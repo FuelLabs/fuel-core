@@ -761,6 +761,50 @@ mod tests {
         }
     }
 
+    // Simulates 2 p2p nodes that are on the same network but their Fuel Upgrade checksum is different
+    // (different chain id or chain config)
+    // So they are not able to connect
+    #[tokio::test]
+    #[instrument]
+    async fn nodes_cannot_connect_due_to_different_checksum() {
+        use libp2p::{
+            swarm::DialError,
+            TransportError,
+        };
+        // Node A
+        let mut p2p_config = P2PConfig::default_with_network(
+            "nodes_cannot_connect_due_to_different_checksum",
+        );
+        p2p_config.enable_mdns = true;
+        let mut node_a = build_service_from_config(p2p_config.clone());
+
+        // different checksum
+        p2p_config.checksum = [1u8; 32];
+        // Node B
+        let mut node_b = build_service_from_config(p2p_config);
+
+        loop {
+            tokio::select! {
+                node_a_event = node_a.swarm.select_next_some() => {
+                    tracing::info!("Node A Event: {:?}", node_a_event);
+                    if let SwarmEvent::OutgoingConnectionError { peer_id: _, error: DialError::Transport(mut errors) } = node_a_event {
+                        if let TransportError::Other(_) = errors.pop().unwrap().1 {
+                            // Custom error confirmed
+                            break
+                        }
+                    }
+                },
+                node_b_event = node_b.next_event() => {
+                    if let Some(FuelP2PEvent::PeerConnected(_)) = node_b_event {
+                        panic!("Node B should not connect to Node A!")
+                    }
+                    tracing::info!("Node B Event: {:?}", node_b_event);
+                },
+
+            };
+        }
+    }
+
     // Simulates 3 p2p nodes, Node B & Node C are bootstrapped with Node A
     // Using Identify Protocol Node C should be able to identify and connect to Node B
     #[tokio::test]

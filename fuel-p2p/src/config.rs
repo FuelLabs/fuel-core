@@ -12,12 +12,18 @@ use futures::{
     future,
     AsyncRead,
     AsyncWrite,
+    Future,
+    FutureExt,
     TryFutureExt,
 };
 use libp2p::{
     core::{
         muxing::StreamMuxerBox,
         transport::Boxed,
+        upgrade::{
+            read_length_prefixed,
+            write_length_prefixed,
+        },
         UpgradeInfo,
     },
     identity::{
@@ -44,9 +50,11 @@ use libp2p::{
     Transport,
 };
 
-use core::future::Future;
 use std::{
     collections::HashSet,
+    error::Error,
+    fmt,
+    io,
     net::{
         IpAddr,
         Ipv4Addr,
@@ -66,12 +74,18 @@ const MAX_NUM_OF_FRAMES_BUFFERED: usize = 256;
 /// inbound and outbound connections established through the transport.
 const TRANSPORT_TIMEOUT: Duration = Duration::from_secs(20);
 
+/// Sha256 hash of chain id and chain config
+type Checksum = [u8; 32];
+
 #[derive(Clone, Debug)]
 pub struct P2PConfig {
     pub local_keypair: Keypair,
 
     /// Name of the Network
     pub network_name: String,
+
+    /// Checksum (sha256) of Chain ID + Chain Config
+    pub checksum: Checksum,
 
     /// IP address for Swarm to listen on
     pub address: IpAddr,
@@ -138,6 +152,7 @@ impl P2PConfig {
         P2PConfig {
             local_keypair,
             network_name: network_name.into(),
+            checksum: [0u8; 32],
             address: IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0])),
             public_address: None,
             tcp_port: 0,
@@ -199,18 +214,22 @@ pub(crate) fn build_transport(p2p_config: &P2PConfig) -> Boxed<(PeerId, StreamMu
         libp2p::core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
     };
 
+    let fuel_upgrade = FuelUpgrade::new(p2p_config.checksum);
+
     if p2p_config.reserved_nodes_only_mode {
         transport
             .authenticate(NoiseWithReservedNodes::new(
                 noise_authenticated,
                 &p2p_config.reserved_nodes,
             ))
+            .apply(fuel_upgrade)
             .multiplex(multiplex_config)
             .timeout(TRANSPORT_TIMEOUT)
             .boxed()
     } else {
         transport
             .authenticate(noise_authenticated)
+            .apply(fuel_upgrade)
             .multiplex(multiplex_config)
             .timeout(TRANSPORT_TIMEOUT)
             .boxed()
@@ -317,5 +336,104 @@ where
                     accept_reserved_node(&self.reserved_nodes, remote_peer_id, io)
                 }),
         )
+    }
+}
+
+/// When two nodes want to establish a connection they need to
+/// exchange the Hash of their respective Chain Id and Chain Config.
+/// The connection is only accepted if their hashes match.
+/// This is used to aviod peers having same network name but different configurations connecting to each other.
+#[derive(Debug, Clone)]
+struct FuelUpgrade {
+    checksum: Checksum,
+}
+
+impl FuelUpgrade {
+    fn new(checksum: Checksum) -> Self {
+        Self { checksum }
+    }
+}
+
+#[derive(Debug)]
+enum FuelUpgradeError {
+    IncorrectChecksum,
+    Io(io::Error),
+}
+
+impl fmt::Display for FuelUpgradeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FuelUpgradeError::Io(e) => write!(f, "{}", e),            
+            FuelUpgradeError::IncorrectChecksum => f.write_str("Fuel node checksum does not match, either ChainId or ChainConfig are not the same, or both."),            
+        }
+    }
+}
+
+impl From<io::Error> for FuelUpgradeError {
+    fn from(e: io::Error) -> Self {
+        FuelUpgradeError::Io(e)
+    }
+}
+
+impl Error for FuelUpgradeError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            FuelUpgradeError::Io(e) => Some(e),
+            FuelUpgradeError::IncorrectChecksum => None,
+        }
+    }
+}
+
+impl UpgradeInfo for FuelUpgrade {
+    type Info = &'static [u8];
+    type InfoIter = std::iter::Once<Self::Info>;
+
+    fn protocol_info(&self) -> Self::InfoIter {
+        std::iter::once(b"/fuel/upgrade/0")
+    }
+}
+
+impl<C> InboundUpgrade<C> for FuelUpgrade
+where
+    C: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    type Output = C;
+    type Error = FuelUpgradeError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
+
+    fn upgrade_inbound(self, mut socket: C, _: Self::Info) -> Self::Future {
+        async move {
+            // Inbound node receives the checksum and compares it to its own checksum.
+            // If they do not match the connection is rejected.
+            let res = read_length_prefixed(&mut socket, self.checksum.len()).await?;
+            if res != self.checksum {
+                return Err(FuelUpgradeError::IncorrectChecksum)
+            }
+
+            Ok(socket)
+        }
+        .boxed()
+    }
+}
+
+impl<C> OutboundUpgrade<C> for FuelUpgrade
+where
+    C: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    type Output = C;
+    type Error = FuelUpgradeError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
+
+    fn upgrade_outbound(self, mut socket: C, _: Self::Info) -> Self::Future {
+        async move {
+            // Outbound node sends their own checksum for comparison with the inbound node.
+            write_length_prefixed(&mut socket, &self.checksum).await?;
+
+            // Note: outbound node does not need to receive the checksum from the inbound node,
+            // since inbound node will reject the connection if the two don't match on its side.
+
+            Ok(socket)
+        }
+        .boxed()
     }
 }
