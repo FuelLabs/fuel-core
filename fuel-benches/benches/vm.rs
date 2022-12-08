@@ -23,6 +23,7 @@ where
                 vm,
                 instruction,
                 cleanup_script,
+                diff,
             } = &mut i;
             let code = OpcodeRepr::from_u8(instruction.op());
             let db_txn = {
@@ -38,28 +39,29 @@ where
                     OpcodeRepr::CALL => {
                         let (_, ra, rb, rc, rd, _imm) = instruction.into_inner();
                         black_box(vm.prepare_call(ra, rb, rc, rd).unwrap());
-                        vm.instruction(ret).unwrap();
+                        // vm.instruction(ret).unwrap();
                     }
                     _ => {
                         black_box(vm.instruction(*instruction).unwrap());
-                        if !cleanup_script.is_empty() {
-                            for i in cleanup_script.iter_mut() {
-                                vm.instruction(*i).unwrap();
-                            }
-                        }
+                        // if !cleanup_script.is_empty() {
+                        //     for i in cleanup_script.iter_mut() {
+                        //         vm.instruction(*i).unwrap();
+                        //     }
+                        // }
                     }
                 }
-                if matches!(
-                    code,
-                    OpcodeRepr::CALL
-                        | OpcodeRepr::RET
-                        | OpcodeRepr::LDC
-                        | OpcodeRepr::RVRT
-                        | OpcodeRepr::LOG
-                        | OpcodeRepr::LOGD
-                ) {
-                    vm.clear_receipts();
-                }
+                vm.inverse(&diff);
+                // if matches!(
+                //     code,
+                //     OpcodeRepr::CALL
+                //         | OpcodeRepr::RET
+                //         | OpcodeRepr::LDC
+                //         | OpcodeRepr::RVRT
+                //         | OpcodeRepr::LOG
+                //         | OpcodeRepr::LOGD
+                // ) {
+                //     vm.clear_receipts();
+                // }
             }
             db_txn.commit().unwrap();
             start.elapsed()

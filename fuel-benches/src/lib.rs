@@ -1,12 +1,15 @@
 use fuel_core::database::vm_database::VmDatabase;
 pub use fuel_core::database::Database;
-use fuel_core_interfaces::common::fuel_tx::{
-    StorageSlot,
-    TransactionBuilder,
-};
 pub use fuel_core_interfaces::common::{
     consts::*,
     prelude::*,
+};
+use fuel_core_interfaces::common::{
+    fuel_tx::{
+        StorageSlot,
+        TransactionBuilder,
+    },
+    interpreter::diff,
 };
 pub use rand::Rng;
 use std::{
@@ -83,6 +86,7 @@ pub struct VmBenchPrepared {
     pub vm: Interpreter<VmDatabase, Script>,
     pub instruction: Instruction,
     pub cleanup_script: Vec<Instruction>,
+    pub diff: diff::Diff<diff::Beginning>,
 }
 
 impl VmBench {
@@ -406,10 +410,35 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             }
         }
 
+        let code = OpcodeRepr::from_u8(instruction.op());
+        let start_vm = vm.clone();
+        let mut vm = vm.add_recording();
+        match code {
+            OpcodeRepr::CALL => {
+                let (_, ra, rb, rc, rd, _imm) = instruction.into_inner();
+                vm.prepare_call(ra, rb, rc, rd).unwrap();
+            }
+            _ => {
+                vm.instruction(instruction).unwrap();
+                // if !cleanup_script.is_empty() {
+                //     for i in cleanup_script.iter_mut() {
+                //         vm.instruction(*i).unwrap();
+                //     }
+                // }
+            }
+        }
+        let storage_diff = vm.storage_diff();
+        let mut vm = vm.remove_recording();
+        let mut diff = start_vm.diff(&vm);
+        diff += storage_diff;
+        let diff: diff::Diff<diff::Beginning> = diff.into();
+        vm.inverse(&diff);
+
         Ok(Self {
             vm,
             instruction,
             cleanup_script,
+            diff,
         })
     }
 }

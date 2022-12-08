@@ -136,7 +136,7 @@ pub fn run(c: &mut Criterion) {
     // FIXME: Currently unable to measure this as it has no inverse and the memory overflows.
     let mut ldc = c.benchmark_group("ldc");
 
-    for i in vec![0] {
+    for i in linear.clone() {
         let mut code = vec![0u8; i as usize];
 
         rng.fill_bytes(&mut code);
