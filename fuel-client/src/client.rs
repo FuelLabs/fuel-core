@@ -9,6 +9,7 @@ use cynic::{
     QueryBuilder,
     StreamingOperation,
 };
+use eventsource_client::HttpsConnector;
 use fuel_vm::prelude::*;
 use futures::StreamExt;
 use itertools::Itertools;
@@ -192,7 +193,7 @@ impl FuelClient {
                     format!("Failed to add header to client {:?}", e),
                 )
             })?
-            .build_http();
+            .build_with_conn(HttpsConnector::with_webpki_roots());
 
         let mut last = None;
 
