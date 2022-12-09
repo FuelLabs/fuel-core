@@ -1,5 +1,6 @@
 use crate::{
     database::{
+        transactional::DatabaseTransaction,
         Column,
         Database,
     },
@@ -297,7 +298,7 @@ impl InterpreterStorage for VmDatabase {
             current_key.to_big_endian(&mut key_bytes);
 
             let option = transaction_db.remove(
-                MultiKey::new(&(contract, key_bytes)).into(),
+                MultiKey::new(&(contract, key_bytes)).as_ref(),
                 Column::ContractsState,
             )?;
 
@@ -313,11 +314,6 @@ impl InterpreterStorage for VmDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn clear_range() {
-        let db = Database::default();
-    }
 
     #[test]
     fn read_single_value() {}
@@ -364,23 +360,247 @@ mod tests {
     fn insert_range_fully_set() {}
 
     #[test]
-    fn remove_single_unset() {}
+    fn remove_single_unset() {
+        let mut db = VmDatabase::default();
+
+        let contract_id = ContractId::new([0u8; 32]);
+        let key = Bytes32::new([0u8; 32]);
+        let value = Bytes32::new([1u8; 32]);
+
+        let pre_read = db.merkle_contract_state(&contract_id, &key)?;
+
+        let clear_status =
+            db.merkle_contract_state_remove_range(&contract_id, &key, 1)?;
+
+        let read = db.merkle_contract_state(&contract_id, &key)?;
+
+        assert_eq!(pre_read.is_none(), true);
+        assert_eq!(clear_status_1.is_none(), true);
+        assert_eq!(read.is_none(), true);
+    }
 
     #[test]
-    fn remove_single_set() {}
+    fn remove_single_set() {
+        let mut db = VmDatabase::default();
+
+        let contract_id = ContractId::new([0u8; 32]);
+        let key = Bytes32::new([0u8; 32]);
+        let value = Bytes32::new([1u8; 32]);
+
+        let insert_status =
+            db.merkle_contract_state_insert(&contract_id, &key, &value)?;
+
+        let clear_status =
+            db.merkle_contract_state_remove_range(&contract_id, &key, 1)?;
+
+        let read_status = db.merkle_contract_state(&contract_id, &zero_bytes32)?;
+
+        assert_eq!(insert_status.is_none(), true);
+        assert_eq!(clear_status.is_none(), false);
+        assert_eq!(read_status.is_none(), true);
+    }
 
     #[test]
-    fn remove_range_over_unset() {}
+    fn remove_range_over_unset() {
+        let mut db = VmDatabase::default();
+
+        let contract_id = ContractId::new([0u8; 32]);
+        let zero_bytes32 = Bytes32::new([0u8; 32]);
+
+        let clear_status =
+            db.merkle_contract_state_remove_range(&contract_id, &zero_bytes32, 3)?;
+
+        assert_eq!(clear_status.is_none(), true);
+    }
 
     #[test]
-    fn remove_range_partially_unset_start() {}
+    fn remove_range_partially_unset_start() {
+        let mut db = VmDatabase::default();
+
+        let contract_id = ContractId::new([0u8; 32]);
+        let zero_bytes32 = Bytes32::new([0u8; 32]);
+        let value = Bytes32::new([1u8; 32]);
+
+        let u256_zero = U256::from_big_endian(&zero_bytes32);
+
+        let mut key_1 = [0u8; 32];
+        let u256_1 = u256_zero.checked_add(1.into());
+        u256_1.to_big_endian(&mut key_1);
+
+        let mut key_2 = [0u8; 32];
+        let u256_2 = u256_zero.checked_add(2.into());
+        u256_2.to_big_endian(&mut key_2);
+
+        let insert_status_1 =
+            db.merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value)?;
+        let insert_status_2 =
+            db.merkle_contract_state_insert(&contract_id, &Bytes32::new(key_2), &value)?;
+
+        let pre_clear_read_0 = db.merkle_contract_state(&contract_id, &zero_bytes32)?;
+        let pre_clear_read_1 =
+            db.merkle_contract_state(&contract_id, &Bytes32::new(key_1))?;
+        let pre_clear_read_2 =
+            db.merkle_contract_state(&contract_id, &Bytes32::new(key_2))?;
+
+        let clear_status =
+            db.merkle_contract_state_remove_range(&contract_id, &zero_bytes32, 3)?;
+
+        let read_0 = db.merkle_contract_state(&contract_id, &zero_bytes32)?;
+        let read_1 = db.merkle_contract_state(&contract_id, &Bytes32::new(key_1))?;
+        let read_2 = db.merkle_contract_state(&contract_id, &Bytes32::new(key_2))?;
+
+        assert_eq!(insert_status_1.is_none(), true);
+        assert_eq!(insert_status_2.is_none(), true);
+        assert_eq!(pre_clear_read_0.is_none(), true);
+        assert_eq!(pre_clear_read_1.is_none(), false);
+        assert_eq!(pre_clear_read_2.is_none(), false);
+        assert_eq!(clear_status.is_none(), true);
+        assert_eq!(read_0.is_none(), true);
+        assert_eq!(read_1.is_none(), true);
+        assert_eq!(read_2.is_none(), true);
+    }
 
     #[test]
-    fn remove_range_partially_unset_middle() {}
+    fn remove_range_partially_unset_middle() {
+        let mut db = VmDatabase::default();
+
+        let contract_id = ContractId::new([0u8; 32]);
+        let zero_bytes32 = Bytes32::new([0u8; 32]);
+        let value = Bytes32::new([1u8; 32]);
+
+        let u256_zero = U256::from_big_endian(&zero_bytes32);
+
+        let mut key_1 = [0u8; 32];
+        let u256_1 = u256_zero.checked_add(1.into());
+        u256_1.to_big_endian(&mut key_1);
+
+        let mut key_2 = [0u8; 32];
+        let u256_2 = u256_zero.checked_add(2.into());
+        u256_2.to_big_endian(&mut key_2);
+
+        let insert_status_0 =
+            db.merkle_contract_state_insert(&contract_id, &zero_bytes32, &value)?;
+        let insert_status_2 =
+            db.merkle_contract_state_insert(&contract_id, &Bytes32::new(key_2), &value)?;
+
+        let pre_clear_read_0 = db.merkle_contract_state(&contract_id, &zero_bytes32)?;
+        let pre_clear_read_1 =
+            db.merkle_contract_state(&contract_id, &Bytes32::new(key_1))?;
+        let pre_clear_read_2 =
+            db.merkle_contract_state(&contract_id, &Bytes32::new(key_2))?;
+
+        let clear_status =
+            db.merkle_contract_state_remove_range(&contract_id, &zero_bytes32, 3)?;
+
+        let read_0 = db.merkle_contract_state(&contract_id, &zero_bytes32)?;
+        let read_2 = db.merkle_contract_state(&contract_id, &Bytes32::new(key_1))?;
+        let read_2 = db.merkle_contract_state(&contract_id, &Bytes32::new(key_2))?;
+
+        assert_eq!(insert_status_0.is_none(), true);
+        assert_eq!(insert_status_2.is_none(), true);
+        assert_eq!(pre_clear_read_0.is_none(), false);
+        assert_eq!(pre_clear_read_1.is_none(), true);
+        assert_eq!(pre_clear_read_2.is_none(), false);
+        assert_eq!(clear_status.is_none(), true);
+        assert_eq!(read_0.is_none(), true);
+        assert_eq!(read_1.is_none(), true);
+        assert_eq!(read_2.is_none(), true);
+    }
 
     #[test]
-    fn remove_range_partially_unset_end() {}
+    fn remove_range_partially_unset_end() {
+        let mut db = VmDatabase::default();
+
+        let contract_id = ContractId::new([0u8; 32]);
+        let zero_bytes32 = Bytes32::new([0u8; 32]);
+        let value = Bytes32::new([1u8; 32]);
+
+        let u256_zero = U256::from_big_endian(&zero_bytes32);
+
+        let mut key_1 = [0u8; 32];
+        let u256_1 = u256_zero.checked_add(1.into());
+        u256_1.to_big_endian(&mut key_1);
+
+        let mut key_2 = [0u8; 32];
+        let u256_2 = u256_zero.checked_add(2.into());
+        u256_2.to_big_endian(&mut key_2);
+
+        let insert_status_0 =
+            db.merkle_contract_state_insert(&contract_id, &zero_bytes32, &value)?;
+        let insert_status_2 =
+            db.merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value)?;
+
+        let pre_clear_read_0 = db.merkle_contract_state(&contract_id, &zero_bytes32)?;
+        let pre_clear_read_1 =
+            db.merkle_contract_state(&contract_id, &Bytes32::new(key_1))?;
+        let pre_clear_read_2 =
+            db.merkle_contract_state(&contract_id, &Bytes32::new(key_2))?;
+
+        let clear_status =
+            db.merkle_contract_state_remove_range(&contract_id, &zero_bytes32, 3)?;
+
+        let read_0 = db.merkle_contract_state(&contract_id, &zero_bytes32)?;
+        let read_1 = db.merkle_contract_state(&contract_id, &Bytes32::new(key_1))?;
+        let read_1 = db.merkle_contract_state(&contract_id, &Bytes32::new(key_2))?;
+
+        assert_eq!(insert_status_0.is_none(), true);
+        assert_eq!(insert_status_1.is_none(), true);
+        assert_eq!(pre_clear_read_0.is_none(), false);
+        assert_eq!(pre_clear_read_1.is_none(), false);
+        assert_eq!(pre_clear_read_2.is_none(), true);
+        assert_eq!(clear_status.is_none(), true);
+        assert_eq!(read_0.is_none(), true);
+        assert_eq!(read_1.is_none(), true);
+        assert_eq!(read_2.is_none(), true);
+    }
 
     #[test]
-    fn remove_range_fully_set() {}
+    fn remove_range_fully_set() {
+        let mut db = VmDatabase::default();
+
+        let contract_id = ContractId::new([0u8; 32]);
+        let zero_bytes32 = Bytes32::new([0u8; 32]);
+        let value = Bytes32::new([1u8; 32]);
+
+        let u256_zero = U256::from_big_endian(&zero_bytes32);
+
+        let mut key_1 = [0u8; 32];
+        let u256_1 = u256_zero.checked_add(1.into());
+        u256_1.to_big_endian(&mut key_1);
+
+        let mut key_2 = [0u8; 32];
+        let u256_2 = u256_zero.checked_add(2.into());
+        u256_2.to_big_endian(&mut key_2);
+
+        let insert_status_0 =
+            db.merkle_contract_state_insert(&contract_id, &zero_bytes32, &value)?;
+        let insert_status_1 =
+            db.merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value)?;
+        let insert_status_2 =
+            db.merkle_contract_state_insert(&contract_id, &Bytes32::new(key_2), &value)?;
+
+        let pre_clear_read_0 = db.merkle_contract_state(&contract_id, &zero_bytes32)?;
+        let pre_clear_read_1 =
+            db.merkle_contract_state(&contract_id, &Bytes32::new(key_1))?;
+        let pre_clear_read_2 =
+            db.merkle_contract_state(&contract_id, &Bytes32::new(key_2))?;
+
+        let clear_status =
+            db.merkle_contract_state_remove_range(&contract_id, &zero_bytes32, 3)?;
+
+        let read_0 = db.merkle_contract_state(&contract_id, &zero_bytes32)?;
+        let read_1 = db.merkle_contract_state(&contract_id, &Bytes32::new(key_1))?;
+        let read_2 = db.merkle_contract_state(&contract_id, &Bytes32::new(key_2))?;
+
+        assert_eq!(insert_status_0.is_none(), true);
+        assert_eq!(insert_status_1.is_none(), true);
+        assert_eq!(insert_status_2.is_none(), true);
+        assert_eq!(pre_clear_read_0.is_none(), false);
+        assert_eq!(pre_clear_read_1.is_none(), false);
+        assert_eq!(pre_clear_read_2.is_none(), false);
+        assert_eq!(clear_status.is_none(), false);
+        assert_eq!(read_0.is_none(), true);
+        assert_eq!(read_1.is_none(), true);
+        assert_eq!(read_2.is_none(), true);
+    }
 }
