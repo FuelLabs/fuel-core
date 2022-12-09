@@ -253,12 +253,6 @@ impl InterpreterStorage for VmDatabase {
         let transaction_db = transaction.deref();
 
         for value in values {
-            current_key =
-                current_key
-                    .checked_add(1.into())
-                    .ok_or(Error::Other(anyhow!(
-                        "current_key overflowed during computation"
-                    )))?;
             let mut key_bytes = [0u8; 32];
             current_key.to_big_endian(&mut key_bytes);
 
@@ -269,6 +263,13 @@ impl InterpreterStorage for VmDatabase {
             )?;
 
             found_unset |= option.is_none();
+
+            current_key =
+                current_key
+                    .checked_add(1.into())
+                    .ok_or(Error::Other(anyhow!(
+                        "current_key overflowed during computation"
+                    )))?;
         }
 
         transaction.commit()?;
