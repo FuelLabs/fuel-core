@@ -49,6 +49,7 @@ use schema::{
 };
 use std::{
     convert::TryInto,
+    future,
     io::{
         self,
         ErrorKind,
@@ -471,13 +472,25 @@ impl FuelClient {
         &self,
         id: &str,
     ) -> io::Result<TransactionStatus> {
-        let mut outcomes: Vec<_> = futures::TryStreamExt::try_collect(
-            self.subscribe_transaction_status(id).await?,
-        )
-        .await?;
-        outcomes.pop().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "Failed to get status for transaction")
-        })
+        // skip until we've reached a final status and then stop consuming the stream
+        // to avoid an EOF which the eventsource client considers as an error.
+        let status_result = self
+            .subscribe_transaction_status(id)
+            .await?
+            .skip_while(|status| {
+                future::ready(matches!(status, Ok(TransactionStatus::Submitted { .. })))
+            })
+            .next()
+            .await;
+
+        if let Some(Ok(status)) = status_result {
+            Ok(status)
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Failed to get status for transaction",
+            ))
+        }
     }
 
     /// returns a paginated set of transactions sorted by block height
