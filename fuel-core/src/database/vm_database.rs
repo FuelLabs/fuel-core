@@ -200,9 +200,10 @@ impl InterpreterStorage for VmDatabase {
                     // Iterator moved beyond contract range, populate with None until end of range
                     for _ in range_count..range {
                         results.push(None);
-                        current_key.checked_add(1.into()).ok_or(Error::Other(
-                            anyhow!("current_key overflowed during computation"),
-                        ))?;
+                        current_key =
+                            current_key.checked_add(1.into()).ok_or(Error::Other(
+                                anyhow!("current_key overflowed during computation"),
+                            ))?;
                     }
                     // Iterator no longer useful, return
                     return Ok(results)
@@ -212,25 +213,29 @@ impl InterpreterStorage for VmDatabase {
                         // count until we find the current key
                         results.push(None);
                         range_count += 1;
-                        current_key.checked_add(1.into()).ok_or(Error::Other(
-                            anyhow!("current_key overflowed during computation"),
-                        ))?;
+                        current_key =
+                            current_key.checked_add(1.into()).ok_or(Error::Other(
+                                anyhow!("current_key overflowed during computation"),
+                            ))?;
                     }
                 }
                 // State key matches, put value into results
                 if state_key == current_key {
                     results.push(Some(Cow::Owned(value)));
+                    current_key =
+                        current_key.checked_add(1.into()).ok_or(Error::Other(
+                            anyhow!("current_key overflowed during computation"),
+                        ))?;
                 }
             } else {
                 // No iterator returned, populate with None until end of range
                 for _ in range_count..range {
                     results.push(None);
                     range_count += 1;
-                    current_key
-                        .checked_add(1.into())
-                        .ok_or(Error::Other(anyhow!(
-                            "current_key overflowed during computation"
-                        )))?;
+                    current_key =
+                        current_key.checked_add(1.into()).ok_or(Error::Other(
+                            anyhow!("current_key overflowed during computation"),
+                        ))?;
                 }
             };
             range_count += 1;
@@ -385,9 +390,11 @@ mod tests {
         // setup data
         for i in 0..RANGE_LENGTH {
             let key = start_key.add(i);
+            let key = u256_to_bytes32(key);
+            let multi_key = MultiKey::new(&(contract_id.as_ref(), key.as_ref()));
             db.database
                 .insert::<_, _, Bytes32>(
-                    &u256_to_bytes32(key),
+                    &multi_key,
                     Column::ContractsState,
                     &setup_values[i],
                 )
@@ -396,7 +403,11 @@ mod tests {
 
         // perform sequential read
         let results = db
-            .merkle_contract_state_range(&contract_id, &u256_to_bytes32(start_key), 10)
+            .merkle_contract_state_range(
+                &contract_id,
+                &u256_to_bytes32(start_key),
+                RANGE_LENGTH as u64,
+            )
             .unwrap();
 
         // verify a vector of the correct length is returned, and all values are set correctly
