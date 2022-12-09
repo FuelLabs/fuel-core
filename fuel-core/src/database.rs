@@ -256,13 +256,6 @@ impl Database {
             })
     }
 
-    fn batch_write(
-        &self,
-        entries: &mut dyn Iterator<Item = WriteOperation>,
-    ) -> Result<(), Error> {
-        self.data.batch_write(entries)
-    }
-
     pub fn transaction(&self) -> DatabaseTransaction {
         self.into()
     }
