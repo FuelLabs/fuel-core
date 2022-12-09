@@ -2453,6 +2453,7 @@ dependencies = [
  "fuel-vm",
  "futures",
  "hex",
+ "hyper-rustls 0.22.1",
  "insta",
  "itertools",
  "reqwest",
@@ -2663,9 +2664,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.22.5"
+version = "0.22.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8d4cbdd4d7d937e7a0abe8be9508c8480b4ef2ba2534ba169ff56e3ecdaf93b"
+checksum = "1521a9ecf42e1d133b29e3785ca6f46bf74ae9bf2509fc3daed49b731f530560"
 dependencies = [
  "anyhow",
  "fuel-asm",
@@ -3170,6 +3171,7 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.22.0",
  "webpki 0.21.4",
+ "webpki-roots 0.21.1",
 ]
 
 [[package]]
@@ -3884,7 +3886,7 @@ dependencies = [
  "rw-stream-sink",
  "soketto",
  "url",
- "webpki-roots",
+ "webpki-roots 0.22.5",
 ]
 
 [[package]]
@@ -5248,7 +5250,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
- "webpki-roots",
+ "webpki-roots 0.22.5",
  "winreg",
 ]
 
@@ -6354,7 +6356,7 @@ dependencies = [
  "tokio-rustls 0.23.4",
  "tungstenite",
  "webpki 0.22.0",
- "webpki-roots",
+ "webpki-roots 0.22.5",
 ]
 
 [[package]]
@@ -6964,6 +6966,15 @@ checksum = "f095d78192e208183081cc07bc5515ef55216397af48b873e5edcd72637fa1bd"
 dependencies = [
  "ring",
  "untrusted",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "0.21.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aabe153544e473b775453675851ecc86863d2a81d786d741f6b76778f2a48940"
+dependencies = [
+ "webpki 0.21.4",
 ]
 
 [[package]]
