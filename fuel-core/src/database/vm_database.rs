@@ -259,7 +259,7 @@ impl InterpreterStorage for VmDatabase {
             let option = transaction_db.insert::<_, _, Bytes32>(
                 MultiKey::new(&(contract_id, key_bytes)).as_ref(),
                 Column::ContractsState,
-                value.to_vec(),
+                value,
             )?;
 
             found_unset |= option.is_none();
@@ -355,14 +355,38 @@ mod tests {
 
         let contract_id = ContractId::new([0u8; 32]);
         let zero_bytes32 = Bytes32::new([0u8; 32]);
-        let value = Bytes32::new([1u8; 32]);
+        let value_1 = Bytes32::new([1u8; 32]);
 
         let pre_insert_read = read_db
             .merkle_contract_state(&contract_id, &zero_bytes32)
             .unwrap();
 
         let insert_status_0 = db
-            .merkle_contract_state_insert_range(&contract_id, &zero_bytes32, &[value])
+            .merkle_contract_state_insert_range(&contract_id, &zero_bytes32, &[value_1])
+            .unwrap();
+
+        let post_insert_read_0 = read_db
+            .merkle_contract_state(&contract_id, &zero_bytes32)
+            .unwrap();
+
+        assert_eq!(pre_insert_read.is_none(), true);
+        assert_eq!(insert_status_0.is_none(), true);
+        assert_eq!(post_insert_read_0.is_none(), false);
+        assert_eq!(post_insert_read_0.unwrap().as_ref(), &value_1);
+    }
+
+    #[test]
+    fn insert_single_set() {
+        let mut db = VmDatabase::default();
+        let read_db = db.clone();
+
+        let contract_id = ContractId::new([0u8; 32]);
+        let zero_bytes32 = Bytes32::new([0u8; 32]);
+        let value_1 = Bytes32::new([1u8; 32]);
+        let value_2 = Bytes32::new([2u8; 32]);
+
+        let insert_status_0 = db
+            .merkle_contract_state_insert_range(&contract_id, &zero_bytes32, &[value_1])
             .unwrap();
 
         let post_insert_read_0 = read_db
@@ -370,22 +394,20 @@ mod tests {
             .unwrap();
 
         let insert_status_1 = db
-            .merkle_contract_state_insert_range(&contract_id, &zero_bytes32, &[value])
+            .merkle_contract_state_insert_range(&contract_id, &zero_bytes32, &[value_2])
             .unwrap();
 
         let post_insert_read_1 = read_db
             .merkle_contract_state(&contract_id, &zero_bytes32)
             .unwrap();
 
-        assert_eq!(pre_insert_read.is_none(), true);
         assert_eq!(insert_status_0.is_none(), true);
         assert_eq!(post_insert_read_0.is_none(), false);
+        assert_eq!(post_insert_read_0.unwrap().as_ref(), &value_1);
         assert_eq!(insert_status_1.is_none(), false);
         assert_eq!(post_insert_read_1.is_none(), false);
+        assert_eq!(post_insert_read_1.unwrap().as_ref(), &value_2);
     }
-
-    #[test]
-    fn insert_single_set() {}
 
     #[test]
     fn insert_range_over_unset() {}
