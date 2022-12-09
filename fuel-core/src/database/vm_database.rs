@@ -241,23 +241,23 @@ impl InterpreterStorage for VmDatabase {
 
     fn merkle_contract_state_insert_range(
         &mut self,
-        contract: &ContractId,
+        contract_id: &ContractId,
         start_key: &Bytes32,
         values: &[Bytes32],
     ) -> Result<Option<()>, Self::DataError> {
         let mut found_unset = false;
 
         let mut current_key = U256::from_big_endian(start_key.as_ref());
+        let mut key_bytes = [0u8; 32];
 
         let transaction = self.database.transaction();
         let transaction_db = transaction.deref();
 
         for value in values {
-            let mut key_bytes = [0u8; 32];
             current_key.to_big_endian(&mut key_bytes);
 
             let option = transaction_db.insert::<_, _, Bytes32>(
-                MultiKey::new(&(contract, key_bytes)).as_ref(),
+                MultiKey::new(&(contract_id, key_bytes)).as_ref(),
                 Column::ContractsState,
                 value.to_vec(),
             )?;
@@ -274,12 +274,17 @@ impl InterpreterStorage for VmDatabase {
 
         transaction.commit()?;
 
+        // let get_result = self.database.get::<Bytes32>(
+        //     MultiKey::new(&(contract_id, start_key)).as_ref(),
+        //     Column::ContractsState,
+        // );
+
         return Ok((!found_unset).then(|| ()))
     }
 
     fn merkle_contract_state_remove_range(
         &mut self,
-        contract: &ContractId,
+        contract_id: &ContractId,
         start_key: &Bytes32,
         range: Word,
     ) -> Result<Option<()>, Self::DataError> {
@@ -295,7 +300,7 @@ impl InterpreterStorage for VmDatabase {
             current_key.to_big_endian(&mut key_bytes);
 
             let option = transaction_db.remove::<Bytes32>(
-                MultiKey::new(&(contract, key_bytes)).as_ref(),
+                MultiKey::new(&(contract_id, key_bytes)).as_ref(),
                 Column::ContractsState,
             )?;
 
@@ -344,7 +349,40 @@ mod tests {
     fn read_range_overruns_iterator_empty() {}
 
     #[test]
-    fn insert_single_unset() {}
+    fn insert_single_unset() {
+        let mut db = VmDatabase::default();
+        let read_db = db.clone();
+
+        let contract_id = ContractId::new([0u8; 32]);
+        let zero_bytes32 = Bytes32::new([0u8; 32]);
+        let value = Bytes32::new([1u8; 32]);
+
+        let pre_insert_read = read_db
+            .merkle_contract_state(&contract_id, &zero_bytes32)
+            .unwrap();
+
+        let insert_status_0 = db
+            .merkle_contract_state_insert_range(&contract_id, &zero_bytes32, &[value])
+            .unwrap();
+
+        let post_insert_read_0 = read_db
+            .merkle_contract_state(&contract_id, &zero_bytes32)
+            .unwrap();
+
+        let insert_status_1 = db
+            .merkle_contract_state_insert_range(&contract_id, &zero_bytes32, &[value])
+            .unwrap();
+
+        let post_insert_read_1 = read_db
+            .merkle_contract_state(&contract_id, &zero_bytes32)
+            .unwrap();
+
+        assert_eq!(pre_insert_read.is_none(), true);
+        assert_eq!(insert_status_0.is_none(), true);
+        assert_eq!(post_insert_read_0.is_none(), false);
+        assert_eq!(insert_status_1.is_none(), false);
+        assert_eq!(post_insert_read_1.is_none(), false);
+    }
 
     #[test]
     fn insert_single_set() {}
