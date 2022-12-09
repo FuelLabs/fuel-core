@@ -336,7 +336,10 @@ mod tests {
     };
     use std::{
         fs::read,
-        ops::Add,
+        ops::{
+            Add,
+            Sub,
+        },
     };
 
     fn u256_to_bytes32(u: U256) -> Bytes32 {
@@ -419,21 +422,233 @@ mod tests {
     }
 
     #[test]
-    fn read_over_unset_region_same_contract() {}
+    fn read_range_unset() {
+        // ensure we pad the correct number of results even if the iterator is empty
+        const RANGE_LENGTH: usize = 10;
+        let contract_id = ContractId::new([0u8; 32]);
+        let start_key = U256::zero();
 
-    #[test]
-    fn read_overrun_contract_id() {}
-
-    #[test]
-    fn read_range_overruns_keyspace_mismatched_contract_id() {}
-
-    #[test]
-    fn read_range_overruns_keyspace_unset_key_range() {
-        // may be untestable
+        let db = VmDatabase::default();
+        // perform sequential read
+        let results = db
+            .merkle_contract_state_range(
+                &contract_id,
+                &u256_to_bytes32(start_key),
+                RANGE_LENGTH as u64,
+            )
+            .unwrap();
+        assert_eq!(results.len(), RANGE_LENGTH);
+        results
+            .iter()
+            .enumerate()
+            .for_each(|(i, item)| assert!(item.is_none(), "Expected None for idx {}", i));
     }
 
     #[test]
-    fn read_range_overruns_iterator_empty() {}
+    fn read_over_unset_region_same_contract() {
+        let rng = &mut StdRng::seed_from_u64(100);
+        let db = VmDatabase::default();
+
+        const RANGE_LENGTH: usize = 10;
+        let contract_id = ContractId::new([0u8; 32]);
+        let start_key = U256::zero();
+
+        // only set even keys to some value
+        let setup_values = (0..RANGE_LENGTH)
+            .map(|i| if i % 2 == 0 { Some(rng.gen()) } else { None })
+            .collect::<Vec<Option<Bytes32>>>();
+
+        // setup only some of the data in the range
+        for i in 0..RANGE_LENGTH {
+            if let Some(value) = setup_values[i] {
+                let key = start_key.add(i);
+                let key = u256_to_bytes32(key);
+                let multi_key = MultiKey::new(&(contract_id.as_ref(), key.as_ref()));
+                db.database
+                    .insert::<_, _, Bytes32>(&multi_key, Column::ContractsState, &value)
+                    .unwrap();
+            }
+        }
+
+        // perform sequential read
+        let results = db
+            .merkle_contract_state_range(
+                &contract_id,
+                &u256_to_bytes32(start_key),
+                RANGE_LENGTH as u64,
+            )
+            .unwrap();
+
+        // verify a vector of the correct length is returned, and all values are set correctly
+        assert_eq!(results.len(), RANGE_LENGTH);
+        for (i, value) in results.into_iter().enumerate() {
+            assert_eq!(value.map(Cow::into_owned), setup_values[i]);
+        }
+    }
+
+    #[test]
+    fn read_overrun_contract_id() {
+        // setup two contracts in the same database
+        // to ensure we don't return data from other contracts
+        let rng = &mut StdRng::seed_from_u64(100);
+        let db = VmDatabase::default();
+
+        let contract_id_1 = ContractId::new([0u8; 32]);
+        let contract_id_2 = ContractId::new([1u8; 32]);
+        let start_key = U256::zero();
+
+        // setup test values for the database
+        let key = u256_to_bytes32(start_key.add(0));
+        let c1_k1 = MultiKey::new(&(contract_id_1.as_ref(), key.as_ref()));
+        let c1_v1: Bytes32 = rng.gen();
+        db.database
+            .insert::<_, _, Bytes32>(&c1_k1, Column::ContractsState, &c1_v1)
+            .unwrap();
+
+        let key = u256_to_bytes32(start_key.add(1));
+        let c1_k2 = MultiKey::new(&(contract_id_1.as_ref(), key.as_ref()));
+        let c1_v2: Bytes32 = rng.gen();
+        db.database
+            .insert::<_, _, Bytes32>(&c1_k2, Column::ContractsState, &c1_v2)
+            .unwrap();
+
+        let key = u256_to_bytes32(start_key.add(0));
+        let c2_k1 = MultiKey::new(&(contract_id_2.as_ref(), key.as_ref()));
+        let c2_v1: Bytes32 = rng.gen();
+        db.database
+            .insert::<_, _, Bytes32>(&c2_k1, Column::ContractsState, &c2_v1)
+            .unwrap();
+
+        let key = u256_to_bytes32(start_key.add(1));
+        let c2_k2 = MultiKey::new(&(contract_id_2.as_ref(), key.as_ref()));
+        let c2_v2: Bytes32 = rng.gen();
+        db.database
+            .insert::<_, _, Bytes32>(&c2_k2, Column::ContractsState, &c2_v2)
+            .unwrap();
+
+        // perform sequential read
+        const READ_RANGE: usize = 4;
+        let results = db
+            .merkle_contract_state_range(
+                &contract_id_1,
+                &u256_to_bytes32(start_key),
+                READ_RANGE as u64,
+            )
+            .unwrap()
+            .into_iter()
+            .map(|v| v.map(Cow::into_owned))
+            .collect_vec();
+
+        // verify a vector of the correct length is returned, and all values are set correctly
+        assert_eq!(results.len(), READ_RANGE);
+        assert_eq!(results[0], Some(c1_v1));
+        assert_eq!(results[1], Some(c1_v2));
+        assert_eq!(results[2], None);
+        assert_eq!(results[3], None);
+    }
+
+    #[test]
+    fn read_range_overruns_keyspace_mismatched_contract_id() {
+        // ensure that we don't pad extra results past u256::max when there are multiple contracts
+        let rng = &mut StdRng::seed_from_u64(100);
+        let db = VmDatabase::default();
+
+        let contract_id_1 = ContractId::new([0u8; 32]);
+        let contract_id_2 = ContractId::new([1u8; 32]);
+        let start_key = U256::max_value().sub(2);
+
+        // setup test values for the database
+        let key = u256_to_bytes32(start_key.add(0));
+        let c1_k1 = MultiKey::new(&(contract_id_1.as_ref(), key.as_ref()));
+        let c1_v1: Bytes32 = rng.gen();
+        db.database
+            .insert::<_, _, Bytes32>(&c1_k1, Column::ContractsState, &c1_v1)
+            .unwrap();
+
+        let key = u256_to_bytes32(start_key.add(1));
+        let c1_k2 = MultiKey::new(&(contract_id_1.as_ref(), key.as_ref()));
+        let c1_v2: Bytes32 = rng.gen();
+        db.database
+            .insert::<_, _, Bytes32>(&c1_k2, Column::ContractsState, &c1_v2)
+            .unwrap();
+
+        let key = u256_to_bytes32(start_key.add(0));
+        let c2_k1 = MultiKey::new(&(contract_id_2.as_ref(), key.as_ref()));
+        let c2_v1: Bytes32 = rng.gen();
+        db.database
+            .insert::<_, _, Bytes32>(&c2_k1, Column::ContractsState, &c2_v1)
+            .unwrap();
+
+        let key = u256_to_bytes32(start_key.add(1));
+        let c2_k2 = MultiKey::new(&(contract_id_2.as_ref(), key.as_ref()));
+        let c2_v2: Bytes32 = rng.gen();
+        db.database
+            .insert::<_, _, Bytes32>(&c2_k2, Column::ContractsState, &c2_v2)
+            .unwrap();
+
+        // perform sequential read
+        const READ_RANGE: usize = 4;
+        let result = db.merkle_contract_state_range(
+            &contract_id_1,
+            &u256_to_bytes32(start_key),
+            READ_RANGE as u64,
+        );
+
+        // assert read fails since start key + READ_RANGE > u256::max
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn read_range_overruns_keyspace_partially_set_key_range() {
+        // ensure that we don't pad extra results when keyspace is exhausted and some keys are set
+        let rng = &mut StdRng::seed_from_u64(100);
+        let db = VmDatabase::default();
+
+        let contract_id = ContractId::new([0u8; 32]);
+        // leave enough room for one valid unset storage slot before exhausting the keyspace
+        let start_key = U256::max_value().sub(1);
+
+        // setup test values for the database
+        let key = u256_to_bytes32(start_key);
+        let key = MultiKey::new(&(contract_id.as_ref(), key.as_ref()));
+        let value: Bytes32 = rng.gen();
+        db.database
+            .insert::<_, _, Bytes32>(&key, Column::ContractsState, &value)
+            .unwrap();
+
+        // perform sequential read (u256::max - 1, u256::max, invalid key)
+        const READ_RANGE: usize = 3;
+        let result = db.merkle_contract_state_range(
+            &contract_id,
+            &u256_to_bytes32(start_key),
+            READ_RANGE as u64,
+        );
+
+        // assert read fails since start key + READ_RANGE > u256::max
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn read_range_overruns_keyspace_unset_key_range() {
+        // ensure that we don't pad extra results when keyspace is exhausted and no keys are set
+        let rng = &mut StdRng::seed_from_u64(100);
+        let db = VmDatabase::default();
+
+        let contract_id = ContractId::new([0u8; 32]);
+        // leave enough room for one valid unset storage slot before exhausting the keyspace
+        let start_key = U256::max_value().sub(1);
+
+        // perform sequential read (u256::max - 1, u256::max, invalid key)
+        const READ_RANGE: usize = 3;
+        let result = db.merkle_contract_state_range(
+            &contract_id,
+            &u256_to_bytes32(start_key),
+            READ_RANGE as u64,
+        );
+
+        // assert read fails since start key + READ_RANGE > u256::max
+        assert!(result.is_err());
+    }
 
     #[test]
     fn insert_single_unset() {
