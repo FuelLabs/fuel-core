@@ -1,6 +1,6 @@
 [package]
 name = "fuel-block-producer"
-version = "0.14.1"
+version = "0.15.0"
 authors = ["Fuel Labs <contact@fuel.sh>"]
 edition = "2021"
 homepage = "https://fuel.network/"
@@ -12,7 +12,7 @@ description = "Fuel Block Producer"
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
-fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.14.1" }
+fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.15.0" }
 parking_lot = "0.12"
 thiserror = "1.0"
 tokio = { version = "1.21", features = ["full"] }
