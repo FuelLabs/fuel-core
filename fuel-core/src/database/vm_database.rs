@@ -323,13 +323,89 @@ impl InterpreterStorage for VmDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::read;
+    use itertools::Itertools;
+    use rand::{
+        rngs::StdRng,
+        Rng,
+        SeedableRng,
+    };
+    use std::{
+        fs::read,
+        ops::Add,
+    };
+
+    fn u256_to_bytes32(u: U256) -> Bytes32 {
+        let mut bytes = [0u8; 32];
+        u.to_big_endian(&mut bytes);
+        Bytes32::from(bytes)
+    }
 
     #[test]
-    fn read_single_value() {}
+    fn read_single_value() {
+        let mut db = VmDatabase::default();
+
+        let contract_id = ContractId::new([0u8; 32]);
+        let key = Bytes32::new([0u8; 32]);
+        let value = Bytes32::new([1u8; 32]);
+
+        // check that read is unset before insert
+        let pre_read_status = db.merkle_contract_state(&contract_id, &key).unwrap();
+        assert_eq!(pre_read_status.is_none(), true);
+
+        // insert expected key
+        let _ = db
+            .merkle_contract_state_insert(&contract_id, &key, &value)
+            .unwrap();
+
+        // check that read is set and returns the correct value
+        let read_status = db.merkle_contract_state(&contract_id, &key).unwrap();
+        assert_eq!(read_status.is_some(), true);
+        assert_eq!(read_status.unwrap().into_owned(), value);
+    }
 
     #[test]
-    fn read_sequential_set_data() {}
+    fn read_sequential_set_data() {
+        let rng = &mut StdRng::seed_from_u64(100);
+        let db = VmDatabase::default();
+
+        const RANGE_LENGTH: usize = 10;
+        let contract_id = ContractId::new([0u8; 32]);
+        let start_key = U256::zero();
+
+        // check range is unset
+        db.merkle_contract_state_range(&contract_id, &u256_to_bytes32(start_key), 10)
+            .unwrap()
+            .iter()
+            .for_each(|item| assert!(item.is_none()));
+
+        let setup_values = (0..RANGE_LENGTH)
+            .map(|_| rng.gen())
+            .collect::<Vec<Bytes32>>();
+
+        // setup data
+        for i in 0..RANGE_LENGTH {
+            let key = start_key.add(i);
+            db.database
+                .insert::<_, _, Bytes32>(
+                    &u256_to_bytes32(key),
+                    Column::ContractsState,
+                    &setup_values[i],
+                )
+                .unwrap();
+        }
+
+        // perform sequential read
+        let results = db
+            .merkle_contract_state_range(&contract_id, &u256_to_bytes32(start_key), 10)
+            .unwrap();
+
+        // verify a vector of the correct length is returned, and all values are set correctly
+        assert_eq!(results.len(), RANGE_LENGTH);
+        for (i, value) in results.into_iter().enumerate() {
+            let value = value.expect(&format!("Expected value to be set at {}", i));
+            assert_eq!(value.as_ref(), &setup_values[i]);
+        }
+    }
 
     #[test]
     fn read_over_unset_region_same_contract() {}
