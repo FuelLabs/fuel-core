@@ -9,7 +9,10 @@ use std::{
 
 use clap::Args;
 
-use fuel_chain_config::ChainConfig;
+use fuel_chain_config::{
+    ChainConfig,
+    GenesisCommitment,
+};
 use fuel_core_interfaces::common::fuel_crypto;
 use fuel_p2p::{
     config::P2PConfig,
@@ -133,10 +136,11 @@ pub struct P2pArgs {
 }
 
 impl P2pArgs {
-    pub fn into_config(self, chain_config: &ChainConfig) -> anyhow::Result<P2PConfig> {
-        let checksum = *fuel_crypto::Hasher::default()
-            .chain(bincode::serialize(chain_config)?)
-            .finalize();
+    pub fn into_config(
+        self,
+        chain_config: &mut ChainConfig,
+    ) -> anyhow::Result<P2PConfig> {
+        let checksum = chain_config.root()?.into();
 
         let local_keypair = {
             match self.keypair {

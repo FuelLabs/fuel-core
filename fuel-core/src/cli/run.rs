@@ -140,11 +140,11 @@ impl Command {
 
         let addr = net::SocketAddr::new(ip, port);
 
-        let chain_conf: ChainConfig = chain_config.as_str().parse()?;
+        let mut chain_conf: ChainConfig = chain_config.as_str().parse()?;
 
         #[cfg(feature = "p2p")]
         let p2p_cfg = {
-            let mut p2p = match p2p_args.into_config(&chain_conf) {
+            let mut p2p = match p2p_args.into_config(&mut chain_conf) {
                 Ok(value) => value,
                 Err(e) => return Err(e),
             };
