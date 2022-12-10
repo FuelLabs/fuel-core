@@ -6,8 +6,10 @@ use crate::gossipsub::{
         NEW_TX_GOSSIP_TOPIC,
     },
 };
-
-use fuel_core_interfaces::common::secrecy::Zeroize;
+use fuel_core_interfaces::{
+    common::secrecy::Zeroize,
+    model::Genesis,
+};
 use futures::{
     future,
     AsyncRead,
@@ -26,6 +28,7 @@ use libp2p::{
         },
         UpgradeInfo,
     },
+    gossipsub::GossipsubConfig,
     identity::{
         secp256k1::SecretKey,
         Keypair,
@@ -49,9 +52,6 @@ use libp2p::{
     PeerId,
     Transport,
 };
-
-use fuel_core_interfaces::model::Genesis;
-use libp2p::gossipsub::GossipsubConfig;
 use std::{
     collections::HashSet,
     error::Error,
