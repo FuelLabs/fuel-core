@@ -74,8 +74,15 @@ const MAX_NUM_OF_FRAMES_BUFFERED: usize = 256;
 /// inbound and outbound connections established through the transport.
 const TRANSPORT_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// Sha256 hash of chain id and chain config
-type Checksum = [u8; 32];
+/// Sha256 hash of ChainConfig
+#[derive(Debug, Clone, Copy)]
+pub struct Checksum([u8; 32]);
+
+impl From<[u8; 32]> for Checksum {
+    fn from(value: [u8; 32]) -> Self {
+        Self(value)
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct P2PConfig {
@@ -152,7 +159,7 @@ impl P2PConfig {
         P2PConfig {
             local_keypair,
             network_name: network_name.into(),
-            checksum: [0u8; 32],
+            checksum: [0u8; 32].into(),
             address: IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0])),
             public_address: None,
             tcp_port: 0,
@@ -405,8 +412,8 @@ where
         async move {
             // Inbound node receives the checksum and compares it to its own checksum.
             // If they do not match the connection is rejected.
-            let res = read_length_prefixed(&mut socket, self.checksum.len()).await?;
-            if res != self.checksum {
+            let res = read_length_prefixed(&mut socket, self.checksum.0.len()).await?;
+            if res != self.checksum.0 {
                 return Err(FuelUpgradeError::IncorrectChecksum)
             }
 
@@ -427,7 +434,7 @@ where
     fn upgrade_outbound(self, mut socket: C, _: Self::Info) -> Self::Future {
         async move {
             // Outbound node sends their own checksum for comparison with the inbound node.
-            write_length_prefixed(&mut socket, &self.checksum).await?;
+            write_length_prefixed(&mut socket, &self.checksum.0).await?;
 
             // Note: outbound node does not need to receive the checksum from the inbound node,
             // since inbound node will reject the connection if the two don't match on its side.

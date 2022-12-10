@@ -779,7 +779,7 @@ mod tests {
         let mut node_a = build_service_from_config(p2p_config.clone());
 
         // different checksum
-        p2p_config.checksum = [1u8; 32];
+        p2p_config.checksum = [1u8; 32].into();
         // Node B
         let mut node_b = build_service_from_config(p2p_config);
 
