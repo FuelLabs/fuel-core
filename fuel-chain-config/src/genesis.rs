@@ -14,10 +14,10 @@ pub trait GenesisCommitment {
 impl GenesisCommitment for Genesis {
     fn root(&mut self) -> anyhow::Result<MerkleRoot> {
         let genesis_hash = *Hasher::default()
+            .chain(self.chain_config_hash)
             .chain(self.coins_root)
             .chain(self.contracts_root)
             .chain(self.messages_root)
-            .chain(self.chain_config_hash)
             .finalize();
 
         Ok(genesis_hash)
