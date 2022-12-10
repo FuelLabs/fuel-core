@@ -136,7 +136,6 @@ impl GenesisCommitment for ChainConfig {
             .chain(self.block_gas_limit.to_be_bytes())
             .chain(self.transaction_parameters.root()?)
             .chain(self.chain_name.as_bytes())
-            .chain(bincode::serialize(&self.initial_state)?)
             .finalize();
 
         Ok(config_hash)
