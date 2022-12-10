@@ -143,7 +143,8 @@ pub struct P2PConfig<State = Initialized> {
     pub metrics: bool,
 
     /// It is the state of the config initialization. Everyone can create an instance of the `Self`
-    /// with the `NotInitialized` state. But it can be initialized only with the `init` method.
+    /// with the `NotInitialized` state. But it can be set into the `Initialized` state only with
+    /// the `init` method.
     pub state: State,
 }
 
