@@ -1,14 +1,20 @@
+use fuel_chain_config::GenesisCommitment;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::{
             Mappable,
             MerkleRootStorage,
+            StorageAsMut,
             StorageAsRef,
             StorageInspect,
         },
         fuel_tx::{
             Bytes32,
             ContractId,
+        },
+        prelude::{
+            Hasher,
+            MerkleRoot,
         },
     },
     db::{
@@ -17,8 +23,12 @@ use fuel_core_interfaces::{
         ContractsState,
     },
     executor::Error,
+    not_found,
 };
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    error::Error as StdError,
+};
 
 /// The wrapper around `contract_id` to simplify work with `Contract` in the database.
 pub struct ContractRef<Database> {
@@ -100,5 +110,49 @@ where
         &mut self,
     ) -> Result<Bytes32, <Database as StorageInspect<ContractsState<'_>>>::Error> {
         self.database.root(&self.contract_id).map(Into::into)
+    }
+}
+
+impl<'a, Database> GenesisCommitment for ContractRef<&'a mut Database>
+where
+    for<'b> Database: StorageInspect<ContractsLatestUtxo>
+        + MerkleRootStorage<ContractId, ContractsState<'a>>
+        + MerkleRootStorage<ContractId, ContractsAssets<'a>>,
+    <Database as StorageInspect<ContractsLatestUtxo>>::Error:
+        StdError + Send + Sync + 'static,
+    <Database as StorageInspect<ContractsState<'a>>>::Error:
+        StdError + Send + Sync + 'static,
+    <Database as StorageInspect<ContractsAssets<'a>>>::Error:
+        StdError + Send + Sync + 'static,
+{
+    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
+        let contract_id = *self.contract_id();
+        let utxo = self
+            .database()
+            .storage::<ContractsLatestUtxo>()
+            .get(&contract_id)?
+            .ok_or(not_found!(ContractsLatestUtxo))?
+            .into_owned();
+
+        let state_root = self
+            .database_mut()
+            .storage::<ContractsState>()
+            .root(&contract_id)?;
+
+        let balance_root = self
+            .database_mut()
+            .storage::<ContractsAssets>()
+            .root(&contract_id)?;
+
+        let contract_hash = *Hasher::default()
+            // `ContractId` already is based on contract's code and salt so we don't need it.
+            .chain(contract_id.as_ref())
+            .chain(utxo.tx_id().as_ref())
+            .chain([utxo.output_index()])
+            .chain(state_root.as_slice())
+            .chain(balance_root.as_slice())
+            .finalize();
+
+        Ok(contract_hash)
     }
 }
