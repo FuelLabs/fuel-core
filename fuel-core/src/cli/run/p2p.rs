@@ -9,10 +9,12 @@ use std::{
 
 use clap::Args;
 
-use fuel_core::service::config::NotInitialized;
 use fuel_core_interfaces::common::fuel_crypto;
 use fuel_p2p::{
-    config::P2PConfig,
+    config::{
+        NotInitialized,
+        P2PConfig,
+    },
     gossipsub_config::default_gossipsub_builder,
     Multiaddr,
 };
@@ -179,6 +181,7 @@ impl P2PArgs {
         Ok(P2PConfig {
             keypair: local_keypair,
             network_name: self.network,
+            checksum: Default::default(),
             address: self
                 .address
                 .unwrap_or_else(|| IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]))),
@@ -202,7 +205,7 @@ impl P2PArgs {
             info_interval: Some(Duration::from_secs(self.info_interval)),
             identify_interval: Some(Duration::from_secs(self.identify_interval)),
             metrics,
-            extra: NotInitialized,
+            state: NotInitialized,
         })
     }
 }

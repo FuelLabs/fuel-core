@@ -33,8 +33,6 @@ use tokio::{
 };
 
 #[cfg(feature = "p2p")]
-use crate::service::config::InitializeP2PConfig;
-#[cfg(feature = "p2p")]
 use fuel_core_interfaces::p2p::P2pDb;
 
 pub struct Modules {

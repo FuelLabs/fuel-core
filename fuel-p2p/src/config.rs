@@ -50,6 +50,8 @@ use libp2p::{
     Transport,
 };
 
+use fuel_core_interfaces::model::Genesis;
+use libp2p::gossipsub::GossipsubConfig;
 use std::{
     collections::HashSet,
     error::Error,
@@ -62,8 +64,6 @@ use std::{
     pin::Pin,
     time::Duration,
 };
-
-use libp2p::gossipsub::GossipsubConfig;
 
 const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -85,12 +85,15 @@ impl From<[u8; 32]> for Checksum {
 }
 
 #[derive(Clone, Debug)]
-pub struct P2PConfig<Extra = Initialized> {
+pub struct P2PConfig<State = Initialized> {
     /// The keypair used for for handshake during communication with other p2p nodes.
     pub keypair: Keypair,
 
     /// Name of the Network
     pub network_name: String,
+
+    /// Checksum is a hash(sha256) of [`Genesis`](fuel_core_interfaces::model::Genesis) - chain id.
+    pub checksum: Checksum,
 
     /// IP address for Swarm to listen on
     pub address: IpAddr,
@@ -139,14 +142,49 @@ pub struct P2PConfig<Extra = Initialized> {
     /// Enables prometheus metrics for this fuel-service
     pub metrics: bool,
 
-    /// Extra fields that can be initialized later.
-    pub extra: Extra,
+    /// It is the state of the config initialization. Everyone can create an instance of the `Self`
+    /// with the `NotInitialized` state. But it can be initialized only with the `init` method.
+    pub state: State,
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct Initialized {
-    /// Checksum is a hash(sha256) of [`Genesis`](fuel_core_interfaces::model::Genesis) - chain id.
-    pub checksum: Checksum,
+/// The initialized state can be achieved only by the `init` function because `()` is private.
+#[derive(Clone, Debug)]
+pub struct Initialized(());
+
+#[derive(Clone, Debug)]
+pub struct NotInitialized;
+
+impl P2PConfig<NotInitialized> {
+    /// Inits the `P2PConfig` with some lazily loaded data.
+    pub fn init(self, mut genesis: Genesis) -> anyhow::Result<P2PConfig<Initialized>> {
+        use fuel_chain_config::GenesisCommitment;
+
+        Ok(P2PConfig {
+            keypair: self.keypair,
+            network_name: self.network_name,
+            checksum: genesis.root()?.into(),
+            address: self.address,
+            public_address: self.public_address,
+            tcp_port: self.tcp_port,
+            max_block_size: self.max_block_size,
+            bootstrap_nodes: self.bootstrap_nodes,
+            enable_mdns: self.enable_mdns,
+            max_peers_connected: self.max_peers_connected,
+            allow_private_addresses: self.allow_private_addresses,
+            random_walk: self.random_walk,
+            connection_idle_timeout: self.connection_idle_timeout,
+            reserved_nodes: self.reserved_nodes,
+            reserved_nodes_only_mode: self.reserved_nodes_only_mode,
+            identify_interval: self.identify_interval,
+            info_interval: self.info_interval,
+            gossipsub_config: self.gossipsub_config,
+            topics: self.topics,
+            set_request_timeout: self.set_request_timeout,
+            set_connection_keep_alive: self.set_connection_keep_alive,
+            metrics: self.metrics,
+            state: Initialized(()),
+        })
+    }
 }
 
 /// Takes secret key bytes generated outside of libp2p.
@@ -159,13 +197,14 @@ pub fn convert_to_libp2p_keypair(
     Ok(Keypair::Secp256k1(secret_key.into()))
 }
 
-impl<Extra: Default> P2PConfig<Extra> {
-    pub fn default_with_network(network_name: &str) -> Self {
+impl P2PConfig<NotInitialized> {
+    pub fn default(network_name: &str) -> Self {
         let keypair = Keypair::generate_secp256k1();
 
-        P2PConfig {
+        Self {
             keypair,
             network_name: network_name.into(),
+            checksum: Default::default(),
             address: IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0])),
             public_address: None,
             tcp_port: 0,
@@ -189,8 +228,17 @@ impl<Extra: Default> P2PConfig<Extra> {
             info_interval: Some(Duration::from_secs(3)),
             identify_interval: Some(Duration::from_secs(5)),
             metrics: false,
-            extra: Extra::default(),
+            state: NotInitialized,
         }
+    }
+}
+
+#[cfg(any(feature = "test-helpers", test))]
+impl P2PConfig<Initialized> {
+    pub fn default_initialized(network_name: &str) -> Self {
+        P2PConfig::<NotInitialized>::default(network_name)
+            .init(Default::default())
+            .expect("Expected correct initialization of config")
     }
 }
 
@@ -228,7 +276,7 @@ pub(crate) fn build_transport(p2p_config: &P2PConfig) -> Boxed<(PeerId, StreamMu
         libp2p::core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
     };
 
-    let fuel_upgrade = FuelUpgrade::new(p2p_config.extra.checksum);
+    let fuel_upgrade = FuelUpgrade::new(p2p_config.checksum);
 
     if p2p_config.reserved_nodes_only_mode {
         transport
