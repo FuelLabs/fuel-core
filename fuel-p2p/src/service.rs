@@ -119,7 +119,7 @@ pub enum FuelP2PEvent {
 
 impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     pub fn new(config: P2PConfig, codec: Codec) -> anyhow::Result<Self> {
-        let local_peer_id = PeerId::from(config.local_keypair.public());
+        let local_peer_id = PeerId::from(config.keypair.public());
 
         // configure and build P2P Service
         let transport = build_transport(&config);
@@ -531,7 +531,7 @@ mod tests {
     fn build_service_from_config(
         mut p2p_config: P2PConfig,
     ) -> FuelP2PService<BincodeCodec> {
-        p2p_config.local_keypair = Keypair::generate_secp256k1(); // change keypair for each Node
+        p2p_config.keypair = Keypair::generate_secp256k1(); // change keypair for each Node
         let max_block_size = p2p_config.max_block_size;
 
         FuelP2PService::new(p2p_config, BincodeCodec::new(max_block_size)).unwrap()
@@ -585,7 +585,7 @@ mod tests {
         ) -> FuelP2PService<BincodeCodec> {
             let max_block_size = p2p_config.max_block_size;
             p2p_config.tcp_port = self.tcp_port;
-            p2p_config.local_keypair = self.keypair.clone();
+            p2p_config.keypair = self.keypair.clone();
 
             FuelP2PService::new(p2p_config, BincodeCodec::new(max_block_size)).unwrap()
         }
@@ -779,7 +779,7 @@ mod tests {
         let mut node_a = build_service_from_config(p2p_config.clone());
 
         // different checksum
-        p2p_config.checksum = [1u8; 32].into();
+        p2p_config.extra.checksum = [1u8; 32].into();
         // Node B
         let mut node_b = build_service_from_config(p2p_config);
 

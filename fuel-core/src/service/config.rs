@@ -20,7 +20,12 @@ use strum_macros::{
 };
 
 #[cfg(feature = "p2p")]
-use fuel_p2p;
+use fuel_core_interfaces::model::Genesis;
+#[cfg(feature = "p2p")]
+use fuel_p2p::config::{
+    Initialized,
+    P2PConfig,
+};
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -40,7 +45,7 @@ pub struct Config {
     #[cfg(feature = "relayer")]
     pub relayer: fuel_relayer::Config,
     #[cfg(feature = "p2p")]
-    pub p2p: fuel_p2p::config::P2PConfig,
+    pub p2p: P2PConfig<NotInitialized>,
     pub consensus_key: Option<Secret<SecretKeyWrapper>>,
 }
 
@@ -65,7 +70,7 @@ impl Config {
             #[cfg(feature = "relayer")]
             relayer: Default::default(),
             #[cfg(feature = "p2p")]
-            p2p: fuel_p2p::config::P2PConfig::default_with_network("test_network"),
+            p2p: P2PConfig::default_with_network("test_network"),
             consensus_key: Some(Secret::new(default_consensus_dev_key().into())),
         }
     }
@@ -81,6 +86,50 @@ pub struct VMConfig {
 pub enum DbType {
     InMemory,
     RocksDb,
+}
+
+#[cfg(feature = "p2p")]
+#[derive(Debug, Clone, Default)]
+pub struct NotInitialized;
+
+#[cfg(feature = "p2p")]
+pub trait InitializeP2PConfig {
+    /// Inits the `P2PConfig` with some lazily loaded data.
+    fn init(self, genesis: Genesis) -> anyhow::Result<P2PConfig>;
+}
+
+#[cfg(feature = "p2p")]
+impl InitializeP2PConfig for P2PConfig<NotInitialized> {
+    fn init(self, mut genesis: Genesis) -> anyhow::Result<P2PConfig> {
+        use fuel_chain_config::GenesisCommitment;
+
+        Ok(P2PConfig {
+            keypair: self.keypair,
+            network_name: self.network_name,
+            address: self.address,
+            public_address: self.public_address,
+            tcp_port: self.tcp_port,
+            max_block_size: self.max_block_size,
+            bootstrap_nodes: self.bootstrap_nodes,
+            enable_mdns: self.enable_mdns,
+            max_peers_connected: self.max_peers_connected,
+            allow_private_addresses: self.allow_private_addresses,
+            random_walk: self.random_walk,
+            connection_idle_timeout: self.connection_idle_timeout,
+            reserved_nodes: self.reserved_nodes,
+            reserved_nodes_only_mode: self.reserved_nodes_only_mode,
+            identify_interval: self.identify_interval,
+            info_interval: self.info_interval,
+            gossipsub_config: self.gossipsub_config,
+            topics: self.topics,
+            set_request_timeout: self.set_request_timeout,
+            set_connection_keep_alive: self.set_connection_keep_alive,
+            metrics: self.metrics,
+            extra: Initialized {
+                checksum: genesis.root()?.into(),
+            },
+        })
+    }
 }
 
 /// A default secret key to use for testing purposes only

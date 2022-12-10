@@ -75,7 +75,7 @@ const MAX_NUM_OF_FRAMES_BUFFERED: usize = 256;
 const TRANSPORT_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Sha256 hash of ChainConfig
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Checksum([u8; 32]);
 
 impl From<[u8; 32]> for Checksum {
@@ -85,14 +85,12 @@ impl From<[u8; 32]> for Checksum {
 }
 
 #[derive(Clone, Debug)]
-pub struct P2PConfig {
-    pub local_keypair: Keypair,
+pub struct P2PConfig<Extra = Initialized> {
+    /// The keypair used for for handshake during communication with other p2p nodes.
+    pub keypair: Keypair,
 
     /// Name of the Network
     pub network_name: String,
-
-    /// Checksum (sha256) of Chain ID + Chain Config
-    pub checksum: Checksum,
 
     /// IP address for Swarm to listen on
     pub address: IpAddr,
@@ -140,6 +138,15 @@ pub struct P2PConfig {
 
     /// Enables prometheus metrics for this fuel-service
     pub metrics: bool,
+
+    /// Extra fields that can be initialized later.
+    pub extra: Extra,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Initialized {
+    /// Checksum is a hash(sha256) of [`Genesis`](fuel_core_interfaces::model::Genesis) - chain id.
+    pub checksum: Checksum,
 }
 
 /// Takes secret key bytes generated outside of libp2p.
@@ -152,14 +159,13 @@ pub fn convert_to_libp2p_keypair(
     Ok(Keypair::Secp256k1(secret_key.into()))
 }
 
-impl P2PConfig {
+impl<Extra: Default> P2PConfig<Extra> {
     pub fn default_with_network(network_name: &str) -> Self {
-        let local_keypair = Keypair::generate_secp256k1();
+        let keypair = Keypair::generate_secp256k1();
 
         P2PConfig {
-            local_keypair,
+            keypair,
             network_name: network_name.into(),
-            checksum: [0u8; 32].into(),
             address: IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0])),
             public_address: None,
             tcp_port: 0,
@@ -183,6 +189,7 @@ impl P2PConfig {
             info_interval: Some(Duration::from_secs(3)),
             identify_interval: Some(Duration::from_secs(5)),
             metrics: false,
+            extra: Extra::default(),
         }
     }
 }
@@ -207,7 +214,7 @@ pub(crate) fn build_transport(p2p_config: &P2PConfig) -> Boxed<(PeerId, StreamMu
 
     let noise_authenticated = {
         let dh_keys = noise::Keypair::<noise::X25519Spec>::new()
-            .into_authentic(&p2p_config.local_keypair)
+            .into_authentic(&p2p_config.keypair)
             .expect("Noise key generation failed");
 
         noise::NoiseConfig::xx(dh_keys).into_authenticated()
@@ -221,7 +228,7 @@ pub(crate) fn build_transport(p2p_config: &P2PConfig) -> Boxed<(PeerId, StreamMu
         libp2p::core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
     };
 
-    let fuel_upgrade = FuelUpgrade::new(p2p_config.checksum);
+    let fuel_upgrade = FuelUpgrade::new(p2p_config.extra.checksum);
 
     if p2p_config.reserved_nodes_only_mode {
         transport
