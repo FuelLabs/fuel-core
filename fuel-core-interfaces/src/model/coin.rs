@@ -28,6 +28,7 @@ pub struct Coin {
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]
+#[repr(u8)]
 pub enum CoinStatus {
     Unspent,
     Spent,

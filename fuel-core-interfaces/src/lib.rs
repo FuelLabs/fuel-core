@@ -1,6 +1,5 @@
 pub mod bft;
 pub mod block_importer;
-pub mod block_producer;
 pub mod db;
 pub mod executor;
 pub mod model;

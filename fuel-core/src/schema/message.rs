@@ -10,14 +10,7 @@ use super::{
     },
 };
 use crate::{
-    database::{
-        storage::{
-            FuelBlocks,
-            Receipts,
-            SealedBlockConsensus,
-        },
-        Database,
-    },
+    database::Database,
     query::MessageProofData,
     state::IterDirection,
 };
@@ -39,8 +32,11 @@ use fuel_core_interfaces::{
         fuel_types,
     },
     db::{
+        FuelBlocks,
         KvStoreError,
         Messages,
+        Receipts,
+        SealedBlockConsensus,
         Transactions,
     },
     model::{
@@ -48,6 +44,7 @@ use fuel_core_interfaces::{
         FuelBlockConsensus,
     },
     not_found,
+    txpool::TransactionStatus,
 };
 use itertools::Itertools;
 use std::borrow::Cow;
@@ -291,7 +288,7 @@ impl MessageProofData for MessageProofContext<'_> {
     fn transaction_status(
         &self,
         transaction_id: &fuel_core_interfaces::common::prelude::Bytes32,
-    ) -> Result<Option<crate::tx_pool::TransactionStatus>, KvStoreError> {
+    ) -> Result<Option<TransactionStatus>, KvStoreError> {
         Ok(self.0.get_tx_status(transaction_id)?)
     }
 
@@ -318,6 +315,8 @@ impl MessageProofData for MessageProofContext<'_> {
             .get(block_id)?
             .map(Cow::into_owned)
         {
+            // TODO: https://github.com/FuelLabs/fuel-core/issues/816
+            Some(FuelBlockConsensus::Genesis(_)) => Ok(Default::default()),
             Some(FuelBlockConsensus::PoA(c)) => Ok(Some(c.signature)),
             None => Ok(None),
         }

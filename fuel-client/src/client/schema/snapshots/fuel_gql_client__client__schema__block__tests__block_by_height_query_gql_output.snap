@@ -2,8 +2,8 @@
 source: fuel-client/src/client/schema/block.rs
 expression: operation.query
 ---
-query($id: BlockId) {
-  block(id: $id) {
+query($height: U64) {
+  block(height: $height) {
     id
     header {
       id
