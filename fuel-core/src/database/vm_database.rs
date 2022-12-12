@@ -277,7 +277,7 @@ impl InterpreterStorage for VmDatabase {
         //     Column::ContractsState,
         // );
 
-        Ok((!found_unset).then(|| ()))
+        Ok((!found_unset).then_some(()))
     }
 
     fn merkle_contract_state_remove_range(
@@ -314,7 +314,7 @@ impl InterpreterStorage for VmDatabase {
 
         transaction.commit()?;
 
-        Ok((!found_unset).then(|| ()))
+        Ok((!found_unset).then_some(()))
     }
 }
 
@@ -389,7 +389,7 @@ mod tests {
                 .insert::<_, _, Bytes32>(
                     &multi_key,
                     Column::ContractsState,
-                    &setup_values[i],
+                    setup_values[i],
                 )
                 .unwrap();
         }
@@ -455,7 +455,7 @@ mod tests {
                 let key = u256_to_bytes32(key);
                 let multi_key = MultiKey::new(&(contract_id.as_ref(), key.as_ref()));
                 db.database
-                    .insert::<_, _, Bytes32>(&multi_key, Column::ContractsState, &value)
+                    .insert::<_, _, Bytes32>(&multi_key, Column::ContractsState, value)
                     .unwrap();
             }
         }
@@ -492,28 +492,28 @@ mod tests {
         let c1_k1 = MultiKey::new(&(contract_id_1.as_ref(), key.as_ref()));
         let c1_v1: Bytes32 = rng.gen();
         db.database
-            .insert::<_, _, Bytes32>(&c1_k1, Column::ContractsState, &c1_v1)
+            .insert::<_, _, Bytes32>(&c1_k1, Column::ContractsState, c1_v1)
             .unwrap();
 
         let key = u256_to_bytes32(start_key.add(1));
         let c1_k2 = MultiKey::new(&(contract_id_1.as_ref(), key.as_ref()));
         let c1_v2: Bytes32 = rng.gen();
         db.database
-            .insert::<_, _, Bytes32>(&c1_k2, Column::ContractsState, &c1_v2)
+            .insert::<_, _, Bytes32>(&c1_k2, Column::ContractsState, c1_v2)
             .unwrap();
 
         let key = u256_to_bytes32(start_key.add(0));
         let c2_k1 = MultiKey::new(&(contract_id_2.as_ref(), key.as_ref()));
         let c2_v1: Bytes32 = rng.gen();
         db.database
-            .insert::<_, _, Bytes32>(&c2_k1, Column::ContractsState, &c2_v1)
+            .insert::<_, _, Bytes32>(&c2_k1, Column::ContractsState, c2_v1)
             .unwrap();
 
         let key = u256_to_bytes32(start_key.add(1));
         let c2_k2 = MultiKey::new(&(contract_id_2.as_ref(), key.as_ref()));
         let c2_v2: Bytes32 = rng.gen();
         db.database
-            .insert::<_, _, Bytes32>(&c2_k2, Column::ContractsState, &c2_v2)
+            .insert::<_, _, Bytes32>(&c2_k2, Column::ContractsState, c2_v2)
             .unwrap();
 
         // perform sequential read
@@ -559,21 +559,21 @@ mod tests {
         let c1_k2 = MultiKey::new(&(contract_id_1.as_ref(), key.as_ref()));
         let c1_v2: Bytes32 = rng.gen();
         db.database
-            .insert::<_, _, Bytes32>(&c1_k2, Column::ContractsState, &c1_v2)
+            .insert::<_, _, Bytes32>(&c1_k2, Column::ContractsState, c1_v2)
             .unwrap();
 
         let key = u256_to_bytes32(start_key.add(0));
         let c2_k1 = MultiKey::new(&(contract_id_2.as_ref(), key.as_ref()));
         let c2_v1: Bytes32 = rng.gen();
         db.database
-            .insert::<_, _, Bytes32>(&c2_k1, Column::ContractsState, &c2_v1)
+            .insert::<_, _, Bytes32>(&c2_k1, Column::ContractsState, c2_v1)
             .unwrap();
 
         let key = u256_to_bytes32(start_key.add(1));
         let c2_k2 = MultiKey::new(&(contract_id_2.as_ref(), key.as_ref()));
         let c2_v2: Bytes32 = rng.gen();
         db.database
-            .insert::<_, _, Bytes32>(&c2_k2, Column::ContractsState, &c2_v2)
+            .insert::<_, _, Bytes32>(&c2_k2, Column::ContractsState, c2_v2)
             .unwrap();
 
         // perform sequential read
@@ -603,7 +603,7 @@ mod tests {
         let key = MultiKey::new(&(contract_id.as_ref(), key.as_ref()));
         let value: Bytes32 = rng.gen();
         db.database
-            .insert::<_, _, Bytes32>(&key, Column::ContractsState, &value)
+            .insert::<_, _, Bytes32>(&key, Column::ContractsState, value)
             .unwrap();
 
         // perform sequential read (u256::max - 1, u256::max, invalid key)
@@ -693,10 +693,10 @@ mod tests {
             .unwrap();
 
         assert!(insert_status_0.is_none());
-        assert!(!post_insert_read_0.is_none());
+        assert!(post_insert_read_0.is_some());
         assert_eq!(post_insert_read_0.unwrap().as_ref(), &value_1);
-        assert!(!insert_status_1.is_none());
-        assert!(!post_insert_read_1.is_none());
+        assert!(insert_status_1.is_some());
+        assert!(post_insert_read_1.is_some());
         assert_eq!(post_insert_read_1.unwrap().as_ref(), &value_2);
     }
 
@@ -753,11 +753,11 @@ mod tests {
         assert!(pre_insert_read_1.is_none());
         assert!(pre_insert_read_2.is_none());
         assert!(insert_status.is_none());
-        assert!(!read_0.is_none());
+        assert!(read_0.is_some());
         assert_eq!(read_0.unwrap().as_ref(), &value_1);
-        assert!(!read_1.is_none());
+        assert!(read_1.is_some());
         assert_eq!(read_1.unwrap().as_ref(), &value_2);
-        assert!(!read_2.is_none());
+        assert!(read_2.is_some());
         assert_eq!(read_2.unwrap().as_ref(), &value_3);
     }
 
@@ -819,14 +819,14 @@ mod tests {
             .unwrap();
 
         assert!(pre_insert_read_0.is_none());
-        assert!(!pre_insert_read_1.is_none());
-        assert!(!pre_insert_read_2.is_none());
+        assert!(pre_insert_read_1.is_some());
+        assert!(pre_insert_read_2.is_some());
         assert!(insert_status.is_none());
-        assert!(!read_0.is_none());
+        assert!(read_0.is_some());
         assert_eq!(read_0.unwrap().as_ref(), &value_1);
-        assert!(!read_1.is_none());
+        assert!(read_1.is_some());
         assert_eq!(read_1.unwrap().as_ref(), &value_2);
-        assert!(!read_2.is_none());
+        assert!(read_2.is_some());
         assert_eq!(read_2.unwrap().as_ref(), &value_3);
     }
 
@@ -890,15 +890,15 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
-        assert!(!pre_insert_read_0.is_none());
+        assert!(pre_insert_read_0.is_some());
         assert!(pre_insert_read_1.is_none());
-        assert!(!pre_insert_read_2.is_none());
+        assert!(pre_insert_read_2.is_some());
         assert!(insert_status.is_none());
-        assert!(!read_0.is_none());
+        assert!(read_0.is_some());
         assert_eq!(read_0.unwrap().as_ref(), &value_1);
-        assert!(!read_1.is_none());
+        assert!(read_1.is_some());
         assert_eq!(read_1.unwrap().as_ref(), &value_2);
-        assert!(!read_2.is_none());
+        assert!(read_2.is_some());
         assert_eq!(read_2.unwrap().as_ref(), &value_3);
     }
 
@@ -959,15 +959,15 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
-        assert!(!pre_insert_read_0.is_none());
-        assert!(!pre_insert_read_1.is_none());
+        assert!(pre_insert_read_0.is_some());
+        assert!(pre_insert_read_1.is_some());
         assert!(pre_insert_read_2.is_none());
         assert!(insert_status.is_none());
-        assert!(!read_0.is_none());
+        assert!(read_0.is_some());
         assert_eq!(read_0.unwrap().as_ref(), &value_1);
-        assert!(!read_1.is_none());
+        assert!(read_1.is_some());
         assert_eq!(read_1.unwrap().as_ref(), &value_2);
-        assert!(!read_2.is_none());
+        assert!(read_2.is_some());
         assert_eq!(read_2.unwrap().as_ref(), &value_3);
     }
 
@@ -1031,15 +1031,15 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
-        assert!(!pre_insert_read_0.is_none());
-        assert!(!pre_insert_read_1.is_none());
-        assert!(!pre_insert_read_2.is_none());
-        assert!(!insert_status.is_none());
-        assert!(!read_0.is_none());
+        assert!(pre_insert_read_0.is_some());
+        assert!(pre_insert_read_1.is_some());
+        assert!(pre_insert_read_2.is_some());
+        assert!(insert_status.is_some());
+        assert!(read_0.is_some());
         assert_eq!(read_0.unwrap().as_ref(), &value_1);
-        assert!(!read_1.is_none());
+        assert!(read_1.is_some());
         assert_eq!(read_1.unwrap().as_ref(), &value_2);
-        assert!(!read_2.is_none());
+        assert!(read_2.is_some());
         assert_eq!(read_2.unwrap().as_ref(), &value_3);
     }
 
@@ -1085,7 +1085,7 @@ mod tests {
         let read_status = db.merkle_contract_state(&contract_id, &key).unwrap();
 
         assert!(insert_status.is_none());
-        assert!(!clear_status.is_none());
+        assert!(clear_status.is_some());
         assert!(read_status.is_none());
     }
 
@@ -1154,8 +1154,8 @@ mod tests {
             .unwrap();
 
         assert!(pre_clear_read_0.is_none());
-        assert!(!pre_clear_read_1.is_none());
-        assert!(!pre_clear_read_2.is_none());
+        assert!(pre_clear_read_1.is_some());
+        assert!(pre_clear_read_2.is_some());
         assert!(clear_status.is_none());
         assert!(read_0.is_none());
         assert!(read_1.is_none());
@@ -1212,9 +1212,9 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
-        assert!(!pre_clear_read_0.is_none());
+        assert!(pre_clear_read_0.is_some());
         assert!(pre_clear_read_1.is_none());
-        assert!(!pre_clear_read_2.is_none());
+        assert!(pre_clear_read_2.is_some());
         assert!(clear_status.is_none());
         assert!(read_0.is_none());
         assert!(read_1.is_none());
@@ -1271,8 +1271,8 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
-        assert!(!pre_clear_read_0.is_none());
-        assert!(!pre_clear_read_1.is_none());
+        assert!(pre_clear_read_0.is_some());
+        assert!(pre_clear_read_1.is_some());
         assert!(pre_clear_read_2.is_none());
         assert!(clear_status.is_none());
         assert!(read_0.is_none());
@@ -1336,10 +1336,10 @@ mod tests {
         assert!(insert_status_0.is_none());
         assert!(insert_status_1.is_none());
         assert!(insert_status_2.is_none());
-        assert!(!pre_clear_read_0.is_none());
-        assert!(!pre_clear_read_1.is_none());
-        assert!(!pre_clear_read_2.is_none());
-        assert!(!clear_status.is_none());
+        assert!(pre_clear_read_0.is_some());
+        assert!(pre_clear_read_1.is_some());
+        assert!(pre_clear_read_2.is_some());
+        assert!(clear_status.is_some());
         assert!(read_0.is_none());
         assert!(read_1.is_none());
         assert!(read_2.is_none());
