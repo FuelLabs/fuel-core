@@ -783,10 +783,10 @@ mod tests {
         let u256_2 = u256_zero.checked_add(2.into()).unwrap();
         u256_2.to_big_endian(&mut key_2);
 
-        let insert_status_1 = db
+        let _insert_status_1 = db
             .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value_0)
             .unwrap();
-        let insert_status_2 = db
+        let _insert_status_2 = db
             .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_2), &value_0)
             .unwrap();
 
@@ -818,8 +818,6 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
-        assert_eq!(insert_status_1.is_none(), true);
-        assert_eq!(insert_status_2.is_none(), true);
         assert_eq!(pre_insert_read_0.is_none(), true);
         assert_eq!(pre_insert_read_1.is_none(), false);
         assert_eq!(pre_insert_read_2.is_none(), false);
@@ -853,10 +851,10 @@ mod tests {
         let u256_2 = u256_zero.checked_add(2.into()).unwrap();
         u256_2.to_big_endian(&mut key_2);
 
-        let insert_status_0 = db
+        let _insert_status_0 = db
             .merkle_contract_state_insert(&contract_id, &zero_bytes32, &zero_bytes32)
             .unwrap();
-        let insert_status_2 = db
+        let _insert_status_2 = db
             .merkle_contract_state_insert(
                 &contract_id,
                 &Bytes32::new(key_2),
@@ -892,8 +890,6 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
-        assert_eq!(insert_status_0.is_none(), true);
-        assert_eq!(insert_status_2.is_none(), true);
         assert_eq!(pre_insert_read_0.is_none(), false);
         assert_eq!(pre_insert_read_1.is_none(), true);
         assert_eq!(pre_insert_read_2.is_none(), false);
@@ -928,10 +924,10 @@ mod tests {
         let u256_2 = u256_zero.checked_add(2.into()).unwrap();
         u256_2.to_big_endian(&mut key_2);
 
-        let insert_status_0 = db
+        let _insert_status_0 = db
             .merkle_contract_state_insert(&contract_id, &zero_bytes32, &value_0)
             .unwrap();
-        let insert_status_1 = db
+        let _insert_status_1 = db
             .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value_0)
             .unwrap();
 
@@ -963,8 +959,6 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
-        assert_eq!(insert_status_0.is_none(), false);
-        assert_eq!(insert_status_1.is_none(), false);
         assert_eq!(pre_insert_read_0.is_none(), false);
         assert_eq!(pre_insert_read_1.is_none(), false);
         assert_eq!(pre_insert_read_2.is_none(), true);
@@ -1130,10 +1124,10 @@ mod tests {
         let u256_2 = u256_zero.checked_add(2.into()).unwrap();
         u256_2.to_big_endian(&mut key_2);
 
-        let insert_status_1 = db
+        let _insert_status_1 = db
             .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value)
             .unwrap();
-        let insert_status_2 = db
+        let _insert_status_2 = db
             .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_2), &value)
             .unwrap();
 
@@ -1161,8 +1155,6 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
-        assert_eq!(insert_status_1.is_none(), true);
-        assert_eq!(insert_status_2.is_none(), true);
         assert_eq!(pre_clear_read_0.is_none(), true);
         assert_eq!(pre_clear_read_1.is_none(), false);
         assert_eq!(pre_clear_read_2.is_none(), false);
@@ -1191,10 +1183,10 @@ mod tests {
         let u256_2 = u256_zero.checked_add(2.into()).unwrap();
         u256_2.to_big_endian(&mut key_2);
 
-        let insert_status_0 = db
+        let _insert_status_0 = db
             .merkle_contract_state_insert(&contract_id, &zero_bytes32, &value)
             .unwrap();
-        let insert_status_2 = db
+        let _insert_status_2 = db
             .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_2), &value)
             .unwrap();
 
@@ -1222,8 +1214,6 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
-        assert_eq!(insert_status_0.is_none(), true);
-        assert_eq!(insert_status_2.is_none(), true);
         assert_eq!(pre_clear_read_0.is_none(), false);
         assert_eq!(pre_clear_read_1.is_none(), true);
         assert_eq!(pre_clear_read_2.is_none(), false);
@@ -1252,10 +1242,10 @@ mod tests {
         let u256_2 = u256_zero.checked_add(2.into()).unwrap();
         u256_2.to_big_endian(&mut key_2);
 
-        let insert_status_0 = db
+        let _insert_status_0 = db
             .merkle_contract_state_insert(&contract_id, &zero_bytes32, &value)
             .unwrap();
-        let insert_status_1 = db
+        let _insert_status_1 = db
             .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value)
             .unwrap();
 
@@ -1283,8 +1273,6 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
-        assert_eq!(insert_status_0.is_none(), true);
-        assert_eq!(insert_status_1.is_none(), true);
         assert_eq!(pre_clear_read_0.is_none(), false);
         assert_eq!(pre_clear_read_1.is_none(), false);
         assert_eq!(pre_clear_read_2.is_none(), true);
