@@ -133,7 +133,6 @@ pub fn run(c: &mut Criterion) {
 
     call.finish();
 
-    // FIXME: Currently unable to measure this as it has no inverse and the memory overflows.
     let mut ldc = c.benchmark_group("ldc");
 
     for i in linear.clone() {
@@ -169,8 +168,7 @@ pub fn run(c: &mut Criterion) {
             VmBench::new(Opcode::LDC(0x10, REG_ZERO, 0x13))
                 .with_contract_code(code)
                 .with_data(data)
-                .with_prepare_script(prepare_script)
-                .with_cleanup(vec![Opcode::RET(REG_ONE)]),
+                .with_prepare_script(prepare_script),
         );
     }
 

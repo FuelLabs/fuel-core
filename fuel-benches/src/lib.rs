@@ -68,7 +68,6 @@ pub struct VmBench {
     pub height: Word,
     pub prepare_script: Vec<Opcode>,
     pub post_call: Vec<Opcode>,
-    pub cleanup_script: Vec<Opcode>,
     pub data: Vec<u8>,
     pub inputs: Vec<Input>,
     pub outputs: Vec<Output>,
@@ -85,8 +84,7 @@ pub struct VmBench {
 pub struct VmBenchPrepared {
     pub vm: Interpreter<VmDatabase, Script>,
     pub instruction: Instruction,
-    pub cleanup_script: Vec<Instruction>,
-    pub diff: diff::Diff<diff::Beginning>,
+    pub diff: diff::Diff<diff::InitialVmState>,
 }
 
 impl VmBench {
@@ -105,7 +103,6 @@ impl VmBench {
             height: 0,
             prepare_script: vec![],
             post_call: vec![],
-            cleanup_script: vec![],
             data: vec![],
             inputs: vec![],
             outputs: vec![],
@@ -220,11 +217,6 @@ impl VmBench {
         self
     }
 
-    pub fn with_cleanup(mut self, cleanup_script: Vec<Opcode>) -> Self {
-        self.cleanup_script = cleanup_script;
-        self
-    }
-
     pub fn with_data(mut self, data: Vec<u8>) -> Self {
         self.data = data;
         self
@@ -285,7 +277,6 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             height,
             prepare_script,
             post_call,
-            cleanup_script,
             data,
             inputs,
             outputs,
@@ -391,8 +382,6 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
         let instruction = Instruction::from(instruction);
 
-        let cleanup_script = cleanup_script.into_iter().map(Instruction::from).collect();
-
         let mut txtor = Transactor::new(db, params, GasCosts::free());
 
         txtor.transact(tx);
@@ -420,42 +409,19 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             }
             _ => {
                 vm.instruction(instruction).unwrap();
-                // if !cleanup_script.is_empty() {
-                //     for i in cleanup_script.iter_mut() {
-                //         vm.instruction(*i).unwrap();
-                //     }
-                // }
             }
         }
         let storage_diff = vm.storage_diff();
         let mut vm = vm.remove_recording();
         let mut diff = start_vm.diff(&vm);
         diff += storage_diff;
-        let diff: diff::Diff<diff::Beginning> = diff.into();
-        vm.inverse(&diff);
+        let diff: diff::Diff<diff::InitialVmState> = diff.into();
+        vm.reset_vm_state(&diff);
 
         Ok(Self {
             vm,
             instruction,
-            cleanup_script,
             diff,
         })
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use std::iter::successors;
-
-    #[test]
-    fn test_numbers() {
-        let iter = successors(Some(10.0f64), |n| Some(n * 10.0)).take(5);
-        eprintln!("{:?}", iter.collect::<Vec<_>>());
-        let iter = successors(Some(10.0f64), |n| Some(n.powf(1.5))).take(5);
-        eprintln!("{:?}", iter.collect::<Vec<_>>());
-        let iter = successors(Some(100_000.0f64), |n| Some(n / 1.5)).take(5);
-        eprintln!("{:?}", iter.collect::<Vec<_>>());
-        let iter = successors(Some(100_000u64), |n| n.checked_div(2)).take(5);
-        eprintln!("{:?}", iter.collect::<Vec<_>>());
     }
 }

@@ -4,8 +4,10 @@ use fuel_core_interfaces::common::{
         Address,
         AssetId,
     },
-    prelude::GasCosts,
-    prelude::GasCostsValues,
+    prelude::{
+        GasCosts,
+        GasCostsValues,
+    },
 };
 use itertools::Itertools;
 use rand::{

@@ -57,7 +57,13 @@ fn main() {
         let count_sanity = (count.sanity as f64 / count.total as f64) * 100.0;
         println!(
             "{}: {} out of {} : {:.4}%, {}X noop, s: {} : {:.4}%",
-            bench, count.count, count.total, count_percentage, count_times, count.sanity, count_sanity,
+            bench,
+            count.count,
+            count.total,
+            count_percentage,
+            count_times,
+            count.sanity,
+            count_sanity,
         );
         out_map.insert("bench".into(), bench.into());
         out_map.insert("count".into(), count.count.into());
@@ -81,17 +87,7 @@ fn main() {
     let _ = std::fs::remove_file(out_stacks);
 }
 
-// let mut out = std::env::current_dir().unwrap();
-// let bench_name = bench_name.replace("/", "-");
-// out.push(format!("folded-{}.stacks", bench_name));
-// dbg!(&out);
-// std::fs::write(out, folded.stdout).unwrap();
-
 fn count(folded: Vec<u8>, fn_name: &str, sanity_fn: &str) -> Counts {
-    // {
-    //     let stacks = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("stacks.out");
-    //     std::fs::write(stacks, &folded).unwrap()
-    // }
     let folded = String::from_utf8_lossy(&folded);
 
     let mut lines = folded.lines();
@@ -197,17 +193,3 @@ fn counts(
 
     count(folded.stdout, fn_name, sanity_fn)
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use std::path::PathBuf;
-
-//     use super::*;
-
-//     #[test]
-//     fn test_script() {
-//         let stacks = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("stacks.out");
-//         let stacks = std::fs::read(stacks).unwrap();
-//         dbg!(count(stacks, "alu_capture_overflow", "iter"));
-//     }
-// }

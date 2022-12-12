@@ -128,13 +128,25 @@ impl PoolTransaction {
         }
     }
 
-    pub fn check_predicates(&self, params: ConsensusParameters, gas_costs: fuel_vm::gas::GasCosts) -> bool {
+    pub fn check_predicates(
+        &self,
+        params: ConsensusParameters,
+        gas_costs: fuel_vm::gas::GasCosts,
+    ) -> bool {
         match self {
             PoolTransaction::Script(script) => {
-                Interpreter::<PredicateStorage>::check_predicates(script.clone(), params, gas_costs)
+                Interpreter::<PredicateStorage>::check_predicates(
+                    script.clone(),
+                    params,
+                    gas_costs,
+                )
             }
             PoolTransaction::Create(create) => {
-                Interpreter::<PredicateStorage>::check_predicates(create.clone(), params, gas_costs)
+                Interpreter::<PredicateStorage>::check_predicates(
+                    create.clone(),
+                    params,
+                    gas_costs,
+                )
             }
         }
     }

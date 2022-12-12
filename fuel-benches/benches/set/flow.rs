@@ -2,7 +2,10 @@ use std::iter::successors;
 
 use super::run_group_ref;
 
-use criterion::{Criterion, Throughput};
+use criterion::{
+    Criterion,
+    Throughput,
+};
 use fuel_core_benches::*;
 use rand::{
     rngs::StdRng,
@@ -66,7 +69,7 @@ pub fn run(c: &mut Criterion) {
         "rvrt (contract)",
         VmBench::contract(rng, Opcode::RET(REG_ONE)).unwrap(),
     );
-    
+
     run_group_ref(
         &mut c.benchmark_group("log"),
         "log",
@@ -80,16 +83,15 @@ pub fn run(c: &mut Criterion) {
         .collect::<Vec<_>>();
     l.sort_unstable();
     linear.extend(l);
-    
+
     let mut logd = c.benchmark_group("logd");
     for i in &linear {
         logd.throughput(Throughput::Bytes(*i as u64));
         run_group_ref(
             &mut logd,
             format!("{}", i),
-            VmBench::new(Opcode::LOGD(0x10, 0x11, REG_ZERO, 0x13)).with_prepare_script(vec![
-                Opcode::MOVI(0x13, *i),
-            ]),
+            VmBench::new(Opcode::LOGD(0x10, 0x11, REG_ZERO, 0x13))
+                .with_prepare_script(vec![Opcode::MOVI(0x13, *i)]),
         );
     }
     logd.finish();

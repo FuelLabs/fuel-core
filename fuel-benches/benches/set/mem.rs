@@ -53,7 +53,7 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("cfei"),
         "cfei",
-        VmBench::new(Opcode::CFEI(1)).with_cleanup(vec![Opcode::CFSI(1)]),
+        VmBench::new(Opcode::CFEI(1)),
     );
 
     let mut mem_mcl = c.benchmark_group("mcl");

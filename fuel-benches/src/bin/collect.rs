@@ -322,7 +322,7 @@ impl Display for State {
 const TEMPLATE: [&str; 4] = [
     r##"use super::*;
 
-pub const GIT: &'static str = ""##,
+pub const GIT: &str = ""##,
     r##"";"##,
     r##"
 pub fn default_gas_costs() -> GasCostsValues {

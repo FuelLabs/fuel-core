@@ -1,6 +1,6 @@
 use super::*;
 
-pub const GIT: &'static str = "002cf51c0669371856276e46a91afe45cf7cbbcd";
+pub const GIT: &str = "21d35c78988d5265a75a9451b4347b301a961cf8";
 pub fn default_gas_costs() -> GasCostsValues {
     GasCostsValues {
         add: 2,
@@ -54,7 +54,6 @@ pub fn default_gas_costs() -> GasCostsValues {
         bhei: 1,
         bhsh: 1,
         burn: 1,
-        call: 1,
         cb: 1,
         croo: 1,
         csiz: 1,
@@ -97,6 +96,10 @@ pub fn default_gas_costs() -> GasCostsValues {
             dep_per_unit: 0,
         },
         meq: DependantCost {
+            base: 1,
+            dep_per_unit: 0,
+        },
+        call: DependantCost {
             base: 1,
             dep_per_unit: 0,
         },

@@ -79,7 +79,9 @@ pub async fn start_server(
         .data(modules.block_producer.clone())
         .data(modules.sync.clone())
         .data(modules.coordinator.clone());
-    let schema = dap::init(schema, params, gas_costs).extension(Tracing).finish();
+    let schema = dap::init(schema, params, gas_costs)
+        .extension(Tracing)
+        .finish();
 
     let router = Router::new()
         .route("/playground", get(graphql_playground))

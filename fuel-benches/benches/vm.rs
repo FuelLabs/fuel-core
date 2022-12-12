@@ -22,7 +22,6 @@ where
             let VmBenchPrepared {
                 vm,
                 instruction,
-                cleanup_script,
                 diff,
             } = &mut i;
             let code = OpcodeRepr::from_u8(instruction.op());
@@ -32,36 +31,18 @@ where
                 *db = db_txn.as_ref().clone();
                 db_txn
             };
-            let ret = Instruction::from(Opcode::RET(REG_ONE));
             let start = std::time::Instant::now();
             for _ in 0..iters {
                 match code {
                     OpcodeRepr::CALL => {
                         let (_, ra, rb, rc, rd, _imm) = instruction.into_inner();
                         black_box(vm.prepare_call(ra, rb, rc, rd).unwrap());
-                        // vm.instruction(ret).unwrap();
                     }
                     _ => {
                         black_box(vm.instruction(*instruction).unwrap());
-                        // if !cleanup_script.is_empty() {
-                        //     for i in cleanup_script.iter_mut() {
-                        //         vm.instruction(*i).unwrap();
-                        //     }
-                        // }
                     }
                 }
-                vm.inverse(&diff);
-                // if matches!(
-                //     code,
-                //     OpcodeRepr::CALL
-                //         | OpcodeRepr::RET
-                //         | OpcodeRepr::LDC
-                //         | OpcodeRepr::RVRT
-                //         | OpcodeRepr::LOG
-                //         | OpcodeRepr::LOGD
-                // ) {
-                //     vm.clear_receipts();
-                // }
+                vm.reset_vm_state(&diff);
             }
             db_txn.commit().unwrap();
             start.elapsed()

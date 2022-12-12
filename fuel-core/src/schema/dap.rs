@@ -172,7 +172,9 @@ pub fn init<Q, M, S>(
     params: ConsensusParameters,
     gas_costs: GasCosts,
 ) -> SchemaBuilder<Q, M, S> {
-    schema.data(GraphStorage::new(Mutex::new(ConcreteStorage::new(params, gas_costs))))
+    schema.data(GraphStorage::new(Mutex::new(ConcreteStorage::new(
+        params, gas_costs,
+    ))))
 }
 
 #[Object]
