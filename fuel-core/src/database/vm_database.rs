@@ -222,7 +222,7 @@ impl InterpreterStorage for VmDatabase {
                 }
             } else {
                 // No iterator returned, populate with None until end of range
-                range_to_fill = range_count..range;
+                let range_to_fill = range_count..range;
                 for _ in range_to_fill {
                     results.push(None);
                     range_count += 1;
