@@ -10,6 +10,5 @@ path = "test.rs"
 
 [dev-dependencies]
 f_core = { version = "=0.14.1", package = "fuel-core" }
-# TODO: Use `0.15.0` when it is released
-fuel-gql-client = { path = "../../../fuel-client", features = ["test-helpers"] }
+fuel-gql-client = { version = "=0.15", features = ["test-helpers"] }
 tokio = { version = "1.21", features = ["macros", "rt-multi-thread"] }
