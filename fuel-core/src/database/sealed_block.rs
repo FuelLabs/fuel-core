@@ -16,9 +16,11 @@ use fuel_core_interfaces::{
     },
     model::{
         FuelBlockConsensus,
+        Genesis,
         SealedFuelBlock,
         SealedFuelBlockHeader,
     },
+    not_found,
 };
 use std::borrow::Cow;
 
@@ -76,6 +78,20 @@ impl Database {
             Ok(Some(sealed_block))
         } else {
             Ok(None)
+        }
+    }
+
+    pub fn get_genesis(&self) -> Result<Genesis, KvStoreError> {
+        let (_, genesis_block_id) = self.genesis_block_ids()?;
+        let consensus = self
+            .storage::<SealedBlockConsensus>()
+            .get(&genesis_block_id)?
+            .map(|c| c.into_owned());
+
+        if let Some(FuelBlockConsensus::Genesis(genesis)) = consensus {
+            Ok(genesis)
+        } else {
+            Err(not_found!(SealedBlockConsensus))
         }
     }
 

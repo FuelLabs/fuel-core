@@ -9,19 +9,18 @@ use std::{
 
 use clap::Args;
 
-use fuel_chain_config::{
-    ChainConfig,
-    GenesisCommitment,
-};
 use fuel_core_interfaces::common::fuel_crypto;
 use fuel_p2p::{
-    config::P2PConfig,
+    config::{
+        NotInitialized,
+        P2PConfig,
+    },
     gossipsub_config::default_gossipsub_builder,
     Multiaddr,
 };
 
 #[derive(Debug, Clone, Args)]
-pub struct P2pArgs {
+pub struct P2PArgs {
     /// Path to the location of DER-encoded Secp256k1 Keypair
     #[clap(long = "keypair")]
     pub keypair: Option<PathBuf>,
@@ -135,13 +134,8 @@ pub struct P2pArgs {
     pub connection_keep_alive: u64,
 }
 
-impl P2pArgs {
-    pub fn into_config(
-        self,
-        chain_config: &mut ChainConfig,
-    ) -> anyhow::Result<P2PConfig> {
-        let checksum = chain_config.root()?.into();
-
+impl P2PArgs {
+    pub fn into_config(self, metrics: bool) -> anyhow::Result<P2PConfig<NotInitialized>> {
         let local_keypair = {
             match self.keypair {
                 Some(path) => {
@@ -185,9 +179,9 @@ impl P2pArgs {
         };
 
         Ok(P2PConfig {
-            local_keypair,
+            keypair: local_keypair,
             network_name: self.network,
-            checksum,
+            checksum: Default::default(),
             address: self
                 .address
                 .unwrap_or_else(|| IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]))),
@@ -210,7 +204,8 @@ impl P2pArgs {
             set_connection_keep_alive: Duration::from_secs(self.connection_keep_alive),
             info_interval: Some(Duration::from_secs(self.info_interval)),
             identify_interval: Some(Duration::from_secs(self.identify_interval)),
-            metrics: false,
+            metrics,
+            state: NotInitialized,
         })
     }
 }

@@ -60,7 +60,7 @@ pub(crate) fn build_gossipsub_behaviour(p2p_config: &P2PConfig) -> Gossipsub {
         let metrics_config = MetricsConfig::default();
 
         let mut gossipsub = Gossipsub::new_with_metrics(
-            MessageAuthenticity::Signed(p2p_config.local_keypair.clone()),
+            MessageAuthenticity::Signed(p2p_config.keypair.clone()),
             p2p_config.gossipsub_config.clone(),
             &mut p2p_registry,
             metrics_config,
@@ -80,7 +80,7 @@ pub(crate) fn build_gossipsub_behaviour(p2p_config: &P2PConfig) -> Gossipsub {
         gossipsub
     } else {
         let mut gossipsub = Gossipsub::new(
-            MessageAuthenticity::Signed(p2p_config.local_keypair.clone()),
+            MessageAuthenticity::Signed(p2p_config.keypair.clone()),
             p2p_config.gossipsub_config.clone(),
         )
         .expect("gossipsub initialized");
