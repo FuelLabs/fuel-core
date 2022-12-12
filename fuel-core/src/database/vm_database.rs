@@ -348,7 +348,7 @@ mod tests {
 
         // check that read is unset before insert
         let pre_read_status = db.merkle_contract_state(&contract_id, &key).unwrap();
-        assert_eq!(pre_read_status.is_none(), true);
+        assert!(pre_read_status.is_none());
 
         // insert expected key
         let _ = db
@@ -357,7 +357,7 @@ mod tests {
 
         // check that read is set and returns the correct value
         let read_status = db.merkle_contract_state(&contract_id, &key).unwrap();
-        assert_eq!(read_status.is_some(), true);
+        assert!(read_status.is_some());
         assert_eq!(read_status.unwrap().into_owned(), value);
     }
 
@@ -660,9 +660,9 @@ mod tests {
             .merkle_contract_state(&contract_id, &zero_bytes32)
             .unwrap();
 
-        assert_eq!(pre_insert_read.is_none(), true);
-        assert_eq!(insert_status_0.is_none(), true);
-        assert_eq!(post_insert_read_0.is_none(), false);
+        assert!(pre_insert_read.is_none());
+        assert!(insert_status_0.is_none());
+        assert!(!post_insert_read_0.is_none());
         assert_eq!(post_insert_read_0.unwrap().as_ref(), &value_1);
     }
 
@@ -692,11 +692,11 @@ mod tests {
             .merkle_contract_state(&contract_id, &zero_bytes32)
             .unwrap();
 
-        assert_eq!(insert_status_0.is_none(), true);
-        assert_eq!(post_insert_read_0.is_none(), false);
+        assert!(insert_status_0.is_none());
+        assert!(!post_insert_read_0.is_none());
         assert_eq!(post_insert_read_0.unwrap().as_ref(), &value_1);
-        assert_eq!(insert_status_1.is_none(), false);
-        assert_eq!(post_insert_read_1.is_none(), false);
+        assert!(!insert_status_1.is_none());
+        assert!(!post_insert_read_1.is_none());
         assert_eq!(post_insert_read_1.unwrap().as_ref(), &value_2);
     }
 
@@ -749,15 +749,15 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
-        assert_eq!(pre_insert_read_0.is_none(), true);
-        assert_eq!(pre_insert_read_1.is_none(), true);
-        assert_eq!(pre_insert_read_2.is_none(), true);
-        assert_eq!(insert_status.is_none(), true);
-        assert_eq!(read_0.is_none(), false);
+        assert!(pre_insert_read_0.is_none());
+        assert!(pre_insert_read_1.is_none());
+        assert!(pre_insert_read_2.is_none());
+        assert!(insert_status.is_none());
+        assert!(!read_0.is_none());
         assert_eq!(read_0.unwrap().as_ref(), &value_1);
-        assert_eq!(read_1.is_none(), false);
+        assert!(!read_1.is_none());
         assert_eq!(read_1.unwrap().as_ref(), &value_2);
-        assert_eq!(read_2.is_none(), false);
+        assert!(!read_2.is_none());
         assert_eq!(read_2.unwrap().as_ref(), &value_3);
     }
 
@@ -818,15 +818,15 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
-        assert_eq!(pre_insert_read_0.is_none(), true);
-        assert_eq!(pre_insert_read_1.is_none(), false);
-        assert_eq!(pre_insert_read_2.is_none(), false);
-        assert_eq!(insert_status.is_none(), true);
-        assert_eq!(read_0.is_none(), false);
+        assert!(pre_insert_read_0.is_none());
+        assert!(!pre_insert_read_1.is_none());
+        assert!(!pre_insert_read_2.is_none());
+        assert!(insert_status.is_none());
+        assert!(!read_0.is_none());
         assert_eq!(read_0.unwrap().as_ref(), &value_1);
-        assert_eq!(read_1.is_none(), false);
+        assert!(!read_1.is_none());
         assert_eq!(read_1.unwrap().as_ref(), &value_2);
-        assert_eq!(read_2.is_none(), false);
+        assert!(!read_2.is_none());
         assert_eq!(read_2.unwrap().as_ref(), &value_3);
     }
 
@@ -890,15 +890,15 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
-        assert_eq!(pre_insert_read_0.is_none(), false);
-        assert_eq!(pre_insert_read_1.is_none(), true);
-        assert_eq!(pre_insert_read_2.is_none(), false);
-        assert_eq!(insert_status.is_none(), true);
-        assert_eq!(read_0.is_none(), false);
+        assert!(!pre_insert_read_0.is_none());
+        assert!(pre_insert_read_1.is_none());
+        assert!(!pre_insert_read_2.is_none());
+        assert!(insert_status.is_none());
+        assert!(!read_0.is_none());
         assert_eq!(read_0.unwrap().as_ref(), &value_1);
-        assert_eq!(read_1.is_none(), false);
+        assert!(!read_1.is_none());
         assert_eq!(read_1.unwrap().as_ref(), &value_2);
-        assert_eq!(read_2.is_none(), false);
+        assert!(!read_2.is_none());
         assert_eq!(read_2.unwrap().as_ref(), &value_3);
     }
 
@@ -959,15 +959,15 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
-        assert_eq!(pre_insert_read_0.is_none(), false);
-        assert_eq!(pre_insert_read_1.is_none(), false);
-        assert_eq!(pre_insert_read_2.is_none(), true);
-        assert_eq!(insert_status.is_none(), true);
-        assert_eq!(read_0.is_none(), false);
+        assert!(!pre_insert_read_0.is_none());
+        assert!(!pre_insert_read_1.is_none());
+        assert!(pre_insert_read_2.is_none());
+        assert!(insert_status.is_none());
+        assert!(!read_0.is_none());
         assert_eq!(read_0.unwrap().as_ref(), &value_1);
-        assert_eq!(read_1.is_none(), false);
+        assert!(!read_1.is_none());
         assert_eq!(read_1.unwrap().as_ref(), &value_2);
-        assert_eq!(read_2.is_none(), false);
+        assert!(!read_2.is_none());
         assert_eq!(read_2.unwrap().as_ref(), &value_3);
     }
 
@@ -993,13 +993,13 @@ mod tests {
         let u256_2 = u256_zero.checked_add(2.into()).unwrap();
         u256_2.to_big_endian(&mut key_2);
 
-        let insert_status_0 = db
+        let _insert_status_0 = db
             .merkle_contract_state_insert(&contract_id, &zero_bytes32, &value_0)
             .unwrap();
-        let insert_status_1 = db
+        let _insert_status_1 = db
             .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value_0)
             .unwrap();
-        let insert_status_2 = db
+        let _insert_status_2 = db
             .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_2), &value_0)
             .unwrap();
 
@@ -1031,15 +1031,15 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
-        assert_eq!(pre_insert_read_0.is_none(), false);
-        assert_eq!(pre_insert_read_1.is_none(), false);
-        assert_eq!(pre_insert_read_2.is_none(), false);
-        assert_eq!(insert_status.is_none(), false);
-        assert_eq!(read_0.is_none(), false);
+        assert!(!pre_insert_read_0.is_none());
+        assert!(!pre_insert_read_1.is_none());
+        assert!(!pre_insert_read_2.is_none());
+        assert!(!insert_status.is_none());
+        assert!(!read_0.is_none());
         assert_eq!(read_0.unwrap().as_ref(), &value_1);
-        assert_eq!(read_1.is_none(), false);
+        assert!(!read_1.is_none());
         assert_eq!(read_1.unwrap().as_ref(), &value_2);
-        assert_eq!(read_2.is_none(), false);
+        assert!(!read_2.is_none());
         assert_eq!(read_2.unwrap().as_ref(), &value_3);
     }
 
@@ -1050,8 +1050,6 @@ mod tests {
 
         let contract_id = ContractId::new([0u8; 32]);
         let key = Bytes32::new([0u8; 32]);
-        let key1 = Bytes32::new([0u8; 32]);
-        let value = Bytes32::new([1u8; 32]);
 
         let read_db = db.clone();
 
@@ -1063,9 +1061,9 @@ mod tests {
 
         let read = db.merkle_contract_state(&contract_id, &key).unwrap();
 
-        assert_eq!(pre_read.is_none(), true);
-        assert_eq!(clear_status.is_none(), true);
-        assert_eq!(read.is_none(), true);
+        assert!(pre_read.is_none());
+        assert!(clear_status.is_none());
+        assert!(read.is_none());
     }
 
     #[test]
@@ -1086,9 +1084,9 @@ mod tests {
 
         let read_status = db.merkle_contract_state(&contract_id, &key).unwrap();
 
-        assert_eq!(insert_status.is_none(), true);
-        assert_eq!(clear_status.is_none(), false);
-        assert_eq!(read_status.is_none(), true);
+        assert!(insert_status.is_none());
+        assert!(!clear_status.is_none());
+        assert!(read_status.is_none());
     }
 
     #[test]
@@ -1102,7 +1100,7 @@ mod tests {
             .merkle_contract_state_remove_range(&contract_id, &zero_bytes32, 3)
             .unwrap();
 
-        assert_eq!(clear_status.is_none(), true);
+        assert!(clear_status.is_none());
     }
 
     #[test]
@@ -1155,13 +1153,13 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
-        assert_eq!(pre_clear_read_0.is_none(), true);
-        assert_eq!(pre_clear_read_1.is_none(), false);
-        assert_eq!(pre_clear_read_2.is_none(), false);
-        assert_eq!(clear_status.is_none(), true);
-        assert_eq!(read_0.is_none(), true);
-        assert_eq!(read_1.is_none(), true);
-        assert_eq!(read_2.is_none(), true);
+        assert!(pre_clear_read_0.is_none());
+        assert!(!pre_clear_read_1.is_none());
+        assert!(!pre_clear_read_2.is_none());
+        assert!(clear_status.is_none());
+        assert!(read_0.is_none());
+        assert!(read_1.is_none());
+        assert!(read_2.is_none());
     }
 
     #[test]
@@ -1214,13 +1212,13 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
-        assert_eq!(pre_clear_read_0.is_none(), false);
-        assert_eq!(pre_clear_read_1.is_none(), true);
-        assert_eq!(pre_clear_read_2.is_none(), false);
-        assert_eq!(clear_status.is_none(), true);
-        assert_eq!(read_0.is_none(), true);
-        assert_eq!(read_1.is_none(), true);
-        assert_eq!(read_2.is_none(), true);
+        assert!(!pre_clear_read_0.is_none());
+        assert!(pre_clear_read_1.is_none());
+        assert!(!pre_clear_read_2.is_none());
+        assert!(clear_status.is_none());
+        assert!(read_0.is_none());
+        assert!(read_1.is_none());
+        assert!(read_2.is_none());
     }
 
     #[test]
@@ -1273,13 +1271,13 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
-        assert_eq!(pre_clear_read_0.is_none(), false);
-        assert_eq!(pre_clear_read_1.is_none(), false);
-        assert_eq!(pre_clear_read_2.is_none(), true);
-        assert_eq!(clear_status.is_none(), true);
-        assert_eq!(read_0.is_none(), true);
-        assert_eq!(read_1.is_none(), true);
-        assert_eq!(read_2.is_none(), true);
+        assert!(!pre_clear_read_0.is_none());
+        assert!(!pre_clear_read_1.is_none());
+        assert!(pre_clear_read_2.is_none());
+        assert!(clear_status.is_none());
+        assert!(read_0.is_none());
+        assert!(read_1.is_none());
+        assert!(read_2.is_none());
     }
 
     #[test]
@@ -1335,15 +1333,15 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
-        assert_eq!(insert_status_0.is_none(), true);
-        assert_eq!(insert_status_1.is_none(), true);
-        assert_eq!(insert_status_2.is_none(), true);
-        assert_eq!(pre_clear_read_0.is_none(), false);
-        assert_eq!(pre_clear_read_1.is_none(), false);
-        assert_eq!(pre_clear_read_2.is_none(), false);
-        assert_eq!(clear_status.is_none(), false);
-        assert_eq!(read_0.is_none(), true);
-        assert_eq!(read_1.is_none(), true);
-        assert_eq!(read_2.is_none(), true);
+        assert!(insert_status_0.is_none());
+        assert!(insert_status_1.is_none());
+        assert!(insert_status_2.is_none());
+        assert!(!pre_clear_read_0.is_none());
+        assert!(!pre_clear_read_1.is_none());
+        assert!(!pre_clear_read_2.is_none());
+        assert!(!clear_status.is_none());
+        assert!(read_0.is_none());
+        assert!(read_1.is_none());
+        assert!(read_2.is_none());
     }
 }
