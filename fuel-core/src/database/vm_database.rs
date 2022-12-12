@@ -1,13 +1,11 @@
 use crate::{
     database::{
-        transactional::DatabaseTransaction,
         Column,
         Database,
     },
     state::{
         IterDirection,
         MultiKey,
-        WriteOperation,
     },
 };
 use anyhow::anyhow;
@@ -19,10 +17,7 @@ use fuel_core_interfaces::{
             StorageInspect,
             StorageMutate,
         },
-        fuel_tx::{
-            Bytes32,
-            Bytes64,
-        },
+        fuel_tx::Bytes32,
         prelude::{
             Address,
             ContractId,
@@ -33,7 +28,6 @@ use fuel_core_interfaces::{
         tai64::Tai64,
     },
     db::{
-        ContractsState,
         Error,
         Transactional,
     },
@@ -44,7 +38,6 @@ use primitive_types::U256;
 use std::{
     borrow::Cow,
     ops::Deref,
-    thread::current,
 };
 
 /// Used to store metadata relevant during the execution of a transaction
@@ -241,7 +234,7 @@ impl InterpreterStorage for VmDatabase {
             range_count += 1;
         }
 
-        return Ok(results)
+        Ok(results)
     }
 
     fn merkle_contract_state_insert_range(
@@ -284,7 +277,7 @@ impl InterpreterStorage for VmDatabase {
         //     Column::ContractsState,
         // );
 
-        return Ok((!found_unset).then(|| ()))
+        Ok((!found_unset).then(|| ()))
     }
 
     fn merkle_contract_state_remove_range(
@@ -321,7 +314,7 @@ impl InterpreterStorage for VmDatabase {
 
         transaction.commit()?;
 
-        return Ok((!found_unset).then(|| ()))
+        Ok((!found_unset).then(|| ()))
     }
 }
 
@@ -334,12 +327,9 @@ mod tests {
         Rng,
         SeedableRng,
     };
-    use std::{
-        fs::read,
-        ops::{
-            Add,
-            Sub,
-        },
+    use std::ops::{
+        Add,
+        Sub,
     };
 
     fn u256_to_bytes32(u: U256) -> Bytes32 {
@@ -631,7 +621,6 @@ mod tests {
     #[test]
     fn read_range_overruns_keyspace_unset_key_range() {
         // ensure that we don't pad extra results when keyspace is exhausted and no keys are set
-        let rng = &mut StdRng::seed_from_u64(100);
         let db = VmDatabase::default();
 
         let contract_id = ContractId::new([0u8; 32]);
@@ -829,6 +818,8 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
+        assert_eq!(insert_status_1.is_none(), true);
+        assert_eq!(insert_status_2.is_none(), true);
         assert_eq!(pre_insert_read_0.is_none(), true);
         assert_eq!(pre_insert_read_1.is_none(), false);
         assert_eq!(pre_insert_read_2.is_none(), false);
@@ -862,7 +853,7 @@ mod tests {
         let u256_2 = u256_zero.checked_add(2.into()).unwrap();
         u256_2.to_big_endian(&mut key_2);
 
-        let insert_status_1 = db
+        let insert_status_0 = db
             .merkle_contract_state_insert(&contract_id, &zero_bytes32, &zero_bytes32)
             .unwrap();
         let insert_status_2 = db
@@ -901,6 +892,8 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
+        assert_eq!(insert_status_0.is_none(), true);
+        assert_eq!(insert_status_2.is_none(), true);
         assert_eq!(pre_insert_read_0.is_none(), false);
         assert_eq!(pre_insert_read_1.is_none(), true);
         assert_eq!(pre_insert_read_2.is_none(), false);
@@ -935,10 +928,10 @@ mod tests {
         let u256_2 = u256_zero.checked_add(2.into()).unwrap();
         u256_2.to_big_endian(&mut key_2);
 
-        let insert_status_1 = db
+        let insert_status_0 = db
             .merkle_contract_state_insert(&contract_id, &zero_bytes32, &value_0)
             .unwrap();
-        let insert_status_2 = db
+        let insert_status_1 = db
             .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value_0)
             .unwrap();
 
@@ -970,6 +963,8 @@ mod tests {
             .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
             .unwrap();
 
+        assert_eq!(insert_status_0.is_none(), false);
+        assert_eq!(insert_status_1.is_none(), false);
         assert_eq!(pre_insert_read_0.is_none(), false);
         assert_eq!(pre_insert_read_1.is_none(), false);
         assert_eq!(pre_insert_read_2.is_none(), true);

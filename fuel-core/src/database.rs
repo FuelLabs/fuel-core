@@ -54,7 +54,6 @@ use std::{
 
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
-use crate::state::WriteOperation;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 #[cfg(feature = "rocksdb")]
