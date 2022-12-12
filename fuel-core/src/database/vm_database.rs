@@ -222,7 +222,8 @@ impl InterpreterStorage for VmDatabase {
                 }
             } else {
                 // No iterator returned, populate with None until end of range
-                for _ in range_count..range {
+                range_to_fill = range_count..range;
+                for _ in range_to_fill {
                     results.push(None);
                     range_count += 1;
                     current_key =
@@ -381,16 +382,12 @@ mod tests {
             .collect::<Vec<Bytes32>>();
 
         // setup data
-        for i in 0..RANGE_LENGTH {
+        for (i, setup_value) in setup_values.iter().enumerate().take(RANGE_LENGTH) {
             let key = start_key.add(i);
             let key = u256_to_bytes32(key);
             let multi_key = MultiKey::new(&(contract_id.as_ref(), key.as_ref()));
             db.database
-                .insert::<_, _, Bytes32>(
-                    &multi_key,
-                    Column::ContractsState,
-                    setup_values[i],
-                )
+                .insert::<_, _, Bytes32>(&multi_key, Column::ContractsState, setup_value)
                 .unwrap();
         }
 
@@ -449,8 +446,8 @@ mod tests {
             .collect::<Vec<Option<Bytes32>>>();
 
         // setup only some of the data in the range
-        for i in 0..RANGE_LENGTH {
-            if let Some(value) = setup_values[i] {
+        for (i, setup_value) in setup_values.iter().enumerate().take(RANGE_LENGTH) {
+            if let Some(value) = setup_value {
                 let key = start_key.add(i);
                 let key = u256_to_bytes32(key);
                 let multi_key = MultiKey::new(&(contract_id.as_ref(), key.as_ref()));
@@ -552,7 +549,7 @@ mod tests {
         let c1_k1 = MultiKey::new(&(contract_id_1.as_ref(), key.as_ref()));
         let c1_v1: Bytes32 = rng.gen();
         db.database
-            .insert::<_, _, Bytes32>(&c1_k1, Column::ContractsState, &c1_v1)
+            .insert::<_, _, Bytes32>(&c1_k1, Column::ContractsState, c1_v1)
             .unwrap();
 
         let key = u256_to_bytes32(start_key.add(1));
@@ -662,7 +659,7 @@ mod tests {
 
         assert!(pre_insert_read.is_none());
         assert!(insert_status_0.is_none());
-        assert!(!post_insert_read_0.is_none());
+        assert!(post_insert_read_0.is_some());
         assert_eq!(post_insert_read_0.unwrap().as_ref(), &value_1);
     }
 
