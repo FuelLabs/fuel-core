@@ -194,9 +194,11 @@ impl InterpreterStorage for VmDatabase {
                     for _ in range_count..range {
                         results.push(None);
                         current_key =
-                            current_key.checked_add(1.into()).ok_or(Error::Other(
-                                anyhow!("current_key overflowed during computation"),
-                            ))?;
+                            current_key.checked_add(1.into()).ok_or_else(|| {
+                                Error::Other(anyhow!(
+                                    "range op exceeded available keyspace"
+                                ))
+                            })?;
                     }
                     // Iterator no longer useful, return
                     return Ok(results)
@@ -207,18 +209,19 @@ impl InterpreterStorage for VmDatabase {
                         results.push(None);
                         range_count += 1;
                         current_key =
-                            current_key.checked_add(1.into()).ok_or(Error::Other(
-                                anyhow!("current_key overflowed during computation"),
-                            ))?;
+                            current_key.checked_add(1.into()).ok_or_else(|| {
+                                Error::Other(anyhow!(
+                                    "range op exceeded available keyspace"
+                                ))
+                            })?;
                     }
                 }
                 // State key matches, put value into results
                 if state_key == current_key {
                     results.push(Some(Cow::Owned(value)));
-                    current_key =
-                        current_key.checked_add(1.into()).ok_or(Error::Other(
-                            anyhow!("current_key overflowed during computation"),
-                        ))?;
+                    current_key = current_key.checked_add(1.into()).ok_or_else(|| {
+                        Error::Other(anyhow!("range op exceeded available keyspace"))
+                    })?;
                 }
             } else {
                 // No iterator returned, populate with None until end of range
@@ -226,10 +229,9 @@ impl InterpreterStorage for VmDatabase {
                 for _ in range_to_fill {
                     results.push(None);
                     range_count += 1;
-                    current_key =
-                        current_key.checked_add(1.into()).ok_or(Error::Other(
-                            anyhow!("current_key overflowed during computation"),
-                        ))?;
+                    current_key = current_key.checked_add(1.into()).ok_or_else(|| {
+                        Error::Other(anyhow!("range op exceeded available keyspace"))
+                    })?;
                 }
             };
             range_count += 1;
@@ -263,20 +265,12 @@ impl InterpreterStorage for VmDatabase {
 
             found_unset |= option.is_none();
 
-            current_key =
-                current_key
-                    .checked_add(1.into())
-                    .ok_or(Error::Other(anyhow!(
-                        "current_key overflowed during computation"
-                    )))?;
+            current_key = current_key.checked_add(1.into()).ok_or_else(|| {
+                Error::Other(anyhow!("range op exceeded available keyspace"))
+            })?;
         }
 
         transaction.commit()?;
-
-        // let get_result = self.database.get::<Bytes32>(
-        //     MultiKey::new(&(contract_id, start_key)).as_ref(),
-        //     Column::ContractsState,
-        // );
 
         Ok((!found_unset).then_some(()))
     }
@@ -305,12 +299,9 @@ impl InterpreterStorage for VmDatabase {
 
             found_unset |= option.is_none();
 
-            current_key =
-                current_key
-                    .checked_add(1.into())
-                    .ok_or(Error::Other(anyhow!(
-                        "current_key overflowed during computation"
-                    )))?;
+            current_key = current_key.checked_add(1.into()).ok_or_else(|| {
+                Error::Other(anyhow!("range op exceeded available keyspace"))
+            })?;
         }
 
         transaction.commit()?;
@@ -403,7 +394,8 @@ mod tests {
         // verify a vector of the correct length is returned, and all values are set correctly
         assert_eq!(results.len(), RANGE_LENGTH);
         for (i, value) in results.into_iter().enumerate() {
-            let value = value.expect(&format!("Expected value to be set at {}", i));
+            let value =
+                value.unwrap_or_else(|| panic!("Expected value to be set at {}", i));
             assert_eq!(value.as_ref(), &setup_values[i]);
         }
     }
