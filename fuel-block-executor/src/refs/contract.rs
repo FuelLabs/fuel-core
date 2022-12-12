@@ -113,17 +113,17 @@ where
     }
 }
 
+pub trait ContractStorageTrait<'a>:
+    StorageInspect<ContractsLatestUtxo, Error = Self::InnerError>
+    + MerkleRootStorage<ContractId, ContractsState<'a>, Error = Self::InnerError>
+    + MerkleRootStorage<ContractId, ContractsAssets<'a>, Error = Self::InnerError>
+{
+    type InnerError: StdError + Send + Sync + 'static;
+}
+
 impl<'a, Database> GenesisCommitment for ContractRef<&'a mut Database>
 where
-    for<'b> Database: StorageInspect<ContractsLatestUtxo>
-        + MerkleRootStorage<ContractId, ContractsState<'a>>
-        + MerkleRootStorage<ContractId, ContractsAssets<'a>>,
-    <Database as StorageInspect<ContractsLatestUtxo>>::Error:
-        StdError + Send + Sync + 'static,
-    <Database as StorageInspect<ContractsState<'a>>>::Error:
-        StdError + Send + Sync + 'static,
-    <Database as StorageInspect<ContractsAssets<'a>>>::Error:
-        StdError + Send + Sync + 'static,
+    for<'b> Database: ContractStorageTrait<'a>,
 {
     fn root(&mut self) -> anyhow::Result<MerkleRoot> {
         let contract_id = *self.contract_id();
