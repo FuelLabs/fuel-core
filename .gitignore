@@ -6,3 +6,4 @@
 .vscode
 .cov
 lcov.info
+version-compatibility/Cargo.lock

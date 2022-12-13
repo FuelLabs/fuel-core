@@ -53,6 +53,6 @@ async fn poa_never_trigger_doesnt_produce_blocks() {
             })
             .await
             .expect("blocks request failed");
-        assert_eq!(resp.results.len(), 0);
+        assert_eq!(resp.results.len(), 1 /* only genesis block */);
     }
 }

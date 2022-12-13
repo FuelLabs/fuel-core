@@ -59,6 +59,7 @@ async fn poa_instant_trigger_is_produces_instantly() {
             .results
             .len();
 
-        assert_eq!(count, i + 1);
+        let block_number = i + 1;
+        assert_eq!(count, block_number + 1 /* genesis block */);
     }
 }

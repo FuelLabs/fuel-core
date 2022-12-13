@@ -166,20 +166,25 @@ async fn poa_interval_produces_nonempty_blocks_at_correct_rate() {
     );
 
     // Make sure all txs got produced
-    let resp = client
+    let mut blocks = client
         .blocks(PaginationRequest {
             cursor: None,
             results: 1024,
             direction: PageDirection::Forward,
         })
         .await
-        .expect("blocks request failed");
+        .expect("blocks request failed")
+        .results;
+    // Remove the genesis block because it doesn't contain transactions
+    blocks.remove(0);
+    let blocks_without_genesis = blocks;
 
-    let txs_len: usize = resp
-        .results
+    let txs_len: usize = blocks_without_genesis
         .iter()
         .map(|block| block.transactions.len())
         .sum();
+    // Each block(except genesis block) contains at least 1 coinbase transaction
+    let coinbase_tx_count = blocks_without_genesis.len();
 
-    assert_eq!(txs_len, resp.results.len() + tx_count);
+    assert_eq!(txs_len, coinbase_tx_count + tx_count);
 }
