@@ -98,7 +98,7 @@ impl MessageQuery {
     {
         let db = ctx.data_unchecked::<Database>().clone();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            let start = start.clone();
+            let start = *start;
             // TODO: Avoid the `collect_vec`.
             let messages = if let Some(owner) = owner {
                 let message_ids: Vec<_> = db

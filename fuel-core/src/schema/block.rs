@@ -241,7 +241,7 @@ impl BlockQuery {
     ) -> async_graphql::Result<Connection<usize, Block, EmptyFields, EmptyFields>> {
         let db = ctx.data_unchecked::<Database>();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            blocks_query(&db, start.clone(), direction)
+            blocks_query(db, *start, direction)
         })
         .await
     }
@@ -274,7 +274,7 @@ impl HeaderQuery {
     ) -> async_graphql::Result<Connection<usize, Header, EmptyFields, EmptyFields>> {
         let db = ctx.data_unchecked::<Database>();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            blocks_query(&db, start.clone(), direction)
+            blocks_query(db, *start, direction)
         })
         .await
     }

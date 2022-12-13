@@ -163,7 +163,7 @@ impl ContractBalanceQuery {
             let balances = db
                 .contract_balances(
                     filter.contract.into(),
-                    start.clone().map(Into::into),
+                    (*start).map(Into::into),
                     Some(direction),
                 )
                 .map(move |balance| {

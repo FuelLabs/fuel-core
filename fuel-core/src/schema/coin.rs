@@ -114,7 +114,7 @@ impl CoinQuery {
             let db = ctx.data_unchecked::<Database>();
             let owner: fuel_tx::Address = filter.owner.into();
             let coin_ids: Vec<_> = db
-                .owned_coins_ids(&owner, start.clone().map(Into::into), Some(direction))
+                .owned_coins_ids(&owner, (*start).map(Into::into), Some(direction))
                 .try_collect()?;
             let coins = coin_ids
                 .into_iter()
@@ -130,14 +130,13 @@ impl CoinQuery {
                     Ok((utxo_id, value))
                 })
                 .filter_map(|result| {
-                    match (&result, &filter.asset_id) {
-                        (Ok((_, coin)), Some(filter_asset_id)) => {
-                            if coin.1.asset_id != filter_asset_id.0 {
-                                return None
-                            }
+                    if let (Ok((_, coin)), Some(filter_asset_id)) =
+                        (&result, &filter.asset_id)
+                    {
+                        if coin.1.asset_id != filter_asset_id.0 {
+                            return None
                         }
-                        _ => {}
-                    };
+                    }
 
                     Some(result)
                 });
