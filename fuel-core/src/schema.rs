@@ -112,11 +112,12 @@ where
         last,
         |after: Option<SchemaKey>, before: Option<SchemaKey>, first, last| async move {
             let (count, direction) = if let Some(first) = first {
-                (Some(first), IterDirection::Forward)
+                (first, IterDirection::Forward)
             } else if let Some(last) = last {
-                (Some(last), IterDirection::Reverse)
+                (last, IterDirection::Reverse)
             } else {
-                (None, IterDirection::Forward)
+                // Unreachable because of the check `(None, None, None, None)` above
+                unreachable!()
             };
 
             let start;
@@ -151,7 +152,7 @@ where
                 false
             });
 
-            let mut count = count.unwrap_or(usize::MAX / 2) + 1 /* for `has_next_page` */;
+            let mut count = count + 1 /* for `has_next_page` */;
             let entries = entries.take(count).take_while(|result| {
                 if let Ok((key, _)) = result {
                     if let Some(end) = end.as_ref() {
