@@ -7,13 +7,10 @@ use crate::{
         },
         Database,
     },
-    schema::{
-        check_pagination_parameters,
-        scalars::{
-            Address,
-            AssetId,
-            U64,
-        },
+    schema::scalars::{
+        Address,
+        AssetId,
+        U64,
     },
     state::{
         Error,
@@ -22,19 +19,14 @@ use crate::{
 };
 use async_graphql::{
     connection::{
-        query,
         Connection,
-        Edge,
         EmptyFields,
     },
     Context,
     InputObject,
     Object,
 };
-use fuel_core_interfaces::common::{
-    fuel_tx,
-    fuel_types,
-};
+use fuel_core_interfaces::common::fuel_types;
 use itertools::Itertools;
 use std::{
     cmp::Ordering,
@@ -120,114 +112,43 @@ impl BalanceQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<AssetId, Balance, EmptyFields, EmptyFields>>
     {
-        if check_pagination_parameters(&first, &after, &last, &before) {
-            return Err(async_graphql::Error::new("Wrong Argument Combination"))
-        };
-
         let db = ctx.data_unchecked::<Database>();
-        let owner = filter.owner.into();
+        crate::schema::query_pagination(after, before, first, last, |_, direction| {
+            let owner = filter.owner.into();
 
-        let mut amounts_per_asset = HashMap::new();
+            let mut amounts_per_asset = HashMap::new();
 
-        for resource in AssetsQuery::new(&owner, None, None, db).unspent_resources() {
-            let resource = resource?;
-            *amounts_per_asset.entry(*resource.asset_id()).or_default() +=
-                resource.amount();
-        }
-
-        let mut balances = amounts_per_asset
-            .into_iter()
-            .map(|(asset_id, amount)| Balance {
-                owner,
-                amount,
-                asset_id,
-            })
-            .collect_vec();
-        balances.sort_by(|l, r| {
-            if l.asset_id < r.asset_id {
-                Ordering::Less
-            } else {
-                Ordering::Greater
+            for resource in AssetsQuery::new(&owner, None, None, db).unspent_resources() {
+                let resource = resource?;
+                *amounts_per_asset.entry(*resource.asset_id()).or_default() +=
+                    resource.amount();
             }
-        });
 
-        query(
-            after,
-            before,
-            first,
-            last,
-            |after: Option<AssetId>, before: Option<AssetId>, first, last| {
-                async move {
-                    let (records_to_fetch, direction) = if let Some(first) = first {
-                        (first, IterDirection::Forward)
-                    } else if let Some(last) = last {
-                        (last, IterDirection::Reverse)
-                    } else {
-                        (0, IterDirection::Forward)
-                    };
-
-                    let after = after.map(fuel_tx::AssetId::from);
-                    let before = before.map(fuel_tx::AssetId::from);
-
-                    let start;
-                    let end;
-
-                    if direction == IterDirection::Forward {
-                        start = after;
-                        end = before;
-                    } else {
-                        start = before;
-                        end = after;
-                    }
-
-                    let mut balances = balances.into_iter();
-                    if direction == IterDirection::Reverse {
-                        balances = balances.rev().collect::<Vec<Balance>>().into_iter();
-                    }
-                    if let Some(start) = start {
-                        balances = balances
-                            .skip_while(|balance| balance.asset_id == start)
-                            .collect::<Vec<Balance>>()
-                            .into_iter();
-                    }
-                    let mut started = None;
-                    if start.is_some() {
-                        // skip initial result
-                        started = balances.next();
-                    }
-
-                    // take desired amount of results
-                    let balances = balances
-                        .take_while(|balance| {
-                            // take until we've reached the end
-                            if let Some(end) = end.as_ref() {
-                                if balance.asset_id == *end {
-                                    return false
-                                }
-                            }
-                            true
-                        })
-                        .take(records_to_fetch);
-                    let mut balances: Vec<Balance> = balances.collect();
-                    if direction == IterDirection::Reverse {
-                        balances.reverse();
-                    }
-
-                    let mut connection = Connection::new(
-                        started.is_some(),
-                        records_to_fetch <= balances.len(),
-                    );
-
-                    connection.edges.extend(
-                        balances
-                            .into_iter()
-                            .map(|item| Edge::new(item.asset_id.into(), item)),
-                    );
-
-                    Ok::<Connection<AssetId, Balance>, anyhow::Error>(connection)
+            let mut balances = amounts_per_asset
+                .into_iter()
+                .map(|(asset_id, amount)| Balance {
+                    owner,
+                    amount,
+                    asset_id,
+                })
+                .collect_vec();
+            balances.sort_by(|l, r| {
+                if l.asset_id < r.asset_id {
+                    Ordering::Less
+                } else {
+                    Ordering::Greater
                 }
-            },
-        )
+            });
+            if direction == IterDirection::Reverse {
+                balances.reverse();
+            }
+
+            let balances = balances
+                .into_iter()
+                .map(|balance| Ok((balance.asset_id.into(), balance)));
+
+            Ok(balances)
+        })
         .await
     }
 }

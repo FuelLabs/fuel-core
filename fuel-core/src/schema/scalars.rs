@@ -81,7 +81,7 @@ impl ScalarType for Tai64Timestamp {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SortedTxCursor {
     pub block_height: BlockHeight,
     pub tx_id: Bytes32,
@@ -178,7 +178,7 @@ impl FromStr for HexString {
 
 macro_rules! fuel_type_scalar {
     ($name:literal, $id:ident, $ft_id:ident, $len:expr) => {
-        #[derive(Copy, Clone, Debug)]
+        #[derive(Copy, Clone, Debug, PartialOrd, Ord, PartialEq, Eq)]
         pub struct $id(pub(crate) fuel_types::$ft_id);
 
         #[Scalar(name = $name)]

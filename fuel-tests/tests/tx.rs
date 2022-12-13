@@ -362,10 +362,10 @@ async fn get_transactions() {
         .iter()
         .map(|tx| tx.transaction.id())
         .collect_vec();
-    // coinbase_tx1
-    assert_eq!(transactions[1], tx1);
-    // coinbase_tx2
-    assert_eq!(transactions[3], tx2);
+    // transactions[4] - coinbase_tx1
+    assert_eq!(transactions[3], tx1);
+    // transactions[2] - coinbase_tx2
+    assert_eq!(transactions[1], tx2);
     // Check pagination state for last page
     assert!(!response.has_next_page);
     assert!(response.has_previous_page);
@@ -483,14 +483,14 @@ async fn get_transactions_from_manual_blocks() {
         .iter()
         .map(|tx| tx.transaction.id())
         .collect_vec();
-    // coinbase_tx1
-    assert_eq!(transactions[1], txs[0].id());
-    assert_eq!(transactions[2], txs[1].id());
-    assert_eq!(transactions[3], txs[2].id());
-    assert_eq!(transactions[4], txs[3].id());
-    assert_eq!(transactions[5], txs[4].id());
-    // coinbase_tx2
-    assert_eq!(transactions[7], txs[5].id());
+    assert_eq!(transactions[0], txs[5].id());
+    // transactions[1] coinbase_tx2
+    assert_eq!(transactions[2], txs[4].id());
+    assert_eq!(transactions[3], txs[3].id());
+    assert_eq!(transactions[4], txs[2].id());
+    assert_eq!(transactions[5], txs[1].id());
+    assert_eq!(transactions[6], txs[0].id());
+    // transactions[7] coinbase_tx1
 }
 
 #[tokio::test]

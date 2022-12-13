@@ -188,7 +188,7 @@ impl TxQuery {
 
                 let tx_ids: Vec<(fuel_types::Bytes32, BlockHeight)> = txs.try_collect()?;
 
-                let mut txs: Vec<(Cow<FuelTx>, &BlockHeight)> = tx_ids
+                let txs: Vec<(Cow<FuelTx>, &BlockHeight)> = tx_ids
                     .iter()
                     .take(records_to_fetch)
                     .map(|(tx_id, block_height)| -> Result<(Cow<FuelTx>, &BlockHeight), KvStoreError> {
@@ -199,10 +199,6 @@ impl TxQuery {
                         Ok((tx?, block_height))
                     })
                     .try_collect()?;
-
-                if direction == IterDirection::Reverse {
-                    txs.reverse()
-                }
 
                 let mut connection =
                     Connection::new(started.is_some(), records_to_fetch < tx_ids.len());
