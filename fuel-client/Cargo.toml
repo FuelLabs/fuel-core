@@ -1,6 +1,6 @@
 [package]
 name = "fuel-gql-client"
-version = "0.14.1"
+version = "0.15.0"
 authors = ["Fuel Labs <contact@fuel.sh>"]
 categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
 edition = "2021"
@@ -13,24 +13,26 @@ description = "Tx client and schema specification."
 [[bin]]
 name = "fuel-gql-cli"
 path = "src/main.rs"
+required-features = ["build-binary"]
 
 [dependencies]
 anyhow = "1.0"
 clap = { version = "3.1", features = ["derive"] }
-cynic = { version = "2.2.1", features = ["http-surf"] }
+cynic = { version = "2.2.1", features = ["http-reqwest"] }
 derive_more = { version = "0.99" }
 eventsource-client = "0.10.2"
 fuel-vm = { version = "0.22", features = ["serde"] }
 futures = "0.3"
-futures-timer = "3.0"
 hex = "0.4"
+# Included to enable webpki in the eventsource client
+hyper-rustls = { version = "0.22", features = ["webpki-tokio"] }
 itertools = "0.10"
-json-decode = "0.6"
+reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
-surf = { version = "2.2", default-features = false, features = ["h1-client-rustls"] }
 tai64 = {version = "4.0", features = ["serde"] }
 thiserror = "1.0"
+tokio = { version = "1.21", features = ["macros"], optional = true }
 
 [dev-dependencies]
 insta = "1.8"
@@ -40,5 +42,6 @@ schemafy_lib = { version = "0.5", optional = true }
 serde_json = { version = "1.0", features = ["raw_value"], optional = true }
 
 [features]
+build-binary = ["tokio"]
 test-helpers = []
 dap = ["schemafy_lib", "serde_json"]

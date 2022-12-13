@@ -113,6 +113,18 @@ impl Database {
     pub fn get_message_config(&self) -> Result<Option<Vec<MessageConfig>>, Error> {
         let configs = self
             .all_messages(None, None)
+            .filter_map(|msg| {
+                // Return only unspent messages
+                if let Ok(msg) = msg {
+                    if msg.fuel_block_spend.is_none() {
+                        Some(Ok(msg))
+                    } else {
+                        None
+                    }
+                } else {
+                    Some(msg)
+                }
+            })
             .map(|msg| -> Result<MessageConfig, Error> {
                 let msg = msg?;
 

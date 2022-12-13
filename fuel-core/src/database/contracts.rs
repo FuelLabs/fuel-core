@@ -1,6 +1,5 @@
 use crate::{
     database::{
-        storage::ContractsLatestUtxo,
         Column,
         Database,
     },
@@ -31,6 +30,7 @@ use fuel_core_interfaces::{
     },
     db::{
         ContractsInfo,
+        ContractsLatestUtxo,
         ContractsRawCode,
     },
 };
@@ -192,7 +192,7 @@ mod tests {
     };
 
     #[test]
-    fn contract_get() {
+    fn raw_code_get() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
 
@@ -215,7 +215,7 @@ mod tests {
     }
 
     #[test]
-    fn contract_put() {
+    fn raw_code_put() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
 
@@ -235,7 +235,7 @@ mod tests {
     }
 
     #[test]
-    fn contract_remove() {
+    fn raw_code_remove() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
 
@@ -257,7 +257,7 @@ mod tests {
     }
 
     #[test]
-    fn contract_exists() {
+    fn raw_code_exists() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
 
@@ -274,7 +274,7 @@ mod tests {
     }
 
     #[test]
-    fn contract_utxo_id_get() {
+    fn latest_utxo_get() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
 
@@ -297,7 +297,7 @@ mod tests {
     }
 
     #[test]
-    fn contract_utxo_id_put() {
+    fn latest_utxo_put() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
 
@@ -316,7 +316,7 @@ mod tests {
     }
 
     #[test]
-    fn contract_utxo_id_remove() {
+    fn latest_utxo_remove() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
 
@@ -338,7 +338,7 @@ mod tests {
     }
 
     #[test]
-    fn contract_utxo_id_exists() {
+    fn latest_utxo_exists() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
 

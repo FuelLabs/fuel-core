@@ -3,14 +3,7 @@ use super::scalars::{
     Tai64Timestamp,
 };
 use crate::{
-    database::{
-        storage::{
-            FuelBlocks,
-            SealedBlockConsensus,
-        },
-        Database,
-        KvStoreError,
-    },
+    database::Database,
     executor::Executor,
     model::{
         BlockHeight,
@@ -39,28 +32,37 @@ use async_graphql::{
     Context,
     InputObject,
     Object,
+    SimpleObject,
     Union,
 };
+use fuel_block_producer::ports::Executor as ExecutorTrait;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsRef,
         fuel_types,
         tai64::Tai64,
     },
-    db::Transactions,
+    db::{
+        FuelBlocks,
+        SealedBlockConsensus,
+        Transactions,
+    },
     executor::{
         ExecutionBlock,
-        Executor as ExecutorTrait,
+        ExecutionResult,
     },
     model::{
         FuelApplicationHeader,
         FuelBlockConsensus,
         FuelBlockHeader,
         FuelConsensusHeader,
+        Genesis as FuelGenesis,
         PartialFuelBlock,
         PartialFuelBlockHeader,
     },
+    not_found,
 };
+use fuel_poa_coordinator::service::seal_block;
 use itertools::Itertools;
 use std::{
     borrow::Cow,
@@ -76,7 +78,21 @@ pub struct Header(pub(crate) FuelBlockHeader);
 
 #[derive(Union)]
 pub enum Consensus {
+    Genesis(Genesis),
     PoA(PoAConsensus),
+}
+
+#[derive(SimpleObject)]
+pub struct Genesis {
+    /// The chain configs define what consensus type to use, what settlement layer to use,
+    /// rules of block validity, etc.
+    pub chain_config_hash: Bytes32,
+    /// The Binary Merkle Tree root of all genesis coins.
+    pub coins_root: Bytes32,
+    /// The Binary Merkle Tree root of state, balances, contracts code hash of each contract.
+    pub contracts_root: Bytes32,
+    /// The Binary Merkle Tree root of all genesis messages.
+    pub messages_root: Bytes32,
 }
 
 pub struct PoAConsensus {
@@ -102,7 +118,7 @@ impl Block {
             .storage::<SealedBlockConsensus>()
             .get(&id)
             .map(|c| c.map(|c| c.into_owned().into()))?
-            .ok_or(KvStoreError::NotFound)?;
+            .ok_or(not_found!(SealedBlockConsensus))?;
 
         Ok(consensus)
     }
@@ -118,7 +134,7 @@ impl Block {
                 Ok(Transaction(
                     db.storage::<Transactions>()
                         .get(tx_id)
-                        .and_then(|v| v.ok_or(KvStoreError::NotFound))?
+                        .and_then(|v| v.ok_or(not_found!(Transactions)))?
                         .into_owned(),
                 ))
             })
@@ -209,14 +225,8 @@ impl BlockQuery {
             (Some(id), None) => id.into(),
             (None, Some(height)) => {
                 let height: u64 = height.into();
-                if height == 0 {
-                    return Err(async_graphql::Error::new(
-                        "Genesis block isn't implemented yet",
-                    ))
-                } else {
-                    db.get_block_id(height.try_into()?)?
-                        .ok_or("Block height non-existent")?
-                }
+                db.get_block_id(height.try_into()?)?
+                    .ok_or("Block height non-existent")?
             }
             (None, None) => {
                 return Err(async_graphql::Error::new("Missing either id or height"))
@@ -352,10 +362,7 @@ where
             true
         })
         .take(records_to_fetch);
-    let mut blocks: Vec<(BlockHeight, fuel_types::Bytes32)> = blocks.try_collect()?;
-    if direction == IterDirection::Forward {
-        blocks.reverse();
-    }
+    let blocks: Vec<(BlockHeight, fuel_types::Bytes32)> = blocks.try_collect()?;
 
     // TODO: do a batch get instead
     let blocks: Vec<Cow<FuelBlockDb>> = blocks
@@ -364,7 +371,7 @@ where
             db.storage::<FuelBlocks>()
                 .get(id)
                 .transpose()
-                .ok_or(KvStoreError::NotFound)?
+                .ok_or(not_found!(FuelBlocks))?
         })
         .try_collect()?;
 
@@ -397,9 +404,9 @@ impl BlockMutation {
         time: Option<TimeParameters>,
     ) -> async_graphql::Result<U64> {
         let db = ctx.data_unchecked::<Database>();
-        let cfg = ctx.data_unchecked::<Config>().clone();
+        let config = ctx.data_unchecked::<Config>().clone();
 
-        if !cfg.manual_blocks_enabled {
+        if !config.manual_blocks_enabled {
             return Err(
                 anyhow!("Manual Blocks must be enabled to use this endpoint").into(),
             )
@@ -408,7 +415,7 @@ impl BlockMutation {
 
         let executor = Executor {
             database: db.clone(),
-            config: cfg,
+            config: config.clone(),
         };
 
         let block_time = get_time_closure(db, time, blocks_to_produce.0)?;
@@ -434,7 +441,15 @@ impl BlockMutation {
                 vec![],
             );
 
-            executor.execute(ExecutionBlock::Production(block))?;
+            // TODO: Instead of using raw `Executor` here, we need to use `CM` - Consensus Module.
+            //  It will guarantee that the block is entirely valid and all information is stored.
+            //  For that, we need to manually trigger block production and reset/ignore timers
+            //  inside CM for `blocks_to_produce` blocks.
+            let (ExecutionResult { block, .. }, mut db_transaction) = executor
+                .execute_without_commit(ExecutionBlock::Production(block))?
+                .into();
+            seal_block(&config.consensus_key, &block, db_transaction.database_mut())?;
+            db_transaction.commit_box()?;
         }
 
         db.get_block_height()?
@@ -518,9 +533,21 @@ impl From<FuelBlockDb> for Header {
     }
 }
 
+impl From<FuelGenesis> for Genesis {
+    fn from(genesis: FuelGenesis) -> Self {
+        Genesis {
+            chain_config_hash: genesis.chain_config_hash.into(),
+            coins_root: genesis.coins_root.into(),
+            contracts_root: genesis.contracts_root.into(),
+            messages_root: genesis.messages_root.into(),
+        }
+    }
+}
+
 impl From<FuelBlockConsensus> for Consensus {
     fn from(consensus: FuelBlockConsensus) -> Self {
         match consensus {
+            FuelBlockConsensus::Genesis(genesis) => Consensus::Genesis(genesis.into()),
             FuelBlockConsensus::PoA(poa) => Consensus::PoA(PoAConsensus {
                 signature: poa.signature.into(),
             }),

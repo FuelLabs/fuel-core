@@ -1,7 +1,7 @@
 use crate::client::schema::contract::ContractBalanceQueryArgs;
 use anyhow::Context;
 use cynic::{
-    http::SurfExt,
+    http::ReqwestExt,
     GraphQlResponse,
     Id,
     MutationBuilder,
@@ -9,6 +9,7 @@ use cynic::{
     QueryBuilder,
     StreamingOperation,
 };
+use eventsource_client::HttpsConnector;
 use fuel_vm::prelude::*;
 use futures::StreamExt;
 use itertools::Itertools;
@@ -48,6 +49,7 @@ use schema::{
 };
 use std::{
     convert::TryInto,
+    future,
     io::{
         self,
         ErrorKind,
@@ -64,6 +66,7 @@ use types::{
 };
 
 use crate::client::schema::{
+    block::BlockByHeightArgs,
     resource::ExcludeInput,
     tx::DryRunArg,
 };
@@ -86,7 +89,7 @@ pub mod types;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FuelClient {
-    url: surf::Url,
+    url: reqwest::Url,
 }
 
 impl FromStr for FuelClient {
@@ -98,7 +101,7 @@ impl FromStr for FuelClient {
             raw_url = format!("http://{}", raw_url);
         }
 
-        let mut url = surf::Url::parse(&raw_url)
+        let mut url = reqwest::Url::parse(&raw_url)
             .with_context(|| format!("Invalid fuel-core URL: {}", str))?;
         url.set_path("/graphql");
         Ok(Self { url })
@@ -141,7 +144,8 @@ impl FuelClient {
         Vars: serde::Serialize,
         ResponseData: serde::de::DeserializeOwned + 'static,
     {
-        let response = surf::post(&self.url)
+        let response = reqwest::Client::new()
+            .post(self.url.clone())
             .run_graphql(q)
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
@@ -190,7 +194,7 @@ impl FuelClient {
                     format!("Failed to add header to client {:?}", e),
                 )
             })?
-            .build_http();
+            .build_with_conn(HttpsConnector::with_webpki_roots());
 
         let mut last = None;
 
@@ -425,7 +429,10 @@ impl FuelClient {
         let query = schema::tx::TransactionQuery::build(TxIdArgs { id: id.parse()? });
 
         let tx = self.query(query).await?.transaction.ok_or_else(|| {
-            io::Error::new(ErrorKind::NotFound, format!("transaction {} not found", id))
+            io::Error::new(
+                ErrorKind::NotFound,
+                format!("status not found for transaction {} ", id),
+            )
         })?;
 
         let status = tx
@@ -465,13 +472,25 @@ impl FuelClient {
         &self,
         id: &str,
     ) -> io::Result<TransactionStatus> {
-        let mut outcomes: Vec<_> = futures::TryStreamExt::try_collect(
-            self.subscribe_transaction_status(id).await?,
-        )
-        .await?;
-        outcomes.pop().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "Failed to get status for transaction")
-        })
+        // skip until we've reached a final status and then stop consuming the stream
+        // to avoid an EOF which the eventsource client considers as an error.
+        let status_result = self
+            .subscribe_transaction_status(id)
+            .await?
+            .skip_while(|status| {
+                future::ready(matches!(status, Ok(TransactionStatus::Submitted { .. })))
+            })
+            .next()
+            .await;
+
+        if let Some(Ok(status)) = status_result {
+            Ok(status)
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Failed to get status for transaction",
+            ))
+        }
     }
 
     /// returns a paginated set of transactions sorted by block height
@@ -533,8 +552,22 @@ impl FuelClient {
     }
 
     pub async fn block(&self, id: &str) -> io::Result<Option<schema::block::Block>> {
-        let query =
-            schema::block::BlockByIdQuery::build(BlockByIdArgs { id: id.parse()? });
+        let query = schema::block::BlockByIdQuery::build(BlockByIdArgs {
+            id: Some(id.parse()?),
+        });
+
+        let block = self.query(query).await?.block;
+
+        Ok(block)
+    }
+
+    pub async fn block_by_height(
+        &self,
+        height: u64,
+    ) -> io::Result<Option<schema::block::Block>> {
+        let query = schema::block::BlockByHeightQuery::build(BlockByHeightArgs {
+            height: Some(U64(height)),
+        });
 
         let block = self.query(query).await?.block;
 

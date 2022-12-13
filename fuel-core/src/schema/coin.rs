@@ -1,8 +1,5 @@
 use crate::{
-    database::{
-        Database,
-        KvStoreError,
-    },
+    database::Database,
     schema::{
         check_pagination_parameters,
         scalars::{
@@ -36,6 +33,7 @@ use fuel_core_interfaces::{
         Coin as CoinModel,
         CoinStatus as CoinStatusModel,
     },
+    not_found,
 };
 use itertools::Itertools;
 
@@ -183,7 +181,7 @@ impl CoinQuery {
                             db.storage::<Coins>()
                                 .get(&id)
                                 .transpose()
-                                .ok_or(KvStoreError::NotFound)?
+                                .ok_or(not_found!(Coins))?
                                 .map(|coin| Coin(id, coin.into_owned()))
                         })
                         .try_collect()?;
