@@ -592,7 +592,7 @@ impl From<FuelBlock> for PartialFuelBlock {
 /// network - contracts states, contracts balances, unspent coins, and messages. It also contains
 /// the hash on the initial config of the network that defines the consensus rules for following
 /// blocks.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Genesis {
     /// The chain config define what consensus type to use, what settlement layer to use,

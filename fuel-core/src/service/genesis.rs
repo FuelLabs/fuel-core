@@ -8,17 +8,15 @@ use crate::{
 use anyhow::anyhow;
 use fuel_block_executor::refs::ContractRef;
 use fuel_chain_config::{
-    ChainConfig,
     ContractConfig,
+    GenesisCommitment,
     StateConfig,
 };
 use fuel_core_interfaces::{
     common::{
-        fuel_crypto::Hasher,
         fuel_merkle::binary,
         fuel_storage::StorageAsMut,
         fuel_tx::{
-            ConsensusParameters,
             Contract,
             MessageId,
             UtxoId,
@@ -53,89 +51,9 @@ use fuel_core_interfaces::{
         Message,
         PartialFuelBlockHeader,
     },
-    not_found,
 };
 use fuel_poa_coordinator::ports::BlockDb;
 use itertools::Itertools;
-
-trait Merklization {
-    /// Calculates the merkle root of the state of the entity.
-    fn root(&mut self) -> anyhow::Result<MerkleRoot>;
-}
-
-impl Merklization for Message {
-    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
-        Ok(self.id().into())
-    }
-}
-
-impl Merklization for Coin {
-    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
-        let coin_hash = *Hasher::default()
-            .chain(self.owner)
-            .chain(self.amount.to_be_bytes())
-            .chain(self.asset_id)
-            .chain((*self.maturity).to_be_bytes())
-            .chain([self.status as u8])
-            .chain((*self.block_created).to_be_bytes())
-            .finalize();
-
-        Ok(coin_hash)
-    }
-}
-
-impl<'a> Merklization for ContractRef<&'a mut Database> {
-    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
-        let contract_id = *self.contract_id();
-        let utxo = self
-            .database()
-            .storage::<ContractsLatestUtxo>()
-            .get(&contract_id)?
-            .ok_or(not_found!(ContractsLatestUtxo))?
-            .into_owned();
-        let state_root = self
-            .database_mut()
-            .storage::<ContractsState>()
-            .root(&contract_id)?;
-        let balance_root = self
-            .database_mut()
-            .storage::<ContractsAssets>()
-            .root(&contract_id)?;
-
-        let contract_hash = *Hasher::default()
-            // `ContractId` already is based on contract's code and salt so we don't need it.
-            .chain(contract_id.as_ref())
-            .chain(utxo.tx_id().as_ref())
-            .chain([utxo.output_index()])
-            .chain(state_root.as_slice())
-            .chain(balance_root.as_slice())
-            .finalize();
-
-        Ok(contract_hash)
-    }
-}
-
-impl Merklization for ConsensusParameters {
-    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
-        // TODO: Define hash algorithm for `ConsensusParameters`
-        let params_hash = Hasher::default()
-            .chain(bincode::serialize(&self)?)
-            .finalize();
-        Ok(params_hash.into())
-    }
-}
-
-impl Merklization for ChainConfig {
-    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
-        // TODO: Hash settlement configuration, consensus block production
-        let config_hash = *Hasher::default()
-            .chain(self.block_gas_limit.to_be_bytes())
-            .chain(self.transaction_parameters.root()?)
-            .finalize();
-
-        Ok(config_hash)
-    }
-}
 
 impl FuelService {
     /// Loads state from the chain config into database

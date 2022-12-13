@@ -110,7 +110,7 @@ pub struct Command {
 
     #[cfg(feature = "p2p")]
     #[clap(flatten)]
-    pub p2p_args: p2p::P2pArgs,
+    pub p2p_args: p2p::P2PArgs,
 
     #[clap(long = "metrics")]
     pub metrics: bool,
@@ -143,14 +143,7 @@ impl Command {
         let chain_conf: ChainConfig = chain_config.as_str().parse()?;
 
         #[cfg(feature = "p2p")]
-        let p2p_cfg = {
-            let mut p2p = match p2p_args.into_config(&chain_conf) {
-                Ok(value) => value,
-                Err(e) => return Err(e),
-            };
-            p2p.metrics = metrics;
-            p2p
-        };
+        let p2p_cfg = p2p_args.into_config(metrics)?;
 
         // if consensus key is not configured, fallback to dev consensus key
         let consensus_key = load_consensus_key(consensus_key)?.or_else(|| {

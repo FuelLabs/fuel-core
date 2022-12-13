@@ -1,10 +1,14 @@
-use crate::serialization::{
-    HexNumber,
-    HexType,
+use crate::{
+    serialization::{
+        HexNumber,
+        HexType,
+    },
+    GenesisCommitment,
 };
 use fuel_core_interfaces::{
     common::prelude::{
         Address,
+        MerkleRoot,
         Word,
     },
     model::{
@@ -51,5 +55,11 @@ impl From<MessageConfig> for Message {
             da_height: msg.da_height,
             fuel_block_spend: None,
         }
+    }
+}
+
+impl GenesisCommitment for Message {
+    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
+        Ok(self.id().into())
     }
 }

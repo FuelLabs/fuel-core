@@ -6,8 +6,10 @@ use crate::gossipsub::{
         NEW_TX_GOSSIP_TOPIC,
     },
 };
-
-use fuel_core_interfaces::common::secrecy::Zeroize;
+use fuel_core_interfaces::{
+    common::secrecy::Zeroize,
+    model::Genesis,
+};
 use futures::{
     future,
     AsyncRead,
@@ -26,6 +28,7 @@ use libp2p::{
         },
         UpgradeInfo,
     },
+    gossipsub::GossipsubConfig,
     identity::{
         secp256k1::SecretKey,
         Keypair,
@@ -49,7 +52,6 @@ use libp2p::{
     PeerId,
     Transport,
 };
-
 use std::{
     collections::HashSet,
     error::Error,
@@ -63,8 +65,6 @@ use std::{
     time::Duration,
 };
 
-use libp2p::gossipsub::GossipsubConfig;
-
 const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Maximum number of frames buffered per substream.
@@ -74,17 +74,25 @@ const MAX_NUM_OF_FRAMES_BUFFERED: usize = 256;
 /// inbound and outbound connections established through the transport.
 const TRANSPORT_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// Sha256 hash of chain id and chain config
-type Checksum = [u8; 32];
+/// Sha256 hash of ChainConfig
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Checksum([u8; 32]);
+
+impl From<[u8; 32]> for Checksum {
+    fn from(value: [u8; 32]) -> Self {
+        Self(value)
+    }
+}
 
 #[derive(Clone, Debug)]
-pub struct P2PConfig {
-    pub local_keypair: Keypair,
+pub struct P2PConfig<State = Initialized> {
+    /// The keypair used for for handshake during communication with other p2p nodes.
+    pub keypair: Keypair,
 
     /// Name of the Network
     pub network_name: String,
 
-    /// Checksum (sha256) of Chain ID + Chain Config
+    /// Checksum is a hash(sha256) of [`Genesis`](fuel_core_interfaces::model::Genesis) - chain id.
     pub checksum: Checksum,
 
     /// IP address for Swarm to listen on
@@ -133,6 +141,51 @@ pub struct P2PConfig {
 
     /// Enables prometheus metrics for this fuel-service
     pub metrics: bool,
+
+    /// It is the state of the config initialization. Everyone can create an instance of the `Self`
+    /// with the `NotInitialized` state. But it can be set into the `Initialized` state only with
+    /// the `init` method.
+    pub state: State,
+}
+
+/// The initialized state can be achieved only by the `init` function because `()` is private.
+#[derive(Clone, Debug)]
+pub struct Initialized(());
+
+#[derive(Clone, Debug)]
+pub struct NotInitialized;
+
+impl P2PConfig<NotInitialized> {
+    /// Inits the `P2PConfig` with some lazily loaded data.
+    pub fn init(self, mut genesis: Genesis) -> anyhow::Result<P2PConfig<Initialized>> {
+        use fuel_chain_config::GenesisCommitment;
+
+        Ok(P2PConfig {
+            keypair: self.keypair,
+            network_name: self.network_name,
+            checksum: genesis.root()?.into(),
+            address: self.address,
+            public_address: self.public_address,
+            tcp_port: self.tcp_port,
+            max_block_size: self.max_block_size,
+            bootstrap_nodes: self.bootstrap_nodes,
+            enable_mdns: self.enable_mdns,
+            max_peers_connected: self.max_peers_connected,
+            allow_private_addresses: self.allow_private_addresses,
+            random_walk: self.random_walk,
+            connection_idle_timeout: self.connection_idle_timeout,
+            reserved_nodes: self.reserved_nodes,
+            reserved_nodes_only_mode: self.reserved_nodes_only_mode,
+            identify_interval: self.identify_interval,
+            info_interval: self.info_interval,
+            gossipsub_config: self.gossipsub_config,
+            topics: self.topics,
+            set_request_timeout: self.set_request_timeout,
+            set_connection_keep_alive: self.set_connection_keep_alive,
+            metrics: self.metrics,
+            state: Initialized(()),
+        })
+    }
 }
 
 /// Takes secret key bytes generated outside of libp2p.
@@ -145,14 +198,14 @@ pub fn convert_to_libp2p_keypair(
     Ok(Keypair::Secp256k1(secret_key.into()))
 }
 
-impl P2PConfig {
-    pub fn default_with_network(network_name: &str) -> Self {
-        let local_keypair = Keypair::generate_secp256k1();
+impl P2PConfig<NotInitialized> {
+    pub fn default(network_name: &str) -> Self {
+        let keypair = Keypair::generate_secp256k1();
 
-        P2PConfig {
-            local_keypair,
+        Self {
+            keypair,
             network_name: network_name.into(),
-            checksum: [0u8; 32],
+            checksum: Default::default(),
             address: IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0])),
             public_address: None,
             tcp_port: 0,
@@ -176,7 +229,17 @@ impl P2PConfig {
             info_interval: Some(Duration::from_secs(3)),
             identify_interval: Some(Duration::from_secs(5)),
             metrics: false,
+            state: NotInitialized,
         }
+    }
+}
+
+#[cfg(any(feature = "test-helpers", test))]
+impl P2PConfig<Initialized> {
+    pub fn default_initialized(network_name: &str) -> Self {
+        P2PConfig::<NotInitialized>::default(network_name)
+            .init(Default::default())
+            .expect("Expected correct initialization of config")
     }
 }
 
@@ -200,7 +263,7 @@ pub(crate) fn build_transport(p2p_config: &P2PConfig) -> Boxed<(PeerId, StreamMu
 
     let noise_authenticated = {
         let dh_keys = noise::Keypair::<noise::X25519Spec>::new()
-            .into_authentic(&p2p_config.local_keypair)
+            .into_authentic(&p2p_config.keypair)
             .expect("Noise key generation failed");
 
         noise::NoiseConfig::xx(dh_keys).into_authenticated()
@@ -405,8 +468,8 @@ where
         async move {
             // Inbound node receives the checksum and compares it to its own checksum.
             // If they do not match the connection is rejected.
-            let res = read_length_prefixed(&mut socket, self.checksum.len()).await?;
-            if res != self.checksum {
+            let res = read_length_prefixed(&mut socket, self.checksum.0.len()).await?;
+            if res != self.checksum.0 {
                 return Err(FuelUpgradeError::IncorrectChecksum)
             }
 
@@ -427,7 +490,7 @@ where
     fn upgrade_outbound(self, mut socket: C, _: Self::Info) -> Self::Future {
         async move {
             // Outbound node sends their own checksum for comparison with the inbound node.
-            write_length_prefixed(&mut socket, &self.checksum).await?;
+            write_length_prefixed(&mut socket, &self.checksum.0).await?;
 
             // Note: outbound node does not need to receive the checksum from the inbound node,
             // since inbound node will reject the connection if the two don't match on its side.
