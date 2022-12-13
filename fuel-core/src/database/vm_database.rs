@@ -330,12 +330,19 @@ mod tests {
         Bytes32::from(bytes)
     }
 
+    const fn key(k: u8) -> [u8; 32] {
+        [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, k,
+        ]
+    }
+
     #[test]
     fn read_single_value() {
         let mut db = VmDatabase::default();
 
         let contract_id = ContractId::new([0u8; 32]);
-        let key = Bytes32::new([0u8; 32]);
+        let key = Bytes32::new(key(0));
         let value = Bytes32::new([1u8; 32]);
 
         // check that read is unset before insert
@@ -695,23 +702,16 @@ mod tests {
         let read_db = db.clone();
 
         let contract_id = ContractId::new([0u8; 32]);
-        let zero_bytes32 = Bytes32::new([0u8; 32]);
+        let key_0 = key(0);
         let value_1 = Bytes32::new([1u8; 32]);
         let value_2 = Bytes32::new([2u8; 32]);
         let value_3 = Bytes32::new([3u8; 32]);
 
-        let u256_zero = U256::from_big_endian(zero_bytes32.as_ref());
-
-        let mut key_1 = [0u8; 32];
-        let u256_1 = u256_zero.checked_add(1.into()).unwrap();
-        u256_1.to_big_endian(&mut key_1);
-
-        let mut key_2 = [0u8; 32];
-        let u256_2 = u256_zero.checked_add(2.into()).unwrap();
-        u256_2.to_big_endian(&mut key_2);
+        let key_1 = key(1);
+        let key_2 = key(2);
 
         let pre_insert_read_0 = read_db
-            .merkle_contract_state(&contract_id, &zero_bytes32)
+            .merkle_contract_state(&contract_id, &Bytes32::new(key_0))
             .unwrap();
         let pre_insert_read_1 = read_db
             .merkle_contract_state(&contract_id, &Bytes32::new(key_1))
@@ -723,13 +723,13 @@ mod tests {
         let insert_status = db
             .merkle_contract_state_insert_range(
                 &contract_id,
-                &zero_bytes32,
+                &Bytes32::new(key_0),
                 &[value_1, value_2, value_3],
             )
             .unwrap();
 
         let read_0 = read_db
-            .merkle_contract_state(&contract_id, &zero_bytes32)
+            .merkle_contract_state(&contract_id, &Bytes32::new(key_0))
             .unwrap();
         let read_1 = read_db
             .merkle_contract_state(&contract_id, &Bytes32::new(key_1))
@@ -762,15 +762,8 @@ mod tests {
         let value_2 = Bytes32::new([2u8; 32]);
         let value_3 = Bytes32::new([3u8; 32]);
 
-        let u256_zero = U256::from_big_endian(zero_bytes32.as_ref());
-
-        let mut key_1 = [0u8; 32];
-        let u256_1 = u256_zero.checked_add(1.into()).unwrap();
-        u256_1.to_big_endian(&mut key_1);
-
-        let mut key_2 = [0u8; 32];
-        let u256_2 = u256_zero.checked_add(2.into()).unwrap();
-        u256_2.to_big_endian(&mut key_2);
+        let key_1 = key(1);
+        let key_2 = key(2);
 
         let _insert_status_1 = db
             .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value_0)
@@ -830,15 +823,8 @@ mod tests {
         let value_2 = Bytes32::new([2u8; 32]);
         let value_3 = Bytes32::new([3u8; 32]);
 
-        let u256_zero = U256::from_big_endian(zero_bytes32.as_ref());
-
-        let mut key_1 = [0u8; 32];
-        let u256_1 = u256_zero.checked_add(1.into()).unwrap();
-        u256_1.to_big_endian(&mut key_1);
-
-        let mut key_2 = [0u8; 32];
-        let u256_2 = u256_zero.checked_add(2.into()).unwrap();
-        u256_2.to_big_endian(&mut key_2);
+        let key_1 = key(1);
+        let key_2 = key(2);
 
         let _insert_status_0 = db
             .merkle_contract_state_insert(&contract_id, &zero_bytes32, &zero_bytes32)
@@ -903,15 +889,8 @@ mod tests {
         let value_2 = Bytes32::new([2u8; 32]);
         let value_3 = Bytes32::new([3u8; 32]);
 
-        let u256_zero = U256::from_big_endian(zero_bytes32.as_ref());
-
-        let mut key_1 = [0u8; 32];
-        let u256_1 = u256_zero.checked_add(1.into()).unwrap();
-        u256_1.to_big_endian(&mut key_1);
-
-        let mut key_2 = [0u8; 32];
-        let u256_2 = u256_zero.checked_add(2.into()).unwrap();
-        u256_2.to_big_endian(&mut key_2);
+        let key_1 = key(1);
+        let key_2 = key(2);
 
         let _insert_status_0 = db
             .merkle_contract_state_insert(&contract_id, &zero_bytes32, &value_0)
@@ -972,15 +951,8 @@ mod tests {
         let value_2 = Bytes32::new([2u8; 32]);
         let value_3 = Bytes32::new([3u8; 32]);
 
-        let u256_zero = U256::from_big_endian(zero_bytes32.as_ref());
-
-        let mut key_1 = [0u8; 32];
-        let u256_1 = u256_zero.checked_add(1.into()).unwrap();
-        u256_1.to_big_endian(&mut key_1);
-
-        let mut key_2 = [0u8; 32];
-        let u256_2 = u256_zero.checked_add(2.into()).unwrap();
-        u256_2.to_big_endian(&mut key_2);
+        let key_1 = key(1);
+        let key_2 = key(2);
 
         let _insert_status_0 = db
             .merkle_contract_state_insert(&contract_id, &zero_bytes32, &value_0)
@@ -1035,7 +1007,6 @@ mod tests {
     #[test]
     fn remove_single_unset() {
         let mut db = VmDatabase::default();
-        // let mut db_mut = &mut db;
 
         let contract_id = ContractId::new([0u8; 32]);
         let key = Bytes32::new([0u8; 32]);
@@ -1101,15 +1072,8 @@ mod tests {
         let zero_bytes32 = Bytes32::new([0u8; 32]);
         let value = Bytes32::new([1u8; 32]);
 
-        let u256_zero = U256::from_big_endian(zero_bytes32.as_ref());
-
-        let mut key_1 = [0u8; 32];
-        let u256_1 = u256_zero.checked_add(1.into()).unwrap();
-        u256_1.to_big_endian(&mut key_1);
-
-        let mut key_2 = [0u8; 32];
-        let u256_2 = u256_zero.checked_add(2.into()).unwrap();
-        u256_2.to_big_endian(&mut key_2);
+        let key_1 = key(1);
+        let key_2 = key(2);
 
         let _insert_status_1 = db
             .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value)
@@ -1160,15 +1124,8 @@ mod tests {
         let zero_bytes32 = Bytes32::new([0u8; 32]);
         let value = Bytes32::new([1u8; 32]);
 
-        let u256_zero = U256::from_big_endian(zero_bytes32.as_ref());
-
-        let mut key_1 = [0u8; 32];
-        let u256_1 = u256_zero.checked_add(1.into()).unwrap();
-        u256_1.to_big_endian(&mut key_1);
-
-        let mut key_2 = [0u8; 32];
-        let u256_2 = u256_zero.checked_add(2.into()).unwrap();
-        u256_2.to_big_endian(&mut key_2);
+        let key_1 = key(1);
+        let key_2 = key(2);
 
         let _insert_status_0 = db
             .merkle_contract_state_insert(&contract_id, &zero_bytes32, &value)
@@ -1219,15 +1176,8 @@ mod tests {
         let zero_bytes32 = Bytes32::new([0u8; 32]);
         let value = Bytes32::new([1u8; 32]);
 
-        let u256_zero = U256::from_big_endian(zero_bytes32.as_ref());
-
-        let mut key_1 = [0u8; 32];
-        let u256_1 = u256_zero.checked_add(1.into()).unwrap();
-        u256_1.to_big_endian(&mut key_1);
-
-        let mut key_2 = [0u8; 32];
-        let u256_2 = u256_zero.checked_add(2.into()).unwrap();
-        u256_2.to_big_endian(&mut key_2);
+        let key_1 = key(1);
+        let key_2 = key(2);
 
         let _insert_status_0 = db
             .merkle_contract_state_insert(&contract_id, &zero_bytes32, &value)
@@ -1278,15 +1228,8 @@ mod tests {
         let zero_bytes32 = Bytes32::new([0u8; 32]);
         let value = Bytes32::new([1u8; 32]);
 
-        let u256_zero = U256::from_big_endian(zero_bytes32.as_ref());
-
-        let mut key_1 = [0u8; 32];
-        let u256_1 = u256_zero.checked_add(1.into()).unwrap();
-        u256_1.to_big_endian(&mut key_1);
-
-        let mut key_2 = [0u8; 32];
-        let u256_2 = u256_zero.checked_add(2.into()).unwrap();
-        u256_2.to_big_endian(&mut key_2);
+        let key_1 = key(1);
+        let key_2 = key(2);
 
         let insert_status_0 = db
             .merkle_contract_state_insert(&contract_id, &zero_bytes32, &value)
