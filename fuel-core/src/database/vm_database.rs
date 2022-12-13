@@ -298,6 +298,21 @@ mod tests {
         Bytes32::from(bytes)
     }
 
+    fn setup_value(
+        db: &VmDatabase,
+        contract_id: ContractId,
+        start_key: U256,
+        i: usize,
+        value: &Bytes32,
+    ) {
+        let key = start_key.add(i);
+        let key = u256_to_bytes32(key);
+        let multi_key = MultiKey::new(&(contract_id.as_ref(), key.as_ref()));
+        db.database
+            .insert::<_, _, Bytes32>(&multi_key, Column::ContractsState, value)
+            .unwrap();
+    }
+
     #[test]
     fn read_single_value() {
         let mut db = VmDatabase::default();
@@ -322,6 +337,29 @@ mod tests {
     }
 
     #[test]
+    fn read_range_unset() {
+        // ensure we pad the correct number of results even if the iterator is empty
+        const RANGE_LENGTH: usize = 10;
+        let contract_id = ContractId::new([0u8; 32]);
+        let start_key = U256::zero();
+
+        let db = VmDatabase::default();
+        // perform sequential read
+        let results = db
+            .merkle_contract_state_range(
+                &contract_id,
+                &u256_to_bytes32(start_key),
+                RANGE_LENGTH as Word,
+            )
+            .unwrap();
+        assert_eq!(results.len(), RANGE_LENGTH);
+        results
+            .iter()
+            .enumerate()
+            .for_each(|(i, item)| assert!(item.is_none(), "Expected None for idx {}", i));
+    }
+
+    #[test]
     fn read_sequential_set_data() {
         let rng = &mut StdRng::seed_from_u64(100);
         let db = VmDatabase::default();
@@ -331,23 +369,22 @@ mod tests {
         let start_key = U256::zero();
 
         // check range is unset
-        db.merkle_contract_state_range(&contract_id, &u256_to_bytes32(start_key), 10)
-            .unwrap()
-            .iter()
-            .for_each(|item| assert!(item.is_none()));
+        db.merkle_contract_state_range(
+            &contract_id,
+            &u256_to_bytes32(start_key),
+            RANGE_LENGTH as Word,
+        )
+        .unwrap()
+        .iter()
+        .for_each(|item| assert!(item.is_none()));
 
         let setup_values = (0..RANGE_LENGTH)
             .map(|_| rng.gen())
             .collect::<Vec<Bytes32>>();
 
         // setup data
-        for (i, setup_value) in setup_values.iter().enumerate().take(RANGE_LENGTH) {
-            let key = start_key.add(i);
-            let key = u256_to_bytes32(key);
-            let multi_key = MultiKey::new(&(contract_id.as_ref(), key.as_ref()));
-            db.database
-                .insert::<_, _, Bytes32>(&multi_key, Column::ContractsState, setup_value)
-                .unwrap();
+        for (i, value) in setup_values.iter().enumerate().take(RANGE_LENGTH) {
+            setup_value(&db, contract_id, start_key, i, value);
         }
 
         // perform sequential read
@@ -369,29 +406,6 @@ mod tests {
     }
 
     #[test]
-    fn read_range_unset() {
-        // ensure we pad the correct number of results even if the iterator is empty
-        const RANGE_LENGTH: usize = 10;
-        let contract_id = ContractId::new([0u8; 32]);
-        let start_key = U256::zero();
-
-        let db = VmDatabase::default();
-        // perform sequential read
-        let results = db
-            .merkle_contract_state_range(
-                &contract_id,
-                &u256_to_bytes32(start_key),
-                RANGE_LENGTH as u64,
-            )
-            .unwrap();
-        assert_eq!(results.len(), RANGE_LENGTH);
-        results
-            .iter()
-            .enumerate()
-            .for_each(|(i, item)| assert!(item.is_none(), "Expected None for idx {}", i));
-    }
-
-    #[test]
     fn read_over_unset_region_same_contract() {
         let rng = &mut StdRng::seed_from_u64(100);
         let db = VmDatabase::default();
@@ -406,14 +420,9 @@ mod tests {
             .collect::<Vec<Option<Bytes32>>>();
 
         // setup only some of the data in the range
-        for (i, setup_value) in setup_values.iter().enumerate().take(RANGE_LENGTH) {
-            if let Some(value) = setup_value {
-                let key = start_key.add(i);
-                let key = u256_to_bytes32(key);
-                let multi_key = MultiKey::new(&(contract_id.as_ref(), key.as_ref()));
-                db.database
-                    .insert::<_, _, Bytes32>(&multi_key, Column::ContractsState, value)
-                    .unwrap();
+        for (i, value) in setup_values.iter().enumerate().take(RANGE_LENGTH) {
+            if let Some(value) = value {
+                setup_value(&db, contract_id, start_key, i, value);
             }
         }
 
@@ -445,33 +454,12 @@ mod tests {
         let start_key = U256::zero();
 
         // setup test values for the database
-        let key = u256_to_bytes32(start_key.add(0));
-        let c1_k1 = MultiKey::new(&(contract_id_1.as_ref(), key.as_ref()));
-        let c1_v1: Bytes32 = rng.gen();
-        db.database
-            .insert::<_, _, Bytes32>(&c1_k1, Column::ContractsState, c1_v1)
-            .unwrap();
-
-        let key = u256_to_bytes32(start_key.add(1));
-        let c1_k2 = MultiKey::new(&(contract_id_1.as_ref(), key.as_ref()));
-        let c1_v2: Bytes32 = rng.gen();
-        db.database
-            .insert::<_, _, Bytes32>(&c1_k2, Column::ContractsState, c1_v2)
-            .unwrap();
-
-        let key = u256_to_bytes32(start_key.add(0));
-        let c2_k1 = MultiKey::new(&(contract_id_2.as_ref(), key.as_ref()));
-        let c2_v1: Bytes32 = rng.gen();
-        db.database
-            .insert::<_, _, Bytes32>(&c2_k1, Column::ContractsState, c2_v1)
-            .unwrap();
-
-        let key = u256_to_bytes32(start_key.add(1));
-        let c2_k2 = MultiKey::new(&(contract_id_2.as_ref(), key.as_ref()));
-        let c2_v2: Bytes32 = rng.gen();
-        db.database
-            .insert::<_, _, Bytes32>(&c2_k2, Column::ContractsState, c2_v2)
-            .unwrap();
+        let c1_v1 = rng.gen();
+        setup_value(&db, contract_id_1, start_key, 0, &c1_v1);
+        let c1_v2 = rng.gen();
+        setup_value(&db, contract_id_1, start_key, 1, &c1_v2);
+        let c2_v2 = rng.gen();
+        setup_value(&db, contract_id_2, start_key, 1, &c2_v2);
 
         // perform sequential read
         const READ_RANGE: usize = 4;
@@ -505,33 +493,9 @@ mod tests {
         let start_key = U256::max_value().sub(2);
 
         // setup test values for the database
-        let key = u256_to_bytes32(start_key.add(0));
-        let c1_k1 = MultiKey::new(&(contract_id_1.as_ref(), key.as_ref()));
-        let c1_v1: Bytes32 = rng.gen();
-        db.database
-            .insert::<_, _, Bytes32>(&c1_k1, Column::ContractsState, c1_v1)
-            .unwrap();
-
-        let key = u256_to_bytes32(start_key.add(1));
-        let c1_k2 = MultiKey::new(&(contract_id_1.as_ref(), key.as_ref()));
-        let c1_v2: Bytes32 = rng.gen();
-        db.database
-            .insert::<_, _, Bytes32>(&c1_k2, Column::ContractsState, c1_v2)
-            .unwrap();
-
-        let key = u256_to_bytes32(start_key.add(0));
-        let c2_k1 = MultiKey::new(&(contract_id_2.as_ref(), key.as_ref()));
-        let c2_v1: Bytes32 = rng.gen();
-        db.database
-            .insert::<_, _, Bytes32>(&c2_k1, Column::ContractsState, c2_v1)
-            .unwrap();
-
-        let key = u256_to_bytes32(start_key.add(1));
-        let c2_k2 = MultiKey::new(&(contract_id_2.as_ref(), key.as_ref()));
-        let c2_v2: Bytes32 = rng.gen();
-        db.database
-            .insert::<_, _, Bytes32>(&c2_k2, Column::ContractsState, c2_v2)
-            .unwrap();
+        setup_value(&db, contract_id_1, start_key, 0, &rng.gen());
+        setup_value(&db, contract_id_1, start_key, 1, &rng.gen());
+        setup_value(&db, contract_id_2, start_key, 1, &rng.gen());
 
         // perform sequential read
         const READ_RANGE: usize = 4;
@@ -556,12 +520,7 @@ mod tests {
         let start_key = U256::max_value().sub(1);
 
         // setup test values for the database
-        let key = u256_to_bytes32(start_key);
-        let key = MultiKey::new(&(contract_id.as_ref(), key.as_ref()));
-        let value: Bytes32 = rng.gen();
-        db.database
-            .insert::<_, _, Bytes32>(&key, Column::ContractsState, value)
-            .unwrap();
+        setup_value(&db, contract_id, start_key, 0, &rng.gen());
 
         // perform sequential read (u256::max - 1, u256::max, invalid key)
         const READ_RANGE: usize = 3;
@@ -808,16 +767,14 @@ mod tests {
         let u256_2 = u256_zero.checked_add(2.into()).unwrap();
         u256_2.to_big_endian(&mut key_2);
 
-        let _insert_status_0 = db
-            .merkle_contract_state_insert(&contract_id, &zero_bytes32, &zero_bytes32)
+        db.merkle_contract_state_insert(&contract_id, &zero_bytes32, &zero_bytes32)
             .unwrap();
-        let _insert_status_2 = db
-            .merkle_contract_state_insert(
-                &contract_id,
-                &Bytes32::new(key_2),
-                &zero_bytes32,
-            )
-            .unwrap();
+        db.merkle_contract_state_insert(
+            &contract_id,
+            &Bytes32::new(key_2),
+            &zero_bytes32,
+        )
+        .unwrap();
 
         let pre_insert_read_0 = read_db
             .merkle_contract_state(&contract_id, &zero_bytes32)
@@ -881,11 +838,9 @@ mod tests {
         let u256_2 = u256_zero.checked_add(2.into()).unwrap();
         u256_2.to_big_endian(&mut key_2);
 
-        let _insert_status_0 = db
-            .merkle_contract_state_insert(&contract_id, &zero_bytes32, &value_0)
+        db.merkle_contract_state_insert(&contract_id, &zero_bytes32, &value_0)
             .unwrap();
-        let _insert_status_1 = db
-            .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value_0)
+        db.merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value_0)
             .unwrap();
 
         let pre_insert_read_0 = read_db
@@ -950,14 +905,11 @@ mod tests {
         let u256_2 = u256_zero.checked_add(2.into()).unwrap();
         u256_2.to_big_endian(&mut key_2);
 
-        let _insert_status_0 = db
-            .merkle_contract_state_insert(&contract_id, &zero_bytes32, &value_0)
+        db.merkle_contract_state_insert(&contract_id, &zero_bytes32, &value_0)
             .unwrap();
-        let _insert_status_1 = db
-            .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value_0)
+        db.merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value_0)
             .unwrap();
-        let _insert_status_2 = db
-            .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_2), &value_0)
+        db.merkle_contract_state_insert(&contract_id, &Bytes32::new(key_2), &value_0)
             .unwrap();
 
         let pre_insert_read_0 = read_db
@@ -1079,11 +1031,9 @@ mod tests {
         let u256_2 = u256_zero.checked_add(2.into()).unwrap();
         u256_2.to_big_endian(&mut key_2);
 
-        let _insert_status_1 = db
-            .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value)
+        db.merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value)
             .unwrap();
-        let _insert_status_2 = db
-            .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_2), &value)
+        db.merkle_contract_state_insert(&contract_id, &Bytes32::new(key_2), &value)
             .unwrap();
 
         let pre_clear_read_0 = read_db
@@ -1138,11 +1088,9 @@ mod tests {
         let u256_2 = u256_zero.checked_add(2.into()).unwrap();
         u256_2.to_big_endian(&mut key_2);
 
-        let _insert_status_0 = db
-            .merkle_contract_state_insert(&contract_id, &zero_bytes32, &value)
+        db.merkle_contract_state_insert(&contract_id, &zero_bytes32, &value)
             .unwrap();
-        let _insert_status_2 = db
-            .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_2), &value)
+        db.merkle_contract_state_insert(&contract_id, &Bytes32::new(key_2), &value)
             .unwrap();
 
         let pre_clear_read_0 = read_db
@@ -1197,11 +1145,9 @@ mod tests {
         let u256_2 = u256_zero.checked_add(2.into()).unwrap();
         u256_2.to_big_endian(&mut key_2);
 
-        let _insert_status_0 = db
-            .merkle_contract_state_insert(&contract_id, &zero_bytes32, &value)
+        db.merkle_contract_state_insert(&contract_id, &zero_bytes32, &value)
             .unwrap();
-        let _insert_status_1 = db
-            .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value)
+        db.merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value)
             .unwrap();
 
         let pre_clear_read_0 = read_db
