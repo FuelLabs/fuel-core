@@ -102,6 +102,8 @@ impl BalanceQuery {
         Ok(balance)
     }
 
+    // TODO: We can't paginate over `AssetId` because it is not unique.
+    //  It should be replaced with `UtxoId`.
     async fn balances(
         &self,
         ctx: &Context<'_>,
