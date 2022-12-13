@@ -139,6 +139,22 @@ impl Database {
             })
     }
 
+    pub fn genesis_block_ids(&self) -> Result<(BlockHeight, Bytes32), Error> {
+        self.iter_all(
+            Column::FuelBlockIds,
+            None,
+            None,
+            Some(IterDirection::Forward),
+        )
+        .next()
+        .ok_or(not_found!("Genesis block height"))?
+        .map(|(height, id): (Vec<u8>, Bytes32)| {
+            let bytes = <[u8; 4]>::try_from(height.as_slice())
+                .expect("all block heights are stored with the correct amount of bytes");
+            (u32::from_be_bytes(bytes).into(), id)
+        })
+    }
+
     fn latest_block(&self) -> Result<Option<(Vec<u8>, Bytes32)>, Error> {
         self.iter_all(
             Column::FuelBlockIds,

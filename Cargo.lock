@@ -2280,6 +2280,7 @@ name = "fuel-block-executor"
 version = "0.15.0"
 dependencies = [
  "anyhow",
+ "fuel-chain-config",
  "fuel-core-interfaces",
  "tokio",
 ]
@@ -2317,6 +2318,7 @@ name = "fuel-chain-config"
 version = "0.15.0"
 dependencies = [
  "anyhow",
+ "bincode",
  "fuel-core-interfaces",
  "fuel-poa-coordinator",
  "hex",
@@ -2496,6 +2498,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "ctor",
+ "fuel-chain-config",
  "fuel-core-interfaces",
  "fuel-metrics",
  "futures",
