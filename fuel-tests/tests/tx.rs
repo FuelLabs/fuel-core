@@ -327,7 +327,7 @@ async fn get_transactions() {
         direction: PageDirection::Forward,
     };
 
-    // Query backwards from last given cursor [3]: [coinbase_tx1, tx1, coinbase_tx2, tx2]
+    // Query backwards from last given cursor [3]: [coinbase_tx3, tx2, coinbase_tx2, tx1, coinbase_tx1]
     let page_request_backwards = PaginationRequest {
         cursor: response.cursor.clone(),
         results: 6,
@@ -362,10 +362,11 @@ async fn get_transactions() {
         .iter()
         .map(|tx| tx.transaction.id())
         .collect_vec();
-    // transactions[4] - coinbase_tx1
-    assert_eq!(transactions[3], tx1);
-    // transactions[2] - coinbase_tx2
+    // transactions[0] - coinbase_tx3
     assert_eq!(transactions[1], tx2);
+    // transactions[2] - coinbase_tx2
+    assert_eq!(transactions[3], tx1);
+    // transactions[4] - coinbase_tx1
     // Check pagination state for last page
     assert!(!response.has_next_page);
     assert!(response.has_previous_page);
