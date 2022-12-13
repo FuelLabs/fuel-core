@@ -1,6 +1,5 @@
 use crate::{
     database::{
-        storage::FuelBlocks,
         Column,
         Database,
         KvStoreError,
@@ -24,8 +23,12 @@ use fuel_core_interfaces::{
         prelude::StorageAsRef,
         tai64::Tai64,
     },
-    db::Transactions,
+    db::{
+        FuelBlocks,
+        Transactions,
+    },
     model::FuelBlock,
+    not_found,
 };
 use itertools::Itertools;
 use std::{
@@ -136,6 +139,22 @@ impl Database {
             })
     }
 
+    pub fn genesis_block_ids(&self) -> Result<(BlockHeight, Bytes32), Error> {
+        self.iter_all(
+            Column::FuelBlockIds,
+            None,
+            None,
+            Some(IterDirection::Forward),
+        )
+        .next()
+        .ok_or(not_found!("Genesis block height"))?
+        .map(|(height, id): (Vec<u8>, Bytes32)| {
+            let bytes = <[u8; 4]>::try_from(height.as_slice())
+                .expect("all block heights are stored with the correct amount of bytes");
+            (u32::from_be_bytes(bytes).into(), id)
+        })
+    }
+
     fn latest_block(&self) -> Result<Option<(Vec<u8>, Bytes32)>, Error> {
         self.iter_all(
             Column::FuelBlockIds,
@@ -162,7 +181,7 @@ impl Database {
                 .map(|tx_id| {
                     self.storage::<Transactions>()
                         .get(tx_id)
-                        .and_then(|tx| tx.ok_or(KvStoreError::NotFound))
+                        .and_then(|tx| tx.ok_or(not_found!(Transactions)))
                         .map(Cow::into_owned)
                 })
                 .try_collect()?;

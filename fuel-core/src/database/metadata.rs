@@ -4,9 +4,9 @@ use crate::{
         Database,
     },
     model::BlockHeight,
-    service::config::Config,
     state::Error,
 };
+use fuel_chain_config::ChainConfig;
 
 pub(crate) const DB_VERSION_KEY: &[u8] = b"version";
 pub(crate) const CHAIN_NAME_KEY: &[u8] = b"chain_name";
@@ -18,23 +18,18 @@ pub(crate) const LAST_PUBLISHED_BLOCK_HEIGHT_KEY: &[u8] = b"last_publish_block_h
 pub(crate) const DB_VERSION: u32 = 0;
 
 impl Database {
-    pub fn init(&self, config: &Config) -> Result<(), Error> {
+    pub fn init(&self, config: &ChainConfig) -> Result<(), Error> {
         // check only for one field if it initialized or not.
-        self.insert(
-            CHAIN_NAME_KEY,
-            Column::Metadata,
-            config.chain_conf.chain_name.clone(),
-        )
-        .and_then(|v: Option<String>| {
-            if v.is_some() {
-                Err(Error::ChainAlreadyInitialized)
-            } else {
-                Ok(())
-            }
-        })?;
+        self.insert(CHAIN_NAME_KEY, Column::Metadata, config.chain_name.clone())
+            .and_then(|v: Option<String>| {
+                if v.is_some() {
+                    Err(Error::ChainAlreadyInitialized)
+                } else {
+                    Ok(())
+                }
+            })?;
 
         let chain_height = config
-            .chain_conf
             .initial_state
             .as_ref()
             .and_then(|c| c.height)

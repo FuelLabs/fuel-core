@@ -370,7 +370,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn start_stop_works() {
-        let p2p_config = P2PConfig::default_with_network("start_stop_works");
+        let p2p_config = P2PConfig::default_initialized("start_stop_works");
         let db: Arc<dyn P2pDb> = Arc::new(FakeDb);
 
         let (_, rx_request_event) = tokio::sync::mpsc::channel(100);

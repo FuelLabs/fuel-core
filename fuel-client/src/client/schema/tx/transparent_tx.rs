@@ -35,10 +35,10 @@ use itertools::Itertools;
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "TxIdArgs"
+    variables = "TxIdArgs"
 )]
 pub struct TransactionQuery {
-    #[arguments(id = &args.id)]
+    #[arguments(id: $id)]
     pub transaction: Option<Transaction>,
 }
 
@@ -46,10 +46,10 @@ pub struct TransactionQuery {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "ConnectionArgs"
+    variables = "ConnectionArgs"
 )]
 pub struct TransactionsQuery {
-    #[arguments(after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
+    #[arguments(after: $after, before: $before, first: $first, last: $last)]
     pub transactions: TransactionConnection,
 }
 
@@ -248,6 +248,8 @@ pub enum Input {
     InputCoin(InputCoin),
     InputContract(InputContract),
     InputMessage(InputMessage),
+    #[cynic(fallback)]
+    Unknown,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -348,6 +350,7 @@ impl TryFrom<Input> for ::fuel_vm::fuel_tx::Input {
                     }
                 }
             }
+            Input::Unknown => return Err(Self::Error::UnknownVariant("Input")),
         })
     }
 }
@@ -361,6 +364,8 @@ pub enum Output {
     ChangeOutput(ChangeOutput),
     VariableOutput(VariableOutput),
     ContractCreated(ContractCreated),
+    #[cynic(fallback)]
+    Unknown,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -442,6 +447,7 @@ impl TryFrom<Output> for ::fuel_vm::fuel_tx::Output {
                 contract_id: contract.contract.id.into(),
                 state_root: contract.state_root.into(),
             },
+            Output::Unknown => return Err(Self::Error::UnknownVariant("Output")),
         })
     }
 }

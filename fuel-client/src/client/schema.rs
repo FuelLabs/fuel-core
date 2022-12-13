@@ -41,7 +41,7 @@ pub struct StartSession {
     pub start_session: cynic::Id,
 }
 
-#[derive(cynic::FragmentArguments)]
+#[derive(cynic::QueryVariables)]
 pub struct IdArg {
     pub id: cynic::Id,
 }
@@ -50,10 +50,10 @@ pub struct IdArg {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Mutation",
-    argument_struct = "IdArg"
+    variables = "IdArg"
 )]
 pub struct EndSession {
-    #[arguments(id = &args.id)]
+    #[arguments(id: $id)]
     pub end_session: bool,
 }
 
@@ -61,14 +61,14 @@ pub struct EndSession {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Mutation",
-    argument_struct = "IdArg"
+    variables = "IdArg"
 )]
 pub struct Reset {
-    #[arguments(id = &args.id)]
+    #[arguments(id: $id)]
     pub reset: bool,
 }
 
-#[derive(cynic::FragmentArguments)]
+#[derive(cynic::QueryVariables)]
 pub struct ExecuteArgs {
     pub id: cynic::Id,
     pub op: String,
@@ -78,14 +78,14 @@ pub struct ExecuteArgs {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Mutation",
-    argument_struct = "ExecuteArgs"
+    variables = "ExecuteArgs"
 )]
 pub struct Execute {
-    #[arguments(id = &args.id, op = &args.op)]
+    #[arguments(id: $id, op: $op)]
     pub execute: bool,
 }
 
-#[derive(cynic::FragmentArguments)]
+#[derive(cynic::QueryVariables)]
 pub struct RegisterArgs {
     pub id: cynic::Id,
     pub register: U64,
@@ -95,14 +95,14 @@ pub struct RegisterArgs {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "RegisterArgs"
+    variables = "RegisterArgs"
 )]
 pub struct Register {
-    #[arguments(id = &args.id, register = &args.register)]
+    #[arguments(id: $id, register: $register)]
     pub register: U64,
 }
 
-#[derive(cynic::FragmentArguments)]
+#[derive(cynic::QueryVariables)]
 pub struct MemoryArgs {
     pub id: cynic::Id,
     pub start: U64,
@@ -113,14 +113,14 @@ pub struct MemoryArgs {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "MemoryArgs"
+    variables = "MemoryArgs"
 )]
 pub struct Memory {
-    #[arguments(id = &args.id, start = &args.start, size = &args.size)]
+    #[arguments(id: $id, start: $start, size: $size)]
     pub memory: String,
 }
 
-#[derive(cynic::FragmentArguments, Debug)]
+#[derive(cynic::QueryVariables, Debug)]
 pub struct SetBreakpointArgs {
     pub id: cynic::Id,
     pub bp: Breakpoint,
@@ -130,10 +130,10 @@ pub struct SetBreakpointArgs {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Mutation",
-    argument_struct = "SetBreakpointArgs"
+    variables = "SetBreakpointArgs"
 )]
 pub struct SetBreakpoint {
-    #[arguments(id = &args.id, breakpoint = &args.bp)]
+    #[arguments(id: $id, breakpoint: $bp)]
     pub set_breakpoint: bool,
 }
 
@@ -144,7 +144,7 @@ pub struct Breakpoint {
     pub pc: U64,
 }
 
-#[derive(cynic::FragmentArguments, Debug)]
+#[derive(cynic::QueryVariables, Debug)]
 pub struct SetSingleSteppingArgs {
     pub id: cynic::Id,
     pub enable: bool,
@@ -154,14 +154,14 @@ pub struct SetSingleSteppingArgs {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Mutation",
-    argument_struct = "SetSingleSteppingArgs"
+    variables = "SetSingleSteppingArgs"
 )]
 pub struct SetSingleStepping {
-    #[arguments(id = &args.id, enable = &args.enable)]
+    #[arguments(id: $id, enable: $enable)]
     pub set_single_stepping: bool,
 }
 
-#[derive(cynic::FragmentArguments, Debug)]
+#[derive(cynic::QueryVariables, Debug)]
 pub struct StartTxArgs {
     pub id: cynic::Id,
     pub tx: String,
@@ -171,14 +171,14 @@ pub struct StartTxArgs {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Mutation",
-    argument_struct = "StartTxArgs"
+    variables = "StartTxArgs"
 )]
 pub struct StartTx {
-    #[arguments(id = &args.id, tx_json = &args.tx)]
+    #[arguments(id: $id, txJson: $tx)]
     pub start_tx: RunResult,
 }
 
-#[derive(cynic::FragmentArguments, Debug)]
+#[derive(cynic::QueryVariables, Debug)]
 pub struct ContinueTxArgs {
     pub id: cynic::Id,
 }
@@ -187,10 +187,10 @@ pub struct ContinueTxArgs {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Mutation",
-    argument_struct = "ContinueTxArgs"
+    variables = "ContinueTxArgs"
 )]
 pub struct ContinueTx {
-    #[arguments(id = &args.id)]
+    #[arguments(id: $id)]
     pub continue_tx: RunResult,
 }
 
@@ -228,7 +228,7 @@ pub struct OutputBreakpoint {
 }
 
 /// Generic graphql pagination query args
-#[derive(cynic::FragmentArguments, Debug, Default)]
+#[derive(cynic::QueryVariables, Debug, Default)]
 pub struct ConnectionArgs {
     /// Skip until cursor (forward pagination)
     pub after: Option<String>,
@@ -315,6 +315,8 @@ pub enum ConversionError {
     ReceiptFromBytesError(std::io::Error),
     #[error("failed to convert from bytes due to unexpected length")]
     BytesLength,
+    #[error("Unknown variant of the {0} enum")]
+    UnknownVariant(&'static str),
 }
 
 impl From<FromHexError> for ConversionError {

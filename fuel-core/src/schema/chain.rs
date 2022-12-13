@@ -1,8 +1,5 @@
 use crate::{
-    database::{
-        storage::FuelBlocks,
-        Database,
-    },
+    database::Database,
     schema::{
         block::Block,
         scalars::U64,
@@ -18,7 +15,8 @@ use fuel_core_interfaces::{
         fuel_storage::StorageAsRef,
         fuel_tx,
     },
-    model::FuelBlockDb,
+    db::FuelBlocks,
+    not_found,
 };
 
 pub const DEFAULT_NAME: &str = "Fuel.testnet";
@@ -96,9 +94,10 @@ impl ChainInfo {
         let db = ctx.data_unchecked::<Database>().clone();
         let height = db.get_block_height()?.unwrap_or_default();
         let id = db.get_block_id(height)?.unwrap_or_default();
-        let block = db.storage::<FuelBlocks>().get(&id)?.unwrap_or_else(|| {
-            std::borrow::Cow::Owned(FuelBlockDb::fix_me_default_block())
-        });
+        let block = db
+            .storage::<FuelBlocks>()
+            .get(&id)?
+            .ok_or(not_found!(FuelBlocks))?;
         Ok(Block::from(block.into_owned()))
     }
 

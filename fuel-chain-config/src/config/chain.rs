@@ -4,6 +4,10 @@ use fuel_core_interfaces::common::{
         Address,
         AssetId,
     },
+    prelude::{
+        Hasher,
+        MerkleRoot,
+    },
 };
 use itertools::Itertools;
 use rand::{
@@ -22,6 +26,8 @@ use std::{
     str::FromStr,
 };
 
+use crate::GenesisCommitment;
+
 use super::{
     coin::CoinConfig,
     state::StateConfig,
@@ -30,6 +36,8 @@ use super::{
 pub const LOCAL_TESTNET: &str = "local_testnet";
 pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 
+// TODO: Remove not consensus/network fields from `ChainConfig` or create a new config only
+//  for consensus/network fields.
 #[skip_serializing_none]
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct ChainConfig {
@@ -118,6 +126,30 @@ impl FromStr for ChainConfig {
                 })
             }
         }
+    }
+}
+
+impl GenesisCommitment for ChainConfig {
+    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
+        // TODO: Hash settlement configuration, consensus block production
+        let config_hash = *Hasher::default()
+            .chain(self.block_gas_limit.to_be_bytes())
+            .chain(self.transaction_parameters.root()?)
+            .chain(self.chain_name.as_bytes())
+            .finalize();
+
+        Ok(config_hash)
+    }
+}
+
+impl GenesisCommitment for ConsensusParameters {
+    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
+        // TODO: Define hash algorithm for `ConsensusParameters`
+        let params_hash = Hasher::default()
+            .chain(bincode::serialize(&self)?)
+            .finalize();
+
+        Ok(params_hash.into())
     }
 }
 

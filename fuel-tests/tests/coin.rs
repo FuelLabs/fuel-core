@@ -35,21 +35,10 @@ use rstest::rstest;
 #[tokio::test]
 async fn coin() {
     // setup test data in the node
-    let coin = Coin {
-        owner: Default::default(),
-        amount: 0,
-        asset_id: Default::default(),
-        maturity: Default::default(),
-        status: CoinStatus::Unspent,
-        block_created: Default::default(),
-    };
-
     let utxo_id = UtxoId::new(Default::default(), 5);
 
-    let mut db = Database::default();
-    db.storage::<Coins>().insert(&utxo_id, &coin).unwrap();
     // setup server & client
-    let srv = FuelService::from_database(db, Config::local_node())
+    let srv = FuelService::from_database(Database::default(), Config::local_node())
         .await
         .unwrap();
     let client = FuelClient::from(srv.bound_address);

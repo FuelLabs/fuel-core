@@ -20,7 +20,10 @@ use strum_macros::{
 };
 
 #[cfg(feature = "p2p")]
-use fuel_p2p;
+use fuel_p2p::config::{
+    NotInitialized,
+    P2PConfig,
+};
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -40,7 +43,7 @@ pub struct Config {
     #[cfg(feature = "relayer")]
     pub relayer: fuel_relayer::Config,
     #[cfg(feature = "p2p")]
-    pub p2p: fuel_p2p::config::P2PConfig,
+    pub p2p: P2PConfig<NotInitialized>,
     pub consensus_key: Option<Secret<SecretKeyWrapper>>,
 }
 
@@ -65,7 +68,7 @@ impl Config {
             #[cfg(feature = "relayer")]
             relayer: Default::default(),
             #[cfg(feature = "p2p")]
-            p2p: fuel_p2p::config::P2PConfig::default_with_network("test_network"),
+            p2p: P2PConfig::<NotInitialized>::default("test_network"),
             consensus_key: Some(Secret::new(default_consensus_dev_key().into())),
         }
     }

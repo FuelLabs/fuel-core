@@ -12,6 +12,7 @@ use core::time::Duration;
 use ethers_core::types::{
     Filter,
     Log,
+    SyncingStatus,
     ValueOrArray,
     H160,
 };
@@ -20,7 +21,6 @@ use ethers_providers::{
     Middleware,
     Provider,
     ProviderError,
-    SyncingStatus,
 };
 use fuel_core_interfaces::{
     db::Messages,
