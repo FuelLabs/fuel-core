@@ -135,9 +135,11 @@ where
             let mut has_next_page = false;
 
             // TODO: Add support of `skip` field for pages with huge list of entities with
-            //  the same `SchemaKey` or if we at the middle of the block.
+            //  the same `SchemaKey`.
             let entries = entries.skip_while(|result| {
                 if let Ok((key, _)) = result {
+                    // TODO: `entries` should return information about `has_previous_page` for wild
+                    //  queries
                     if let Some(start) = start.as_ref() {
                         // Skip until start + 1
                         if key == start {
@@ -149,7 +151,8 @@ where
                 false
             });
 
-            let entries = entries.take_while(|result| {
+            let mut count = count.unwrap_or(usize::MAX / 2) + 1 /* for `has_next_page` */;
+            let entries = entries.take(count).take_while(|result| {
                 if let Ok((key, _)) = result {
                     if let Some(end) = end.as_ref() {
                         // take until we've reached the end
@@ -158,7 +161,9 @@ where
                             return false
                         }
                     }
-                    true
+                    count -= 1;
+                    has_next_page |= count == 0;
+                    count != 0
                 } else {
                     // We want to stop immediately in the case of error
                     false
@@ -166,7 +171,7 @@ where
             });
 
             let entries: Vec<_> = entries.try_collect()?;
-            let entries = entries.into_iter().take(count.unwrap_or(usize::MAX));
+            let entries = entries.into_iter();
 
             let mut connection = Connection::new(has_previous_page, has_next_page);
 

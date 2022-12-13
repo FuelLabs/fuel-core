@@ -81,7 +81,7 @@ impl ScalarType for Tai64Timestamp {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct SortedTxCursor {
     pub block_height: BlockHeight,
     pub tx_id: Bytes32,
@@ -116,7 +116,7 @@ impl CursorType for SortedTxCursor {
     }
 }
 
-#[derive(Clone, Debug, derive_more::Into, derive_more::From)]
+#[derive(Clone, Debug, derive_more::Into, derive_more::From, PartialEq, Eq)]
 pub struct HexString(pub(crate) Vec<u8>);
 
 #[Scalar(name = "HexString")]

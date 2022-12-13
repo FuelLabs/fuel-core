@@ -471,7 +471,7 @@ async fn get_transactions_from_manual_blocks() {
     assert_eq!(transactions[3], txs[5].id());
     assert_eq!(transactions[4], txs[6].id());
 
-    // Query backwards from last given cursor [6]: [0,1,2,3,4,5]
+    // Query backwards from last given cursor [8]: [coinbase_tx1, 0, 1, 2, 3, 4, coinbase_tx2, 5]
     let page_request_backwards = PaginationRequest {
         cursor: response.cursor,
         results: 10,
