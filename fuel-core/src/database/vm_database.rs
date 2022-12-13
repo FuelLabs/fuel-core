@@ -27,18 +27,12 @@ use fuel_core_interfaces::{
         },
         tai64::Tai64,
     },
-    db::{
-        Error,
-        Transactional,
-    },
+    db::Error,
     model::FuelConsensusHeader,
     not_found,
 };
 use primitive_types::U256;
-use std::{
-    borrow::Cow,
-    ops::Deref,
-};
+use std::borrow::Cow;
 
 /// Used to store metadata relevant during the execution of a transaction
 #[derive(Clone, Debug)]
@@ -47,6 +41,19 @@ pub struct VmDatabase {
     current_timestamp: Tai64,
     coinbase: Address,
     database: Database,
+}
+
+trait IncreaseStorageKey {
+    fn increase(&mut self) -> anyhow::Result<()>;
+}
+
+impl IncreaseStorageKey for U256 {
+    fn increase(&mut self) -> anyhow::Result<()> {
+        *self = self.checked_add(1.into()).ok_or_else(|| {
+            Error::Other(anyhow!("range op exceeded available keyspace"))
+        })?;
+        Ok(())
+    }
 }
 
 impl Default for VmDatabase {
@@ -162,79 +169,46 @@ impl InterpreterStorage for VmDatabase {
         start_key: &Bytes32,
         range: Word,
     ) -> Result<Vec<Option<Cow<Bytes32>>>, Self::DataError> {
+        // TODO: Optimization: Iterate only over `range` elements.
         let mut iterator = self.database.iter_all::<Vec<u8>, Bytes32>(
             Column::ContractsState,
             Some(contract_id.as_ref().to_vec()),
             Some(MultiKey::new(&(contract_id, start_key)).into()),
             Some(IterDirection::Forward),
         );
+        let range = range as usize;
 
-        let mut current_key = U256::from_big_endian(start_key.as_ref());
-
-        let mut range_count = 0;
-
+        let mut expected_key = U256::from_big_endian(start_key.as_ref());
         let mut results = vec![];
 
-        while range_count < range {
-            let entry_option = iterator.next();
+        while results.len() < range {
+            let entry = iterator.next().transpose()?;
 
-            if let Some(entry) = entry_option {
-                let entry = entry?;
-                let multikey = entry.0;
-                let value = entry.1;
+            if entry.is_none() {
+                // We out of `contract_id` prefix
+                break
+            }
 
-                let state_contract_id =
-                    ContractId::new(multikey[..32].try_into().map_err(|e| {
-                        anyhow::Error::from(e).context("Invalid state key length")
-                    })?);
-                let state_key = U256::from_big_endian(&multikey[32..]);
+            let (multikey, value) =
+                entry.expect("We did a check before, so the entry should be `Some`");
+            let actual_key = U256::from_big_endian(&multikey[32..]);
 
-                if &state_contract_id != contract_id {
-                    // Iterator moved beyond contract range, populate with None until end of range
-                    for _ in range_count..range {
-                        results.push(None);
-                        current_key =
-                            current_key.checked_add(1.into()).ok_or_else(|| {
-                                Error::Other(anyhow!(
-                                    "range op exceeded available keyspace"
-                                ))
-                            })?;
-                    }
-                    // Iterator no longer useful, return
-                    return Ok(results)
-                } else if state_key != current_key {
-                    while (state_key != current_key) && (range_count < range) {
-                        // Iterator moved beyond next expected key, push none and increment range
-                        // count until we find the current key
-                        results.push(None);
-                        range_count += 1;
-                        current_key =
-                            current_key.checked_add(1.into()).ok_or_else(|| {
-                                Error::Other(anyhow!(
-                                    "range op exceeded available keyspace"
-                                ))
-                            })?;
-                    }
-                }
-                // State key matches, put value into results
-                if state_key == current_key {
+            while (expected_key <= actual_key) && results.len() < range {
+                if expected_key == actual_key {
+                    // We found expected key, put value into results
                     results.push(Some(Cow::Owned(value)));
-                    current_key = current_key.checked_add(1.into()).ok_or_else(|| {
-                        Error::Other(anyhow!("range op exceeded available keyspace"))
-                    })?;
-                }
-            } else {
-                // No iterator returned, populate with None until end of range
-                let range_to_fill = range_count..range;
-                for _ in range_to_fill {
+                } else {
+                    // Iterator moved beyond next expected key, push none until we find the key
                     results.push(None);
-                    range_count += 1;
-                    current_key = current_key.checked_add(1.into()).ok_or_else(|| {
-                        Error::Other(anyhow!("range op exceeded available keyspace"))
-                    })?;
                 }
-            };
-            range_count += 1;
+                expected_key.increase()?;
+            }
+        }
+
+        // Fill not initialized slots with `None`.
+        while results.len() < range {
+            results.push(None);
+            expected_key.increase()?;
         }
 
         Ok(results)
@@ -251,13 +225,10 @@ impl InterpreterStorage for VmDatabase {
         let mut current_key = U256::from_big_endian(start_key.as_ref());
         let mut key_bytes = [0u8; 32];
 
-        let transaction = self.database.transaction();
-        let transaction_db = transaction.deref();
-
         for value in values {
             current_key.to_big_endian(&mut key_bytes);
 
-            let option = transaction_db.insert::<_, _, Bytes32>(
+            let option = self.database.insert::<_, _, Bytes32>(
                 MultiKey::new(&(contract_id, key_bytes)).as_ref(),
                 Column::ContractsState,
                 value,
@@ -265,14 +236,14 @@ impl InterpreterStorage for VmDatabase {
 
             found_unset |= option.is_none();
 
-            current_key = current_key.checked_add(1.into()).ok_or_else(|| {
-                Error::Other(anyhow!("range op exceeded available keyspace"))
-            })?;
+            current_key.increase()?;
         }
 
-        transaction.commit()?;
-
-        Ok((!found_unset).then_some(()))
+        if found_unset {
+            Ok(None)
+        } else {
+            Ok(Some(()))
+        }
     }
 
     fn merkle_contract_state_remove_range(
@@ -285,28 +256,25 @@ impl InterpreterStorage for VmDatabase {
 
         let mut current_key = U256::from_big_endian(start_key.as_ref());
 
-        let transaction = self.database.transaction();
-        let transaction_db = transaction.deref();
-
         for _ in 0..range {
             let mut key_bytes = [0u8; 32];
             current_key.to_big_endian(&mut key_bytes);
 
-            let option = transaction_db.remove::<Bytes32>(
+            let option = self.database.remove::<Bytes32>(
                 MultiKey::new(&(contract_id, key_bytes)).as_ref(),
                 Column::ContractsState,
             )?;
 
             found_unset |= option.is_none();
 
-            current_key = current_key.checked_add(1.into()).ok_or_else(|| {
-                Error::Other(anyhow!("range op exceeded available keyspace"))
-            })?;
+            current_key.increase()?;
         }
 
-        transaction.commit()?;
-
-        Ok((!found_unset).then_some(()))
+        if found_unset {
+            Ok(None)
+        } else {
+            Ok(Some(()))
+        }
     }
 }
 
