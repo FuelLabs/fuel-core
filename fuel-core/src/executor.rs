@@ -83,6 +83,7 @@ use fuel_core_interfaces::{
     model::{
         BlockId,
         DaBlockHeight,
+        FuelBlock,
         Message,
         PartialFuelBlock,
         PartialFuelBlockHeader,
@@ -255,33 +256,9 @@ impl Executor {
             &mut tx_status,
             block_db_transaction.deref_mut(),
         )?;
-        for (tx_idx, tx) in block.transactions().iter().enumerate() {
-            let block_height = *block.header().height();
-            let mut inputs = &[][..];
-            let outputs;
-            let tx_id = tx.id();
-            match tx {
-                Transaction::Script(tx) => {
-                    inputs = tx.inputs().as_slice();
-                    outputs = tx.outputs().as_slice();
-                }
-                Transaction::Create(tx) => {
-                    inputs = tx.inputs().as_slice();
-                    outputs = tx.outputs().as_slice();
-                }
-                Transaction::Mint(tx) => {
-                    outputs = tx.outputs().as_slice();
-                }
-            }
-            self.persist_owners_index(
-                block_height,
-                inputs,
-                outputs,
-                &tx_id,
-                tx_idx as u16,
-                block_db_transaction.deref_mut(),
-            )?;
-        }
+
+        // save the associated owner for each transaction in the block
+        self.index_tx_owners_for_block(&block, &mut block_db_transaction)?;
 
         // ------------ GraphQL API Functionality   END ------------
 
@@ -1249,6 +1226,42 @@ impl Executor {
     ) -> Result<(), Error> {
         if db.storage::<Receipts>().insert(tx_id, receipts)?.is_some() {
             return Err(Error::OutputAlreadyExists)
+        }
+        Ok(())
+    }
+
+    /// Associate all transactions within a block to their respective UTXO owners
+    fn index_tx_owners_for_block(
+        &self,
+        block: &FuelBlock,
+        block_db_transaction: &mut DatabaseTransaction,
+    ) -> Result<(), Error> {
+        for (tx_idx, tx) in block.transactions().iter().enumerate() {
+            let block_height = *block.header().height();
+            let mut inputs = &[][..];
+            let outputs;
+            let tx_id = tx.id();
+            match tx {
+                Transaction::Script(tx) => {
+                    inputs = tx.inputs().as_slice();
+                    outputs = tx.outputs().as_slice();
+                }
+                Transaction::Create(tx) => {
+                    inputs = tx.inputs().as_slice();
+                    outputs = tx.outputs().as_slice();
+                }
+                Transaction::Mint(tx) => {
+                    outputs = tx.outputs().as_slice();
+                }
+            }
+            self.persist_owners_index(
+                block_height,
+                inputs,
+                outputs,
+                &tx_id,
+                tx_idx as u16,
+                block_db_transaction.deref_mut(),
+            )?;
         }
         Ok(())
     }
