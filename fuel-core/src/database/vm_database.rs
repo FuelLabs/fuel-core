@@ -683,7 +683,7 @@ mod tests {
         ; "remove single value over initialized range"
     )]
     #[test_case(
-        &[], [0; 32], 2 
+        &[], [0; 32], 2
         => (vec![], false)
         ; "remove multiple slots over uninitialized range"
     )]
@@ -754,6 +754,4 @@ mod tests {
 
         (results, remove_status)
     }
-
-
 }
