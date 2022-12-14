@@ -23,6 +23,7 @@ use fuel_core_interfaces::{
         fuel_storage,
         fuel_tx::{
             field::{
+                Inputs,
                 Outputs,
                 TxPointer as TxPointerField,
             },
@@ -246,12 +247,43 @@ impl Executor {
             }
         }
 
+        // ------------ GraphQL API Functionality BEGIN ------------
+
         // save the status for every transaction using the finalized block id
         self.persist_transaction_status(
             finalized_block_id,
             &mut tx_status,
             block_db_transaction.deref_mut(),
         )?;
+        for (tx_idx, tx) in block.transactions().iter().enumerate() {
+            let block_height = *block.header().height();
+            let mut inputs = &[][..];
+            let outputs;
+            let tx_id = tx.id();
+            match tx {
+                Transaction::Script(tx) => {
+                    inputs = tx.inputs().as_slice();
+                    outputs = tx.outputs().as_slice();
+                }
+                Transaction::Create(tx) => {
+                    inputs = tx.inputs().as_slice();
+                    outputs = tx.outputs().as_slice();
+                }
+                Transaction::Mint(tx) => {
+                    outputs = tx.outputs().as_slice();
+                }
+            }
+            self.persist_owners_index(
+                block_height,
+                inputs,
+                outputs,
+                &tx_id,
+                tx_idx as u16,
+                block_db_transaction.deref_mut(),
+            )?;
+        }
+
+        // ------------ GraphQL API Functionality   END ------------
 
         // insert block into database
         block_db_transaction
@@ -444,18 +476,7 @@ impl Executor {
         block_db_transaction: &mut DatabaseTransaction,
     ) -> Result<(), Error> {
         let block_height = *block.header.height();
-        let inputs = [];
-        // Coinbase is always the first transaction in the block.
-        let tx_index = 0;
         let coinbase_id = coinbase_tx.id();
-        self.persist_owners_index(
-            block_height,
-            &inputs,
-            coinbase_tx.outputs(),
-            &coinbase_id,
-            tx_index,
-            block_db_transaction.deref_mut(),
-        )?;
         self.persist_output_utxos(
             block_height,
             &coinbase_id,
@@ -525,7 +546,8 @@ impl Executor {
 
     fn execute_create_or_script<Tx>(
         &self,
-        idx: u16,
+        // TODO: Use it to calculate `TxPointer`.
+        _idx: u16,
         original_tx: &mut Tx,
         header: &PartialFuelBlockHeader,
         execution_data: &mut ExecutionData,
@@ -573,16 +595,6 @@ impl Executor {
                 .check_signatures()
                 .map_err(TransactionValidityError::from)?;
         }
-
-        // index owners of inputs and outputs with tx-id, regardless of validity (hence block_tx instead of tx_db)
-        self.persist_owners_index(
-            *header.height(),
-            checked_tx.transaction().inputs(),
-            checked_tx.transaction().outputs(),
-            &tx_id,
-            idx,
-            tx_db_transaction.deref_mut(),
-        )?;
 
         // execute transaction
         // setup database view that only lives for the duration of vm execution
