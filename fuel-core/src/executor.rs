@@ -12,11 +12,7 @@ use crate::{
     },
     service::Config,
 };
-use fuel_block_executor::refs::ContractRef;
-use fuel_block_producer::ports::{
-    DBTransaction,
-    Executor as ExecutorTrait,
-};
+use fuel_core_executor::refs::ContractRef;
 use fuel_core_interfaces::{
     common::{
         fuel_asm::Word,
@@ -89,6 +85,10 @@ use fuel_core_interfaces::{
         PartialFuelBlockHeader,
     },
     txpool::TransactionStatus,
+};
+use fuel_core_producer::ports::{
+    DBTransaction,
+    Executor as ExecutorTrait,
 };
 use fuel_storage::{
     StorageAsMut,

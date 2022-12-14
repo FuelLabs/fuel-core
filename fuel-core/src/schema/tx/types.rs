@@ -63,7 +63,7 @@ use fuel_core_interfaces::{
         TxPoolMpsc,
     },
 };
-use fuel_txpool::Service as TxPoolService;
+use fuel_core_txpool::Service as TxPoolService;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 

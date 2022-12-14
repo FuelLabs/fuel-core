@@ -10,7 +10,7 @@ use std::{
 use clap::Args;
 
 use fuel_core_interfaces::common::fuel_crypto;
-use fuel_p2p::{
+use fuel_core_p2p::{
     config::{
         NotInitialized,
         P2PConfig,
@@ -147,13 +147,17 @@ impl P2PArgs {
                             "m/44'/60'/0'/0/0",
                         )?;
 
-                    fuel_p2p::config::convert_to_libp2p_keypair(&mut secret_key.to_vec())?
+                    fuel_core_p2p::config::convert_to_libp2p_keypair(
+                        &mut secret_key.to_vec(),
+                    )?
                 }
                 _ => {
                     let mut rand = fuel_crypto::rand::thread_rng();
                     let secret_key = fuel_crypto::SecretKey::random(&mut rand);
 
-                    fuel_p2p::config::convert_to_libp2p_keypair(&mut secret_key.to_vec())?
+                    fuel_core_p2p::config::convert_to_libp2p_keypair(
+                        &mut secret_key.to_vec(),
+                    )?
                 }
             }
         };

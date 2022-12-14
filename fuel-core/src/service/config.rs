@@ -1,4 +1,4 @@
-use fuel_chain_config::ChainConfig;
+use fuel_core_chain_config::ChainConfig;
 use fuel_core_interfaces::{
     common::{
         prelude::SecretKey,
@@ -20,7 +20,7 @@ use strum_macros::{
 };
 
 #[cfg(feature = "p2p")]
-use fuel_p2p::config::{
+use fuel_core_p2p::config::{
     NotInitialized,
     P2PConfig,
 };
@@ -35,13 +35,13 @@ pub struct Config {
     pub utxo_validation: bool,
     pub manual_blocks_enabled: bool,
     pub vm: VMConfig,
-    pub txpool: fuel_txpool::Config,
-    pub block_importer: fuel_block_importer::Config,
-    pub block_producer: fuel_block_producer::Config,
-    pub block_executor: fuel_block_executor::Config,
-    pub sync: fuel_sync::Config,
+    pub txpool: fuel_core_txpool::Config,
+    pub block_importer: fuel_core_importer::Config,
+    pub block_producer: fuel_core_producer::Config,
+    pub block_executor: fuel_core_executor::Config,
+    pub sync: fuel_core_sync::Config,
     #[cfg(feature = "relayer")]
-    pub relayer: fuel_relayer::Config,
+    pub relayer: fuel_core_relayer::Config,
     #[cfg(feature = "p2p")]
     pub p2p: P2PConfig<NotInitialized>,
     pub consensus_key: Option<Secret<SecretKeyWrapper>>,
@@ -60,7 +60,11 @@ impl Config {
             manual_blocks_enabled: false,
             vm: Default::default(),
             utxo_validation,
-            txpool: fuel_txpool::Config::new(chain_conf, min_gas_price, utxo_validation),
+            txpool: fuel_core_txpool::Config::new(
+                chain_conf,
+                min_gas_price,
+                utxo_validation,
+            ),
             block_importer: Default::default(),
             block_producer: Default::default(),
             block_executor: Default::default(),

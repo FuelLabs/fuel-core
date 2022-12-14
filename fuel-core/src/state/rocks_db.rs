@@ -17,7 +17,7 @@ use crate::{
     },
 };
 #[cfg(feature = "metrics")]
-use fuel_metrics::core_metrics::DATABASE_METRICS;
+use fuel_core_metrics::core_metrics::DATABASE_METRICS;
 use rocksdb::{
     BoundColumnFamily,
     ColumnFamilyDescriptor,

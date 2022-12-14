@@ -2283,34 +2283,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "fuel-block-executor"
-version = "0.15.1"
-dependencies = [
- "anyhow",
- "fuel-chain-config",
- "fuel-core-interfaces",
- "tokio",
-]
-
-[[package]]
-name = "fuel-block-importer"
-version = "0.15.1"
-dependencies = [
- "anyhow",
- "fuel-core-interfaces",
- "parking_lot 0.12.1",
- "tokio",
-]
-
-[[package]]
-name = "fuel-block-producer"
+name = "fuel-core-producer"
 version = "0.15.1"
 dependencies = [
  "anyhow",
  "async-trait",
- "fuel-block-producer",
+ "fuel-core-producer",
  "fuel-core-interfaces",
- "fuel-txpool",
+ "fuel-core-txpool",
  "itertools",
  "parking_lot 0.12.1",
  "rand 0.8.5",
@@ -2321,13 +2301,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "fuel-chain-config"
+name = "fuel-core-chain-config"
 version = "0.15.1"
 dependencies = [
  "anyhow",
  "bincode",
  "fuel-core-interfaces",
- "fuel-poa-coordinator",
+ "fuel-core-poa",
  "hex",
  "insta",
  "itertools",
@@ -2354,18 +2334,18 @@ dependencies = [
  "derive_more",
  "dirs",
  "enum-iterator",
- "fuel-block-executor",
- "fuel-block-importer",
- "fuel-block-producer",
- "fuel-chain-config",
+ "fuel-core-producer",
+ "fuel-core-chain-config",
  "fuel-core-bft",
+ "fuel-core-executor",
+ "fuel-core-importer",
  "fuel-core-interfaces",
- "fuel-metrics",
- "fuel-p2p",
- "fuel-poa-coordinator",
- "fuel-relayer",
- "fuel-sync",
- "fuel-txpool",
+ "fuel-core-p2p",
+ "fuel-core-poa",
+ "fuel-core-relayer",
+ "fuel-core-sync",
+ "fuel-core-txpool",
+ "fuel-core-metrics",
  "futures",
  "hex",
  "insta",
@@ -2415,6 +2395,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-executor"
+version = "0.15.1"
+dependencies = [
+ "anyhow",
+ "fuel-core-chain-config",
+ "fuel-core-interfaces",
+ "tokio",
+]
+
+[[package]]
+name = "fuel-core-importer"
+version = "0.15.1"
+dependencies = [
+ "anyhow",
+ "fuel-core-interfaces",
+ "parking_lot 0.12.1",
+ "tokio",
+]
+
+[[package]]
 name = "fuel-core-interfaces"
 version = "0.15.1"
 dependencies = [
@@ -2433,11 +2433,123 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-p2p"
+version = "0.15.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bincode",
+ "ctor",
+ "fuel-core-chain-config",
+ "fuel-core-interfaces",
+ "fuel-core-metrics",
+ "futures",
+ "futures-timer",
+ "ip_network",
+ "libp2p",
+ "libp2p-core",
+ "libp2p-dns",
+ "libp2p-gossipsub",
+ "libp2p-identify",
+ "libp2p-kad",
+ "libp2p-mdns",
+ "libp2p-mplex",
+ "libp2p-noise",
+ "libp2p-ping",
+ "libp2p-request-response",
+ "libp2p-swarm",
+ "libp2p-swarm-derive",
+ "libp2p-tcp",
+ "libp2p-websocket",
+ "libp2p-yamux",
+ "prometheus-client",
+ "rand 0.8.5",
+ "serde",
+ "sha2 0.10.6",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-attributes",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "fuel-core-poa"
+version = "0.15.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fuel-core-interfaces",
+ "humantime-serde",
+ "mockall",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
+ "serde",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "fuel-core-relayer"
+version = "0.15.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "ethers-contract",
+ "ethers-core",
+ "ethers-providers",
+ "fuel-core-interfaces",
+ "fuel-core-relayer",
+ "futures",
+ "hex",
+ "mockall",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "sha3",
+ "test-case",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-test",
+ "url",
+]
+
+[[package]]
 name = "fuel-core-storage"
 version = "0.15.1"
 dependencies = [
  "fuel-core-types",
  "fuel-vm",
+]
+
+[[package]]
+name = "fuel-core-sync"
+version = "0.15.1"
+dependencies = [
+ "anyhow",
+ "fuel-core-interfaces",
+ "parking_lot 0.12.1",
+ "tokio",
+]
+
+[[package]]
+name = "fuel-core-txpool"
+version = "0.15.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fuel-core-chain-config",
+ "fuel-core-interfaces",
+ "fuel-core-txpool",
+ "fuel-core-metrics",
+ "parking_lot 0.12.1",
+ "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2470,7 +2582,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "fuel-gql-client"
+name = "fuel-core-client"
 version = "0.15.1"
 dependencies = [
  "anyhow",
@@ -2508,7 +2620,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "fuel-metrics"
+name = "fuel-core-metrics"
 version = "0.15.1"
 dependencies = [
  "axum",
@@ -2518,120 +2630,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "fuel-p2p"
-version = "0.15.1"
-dependencies = [
- "anyhow",
- "async-trait",
- "bincode",
- "ctor",
- "fuel-chain-config",
- "fuel-core-interfaces",
- "fuel-metrics",
- "futures",
- "futures-timer",
- "ip_network",
- "libp2p",
- "libp2p-core",
- "libp2p-dns",
- "libp2p-gossipsub",
- "libp2p-identify",
- "libp2p-kad",
- "libp2p-mdns",
- "libp2p-mplex",
- "libp2p-noise",
- "libp2p-ping",
- "libp2p-request-response",
- "libp2p-swarm",
- "libp2p-swarm-derive",
- "libp2p-tcp",
- "libp2p-websocket",
- "libp2p-yamux",
- "prometheus-client",
- "rand 0.8.5",
- "serde",
- "sha2 0.10.6",
- "tokio",
- "tracing",
- "tracing-appender",
- "tracing-attributes",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "fuel-poa-coordinator"
-version = "0.15.1"
-dependencies = [
- "anyhow",
- "async-trait",
- "fuel-core-interfaces",
- "humantime-serde",
- "mockall",
- "parking_lot 0.12.1",
- "rand 0.8.5",
- "serde",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "fuel-relayer"
-version = "0.15.1"
-dependencies = [
- "anyhow",
- "async-trait",
- "bytes",
- "ethers-contract",
- "ethers-core",
- "ethers-providers",
- "fuel-core-interfaces",
- "fuel-relayer",
- "futures",
- "hex",
- "mockall",
- "once_cell",
- "parking_lot 0.12.1",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "sha3",
- "test-case",
- "thiserror",
- "tokio",
- "tracing",
- "tracing-test",
- "url",
-]
-
-[[package]]
 name = "fuel-storage"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0f895423d18472d60eb078cf949608ff3fe6e42e91d41b85993b11528d2c4c3"
 
 [[package]]
-name = "fuel-sync"
-version = "0.15.1"
-dependencies = [
- "anyhow",
- "fuel-core-interfaces",
- "parking_lot 0.12.1",
- "tokio",
-]
-
-[[package]]
-name = "fuel-tests"
+name = "fuel-core-tests"
 version = "0.0.0"
 dependencies = [
  "async-std",
  "ethers",
- "fuel-block-producer",
+ "fuel-core-producer",
  "fuel-core",
  "fuel-core-interfaces",
- "fuel-gql-client",
- "fuel-poa-coordinator",
- "fuel-relayer",
- "fuel-txpool",
+ "fuel-core-poa",
+ "fuel-core-relayer",
+ "fuel-core-txpool",
+ "fuel-core-client",
  "futures",
  "hyper",
  "insta",
@@ -2663,22 +2679,6 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "fuel-txpool"
-version = "0.15.1"
-dependencies = [
- "anyhow",
- "async-trait",
- "fuel-chain-config",
- "fuel-core-interfaces",
- "fuel-metrics",
- "fuel-txpool",
- "parking_lot 0.12.1",
- "thiserror",
- "tokio",
- "tracing",
 ]
 
 [[package]]

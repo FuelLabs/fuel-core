@@ -6,7 +6,7 @@ use crate::{
     model::BlockHeight,
     state::Error,
 };
-use fuel_chain_config::ChainConfig;
+use fuel_core_chain_config::ChainConfig;
 
 pub(crate) const DB_VERSION_KEY: &[u8] = b"version";
 pub(crate) const CHAIN_NAME_KEY: &[u8] = b"chain_name";

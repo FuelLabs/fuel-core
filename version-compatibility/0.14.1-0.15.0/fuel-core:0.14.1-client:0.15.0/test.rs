@@ -7,7 +7,7 @@ mod test {
             FuelService,
         },
     };
-    use fuel_gql_client::{
+    use fuel_core_client::{
         client::{
             types::TransactionStatus,
             FuelClient,

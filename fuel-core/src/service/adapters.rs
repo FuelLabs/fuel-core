@@ -3,7 +3,6 @@ use crate::{
     executor::Executor,
     service::Config,
 };
-use fuel_block_producer::ports::DBTransaction;
 use fuel_core_interfaces::{
     common::{
         fuel_tx::{
@@ -20,8 +19,9 @@ use fuel_core_interfaces::{
     model::BlockHeight,
     relayer::RelayerDb,
 };
+use fuel_core_producer::ports::DBTransaction;
 #[cfg(feature = "relayer")]
-use fuel_relayer::RelayerSynced;
+use fuel_core_relayer::RelayerSynced;
 use std::sync::Arc;
 
 pub struct ExecutorAdapter {
@@ -30,7 +30,7 @@ pub struct ExecutorAdapter {
 }
 
 #[async_trait::async_trait]
-impl fuel_block_producer::ports::Executor<Database> for ExecutorAdapter {
+impl fuel_core_producer::ports::Executor<Database> for ExecutorAdapter {
     fn execute_without_commit(
         &self,
         block: ExecutionBlock,
@@ -62,7 +62,7 @@ pub struct MaybeRelayerAdapter {
 }
 
 #[async_trait::async_trait]
-impl fuel_block_producer::ports::Relayer for MaybeRelayerAdapter {
+impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
     async fn get_best_finalized_da_height(
         &self,
     ) -> anyhow::Result<fuel_core_interfaces::model::DaBlockHeight> {
@@ -82,11 +82,11 @@ impl fuel_block_producer::ports::Relayer for MaybeRelayerAdapter {
 }
 
 pub struct PoACoordinatorAdapter {
-    pub block_producer: Arc<fuel_block_producer::Producer<Database>>,
+    pub block_producer: Arc<fuel_core_producer::Producer<Database>>,
 }
 
 #[async_trait::async_trait]
-impl fuel_poa_coordinator::ports::BlockProducer<Database> for PoACoordinatorAdapter {
+impl fuel_core_poa::ports::BlockProducer<Database> for PoACoordinatorAdapter {
     async fn produce_and_execute_block(
         &self,
         height: BlockHeight,

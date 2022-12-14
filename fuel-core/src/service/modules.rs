@@ -19,7 +19,7 @@ use fuel_core_interfaces::{
         TxPoolDb,
     },
 };
-use fuel_txpool::service::TxStatusChange;
+use fuel_core_txpool::service::TxStatusChange;
 use futures::future::join_all;
 use std::sync::Arc;
 use tokio::{
@@ -36,15 +36,15 @@ use tokio::{
 use fuel_core_interfaces::p2p::P2pDb;
 
 pub struct Modules {
-    pub txpool: Arc<fuel_txpool::Service>,
-    pub block_importer: Arc<fuel_block_importer::Service>,
-    pub block_producer: Arc<fuel_block_producer::Producer<Database>>,
+    pub txpool: Arc<fuel_core_txpool::Service>,
+    pub block_importer: Arc<fuel_core_importer::Service>,
+    pub block_producer: Arc<fuel_core_producer::Producer<Database>>,
     pub coordinator: Arc<CoordinatorService>,
-    pub sync: Arc<fuel_sync::Service>,
+    pub sync: Arc<fuel_core_sync::Service>,
     #[cfg(feature = "relayer")]
-    pub relayer: Option<fuel_relayer::RelayerHandle>,
+    pub relayer: Option<fuel_core_relayer::RelayerHandle>,
     #[cfg(feature = "p2p")]
-    pub network_service: Arc<fuel_p2p::orchestrator::Service>,
+    pub network_service: Arc<fuel_core_p2p::orchestrator::Service>,
 }
 
 impl Modules {
@@ -66,7 +66,7 @@ impl Modules {
 }
 
 pub enum CoordinatorService {
-    Poa(fuel_poa_coordinator::Service),
+    Poa(fuel_core_poa::Service),
     Bft(fuel_core_bft::Service),
 }
 impl CoordinatorService {
@@ -83,27 +83,26 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
 
     // Initialize and bind all components
     let block_importer =
-        fuel_block_importer::Service::new(&config.block_importer, db).await?;
-    let sync = fuel_sync::Service::new(&config.sync).await?;
+        fuel_core_importer::Service::new(&config.block_importer, db).await?;
+    let sync = fuel_core_sync::Service::new(&config.sync).await?;
 
     let coordinator = match &config.chain_conf.block_production {
-        BlockProduction::ProofOfAuthority { trigger } => CoordinatorService::Poa(
-            fuel_poa_coordinator::Service::new(&fuel_poa_coordinator::Config {
+        BlockProduction::ProofOfAuthority { trigger } => {
+            CoordinatorService::Poa(fuel_core_poa::Service::new(&fuel_core_poa::Config {
                 trigger: *trigger,
                 block_gas_limit: config.chain_conf.block_gas_limit,
                 signing_key: config.consensus_key.clone(),
                 metrics: false,
-            }),
-        ),
-        // TODO: enable when bft config is ready to use
-        // CoordinatorConfig::Bft { config } => {
-        //     CoordinatorService::Bft(fuel_core_bft::Service::new(config, db).await?)
-        // }
+            }))
+        } /* TODO: enable when bft config is ready to use
+           * CoordinatorConfig::Bft { config } => {
+           *     CoordinatorService::Bft(fuel_core_bft::Service::new(config, db).await?)
+           * } */
     };
 
     #[cfg(feature = "relayer")]
     let relayer = if config.relayer.eth_client.is_some() {
-        Some(fuel_relayer::RelayerHandle::start(
+        Some(fuel_core_relayer::RelayerHandle::start(
             Box::new(database.clone()),
             config.relayer.clone(),
         )?)
@@ -128,7 +127,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         let genesis = database.get_genesis()?;
         let p2p_config = config.p2p.clone().init(genesis)?;
 
-        fuel_p2p::orchestrator::Service::new(
+        fuel_core_p2p::orchestrator::Service::new(
             p2p_config,
             p2p_db,
             p2p_request_event_receiver,
@@ -155,7 +154,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
 
     let (txpool_sender, txpool_receiver) = mpsc::channel(100);
 
-    let mut txpool_builder = fuel_txpool::ServiceBuilder::new();
+    let mut txpool_builder = fuel_core_txpool::ServiceBuilder::new();
     txpool_builder
         .config(config.txpool.clone())
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
@@ -170,10 +169,10 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     // restrict the max number of concurrent dry runs to the number of CPUs
     // as execution in the worst case will be CPU bound rather than I/O bound.
     let max_dry_run_concurrency = num_cpus::get();
-    let block_producer = Arc::new(fuel_block_producer::Producer {
+    let block_producer = Arc::new(fuel_core_producer::Producer {
         config: config.block_producer.clone(),
         db: database.clone(),
-        txpool: Box::new(fuel_block_producer::adapters::TxPoolAdapter {
+        txpool: Box::new(fuel_core_producer::adapters::TxPoolAdapter {
             sender: txpool_builder.sender().clone(),
         }),
         executor: Arc::new(ExecutorAdapter {

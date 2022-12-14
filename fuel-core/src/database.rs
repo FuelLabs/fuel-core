@@ -8,13 +8,12 @@ use crate::{
     },
 };
 use async_trait::async_trait;
-use fuel_block_executor::refs::ContractStorageTrait;
-use fuel_block_producer::ports::BlockProducerDatabase;
-use fuel_chain_config::{
+use fuel_core_chain_config::{
     ChainConfigDb,
     CoinConfig,
     ContractConfig,
 };
+use fuel_core_executor::refs::ContractStorageTrait;
 pub use fuel_core_interfaces::db::KvStoreError;
 use fuel_core_interfaces::{
     common::fuel_storage::{
@@ -37,7 +36,8 @@ use fuel_core_interfaces::{
     relayer::RelayerDb,
     txpool::TxPoolDb,
 };
-use fuel_poa_coordinator::ports::BlockDb;
+use fuel_core_poa::ports::BlockDb;
+use fuel_core_producer::ports::BlockProducerDatabase;
 use serde::{
     de::DeserializeOwned,
     Serialize,
@@ -369,7 +369,7 @@ impl ChainConfigDb for Database {
 
     fn get_message_config(
         &self,
-    ) -> Result<Option<Vec<fuel_chain_config::MessageConfig>>, Error> {
+    ) -> Result<Option<Vec<fuel_core_chain_config::MessageConfig>>, Error> {
         Self::get_message_config(self)
     }
 

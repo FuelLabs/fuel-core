@@ -31,7 +31,7 @@ pub struct FuelService {
     shutdown: oneshot::Sender<()>,
     #[cfg(feature = "relayer")]
     /// Relayer handle
-    relayer_handle: Option<fuel_relayer::RelayerSynced>,
+    relayer_handle: Option<fuel_core_relayer::RelayerSynced>,
     /// The address bound by the system for serving the API
     pub bound_address: SocketAddr,
 }
@@ -74,7 +74,7 @@ impl FuelService {
             .modules
             .relayer
             .as_ref()
-            .map(fuel_relayer::RelayerHandle::listen_synced);
+            .map(fuel_core_relayer::RelayerHandle::listen_synced);
 
         let handle = tokio::spawn(async move {
             let run_fut = service.run();

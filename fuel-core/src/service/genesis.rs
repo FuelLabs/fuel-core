@@ -6,12 +6,12 @@ use crate::{
     },
 };
 use anyhow::anyhow;
-use fuel_block_executor::refs::ContractRef;
-use fuel_chain_config::{
+use fuel_core_chain_config::{
     ContractConfig,
     GenesisCommitment,
     StateConfig,
 };
+use fuel_core_executor::refs::ContractRef;
 use fuel_core_interfaces::{
     common::{
         fuel_merkle::binary,
@@ -52,7 +52,7 @@ use fuel_core_interfaces::{
         PartialFuelBlockHeader,
     },
 };
-use fuel_poa_coordinator::ports::BlockDb;
+use fuel_core_poa::ports::BlockDb;
 use itertools::Itertools;
 
 impl FuelService {
@@ -339,7 +339,7 @@ mod tests {
         model::BlockHeight,
         service::config::Config,
     };
-    use fuel_chain_config::{
+    use fuel_core_chain_config::{
         ChainConfig,
         CoinConfig,
         MessageConfig,

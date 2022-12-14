@@ -1,7 +1,7 @@
 use clap::Args;
 use core::time::Duration;
 use fuel_core_interfaces::model::DaBlockHeight;
-use fuel_relayer::{
+use fuel_core_relayer::{
     Config,
     H160,
 };

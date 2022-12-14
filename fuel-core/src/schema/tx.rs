@@ -41,7 +41,7 @@ use fuel_core_interfaces::{
     not_found,
     txpool::TxPoolMpsc,
 };
-use fuel_txpool::Service as TxPoolService;
+use fuel_core_txpool::Service as TxPoolService;
 use futures::{
     Stream,
     StreamExt,
@@ -227,7 +227,7 @@ impl TxMutation {
         utxo_validation: Option<bool>,
     ) -> async_graphql::Result<Vec<receipt::Receipt>> {
         let block_producer =
-            ctx.data_unchecked::<Arc<fuel_block_producer::Producer<Database>>>();
+            ctx.data_unchecked::<Arc<fuel_core_producer::Producer<Database>>>();
 
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute();

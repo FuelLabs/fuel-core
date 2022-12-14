@@ -29,7 +29,6 @@ use async_graphql::{
     SimpleObject,
     Union,
 };
-use fuel_block_producer::ports::Executor as ExecutorTrait;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsRef,
@@ -56,7 +55,8 @@ use fuel_core_interfaces::{
     },
     not_found,
 };
-use fuel_poa_coordinator::service::seal_block;
+use fuel_core_poa::service::seal_block;
+use fuel_core_producer::ports::Executor as ExecutorTrait;
 use itertools::Itertools;
 use std::convert::TryInto;
 

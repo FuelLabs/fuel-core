@@ -9,7 +9,7 @@ use crate::{
         IterDirection,
     },
 };
-use fuel_chain_config::MessageConfig;
+use fuel_core_chain_config::MessageConfig;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::{

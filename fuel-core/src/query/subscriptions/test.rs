@@ -36,7 +36,7 @@ fn txn_updated(tx_id: Bytes32) -> TxUpdate {
 }
 
 fn txn_squeezed(tx_id: Bytes32) -> TxUpdate {
-    TxUpdate::squeezed_out(tx_id, fuel_txpool::Error::SqueezedOut(String::new()))
+    TxUpdate::squeezed_out(tx_id, fuel_core_txpool::Error::SqueezedOut(String::new()))
 }
 
 fn db_always_some(
@@ -94,7 +94,7 @@ fn failed() -> TransactionStatus {
 
 fn squeezed() -> TransactionStatus {
     TransactionStatus::SqueezedOut {
-        reason: fuel_txpool::Error::SqueezedOut(String::new()).to_string(),
+        reason: fuel_core_txpool::Error::SqueezedOut(String::new()).to_string(),
     }
 }
 
