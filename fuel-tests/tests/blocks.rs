@@ -342,7 +342,7 @@ async fn block_connection_5(
         .blocks(PaginationRequest {
             cursor: None,
             results: 5,
-            direction: pagination_direction.clone(),
+            direction: pagination_direction,
         })
         .await
         .unwrap();
