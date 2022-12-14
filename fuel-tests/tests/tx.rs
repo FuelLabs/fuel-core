@@ -278,9 +278,9 @@ async fn get_transparent_transaction_by_id() {
 
 #[tokio::test]
 async fn get_transactions() {
-    let alice = Address::from([0; 32]);
-    let bob = Address::from([1; 32]);
-    let charlie = Address::from([2; 32]);
+    let alice = Address::from([1; 32]);
+    let bob = Address::from([2; 32]);
+    let charlie = Address::from([3; 32]);
 
     let mut context = TestContext::new(100).await;
     let tx1 = context.transfer(alice, charlie, 1).await.unwrap();
@@ -496,9 +496,9 @@ async fn get_transactions_from_manual_blocks() {
 
 #[tokio::test]
 async fn get_owned_transactions() {
-    let alice = Address::from([0; 32]);
-    let bob = Address::from([1; 32]);
-    let charlie = Address::from([2; 32]);
+    let alice = Address::from([1; 32]);
+    let bob = Address::from([2; 32]);
+    let charlie = Address::from([3; 32]);
 
     let mut context = TestContext::new(100).await;
     let tx1 = context.transfer(alice, charlie, 1).await.unwrap();
