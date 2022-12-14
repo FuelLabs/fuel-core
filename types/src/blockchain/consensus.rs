@@ -2,10 +2,15 @@
 
 use crate::{
     blockchain::primitives::BlockId,
-    fuel_crypto::{PublicKey, Signature},
+    fuel_crypto::{
+        PublicKey,
+        Signature,
+    },
     fuel_tx::Input,
-    fuel_types::Address,
-    fuel_types::Bytes32,
+    fuel_types::{
+        Address,
+        Bytes32,
+    },
 };
 
 // Different types of consensus are represented as separate modules
