@@ -164,7 +164,7 @@ impl From<Vec<u8>> for OwnedTransactionIndexKey {
     }
 }
 
-#[derive(Clone, Debug, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, PartialOrd, Eq, PartialEq)]
 pub struct OwnedTransactionIndexCursor {
     pub block_height: BlockHeight,
     pub tx_idx: TransactionIndex,
