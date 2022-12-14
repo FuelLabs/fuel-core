@@ -6,8 +6,9 @@ use crate::blockchain::{
     header::BlockHeader,
 };
 
+mod height;
+
 pub mod block;
-pub mod block_height;
 pub mod consensus;
 pub mod header;
 pub mod primitives;
@@ -17,3 +18,8 @@ pub type SealedBlockHeader = Sealed<BlockHeader>;
 
 /// Block and the associated consensus info
 pub type SealedBlock = Sealed<Block>;
+
+pub use height::{
+    BlockHeight,
+    DaBlockHeight,
+};
