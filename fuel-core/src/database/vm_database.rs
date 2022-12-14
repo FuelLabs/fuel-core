@@ -220,11 +220,16 @@ impl InterpreterStorage for VmDatabase {
         start_key: &Bytes32,
         values: &[Bytes32],
     ) -> Result<Option<()>, Self::DataError> {
-        let mut found_unset = false;
-
         let mut current_key = U256::from_big_endian(start_key.as_ref());
-        let mut key_bytes = [0u8; 32];
+        // verify key is in range
+        current_key
+            .checked_add(U256::from(values.len()))
+            .ok_or_else(|| {
+                Error::Other(anyhow!("range op exceeded available keyspace"))
+            })?;
 
+        let mut key_bytes = [0u8; 32];
+        let mut found_unset = false;
         for value in values {
             current_key.to_big_endian(&mut key_bytes);
 
@@ -564,49 +569,54 @@ mod tests {
 
     #[test_case(
         &[], key(0), &[[1; 32]]
-        => false
+        => Ok(false)
         ; "insert single value over uninitialized range"
     )]
     #[test_case(
         &[(key(0), [0; 32])], key(0), &[[1; 32]]
-        => true
+        => Ok(true)
         ; "insert single value over initialized range"
     )]
     #[test_case(
         &[], key(0), &[[1; 32], [2; 32]]
-        => false
+        => Ok(false)
         ; "insert multiple slots over uninitialized range"
     )]
     #[test_case(
         &[(key(1), [0; 32]), (key(2), [0; 32])], key(0), &[[1; 32], [2; 32], [3; 32]]
-        => false
+        => Ok(false)
         ; "insert multiple slots with uninitialized start of the range"
     )]
     #[test_case(
         &[(key(0), [0; 32]), (key(2), [0; 32])], key(0), &[[1; 32], [2; 32], [3; 32]]
-        => false
+        => Ok(false)
         ; "insert multiple slots with uninitialized middle of the range"
     )]
     #[test_case(
         &[(key(0), [0; 32]), (key(1), [0; 32])], key(0), &[[1; 32], [2; 32], [3; 32]]
-        => false
+        => Ok(false)
         ; "insert multiple slots with uninitialized end of the range"
     )]
     #[test_case(
         &[(key(0), [0; 32]), (key(1), [0; 32]), (key(2), [0; 32])], key(0), &[[1; 32], [2; 32], [3; 32]]
-        => true
+        => Ok(true)
         ; "insert multiple slots over initialized range"
     )]
     #[test_case(
         &[(key(0), [0; 32]), (key(1), [0; 32]), (key(2), [0; 32]), (key(3), [0; 32])], key(1), &[[1; 32], [2; 32]]
-        => true
+        => Ok(true)
         ; "insert multiple slots over sub-range of prefilled data"
+    )]
+    #[test_case(
+        &[], *u256_to_bytes32(U256::MAX), &[[1; 32], [2; 32]]
+        => Err(())
+        ; "insert fails if start_key + range > u256::MAX"
     )]
     fn insert_range(
         prefilled_slots: &[([u8; 32], [u8; 32])],
         start_key: [u8; 32],
         insertion_range: &[[u8; 32]],
-    ) -> bool {
+    ) -> Result<bool, ()> {
         let mut db = VmDatabase::default();
 
         let contract_id = ContractId::new([0u8; 32]);
@@ -633,25 +643,31 @@ mod tests {
                     .map(|v| Bytes32::new(*v))
                     .collect::<Vec<_>>(),
             )
-            .unwrap()
-            .is_some();
+            .map_err(|_| ())
+            .map(|v| v.is_some());
 
         // check stored data
         let results: Vec<_> = (0..insertion_range.len())
-            .map(|i| {
-                let current_key = U256::from_big_endian(&start_key) + i;
+            .filter_map(|i| {
+                let current_key =
+                    U256::from_big_endian(&start_key).checked_add(i.into())?;
                 let current_key = u256_to_bytes32(current_key);
                 let result = db
                     .merkle_contract_state(&contract_id, &current_key)
                     .unwrap()
                     .map(Cow::into_owned)
-                    .expect("expected inserted value to be set");
-                *result
+                    .map(|b| *b);
+                result
             })
             .collect();
 
-        // verify all data from insertion request is actually inserted
-        assert_eq!(insertion_range, results);
+        // verify all data from insertion request is actually inserted if successful
+        // or not inserted at all if unsuccessful
+        if insert_status.is_ok() {
+            assert_eq!(insertion_range, results);
+        } else {
+            assert_eq!(results.len(), 0);
+        }
 
         insert_status
     }
