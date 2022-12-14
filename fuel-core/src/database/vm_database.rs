@@ -564,44 +564,49 @@ mod tests {
 
     #[test_case(
         &[], key(0), &[[1; 32]]
-        => (vec![[1; 32]], false)
+        => false
         ; "insert single value over uninitialized range"
     )]
     #[test_case(
         &[(key(0), [0; 32])], key(0), &[[1; 32]]
-        => (vec![[1; 32]], true)
+        => true
         ; "insert single value over initialized range"
     )]
     #[test_case(
         &[], key(0), &[[1; 32], [2; 32]]
-        => (vec![[1; 32], [2; 32]], false)
+        => false
         ; "insert multiple slots over uninitialized range"
     )]
     #[test_case(
         &[(key(1), [0; 32]), (key(2), [0; 32])], key(0), &[[1; 32], [2; 32], [3; 32]]
-        => (vec![[1; 32], [2; 32], [3; 32]], false)
+        => false
         ; "insert multiple slots with uninitialized start of the range"
     )]
     #[test_case(
         &[(key(0), [0; 32]), (key(2), [0; 32])], key(0), &[[1; 32], [2; 32], [3; 32]]
-        => (vec![[1; 32], [2; 32], [3; 32]], false)
+        => false
         ; "insert multiple slots with uninitialized middle of the range"
     )]
     #[test_case(
         &[(key(0), [0; 32]), (key(1), [0; 32])], key(0), &[[1; 32], [2; 32], [3; 32]]
-        => (vec![[1; 32], [2; 32], [3; 32]], false)
+        => false
         ; "insert multiple slots with uninitialized end of the range"
     )]
     #[test_case(
         &[(key(0), [0; 32]), (key(1), [0; 32]), (key(2), [0; 32])], key(0), &[[1; 32], [2; 32], [3; 32]]
-        => (vec![[1; 32], [2; 32], [3; 32]], true)
+        => true
         ; "insert multiple slots over initialized range"
+    )]
+    #[test_case(
+        &[(key(0), [0; 32]), (key(1), [0; 32]), (key(2), [0; 32]), (key(3), [0; 32])], key(1), &[[1; 32], [2; 32]]
+        => true
+        ; "insert multiple slots over sub-range of prefilled data"
     )]
     fn insert_range(
         prefilled_slots: &[([u8; 32], [u8; 32])],
         start_key: [u8; 32],
         insertion_range: &[[u8; 32]],
-    ) -> (Vec<[u8; 32]>, bool) {
+    ) -> bool {
         let mut db = VmDatabase::default();
 
         let contract_id = ContractId::new([0u8; 32]);
@@ -645,7 +650,10 @@ mod tests {
             })
             .collect();
 
-        (results, insert_status)
+        // verify all data from insertion request is actually inserted
+        assert_eq!(insertion_range, results);
+
+        insert_status
     }
 
     #[test]
