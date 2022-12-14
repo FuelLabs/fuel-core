@@ -90,9 +90,15 @@ async fn test_5_contract_balances(
         .unwrap();
 
     assert!(!contract_balances.results.is_empty());
-    assert_eq!(contract_balances.results[0].amount.0, 1000);
-    assert_eq!(contract_balances.results[1].amount.0, 400);
-    assert_eq!(contract_balances.results[2].amount.0, 700);
+    if direction == PageDirection::Forward {
+        assert_eq!(contract_balances.results[0].amount.0, 1000);
+        assert_eq!(contract_balances.results[1].amount.0, 400);
+        assert_eq!(contract_balances.results[2].amount.0, 700);
+    } else {
+        assert_eq!(contract_balances.results[2].amount.0, 1000);
+        assert_eq!(contract_balances.results[1].amount.0, 400);
+        assert_eq!(contract_balances.results[0].amount.0, 700);
+    }
 }
 
 fn key(i: u8) -> Bytes32 {

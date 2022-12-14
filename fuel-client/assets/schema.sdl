@@ -145,11 +145,11 @@ type CoinEdge {
 
 input CoinFilterInput {
 	"""
-	Address of the owner
+	Returns coins owned by the `owner`.
 	"""
 	owner: Address!
 	"""
-	Asset ID of the coins
+	Returns coins only with `asset_id`.
 	"""
 	assetId: AssetId
 }
@@ -512,7 +512,14 @@ type Query {
 	Returns true when the GraphQL API is serving requests.
 	"""
 	health: Boolean!
+	"""
+	Gets the coin by `utxo_id`.
+	"""
 	coin(utxoId: UtxoId!): Coin
+	"""
+	Gets all coins of some `owner` maybe filtered with by `asset_id` per page.
+	It includes `CoinStatus::Spent` and `CoinStatus::Unspent` coins.
+	"""
 	coins(filter: CoinFilterInput!, first: Int, after: String, last: Int, before: String): CoinConnection!
 	contract(id: ContractId!): Contract
 	contractBalance(contract: ContractId!, asset: AssetId!): ContractBalance!
