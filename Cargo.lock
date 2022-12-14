@@ -2433,6 +2433,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-storage"
+version = "0.15.1"
+dependencies = [
+ "fuel-core-types",
+ "fuel-vm",
+]
+
+[[package]]
+name = "fuel-core-types"
+version = "0.15.1"
+dependencies = [
+ "anyhow",
+ "derive_more",
+ "fuel-vm",
+ "serde",
+ "tai64",
+]
+
+[[package]]
 name = "fuel-crypto"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

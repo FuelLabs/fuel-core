@@ -5,13 +5,26 @@ use fuel_core_interfaces::{
         BlockGossipData,
         P2pRequestEvent,
     },
-    sync::SyncMpsc,
 };
 use parking_lot::Mutex;
 use tokio::{
-    sync::mpsc,
+    sync::{
+        mpsc,
+        oneshot,
+    },
     task::JoinHandle,
 };
+
+pub enum SyncStatus {
+    Stopped,
+    InitialSync,
+}
+
+pub enum SyncMpsc {
+    Status { ret: oneshot::Sender<SyncStatus> },
+    Start,
+    Stop,
+}
 
 pub struct Service {
     join: Mutex<Option<JoinHandle<()>>>,

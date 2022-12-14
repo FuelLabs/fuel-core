@@ -7,7 +7,6 @@ pub mod p2p;
 pub mod poa_coordinator;
 pub mod relayer;
 pub mod signer;
-pub mod sync;
 pub mod txpool;
 
 pub mod common {

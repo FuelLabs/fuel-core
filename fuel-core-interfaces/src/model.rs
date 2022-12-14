@@ -6,13 +6,7 @@ mod messages;
 mod txpool;
 mod vote;
 
-use crate::common::{
-    fuel_crypto::SecretKey,
-    fuel_types::{
-        Address,
-        Bytes32,
-    },
-};
+use crate::common::fuel_crypto::SecretKey;
 pub use block::{
     BlockId,
     ConsensusType,
@@ -52,12 +46,6 @@ pub use txpool::{
 };
 pub use vote::ConsensusVote;
 use zeroize::Zeroize;
-
-/// Validator address used for registration of validator on DA layer
-pub type ValidatorId = Address;
-/// Consensus public key used for Fuel network consensus protocol to
-/// check signatures. ConsensusId is assigned by validator.
-pub type ConsensusId = Bytes32;
 
 /// Wrapper around [`fuel_crypto::SecretKey`] to implement [`secrecy`] marker traits
 #[derive(
