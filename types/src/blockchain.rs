@@ -7,6 +7,7 @@ use crate::blockchain::{
 };
 
 pub mod block;
+pub mod block_height;
 pub mod consensus;
 pub mod header;
 pub mod primitives;

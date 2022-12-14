@@ -1,16 +1,13 @@
 use crate::{
     blockchain::{
         consensus::{
-            genesis::Genesis,
-            poa::PoAConsensus,
+            Genesis,
+            PoAConsensus,
         },
         primitives::BlockId,
     },
     fuel_tx::Input,
-    fuel_types::{
-        Address,
-        Bytes32,
-    },
+    fuel_types::Address,
 };
 
 #[derive(Clone, Debug)]
