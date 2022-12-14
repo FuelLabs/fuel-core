@@ -48,6 +48,7 @@ hex = { version = "0.4", features = ["serde"] }
 itertools = "0.10"
 lazy_static = "1.4"
 num_cpus = "1.13"
+primitive-types = "0.12"
 rand = "0.8"
 rocksdb = { version = "0.19", default-features = false, features = [
     "lz4",

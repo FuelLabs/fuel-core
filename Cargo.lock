@@ -2366,6 +2366,7 @@ dependencies = [
  "lazy_static",
  "mockall",
  "num_cpus",
+ "primitive-types",
  "rand 0.8.5",
  "rocksdb",
  "serde",
@@ -2666,9 +2667,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.22.6"
+version = "0.22.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1521a9ecf42e1d133b29e3785ca6f46bf74ae9bf2509fc3daed49b731f530560"
+checksum = "6540c62a717f927704b44fd6fa0ea456a86c4e5732aadb191bb428f1b4937fda"
 dependencies = [
  "anyhow",
  "fuel-asm",
