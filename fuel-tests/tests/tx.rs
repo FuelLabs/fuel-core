@@ -327,7 +327,7 @@ async fn get_transactions() {
         direction: PageDirection::Forward,
     };
 
-    // Query backwards from last given cursor [3]: [coinbase_tx3, tx2, coinbase_tx2, tx1, coinbase_tx1]
+    // Query backwards from last given cursor [3]: [coinbase_tx1, tx1, coinbase_tx2, tx2]
     let page_request_backwards = PaginationRequest {
         cursor: response.cursor.clone(),
         results: 6,
@@ -362,11 +362,10 @@ async fn get_transactions() {
         .iter()
         .map(|tx| tx.transaction.id())
         .collect_vec();
-    // transactions[0] - coinbase_tx3
-    assert_eq!(transactions[1], tx2);
-    // transactions[2] - coinbase_tx2
-    assert_eq!(transactions[3], tx1);
-    // transactions[4] - coinbase_tx1
+    // coinbase_tx1
+    assert_eq!(transactions[1], tx1);
+    // coinbase_tx2
+    assert_eq!(transactions[3], tx2);
     // Check pagination state for last page
     assert!(!response.has_next_page);
     assert!(response.has_previous_page);
@@ -472,7 +471,7 @@ async fn get_transactions_from_manual_blocks() {
     assert_eq!(transactions[3], txs[5].id());
     assert_eq!(transactions[4], txs[6].id());
 
-    // Query backwards from last given cursor [8]: [coinbase_tx1, 0, 1, 2, 3, 4, coinbase_tx2, 5]
+    // Query backwards from last given cursor [6]: [0,1,2,3,4,5]
     let page_request_backwards = PaginationRequest {
         cursor: response.cursor,
         results: 10,
@@ -484,14 +483,14 @@ async fn get_transactions_from_manual_blocks() {
         .iter()
         .map(|tx| tx.transaction.id())
         .collect_vec();
-    assert_eq!(transactions[0], txs[5].id());
-    // transactions[1] coinbase_tx2
-    assert_eq!(transactions[2], txs[4].id());
-    assert_eq!(transactions[3], txs[3].id());
-    assert_eq!(transactions[4], txs[2].id());
-    assert_eq!(transactions[5], txs[1].id());
-    assert_eq!(transactions[6], txs[0].id());
-    // transactions[7] coinbase_tx1
+    // coinbase_tx1
+    assert_eq!(transactions[1], txs[0].id());
+    assert_eq!(transactions[2], txs[1].id());
+    assert_eq!(transactions[3], txs[2].id());
+    assert_eq!(transactions[4], txs[3].id());
+    assert_eq!(transactions[5], txs[4].id());
+    // coinbase_tx2
+    assert_eq!(transactions[7], txs[5].id());
 }
 
 #[tokio::test]

@@ -15,7 +15,7 @@ use std::{
     str::FromStr,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug)]
 pub struct UtxoId(pub(crate) fuel_tx::UtxoId);
 
 #[Scalar(name = "UtxoId")]
