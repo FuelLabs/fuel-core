@@ -1,4 +1,4 @@
-use crate::blockchain::consensus::consensus::Consensus;
+use crate::blockchain::consensus::Consensus;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
