@@ -286,16 +286,7 @@ impl InterpreterStorage for VmDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use itertools::Itertools;
-    use rand::{
-        rngs::StdRng,
-        Rng,
-        SeedableRng,
-    };
-    use std::ops::{
-        Add,
-        Sub,
-    };
+    use std::ops::Add;
     use test_case::test_case;
 
     fn u256_to_bytes32(u: U256) -> Bytes32 {
@@ -326,245 +317,89 @@ mod tests {
         ]
     }
 
-    #[test]
-    fn read_single_value() {
+    #[test_case(
+        &[], key(0), 1
+        => Ok(vec![None])
+        ; "read single uninitialized value"
+    )]
+    #[test_case(
+        &[(key(0), [0; 32])], key(0), 1
+        => Ok(vec![Some([0; 32])])
+        ; "read single initialized value"
+    )]
+    #[test_case(
+        &[], key(0), 3
+        => Ok(vec![None, None, None])
+        ; "read uninitialized range"
+    )]
+    #[test_case(
+        &[(key(1), [1; 32]), (key(2), [2; 32])], key(0), 3
+        => Ok(vec![None, Some([1; 32]), Some([2; 32])])
+        ; "read uninitialized start range"
+    )]
+    #[test_case(
+        &[(key(0), [0; 32]), (key(2), [2; 32])], key(0), 3
+        => Ok(vec![Some([0; 32]), None, Some([2; 32])])
+        ; "read uninitialized middle range"
+    )]
+    #[test_case(
+        &[(key(0), [0; 32]), (key(1), [1; 32])], key(0), 3
+        => Ok(vec![Some([0; 32]), Some([1; 32]), None])
+        ; "read uninitialized end range"
+    )]
+    #[test_case(
+        &[(key(0), [0; 32]), (key(1), [1; 32]), (key(2), [2; 32])], key(0), 3
+        => Ok(vec![Some([0; 32]), Some([1; 32]), Some([2; 32])])
+        ; "read fully initialized range"
+    )]
+    #[test_case(
+        &[(key(0), [0; 32]), (key(1), [1; 32]), (key(2), [2; 32])], key(0), 2
+        => Ok(vec![Some([0; 32]), Some([1; 32])])
+        ; "read subset of initialized range"
+    )]
+    #[test_case(
+        &[(key(0), [0; 32]), (key(2), [2; 32])], key(0), 2
+        => Ok(vec![Some([0; 32]), None])
+        ; "read subset of partially set range without running too far"
+    )]
+    #[test_case(
+        &[], *u256_to_bytes32(U256::MAX), 2
+        => Err(())
+        ; "read fails on uninitialized range if keyspace exceeded"
+    )]
+    #[test_case(
+        &[(*u256_to_bytes32(U256::MAX), [0; 32])], *u256_to_bytes32(U256::MAX), 2
+        => Err(())
+        ; "read fails on partially initialized range if keyspace exceeded"
+    )]
+    fn read_sequential_range(
+        prefilled_slots: &[([u8; 32], [u8; 32])],
+        start_key: [u8; 32],
+        range: u64,
+    ) -> Result<Vec<Option<[u8; 32]>>, ()> {
         let db = VmDatabase::default();
 
         let contract_id = ContractId::new([0u8; 32]);
-        let key = U256::from(10);
-        let key_bytes = u256_to_bytes32(key);
-        let value = Bytes32::new([1u8; 32]);
 
-        // check that read is unset before insert
-        let pre_read_status = db.merkle_contract_state(&contract_id, &key_bytes).unwrap();
-        assert!(pre_read_status.is_none());
-
-        // insert expected key
-        setup_value(&db, contract_id, key, 0, &value);
-
-        // check that read is set and returns the correct value
-        let read_status = db.merkle_contract_state(&contract_id, &key_bytes).unwrap();
-        assert!(read_status.is_some());
-        assert_eq!(read_status.unwrap().into_owned(), value);
-    }
-
-    #[test]
-    fn read_range_unset() {
-        // ensure we pad the correct number of results even if the iterator is empty
-        const RANGE_LENGTH: usize = 10;
-        let contract_id = ContractId::new([0u8; 32]);
-        let start_key = U256::zero();
-
-        let db = VmDatabase::default();
-        // perform sequential read
-        let results = db
-            .merkle_contract_state_range(
-                &contract_id,
-                &u256_to_bytes32(start_key),
-                RANGE_LENGTH as Word,
-            )
-            .unwrap();
-        assert_eq!(results.len(), RANGE_LENGTH);
-        results
-            .iter()
-            .enumerate()
-            .for_each(|(i, item)| assert!(item.is_none(), "Expected None for idx {}", i));
-    }
-
-    #[test]
-    fn read_sequential_set_data() {
-        let rng = &mut StdRng::seed_from_u64(100);
-        let db = VmDatabase::default();
-
-        const RANGE_LENGTH: usize = 10;
-        let contract_id = ContractId::new([0u8; 32]);
-        let start_key = U256::zero();
-
-        // check range is unset
-        db.merkle_contract_state_range(
-            &contract_id,
-            &u256_to_bytes32(start_key),
-            RANGE_LENGTH as Word,
-        )
-        .unwrap()
-        .iter()
-        .for_each(|item| assert!(item.is_none()));
-
-        let setup_values = (0..RANGE_LENGTH)
-            .map(|_| rng.gen())
-            .collect::<Vec<Bytes32>>();
-
-        // setup data
-        for (i, value) in setup_values.iter().enumerate().take(RANGE_LENGTH) {
-            setup_value(&db, contract_id, start_key, i, value);
+        // prefill db
+        for (key, value) in prefilled_slots {
+            let multi_key = MultiKey::new(&(contract_id.as_ref(), key));
+            db.database
+                .insert::<_, _, Bytes32>(
+                    &multi_key,
+                    Column::ContractsState,
+                    Bytes32::new(*value),
+                )
+                .unwrap();
         }
 
         // perform sequential read
-        let results = db
-            .merkle_contract_state_range(
-                &contract_id,
-                &u256_to_bytes32(start_key),
-                RANGE_LENGTH as u64,
-            )
-            .unwrap();
-
-        // verify a vector of the correct length is returned, and all values are set correctly
-        assert_eq!(results.len(), RANGE_LENGTH);
-        for (i, value) in results.into_iter().enumerate() {
-            let value =
-                value.unwrap_or_else(|| panic!("Expected value to be set at {}", i));
-            assert_eq!(value.as_ref(), &setup_values[i]);
-        }
-    }
-
-    #[test]
-    fn read_over_unset_region_same_contract() {
-        let rng = &mut StdRng::seed_from_u64(100);
-        let db = VmDatabase::default();
-
-        const RANGE_LENGTH: usize = 10;
-        let contract_id = ContractId::new([0u8; 32]);
-        let start_key = U256::zero();
-
-        // only set even keys to some value
-        let setup_values = (0..RANGE_LENGTH)
-            .map(|i| if i % 2 == 0 { Some(rng.gen()) } else { None })
-            .collect::<Vec<Option<Bytes32>>>();
-
-        // setup only some of the data in the range
-        for (i, value) in setup_values.iter().enumerate().take(RANGE_LENGTH) {
-            if let Some(value) = value {
-                setup_value(&db, contract_id, start_key, i, value);
-            }
-        }
-
-        // perform sequential read
-        let results = db
-            .merkle_contract_state_range(
-                &contract_id,
-                &u256_to_bytes32(start_key),
-                RANGE_LENGTH as u64,
-            )
-            .unwrap();
-
-        // verify a vector of the correct length is returned, and all values are set correctly
-        assert_eq!(results.len(), RANGE_LENGTH);
-        for (i, value) in results.into_iter().enumerate() {
-            assert_eq!(value.map(Cow::into_owned), setup_values[i]);
-        }
-    }
-
-    #[test]
-    fn read_overrun_contract_id() {
-        // setup two contracts in the same database
-        // to ensure we don't return data from other contracts
-        let rng = &mut StdRng::seed_from_u64(100);
-        let db = VmDatabase::default();
-
-        let contract_id_1 = ContractId::new([0u8; 32]);
-        let contract_id_2 = ContractId::new([1u8; 32]);
-        let start_key = U256::zero();
-
-        // setup test values for the database
-        let c1_v1 = rng.gen();
-        setup_value(&db, contract_id_1, start_key, 0, &c1_v1);
-        let c1_v2 = rng.gen();
-        setup_value(&db, contract_id_1, start_key, 1, &c1_v2);
-        let c2_v2 = rng.gen();
-        setup_value(&db, contract_id_2, start_key, 1, &c2_v2);
-
-        // perform sequential read
-        const READ_RANGE: usize = 4;
-        let results = db
-            .merkle_contract_state_range(
-                &contract_id_1,
-                &u256_to_bytes32(start_key),
-                READ_RANGE as u64,
-            )
-            .unwrap()
+        Ok(db
+            .merkle_contract_state_range(&contract_id, &Bytes32::new(start_key), range)
+            .map_err(|_| ())?
             .into_iter()
-            .map(|v| v.map(Cow::into_owned))
-            .collect_vec();
-
-        // verify a vector of the correct length is returned, and all values are set correctly
-        assert_eq!(results.len(), READ_RANGE);
-        assert_eq!(results[0], Some(c1_v1));
-        assert_eq!(results[1], Some(c1_v2));
-        assert_eq!(results[2], None);
-        assert_eq!(results[3], None);
-    }
-
-    #[test]
-    fn read_range_overruns_keyspace_mismatched_contract_id() {
-        // ensure that we don't pad extra results past u256::max when there are multiple contracts
-        let rng = &mut StdRng::seed_from_u64(100);
-        let db = VmDatabase::default();
-
-        let contract_id_1 = ContractId::new([0u8; 32]);
-        let contract_id_2 = ContractId::new([1u8; 32]);
-        let start_key = U256::max_value().sub(2);
-
-        // setup test values for the database
-        setup_value(&db, contract_id_1, start_key, 0, &rng.gen());
-        setup_value(&db, contract_id_1, start_key, 1, &rng.gen());
-        setup_value(&db, contract_id_2, start_key, 1, &rng.gen());
-
-        // perform sequential read
-        const READ_RANGE: usize = 4;
-        let result = db.merkle_contract_state_range(
-            &contract_id_1,
-            &u256_to_bytes32(start_key),
-            READ_RANGE as u64,
-        );
-
-        // assert read fails since start key + READ_RANGE > u256::max
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn read_range_overruns_keyspace_partially_set_key_range() {
-        // ensure that we don't pad extra results when keyspace is exhausted and some keys are set
-        let rng = &mut StdRng::seed_from_u64(100);
-        let db = VmDatabase::default();
-
-        let contract_id = ContractId::new([0u8; 32]);
-        // leave enough room for one valid unset storage slot before exhausting the keyspace
-        let start_key = U256::max_value().sub(1);
-
-        // setup test values for the database
-        setup_value(&db, contract_id, start_key, 0, &rng.gen());
-
-        // perform sequential read (u256::max - 1, u256::max, invalid key)
-        const READ_RANGE: usize = 3;
-        let result = db.merkle_contract_state_range(
-            &contract_id,
-            &u256_to_bytes32(start_key),
-            READ_RANGE as u64,
-        );
-
-        // assert read fails since start key + READ_RANGE > u256::max
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn read_range_overruns_keyspace_unset_key_range() {
-        // ensure that we don't pad extra results when keyspace is exhausted and no keys are set
-        let db = VmDatabase::default();
-
-        let contract_id = ContractId::new([0u8; 32]);
-        // leave enough room for one valid unset storage slot before exhausting the keyspace
-        let start_key = U256::max_value().sub(1);
-
-        // perform sequential read (u256::max - 1, u256::max, invalid key)
-        const READ_RANGE: usize = 3;
-        let result = db.merkle_contract_state_range(
-            &contract_id,
-            &u256_to_bytes32(start_key),
-            READ_RANGE as u64,
-        );
-
-        // assert read fails since start key + READ_RANGE > u256::max
-        assert!(result.is_err());
+            .map(|v| v.map(Cow::into_owned).map(|v| *v))
+            .collect())
     }
 
     #[test_case(
