@@ -1,6 +1,6 @@
 [package]
 name = "fuel-chain-config"
-version = "0.15.0"
+version = "0.15.1"
 authors = ["Fuel Labs <contact@fuel.sh>"]
 categories = ["cryptography::cryptocurrencies"]
 edition = "2021"
@@ -13,10 +13,10 @@ description = "Fuel Chain config types"
 [dependencies]
 anyhow = "1.0"
 bincode = "1.3"
-fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.15.0", features = [
+fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.15.1", features = [
     "serde",
 ] }
-fuel-poa-coordinator = { path = "../fuel-poa-coordinator", version = "0.15.0" }
+fuel-poa-coordinator = { path = "../fuel-poa-coordinator", version = "0.15.1" }
 hex = { version = "0.4", features = ["serde"] }
 itertools = "0.10"
 rand = "0.8"
