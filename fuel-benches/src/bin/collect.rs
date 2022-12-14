@@ -406,7 +406,14 @@ impl State {
     }
 
     fn to_yaml(&self) -> serde_yaml::Value {
-        serde_yaml::to_value(self.clone().into_costs()).unwrap()
+        let v = serde_yaml::to_value(self.clone().into_costs()).unwrap();
+        let v = match v {
+            serde_yaml::Value::Mapping(m) => m,
+            _ => unreachable!(),
+        };
+        let mut v = v.into_iter().collect::<Vec<_>>();
+        v.sort_unstable_by_key(|(k, _)| k.as_str().unwrap().to_string());
+        v.into_iter().collect::<serde_yaml::Mapping>().into()
     }
 
     fn to_json(&self) -> serde_json::Value {
