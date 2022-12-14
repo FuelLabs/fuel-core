@@ -1,3 +1,5 @@
+//! Proof of authority
+
 use crate::fuel_crypto::Signature;
 
 #[derive(Clone, Debug, Default)]

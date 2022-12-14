@@ -1,3 +1,5 @@
+//! Block header types
+
 use super::{
     consensus::ConsensusType,
     primitives::{

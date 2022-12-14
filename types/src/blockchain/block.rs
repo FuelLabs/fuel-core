@@ -1,3 +1,5 @@
+//! Types related to blocks
+
 use super::{
     consensus::ConsensusType,
     header::{
@@ -130,6 +132,7 @@ impl<TransactionRepresentation> Block<TransactionRepresentation> {
 }
 
 impl PartialFuelBlock {
+    /// Create a new block
     pub fn new(header: PartialBlockHeader, transactions: Vec<Transaction>) -> Self {
         Self {
             header,

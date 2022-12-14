@@ -1,3 +1,5 @@
+//! Primitive types
+
 use crate::{
     fuel_crypto,
     fuel_types::Bytes32,
@@ -53,6 +55,7 @@ impl BlockId {
         // difficult to verify.
     }
 
+    /// Converts the hash into a message having the same bytes.
     pub fn as_message(&self) -> &fuel_crypto::Message {
         // This is safe because BlockId is a cryptographically secure hash.
         unsafe { fuel_crypto::Message::as_ref_unchecked(self.0.as_slice()) }
@@ -61,6 +64,7 @@ impl BlockId {
     }
 }
 
+/// Block height
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(
     Copy,
@@ -116,19 +120,23 @@ impl From<usize> for BlockHeight {
 }
 
 impl BlockHeight {
+    /// Convert to array of big endian bytes
     pub fn to_bytes(self) -> [u8; 4] {
         self.0.to_be_bytes()
     }
 
+    /// Convert to usize
     pub fn to_usize(self) -> usize {
         self.0 as usize
     }
 
+    /// Convert to usize
     pub fn as_usize(&self) -> usize {
         self.0 as usize
     }
 }
 
+/// Block height of the data availability layer
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(
     Sub,
@@ -172,18 +180,22 @@ impl core::ops::Add<u64> for DaBlockHeight {
 }
 
 impl DaBlockHeight {
+    /// Convert to array of big endian bytes
     pub fn to_bytes(self) -> [u8; 8] {
         self.0.to_be_bytes()
     }
 
+    /// Convert to usize
     pub fn to_usize(self) -> usize {
         self.0 as usize
     }
 
+    /// Convert to usize
     pub fn as_usize(&self) -> usize {
         self.0 as usize
     }
 
+    /// Convert to u64
     pub fn as_u64(&self) -> u64 {
         self.0
     }

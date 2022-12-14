@@ -2,8 +2,7 @@
 //! libraries. This crate doesn't contain any business logic and is to be such primitive as that
 //! is possible.
 
-// TODO: Add documentation to all public types
-// #![deny(missing_docs)]
+#![deny(missing_docs)]
 
 pub use fuel_vm_private::{
     fuel_asm,
@@ -17,6 +16,7 @@ pub mod blockchain;
 pub mod entities;
 pub mod services;
 
+/// Re-export of some fuel-vm types
 pub mod fuel_vm {
     pub use fuel_vm_private::prelude::{
         Interpreter,
