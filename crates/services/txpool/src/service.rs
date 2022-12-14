@@ -1,11 +1,15 @@
 use crate::{
+    ports::PeerToPeer,
     Config,
     TxPool,
 };
 use anyhow::anyhow;
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
-    common::prelude::Bytes32,
+    common::prelude::{
+        Bytes32,
+        Transaction,
+    },
     p2p::{
         GossipData,
         P2pRequestEvent,
@@ -33,6 +37,8 @@ use tokio::{
 };
 use tracing::error;
 
+type PeerToPeerForTx = Arc<dyn PeerToPeer<GossipedTransaction = TransactionGossipData>>;
+
 pub struct ServiceBuilder {
     config: Config,
     db: Option<Box<dyn TxPoolDb>>,
@@ -40,7 +46,7 @@ pub struct ServiceBuilder {
     txpool_receiver: Option<mpsc::Receiver<TxPoolMpsc>>,
     tx_status_sender: Option<TxStatusChange>,
     import_block_receiver: Option<broadcast::Receiver<ImportBlockBroadcast>>,
-    incoming_tx_receiver: Option<broadcast::Receiver<TransactionGossipData>>,
+    p2p_port: Option<PeerToPeerForTx>,
     network_sender: Option<mpsc::Sender<P2pRequestEvent>>,
 }
 
@@ -96,7 +102,7 @@ impl ServiceBuilder {
             txpool_receiver: None,
             tx_status_sender: None,
             import_block_receiver: None,
-            incoming_tx_receiver: None,
+            p2p_port: None,
             network_sender: None,
         }
     }
@@ -144,11 +150,8 @@ impl ServiceBuilder {
         self
     }
 
-    pub fn incoming_tx_receiver(
-        &mut self,
-        incoming_tx_receiver: broadcast::Receiver<TransactionGossipData>,
-    ) -> &mut Self {
-        self.incoming_tx_receiver = Some(incoming_tx_receiver);
+    pub fn p2p_port(&mut self, p2p_port: PeerToPeerForTx) -> &mut Self {
+        self.p2p_port = Some(p2p_port);
         self
     }
 
@@ -176,7 +179,7 @@ impl ServiceBuilder {
     pub fn build(self) -> anyhow::Result<Service> {
         if self.db.is_none()
             || self.import_block_receiver.is_none()
-            || self.incoming_tx_receiver.is_none()
+            || self.p2p_port.is_none()
             || self.txpool_sender.is_none()
             || self.tx_status_sender.is_none()
             || self.txpool_receiver.is_none()
@@ -194,7 +197,7 @@ impl ServiceBuilder {
                 txpool_receiver: self.txpool_receiver.unwrap(),
                 tx_status_sender: self.tx_status_sender.unwrap(),
                 import_block_receiver: self.import_block_receiver.unwrap(),
-                incoming_tx_receiver: self.incoming_tx_receiver.unwrap(),
+                p2p_port: self.p2p_port.unwrap(),
                 network_sender: self.network_sender.unwrap(),
             },
         )?;
@@ -208,7 +211,7 @@ pub struct Context {
     pub txpool_receiver: mpsc::Receiver<TxPoolMpsc>,
     pub tx_status_sender: TxStatusChange,
     pub import_block_receiver: broadcast::Receiver<ImportBlockBroadcast>,
-    pub incoming_tx_receiver: broadcast::Receiver<TransactionGossipData>,
+    pub p2p_port: PeerToPeerForTx,
     pub network_sender: mpsc::Sender<P2pRequestEvent>,
 }
 
@@ -218,11 +221,11 @@ impl Context {
 
         loop {
             tokio::select! {
-                new_transaction = self.incoming_tx_receiver.recv() => {
-                    if new_transaction.is_err() {
-                        error!("Incoming tx receiver channel closed unexpectedly; shutting down transaction pool service.");
-                        break;
-                    }
+                new_transaction = self.p2p_port.next_gossiped_transaction() => {
+                    // if new_transaction.is_err() {
+                    //     error!("Incoming tx receiver channel closed unexpectedly; shutting down transaction pool service.");
+                    //     break;
+                    // }
 
                     let txpool = txpool.clone();
                     let db = self.db.clone();
@@ -230,13 +233,12 @@ impl Context {
 
                     tokio::spawn( async move {
                         let txpool = txpool.as_ref();
-                        if let GossipData { data: Some(TransactionBroadcast::NewTransaction ( tx )), .. } =  new_transaction.unwrap() {
+                        if let GossipData { data: Some(tx), .. } =  new_transaction {
                             let txs = vec!(Arc::new(tx));
                             TxPool::insert(txpool, db.as_ref().as_ref(), &tx_status_sender, &txs).await;
                         }
                     });
                 }
-
                 event = self.txpool_receiver.recv() => {
                     if matches!(event,Some(TxPoolMpsc::Stop) | None) {
                         break;

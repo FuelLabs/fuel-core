@@ -46,7 +46,7 @@ impl TestContext {
         builder
             .config(config)
             .db(mock_db.clone())
-            .incoming_tx_receiver(gossip_rx)
+            .p2p_port(gossip_rx)
             .import_block_event(block_rx)
             .tx_status_sender(status_tx)
             .txpool_sender(txpool_tx)

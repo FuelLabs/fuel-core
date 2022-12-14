@@ -110,7 +110,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         None
     };
 
-    let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
+    // let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
     let (block_event_sender, block_event_receiver) = mpsc::channel(100);
     let (block_import_tx, block_import_rx) = broadcast::channel(16);
 
@@ -120,22 +120,23 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     let (p2p_request_event_sender, mut p2p_request_event_receiver) = mpsc::channel(100);
 
     #[cfg(feature = "p2p")]
-    let network_service = {
-        let p2p_db: Arc<dyn P2pDb> = Arc::new(database.clone());
-        let (tx_consensus, _) = mpsc::channel(100);
+    let network_service: fuel_p2p::orchestrator::Service = todo!();
+    // {
+    //     let p2p_db: Arc<dyn P2pDb> = Arc::new(database.clone());
+    //     let (tx_consensus, _) = mpsc::channel(100);
 
-        let genesis = database.get_genesis()?;
-        let p2p_config = config.p2p.clone().init(genesis)?;
+    //     let genesis = database.get_genesis()?;
+    //     let p2p_config = config.p2p.clone().init(genesis)?;
 
-        fuel_core_p2p::orchestrator::Service::new(
-            p2p_config,
-            p2p_db,
-            p2p_request_event_receiver,
-            tx_consensus,
-            incoming_tx_sender,
-            block_event_sender,
-        )
-    };
+    //     fuel_p2p::orchestrator::Service::new(
+    //         p2p_config,
+    //         p2p_db,
+    //         p2p_request_event_receiver,
+    //         tx_consensus,
+    //         incoming_tx_sender,
+    //         block_event_sender,
+    //     )
+    // };
 
     #[cfg(not(feature = "p2p"))]
     {
@@ -158,7 +159,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     txpool_builder
         .config(config.txpool.clone())
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
-        .incoming_tx_receiver(incoming_tx_receiver)
+        //.p2p_port(incoming_tx_receiver)
         .import_block_event(block_import_rx)
         .tx_status_sender(tx_status_sender.clone())
         .txpool_sender(Sender::new(txpool_sender))
