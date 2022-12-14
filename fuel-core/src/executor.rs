@@ -443,9 +443,21 @@ impl Executor {
         execution_data: &mut ExecutionData,
         block_db_transaction: &mut DatabaseTransaction,
     ) -> Result<(), Error> {
+        let block_height = *block.header.height();
+        let inputs = [];
+        // Coinbase is always the first transaction in the block.
+        let tx_index = 0;
         let coinbase_id = coinbase_tx.id();
+        self.persist_owners_index(
+            block_height,
+            &inputs,
+            coinbase_tx.outputs(),
+            &coinbase_id,
+            tx_index,
+            block_db_transaction.deref_mut(),
+        )?;
         self.persist_output_utxos(
-            *block.header.height(),
+            block_height,
             &coinbase_id,
             block_db_transaction,
             &[],
@@ -565,7 +577,8 @@ impl Executor {
         // index owners of inputs and outputs with tx-id, regardless of validity (hence block_tx instead of tx_db)
         self.persist_owners_index(
             *header.height(),
-            checked_tx.transaction(),
+            checked_tx.transaction().inputs(),
+            checked_tx.transaction().outputs(),
             &tx_id,
             idx,
             tx_db_transaction.deref_mut(),
@@ -1229,19 +1242,17 @@ impl Executor {
     }
 
     /// Index the tx id by owner for all of the inputs and outputs
-    fn persist_owners_index<Tx>(
+    fn persist_owners_index(
         &self,
         block_height: BlockHeight,
-        tx: &Tx,
+        inputs: &[Input],
+        outputs: &[Output],
         tx_id: &Bytes32,
         tx_idx: u16,
         db: &mut Database,
-    ) -> Result<(), Error>
-    where
-        Tx: ExecutableTransaction,
-    {
+    ) -> Result<(), Error> {
         let mut owners = vec![];
-        for input in tx.inputs() {
+        for input in inputs {
             if let Input::CoinSigned { owner, .. } | Input::CoinPredicate { owner, .. } =
                 input
             {
@@ -1249,7 +1260,7 @@ impl Executor {
             }
         }
 
-        for output in tx.outputs() {
+        for output in outputs {
             match output {
                 Output::Coin { to, .. }
                 | Output::Message { recipient: to, .. }
@@ -1715,6 +1726,14 @@ mod tests {
                 .execute_and_commit(ExecutionBlock::Validation(produced_block))
                 .unwrap();
             assert_eq!(validated_block.transactions(), produced_txs);
+            let (_, owned_transactions_td_id) = validator
+                .database
+                .owned_transactions(&recipient, None, None)
+                .next()
+                .unwrap()
+                .unwrap();
+            // Should own `Mint` transaction
+            assert_eq!(owned_transactions_td_id, produced_txs[0].id());
         }
 
         #[test]
