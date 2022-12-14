@@ -286,28 +286,12 @@ impl InterpreterStorage for VmDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::ops::Add;
     use test_case::test_case;
 
     fn u256_to_bytes32(u: U256) -> Bytes32 {
         let mut bytes = [0u8; 32];
         u.to_big_endian(&mut bytes);
         Bytes32::from(bytes)
-    }
-
-    fn setup_value(
-        db: &VmDatabase,
-        contract_id: ContractId,
-        start_key: U256,
-        i: usize,
-        value: &Bytes32,
-    ) {
-        let key = start_key.add(i);
-        let key = u256_to_bytes32(key);
-        let multi_key = MultiKey::new(&(contract_id.as_ref(), key.as_ref()));
-        db.database
-            .insert::<_, _, Bytes32>(&multi_key, Column::ContractsState, value)
-            .unwrap();
     }
 
     const fn key(k: u8) -> [u8; 32] {
