@@ -120,11 +120,13 @@ impl<TransactionRepresentation> Block<TransactionRepresentation> {
         self.header.consensus_type()
     }
 
+    /// Get mutable access to transactions for testing purposes
     #[cfg(any(test, feature = "test-helpers"))]
     pub fn transactions_mut(&mut self) -> &mut Vec<TransactionRepresentation> {
         &mut self.transactions
     }
 
+    /// Get mutable access to header for testing purposes
     #[cfg(any(test, feature = "test-helpers"))]
     pub fn header_mut(&mut self) -> &mut BlockHeader {
         &mut self.header
