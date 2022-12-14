@@ -578,11 +578,6 @@ mod tests {
         ; "insert multiple slots over uninitialized range"
     )]
     #[test_case(
-        &[(key(0), [0; 32]), (key(1), [0; 32]), (key(2), [0; 32])], key(0), &[[1; 32], [2; 32], [3; 32]]
-        => (vec![[1; 32], [2; 32], [3; 32]], true)
-        ; "insert multiple slots over initialized range"
-    )]
-    #[test_case(
         &[(key(1), [0; 32]), (key(2), [0; 32])], key(0), &[[1; 32], [2; 32], [3; 32]]
         => (vec![[1; 32], [2; 32], [3; 32]], false)
         ; "insert multiple slots with uninitialized start of the range"
@@ -596,6 +591,11 @@ mod tests {
         &[(key(0), [0; 32]), (key(1), [0; 32])], key(0), &[[1; 32], [2; 32], [3; 32]]
         => (vec![[1; 32], [2; 32], [3; 32]], false)
         ; "insert multiple slots with uninitialized end of the range"
+    )]
+    #[test_case(
+        &[(key(0), [0; 32]), (key(1), [0; 32]), (key(2), [0; 32])], key(0), &[[1; 32], [2; 32], [3; 32]]
+        => (vec![[1; 32], [2; 32], [3; 32]], true)
+        ; "insert multiple slots over initialized range"
     )]
     fn insert_range(
         prefilled_slots: &[([u8; 32], [u8; 32])],
