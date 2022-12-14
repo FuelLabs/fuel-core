@@ -119,7 +119,7 @@ pub enum FuelP2PEvent {
 
 impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     pub fn new(config: P2PConfig, codec: Codec) -> anyhow::Result<Self> {
-        let local_peer_id = PeerId::from(config.local_keypair.public());
+        let local_peer_id = PeerId::from(config.keypair.public());
 
         // configure and build P2P Service
         let transport = build_transport(&config);
@@ -531,7 +531,7 @@ mod tests {
     fn build_service_from_config(
         mut p2p_config: P2PConfig,
     ) -> FuelP2PService<BincodeCodec> {
-        p2p_config.local_keypair = Keypair::generate_secp256k1(); // change keypair for each Node
+        p2p_config.keypair = Keypair::generate_secp256k1(); // change keypair for each Node
         let max_block_size = p2p_config.max_block_size;
 
         FuelP2PService::new(p2p_config, BincodeCodec::new(max_block_size)).unwrap()
@@ -585,7 +585,7 @@ mod tests {
         ) -> FuelP2PService<BincodeCodec> {
             let max_block_size = p2p_config.max_block_size;
             p2p_config.tcp_port = self.tcp_port;
-            p2p_config.local_keypair = self.keypair.clone();
+            p2p_config.keypair = self.keypair.clone();
 
             FuelP2PService::new(p2p_config, BincodeCodec::new(max_block_size)).unwrap()
         }
@@ -595,7 +595,7 @@ mod tests {
     #[instrument]
     async fn p2p_service_works() {
         let mut fuel_p2p_service = build_service_from_config(
-            P2PConfig::default_with_network("p2p_service_works"),
+            P2PConfig::default_initialized("p2p_service_works"),
         );
 
         loop {
@@ -621,7 +621,7 @@ mod tests {
         let reserved_nodes_size = 4;
         let double_reserved_nodes_size = reserved_nodes_size * 2;
 
-        let mut p2p_config = P2PConfig::default_with_network("sentry_nodes_working");
+        let mut p2p_config = P2PConfig::default_initialized("sentry_nodes_working");
         // enable mdns for faster discovery of nodes
         p2p_config.enable_mdns = true;
 
@@ -738,7 +738,7 @@ mod tests {
     #[instrument]
     async fn nodes_connected_via_mdns() {
         // Node A
-        let mut p2p_config = P2PConfig::default_with_network("nodes_connected_via_mdns");
+        let mut p2p_config = P2PConfig::default_initialized("nodes_connected_via_mdns");
         p2p_config.enable_mdns = true;
         let mut node_a = build_service_from_config(p2p_config.clone());
 
@@ -772,14 +772,14 @@ mod tests {
             TransportError,
         };
         // Node A
-        let mut p2p_config = P2PConfig::default_with_network(
+        let mut p2p_config = P2PConfig::default_initialized(
             "nodes_cannot_connect_due_to_different_checksum",
         );
         p2p_config.enable_mdns = true;
         let mut node_a = build_service_from_config(p2p_config.clone());
 
         // different checksum
-        p2p_config.checksum = [1u8; 32];
+        p2p_config.checksum = [1u8; 32].into();
         // Node B
         let mut node_b = build_service_from_config(p2p_config);
 
@@ -812,7 +812,7 @@ mod tests {
     async fn nodes_connected_via_identify() {
         // Node A
         let mut p2p_config =
-            P2PConfig::default_with_network("nodes_connected_via_identify");
+            P2PConfig::default_initialized("nodes_connected_via_identify");
 
         let node_a_data = NodeData::random();
         let mut node_a = node_a_data.create_service(p2p_config.clone());
@@ -851,7 +851,7 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn peer_info_updates_work() {
-        let mut p2p_config = P2PConfig::default_with_network("peer_info_updates_work");
+        let mut p2p_config = P2PConfig::default_initialized("peer_info_updates_work");
 
         // Node A
         let node_a_data = NodeData::random();
@@ -915,7 +915,7 @@ mod tests {
     /// Reusable helper function for Broadcasting Gossipsub requests
     async fn gossipsub_broadcast(broadcast_request: GossipsubBroadcastRequest) {
         let mut p2p_config =
-            P2PConfig::default_with_network("gossipsub_exchanges_messages");
+            P2PConfig::default_initialized("gossipsub_exchanges_messages");
 
         let selected_topic: GossipTopic = {
             let topic = match broadcast_request {
@@ -1009,7 +1009,7 @@ mod tests {
             },
         };
 
-        let mut p2p_config = P2PConfig::default_with_network("request_response_works");
+        let mut p2p_config = P2PConfig::default_initialized("request_response_works");
 
         // Node A
         let node_a_data = NodeData::random();
@@ -1085,7 +1085,7 @@ mod tests {
     #[instrument]
     async fn req_res_outbound_timeout_works() {
         let mut p2p_config =
-            P2PConfig::default_with_network("req_res_outbound_timeout_works");
+            P2PConfig::default_initialized("req_res_outbound_timeout_works");
 
         // Node A
         // setup request timeout to 0 in order for the Request to fail

@@ -14,6 +14,7 @@ description = "Fuel client networking"
 anyhow = "1.0"
 async-trait = "0.1"
 bincode = "1.3"
+fuel-chain-config = { path = "../fuel-chain-config", version = "0.15.0" }
 fuel-core-interfaces = { path = "../fuel-core-interfaces", features = [
     "serde",
 ], version = "0.15.0" }

@@ -1,3 +1,6 @@
 mod contract;
 
-pub use contract::ContractRef;
+pub use contract::{
+    ContractRef,
+    ContractStorageTrait,
+};

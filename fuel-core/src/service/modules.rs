@@ -12,8 +12,6 @@ use crate::{
     },
 };
 use anyhow::Result;
-#[cfg(feature = "p2p")]
-use fuel_core_interfaces::p2p::P2pDb;
 use fuel_core_interfaces::{
     self,
     txpool::{
@@ -33,6 +31,9 @@ use tokio::{
     },
     task::JoinHandle,
 };
+
+#[cfg(feature = "p2p")]
+use fuel_core_interfaces::p2p::P2pDb;
 
 pub struct Modules {
     pub txpool: Arc<fuel_txpool::Service>,
@@ -123,8 +124,12 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     let network_service = {
         let p2p_db: Arc<dyn P2pDb> = Arc::new(database.clone());
         let (tx_consensus, _) = mpsc::channel(100);
+
+        let genesis = database.get_genesis()?;
+        let p2p_config = config.p2p.clone().init(genesis)?;
+
         fuel_p2p::orchestrator::Service::new(
-            config.p2p.clone(),
+            p2p_config,
             p2p_db,
             p2p_request_event_receiver,
             tx_consensus,
