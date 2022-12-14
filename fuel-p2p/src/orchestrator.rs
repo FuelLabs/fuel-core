@@ -3,19 +3,11 @@ use std::sync::Arc;
 use anyhow::anyhow;
 
 use fuel_core_interfaces::{
+    common::prelude::Transaction,
     model::SealedFuelBlock,
     p2p::{
-        BlockBroadcast,
-        BlockGossipData,
-        ConsensusBroadcast,
-        ConsensusGossipData,
-        GossipData,
         GossipsubMessageAcceptance,
         GossipsubMessageInfo,
-        P2pDb,
-        P2pRequestEvent,
-        TransactionBroadcast,
-        TransactionGossipData,
     },
 };
 use libp2p::{
@@ -23,9 +15,12 @@ use libp2p::{
     request_response::RequestId,
     PeerId,
 };
+use libp2p_gossipsub::{
+    error::PublishError,
+    MessageId,
+};
 use tokio::{
     sync::{
-        broadcast,
         mpsc::{
             Receiver,
             Sender,
@@ -51,10 +46,10 @@ use crate::{
         GossipsubBroadcastRequest,
         GossipsubMessage,
     },
+    ports::Database,
     request_response::messages::{
         OutboundResponse,
         RequestMessage,
-        ResponseChannelItem,
     },
     service::{
         FuelP2PEvent,
@@ -66,20 +61,9 @@ use crate::{
 /// and the top level `NetworkService`.
 struct NetworkOrchestrator {
     p2p_config: P2PConfig,
-    db: Arc<dyn P2pDb>,
-
-    /// External P2P Request Events received from different Fuel Components
-    rx_p2p_request: Receiver<P2pRequestEvent>,
-    /// Internal Orchestrator Requests generated either from the enclosing `NetworkService`
-    /// or from the `NetworkOrchestrator` itself
+    db: Arc<dyn Database>,
+    /// Receive internal Orchestrator Requests
     rx_orchestrator_request: Receiver<OrchestratorRequest>,
-
-    // Broadcasters
-    // Broadcast different p2p events to external Fuel Components
-    tx_consensus: Sender<ConsensusGossipData>,
-    tx_transaction: broadcast::Sender<TransactionGossipData>,
-    tx_block: Sender<BlockGossipData>,
-
     /// Generate internal Orchestrator Requests
     tx_orchestrator_request: Sender<OrchestratorRequest>,
 }
@@ -87,23 +71,23 @@ struct NetworkOrchestrator {
 enum OrchestratorRequest {
     Stop,
     GetPeersIds(oneshot::Sender<Vec<PeerId>>),
+    BroadcastTransaction(
+        (
+            Arc<Transaction>,
+            oneshot::Sender<Result<MessageId, PublishError>>,
+        ),
+    ),
     RespondWithRequestedBlock((Option<Arc<SealedFuelBlock>>, RequestId)),
 }
 
 impl NetworkOrchestrator {
     fn new(
         p2p_config: P2PConfig,
-        db: Arc<dyn P2pDb>,
-
-        rx_p2p_request: Receiver<P2pRequestEvent>,
+        db: Arc<dyn Database>,
         orchestrator_request_channels: (
             Receiver<OrchestratorRequest>,
             Sender<OrchestratorRequest>,
         ),
-
-        tx_consensus: Sender<ConsensusGossipData>,
-        tx_transaction: broadcast::Sender<TransactionGossipData>,
-        tx_block: Sender<BlockGossipData>,
     ) -> Self {
         let (rx_orchestrator_request, tx_orchestrator_request) =
             orchestrator_request_channels;
@@ -111,11 +95,7 @@ impl NetworkOrchestrator {
         Self {
             p2p_config,
             db,
-            rx_p2p_request,
             rx_orchestrator_request,
-            tx_block,
-            tx_consensus,
-            tx_transaction,
             tx_orchestrator_request,
         }
     }
@@ -134,6 +114,10 @@ impl NetworkOrchestrator {
                         Some(OrchestratorRequest::GetPeersIds(channel)) => {
                             let _ = channel.send(p2p_service.get_peers_ids());
                         }
+                        Some(OrchestratorRequest::BroadcastTransaction((transaction, sender))) => {
+                            let broadcast = GossipsubBroadcastRequest::NewTx(transaction);
+                            let _ = sender.send(p2p_service.publish_message(broadcast));
+                        }
                         Some(OrchestratorRequest::RespondWithRequestedBlock((response, request_id))) => {
                             let _ = p2p_service.send_response_msg(request_id, response.map(OutboundResponse::ResponseBlock));
                         }
@@ -147,13 +131,13 @@ impl NetworkOrchestrator {
 
                             match message {
                                 GossipsubMessage::NewTx(tx) => {
-                                    let _ = self.tx_transaction.send(GossipData::new(TransactionBroadcast::NewTransaction(tx), peer_id, message_id));
+                                    //let _ = self.tx_transaction.send(GossipData::new(TransactionBroadcast::NewTransaction(tx), peer_id, message_id));
                                 },
                                 GossipsubMessage::NewBlock(block) => {
-                                    let _ = self.tx_block.send(GossipData::new(BlockBroadcast::NewBlock(block), peer_id, message_id));
+                                    //let _ = self.tx_block.send(GossipData::new(BlockBroadcast::NewBlock(block), peer_id, message_id));
                                 },
                                 GossipsubMessage::ConsensusVote(vote) => {
-                                    let _ = self.tx_consensus.send(GossipData::new(ConsensusBroadcast::NewVote(vote), peer_id, message_id));
+                                    //let _ = self.tx_consensus.send(GossipData::new(ConsensusBroadcast::NewVote(vote), peer_id, message_id));
                                 },
                             }
                         },
@@ -173,35 +157,35 @@ impl NetworkOrchestrator {
                         _ => {}
                     }
                 },
-                module_request_msg = self.rx_p2p_request.recv() => {
-                    if let Some(request_event) = module_request_msg {
-                        match request_event {
-                            P2pRequestEvent::RequestBlock { height, response } => {
-                                let request_msg = RequestMessage::RequestBlock(height);
-                                let channel_item = ResponseChannelItem::ResponseBlock(response);
-                                let _ = p2p_service.send_request_msg(None, request_msg, channel_item);
-                            },
-                            P2pRequestEvent::BroadcastNewBlock { block } => {
-                                let broadcast = GossipsubBroadcastRequest::NewBlock(block);
-                                let _ = p2p_service.publish_message(broadcast);
-                            },
-                            P2pRequestEvent::BroadcastNewTransaction { transaction } => {
-                                let broadcast = GossipsubBroadcastRequest::NewTx(transaction);
-                                let _ = p2p_service.publish_message(broadcast);
-                            },
-                            P2pRequestEvent::BroadcastConsensusVote { vote } => {
-                                let broadcast = GossipsubBroadcastRequest::ConsensusVote(vote);
-                                let _ = p2p_service.publish_message(broadcast);
-                            },
-                            P2pRequestEvent::GossipsubMessageReport { message, acceptance } => {
-                                report_message(message, acceptance, &mut p2p_service);
-                            }
-                            P2pRequestEvent::Stop => break,
-                        }
-                    } else {
-                        warn!(target: "fuel-libp2p", "Failed to receive P2PRequestEvent");
-                    }
-                }
+                // module_request_msg = self.rx_p2p_request.recv() => {
+                //     if let Some(request_event) = module_request_msg {
+                //         match request_event {
+                //             P2pRequestEvent::RequestBlock { height, response } => {
+                //                 let request_msg = RequestMessage::RequestBlock(height);
+                //                 let channel_item = ResponseChannelItem::ResponseBlock(response);
+                //                 let _ = p2p_service.send_request_msg(None, request_msg, channel_item);
+                //             },
+                //             P2pRequestEvent::BroadcastNewBlock { block } => {
+                //                 let broadcast = GossipsubBroadcastRequest::NewBlock(block);
+                //                 let _ = p2p_service.publish_message(broadcast);
+                //             },
+                //             P2pRequestEvent::BroadcastNewTransaction { transaction } => {
+                //                 let broadcast = GossipsubBroadcastRequest::NewTx(transaction);
+                //                 let _ = p2p_service.publish_message(broadcast);
+                //             },
+                //             P2pRequestEvent::BroadcastConsensusVote { vote } => {
+                //                 let broadcast = GossipsubBroadcastRequest::ConsensusVote(vote);
+                //                 let _ = p2p_service.publish_message(broadcast);
+                //             },
+                //             P2pRequestEvent::GossipsubMessageReport { message, acceptance } => {
+                //                 report_message(message, acceptance, &mut p2p_service);
+                //             }
+                //             P2pRequestEvent::Stop => break,
+                //         }
+                //     } else {
+                //         warn!(target: "fuel-libp2p", "Failed to receive P2PRequestEvent");
+                //     }
+                // }
             }
         }
 
@@ -255,31 +239,41 @@ pub struct Service {
 }
 
 impl Service {
-    pub fn new(
-        p2p_config: P2PConfig,
-        db: Arc<dyn P2pDb>,
-        rx_p2p_request: Receiver<P2pRequestEvent>,
-        tx_consensus: Sender<ConsensusGossipData>,
-        tx_transaction: broadcast::Sender<TransactionGossipData>,
-        tx_block: Sender<BlockGossipData>,
-    ) -> Self {
+    pub fn new(p2p_config: P2PConfig, db: Arc<dyn Database>) -> Self {
         let (tx_orchestrator_request, rx_orchestrator_request) =
             tokio::sync::mpsc::channel(100);
 
         let network_orchestrator = NetworkOrchestrator::new(
             p2p_config,
             db,
-            rx_p2p_request,
             (rx_orchestrator_request, tx_orchestrator_request.clone()),
-            tx_consensus,
-            tx_transaction,
-            tx_block,
         );
 
         Self {
             join: Mutex::new(None),
             network_orchestrator: Arc::new(Mutex::new(Some(network_orchestrator))),
             tx_orchestrator_request,
+        }
+    }
+
+    pub async fn broadcast_transaction(
+        &self,
+        transaction: Arc<Transaction>,
+    ) -> anyhow::Result<()> {
+        let (sender, receiver) = oneshot::channel();
+
+        let _ = self
+            .tx_orchestrator_request
+            .send(OrchestratorRequest::BroadcastTransaction((
+                transaction,
+                sender,
+            )))
+            .await;
+
+        match receiver.await {
+            Err(e) => anyhow::Result::Err(anyhow!("{}", e)),
+            Ok(anyhow::Result::Ok(_)) => anyhow::Ok(()),
+            Ok(anyhow::Result::Err(e)) => anyhow::Result::Err(anyhow!("{}", e)),
         }
     }
 
@@ -352,7 +346,7 @@ pub mod tests {
     struct FakeDb;
 
     #[async_trait]
-    impl P2pDb for FakeDb {
+    impl Database for FakeDb {
         async fn get_sealed_block(
             &self,
             _height: BlockHeight,
@@ -371,21 +365,9 @@ pub mod tests {
     #[tokio::test]
     async fn start_stop_works() {
         let p2p_config = P2PConfig::default_initialized("start_stop_works");
-        let db: Arc<dyn P2pDb> = Arc::new(FakeDb);
+        let db: Arc<dyn Database> = Arc::new(FakeDb);
 
-        let (_, rx_request_event) = tokio::sync::mpsc::channel(100);
-        let (tx_consensus, _) = tokio::sync::mpsc::channel(100);
-        let (tx_transaction, _) = tokio::sync::broadcast::channel(100);
-        let (tx_block, _) = tokio::sync::mpsc::channel(100);
-
-        let service = Service::new(
-            p2p_config,
-            db.clone(),
-            rx_request_event,
-            tx_consensus,
-            tx_transaction,
-            tx_block,
-        );
+        let service = Service::new(p2p_config, db.clone());
 
         // Node with p2p service started
         assert!(service.start().await.is_ok());
