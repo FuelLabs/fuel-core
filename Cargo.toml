@@ -18,6 +18,8 @@ members = [
   "fuel-sync",
   "fuel-tests",
   "fuel-txpool",
+  "storage",
+  "types",
   "xtask",
 ]
 
