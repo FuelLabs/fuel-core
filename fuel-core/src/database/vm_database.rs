@@ -563,24 +563,39 @@ mod tests {
     }
 
     #[test_case(
-        &[], [0; 32], &[[1; 32]]
+        &[], key(0), &[[1; 32]]
         => (vec![[1; 32]], false)
         ; "insert single value over uninitialized range"
     )]
     #[test_case(
-        &[([0; 32], [0; 32])], [0; 32], &[[1; 32]]
+        &[(key(0), [0; 32])], key(0), &[[1; 32]]
         => (vec![[1; 32]], true)
         ; "insert single value over initialized range"
     )]
     #[test_case(
-        &[], [0; 32], &[[1; 32], [2; 32]]
+        &[], key(0), &[[1; 32], [2; 32]]
         => (vec![[1; 32], [2; 32]], false)
         ; "insert multiple slots over uninitialized range"
     )]
     #[test_case(
-        &[([0; 32], [0; 32]), (key(1), [0; 32])], [0; 32], &[[1; 32], [2; 32]]
-        => (vec![[1; 32], [2; 32]], true)
+        &[(key(0), [0; 32]), (key(1), [0; 32]), (key(2), [0; 32])], key(0), &[[1; 32], [2; 32], [3; 32]]
+        => (vec![[1; 32], [2; 32], [3; 32]], true)
         ; "insert multiple slots over initialized range"
+    )]
+    #[test_case(
+        &[(key(1), [0; 32]), (key(2), [0; 32])], key(0), &[[1; 32], [2; 32], [3; 32]]
+        => (vec![[1; 32], [2; 32], [3; 32]], false)
+        ; "insert multiple slots over uninitialized start of the range"
+    )]
+    #[test_case(
+        &[(key(0), [0; 32]), (key(2), [0; 32])], key(0), &[[1; 32], [2; 32], [3; 32]]
+        => (vec![[1; 32], [2; 32], [3; 32]], false)
+        ; "insert multiple slots over uninitialized middle of the range"
+    )]
+    #[test_case(
+        &[(key(0), [0; 32]), (key(1), [0; 32])], key(0), &[[1; 32], [2; 32], [3; 32]]
+        => (vec![[1; 32], [2; 32], [3; 32]], false)
+        ; "insert multiple slots over uninitialized end of the range"
     )]
     fn insert_range(
         prefilled_slots: &[([u8; 32], [u8; 32])],
@@ -631,253 +646,6 @@ mod tests {
             .collect();
 
         (results, insert_status)
-    }
-
-    #[test]
-    fn insert_range_partially_unset_start() {
-        let mut db = VmDatabase::default();
-        let read_db = db.clone();
-
-        let contract_id = ContractId::new([0u8; 32]);
-        let zero_bytes32 = Bytes32::new([0u8; 32]);
-        let value_0 = Bytes32::new([0u8; 32]);
-        let value_1 = Bytes32::new([1u8; 32]);
-        let value_2 = Bytes32::new([2u8; 32]);
-        let value_3 = Bytes32::new([3u8; 32]);
-
-        let key_1 = key(1);
-        let key_2 = key(2);
-
-        let _insert_status_1 = db
-            .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value_0)
-            .unwrap();
-        let _insert_status_2 = db
-            .merkle_contract_state_insert(&contract_id, &Bytes32::new(key_2), &value_0)
-            .unwrap();
-
-        let pre_insert_read_0 = read_db
-            .merkle_contract_state(&contract_id, &zero_bytes32)
-            .unwrap();
-        let pre_insert_read_1 = read_db
-            .merkle_contract_state(&contract_id, &Bytes32::new(key_1))
-            .unwrap();
-        let pre_insert_read_2 = read_db
-            .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
-            .unwrap();
-
-        let insert_status = db
-            .merkle_contract_state_insert_range(
-                &contract_id,
-                &zero_bytes32,
-                &[value_1, value_2, value_3],
-            )
-            .unwrap();
-
-        let read_0 = read_db
-            .merkle_contract_state(&contract_id, &zero_bytes32)
-            .unwrap();
-        let read_1 = read_db
-            .merkle_contract_state(&contract_id, &Bytes32::new(key_1))
-            .unwrap();
-        let read_2 = read_db
-            .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
-            .unwrap();
-
-        assert!(pre_insert_read_0.is_none());
-        assert!(pre_insert_read_1.is_some());
-        assert!(pre_insert_read_2.is_some());
-        assert!(insert_status.is_none());
-        assert!(read_0.is_some());
-        assert_eq!(read_0.unwrap().as_ref(), &value_1);
-        assert!(read_1.is_some());
-        assert_eq!(read_1.unwrap().as_ref(), &value_2);
-        assert!(read_2.is_some());
-        assert_eq!(read_2.unwrap().as_ref(), &value_3);
-    }
-
-    #[test]
-    fn insert_range_partially_unset_middle() {
-        let mut db = VmDatabase::default();
-        let read_db = db.clone();
-
-        let contract_id = ContractId::new([0u8; 32]);
-        let zero_bytes32 = Bytes32::new([0u8; 32]);
-        let value_1 = Bytes32::new([1u8; 32]);
-        let value_2 = Bytes32::new([2u8; 32]);
-        let value_3 = Bytes32::new([3u8; 32]);
-
-        let key_1 = key(1);
-        let key_2 = key(2);
-
-        db.merkle_contract_state_insert(&contract_id, &zero_bytes32, &zero_bytes32)
-            .unwrap();
-        db.merkle_contract_state_insert(
-            &contract_id,
-            &Bytes32::new(key_2),
-            &zero_bytes32,
-        )
-        .unwrap();
-
-        let pre_insert_read_0 = read_db
-            .merkle_contract_state(&contract_id, &zero_bytes32)
-            .unwrap();
-        let pre_insert_read_1 = read_db
-            .merkle_contract_state(&contract_id, &Bytes32::new(key_1))
-            .unwrap();
-        let pre_insert_read_2 = read_db
-            .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
-            .unwrap();
-
-        let insert_status = db
-            .merkle_contract_state_insert_range(
-                &contract_id,
-                &zero_bytes32,
-                &[value_1, value_2, value_3],
-            )
-            .unwrap();
-
-        let read_0 = read_db
-            .merkle_contract_state(&contract_id, &zero_bytes32)
-            .unwrap();
-        let read_1 = read_db
-            .merkle_contract_state(&contract_id, &Bytes32::new(key_1))
-            .unwrap();
-        let read_2 = read_db
-            .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
-            .unwrap();
-
-        assert!(pre_insert_read_0.is_some());
-        assert!(pre_insert_read_1.is_none());
-        assert!(pre_insert_read_2.is_some());
-        assert!(insert_status.is_none());
-        assert!(read_0.is_some());
-        assert_eq!(read_0.unwrap().as_ref(), &value_1);
-        assert!(read_1.is_some());
-        assert_eq!(read_1.unwrap().as_ref(), &value_2);
-        assert!(read_2.is_some());
-        assert_eq!(read_2.unwrap().as_ref(), &value_3);
-    }
-
-    #[test]
-    fn insert_range_partially_unset_end() {
-        let mut db = VmDatabase::default();
-        let read_db = db.clone();
-
-        let contract_id = ContractId::new([0u8; 32]);
-        let zero_bytes32 = Bytes32::new([0u8; 32]);
-        let value_0 = Bytes32::new([0u8; 32]);
-        let value_1 = Bytes32::new([1u8; 32]);
-        let value_2 = Bytes32::new([2u8; 32]);
-        let value_3 = Bytes32::new([3u8; 32]);
-
-        let key_1 = key(1);
-        let key_2 = key(2);
-
-        db.merkle_contract_state_insert(&contract_id, &zero_bytes32, &value_0)
-            .unwrap();
-        db.merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value_0)
-            .unwrap();
-
-        let pre_insert_read_0 = read_db
-            .merkle_contract_state(&contract_id, &zero_bytes32)
-            .unwrap();
-        let pre_insert_read_1 = read_db
-            .merkle_contract_state(&contract_id, &Bytes32::new(key_1))
-            .unwrap();
-        let pre_insert_read_2 = read_db
-            .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
-            .unwrap();
-
-        let insert_status = db
-            .merkle_contract_state_insert_range(
-                &contract_id,
-                &zero_bytes32,
-                &[value_1, value_2, value_3],
-            )
-            .unwrap();
-
-        let read_0 = read_db
-            .merkle_contract_state(&contract_id, &zero_bytes32)
-            .unwrap();
-        let read_1 = read_db
-            .merkle_contract_state(&contract_id, &Bytes32::new(key_1))
-            .unwrap();
-        let read_2 = read_db
-            .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
-            .unwrap();
-
-        assert!(pre_insert_read_0.is_some());
-        assert!(pre_insert_read_1.is_some());
-        assert!(pre_insert_read_2.is_none());
-        assert!(insert_status.is_none());
-        assert!(read_0.is_some());
-        assert_eq!(read_0.unwrap().as_ref(), &value_1);
-        assert!(read_1.is_some());
-        assert_eq!(read_1.unwrap().as_ref(), &value_2);
-        assert!(read_2.is_some());
-        assert_eq!(read_2.unwrap().as_ref(), &value_3);
-    }
-
-    #[test]
-    fn insert_range_fully_set() {
-        let mut db = VmDatabase::default();
-        let read_db = db.clone();
-
-        let contract_id = ContractId::new([0u8; 32]);
-        let zero_bytes32 = Bytes32::new([0u8; 32]);
-        let value_0 = Bytes32::new([0u8; 32]);
-        let value_1 = Bytes32::new([1u8; 32]);
-        let value_2 = Bytes32::new([2u8; 32]);
-        let value_3 = Bytes32::new([3u8; 32]);
-
-        let key_1 = key(1);
-        let key_2 = key(2);
-
-        db.merkle_contract_state_insert(&contract_id, &zero_bytes32, &value_0)
-            .unwrap();
-        db.merkle_contract_state_insert(&contract_id, &Bytes32::new(key_1), &value_0)
-            .unwrap();
-        db.merkle_contract_state_insert(&contract_id, &Bytes32::new(key_2), &value_0)
-            .unwrap();
-
-        let pre_insert_read_0 = read_db
-            .merkle_contract_state(&contract_id, &zero_bytes32)
-            .unwrap();
-        let pre_insert_read_1 = read_db
-            .merkle_contract_state(&contract_id, &Bytes32::new(key_1))
-            .unwrap();
-        let pre_insert_read_2 = read_db
-            .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
-            .unwrap();
-
-        let insert_status = db
-            .merkle_contract_state_insert_range(
-                &contract_id,
-                &zero_bytes32,
-                &[value_1, value_2, value_3],
-            )
-            .unwrap();
-
-        let read_0 = read_db
-            .merkle_contract_state(&contract_id, &zero_bytes32)
-            .unwrap();
-        let read_1 = read_db
-            .merkle_contract_state(&contract_id, &Bytes32::new(key_1))
-            .unwrap();
-        let read_2 = read_db
-            .merkle_contract_state(&contract_id, &Bytes32::new(key_2))
-            .unwrap();
-
-        assert!(pre_insert_read_0.is_some());
-        assert!(pre_insert_read_1.is_some());
-        assert!(pre_insert_read_2.is_some());
-        assert!(insert_status.is_some());
-        assert!(read_0.is_some());
-        assert_eq!(read_0.unwrap().as_ref(), &value_1);
-        assert!(read_1.is_some());
-        assert_eq!(read_1.unwrap().as_ref(), &value_2);
-        assert!(read_2.is_some());
-        assert_eq!(read_2.unwrap().as_ref(), &value_3);
     }
 
     #[test]
