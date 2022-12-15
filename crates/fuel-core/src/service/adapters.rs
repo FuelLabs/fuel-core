@@ -30,7 +30,7 @@ use fuel_core_txpool::{self,};
 use std::sync::Arc;
 
 #[cfg(feature = "p2p")]
-use fuel_p2p::orchestrator::Service as P2pService;
+use fuel_core_p2p::orchestrator::Service as P2pService;
 
 pub struct ExecutorAdapter {
     pub database: Database,
@@ -123,7 +123,7 @@ struct P2pAdapter {
 }
 
 #[async_trait::async_trait]
-impl fuel_txpool::ports::PeerToPeer for P2pAdapter {
+impl fuel_core_txpool::ports::PeerToPeer for P2pAdapter {
     type GossipedTransaction = TransactionGossipData;
 
     async fn broadcast_transaction(
@@ -140,7 +140,7 @@ impl fuel_txpool::ports::PeerToPeer for P2pAdapter {
     fn notify_gossip_transaction_validity(
         &self,
         message: &Self::GossipedTransaction,
-        validity: fuel_txpool::ports::GossipValidity,
+        validity: fuel_core_txpool::ports::GossipValidity,
     ) {
         todo!()
     }

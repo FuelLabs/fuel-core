@@ -120,7 +120,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     let (p2p_request_event_sender, mut p2p_request_event_receiver) = mpsc::channel(100);
 
     #[cfg(feature = "p2p")]
-    let network_service: fuel_p2p::orchestrator::Service = todo!();
+    let network_service: fuel_core_p2p::orchestrator::Service = todo!();
     // {
     //     let p2p_db: Arc<dyn P2pDb> = Arc::new(database.clone());
     //     let (tx_consensus, _) = mpsc::channel(100);
