@@ -26,11 +26,11 @@ harness = true
 [dependencies]
 async-std = "1.12"
 ethers = "1.0.2"
-fuel-core-producer = { path = "../crates/services/producer", default-features = false }
 fuel-core = { path = "../crates/fuel-core", default-features = false }
-fuel-core-interfaces = { path = "../crates/fuel-core-interfaces", features = ["test-helpers"] }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
+fuel-core-interfaces = { path = "../crates/fuel-core-interfaces", features = ["test-helpers"] }
 fuel-core-poa = { path = "../crates/services/consensus_module/poa" }
+fuel-core-producer = { path = "../crates/services/producer", default-features = false }
 fuel-core-relayer = { path = "../crates/services/relayer", features = ["test-helpers"] }
 fuel-core-txpool = { path = "../crates/services/txpool" }
 futures = "0.3"

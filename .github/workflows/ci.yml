@@ -43,10 +43,10 @@ jobs:
       - name: Install Cargo.toml linter
         uses: baptiste0928/cargo-install@v1
         with:
-          crate: cargo-toml-lint
-          version: '0.1'
-      - name: Run Cargo.toml linter
-        run: git ls-files | grep Cargo.toml$ | xargs --verbose -n 1 cargo-toml-lint
+          crate: cargo-sort
+          version: '1.0.9'
+      - name: Run Cargo.toml sort check
+        run: cargo sort -w --check
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v2
         if: always() && github.ref == 'refs/heads/master'

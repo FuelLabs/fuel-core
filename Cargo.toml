@@ -2,23 +2,23 @@
 # Use the new resolver to prevent dev-deps and build-deps from enabling debugging or test features in production.
 resolver = "2"
 members = [
+  "benches",
   "crates/chain-config",
   "crates/client",
   "crates/fuel-core",
   "crates/fuel-core-interfaces",
   "crates/metrics",
+  "crates/services/consensus_module/bft",
+  "crates/services/consensus_module/poa",
   "crates/services/executor",
   "crates/services/importer",
-  "crates/services/producer",
   "crates/services/p2p",
+  "crates/services/producer",
   "crates/services/relayer",
   "crates/services/sync",
   "crates/services/txpool",
-  "crates/services/consensus_module/bft",
-  "crates/services/consensus_module/poa",
   "crates/storage",
   "crates/types",
-  "benches",
   "tests",
   "xtask",
 ]
