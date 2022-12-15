@@ -15,6 +15,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_VERSION: 1.65.0
   RUSTFLAGS: -D warnings
   REGISTRY: ghcr.io
 
@@ -26,7 +27,7 @@ jobs:
       - name: Install latest nightly
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-${{ env.RUST_VERSION }}
           override: true
           components: rustfmt
 
@@ -39,7 +40,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: stable-${{ env.RUST_VERSION }}
       - name: Install Cargo.toml linter
         uses: baptiste0928/cargo-install@v1
         with:
@@ -107,7 +108,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: stable-${{ env.RUST_VERSION }}
       - name: Install Cargo Make
         uses: davidB/rust-cargo-make@v1
         with:
@@ -152,7 +153,7 @@ jobs:
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: stable-${{ env.RUST_VERSION }}
           override: true
 
       - name: Install Protoc
@@ -314,7 +315,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: stable-1.65
           target: ${{ matrix.job.target }}
           override: true
 
