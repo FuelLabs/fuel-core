@@ -5,7 +5,10 @@ use super::scalars::{
 use crate::{
     database::Database,
     executor::Executor,
-    model::FuelBlockDb,
+    model::{
+        BlockHeight,
+        FuelBlockDb,
+    },
     schema::{
         scalars::{
             BlockId,
@@ -20,7 +23,9 @@ use crate::{
 use anyhow::anyhow;
 use async_graphql::{
     connection::{
+        query,
         Connection,
+        Edge,
         EmptyFields,
     },
     Context,
@@ -58,7 +63,10 @@ use fuel_core_interfaces::{
 };
 use fuel_poa_coordinator::service::seal_block;
 use itertools::Itertools;
-use std::convert::TryInto;
+use std::{
+    borrow::Cow,
+    convert::TryInto,
+};
 
 pub struct Block {
     pub(crate) header: Header,
@@ -239,10 +247,17 @@ impl BlockQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<usize, Block, EmptyFields, EmptyFields>> {
-        let db = ctx.data_unchecked::<Database>();
-        crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            blocks_query(db, *start, direction)
-        })
+        let db = ctx.data_unchecked::<Database>().clone();
+
+        query(
+            after,
+            before,
+            first,
+            last,
+            |after: Option<usize>, before: Option<usize>, first, last| async move {
+                blocks_query(db, first, after, last, before)
+            },
+        )
         .await
     }
 }
@@ -272,40 +287,98 @@ impl HeaderQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<usize, Header, EmptyFields, EmptyFields>> {
-        let db = ctx.data_unchecked::<Database>();
-        crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            blocks_query(db, *start, direction)
-        })
+        let db = ctx.data_unchecked::<Database>().clone();
+
+        query(
+            after,
+            before,
+            first,
+            last,
+            |after: Option<usize>, before: Option<usize>, first, last| async move {
+                blocks_query(db, first, after, last, before)
+            },
+        )
         .await
     }
 }
 
 fn blocks_query<T>(
-    db: &Database,
-    start: Option<usize>,
-    direction: IterDirection,
-) -> anyhow::Result<impl Iterator<Item = anyhow::Result<(usize, T)>> + '_>
+    db: Database,
+    first: Option<usize>,
+    after: Option<usize>,
+    last: Option<usize>,
+    before: Option<usize>,
+) -> anyhow::Result<Connection<usize, T, EmptyFields, EmptyFields>>
 where
     T: async_graphql::OutputType,
     T: From<FuelBlockDb>,
 {
-    let blocks: Vec<_> = db
-        .all_block_ids(start.map(Into::into), Some(direction))
+    let (records_to_fetch, direction) = if let Some(first) = first {
+        (first, IterDirection::Forward)
+    } else if let Some(last) = last {
+        (last, IterDirection::Reverse)
+    } else {
+        (0, IterDirection::Forward)
+    };
+
+    if (first.is_some() && before.is_some())
+        || (after.is_some() && before.is_some())
+        || (last.is_some() && after.is_some())
+    {
+        return Err(anyhow!("Wrong argument combination"))
+    }
+
+    let start;
+    let end;
+
+    if direction == IterDirection::Forward {
+        start = after;
+        end = before;
+    } else {
+        start = before;
+        end = after;
+    }
+
+    let mut blocks = db.all_block_ids(start.map(Into::into), Some(direction));
+    let mut started = None;
+    if start.is_some() {
+        // skip initial result
+        started = blocks.next();
+    }
+
+    // take desired amount of results
+    let blocks = blocks
+        .take_while(|r| {
+            if let (Ok(b), Some(end)) = (r, end) {
+                if b.0.as_usize() == end {
+                    return false
+                }
+            }
+            true
+        })
+        .take(records_to_fetch);
+    let blocks: Vec<(BlockHeight, fuel_types::Bytes32)> = blocks.try_collect()?;
+
+    // TODO: do a batch get instead
+    let blocks: Vec<Cow<FuelBlockDb>> = blocks
+        .iter()
+        .map(|(_, id)| {
+            db.storage::<FuelBlocks>()
+                .get(id)
+                .transpose()
+                .ok_or(not_found!(FuelBlocks))?
+        })
         .try_collect()?;
-    let blocks = blocks.into_iter().map(move |(height, id)| {
-        let value = db
-            .storage::<FuelBlocks>()
-            .get(&id)
-            .transpose()
-            .ok_or(not_found!(FuelBlocks))??
-            .into_owned();
 
-        Ok((height.to_usize(), value.into()))
-    });
+    let mut connection =
+        Connection::new(started.is_some(), records_to_fetch <= blocks.len());
 
-    Ok(blocks)
+    connection.edges.extend(blocks.into_iter().map(|item| {
+        Edge::new(item.header.height().to_usize(), T::from(item.into_owned()))
+    }));
+
+    Ok::<Connection<usize, T>, anyhow::Error>(connection)
 }
-
 #[derive(Default)]
 pub struct BlockMutation;
 

@@ -12,10 +12,14 @@ use super::{
 use crate::{
     database::Database,
     query::MessageProofData,
+    state::IterDirection,
 };
+use anyhow::anyhow;
 use async_graphql::{
     connection::{
+        self,
         Connection,
+        Edge,
         EmptyFields,
     },
     Context,
@@ -25,6 +29,7 @@ use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsRef,
         fuel_tx,
+        fuel_types,
     },
     db::{
         FuelBlocks,
@@ -97,44 +102,99 @@ impl MessageQuery {
     ) -> async_graphql::Result<Connection<MessageId, Message, EmptyFields, EmptyFields>>
     {
         let db = ctx.data_unchecked::<Database>().clone();
-        crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            let start = *start;
-            // TODO: Avoid the `collect_vec`.
-            let messages = if let Some(owner) = owner {
-                let message_ids: Vec<_> = db
-                    .owned_message_ids(&owner.0, start.map(Into::into), Some(direction))
-                    .try_collect()?;
 
-                let messages = message_ids
-                    .into_iter()
-                    .map(|msg_id| {
-                        let message = db
-                            .storage::<Messages>()
-                            .get(&msg_id)
-                            .transpose()
-                            .ok_or(not_found!(Messages))??
-                            .into_owned();
+        connection::query(
+            after,
+            before,
+            first,
+            last,
+            |after: Option<MessageId>, before: Option<MessageId>, first, last| {
+                async move {
+                    let (records_to_fetch, direction) = if let Some(first) = first {
+                        (first, IterDirection::Forward)
+                    } else if let Some(last) = last {
+                        (last, IterDirection::Reverse)
+                    } else {
+                        (0, IterDirection::Forward)
+                    };
 
-                        Ok((msg_id.into(), message.into()))
-                    })
-                    .collect_vec()
-                    .into_iter();
-                Ok::<_, anyhow::Error>(messages)
-            } else {
-                let messages = db
-                    .all_messages(start.map(Into::into), Some(direction))
-                    .map(|result| {
-                        result
-                            .map(|message| (message.id().into(), message.into()))
-                            .map_err(Into::into)
-                    })
-                    .collect_vec()
-                    .into_iter();
-                Ok(messages)
-            }?;
+                    if (first.is_some() && before.is_some())
+                        || (after.is_some() && before.is_some())
+                        || (last.is_some() && after.is_some())
+                    {
+                        return Err(anyhow!("Wrong argument combination"))
+                    }
 
-            Ok(messages)
-        })
+                    let start = if direction == IterDirection::Forward {
+                        after
+                    } else {
+                        before
+                    };
+
+                    let (mut messages, has_next_page, has_previous_page) =
+                        if let Some(owner) = owner {
+                            let mut message_ids = db.owned_message_ids(
+                                &owner.0,
+                                start.map(Into::into),
+                                Some(direction),
+                            );
+                            let mut started = None;
+                            if start.is_some() {
+                                // skip initial result
+                                started = message_ids.next();
+                            }
+                            let message_ids = message_ids.take(records_to_fetch + 1);
+                            let message_ids: Vec<fuel_types::MessageId> =
+                                message_ids.try_collect()?;
+                            let has_next_page = message_ids.len() > records_to_fetch;
+
+                            let messages: Vec<model::Message> = message_ids
+                                .iter()
+                                .take(records_to_fetch)
+                                .map(|msg_id| {
+                                    db.storage::<Messages>()
+                                        .get(msg_id)
+                                        .transpose()
+                                        .ok_or(not_found!(Messages))?
+                                        .map(|f| f.into_owned())
+                                })
+                                .try_collect()?;
+                            (messages, has_next_page, started.is_some())
+                        } else {
+                            let mut messages =
+                                db.all_messages(start.map(Into::into), Some(direction));
+                            let mut started = None;
+                            if start.is_some() {
+                                // skip initial result
+                                started = messages.next();
+                            }
+                            let messages: Vec<model::Message> =
+                                messages.take(records_to_fetch + 1).try_collect()?;
+                            let has_next_page = messages.len() > records_to_fetch;
+                            let messages =
+                                messages.into_iter().take(records_to_fetch).collect();
+                            (messages, has_next_page, started.is_some())
+                        };
+
+                    // reverse after filtering next page test record to maintain consistent ordering
+                    // in the response regardless of whether first or last was used.
+                    if direction == IterDirection::Forward {
+                        messages.reverse();
+                    }
+
+                    let mut connection =
+                        Connection::new(has_previous_page, has_next_page);
+
+                    connection.edges.extend(
+                        messages.into_iter().map(|message| {
+                            Edge::new(message.id().into(), Message(message))
+                        }),
+                    );
+
+                    Ok::<Connection<MessageId, Message>, anyhow::Error>(connection)
+                }
+            },
+        )
         .await
     }
 
@@ -271,11 +331,5 @@ impl MessageProofData for MessageProofContext<'_> {
             .storage::<FuelBlocks>()
             .get(block_id)?
             .map(Cow::into_owned))
-    }
-}
-
-impl From<model::Message> for Message {
-    fn from(message: model::Message) -> Self {
-        Message(message)
     }
 }

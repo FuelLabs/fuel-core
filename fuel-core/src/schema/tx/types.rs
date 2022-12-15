@@ -522,9 +522,3 @@ pub(super) async fn get_tx_status(
         }
     }
 }
-
-impl From<fuel_tx::Transaction> for Transaction {
-    fn from(tx: fuel_tx::Transaction) -> Self {
-        Transaction(tx)
-    }
-}
