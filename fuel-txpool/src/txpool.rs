@@ -289,7 +289,7 @@ impl TxPool {
                 }
             }
         }
-        let mut list: Vec<ArcPoolTx> = seen.into_iter().map(|(_, tx)| tx).collect();
+        let mut list: Vec<_> = seen.into_values().collect();
         // sort from high to low price
         list.sort_by_key(|tx| Reverse(tx.price()));
 

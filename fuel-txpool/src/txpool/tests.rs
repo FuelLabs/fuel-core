@@ -37,10 +37,7 @@ use fuel_core_interfaces::{
         Coins,
         Messages,
     },
-    model::{
-        ArcPoolTx,
-        CoinStatus,
-    },
+    model::CoinStatus,
 };
 use std::{
     cmp::Reverse,
@@ -767,7 +764,7 @@ async fn find_dependent_tx1_tx2() {
         .dependency()
         .find_dependent(tx3_result.inserted, &mut seen, txpool.txs());
 
-    let mut list: Vec<ArcPoolTx> = seen.into_iter().map(|(_, tx)| tx).collect();
+    let mut list: Vec<_> = seen.into_values().collect();
     // sort from high to low price
     list.sort_by_key(|tx| Reverse(tx.price()));
     assert_eq!(list.len(), 3, "We should have three items");

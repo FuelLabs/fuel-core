@@ -35,7 +35,7 @@ impl TestContext {
     pub async fn new() -> Self {
         let rng = RefCell::new(StdRng::seed_from_u64(0));
         let config = Config::default();
-        let mock_db = Box::new(MockDb::default());
+        let mock_db = Box::<MockDb>::default();
         let (block_tx, block_rx) = broadcast::channel(10);
         let (p2p_request_tx, p2p_request_rx) = mpsc::channel(100);
         let (gossip_tx, gossip_rx) = broadcast::channel(100);
