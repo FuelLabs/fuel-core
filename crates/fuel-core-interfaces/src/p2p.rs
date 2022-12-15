@@ -1,13 +1,13 @@
-use super::model::{
-    BlockHeight,
-    FuelBlock,
-    SealedFuelBlock,
-};
-use crate::{
-    common::fuel_tx::Transaction,
-    model::ConsensusVote,
-};
 use async_trait::async_trait;
+use fuel_core_types::{
+    blockchain::{
+        block::Block,
+        consensus::ConsensusVote,
+        primitives::BlockHeight,
+        SealedBlock,
+    },
+    fuel_tx::Transaction,
+};
 use std::{
     fmt::Debug,
     sync::Arc,
@@ -27,7 +27,7 @@ pub enum ConsensusBroadcast {
 #[derive(Debug, Clone)]
 pub enum BlockBroadcast {
     /// fuel block without consensus data
-    NewBlock(FuelBlock),
+    NewBlock(Block),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
@@ -57,13 +57,13 @@ impl<T> From<&GossipData<T>> for GossipsubMessageInfo {
 pub enum P2pRequestEvent {
     RequestBlock {
         height: BlockHeight,
-        response: oneshot::Sender<SealedFuelBlock>,
+        response: oneshot::Sender<SealedBlock>,
     },
     BroadcastNewTransaction {
         transaction: Arc<Transaction>,
     },
     BroadcastNewBlock {
-        block: Arc<FuelBlock>,
+        block: Arc<Block>,
     },
     BroadcastConsensusVote {
         vote: Arc<ConsensusVote>,
@@ -112,6 +112,5 @@ impl<T: Debug + Send + 'static> NetworkData<T> for GossipData<T> {
 
 #[async_trait]
 pub trait P2pDb: Send + Sync {
-    async fn get_sealed_block(&self, height: BlockHeight)
-        -> Option<Arc<SealedFuelBlock>>;
+    async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedBlock>>;
 }

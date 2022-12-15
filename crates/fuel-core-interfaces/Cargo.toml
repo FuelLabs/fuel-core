@@ -14,6 +14,8 @@ description = "Fuel core interfaces"
 anyhow = "1.0"
 async-trait = "0.1"
 derive_more = { version = "0.99" }
+fuel-core-storage = { version = "0.15.1", path = "../storage" }
+fuel-core-types = { version = "0.15.1", path = "../types" }
 fuel-vm = { version = "0.22", default-features = false, features = ["random"] }
 lazy_static = "1.4"
 parking_lot = "0.12"

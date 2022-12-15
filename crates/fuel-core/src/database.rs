@@ -16,21 +16,6 @@ use fuel_core_chain_config::{
 use fuel_core_executor::refs::ContractStorageTrait;
 pub use fuel_core_interfaces::db::KvStoreError;
 use fuel_core_interfaces::{
-    common::fuel_storage::{
-        StorageAsMut,
-        StorageAsRef,
-    },
-    db::{
-        FuelBlocks,
-        SealedBlockConsensus,
-    },
-    model::{
-        BlockHeight,
-        BlockId,
-        FuelBlockConsensus,
-        FuelBlockDb,
-        SealedFuelBlock,
-    },
     not_found,
     p2p::P2pDb,
     relayer::RelayerDb,
@@ -38,6 +23,23 @@ use fuel_core_interfaces::{
 };
 use fuel_core_poa::ports::BlockDb;
 use fuel_core_producer::ports::BlockProducerDatabase;
+use fuel_core_storage::{
+    tables::{
+        FuelBlocks,
+        SealedBlockConsensus,
+    },
+    StorageAsMut,
+    StorageAsRef,
+};
+use fuel_core_types::blockchain::{
+    block::CompressedBlock,
+    consensus::Consensus,
+    primitives::{
+        BlockHeight,
+        BlockId,
+    },
+    SealedBlock,
+};
 use serde::{
     de::DeserializeOwned,
     Serialize,
@@ -311,7 +313,7 @@ impl BlockDb for Database {
     fn seal_block(
         &mut self,
         block_id: BlockId,
-        consensus: FuelBlockConsensus,
+        consensus: Consensus,
     ) -> anyhow::Result<()> {
         self.storage::<SealedBlockConsensus>()
             .insert(&block_id.into(), &consensus)

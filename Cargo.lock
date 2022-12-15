@@ -2308,8 +2308,10 @@ dependencies = [
  "fuel-core-poa",
  "fuel-core-producer",
  "fuel-core-relayer",
+ "fuel-core-storage",
  "fuel-core-sync",
  "fuel-core-txpool",
+ "fuel-core-types",
  "futures",
  "hex",
  "insta",
@@ -2429,6 +2431,8 @@ dependencies = [
  "anyhow",
  "async-trait",
  "derive_more",
+ "fuel-core-storage",
+ "fuel-core-types",
  "fuel-vm",
  "lazy_static",
  "parking_lot 0.12.1",
@@ -2622,8 +2626,10 @@ dependencies = [
  "anyhow",
  "derive_more",
  "fuel-vm",
+ "secrecy",
  "serde",
  "tai64",
+ "zeroize",
 ]
 
 [[package]]

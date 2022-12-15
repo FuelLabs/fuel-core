@@ -1,33 +1,33 @@
-use crate::{
-    common::{
-        fuel_tx::{
-            CheckError,
-            TxId,
-            UtxoId,
+use crate::db::KvStoreError;
+use fuel_core_types::{
+    blockchain::{
+        block::{
+            Block,
+            PartialFuelBlock,
         },
-        fuel_types::{
-            Bytes32,
-            ContractId,
-            MessageId,
-        },
-        fuel_vm::backtrace::Backtrace,
+        primitives::BlockId,
     },
-    db::KvStoreError,
-    model::{
-        BlockId,
-        FuelBlock,
-        PartialFuelBlock,
+    fuel_tx::{
+        CheckError,
+        Transaction,
+        TxId,
+        UtxoId,
     },
-    txpool::TransactionStatus,
+    fuel_types::{
+        Bytes32,
+        ContractId,
+        MessageId,
+    },
+    fuel_vm::Backtrace,
+    services::txpool::TransactionStatus,
 };
-use fuel_vm::fuel_tx::Transaction;
 use std::error::Error as StdError;
 use thiserror::Error;
 
 /// Starting point for executing a block.
 /// Production starts with a [`PartialFuelBlock`].
 /// Validation starts with a full [`FuelBlock`].
-pub type ExecutionBlock = ExecutionTypes<PartialFuelBlock, FuelBlock>;
+pub type ExecutionBlock = ExecutionTypes<PartialFuelBlock, Block>;
 
 /// Execution wrapper with only a single type.
 pub type ExecutionType<T> = ExecutionTypes<T, T>;
@@ -46,7 +46,7 @@ pub enum ExecutionTypes<P, V> {
 #[derive(Debug)]
 pub struct ExecutionResult {
     /// Created block during the execution of transactions. It contains only valid transactions.
-    pub block: FuelBlock,
+    pub block: Block,
     /// The list of skipped transactions with corresponding errors. Those transactions were
     /// not included in the block and didn't affect the state of the blockchain.
     pub skipped_transactions: Vec<(Transaction, Error)>,

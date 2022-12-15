@@ -41,8 +41,10 @@ fuel-core-p2p = { path = "../services/p2p", version = "0.15.1", optional = true 
 fuel-core-poa = { path = "../services/consensus_module/poa", version = "0.15.1" }
 fuel-core-producer = { path = "../services/producer", version = "0.15.1" }
 fuel-core-relayer = { path = "../services/relayer", version = "0.15.1", optional = true }
+fuel-core-storage = { path = "../storage", version = "0.15.1" }
 fuel-core-sync = { path = "../services/sync", version = "0.15.1" }
 fuel-core-txpool = { path = "../services/txpool", version = "0.15.1" }
+fuel-core-types = { path = "../types", version = "0.15.1", features = ["serde"] }
 futures = "0.3"
 hex = { version = "0.4", features = ["serde"] }
 itertools = "0.10"

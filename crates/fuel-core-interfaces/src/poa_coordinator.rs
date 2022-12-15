@@ -1,8 +1,8 @@
-use crate::{
-    common::fuel_tx::TxId,
-    model::ArcPoolTx,
-};
 use anyhow::Result;
+use fuel_core_types::{
+    fuel_tx::TxId,
+    services::txpool::ArcPoolTx,
+};
 
 #[async_trait::async_trait]
 pub trait TransactionPool {

@@ -1,62 +1,68 @@
-use crate::{
-    common::{
-        fuel_asm::Word,
-        fuel_storage::{
-            StorageAsRef,
-            StorageInspect,
-        },
-        fuel_tx::{
-            field::{
-                Inputs,
-                Outputs,
-            },
-            Bytes32,
-            Cacheable,
-            Chargeable,
-            Checked,
-            ConsensusParameters,
-            ContractId,
-            Create,
-            Input,
-            Output,
-            Script,
-            Transaction,
-            TxId,
-            UniqueIdentifier,
-            UtxoId,
-        },
-        fuel_types::MessageId,
-        fuel_vm::storage::ContractsRawCode,
-    },
-    db::{
-        Coins,
-        Error as DbStateError,
-        KvStoreError,
-        Messages,
-    },
-    model::{
-        ArcPoolTx,
-        BlockHeight,
-        BlockId,
-        Coin,
-        Message,
-        TxInfo,
-    },
+use crate::db::{
+    Error as DbStateError,
+    KvStoreError,
 };
 use derive_more::{
     Deref,
     DerefMut,
 };
-use fuel_vm::prelude::{
-    Interpreter,
-    PredicateStorage,
-    ProgramState,
+use fuel_core_storage::{
+    tables::{
+        Coins,
+        Messages,
+    },
+    StorageAsRef,
+    StorageInspect,
 };
+use fuel_core_types::{
+    blockchain::primitives::{
+        BlockHeight,
+        BlockId,
+    },
+    entities::{
+        coin::Coin,
+        message::Message,
+    },
+    fuel_tx::{
+        field::{
+            Inputs,
+            Outputs,
+        },
+        Cacheable,
+        Chargeable,
+        Checked,
+        ConsensusParameters,
+        Create,
+        Input,
+        Output,
+        Script,
+        Transaction,
+        TxId,
+        UniqueIdentifier,
+        UtxoId,
+    },
+    fuel_types::{
+        Bytes32,
+        ContractId,
+        MessageId,
+        Word,
+    },
+    fuel_vm::{
+        Interpreter,
+        PredicateStorage,
+        ProgramState,
+    },
+    services::txpool::{
+        ArcPoolTx,
+        TxInfo,
+    },
+    tai64::Tai64,
+};
+use fuel_vm::storage::ContractsRawCode;
 use std::{
     fmt::Debug,
     sync::Arc,
 };
-use tai64::Tai64;
 use thiserror::Error;
 use tokio::sync::{
     mpsc,

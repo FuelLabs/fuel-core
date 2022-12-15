@@ -2,6 +2,7 @@
 
 use crate::{
     fuel_crypto,
+    fuel_crypto::SecretKey,
     fuel_types::Bytes32,
 };
 use derive_more::{
@@ -17,6 +18,12 @@ use derive_more::{
     Sub,
     UpperHex,
 };
+use secrecy::{
+    zeroize,
+    CloneableSecret,
+    DebugSecret,
+};
+use zeroize::Zeroize;
 
 #[derive(Clone, Copy, Debug, Default)]
 /// Empty generated fields.
@@ -200,3 +207,13 @@ impl DaBlockHeight {
         self.0
     }
 }
+
+/// Wrapper around [`fuel_crypto::SecretKey`] to implement [`secrecy`] marker traits
+#[derive(
+    Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroize, Deref, From,
+)]
+#[repr(transparent)]
+pub struct SecretKeyWrapper(SecretKey);
+
+impl CloneableSecret for SecretKeyWrapper {}
+impl DebugSecret for SecretKeyWrapper {}

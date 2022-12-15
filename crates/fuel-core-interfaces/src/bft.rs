@@ -1,18 +1,18 @@
-use super::model::{
-    FuelBlock,
-    SealedFuelBlock,
-};
 use anyhow::Result;
+use fuel_core_types::blockchain::{
+    block::Block,
+    SealedBlock,
+};
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
 pub enum BftMpsc {
     CheckBlockConsensus {
-        block: Arc<SealedFuelBlock>,
+        block: Arc<SealedBlock>,
         ret: oneshot::Sender<Result<()>>,
     },
     CheckBlockLeader {
-        block: Arc<FuelBlock>,
+        block: Arc<Block>,
         ret: oneshot::Sender<Result<()>>,
     },
     Stop,

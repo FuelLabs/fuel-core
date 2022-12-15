@@ -1,20 +1,20 @@
-use crate::{
-    common::fuel_storage::{
-        StorageAsMut,
-        StorageMutate,
-    },
-    db::{
-        KvStoreError,
-        Messages,
-    },
-    model::{
-        BlockHeight,
-        CheckedMessage,
-        DaBlockHeight,
-        SealedFuelBlock,
-    },
-};
+use crate::db::KvStoreError;
 use async_trait::async_trait;
+use fuel_core_storage::{
+    tables::Messages,
+    StorageAsMut,
+    StorageMutate,
+};
+use fuel_core_types::{
+    blockchain::{
+        primitives::{
+            BlockHeight,
+            DaBlockHeight,
+        },
+        SealedBlock,
+    },
+    entities::message::CheckedMessage,
+};
 use std::sync::Arc;
 
 // Manages state related to supported external chains.
@@ -30,8 +30,7 @@ pub trait RelayerDb: StorageMutate<Messages, Error = KvStoreError> + Send + Sync
     /// current best block number
     async fn get_chain_height(&self) -> BlockHeight;
 
-    async fn get_sealed_block(&self, height: BlockHeight)
-        -> Option<Arc<SealedFuelBlock>>;
+    async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedBlock>>;
 
     /// set finalized da height that represent last block from da layer that got finalized.
     async fn set_finalized_da_height(&self, block: DaBlockHeight);

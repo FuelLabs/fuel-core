@@ -4,6 +4,7 @@
 
 #![deny(missing_docs)]
 
+#[doc(no_inline)]
 pub use fuel_vm_private::{
     fuel_asm,
     fuel_crypto,
@@ -11,6 +12,10 @@ pub use fuel_vm_private::{
     fuel_tx,
     fuel_types,
 };
+#[doc(no_inline)]
+pub use secrecy;
+#[doc(no_inline)]
+pub use tai64;
 
 pub mod blockchain;
 pub mod entities;
@@ -18,10 +23,13 @@ pub mod services;
 
 /// Re-export of some fuel-vm types
 pub mod fuel_vm {
+    #[doc(no_inline)]
     pub use fuel_vm_private::prelude::{
+        Backtrace,
+        Contract,
         Interpreter,
+        InterpreterError,
         PredicateStorage,
         ProgramState,
-        Contract,
     };
 }
