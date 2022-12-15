@@ -17,6 +17,7 @@ env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
   REGISTRY: ghcr.io
+  RUST_VERSION: 1.64.0
 
 jobs:
   rustfmt:
@@ -39,7 +40,8 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: ${{ env.RUST_VERSION }}
+          override: true
       - name: Install Cargo.toml linter
         uses: baptiste0928/cargo-install@v1
         with:
@@ -107,7 +109,8 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: ${{ env.RUST_VERSION }}
+          override: true
       - name: Install Cargo Make
         uses: davidB/rust-cargo-make@v1
         with:
@@ -150,9 +153,9 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: ${{ env.RUST_VERSION }}
           override: true
 
       - name: Install Protoc
@@ -311,12 +314,12 @@ jobs:
           ci/macos-install-packages.sh
 
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@v1
         with:
-          profile: minimal
-          toolchain: stable
-          target: ${{ matrix.job.target }}
+          toolchain: ${{ env.RUST_VERSION }}
           override: true
+          profile: minimal
+          target: ${{ matrix.job.target }}
 
       - uses: Swatinem/rust-cache@v1
         with:
