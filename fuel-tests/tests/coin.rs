@@ -25,7 +25,6 @@ use fuel_core_interfaces::{
     db::Coins,
 };
 use fuel_gql_client::client::{
-    schema::coin::CoinStatus as SchemeCoinStatus,
     FuelClient,
     PageDirection,
     PaginationRequest,
@@ -141,7 +140,7 @@ async fn only_asset_id_filtered_coins() {
     let coins = client
         .coins(
             format!("{:#x}", owner).as_str(),
-            Some(format!("{:#x}", AssetId::new([1u8; 32])).as_str()),
+            Some(format!("{:#x}", asset_id).as_str()),
             PaginationRequest {
                 cursor: None,
                 results: 10,
@@ -160,12 +159,12 @@ async fn only_asset_id_filtered_coins() {
 
 #[rstest]
 #[tokio::test]
-async fn only_unspent_coins(
+async fn get_unspent_and_spent_coins(
     #[values(Address::default(), Address::from([16; 32]))] owner: Address,
     #[values(AssetId::from([1u8; 32]), AssetId::from([32u8; 32]))] asset_id: AssetId,
 ) {
     // setup test data in the node
-    let coins: Vec<(UtxoId, Coin)> = (1..10usize)
+    let coins: Vec<(UtxoId, Coin)> = (1..11usize)
         .map(|i| {
             let coin = Coin {
                 owner,
@@ -210,9 +209,5 @@ async fn only_unspent_coins(
         .await
         .unwrap();
     assert!(!coins.results.is_empty());
-    assert_eq!(coins.results.len(), 5);
-    assert!(coins
-        .results
-        .into_iter()
-        .all(|c| c.status == SchemeCoinStatus::Unspent));
+    assert_eq!(coins.results.len(), 10);
 }

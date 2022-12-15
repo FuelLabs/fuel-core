@@ -274,6 +274,18 @@ impl From<U64> for InstructionResult {
 pub struct Tai64Timestamp(pub Tai64);
 impl_scalar!(Tai64Timestamp, schema::Tai64Timestamp);
 
+impl Tai64Timestamp {
+    /// Convert Unix timestamp to `Tai64Timestamp`.
+    pub fn from_unix(secs: i64) -> Self {
+        Tai64Timestamp(Tai64::from_unix(secs))
+    }
+
+    /// Convert `Tai64Timestamp` to unix timestamp.
+    pub fn to_unix(self) -> i64 {
+        self.0.to_unix()
+    }
+}
+
 impl Serialize for Tai64Timestamp {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

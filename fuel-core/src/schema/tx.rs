@@ -2,28 +2,22 @@ use crate::{
     database::{
         transaction::OwnedTransactionIndexCursor,
         Database,
-        KvStoreError,
     },
-    model::BlockHeight,
     query::{
         transaction_status_change,
         TxnStatusChangeState,
     },
     schema::scalars::{
         Address,
-        Bytes32,
         HexString,
         SortedTxCursor,
         TransactionId,
     },
     state::IterDirection,
 };
-use anyhow::anyhow;
 use async_graphql::{
     connection::{
-        query,
         Connection,
-        Edge,
         EmptyFields,
     },
     Context,
@@ -36,7 +30,6 @@ use fuel_core_interfaces::{
         fuel_tx::{
             Cacheable,
             Transaction as FuelTx,
-            UniqueIdentifier,
         },
         fuel_types,
         fuel_vm::prelude::Deserializable,
@@ -56,7 +49,6 @@ use futures::{
 };
 use itertools::Itertools;
 use std::{
-    borrow::Cow,
     iter,
     ops::Deref,
     sync::Arc,
@@ -113,59 +105,25 @@ impl TxQuery {
         Connection<SortedTxCursor, Transaction, EmptyFields, EmptyFields>,
     > {
         let db = ctx.data_unchecked::<Database>();
-
-        query(
+        crate::schema::query_pagination(
             after,
             before,
             first,
             last,
-            |after: Option<SortedTxCursor>, before: Option<SortedTxCursor>, first, last| async move {
-                let (records_to_fetch, direction) = if let Some(first) = first {
-                    (first, IterDirection::Forward)
-                } else if let Some(last) = last {
-                    (last, IterDirection::Reverse)
-                } else {
-                    (0, IterDirection::Forward)
-                };
+            |start: &Option<SortedTxCursor>, direction| {
+                let start = *start;
+                let block_id = start.map(|sorted| sorted.block_height);
+                let all_block_ids = db.all_block_ids(block_id, Some(direction));
 
-                if (first.is_some() && before.is_some())
-                    || (after.is_some() && before.is_some())
-                    || (last.is_some() && after.is_some())
-                {
-                    return Err(anyhow!("Wrong argument combination"));
-                }
-
-                let block_id;
-                let tx_id;
-
-                if direction == IterDirection::Forward {
-                    let after = after.map(|after| (after.block_height, after.tx_id));
-                    block_id = after.map(|(height, _)| height);
-                    tx_id = after.map(|(_, id)| id);
-                } else {
-                    let before = before.map(|before| (before.block_height, before.tx_id));
-                    block_id = before.map(|(height, _)| height);
-                    tx_id = before.map(|(_, id)| id);
-                }
-
-                let all_block_ids =
-                    db.all_block_ids(block_id.map(Into::into), Some(direction));
-                let mut started = None;
-
-                if block_id.is_some() {
-                    started = Some((block_id, tx_id));
-                }
-
-                let txs = all_block_ids
-                    .flat_map(|block| {
+                let all_txs = all_block_ids
+                    .flat_map(move |block| {
                         block.map(|(block_height, block_id)| {
-                            db.storage::<FuelBlocks>().get(&block_id)
+                            db.storage::<FuelBlocks>()
+                                .get(&block_id)
                                 .transpose()
                                 .ok_or(not_found!(FuelBlocks))?
                                 .map(|fuel_block| {
-                                    let mut txs = fuel_block
-                                        .into_owned()
-                                        .transactions;
+                                    let mut txs = fuel_block.into_owned().transactions;
 
                                     if direction == IterDirection::Reverse {
                                         txs.reverse();
@@ -176,45 +134,36 @@ impl TxQuery {
                         })
                     })
                     .flatten_ok()
-                    .skip_while(|h| {
-                        if let (Ok((tx, _)), Some(end)) = (h, tx_id) {
-                            tx != &end.into()
-                        } else {
-                            false
+                    .map(|result| {
+                        result
+                            .map(|(tx_id, block_height)| {
+                                SortedTxCursor::new(block_height, tx_id.into())
+                            })
+                            .map_err(anyhow::Error::from)
+                    })
+                    .skip_while(move |result| {
+                        if let Ok(sorted) = result {
+                            if let Some(start) = start {
+                                return sorted != &start
+                            }
                         }
-                    })
-                    .skip(usize::from(tx_id.is_some()))
-                    .take(records_to_fetch + 1);
+                        false
+                    });
+                let all_txs =
+                    all_txs.map(|result: Result<SortedTxCursor, anyhow::Error>| {
+                        result.and_then(|sorted| {
+                            let tx = db
+                                .storage::<Transactions>()
+                                .get(&sorted.tx_id.0)
+                                .transpose()
+                                .ok_or(not_found!(Transactions))??
+                                .into_owned();
 
-                let tx_ids: Vec<(fuel_types::Bytes32, BlockHeight)> = txs.try_collect()?;
+                            Ok((sorted, tx.into()))
+                        })
+                    });
 
-                let mut txs: Vec<(Cow<FuelTx>, &BlockHeight)> = tx_ids
-                    .iter()
-                    .take(records_to_fetch)
-                    .map(|(tx_id, block_height)| -> Result<(Cow<FuelTx>, &BlockHeight), KvStoreError> {
-                        let tx = db.storage::<Transactions>().get(tx_id)
-                            .transpose()
-                            .ok_or(not_found!(Transactions))?;
-
-                        Ok((tx?, block_height))
-                    })
-                    .try_collect()?;
-
-                if direction == IterDirection::Reverse {
-                    txs.reverse()
-                }
-
-                let mut connection =
-                    Connection::new(started.is_some(), records_to_fetch < tx_ids.len());
-
-                connection.edges.extend(txs.into_iter().map(|(tx, block_height)| {
-                    Edge::new(
-                        SortedTxCursor::new(*block_height, Bytes32::from(tx.id())),
-                        Transaction(tx.into_owned()),
-                    )
-                }));
-
-                Ok::<Connection<SortedTxCursor, Transaction>, anyhow::Error>(connection)
+                Ok(all_txs)
             },
         )
         .await
@@ -233,86 +182,29 @@ impl TxQuery {
         let db = ctx.data_unchecked::<Database>();
         let owner = fuel_types::Address::from(owner);
 
-        query(
+        crate::schema::query_pagination(
             after,
             before,
             first,
             last,
-            |after: Option<HexString>, before: Option<HexString>, first, last| {
-                async move {
-                    let (records_to_fetch, direction) = if let Some(first) = first {
-                        (first, IterDirection::Forward)
-                    } else if let Some(last) = last {
-                        (last, IterDirection::Reverse)
-                    } else {
-                        (0, IterDirection::Forward)
-                    };
-
-                    if (first.is_some() && before.is_some())
-                        || (after.is_some() && before.is_some())
-                        || (last.is_some() && after.is_some())
-                    {
-                        return Err(anyhow!("Wrong argument combination"))
-                    }
-
-                    let after = after.map(OwnedTransactionIndexCursor::from);
-                    let before = before.map(OwnedTransactionIndexCursor::from);
-
-                    let start;
-                    let end;
-
-                    if direction == IterDirection::Forward {
-                        start = after;
-                        end = before;
-                    } else {
-                        start = before;
-                        end = after;
-                    }
-
-                    let mut txs =
-                        db.owned_transactions(&owner, start.as_ref(), Some(direction));
-                    let mut started = None;
-                    if start.is_some() {
-                        // skip initial result
-                        started = txs.next();
-                    }
-
-                    // take desired amount of results
-                    let txs = txs
-                        .take_while(|r| {
-                            // take until we've reached the end
-                            if let (Ok(t), Some(end)) = (r, end.as_ref()) {
-                                if &t.0 == end {
-                                    return false
-                                }
-                            }
-                            true
-                        })
-                        .take(records_to_fetch)
-                        .map(|res| {
-                            res.and_then(|(cursor, tx_id)| {
+            |start: &Option<HexString>, direction| {
+                let start: Option<OwnedTransactionIndexCursor> =
+                    start.clone().map(Into::into);
+                let txs = db
+                    .owned_transactions(&owner, start.as_ref(), Some(direction))
+                    .map(|result| {
+                        result
+                            .and_then(|(cursor, tx_id)| {
                                 let tx = db
                                     .storage::<Transactions>()
                                     .get(&tx_id)?
                                     .ok_or(not_found!(Transactions))?
                                     .into_owned();
-                                Ok((cursor, tx))
+                                Ok((cursor.into(), tx.into()))
                             })
-                        });
-                    let mut txs: Vec<(OwnedTransactionIndexCursor, FuelTx)> =
-                        txs.try_collect()?;
-                    if direction == IterDirection::Reverse {
-                        txs.reverse();
-                    }
-
-                    let mut connection =
-                        Connection::new(started.is_some(), records_to_fetch <= txs.len());
-                    connection.edges.extend(txs.into_iter().map(|item| {
-                        Edge::new(HexString::from(item.0), Transaction(item.1))
-                    }));
-
-                    Ok::<Connection<HexString, Transaction>, anyhow::Error>(connection)
-                }
+                            .map_err(Into::into)
+                    });
+                Ok(txs)
             },
         )
         .await

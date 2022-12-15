@@ -8,6 +8,7 @@ use crate::{
     },
 };
 use async_trait::async_trait;
+use fuel_block_executor::refs::ContractStorageTrait;
 use fuel_block_producer::ports::BlockProducerDatabase;
 use fuel_chain_config::{
     ChainConfigDb,
@@ -264,6 +265,11 @@ impl AsRef<Database> for Database {
     fn as_ref(&self) -> &Database {
         self
     }
+}
+
+/// Implemented to satisfy: `GenesisCommitment for ContractRef<&'a mut Database>`
+impl ContractStorageTrait<'_> for Database {
+    type InnerError = Error;
 }
 
 /// Construct an ephemeral database

@@ -42,7 +42,7 @@ reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"
 rstest = "0.15"
 serde_json = "1.0"
 tempfile = "3.3"
-tokio = { version = "1.21", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.21", features = ["macros", "rt-multi-thread", "test-util"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 
