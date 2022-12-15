@@ -33,6 +33,4 @@ pub mod fuel_vm {
         PredicateStorage,
         ProgramState,
     };
-    #[doc(no_inline)]
-    pub use fuel_vm_private::storage::ContractsRawCode;
 }
