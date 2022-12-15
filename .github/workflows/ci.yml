@@ -162,20 +162,25 @@ jobs:
 
       - name: Verify tag version
         run: |
+          # TODO: Automate running `verify_tag` only for "publish = true" crates
           curl -sSLf "https://github.com/TomWright/dasel/releases/download/v1.24.3/dasel_linux_amd64" -L -o dasel && chmod +x dasel
           mv ./dasel /usr/local/bin/dasel
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-executor/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-importer/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-producer/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-chain-config/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-client/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-bft/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-interfaces/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-p2p/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-sync/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-txpool/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-relayer/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/fuel-client/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/fuel-core/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/types/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/storage/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/metrics/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/executor/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/importer/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/producer/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/chain-config/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/p2p/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/sync/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/txpool/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/relayer/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/consensus_module/bft/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/consensus_module/poa/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/fuel-core-interfaces/Cargo.toml
 
       - name: Verify helm chart version
         run: |
