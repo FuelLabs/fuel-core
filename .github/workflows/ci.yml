@@ -184,7 +184,7 @@ jobs:
       - name: Publish crate
         uses: katyo/publish-crates@v1
         with:
-          publish-delay: 30000
+          publish-delay: 60000
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Notify if Job Fails
