@@ -1,0 +1,9 @@
+---
+source: crates/client/src/client/schema/block.rs
+expression: operation.query
+---
+mutation($blocksToProduce: U64!, $time: TimeParameters) {
+  produceBlocks(blocksToProduce: $blocksToProduce, time: $time)
+}
+
+

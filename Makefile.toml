@@ -28,8 +28,8 @@ description = "Compile code without linking. Faster than build to detect problem
 category = "Build"
 command = "cargo"
 args = ["check", "${@}"]
-# skip compilation checks on fuel-tests since it will be tested anyways
-env = { "CARGO_MAKE_WORKSPACE_SKIP_MEMBERS" = ["fuel-tests"] }
+# skip compilation checks on tests since it will be tested anyways
+env = { "CARGO_MAKE_WORKSPACE_SKIP_MEMBERS" = ["fuel-core-tests"] }
 
 [tasks.test]
 description = "Run tests on each workspace member"

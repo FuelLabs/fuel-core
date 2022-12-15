@@ -1,0 +1,40 @@
+---
+source: crates/chain-config/src/config.rs
+expression: json
+---
+{
+  "chain_name": "local_testnet",
+  "block_production": {
+    "ProofOfAuthority": {
+      "trigger": "instant"
+    }
+  },
+  "block_gas_limit": 1000000000,
+  "initial_state": {
+    "messages": [
+      {
+        "sender": "0x61644a25da5ad31754e23bc1eca8c766a61ceaa8c60ddc65f158a30209256e35",
+        "recipient": "0xc9fba417a2d8d9ed086c0f3f03f94ec89a67bfdc6a1e22b69d667e5ac8055d00",
+        "nonce": "0xf4c4c9f506cc05a3",
+        "amount": "0x43bd0a27cb68f270",
+        "data": "0xbc",
+        "da_height": "0x6438200d0d1865b1"
+      }
+    ]
+  },
+  "transaction_parameters": {
+    "contract_max_size": 16777216,
+    "max_inputs": 255,
+    "max_outputs": 255,
+    "max_witnesses": 255,
+    "max_gas_per_tx": 100000000,
+    "max_script_length": 1048576,
+    "max_script_data_length": 1048576,
+    "max_storage_slots": 255,
+    "max_predicate_length": 1048576,
+    "max_predicate_data_length": 1048576,
+    "gas_price_factor": 1000000000,
+    "gas_per_byte": 4,
+    "max_message_data_length": 1048576
+  }
+}

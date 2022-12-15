@@ -1,0 +1,7 @@
+---
+source: fuel-core-tests/tests/tx.rs
+assertion_line: 30
+expression: "format!(\"{:?}\", script)"
+
+---
+[80, 64, 0, 202, 80, 68, 0, 186, 51, 65, 16, 0, 36, 4, 0, 0]
