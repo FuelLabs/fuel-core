@@ -1,0 +1,18 @@
+[package]
+name = "core14-1-core15-1"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+path = "test.rs"
+
+[dependencies]
+core_14 = { version = "=0.14.1", package = "fuel-core" }
+client_14 = { version = "=0.14.1", package = "fuel-gql-client" }
+fuel_tx_old = { version = "=0.23.1", package = "fuel-tx", features = ["builder"] }
+core_15 = { path = "../../../fuel-core", package = "fuel-core" }
+client_15 = { path = "../../../fuel-client", package = "fuel-gql-client" }
+tempdir = "0.3.7"
+tokio = { version = "1.21", features = ["macros", "rt-multi-thread"] }

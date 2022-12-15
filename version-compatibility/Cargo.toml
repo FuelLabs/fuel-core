@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "0.14.1-0.15.0/core14-1-core15-1",
     "0.14.1-0.15.0/fuel-core:0.14.1-client:0.15.0",
     "0.14.1-0.15.0/fuel-core:0.15.0-client:0.14.1",
 ]

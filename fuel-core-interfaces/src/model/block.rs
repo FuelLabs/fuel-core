@@ -611,9 +611,9 @@ pub struct Genesis {
 /// The consensus related data that doesn't live on the
 /// header.
 pub enum FuelBlockConsensus {
+    PoA(FuelBlockPoAConsensus),
     /// The genesis block defines the consensus rules for future blocks.
     Genesis(Genesis),
-    PoA(FuelBlockPoAConsensus),
 }
 
 impl FuelBlockConsensus {
