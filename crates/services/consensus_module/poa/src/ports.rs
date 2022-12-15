@@ -1,20 +1,18 @@
-use fuel_core_interfaces::{
-    common::{
-        fuel_asm::Word,
-        fuel_tx::{
-            Receipt,
-            Transaction,
+use fuel_core_storage::transactional::StorageTransaction;
+use fuel_core_types::{
+    blockchain::{
+        consensus::Consensus,
+        primitives::{
+            BlockHeight,
+            BlockId,
         },
     },
-    db::DatabaseTransaction,
-};
-use fuel_core_storage::UncommittedResult;
-use fuel_core_types::blockchain::{
-    consensus::Consensus,
-    primitives::{
-        BlockHeight,
-        BlockId,
+    fuel_asm::Word,
+    fuel_tx::{
+        Receipt,
+        Transaction,
     },
+    services::executor::UncommittedResult,
 };
 
 pub trait BlockDb: Send + Sync {
@@ -28,9 +26,6 @@ pub trait BlockDb: Send + Sync {
     ) -> anyhow::Result<()>;
 }
 
-// TODO: Replace by the analog from the `fuel-core-storage`.
-pub type DBTransaction<Database> = Box<dyn DatabaseTransaction<Database>>;
-
 #[async_trait::async_trait]
 pub trait BlockProducer<Database>: Send + Sync {
     // TODO: Right now production and execution of the block is one step, but in the future,
@@ -39,7 +34,7 @@ pub trait BlockProducer<Database>: Send + Sync {
         &self,
         height: BlockHeight,
         max_gas: Word,
-    ) -> anyhow::Result<UncommittedResult<DBTransaction<Database>>>;
+    ) -> anyhow::Result<UncommittedResult<StorageTransaction<Database>>>;
 
     async fn dry_run(
         &self,

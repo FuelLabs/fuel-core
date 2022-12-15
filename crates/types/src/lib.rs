@@ -24,6 +24,8 @@ pub mod services;
 /// Re-export of some fuel-vm types
 pub mod fuel_vm {
     #[doc(no_inline)]
+    pub use fuel_vm_private::crypto;
+    #[doc(no_inline)]
     pub use fuel_vm_private::prelude::{
         Backtrace,
         Contract,
@@ -33,6 +35,4 @@ pub mod fuel_vm {
         PredicateStorage,
         ProgramState,
     };
-    #[doc(no_inline)]
-    pub use fuel_vm_private::storage::ContractsRawCode;
 }

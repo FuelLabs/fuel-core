@@ -4,18 +4,19 @@ use crate::{
         Database,
     },
     state::{
-        Error,
         IterDirection,
         MultiKey,
     },
 };
 use fuel_core_chain_config::ContractConfig;
+use fuel_core_database::Error as DatabaseError;
 use fuel_core_storage::{
     tables::{
         ContractsInfo,
         ContractsLatestUtxo,
         ContractsRawCode,
     },
+    Error as StorageError,
     StorageAsRef,
     StorageInspect,
     StorageMutate,
@@ -36,14 +37,16 @@ use fuel_core_types::{
 use std::borrow::Cow;
 
 impl StorageInspect<ContractsRawCode> for Database {
-    type Error = Error;
+    type Error = StorageError;
 
-    fn get(&self, key: &ContractId) -> Result<Option<Cow<Contract>>, Error> {
+    fn get(&self, key: &ContractId) -> Result<Option<Cow<Contract>>, Self::Error> {
         self.get(key.as_ref(), Column::ContractsRawCode)
+            .map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &ContractId) -> Result<bool, Error> {
+    fn contains_key(&self, key: &ContractId) -> Result<bool, Self::Error> {
         self.exists(key.as_ref(), Column::ContractsRawCode)
+            .map_err(Into::into)
     }
 }
 
@@ -52,24 +55,27 @@ impl StorageMutate<ContractsRawCode> for Database {
         &mut self,
         key: &ContractId,
         value: &[u8],
-    ) -> Result<Option<Contract>, Error> {
+    ) -> Result<Option<Contract>, StorageError> {
         Database::insert(self, key.as_ref(), Column::ContractsRawCode, value)
+            .map_err(Into::into)
     }
 
-    fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, Error> {
-        Database::remove(self, key.as_ref(), Column::ContractsRawCode)
+    fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, Self::Error> {
+        Database::remove(self, key.as_ref(), Column::ContractsRawCode).map_err(Into::into)
     }
 }
 
 impl StorageInspect<ContractsLatestUtxo> for Database {
-    type Error = Error;
+    type Error = StorageError;
 
     fn get(&self, key: &ContractId) -> Result<Option<Cow<UtxoId>>, Self::Error> {
         self.get(key.as_ref(), Column::ContractsLatestUtxo)
+            .map_err(Into::into)
     }
 
     fn contains_key(&self, key: &ContractId) -> Result<bool, Self::Error> {
         self.exists(key.as_ref(), Column::ContractsLatestUtxo)
+            .map_err(Into::into)
     }
 }
 
@@ -80,10 +86,12 @@ impl StorageMutate<ContractsLatestUtxo> for Database {
         value: &UtxoId,
     ) -> Result<Option<UtxoId>, Self::Error> {
         Database::insert(self, key.as_ref(), Column::ContractsLatestUtxo, *value)
+            .map_err(Into::into)
     }
 
     fn remove(&mut self, key: &ContractId) -> Result<Option<UtxoId>, Self::Error> {
         Database::remove(self, key.as_ref(), Column::ContractsLatestUtxo)
+            .map_err(Into::into)
     }
 }
 
@@ -93,7 +101,7 @@ impl Database {
         contract: ContractId,
         start_asset: Option<AssetId>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = Result<(AssetId, Word), Error>> + '_ {
+    ) -> impl Iterator<Item = Result<(AssetId, Word), DatabaseError>> + '_ {
         self.iter_all::<Vec<u8>, Word>(
             Column::ContractsAssets,
             Some(contract.as_ref().to_vec()),
@@ -110,10 +118,10 @@ impl Database {
 
     pub fn get_contract_config(
         &self,
-    ) -> Result<Option<Vec<ContractConfig>>, anyhow::Error> {
+    ) -> Result<Option<Vec<ContractConfig>>, DatabaseError> {
         let configs = self
             .iter_all::<Vec<u8>, Word>(Column::ContractsRawCode, None, None, None)
-            .map(|raw_contract_id| -> Result<ContractConfig, anyhow::Error> {
+            .map(|raw_contract_id| -> Result<ContractConfig, DatabaseError> {
                 let contract_id =
                     ContractId::new(raw_contract_id.unwrap().0[..32].try_into()?);
 
@@ -138,7 +146,7 @@ impl Database {
                         None,
                         None,
                     )
-                    .map(|res| -> Result<(Bytes32, Bytes32), anyhow::Error> {
+                    .map(|res| -> Result<(Bytes32, Bytes32), DatabaseError> {
                         let safe_res = res?;
 
                         // We don't need to store ContractId which is the first 32 bytes of this
@@ -148,7 +156,7 @@ impl Database {
                         Ok((state_key, safe_res.1))
                     })
                     .filter(|val| val.is_ok())
-                    .collect::<Result<Vec<(Bytes32, Bytes32)>, anyhow::Error>>()?,
+                    .collect::<Result<Vec<(Bytes32, Bytes32)>, DatabaseError>>()?,
                 );
 
                 let balances = Some(
@@ -158,7 +166,7 @@ impl Database {
                         None,
                         None,
                     )
-                    .map(|res| -> Result<(AssetId, u64), anyhow::Error> {
+                    .map(|res| -> Result<(AssetId, u64), DatabaseError> {
                         let safe_res = res?;
 
                         let asset_id = AssetId::new(safe_res.0[32..].try_into()?);
@@ -166,7 +174,7 @@ impl Database {
                         Ok((asset_id, safe_res.1))
                     })
                     .filter(|val| val.is_ok())
-                    .collect::<Result<Vec<(AssetId, u64)>, anyhow::Error>>()?,
+                    .collect::<Result<Vec<(AssetId, u64)>, DatabaseError>>()?,
                 );
 
                 Ok(ContractConfig {
@@ -176,7 +184,7 @@ impl Database {
                     balances,
                 })
             })
-            .collect::<Result<Vec<ContractConfig>, anyhow::Error>>()?;
+            .collect::<Result<Vec<ContractConfig>, DatabaseError>>()?;
 
         Ok(Some(configs))
     }

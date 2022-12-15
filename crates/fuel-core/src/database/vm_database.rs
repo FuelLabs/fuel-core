@@ -9,11 +9,9 @@ use crate::{
     },
 };
 use anyhow::anyhow;
-use fuel_core_interfaces::{
-    db::Error,
-    not_found,
-};
 use fuel_core_storage::{
+    not_found,
+    Error as StorageError,
     Mappable,
     MerkleRoot,
     MerkleRootStorage,
@@ -21,6 +19,7 @@ use fuel_core_storage::{
     StorageMutate,
 };
 use fuel_core_types::{
+    blockchain::header::ConsensusHeader,
     fuel_types::{
         Address,
         Bytes32,
@@ -28,7 +27,7 @@ use fuel_core_types::{
         Word,
     },
     fuel_vm::InterpreterStorage,
-    tai64::Tai64, blockchain::header::ConsensusHeader,
+    tai64::Tai64,
 };
 use primitive_types::U256;
 use std::borrow::Cow;
@@ -48,9 +47,9 @@ trait IncreaseStorageKey {
 
 impl IncreaseStorageKey for U256 {
     fn increase(&mut self) -> anyhow::Result<()> {
-        *self = self.checked_add(1.into()).ok_or_else(|| {
-            Error::Other(anyhow!("range op exceeded available keyspace"))
-        })?;
+        *self = self
+            .checked_add(1.into())
+            .ok_or(anyhow!("range op exceeded available keyspace"))?;
         Ok(())
     }
 }
@@ -87,22 +86,22 @@ impl VmDatabase {
 
 impl<M: Mappable> StorageInspect<M> for VmDatabase
 where
-    Database: StorageInspect<M, Error = Error>,
+    Database: StorageInspect<M, Error = StorageError>,
 {
-    type Error = Error;
+    type Error = StorageError;
 
-    fn get(&self, key: &M::Key) -> Result<Option<Cow<M::GetValue>>, Error> {
+    fn get(&self, key: &M::Key) -> Result<Option<Cow<M::GetValue>>, StorageError> {
         StorageInspect::<M>::get(&self.database, key)
     }
 
-    fn contains_key(&self, key: &M::Key) -> Result<bool, Error> {
+    fn contains_key(&self, key: &M::Key) -> Result<bool, StorageError> {
         StorageInspect::<M>::contains_key(&self.database, key)
     }
 }
 
 impl<M: Mappable> StorageMutate<M> for VmDatabase
 where
-    Database: StorageMutate<M, Error = Error>,
+    Database: StorageMutate<M, Error = StorageError>,
 {
     fn insert(
         &mut self,
@@ -119,7 +118,7 @@ where
 
 impl<K, M: Mappable> MerkleRootStorage<K, M> for VmDatabase
 where
-    Database: MerkleRootStorage<K, M, Error = Error>,
+    Database: MerkleRootStorage<K, M, Error = StorageError>,
 {
     fn root(&mut self, key: &K) -> Result<MerkleRoot, Self::Error> {
         MerkleRootStorage::<K, M>::root(&mut self.database, key)
@@ -127,7 +126,7 @@ where
 }
 
 impl InterpreterStorage for VmDatabase {
-    type DataError = Error;
+    type DataError = StorageError;
 
     fn block_height(&self) -> Result<u32, Self::DataError> {
         Ok(self.current_block_height)

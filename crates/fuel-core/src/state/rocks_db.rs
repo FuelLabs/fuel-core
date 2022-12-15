@@ -8,7 +8,6 @@ use crate::{
     },
     state::{
         BatchOperations,
-        Error,
         IterDirection,
         KVItem,
         KeyValueStore,
@@ -16,6 +15,7 @@ use crate::{
         WriteOperation,
     },
 };
+use fuel_core_database::Error as DatabaseError;
 #[cfg(feature = "metrics")]
 use fuel_core_metrics::core_metrics::DATABASE_METRICS;
 use rocksdb::{
@@ -43,11 +43,14 @@ pub struct RocksDb {
 }
 
 impl RocksDb {
-    pub fn default_open<P: AsRef<Path>>(path: P) -> Result<RocksDb, Error> {
+    pub fn default_open<P: AsRef<Path>>(path: P) -> Result<RocksDb, DatabaseError> {
         Self::open(path, enum_iterator::all::<Column>().collect::<Vec<_>>())
     }
 
-    pub fn open<P: AsRef<Path>>(path: P, columns: Vec<Column>) -> Result<RocksDb, Error> {
+    pub fn open<P: AsRef<Path>>(
+        path: P,
+        columns: Vec<Column>,
+    ) -> Result<RocksDb, DatabaseError> {
         let cf_descriptors: Vec<_> = columns
             .clone()
             .into_iter()
@@ -64,7 +67,7 @@ impl RocksDb {
                     Ok(db) => {
                         for i in columns {
                             db.create_cf(RocksDb::col_name(i), &opts)
-                                .map_err(|e| Error::DatabaseError(Box::new(e)))?;
+                                .map_err(|e| DatabaseError::Other(e.into()))?;
                         }
                         Ok(db)
                     }
@@ -73,13 +76,13 @@ impl RocksDb {
             }
             ok => ok,
         }
-        .map_err(|e| Error::DatabaseError(Box::new(e)))?;
+        .map_err(|e| DatabaseError::Other(e.into()))?;
         let rocks_db = RocksDb { db };
         rocks_db.validate_or_set_db_version()?;
         Ok(rocks_db)
     }
 
-    fn validate_or_set_db_version(&self) -> Result<(), Error> {
+    fn validate_or_set_db_version(&self) -> Result<(), DatabaseError> {
         let data = self.get(DB_VERSION_KEY, Column::Metadata)?;
         match data {
             None => {
@@ -91,10 +94,10 @@ impl RocksDb {
             }
             Some(v) => {
                 let b = <[u8; 4]>::try_from(v.as_slice())
-                    .map_err(|_| Error::InvalidDatabaseVersion)?;
+                    .map_err(|_| DatabaseError::InvalidDatabaseVersion)?;
                 let version = u32::from_be_bytes(b);
                 if version != DB_VERSION {
-                    return Err(Error::InvalidDatabaseVersion)
+                    return Err(DatabaseError::InvalidDatabaseVersion)
                 }
             }
         };
@@ -134,7 +137,7 @@ impl KeyValueStore for RocksDb {
         let value = self
             .db
             .get_cf(&self.cf(column), key)
-            .map_err(|e| Error::DatabaseError(Box::new(e)));
+            .map_err(|e| DatabaseError::Other(e.into()));
         #[cfg(feature = "metrics")]
         {
             if value.is_ok() && value.as_ref().unwrap().is_some() {
@@ -161,7 +164,7 @@ impl KeyValueStore for RocksDb {
         let prev = self.get(key, column)?;
         self.db
             .put_cf(&self.cf(column), key, value)
-            .map_err(|e| Error::DatabaseError(Box::new(e)))
+            .map_err(|e| DatabaseError::Other(e.into()))
             .map(|_| prev)
     }
 
@@ -173,7 +176,7 @@ impl KeyValueStore for RocksDb {
         let prev = self.get(key, column)?;
         self.db
             .delete_cf(&self.cf(column), key)
-            .map_err(|e| Error::DatabaseError(Box::new(e)))
+            .map_err(|e| DatabaseError::Other(e.into()))
             .map(|_| prev)
     }
 
@@ -182,7 +185,7 @@ impl KeyValueStore for RocksDb {
         // since we're just checking for the existence of the key
         self.db
             .get_pinned_cf(&self.cf(column), key)
-            .map_err(|e| Error::DatabaseError(Box::new(e)))
+            .map_err(|e| DatabaseError::Other(e.into()))
             .map(|v| v.is_some())
     }
 
@@ -236,7 +239,7 @@ impl KeyValueStore for RocksDb {
                     }
                     (key_as_vec, value_as_vec)
                 })
-                .map_err(|e| Error::DatabaseError(Box::new(e)))
+                .map_err(|e| DatabaseError::Other(e.into()))
             });
 
         if let Some(prefix) = prefix {
@@ -259,7 +262,7 @@ impl BatchOperations for RocksDb {
     fn batch_write(
         &self,
         entries: &mut dyn Iterator<Item = WriteOperation>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DatabaseError> {
         let mut batch = WriteBatch::default();
 
         for entry in entries {
@@ -281,7 +284,7 @@ impl BatchOperations for RocksDb {
         }
         self.db
             .write(batch)
-            .map_err(|e| Error::DatabaseError(Box::new(e)))
+            .map_err(|e| DatabaseError::Other(e.into()))
     }
 }
 

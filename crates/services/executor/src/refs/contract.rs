@@ -1,30 +1,26 @@
 use fuel_core_chain_config::GenesisCommitment;
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::{
-            Mappable,
-            MerkleRootStorage,
-            StorageAsMut,
-            StorageAsRef,
-            StorageInspect,
-        },
-        fuel_tx::{
-            Bytes32,
-            ContractId,
-        },
-        prelude::{
-            Hasher,
-            MerkleRoot,
-        },
-    },
-    db::{
+use fuel_core_storage::{
+    not_found,
+    tables::{
         ContractsAssets,
+        ContractsLatestUtxo,
         ContractsState,
     },
-    not_found,
+    Mappable,
+    MerkleRoot,
+    MerkleRootStorage,
+    StorageAsMut,
+    StorageAsRef,
+    StorageInspect,
 };
-use fuel_core_storage::tables::ContractsLatestUtxo;
-use fuel_core_types::blockchain::block::Error;
+use fuel_core_types::{
+    fuel_crypto::Hasher,
+    fuel_types::{
+        Bytes32,
+        ContractId,
+    },
+    services::executor::Error,
+};
 use std::{
     borrow::Cow,
     error::Error as StdError,

@@ -5,6 +5,7 @@ members = [
   "benches",
   "crates/chain-config",
   "crates/client",
+  "crates/database",
   "crates/fuel-core",
   "crates/fuel-core-interfaces",
   "crates/metrics",

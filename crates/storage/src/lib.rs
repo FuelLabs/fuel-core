@@ -6,51 +6,78 @@
 
 #![deny(missing_docs)]
 
-use fuel_core_types::blockchain::block::ExecutionResult;
+use std::io::ErrorKind;
+
 pub use fuel_vm_private::fuel_storage::*;
 
 pub mod tables;
+pub mod transactional;
 
-/// The uncommitted result of transactions execution with database transaction.
-/// The caller should commit the result by itself.
-#[derive(Debug)]
-pub struct UncommittedResult<DbTransaction> {
-    /// The execution result.
-    result: ExecutionResult,
-    /// The database transaction with not committed state.
-    database_transaction: DbTransaction,
+#[derive(thiserror::Error, Debug)]
+#[non_exhaustive]
+/// Error occurring during interaction with storage
+pub enum Error {
+    /// Error occurred during serialization or deserialization of the entity.
+    #[error("error performing serialization or deserialization")]
+    Codec,
+    /// Error occurred during interaction with database.
+    #[error("error occurred in the underlying datastore `{0}`")]
+    DatabaseError(Box<dyn std::error::Error + Send + Sync>),
+    /// This error should be created with `not_found` macro.
+    #[error("resource of type `{0}` was not found at the: {1}")]
+    NotFound(&'static str, &'static str),
+    // TODO: Do we need this type at all?
+    /// Unknown or not expected(by architecture) error.
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
 
-impl<DbTransaction> UncommittedResult<DbTransaction> {
-    /// Create a new instance of `UncommittedResult`.
-    pub fn new(result: ExecutionResult, database_transaction: DbTransaction) -> Self {
-        Self {
-            result,
-            database_transaction,
-        }
+impl From<Error> for std::io::Error {
+    fn from(e: Error) -> Self {
+        std::io::Error::new(ErrorKind::Other, e)
     }
+}
 
-    /// Returns a reference to the `ExecutionResult`.
-    pub fn result(&self) -> &ExecutionResult {
-        &self.result
-    }
+/// Creates `KvStoreError::NotFound` error with file and line information inside.
+///
+/// # Examples
+///
+/// ```
+/// use fuel_core_storage::not_found;
+/// use fuel_core_storage::tables::Messages;
+///
+/// let string_type = not_found!("BlockId");
+/// let mappable_type = not_found!(Messages);
+/// let mappable_path = not_found!(fuel_core_storage::tables::Messages);
+/// ```
+#[macro_export]
+macro_rules! not_found {
+    ($name: literal) => {
+        $crate::Error::NotFound($name, concat!(file!(), ":", line!()))
+    };
+    ($ty: path) => {
+        $crate::Error::NotFound(
+            ::core::any::type_name::<<$ty as $crate::Mappable>::GetValue>(),
+            concat!(file!(), ":", line!()),
+        )
+    };
+}
 
-    /// Return the result and database transaction.
-    ///
-    /// The service can unpack the `UncommittedResult`, apply some changes and pack it again into
-    /// `UncommittedResult`. Because `commit` of the database transaction consumes `self`,
-    /// after committing it is not possible create `UncommittedResult`.
-    pub fn into(self) -> (ExecutionResult, DbTransaction) {
-        (self.result, self.database_transaction)
-    }
+#[cfg(test)]
+mod test {
+    use fuel_core_storage::tables::Coins;
 
-    /// Discards the database transaction and returns only the result of execution.
-    pub fn into_result(self) -> ExecutionResult {
-        self.result
-    }
-
-    /// Discards the result and return database transaction.
-    pub fn into_transaction(self) -> DbTransaction {
-        self.database_transaction
+    #[test]
+    fn not_found_output() {
+        #[rustfmt::skip]
+        assert_eq!(
+            format!("{}", not_found!("BlockId")),
+            format!("resource of type `BlockId` was not found at the: {}:{}", file!(), line!() - 1)
+        );
+        #[rustfmt::skip]
+        assert_eq!(
+            format!("{}", not_found!(Coins)),
+            format!("resource of type `fuel_core_interfaces::model::coin::Coin` was not found at the: {}:{}", file!(), line!() - 1)
+        );
     }
 }

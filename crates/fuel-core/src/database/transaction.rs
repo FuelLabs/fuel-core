@@ -32,11 +32,11 @@ use std::{
 impl StorageInspect<Transactions> for Database {
     type Error = KvStoreError;
 
-    fn get(&self, key: &Bytes32) -> Result<Option<Cow<Transaction>>, KvStoreError> {
+    fn get(&self, key: &Bytes32) -> Result<Option<Cow<Transaction>>, Self::Error> {
         Database::get(self, key.as_ref(), Column::Transactions).map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &Bytes32) -> Result<bool, KvStoreError> {
+    fn contains_key(&self, key: &Bytes32) -> Result<bool, Self::Error> {
         Database::exists(self, key.as_ref(), Column::Transactions).map_err(Into::into)
     }
 }
@@ -46,12 +46,12 @@ impl StorageMutate<Transactions> for Database {
         &mut self,
         key: &Bytes32,
         value: &Transaction,
-    ) -> Result<Option<Transaction>, KvStoreError> {
+    ) -> Result<Option<Transaction>, Self::Error> {
         Database::insert(self, key.as_ref(), Column::Transactions, value.clone())
             .map_err(Into::into)
     }
 
-    fn remove(&mut self, key: &Bytes32) -> Result<Option<Transaction>, KvStoreError> {
+    fn remove(&mut self, key: &Bytes32) -> Result<Option<Transaction>, Self::Error> {
         Database::remove(self, key.as_ref(), Column::Transactions).map_err(Into::into)
     }
 }

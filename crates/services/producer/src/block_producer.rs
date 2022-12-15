@@ -8,30 +8,32 @@ use anyhow::{
     Context,
     Result,
 };
-use fuel_core_interfaces::{
-    common::{
-        crypto::ephemeral_merkle_root,
-        fuel_tx::{
-            Receipt,
-            Transaction,
-            Word,
+use fuel_core_storage::transactional::StorageTransaction;
+use fuel_core_types::{
+    blockchain::{
+        block::PartialFuelBlock,
+        header::{
+            ApplicationHeader,
+            ConsensusHeader,
+            PartialBlockHeader,
         },
-        fuel_types::Bytes32,
-        tai64::Tai64,
+        primitives::{
+            BlockHeight,
+            DaBlockHeight,
+        },
     },
-};
-use fuel_core_storage::UncommittedResult;
-use fuel_core_types::blockchain::{
-    block::{PartialFuelBlock, ExecutionBlock},
-    header::{
-        ApplicationHeader,
-        ConsensusHeader,
-        PartialBlockHeader,
+    fuel_asm::Word,
+    fuel_tx::{
+        Receipt,
+        Transaction,
     },
-    primitives::{
-        BlockHeight,
-        DaBlockHeight,
+    fuel_types::Bytes32,
+    fuel_vm::crypto::ephemeral_merkle_root,
+    services::executor::{
+        ExecutionBlock,
+        UncommittedResult,
     },
+    tai64::Tai64,
 };
 use std::sync::Arc;
 use thiserror::Error;
@@ -83,7 +85,7 @@ where
         &self,
         height: BlockHeight,
         max_gas: Word,
-    ) -> Result<UncommittedResult<ports::DBTransaction<Database>>> {
+    ) -> Result<UncommittedResult<StorageTransaction<Database>>> {
         //  - get previous block info (hash, root, etc)
         //  - select best da_height from relayer
         //  - get available txs from txpool

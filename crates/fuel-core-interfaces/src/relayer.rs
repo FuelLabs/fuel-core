@@ -1,7 +1,7 @@
-use crate::db::KvStoreError;
 use async_trait::async_trait;
 use fuel_core_storage::{
     tables::Messages,
+    Error as StorageError,
     StorageAsMut,
     StorageMutate,
 };
@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 // Manages state related to supported external chains.
 #[async_trait]
-pub trait RelayerDb: StorageMutate<Messages, Error = KvStoreError> + Send + Sync {
+pub trait RelayerDb: StorageMutate<Messages, Error = StorageError> + Send + Sync {
     /// Add bridge message to database. Messages are not revertible.
     async fn insert_message(&mut self, message: &CheckedMessage) {
         let _ = self

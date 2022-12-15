@@ -1,6 +1,6 @@
 use crate::serialization::HexNumber;
 
-use fuel_core_interfaces::db::Error;
+use fuel_core_storage::Error as StorageError;
 use fuel_core_types::blockchain::primitives::BlockHeight;
 
 use serde::{
@@ -36,7 +36,7 @@ pub struct StateConfig {
 }
 
 impl StateConfig {
-    pub fn generate_state_config<T>(db: T) -> anyhow::Result<Self>
+    pub fn generate_state_config<T>(db: T) -> Result<Self, StorageError>
     where
         T: ChainConfigDb,
     {
@@ -51,11 +51,11 @@ impl StateConfig {
 
 pub trait ChainConfigDb {
     /// Returns *all* unspent coin configs available in the database.
-    fn get_coin_config(&self) -> anyhow::Result<Option<Vec<CoinConfig>>>;
+    fn get_coin_config(&self) -> Result<Option<Vec<CoinConfig>>, StorageError>;
     /// Returns *alive* contract configs available in the database.
-    fn get_contract_config(&self) -> Result<Option<Vec<ContractConfig>>, anyhow::Error>;
+    fn get_contract_config(&self) -> Result<Option<Vec<ContractConfig>>, StorageError>;
     /// Returns *all* unspent message configs available in the database.
-    fn get_message_config(&self) -> Result<Option<Vec<MessageConfig>>, Error>;
+    fn get_message_config(&self) -> Result<Option<Vec<MessageConfig>>, StorageError>;
     /// Returns the last available block height.
-    fn get_block_height(&self) -> Result<Option<BlockHeight>, Error>;
+    fn get_block_height(&self) -> Result<Option<BlockHeight>, StorageError>;
 }

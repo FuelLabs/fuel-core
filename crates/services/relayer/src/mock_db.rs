@@ -2,12 +2,10 @@
 
 use async_trait::async_trait;
 
-use fuel_core_interfaces::{
-    db::KvStoreError,
-    relayer::RelayerDb,
-};
+use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_core_storage::{
     tables::Messages,
+    Error as StorageError,
     StorageInspect,
     StorageMutate,
 };
@@ -50,7 +48,7 @@ pub struct MockDb {
 }
 
 impl StorageInspect<Messages> for MockDb {
-    type Error = KvStoreError;
+    type Error = StorageError;
 
     fn get(&self, key: &MessageId) -> Result<Option<Cow<Message>>, Self::Error> {
         Ok(self

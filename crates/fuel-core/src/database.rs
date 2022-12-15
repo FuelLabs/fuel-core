@@ -13,10 +13,9 @@ use fuel_core_chain_config::{
     CoinConfig,
     ContractConfig,
 };
+use fuel_core_database::Error as DatabaseError;
 use fuel_core_executor::refs::ContractStorageTrait;
-pub use fuel_core_interfaces::db::KvStoreError;
 use fuel_core_interfaces::{
-    not_found,
     p2p::P2pDb,
     relayer::RelayerDb,
     txpool::TxPoolDb,
@@ -24,10 +23,12 @@ use fuel_core_interfaces::{
 use fuel_core_poa::ports::BlockDb;
 use fuel_core_producer::ports::BlockProducerDatabase;
 use fuel_core_storage::{
+    not_found,
     tables::{
         FuelBlocks,
         SealedBlockConsensus,
     },
+    Error as StorageError,
     StorageAsMut,
     StorageAsRef,
 };
@@ -54,6 +55,8 @@ use std::{
     marker::Send,
     sync::Arc,
 };
+
+// TODO: Extract `Database` and all belongs into `fuel-core-database`.
 
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
@@ -168,7 +171,7 @@ unsafe impl Sync for Database {}
 
 impl Database {
     #[cfg(feature = "rocksdb")]
-    pub fn open(path: &Path) -> Result<Self, Error> {
+    pub fn open(path: &Path) -> Result<Self, DatabaseError> {
         let db = RocksDb::default_open(path)?;
 
         Ok(Database {
@@ -192,15 +195,15 @@ impl Database {
         key: K,
         column: Column,
         value: V,
-    ) -> Result<Option<R>, Error> {
+    ) -> Result<Option<R>, DatabaseError> {
         let result = self.data.put(
             key.as_ref(),
             column,
-            bincode::serialize(&value).map_err(|_| Error::Codec)?,
+            bincode::serialize(&value).map_err(|_| DatabaseError::Codec)?,
         )?;
         if let Some(previous) = result {
             Ok(Some(
-                bincode::deserialize(&previous).map_err(|_| Error::Codec)?,
+                bincode::deserialize(&previous).map_err(|_| DatabaseError::Codec)?,
             ))
         } else {
             Ok(None)
@@ -211,10 +214,10 @@ impl Database {
         &self,
         key: &[u8],
         column: Column,
-    ) -> Result<Option<V>, Error> {
+    ) -> Result<Option<V>, DatabaseError> {
         self.data
             .delete(key, column)?
-            .map(|val| bincode::deserialize(&val).map_err(|_| Error::Codec))
+            .map(|val| bincode::deserialize(&val).map_err(|_| DatabaseError::Codec))
             .transpose()
     }
 
@@ -222,16 +225,16 @@ impl Database {
         &self,
         key: &[u8],
         column: Column,
-    ) -> Result<Option<V>, Error> {
+    ) -> Result<Option<V>, DatabaseError> {
         self.data
             .get(key, column)?
-            .map(|val| bincode::deserialize(&val).map_err(|_| Error::Codec))
+            .map(|val| bincode::deserialize(&val).map_err(|_| DatabaseError::Codec))
             .transpose()
     }
 
     // TODO: Rename to `contains_key` to be the same as `StorageInspect`
     //  https://github.com/FuelLabs/fuel-core/issues/622
-    fn exists(&self, key: &[u8], column: Column) -> Result<bool, Error> {
+    fn exists(&self, key: &[u8], column: Column) -> Result<bool, DatabaseError> {
         self.data.exists(key, column)
     }
 
@@ -241,7 +244,7 @@ impl Database {
         prefix: Option<Vec<u8>>,
         start: Option<Vec<u8>>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = Result<(K, V), Error>> + '_
+    ) -> impl Iterator<Item = Result<(K, V), DatabaseError>> + '_
     where
         K: From<Vec<u8>>,
         V: DeserializeOwned,
@@ -252,7 +255,7 @@ impl Database {
                 val.and_then(|(key, value)| {
                     let key = K::from(key);
                     let value: V =
-                        bincode::deserialize(&value).map_err(|_| Error::Codec)?;
+                        bincode::deserialize(&value).map_err(|_| DatabaseError::Codec)?;
                     Ok((key, value))
                 })
             })
@@ -271,7 +274,7 @@ impl AsRef<Database> for Database {
 
 /// Implemented to satisfy: `GenesisCommitment for ContractRef<&'a mut Database>`
 impl ContractStorageTrait<'_> for Database {
-    type InnerError = Error;
+    type InnerError = StorageError;
 }
 
 /// Construct an ephemeral database
@@ -323,7 +326,7 @@ impl BlockDb for Database {
 }
 
 impl TxPoolDb for Database {
-    fn current_block_height(&self) -> Result<BlockHeight, KvStoreError> {
+    fn current_block_height(&self) -> Result<BlockHeight, StorageError> {
         self.get_block_height()
             .map(|h| h.unwrap_or_default())
             .map_err(Into::into)
@@ -334,7 +337,7 @@ impl BlockProducerDatabase for Database {
     fn get_block(
         &self,
         fuel_height: BlockHeight,
-    ) -> anyhow::Result<Option<Cow<CompressedBlock>>> {
+    ) -> Result<Option<Cow<CompressedBlock>>, StorageError> {
         let id = self
             .get_block_id(fuel_height)?
             .ok_or(not_found!("BlockId"))?;
@@ -350,10 +353,7 @@ impl BlockProducerDatabase for Database {
 
 #[async_trait]
 impl P2pDb for Database {
-    async fn get_sealed_block(
-        &self,
-        height: BlockHeight,
-    ) -> Option<Arc<SealedBlock>> {
+    async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedBlock>> {
         <Self as RelayerDb>::get_sealed_block(self, height).await
     }
 }
@@ -361,21 +361,21 @@ impl P2pDb for Database {
 /// Implement `ChainConfigDb` so that `Database` can be passed to
 /// `StateConfig's` `generate_state_config()` method
 impl ChainConfigDb for Database {
-    fn get_coin_config(&self) -> anyhow::Result<Option<Vec<CoinConfig>>> {
+    fn get_coin_config(&self) -> Result<Option<Vec<CoinConfig>>, StorageError> {
         Self::get_coin_config(self)
     }
 
-    fn get_contract_config(&self) -> Result<Option<Vec<ContractConfig>>, anyhow::Error> {
+    fn get_contract_config(&self) -> Result<Option<Vec<ContractConfig>>, StorageError> {
         Self::get_contract_config(self)
     }
 
     fn get_message_config(
         &self,
-    ) -> Result<Option<Vec<fuel_core_chain_config::MessageConfig>>, Error> {
+    ) -> Result<Option<Vec<fuel_core_chain_config::MessageConfig>>, StorageError> {
         Self::get_message_config(self)
     }
 
-    fn get_block_height(&self) -> Result<Option<BlockHeight>, Error> {
+    fn get_block_height(&self) -> Result<Option<BlockHeight>, StorageError> {
         Self::get_block_height(self)
     }
 }
@@ -388,10 +388,13 @@ mod relayer {
         Database,
     };
     use fuel_core_interfaces::relayer::RelayerDb;
-    use fuel_core_types::blockchain::{primitives::{
-        BlockHeight,
-        DaBlockHeight,
-    }, SealedBlock};
+    use fuel_core_types::blockchain::{
+        primitives::{
+            BlockHeight,
+            DaBlockHeight,
+        },
+        SealedBlock,
+    };
     use std::sync::Arc;
 
     #[async_trait::async_trait]

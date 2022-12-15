@@ -1,34 +1,29 @@
-use crate::{
-    database::{
-        Column,
-        Database,
-    },
-    state::Error,
+use crate::database::{
+    Column,
+    Database,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::{
-            StorageInspect,
-            StorageMutate,
-        },
-        fuel_vm::prelude::{
-            Bytes32,
-            ContractId,
-            Salt,
-        },
+use fuel_core_interfaces::common::{
+    fuel_storage::{
+        StorageInspect,
+        StorageMutate,
     },
-    db::ContractsInfo,
+    fuel_vm::prelude::{
+        Bytes32,
+        ContractId,
+        Salt,
+    },
 };
+use fuel_core_storage::Error as StorageError;
 use std::borrow::Cow;
 
 impl StorageInspect<ContractsInfo> for Database {
     type Error = Error;
 
-    fn get(&self, key: &ContractId) -> Result<Option<Cow<(Salt, Bytes32)>>, Error> {
+    fn get(&self, key: &ContractId) -> Result<Option<Cow<(Salt, Bytes32)>>, Self::Error> {
         Database::get(self, key.as_ref(), Column::ContractsInfo)
     }
 
-    fn contains_key(&self, key: &ContractId) -> Result<bool, Error> {
+    fn contains_key(&self, key: &ContractId) -> Result<bool, Self::Error> {
         Database::exists(self, key.as_ref(), Column::ContractsInfo)
     }
 }
@@ -38,11 +33,14 @@ impl StorageMutate<ContractsInfo> for Database {
         &mut self,
         key: &ContractId,
         value: &(Salt, Bytes32),
-    ) -> Result<Option<(Salt, Bytes32)>, Error> {
+    ) -> Result<Option<(Salt, Bytes32)>, Self::Error> {
         Database::insert(self, key.as_ref(), Column::ContractsInfo, *value)
     }
 
-    fn remove(&mut self, key: &ContractId) -> Result<Option<(Salt, Bytes32)>, Error> {
+    fn remove(
+        &mut self,
+        key: &ContractId,
+    ) -> Result<Option<(Salt, Bytes32)>, Self::Error> {
         Database::remove(self, key.as_ref(), Column::ContractsInfo)
     }
 }

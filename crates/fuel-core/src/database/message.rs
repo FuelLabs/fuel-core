@@ -2,16 +2,14 @@ use crate::{
     database::{
         Column,
         Database,
-        KvStoreError,
     },
-    state::{
-        Error,
-        IterDirection,
-    },
+    state::IterDirection,
 };
 use fuel_core_chain_config::MessageConfig;
+use fuel_core_database::Error as DatabaseError;
 use fuel_core_storage::{
     tables::Messages,
+    Error as StorageError,
     StorageInspect,
     StorageMutate,
 };
@@ -29,13 +27,13 @@ use std::{
 };
 
 impl StorageInspect<Messages> for Database {
-    type Error = KvStoreError;
+    type Error = StorageError;
 
-    fn get(&self, key: &MessageId) -> Result<Option<Cow<Message>>, KvStoreError> {
+    fn get(&self, key: &MessageId) -> Result<Option<Cow<Message>>, Self::Error> {
         Database::get(self, key.as_ref(), Column::Messages).map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &MessageId) -> Result<bool, KvStoreError> {
+    fn contains_key(&self, key: &MessageId) -> Result<bool, Self::Error> {
         Database::exists(self, key.as_ref(), Column::Messages).map_err(Into::into)
     }
 }
@@ -45,7 +43,7 @@ impl StorageMutate<Messages> for Database {
         &mut self,
         key: &MessageId,
         value: &Message,
-    ) -> Result<Option<Message>, KvStoreError> {
+    ) -> Result<Option<Message>, Self::Error> {
         // insert primary record
         let result =
             Database::insert(self, key.as_ref(), Column::Messages, value.clone())?;
@@ -61,7 +59,7 @@ impl StorageMutate<Messages> for Database {
         Ok(result)
     }
 
-    fn remove(&mut self, key: &MessageId) -> Result<Option<Message>, KvStoreError> {
+    fn remove(&mut self, key: &MessageId) -> Result<Option<Message>, Self::Error> {
         let result: Option<Message> =
             Database::remove(self, key.as_ref(), Column::Messages)?;
 
@@ -83,7 +81,7 @@ impl Database {
         owner: &Address,
         start_message_id: Option<MessageId>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = Result<MessageId, Error>> + '_ {
+    ) -> impl Iterator<Item = Result<MessageId, DatabaseError>> + '_ {
         self.iter_all::<Vec<u8>, bool>(
             Column::OwnedMessageIds,
             Some(owner.to_vec()),
@@ -102,13 +100,15 @@ impl Database {
         &self,
         start: Option<MessageId>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = Result<Message, Error>> + '_ {
+    ) -> impl Iterator<Item = Result<Message, DatabaseError>> + '_ {
         let start = start.map(|v| v.deref().to_vec());
         self.iter_all::<Vec<u8>, Message>(Column::Messages, None, start, direction)
             .map(|res| res.map(|(_, message)| message))
     }
 
-    pub fn get_message_config(&self) -> Result<Option<Vec<MessageConfig>>, Error> {
+    pub fn get_message_config(
+        &self,
+    ) -> Result<Option<Vec<MessageConfig>>, DatabaseError> {
         let configs = self
             .all_messages(None, None)
             .filter_map(|msg| {
@@ -123,7 +123,7 @@ impl Database {
                     Some(msg)
                 }
             })
-            .map(|msg| -> Result<MessageConfig, Error> {
+            .map(|msg| -> Result<MessageConfig, DatabaseError> {
                 let msg = msg?;
 
                 Ok(MessageConfig {
@@ -135,7 +135,7 @@ impl Database {
                     da_height: msg.da_height,
                 })
             })
-            .collect::<Result<Vec<MessageConfig>, Error>>()?;
+            .collect::<Result<Vec<MessageConfig>, DatabaseError>>()?;
 
         Ok(Some(configs))
     }

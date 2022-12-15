@@ -1,31 +1,29 @@
 use crate::database::Database;
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::StorageAsRef,
-        fuel_tx::UtxoId,
-        fuel_types::{
-            Address,
-            AssetId,
-            MessageId,
-            Word,
-        },
-    },
-    db::{
-        Error,
-        KvStoreError,
-    },
+use fuel_core_database::Error as DatabaseError;
+use fuel_core_storage::{
     not_found,
-};
-use fuel_core_storage::tables::{
-    Coins,
-    Messages,
-};
-use fuel_core_types::entities::{
-    coin::{
-        Coin,
-        CoinStatus,
+    tables::{
+        Coins,
+        Messages,
     },
-    message::Message,
+    Error as StorageError,
+    StorageAsRef,
+};
+use fuel_core_types::{
+    entities::{
+        coin::{
+            Coin,
+            CoinStatus,
+        },
+        message::Message,
+    },
+    fuel_tx::UtxoId,
+    fuel_types::{
+        Address,
+        AssetId,
+        MessageId,
+        Word,
+    },
 };
 use itertools::Itertools;
 use std::{
@@ -104,7 +102,8 @@ impl<'a> AssetsQuery<'a> {
     //  https://github.com/FuelLabs/fuel-core/issues/588
     pub fn unspent_resources(
         &self,
-    ) -> impl Iterator<Item = Result<Resource<Cow<Coin>, Cow<Message>>, Error>> + '_ {
+    ) -> impl Iterator<Item = Result<Resource<Cow<Coin>, Cow<Message>>, DatabaseError>> + '_
+    {
         let coins_iter = self
             .database
             .owned_coins_ids(self.owner, None, None)
@@ -123,7 +122,7 @@ impl<'a> AssetsQuery<'a> {
                         .get(&id)?
                         .ok_or(not_found!(Coins))?;
 
-                    Ok::<_, KvStoreError>(Resource::Coin { id, fields: coin })
+                    Ok::<_, StorageError>(Resource::Coin { id, fields: coin })
                 })
             })
             .map(|results| Ok(results??))
@@ -157,7 +156,7 @@ impl<'a> AssetsQuery<'a> {
                         .get(&id)?
                         .ok_or(not_found!(Messages))?;
 
-                    Ok::<_, KvStoreError>(Resource::Message {
+                    Ok::<_, StorageError>(Resource::Message {
                         id,
                         fields: message,
                     })
@@ -211,7 +210,8 @@ impl<'a> AssetQuery<'a> {
     /// for the `asset_id`.
     pub fn unspent_resources(
         &self,
-    ) -> impl Iterator<Item = Result<Resource<Cow<Coin>, Cow<Message>>, Error>> + '_ {
+    ) -> impl Iterator<Item = Result<Resource<Cow<Coin>, Cow<Message>>, StorageError>> + '_
+    {
         self.query.unspent_resources()
     }
 }
