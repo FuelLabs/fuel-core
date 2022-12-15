@@ -5,21 +5,15 @@ use crate::{
     },
     GenesisCommitment,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_types::{
-            Address,
-            AssetId,
-            Bytes32,
-        },
-        prelude::{
-            Hasher,
-            MerkleRoot,
-        },
-    },
-    model::{
-        BlockHeight,
-        Coin,
+use fuel_core_storage::fuel_storage::MerkleRoot;
+use fuel_core_types::{
+    blockchain::primitives::BlockHeight,
+    entities::coin::Coin,
+    fuel_crypto::Hasher,
+    fuel_types::{
+        Address,
+        AssetId,
+        Bytes32,
     },
 };
 

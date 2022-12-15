@@ -12,17 +12,16 @@ pub use state::*;
 
 #[cfg(test)]
 mod tests {
-    use fuel_core_interfaces::{
-        common::{
-            fuel_asm::Opcode,
-            fuel_vm::prelude::Contract,
-            prelude::{
-                AssetId,
-                Bytes32,
-            },
+    use fuel_core_types::{
+        blockchain::primitives::DaBlockHeight,
+        fuel_asm::Opcode,
+        fuel_types::{
+            AssetId,
+            Bytes32,
         },
-        model::DaBlockHeight,
+        fuel_vm::Contract,
     };
+
     use rand::{
         prelude::StdRng,
         Rng,

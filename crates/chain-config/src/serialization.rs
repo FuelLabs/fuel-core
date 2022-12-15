@@ -1,13 +1,11 @@
 use core::fmt;
-use fuel_core_interfaces::{
-    common::fuel_types::{
-        bytes::WORD_SIZE,
-        Word,
-    },
-    model::{
+use fuel_core_types::{
+    blockchain::primitives::{
         BlockHeight,
         DaBlockHeight,
     },
+    fuel_asm::Word,
+    fuel_types::bytes::WORD_SIZE,
 };
 use serde::{
     de::Error,

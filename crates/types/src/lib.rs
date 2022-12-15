@@ -22,5 +22,6 @@ pub mod fuel_vm {
         Interpreter,
         PredicateStorage,
         ProgramState,
+        Contract,
     };
 }

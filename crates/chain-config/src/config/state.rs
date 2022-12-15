@@ -1,9 +1,7 @@
 use crate::serialization::HexNumber;
 
-use fuel_core_interfaces::{
-    db::Error,
-    model::BlockHeight,
-};
+use fuel_core_interfaces::db::Error;
+use fuel_core_types::blockchain::primitives::BlockHeight;
 
 use serde::{
     Deserialize,

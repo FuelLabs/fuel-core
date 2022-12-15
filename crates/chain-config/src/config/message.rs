@@ -5,16 +5,12 @@ use crate::{
     },
     GenesisCommitment,
 };
-use fuel_core_interfaces::{
-    common::prelude::{
-        Address,
-        MerkleRoot,
-        Word,
-    },
-    model::{
-        DaBlockHeight,
-        Message,
-    },
+use fuel_core_storage::fuel_storage::MerkleRoot;
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    entities::message::Message,
+    fuel_asm::Word,
+    fuel_types::Address,
 };
 use serde::{
     Deserialize,

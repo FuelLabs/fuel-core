@@ -2366,6 +2366,8 @@ dependencies = [
  "bincode",
  "fuel-core-interfaces",
  "fuel-core-poa",
+ "fuel-core-storage",
+ "fuel-core-types",
  "hex",
  "insta",
  "itertools",
