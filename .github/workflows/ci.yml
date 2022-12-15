@@ -112,6 +112,7 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           override: true
+          components: clippy
       - name: Install Cargo Make
         uses: davidB/rust-cargo-make@v1
         with:
