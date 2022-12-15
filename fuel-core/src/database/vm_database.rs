@@ -144,28 +144,60 @@ impl InterpreterStorage for VmDatabase {
 
     fn merkle_contract_state_range(
         &self,
-        _id: &ContractId,
-        _start_key: &Bytes32,
-        _range: Word,
+        id: &ContractId,
+        start_key: &Bytes32,
+        range: Word,
     ) -> Result<Vec<Option<Cow<Bytes32>>>, Self::DataError> {
-        unimplemented!()
+        if range != 1 {
+            return Err(Error::Other(anyhow!(
+                "Range read supports only reading with a range equal 1"
+            )))
+        }
+        let value = self.merkle_contract_state(id, start_key)?;
+
+        Ok(vec![value])
     }
 
     fn merkle_contract_state_insert_range(
         &mut self,
-        _contract: &ContractId,
-        _start_key: &Bytes32,
-        _values: &[Bytes32],
+        contract: &ContractId,
+        start_key: &Bytes32,
+        values: &[Bytes32],
     ) -> Result<Option<()>, Self::DataError> {
-        unimplemented!()
+        if values.len() != 1 {
+            return Err(Error::Other(anyhow!(
+                "Range insert supports only inserting with a range equal 1"
+            )))
+        }
+        let found_unset = self
+            .merkle_contract_state_insert(contract, start_key, &values[0])?
+            .is_none();
+
+        if found_unset {
+            Ok(None)
+        } else {
+            Ok(Some(()))
+        }
     }
 
     fn merkle_contract_state_remove_range(
         &mut self,
-        _contract: &ContractId,
-        _start_key: &Bytes32,
-        _range: Word,
+        contract: &ContractId,
+        start_key: &Bytes32,
+        range: Word,
     ) -> Result<Option<()>, Self::DataError> {
-        unimplemented!()
+        if range != 1 {
+            return Err(Error::Other(anyhow!(
+                "Range remove supports only removing with a range equal 1"
+            )))
+        }
+        let found_unset = self
+            .merkle_contract_state_remove(contract, start_key)?
+            .is_none();
+        if found_unset {
+            Ok(None)
+        } else {
+            Ok(Some(()))
+        }
     }
 }
