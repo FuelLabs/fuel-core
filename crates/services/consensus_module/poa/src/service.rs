@@ -6,7 +6,6 @@ use crate::{
     ports::{
         BlockDb,
         BlockProducer,
-        DBTransaction,
     },
     Config,
     Trigger,
@@ -17,33 +16,34 @@ use anyhow::{
 };
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
-    common::{
-        fuel_tx::UniqueIdentifier,
-        prelude::{
-            Signature,
-            Word,
-        },
-        secrecy::{
-            ExposeSecret,
-            Secret,
-        },
-    },
     poa_coordinator::TransactionPool,
-    txpool::TxStatus,
 };
-use fuel_core_storage::UncommittedResult;
-use fuel_core_types::blockchain::{
-    block::{
-        Block,
-        ExecutionResult,
+use fuel_core_storage::transactional::StorageTransaction;
+use fuel_core_types::{
+    blockchain::{
+        block::Block,
+        consensus::{
+            poa::PoAConsensus,
+            Consensus,
+        },
+        primitives::{
+            BlockHeight,
+            SecretKeyWrapper,
+        },
     },
-    consensus::{
-        poa::PoAConsensus,
-        Consensus,
+    fuel_asm::Word,
+    fuel_crypto::Signature,
+    fuel_tx::UniqueIdentifier,
+    secrecy::{
+        ExposeSecret,
+        Secret,
     },
-    primitives::{
-        BlockHeight,
-        SecretKeyWrapper,
+    services::{
+        executor::{
+            ExecutionResult,
+            UncommittedResult,
+        },
+        txpool::TxStatus,
     },
 };
 use parking_lot::Mutex;
@@ -168,7 +168,7 @@ where
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(
         &mut self,
-    ) -> anyhow::Result<UncommittedResult<DBTransaction<D>>> {
+    ) -> anyhow::Result<UncommittedResult<StorageTransaction<D>>> {
         let current_height = self
             .db
             .block_height()
@@ -197,8 +197,8 @@ where
         ) = self.signal_produce_block().await?.into();
 
         // sign the block and seal it
-        seal_block(&self.signing_key, &block, db_transaction.database_mut())?;
-        db_transaction.commit_box()?;
+        seal_block(&self.signing_key, &block, db_transaction.as_mut())?;
+        db_transaction.commit()?;
 
         let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
         for (tx, err) in skipped_transactions {

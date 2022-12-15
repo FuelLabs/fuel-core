@@ -10,9 +10,10 @@ use crate::{
     },
 };
 use fuel_core_chain_config::CoinConfig;
-use fuel_core_interfaces::{self,};
+use fuel_core_database::Error as DatabaseError;
 use fuel_core_storage::{
     tables::Coins,
+    Error as StorageError,
     StorageInspect,
     StorageMutate,
 };
@@ -49,13 +50,13 @@ fn utxo_id_to_bytes(utxo_id: &UtxoId) -> Vec<u8> {
 }
 
 impl StorageInspect<Coins> for Database {
-    type Error = KvStoreError;
+    type Error = StorageError;
 
-    fn get(&self, key: &UtxoId) -> Result<Option<Cow<Coin>>, KvStoreError> {
+    fn get(&self, key: &UtxoId) -> Result<Option<Cow<Coin>>, StorageError> {
         Database::get(self, &utxo_id_to_bytes(key), Column::Coins).map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &UtxoId) -> Result<bool, KvStoreError> {
+    fn contains_key(&self, key: &UtxoId) -> Result<bool, StorageError> {
         Database::exists(self, &utxo_id_to_bytes(key), Column::Coins).map_err(Into::into)
     }
 }
@@ -65,7 +66,7 @@ impl StorageMutate<Coins> for Database {
         &mut self,
         key: &UtxoId,
         value: &Coin,
-    ) -> Result<Option<Coin>, KvStoreError> {
+    ) -> Result<Option<Coin>, StorageError> {
         let coin_by_owner: Vec<u8> = owner_coin_id_key(&value.owner, key);
         // insert primary record
         let insert = Database::insert(self, utxo_id_to_bytes(key), Column::Coins, value)?;
@@ -75,7 +76,7 @@ impl StorageMutate<Coins> for Database {
         Ok(insert)
     }
 
-    fn remove(&mut self, key: &UtxoId) -> Result<Option<Coin>, KvStoreError> {
+    fn remove(&mut self, key: &UtxoId) -> Result<Option<Coin>, StorageError> {
         let coin: Option<Coin> =
             Database::remove(self, &utxo_id_to_bytes(key), Column::Coins)?;
 
@@ -96,7 +97,7 @@ impl Database {
         owner: &Address,
         start_coin: Option<UtxoId>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = Result<UtxoId, Error>> + '_ {
+    ) -> impl Iterator<Item = Result<UtxoId, DatabaseError>> + '_ {
         self.iter_all::<Vec<u8>, bool>(
             Column::OwnedCoins,
             Some(owner.as_ref().to_vec()),
@@ -114,7 +115,7 @@ impl Database {
         })
     }
 
-    pub fn get_coin_config(&self) -> anyhow::Result<Option<Vec<CoinConfig>>> {
+    pub fn get_coin_config(&self) -> Result<Option<Vec<CoinConfig>>, DatabaseError> {
         let configs = self
             .iter_all::<Vec<u8>, Coin>(Column::Coins, None, None, None)
             .filter_map(|coin| {

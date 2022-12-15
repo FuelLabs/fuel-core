@@ -4,42 +4,42 @@ use crate::{
         Database,
     },
     state::{
-        Error,
         IterDirection,
         MultiKey,
     },
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::{
-            StorageInspect,
-            StorageMutate,
-        },
-        fuel_vm::{
-            crypto,
-            prelude::{
-                Bytes32,
-                ContractId,
-                MerkleRoot,
-                MerkleRootStorage,
-            },
-        },
+use fuel_core_database::Error as DatabaseError;
+use fuel_core_storage::{
+    tables::ContractsState,
+    Error as StorageError,
+    MerkleRoot,
+    MerkleRootStorage,
+    StorageInspect,
+    StorageMutate,
+};
+use fuel_core_types::{
+    fuel_types::{
+        Bytes32,
+        ContractId,
     },
-    db::ContractsState,
+    fuel_vm::crypto,
 };
 use itertools::Itertools;
 use std::borrow::Cow;
 
 impl StorageInspect<ContractsState<'_>> for Database {
-    type Error = Error;
+    type Error = StorageError;
 
-    fn get(&self, key: &(&ContractId, &Bytes32)) -> Result<Option<Cow<Bytes32>>, Error> {
+    fn get(
+        &self,
+        key: &(&ContractId, &Bytes32),
+    ) -> Result<Option<Cow<Bytes32>>, StorageError> {
         let key = MultiKey::new(key);
         self.get(key.as_ref(), Column::ContractsState)
             .map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &(&ContractId, &Bytes32)) -> Result<bool, Error> {
+    fn contains_key(&self, key: &(&ContractId, &Bytes32)) -> Result<bool, StorageError> {
         let key = MultiKey::new(key);
         self.exists(key.as_ref(), Column::ContractsState)
             .map_err(Into::into)
@@ -51,7 +51,7 @@ impl StorageMutate<ContractsState<'_>> for Database {
         &mut self,
         key: &(&ContractId, &Bytes32),
         value: &Bytes32,
-    ) -> Result<Option<Bytes32>, Error> {
+    ) -> Result<Option<Bytes32>, StorageError> {
         let key = MultiKey::new(key);
         Database::insert(self, key.as_ref(), Column::ContractsState, *value)
             .map_err(Into::into)
@@ -60,14 +60,14 @@ impl StorageMutate<ContractsState<'_>> for Database {
     fn remove(
         &mut self,
         key: &(&ContractId, &Bytes32),
-    ) -> Result<Option<Bytes32>, Error> {
+    ) -> Result<Option<Bytes32>, StorageError> {
         let key = MultiKey::new(key);
         Database::remove(self, key.as_ref(), Column::ContractsState).map_err(Into::into)
     }
 }
 
 impl MerkleRootStorage<ContractId, ContractsState<'_>> for Database {
-    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Error> {
+    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, StorageError> {
         let items: Vec<_> = Database::iter_all::<Vec<u8>, Bytes32>(
             self,
             Column::ContractsState,

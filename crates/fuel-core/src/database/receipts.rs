@@ -17,11 +17,11 @@ use std::borrow::Cow;
 impl StorageInspect<Receipts> for Database {
     type Error = KvStoreError;
 
-    fn get(&self, key: &Bytes32) -> Result<Option<Cow<Vec<Receipt>>>, KvStoreError> {
+    fn get(&self, key: &Bytes32) -> Result<Option<Cow<Vec<Receipt>>>, Self::Error> {
         Database::get(self, key.as_ref(), Column::Receipts).map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &Bytes32) -> Result<bool, KvStoreError> {
+    fn contains_key(&self, key: &Bytes32) -> Result<bool, Self::Error> {
         Database::exists(self, key.as_ref(), Column::Receipts).map_err(Into::into)
     }
 }
@@ -31,11 +31,11 @@ impl StorageMutate<Receipts> for Database {
         &mut self,
         key: &Bytes32,
         value: &[Receipt],
-    ) -> Result<Option<Vec<Receipt>>, KvStoreError> {
+    ) -> Result<Option<Vec<Receipt>>, Self::Error> {
         Database::insert(self, key.as_ref(), Column::Receipts, value).map_err(Into::into)
     }
 
-    fn remove(&mut self, key: &Bytes32) -> Result<Option<Vec<Receipt>>, KvStoreError> {
+    fn remove(&mut self, key: &Bytes32) -> Result<Option<Vec<Receipt>>, Self::Error> {
         Database::remove(self, key.as_ref(), Column::Receipts).map_err(Into::into)
     }
 }

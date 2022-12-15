@@ -1,22 +1,22 @@
 use async_trait::async_trait;
-use fuel_core_interfaces::{
-    common::fuel_tx::Receipt,
-    db::DatabaseTransaction,
-};
-use fuel_core_storage::UncommittedResult;
+use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
     blockchain::{
-        block::{
-            CompressedBlock,
-            Error as ExecutorError,
-            ExecutionBlock,
-        },
+        block::CompressedBlock,
         primitives::{
             BlockHeight,
             DaBlockHeight,
         },
     },
-    services::txpool::ArcPoolTx,
+    fuel_tx::Receipt,
+    services::{
+        executor::{
+            Error as ExecutorError,
+            ExecutionBlock,
+            UncommittedResult,
+        },
+        txpool::ArcPoolTx,
+    },
 };
 use std::borrow::Cow;
 
@@ -48,16 +48,13 @@ pub trait Relayer: Sync + Send {
     async fn get_best_finalized_da_height(&self) -> anyhow::Result<DaBlockHeight>;
 }
 
-// TODO: Replace by the analog from the `fuel-core-storage`.
-pub type DBTransaction<Database> = Box<dyn DatabaseTransaction<Database>>;
-
-pub trait Executor<Database: ?Sized>: Sync + Send {
+pub trait Executor<Database>: Sync + Send {
     /// Executes the block and returns the result of execution with uncommitted database
     /// transaction.
     fn execute_without_commit(
         &self,
         block: ExecutionBlock,
-    ) -> Result<UncommittedResult<DBTransaction<Database>>, ExecutorError>;
+    ) -> Result<UncommittedResult<StorageTransaction<Database>>, ExecutorError>;
 
     /// Executes the block without committing it to the database. During execution collects the
     /// receipts to return them. The `utxo_validation` field can be used to disable the validation

@@ -1,17 +1,17 @@
 [package]
-name = "fuel-core-storage"
+name = "fuel-core-database"
 version = "0.15.1"
 authors = ["Fuel Labs <contact@fuel.sh>"]
 categories = ["cryptography::cryptocurrencies"]
 edition = "2021"
 homepage = "https://fuel.network/"
-keywords = ["blockchain", "cryptocurrencies", "fuel-core", "fuel-client", "fuel-storage"]
+keywords = ["blockchain", "cryptocurrencies", "fuel-core", "fuel-client", "fuel-database"]
 license = "BUSL-1.1"
 repository = "https://github.com/FuelLabs/fuel-core"
-description = "Storage types and primitives used by Fuel core protocol."
+description = "The crates contains databases used by Fuel core protocol."
 
 [dependencies]
 anyhow = "1.0"
 fuel-core-types = { path = "../types", version = "0.15.1" }
-fuel-vm-private = { version = "0.22", package = "fuel-vm" }
+fuel-core-storage = { path = "../storage", version = "0.15.1" }
 thiserror = "1.0"

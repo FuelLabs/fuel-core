@@ -1,7 +1,3 @@
-use crate::db::{
-    Error as DbStateError,
-    KvStoreError,
-};
 use derive_more::{
     Deref,
     DerefMut,
@@ -11,14 +7,12 @@ use fuel_core_storage::{
         Coins,
         Messages,
     },
+    Error as StorageError,
     StorageAsRef,
     StorageInspect,
 };
 use fuel_core_types::{
-    blockchain::primitives::{
-        BlockHeight,
-        BlockId,
-    },
+    blockchain::primitives::BlockHeight,
     entities::{
         coin::Coin,
         message::Message,
@@ -34,14 +28,11 @@ use fuel_core_types::{
         MessageId,
         Word,
     },
-    fuel_vm::ProgramState,
     services::txpool::{
         ArcPoolTx,
         InsertionResult,
-        TransactionStatus,
         TxInfo,
     },
-    tai64::Tai64,
 };
 use fuel_vm::storage::ContractsRawCode;
 use std::{
@@ -55,29 +46,29 @@ use tokio::sync::{
 };
 
 pub trait TxPoolDb:
-    StorageInspect<Coins, Error = KvStoreError>
-    + StorageInspect<ContractsRawCode, Error = DbStateError>
-    + StorageInspect<Messages, Error = KvStoreError>
+    StorageInspect<Coins, Error = StorageError>
+    + StorageInspect<ContractsRawCode, Error = StorageError>
+    + StorageInspect<Messages, Error = StorageError>
     + Send
     + Sync
 {
-    fn utxo(&self, utxo_id: &UtxoId) -> Result<Option<Coin>, KvStoreError> {
+    fn utxo(&self, utxo_id: &UtxoId) -> Result<Option<Coin>, StorageError> {
         self.storage::<Coins>()
             .get(utxo_id)
             .map(|t| t.map(|t| t.as_ref().clone()))
     }
 
-    fn contract_exist(&self, contract_id: &ContractId) -> Result<bool, DbStateError> {
+    fn contract_exist(&self, contract_id: &ContractId) -> Result<bool, StorageError> {
         self.storage::<ContractsRawCode>().contains_key(contract_id)
     }
 
-    fn message(&self, message_id: &MessageId) -> Result<Option<Message>, KvStoreError> {
+    fn message(&self, message_id: &MessageId) -> Result<Option<Message>, StorageError> {
         self.storage::<Messages>()
             .get(message_id)
             .map(|t| t.map(|t| t.as_ref().clone()))
     }
 
-    fn current_block_height(&self) -> Result<BlockHeight, KvStoreError>;
+    fn current_block_height(&self) -> Result<BlockHeight, StorageError>;
 }
 
 /// RPC client for doing calls to the TxPool through an MPSC channel.

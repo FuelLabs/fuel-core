@@ -2,10 +2,7 @@ use crate::{
     database::Database,
     state::in_memory::transaction::MemoryTransactionView,
 };
-use fuel_core_interfaces::db::{
-    Error,
-    Transactional,
-};
+use fuel_core_storage::transactional::Transactional;
 use std::{
     fmt::Debug,
     ops::{
@@ -59,20 +56,6 @@ impl Transactional for DatabaseTransaction {
     fn commit(self) -> crate::state::Result<()> {
         // TODO: should commit be fallible if this api is meant to be atomic?
         self.changes.commit()
-    }
-
-    fn commit_box(self: Box<Self>) -> Result<(), Error> {
-        self.changes.commit()
-    }
-}
-
-impl fuel_core_interfaces::db::DatabaseTransaction<Database> for DatabaseTransaction {
-    fn database(&self) -> &Database {
-        &self.database
-    }
-
-    fn database_mut(&mut self) -> &mut Database {
-        &mut self.database
     }
 }
 

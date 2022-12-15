@@ -4,6 +4,8 @@ use fuel_core_types::{
     fuel_crypto::Hasher,
 };
 
+// TODO: Replace `anyhow` with own `Error` related to genesis.
+
 pub trait GenesisCommitment {
     /// Calculates the merkle root of the state of the entity.
     fn root(&mut self) -> anyhow::Result<MerkleRoot>;

@@ -2,26 +2,27 @@ use crate::{
     database::{
         Column,
         Database,
-        KvStoreError,
     },
-    state::{
-        Error,
-        IterDirection,
-    },
+    state::IterDirection,
 };
-use fuel_core_interfaces::not_found;
+use fuel_core_database::Error as DatabaseError;
 use fuel_core_storage::{
+    not_found,
     tables::{
         FuelBlocks,
         Transactions,
     },
+    Error as StorageError,
     StorageAsRef,
     StorageInspect,
     StorageMutate,
 };
 use fuel_core_types::{
     blockchain::{
-        block::{Block, CompressedBlock},
+        block::{
+            Block,
+            CompressedBlock,
+        },
         primitives::BlockHeight,
     },
     fuel_tx::Bytes32,
@@ -39,11 +40,11 @@ use std::{
 impl StorageInspect<FuelBlocks> for Database {
     type Error = KvStoreError;
 
-    fn get(&self, key: &Bytes32) -> Result<Option<Cow<CompressedBlock>>, KvStoreError> {
+    fn get(&self, key: &Bytes32) -> Result<Option<Cow<CompressedBlock>>, Self::Error> {
         Database::get(self, key.as_ref(), Column::FuelBlocks).map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &Bytes32) -> Result<bool, KvStoreError> {
+    fn contains_key(&self, key: &Bytes32) -> Result<bool, Self::Error> {
         Database::exists(self, key.as_ref(), Column::FuelBlocks).map_err(Into::into)
     }
 }
@@ -53,7 +54,7 @@ impl StorageMutate<FuelBlocks> for Database {
         &mut self,
         key: &Bytes32,
         value: &CompressedBlock,
-    ) -> Result<Option<CompressedBlock>, KvStoreError> {
+    ) -> Result<Option<CompressedBlock>, Self::Error> {
         let _: Option<BlockHeight> = Database::insert(
             self,
             value.header().height().to_be_bytes(),
@@ -64,7 +65,7 @@ impl StorageMutate<FuelBlocks> for Database {
             .map_err(Into::into)
     }
 
-    fn remove(&mut self, key: &Bytes32) -> Result<Option<CompressedBlock>, KvStoreError> {
+    fn remove(&mut self, key: &Bytes32) -> Result<Option<CompressedBlock>, Self::Error> {
         let block: Option<CompressedBlock> =
             Database::remove(self, key.as_ref(), Column::FuelBlocks)?;
         if let Some(block) = &block {
@@ -79,7 +80,7 @@ impl StorageMutate<FuelBlocks> for Database {
 }
 
 impl Database {
-    pub fn get_block_height(&self) -> Result<Option<BlockHeight>, Error> {
+    pub fn get_block_height(&self) -> Result<Option<BlockHeight>, DatabaseError> {
         let block_entry = self.latest_block()?;
         // get block height from most recently indexed block
         let mut id = block_entry.map(|(height, _)| {
@@ -105,17 +106,21 @@ impl Database {
         }
     }
 
-    pub fn block_time(&self, height: u32) -> Result<Tai64, Error> {
+    pub fn block_time(&self, height: u32) -> Result<Tai64, StorageError> {
         let id = self.get_block_id(height.into())?.unwrap_or_default();
         let block = self
             .storage::<FuelBlocks>()
             .get(&id)?
-            .ok_or(Error::ChainUninitialized)?;
+            .ok_or(not_found!(FuelBlocks))?;
         Ok(block.header().time().to_owned())
     }
 
-    pub fn get_block_id(&self, height: BlockHeight) -> Result<Option<Bytes32>, Error> {
+    pub fn get_block_id(
+        &self,
+        height: BlockHeight,
+    ) -> Result<Option<Bytes32>, StorageError> {
         Database::get(self, &height.to_bytes()[..], Column::FuelBlockIds)
+            .map_err(Into::into)
     }
 
     pub fn all_block_ids(
@@ -144,7 +149,7 @@ impl Database {
             Some(IterDirection::Forward),
         )
         .next()
-        .ok_or(not_found!("Genesis block height"))?
+        .ok_or(Error::ChainUninitialized)?
         .map(|(height, id): (Vec<u8>, Bytes32)| {
             let bytes = <[u8; 4]>::try_from(height.as_slice())
                 .expect("all block heights are stored with the correct amount of bytes");

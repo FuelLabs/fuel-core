@@ -7,7 +7,6 @@ use crate::blockchain::{
 };
 
 pub mod block;
-pub mod transaction;
 pub mod consensus;
 pub mod header;
 pub mod primitives;

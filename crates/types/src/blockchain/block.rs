@@ -12,7 +12,6 @@ use super::{
         BlockId,
         Empty,
     },
-    transaction::TransactionValidityError,
 };
 use crate::{
     fuel_tx::{
@@ -25,8 +24,6 @@ use crate::{
         MessageId,
     },
 };
-use std::error::Error as StdError;
-use thiserror::Error;
 
 /// Fuel block with all transaction data included
 #[derive(Clone, Debug)]

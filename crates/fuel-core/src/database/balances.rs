@@ -4,44 +4,45 @@ use crate::{
         Database,
     },
     state::{
-        Error,
         IterDirection,
         MultiKey,
     },
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::{
-            MerkleRoot,
-            StorageInspect,
-            StorageMutate,
-        },
-        fuel_vm::{
-            crypto,
-            prelude::{
-                AssetId,
-                ContractId,
-                MerkleRootStorage,
-                Word,
-            },
-        },
+use fuel_core_storage::{
+    tables::ContractsAssets,
+    Error as StorageError,
+    MerkleRoot,
+    MerkleRootStorage,
+    StorageInspect,
+    StorageMutate,
+};
+use fuel_core_types::{
+    fuel_asm::Word,
+    fuel_types::{
+        AssetId,
+        ContractId,
     },
-    db::ContractsAssets,
+    fuel_vm::crypto,
 };
 use itertools::Itertools;
 use std::borrow::Cow;
 
 impl StorageInspect<ContractsAssets<'_>> for Database {
-    type Error = Error;
+    type Error = StorageError;
 
-    fn get(&self, key: &(&ContractId, &AssetId)) -> Result<Option<Cow<Word>>, Error> {
+    fn get(
+        &self,
+        key: &(&ContractId, &AssetId),
+    ) -> Result<Option<Cow<Word>>, StorageError> {
         let key = MultiKey::new(key);
         self.get(key.as_ref(), Column::ContractsAssets)
+            .map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &(&ContractId, &AssetId)) -> Result<bool, Error> {
+    fn contains_key(&self, key: &(&ContractId, &AssetId)) -> Result<bool, StorageError> {
         let key = MultiKey::new(key);
         self.exists(key.as_ref(), Column::ContractsAssets)
+            .map_err(Into::into)
     }
 }
 
@@ -50,19 +51,23 @@ impl StorageMutate<ContractsAssets<'_>> for Database {
         &mut self,
         key: &(&ContractId, &AssetId),
         value: &Word,
-    ) -> Result<Option<Word>, Error> {
+    ) -> Result<Option<Word>, StorageError> {
         let key = MultiKey::new(key);
         Database::insert(self, key.as_ref(), Column::ContractsAssets, *value)
+            .map_err(Into::into)
     }
 
-    fn remove(&mut self, key: &(&ContractId, &AssetId)) -> Result<Option<Word>, Error> {
+    fn remove(
+        &mut self,
+        key: &(&ContractId, &AssetId),
+    ) -> Result<Option<Word>, StorageError> {
         let key = MultiKey::new(key);
-        Database::remove(self, key.as_ref(), Column::ContractsAssets)
+        Database::remove(self, key.as_ref(), Column::ContractsAssets).map_err(Into::into)
     }
 }
 
 impl MerkleRootStorage<ContractId, ContractsAssets<'_>> for Database {
-    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Error> {
+    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, StorageError> {
         let items: Vec<_> = Database::iter_all::<Vec<u8>, Word>(
             self,
             Column::ContractsAssets,

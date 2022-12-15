@@ -2,15 +2,14 @@ use crate::{
     database::Column,
     state::in_memory::transaction::MemoryTransactionView,
 };
+use fuel_core_database::Error as DatabaseError;
 use std::{
     fmt::Debug,
     marker::PhantomData,
     sync::Arc,
 };
 
-pub use fuel_core_interfaces::db::Error;
-
-pub type Result<T> = core::result::Result<T, Error>;
+pub type Result<T> = core::result::Result<T, DatabaseError>;
 pub type DataSource = Arc<dyn TransactableStorage>;
 pub type ColumnId = u32;
 
