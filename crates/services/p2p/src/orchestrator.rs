@@ -1,4 +1,8 @@
-use std::sync::Arc;
+use std::{
+    collections::VecDeque,
+    fmt::Debug,
+    sync::Arc,
+};
 
 use anyhow::anyhow;
 
@@ -6,10 +10,13 @@ use fuel_core_interfaces::{
     common::prelude::Transaction,
     model::SealedFuelBlock,
     p2p::{
+        GossipData,
         GossipsubMessageAcceptance,
         GossipsubMessageInfo,
+        TransactionGossipData,
     },
 };
+
 use libp2p::{
     gossipsub::MessageAcceptance,
     request_response::RequestId,
@@ -66,6 +73,7 @@ struct NetworkOrchestrator {
     rx_orchestrator_request: Receiver<OrchestratorRequest>,
     /// Generate internal Orchestrator Requests
     tx_orchestrator_request: Sender<OrchestratorRequest>,
+    transactions: VecDeque<TransactionGossipData>,
 }
 
 enum OrchestratorRequest {
@@ -77,7 +85,14 @@ enum OrchestratorRequest {
             oneshot::Sender<Result<MessageId, PublishError>>,
         ),
     ),
+    NextTransaction(oneshot::Sender<Option<TransactionGossipData>>),
     RespondWithRequestedBlock((Option<Arc<SealedFuelBlock>>, RequestId)),
+}
+
+impl Debug for OrchestratorRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "OrchestratorRequest")
+    }
 }
 
 impl NetworkOrchestrator {
@@ -97,6 +112,7 @@ impl NetworkOrchestrator {
             db,
             rx_orchestrator_request,
             tx_orchestrator_request,
+            transactions: VecDeque::default(),
         }
     }
 
@@ -121,7 +137,10 @@ impl NetworkOrchestrator {
                         Some(OrchestratorRequest::RespondWithRequestedBlock((response, request_id))) => {
                             let _ = p2p_service.send_response_msg(request_id, response.map(OutboundResponse::ResponseBlock));
                         }
-                        _ => {}
+                        Some(OrchestratorRequest::NextTransaction(sender)) => {
+                            let _ = sender.send(self.transactions.pop_front());
+                        }
+                        None => {}
                     }
                 }
                 p2p_event = p2p_service.next_event() => {
@@ -131,7 +150,8 @@ impl NetworkOrchestrator {
 
                             match message {
                                 GossipsubMessage::NewTx(tx) => {
-                                    //let _ = self.tx_transaction.send(GossipData::new(TransactionBroadcast::NewTransaction(tx), peer_id, message_id));
+                                    let next_tx = GossipData::new(tx, peer_id, message_id);
+                                    self.transactions.push_back(next_tx);
                                 },
                                 GossipsubMessage::NewBlock(block) => {
                                     //let _ = self.tx_block.send(GossipData::new(BlockBroadcast::NewBlock(block), peer_id, message_id));
@@ -256,25 +276,38 @@ impl Service {
         }
     }
 
+    pub async fn next_gossiped_transaction(
+        &self,
+    ) -> anyhow::Result<TransactionGossipData> {
+        loop {
+            let (sender, receiver) = oneshot::channel();
+
+            self.tx_orchestrator_request
+                .send(OrchestratorRequest::NextTransaction(sender))
+                .await?;
+
+            match receiver.await? {
+                Some(tx) => return anyhow::Result::Ok(tx),
+                // currently no transactions to propagate to the txpool
+                None => tokio::task::yield_now().await,
+            }
+        }
+    }
+
     pub async fn broadcast_transaction(
         &self,
         transaction: Arc<Transaction>,
     ) -> anyhow::Result<()> {
         let (sender, receiver) = oneshot::channel();
 
-        let _ = self
-            .tx_orchestrator_request
+        self.tx_orchestrator_request
             .send(OrchestratorRequest::BroadcastTransaction((
                 transaction,
                 sender,
             )))
-            .await;
+            .await?;
 
-        match receiver.await {
-            Err(e) => anyhow::Result::Err(anyhow!("{}", e)),
-            Ok(anyhow::Result::Ok(_)) => anyhow::Ok(()),
-            Ok(anyhow::Result::Err(e)) => anyhow::Result::Err(anyhow!("{}", e)),
-        }
+        receiver.await?.map(|_| ()).map_err(|e| anyhow!("{}", e))
     }
 
     pub async fn get_peers_ids(&self) -> anyhow::Result<Vec<PeerId>> {
@@ -283,7 +316,7 @@ impl Service {
         let _ = self
             .tx_orchestrator_request
             .send(OrchestratorRequest::GetPeersIds(sender))
-            .await;
+            .await?;
 
         receiver.await.map_err(|e| anyhow!("{}", e))
     }

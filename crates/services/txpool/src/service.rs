@@ -222,18 +222,13 @@ impl Context {
         loop {
             tokio::select! {
                 new_transaction = self.p2p_port.next_gossiped_transaction() => {
-                    // if new_transaction.is_err() {
-                    //     error!("Incoming tx receiver channel closed unexpectedly; shutting down transaction pool service.");
-                    //     break;
-                    // }
-
                     let txpool = txpool.clone();
                     let db = self.db.clone();
                     let tx_status_sender = self.tx_status_sender.clone();
 
                     tokio::spawn( async move {
                         let txpool = txpool.as_ref();
-                        if let GossipData { data: Some(tx), .. } =  new_transaction {
+                        if let GossipData { data: Some(tx), .. } = new_transaction {
                             let txs = vec!(Arc::new(tx));
                             TxPool::insert(txpool, db.as_ref().as_ref(), &tx_status_sender, &txs).await;
                         }

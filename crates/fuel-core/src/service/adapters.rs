@@ -134,7 +134,8 @@ impl fuel_core_txpool::ports::PeerToPeer for P2pAdapter {
     }
 
     async fn next_gossiped_transaction(&self) -> Self::GossipedTransaction {
-        todo!()
+        // todo: handle unwrap
+        self.p2p_service.next_gossiped_transaction().await.unwrap()
     }
 
     fn notify_gossip_transaction_validity(
