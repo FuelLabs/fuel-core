@@ -45,7 +45,7 @@ fn generate_dap_schema() {
         })
         .expect("Failed to fetch schema path");
 
-    File::create(schema)
+    File::create(&schema)
         .and_then(|mut f| {
             f.write_all(contents.as_bytes())?;
             f.sync_all()

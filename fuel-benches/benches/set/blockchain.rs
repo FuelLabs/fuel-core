@@ -13,7 +13,7 @@ pub fn run(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("blockchain");
 
-    let cases: Vec<u64> = vec![1, 10, 100, 1_000, 10_000, 100_000, 1_000_000];
+    let cases = vec![1, 10, 100, 1_000, 10_000, 100_000, 1_000_000];
     let asset: AssetId = rng.gen();
     let contract: ContractId = rng.gen();
 
@@ -32,7 +32,8 @@ pub fn run(c: &mut Criterion) {
                     let mut asset_inc = AssetId::zeroed();
 
                     for i in 0..i {
-                        asset_inc.as_mut()[..8].copy_from_slice(&i.to_be_bytes());
+                        asset_inc.as_mut()[..8]
+                            .copy_from_slice(&(i as u64).to_be_bytes());
 
                         db.merkle_contract_asset_id_balance_insert(
                             &contract, &asset_inc, i,
@@ -68,7 +69,7 @@ pub fn run(c: &mut Criterion) {
                     let mut key = Bytes32::zeroed();
 
                     for i in 0..i {
-                        key.as_mut()[..8].copy_from_slice(&i.to_be_bytes());
+                        key.as_mut()[..8].copy_from_slice(&(i as u64).to_be_bytes());
 
                         db.merkle_contract_state_insert(&contract, &key, &key)?;
                     }
