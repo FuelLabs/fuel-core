@@ -278,7 +278,7 @@ fn blocks_query<T>(
 ) -> anyhow::Result<impl Iterator<Item = anyhow::Result<(usize, T)>> + '_>
 where
     T: async_graphql::OutputType,
-    T: From<FuelBlockDb>,
+    T: From<CompressedBlock>,
 {
     let blocks: Vec<_> = db
         .all_block_ids(start.map(Into::into), Some(direction))
@@ -338,8 +338,8 @@ impl BlockMutation {
             let new_block_height = current_height + 1u32.into();
 
             let block = PartialFuelBlock::new(
-                PartialFuelBlockHeader {
-                    consensus: FuelConsensusHeader {
+                PartialBlockHeader {
+                    consensus: ConsensusHeader {
                         height: new_block_height,
                         time: block_time(idx),
                         prev_root: Default::default(),
@@ -427,9 +427,9 @@ fn check_block_time_overflow(
     Ok(())
 }
 
-impl From<FuelBlockDb> for Block {
-    fn from(block: FuelBlockDb) -> Self {
-        let FuelBlockDb {
+impl From<CompressedBlock> for Block {
+    fn from(block: CompressedBlock) -> Self {
+        let CompressedBlock {
             header,
             transactions,
         } = block;
@@ -440,8 +440,8 @@ impl From<FuelBlockDb> for Block {
     }
 }
 
-impl From<FuelBlockDb> for Header {
-    fn from(block: FuelBlockDb) -> Self {
+impl From<CompressedBlock> for Header {
+    fn from(block: CompressedBlock) -> Self {
         Header(block.header)
     }
 }

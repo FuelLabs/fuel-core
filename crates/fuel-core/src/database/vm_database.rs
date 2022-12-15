@@ -28,7 +28,7 @@ use fuel_core_types::{
         Word,
     },
     fuel_vm::InterpreterStorage,
-    tai64::Tai64,
+    tai64::Tai64, blockchain::header::ConsensusHeader,
 };
 use primitive_types::U256;
 use std::borrow::Cow;
@@ -69,7 +69,7 @@ impl Default for VmDatabase {
 impl VmDatabase {
     pub fn new<T>(
         database: Database,
-        header: &FuelConsensusHeader<T>,
+        header: &ConsensusHeader<T>,
         coinbase: Address,
     ) -> Self {
         Self {

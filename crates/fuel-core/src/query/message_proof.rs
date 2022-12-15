@@ -7,11 +7,10 @@ use fuel_core_interfaces::{
         prelude::*,
     },
     db::KvStoreError,
-    txpool::TransactionStatus,
 };
 use fuel_core_types::{
     blockchain::block::CompressedBlock,
-    entities::message::MessageProof,
+    entities::message::MessageProof, services::txpool::TransactionStatus,
 };
 
 #[cfg(test)]
@@ -163,7 +162,7 @@ pub async fn message_proof(
 
             // Get the fuel block.
             let header = match data.block(&block_id.into())? {
-                Some(t) => t.header,
+                Some(t) => t.into_inner().0,
                 None => return Ok(None),
             };
 

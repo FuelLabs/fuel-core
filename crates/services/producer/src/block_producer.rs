@@ -19,13 +19,10 @@ use fuel_core_interfaces::{
         fuel_types::Bytes32,
         tai64::Tai64,
     },
-    executor::{
-        ExecutionBlock,
-        UncommittedResult,
-    },
 };
+use fuel_core_storage::UncommittedResult;
 use fuel_core_types::blockchain::{
-    block::PartialFuelBlock,
+    block::{PartialFuelBlock, ExecutionBlock},
     header::{
         ApplicationHeader,
         ConsensusHeader,

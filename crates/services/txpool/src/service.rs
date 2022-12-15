@@ -304,7 +304,7 @@ impl Context {
                                 //     TxPool::block_update(txpool.as_ref(), block).await
                                 // });
                             },
-                            ImportBlockBroadcast::SealedFuelBlockImported { block: _, is_created_by_self: _ } => {
+                            ImportBlockBroadcast::SealedBlockImported { block: _, is_created_by_self: _ } => {
                                 // TODO: what to do with sealed blocks?
                                 todo!("Sealed block");
                             }

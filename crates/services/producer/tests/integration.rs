@@ -24,7 +24,6 @@ use fuel_core_interfaces::{
         fuel_vm::consts::REG_ZERO,
         prelude::StorageAsMut,
     },
-    executor::ExecutionResult,
     txpool::Sender as TxPoolSender,
 };
 use fuel_core_producer::{
@@ -44,7 +43,10 @@ use fuel_core_txpool::{
     ServiceBuilder as TxPoolServiceBuilder,
 };
 use fuel_core_types::{
-    blockchain::block::CompressedBlock,
+    blockchain::block::{
+        CompressedBlock,
+        ExecutionResult,
+    },
     entities::coin::{
         Coin,
         CoinStatus,

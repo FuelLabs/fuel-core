@@ -16,10 +16,6 @@ use fuel_core_interfaces::{
         Error,
         Transactional,
     },
-    executor::{
-        ExecutionResult,
-        UncommittedResult,
-    },
     poa_coordinator::TransactionPool,
     txpool::TxStatus,
 };
@@ -33,9 +29,13 @@ use fuel_core_poa::{
     Service,
     Trigger,
 };
+use fuel_core_storage::UncommittedResult;
 use fuel_core_types::{
     blockchain::{
-        block::PartialFuelBlock,
+        block::{
+            ExecutionResult,
+            PartialFuelBlock,
+        },
         consensus::Consensus,
         header::{
             ConsensusHeader,

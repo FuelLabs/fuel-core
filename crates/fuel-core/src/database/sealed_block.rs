@@ -68,8 +68,8 @@ impl Database {
         let consensus = self.storage::<SealedBlockConsensus>().get(block_id)?;
 
         if let (Some(block), Some(consensus)) = (block, consensus) {
-            let sealed_block = SealedFuelBlock {
-                block,
+            let sealed_block = SealedBlock {
+                entity: block,
                 consensus: consensus.into_owned(),
             };
 
@@ -96,7 +96,7 @@ impl Database {
     pub fn get_sealed_block_header(
         &self,
         block_id: &Bytes32,
-    ) -> Result<Option<SealedFuelBlockHeader>, KvStoreError> {
+    ) -> Result<Option<SealedBlockHeader>, KvStoreError> {
         let header = self.storage::<FuelBlocks>().get(block_id)?;
         let consensus = self.storage::<SealedBlockConsensus>().get(block_id)?;
 

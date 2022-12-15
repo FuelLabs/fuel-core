@@ -5,90 +5,83 @@ use crate::{
         vm_database::VmDatabase,
         Database,
     },
-    model::{
-        BlockHeight,
-        Coin,
-        CoinStatus,
-    },
     service::Config,
 };
 use fuel_core_executor::refs::ContractRef;
-use fuel_core_interfaces::{
-    common::{
-        fuel_asm::Word,
-        fuel_storage,
-        fuel_tx::{
-            field::{
-                Inputs,
-                Outputs,
-                TxPointer as TxPointerField,
-            },
-            Address,
-            AssetId,
-            Bytes32,
-            Checked,
-            CreateCheckedMetadata,
-            Input,
-            IntoChecked,
-            Mint,
-            Output,
-            Receipt,
-            ScriptCheckedMetadata,
-            Transaction,
-            TransactionFee,
-            TxPointer,
-            UniqueIdentifier,
-            UtxoId,
+use fuel_core_interfaces::common::{
+    fuel_asm::Word,
+    fuel_storage,
+    fuel_tx::{
+        field::{
+            Inputs,
+            Outputs,
+            TxPointer as TxPointerField,
         },
-        fuel_types::MessageId,
-        fuel_vm::{
-            consts::REG_SP,
-            prelude::{
-                Backtrace as FuelBacktrace,
-                Interpreter,
-                PredicateStorage,
-            },
-        },
-        interpreter::CheckedMetadata,
+        Address,
+        AssetId,
+        Bytes32,
+        Checked,
+        CreateCheckedMetadata,
+        Input,
+        IntoChecked,
+        Mint,
+        Output,
+        Receipt,
+        ScriptCheckedMetadata,
+        Transaction,
+        TransactionFee,
+        TxPointer,
+        UniqueIdentifier,
+        UtxoId,
+    },
+    fuel_types::MessageId,
+    fuel_vm::{
+        consts::REG_SP,
         prelude::{
-            ExecutableTransaction,
-            StorageInspect,
+            Backtrace as FuelBacktrace,
+            Interpreter,
+            PredicateStorage,
         },
-        state::StateTransition,
     },
-    db::{
-        Coins,
-        ContractsLatestUtxo,
-        FuelBlocks,
-        Messages,
-        Receipts,
-        Transactional,
-        Transactions,
+    interpreter::CheckedMetadata,
+    prelude::{
+        ExecutableTransaction,
+        StorageInspect,
     },
-    executor::{
-        Error,
-        ExecutionBlock,
-        ExecutionKind,
-        ExecutionResult,
-        ExecutionType,
-        ExecutionTypes,
-        TransactionExecutionStatus,
-        TransactionValidityError,
-        UncommittedResult,
-    },
-    model::{
-        BlockId,
-        DaBlockHeight,
-        FuelBlock,
-        Message,
-        PartialFuelBlock,
-        PartialFuelBlockHeader,
-    },
-    txpool::TransactionStatus,
+    state::StateTransition,
 };
 use fuel_core_producer::ports::{
     DBTransaction,
     Executor as ExecutorTrait,
+};
+use fuel_core_storage::{
+    tables::{
+        Coins,
+        FuelBlocks,
+        Messages,
+        Receipts,
+        Transactions,
+    },
+    UncommittedResult,
+};
+use fuel_core_types::{
+    blockchain::{
+        block::{
+            Error,
+            ExecutionBlock,
+            ExecutionResult,
+            ExecutionType,
+            PartialFuelBlock,
+            TransactionExecutionStatus, ExecutionKind, ExecutionTypes,
+        },
+        header::PartialBlockHeader,
+        primitives::{
+            BlockHeight,
+            DaBlockHeight,
+        }, transaction::TransactionValidityError,
+    },
+    entities::coin::{CoinStatus, Coin},
+    services::txpool::TransactionStatus,
 };
 use fuel_storage::{
     StorageAsMut,
@@ -399,7 +392,7 @@ impl Executor {
         &self,
         idx: u16,
         tx: &mut Transaction,
-        header: &PartialFuelBlockHeader,
+        header: &PartialBlockHeader,
         execution_data: &mut ExecutionData,
         execution_kind: ExecutionKind,
         tx_db_transaction: &mut DatabaseTransaction,
@@ -526,7 +519,7 @@ impl Executor {
         // TODO: Use it to calculate `TxPointer`.
         _idx: u16,
         original_tx: &mut Tx,
-        header: &PartialFuelBlockHeader,
+        header: &PartialBlockHeader,
         execution_data: &mut ExecutionData,
         tx_db_transaction: &mut DatabaseTransaction,
         execution_kind: ExecutionKind,
@@ -1233,7 +1226,7 @@ impl Executor {
     /// Associate all transactions within a block to their respective UTXO owners
     fn index_tx_owners_for_block(
         &self,
-        block: &FuelBlock,
+        block: &Block,
         block_db_transaction: &mut DatabaseTransaction,
     ) -> Result<(), Error> {
         for (tx_idx, tx) in block.transactions().iter().enumerate() {
@@ -1415,10 +1408,10 @@ mod tests {
         executor::ExecutionTypes,
         model::{
             CheckedMessage,
+            ConsensusHeader,
             DaBlockHeight,
-            FuelConsensusHeader,
             Message,
-            PartialFuelBlockHeader,
+            PartialBlockHeader,
         },
     };
     use itertools::Itertools;
@@ -2670,8 +2663,8 @@ mod tests {
         };
 
         let block = PartialFuelBlock {
-            header: PartialFuelBlockHeader {
-                consensus: FuelConsensusHeader {
+            header: PartialBlockHeader {
+                consensus: ConsensusHeader {
                     height: 1u64.into(),
                     ..Default::default()
                 },
@@ -2736,8 +2729,8 @@ mod tests {
         };
 
         let block = PartialFuelBlock {
-            header: PartialFuelBlockHeader {
-                consensus: FuelConsensusHeader {
+            header: PartialBlockHeader {
+                consensus: ConsensusHeader {
                     height: 1u64.into(),
                     ..Default::default()
                 },
@@ -2848,8 +2841,8 @@ mod tests {
         };
 
         let block = PartialFuelBlock {
-            header: PartialFuelBlockHeader {
-                consensus: FuelConsensusHeader {
+            header: PartialBlockHeader {
+                consensus: ConsensusHeader {
                     height: 1u64.into(),
                     ..Default::default()
                 },
@@ -2932,8 +2925,8 @@ mod tests {
         };
 
         let block = PartialFuelBlock {
-            header: PartialFuelBlockHeader {
-                consensus: FuelConsensusHeader {
+            header: PartialBlockHeader {
+                consensus: ConsensusHeader {
                     height: 1u64.into(),
                     ..Default::default()
                 },
@@ -3020,8 +3013,8 @@ mod tests {
         };
 
         let block = PartialFuelBlock {
-            header: PartialFuelBlockHeader {
-                consensus: FuelConsensusHeader {
+            header: PartialBlockHeader {
+                consensus: ConsensusHeader {
                     height: 6u64.into(),
                     ..Default::default()
                 },
@@ -3070,8 +3063,8 @@ mod tests {
             .into();
 
         let second_block = PartialFuelBlock {
-            header: PartialFuelBlockHeader {
-                consensus: FuelConsensusHeader {
+            header: PartialBlockHeader {
+                consensus: ConsensusHeader {
                     height: 2u64.into(),
                     ..Default::default()
                 },
@@ -3151,8 +3144,8 @@ mod tests {
         let tx_id = tx3.id();
 
         let second_block = PartialFuelBlock {
-            header: PartialFuelBlockHeader {
-                consensus: FuelConsensusHeader {
+            header: PartialBlockHeader {
+                consensus: ConsensusHeader {
                     height: 2u64.into(),
                     ..Default::default()
                 },
@@ -3524,8 +3517,8 @@ mod tests {
         let block_height = rng.gen_range(5u32..1000u32);
 
         let block = PartialFuelBlock {
-            header: PartialFuelBlockHeader {
-                consensus: FuelConsensusHeader {
+            header: PartialBlockHeader {
+                consensus: ConsensusHeader {
                     height: block_height.into(),
                     ..Default::default()
                 },
@@ -3600,8 +3593,8 @@ mod tests {
         let time = Tai64(rng.gen_range(1u32..u32::MAX) as u64);
 
         let block = PartialFuelBlock {
-            header: PartialFuelBlockHeader {
-                consensus: FuelConsensusHeader {
+            header: PartialBlockHeader {
+                consensus: ConsensusHeader {
                     height: block_height.into(),
                     time,
                     ..Default::default()

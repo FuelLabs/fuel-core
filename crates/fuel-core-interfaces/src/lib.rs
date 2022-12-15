@@ -1,7 +1,6 @@
 pub mod bft;
 pub mod block_importer;
 pub mod db;
-pub mod executor;
 pub mod p2p;
 pub mod poa_coordinator;
 pub mod relayer;

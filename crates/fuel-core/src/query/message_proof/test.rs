@@ -7,8 +7,8 @@ use fuel_core_interfaces::{
     },
     model::{
         FuelApplicationHeader,
-        FuelConsensusHeader,
-        PartialFuelBlockHeader,
+        ConsensusHeader,
+        PartialBlockHeader,
     },
 };
 
@@ -138,12 +138,12 @@ async fn can_build_message_proof() {
         .with(eq(Bytes32::default()))
         .returning(|_| Ok(Some(fuel_crypto::Signature::default())));
 
-    let header = PartialFuelBlockHeader {
+    let header = PartialBlockHeader {
         application: FuelApplicationHeader {
             da_height: 0u64.into(),
             generated: Default::default(),
         },
-        consensus: FuelConsensusHeader {
+        consensus: ConsensusHeader {
             prev_root: Bytes32::zeroed(),
             height: 1u64.into(),
             time: Tai64::UNIX_EPOCH,
@@ -160,7 +160,7 @@ async fn can_build_message_proof() {
             move |_| {
                 let header = header.clone().generate(&[vec![]], &message_ids);
                 let transactions = TXNS.to_vec();
-                Ok(Some(FuelBlockDb {
+                Ok(Some(CompressedBlock {
                     header,
                     transactions,
                 }))

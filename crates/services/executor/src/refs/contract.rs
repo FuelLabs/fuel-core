@@ -21,10 +21,10 @@ use fuel_core_interfaces::{
         ContractsAssets,
         ContractsState,
     },
-    executor::Error,
     not_found,
 };
 use fuel_core_storage::tables::ContractsLatestUtxo;
+use fuel_core_types::blockchain::block::Error;
 use std::{
     borrow::Cow,
     error::Error as StdError,

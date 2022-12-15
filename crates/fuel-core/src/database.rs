@@ -334,7 +334,7 @@ impl BlockProducerDatabase for Database {
     fn get_block(
         &self,
         fuel_height: BlockHeight,
-    ) -> anyhow::Result<Option<Cow<FuelBlockDb>>> {
+    ) -> anyhow::Result<Option<Cow<CompressedBlock>>> {
         let id = self
             .get_block_id(fuel_height)?
             .ok_or(not_found!("BlockId"))?;
@@ -353,7 +353,7 @@ impl P2pDb for Database {
     async fn get_sealed_block(
         &self,
         height: BlockHeight,
-    ) -> Option<Arc<SealedFuelBlock>> {
+    ) -> Option<Arc<SealedBlock>> {
         <Self as RelayerDb>::get_sealed_block(self, height).await
     }
 }
@@ -388,10 +388,10 @@ mod relayer {
         Database,
     };
     use fuel_core_interfaces::relayer::RelayerDb;
-    use fuel_core_types::blockchain::primitives::{
+    use fuel_core_types::blockchain::{primitives::{
         BlockHeight,
         DaBlockHeight,
-    };
+    }, SealedBlock};
     use std::sync::Arc;
 
     #[async_trait::async_trait]
@@ -410,7 +410,7 @@ mod relayer {
         async fn get_sealed_block(
             &self,
             height: BlockHeight,
-        ) -> Option<Arc<SealedFuelBlock>> {
+        ) -> Option<Arc<SealedBlock>> {
             let block_id = self
                 .get_block_id(height)
                 .unwrap_or_else(|_| panic!("nonexistent block height {}", height))?;

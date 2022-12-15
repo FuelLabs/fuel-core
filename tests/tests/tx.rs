@@ -24,9 +24,9 @@ use fuel_core_interfaces::{
     },
     executor::ExecutionBlock,
     model::{
-        FuelConsensusHeader,
+        ConsensusHeader,
         PartialFuelBlock,
-        PartialFuelBlockHeader,
+        PartialBlockHeader,
     },
 };
 use itertools::Itertools;
@@ -399,8 +399,8 @@ async fn get_transactions_from_manual_blocks() {
 
     // make 1st test block
     let first_test_block = PartialFuelBlock {
-        header: PartialFuelBlockHeader {
-            consensus: FuelConsensusHeader {
+        header: PartialBlockHeader {
+            consensus: ConsensusHeader {
                 height: 1u32.into(),
                 time: Tai64::now(),
                 ..Default::default()
@@ -414,8 +414,8 @@ async fn get_transactions_from_manual_blocks() {
 
     // make 2nd test block
     let second_test_block = PartialFuelBlock {
-        header: PartialFuelBlockHeader {
-            consensus: FuelConsensusHeader {
+        header: PartialBlockHeader {
+            consensus: ConsensusHeader {
                 height: 2u32.into(),
                 time: Tai64::now(),
                 ..Default::default()

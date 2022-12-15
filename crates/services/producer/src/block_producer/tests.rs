@@ -179,7 +179,7 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
 async fn production_fails_on_execution_error() {
     let ctx = TestContext {
         executor: Arc::new(FailingMockExecutor(Mutex::new(Some(
-            fuel_core_interfaces::executor::Error::TransactionIdCollision(
+            fuel_core_types::blockchain::block::Error::TransactionIdCollision(
                 Default::default(),
             ),
         )))),
@@ -195,8 +195,8 @@ async fn production_fails_on_execution_error() {
 
     assert!(
         matches!(
-            err.downcast_ref::<fuel_core_interfaces::executor::Error>(),
-            Some(fuel_core_interfaces::executor::Error::TransactionIdCollision { .. })
+            err.downcast_ref::<fuel_core_types::blockchain::block::Error>(),
+            Some(fuel_core_types::blockchain::block::Error::TransactionIdCollision { .. })
         ),
         "unexpected err {:?}",
         err

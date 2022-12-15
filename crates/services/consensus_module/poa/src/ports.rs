@@ -7,8 +7,8 @@ use fuel_core_interfaces::{
         },
     },
     db::DatabaseTransaction,
-    executor::UncommittedResult,
 };
+use fuel_core_storage::UncommittedResult;
 use fuel_core_types::blockchain::{
     consensus::Consensus,
     primitives::{

@@ -46,10 +46,10 @@ use fuel_core_interfaces::{
         FuelApplicationHeader,
         FuelBlock,
         FuelBlockConsensus,
-        FuelConsensusHeader,
+        ConsensusHeader,
         Genesis,
         Message,
-        PartialFuelBlockHeader,
+        PartialBlockHeader,
     },
 };
 use fuel_core_poa::ports::BlockDb;
@@ -100,12 +100,12 @@ impl FuelService {
         };
 
         let block = FuelBlock::new(
-            PartialFuelBlockHeader {
+            PartialBlockHeader {
                 application: FuelApplicationHeader::<Empty> {
                     da_height: Default::default(),
                     generated: Empty,
                 },
-                consensus: FuelConsensusHeader::<Empty> {
+                consensus: ConsensusHeader::<Empty> {
                     // The genesis is a first block, so previous root is zero.
                     prev_root: Bytes32::zeroed(),
                     // The initial height is defined by the `ChainConfig`.

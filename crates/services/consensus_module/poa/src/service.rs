@@ -28,15 +28,15 @@ use fuel_core_interfaces::{
             Secret,
         },
     },
-    executor::{
-        ExecutionResult,
-        UncommittedResult,
-    },
     poa_coordinator::TransactionPool,
     txpool::TxStatus,
 };
+use fuel_core_storage::UncommittedResult;
 use fuel_core_types::blockchain::{
-    block::Block,
+    block::{
+        Block,
+        ExecutionResult,
+    },
     consensus::{
         poa::PoAConsensus,
         Consensus,
@@ -423,11 +423,13 @@ mod test {
             Error as DBError,
             Transactional,
         },
-        executor::Error,
         txpool::Error::NoMetadata,
     };
     use fuel_core_types::{
-        blockchain::primitives::BlockId,
+        blockchain::{
+            block::Error,
+            primitives::BlockId,
+        },
         services::txpool::ArcPoolTx,
     };
     use rand::{

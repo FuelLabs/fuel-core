@@ -1,19 +1,20 @@
 [package]
-name = "fuel-core-poa"
-version = "0.15.1"
 authors = ["Fuel Labs <contact@fuel.sh>"]
+description = "Fuel Core PoA Coordinator"
 edition = "2021"
 homepage = "https://fuel.network/"
-keywords = ["blockchain", "fuel", "consensus", "bft"]
+keywords = ["bft", "blockchain", "consensus", "fuel"]
 license = "BUSL-1.1"
+name = "fuel-core-poa"
 repository = "https://github.com/FuelLabs/fuel-core"
-description = "Fuel Core PoA Coordinator"
+version = "0.15.1"
 
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
 fuel-core-interfaces = { path = "../../../fuel-core-interfaces", version = "0.15.1" }
 fuel-core-types = { path = "../../../types", version = "0.15.1" }
+fuel-core-storage = { path = "../../../storage", version = "0.15.1"}
 humantime-serde = "1.1.1"
 parking_lot = "0.12"
 serde = { version = "1.0", features = ["derive"] }
@@ -21,7 +22,9 @@ tokio = { version = "1.21", features = ["full"] }
 tracing = "0.1"
 
 [dev-dependencies]
-fuel-core-interfaces = { path = "../../../fuel-core-interfaces", features = ["test-helpers"] }
+fuel-core-interfaces = { path = "../../../fuel-core-interfaces", features = [
+    "test-helpers",
+] }
 fuel-core-types = { path = "../../../types", features = ["test-helpers"] }
 mockall = "0.11"
 rand = "0.8"

@@ -2,15 +2,15 @@ use async_trait::async_trait;
 use fuel_core_interfaces::{
     common::fuel_tx::Receipt,
     db::DatabaseTransaction,
-    executor::{
-        Error as ExecutorError,
-        ExecutionBlock,
-        UncommittedResult,
-    },
 };
+use fuel_core_storage::UncommittedResult;
 use fuel_core_types::{
     blockchain::{
-        block::CompressedBlock,
+        block::{
+            CompressedBlock,
+            Error as ExecutorError,
+            ExecutionBlock,
+        },
         primitives::{
             BlockHeight,
             DaBlockHeight,

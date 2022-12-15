@@ -21,7 +21,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::Block,
+        block::{Block, CompressedBlock},
         primitives::BlockHeight,
     },
     fuel_tx::Bytes32,
@@ -39,7 +39,7 @@ use std::{
 impl StorageInspect<FuelBlocks> for Database {
     type Error = KvStoreError;
 
-    fn get(&self, key: &Bytes32) -> Result<Option<Cow<FuelBlockDb>>, KvStoreError> {
+    fn get(&self, key: &Bytes32) -> Result<Option<Cow<CompressedBlock>>, KvStoreError> {
         Database::get(self, key.as_ref(), Column::FuelBlocks).map_err(Into::into)
     }
 
@@ -52,11 +52,11 @@ impl StorageMutate<FuelBlocks> for Database {
     fn insert(
         &mut self,
         key: &Bytes32,
-        value: &FuelBlockDb,
-    ) -> Result<Option<FuelBlockDb>, KvStoreError> {
+        value: &CompressedBlock,
+    ) -> Result<Option<CompressedBlock>, KvStoreError> {
         let _: Option<BlockHeight> = Database::insert(
             self,
-            value.header.height().to_be_bytes(),
+            value.header().height().to_be_bytes(),
             Column::FuelBlockIds,
             *key,
         )?;
@@ -64,13 +64,13 @@ impl StorageMutate<FuelBlocks> for Database {
             .map_err(Into::into)
     }
 
-    fn remove(&mut self, key: &Bytes32) -> Result<Option<FuelBlockDb>, KvStoreError> {
-        let block: Option<FuelBlockDb> =
+    fn remove(&mut self, key: &Bytes32) -> Result<Option<CompressedBlock>, KvStoreError> {
+        let block: Option<CompressedBlock> =
             Database::remove(self, key.as_ref(), Column::FuelBlocks)?;
         if let Some(block) = &block {
             let _: Option<Bytes32> = Database::remove(
                 self,
-                &block.header.height().to_be_bytes(),
+                &block.header().height().to_be_bytes(),
                 Column::FuelBlockIds,
             )?;
         }
@@ -95,7 +95,7 @@ impl Database {
     }
 
     /// Get the current block at the head of the chain.
-    pub fn get_current_block(&self) -> Result<Option<Cow<FuelBlockDb>>, Error> {
+    pub fn get_current_block(&self) -> Result<Option<Cow<CompressedBlock>>, Error> {
         let block_entry = self.latest_block()?;
         match block_entry {
             Some((_, id)) => StorageAsRef::storage::<FuelBlocks>(self)
@@ -111,7 +111,7 @@ impl Database {
             .storage::<FuelBlocks>()
             .get(&id)?
             .ok_or(Error::ChainUninitialized)?;
-        Ok(block.header.time().to_owned())
+        Ok(block.header().time().to_owned())
     }
 
     pub fn get_block_id(&self, height: BlockHeight) -> Result<Option<Bytes32>, Error> {
@@ -182,7 +182,7 @@ impl Database {
                         .map(Cow::into_owned)
                 })
                 .try_collect()?;
-            Ok(Some(db_block.uncompress(txs)))
+            Ok(Some(block.uncompress(txs)))
         } else {
             Ok(None)
         }

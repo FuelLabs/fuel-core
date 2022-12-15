@@ -12,7 +12,7 @@ pub enum ImportBlockBroadcast {
         block: Arc<Block>,
     },
     /// for blocks that imported in initial sync and in active sync.
-    SealedFuelBlockImported {
+    SealedBlockImported {
         block: Arc<SealedBlock>,
         is_created_by_self: bool,
     },
@@ -22,13 +22,13 @@ impl ImportBlockBroadcast {
     pub fn block(&self) -> &Block {
         match self {
             Self::PendingFuelBlockImported { block } => block.as_ref(),
-            Self::SealedFuelBlockImported { block, .. } => &block.as_ref().entity,
+            Self::SealedBlockImported { block, .. } => &block.as_ref().entity,
         }
     }
 }
 
 pub enum ImportBlockMpsc {
-    ImportSealedFuelBlock {
+    ImportSealedBlock {
         block: Arc<SealedBlock>,
     },
     ImportFuelBlock {

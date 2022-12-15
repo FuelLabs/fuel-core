@@ -126,7 +126,7 @@ trait BlockProducer {
 trait BlockImporter {
     // After the PoA node has signed over the block, send it to the block importer for inclusion
     // into the finalized state of the node.
-    async fn commit(sealed_block: SealedFuelBlock) -> Result<()>;
+    async fn commit(sealed_block: SealedBlock) -> Result<()>;
 }
 
 trait Relayer {
@@ -142,7 +142,7 @@ trait Database {
     // get the current fuel chain height
     fn get_current_height() -> Result<BlockHeight>;
     // insert consensus information associated with a sealed block that was locally produced
-    fn insert_consensus_data(sealed_block: &SealedFuelBlock) -> Result<()>;
+    fn insert_consensus_data(sealed_block: &SealedBlock) -> Result<()>;
 }
 ```
 #### Adapters: fuel_core::service::adapters::poa_consensus
@@ -200,12 +200,12 @@ trait TransactionPool {
 
 trait Database {
     // insert consensus information associated with a sealed block
-    fn insert_consensus_data(sealed_block: &SealedFuelBlock) -> Result<()>;
+    fn insert_consensus_data(sealed_block: &SealedBlock) -> Result<()>;
 }
 
 trait PeerToPeer {
    // broadcast the finalized header to peers who may need to sync
-   async fn broadcast_sealed_header(sealed_block_header: SealedFuelBlockHeader) -> Result<()>;
+   async fn broadcast_sealed_header(sealed_block_header: SealedBlockHeader) -> Result<()>;
 }
 
 ```
@@ -226,9 +226,9 @@ impl fuel_core_sync::ports::BlockImporter for Service<BlockImporter> {
 
 ```rust
 trait PeerToPeer {
-    type SealedHeaderResponse: NetworkData<SealedFuelBlockHeader>;
-    type BlockResponse: NetworkData<Vec<SealedFuelBlock>>;
-    type GossipedBlockHeader: NetworkData<SealedFuelBlockHeader>;
+    type SealedHeaderResponse: NetworkData<SealedBlockHeader>;
+    type BlockResponse: NetworkData<Vec<SealedBlock>>;
+    type GossipedBlockHeader: NetworkData<SealedBlockHeader>;
     
     async fn fetch_best_network_block_header() -> Result<Option<Self::SealedHeaderResponse>>;
     async fn fetch_blocks(query: Range<BlockHeight>) -> Result<Self::BlockResponse>;
@@ -237,7 +237,7 @@ trait PeerToPeer {
     // punish the sender for providing a set of blocks that aren't valid
     fn report_invalid_blocks(invalid_blocks: &Self::BlockResponse) -> Result<()>;
     // await a newly produced block from the network (similar to stream.next())
-    async fn next_gossiped_block_header() -> Result<Self::SealedFuelBlockHeader>;
+    async fn next_gossiped_block_header() -> Result<Self::SealedBlockHeader>;
     // notify the p2p network whether to continue gossiping this message to others or
     // punish the peer that sent it
     fn notify_gossip_block_validity(message: &Self::GossipedBlockHeader, validity: GossipValidity);
@@ -262,12 +262,12 @@ pub enum GossipValidity {
 
 trait BlockImporter {
     // commit a sealed block to the chain
-    async fn commit(block: SealedFuelBlock) -> Result<()>;
+    async fn commit(block: SealedBlock) -> Result<()>;
 }
 
 trait Consensus {
     // check with the consensus layer whether a block header passes consensus rules
-    async fn validate_sealed_block_header(block: SealedFuelBlockHeader) -> Result<()>;
+    async fn validate_sealed_block_header(block: SealedBlockHeader) -> Result<()>;
 }
 
 trait Database {
@@ -284,7 +284,7 @@ _N/A_
 ```rust
 trait Database {
     // used when other peers are syncing
-    fn get_sealed_block(height: BlockHeight) -> Result<SealedFuelBlock>; 
+    fn get_sealed_block(height: BlockHeight) -> Result<SealedBlock>; 
 }
 ```
 

@@ -1,7 +1,7 @@
 use fuel_core::{
     database::Database,
     model::{
-        FuelBlockDb,
+        CompressedBlock,
         FuelBlockHeader,
     },
     schema::scalars::BlockId,
@@ -40,7 +40,7 @@ use fuel_core_interfaces::{
     },
     model::{
         FuelBlockConsensus,
-        FuelConsensusHeader,
+        ConsensusHeader,
     },
 };
 use itertools::{
@@ -53,7 +53,7 @@ use std::ops::Deref;
 #[tokio::test]
 async fn block() {
     // setup test data in the node
-    let block = FuelBlockDb::default();
+    let block = CompressedBlock::default();
     let id = block.id();
     let mut db = Database::default();
     db.storage::<FuelBlocks>()
@@ -306,9 +306,9 @@ async fn block_connection_5(
 ) {
     // blocks
     let blocks = (0..10u32)
-        .map(|i| FuelBlockDb {
+        .map(|i| CompressedBlock {
             header: FuelBlockHeader {
-                consensus: FuelConsensusHeader {
+                consensus: ConsensusHeader {
                     height: i.into(),
                     time: Tai64(i.into()),
                     ..Default::default()

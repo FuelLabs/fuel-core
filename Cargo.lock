@@ -2412,6 +2412,7 @@ dependencies = [
  "fuel-core-chain-config",
  "fuel-core-interfaces",
  "fuel-core-storage",
+ "fuel-core-types",
  "tokio",
 ]
 
@@ -2504,6 +2505,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "fuel-core-interfaces",
+ "fuel-core-storage",
  "fuel-core-types",
  "humantime-serde",
  "mockall",
@@ -2638,6 +2640,7 @@ dependencies = [
  "secrecy",
  "serde",
  "tai64",
+ "thiserror",
  "zeroize",
 ]
 

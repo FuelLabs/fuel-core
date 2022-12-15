@@ -7,7 +7,6 @@ use std::sync::{
 use super::*;
 use fuel_core_interfaces::{
     common::tai64::Tai64,
-    txpool::TransactionStatus,
 };
 use test_case::test_case;
 
