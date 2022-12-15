@@ -6,6 +6,6 @@
 
 #![deny(missing_docs)]
 
-pub use fuel_vm_private::fuel_storage;
+pub use fuel_vm_private::fuel_storage::*;
 
 pub mod tables;

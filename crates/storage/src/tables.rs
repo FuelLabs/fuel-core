@@ -1,7 +1,7 @@
 //! The module contains definition of storage tables used by default implementation of fuel
 //! services.
 
-use crate::fuel_storage::Mappable;
+use crate::Mappable;
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,

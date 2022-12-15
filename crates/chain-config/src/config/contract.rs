@@ -2,7 +2,7 @@ use crate::serialization::{
     HexNumber,
     HexType,
 };
-use fuel_core_interfaces::common::prelude::{
+use fuel_core_types::fuel_types::{
     AssetId,
     Bytes32,
     Salt,

@@ -1,9 +1,7 @@
-use fuel_core_interfaces::{
-    common::prelude::{
-        Hasher,
-        MerkleRoot,
-    },
-    model::Genesis,
+use fuel_core_storage::MerkleRoot;
+use fuel_core_types::{
+    blockchain::consensus::Genesis,
+    fuel_crypto::Hasher,
 };
 
 pub trait GenesisCommitment {

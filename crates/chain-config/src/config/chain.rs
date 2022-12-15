@@ -1,4 +1,4 @@
-use fuel_core_storage::fuel_storage::MerkleRoot;
+use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     fuel_crypto::Hasher,
     fuel_tx::ConsensusParameters,
