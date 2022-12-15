@@ -1,0 +1,57 @@
+---
+source: crates/chain-config/src/config.rs
+expression: json
+---
+{
+  "chain_name": "local_testnet",
+  "block_production": {
+    "ProofOfAuthority": {
+      "trigger": "instant"
+    }
+  },
+  "block_gas_limit": 1000000000,
+  "initial_state": {
+    "coins": [
+      {
+        "owner": "0x6b63804cfbf9856e68e5b6e7aef238dc8311ec55bec04df774003a2c96e0418e",
+        "amount": "0x0000000000989680",
+        "asset_id": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "owner": "0x54944e5b8189827e470e5a8bacfc6c3667397dc4e1eef7ef3519d16d6d6c6610",
+        "amount": "0x0000000000989680",
+        "asset_id": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "owner": "0xe10f526b192593793b7a1559a391445faba82a1d669e3eb2dcd17f9c121b24b1",
+        "amount": "0x0000000000989680",
+        "asset_id": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "owner": "0x577e424ee53a16e6a85291feabc8443862495f74ac39a706d2dd0b9fc16955eb",
+        "amount": "0x0000000000989680",
+        "asset_id": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "owner": "0xc36be0e14d3eaf5d8d233e0f4a40b3b4e48427d25f84c460d2b03b242a38479e",
+        "amount": "0x0000000000989680",
+        "asset_id": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ]
+  },
+  "transaction_parameters": {
+    "contract_max_size": 16777216,
+    "max_inputs": 255,
+    "max_outputs": 255,
+    "max_witnesses": 255,
+    "max_gas_per_tx": 100000000,
+    "max_script_length": 1048576,
+    "max_script_data_length": 1048576,
+    "max_storage_slots": 255,
+    "max_predicate_length": 1048576,
+    "max_predicate_data_length": 1048576,
+    "gas_price_factor": 1000000000,
+    "gas_per_byte": 4,
+    "max_message_data_length": 1048576
+  }
+}

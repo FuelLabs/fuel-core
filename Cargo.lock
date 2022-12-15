@@ -2283,42 +2283,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fuel-core-producer"
-version = "0.15.1"
-dependencies = [
- "anyhow",
- "async-trait",
- "fuel-core-producer",
- "fuel-core-interfaces",
- "fuel-core-txpool",
- "itertools",
- "parking_lot 0.12.1",
- "rand 0.8.5",
- "rstest",
- "thiserror",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "fuel-core-chain-config"
-version = "0.15.1"
-dependencies = [
- "anyhow",
- "bincode",
- "fuel-core-interfaces",
- "fuel-core-poa",
- "hex",
- "insta",
- "itertools",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "serde_with",
- "tracing",
-]
-
-[[package]]
 name = "fuel-core"
 version = "0.15.1"
 dependencies = [
@@ -2334,18 +2298,18 @@ dependencies = [
  "derive_more",
  "dirs",
  "enum-iterator",
- "fuel-core-producer",
- "fuel-core-chain-config",
  "fuel-core-bft",
+ "fuel-core-chain-config",
  "fuel-core-executor",
  "fuel-core-importer",
  "fuel-core-interfaces",
+ "fuel-core-metrics",
  "fuel-core-p2p",
  "fuel-core-poa",
+ "fuel-core-producer",
  "fuel-core-relayer",
  "fuel-core-sync",
  "fuel-core-txpool",
- "fuel-core-metrics",
  "futures",
  "hex",
  "insta",
@@ -2395,6 +2359,48 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-chain-config"
+version = "0.15.1"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "fuel-core-interfaces",
+ "fuel-core-poa",
+ "hex",
+ "insta",
+ "itertools",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "tracing",
+]
+
+[[package]]
+name = "fuel-core-client"
+version = "0.15.1"
+dependencies = [
+ "anyhow",
+ "clap",
+ "cynic",
+ "derive_more",
+ "eventsource-client",
+ "fuel-vm",
+ "futures",
+ "hex",
+ "hyper-rustls 0.22.1",
+ "insta",
+ "itertools",
+ "reqwest",
+ "schemafy_lib",
+ "serde",
+ "serde_json",
+ "tai64",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "fuel-core-executor"
 version = "0.15.1"
 dependencies = [
@@ -2430,6 +2436,16 @@ dependencies = [
  "thiserror",
  "tokio",
  "zeroize",
+]
+
+[[package]]
+name = "fuel-core-metrics"
+version = "0.15.1"
+dependencies = [
+ "axum",
+ "lazy_static",
+ "once_cell",
+ "prometheus-client",
 ]
 
 [[package]]
@@ -2490,6 +2506,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-producer"
+version = "0.15.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fuel-core-interfaces",
+ "fuel-core-producer",
+ "fuel-core-txpool",
+ "itertools",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
+ "rstest",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fuel-core-relayer"
 version = "0.15.1"
 dependencies = [
@@ -2537,6 +2571,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-tests"
+version = "0.0.0"
+dependencies = [
+ "async-std",
+ "ethers",
+ "fuel-core",
+ "fuel-core-client",
+ "fuel-core-interfaces",
+ "fuel-core-poa",
+ "fuel-core-producer",
+ "fuel-core-relayer",
+ "fuel-core-txpool",
+ "futures",
+ "hyper",
+ "insta",
+ "itertools",
+ "rand 0.8.5",
+ "reqwest",
+ "rstest",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "fuel-core-txpool"
 version = "0.15.1"
 dependencies = [
@@ -2544,8 +2605,8 @@ dependencies = [
  "async-trait",
  "fuel-core-chain-config",
  "fuel-core-interfaces",
- "fuel-core-txpool",
  "fuel-core-metrics",
+ "fuel-core-txpool",
  "parking_lot 0.12.1",
  "thiserror",
  "tokio",
@@ -2582,30 +2643,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fuel-core-client"
-version = "0.15.1"
-dependencies = [
- "anyhow",
- "clap",
- "cynic",
- "derive_more",
- "eventsource-client",
- "fuel-vm",
- "futures",
- "hex",
- "hyper-rustls 0.22.1",
- "insta",
- "itertools",
- "reqwest",
- "schemafy_lib",
- "serde",
- "serde_json",
- "tai64",
- "thiserror",
- "tokio",
-]
-
-[[package]]
 name = "fuel-merkle"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2620,47 +2657,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "fuel-core-metrics"
-version = "0.15.1"
-dependencies = [
- "axum",
- "lazy_static",
- "once_cell",
- "prometheus-client",
-]
-
-[[package]]
 name = "fuel-storage"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0f895423d18472d60eb078cf949608ff3fe6e42e91d41b85993b11528d2c4c3"
-
-[[package]]
-name = "fuel-core-tests"
-version = "0.0.0"
-dependencies = [
- "async-std",
- "ethers",
- "fuel-core-producer",
- "fuel-core",
- "fuel-core-interfaces",
- "fuel-core-poa",
- "fuel-core-relayer",
- "fuel-core-txpool",
- "fuel-core-client",
- "futures",
- "hyper",
- "insta",
- "itertools",
- "rand 0.8.5",
- "reqwest",
- "rstest",
- "serde_json",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
 
 [[package]]
 name = "fuel-tx"

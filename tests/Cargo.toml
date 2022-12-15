@@ -26,13 +26,13 @@ harness = true
 [dependencies]
 async-std = "1.12"
 ethers = "1.0.2"
-fuel-core-producer = { path = "../services/producer", default-features = false }
-fuel-core = { path = "../fuel-core", default-features = false }
-fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["test-helpers"] }
-fuel-core-client = { path = "../client", features = ["test-helpers"] }
-fuel-core-poa = { path = "../services/consensus_module/poa" }
-fuel-core-relayer = { path = "../services/relayer", features = ["test-helpers"] }
-fuel-core-txpool = { path = "../services/txpool" }
+fuel-core-producer = { path = "../crates/services/producer", default-features = false }
+fuel-core = { path = "../crates/fuel-core", default-features = false }
+fuel-core-interfaces = { path = "../crates/fuel-core-interfaces", features = ["test-helpers"] }
+fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
+fuel-core-poa = { path = "../crates/services/consensus_module/poa" }
+fuel-core-relayer = { path = "../crates/services/relayer", features = ["test-helpers"] }
+fuel-core-txpool = { path = "../crates/services/txpool" }
 futures = "0.3"
 hyper = { version = "0.14", features = ["server"] }
 insta = "1.8"

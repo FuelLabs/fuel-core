@@ -1,0 +1,13 @@
+---
+source: crates/client/src/client/schema/balance.rs
+expression: operation.query
+---
+query($owner: Address!, $assetId: AssetId!) {
+  balance(owner: $owner, assetId: $assetId) {
+    owner
+    amount
+    assetId
+  }
+}
+
+
