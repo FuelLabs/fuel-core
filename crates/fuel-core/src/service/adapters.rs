@@ -16,12 +16,15 @@ use fuel_core_interfaces::{
         ExecutionBlock,
         UncommittedResult,
     },
-    model::BlockHeight,
     relayer::RelayerDb,
 };
 use fuel_core_producer::ports::DBTransaction;
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::RelayerSynced;
+use fuel_core_types::blockchain::{
+    primitives,
+    primitives::BlockHeight,
+};
 use std::sync::Arc;
 
 pub struct ExecutorAdapter {
@@ -65,7 +68,7 @@ pub struct MaybeRelayerAdapter {
 impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
     async fn get_best_finalized_da_height(
         &self,
-    ) -> anyhow::Result<fuel_core_interfaces::model::DaBlockHeight> {
+    ) -> anyhow::Result<primitives::DaBlockHeight> {
         #[cfg(feature = "relayer")]
         {
             if let Some(sync) = self.relayer_synced.as_ref() {

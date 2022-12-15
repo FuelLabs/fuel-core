@@ -5,7 +5,6 @@ use super::scalars::{
 use crate::{
     database::Database,
     executor::Executor,
-    model::FuelBlockDb,
     schema::{
         scalars::{
             BlockId,
@@ -35,28 +34,20 @@ use fuel_core_interfaces::{
         fuel_types,
         tai64::Tai64,
     },
-    db::{
-        FuelBlocks,
-        SealedBlockConsensus,
-        Transactions,
-    },
     executor::{
         ExecutionBlock,
         ExecutionResult,
-    },
-    model::{
-        FuelApplicationHeader,
-        FuelBlockConsensus,
-        FuelBlockHeader,
-        FuelConsensusHeader,
-        Genesis as FuelGenesis,
-        PartialFuelBlock,
-        PartialFuelBlockHeader,
     },
     not_found,
 };
 use fuel_core_poa::service::seal_block;
 use fuel_core_producer::ports::Executor as ExecutorTrait;
+use fuel_core_storage::tables::{
+    FuelBlocks,
+    SealedBlockConsensus,
+    Transactions,
+};
+use fuel_core_types::blockchain::block::PartialFuelBlock;
 use itertools::Itertools;
 use std::convert::TryInto;
 
@@ -469,8 +460,8 @@ impl From<FuelGenesis> for Genesis {
 impl From<FuelBlockConsensus> for Consensus {
     fn from(consensus: FuelBlockConsensus) -> Self {
         match consensus {
-            FuelBlockConsensus::Genesis(genesis) => Consensus::Genesis(genesis.into()),
-            FuelBlockConsensus::PoA(poa) => Consensus::PoA(PoAConsensus {
+            Consensus::Genesis(genesis) => Consensus::Genesis(genesis.into()),
+            Consensus::PoA(poa) => Consensus::PoA(PoAConsensus {
                 signature: poa.signature.into(),
             }),
         }

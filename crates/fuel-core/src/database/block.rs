@@ -4,31 +4,28 @@ use crate::{
         Database,
         KvStoreError,
     },
-    model::{
-        BlockHeight,
-        FuelBlockDb,
-    },
     state::{
         Error,
         IterDirection,
     },
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::{
-            StorageInspect,
-            StorageMutate,
-        },
-        fuel_tx::Bytes32,
-        prelude::StorageAsRef,
-        tai64::Tai64,
-    },
-    db::{
+use fuel_core_interfaces::not_found;
+use fuel_core_storage::{
+    tables::{
         FuelBlocks,
         Transactions,
     },
-    model::FuelBlock,
-    not_found,
+    StorageAsRef,
+    StorageInspect,
+    StorageMutate,
+};
+use fuel_core_types::{
+    blockchain::{
+        block::Block,
+        primitives::BlockHeight,
+    },
+    fuel_tx::Bytes32,
+    tai64::Tai64,
 };
 use itertools::Itertools;
 use std::{
@@ -170,13 +167,13 @@ impl Database {
     pub(crate) fn get_full_block(
         &self,
         block_id: &Bytes32,
-    ) -> Result<Option<FuelBlock>, Error> {
+    ) -> Result<Option<Block>, Error> {
         let db_block = self.storage::<FuelBlocks>().get(block_id)?;
         if let Some(block) = db_block {
             // fetch all the transactions
             // TODO: optimize with multi-key get
             let txs = block
-                .transactions
+                .transactions()
                 .iter()
                 .map(|tx_id| {
                     self.storage::<Transactions>()
@@ -185,7 +182,7 @@ impl Database {
                         .map(Cow::into_owned)
                 })
                 .try_collect()?;
-            Ok(Some(FuelBlock::from_db_block(block.into_owned(), txs)))
+            Ok(Some(db_block.uncompress(txs)))
         } else {
             Ok(None)
         }

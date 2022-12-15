@@ -29,6 +29,7 @@ pub mod fuel_vm {
         Contract,
         Interpreter,
         InterpreterError,
+        InterpreterStorage,
         PredicateStorage,
         ProgramState,
     };

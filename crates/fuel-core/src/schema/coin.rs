@@ -17,17 +17,17 @@ use async_graphql::{
     InputObject,
     Object,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::StorageAsRef,
-        fuel_tx,
-    },
-    db::Coins,
-    model::{
+use fuel_core_interfaces::not_found;
+use fuel_core_storage::{
+    tables::Coins,
+    StorageAsRef,
+};
+use fuel_core_types::{
+    entities::coin::{
         Coin as CoinModel,
         CoinStatus as CoinStatusModel,
     },
-    not_found,
+    fuel_tx,
 };
 use itertools::Itertools;
 

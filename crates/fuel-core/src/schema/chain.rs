@@ -15,9 +15,9 @@ use fuel_core_interfaces::{
         fuel_storage::StorageAsRef,
         fuel_tx,
     },
-    db::FuelBlocks,
     not_found,
 };
+use fuel_core_storage::tables::FuelBlocks;
 
 pub const DEFAULT_NAME: &str = "Fuel.testnet";
 

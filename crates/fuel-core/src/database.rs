@@ -387,13 +387,10 @@ mod relayer {
         Column,
         Database,
     };
-    use fuel_core_interfaces::{
-        model::{
-            BlockHeight,
-            DaBlockHeight,
-            SealedFuelBlock,
-        },
-        relayer::RelayerDb,
+    use fuel_core_interfaces::relayer::RelayerDb;
+    use fuel_core_types::blockchain::primitives::{
+        BlockHeight,
+        DaBlockHeight,
     };
     use std::sync::Arc;
 

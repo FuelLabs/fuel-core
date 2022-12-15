@@ -11,17 +11,21 @@ use fuel_core_interfaces::{
         },
     },
     db::{
-        Coins,
         Error,
         KvStoreError,
-        Messages,
-    },
-    model::{
-        Coin,
-        CoinStatus,
-        Message,
     },
     not_found,
+};
+use fuel_core_storage::tables::{
+    Coins,
+    Messages,
+};
+use fuel_core_types::entities::{
+    coin::{
+        Coin,
+        CoinStatus,
+    },
+    message::Message,
 };
 use itertools::Itertools;
 use std::{

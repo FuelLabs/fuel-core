@@ -10,20 +10,18 @@ use crate::{
     },
 };
 use fuel_core_chain_config::MessageConfig;
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::{
-            StorageInspect,
-            StorageMutate,
-        },
-        fuel_types::{
-            Address,
-            Bytes32,
-            MessageId,
-        },
+use fuel_core_storage::{
+    tables::Messages,
+    StorageInspect,
+    StorageMutate,
+};
+use fuel_core_types::{
+    entities::message::Message,
+    fuel_types::{
+        Address,
+        Bytes32,
+        MessageId,
     },
-    db::Messages,
-    model::Message,
 };
 use std::{
     borrow::Cow,

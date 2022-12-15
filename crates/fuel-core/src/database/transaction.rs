@@ -4,26 +4,25 @@ use crate::{
         Database,
         KvStoreError,
     },
-    model::BlockHeight,
     state::{
         Error,
         IterDirection,
     },
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::{
-            StorageInspect,
-            StorageMutate,
-        },
-        fuel_tx::{
-            Bytes32,
-            Transaction,
-        },
-        fuel_types::Address,
+use fuel_core_storage::{
+    tables::Transactions,
+    StorageInspect,
+    StorageMutate,
+};
+use fuel_core_types::{
+    self,
+    blockchain::primitives::BlockHeight,
+    fuel_tx::{
+        Bytes32,
+        Transaction,
     },
-    db::Transactions,
-    txpool::TransactionStatus,
+    fuel_types::Address,
+    services::txpool::TransactionStatus,
 };
 use std::{
     borrow::Cow,

@@ -1,10 +1,7 @@
 use fuel_core_chain_config::ChainConfig;
-use fuel_core_interfaces::{
-    common::{
-        prelude::SecretKey,
-        secrecy::Secret,
-    },
-    model::SecretKeyWrapper,
+use fuel_core_interfaces::common::{
+    prelude::SecretKey,
+    secrecy::Secret,
 };
 use std::{
     net::{
@@ -24,6 +21,7 @@ use fuel_core_p2p::config::{
     NotInitialized,
     P2PConfig,
 };
+use fuel_core_types::blockchain::primitives::SecretKeyWrapper;
 
 #[derive(Clone, Debug)]
 pub struct Config {

@@ -4,27 +4,28 @@ use crate::{
         Database,
         KvStoreError,
     },
-    model::Coin,
     state::{
         Error,
         IterDirection,
     },
 };
 use fuel_core_chain_config::CoinConfig;
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::{
-            StorageInspect,
-            StorageMutate,
-        },
-        fuel_tx::{
-            Address,
-            Bytes32,
-            UtxoId,
-        },
+use fuel_core_interfaces::{self,};
+use fuel_core_storage::{
+    tables::Coins,
+    StorageInspect,
+    StorageMutate,
+};
+use fuel_core_types::{
+    entities::coin::{
+        Coin,
+        CoinStatus,
     },
-    db::Coins,
-    model::CoinStatus,
+    fuel_tx::{
+        Address,
+        Bytes32,
+        UtxoId,
+    },
 };
 use std::borrow::Cow;
 

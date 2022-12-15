@@ -26,25 +26,28 @@ use fuel_core_interfaces::{
         fuel_storage::StorageAsRef,
         fuel_tx,
     },
-    db::{
-        FuelBlocks,
-        KvStoreError,
-        Messages,
-        Receipts,
-        SealedBlockConsensus,
-        Transactions,
-    },
-    model::{
-        self,
-        FuelBlockConsensus,
-    },
+    db::KvStoreError,
     not_found,
-    txpool::TransactionStatus,
+};
+use fuel_core_storage::tables::{
+    FuelBlocks,
+    Messages,
+    Receipts,
+    SealedBlockConsensus,
+    Transactions,
+};
+use fuel_core_types::{
+    blockchain::{
+        block::CompressedBlock,
+        consensus::Consensus,
+    },
+    entities,
+    services::txpool::TransactionStatus,
 };
 use itertools::Itertools;
 use std::borrow::Cow;
 
-pub struct Message(pub(crate) model::Message);
+pub struct Message(pub(crate) entities::message::Message);
 
 #[Object]
 impl Message {
@@ -153,7 +156,7 @@ impl MessageQuery {
     }
 }
 
-pub struct MessageProof(pub(crate) model::MessageProof);
+pub struct MessageProof(pub(crate) entities::message::MessageProof);
 
 #[Object]
 impl MessageProof {
@@ -240,7 +243,7 @@ impl MessageProofData for MessageProofContext<'_> {
             .0
             .storage::<FuelBlocks>()
             .get(block_id)?
-            .map(|block| block.into_owned().transactions)
+            .map(|block| block.into_owned().transactions().to_vec())
             .unwrap_or_else(|| Vec::with_capacity(0)))
     }
 
@@ -256,8 +259,8 @@ impl MessageProofData for MessageProofContext<'_> {
             .map(Cow::into_owned)
         {
             // TODO: https://github.com/FuelLabs/fuel-core/issues/816
-            Some(FuelBlockConsensus::Genesis(_)) => Ok(Default::default()),
-            Some(FuelBlockConsensus::PoA(c)) => Ok(Some(c.signature)),
+            Some(Consensus::Genesis(_)) => Ok(Default::default()),
+            Some(Consensus::PoA(c)) => Ok(Some(c.signature)),
             None => Ok(None),
         }
     }
@@ -265,7 +268,7 @@ impl MessageProofData for MessageProofContext<'_> {
     fn block(
         &self,
         block_id: &fuel_core_interfaces::common::prelude::Bytes32,
-    ) -> Result<Option<model::FuelBlockDb>, KvStoreError> {
+    ) -> Result<Option<CompressedBlock>, KvStoreError> {
         Ok(self
             .0
             .storage::<FuelBlocks>()
@@ -274,8 +277,8 @@ impl MessageProofData for MessageProofContext<'_> {
     }
 }
 
-impl From<model::Message> for Message {
-    fn from(message: model::Message) -> Self {
+impl From<entities::message::Message> for Message {
+    fn from(message: entities::message::Message) -> Self {
         Message(message)
     }
 }

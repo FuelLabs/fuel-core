@@ -10,19 +10,19 @@ use crate::{
         Database,
         KvStoreError,
     },
-    model::Coin,
     state::Error as StateError,
 };
 use core::mem::swap;
-use fuel_core_interfaces::{
-    common::{
-        fuel_tx::Address,
-        fuel_types::{
-            AssetId,
-            Word,
-        },
+use fuel_core_types::{
+    entities::{
+        coin::Coin,
+        message::Message,
     },
-    model::Message,
+    fuel_types::{
+        Address,
+        AssetId,
+        Word,
+    },
 };
 use itertools::Itertools;
 use rand::prelude::*;
@@ -252,6 +252,14 @@ mod tests {
             DaBlockHeight,
             Message,
         },
+    };
+    use fuel_core_storage::tables::{
+        Coins,
+        Messages,
+    };
+    use fuel_core_types::{
+        blockchain::primitives::DaBlockHeight,
+        entities::coin::CoinStatus,
     };
     use itertools::Itertools;
 

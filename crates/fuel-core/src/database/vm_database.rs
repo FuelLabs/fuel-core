@@ -10,26 +10,25 @@ use crate::{
 };
 use anyhow::anyhow;
 use fuel_core_interfaces::{
-    common::{
-        fuel_storage::{
-            Mappable,
-            MerkleRoot,
-            StorageInspect,
-            StorageMutate,
-        },
-        fuel_tx::Bytes32,
-        prelude::{
-            Address,
-            ContractId,
-            InterpreterStorage,
-            MerkleRootStorage,
-            Word,
-        },
-        tai64::Tai64,
-    },
     db::Error,
-    model::FuelConsensusHeader,
     not_found,
+};
+use fuel_core_storage::{
+    Mappable,
+    MerkleRoot,
+    MerkleRootStorage,
+    StorageInspect,
+    StorageMutate,
+};
+use fuel_core_types::{
+    fuel_types::{
+        Address,
+        Bytes32,
+        ContractId,
+        Word,
+    },
+    fuel_vm::InterpreterStorage,
+    tai64::Tai64,
 };
 use primitive_types::U256;
 use std::borrow::Cow;

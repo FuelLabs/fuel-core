@@ -10,30 +10,29 @@ use crate::{
     },
 };
 use fuel_core_chain_config::ContractConfig;
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::{
-            StorageAsRef,
-            StorageInspect,
-            StorageMutate,
-        },
-        fuel_tx::UtxoId,
-        fuel_types::{
-            Bytes32,
-            Word,
-        },
-        fuel_vm::prelude::{
-            AssetId,
-            Contract,
-            ContractId,
-        },
-    },
-    db::{
+use fuel_core_storage::{
+    tables::{
         ContractsInfo,
         ContractsLatestUtxo,
         ContractsRawCode,
     },
+    StorageAsRef,
+    StorageInspect,
+    StorageMutate,
 };
+use fuel_core_types::{
+    fuel_tx::{
+        Contract,
+        UtxoId,
+    },
+    fuel_types::{
+        AssetId,
+        Bytes32,
+        ContractId,
+        Word,
+    },
+};
+
 use std::borrow::Cow;
 
 impl StorageInspect<ContractsRawCode> for Database {

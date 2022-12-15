@@ -53,17 +53,18 @@ use fuel_core_interfaces::{
         fuel_vm::prelude::ProgramState as VmProgramState,
         tai64::Tai64,
     },
-    db::{
-        FuelBlocks,
-        Receipts,
-    },
     not_found,
-    txpool::{
-        TransactionStatus as TxStatus,
-        TxPoolMpsc,
-    },
+    txpool::TxPoolMpsc,
+};
+use fuel_core_storage::tables::{
+    FuelBlocks,
+    Receipts,
 };
 use fuel_core_txpool::Service as TxPoolService;
+use fuel_core_types::{
+    blockchain::primitives,
+    services::txpool::TransactionStatus as TxStatus,
+};
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
@@ -133,7 +134,7 @@ impl SubmittedStatus {
 
 #[derive(Debug)]
 pub struct SuccessStatus {
-    block_id: fuel_core_interfaces::model::BlockId,
+    block_id: primitives::BlockId,
     time: Tai64,
     result: Option<VmProgramState>,
 }
@@ -162,7 +163,7 @@ impl SuccessStatus {
 
 #[derive(Debug)]
 pub struct FailureStatus {
-    block_id: fuel_core_interfaces::model::BlockId,
+    block_id: primitives::BlockId,
     time: Tai64,
     reason: String,
     state: Option<VmProgramState>,

@@ -3,34 +3,35 @@ use crate::database::{
     Database,
 };
 use fuel_core_interfaces::{
-    common::prelude::{
-        Bytes32,
-        StorageAsRef,
-        StorageInspect,
-        StorageMutate,
-    },
-    db::{
+    db::KvStoreError,
+    not_found,
+};
+use fuel_core_storage::{
+    tables::{
         FuelBlocks,
-        KvStoreError,
         SealedBlockConsensus,
     },
-    model::{
-        FuelBlockConsensus,
-        Genesis,
-        SealedFuelBlock,
-        SealedFuelBlockHeader,
+    StorageAsRef,
+    StorageInspect,
+    StorageMutate,
+};
+use fuel_core_types::{
+    blockchain::{
+        consensus::{
+            Consensus,
+            Genesis,
+        },
+        SealedBlock,
+        SealedBlockHeader,
     },
-    not_found,
+    fuel_tx::Bytes32,
 };
 use std::borrow::Cow;
 
 impl StorageInspect<SealedBlockConsensus> for Database {
     type Error = KvStoreError;
 
-    fn get(
-        &self,
-        key: &Bytes32,
-    ) -> Result<Option<Cow<FuelBlockConsensus>>, KvStoreError> {
+    fn get(&self, key: &Bytes32) -> Result<Option<Cow<Consensus>>, KvStoreError> {
         Database::get(self, key.as_ref(), Column::FuelBlockConsensus).map_err(Into::into)
     }
 
@@ -44,16 +45,13 @@ impl StorageMutate<SealedBlockConsensus> for Database {
     fn insert(
         &mut self,
         key: &Bytes32,
-        value: &FuelBlockConsensus,
-    ) -> Result<Option<FuelBlockConsensus>, KvStoreError> {
+        value: &Consensus,
+    ) -> Result<Option<Consensus>, KvStoreError> {
         Database::insert(self, key.as_ref(), Column::FuelBlockConsensus, value)
             .map_err(Into::into)
     }
 
-    fn remove(
-        &mut self,
-        key: &Bytes32,
-    ) -> Result<Option<FuelBlockConsensus>, KvStoreError> {
+    fn remove(&mut self, key: &Bytes32) -> Result<Option<Consensus>, KvStoreError> {
         Database::remove(self, key.as_ref(), Column::FuelBlockConsensus)
             .map_err(Into::into)
     }
@@ -63,7 +61,7 @@ impl Database {
     pub fn get_sealed_block(
         &self,
         block_id: &Bytes32,
-    ) -> Result<Option<SealedFuelBlock>, KvStoreError> {
+    ) -> Result<Option<SealedBlock>, KvStoreError> {
         // combine the block and consensus metadata into a sealed fuel block type
 
         let block = self.get_full_block(block_id)?;
@@ -88,7 +86,7 @@ impl Database {
             .get(&genesis_block_id)?
             .map(|c| c.into_owned());
 
-        if let Some(FuelBlockConsensus::Genesis(genesis)) = consensus {
+        if let Some(Consensus::Genesis(genesis)) = consensus {
             Ok(genesis)
         } else {
             Err(not_found!(SealedBlockConsensus))
@@ -103,8 +101,8 @@ impl Database {
         let consensus = self.storage::<SealedBlockConsensus>().get(block_id)?;
 
         if let (Some(header), Some(consensus)) = (header, consensus) {
-            let sealed_block = SealedFuelBlockHeader {
-                header: header.into_owned().header,
+            let sealed_block = SealedBlockHeader {
+                entity: header.into_owned().header().clone(),
                 consensus: consensus.into_owned(),
             };
 

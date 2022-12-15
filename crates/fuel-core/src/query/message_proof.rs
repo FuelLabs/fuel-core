@@ -7,11 +7,11 @@ use fuel_core_interfaces::{
         prelude::*,
     },
     db::KvStoreError,
-    model::{
-        FuelBlockDb,
-        MessageProof,
-    },
     txpool::TransactionStatus,
+};
+use fuel_core_types::{
+    blockchain::block::CompressedBlock,
+    entities::message::MessageProof,
 };
 
 #[cfg(test)]
@@ -43,7 +43,7 @@ pub trait MessageProofData {
         block_id: &Bytes32,
     ) -> Result<Option<fuel_crypto::Signature>, KvStoreError>;
     /// Get the fuel block.
-    fn block(&self, block_id: &Bytes32) -> Result<Option<FuelBlockDb>, KvStoreError>;
+    fn block(&self, block_id: &Bytes32) -> Result<Option<CompressedBlock>, KvStoreError>;
 }
 
 /// Generate an output proof.
