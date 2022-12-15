@@ -1,0 +1,38 @@
+---
+source: crates/client/src/client/schema/block.rs
+expression: operation.query
+---
+query($height: U64) {
+  block(height: $height) {
+    id
+    header {
+      id
+      daHeight
+      transactionsCount
+      outputMessagesCount
+      transactionsRoot
+      outputMessagesRoot
+      height
+      prevRoot
+      time
+      applicationHash
+    }
+    consensus {
+      __typename
+      ... on Genesis {
+        chainConfigHash
+        coinsRoot
+        contractsRoot
+        messagesRoot
+      }
+      ... on PoAConsensus {
+        signature
+      }
+    }
+    transactions {
+      id
+    }
+  }
+}
+
+

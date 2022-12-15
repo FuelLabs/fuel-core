@@ -147,14 +147,14 @@ trait Database {
 ```
 #### Adapters: fuel_core::service::adapters::poa_consensus
 ```rust
-impl fuel_sync::ports::Consensus for Service<PoA> {
+impl fuel_core_sync::ports::Consensus for Service<PoA> {
     // insert impl here
 }
 ```
 
 ### Block Producer
 
-#### Ports: fuel_block_producer::ports
+#### Ports: fuel_core_producer::ports
 
 ```rust
 trait TransactionPool {
@@ -179,7 +179,7 @@ impl fuel_poa_consensus::ports::BlockProducer for Service<BlockProducer> {
 
 ### Block Importer
 
-#### Ports: fuel_block_importer::ports
+#### Ports: fuel_core_importer::ports
 
 ```rust
 trait Relayer {
@@ -215,14 +215,14 @@ impl fuel_poa_consensus::ports::BlockImporter for Service<BlockImporter> {
     // insert impl here
 }
 
-impl fuel_sync::ports::BlockImporter for Service<BlockImporter> {
+impl fuel_core_sync::ports::BlockImporter for Service<BlockImporter> {
     // insert impl here
 }
 ```
 
 ### Synchronizer
 
-#### Ports: fuel_sync::ports
+#### Ports: fuel_core_sync::ports
 
 ```rust
 trait PeerToPeer {
@@ -275,12 +275,12 @@ trait Database {
     fn get_current_height() -> Result<BlockHeight>;
 }
 ```
-#### Adapters: fuel_core::service::adapters::fuel_sync
+#### Adapters: fuel_core::service::adapters::fuel_core_sync
 _N/A_
 
 ### P2P
 
-#### Ports: fuel_p2p::ports
+#### Ports: fuel_core_p2p::ports
 ```rust
 trait Database {
     // used when other peers are syncing
@@ -294,18 +294,18 @@ impl fuel_poa_consensus::ports::PeerToPeer for Service<P2pService> {
     // insert impl here
 }
 
-impl fuel_sync::ports::PeerToPeer for Service<P2pService> {
+impl fuel_core_sync::ports::PeerToPeer for Service<P2pService> {
     // insert impl here
 }
 
-impl fuel_txpool::ports::PeerToPeer for Service<P2pService> {
+impl fuel_core_txpool::ports::PeerToPeer for Service<P2pService> {
     // insert impl here
 }
 ```
 
 ### Transaction Pool
 
-#### Ports: fuel_txpool::ports
+#### Ports: fuel_core_txpool::ports
 ```rust
 trait PeerToPeer {
     type GossipedTransaction: NetworkData<Transaction>;
@@ -356,7 +356,7 @@ impl block_producer::ports::TransactionPool for Service<TransactionPool> {
 
 ### Executor
 
-#### Ports: fuel_block_executor::ports
+#### Ports: fuel_core_executor::ports
 ```rust
 trait Database: IntepreterStorage 
   + StorageMut<Coins, Error = KvStoreError>
@@ -379,18 +379,18 @@ trait DatabaseTransaction: AsRef<Box<dyn Database>> {
 ```
 #### Adapters: fuel_core::service::adapters::executor
 ```rust
-impl fuel_block_producer::ports::Executor for Service<Executor> {
+impl fuel_core_producer::ports::Executor for Service<Executor> {
     // insert impl here
 }
 
-impl fuel_block_importer::ports::Executor for Service<Executor> {
+impl fuel_core_importer::ports::Executor for Service<Executor> {
     // insert impl here
 }
 ```
 
 ### Relayer
 
-#### Ports: fuel_relayer::ports
+#### Ports: fuel_core_relayer::ports
 ```rust
 trait Database: StorageMutate<Messages, Error = KvStoreError> {
     fn get_da_synced_height(&self) -> Result<DaBlockHeight>;
@@ -408,11 +408,11 @@ pub struct DaBlockHeight(u64);
 
 #### Adapters: fuel_core::service::adapters::relayer
 ```rust
-impl fuel_block_importer::ports::Relayer for Service<Relayer> {
+impl fuel_core_importer::ports::Relayer for Service<Relayer> {
     // insert impl here
 }
 
-impl fuel_block_producer::ports::Relayer for Service<Relayer> {
+impl fuel_core_producer::ports::Relayer for Service<Relayer> {
     // insert impl here
 }
 
