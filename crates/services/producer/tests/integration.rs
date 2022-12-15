@@ -24,13 +24,7 @@ use fuel_core_interfaces::{
         fuel_vm::consts::REG_ZERO,
         prelude::StorageAsMut,
     },
-    db::Coins,
     executor::ExecutionResult,
-    model::{
-        Coin,
-        CoinStatus,
-        FuelBlockDb,
-    },
     txpool::Sender as TxPoolSender,
 };
 use fuel_core_producer::{
@@ -42,11 +36,19 @@ use fuel_core_producer::{
     },
     Producer,
 };
+use fuel_core_storage::tables::Coins;
 use fuel_core_txpool::{
     service::TxStatusChange,
     Config as TxPoolConfig,
     MockDb as TxPoolDb,
     ServiceBuilder as TxPoolServiceBuilder,
+};
+use fuel_core_types::{
+    blockchain::block::CompressedBlock,
+    entities::coin::{
+        Coin,
+        CoinStatus,
+    },
 };
 use rand::{
     prelude::StdRng,
@@ -149,7 +151,7 @@ async fn block_producer() -> Result<()> {
 
     let mock_db = MockDb {
         blocks: Arc::new(Mutex::new(
-            vec![(0u32.into(), FuelBlockDb::default())]
+            vec![(0u32.into(), CompressedBlock::default())]
                 .into_iter()
                 .collect(),
         )),

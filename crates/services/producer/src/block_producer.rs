@@ -23,13 +23,17 @@ use fuel_core_interfaces::{
         ExecutionBlock,
         UncommittedResult,
     },
-    model::{
+};
+use fuel_core_types::blockchain::{
+    block::PartialFuelBlock,
+    header::{
+        ApplicationHeader,
+        ConsensusHeader,
+        PartialBlockHeader,
+    },
+    primitives::{
         BlockHeight,
         DaBlockHeight,
-        FuelApplicationHeader,
-        FuelConsensusHeader,
-        PartialFuelBlock,
-        PartialFuelBlockHeader,
     },
 };
 use std::sync::Arc;
@@ -165,18 +169,18 @@ where
     Database: BlockProducerDatabase,
 {
     /// Create the header for a new block at the provided height
-    async fn new_header(&self, height: BlockHeight) -> Result<PartialFuelBlockHeader> {
+    async fn new_header(&self, height: BlockHeight) -> Result<PartialBlockHeader> {
         let previous_block_info = self.previous_block_info(height)?;
         let new_da_height = self
             .select_new_da_height(previous_block_info.da_height)
             .await?;
 
-        Ok(PartialFuelBlockHeader {
-            application: FuelApplicationHeader {
+        Ok(PartialBlockHeader {
+            application: ApplicationHeader {
                 da_height: new_da_height,
                 generated: Default::default(),
             },
-            consensus: FuelConsensusHeader {
+            consensus: ConsensusHeader {
                 // TODO: this needs to be updated using a proper BMT MMR
                 prev_root: previous_block_info.prev_root,
                 height,
@@ -221,12 +225,12 @@ where
             // TODO: this should use a proper BMT MMR
             let hash = previous_block.id();
             let prev_root = ephemeral_merkle_root(
-                vec![*previous_block.header.prev_root(), hash.into()].iter(),
+                vec![*previous_block.header().prev_root(), hash.into()].iter(),
             );
 
             Ok(PreviousBlockInfo {
                 prev_root,
-                da_height: previous_block.header.da_height,
+                da_height: previous_block.header().da_height,
             })
         }
     }

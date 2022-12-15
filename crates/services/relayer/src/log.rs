@@ -8,14 +8,12 @@ use ethers_core::{
     abi::RawLog,
     types::Log,
 };
-use fuel_core_interfaces::{
-    common::fuel_types::{
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    entities::message::Message,
+    fuel_types::{
         Address,
         Word,
-    },
-    model::{
-        DaBlockHeight,
-        Message,
     },
 };
 

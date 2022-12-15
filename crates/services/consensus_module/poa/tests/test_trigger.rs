@@ -20,21 +20,8 @@ use fuel_core_interfaces::{
         ExecutionResult,
         UncommittedResult,
     },
-    model::{
-        ArcPoolTx,
-        BlockHeight,
-        BlockId,
-        FuelBlockConsensus,
-        FuelConsensusHeader,
-        PartialFuelBlock,
-        PartialFuelBlockHeader,
-        SecretKeyWrapper,
-    },
     poa_coordinator::TransactionPool,
-    txpool::{
-        PoolTransaction,
-        TxStatus,
-    },
+    txpool::TxStatus,
 };
 use fuel_core_poa::{
     ports::{
@@ -45,6 +32,25 @@ use fuel_core_poa::{
     Config,
     Service,
     Trigger,
+};
+use fuel_core_types::{
+    blockchain::{
+        block::PartialFuelBlock,
+        consensus::Consensus,
+        header::{
+            ConsensusHeader,
+            PartialBlockHeader,
+        },
+        primitives::{
+            BlockHeight,
+            BlockId,
+            SecretKeyWrapper,
+        },
+    },
+    services::txpool::{
+        ArcPoolTx,
+        PoolTransaction,
+    },
 };
 use parking_lot::RwLock;
 use rand::{
@@ -119,7 +125,7 @@ impl BlockProducer<MockDatabase> for MockBlockProducer {
     ) -> anyhow::Result<UncommittedResult<DBTransaction<MockDatabase>>> {
         let includable_txs: Vec<_> = self.txpool_sender.includable().await;
 
-        let transactions: Vec<_> = select_transactions(includable_txs, max_gas)
+        let transactions: Vec<Transaction> = select_transactions(includable_txs, max_gas)
             .into_iter()
             .map(|c| c.as_ref().into())
             .collect();
@@ -127,8 +133,8 @@ impl BlockProducer<MockDatabase> for MockBlockProducer {
         self.database.inner.write().height += 1;
 
         let block = PartialFuelBlock {
-            header: PartialFuelBlockHeader {
-                consensus: FuelConsensusHeader {
+            header: PartialBlockHeader {
+                consensus: ConsensusHeader {
                     height,
                     ..Default::default()
                 },
@@ -199,7 +205,7 @@ pub struct MockDatabase {
 #[derive(Default, Debug)]
 pub struct MockDatabaseInner {
     height: u32,
-    consensus: HashMap<BlockId, FuelBlockConsensus>,
+    consensus: HashMap<BlockId, Consensus>,
 }
 
 impl MockDatabase {
@@ -216,7 +222,7 @@ impl BlockDb for MockDatabase {
     fn seal_block(
         &mut self,
         block_id: BlockId,
-        consensus: FuelBlockConsensus,
+        consensus: Consensus,
     ) -> anyhow::Result<()> {
         if self.inner.read().consensus.contains_key(&block_id) {
             Err(anyhow!("block already sealed"))
@@ -579,7 +585,7 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
             .next()
             .expect("expected sealed block info");
         match consensus {
-            FuelBlockConsensus::PoA(poa) => {
+            Consensus::PoA(poa) => {
                 // verify against public key from test config
                 let pk = test_signing_key().expose_secret().public_key();
 

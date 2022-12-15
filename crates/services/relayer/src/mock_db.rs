@@ -2,6 +2,26 @@
 
 use async_trait::async_trait;
 
+use fuel_core_interfaces::{
+    db::KvStoreError,
+    relayer::RelayerDb,
+};
+use fuel_core_storage::{
+    tables::Messages,
+    StorageInspect,
+    StorageMutate,
+};
+use fuel_core_types::{
+    blockchain::{
+        primitives::{
+            BlockHeight,
+            DaBlockHeight,
+        },
+        SealedBlock,
+    },
+    entities::message::Message,
+    fuel_tx::MessageId,
+};
 use std::{
     borrow::Cow,
     collections::HashMap,
@@ -11,32 +31,11 @@ use std::{
     },
 };
 
-use fuel_core_interfaces::{
-    common::{
-        fuel_tx::MessageId,
-        prelude::{
-            StorageInspect,
-            StorageMutate,
-        },
-    },
-    db::{
-        KvStoreError,
-        Messages,
-    },
-    model::{
-        BlockHeight,
-        DaBlockHeight,
-        Message,
-        SealedFuelBlock,
-    },
-    relayer::RelayerDb,
-};
-
 #[derive(Default)]
 pub struct Data {
     pub messages: HashMap<MessageId, Message>,
     pub chain_height: BlockHeight,
-    pub sealed_blocks: HashMap<BlockHeight, Arc<SealedFuelBlock>>,
+    pub sealed_blocks: HashMap<BlockHeight, Arc<SealedBlock>>,
     pub finalized_da_height: Option<DaBlockHeight>,
     pub last_committed_finalized_fuel_height: BlockHeight,
     pub pending_committed_fuel_height: Option<BlockHeight>,
@@ -92,10 +91,7 @@ impl RelayerDb for MockDb {
         self.data.lock().unwrap().chain_height
     }
 
-    async fn get_sealed_block(
-        &self,
-        height: BlockHeight,
-    ) -> Option<Arc<SealedFuelBlock>> {
+    async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedBlock>> {
         self.data
             .lock()
             .unwrap()

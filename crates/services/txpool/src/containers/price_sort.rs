@@ -1,10 +1,10 @@
 use crate::types::*;
-use fuel_core_interfaces::{
-    common::fuel_tx::{
+use fuel_core_types::{
+    fuel_tx::{
         Chargeable,
         UniqueIdentifier,
     },
-    model::ArcPoolTx,
+    services::txpool::ArcPoolTx,
 };
 use std::{
     cmp,

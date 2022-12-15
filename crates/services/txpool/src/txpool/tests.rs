@@ -17,30 +17,28 @@ use crate::{
     MockDb,
     TxPool,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_crypto::rand::{
-            rngs::StdRng,
-            SeedableRng,
-        },
-        fuel_storage::StorageAsMut,
-        fuel_tx::{
-            AssetId,
-            Chargeable,
-            Output,
-            TransactionBuilder,
-            UniqueIdentifier,
-            UtxoId,
-        },
-    },
-    db::{
+use fuel_core_storage::{
+    tables::{
         Coins,
         Messages,
     },
-    model::{
-        ArcPoolTx,
-        CoinStatus,
+    StorageAsMut,
+};
+use fuel_core_types::{
+    entities::coin::CoinStatus,
+    fuel_crypto::rand::{
+        rngs::StdRng,
+        SeedableRng,
     },
+    fuel_tx::{
+        AssetId,
+        Chargeable,
+        Output,
+        TransactionBuilder,
+        UniqueIdentifier,
+        UtxoId,
+    },
+    services::txpool::ArcPoolTx,
 };
 use std::{
     cmp::Reverse,

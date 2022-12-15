@@ -1,10 +1,6 @@
 #![cfg(feature = "test-helpers")]
 
-use fuel_core_interfaces::{
-    common::fuel_storage::StorageAsRef,
-    db::Messages,
-    relayer::RelayerDb,
-};
+use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_core_relayer::{
     bridge::message::SentMessageFilter,
     mock_db::MockDb,
@@ -15,6 +11,10 @@ use fuel_core_relayer::{
     },
     Config,
     RelayerHandle,
+};
+use fuel_core_storage::{
+    tables::Messages,
+    StorageAsRef,
 };
 
 #[tokio::test(start_paused = true)]

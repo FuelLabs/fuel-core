@@ -22,10 +22,11 @@ use ethers_providers::{
     Provider,
     ProviderError,
 };
-use fuel_core_interfaces::{
-    db::Messages,
-    model::Message,
-    relayer::RelayerDb,
+use fuel_core_interfaces::relayer::RelayerDb;
+use fuel_core_storage::tables::Messages;
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    entities::message::Message,
 };
 use std::{
     convert::TryInto,
@@ -140,10 +141,7 @@ where
         write_logs(self.database.as_mut(), logs).await
     }
 
-    async fn set_finalized_da_height(
-        &self,
-        height: fuel_core_interfaces::model::DaBlockHeight,
-    ) {
+    async fn set_finalized_da_height(&self, height: DaBlockHeight) {
         self.database.set_finalized_da_height(height).await
     }
 

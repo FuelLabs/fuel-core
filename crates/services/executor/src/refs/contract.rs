@@ -19,12 +19,12 @@ use fuel_core_interfaces::{
     },
     db::{
         ContractsAssets,
-        ContractsLatestUtxo,
         ContractsState,
     },
     executor::Error,
     not_found,
 };
+use fuel_core_storage::tables::ContractsLatestUtxo;
 use std::{
     borrow::Cow,
     error::Error as StdError,

@@ -80,12 +80,10 @@ impl GossipsubTopics {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_interfaces::{
-        common::fuel_tx::Transaction,
-        model::{
-            ConsensusVote,
-            FuelBlock,
-        },
+    use fuel_core_interfaces::common::fuel_tx::Transaction;
+    use fuel_core_types::blockchain::{
+        block::Block,
+        consensus::ConsensusVote,
     };
     use libp2p::gossipsub::Topic;
     use std::sync::Arc;
@@ -133,7 +131,7 @@ mod tests {
         );
 
         let broadcast_req =
-            GossipsubBroadcastRequest::NewBlock(Arc::new(FuelBlock::default()));
+            GossipsubBroadcastRequest::NewBlock(Arc::new(Block::default()));
         assert_eq!(
             gossipsub_topics.get_gossipsub_topic(&broadcast_req).hash(),
             new_block_topic.hash()

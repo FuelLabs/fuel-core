@@ -5,7 +5,6 @@ use crate::{
 use anyhow::anyhow;
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
-    common::prelude::Bytes32,
     p2p::{
         GossipData,
         P2pRequestEvent,
@@ -21,6 +20,7 @@ use fuel_core_interfaces::{
         TxUpdate,
     },
 };
+use fuel_core_types::fuel_types::Bytes32;
 use std::sync::Arc;
 use tokio::{
     sync::{
@@ -238,7 +238,7 @@ impl Context {
                 }
 
                 event = self.txpool_receiver.recv() => {
-                    if matches!(event,Some(TxPoolMpsc::Stop) | None) {
+                    if matches!(event, Some(TxPoolMpsc::Stop) | None) {
                         break;
                     }
                     let txpool = txpool.clone();

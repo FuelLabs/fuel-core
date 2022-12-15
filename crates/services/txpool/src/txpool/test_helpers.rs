@@ -1,22 +1,16 @@
-use crate::types::TxId;
-use fuel_core_interfaces::{
-    common::{
-        fuel_tx::{
-            Contract,
-            ContractId,
-            Input,
-            Output,
-            UtxoId,
-        },
-        prelude::{
-            Opcode,
-            Word,
-        },
+use fuel_core_types::{
+    blockchain::primitives::BlockHeight,
+    entities::message::Message,
+    fuel_asm::Opcode,
+    fuel_tx::{
+        Contract,
+        ContractId,
+        Input,
+        Output,
+        TxId,
+        UtxoId,
     },
-    model::{
-        BlockHeight,
-        Message,
-    },
+    fuel_types::Word,
 };
 
 pub(crate) fn create_message_predicate_from_message(

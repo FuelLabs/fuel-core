@@ -1,11 +1,10 @@
-use fuel_core_interfaces::{
-    common::{
-        fuel_types::Word,
-        prelude::Chargeable,
-    },
-    model::ArcPoolTx,
-};
 use std::cmp::Reverse;
+
+use fuel_core_types::{
+    fuel_tx::Chargeable,
+    fuel_types::Word,
+    services::txpool::ArcPoolTx,
+};
 
 // TODO: This logic should be housed in the txpool,
 //  as it will have the most efficient way to select txs.

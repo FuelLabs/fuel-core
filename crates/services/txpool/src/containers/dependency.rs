@@ -3,24 +3,24 @@ use crate::{
     Error,
 };
 use anyhow::anyhow;
-use fuel_core_interfaces::{
-    common::{
-        fuel_tx::{
-            Chargeable,
-            Input,
-            Output,
-            UniqueIdentifier,
-            UtxoId,
-        },
-        fuel_types::MessageId,
-    },
-    model::{
-        ArcPoolTx,
+use fuel_core_interfaces::txpool::TxPoolDb;
+use fuel_core_types::{
+    entities::coin::{
         Coin,
         CoinStatus,
+    },
+    fuel_tx::{
+        Chargeable,
+        Input,
+        Output,
+        UniqueIdentifier,
+        UtxoId,
+    },
+    fuel_types::MessageId,
+    services::txpool::{
+        ArcPoolTx,
         TxInfo,
     },
-    txpool::TxPoolDb,
 };
 use std::collections::{
     HashMap,

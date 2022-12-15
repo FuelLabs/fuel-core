@@ -1,13 +1,11 @@
 use super::*;
 use crate::service::test_helpers::TestContext;
-use fuel_core_interfaces::{
-    common::fuel_tx::UniqueIdentifier,
-    txpool::{
-        Error as TxpoolError,
-        TxPoolMpsc,
-        TxStatus,
-    },
+use fuel_core_interfaces::txpool::{
+    Error as TxpoolError,
+    TxPoolMpsc,
+    TxStatus,
 };
+use fuel_core_types::fuel_tx::UniqueIdentifier;
 use tokio::sync::oneshot;
 
 #[tokio::test]

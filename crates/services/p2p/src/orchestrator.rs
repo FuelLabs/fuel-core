@@ -2,22 +2,20 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 
-use fuel_core_interfaces::{
-    model::SealedFuelBlock,
-    p2p::{
-        BlockBroadcast,
-        BlockGossipData,
-        ConsensusBroadcast,
-        ConsensusGossipData,
-        GossipData,
-        GossipsubMessageAcceptance,
-        GossipsubMessageInfo,
-        P2pDb,
-        P2pRequestEvent,
-        TransactionBroadcast,
-        TransactionGossipData,
-    },
+use fuel_core_interfaces::p2p::{
+    BlockBroadcast,
+    BlockGossipData,
+    ConsensusBroadcast,
+    ConsensusGossipData,
+    GossipData,
+    GossipsubMessageAcceptance,
+    GossipsubMessageInfo,
+    P2pDb,
+    P2pRequestEvent,
+    TransactionBroadcast,
+    TransactionGossipData,
 };
+use fuel_core_types::blockchain::SealedBlock;
 use libp2p::{
     gossipsub::MessageAcceptance,
     request_response::RequestId,
@@ -87,7 +85,7 @@ struct NetworkOrchestrator {
 enum OrchestratorRequest {
     Stop,
     GetPeersIds(oneshot::Sender<Vec<PeerId>>),
-    RespondWithRequestedBlock((Option<Arc<SealedFuelBlock>>, RequestId)),
+    RespondWithRequestedBlock((Option<Arc<SealedBlock>>, RequestId)),
 }
 
 impl NetworkOrchestrator {
@@ -336,12 +334,13 @@ impl Service {
 pub mod tests {
     use super::*;
     use async_trait::async_trait;
-    use fuel_core_interfaces::model::{
-        BlockHeight,
-        FuelBlock,
-        FuelBlockConsensus,
-        FuelBlockPoAConsensus,
-        SealedFuelBlock,
+    use fuel_core_types::blockchain::{
+        block::Block,
+        consensus::{
+            poa::PoAConsensus,
+            Consensus,
+        },
+        primitives::BlockHeight,
     };
     use tokio::time::{
         sleep,
@@ -356,14 +355,12 @@ pub mod tests {
         async fn get_sealed_block(
             &self,
             _height: BlockHeight,
-        ) -> Option<Arc<SealedFuelBlock>> {
-            let block = FuelBlock::new(Default::default(), vec![], &[]);
+        ) -> Option<Arc<SealedBlock>> {
+            let block = Block::new(Default::default(), vec![], &[]);
 
-            Some(Arc::new(SealedFuelBlock {
-                block,
-                consensus: FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(
-                    Default::default(),
-                )),
+            Some(Arc::new(SealedBlock {
+                entity: block,
+                consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
             }))
         }
     }

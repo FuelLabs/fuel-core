@@ -8,10 +8,12 @@ use fuel_core_interfaces::{
     },
     db::DatabaseTransaction,
     executor::UncommittedResult,
-    model::{
+};
+use fuel_core_types::blockchain::{
+    consensus::Consensus,
+    primitives::{
         BlockHeight,
         BlockId,
-        FuelBlockConsensus,
     },
 };
 
@@ -22,7 +24,7 @@ pub trait BlockDb: Send + Sync {
     fn seal_block(
         &mut self,
         block_id: BlockId,
-        consensus: FuelBlockConsensus,
+        consensus: Consensus,
     ) -> anyhow::Result<()>;
 }
 

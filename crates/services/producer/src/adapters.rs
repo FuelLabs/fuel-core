@@ -2,12 +2,10 @@ use crate::{
     adapters::transaction_selector::select_transactions,
     ports::TxPool,
 };
-use fuel_core_interfaces::{
-    model::{
-        ArcPoolTx,
-        BlockHeight,
-    },
-    txpool::Sender,
+use fuel_core_interfaces::txpool::Sender;
+use fuel_core_types::{
+    blockchain::primitives::BlockHeight,
+    services::txpool::ArcPoolTx,
 };
 
 pub mod transaction_selector;

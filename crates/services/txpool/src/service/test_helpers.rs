@@ -1,20 +1,18 @@
 use super::*;
 use crate::MockDb;
-use fuel_core_interfaces::{
-    common::{
-        fuel_crypto::rand::{
-            rngs::StdRng,
-            SeedableRng,
-        },
-        fuel_tx::{
-            Input,
-            Transaction,
-            TransactionBuilder,
-            Word,
-        },
+use fuel_core_interfaces::txpool::Sender;
+use fuel_core_types::{
+    entities::coin::Coin,
+    fuel_crypto::rand::{
+        rngs::StdRng,
+        SeedableRng,
     },
-    model::Coin,
-    txpool::Sender,
+    fuel_tx::{
+        Input,
+        Transaction,
+        TransactionBuilder,
+        Word,
+    },
 };
 use std::{
     any::Any,

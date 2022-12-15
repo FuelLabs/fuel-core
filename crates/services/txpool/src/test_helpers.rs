@@ -2,26 +2,24 @@
 #![allow(dead_code)]
 
 use crate::MockDb;
-use fuel_core_interfaces::{
-    common::{
-        fuel_asm::Opcode,
-        fuel_crypto::rand::{
-            rngs::StdRng,
-            Rng,
-        },
-        fuel_tx::{
-            Output,
-            UtxoId,
-        },
-        prelude::{
-            AssetId,
-            Input,
-            Word,
-        },
-    },
-    model::{
+use fuel_core_types::{
+    entities::coin::{
         Coin,
         CoinStatus,
+    },
+    fuel_asm::Opcode,
+    fuel_crypto::rand::{
+        rngs::StdRng,
+        Rng,
+    },
+    fuel_tx::{
+        Input,
+        Output,
+        UtxoId,
+    },
+    fuel_types::{
+        AssetId,
+        Word,
     },
 };
 

@@ -11,11 +11,16 @@ use crate::{
     Config,
     Producer,
 };
-use fuel_core_interfaces::model::{
-    FuelApplicationHeader,
-    FuelBlockDb,
-    FuelBlockHeader,
-    FuelConsensusHeader,
+use fuel_core_types::blockchain::{
+    block::{
+        CompressedBlock,
+        PartialFuelBlock,
+    },
+    header::{
+        ApplicationHeader,
+        ConsensusHeader,
+        PartialBlockHeader,
+    },
 };
 use rand::{
     rngs::StdRng,
@@ -63,9 +68,9 @@ async fn can_produce_next_block() {
     let mut rng = StdRng::seed_from_u64(0u64);
     // setup dummy previous block
     let prev_height = 1u32.into();
-    let previous_block = FuelBlockDb {
-        header: FuelBlockHeader {
-            consensus: FuelConsensusHeader {
+    let previous_block = PartialFuelBlock {
+        header: PartialBlockHeader {
+            consensus: ConsensusHeader {
                 height: prev_height,
                 prev_root: rng.gen(),
                 ..Default::default()
@@ -73,7 +78,9 @@ async fn can_produce_next_block() {
             ..Default::default()
         },
         transactions: vec![],
-    };
+    }
+    .generate(&[])
+    .compress();
 
     let db = MockDb {
         blocks: Arc::new(Mutex::new(
@@ -117,20 +124,22 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
     // setup previous block with a high da_height
     let prev_da_height = 100u64.into();
     let prev_height = 1u32.into();
-    let previous_block = FuelBlockDb {
-        header: FuelBlockHeader {
-            application: FuelApplicationHeader {
+    let previous_block = PartialFuelBlock {
+        header: PartialBlockHeader {
+            application: ApplicationHeader {
                 da_height: prev_da_height,
                 ..Default::default()
             },
-            consensus: FuelConsensusHeader {
+            consensus: ConsensusHeader {
                 height: prev_height,
                 ..Default::default()
             },
             ..Default::default()
         },
         transactions: vec![],
-    };
+    }
+    .generate(&[])
+    .compress();
 
     let db = MockDb {
         blocks: Arc::new(Mutex::new(
@@ -205,7 +214,7 @@ struct TestContext {
 impl TestContext {
     pub fn default() -> Self {
         let genesis_height = 0u32.into();
-        let genesis_block = FuelBlockDb::default();
+        let genesis_block = CompressedBlock::default();
 
         let db = MockDb {
             blocks: Arc::new(Mutex::new(

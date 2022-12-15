@@ -3,7 +3,7 @@ use ethers_core::types::{
     H160,
     H256,
 };
-use fuel_core_interfaces::model::DaBlockHeight;
+use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use once_cell::sync::Lazy;
 use std::{
     str::FromStr,

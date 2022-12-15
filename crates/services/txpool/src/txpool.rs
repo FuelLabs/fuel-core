@@ -9,25 +9,23 @@ use crate::{
     Error,
 };
 use anyhow::anyhow;
-use fuel_core_interfaces::{
-    common::fuel_tx::{
+use fuel_core_interfaces::txpool::TxPoolDb;
+use fuel_core_metrics::txpool_metrics::TXPOOL_METRICS;
+use fuel_core_types::{
+    blockchain::block::Block,
+    fuel_tx::{
         Chargeable,
         CheckedTransaction,
         IntoChecked,
         Transaction,
         UniqueIdentifier,
     },
-    model::{
+    services::txpool::{
         ArcPoolTx,
-        FuelBlock,
+        InsertionResult,
         TxInfo,
     },
-    txpool::{
-        InsertionResult,
-        TxPoolDb,
-    },
 };
-use fuel_core_metrics::txpool_metrics::TXPOOL_METRICS;
 use std::{
     cmp::Reverse,
     collections::HashMap,
@@ -331,7 +329,7 @@ impl TxPool {
     pub async fn block_update(
         txpool: &RwLock<Self>,
         tx_status_sender: &TxStatusChange,
-        block: Arc<FuelBlock>,
+        block: Arc<Block>,
         // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
         let mut guard = txpool.write().await;

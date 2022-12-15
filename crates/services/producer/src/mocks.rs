@@ -24,13 +24,17 @@ use fuel_core_interfaces::{
         ExecutionResult,
         UncommittedResult,
     },
-    model::{
-        ArcPoolTx,
-        BlockHeight,
-        DaBlockHeight,
-        FuelBlockDb,
-        Message,
+};
+use fuel_core_types::{
+    blockchain::{
+        block::CompressedBlock,
+        primitives::{
+            BlockHeight,
+            DaBlockHeight,
+        },
     },
+    entities::message::Message,
+    services::txpool::ArcPoolTx,
 };
 use std::{
     borrow::Cow,
@@ -108,7 +112,7 @@ impl Executor<MockDb> for MockExecutor {
         };
         // simulate executor inserting a block
         let mut block_db = self.0.blocks.lock().unwrap();
-        block_db.insert(*block.header().height(), block.to_db_block());
+        block_db.insert(*block.header().height(), block.compress());
         Ok(UncommittedResult::new(
             ExecutionResult {
                 block,
@@ -175,12 +179,15 @@ impl Executor<MockDb> for FailingMockExecutor {
 
 #[derive(Clone, Default, Debug)]
 pub struct MockDb {
-    pub blocks: Arc<Mutex<HashMap<BlockHeight, FuelBlockDb>>>,
+    pub blocks: Arc<Mutex<HashMap<BlockHeight, CompressedBlock>>>,
     pub messages: Arc<Mutex<HashMap<MessageId, Message>>>,
 }
 
 impl BlockProducerDatabase for MockDb {
-    fn get_block(&self, fuel_height: BlockHeight) -> Result<Option<Cow<FuelBlockDb>>> {
+    fn get_block(
+        &self,
+        fuel_height: BlockHeight,
+    ) -> Result<Option<Cow<CompressedBlock>>> {
         let blocks = self.blocks.lock().unwrap();
 
         Ok(blocks.get(&fuel_height).cloned().map(Cow::Owned))

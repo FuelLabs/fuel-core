@@ -6,10 +6,8 @@ use crate::gossipsub::{
         NEW_TX_GOSSIP_TOPIC,
     },
 };
-use fuel_core_interfaces::{
-    common::secrecy::Zeroize,
-    model::Genesis,
-};
+use fuel_core_interfaces::common::secrecy::Zeroize;
+use fuel_core_types::blockchain::consensus::Genesis;
 use futures::{
     future,
     AsyncRead,
@@ -104,7 +102,7 @@ pub struct P2PConfig<State = Initialized> {
     /// The TCP port that Swarm listens on
     pub tcp_port: u16,
 
-    /// Max Size of a FuelBlock in bytes
+    /// Max Size of a Block in bytes
     pub max_block_size: usize,
 
     // `DiscoveryBehaviour` related fields

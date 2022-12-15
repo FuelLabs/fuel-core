@@ -43,7 +43,7 @@ use std::io;
 pub struct BincodeCodec {
     /// Used for `max_size` parameter when reading Response Message
     /// Necessary in order to avoid DoS attacks
-    /// Currently the size mostly depends on the max size of the FuelBlock
+    /// Currently the size mostly depends on the max size of the Block
     max_response_size: usize,
 }
 

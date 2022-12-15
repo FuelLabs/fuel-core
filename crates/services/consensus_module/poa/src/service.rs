@@ -32,15 +32,19 @@ use fuel_core_interfaces::{
         ExecutionResult,
         UncommittedResult,
     },
-    model::{
-        BlockHeight,
-        FuelBlock,
-        FuelBlockConsensus,
-        FuelBlockPoAConsensus,
-        SecretKeyWrapper,
-    },
     poa_coordinator::TransactionPool,
     txpool::TxStatus,
+};
+use fuel_core_types::blockchain::{
+    block::Block,
+    consensus::{
+        poa::PoAConsensus,
+        Consensus,
+    },
+    primitives::{
+        BlockHeight,
+        SecretKeyWrapper,
+    },
 };
 use parking_lot::Mutex;
 use std::{
@@ -384,7 +388,7 @@ where
 
 pub fn seal_block(
     signing_key: &Option<Secret<SecretKeyWrapper>>,
-    block: &FuelBlock,
+    block: &Block,
     database: &mut dyn BlockDb,
 ) -> anyhow::Result<()> {
     if let Some(key) = signing_key {
@@ -395,7 +399,7 @@ pub fn seal_block(
         let signing_key = key.expose_secret().deref();
 
         let poa_signature = Signature::sign(signing_key, &message);
-        let seal = FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(poa_signature));
+        let seal = Consensus::PoA(PoAConsensus::new(poa_signature));
         database.seal_block(block_hash, seal)
     } else {
         Err(anyhow!("no PoA signing key configured"))
@@ -420,11 +424,11 @@ mod test {
             Transactional,
         },
         executor::Error,
-        model::{
-            ArcPoolTx,
-            BlockId,
-        },
         txpool::Error::NoMetadata,
+    };
+    use fuel_core_types::{
+        blockchain::primitives::BlockId,
+        services::txpool::ArcPoolTx,
     };
     use rand::{
         prelude::StdRng,
@@ -462,7 +466,7 @@ mod test {
             fn seal_block(
                 &mut self,
                 block_id: BlockId,
-                consensus: FuelBlockConsensus,
+                consensus: Consensus,
             ) -> anyhow::Result<()>;
         }
     }

@@ -461,14 +461,16 @@ mod tests {
         service::FuelP2PEvent,
     };
     use ctor::ctor;
-    use fuel_core_interfaces::{
-        common::fuel_tx::Transaction,
-        model::{
+    use fuel_core_interfaces::common::fuel_tx::Transaction;
+    use fuel_core_types::blockchain::{
+        block::Block,
+        consensus::{
+            poa::PoAConsensus,
+            Consensus,
             ConsensusVote,
-            FuelBlock,
-            FuelBlockConsensus,
-            PartialFuelBlockHeader,
         },
+        header::PartialBlockHeader,
+        SealedBlock,
     };
     use futures::StreamExt;
     use libp2p::{
@@ -907,7 +909,7 @@ mod tests {
     #[instrument]
     async fn gossipsub_broadcast_block() {
         gossipsub_broadcast(GossipsubBroadcastRequest::NewBlock(Arc::new(
-            FuelBlock::default(),
+            Block::default(),
         )))
         .await;
     }
@@ -969,7 +971,7 @@ mod tests {
                                 }
                             }
                             GossipsubMessage::NewBlock(block) => {
-                                if block.header().height() != FuelBlock::default().header().height() {
+                                if block.header().height() != Block::<Transaction>::default().header().height() {
                                     tracing::error!("Wrong p2p message {:?}", message);
                                     panic!("Wrong GossipsubMessage")
                                 }
@@ -1000,14 +1002,7 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn request_response_works() {
-        use fuel_core_interfaces::{
-            common::fuel_tx::Transaction,
-            model::{
-                FuelBlock,
-                FuelBlockPoAConsensus,
-                SealedFuelBlock,
-            },
-        };
+        use fuel_core_interfaces::common::fuel_tx::Transaction;
 
         let mut p2p_config = P2PConfig::default_initialized("request_response_works");
 
@@ -1049,7 +1044,7 @@ mod tests {
                                     let response_message = rx_orchestrator.await;
 
                                     if let Ok(sealed_block) = response_message {
-                                        let _ = tx_test_end.send(*sealed_block.block.header().height() == 0_u64.into()).await;
+                                        let _ = tx_test_end.send(*sealed_block.entity.header().height() == 0_u64.into()).await;
                                     } else {
                                         tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
                                         panic!("Message not received successfully!")
@@ -1065,11 +1060,11 @@ mod tests {
                 node_b_event = node_b.next_event() => {
                     // 2. Node B receives the RequestMessage from Node A initiated by the NetworkOrchestrator
                     if let Some(FuelP2PEvent::RequestMessage{ request_id, .. }) = node_b_event {
-                        let block = FuelBlock::new(PartialFuelBlockHeader::default(), vec![Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default()], &[]);
+                        let block = Block::new(PartialBlockHeader::default(), vec![Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default()], &[]);
 
-                        let sealed_block = SealedFuelBlock {
-                            block,
-                            consensus: FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(Default::default())),
+                        let sealed_block = SealedBlock {
+                            entity: block,
+                            consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
                         };
 
                         let _ = node_b.send_response_msg(request_id, Some(OutboundResponse::ResponseBlock(Arc::new(sealed_block))));

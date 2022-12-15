@@ -2,6 +2,10 @@
 
 use std::convert::TryFrom;
 
+use crate::{
+    config,
+    log::EthEventLog,
+};
 use bytes::{
     Bytes,
     BytesMut,
@@ -17,17 +21,12 @@ use ethers_core::{
         U64,
     },
 };
-use fuel_core_interfaces::{
-    common::prelude::Address,
-    model::{
+use fuel_core_types::{
+    entities::message::{
         CheckedMessage,
         Message,
     },
-};
-
-use crate::{
-    config,
-    log::EthEventLog,
+    fuel_types::Address,
 };
 
 pub mod middleware;

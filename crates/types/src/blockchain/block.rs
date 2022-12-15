@@ -87,13 +87,15 @@ impl Block<Transaction> {
             transactions: self.transactions.iter().map(|tx| tx.id()).collect(),
         }
     }
+}
 
+impl CompressedBlock {
     /// Convert from a compressed block back to a the full block.
-    pub fn uncompress(block: CompressedBlock, transactions: Vec<Transaction>) -> Self {
+    pub fn uncompress(self, transactions: Vec<Transaction>) -> Block<Transaction> {
         // TODO: should we perform an extra validation step to ensure the provided
         //  txs match the expected ones in the block?
-        Self {
-            header: block.header,
+        Block {
+            header: self.header,
             transactions,
         }
     }

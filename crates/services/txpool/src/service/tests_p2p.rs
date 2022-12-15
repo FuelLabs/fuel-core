@@ -1,14 +1,12 @@
 use super::*;
 use crate::service::test_helpers::TestContext;
-use fuel_core_interfaces::{
-    common::fuel_tx::{
-        Transaction,
-        UniqueIdentifier,
-    },
-    txpool::{
-        TxPoolMpsc,
-        TxStatus,
-    },
+use fuel_core_interfaces::txpool::{
+    TxPoolMpsc,
+    TxStatus,
+};
+use fuel_core_types::fuel_tx::{
+    Transaction,
+    UniqueIdentifier,
 };
 use std::ops::Deref;
 use tokio::sync::{

@@ -1,3 +1,32 @@
+use fuel_core_interfaces::{
+    db::{
+        Error,
+        KvStoreError,
+    },
+    txpool::TxPoolDb,
+};
+use fuel_core_storage::{
+    tables::{
+        Coins,
+        Messages,
+    },
+    StorageInspect,
+    StorageMutate,
+};
+use fuel_core_types::{
+    blockchain::primitives::BlockHeight,
+    entities::{
+        coin::Coin,
+        message::Message,
+    },
+    fuel_tx::{
+        Contract,
+        ContractId,
+        MessageId,
+        UtxoId,
+    },
+    fuel_vm::ContractsRawCode,
+};
 use std::{
     borrow::Cow,
     collections::HashMap,
@@ -5,34 +34,6 @@ use std::{
         Arc,
         Mutex,
     },
-};
-
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::{
-            StorageInspect,
-            StorageMutate,
-        },
-        fuel_tx::{
-            Contract,
-            ContractId,
-            MessageId,
-            UtxoId,
-        },
-    },
-    db::{
-        Coins,
-        ContractsRawCode,
-        Error,
-        KvStoreError,
-        Messages,
-    },
-    model::{
-        BlockHeight,
-        Coin,
-        Message,
-    },
-    txpool::TxPoolDb,
 };
 
 #[derive(Default)]

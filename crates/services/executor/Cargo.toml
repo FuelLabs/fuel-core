@@ -13,4 +13,5 @@ description = "Fuel Block Executor"
 anyhow = "1.0"
 fuel-core-chain-config = { path = "../../chain-config", version = "0.15.1" }
 fuel-core-interfaces = { path = "../../fuel-core-interfaces", version = "0.15.1" }
+fuel-core-storage = { path = "../../storage", version = "0.15.1" }
 tokio = { version = "1.21", features = ["full"] }

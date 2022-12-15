@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use fuel_core_interfaces::model::{
-    BlockHeight,
-    SealedFuelBlock,
+use fuel_core_types::blockchain::{
+    primitives::BlockHeight,
+    SealedBlock,
 };
 use serde::{
     Deserialize,
@@ -24,13 +24,13 @@ pub enum RequestMessage {
 /// Final Response Message that p2p service sends to the Orchestrator
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ResponseMessage {
-    ResponseBlock(SealedFuelBlock),
+    ResponseBlock(SealedBlock),
 }
 
 /// Holds oneshot channels for specific responses
 #[derive(Debug)]
 pub enum ResponseChannelItem {
-    ResponseBlock(oneshot::Sender<SealedFuelBlock>),
+    ResponseBlock(oneshot::Sender<SealedBlock>),
 }
 
 /// Response that is sent over the wire
@@ -44,7 +44,7 @@ pub enum IntermediateResponse {
 /// and wrapped into `IntermediateResponse`
 #[derive(Debug, Clone)]
 pub enum OutboundResponse {
-    ResponseBlock(Arc<SealedFuelBlock>),
+    ResponseBlock(Arc<SealedBlock>),
 }
 
 #[derive(Debug)]

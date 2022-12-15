@@ -7,12 +7,16 @@ use fuel_core_interfaces::{
         ExecutionBlock,
         UncommittedResult,
     },
-    model::{
-        ArcPoolTx,
-        BlockHeight,
-        DaBlockHeight,
-        FuelBlockDb,
+};
+use fuel_core_types::{
+    blockchain::{
+        block::CompressedBlock,
+        primitives::{
+            BlockHeight,
+            DaBlockHeight,
+        },
     },
+    services::txpool::ArcPoolTx,
 };
 use std::borrow::Cow;
 
@@ -21,7 +25,7 @@ pub trait BlockProducerDatabase: Send + Sync {
     fn get_block(
         &self,
         fuel_height: BlockHeight,
-    ) -> anyhow::Result<Option<Cow<FuelBlockDb>>>;
+    ) -> anyhow::Result<Option<Cow<CompressedBlock>>>;
 
     /// Fetch the current block height.
     fn current_block_height(&self) -> anyhow::Result<BlockHeight>;

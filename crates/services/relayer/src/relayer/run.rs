@@ -11,7 +11,7 @@ use super::{
 };
 
 use async_trait::async_trait;
-use fuel_core_interfaces::model::DaBlockHeight;
+use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
 #[cfg(test)]
 mod test;
