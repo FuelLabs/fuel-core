@@ -4,10 +4,19 @@ use fuel_core_interfaces::common::{
     fuel_tx::Script,
     tai64::Tai64,
 };
-use fuel_core_types::blockchain::header::{
-    ApplicationHeader,
-    ConsensusHeader,
-    PartialBlockHeader,
+use fuel_core_types::{
+    blockchain::header::{
+        ApplicationHeader,
+        ConsensusHeader,
+        PartialBlockHeader,
+    },
+    fuel_types::{
+        Address,
+        AssetId,
+        Bytes32,
+        ContractId,
+        MessageId,
+    },
 };
 
 use super::*;
@@ -134,7 +143,7 @@ async fn can_build_message_proof() {
     data.expect_signature()
         .once()
         .with(eq(Bytes32::default()))
-        .returning(|_| Ok(Some(fuel_crypto::Signature::default())));
+        .returning(|_| Ok(Some(Signature::default())));
 
     let header = PartialBlockHeader {
         application: ApplicationHeader {
@@ -167,7 +176,7 @@ async fn can_build_message_proof() {
         .unwrap()
         .unwrap();
     assert_eq!(p.message_id(), message_id);
-    assert_eq!(p.signature, fuel_crypto::Signature::default());
+    assert_eq!(p.signature, Signature::default());
     let header = header.generate(&[vec![]], &message_ids);
     assert_eq!(p.header.output_messages_root, header.output_messages_root);
 }
