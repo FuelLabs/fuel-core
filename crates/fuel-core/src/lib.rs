@@ -12,6 +12,8 @@ pub use fuel_core_producer as producer;
 pub use fuel_core_relayer as relayer;
 #[doc(no_inline)]
 pub use fuel_core_txpool as txpool;
+#[doc(no_inline)]
+pub use fuel_core_types as types;
 
 pub mod database;
 pub mod executor;

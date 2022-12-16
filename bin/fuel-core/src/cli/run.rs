@@ -18,14 +18,14 @@ use fuel_core::{
         VMConfig,
     },
     txpool::Config as TxPoolConfig,
-};
-use fuel_core_types::{
-    blockchain::primitives::SecretKeyWrapper,
-    fuel_tx::Address,
-    fuel_vm::SecretKey,
-    secrecy::{
-        ExposeSecret,
-        Secret,
+    types::{
+        blockchain::primitives::SecretKeyWrapper,
+        fuel_tx::Address,
+        fuel_vm::SecretKey,
+        secrecy::{
+            ExposeSecret,
+            Secret,
+        },
     },
 };
 use std::{

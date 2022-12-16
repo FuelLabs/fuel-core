@@ -1,14 +1,16 @@
 use clap::Args;
-use fuel_core::p2p::{
-    config::{
-        convert_to_libp2p_keypair,
-        NotInitialized,
-        P2PConfig,
+use fuel_core::{
+    p2p::{
+        config::{
+            convert_to_libp2p_keypair,
+            NotInitialized,
+            P2PConfig,
+        },
+        gossipsub_config::default_gossipsub_builder,
+        Multiaddr,
     },
-    gossipsub_config::default_gossipsub_builder,
-    Multiaddr,
+    types::fuel_crypto,
 };
-use fuel_core_types::fuel_crypto;
 use std::{
     net::{
         IpAddr,

@@ -2267,7 +2267,6 @@ dependencies = [
  "clap",
  "dirs",
  "fuel-core",
- "fuel-core-types",
  "lazy_static",
  "serde_json",
  "strum",
