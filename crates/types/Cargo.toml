@@ -30,3 +30,4 @@ zeroize = "1.5"
 default = []
 serde = ["dep:serde", "fuel-vm-private/serde"]
 test-helpers = ["fuel-vm-private/random"]
+debug = ["fuel-vm-private/debug"]

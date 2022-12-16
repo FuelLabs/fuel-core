@@ -94,7 +94,7 @@ mockall = "0.11"
 test-case = "2.2"
 
 [features]
-debug = ["fuel-core-interfaces/debug"]
+debug = ["fuel-core-interfaces/debug", "fuel-core-types/debug"]
 default = ["debug", "metrics", "rocksdb"]
 metrics = ["dep:fuel-core-metrics"]
 p2p = ["dep:fuel-core-p2p"]
