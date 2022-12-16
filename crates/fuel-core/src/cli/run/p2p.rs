@@ -9,7 +9,6 @@ use std::{
 
 use clap::Args;
 
-use fuel_core_interfaces::common::fuel_crypto;
 use fuel_core_p2p::{
     config::{
         NotInitialized,
@@ -18,6 +17,7 @@ use fuel_core_p2p::{
     gossipsub_config::default_gossipsub_builder,
     Multiaddr,
 };
+use fuel_core_types::fuel_crypto;
 
 #[derive(Debug, Clone, Args)]
 pub struct P2PArgs {

@@ -238,7 +238,7 @@ pub enum TxStatus {
     /// - failed to execute and state changes reverted
     Completed,
     /// removed from txpool.
-    SqueezedOut { reason: String },
+    SqueezedOut { reason: Error },
 }
 
 #[allow(missing_docs)]

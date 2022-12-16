@@ -2,20 +2,16 @@ use crate::database::{
     Column,
     Database,
 };
-use fuel_core_interfaces::common::{
-    fuel_storage::{
-        StorageInspect,
-        StorageMutate,
-    },
-    fuel_vm::prelude::{
-        Bytes32,
-        ContractId,
-        Salt,
-    },
-};
 use fuel_core_storage::{
     tables::ContractsInfo,
     Error as StorageError,
+    StorageInspect,
+    StorageMutate,
+};
+use fuel_core_types::fuel_types::{
+    Bytes32,
+    ContractId,
+    Salt,
 };
 use std::borrow::Cow;
 
@@ -52,10 +48,8 @@ impl StorageMutate<ContractsInfo> for Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_interfaces::common::{
-        fuel_storage::StorageAsMut,
-        fuel_vm::prelude::Contract,
-    };
+    use fuel_core_storage::StorageAsMut;
+    use fuel_core_types::fuel_vm::Contract;
     use rand::{
         rngs::StdRng,
         Rng,

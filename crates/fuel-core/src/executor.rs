@@ -8,9 +8,44 @@ use crate::{
     service::Config,
 };
 use fuel_core_executor::refs::ContractRef;
-use fuel_core_interfaces::common::{
+use fuel_core_producer::ports::Executor as ExecutorTrait;
+use fuel_core_storage::{
+    tables::{
+        Coins,
+        ContractsLatestUtxo,
+        FuelBlocks,
+        Messages,
+        Receipts,
+        Transactions,
+    },
+    transactional::{
+        StorageTransaction,
+        Transactional,
+    },
+    StorageAsMut,
+    StorageAsRef,
+    StorageInspect,
+};
+use fuel_core_types::{
+    blockchain::{
+        block::{
+            Block,
+            PartialFuelBlock,
+        },
+        header::PartialBlockHeader,
+        primitives::{
+            BlockHeight,
+            DaBlockHeight,
+        },
+    },
+    entities::{
+        coin::{
+            Coin,
+            CoinStatus,
+        },
+        message::Message,
+    },
     fuel_asm::Word,
-    fuel_storage,
     fuel_tx::{
         field::{
             Inputs,
@@ -37,52 +72,12 @@ use fuel_core_interfaces::common::{
     fuel_types::MessageId,
     fuel_vm::{
         consts::REG_SP,
-        prelude::{
-            Backtrace as FuelBacktrace,
-            Interpreter,
-            PredicateStorage,
-        },
-    },
-    interpreter::CheckedMetadata,
-    prelude::{
+        interpreter::CheckedMetadata,
+        state::StateTransition,
+        Backtrace as FuelBacktrace,
         ExecutableTransaction,
-        StorageInspect,
-    },
-    state::StateTransition,
-};
-use fuel_core_producer::ports::Executor as ExecutorTrait;
-use fuel_core_storage::{
-    tables::{
-        Coins,
-        ContractsLatestUtxo,
-        FuelBlocks,
-        Messages,
-        Receipts,
-        Transactions,
-    },
-    transactional::{
-        StorageTransaction,
-        Transactional,
-    },
-};
-use fuel_core_types::{
-    blockchain::{
-        block::{
-            Block,
-            PartialFuelBlock,
-        },
-        header::PartialBlockHeader,
-        primitives::{
-            BlockHeight,
-            DaBlockHeight,
-        },
-    },
-    entities::{
-        coin::{
-            Coin,
-            CoinStatus,
-        },
-        message::Message,
+        Interpreter,
+        PredicateStorage,
     },
     services::{
         executor::{
@@ -100,10 +95,6 @@ use fuel_core_types::{
         },
         txpool::TransactionStatus,
     },
-};
-use fuel_storage::{
-    StorageAsMut,
-    StorageAsRef,
 };
 use itertools::Itertools;
 use std::ops::{
@@ -1389,8 +1380,9 @@ impl Fee for CreateCheckedMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_interfaces::common::{
-        consts::REG_PC,
+    use fuel_core_types::{
+        blockchain::header::ConsensusHeader,
+        entities::message::CheckedMessage,
         fuel_asm::Opcode,
         fuel_crypto::SecretKey,
         fuel_merkle::binary::empty_sum,
@@ -1421,20 +1413,15 @@ mod tests {
                 REG_CGAS,
                 REG_FP,
                 REG_ONE,
+                REG_PC,
                 REG_ZERO,
-            },
-            prelude::{
-                Call,
-                CallFrame,
             },
             script_with_data_offset,
             util::test_helpers::TestBuilder as TxBuilder,
+            Call,
+            CallFrame,
         },
         tai64::Tai64,
-    };
-    use fuel_core_types::{
-        blockchain::header::ConsensusHeader,
-        entities::message::CheckedMessage,
     };
     use itertools::Itertools;
     use rand::{
@@ -1639,9 +1626,9 @@ mod tests {
 
     mod coinbase {
         use super::*;
-        use fuel_core_interfaces::common::{
-            consts::REG_HP,
+        use fuel_core_types::{
             fuel_asm::GTFArgs,
+            fuel_vm::consts::REG_HP,
         };
 
         #[test]

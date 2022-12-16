@@ -152,7 +152,7 @@ fn owner_msg_id_key(owner: &Address, msg_id: &MessageId) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_interfaces::common::fuel_storage::StorageAsMut;
+    use fuel_core_storage::StorageAsMut;
 
     #[test]
     fn owned_message_ids() {

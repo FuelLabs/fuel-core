@@ -659,11 +659,9 @@ mod test {
         // simulate some txpool events to see if any block production is erroneously triggered
         task.on_txpool_event(&TxStatus::Submitted).await.unwrap();
         task.on_txpool_event(&TxStatus::Completed).await.unwrap();
-        task.on_txpool_event(&TxStatus::SqueezedOut {
-            reason: NoMetadata.to_string(),
-        })
-        .await
-        .unwrap();
+        task.on_txpool_event(&TxStatus::SqueezedOut { reason: NoMetadata })
+            .await
+            .unwrap();
     }
 
     #[tokio::test(start_paused = true)]
@@ -721,9 +719,7 @@ mod test {
         txpool_tx.send(TxStatus::Submitted).unwrap();
         txpool_tx.send(TxStatus::Completed).unwrap();
         txpool_tx
-            .send(TxStatus::SqueezedOut {
-                reason: NoMetadata.to_string(),
-            })
+            .send(TxStatus::SqueezedOut { reason: NoMetadata })
             .unwrap();
 
         // wait max_tx_idle_time - causes block production to occur if
