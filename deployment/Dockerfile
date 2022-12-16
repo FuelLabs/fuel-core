@@ -1,5 +1,6 @@
 # Stage 1: Build
-FROM lukemathwalker/cargo-chef:latest-rust-1.64 as chef
+FROM rust:1.66 AS chef
+RUN cargo install cargo-chef
 WORKDIR /build/
 # hadolint ignore=DL3008
 RUN apt-get update && \
