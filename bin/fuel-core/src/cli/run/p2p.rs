@@ -1,3 +1,16 @@
+use clap::Args;
+use fuel_core::{
+    p2p::{
+        config::{
+            convert_to_libp2p_keypair,
+            NotInitialized,
+            P2PConfig,
+        },
+        gossipsub_config::default_gossipsub_builder,
+        Multiaddr,
+    },
+    types::fuel_crypto,
+};
 use std::{
     net::{
         IpAddr,
@@ -6,18 +19,6 @@ use std::{
     path::PathBuf,
     time::Duration,
 };
-
-use clap::Args;
-
-use fuel_core_p2p::{
-    config::{
-        NotInitialized,
-        P2PConfig,
-    },
-    gossipsub_config::default_gossipsub_builder,
-    Multiaddr,
-};
-use fuel_core_types::fuel_crypto;
 
 #[derive(Debug, Clone, Args)]
 pub struct P2PArgs {
@@ -147,17 +148,13 @@ impl P2PArgs {
                             "m/44'/60'/0'/0/0",
                         )?;
 
-                    fuel_core_p2p::config::convert_to_libp2p_keypair(
-                        &mut secret_key.to_vec(),
-                    )?
+                    convert_to_libp2p_keypair(&mut secret_key.to_vec())?
                 }
                 _ => {
                     let mut rand = fuel_crypto::rand::thread_rng();
                     let secret_key = fuel_crypto::SecretKey::random(&mut rand);
 
-                    fuel_core_p2p::config::convert_to_libp2p_keypair(
-                        &mut secret_key.to_vec(),
-                    )?
+                    convert_to_libp2p_keypair(&mut secret_key.to_vec())?
                 }
             }
         };

@@ -20,14 +20,6 @@ anyhow = "1.0"
 clap = { version = "3.2", features = ["derive", "env"] }
 dirs = "4.0"
 fuel-core = { path = "../../crates/fuel-core", version = "0.15.1" }
-fuel-core-chain-config = { path = "../../crates/chain-config", version = "0.15.1" }
-fuel-core-p2p = { path = "../../crates/services/p2p", version = "0.15.1", optional = true }
-fuel-core-producer = { path = "../../crates/services/producer", version = "0.15.1" }
-fuel-core-relayer = { path = "../../crates/services/relayer", version = "0.15.1", optional = true }
-fuel-core-txpool = { path = "../../crates/services/txpool", version = "0.15.1" }
-fuel-core-types = { path = "../../crates/types", version = "0.15.1", features = [
-    "serde",
-] }
 lazy_static = "1.4"
 serde_json = { version = "1.0", features = ["raw_value"], optional = true }
 strum = "0.24"
@@ -41,11 +33,11 @@ tracing-subscriber = { version = "0.3", features = [
 url = { version = "2.2", optional = true }
 
 [features]
-debug = ["fuel-core-types/debug"]
+debug = ["fuel-core/debug"]
 default = ["debug", "metrics", "relayer", "rocksdb"]
 metrics = ["fuel-core/metrics"]
-p2p = ["dep:fuel-core-p2p", "fuel-core/p2p"]
-relayer = ["dep:fuel-core-relayer", "fuel-core/relayer", "dep:url", "dep:serde_json"]
+p2p = ["fuel-core/p2p"]
+relayer = ["fuel-core/relayer", "dep:url", "dep:serde_json"]
 rocksdb = ["fuel-core/rocksdb"]
 rocksdb-production = ["fuel-core/rocksdb-production"]
 # features to enable in production, but increase build times
