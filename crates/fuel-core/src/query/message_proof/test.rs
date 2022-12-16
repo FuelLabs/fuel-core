@@ -158,10 +158,7 @@ async fn can_build_message_proof() {
             move |_| {
                 let header = header.clone().generate(&[vec![]], &message_ids);
                 let transactions = TXNS.to_vec();
-                Ok(Some(CompressedBlock {
-                    header,
-                    transactions,
-                }))
+                Ok(Some(CompressedBlock::test(header, transactions)))
             }
         });
 

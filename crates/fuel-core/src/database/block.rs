@@ -101,9 +101,7 @@ impl Database {
     ) -> Result<Option<Cow<CompressedBlock>>, DatabaseError> {
         let block_entry = self.latest_block()?;
         match block_entry {
-            Some((_, id)) => StorageAsRef::storage::<FuelBlocks>(self)
-                .get(&id)
-                .map_err(DatabaseError::from),
+            Some((_, id)) => Ok(StorageAsRef::storage::<FuelBlocks>(self).get(&id)?),
             None => Ok(None),
         }
     }
@@ -189,7 +187,7 @@ impl Database {
                         .map(Cow::into_owned)
                 })
                 .try_collect()?;
-            Ok(Some(block.uncompress(txs)))
+            Ok(Some(block.into_owned().uncompress(txs)))
         } else {
             Ok(None)
         }

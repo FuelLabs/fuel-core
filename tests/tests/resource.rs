@@ -14,12 +14,9 @@ use fuel_core_client::client::{
     schema::resource::Resource,
     FuelClient,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_tx::AssetId,
-        fuel_vm::prelude::Address,
-    },
-    model::DaBlockHeight,
+use fuel_core_interfaces::common::{
+    fuel_tx::AssetId,
+    fuel_vm::prelude::Address,
 };
 
 mod coins {
@@ -228,6 +225,8 @@ mod coins {
 }
 
 mod messages {
+    use fuel_core_types::blockchain::primitives::DaBlockHeight;
+
     use super::*;
 
     async fn setup(owner: Address) -> (AssetId, FuelClient) {
@@ -392,6 +391,8 @@ mod messages {
 
 // It is combination of coins and messages test cases.
 mod messages_and_coins {
+    use fuel_core_types::blockchain::primitives::DaBlockHeight;
+
     use super::*;
 
     async fn setup(owner: Address, asset_id_b: AssetId) -> (AssetId, FuelClient) {

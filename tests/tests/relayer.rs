@@ -25,21 +25,18 @@ use fuel_core_client::{
         StorageAsRef,
     },
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_crypto::SecretKey,
-        fuel_tx::{
-            field::Inputs,
-            Input,
-            TransactionBuilder,
-        },
-        fuel_types::MessageId,
-        prelude::{
-            Address,
-            Output,
-        },
+use fuel_core_interfaces::common::{
+    fuel_crypto::SecretKey,
+    fuel_tx::{
+        field::Inputs,
+        Input,
+        TransactionBuilder,
     },
-    db::Messages,
+    fuel_types::MessageId,
+    prelude::{
+        Address,
+        Output,
+    },
 };
 use fuel_core_relayer::{
     test_helpers::{
@@ -49,6 +46,7 @@ use fuel_core_relayer::{
     },
     H160,
 };
+use fuel_core_storage::tables::Messages;
 use hyper::{
     service::{
         make_service_fn,

@@ -13,21 +13,23 @@ use fuel_core_client::client::{
     PageDirection,
     PaginationRequest,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_tx,
-        fuel_vm::{
-            consts::*,
-            prelude::*,
+use fuel_core_interfaces::common::{
+    fuel_tx,
+    fuel_vm::{
+        consts::*,
+        prelude::*,
+    },
+    tai64::Tai64,
+};
+use fuel_core_types::{
+    blockchain::{
+        block::PartialFuelBlock,
+        header::{
+            ConsensusHeader,
+            PartialBlockHeader,
         },
-        tai64::Tai64,
     },
-    executor::ExecutionBlock,
-    model::{
-        ConsensusHeader,
-        PartialBlockHeader,
-        PartialFuelBlock,
-    },
+    services::executor::ExecutionBlock,
 };
 use itertools::Itertools;
 use rand::{

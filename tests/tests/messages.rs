@@ -22,14 +22,12 @@ use fuel_core_client::{
         Opcode,
     },
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_crypto::SecretKey,
-        fuel_tx::TransactionBuilder,
-        fuel_types::Address,
-    },
-    model::DaBlockHeight,
+use fuel_core_interfaces::common::{
+    fuel_crypto::SecretKey,
+    fuel_tx::TransactionBuilder,
+    fuel_types::Address,
 };
+use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use rand::{
     rngs::StdRng,
     Rng,
@@ -502,7 +500,7 @@ fn verify_merkle(
 }
 
 fn verify_signature(
-    block_id: fuel_core_interfaces::model::BlockId,
+    block_id: fuel_core_types::blockchain::primitives::BlockId,
     signature: fuel_core_client::client::schema::Signature,
 ) -> bool {
     let signature = fuel_core_client::prelude::Signature::from(Bytes64::from(signature));

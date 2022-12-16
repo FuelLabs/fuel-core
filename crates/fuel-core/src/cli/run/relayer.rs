@@ -1,10 +1,10 @@
 use clap::Args;
 use core::time::Duration;
-use fuel_core_interfaces::model::DaBlockHeight;
 use fuel_core_relayer::{
     Config,
     H160,
 };
+use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Args)]

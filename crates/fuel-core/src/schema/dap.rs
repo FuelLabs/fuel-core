@@ -138,8 +138,10 @@ impl ConcreteStorage {
         storage: &DatabaseTransaction,
     ) -> Result<VmDatabase, InterpreterError> {
         let block = storage
-            .get_current_block()?
-            .ok_or(not_found!("Block for VMDatabase"))?
+            .get_current_block()
+            .map_err(std::io::Error::from)?
+            .ok_or(not_found!("Block for VMDatabase"))
+            .map_err(std::io::Error::from)?
             .into_owned();
 
         let vm_database = VmDatabase::new(

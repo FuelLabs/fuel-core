@@ -7,7 +7,10 @@
 #![deny(missing_docs)]
 
 use fuel_core_storage::Error as StorageError;
-use std::io::ErrorKind;
+use std::{
+    array::TryFromSliceError,
+    io::ErrorKind,
+};
 
 /// The error occurred during work with any of databases.
 #[derive(thiserror::Error, Debug)]
@@ -39,5 +42,23 @@ impl From<Error> for std::io::Error {
 impl From<Error> for StorageError {
     fn from(e: Error) -> Self {
         StorageError::DatabaseError(Box::new(e))
+    }
+}
+
+impl From<StorageError> for Error {
+    fn from(e: StorageError) -> Self {
+        Self::Other(anyhow::anyhow!(e))
+    }
+}
+
+impl From<TryFromSliceError> for Error {
+    fn from(e: TryFromSliceError) -> Self {
+        Self::Other(anyhow::anyhow!(e))
+    }
+}
+
+impl From<Error> for fuel_core_types::services::executor::Error {
+    fn from(e: Error) -> Self {
+        fuel_core_types::services::executor::Error::CorruptedBlockState(Box::new(e))
     }
 }

@@ -1,9 +1,5 @@
 use fuel_core::{
     database::Database,
-    model::{
-        CompressedBlock,
-        FuelBlockHeader,
-    },
     schema::scalars::BlockId,
     service::{
         Config,
@@ -13,10 +9,7 @@ use fuel_core::{
 use fuel_core_client::{
     client::{
         schema::{
-            block::{
-                Consensus,
-                TimeParameters,
-            },
+            block::TimeParameters,
             U64,
         },
         types::TransactionStatus,
@@ -26,22 +19,20 @@ use fuel_core_client::{
     },
     prelude::Bytes32,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::StorageAsMut,
-        fuel_tx,
-        fuel_tx::UniqueIdentifier,
-        secrecy::ExposeSecret,
-        tai64::Tai64,
-    },
-    db::{
-        FuelBlocks,
-        SealedBlockConsensus,
-    },
-    model::{
-        ConsensusHeader,
-        FuelBlockConsensus,
-    },
+use fuel_core_interfaces::common::{
+    fuel_storage::StorageAsMut,
+    fuel_tx,
+    fuel_tx::UniqueIdentifier,
+    secrecy::ExposeSecret,
+    tai64::Tai64,
+};
+use fuel_core_storage::tables::{
+    FuelBlocks,
+    SealedBlockConsensus,
+};
+use fuel_core_types::blockchain::{
+    block::CompressedBlock,
+    consensus::Consensus,
 };
 use itertools::{
     rev,
@@ -60,7 +51,7 @@ async fn block() {
         .insert(&id.into(), &block)
         .unwrap();
     db.storage::<SealedBlockConsensus>()
-        .insert(&id.into(), &FuelBlockConsensus::PoA(Default::default()))
+        .insert(&id.into(), &Consensus::PoA(Default::default()))
         .unwrap();
 
     // setup server & client
@@ -90,7 +81,10 @@ async fn get_genesis_block() {
 
     let block = client.block_by_height(0).await.unwrap().unwrap();
     assert_eq!(block.header.height.0, 0);
-    assert!(matches!(block.consensus, Consensus::Genesis(_)));
+    assert!(matches!(
+        block.consensus,
+        fuel_core_client::client::schema::block::Consensus::Genesis(_)
+    ));
 }
 
 #[tokio::test]
@@ -306,16 +300,18 @@ async fn block_connection_5(
 ) {
     // blocks
     let blocks = (0..10u32)
-        .map(|i| CompressedBlock {
-            header: FuelBlockHeader {
-                consensus: ConsensusHeader {
-                    height: i.into(),
-                    time: Tai64(i.into()),
+        .map(|i| {
+            CompressedBlock::test(
+                fuel_core_types::blockchain::header::BlockHeader {
+                    consensus: fuel_core_types::blockchain::header::ConsensusHeader {
+                        height: i.into(),
+                        time: Tai64(i.into()),
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
-                ..Default::default()
-            },
-            transactions: vec![],
+                vec![],
+            )
         })
         .collect_vec();
 
@@ -327,7 +323,7 @@ async fn block_connection_5(
             .insert(&id.into(), &block)
             .unwrap();
         db.storage::<SealedBlockConsensus>()
-            .insert(&id.into(), &FuelBlockConsensus::PoA(Default::default()))
+            .insert(&id.into(), &Consensus::PoA(Default::default()))
             .unwrap();
     }
 

@@ -442,10 +442,7 @@ fn check_block_time_overflow(
 
 impl From<CompressedBlock> for Block {
     fn from(block: CompressedBlock) -> Self {
-        let CompressedBlock {
-            header,
-            transactions,
-        } = block;
+        let (header, transactions) = block.into_inner();
         Block {
             header: Header(header),
             transactions,

@@ -198,3 +198,14 @@ impl From<Block> for PartialFuelBlock {
         }
     }
 }
+
+#[cfg(any(test, feature = "test-helpers"))]
+impl CompressedBlock {
+    /// Create a compressed header for testing. This does not generate fields.
+    pub fn test(header: BlockHeader, transactions: Vec<Bytes32>) -> Self {
+        Self {
+            header,
+            transactions,
+        }
+    }
+}

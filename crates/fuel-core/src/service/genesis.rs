@@ -646,10 +646,10 @@ mod tests {
         db.owned_coins_ids(owner, None, None)
             .map(|r| {
                 r.and_then(|coin_id| {
-                    db.storage::<Coins>()
+                    Ok(db
+                        .storage::<Coins>()
                         .get(&coin_id)
-                        .map_err(Into::into)
-                        .map(|v| (coin_id, v.unwrap().into_owned()))
+                        .map(|v| (coin_id, v.unwrap().into_owned()))?)
                 })
             })
             .try_collect()
