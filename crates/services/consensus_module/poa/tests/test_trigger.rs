@@ -35,7 +35,24 @@ use fuel_core_types::{
             SecretKeyWrapper,
         },
     },
-    fuel_tx::TransactionBuilder,
+    fuel_asm::{
+        Opcode,
+        Word,
+    },
+    fuel_crypto::SecretKey,
+    fuel_tx::{
+        Output,
+        Receipt,
+        Transaction,
+        TransactionBuilder,
+        TxId,
+        UniqueIdentifier,
+        UtxoId,
+    },
+    fuel_types::{
+        AssetId,
+        Bytes32,
+    },
     fuel_vm::consts::REG_ZERO,
     secrecy::{
         ExposeSecret,

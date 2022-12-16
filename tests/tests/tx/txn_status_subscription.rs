@@ -6,18 +6,8 @@ use fuel_core::service::{
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_types::{
-    fuel_asm::Opcode,
-    fuel_tx,
-    fuel_tx::{
-        Input,
-        Transaction,
-        TxPointer,
-        UtxoId,
-    },
-    fuel_types::{
-        AssetId,
-        Bytes32,
-    },
+    fuel_asm::*,
+    fuel_tx::*,
     fuel_vm::consts::*,
 };
 use futures::StreamExt;
@@ -63,7 +53,7 @@ async fn subscribe_txn_status() {
             predicate,
             vec![],
         );
-        let tx: Transaction = fuel_tx::Transaction::script(
+        let tx: Transaction = Transaction::script(
             gas_price + (i as u64),
             gas_limit,
             maturity,

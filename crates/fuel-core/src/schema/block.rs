@@ -415,7 +415,7 @@ fn check_start_after_latest_block(db: &Database, start_time: u64) -> anyhow::Res
     }
 
     let latest_time = db.block_time(current_height.into())?.0;
-    if latest_time as u64 > start_time {
+    if latest_time > start_time {
         return Err(anyhow!(
             "The start time must be set after the latest block time: {}",
             latest_time

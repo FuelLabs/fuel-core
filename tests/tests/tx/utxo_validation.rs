@@ -9,13 +9,11 @@ use fuel_core_client::client::{
     PageDirection,
     PaginationRequest,
 };
-use fuel_core_interfaces::common::{
-    fuel_crypto::SecretKey,
-    fuel_tx::TransactionBuilder,
-    fuel_vm::{
-        consts::*,
-        prelude::*,
-    },
+use fuel_core_types::{
+    fuel_asm::*,
+    fuel_crypto::*,
+    fuel_tx::*,
+    fuel_vm::consts::*,
 };
 use futures::future::join_all;
 use itertools::Itertools;

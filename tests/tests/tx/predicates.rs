@@ -2,18 +2,12 @@
 
 use crate::helpers::TestSetupBuilder;
 use fuel_core_types::{
-    fuel_asm::Opcode,
+    fuel_asm::*,
     fuel_tx::{
         field::Outputs,
-        Input,
-        Output,
-        TransactionBuilder,
-        UniqueIdentifier,
+        *,
     },
-    fuel_vm::consts::{
-        REG_ONE,
-        REG_ZERO,
-    },
+    fuel_vm::consts::*,
 };
 use rand::{
     rngs::StdRng,

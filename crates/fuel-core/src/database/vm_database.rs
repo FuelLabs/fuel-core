@@ -369,7 +369,7 @@ mod tests {
             let multi_key = MultiKey::new(&(contract_id.as_ref(), key));
             db.database
                 .insert::<_, _, Bytes32>(
-                    &multi_key,
+                    multi_key,
                     Column::ContractsState,
                     Bytes32::new(*value),
                 )
@@ -444,7 +444,7 @@ mod tests {
             let multi_key = MultiKey::new(&(contract_id.as_ref(), key));
             db.database
                 .insert::<_, _, Bytes32>(
-                    &multi_key,
+                    multi_key,
                     Column::ContractsState,
                     Bytes32::new(*value),
                 )
@@ -539,7 +539,7 @@ mod tests {
             let multi_key = MultiKey::new(&(contract_id.as_ref(), key));
             db.database
                 .insert::<_, _, Bytes32>(
-                    &multi_key,
+                    multi_key,
                     Column::ContractsState,
                     Bytes32::new(*value),
                 )

@@ -1,7 +1,6 @@
 use std::cmp::Reverse;
 
 use fuel_core_types::{
-    fuel_tx::Chargeable,
     fuel_types::Word,
     services::txpool::ArcPoolTx,
 };

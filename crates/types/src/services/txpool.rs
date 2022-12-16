@@ -51,22 +51,25 @@ pub enum PoolTransaction {
     Create(Checked<Create>),
 }
 
-impl Chargeable for PoolTransaction {
-    fn price(&self) -> Word {
+impl PoolTransaction {
+    /// Returns the gas price.
+    pub fn price(&self) -> Word {
         match self {
             PoolTransaction::Script(script) => script.transaction().price(),
             PoolTransaction::Create(create) => create.transaction().price(),
         }
     }
 
-    fn limit(&self) -> Word {
+    /// Returns the gas limit.
+    pub fn limit(&self) -> Word {
         match self {
             PoolTransaction::Script(script) => script.transaction().limit(),
             PoolTransaction::Create(create) => create.transaction().limit(),
         }
     }
 
-    fn metered_bytes_size(&self) -> usize {
+    /// Used for accounting purposes when charging byte based fees.
+    pub fn metered_bytes_size(&self) -> usize {
         match self {
             PoolTransaction::Script(script) => script.transaction().metered_bytes_size(),
             PoolTransaction::Create(create) => create.transaction().metered_bytes_size(),
@@ -74,8 +77,9 @@ impl Chargeable for PoolTransaction {
     }
 }
 
-impl UniqueIdentifier for PoolTransaction {
-    fn id(&self) -> Bytes32 {
+impl PoolTransaction {
+    /// Return the unique identifier of the transaction.
+    pub fn id(&self) -> Bytes32 {
         match self {
             PoolTransaction::Script(script) => script.transaction().id(),
             PoolTransaction::Create(create) => create.transaction().id(),

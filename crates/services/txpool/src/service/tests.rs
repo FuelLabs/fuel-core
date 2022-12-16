@@ -170,7 +170,7 @@ async fn simple_insert_removal_subscription() {
         tokio::time::timeout(std::time::Duration::from_secs(2), subscribe_status.recv())
             .await,
         Ok(Ok(TxStatus::SqueezedOut {
-            reason: TxpoolError::Removed.to_string()
+            reason: TxpoolError::Removed
         })),
         "First removed should be tx1"
     );
@@ -185,7 +185,7 @@ async fn simple_insert_removal_subscription() {
         tokio::time::timeout(std::time::Duration::from_secs(2), subscribe_status.recv())
             .await,
         Ok(Ok(TxStatus::SqueezedOut {
-            reason: TxpoolError::Removed.to_string()
+            reason: TxpoolError::Removed
         })),
         "Second removed should be tx2"
     );

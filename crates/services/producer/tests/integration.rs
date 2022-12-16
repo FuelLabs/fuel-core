@@ -169,7 +169,7 @@ async fn block_producer() -> Result<()> {
             sender: txpool.sender().clone(),
         }),
         executor: Arc::new(MockExecutor(mock_db.clone())),
-        relayer: Box::new(MockRelayer::default()),
+        relayer: Box::<MockRelayer>::default(),
         lock: Default::default(),
         dry_run_semaphore: Semaphore::new(1),
     };

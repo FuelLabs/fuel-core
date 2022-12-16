@@ -9,12 +9,12 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::FuelClient;
-use fuel_core_interfaces::common::{
+use fuel_core_types::{
     fuel_tx::{
-        field::Inputs,
-        TransactionBuilder,
+        field::*,
+        *,
     },
-    fuel_vm::prelude::*,
+    fuel_vm::*,
 };
 use rand::{
     rngs::StdRng,

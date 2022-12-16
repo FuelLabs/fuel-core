@@ -5,19 +5,17 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_client::{
-    client::{
-        types::TransactionStatus,
-        FuelClient,
-    },
-    fuel_types::Bytes32,
-    prelude::SecretKey,
+use fuel_core_client::client::{
+    types::TransactionStatus,
+    FuelClient,
 };
-use fuel_core_interfaces::common::{
+use fuel_core_types::{
+    blockchain::consensus::Consensus,
+    fuel_crypto::SecretKey,
     fuel_tx::Transaction,
+    fuel_types::Bytes32,
     secrecy::Secret,
 };
-use fuel_core_types::blockchain::consensus::Consensus;
 use rand::{
     rngs::StdRng,
     SeedableRng,

@@ -23,6 +23,10 @@ pub mod services;
 
 /// Re-export of some fuel-vm types
 pub mod fuel_vm {
+    #[cfg(feature = "debug")]
+    #[doc(no_inline)]
+    pub use fuel_vm_private::prelude::Breakpoint;
+
     #[doc(no_inline)]
     pub use fuel_vm_private::{
         consts,
@@ -30,7 +34,6 @@ pub mod fuel_vm {
         interpreter,
         prelude::{
             Backtrace,
-            Breakpoint,
             Call,
             CallFrame,
             Contract,

@@ -9,7 +9,6 @@ use crate::database::{
     Database,
 };
 use core::mem::swap;
-use fuel_core_database::Error as DatabaseError;
 use fuel_core_storage::Error as StorageError;
 use fuel_core_types::{
     entities::{
@@ -34,8 +33,6 @@ use thiserror::Error;
 pub enum ResourceQueryError {
     #[error("store error occurred")]
     StorageError(StorageError),
-    #[error("state error occurred")]
-    DatabaseError(DatabaseError),
     #[error("not enough resources to fit the target")]
     InsufficientResources {
         asset_id: AssetId,
@@ -208,12 +205,6 @@ pub fn random_improve(
 impl From<StorageError> for ResourceQueryError {
     fn from(e: StorageError) -> Self {
         ResourceQueryError::StorageError(e)
-    }
-}
-
-impl From<DatabaseError> for ResourceQueryError {
-    fn from(e: DatabaseError) -> Self {
-        ResourceQueryError::DatabaseError(e)
     }
 }
 

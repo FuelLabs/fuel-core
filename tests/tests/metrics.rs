@@ -4,16 +4,10 @@ use fuel_core::service::{
     FuelService,
 };
 use fuel_core_client::client::FuelClient;
-use fuel_core_interfaces::common::{
-    fuel_tx,
-    fuel_tx::{
-        Address,
-        AssetId,
-    },
-    fuel_vm::{
-        consts::*,
-        prelude::*,
-    },
+use fuel_core_types::{
+    fuel_asm::*,
+    fuel_tx::*,
+    fuel_vm::consts::*,
 };
 use tempfile::TempDir;
 
@@ -30,12 +24,14 @@ async fn test_metrics_endpoint() {
     let owner = Address::default();
     let asset_id = AssetId::new([1u8; 32]);
     // Should generate some database reads
-    _ = client
+    client
         .balance(
             format!("{:#x}", owner).as_str(),
             Some(format!("{:#x}", asset_id).as_str()),
         )
-        .await;
+        .await
+        .unwrap();
+
     let script = vec![
         Opcode::ADDI(0x10, REG_ZERO, 0xca),
         Opcode::ADDI(0x11, REG_ZERO, 0xba),
@@ -49,17 +45,8 @@ async fn test_metrics_endpoint() {
 
     client
         .submit_and_await_commit(
-            &fuel_tx::Transaction::script(
-                0,
-                1000000,
-                0,
-                script,
-                vec![],
-                vec![],
-                vec![],
-                vec![],
-            )
-            .into(),
+            &Transaction::script(0, 1000000, 0, script, vec![], vec![], vec![], vec![])
+                .into(),
         )
         .await
         .unwrap();

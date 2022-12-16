@@ -10,10 +10,8 @@ use fuel_core_types::{
         CoinStatus,
     },
     fuel_tx::{
-        Chargeable,
         Input,
         Output,
-        UniqueIdentifier,
         UtxoId,
     },
     fuel_types::MessageId,

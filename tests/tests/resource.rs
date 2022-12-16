@@ -14,10 +14,7 @@ use fuel_core_client::client::{
     schema::resource::Resource,
     FuelClient,
 };
-use fuel_core_interfaces::common::{
-    fuel_tx::AssetId,
-    fuel_vm::prelude::Address,
-};
+use fuel_core_types::fuel_tx::*;
 
 mod coins {
     use super::*;

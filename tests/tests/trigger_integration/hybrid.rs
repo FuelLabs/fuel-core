@@ -6,20 +6,17 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_client::{
-    client::{
-        FuelClient,
-        PageDirection,
-        PaginationRequest,
-    },
-    prelude::{
-        Immediate18,
-        Opcode,
-        SecretKey,
-        TransactionBuilder,
-    },
+use fuel_core_client::client::{
+    FuelClient,
+    PageDirection,
+    PaginationRequest,
 };
-use fuel_core_types::secrecy::Secret;
+use fuel_core_types::{
+    fuel_asm::*,
+    fuel_crypto::SecretKey,
+    fuel_tx::TransactionBuilder,
+    secrecy::Secret,
+};
 use rand::{
     rngs::StdRng,
     Rng,
