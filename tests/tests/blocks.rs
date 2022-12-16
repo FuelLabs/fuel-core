@@ -19,20 +19,22 @@ use fuel_core_client::{
     },
     prelude::Bytes32,
 };
-use fuel_core_interfaces::common::{
-    fuel_storage::StorageAsMut,
+use fuel_core_storage::{
+    tables::{
+        FuelBlocks,
+        SealedBlockConsensus,
+    },
+    StorageAsMut,
+};
+use fuel_core_types::{
+    blockchain::{
+        block::CompressedBlock,
+        consensus::Consensus,
+    },
     fuel_tx,
     fuel_tx::UniqueIdentifier,
     secrecy::ExposeSecret,
     tai64::Tai64,
-};
-use fuel_core_storage::tables::{
-    FuelBlocks,
-    SealedBlockConsensus,
-};
-use fuel_core_types::blockchain::{
-    block::CompressedBlock,
-    consensus::Consensus,
 };
 use itertools::{
     rev,

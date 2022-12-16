@@ -12,7 +12,10 @@ use fuel_core_client::client::{
     PageDirection,
     PaginationRequest,
 };
-use fuel_core_interfaces::common::fuel_vm::prelude::*;
+use fuel_core_types::fuel_types::{
+    AssetId,
+    Bytes32,
+};
 use rstest::rstest;
 
 const SEED: u64 = 2322;

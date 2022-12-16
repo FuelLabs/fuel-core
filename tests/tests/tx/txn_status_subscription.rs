@@ -5,14 +5,23 @@ use fuel_core::service::{
     FuelService,
 };
 use fuel_core_client::client::FuelClient;
-use fuel_core_interfaces::common::{
+use fuel_core_types::{
+    fuel_asm::Opcode,
     fuel_tx,
-    fuel_vm::{
-        consts::*,
-        prelude::*,
+    fuel_tx::{
+        Input,
+        Transaction,
+        TxPointer,
+        UtxoId,
     },
+    fuel_types::{
+        AssetId,
+        Bytes32,
+    },
+    fuel_vm::consts::*,
 };
 use futures::StreamExt;
+
 #[tokio::test]
 async fn subscribe_txn_status() {
     use fuel_core_poa::Trigger;

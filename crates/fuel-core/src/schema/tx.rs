@@ -24,18 +24,7 @@ use async_graphql::{
     Object,
     Subscription,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::StorageAsRef,
-        fuel_tx::{
-            Cacheable,
-            Transaction as FuelTx,
-        },
-        fuel_types,
-        fuel_vm::prelude::Deserializable,
-    },
-    txpool::TxPoolMpsc,
-};
+use fuel_core_interfaces::txpool::TxPoolMpsc;
 use fuel_core_storage::{
     not_found,
     tables::{
@@ -44,8 +33,17 @@ use fuel_core_storage::{
     },
     Error as StorageError,
     Result as StorageResult,
+    StorageAsRef,
 };
 use fuel_core_txpool::Service as TxPoolService;
+use fuel_core_types::{
+    fuel_tx::{
+        Cacheable,
+        Transaction as FuelTx,
+    },
+    fuel_types,
+    fuel_types::bytes::Deserializable,
+};
 use futures::{
     Stream,
     StreamExt,
@@ -303,7 +301,7 @@ impl TxStatusSubscription {
 impl TxnStatusChangeState for StreamState {
     async fn get_tx_status(
         &self,
-        id: fuel_core_interfaces::common::fuel_types::Bytes32,
+        id: fuel_core_types::fuel_types::Bytes32,
     ) -> anyhow::Result<Option<TransactionStatus>> {
         Ok(types::get_tx_status(id, &self.db, &self.txpool)
             .await

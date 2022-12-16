@@ -18,10 +18,6 @@ use async_graphql::{
     InputObject,
     Object,
 };
-use fuel_core_interfaces::common::{
-    fuel_storage::StorageAsRef,
-    fuel_types,
-};
 use fuel_core_storage::{
     not_found,
     tables::{
@@ -29,7 +25,9 @@ use fuel_core_storage::{
         ContractsInfo,
         ContractsRawCode,
     },
+    StorageAsRef,
 };
+use fuel_core_types::fuel_types;
 
 pub struct Contract(pub(crate) fuel_types::ContractId);
 

@@ -10,6 +10,7 @@ use crate::client::{
     },
     PaginatedResult,
 };
+use fuel_core_types::fuel_crypto;
 
 use super::{
     tx::TransactionIdFragment,
@@ -164,7 +165,7 @@ pub struct PoAConsensus {
 
 impl Block {
     /// Returns the block producer public key, if any.
-    pub fn block_producer(&self) -> Option<fuel_vm::fuel_crypto::PublicKey> {
+    pub fn block_producer(&self) -> Option<fuel_crypto::PublicKey> {
         let message = self.header.id.clone().into_message();
         match &self.consensus {
             Consensus::Genesis(_) => Some(Default::default()),

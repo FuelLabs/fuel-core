@@ -1,7 +1,8 @@
 // Tests related to the predicate execution feature
 
 use crate::helpers::TestSetupBuilder;
-use fuel_core_interfaces::common::{
+use fuel_core_types::{
+    fuel_asm::Opcode,
     fuel_tx::{
         field::Outputs,
         Input,
@@ -9,12 +10,9 @@ use fuel_core_interfaces::common::{
         TransactionBuilder,
         UniqueIdentifier,
     },
-    fuel_vm::{
-        consts::{
-            REG_ONE,
-            REG_ZERO,
-        },
-        prelude::Opcode,
+    fuel_vm::consts::{
+        REG_ONE,
+        REG_ZERO,
     },
 };
 use rand::{

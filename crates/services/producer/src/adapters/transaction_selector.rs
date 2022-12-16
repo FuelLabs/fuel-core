@@ -46,7 +46,7 @@ pub fn select_transactions(
 
 #[cfg(test)]
 mod tests {
-    use fuel_core_interfaces::common::{
+    use fuel_core_types::{
         fuel_asm::Opcode,
         fuel_crypto::rand::{
             thread_rng,

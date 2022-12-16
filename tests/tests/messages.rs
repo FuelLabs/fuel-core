@@ -22,12 +22,12 @@ use fuel_core_client::{
         Opcode,
     },
 };
-use fuel_core_interfaces::common::{
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
     fuel_crypto::SecretKey,
     fuel_tx::TransactionBuilder,
     fuel_types::Address,
 };
-use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use rand::{
     rngs::StdRng,
     Rng,

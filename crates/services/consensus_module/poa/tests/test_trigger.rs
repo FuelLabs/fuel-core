@@ -3,15 +3,6 @@
 use anyhow::anyhow;
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
-    common::{
-        consts::REG_ZERO,
-        fuel_tx::TransactionBuilder,
-        prelude::*,
-        secrecy::{
-            ExposeSecret,
-            Secret,
-        },
-    },
     poa_coordinator::TransactionPool,
 };
 use fuel_core_poa::{
@@ -43,6 +34,12 @@ use fuel_core_types::{
             BlockId,
             SecretKeyWrapper,
         },
+    },
+    fuel_tx::TransactionBuilder,
+    fuel_vm::consts::REG_ZERO,
+    secrecy::{
+        ExposeSecret,
+        Secret,
     },
     services::{
         executor::{

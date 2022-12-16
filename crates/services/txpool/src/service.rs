@@ -75,7 +75,7 @@ impl TxStatusChange {
 
     pub fn send_squeezed_out(&self, id: Bytes32, reason: TxPoolError) {
         let _ = self.status_sender.send(TxStatus::SqueezedOut {
-            reason: reason.to_string(),
+            reason: reason.clone(),
         });
         let _ = self.update_sender.send(TxUpdate::squeezed_out(id, reason));
     }

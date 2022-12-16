@@ -7,11 +7,11 @@ use async_graphql::{
     ScalarType,
     Value,
 };
-use fuel_core_interfaces::common::{
+use fuel_core_types::{
+    blockchain::primitives::BlockHeight,
     fuel_types,
     tai64::Tai64,
 };
-use fuel_core_types::blockchain::primitives::BlockHeight;
 use std::{
     convert::TryInto,
     fmt::{
@@ -256,8 +256,8 @@ fuel_type_scalar!("TransactionId", TransactionId, Bytes32, 32);
 fuel_type_scalar!("MessageId", MessageId, MessageId, 32);
 fuel_type_scalar!("Signature", Signature, Bytes64, 64);
 
-impl From<fuel_core_interfaces::common::prelude::Signature> for Signature {
-    fn from(s: fuel_core_interfaces::common::prelude::Signature) -> Self {
+impl From<fuel_core_types::fuel_vm::Signature> for Signature {
+    fn from(s: fuel_core_types::fuel_vm::Signature) -> Self {
         Self(<[u8; 64]>::from(s).into())
     }
 }

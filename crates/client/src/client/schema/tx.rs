@@ -15,9 +15,13 @@ use crate::client::{
     PaginatedResult,
     PaginationRequest,
 };
-use fuel_vm::fuel_types::{
-    bytes::Deserializable,
-    Bytes32,
+use fuel_core_types::{
+    fuel_tx,
+    fuel_types::{
+        bytes::Deserializable,
+        Bytes32,
+    },
+    fuel_vm,
 };
 use std::convert::{
     TryFrom,
@@ -93,12 +97,12 @@ pub struct OpaqueTransaction {
     pub status: Option<TransactionStatus>,
 }
 
-impl TryFrom<OpaqueTransaction> for ::fuel_vm::fuel_tx::Transaction {
+impl TryFrom<OpaqueTransaction> for fuel_tx::Transaction {
     type Error = ConversionError;
 
     fn try_from(value: OpaqueTransaction) -> Result<Self, Self::Error> {
         let bytes = value.raw_payload.0 .0;
-        ::fuel_vm::fuel_tx::Transaction::from_bytes(bytes.as_slice())
+        fuel_tx::Transaction::from_bytes(bytes.as_slice())
             .map_err(ConversionError::TransactionFromBytesError)
     }
 }
@@ -115,12 +119,12 @@ pub struct OpaqueReceipt {
     pub raw_payload: HexString,
 }
 
-impl TryFrom<OpaqueReceipt> for ::fuel_vm::fuel_tx::Receipt {
+impl TryFrom<OpaqueReceipt> for fuel_tx::Receipt {
     type Error = ConversionError;
 
     fn try_from(value: OpaqueReceipt) -> Result<Self, Self::Error> {
         let bytes = value.raw_payload.0 .0;
-        ::fuel_vm::fuel_tx::Receipt::from_bytes(bytes.as_slice())
+        fuel_tx::Receipt::from_bytes(bytes.as_slice())
             .map_err(ConversionError::ReceiptFromBytesError)
     }
 }
@@ -140,21 +144,21 @@ pub struct ProgramState {
     pub data: HexString,
 }
 
-impl TryFrom<ProgramState> for fuel_vm::prelude::ProgramState {
+impl TryFrom<ProgramState> for fuel_vm::ProgramState {
     type Error = ConversionError;
 
     fn try_from(state: ProgramState) -> Result<Self, Self::Error> {
         Ok(match state.return_type {
-            ReturnType::Return => fuel_vm::prelude::ProgramState::Return({
+            ReturnType::Return => fuel_vm::ProgramState::Return({
                 let b = state.data.0 .0;
                 let b: [u8; 8] =
                     b.try_into().map_err(|_| ConversionError::BytesLength)?;
                 u64::from_be_bytes(b)
             }),
-            ReturnType::ReturnData => fuel_vm::prelude::ProgramState::ReturnData({
+            ReturnType::ReturnData => fuel_vm::ProgramState::ReturnData({
                 Bytes32::try_from(state.data.0 .0.as_slice())?
             }),
-            ReturnType::Revert => fuel_vm::prelude::ProgramState::Revert({
+            ReturnType::Revert => fuel_vm::ProgramState::Revert({
                 let b = state.data.0 .0;
                 let b: [u8; 8] =
                     b.try_into().map_err(|_| ConversionError::BytesLength)?;
@@ -302,7 +306,7 @@ pub struct Submit {
 pub mod tests {
     use super::*;
     use crate::client::schema::Bytes;
-    use fuel_vm::fuel_types::bytes::SerializableVec;
+    use fuel_core_types::fuel_types::bytes::SerializableVec;
 
     #[test]
     fn transparent_transaction_by_id_query_gql_output() {
@@ -351,7 +355,7 @@ pub mod tests {
     #[test]
     fn dry_run_tx_gql_output() {
         use cynic::MutationBuilder;
-        let mut tx = ::fuel_vm::fuel_tx::Transaction::default();
+        let mut tx = fuel_tx::Transaction::default();
         let query = DryRun::build(DryRunArg {
             tx: HexString(Bytes(tx.to_bytes())),
             utxo_validation: None,
@@ -362,7 +366,7 @@ pub mod tests {
     #[test]
     fn submit_tx_gql_output() {
         use cynic::MutationBuilder;
-        let mut tx = ::fuel_vm::fuel_tx::Transaction::default();
+        let mut tx = fuel_tx::Transaction::default();
         let query = Submit::build(TxArg {
             tx: HexString(Bytes(tx.to_bytes())),
         });

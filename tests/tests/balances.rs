@@ -18,15 +18,15 @@ use fuel_core_client::{
     },
     fuel_tx::TransactionBuilder,
 };
-use fuel_core_interfaces::common::{
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
     fuel_tx::{
         AssetId,
         Input,
         Output,
     },
-    fuel_vm::prelude::Address,
+    fuel_types::Address,
 };
-use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
 #[tokio::test]
 async fn balance() {

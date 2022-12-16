@@ -23,8 +23,8 @@ use async_graphql::{
     InputObject,
     Object,
 };
-use fuel_core_interfaces::common::fuel_types;
 use fuel_core_storage::Result as StorageResult;
+use fuel_core_types::fuel_types;
 use itertools::Itertools;
 use std::{
     cmp::Ordering,

@@ -198,10 +198,8 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_interfaces::common::{
-        fuel_storage::StorageAsMut,
-        fuel_tx::TxId,
-    };
+    use fuel_core_storage::StorageAsMut;
+    use fuel_core_types::fuel_tx::TxId;
 
     #[test]
     fn raw_code_get() {

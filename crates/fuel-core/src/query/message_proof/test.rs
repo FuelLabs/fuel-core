@@ -1,15 +1,12 @@
 use std::collections::HashMap;
 
-use fuel_core_interfaces::common::{
-    fuel_tx::Script,
-    tai64::Tai64,
-};
 use fuel_core_types::{
     blockchain::header::{
         ApplicationHeader,
         ConsensusHeader,
         PartialBlockHeader,
     },
+    fuel_tx::Script,
     fuel_types::{
         Address,
         AssetId,
@@ -17,7 +14,9 @@ use fuel_core_types::{
         ContractId,
         MessageId,
     },
+    tai64::Tai64,
 };
+use std::collections::HashMap;
 
 use super::*;
 

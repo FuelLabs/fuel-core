@@ -28,11 +28,6 @@ use async_graphql::{
     SimpleObject,
     Union,
 };
-use fuel_core_interfaces::common::{
-    fuel_storage::StorageAsRef,
-    fuel_types,
-    tai64::Tai64,
-};
 use fuel_core_poa::service::seal_block;
 use fuel_core_producer::ports::Executor as ExecutorTrait;
 use fuel_core_storage::{
@@ -43,6 +38,7 @@ use fuel_core_storage::{
         Transactions,
     },
     Result as StorageResult,
+    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{
@@ -57,10 +53,12 @@ use fuel_core_types::{
             PartialBlockHeader,
         },
     },
+    fuel_types,
     services::executor::{
         ExecutionBlock,
         ExecutionResult,
     },
+    tai64::Tai64,
 };
 use itertools::Itertools;
 use std::convert::TryInto;
@@ -101,8 +99,7 @@ pub struct PoAConsensus {
 #[Object]
 impl Block {
     async fn id(&self) -> BlockId {
-        let bytes: fuel_core_interfaces::common::prelude::Bytes32 =
-            self.header.0.id().into();
+        let bytes: fuel_core_types::fuel_types::Bytes32 = self.header.0.id().into();
         bytes.into()
     }
 
@@ -145,7 +142,7 @@ impl Block {
 impl Header {
     /// Hash of the header
     async fn id(&self) -> BlockId {
-        let bytes: fuel_core_interfaces::common::prelude::Bytes32 = self.0.id().into();
+        let bytes: fuel_core_types::fuel_types::Bytes32 = self.0.id().into();
         bytes.into()
     }
 

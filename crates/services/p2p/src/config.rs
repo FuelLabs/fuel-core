@@ -6,8 +6,10 @@ use crate::gossipsub::{
         NEW_TX_GOSSIP_TOPIC,
     },
 };
-use fuel_core_interfaces::common::secrecy::Zeroize;
-use fuel_core_types::blockchain::consensus::Genesis;
+use fuel_core_types::{
+    blockchain::consensus::Genesis,
+    secrecy::Zeroize,
+};
 use futures::{
     future,
     AsyncRead,

@@ -24,16 +24,28 @@ pub mod services;
 /// Re-export of some fuel-vm types
 pub mod fuel_vm {
     #[doc(no_inline)]
-    pub use fuel_vm_private::crypto;
-    #[doc(no_inline)]
-    pub use fuel_vm_private::prelude::{
-        Backtrace,
-        Contract,
-        Interpreter,
-        InterpreterError,
-        InterpreterStorage,
-        PredicateStorage,
-        ProgramState,
-        SecretKey,
+    pub use fuel_vm_private::{
+        consts,
+        crypto,
+        interpreter,
+        prelude::{
+            Backtrace,
+            Breakpoint,
+            Call,
+            CallFrame,
+            Contract,
+            Interpreter,
+            InterpreterError,
+            InterpreterStorage,
+            PredicateStorage,
+            ProgramState,
+            Salt,
+            SecretKey,
+            Signature,
+            Transactor,
+        },
+        script_with_data_offset,
+        state,
+        util,
     };
 }

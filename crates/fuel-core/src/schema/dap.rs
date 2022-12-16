@@ -12,14 +12,28 @@ use async_graphql::{
     SchemaBuilder,
     ID,
 };
-use fuel_core_interfaces::common::{
-    fuel_tx::ConsensusParameters,
+use fuel_core_storage::not_found;
+use fuel_core_types::{
+    fuel_asm::{
+        Opcode,
+        RegisterId,
+        Word,
+    },
+    fuel_tx::{
+        CheckedTransaction,
+        ConsensusParameters,
+        IntoChecked,
+        Script,
+        Transaction,
+    },
+    fuel_types::Address,
     fuel_vm::{
         consts,
-        prelude::*,
+        state::DebugEval,
+        Interpreter,
+        InterpreterError,
     },
 };
-use fuel_core_storage::not_found;
 use futures::lock::Mutex;
 use std::{
     collections::HashMap,
@@ -434,7 +448,7 @@ impl DapMutation {
         let state = match vm.resume() {
             Ok(state) => state,
             // The transaction was already completed earlier, so it cannot be resumed
-            Err(fuel_core_interfaces::common::fuel_vm::error::InterpreterError::DebugStateNotInitialized) => {
+            Err(fuel_core_types::fuel_vm::InterpreterError::DebugStateNotInitialized) => {
                 return Ok(self::gql_types::RunResult {
                     state: self::gql_types::RunState::Completed,
                     breakpoint: None,
@@ -442,7 +456,9 @@ impl DapMutation {
                 })
             }
             // The transaction was already completed earlier, so it cannot be resumed
-            Err(err) => return Err(async_graphql::Error::new(format!("VM error: {err:?}"))),
+            Err(err) => {
+                return Err(async_graphql::Error::new(format!("VM error: {err:?}")))
+            }
         };
 
         let json_receipts = vm
@@ -478,7 +494,7 @@ mod gql_types {
     };
 
     #[cfg(feature = "debug")]
-    use fuel_core_interfaces::common::fuel_vm::prelude::Breakpoint as FuelBreakpoint;
+    use fuel_core_types::fuel_vm::Breakpoint as FuelBreakpoint;
 
     #[derive(Debug, Clone, Copy, InputObject)]
     pub struct Breakpoint {
