@@ -18,7 +18,7 @@ use fuel_core_interfaces::{
     },
     relayer::RelayerDb,
 };
-use fuel_core_producer::ports::DBTransaction;
+use fuel_core_producer::ports::StorageTransaction;
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::RelayerSynced;
 use fuel_core_types::blockchain::{
@@ -37,7 +37,7 @@ impl fuel_core_producer::ports::Executor<Database> for ExecutorAdapter {
     fn execute_without_commit(
         &self,
         block: ExecutionBlock,
-    ) -> Result<UncommittedResult<DBTransaction<Database>>, Error> {
+    ) -> Result<UncommittedResult<StorageTransaction<Database>>, Error> {
         let executor = Executor {
             database: self.database.clone(),
             config: self.config.clone(),
@@ -94,7 +94,7 @@ impl fuel_core_poa::ports::BlockProducer<Database> for PoACoordinatorAdapter {
         &self,
         height: BlockHeight,
         max_gas: Word,
-    ) -> anyhow::Result<UncommittedResult<DBTransaction<Database>>> {
+    ) -> anyhow::Result<UncommittedResult<StorageTransaction<Database>>> {
         self.block_producer
             .produce_and_execute_block(height, max_gas)
             .await

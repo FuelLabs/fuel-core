@@ -499,7 +499,7 @@ mod test {
                 &self,
                 _height: BlockHeight,
                 _max_gas: Word,
-            ) -> anyhow::Result<UncommittedResult<DBTransaction<MockDatabase>>>;
+            ) -> anyhow::Result<UncommittedResult<StorageTransaction<MockDatabase>>>;
 
             async fn dry_run(
                 &self,

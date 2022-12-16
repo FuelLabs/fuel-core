@@ -1,40 +1,42 @@
 use crate::ports::{
     BlockProducerDatabase,
-    DBTransaction,
     Executor,
     Relayer,
     TxPool,
 };
 use anyhow::Result;
-use fuel_core_interfaces::{
-    common::{
-        fuel_tx::{
-            MessageId,
-            Receipt,
-        },
-        fuel_types::Address,
+use fuel_core_interfaces::common::{
+    fuel_tx::{
+        MessageId,
+        Receipt,
     },
-    db::{
-        Error,
+    fuel_types::Address,
+};
+use fuel_core_storage::{
+    transactional::{
+        StorageTransaction,
         Transactional,
     },
+    Error as StorageError,
 };
-use fuel_core_storage::UncommittedResult;
 use fuel_core_types::{
     blockchain::{
-        block::{
-            CompressedBlock,
-            Error as ExecutorError,
-            ExecutionBlock,
-            ExecutionResult,
-        },
+        block::CompressedBlock,
         primitives::{
             BlockHeight,
             DaBlockHeight,
         },
     },
     entities::message::Message,
-    services::txpool::ArcPoolTx,
+    services::{
+        executor::{
+            Error as ExecutorError,
+            ExecutionBlock,
+            ExecutionResult,
+            UncommittedResult,
+        },
+        txpool::ArcPoolTx,
+    },
 };
 use std::{
     borrow::Cow,
@@ -81,23 +83,21 @@ struct DatabaseTransaction {
     database: MockDb,
 }
 
-impl Transactional for DatabaseTransaction {
-    fn commit(self) -> Result<(), Error> {
-        Ok(())
-    }
-
-    fn commit_box(self: Box<Self>) -> Result<(), Error> {
+impl Transactional<MockDb> for DatabaseTransaction {
+    fn commit(&mut self) -> Result<(), StorageError> {
         Ok(())
     }
 }
 
-impl fuel_core_interfaces::db::DatabaseTransaction<MockDb> for DatabaseTransaction {
-    fn database(&self) -> &MockDb {
-        &self.database
-    }
-
-    fn database_mut(&mut self) -> &mut MockDb {
+impl AsMut<MockDb> for DatabaseTransaction {
+    fn as_mut(&mut self) -> &mut MockDb {
         &mut self.database
+    }
+}
+
+impl AsRef<MockDb> for DatabaseTransaction {
+    fn as_ref(&self) -> &MockDb {
+        &self.database
     }
 }
 
@@ -105,7 +105,7 @@ impl Executor<MockDb> for MockExecutor {
     fn execute_without_commit(
         &self,
         block: ExecutionBlock,
-    ) -> Result<UncommittedResult<DBTransaction<MockDb>>, ExecutorError> {
+    ) -> Result<UncommittedResult<StorageTransaction<MockDb>>, ExecutorError> {
         let block = match block {
             ExecutionBlock::Production(block) => block.generate(&[]),
             ExecutionBlock::Validation(block) => block,
@@ -119,9 +119,9 @@ impl Executor<MockDb> for MockExecutor {
                 skipped_transactions: vec![],
                 tx_status: vec![],
             },
-            Box::new(DatabaseTransaction {
+            DatabaseTransaction {
                 database: self.0.clone(),
-            }),
+            },
         ))
     }
 
@@ -140,7 +140,7 @@ impl Executor<MockDb> for FailingMockExecutor {
     fn execute_without_commit(
         &self,
         block: ExecutionBlock,
-    ) -> Result<UncommittedResult<DBTransaction<MockDb>>, ExecutorError> {
+    ) -> Result<UncommittedResult<StorageTransaction<MockDb>>, ExecutorError> {
         // simulate an execution failure
         let mut err = self.0.lock().unwrap();
         if let Some(err) = err.take() {

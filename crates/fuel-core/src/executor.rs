@@ -51,7 +51,7 @@ use fuel_core_interfaces::common::{
     state::StateTransition,
 };
 use fuel_core_producer::ports::{
-    DBTransaction,
+    StorageTransaction,
     Executor as ExecutorTrait,
 };
 use fuel_core_storage::{
@@ -131,7 +131,7 @@ impl ExecutorTrait<Database> for Executor {
     fn execute_without_commit(
         &self,
         block: ExecutionBlock,
-    ) -> Result<UncommittedResult<DBTransaction<Database>>, Error> {
+    ) -> Result<UncommittedResult<StorageTransaction<Database>>, Error> {
         self.execute_inner(block, &self.database)
     }
 
@@ -190,7 +190,7 @@ impl Executor {
         &self,
         block: ExecutionBlock,
         database: &Database,
-    ) -> Result<UncommittedResult<DBTransaction<Database>>, Error> {
+    ) -> Result<UncommittedResult<StorageTransaction<Database>>, Error> {
         // Compute the block id before execution if there is one.
         let pre_exec_block_id = block.id();
         // Get the transaction root before execution if there is one.

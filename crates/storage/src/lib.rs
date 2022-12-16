@@ -65,7 +65,7 @@ macro_rules! not_found {
 
 #[cfg(test)]
 mod test {
-    use fuel_core_storage::tables::Coins;
+    use crate::tables::Coins;
 
     #[test]
     fn not_found_output() {

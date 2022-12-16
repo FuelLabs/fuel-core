@@ -23,13 +23,13 @@ use fuel_core_poa::{
     ports::{
         BlockDb,
         BlockProducer,
-        DBTransaction,
+        StorageTransaction,
     },
     Config,
     Service,
     Trigger,
 };
-use fuel_core_storage::UncommittedResult;
+use fuel_core_types::services::executor::UncommittedResult;
 use fuel_core_types::{
     blockchain::{
         block::{
@@ -122,7 +122,7 @@ impl BlockProducer<MockDatabase> for MockBlockProducer {
         &self,
         height: BlockHeight,
         max_gas: Word,
-    ) -> anyhow::Result<UncommittedResult<DBTransaction<MockDatabase>>> {
+    ) -> anyhow::Result<UncommittedResult<StorageTransaction<MockDatabase>>> {
         let includable_txs: Vec<_> = self.txpool_sender.includable().await;
 
         let transactions: Vec<Transaction> = select_transactions(includable_txs, max_gas)
