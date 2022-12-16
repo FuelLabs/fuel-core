@@ -18,10 +18,10 @@ fuel-core-chain-config = { path = "../../chain-config", version = "0.15.1" }
 fuel-core-interfaces = { path = "../../fuel-core-interfaces", features = [
     "serde",
 ], version = "0.15.1" }
+fuel-core-metrics = { path = "../../metrics", version = "0.15.1" } # TODO make this a feature
 fuel-core-types = { path = "../../types", features = [
     "serde",
 ], version = "0.15.1" }
-fuel-core-metrics = { path = "../../metrics", version = "0.15.1" } # TODO make this a feature
 futures = "0.3"
 futures-timer = "3.0"
 ip_network = "0.4"

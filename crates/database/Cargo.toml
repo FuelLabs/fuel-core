@@ -12,6 +12,6 @@ description = "The crates contains databases used by Fuel core protocol."
 
 [dependencies]
 anyhow = "1.0"
-fuel-core-types = { path = "../types", version = "0.15.1" }
 fuel-core-storage = { path = "../storage", version = "0.15.1" }
+fuel-core-types = { path = "../types", version = "0.15.1" }
 thiserror = "1.0"
