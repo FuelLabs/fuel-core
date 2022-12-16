@@ -1,7 +1,6 @@
 use crate::{
     database::Database,
     executor::Executor,
-    schema::scalars,
     service::Config,
 };
 use fuel_core_interfaces::{

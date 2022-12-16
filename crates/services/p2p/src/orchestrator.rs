@@ -3,17 +3,8 @@ use std::sync::Arc;
 use anyhow::anyhow;
 
 use fuel_core_interfaces::p2p::{
-    BlockBroadcast,
-    BlockGossipData,
-    ConsensusBroadcast,
-    ConsensusGossipData,
-    GossipData,
     GossipsubMessageAcceptance,
     GossipsubMessageInfo,
-    P2pDb,
-    P2pRequestEvent,
-    TransactionBroadcast,
-    TransactionGossipData,
 };
 use fuel_core_types::{
     blockchain::SealedBlock,
@@ -30,7 +21,6 @@ use libp2p_gossipsub::{
 };
 use tokio::{
     sync::{
-        broadcast,
         mpsc::{
             Receiver,
             Sender,
@@ -60,7 +50,6 @@ use crate::{
     request_response::messages::{
         OutboundResponse,
         RequestMessage,
-        ResponseChannelItem,
     },
     service::{
         FuelP2PEvent,
@@ -138,19 +127,19 @@ impl NetworkOrchestrator {
                 p2p_event = p2p_service.next_event() => {
                     match p2p_event {
                         Some(FuelP2PEvent::GossipsubMessage { message, message_id, peer_id,.. }) => {
-                            let message_id = message_id.0;
+                            //let message_id = message_id.0;
 
-                            match message {
-                                GossipsubMessage::NewTx(tx) => {
-                                    //let _ = self.tx_transaction.send(GossipData::new(TransactionBroadcast::NewTransaction(tx), peer_id, message_id));
-                                },
-                                GossipsubMessage::NewBlock(block) => {
-                                    //let _ = self.tx_block.send(GossipData::new(BlockBroadcast::NewBlock(block), peer_id, message_id));
-                                },
-                                GossipsubMessage::ConsensusVote(vote) => {
-                                    //let _ = self.tx_consensus.send(GossipData::new(ConsensusBroadcast::NewVote(vote), peer_id, message_id));
-                                },
-                            }
+                            // match message {
+                            //     GossipsubMessage::NewTx(tx) => {
+                            //         //let _ = self.tx_transaction.send(GossipData::new(TransactionBroadcast::NewTransaction(tx), peer_id, message_id));
+                            //     },
+                            //     GossipsubMessage::NewBlock(block) => {
+                            //         //let _ = self.tx_block.send(GossipData::new(BlockBroadcast::NewBlock(block), peer_id, message_id));
+                            //     },
+                            //     GossipsubMessage::ConsensusVote(vote) => {
+                            //         //let _ = self.tx_consensus.send(GossipData::new(ConsensusBroadcast::NewVote(vote), peer_id, message_id));
+                            //     },
+                            // }
                         },
                         Some(FuelP2PEvent::RequestMessage { request_message, request_id }) => {
                             match request_message {

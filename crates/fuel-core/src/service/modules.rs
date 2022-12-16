@@ -29,12 +29,12 @@ use tokio::{
 };
 
 #[cfg(feature = "p2p")]
-use fuel_core_p2p::ports::Database as P2pDb;
-
 use super::adapters::{
     DbAdapter,
     P2pAdapter,
 };
+#[cfg(feature = "p2p")]
+use fuel_core_p2p::ports::Database as P2pDb;
 
 pub struct Modules {
     pub txpool: Arc<fuel_core_txpool::Service>,
@@ -137,6 +137,7 @@ pub async fn start_modules(
         network_service.start().await?;
     }
 
+    #[cfg(feature = "p2p")]
     let p2p_adapter = Arc::new(P2pAdapter::new(network_service));
 
     #[cfg(not(feature = "p2p"))]
