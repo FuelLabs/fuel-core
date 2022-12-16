@@ -86,12 +86,13 @@ use fuel_core_types::{
     },
     services::{
         executor::{
-            Error as ExecutionError,
+            Error as ExecutorError,
             ExecutionBlock,
             ExecutionKind,
             ExecutionResult,
             ExecutionType,
             ExecutionTypes,
+            Result as ExecutorResult,
             TransactionExecutionResult,
             TransactionExecutionStatus,
             TransactionValidityError,
@@ -129,7 +130,7 @@ struct ExecutionData {
     coinbase: u64,
     message_ids: Vec<MessageId>,
     tx_status: Vec<TransactionExecutionStatus>,
-    skipped_transactions: Vec<(Transaction, ExecutionError)>,
+    skipped_transactions: Vec<(Transaction, ExecutorError)>,
 }
 
 impl Executor {
@@ -137,7 +138,7 @@ impl Executor {
     pub fn execute_and_commit(
         &self,
         block: ExecutionBlock,
-    ) -> Result<ExecutionResult, ExecutionError> {
+    ) -> ExecutorResult<ExecutionResult> {
         let (result, db_transaction) = self.execute_without_commit(block)?.into();
         db_transaction.commit()?;
         Ok(result)
@@ -148,7 +149,7 @@ impl ExecutorTrait<Database> for Executor {
     fn execute_without_commit(
         &self,
         block: ExecutionBlock,
-    ) -> Result<UncommittedResult<StorageTransaction<Database>>, ExecutionError> {
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
         self.execute_inner(block, &self.database)
     }
 
@@ -156,7 +157,7 @@ impl ExecutorTrait<Database> for Executor {
         &self,
         block: ExecutionBlock,
         utxo_validation: Option<bool>,
-    ) -> Result<Vec<Vec<Receipt>>, ExecutionError> {
+    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
         let database = self.database.clone();
 
         // fallback to service config value if no utxo_validation override is provided
@@ -207,7 +208,7 @@ impl Executor {
         &self,
         block: ExecutionBlock,
         database: &Database,
-    ) -> Result<UncommittedResult<StorageTransaction<Database>>, ExecutionError> {
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
         // Compute the block id before execution if there is one.
         let pre_exec_block_id = block.id();
         // Get the transaction root before execution if there is one.
@@ -239,7 +240,7 @@ impl Executor {
         // check transaction commitment
         if let Some(pre_exec_txs_root) = pre_exec_txs_root {
             if block.header().transactions_root != pre_exec_txs_root {
-                return Err(ExecutionError::InvalidTransactionRoot)
+                return Err(ExecutorError::InvalidTransactionRoot)
             }
         }
 
@@ -256,7 +257,7 @@ impl Executor {
             if pre_exec_block_id != finalized_block_id {
                 // In theory this shouldn't happen since any deviance in the block should've already
                 // been checked by now.
-                return Err(ExecutionError::InvalidBlockId)
+                return Err(ExecutorError::InvalidBlockId)
             }
         }
 
@@ -295,7 +296,7 @@ impl Executor {
         &self,
         block_db_transaction: &mut DatabaseTransaction,
         block: ExecutionType<&mut PartialFuelBlock>,
-    ) -> Result<ExecutionData, ExecutionError> {
+    ) -> ExecutorResult<ExecutionData> {
         let mut data = ExecutionData {
             coinbase: 0,
             message_ids: Vec::new(),
@@ -329,7 +330,7 @@ impl Executor {
                 let mint = if let Some(Transaction::Mint(mint)) = iter.next() {
                     mint
                 } else {
-                    return Err(ExecutionError::CoinbaseIsNotFirstTransaction)
+                    return Err(ExecutorError::CoinbaseIsNotFirstTransaction)
                 };
                 self.check_coinbase(block_height as Word, mint, None)?
             }
@@ -413,7 +414,7 @@ impl Executor {
         execution_data: &mut ExecutionData,
         execution_kind: ExecutionKind,
         tx_db_transaction: &mut DatabaseTransaction,
-    ) -> Result<(), ExecutionError> {
+    ) -> ExecutorResult<()> {
         let tx_id = tx.id();
         // Throw a clear error if the transaction id is a duplicate
         if tx_db_transaction
@@ -421,7 +422,7 @@ impl Executor {
             .storage::<Transactions>()
             .contains_key(&tx_id)?
         {
-            return Err(ExecutionError::TransactionIdCollision(tx_id))
+            return Err(ExecutorError::TransactionIdCollision(tx_id))
         }
 
         match tx {
@@ -446,7 +447,7 @@ impl Executor {
                 // which are processed separately as a first transaction.
                 //
                 // All other `Mint` transactions are not allowed.
-                return Err(ExecutionError::NotSupportedTransaction(Box::new(
+                return Err(ExecutorError::NotSupportedTransaction(Box::new(
                     mint.clone().into(),
                 )))
             }
@@ -461,7 +462,7 @@ impl Executor {
         block: &PartialFuelBlock,
         execution_data: &mut ExecutionData,
         block_db_transaction: &mut DatabaseTransaction,
-    ) -> Result<(), ExecutionError> {
+    ) -> ExecutorResult<()> {
         let block_height = *block.header.height();
         let coinbase_id = coinbase_tx.id();
         self.persist_output_utxos(
@@ -484,7 +485,7 @@ impl Executor {
             .insert(&coinbase_id, &coinbase_tx.into())?
             .is_some()
         {
-            return Err(ExecutionError::TransactionIdCollision(coinbase_id))
+            return Err(ExecutorError::TransactionIdCollision(coinbase_id))
         }
         Ok(())
     }
@@ -494,16 +495,16 @@ impl Executor {
         block_height: Word,
         mint: Mint,
         expected_amount: Option<Word>,
-    ) -> Result<Mint, ExecutionError> {
+    ) -> ExecutorResult<Mint> {
         let checked_mint = mint
             .into_checked(block_height, &self.config.chain_conf.transaction_parameters)?;
 
         if checked_mint.transaction().tx_pointer().tx_index() != 0 {
-            return Err(ExecutionError::CoinbaseIsNotFirstTransaction)
+            return Err(ExecutorError::CoinbaseIsNotFirstTransaction)
         }
 
         if checked_mint.transaction().outputs().len() > 1 {
-            return Err(ExecutionError::CoinbaseSeveralOutputs)
+            return Err(ExecutorError::CoinbaseSeveralOutputs)
         }
 
         if let Some(Output::Coin {
@@ -511,16 +512,16 @@ impl Executor {
         }) = checked_mint.transaction().outputs().first()
         {
             if asset_id != &AssetId::BASE {
-                return Err(ExecutionError::CoinbaseOutputIsInvalid)
+                return Err(ExecutorError::CoinbaseOutputIsInvalid)
             }
 
             if let Some(expected_amount) = expected_amount {
                 if expected_amount != *amount {
-                    return Err(ExecutionError::CoinbaseAmountMismatch)
+                    return Err(ExecutorError::CoinbaseAmountMismatch)
                 }
             }
         } else {
-            return Err(ExecutionError::CoinbaseOutputIsInvalid)
+            return Err(ExecutorError::CoinbaseOutputIsInvalid)
         }
 
         let (mint, _) = checked_mint.into();
@@ -536,7 +537,7 @@ impl Executor {
         execution_data: &mut ExecutionData,
         tx_db_transaction: &mut DatabaseTransaction,
         execution_kind: ExecutionKind,
-    ) -> Result<(), ExecutionError>
+    ) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction + PartialEq,
         <Tx as IntoChecked>::Metadata: Fee + CheckedMetadata + Clone,
@@ -595,7 +596,7 @@ impl Executor {
         );
         let vm_result: StateTransition<_> = vm
             .transact(checked_tx.clone())
-            .map_err(|error| ExecutionError::VmExecution {
+            .map_err(|error| ExecutorError::VmExecution {
                 error,
                 transaction_id: tx_id,
             })?
@@ -617,7 +618,7 @@ impl Executor {
             ExecutionKind::Validation => {
                 // ensure tx matches vm output exactly
                 if &tx != checked_tx.transaction() {
-                    return Err(ExecutionError::InvalidTransactionOutcome {
+                    return Err(ExecutorError::InvalidTransactionOutcome {
                         transaction_id: tx_id,
                     })
                 }
@@ -697,7 +698,7 @@ impl Executor {
         execution_data.coinbase = execution_data
             .coinbase
             .checked_add(tx_fee)
-            .ok_or(ExecutionError::FeeOverflow)?;
+            .ok_or(ExecutorError::FeeOverflow)?;
         // queue up status for this tx to be stored once block id is finalized.
         execution_data.tx_status.push(TransactionExecutionStatus {
             id: tx_id,
@@ -719,7 +720,7 @@ impl Executor {
         transaction: &Tx,
         block_height: BlockHeight,
         block_da_height: DaBlockHeight,
-    ) -> Result<(), ExecutionError> {
+    ) -> ExecutorResult<()> {
         for input in transaction.inputs() {
             match input {
                 Input::CoinSigned { utxo_id, .. }
@@ -773,7 +774,7 @@ impl Executor {
     }
 
     /// Verify all the predicates of a tx.
-    pub fn verify_tx_predicates<Tx>(&self, tx: Checked<Tx>) -> Result<(), ExecutionError>
+    pub fn verify_tx_predicates<Tx>(&self, tx: Checked<Tx>) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
         <Tx as IntoChecked>::Metadata: CheckedMetadata,
@@ -783,7 +784,7 @@ impl Executor {
             tx,
             self.config.chain_conf.transaction_parameters,
         ) {
-            return Err(ExecutionError::TransactionValidity(
+            return Err(ExecutorError::TransactionValidity(
                 TransactionValidityError::InvalidPredicate(id),
             ))
         }
@@ -798,7 +799,7 @@ impl Executor {
     fn verify_tx_has_at_least_one_coin_or_message<Tx: ExecutableTransaction>(
         &self,
         tx: &Tx,
-    ) -> Result<(), ExecutionError> {
+    ) -> ExecutorResult<()> {
         if tx
             .inputs()
             .iter()
@@ -817,7 +818,7 @@ impl Executor {
         db: &mut Database,
         block_height: BlockHeight,
         utxo_validation: bool,
-    ) -> Result<(), ExecutionError>
+    ) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
     {
@@ -842,7 +843,7 @@ impl Executor {
                     let block_created = if utxo_validation {
                         db.storage::<Coins>()
                             .get(utxo_id)?
-                            .ok_or(ExecutionError::TransactionValidity(
+                            .ok_or(ExecutorError::TransactionValidity(
                                 TransactionValidityError::CoinDoesNotExist(*utxo_id),
                             ))?
                             .block_created
@@ -884,7 +885,7 @@ impl Executor {
                     let da_height = if utxo_validation {
                         db.storage::<Messages>()
                             .get(message_id)?
-                            .ok_or(ExecutionError::TransactionValidity(
+                            .ok_or(ExecutorError::TransactionValidity(
                                 TransactionValidityError::MessageDoesNotExist(
                                     *message_id,
                                 ),
@@ -920,7 +921,7 @@ impl Executor {
         max_fee: u64,
         gas_price: u64,
         receipts: &[Receipt],
-    ) -> Result<Word, ExecutionError> {
+    ) -> ExecutorResult<Word> {
         for r in receipts {
             if let Receipt::ScriptResult { gas_used, .. } = r {
                 return TransactionFee::gas_refund_value(
@@ -929,7 +930,7 @@ impl Executor {
                     gas_price,
                 )
                 .and_then(|refund| max_fee.checked_sub(refund))
-                .ok_or(ExecutionError::FeeOverflow)
+                .ok_or(ExecutorError::FeeOverflow)
             }
         }
         // if there's no script result (i.e. create) then fee == base amount
@@ -943,7 +944,7 @@ impl Executor {
         &self,
         tx: ExecutionTypes<&mut Tx, &Tx>,
         db: &mut Database,
-    ) -> Result<(), ExecutionError>
+    ) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
     {
@@ -984,7 +985,7 @@ impl Executor {
                             let _ = tx_pointer;
                             // TODO: Also calculate `tx_pointer` based on `utxo_id` pointer.
                             // if tx_pointer != &TxPointer::new(height.into(), idx) {
-                            //     return Err(ExecutionError::InvalidTransactionOutcome {
+                            //     return Err(ExecutorError::InvalidTransactionOutcome {
                             //         transaction_id: tx.id(),
                             //     })
                             // }
@@ -1001,17 +1002,17 @@ impl Executor {
                                 != &contract
                                     .validated_utxo(self.config.utxo_validation)?
                             {
-                                return Err(ExecutionError::InvalidTransactionOutcome {
+                                return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx.id(),
                                 })
                             }
                             if balance_root != &contract.balance_root()? {
-                                return Err(ExecutionError::InvalidTransactionOutcome {
+                                return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx.id(),
                                 })
                             }
                             if state_root != &contract.state_root()? {
-                                return Err(ExecutionError::InvalidTransactionOutcome {
+                                return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx.id(),
                                 })
                             }
@@ -1033,7 +1034,7 @@ impl Executor {
         &self,
         tx: ExecutionTypes<&mut Tx, &Tx>,
         db: &mut Database,
-    ) -> Result<(), ExecutionError>
+    ) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
     {
@@ -1055,7 +1056,7 @@ impl Executor {
                             {
                                 contract_id
                             } else {
-                                return Err(ExecutionError::InvalidTransactionOutcome {
+                                return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx.id(),
                                 })
                             };
@@ -1081,19 +1082,19 @@ impl Executor {
                             {
                                 contract_id
                             } else {
-                                return Err(ExecutionError::InvalidTransactionOutcome {
+                                return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx.id(),
                                 })
                             };
 
                         let mut contract = ContractRef::new(&mut *db, *contract_id);
                         if balance_root != &contract.balance_root()? {
-                            return Err(ExecutionError::InvalidTransactionOutcome {
+                            return Err(ExecutorError::InvalidTransactionOutcome {
                                 transaction_id: tx.id(),
                             })
                         }
                         if state_root != &contract.state_root()? {
-                            return Err(ExecutionError::InvalidTransactionOutcome {
+                            return Err(ExecutorError::InvalidTransactionOutcome {
                                 transaction_id: tx.id(),
                             })
                         }
@@ -1132,7 +1133,7 @@ impl Executor {
         db: &mut Database,
         inputs: &[Input],
         outputs: &[Output],
-    ) -> Result<(), ExecutionError> {
+    ) -> ExecutorResult<()> {
         for (output_index, output) in outputs.iter().enumerate() {
             let utxo_id = UtxoId::new(*tx_id, output_index as u8);
             match output {
@@ -1158,7 +1159,7 @@ impl Executor {
                         db.storage::<ContractsLatestUtxo>()
                             .insert(contract_id, &utxo_id)?;
                     } else {
-                        return Err(ExecutionError::TransactionValidity(
+                        return Err(ExecutorError::TransactionValidity(
                             TransactionValidityError::InvalidContractInputIndex(utxo_id),
                         ))
                     }
@@ -1206,7 +1207,7 @@ impl Executor {
         asset_id: &AssetId,
         to: &Address,
         db: &mut Database,
-    ) -> Result<(), ExecutionError> {
+    ) -> ExecutorResult<()> {
         // Only insert a coin output if it has some amount.
         // This is because variable or transfer outputs won't have any value
         // if there's a revert or panic and shouldn't be added to the utxo set.
@@ -1221,7 +1222,7 @@ impl Executor {
             };
 
             if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
-                return Err(ExecutionError::OutputAlreadyExists)
+                return Err(ExecutorError::OutputAlreadyExists)
             }
         }
 
@@ -1233,9 +1234,9 @@ impl Executor {
         tx_id: &Bytes32,
         receipts: &[Receipt],
         db: &mut Database,
-    ) -> Result<(), ExecutionError> {
+    ) -> ExecutorResult<()> {
         if db.storage::<Receipts>().insert(tx_id, receipts)?.is_some() {
-            return Err(ExecutionError::OutputAlreadyExists)
+            return Err(ExecutorError::OutputAlreadyExists)
         }
         Ok(())
     }
@@ -1245,7 +1246,7 @@ impl Executor {
         &self,
         block: &Block,
         block_db_transaction: &mut DatabaseTransaction,
-    ) -> Result<(), ExecutionError> {
+    ) -> ExecutorResult<()> {
         for (tx_idx, tx) in block.transactions().iter().enumerate() {
             let block_height = *block.header().height();
             let mut inputs = &[][..];
@@ -1285,7 +1286,7 @@ impl Executor {
         tx_id: &Bytes32,
         tx_idx: u16,
         db: &mut Database,
-    ) -> Result<(), ExecutionError> {
+    ) -> ExecutorResult<()> {
         let mut owners = vec![];
         for input in inputs {
             if let Input::CoinSigned { owner, .. } | Input::CoinPredicate { owner, .. } =
@@ -1327,7 +1328,7 @@ impl Executor {
         &self,
         result: &ExecutionResult,
         db: &Database,
-    ) -> Result<(), ExecutionError> {
+    ) -> ExecutorResult<()> {
         let time = result.block.header().time();
         let block_id = result.block.id();
         for TransactionExecutionStatus { id, result } in result.tx_status.iter() {
@@ -1875,7 +1876,7 @@ mod tests {
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(
                 validation_err,
-                ExecutionError::CoinbaseIsNotFirstTransaction
+                ExecutorError::CoinbaseIsNotFirstTransaction
             ));
         }
 
@@ -1895,7 +1896,7 @@ mod tests {
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(
                 validation_err,
-                ExecutionError::InvalidTransaction(
+                ExecutorError::InvalidTransaction(
                     CheckError::TransactionMintIncorrectBlockHeight
                 )
             ));
@@ -1917,7 +1918,7 @@ mod tests {
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(
                 validation_err,
-                ExecutionError::CoinbaseOutputIsInvalid
+                ExecutorError::CoinbaseOutputIsInvalid
             ));
         }
 
@@ -1943,7 +1944,7 @@ mod tests {
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(
                 validation_err,
-                ExecutionError::CoinbaseSeveralOutputs
+                ExecutorError::CoinbaseSeveralOutputs
             ));
         }
 
@@ -1970,7 +1971,7 @@ mod tests {
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(
                 validation_err,
-                ExecutionError::CoinbaseOutputIsInvalid
+                ExecutorError::CoinbaseOutputIsInvalid
             ));
         }
 
@@ -1993,7 +1994,7 @@ mod tests {
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(
                 validation_err,
-                ExecutionError::CoinbaseAmountMismatch
+                ExecutorError::CoinbaseAmountMismatch
             ));
         }
 
@@ -2022,7 +2023,7 @@ mod tests {
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(
                 validation_err,
-                ExecutionError::NotSupportedTransaction(_)
+                ExecutorError::NotSupportedTransaction(_)
             ));
         }
     }
@@ -2070,7 +2071,7 @@ mod tests {
         let produce_result = &skipped_transactions[0].1;
         assert!(matches!(
             produce_result,
-            &ExecutionError::InvalidTransaction(CheckError::InsufficientFeeAmount { expected, .. }) if expected == (gas_limit as f64 / factor).ceil() as u64
+            &ExecutorError::InvalidTransaction(CheckError::InsufficientFeeAmount { expected, .. }) if expected == (gas_limit as f64 / factor).ceil() as u64
         ));
 
         // Produced block is valid
@@ -2091,7 +2092,7 @@ mod tests {
         );
         assert!(matches!(
             verify_result,
-            Err(ExecutionError::InvalidTransaction(CheckError::InsufficientFeeAmount { expected, ..})) if expected == (gas_limit as f64 / factor).ceil() as u64
+            Err(ExecutorError::InvalidTransaction(CheckError::InsufficientFeeAmount { expected, ..})) if expected == (gas_limit as f64 / factor).ceil() as u64
         ))
     }
 
@@ -2125,7 +2126,7 @@ mod tests {
         let produce_result = &skipped_transactions[0].1;
         assert!(matches!(
             produce_result,
-            &ExecutionError::TransactionIdCollision(_)
+            &ExecutorError::TransactionIdCollision(_)
         ));
 
         // Produced block is valid
@@ -2146,7 +2147,7 @@ mod tests {
         );
         assert!(matches!(
             verify_result,
-            Err(ExecutionError::TransactionIdCollision(_))
+            Err(ExecutorError::TransactionIdCollision(_))
         ));
     }
 
@@ -2234,7 +2235,7 @@ mod tests {
         let produce_result = &skipped_transactions[0].1;
         assert!(matches!(
             produce_result,
-            &ExecutionError::TransactionValidity(
+            &ExecutorError::TransactionValidity(
                 TransactionValidityError::CoinAlreadySpent(_)
             )
         ));
@@ -2257,7 +2258,7 @@ mod tests {
         );
         assert!(matches!(
             verify_result,
-            Err(ExecutionError::TransactionValidity(
+            Err(ExecutorError::TransactionValidity(
                 TransactionValidityError::CoinAlreadySpent(_)
             ))
         ));
@@ -2321,7 +2322,7 @@ mod tests {
         let produce_result = &skipped_transactions[0].1;
         assert!(matches!(
             produce_result,
-            &ExecutionError::TransactionValidity(
+            &ExecutorError::TransactionValidity(
                 TransactionValidityError::CoinDoesNotExist(_)
             )
         ));
@@ -2344,7 +2345,7 @@ mod tests {
         );
         assert!(matches!(
             verify_result,
-            Err(ExecutionError::TransactionValidity(
+            Err(ExecutorError::TransactionValidity(
                 TransactionValidityError::CoinDoesNotExist(_)
             ))
         ));
@@ -2396,7 +2397,7 @@ mod tests {
             verifier.execute_and_commit(ExecutionBlock::Validation(block));
         assert!(matches!(
             verify_result,
-            Err(ExecutionError::InvalidTransactionOutcome { transaction_id }) if transaction_id == tx_id
+            Err(ExecutorError::InvalidTransactionOutcome { transaction_id }) if transaction_id == tx_id
         ));
     }
 
@@ -2439,7 +2440,7 @@ mod tests {
 
         assert!(matches!(
             verify_result,
-            Err(ExecutionError::InvalidTransactionRoot)
+            Err(ExecutorError::InvalidTransactionRoot)
         ))
     }
 
@@ -2474,7 +2475,7 @@ mod tests {
         // assert block failed to validate when transaction didn't contain any coin inputs
         assert!(matches!(
             err,
-            &ExecutionError::TransactionValidity(TransactionValidityError::NoCoinOrMessageInput(id)) if id == tx_id
+            &ExecutorError::TransactionValidity(TransactionValidityError::NoCoinOrMessageInput(id)) if id == tx_id
         ));
     }
 
@@ -3240,7 +3241,7 @@ mod tests {
 
         assert!(matches!(
             verify_result,
-            Err(ExecutionError::InvalidTransactionOutcome {
+            Err(ExecutorError::InvalidTransactionOutcome {
                 transaction_id
             }) if transaction_id == tx_id
         ));
@@ -3421,7 +3422,7 @@ mod tests {
         let err = &skipped_transactions[0].1;
         assert!(matches!(
             err,
-            &ExecutionError::TransactionValidity(
+            &ExecutorError::TransactionValidity(
                 TransactionValidityError::MessageDoesNotExist(_)
             )
         ));
@@ -3437,7 +3438,7 @@ mod tests {
             .execute_and_commit(ExecutionBlock::Validation(block));
         assert!(matches!(
             res,
-            Err(ExecutionError::TransactionValidity(
+            Err(ExecutorError::TransactionValidity(
                 TransactionValidityError::MessageDoesNotExist(_)
             ))
         ));
@@ -3462,7 +3463,7 @@ mod tests {
         let err = &skipped_transactions[0].1;
         assert!(matches!(
             err,
-            &ExecutionError::TransactionValidity(
+            &ExecutorError::TransactionValidity(
                 TransactionValidityError::MessageSpendTooEarly(_)
             )
         ));
@@ -3478,7 +3479,7 @@ mod tests {
             .execute_and_commit(ExecutionBlock::Validation(block));
         assert!(matches!(
             res,
-            Err(ExecutionError::TransactionValidity(
+            Err(ExecutorError::TransactionValidity(
                 TransactionValidityError::MessageSpendTooEarly(_)
             ))
         ));
@@ -3515,7 +3516,7 @@ mod tests {
         let err = &skipped_transactions[0].1;
         assert!(matches!(
             err,
-            &ExecutionError::TransactionValidity(
+            &ExecutorError::TransactionValidity(
                 TransactionValidityError::MessageAlreadySpent(_)
             )
         ));
@@ -3539,7 +3540,7 @@ mod tests {
         );
         assert!(matches!(
             res,
-            Err(ExecutionError::TransactionValidity(
+            Err(ExecutorError::TransactionValidity(
                 TransactionValidityError::MessageAlreadySpent(_)
             ))
         ));

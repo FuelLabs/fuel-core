@@ -6,6 +6,7 @@
 
 #![deny(missing_docs)]
 
+use fuel_core_types::services::executor::Error as ExecutorError;
 use std::io::ErrorKind;
 
 pub use fuel_vm_private::fuel_storage::*;
@@ -41,9 +42,9 @@ impl From<Error> for std::io::Error {
     }
 }
 
-impl From<Error> for fuel_core_types::services::executor::Error {
+impl From<Error> for ExecutorError {
     fn from(e: Error) -> Self {
-        fuel_core_types::services::executor::Error::StorageError(Box::new(e))
+        ExecutorError::StorageError(Box::new(e))
     }
 }
 

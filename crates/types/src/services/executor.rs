@@ -26,7 +26,9 @@ use crate::{
     },
 };
 use std::error::Error as StdError;
-use thiserror::Error;
+
+/// The alias for executor result.
+pub type Result<T> = core::result::Result<T, Error>;
 
 /// The result of transactions execution.
 #[derive(Debug)]
@@ -272,7 +274,7 @@ impl ExecutionKind {
 }
 
 #[allow(missing_docs)]
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 #[non_exhaustive]
 pub enum Error {
     #[error("Transaction id was already used: {0:#x}")]
@@ -325,7 +327,7 @@ impl From<Backtrace> for Error {
 }
 
 #[allow(missing_docs)]
-#[derive(Debug, Error)]
+#[derive(thiserror::Error, Debug)]
 #[non_exhaustive]
 pub enum TransactionValidityError {
     #[error("Coin input was already spent")]

@@ -14,8 +14,8 @@ use fuel_core_types::{
     fuel_tx::Receipt,
     services::{
         executor::{
-            Error as ExecutorError,
             ExecutionBlock,
+            Result as ExecutorResult,
             UncommittedResult,
         },
         txpool::{
@@ -60,7 +60,7 @@ pub trait Executor<Database>: Sync + Send {
     fn execute_without_commit(
         &self,
         block: ExecutionBlock,
-    ) -> Result<UncommittedResult<StorageTransaction<Database>>, ExecutorError>;
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>>;
 
     /// Executes the block without committing it to the database. During execution collects the
     /// receipts to return them. The `utxo_validation` field can be used to disable the validation
@@ -69,5 +69,5 @@ pub trait Executor<Database>: Sync + Send {
         &self,
         block: ExecutionBlock,
         utxo_validation: Option<bool>,
-    ) -> Result<Vec<Vec<Receipt>>, ExecutorError>;
+    ) -> ExecutorResult<Vec<Vec<Receipt>>>;
 }

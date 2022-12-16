@@ -30,6 +30,7 @@ use fuel_core_types::{
             Error as ExecutorError,
             ExecutionBlock,
             ExecutionResult,
+            Result as ExecutorResult,
             UncommittedResult,
         },
         txpool::{
@@ -123,7 +124,7 @@ impl Executor<MockDb> for MockExecutor {
     fn execute_without_commit(
         &self,
         block: ExecutionBlock,
-    ) -> Result<UncommittedResult<StorageTransaction<MockDb>>, ExecutorError> {
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<MockDb>>> {
         let block = match block {
             ExecutionBlock::Production(block) => block.generate(&[]),
             ExecutionBlock::Validation(block) => block,
@@ -145,7 +146,7 @@ impl Executor<MockDb> for MockExecutor {
         &self,
         _block: ExecutionBlock,
         _utxo_validation: Option<bool>,
-    ) -> std::result::Result<Vec<Vec<Receipt>>, ExecutorError> {
+    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
         Ok(Default::default())
     }
 }
@@ -156,7 +157,7 @@ impl Executor<MockDb> for FailingMockExecutor {
     fn execute_without_commit(
         &self,
         block: ExecutionBlock,
-    ) -> Result<UncommittedResult<StorageTransaction<MockDb>>, ExecutorError> {
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<MockDb>>> {
         // simulate an execution failure
         let mut err = self.0.lock().unwrap();
         if let Some(err) = err.take() {
@@ -181,7 +182,7 @@ impl Executor<MockDb> for FailingMockExecutor {
         &self,
         _block: ExecutionBlock,
         _utxo_validation: Option<bool>,
-    ) -> Result<Vec<Vec<Receipt>>, ExecutorError> {
+    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
         let mut err = self.0.lock().unwrap();
         if let Some(err) = err.take() {
             Err(err)

@@ -7,6 +7,7 @@
 #![deny(missing_docs)]
 
 use fuel_core_storage::Error as StorageError;
+use fuel_core_types::services::executor::Error as ExecutorError;
 use std::{
     array::TryFromSliceError,
     io::ErrorKind,
@@ -51,10 +52,8 @@ impl From<TryFromSliceError> for Error {
     }
 }
 
-impl From<Error> for fuel_core_types::services::executor::Error {
+impl From<Error> for ExecutorError {
     fn from(e: Error) -> Self {
-        fuel_core_types::services::executor::Error::StorageError(Box::new(
-            StorageError::from(e),
-        ))
+        ExecutorError::StorageError(Box::new(StorageError::from(e)))
     }
 }

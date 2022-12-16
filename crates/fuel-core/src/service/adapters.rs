@@ -25,8 +25,8 @@ use fuel_core_types::{
         primitives::BlockHeight,
     },
     services::executor::{
-        Error,
         ExecutionBlock,
+        Result as ExecutorResult,
         UncommittedResult,
     },
 };
@@ -42,7 +42,7 @@ impl fuel_core_producer::ports::Executor<Database> for ExecutorAdapter {
     fn execute_without_commit(
         &self,
         block: ExecutionBlock,
-    ) -> Result<UncommittedResult<StorageTransaction<Database>>, Error> {
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
         let executor = Executor {
             database: self.database.clone(),
             config: self.config.clone(),
@@ -54,7 +54,7 @@ impl fuel_core_producer::ports::Executor<Database> for ExecutorAdapter {
         &self,
         block: ExecutionBlock,
         utxo_validation: Option<bool>,
-    ) -> Result<Vec<Vec<Receipt>>, Error> {
+    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
         let executor = Executor {
             database: self.database.clone(),
             config: self.config.clone(),
