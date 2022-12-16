@@ -459,8 +459,8 @@ impl From<CompressedBlock> for Header {
     }
 }
 
-impl From<Genesis> for Genesis {
-    fn from(genesis: Genesis) -> Self {
+impl From<fuel_core_types::blockchain::consensus::Genesis> for Genesis {
+    fn from(genesis: fuel_core_types::blockchain::consensus::Genesis) -> Self {
         Genesis {
             chain_config_hash: genesis.chain_config_hash.into(),
             coins_root: genesis.coins_root.into(),

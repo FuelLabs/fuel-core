@@ -90,6 +90,7 @@ use fuel_core_types::{
             ExecutionResult,
             ExecutionType,
             ExecutionTypes,
+            TransactionExecutionResult,
             TransactionExecutionStatus,
             TransactionValidityError,
             UncommittedResult,
@@ -472,11 +473,7 @@ impl Executor {
             0,
             TransactionExecutionStatus {
                 id: coinbase_id,
-                status: TransactionStatus::Success {
-                    block_id: Default::default(),
-                    time: *block.header.time(),
-                    result: None,
-                },
+                result: TransactionExecutionResult::Success { result: None },
             },
         );
         if block_db_transaction
@@ -706,7 +703,7 @@ impl Executor {
         // queue up status for this tx to be stored once block id is finalized.
         execution_data
             .tx_status
-            .push(TransactionExecutionStatus { id: tx_id, status });
+            .push(TransactionExecutionStatus { id: tx_id, result: status.into() });
         execution_data
             .message_ids
             .extend(vm_result.receipts().iter().filter_map(|r| match r {
@@ -1326,8 +1323,8 @@ impl Executor {
         tx_status: &mut [TransactionExecutionStatus],
         db: &Database,
     ) -> Result<(), Error> {
-        for TransactionExecutionStatus { id, status } in tx_status {
-            match status {
+        for TransactionExecutionStatus { id, result} in tx_status {
+            match result { 
                 TransactionStatus::Submitted { .. } => {}
                 TransactionStatus::Success { block_id, .. } => {
                     *block_id = finalized_block_id;

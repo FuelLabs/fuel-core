@@ -52,8 +52,8 @@ impl Default for DatabaseTransaction {
     }
 }
 
-impl Transactional for DatabaseTransaction {
-    fn commit(self) -> crate::state::Result<()> {
+impl Transactional<Database> for DatabaseTransaction {
+    fn commit(&mut self) -> crate::state::Result<()> {
         // TODO: should commit be fallible if this api is meant to be atomic?
         self.changes.commit()
     }
