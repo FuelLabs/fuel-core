@@ -9,6 +9,7 @@ use crate::{
     },
 };
 use anyhow::anyhow;
+use fuel_core_database::Error;
 use fuel_core_storage::{
     not_found,
     Error as StorageError,

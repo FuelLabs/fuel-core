@@ -5,7 +5,10 @@ use crate::{
     },
     state::IterDirection,
 };
-use fuel_core_database::Error as DatabaseError;
+use fuel_core_database::{
+    Error as DatabaseError,
+    Error,
+};
 use fuel_core_storage::{
     not_found,
     tables::{

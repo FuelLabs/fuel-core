@@ -51,13 +51,13 @@ use fuel_core_interfaces::common::{
     state::StateTransition,
 };
 use fuel_core_producer::ports::Executor as ExecutorTrait;
-use fuel_core_storage::tables::{
+use fuel_core_storage::{tables::{
     Coins,
     FuelBlocks,
     Messages,
     Receipts,
     Transactions,
-};
+}, transactional::StorageTransaction};
 use fuel_core_types::{
     blockchain::{
         block::PartialFuelBlock,
@@ -78,7 +78,7 @@ use fuel_core_types::{
             ExecutionKind,
             ExecutionResult,
             ExecutionType,
-            ExecutionTypes,
+            ExecutionTypes, TransactionExecutionStatus, UncommittedResult, TransactionValidityError,
         },
         txpool::TransactionStatus,
     },
