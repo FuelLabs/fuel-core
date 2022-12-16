@@ -2,6 +2,7 @@ use super::run_group;
 
 use criterion::Criterion;
 use fuel_core_benches::*;
+use fuel_core_types::fuel_asm::*;
 
 pub fn run(c: &mut Criterion) {
     let mut group = c.benchmark_group("mem");
