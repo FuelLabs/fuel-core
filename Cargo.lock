@@ -2347,7 +2347,7 @@ version = "0.0.0"
 dependencies = [
  "criterion",
  "fuel-core",
- "fuel-core-interfaces",
+ "fuel-core-types",
  "rand 0.8.5",
 ]
 
@@ -2390,7 +2390,7 @@ dependencies = [
  "cynic",
  "derive_more",
  "eventsource-client",
- "fuel-vm",
+ "fuel-core-types",
  "futures",
  "hex",
  "hyper-rustls 0.22.1",

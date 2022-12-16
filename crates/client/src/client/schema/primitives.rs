@@ -5,7 +5,7 @@ use crate::client::schema::{
 };
 use core::fmt;
 use cynic::impl_scalar;
-use fuel_vm::fuel_tx::InstructionResult;
+use fuel_core_types::fuel_tx::InstructionResult;
 use serde::{
     de::Error,
     Deserialize,
@@ -70,26 +70,27 @@ impl<T: LowerHex + Debug + Clone + Default> Display for HexFormatted<T> {
 macro_rules! fuel_type_scalar {
     ($id:ident, $ft_id:ident) => {
         #[derive(cynic::Scalar, Debug, Clone, Default)]
-        pub struct $id(pub HexFormatted<::fuel_vm::fuel_types::$ft_id>);
+        pub struct $id(pub HexFormatted<::fuel_core_types::fuel_types::$ft_id>);
 
         impl FromStr for $id {
             type Err = ConversionError;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
-                let b = HexFormatted::<::fuel_vm::fuel_types::$ft_id>::from_str(s)?;
+                let b =
+                    HexFormatted::<::fuel_core_types::fuel_types::$ft_id>::from_str(s)?;
                 Ok($id(b))
             }
         }
 
-        impl From<$id> for ::fuel_vm::fuel_types::$ft_id {
+        impl From<$id> for ::fuel_core_types::fuel_types::$ft_id {
             fn from(s: $id) -> Self {
-                ::fuel_vm::fuel_types::$ft_id::new(s.0 .0.into())
+                ::fuel_core_types::fuel_types::$ft_id::new(s.0 .0.into())
             }
         }
 
-        impl From<::fuel_vm::fuel_types::$ft_id> for $id {
-            fn from(s: ::fuel_vm::fuel_types::$ft_id) -> Self {
-                $id(HexFormatted::<::fuel_vm::fuel_types::$ft_id>(s))
+        impl From<::fuel_core_types::fuel_types::$ft_id> for $id {
+            fn from(s: ::fuel_core_types::fuel_types::$ft_id) -> Self {
+                $id(HexFormatted::<::fuel_core_types::fuel_types::$ft_id>(s))
             }
         }
 
@@ -118,18 +119,18 @@ impl LowerHex for MessageId {
 }
 
 #[derive(cynic::Scalar, Debug, Clone, Default)]
-pub struct UtxoId(pub HexFormatted<::fuel_vm::fuel_tx::UtxoId>);
+pub struct UtxoId(pub HexFormatted<::fuel_core_types::fuel_tx::UtxoId>);
 
 impl FromStr for UtxoId {
     type Err = ConversionError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let b = HexFormatted::<::fuel_vm::fuel_tx::UtxoId>::from_str(s)?;
+        let b = HexFormatted::<::fuel_core_types::fuel_tx::UtxoId>::from_str(s)?;
         Ok(UtxoId(b))
     }
 }
 
-impl From<UtxoId> for ::fuel_vm::fuel_tx::UtxoId {
+impl From<UtxoId> for ::fuel_core_types::fuel_tx::UtxoId {
     fn from(s: UtxoId) -> Self {
         s.0 .0
     }
@@ -142,18 +143,18 @@ impl LowerHex for UtxoId {
 }
 
 #[derive(cynic::Scalar, Debug, Clone, Default)]
-pub struct TxPointer(pub HexFormatted<::fuel_vm::fuel_tx::TxPointer>);
+pub struct TxPointer(pub HexFormatted<::fuel_core_types::fuel_tx::TxPointer>);
 
 impl FromStr for TxPointer {
     type Err = ConversionError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let b = HexFormatted::<::fuel_vm::fuel_tx::TxPointer>::from_str(s)?;
+        let b = HexFormatted::<::fuel_core_types::fuel_tx::TxPointer>::from_str(s)?;
         Ok(TxPointer(b))
     }
 }
 
-impl From<TxPointer> for ::fuel_vm::fuel_tx::TxPointer {
+impl From<TxPointer> for ::fuel_core_types::fuel_tx::TxPointer {
     fn from(s: TxPointer) -> Self {
         s.0 .0
     }
@@ -308,16 +309,18 @@ impl<'de> Deserialize<'de> for Tai64Timestamp {
 
 impl BlockId {
     /// Converts the hash into a message having the same bytes.
-    pub fn into_message(self) -> fuel_vm::fuel_crypto::Message {
-        let bytes: fuel_vm::fuel_types::Bytes32 = self.into();
+    pub fn into_message(self) -> fuel_core_types::fuel_crypto::Message {
+        let bytes: fuel_core_types::fuel_types::Bytes32 = self.into();
         // This is safe because BlockId is a cryptographically secure hash.
-        unsafe { fuel_vm::fuel_crypto::Message::from_bytes_unchecked(bytes.into()) }
+        unsafe {
+            fuel_core_types::fuel_crypto::Message::from_bytes_unchecked(bytes.into())
+        }
     }
 }
 
 impl Signature {
-    pub fn into_signature(self) -> fuel_vm::fuel_crypto::Signature {
-        let bytes: fuel_vm::fuel_types::Bytes64 = self.into();
+    pub fn into_signature(self) -> fuel_core_types::fuel_crypto::Signature {
+        let bytes: fuel_core_types::fuel_types::Bytes64 = self.into();
         bytes.into()
     }
 }

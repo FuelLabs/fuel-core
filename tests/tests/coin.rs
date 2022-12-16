@@ -10,22 +10,24 @@ use fuel_core_client::client::{
     PageDirection,
     PaginationRequest,
 };
-use fuel_core_interfaces::common::{
-    fuel_storage::StorageAsMut,
+use fuel_core_storage::{
+    tables::Coins,
+    StorageAsMut,
+};
+use fuel_core_types::{
+    entities::coin::{
+        Coin,
+        CoinStatus,
+    },
+    fuel_asm::Word,
     fuel_tx::{
         AssetId,
         UtxoId,
     },
-    fuel_vm::prelude::{
+    fuel_types::{
         Address,
         Bytes32,
-        Word,
     },
-};
-use fuel_core_storage::tables::Coins;
-use fuel_core_types::entities::coin::{
-    Coin,
-    CoinStatus,
 };
 use rstest::rstest;
 

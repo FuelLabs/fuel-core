@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 fuel-core = { path = "../crates/fuel-core" }
-fuel-core-interfaces = { path = "../crates/fuel-core-interfaces", features = ["test-helpers"] }
+fuel-core-types = { path = "../crates/types", features = ["test-helpers"] }
 rand = "0.8"
 
 [dev-dependencies]

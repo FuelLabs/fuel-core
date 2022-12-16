@@ -11,7 +11,10 @@ use crate::client::schema::{
     MessageId,
     U64,
 };
-use fuel_vm::fuel_types::Word;
+use fuel_core_types::{
+    fuel_asm::Word,
+    fuel_tx,
+};
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
@@ -62,12 +65,12 @@ pub enum ReceiptType {
     MessageOut,
 }
 
-impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
+impl TryFrom<Receipt> for fuel_tx::Receipt {
     type Error = ConversionError;
 
     fn try_from(schema: Receipt) -> Result<Self, Self::Error> {
         Ok(match schema.receipt_type {
-            ReceiptType::Call => fuel_vm::prelude::Receipt::Call {
+            ReceiptType::Call => fuel_tx::Receipt::Call {
                 id: schema
                     .contract
                     .ok_or_else(|| MissingField("contract".to_string()))?
@@ -107,7 +110,7 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .ok_or_else(|| MissingField("is".to_string()))?
                     .into(),
             },
-            ReceiptType::Return => fuel_vm::prelude::Receipt::Return {
+            ReceiptType::Return => fuel_tx::Receipt::Return {
                 id: schema
                     .contract
                     .ok_or_else(|| MissingField("contract".to_string()))?
@@ -126,7 +129,7 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .ok_or_else(|| MissingField("is".to_string()))?
                     .into(),
             },
-            ReceiptType::ReturnData => fuel_vm::prelude::Receipt::ReturnData {
+            ReceiptType::ReturnData => fuel_tx::Receipt::ReturnData {
                 id: schema
                     .contract
                     .ok_or_else(|| MissingField("contract".to_string()))?
@@ -157,7 +160,7 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .ok_or_else(|| MissingField("is".to_string()))?
                     .into(),
             },
-            ReceiptType::Panic => fuel_vm::prelude::Receipt::Panic {
+            ReceiptType::Panic => fuel_tx::Receipt::Panic {
                 id: schema
                     .contract
                     .ok_or_else(|| MissingField("contract".to_string()))?
@@ -177,7 +180,7 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .into(),
                 contract_id: schema.contract_id.map(Into::into),
             },
-            ReceiptType::Revert => fuel_vm::prelude::Receipt::Revert {
+            ReceiptType::Revert => fuel_tx::Receipt::Revert {
                 id: schema
                     .contract
                     .ok_or_else(|| MissingField("contract".to_string()))?
@@ -196,7 +199,7 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .ok_or_else(|| MissingField("is".to_string()))?
                     .into(),
             },
-            ReceiptType::Log => fuel_vm::prelude::Receipt::Log {
+            ReceiptType::Log => fuel_tx::Receipt::Log {
                 id: schema
                     .contract
                     .ok_or_else(|| MissingField("contract".to_string()))?
@@ -227,7 +230,7 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .ok_or_else(|| MissingField("is".to_string()))?
                     .into(),
             },
-            ReceiptType::LogData => fuel_vm::prelude::Receipt::LogData {
+            ReceiptType::LogData => fuel_tx::Receipt::LogData {
                 id: schema
                     .contract
                     .ok_or_else(|| MissingField("contract".to_string()))?
@@ -266,7 +269,7 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .ok_or_else(|| MissingField("is".to_string()))?
                     .into(),
             },
-            ReceiptType::Transfer => fuel_vm::prelude::Receipt::Transfer {
+            ReceiptType::Transfer => fuel_tx::Receipt::Transfer {
                 id: schema
                     .contract
                     .ok_or_else(|| MissingField("contract".to_string()))?
@@ -294,7 +297,7 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .ok_or_else(|| MissingField("is".to_string()))?
                     .into(),
             },
-            ReceiptType::TransferOut => fuel_vm::prelude::Receipt::TransferOut {
+            ReceiptType::TransferOut => fuel_tx::Receipt::TransferOut {
                 id: schema
                     .contract
                     .ok_or_else(|| MissingField("contract".to_string()))?
@@ -321,7 +324,7 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .ok_or_else(|| MissingField("is".to_string()))?
                     .into(),
             },
-            ReceiptType::ScriptResult => fuel_vm::prelude::Receipt::ScriptResult {
+            ReceiptType::ScriptResult => fuel_tx::Receipt::ScriptResult {
                 result: Word::from(
                     schema
                         .result
@@ -333,7 +336,7 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .ok_or_else(|| MissingField("gas_used".to_string()))?
                     .into(),
             },
-            ReceiptType::MessageOut => ::fuel_vm::fuel_tx::Receipt::MessageOut {
+            ReceiptType::MessageOut => fuel_tx::Receipt::MessageOut {
                 message_id: schema
                     .message_id
                     .ok_or_else(|| MissingField("message_id".to_string()))?

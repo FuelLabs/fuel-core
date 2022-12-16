@@ -1,4 +1,9 @@
-use crate::client::schema::contract::ContractBalanceQueryArgs;
+use crate::client::schema::{
+    block::BlockByHeightArgs,
+    contract::ContractBalanceQueryArgs,
+    resource::ExcludeInput,
+    tx::DryRunArg,
+};
 use anyhow::Context;
 use cynic::{
     http::ReqwestExt,
@@ -10,7 +15,19 @@ use cynic::{
     StreamingOperation,
 };
 use eventsource_client::HttpsConnector;
-use fuel_vm::prelude::*;
+use fuel_core_types::{
+    fuel_asm::{
+        Opcode,
+        RegisterId,
+        Word,
+    },
+    fuel_tx::{
+        Receipt,
+        Transaction,
+    },
+    fuel_types,
+    fuel_types::bytes::SerializableVec,
+};
 use futures::StreamExt;
 use itertools::Itertools;
 use schema::{
@@ -65,11 +82,6 @@ use types::{
     TransactionStatus,
 };
 
-use crate::client::schema::{
-    block::BlockByHeightArgs,
-    resource::ExcludeInput,
-    tx::DryRunArg,
-};
 pub use schema::{
     PageDirection,
     PaginatedResult,
@@ -363,7 +375,7 @@ impl FuelClient {
     pub async fn set_breakpoint(
         &self,
         session_id: &str,
-        contract: ::fuel_vm::fuel_types::ContractId,
+        contract: fuel_types::ContractId,
         pc: u64,
     ) -> io::Result<()> {
         let operation = SetBreakpoint::build(SetBreakpointArgs {
@@ -516,17 +528,14 @@ impl FuelClient {
         Ok(transactions)
     }
 
-    pub async fn receipts(
-        &self,
-        id: &str,
-    ) -> io::Result<Vec<::fuel_vm::fuel_tx::Receipt>> {
+    pub async fn receipts(&self, id: &str) -> io::Result<Vec<Receipt>> {
         let query = schema::tx::TransactionQuery::build(TxIdArgs { id: id.parse()? });
 
         let tx = self.query(query).await?.transaction.ok_or_else(|| {
             io::Error::new(ErrorKind::NotFound, format!("transaction {} not found", id))
         })?;
 
-        let receipts: Result<Vec<::fuel_vm::fuel_tx::Receipt>, ConversionError> = tx
+        let receipts: Result<Vec<Receipt>, ConversionError> = tx
             .receipts
             .unwrap_or_default()
             .into_iter()
@@ -745,7 +754,7 @@ impl FuelClient {
     pub async fn transparent_transaction(
         &self,
         id: &str,
-    ) -> io::Result<Option<::fuel_vm::fuel_tx::Transaction>> {
+    ) -> io::Result<Option<Transaction>> {
         let query = schema::tx::TransactionQuery::build(TxIdArgs { id: id.parse()? });
 
         let transaction = self.query(query).await?.transaction;

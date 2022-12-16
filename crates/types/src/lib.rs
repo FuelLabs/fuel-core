@@ -42,6 +42,7 @@ pub mod fuel_vm {
             Salt,
             SecretKey,
             Signature,
+            Transactor,
         },
         script_with_data_offset,
         state,
