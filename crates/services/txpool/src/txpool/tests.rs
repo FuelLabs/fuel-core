@@ -32,7 +32,6 @@ use fuel_core_types::{
     },
     fuel_tx::{
         AssetId,
-        Chargeable,
         Output,
         TransactionBuilder,
         UniqueIdentifier,

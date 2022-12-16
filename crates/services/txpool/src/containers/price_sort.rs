@@ -1,11 +1,5 @@
 use crate::types::*;
-use fuel_core_types::{
-    fuel_tx::{
-        Chargeable,
-        UniqueIdentifier,
-    },
-    services::txpool::ArcPoolTx,
-};
+use fuel_core_types::services::txpool::ArcPoolTx;
 use std::{
     cmp,
     collections::BTreeMap,

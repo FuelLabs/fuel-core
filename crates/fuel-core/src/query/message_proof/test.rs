@@ -16,7 +16,6 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::collections::HashMap;
 
 use super::*;
 
