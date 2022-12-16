@@ -16,7 +16,7 @@ use async_graphql::{
     Object,
     Union,
 };
-use fuel_core_interfaces::common::fuel_tx;
+use fuel_core_types::fuel_tx;
 
 #[derive(Union)]
 pub enum Input {

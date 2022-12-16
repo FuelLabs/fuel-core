@@ -12,21 +12,7 @@ use fuel_core_chain_config::{
     StateConfig,
 };
 use fuel_core_executor::refs::ContractRef;
-use fuel_core_interfaces::common::{
-    fuel_merkle::binary,
-    fuel_storage::StorageAsMut,
-    fuel_tx::{
-        Contract,
-        MessageId,
-        UtxoId,
-    },
-    fuel_types::{
-        bytes::WORD_SIZE,
-        Bytes32,
-        ContractId,
-    },
-    prelude::MerkleRoot,
-};
+use fuel_core_interfaces::common::prelude::MerkleRoot;
 use fuel_core_poa::ports::BlockDb;
 use fuel_core_storage::{
     tables::{
@@ -40,6 +26,7 @@ use fuel_core_storage::{
         Messages,
     },
     transactional::Transactional,
+    StorageAsMut,
 };
 use fuel_core_types::{
     blockchain::{
@@ -61,6 +48,17 @@ use fuel_core_types::{
             CoinStatus,
         },
         message::Message,
+    },
+    fuel_merkle::binary,
+    fuel_tx::{
+        Contract,
+        MessageId,
+        UtxoId,
+    },
+    fuel_types::{
+        bytes::WORD_SIZE,
+        Bytes32,
+        ContractId,
     },
 };
 use itertools::Itertools;

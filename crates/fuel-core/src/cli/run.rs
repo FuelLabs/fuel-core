@@ -15,15 +15,15 @@ use fuel_core::service::{
     VMConfig,
 };
 use fuel_core_chain_config::ChainConfig;
-use fuel_core_interfaces::common::{
+use fuel_core_types::{
+    blockchain::primitives::SecretKeyWrapper,
     fuel_tx::Address,
-    prelude::SecretKey,
+    fuel_vm::SecretKey,
     secrecy::{
         ExposeSecret,
         Secret,
     },
 };
-use fuel_core_types::blockchain::primitives::SecretKeyWrapper;
 use std::{
     env,
     net,

@@ -92,7 +92,7 @@ impl MerkleRootStorage<ContractId, ContractsAssets<'_>> for Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_interfaces::common::fuel_storage::StorageAsMut;
+    use fuel_core_storage::StorageAsMut;
 
     #[test]
     fn get() {

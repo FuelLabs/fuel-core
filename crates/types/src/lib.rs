@@ -34,5 +34,6 @@ pub mod fuel_vm {
         InterpreterStorage,
         PredicateStorage,
         ProgramState,
+        SecretKey,
     };
 }

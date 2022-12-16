@@ -221,12 +221,18 @@ impl From<DatabaseError> for ResourceQueryError {
 mod tests {
     use crate::database::Database;
     use assert_matches::assert_matches;
-    use fuel_core_interfaces::common::{
-        fuel_asm::Word,
-        fuel_storage::{
-            StorageAsMut,
-            StorageAsRef,
+    use fuel_core_storage::{
+        tables::{
+            Coins,
+            Messages,
         },
+        StorageAsMut,
+        StorageAsRef,
+    };
+    use fuel_core_types::{
+        blockchain::primitives::DaBlockHeight,
+        entities::coin::CoinStatus,
+        fuel_asm::Word,
         fuel_tx::{
             Address,
             AssetId,
@@ -234,14 +240,6 @@ mod tests {
             UtxoId,
         },
         fuel_types::MessageId,
-    };
-    use fuel_core_storage::tables::{
-        Coins,
-        Messages,
-    };
-    use fuel_core_types::{
-        blockchain::primitives::DaBlockHeight,
-        entities::coin::CoinStatus,
     };
     use itertools::Itertools;
 

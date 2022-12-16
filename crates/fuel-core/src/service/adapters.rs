@@ -3,16 +3,15 @@ use crate::{
     executor::Executor,
     service::Config,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_tx::{
-            Receipt,
-            Transaction,
-        },
-        fuel_types::Word,
+use fuel_core_interfaces::relayer::RelayerDb;
+use fuel_core_types::{
+    fuel_tx::{
+        Receipt,
+        Transaction,
     },
-    relayer::RelayerDb,
+    fuel_types::Word,
 };
+
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::RelayerSynced;
 use fuel_core_storage::{
