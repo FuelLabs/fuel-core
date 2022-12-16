@@ -5,6 +5,7 @@
 //! logic when the `Database` is known.
 
 #![deny(missing_docs)]
+#![deny(unused_crate_dependencies)]
 
 use fuel_core_storage::Error as StorageError;
 use fuel_core_types::services::executor::Error as ExecutorError;

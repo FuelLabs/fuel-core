@@ -1,9 +1,8 @@
-use std::cmp::Reverse;
-
 use fuel_core_types::{
     fuel_types::Word,
     services::txpool::ArcPoolTx,
 };
+use std::cmp::Reverse;
 
 // TODO: This logic should be housed in the txpool,
 //  as it will have the most efficient way to select txs.
@@ -45,6 +44,8 @@ pub fn select_transactions(
 
 #[cfg(test)]
 mod tests {
+    use fuel_core_producer as _;
+    use fuel_core_txpool as _;
     use fuel_core_types::{
         fuel_asm::Opcode,
         fuel_crypto::rand::{

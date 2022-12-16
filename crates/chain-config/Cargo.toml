@@ -17,6 +17,7 @@ fuel-core-poa = { path = "../services/consensus_module/poa", version = "0.15.1" 
 fuel-core-storage = { path = "../storage", version = "0.15.1" }
 fuel-core-types = { path = "../types", version = "0.15.1", features = [
     "serde",
+    "random",
 ] }
 hex = { version = "0.4", features = ["serde"] }
 itertools = "0.10"

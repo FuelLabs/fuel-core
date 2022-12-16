@@ -4,6 +4,7 @@
 //! defined here are used by services but are flexible enough to customize the
 //! logic when the `Database` is known.
 
+#![deny(unused_crate_dependencies)]
 #![deny(missing_docs)]
 
 use fuel_core_types::services::executor::Error as ExecutorError;
