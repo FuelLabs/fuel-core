@@ -34,6 +34,7 @@ fuel-core-relayer = { path = "../crates/services/relayer", features = [
 ] }
 fuel-core-storage = { path = "../crates/storage", features = ["test-helpers"] }
 fuel-core-types = { path = "../crates/types", features = ["test-helpers"] }
+fuel-core-txpool = { path = "../crates/services/txpool", features = ["test-helpers"] }
 futures = "0.3"
 hyper = { version = "0.14", features = ["server"] }
 insta = "1.8"
