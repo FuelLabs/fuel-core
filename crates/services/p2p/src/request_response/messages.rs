@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use fuel_core_types::blockchain::{
-    primitives::BlockId,
+    primitives::BlockHeight,
     SealedBlock,
 };
 use serde::{
@@ -18,7 +18,7 @@ pub(crate) const MAX_REQUEST_SIZE: usize = 8;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, Copy)]
 pub enum RequestMessage {
-    RequestBlock(BlockId),
+    RequestBlock(BlockHeight),
 }
 
 /// Final Response Message that p2p service sends to the Orchestrator

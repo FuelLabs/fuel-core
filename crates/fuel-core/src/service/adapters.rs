@@ -177,7 +177,10 @@ impl DbAdapter {
 
 #[async_trait::async_trait]
 impl P2pDb for DbAdapter {
-    async fn get_sealed_block(&self, block_id: BlockId) -> Option<Arc<SealedBlock>> {
+    async fn get_sealed_block(
+        &self,
+        block_height: BlockHeight,
+    ) -> Option<Arc<SealedBlock>> {
         // todo: current signatures do not match?
         todo!()
     }

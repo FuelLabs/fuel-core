@@ -162,12 +162,12 @@ impl NetworkOrchestrator {
                         },
                         Some(FuelP2PEvent::RequestMessage { request_message, request_id }) => {
                             match request_message {
-                                RequestMessage::RequestBlock(block_id) => {
+                                RequestMessage::RequestBlock(block_height) => {
                                     let db = self.db.clone();
                                     let tx_orchestrator_request = self.tx_orchestrator_request.clone();
 
                                     tokio::spawn(async move {
-                                        let block_response = db.get_sealed_block(block_id).await;
+                                        let block_response = db.get_sealed_block(block_height).await;
                                         let _ = tx_orchestrator_request.send(OrchestratorRequest::RespondWithRequestedBlock((block_response, request_id)));
                                     });
                                 }
@@ -371,7 +371,7 @@ pub mod tests {
             poa::PoAConsensus,
             Consensus,
         },
-        primitives::BlockId,
+        primitives::BlockHeight,
     };
     use tokio::time::{
         sleep,
@@ -383,7 +383,10 @@ pub mod tests {
 
     #[async_trait]
     impl Database for FakeDb {
-        async fn get_sealed_block(&self, _block_id: BlockId) -> Option<Arc<SealedBlock>> {
+        async fn get_sealed_block(
+            &self,
+            block_height: BlockHeight,
+        ) -> Option<Arc<SealedBlock>> {
             let block = Block::new(Default::default(), vec![], &[]);
 
             Some(Arc::new(SealedBlock {
