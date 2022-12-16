@@ -19,7 +19,7 @@ use fuel_core_client::{
         TransactionBuilder,
     },
 };
-use fuel_core_interfaces::common::secrecy::Secret;
+use fuel_core_types::secrecy::Secret;
 use rand::{
     rngs::StdRng,
     SeedableRng,

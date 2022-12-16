@@ -25,16 +25,6 @@ use async_graphql::{
     Subscription,
 };
 use fuel_core_interfaces::txpool::TxPoolMpsc;
-use fuel_core_storage::StorageAsRef;
-use fuel_core_types::{
-    fuel_tx::{
-        Cacheable,
-        Transaction as FuelTx,
-    },
-    fuel_types,
-    fuel_vm::Deserializable,
-};
-
 use fuel_core_storage::{
     not_found,
     tables::{
@@ -43,8 +33,17 @@ use fuel_core_storage::{
     },
     Error as StorageError,
     Result as StorageResult,
+    StorageAsRef,
 };
 use fuel_core_txpool::Service as TxPoolService;
+use fuel_core_types::{
+    fuel_tx::{
+        Cacheable,
+        Transaction as FuelTx,
+    },
+    fuel_types,
+    fuel_types::bytes::Deserializable,
+};
 use futures::{
     Stream,
     StreamExt,

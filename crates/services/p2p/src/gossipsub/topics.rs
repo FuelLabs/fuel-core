@@ -80,10 +80,12 @@ impl GossipsubTopics {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_interfaces::common::fuel_tx::Transaction;
-    use fuel_core_types::blockchain::{
-        block::Block,
-        consensus::ConsensusVote,
+    use fuel_core_types::{
+        blockchain::{
+            block::Block,
+            consensus::ConsensusVote,
+        },
+        fuel_tx::Transaction,
     };
     use libp2p::gossipsub::Topic;
     use std::sync::Arc;

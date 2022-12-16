@@ -711,13 +711,13 @@ mod tests {
 
     use std::str::FromStr;
 
-    use fuel_core_interfaces::common::{
-        fuel_tx::{
+    use fuel_core_types::{
+        fuel_tx::UtxoId,
+        fuel_types::{
             Address,
             AssetId,
-            UtxoId,
+            Bytes32,
         },
-        fuel_types::Bytes32,
     };
 
     use super::*;

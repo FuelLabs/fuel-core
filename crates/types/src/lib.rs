@@ -30,8 +30,10 @@ pub mod fuel_vm {
         interpreter,
         prelude::{
             Backtrace,
+            Breakpoint,
+            Call,
+            CallFrame,
             Contract,
-            Deserializable,
             Interpreter,
             InterpreterError,
             InterpreterStorage,

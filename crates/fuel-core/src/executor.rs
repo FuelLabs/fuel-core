@@ -72,10 +72,12 @@ use fuel_core_types::{
     fuel_types::MessageId,
     fuel_vm::{
         consts::REG_SP,
-        interpreter::CheckedMetadata,
+        interpreter::{
+            CheckedMetadata,
+            ExecutableTransaction,
+        },
         state::StateTransition,
         Backtrace as FuelBacktrace,
-        ExecutableTransaction,
         Interpreter,
         PredicateStorage,
     },

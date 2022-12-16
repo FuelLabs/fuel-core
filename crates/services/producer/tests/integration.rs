@@ -1,29 +1,6 @@
 use anyhow::Result;
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
-    common::{
-        fuel_asm::Opcode,
-        fuel_crypto::{
-            PublicKey,
-            SecretKey,
-        },
-        fuel_merkle::common::Bytes32,
-        fuel_tx::{
-            Chargeable,
-            ConsensusParameters,
-            Output,
-            Script,
-            Signable,
-            TransactionBuilder,
-            UtxoId,
-        },
-        fuel_types::{
-            Address,
-            AssetId,
-        },
-        fuel_vm::consts::REG_ZERO,
-        prelude::StorageAsMut,
-    },
     txpool::Sender as TxPoolSender,
 };
 use fuel_core_producer::{
@@ -35,7 +12,10 @@ use fuel_core_producer::{
     },
     Producer,
 };
-use fuel_core_storage::tables::Coins;
+use fuel_core_storage::{
+    tables::Coins,
+    StorageAsMut,
+};
 use fuel_core_txpool::{
     service::TxStatusChange,
     Config as TxPoolConfig,
@@ -48,6 +28,26 @@ use fuel_core_types::{
         Coin,
         CoinStatus,
     },
+    fuel_asm::Opcode,
+    fuel_crypto::{
+        PublicKey,
+        SecretKey,
+    },
+    fuel_merkle::common::Bytes32,
+    fuel_tx::{
+        Chargeable,
+        ConsensusParameters,
+        Output,
+        Script,
+        Signable,
+        TransactionBuilder,
+        UtxoId,
+    },
+    fuel_types::{
+        Address,
+        AssetId,
+    },
+    fuel_vm::consts::REG_ZERO,
     services::executor::ExecutionResult,
 };
 use rand::{

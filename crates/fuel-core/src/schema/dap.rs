@@ -12,12 +12,28 @@ use async_graphql::{
     SchemaBuilder,
     ID,
 };
-use fuel_core_interfaces::common::fuel_vm::{
-    consts,
-    prelude::*,
-};
 use fuel_core_storage::not_found;
-use fuel_core_types::fuel_tx::ConsensusParameters;
+use fuel_core_types::{
+    fuel_asm::{
+        Opcode,
+        RegisterId,
+        Word,
+    },
+    fuel_tx::{
+        CheckedTransaction,
+        ConsensusParameters,
+        IntoChecked,
+        Script,
+        Transaction,
+    },
+    fuel_types::Address,
+    fuel_vm::{
+        consts,
+        state::DebugEval,
+        Interpreter,
+        InterpreterError,
+    },
+};
 use futures::lock::Mutex;
 use std::{
     collections::HashMap,
@@ -478,7 +494,7 @@ mod gql_types {
     };
 
     #[cfg(feature = "debug")]
-    use fuel_core_interfaces::common::fuel_vm::prelude::Breakpoint as FuelBreakpoint;
+    use fuel_core_types::fuel_vm::Breakpoint as FuelBreakpoint;
 
     #[derive(Debug, Clone, Copy, InputObject)]
     pub struct Breakpoint {

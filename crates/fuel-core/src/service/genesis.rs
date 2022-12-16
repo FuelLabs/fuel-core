@@ -12,7 +12,6 @@ use fuel_core_chain_config::{
     StateConfig,
 };
 use fuel_core_executor::refs::ContractRef;
-use fuel_core_interfaces::common::prelude::MerkleRoot;
 use fuel_core_poa::ports::BlockDb;
 use fuel_core_storage::{
     tables::{
@@ -26,6 +25,7 @@ use fuel_core_storage::{
         Messages,
     },
     transactional::Transactional,
+    MerkleRoot,
     StorageAsMut,
 };
 use fuel_core_types::{
@@ -356,10 +356,10 @@ mod tests {
             DaBlockHeight,
         },
         fuel_asm::Opcode,
-        fuel_crypto::fuel_types::Salt,
         fuel_types::{
             Address,
             AssetId,
+            Salt,
         },
     };
     use itertools::Itertools;

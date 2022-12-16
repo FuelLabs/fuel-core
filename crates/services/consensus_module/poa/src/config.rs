@@ -1,8 +1,8 @@
-use fuel_core_interfaces::common::{
-    prelude::Word,
+use fuel_core_types::{
+    blockchain::primitives::SecretKeyWrapper,
+    fuel_asm::Word,
     secrecy::Secret,
 };
-use fuel_core_types::blockchain::primitives::SecretKeyWrapper;
 use serde::{
     Deserialize,
     Serialize,
