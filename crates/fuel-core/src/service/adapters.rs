@@ -1,6 +1,7 @@
 use crate::{
     database::Database,
     executor::Executor,
+    schema::scalars,
     service::Config,
 };
 use fuel_core_interfaces::{
@@ -8,6 +9,10 @@ use fuel_core_interfaces::{
     relayer::RelayerDb,
 };
 use fuel_core_types::{
+    blockchain::{
+        primitives::BlockId,
+        SealedBlock,
+    },
     fuel_tx::{
         Receipt,
         Transaction,
@@ -35,7 +40,10 @@ use fuel_core_types::{
 use std::sync::Arc;
 
 #[cfg(feature = "p2p")]
-use fuel_core_p2p::orchestrator::Service as P2pService;
+use fuel_core_p2p::{
+    orchestrator::Service as P2pService,
+    ports::Database as P2pDb,
+};
 
 pub struct ExecutorAdapter {
     pub database: Database,
@@ -123,8 +131,14 @@ impl fuel_core_poa::ports::BlockProducer<Database> for PoACoordinatorAdapter {
 }
 
 #[cfg(feature = "p2p")]
-struct P2pAdapter {
+pub struct P2pAdapter {
     p2p_service: P2pService,
+}
+
+impl P2pAdapter {
+    pub fn new(p2p_service: P2pService) -> Self {
+        Self { p2p_service }
+    }
 }
 
 #[async_trait::async_trait]
@@ -147,6 +161,24 @@ impl fuel_core_txpool::ports::PeerToPeer for P2pAdapter {
         message: &Self::GossipedTransaction,
         validity: fuel_core_txpool::ports::GossipValidity,
     ) {
+        todo!()
+    }
+}
+
+pub struct DbAdapter {
+    database: Database,
+}
+
+impl DbAdapter {
+    pub fn new(database: Database) -> Self {
+        Self { database }
+    }
+}
+
+#[async_trait::async_trait]
+impl P2pDb for DbAdapter {
+    async fn get_sealed_block(&self, block_id: BlockId) -> Option<Arc<SealedBlock>> {
+        // todo: current signatures do not match?
         todo!()
     }
 }

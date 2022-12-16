@@ -29,7 +29,12 @@ use tokio::{
 };
 
 #[cfg(feature = "p2p")]
-use fuel_core_interfaces::p2p::P2pDb;
+use fuel_core_p2p::ports::Database as P2pDb;
+
+use super::adapters::{
+    DbAdapter,
+    P2pAdapter,
+};
 
 pub struct Modules {
     pub txpool: Arc<fuel_core_txpool::Service>,
@@ -109,7 +114,6 @@ pub async fn start_modules(
         None
     };
 
-    // let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
     let (block_event_sender, block_event_receiver) = mpsc::channel(100);
     let (block_import_tx, block_import_rx) = broadcast::channel(16);
 
@@ -119,16 +123,21 @@ pub async fn start_modules(
     let (p2p_request_event_sender, mut p2p_request_event_receiver) = mpsc::channel(100);
 
     #[cfg(feature = "p2p")]
-    let network_service: fuel_core_p2p::orchestrator::Service = todo!();
-    // let network_service = {
-    //     let p2p_db: Arc<dyn P2pDb> = Arc::new(database.clone());
-    //     let (tx_consensus, _) = mpsc::channel(100);
+    let network_service = {
+        let p2p_db = Arc::new(DbAdapter::new(database.clone()));
 
-    //     let genesis = database.get_genesis()?;
-    //     let p2p_config = config.p2p.clone().init(genesis)?;
+        let genesis = database.get_genesis()?;
+        let p2p_config = config.p2p.clone().init(genesis)?;
 
-    //     fuel_core_p2p::orchestrator::Service::new(p2p_config, p2p_db)
-    // };
+        fuel_core_p2p::orchestrator::Service::new(p2p_config, p2p_db)
+    };
+
+    #[cfg(feature = "p2p")]
+    if !config.p2p.network_name.is_empty() {
+        network_service.start().await?;
+    }
+
+    let p2p_adapter = Arc::new(P2pAdapter::new(network_service));
 
     #[cfg(not(feature = "p2p"))]
     {
@@ -151,7 +160,7 @@ pub async fn start_modules(
     txpool_builder
         .config(config.txpool.clone())
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
-        //.p2p_port(incoming_tx_receiver)
+        .p2p_port(p2p_adapter.clone())
         .import_block_event(block_import_rx)
         .tx_status_sender(tx_status_sender.clone())
         .txpool_sender(Sender::new(txpool_sender))
@@ -217,11 +226,6 @@ pub async fn start_modules(
     )
     .await;
 
-    #[cfg(feature = "p2p")]
-    if !config.p2p.network_name.is_empty() {
-        network_service.start().await?;
-    }
-
     let txpool = txpool_builder.build()?;
     txpool.start().await?;
 
@@ -234,6 +238,6 @@ pub async fn start_modules(
         #[cfg(feature = "relayer")]
         relayer,
         #[cfg(feature = "p2p")]
-        network_service: Arc::new(network_service),
+        network_service: todo!(), // todo: replace with P2pAdapter?,
     })
 }
