@@ -54,7 +54,6 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 
 [features]
-debug = ["fuel-core-interfaces/debug"]
 default = ["fuel-core/default", "metrics", "relayer"]
 metrics = ["fuel-core/metrics", "fuel-core/rocksdb"]
 p2p = ["fuel-core/p2p"]
