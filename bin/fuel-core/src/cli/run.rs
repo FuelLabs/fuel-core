@@ -8,13 +8,15 @@ use anyhow::{
     Context,
 };
 use clap::Parser;
-use fuel_core::service::{
-    config::default_consensus_dev_key,
-    Config,
-    DbType,
-    VMConfig,
+use fuel_core::{
+    chain_config::ChainConfig,
+    service::{
+        config::default_consensus_dev_key,
+        Config,
+        DbType,
+        VMConfig,
+    },
 };
-use fuel_core_chain_config::ChainConfig;
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
     fuel_tx::Address,
