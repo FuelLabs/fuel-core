@@ -23,6 +23,7 @@ tracing = { version = "0.1" }
 [dev-dependencies]
 fuel-core-producer = { path = "", features = ["test-helpers"] }
 fuel-core-txpool = { path = "../txpool", features = ["test-helpers"] }
+fuel-core-types = { path = "../../types", features = ["test-helpers"] }
 itertools = "0.10"
 rand = "0.8"
 rstest = "0.15"
