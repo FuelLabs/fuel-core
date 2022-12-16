@@ -115,7 +115,7 @@ impl AsMut<MockDb> for MockDb {
 
 impl AsRef<MockDb> for MockDb {
     fn as_ref(&self) -> &MockDb {
-        &self
+        self
     }
 }
 

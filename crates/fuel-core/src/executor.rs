@@ -1344,7 +1344,7 @@ impl Executor {
                         TransactionStatus::Success {
                             block_id: finalized_block_id,
                             time: *time,
-                            result: result.clone(),
+                            result: *result,
                         },
                     )?;
                 }
@@ -1360,7 +1360,7 @@ impl Executor {
                         TransactionStatus::Failed {
                             block_id: finalized_block_id,
                             time: *time,
-                            result: result.clone(),
+                            result: *result,
                             reason: reason.clone(),
                         },
                     )?;
