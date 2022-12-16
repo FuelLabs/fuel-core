@@ -137,7 +137,7 @@ async fn block_producer() -> Result<()> {
     txpool_builder
         .config(tx_pool_config)
         .db(Box::new(txpool_db))
-        .incoming_tx_receiver(incoming_tx_receiver)
+        .p2p_port(incoming_tx_receiver)
         .import_block_event(import_block_events_rx)
         .tx_status_sender(tx_status_sender)
         .txpool_sender(TxPoolSender::new(txpool_sender))

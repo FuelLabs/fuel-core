@@ -83,7 +83,7 @@ pub struct GossipData<T> {
 }
 
 pub type ConsensusGossipData = GossipData<ConsensusBroadcast>;
-pub type TransactionGossipData = GossipData<TransactionBroadcast>;
+pub type TransactionGossipData = GossipData<Transaction>;
 pub type BlockGossipData = GossipData<BlockBroadcast>;
 
 impl<T> GossipData<T> {

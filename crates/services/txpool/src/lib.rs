@@ -1,5 +1,6 @@
 pub mod config;
 mod containers;
+pub mod ports;
 pub mod service;
 pub mod txpool;
 pub mod types;

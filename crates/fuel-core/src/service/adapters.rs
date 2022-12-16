@@ -3,7 +3,10 @@ use crate::{
     executor::Executor,
     service::Config,
 };
-use fuel_core_interfaces::relayer::RelayerDb;
+use fuel_core_interfaces::{
+    p2p::TransactionGossipData,
+    relayer::RelayerDb,
+};
 use fuel_core_types::{
     fuel_tx::{
         Receipt,
@@ -30,6 +33,9 @@ use fuel_core_types::{
     },
 };
 use std::sync::Arc;
+
+#[cfg(feature = "p2p")]
+use fuel_core_p2p::orchestrator::Service as P2pService;
 
 pub struct ExecutorAdapter {
     pub database: Database,
@@ -113,5 +119,34 @@ impl fuel_core_poa::ports::BlockProducer<Database> for PoACoordinatorAdapter {
         self.block_producer
             .dry_run(transaction, height, utxo_validation)
             .await
+    }
+}
+
+#[cfg(feature = "p2p")]
+struct P2pAdapter {
+    p2p_service: P2pService,
+}
+
+#[async_trait::async_trait]
+impl fuel_core_txpool::ports::PeerToPeer for P2pAdapter {
+    type GossipedTransaction = TransactionGossipData;
+
+    async fn broadcast_transaction(
+        &self,
+        transaction: Arc<Transaction>,
+    ) -> anyhow::Result<()> {
+        self.p2p_service.broadcast_transaction(transaction).await
+    }
+
+    async fn next_gossiped_transaction(&self) -> Self::GossipedTransaction {
+        todo!()
+    }
+
+    fn notify_gossip_transaction_validity(
+        &self,
+        message: &Self::GossipedTransaction,
+        validity: fuel_core_txpool::ports::GossipValidity,
+    ) {
+        todo!()
     }
 }
