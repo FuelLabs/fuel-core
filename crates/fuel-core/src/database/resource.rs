@@ -6,6 +6,7 @@ use fuel_core_storage::{
         Messages,
     },
     Error as StorageError,
+    Result as StorageResult,
     StorageAsRef,
 };
 use fuel_core_types::{
@@ -101,8 +102,7 @@ impl<'a> AssetsQuery<'a> {
     //  https://github.com/FuelLabs/fuel-core/issues/588
     pub fn unspent_resources(
         &self,
-    ) -> impl Iterator<Item = Result<Resource<Cow<Coin>, Cow<Message>>, StorageError>> + '_
-    {
+    ) -> impl Iterator<Item = StorageResult<Resource<Cow<Coin>, Cow<Message>>>> + '_ {
         let coins_iter = self
             .database
             .owned_coins_ids(self.owner, None, None)
@@ -114,17 +114,16 @@ impl<'a> AssetsQuery<'a> {
                 }
             })
             .map(|res| {
-                res.map(|id| {
+                res.map_err(StorageError::from).and_then(|id| {
                     let coin = self
                         .database
                         .storage::<Coins>()
                         .get(&id)?
                         .ok_or(not_found!(Coins))?;
 
-                    Ok::<_, StorageError>(Resource::Coin { id, fields: coin })
+                    Ok(Resource::Coin { id, fields: coin })
                 })
             })
-            .map(|results| Ok(results??))
             .filter_ok(|coin| {
                 if let Resource::Coin { fields, .. } = coin {
                     let is_unspent = fields.status == CoinStatus::Unspent;
@@ -148,20 +147,19 @@ impl<'a> AssetsQuery<'a> {
                 }
             })
             .map(|res| {
-                res.map(|id| {
+                res.map_err(StorageError::from).and_then(|id| {
                     let message = self
                         .database
                         .storage::<Messages>()
                         .get(&id)?
                         .ok_or(not_found!(Messages))?;
 
-                    Ok::<_, StorageError>(Resource::Message {
+                    Ok(Resource::Message {
                         id,
                         fields: message,
                     })
                 })
             })
-            .map(|results| Ok(results??))
             .filter_ok(|message| {
                 if let Resource::Message { fields, .. } = message {
                     fields.fuel_block_spend.is_none()
@@ -209,8 +207,7 @@ impl<'a> AssetQuery<'a> {
     /// for the `asset_id`.
     pub fn unspent_resources(
         &self,
-    ) -> impl Iterator<Item = Result<Resource<Cow<Coin>, Cow<Message>>, StorageError>> + '_
-    {
+    ) -> impl Iterator<Item = StorageResult<Resource<Cow<Coin>, Cow<Message>>>> + '_ {
         self.query.unspent_resources()
     }
 }

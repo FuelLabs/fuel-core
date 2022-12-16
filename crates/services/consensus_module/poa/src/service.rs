@@ -420,7 +420,7 @@ mod test {
     };
     use fuel_core_storage::{
         transactional::Transactional,
-        Error as StorageError,
+        Result as StorageResult,
     };
     use fuel_core_types::{
         blockchain::primitives::BlockId,
@@ -473,7 +473,7 @@ mod test {
         }
 
         impl Transactional<MockDatabase> for Database {
-            fn commit(&mut self) -> Result<(), StorageError>;
+            fn commit(&mut self) -> StorageResult<()>;
         }
 
         impl AsRef<MockDatabase> for Database {

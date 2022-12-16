@@ -9,7 +9,7 @@ use fuel_core_storage::{
         StorageTransaction,
         Transactional,
     },
-    Error as StorageError,
+    Result as StorageResult,
 };
 use fuel_core_types::{
     blockchain::{
@@ -56,7 +56,7 @@ pub struct MockRelayer {
 #[async_trait::async_trait]
 impl Relayer for MockRelayer {
     /// Get the best finalized height from the DA layer
-    async fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight, StorageError> {
+    async fn get_best_finalized_da_height(&self) -> StorageResult<DaBlockHeight> {
         Ok(self.best_finalized_height)
     }
 }
@@ -84,7 +84,7 @@ struct DatabaseTransaction {
 }
 
 impl Transactional<MockDb> for DatabaseTransaction {
-    fn commit(&mut self) -> Result<(), StorageError> {
+    fn commit(&mut self) -> StorageResult<()> {
         Ok(())
     }
 }
@@ -102,7 +102,7 @@ impl AsRef<MockDb> for DatabaseTransaction {
 }
 
 impl Transactional<MockDb> for MockDb {
-    fn commit(&mut self) -> Result<(), StorageError> {
+    fn commit(&mut self) -> StorageResult<()> {
         Ok(())
     }
 }
@@ -201,13 +201,13 @@ impl BlockProducerDatabase for MockDb {
     fn get_block(
         &self,
         fuel_height: BlockHeight,
-    ) -> Result<Option<Cow<CompressedBlock>>, StorageError> {
+    ) -> StorageResult<Option<Cow<CompressedBlock>>> {
         let blocks = self.blocks.lock().unwrap();
 
         Ok(blocks.get(&fuel_height).cloned().map(Cow::Owned))
     }
 
-    fn current_block_height(&self) -> Result<BlockHeight, StorageError> {
+    fn current_block_height(&self) -> StorageResult<BlockHeight> {
         let blocks = self.blocks.lock().unwrap();
 
         Ok(blocks.keys().max().cloned().unwrap_or_default())

@@ -42,7 +42,7 @@ use fuel_core_storage::{
         SealedBlockConsensus,
         Transactions,
     },
-    Error as StorageError,
+    Result as StorageResult,
 };
 use fuel_core_types::{
     blockchain::{
@@ -77,6 +77,9 @@ pub enum Consensus {
     Genesis(Genesis),
     PoA(PoAConsensus),
 }
+
+type CoreGenesis = fuel_core_types::blockchain::consensus::Genesis;
+type CoreConsensus = fuel_core_types::blockchain::consensus::Consensus;
 
 #[derive(SimpleObject)]
 pub struct Genesis {
@@ -289,7 +292,7 @@ fn blocks_query<T>(
     db: &Database,
     start: Option<usize>,
     direction: IterDirection,
-) -> Result<impl Iterator<Item = Result<(usize, T), StorageError>> + '_, StorageError>
+) -> StorageResult<impl Iterator<Item = StorageResult<(usize, T)>> + '_>
 where
     T: async_graphql::OutputType,
     T: From<CompressedBlock>,
@@ -458,8 +461,8 @@ impl From<CompressedBlock> for Header {
     }
 }
 
-impl From<fuel_core_types::blockchain::consensus::Genesis> for Genesis {
-    fn from(genesis: fuel_core_types::blockchain::consensus::Genesis) -> Self {
+impl From<CoreGenesis> for Genesis {
+    fn from(genesis: CoreGenesis) -> Self {
         Genesis {
             chain_config_hash: genesis.chain_config_hash.into(),
             coins_root: genesis.coins_root.into(),
@@ -469,17 +472,13 @@ impl From<fuel_core_types::blockchain::consensus::Genesis> for Genesis {
     }
 }
 
-impl From<fuel_core_types::blockchain::consensus::Consensus> for Consensus {
-    fn from(consensus: fuel_core_types::blockchain::consensus::Consensus) -> Self {
+impl From<CoreConsensus> for Consensus {
+    fn from(consensus: CoreConsensus) -> Self {
         match consensus {
-            fuel_core_types::blockchain::consensus::Consensus::Genesis(genesis) => {
-                Consensus::Genesis(genesis.into())
-            }
-            fuel_core_types::blockchain::consensus::Consensus::PoA(poa) => {
-                Consensus::PoA(PoAConsensus {
-                    signature: poa.signature.into(),
-                })
-            }
+            CoreConsensus::Genesis(genesis) => Consensus::Genesis(genesis.into()),
+            CoreConsensus::PoA(poa) => Consensus::PoA(PoAConsensus {
+                signature: poa.signature.into(),
+            }),
         }
     }
 }

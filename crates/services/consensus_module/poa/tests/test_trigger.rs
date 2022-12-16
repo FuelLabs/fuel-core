@@ -28,7 +28,7 @@ use fuel_core_storage::{
         StorageTransaction,
         Transactional,
     },
-    Error as StorageError,
+    Result as StorageResult,
 };
 use fuel_core_types::{
     blockchain::{
@@ -96,7 +96,7 @@ impl MockBlockProducer {
 }
 
 impl Transactional<MockDatabase> for MockDatabase {
-    fn commit(&mut self) -> Result<(), StorageError> {
+    fn commit(&mut self) -> StorageResult<()> {
         Ok(())
     }
 }

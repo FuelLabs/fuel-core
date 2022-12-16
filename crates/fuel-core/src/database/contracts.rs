@@ -18,6 +18,7 @@ use fuel_core_storage::{
         ContractsRawCode,
     },
     Error as StorageError,
+    Result as StorageResult,
     StorageAsRef,
     StorageInspect,
     StorageMutate,
@@ -56,7 +57,7 @@ impl StorageMutate<ContractsRawCode> for Database {
         &mut self,
         key: &ContractId,
         value: &[u8],
-    ) -> Result<Option<Contract>, StorageError> {
+    ) -> Result<Option<Contract>, Self::Error> {
         Database::insert(self, key.as_ref(), Column::ContractsRawCode, value)
             .map_err(Into::into)
     }
@@ -117,12 +118,10 @@ impl Database {
         })
     }
 
-    pub fn get_contract_config(
-        &self,
-    ) -> Result<Option<Vec<ContractConfig>>, StorageError> {
+    pub fn get_contract_config(&self) -> StorageResult<Option<Vec<ContractConfig>>> {
         let configs = self
             .iter_all::<Vec<u8>, Word>(Column::ContractsRawCode, None, None, None)
-            .map(|raw_contract_id| -> Result<ContractConfig, StorageError> {
+            .map(|raw_contract_id| -> StorageResult<ContractConfig> {
                 let contract_id = ContractId::new(
                     raw_contract_id.unwrap().0[..32]
                         .try_into()
@@ -180,7 +179,7 @@ impl Database {
                         Ok((asset_id, safe_res.1))
                     })
                     .filter(|val| val.is_ok())
-                    .collect::<Result<Vec<(AssetId, u64)>, StorageError>>()?,
+                    .collect::<StorageResult<Vec<(AssetId, u64)>>>()?,
                 );
 
                 Ok(ContractConfig {
@@ -190,7 +189,7 @@ impl Database {
                     balances,
                 })
             })
-            .collect::<Result<Vec<ContractConfig>, StorageError>>()?;
+            .collect::<StorageResult<Vec<ContractConfig>>>()?;
 
         Ok(Some(configs))
     }

@@ -49,11 +49,11 @@ fn utxo_id_to_bytes(utxo_id: &UtxoId) -> Vec<u8> {
 impl StorageInspect<Coins> for Database {
     type Error = StorageError;
 
-    fn get(&self, key: &UtxoId) -> Result<Option<Cow<Coin>>, StorageError> {
+    fn get(&self, key: &UtxoId) -> Result<Option<Cow<Coin>>, Self::Error> {
         Database::get(self, &utxo_id_to_bytes(key), Column::Coins).map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &UtxoId) -> Result<bool, StorageError> {
+    fn contains_key(&self, key: &UtxoId) -> Result<bool, Self::Error> {
         Database::exists(self, &utxo_id_to_bytes(key), Column::Coins).map_err(Into::into)
     }
 }
@@ -63,7 +63,7 @@ impl StorageMutate<Coins> for Database {
         &mut self,
         key: &UtxoId,
         value: &Coin,
-    ) -> Result<Option<Coin>, StorageError> {
+    ) -> Result<Option<Coin>, Self::Error> {
         let coin_by_owner: Vec<u8> = owner_coin_id_key(&value.owner, key);
         // insert primary record
         let insert = Database::insert(self, utxo_id_to_bytes(key), Column::Coins, value)?;
@@ -73,7 +73,7 @@ impl StorageMutate<Coins> for Database {
         Ok(insert)
     }
 
-    fn remove(&mut self, key: &UtxoId) -> Result<Option<Coin>, StorageError> {
+    fn remove(&mut self, key: &UtxoId) -> Result<Option<Coin>, Self::Error> {
         let coin: Option<Coin> =
             Database::remove(self, &utxo_id_to_bytes(key), Column::Coins)?;
 

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use fuel_core_storage::{
     transactional::StorageTransaction,
-    Error as StorageError,
+    Result as StorageResult,
 };
 use fuel_core_types::{
     blockchain::{
@@ -31,10 +31,10 @@ pub trait BlockProducerDatabase: Send + Sync {
     fn get_block(
         &self,
         fuel_height: BlockHeight,
-    ) -> Result<Option<Cow<CompressedBlock>>, StorageError>;
+    ) -> StorageResult<Option<Cow<CompressedBlock>>>;
 
     /// Fetch the current block height.
-    fn current_block_height(&self) -> Result<BlockHeight, StorageError>;
+    fn current_block_height(&self) -> StorageResult<BlockHeight>;
 }
 
 #[async_trait]
@@ -51,7 +51,7 @@ pub trait TxPool: Sync + Send {
 #[async_trait::async_trait]
 pub trait Relayer: Sync + Send {
     /// Get the best finalized height from the DA layer
-    async fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight, StorageError>;
+    async fn get_best_finalized_da_height(&self) -> StorageResult<DaBlockHeight>;
 }
 
 pub trait Executor<Database>: Sync + Send {

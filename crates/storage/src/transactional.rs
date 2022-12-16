@@ -1,11 +1,11 @@
 //! The primitives to work with storage in transactional mode.
 
-use crate::Error as StorageError;
+use crate::Result as StorageResult;
 
 /// The type is transactional and holds uncommitted state.
 pub trait Transactional<Storage>: AsRef<Storage> + AsMut<Storage> + Send + Sync {
     /// Commits the pending state changes into the storage.
-    fn commit(&mut self) -> Result<(), StorageError>;
+    fn commit(&mut self) -> StorageResult<()>;
 }
 
 /// The storage transaction for the `Storage` type.
@@ -23,7 +23,7 @@ impl<Storage> StorageTransaction<Storage> {
 }
 
 impl<Storage> Transactional<Storage> for StorageTransaction<Storage> {
-    fn commit(&mut self) -> Result<(), StorageError> {
+    fn commit(&mut self) -> StorageResult<()> {
         self.transaction.commit()
     }
 }
@@ -50,7 +50,7 @@ impl<Storage> AsMut<Storage> for StorageTransaction<Storage> {
 
 impl<Storage> StorageTransaction<Storage> {
     /// Committing of the state consumes `Self`.
-    pub fn commit(mut self) -> Result<(), StorageError> {
+    pub fn commit(mut self) -> StorageResult<()> {
         self.transaction.commit()
     }
 }

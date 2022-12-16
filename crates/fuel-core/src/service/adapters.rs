@@ -17,7 +17,7 @@ use fuel_core_interfaces::{
 use fuel_core_relayer::RelayerSynced;
 use fuel_core_storage::{
     transactional::StorageTransaction,
-    Error as StorageError,
+    Result as StorageResult,
 };
 use fuel_core_types::{
     blockchain::{
@@ -73,7 +73,7 @@ pub struct MaybeRelayerAdapter {
 impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
     async fn get_best_finalized_da_height(
         &self,
-    ) -> Result<primitives::DaBlockHeight, StorageError> {
+    ) -> StorageResult<primitives::DaBlockHeight> {
         #[cfg(feature = "relayer")]
         {
             if let Some(sync) = self.relayer_synced.as_ref() {

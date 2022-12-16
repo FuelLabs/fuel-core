@@ -4,7 +4,7 @@ use crate::{
 };
 use fuel_core_storage::{
     transactional::Transactional,
-    Error as StorageError,
+    Result as StorageResult,
 };
 use std::{
     fmt::Debug,
@@ -56,7 +56,7 @@ impl Default for DatabaseTransaction {
 }
 
 impl Transactional<Database> for DatabaseTransaction {
-    fn commit(&mut self) -> Result<(), StorageError> {
+    fn commit(&mut self) -> StorageResult<()> {
         // TODO: should commit be fallible if this api is meant to be atomic?
         Ok(self.changes.commit()?)
     }

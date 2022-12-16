@@ -14,6 +14,7 @@ use fuel_core_storage::{
         Transactions,
     },
     Error as StorageError,
+    Result as StorageResult,
     StorageAsRef,
     StorageInspect,
     StorageMutate,
@@ -97,9 +98,7 @@ impl Database {
     }
 
     /// Get the current block at the head of the chain.
-    pub fn get_current_block(
-        &self,
-    ) -> Result<Option<Cow<CompressedBlock>>, StorageError> {
+    pub fn get_current_block(&self) -> StorageResult<Option<Cow<CompressedBlock>>> {
         let block_entry = self.latest_block()?;
         match block_entry {
             Some((_, id)) => Ok(StorageAsRef::storage::<FuelBlocks>(self).get(&id)?),
@@ -107,7 +106,7 @@ impl Database {
         }
     }
 
-    pub fn block_time(&self, height: u32) -> Result<Tai64, StorageError> {
+    pub fn block_time(&self, height: u32) -> StorageResult<Tai64> {
         let id = self.get_block_id(height.into())?.unwrap_or_default();
         let block = self
             .storage::<FuelBlocks>()
@@ -116,10 +115,7 @@ impl Database {
         Ok(block.header().time().to_owned())
     }
 
-    pub fn get_block_id(
-        &self,
-        height: BlockHeight,
-    ) -> Result<Option<Bytes32>, StorageError> {
+    pub fn get_block_id(&self, height: BlockHeight) -> StorageResult<Option<Bytes32>> {
         Database::get(self, &height.to_bytes()[..], Column::FuelBlockIds)
             .map_err(Into::into)
     }
@@ -173,7 +169,7 @@ impl Database {
     pub(crate) fn get_full_block(
         &self,
         block_id: &Bytes32,
-    ) -> Result<Option<Block>, StorageError> {
+    ) -> StorageResult<Option<Block>> {
         let db_block = self.storage::<FuelBlocks>().get(block_id)?;
         if let Some(block) = db_block {
             // fetch all the transactions

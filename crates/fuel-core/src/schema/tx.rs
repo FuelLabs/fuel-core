@@ -43,6 +43,7 @@ use fuel_core_storage::{
         Transactions,
     },
     Error as StorageError,
+    Result as StorageResult,
 };
 use fuel_core_txpool::Service as TxPoolService;
 use futures::{
@@ -153,19 +154,18 @@ impl TxQuery {
                         }
                         false
                     });
-                let all_txs =
-                    all_txs.map(|result: Result<SortedTxCursor, StorageError>| {
-                        result.and_then(|sorted| {
-                            let tx = db
-                                .storage::<Transactions>()
-                                .get(&sorted.tx_id.0)
-                                .transpose()
-                                .ok_or(not_found!(Transactions))??
-                                .into_owned();
+                let all_txs = all_txs.map(|result: StorageResult<SortedTxCursor>| {
+                    result.and_then(|sorted| {
+                        let tx = db
+                            .storage::<Transactions>()
+                            .get(&sorted.tx_id.0)
+                            .transpose()
+                            .ok_or(not_found!(Transactions))??
+                            .into_owned();
 
-                            Ok((sorted, tx.into()))
-                        })
-                    });
+                        Ok((sorted, tx.into()))
+                    })
+                });
 
                 Ok(all_txs)
             },

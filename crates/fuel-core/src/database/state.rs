@@ -32,13 +32,13 @@ impl StorageInspect<ContractsState<'_>> for Database {
     fn get(
         &self,
         key: &(&ContractId, &Bytes32),
-    ) -> Result<Option<Cow<Bytes32>>, StorageError> {
+    ) -> Result<Option<Cow<Bytes32>>, Self::Error> {
         let key = MultiKey::new(key);
         self.get(key.as_ref(), Column::ContractsState)
             .map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &(&ContractId, &Bytes32)) -> Result<bool, StorageError> {
+    fn contains_key(&self, key: &(&ContractId, &Bytes32)) -> Result<bool, Self::Error> {
         let key = MultiKey::new(key);
         self.exists(key.as_ref(), Column::ContractsState)
             .map_err(Into::into)
@@ -50,7 +50,7 @@ impl StorageMutate<ContractsState<'_>> for Database {
         &mut self,
         key: &(&ContractId, &Bytes32),
         value: &Bytes32,
-    ) -> Result<Option<Bytes32>, StorageError> {
+    ) -> Result<Option<Bytes32>, Self::Error> {
         let key = MultiKey::new(key);
         Database::insert(self, key.as_ref(), Column::ContractsState, *value)
             .map_err(Into::into)
@@ -59,14 +59,14 @@ impl StorageMutate<ContractsState<'_>> for Database {
     fn remove(
         &mut self,
         key: &(&ContractId, &Bytes32),
-    ) -> Result<Option<Bytes32>, StorageError> {
+    ) -> Result<Option<Bytes32>, Self::Error> {
         let key = MultiKey::new(key);
         Database::remove(self, key.as_ref(), Column::ContractsState).map_err(Into::into)
     }
 }
 
 impl MerkleRootStorage<ContractId, ContractsState<'_>> for Database {
-    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, StorageError> {
+    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Self::Error> {
         let items: Vec<_> = Database::iter_all::<Vec<u8>, Bytes32>(
             self,
             Column::ContractsState,

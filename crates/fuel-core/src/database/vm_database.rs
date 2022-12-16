@@ -91,11 +91,11 @@ where
 {
     type Error = StorageError;
 
-    fn get(&self, key: &M::Key) -> Result<Option<Cow<M::GetValue>>, StorageError> {
+    fn get(&self, key: &M::Key) -> Result<Option<Cow<M::GetValue>>, Self::Error> {
         StorageInspect::<M>::get(&self.database, key)
     }
 
-    fn contains_key(&self, key: &M::Key) -> Result<bool, StorageError> {
+    fn contains_key(&self, key: &M::Key) -> Result<bool, Self::Error> {
         StorageInspect::<M>::contains_key(&self.database, key)
     }
 }

@@ -28,6 +28,7 @@ use fuel_core_storage::{
         SealedBlockConsensus,
     },
     Error as StorageError,
+    Result as StorageResult,
     StorageAsMut,
     StorageAsRef,
 };
@@ -60,7 +61,6 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 type DatabaseError = Error;
 type DatabaseResult<T> = Result<T>;
-type StorageResult<T> = core::result::Result<T, StorageError>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 
