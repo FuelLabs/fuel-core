@@ -5,7 +5,7 @@ use fuel_core::service::{
     FuelService,
 };
 use fuel_core_client::client::FuelClient;
-use fuel_core_types::fuel_vm::*;
+use fuel_core_types::{fuel_types::ContractId, fuel_tx::Transaction};
 
 /// Tests that debugger doesn't produce any errors with a running local node,
 /// and also verifies that breakpoints are working as they should
