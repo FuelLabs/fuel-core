@@ -11,17 +11,12 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_interfaces::common::{
-    fuel_types::{
-        Address,
-        Bytes32,
-        Salt,
+use fuel_core_types::{
+    blockchain::primitives::{
+        BlockHeight,
+        DaBlockHeight,
     },
-    fuel_vm::prelude::AssetId,
-};
-use fuel_core_types::blockchain::primitives::{
-    BlockHeight,
-    DaBlockHeight,
+    fuel_types::*,
 };
 use rand::{
     rngs::StdRng,

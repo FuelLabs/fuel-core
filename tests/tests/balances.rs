@@ -17,12 +17,7 @@ use fuel_core_client::client::{
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    fuel_tx::{
-        AssetId,
-        Input,
-        Output,
-        TransactionBuilder,
-    },
+    fuel_tx::*,
     fuel_types::Address,
 };
 

@@ -4,11 +4,7 @@ use fuel_core::service::{
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_types::{
-    fuel_asm::{
-        Opcode,
-        RegisterId,
-        Word,
-    },
+    fuel_asm::*,
     fuel_vm::consts::*,
 };
 use std::convert::TryInto;

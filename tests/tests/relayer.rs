@@ -31,18 +31,11 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 use fuel_core_types::{
-    fuel_asm::Opcode,
-    fuel_crypto::SecretKey,
+    fuel_asm::*,
+    fuel_crypto::*,
     fuel_tx::{
         field::Inputs,
-        Input,
-        Output,
-        TransactionBuilder,
-    },
-    fuel_types::{
-        Address,
-        AssetId,
-        MessageId,
+        *,
     },
 };
 use hyper::{

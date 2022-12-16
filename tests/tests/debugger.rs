@@ -5,7 +5,7 @@ use fuel_core::service::{
     FuelService,
 };
 use fuel_core_client::client::FuelClient;
-use fuel_core_interfaces::common::fuel_vm::prelude::*;
+use fuel_core_types::fuel_vm::*;
 
 /// Tests that debugger doesn't produce any errors with a running local node,
 /// and also verifies that breakpoints are working as they should

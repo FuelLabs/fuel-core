@@ -28,8 +28,7 @@ use fuel_core_types::{
         block::CompressedBlock,
         consensus::Consensus,
     },
-    fuel_tx,
-    fuel_tx::UniqueIdentifier,
+    fuel_tx::*,
     fuel_types::Bytes32,
     secrecy::ExposeSecret,
     tai64::Tai64,
@@ -76,7 +75,7 @@ async fn get_genesis_block() {
         .unwrap();
 
     let client = FuelClient::from(srv.bound_address);
-    let tx = fuel_tx::Transaction::default();
+    let tx = Transaction::default();
     client.submit_and_await_commit(&tx).await.unwrap();
 
     let block = client.block_by_height(0).await.unwrap().unwrap();
@@ -96,7 +95,7 @@ async fn produce_block() {
 
     let client = FuelClient::from(srv.bound_address);
 
-    let tx = fuel_tx::Transaction::default();
+    let tx = Transaction::default();
     client.submit_and_await_commit(&tx).await.unwrap();
 
     let transaction_response = client
@@ -174,7 +173,7 @@ async fn produce_block_negative() {
         new_height.err().unwrap().to_string()
     );
 
-    let tx = fuel_tx::Transaction::default();
+    let tx = Transaction::default();
     client.submit_and_await_commit(&tx).await.unwrap();
 
     let transaction_response = client

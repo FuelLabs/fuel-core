@@ -12,10 +12,7 @@ use fuel_core_client::client::{
     PaginationRequest,
 };
 use fuel_core_types::{
-    fuel_asm::{
-        Immediate18,
-        Opcode,
-    },
+    fuel_asm::*,
     fuel_crypto::SecretKey,
     fuel_tx::TransactionBuilder,
     secrecy::Secret,

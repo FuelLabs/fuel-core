@@ -19,15 +19,8 @@ use fuel_core_types::{
         Coin,
         CoinStatus,
     },
-    fuel_asm::Word,
-    fuel_tx::{
-        AssetId,
-        UtxoId,
-    },
-    fuel_types::{
-        Address,
-        Bytes32,
-    },
+    fuel_asm::*,
+    fuel_tx::*,
 };
 use rstest::rstest;
 
