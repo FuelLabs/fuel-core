@@ -11,16 +11,19 @@ use crate::{
     Config,
     Producer,
 };
-use fuel_core_types::blockchain::{
-    block::{
-        CompressedBlock,
-        PartialFuelBlock,
+use fuel_core_types::{
+    blockchain::{
+        block::{
+            CompressedBlock,
+            PartialFuelBlock,
+        },
+        header::{
+            ApplicationHeader,
+            ConsensusHeader,
+            PartialBlockHeader,
+        },
     },
-    header::{
-        ApplicationHeader,
-        ConsensusHeader,
-        PartialBlockHeader,
-    },
+    services::executor::Error as ExecutorError,
 };
 use rand::{
     rngs::StdRng,
@@ -179,9 +182,7 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
 async fn production_fails_on_execution_error() {
     let ctx = TestContext {
         executor: Arc::new(FailingMockExecutor(Mutex::new(Some(
-            fuel_core_types::blockchain::block::Error::TransactionIdCollision(
-                Default::default(),
-            ),
+            ExecutorError::TransactionIdCollision(Default::default()),
         )))),
         ..TestContext::default()
     };
@@ -195,8 +196,8 @@ async fn production_fails_on_execution_error() {
 
     assert!(
         matches!(
-            err.downcast_ref::<fuel_core_types::blockchain::block::Error>(),
-            Some(fuel_core_types::blockchain::block::Error::TransactionIdCollision { .. })
+            err.downcast_ref::<ExecutorError>(),
+            Some(ExecutorError::TransactionIdCollision { .. })
         ),
         "unexpected err {:?}",
         err

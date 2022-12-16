@@ -1,15 +1,11 @@
-use fuel_core_interfaces::{
-    db::{
-        Error,
-        KvStoreError,
-    },
-    txpool::TxPoolDb,
-};
+use fuel_core_interfaces::txpool::TxPoolDb;
 use fuel_core_storage::{
     tables::{
         Coins,
+        ContractsRawCode,
         Messages,
     },
+    Error as StorageError,
     StorageInspect,
     StorageMutate,
 };
@@ -25,7 +21,6 @@ use fuel_core_types::{
         MessageId,
         UtxoId,
     },
-    fuel_vm::ContractsRawCode,
 };
 use std::{
     borrow::Cow,
@@ -51,7 +46,7 @@ pub struct MockDb {
 // TODO: Generate storage implementation with macro.
 
 impl StorageInspect<Coins> for MockDb {
-    type Error = KvStoreError;
+    type Error = StorageError;
 
     fn get(&self, key: &UtxoId) -> Result<Option<Cow<Coin>>, Self::Error> {
         Ok(self
@@ -83,7 +78,7 @@ impl StorageMutate<Coins> for MockDb {
 }
 
 impl StorageInspect<ContractsRawCode> for MockDb {
-    type Error = Error;
+    type Error = StorageError;
 
     fn get(&self, key: &ContractId) -> Result<Option<Cow<Contract>>, Self::Error> {
         Ok(self
@@ -120,7 +115,7 @@ impl StorageMutate<ContractsRawCode> for MockDb {
 }
 
 impl StorageInspect<Messages> for MockDb {
-    type Error = KvStoreError;
+    type Error = StorageError;
 
     fn get(&self, key: &MessageId) -> Result<Option<Cow<Message>>, Self::Error> {
         Ok(self
@@ -157,7 +152,7 @@ impl StorageMutate<Messages> for MockDb {
 }
 
 impl TxPoolDb for MockDb {
-    fn current_block_height(&self) -> Result<BlockHeight, KvStoreError> {
+    fn current_block_height(&self) -> Result<BlockHeight, StorageError> {
         Ok(Default::default())
     }
 }

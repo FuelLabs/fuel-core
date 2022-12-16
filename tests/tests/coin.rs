@@ -1,9 +1,5 @@
 use fuel_core::{
     database::Database,
-    model::{
-        Coin,
-        CoinStatus,
-    },
     service::{
         Config,
         FuelService,
@@ -14,20 +10,22 @@ use fuel_core_client::client::{
     PageDirection,
     PaginationRequest,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::StorageAsMut,
-        fuel_tx::{
-            AssetId,
-            UtxoId,
-        },
-        fuel_vm::prelude::{
-            Address,
-            Bytes32,
-            Word,
-        },
+use fuel_core_interfaces::common::{
+    fuel_storage::StorageAsMut,
+    fuel_tx::{
+        AssetId,
+        UtxoId,
     },
-    db::Coins,
+    fuel_vm::prelude::{
+        Address,
+        Bytes32,
+        Word,
+    },
+};
+use fuel_core_storage::tables::Coins;
+use fuel_core_types::entities::coin::{
+    Coin,
+    CoinStatus,
 };
 use rstest::rstest;
 
@@ -59,14 +57,14 @@ async fn first_5_coins(
     let owner = Address::default();
 
     // setup test data in the node
-    let coins: Vec<(UtxoId, Coin)> = (1..10usize)
+    let coins: Vec<(UtxoId, fuel_core_types::entities::coin::Coin)> = (1..10usize)
         .map(|i| {
-            let coin = Coin {
+            let coin = fuel_core_types::entities::coin::Coin {
                 owner,
                 amount: i as Word,
                 asset_id: Default::default(),
                 maturity: Default::default(),
-                status: CoinStatus::Unspent,
+                status: fuel_core_types::entities::coin::CoinStatus::Unspent,
                 block_created: Default::default(),
             };
 
@@ -77,7 +75,9 @@ async fn first_5_coins(
 
     let mut db = Database::default();
     for (utxo_id, coin) in coins {
-        db.storage::<Coins>().insert(&utxo_id, &coin).unwrap();
+        db.storage::<fuel_core_storage::tables::Coins>()
+            .insert(&utxo_id, &coin)
+            .unwrap();
     }
 
     // setup server & client

@@ -38,7 +38,7 @@ use std::{
 };
 
 impl StorageInspect<FuelBlocks> for Database {
-    type Error = KvStoreError;
+    type Error = StorageError;
 
     fn get(&self, key: &Bytes32) -> Result<Option<Cow<CompressedBlock>>, Self::Error> {
         Database::get(self, key.as_ref(), Column::FuelBlocks).map_err(Into::into)
@@ -96,12 +96,12 @@ impl Database {
     }
 
     /// Get the current block at the head of the chain.
-    pub fn get_current_block(&self) -> Result<Option<Cow<CompressedBlock>>, Error> {
+    pub fn get_current_block(
+        &self,
+    ) -> Result<Option<Cow<CompressedBlock>>, DatabaseError> {
         let block_entry = self.latest_block()?;
         match block_entry {
-            Some((_, id)) => StorageAsRef::storage::<FuelBlocks>(self)
-                .get(&id)
-                .map_err(Error::from),
+            Some((_, id)) => Ok(StorageAsRef::storage::<FuelBlocks>(self).get(&id)?),
             None => Ok(None),
         }
     }
@@ -127,7 +127,7 @@ impl Database {
         &self,
         start: Option<BlockHeight>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = Result<(BlockHeight, Bytes32), Error>> + '_ {
+    ) -> impl Iterator<Item = Result<(BlockHeight, Bytes32), DatabaseError>> + '_ {
         let start = start.map(|b| b.to_bytes().to_vec());
         self.iter_all::<Vec<u8>, Bytes32>(Column::FuelBlockIds, None, start, direction)
             .map(|res| {
@@ -141,7 +141,7 @@ impl Database {
             })
     }
 
-    pub fn genesis_block_ids(&self) -> Result<(BlockHeight, Bytes32), Error> {
+    pub fn genesis_block_ids(&self) -> Result<(BlockHeight, Bytes32), DatabaseError> {
         self.iter_all(
             Column::FuelBlockIds,
             None,
@@ -149,7 +149,7 @@ impl Database {
             Some(IterDirection::Forward),
         )
         .next()
-        .ok_or(Error::ChainUninitialized)?
+        .ok_or(DatabaseError::ChainUninitialized)?
         .map(|(height, id): (Vec<u8>, Bytes32)| {
             let bytes = <[u8; 4]>::try_from(height.as_slice())
                 .expect("all block heights are stored with the correct amount of bytes");
@@ -157,7 +157,7 @@ impl Database {
         })
     }
 
-    fn latest_block(&self) -> Result<Option<(Vec<u8>, Bytes32)>, Error> {
+    fn latest_block(&self) -> Result<Option<(Vec<u8>, Bytes32)>, DatabaseError> {
         self.iter_all(
             Column::FuelBlockIds,
             None,
@@ -172,7 +172,7 @@ impl Database {
     pub(crate) fn get_full_block(
         &self,
         block_id: &Bytes32,
-    ) -> Result<Option<Block>, Error> {
+    ) -> Result<Option<Block>, DatabaseError> {
         let db_block = self.storage::<FuelBlocks>().get(block_id)?;
         if let Some(block) = db_block {
             // fetch all the transactions
@@ -187,7 +187,7 @@ impl Database {
                         .map(Cow::into_owned)
                 })
                 .try_collect()?;
-            Ok(Some(block.uncompress(txs)))
+            Ok(Some(block.into_owned().uncompress(txs)))
         } else {
             Ok(None)
         }

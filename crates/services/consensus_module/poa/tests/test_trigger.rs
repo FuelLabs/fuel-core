@@ -12,30 +12,27 @@ use fuel_core_interfaces::{
             Secret,
         },
     },
-    db::{
-        Error,
-        Transactional,
-    },
     poa_coordinator::TransactionPool,
-    txpool::TxStatus,
 };
 use fuel_core_poa::{
     ports::{
         BlockDb,
         BlockProducer,
-        DBTransaction,
     },
     Config,
     Service,
     Trigger,
 };
-use fuel_core_storage::UncommittedResult;
+use fuel_core_storage::{
+    transactional::{
+        StorageTransaction,
+        Transactional,
+    },
+    Error as StorageError,
+};
 use fuel_core_types::{
     blockchain::{
-        block::{
-            ExecutionResult,
-            PartialFuelBlock,
-        },
+        block::PartialFuelBlock,
         consensus::Consensus,
         header::{
             ConsensusHeader,
@@ -47,9 +44,16 @@ use fuel_core_types::{
             SecretKeyWrapper,
         },
     },
-    services::txpool::{
-        ArcPoolTx,
-        PoolTransaction,
+    services::{
+        executor::{
+            ExecutionResult,
+            UncommittedResult,
+        },
+        txpool::{
+            ArcPoolTx,
+            PoolTransaction,
+            TxStatus,
+        },
     },
 };
 use parking_lot::RwLock;
@@ -91,28 +95,21 @@ impl MockBlockProducer {
     }
 }
 
-#[derive(Debug)]
-struct DatabaseTransaction {
-    database: MockDatabase,
-}
-
-impl Transactional for DatabaseTransaction {
-    fn commit(self) -> Result<(), Error> {
-        Ok(())
-    }
-
-    fn commit_box(self: Box<Self>) -> Result<(), Error> {
+impl Transactional<MockDatabase> for MockDatabase {
+    fn commit(&mut self) -> Result<(), StorageError> {
         Ok(())
     }
 }
 
-impl fuel_core_interfaces::db::DatabaseTransaction<MockDatabase> for DatabaseTransaction {
-    fn database(&self) -> &MockDatabase {
-        &self.database
+impl AsMut<MockDatabase> for MockDatabase {
+    fn as_mut(&mut self) -> &mut MockDatabase {
+        self
     }
+}
 
-    fn database_mut(&mut self) -> &mut MockDatabase {
-        &mut self.database
+impl AsRef<MockDatabase> for MockDatabase {
+    fn as_ref(&self) -> &MockDatabase {
+        self
     }
 }
 
@@ -122,7 +119,7 @@ impl BlockProducer<MockDatabase> for MockBlockProducer {
         &self,
         height: BlockHeight,
         max_gas: Word,
-    ) -> anyhow::Result<UncommittedResult<DBTransaction<MockDatabase>>> {
+    ) -> anyhow::Result<UncommittedResult<StorageTransaction<MockDatabase>>> {
         let includable_txs: Vec<_> = self.txpool_sender.includable().await;
 
         let transactions: Vec<Transaction> = select_transactions(includable_txs, max_gas)
@@ -150,9 +147,7 @@ impl BlockProducer<MockDatabase> for MockBlockProducer {
                 skipped_transactions: vec![],
                 tx_status: vec![],
             },
-            Box::new(DatabaseTransaction {
-                database: self.database.clone(),
-            }),
+            StorageTransaction::new(self.database.clone()),
         ))
     }
 

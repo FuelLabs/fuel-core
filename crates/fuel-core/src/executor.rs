@@ -50,38 +50,56 @@ use fuel_core_interfaces::common::{
     },
     state::StateTransition,
 };
-use fuel_core_producer::ports::{
-    DBTransaction,
-    Executor as ExecutorTrait,
-};
+use fuel_core_producer::ports::Executor as ExecutorTrait;
 use fuel_core_storage::{
     tables::{
         Coins,
+        ContractsLatestUtxo,
         FuelBlocks,
         Messages,
         Receipts,
         Transactions,
     },
-    UncommittedResult,
+    transactional::{
+        StorageTransaction,
+        Transactional,
+    },
 };
 use fuel_core_types::{
     blockchain::{
         block::{
-            Error,
-            ExecutionBlock,
-            ExecutionResult,
-            ExecutionType,
+            Block,
             PartialFuelBlock,
-            TransactionExecutionStatus, ExecutionKind, ExecutionTypes,
         },
         header::PartialBlockHeader,
         primitives::{
             BlockHeight,
+            BlockId,
             DaBlockHeight,
-        }, transaction::TransactionValidityError,
+        },
     },
-    entities::coin::{CoinStatus, Coin},
-    services::txpool::TransactionStatus,
+    entities::{
+        coin::{
+            Coin,
+            CoinStatus,
+        },
+        message::Message,
+    },
+    services::{
+        executor::{
+            Error,
+            ExecutionBlock,
+            ExecutionKind,
+            ExecutionResult,
+            ExecutionType,
+            ExecutionTypes,
+            TransactionExecutionResult,
+            TransactionExecutionStatus,
+            TransactionValidityError,
+            UncommittedResult,
+        },
+        txpool::TransactionStatus,
+    },
 };
 use fuel_storage::{
     StorageAsMut,
@@ -122,7 +140,7 @@ impl Executor {
         block: ExecutionBlock,
     ) -> Result<ExecutionResult, Error> {
         let (result, db_transaction) = self.execute_without_commit(block)?.into();
-        db_transaction.commit_box()?;
+        db_transaction.commit()?;
         Ok(result)
     }
 }
@@ -131,7 +149,7 @@ impl ExecutorTrait<Database> for Executor {
     fn execute_without_commit(
         &self,
         block: ExecutionBlock,
-    ) -> Result<UncommittedResult<DBTransaction<Database>>, Error> {
+    ) -> Result<UncommittedResult<StorageTransaction<Database>>, Error> {
         self.execute_inner(block, &self.database)
     }
 
@@ -173,7 +191,7 @@ impl ExecutorTrait<Database> for Executor {
             .iter()
             .map(|tx| {
                 let id = tx.id();
-                StorageInspect::<Receipts>::get(temporary_db.database(), &id)
+                StorageInspect::<Receipts>::get(temporary_db.as_ref(), &id)
                     .transpose()
                     .unwrap_or_else(|| Ok(Default::default()))
                     .map(|v| v.into_owned())
@@ -190,7 +208,7 @@ impl Executor {
         &self,
         block: ExecutionBlock,
         database: &Database,
-    ) -> Result<UncommittedResult<DBTransaction<Database>>, Error> {
+    ) -> Result<UncommittedResult<StorageTransaction<Database>>, Error> {
         // Compute the block id before execution if there is one.
         let pre_exec_block_id = block.id();
         // Get the transaction root before execution if there is one.
@@ -259,7 +277,7 @@ impl Executor {
         block_db_transaction
             .deref_mut()
             .storage::<FuelBlocks>()
-            .insert(&finalized_block_id.into(), &block.to_db_block())?;
+            .insert(&finalized_block_id.into(), &block.compress())?;
 
         // Get the complete fuel block.
         Ok(UncommittedResult::new(
@@ -268,7 +286,7 @@ impl Executor {
                 skipped_transactions,
                 tx_status,
             },
-            Box::new(block_db_transaction),
+            StorageTransaction::new(block_db_transaction),
         ))
     }
 
@@ -458,7 +476,7 @@ impl Executor {
             0,
             TransactionExecutionStatus {
                 id: coinbase_id,
-                status: TransactionStatus::Success {
+                result: TransactionExecutionResult::Success {
                     block_id: Default::default(),
                     time: *block.header.time(),
                     result: None,
@@ -669,16 +687,16 @@ impl Executor {
                 })
                 .unwrap_or_else(|| format!("{:?}", vm_result.state()));
 
-            TransactionStatus::Failed {
-                block_id: Default::default(),
+            TransactionExecutionResult::Failed {
+                block_id: None,
                 time: *header.time(),
                 reason,
                 result: Some(*vm_result.state()),
             }
         } else {
             // else tx was a success
-            TransactionStatus::Success {
-                block_id: Default::default(),
+            TransactionExecutionResult::Success {
+                block_id: None,
                 time: *header.time(),
                 result: Some(*vm_result.state()),
             }
@@ -690,9 +708,10 @@ impl Executor {
             .checked_add(tx_fee)
             .ok_or(Error::FeeOverflow)?;
         // queue up status for this tx to be stored once block id is finalized.
-        execution_data
-            .tx_status
-            .push(TransactionExecutionStatus { id: tx_id, status });
+        execution_data.tx_status.push(TransactionExecutionStatus {
+            id: tx_id,
+            result: status,
+        });
         execution_data
             .message_ids
             .extend(vm_result.receipts().iter().filter_map(|r| match r {
@@ -1312,20 +1331,41 @@ impl Executor {
         tx_status: &mut [TransactionExecutionStatus],
         db: &Database,
     ) -> Result<(), Error> {
-        for TransactionExecutionStatus { id, status } in tx_status {
-            match status {
-                TransactionStatus::Submitted { .. } => {}
-                TransactionStatus::Success { block_id, .. } => {
-                    *block_id = finalized_block_id;
+        for TransactionExecutionStatus { id, result } in tx_status {
+            match result {
+                TransactionExecutionResult::Success {
+                    block_id,
+                    time,
+                    result,
+                } => {
+                    *block_id = Some(finalized_block_id);
+                    db.update_tx_status(
+                        id,
+                        TransactionStatus::Success {
+                            block_id: finalized_block_id,
+                            time: *time,
+                            result: *result,
+                        },
+                    )?;
                 }
-                TransactionStatus::Failed { block_id, .. } => {
-                    *block_id = finalized_block_id;
-                }
-                TransactionStatus::SqueezedOut { .. } => {
-                    unreachable!("A squeezed out transaction will never make it to here")
+                TransactionExecutionResult::Failed {
+                    block_id,
+                    time,
+                    result,
+                    reason,
+                } => {
+                    *block_id = Some(finalized_block_id);
+                    db.update_tx_status(
+                        id,
+                        TransactionStatus::Failed {
+                            block_id: finalized_block_id,
+                            time: *time,
+                            result: *result,
+                            reason: reason.clone(),
+                        },
+                    )?;
                 }
             }
-            db.update_tx_status(id, status.clone())?;
         }
         Ok(())
     }
@@ -1360,59 +1400,52 @@ impl Fee for CreateCheckedMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::FuelBlock;
-    use fuel_core_interfaces::{
-        common::{
-            consts::REG_PC,
-            fuel_asm::Opcode,
-            fuel_crypto::SecretKey,
-            fuel_merkle::binary::empty_sum,
-            fuel_tx,
-            fuel_tx::{
-                field::{
-                    Inputs,
-                    Outputs,
-                },
-                Buildable,
-                Chargeable,
-                CheckError,
-                ConsensusParameters,
-                Create,
-                Script,
-                Transaction,
-                TransactionBuilder,
+    use fuel_core_interfaces::common::{
+        consts::REG_PC,
+        fuel_asm::Opcode,
+        fuel_crypto::SecretKey,
+        fuel_merkle::binary::empty_sum,
+        fuel_tx,
+        fuel_tx::{
+            field::{
+                Inputs,
+                Outputs,
             },
-            fuel_types::{
-                bytes::SerializableVec,
-                ContractId,
-                Immediate12,
-                Immediate18,
-                Salt,
-            },
-            fuel_vm::{
-                consts::{
-                    REG_CGAS,
-                    REG_FP,
-                    REG_ONE,
-                    REG_ZERO,
-                },
-                prelude::{
-                    Call,
-                    CallFrame,
-                },
-                script_with_data_offset,
-                util::test_helpers::TestBuilder as TxBuilder,
-            },
-            tai64::Tai64,
+            Buildable,
+            Chargeable,
+            CheckError,
+            ConsensusParameters,
+            Create,
+            Script,
+            Transaction,
+            TransactionBuilder,
         },
-        executor::ExecutionTypes,
-        model::{
-            CheckedMessage,
-            ConsensusHeader,
-            DaBlockHeight,
-            Message,
-            PartialBlockHeader,
+        fuel_types::{
+            bytes::SerializableVec,
+            ContractId,
+            Immediate12,
+            Immediate18,
+            Salt,
         },
+        fuel_vm::{
+            consts::{
+                REG_CGAS,
+                REG_FP,
+                REG_ONE,
+                REG_ZERO,
+            },
+            prelude::{
+                Call,
+                CallFrame,
+            },
+            script_with_data_offset,
+            util::test_helpers::TestBuilder as TxBuilder,
+        },
+        tai64::Tai64,
+    };
+    use fuel_core_types::{
+        blockchain::header::ConsensusHeader,
+        entities::message::CheckedMessage,
     };
     use itertools::Itertools;
     use rand::{
@@ -1496,7 +1529,7 @@ mod tests {
         (create, script)
     }
 
-    fn test_block(num_txs: usize) -> FuelBlock {
+    fn test_block(num_txs: usize) -> Block {
         let transactions = (1..num_txs + 1)
             .into_iter()
             .map(|i| {
@@ -1512,7 +1545,7 @@ mod tests {
             })
             .collect_vec();
 
-        let mut block = FuelBlock::default();
+        let mut block = Block::default();
         *block.transactions_mut() = transactions;
         block
     }
@@ -1659,7 +1692,7 @@ mod tests {
             .total();
             let invalid_duplicate_tx = script.clone().into();
 
-            let mut block = FuelBlock::default();
+            let mut block = Block::default();
             *block.transactions_mut() = vec![script.into(), invalid_duplicate_tx];
 
             let ExecutionResult {
@@ -1719,7 +1752,7 @@ mod tests {
                 .transaction_parameters
                 .gas_price_factor = gas_price_factor;
 
-            let mut block = FuelBlock::default();
+            let mut block = Block::default();
             *block.transactions_mut() = vec![script.into()];
 
             let ExecutionResult {
@@ -1800,7 +1833,7 @@ mod tests {
                 };
                 producer.config.block_producer.coinbase_recipient = config_coinbase;
 
-                let mut block = FuelBlock::default();
+                let mut block = Block::default();
                 *block.transactions_mut() = vec![script.clone().into()];
 
                 assert!(producer
@@ -1842,7 +1875,7 @@ mod tests {
         fn invalidate_is_not_first() {
             let mint = Transaction::mint(TxPointer::new(0, 1), vec![]);
 
-            let mut block = FuelBlock::default();
+            let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
 
             let validator = Executor {
@@ -1862,7 +1895,7 @@ mod tests {
         fn invalidate_block_height() {
             let mint = Transaction::mint(TxPointer::new(1, 0), vec![]);
 
-            let mut block = FuelBlock::default();
+            let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
 
             let validator = Executor {
@@ -1884,7 +1917,7 @@ mod tests {
         fn invalidate_zero_outputs() {
             let mint = Transaction::mint(TxPointer::new(0, 0), vec![]);
 
-            let mut block = FuelBlock::default();
+            let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
 
             let validator = Executor {
@@ -1907,7 +1940,7 @@ mod tests {
                 ],
             );
 
-            let mut block = FuelBlock::default();
+            let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
 
             let validator = Executor {
@@ -1931,7 +1964,7 @@ mod tests {
                 )],
             );
 
-            let mut block = FuelBlock::default();
+            let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
 
             let validator = Executor {
@@ -1951,7 +1984,7 @@ mod tests {
                 vec![Output::coin(Address::from([1u8; 32]), 123, AssetId::BASE)],
             );
 
-            let mut block = FuelBlock::default();
+            let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
 
             let validator = Executor {
@@ -1966,7 +1999,7 @@ mod tests {
 
         #[test]
         fn invalidate_more_than_one_mint_is_not_allowed() {
-            let mut block = FuelBlock::default();
+            let mut block = Block::default();
             *block.transactions_mut() = vec![
                 Transaction::mint(
                     TxPointer::new(0, 0),
@@ -2335,7 +2368,7 @@ mod tests {
             config: Config::local_node(),
         };
 
-        let mut block = FuelBlock::default();
+        let mut block = Block::default();
         *block.transactions_mut() = vec![tx];
 
         let ExecutionResult { mut block, .. } = producer
@@ -2381,7 +2414,7 @@ mod tests {
             config: Config::local_node(),
         };
 
-        let mut block = FuelBlock::default();
+        let mut block = Block::default();
         *block.transactions_mut() = vec![tx];
 
         let ExecutionResult { mut block, .. } = producer
@@ -2683,8 +2716,8 @@ mod tests {
         let empty_state = Bytes32::from(*empty_sum());
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
-            tx_status[2].status,
-            TransactionStatus::Success { .. }
+            tx_status[2].result,
+            TransactionExecutionResult::Success { .. }
         ));
         assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
         assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
@@ -2749,8 +2782,8 @@ mod tests {
         let empty_state = Bytes32::from(*empty_sum());
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
-            tx_status[2].status,
-            TransactionStatus::Failed { .. }
+            tx_status[2].result,
+            TransactionExecutionResult::Failed { .. }
         ));
         assert_eq!(
             executed_tx.inputs()[0].state_root(),
@@ -2860,8 +2893,8 @@ mod tests {
         let empty_state = Bytes32::from(*empty_sum());
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
-            tx_status[2].status,
-            TransactionStatus::Success { .. }
+            tx_status[2].result,
+            TransactionExecutionResult::Success { .. }
         ));
         assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
         assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
@@ -3362,7 +3395,7 @@ mod tests {
 
         let (tx, _message) = make_tx_and_message(&mut rng, 0);
 
-        let mut block = FuelBlock::default();
+        let mut block = Block::default();
         *block.transactions_mut() = vec![tx.clone()];
 
         let ExecutionResult {
@@ -3401,7 +3434,7 @@ mod tests {
 
         let (tx, message) = make_tx_and_message(&mut rng, 1); // Block has zero da_height
 
-        let mut block = FuelBlock::default();
+        let mut block = Block::default();
         *block.transactions_mut() = vec![tx.clone()];
 
         let ExecutionResult {

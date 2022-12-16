@@ -13,6 +13,21 @@ pub struct StorageTransaction<Storage> {
     transaction: Box<dyn Transactional<Storage>>,
 }
 
+impl<Storage> StorageTransaction<Storage> {
+    /// Create a new storage transaction.
+    pub fn new<T: Transactional<Storage> + 'static>(t: T) -> Self {
+        Self {
+            transaction: Box::new(t),
+        }
+    }
+}
+
+impl<Storage> Transactional<Storage> for StorageTransaction<Storage> {
+    fn commit(&mut self) -> Result<(), StorageError> {
+        self.transaction.commit()
+    }
+}
+
 impl<Storage: core::fmt::Debug> core::fmt::Debug for StorageTransaction<Storage> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("StorageTransaction")

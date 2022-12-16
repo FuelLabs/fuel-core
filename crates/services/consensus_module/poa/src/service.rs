@@ -419,18 +419,18 @@ mod test {
                 TxId,
             },
         },
-        db::{
-            Error as DBError,
-            Transactional,
-        },
         txpool::Error::NoMetadata,
     };
+    use fuel_core_storage::{
+        transactional::Transactional,
+        Error as StorageError,
+    };
     use fuel_core_types::{
-        blockchain::{
-            block::Error,
-            primitives::BlockId,
+        blockchain::primitives::BlockId,
+        services::{
+            executor::Error as ExecutorError,
+            txpool::ArcPoolTx,
         },
-        services::txpool::ArcPoolTx,
     };
     use rand::{
         prelude::StdRng,
@@ -471,22 +471,17 @@ mod test {
                 consensus: Consensus,
             ) -> anyhow::Result<()>;
         }
-    }
 
-    mockall::mock! {
-        #[derive(Debug)]
-        DatabaseTransaction{}
-
-        impl Transactional for DatabaseTransaction {
-            fn commit(self) -> Result<(), DBError>;
-
-            fn commit_box(self: Box<Self>) -> Result<(), DBError>;
+        impl Transactional<MockDatabase> for Database {
+            fn commit(&mut self) -> Result<(), StorageError>;
         }
 
-        impl fuel_core_interfaces::db::DatabaseTransaction<MockDatabase> for DatabaseTransaction {
-            fn database(&self) -> &MockDatabase;
+        impl AsRef<MockDatabase> for Database {
+            fn as_ref(&self) -> &Self;
+        }
 
-            fn database_mut(&mut self) -> &mut MockDatabase;
+        impl AsMut<MockDatabase> for Database {
+            fn as_mut(&mut self) -> &mut Self;
         }
     }
 
@@ -499,7 +494,7 @@ mod test {
                 &self,
                 _height: BlockHeight,
                 _max_gas: Word,
-            ) -> anyhow::Result<UncommittedResult<DBTransaction<MockDatabase>>>;
+            ) -> anyhow::Result<UncommittedResult<StorageTransaction<MockDatabase>>>;
 
             async fn dry_run(
                 &self,
@@ -547,39 +542,34 @@ mod test {
             .in_sequence(&mut seq)
             .returning(move |_, _| {
                 let mut db = MockDatabase::default();
+
+                let mut db_inner = MockDatabase::default();
                 // We expect that `seal_block` should be called 1 time after `produce_and_execute_block`.
-                db.expect_seal_block()
+                db_inner
+                    .expect_seal_block()
                     .times(1)
                     .in_sequence(&mut seq)
                     .returning(|_, _| Ok(()));
-
-                let mut db_transaction = MockDatabaseTransaction::default();
-                db_transaction.expect_database_mut().times(1).return_var(db);
-
-                // Check that `commit` is called after `seal_block`.
-                db_transaction
-                    .expect_commit_box()
-                    // Verifies that `commit_box` have been called.
+                db
+                    .expect_commit()
+                    // Verifies that `commit` have been called.
                     .times(1)
                     .in_sequence(&mut seq)
                     .returning(|| Ok(()));
-                db_transaction
-                    .expect_commit()
-                    // TODO: After removing `commit_box` set `times(1)`
-                    .times(0)
-                    .in_sequence(&mut seq)
-                    .returning(|| Ok(()));
+                // Check that `commit` is called after `seal_block`.
+                db.expect_as_mut().times(1).return_var(db_inner);
+
                 Ok(UncommittedResult::new(
                     ExecutionResult {
                         block: Default::default(),
                         skipped_transactions: mock_skipped_txs
                             .clone()
                             .into_iter()
-                            .map(|tx| (tx, Error::OutputAlreadyExists))
+                            .map(|tx| (tx, ExecutorError::OutputAlreadyExists))
                             .collect(),
                         tx_status: Default::default(),
                     },
-                    Box::new(db_transaction),
+                    StorageTransaction::new(db),
                 ))
             });
 
@@ -669,9 +659,11 @@ mod test {
         // simulate some txpool events to see if any block production is erroneously triggered
         task.on_txpool_event(&TxStatus::Submitted).await.unwrap();
         task.on_txpool_event(&TxStatus::Completed).await.unwrap();
-        task.on_txpool_event(&TxStatus::SqueezedOut { reason: NoMetadata })
-            .await
-            .unwrap();
+        task.on_txpool_event(&TxStatus::SqueezedOut {
+            reason: NoMetadata.to_string(),
+        })
+        .await
+        .unwrap();
     }
 
     #[tokio::test(start_paused = true)]
@@ -729,7 +721,9 @@ mod test {
         txpool_tx.send(TxStatus::Submitted).unwrap();
         txpool_tx.send(TxStatus::Completed).unwrap();
         txpool_tx
-            .send(TxStatus::SqueezedOut { reason: NoMetadata })
+            .send(TxStatus::SqueezedOut {
+                reason: NoMetadata.to_string(),
+            })
             .unwrap();
 
         // wait max_tx_idle_time - causes block production to occur if

@@ -1,15 +1,13 @@
 use std::collections::HashMap;
 
-use fuel_core_interfaces::{
-    common::{
-        fuel_tx::Script,
-        tai64::Tai64,
-    },
-    model::{
-        FuelApplicationHeader,
-        ConsensusHeader,
-        PartialBlockHeader,
-    },
+use fuel_core_interfaces::common::{
+    fuel_tx::Script,
+    tai64::Tai64,
+};
+use fuel_core_types::blockchain::header::{
+    ApplicationHeader,
+    ConsensusHeader,
+    PartialBlockHeader,
 };
 
 use super::*;
@@ -139,7 +137,7 @@ async fn can_build_message_proof() {
         .returning(|_| Ok(Some(fuel_crypto::Signature::default())));
 
     let header = PartialBlockHeader {
-        application: FuelApplicationHeader {
+        application: ApplicationHeader {
             da_height: 0u64.into(),
             generated: Default::default(),
         },
@@ -160,10 +158,7 @@ async fn can_build_message_proof() {
             move |_| {
                 let header = header.clone().generate(&[vec![]], &message_ids);
                 let transactions = TXNS.to_vec();
-                Ok(Some(CompressedBlock {
-                    header,
-                    transactions,
-                }))
+                Ok(Some(CompressedBlock::test(header, transactions)))
             }
         });
 

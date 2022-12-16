@@ -34,12 +34,14 @@ use fuel_core_interfaces::{
         fuel_types,
         fuel_vm::prelude::Deserializable,
     },
-    not_found,
     txpool::TxPoolMpsc,
 };
-use fuel_core_storage::tables::{
-    FuelBlocks,
-    Transactions,
+use fuel_core_storage::{
+    not_found,
+    tables::{
+        FuelBlocks,
+        Transactions,
+    },
 };
 use fuel_core_txpool::Service as TxPoolService;
 use futures::{
@@ -123,7 +125,7 @@ impl TxQuery {
                                 .transpose()
                                 .ok_or(not_found!(FuelBlocks))?
                                 .map(|fuel_block| {
-                                    let mut txs = fuel_block.into_owned().transactions;
+                                    let mut txs = fuel_block.into_owned().into_inner().1;
 
                                     if direction == IterDirection::Reverse {
                                         txs.reverse();

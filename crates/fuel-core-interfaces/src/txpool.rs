@@ -210,18 +210,6 @@ pub enum TxPoolMpsc {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum TxStatus {
-    /// Submitted into txpool.
-    Submitted,
-    /// Transaction has either been:
-    /// - successfully executed and included in a block.
-    /// - failed to execute and state changes reverted
-    Completed,
-    /// removed from txpool.
-    SqueezedOut { reason: Error },
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TxUpdate {
     tx_id: Bytes32,
     squeezed_out: Option<Error>,

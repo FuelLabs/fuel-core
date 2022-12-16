@@ -21,20 +21,20 @@ use async_graphql::{
     Context,
     Object,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::StorageAsRef,
-        fuel_tx,
-    },
-    db::KvStoreError,
-    not_found,
+use fuel_core_interfaces::common::{
+    fuel_storage::StorageAsRef,
+    fuel_tx,
 };
-use fuel_core_storage::tables::{
-    FuelBlocks,
-    Messages,
-    Receipts,
-    SealedBlockConsensus,
-    Transactions,
+use fuel_core_storage::{
+    not_found,
+    tables::{
+        FuelBlocks,
+        Messages,
+        Receipts,
+        SealedBlockConsensus,
+        Transactions,
+    },
+    Error as StorageError,
 };
 use fuel_core_types::{
     blockchain::{
@@ -208,7 +208,7 @@ impl MessageProofData for MessageProofContext<'_> {
     fn receipts(
         &self,
         transaction_id: &fuel_core_interfaces::common::prelude::Bytes32,
-    ) -> Result<Vec<fuel_core_interfaces::common::prelude::Receipt>, KvStoreError> {
+    ) -> Result<Vec<fuel_core_interfaces::common::prelude::Receipt>, StorageError> {
         Ok(self
             .0
             .storage::<Receipts>()
@@ -220,7 +220,7 @@ impl MessageProofData for MessageProofContext<'_> {
     fn transaction(
         &self,
         transaction_id: &fuel_core_interfaces::common::prelude::Bytes32,
-    ) -> Result<Option<fuel_tx::Transaction>, KvStoreError> {
+    ) -> Result<Option<fuel_tx::Transaction>, StorageError> {
         Ok(self
             .0
             .storage::<Transactions>()
@@ -231,14 +231,14 @@ impl MessageProofData for MessageProofContext<'_> {
     fn transaction_status(
         &self,
         transaction_id: &fuel_core_interfaces::common::prelude::Bytes32,
-    ) -> Result<Option<TransactionStatus>, KvStoreError> {
+    ) -> Result<Option<TransactionStatus>, StorageError> {
         Ok(self.0.get_tx_status(transaction_id)?)
     }
 
     fn transactions_on_block(
         &self,
         block_id: &fuel_core_interfaces::common::prelude::Bytes32,
-    ) -> Result<Vec<fuel_core_interfaces::common::prelude::Bytes32>, KvStoreError> {
+    ) -> Result<Vec<fuel_core_interfaces::common::prelude::Bytes32>, StorageError> {
         Ok(self
             .0
             .storage::<FuelBlocks>()
@@ -250,7 +250,7 @@ impl MessageProofData for MessageProofContext<'_> {
     fn signature(
         &self,
         block_id: &fuel_core_interfaces::common::prelude::Bytes32,
-    ) -> Result<Option<fuel_core_interfaces::common::fuel_crypto::Signature>, KvStoreError>
+    ) -> Result<Option<fuel_core_interfaces::common::fuel_crypto::Signature>, StorageError>
     {
         match self
             .0
@@ -268,7 +268,7 @@ impl MessageProofData for MessageProofContext<'_> {
     fn block(
         &self,
         block_id: &fuel_core_interfaces::common::prelude::Bytes32,
-    ) -> Result<Option<CompressedBlock>, KvStoreError> {
+    ) -> Result<Option<CompressedBlock>, StorageError> {
         Ok(self
             .0
             .storage::<FuelBlocks>()

@@ -1,7 +1,7 @@
 use crate::database::{
     Column,
     Database,
-    KvStoreError,
+    StorageError,
 };
 use fuel_core_storage::{
     tables::Receipts,
@@ -15,7 +15,7 @@ use fuel_core_types::{
 use std::borrow::Cow;
 
 impl StorageInspect<Receipts> for Database {
-    type Error = KvStoreError;
+    type Error = StorageError;
 
     fn get(&self, key: &Bytes32) -> Result<Option<Cow<Vec<Receipt>>>, Self::Error> {
         Database::get(self, key.as_ref(), Column::Receipts).map_err(Into::into)

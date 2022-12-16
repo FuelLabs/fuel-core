@@ -12,10 +12,7 @@ use crate::{
         AssetId,
         U64,
     },
-    state::{
-        Error,
-        IterDirection,
-    },
+    state::IterDirection,
 };
 use async_graphql::{
     connection::{
@@ -26,6 +23,7 @@ use async_graphql::{
     InputObject,
     Object,
 };
+use fuel_core_database::Error;
 use fuel_core_interfaces::common::fuel_types;
 use itertools::Itertools;
 use std::{

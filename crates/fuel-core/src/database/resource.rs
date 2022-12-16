@@ -210,7 +210,7 @@ impl<'a> AssetQuery<'a> {
     /// for the `asset_id`.
     pub fn unspent_resources(
         &self,
-    ) -> impl Iterator<Item = Result<Resource<Cow<Coin>, Cow<Message>>, StorageError>> + '_
+    ) -> impl Iterator<Item = Result<Resource<Cow<Coin>, Cow<Message>>, DatabaseError>> + '_
     {
         self.query.unspent_resources()
     }

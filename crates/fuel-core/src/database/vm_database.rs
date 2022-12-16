@@ -9,6 +9,7 @@ use crate::{
     },
 };
 use anyhow::anyhow;
+use fuel_core_database::Error;
 use fuel_core_storage::{
     not_found,
     Error as StorageError,
@@ -49,7 +50,7 @@ impl IncreaseStorageKey for U256 {
     fn increase(&mut self) -> anyhow::Result<()> {
         *self = self
             .checked_add(1.into())
-            .ok_or(anyhow!("range op exceeded available keyspace"))?;
+            .ok_or_else(|| anyhow!("range op exceeded available keyspace"))?;
         Ok(())
     }
 }
@@ -153,7 +154,7 @@ impl InterpreterStorage for VmDatabase {
             // this will return 0x00**32 for block height 0 as well
             self.database
                 .get_block_id(block_height.into())?
-                .ok_or_else(|| not_found!("BlockId").into())
+                .ok_or(not_found!("BlockId"))
         }
     }
 

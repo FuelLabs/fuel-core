@@ -88,7 +88,7 @@ impl Database {
         if let Some(Consensus::Genesis(genesis)) = consensus {
             Ok(genesis)
         } else {
-            Err(not_found!(SealedBlockConsensus))
+            Err(not_found!(SealedBlockConsensus)).map_err(Into::into)
         }
     }
 

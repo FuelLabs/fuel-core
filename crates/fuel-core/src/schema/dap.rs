@@ -12,16 +12,14 @@ use async_graphql::{
     SchemaBuilder,
     ID,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_tx::ConsensusParameters,
-        fuel_vm::{
-            consts,
-            prelude::*,
-        },
+use fuel_core_interfaces::common::{
+    fuel_tx::ConsensusParameters,
+    fuel_vm::{
+        consts,
+        prelude::*,
     },
-    not_found,
 };
+use fuel_core_storage::not_found;
 use futures::lock::Mutex;
 use std::{
     collections::HashMap,
@@ -140,13 +138,15 @@ impl ConcreteStorage {
         storage: &DatabaseTransaction,
     ) -> Result<VmDatabase, InterpreterError> {
         let block = storage
-            .get_current_block()?
-            .ok_or(not_found!("Block for VMDatabase"))?
+            .get_current_block()
+            .map_err(std::io::Error::from)?
+            .ok_or(not_found!("Block for VMDatabase"))
+            .map_err(std::io::Error::from)?
             .into_owned();
 
         let vm_database = VmDatabase::new(
             storage.as_ref().clone(),
-            &block.header.consensus,
+            &block.header().consensus,
             // TODO: Use a real coinbase address
             Address::zeroed(),
         );

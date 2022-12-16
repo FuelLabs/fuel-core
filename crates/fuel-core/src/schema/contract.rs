@@ -18,17 +18,17 @@ use async_graphql::{
     InputObject,
     Object,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::StorageAsRef,
-        fuel_types,
-    },
-    db::{
+use fuel_core_interfaces::common::{
+    fuel_storage::StorageAsRef,
+    fuel_types,
+};
+use fuel_core_storage::{
+    not_found,
+    tables::{
         ContractsAssets,
         ContractsInfo,
         ContractsRawCode,
     },
-    not_found,
 };
 
 pub struct Contract(pub(crate) fuel_types::ContractId);

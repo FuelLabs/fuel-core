@@ -16,11 +16,13 @@ use fuel_core_interfaces::{
         Error,
         TxPoolDb,
         TxPoolMpsc,
-        TxStatus,
         TxUpdate,
     },
 };
-use fuel_core_types::fuel_types::Bytes32;
+use fuel_core_types::{
+    fuel_types::Bytes32,
+    services::txpool::TxStatus,
+};
 use std::sync::Arc;
 use tokio::{
     sync::{
@@ -71,7 +73,7 @@ impl TxStatusChange {
 
     pub fn send_squeezed_out(&self, id: Bytes32, reason: Error) {
         let _ = self.status_sender.send(TxStatus::SqueezedOut {
-            reason: reason.clone(),
+            reason: reason.to_string(),
         });
         let _ = self.update_sender.send(TxUpdate::squeezed_out(id, reason));
     }

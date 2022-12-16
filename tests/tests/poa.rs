@@ -13,13 +13,11 @@ use fuel_core_client::{
     fuel_types::Bytes32,
     prelude::SecretKey,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_tx::Transaction,
-        secrecy::Secret,
-    },
-    model::FuelBlockConsensus,
+use fuel_core_interfaces::common::{
+    fuel_tx::Transaction,
+    secrecy::Secret,
 };
+use fuel_core_types::blockchain::consensus::Consensus;
 use rand::{
     rngs::StdRng,
     SeedableRng,
@@ -60,9 +58,9 @@ async fn can_get_sealed_block_from_poa_produced_block() {
         .expect("expected sealed header to be available");
 
     // verify signature
-    let block_id = sealed_block_header.header.id();
+    let block_id = sealed_block_header.entity.id();
     let signature = match sealed_block_header.consensus {
-        FuelBlockConsensus::PoA(poa) => poa.signature,
+        Consensus::PoA(poa) => poa.signature,
         _ => panic!("Not expected consensus"),
     };
     signature
@@ -76,9 +74,9 @@ async fn can_get_sealed_block_from_poa_produced_block() {
         .expect("expected sealed header to be available");
 
     // verify signature
-    let block_id = sealed_block.block.header().id();
+    let block_id = sealed_block.entity.id();
     let signature = match sealed_block.consensus {
-        FuelBlockConsensus::PoA(poa) => poa.signature,
+        Consensus::PoA(poa) => poa.signature,
         _ => panic!("Not expected consensus"),
     };
     signature

@@ -28,26 +28,39 @@ use async_graphql::{
     SimpleObject,
     Union,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::StorageAsRef,
-        fuel_types,
-        tai64::Tai64,
-    },
-    executor::{
-        ExecutionBlock,
-        ExecutionResult,
-    },
-    not_found,
+use fuel_core_interfaces::common::{
+    fuel_storage::StorageAsRef,
+    fuel_types,
+    tai64::Tai64,
 };
 use fuel_core_poa::service::seal_block;
 use fuel_core_producer::ports::Executor as ExecutorTrait;
-use fuel_core_storage::tables::{
-    FuelBlocks,
-    SealedBlockConsensus,
-    Transactions,
+use fuel_core_storage::{
+    not_found,
+    tables::{
+        FuelBlocks,
+        SealedBlockConsensus,
+        Transactions,
+    },
 };
-use fuel_core_types::blockchain::block::PartialFuelBlock;
+use fuel_core_types::{
+    blockchain::{
+        block::{
+            CompressedBlock,
+            PartialFuelBlock,
+        },
+        header::{
+            ApplicationHeader,
+            BlockHeader,
+            ConsensusHeader,
+            PartialBlockHeader,
+        },
+    },
+    services::executor::{
+        ExecutionBlock,
+        ExecutionResult,
+    },
+};
 use itertools::Itertools;
 use std::convert::TryInto;
 
@@ -56,7 +69,7 @@ pub struct Block {
     pub(crate) transactions: Vec<fuel_types::Bytes32>,
 }
 
-pub struct Header(pub(crate) FuelBlockHeader);
+pub struct Header(pub(crate) BlockHeader);
 
 #[derive(Union)]
 pub enum Consensus {
@@ -345,7 +358,7 @@ impl BlockMutation {
                         prev_root: Default::default(),
                         generated: Default::default(),
                     },
-                    application: FuelApplicationHeader {
+                    application: ApplicationHeader {
                         da_height: Default::default(),
                         generated: Default::default(),
                     },
@@ -361,8 +374,8 @@ impl BlockMutation {
             let (ExecutionResult { block, .. }, mut db_transaction) = executor
                 .execute_without_commit(ExecutionBlock::Production(block))?
                 .into();
-            seal_block(&config.consensus_key, &block, db_transaction.database_mut())?;
-            db_transaction.commit_box()?;
+            seal_block(&config.consensus_key, &block, db_transaction.as_mut())?;
+            db_transaction.commit()?;
         }
 
         db.get_block_height()?
@@ -429,10 +442,7 @@ fn check_block_time_overflow(
 
 impl From<CompressedBlock> for Block {
     fn from(block: CompressedBlock) -> Self {
-        let CompressedBlock {
-            header,
-            transactions,
-        } = block;
+        let (header, transactions) = block.into_inner();
         Block {
             header: Header(header),
             transactions,
@@ -442,12 +452,12 @@ impl From<CompressedBlock> for Block {
 
 impl From<CompressedBlock> for Header {
     fn from(block: CompressedBlock) -> Self {
-        Header(block.header)
+        Header(block.into_inner().0)
     }
 }
 
-impl From<FuelGenesis> for Genesis {
-    fn from(genesis: FuelGenesis) -> Self {
+impl From<fuel_core_types::blockchain::consensus::Genesis> for Genesis {
+    fn from(genesis: fuel_core_types::blockchain::consensus::Genesis) -> Self {
         Genesis {
             chain_config_hash: genesis.chain_config_hash.into(),
             coins_root: genesis.coins_root.into(),
@@ -457,13 +467,17 @@ impl From<FuelGenesis> for Genesis {
     }
 }
 
-impl From<FuelBlockConsensus> for Consensus {
-    fn from(consensus: FuelBlockConsensus) -> Self {
+impl From<fuel_core_types::blockchain::consensus::Consensus> for Consensus {
+    fn from(consensus: fuel_core_types::blockchain::consensus::Consensus) -> Self {
         match consensus {
-            Consensus::Genesis(genesis) => Consensus::Genesis(genesis.into()),
-            Consensus::PoA(poa) => Consensus::PoA(PoAConsensus {
-                signature: poa.signature.into(),
-            }),
+            fuel_core_types::blockchain::consensus::Consensus::Genesis(genesis) => {
+                Consensus::Genesis(genesis.into())
+            }
+            fuel_core_types::blockchain::consensus::Consensus::PoA(poa) => {
+                Consensus::PoA(PoAConsensus {
+                    signature: poa.signature.into(),
+                })
+            }
         }
     }
 }
