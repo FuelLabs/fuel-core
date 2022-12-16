@@ -70,6 +70,10 @@ fuel-core-interfaces = { path = "../../fuel-core-interfaces", features = [
     "serde",
     "test-helpers",
 ], version = "0.15.1" }
+fuel-core-types = { path = "../../types", features = [
+    "serde",
+    "test-helpers"
+], version = "0.15.1" }
 rand = "0.8"
 tokio = { version = "1.21", features = ["full"] }
 tracing-appender = "0.2"
