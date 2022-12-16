@@ -12,31 +12,11 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_client::{
-    client::{
-        types::TransactionStatus,
-        FuelClient,
-        PageDirection,
-        PaginationRequest,
-    },
-    fuel_tx::AssetId,
-    prelude::{
-        Opcode,
-        StorageAsRef,
-    },
-};
-use fuel_core_interfaces::common::{
-    fuel_crypto::SecretKey,
-    fuel_tx::{
-        field::Inputs,
-        Input,
-        TransactionBuilder,
-    },
-    fuel_types::MessageId,
-    prelude::{
-        Address,
-        Output,
-    },
+use fuel_core_client::client::{
+    types::TransactionStatus,
+    FuelClient,
+    PageDirection,
+    PaginationRequest,
 };
 use fuel_core_relayer::{
     test_helpers::{
@@ -46,7 +26,25 @@ use fuel_core_relayer::{
     },
     H160,
 };
-use fuel_core_storage::tables::Messages;
+use fuel_core_storage::{
+    tables::Messages,
+    StorageAsRef,
+};
+use fuel_core_types::{
+    fuel_asm::Opcode,
+    fuel_crypto::SecretKey,
+    fuel_tx::{
+        field::Inputs,
+        Input,
+        Output,
+        TransactionBuilder,
+    },
+    fuel_types::{
+        Address,
+        AssetId,
+        MessageId,
+    },
+};
 use hyper::{
     service::{
         make_service_fn,

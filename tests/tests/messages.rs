@@ -8,25 +8,25 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_client::{
-    client::{
-        types::TransactionStatus,
-        FuelClient,
-        PageDirection,
-        PaginationRequest,
-    },
-    fuel_tx::Input,
-    fuel_types::MessageId,
-    prelude::{
-        Bytes64,
-        Opcode,
-    },
+use fuel_core_client::client::{
+    types::TransactionStatus,
+    FuelClient,
+    PageDirection,
+    PaginationRequest,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
+    fuel_asm::Opcode,
     fuel_crypto::SecretKey,
-    fuel_tx::TransactionBuilder,
-    fuel_types::Address,
+    fuel_tx::{
+        Input,
+        TransactionBuilder,
+    },
+    fuel_types::{
+        Address,
+        Bytes64,
+        MessageId,
+    },
 };
 use rand::{
     rngs::StdRng,

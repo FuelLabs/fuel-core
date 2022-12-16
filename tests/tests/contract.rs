@@ -12,9 +12,30 @@ use fuel_core_client::client::{
     PageDirection,
     PaginationRequest,
 };
-use fuel_core_types::fuel_types::{
-    AssetId,
-    Bytes32,
+use fuel_core_types::{
+    fuel_asm::{
+        GTFArgs,
+        Immediate12,
+        Opcode,
+    },
+    fuel_tx::{
+        Contract,
+        Input,
+        Output,
+        Transaction,
+        TransactionBuilder,
+        TxPointer,
+        UniqueIdentifier,
+        UtxoId,
+        Witness,
+    },
+    fuel_types::{
+        bytes::SerializableVec,
+        AssetId,
+        Bytes32,
+        Salt,
+    },
+    fuel_vm::Call,
 };
 use rstest::rstest;
 
@@ -117,10 +138,7 @@ fn key(i: u8) -> Bytes32 {
 
 #[tokio::test]
 async fn can_get_message_proof() {
-    use fuel_core_client::{
-        consts::*,
-        prelude::*,
-    };
+    use fuel_core_types::fuel_vm::consts::*;
 
     let config = Config::local_node();
     let coin = config

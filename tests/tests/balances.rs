@@ -9,14 +9,11 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_client::{
-    client::{
-        schema::resource::Resource,
-        FuelClient,
-        PageDirection,
-        PaginationRequest,
-    },
-    fuel_tx::TransactionBuilder,
+use fuel_core_client::client::{
+    schema::resource::Resource,
+    FuelClient,
+    PageDirection,
+    PaginationRequest,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -24,6 +21,7 @@ use fuel_core_types::{
         AssetId,
         Input,
         Output,
+        TransactionBuilder,
     },
     fuel_types::Address,
 };

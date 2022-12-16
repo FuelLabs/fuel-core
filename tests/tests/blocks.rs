@@ -6,18 +6,15 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_client::{
-    client::{
-        schema::{
-            block::TimeParameters,
-            U64,
-        },
-        types::TransactionStatus,
-        FuelClient,
-        PageDirection,
-        PaginationRequest,
+use fuel_core_client::client::{
+    schema::{
+        block::TimeParameters,
+        U64,
     },
-    prelude::Bytes32,
+    types::TransactionStatus,
+    FuelClient,
+    PageDirection,
+    PaginationRequest,
 };
 use fuel_core_storage::{
     tables::{
@@ -33,6 +30,7 @@ use fuel_core_types::{
     },
     fuel_tx,
     fuel_tx::UniqueIdentifier,
+    fuel_types::Bytes32,
     secrecy::ExposeSecret,
     tai64::Tai64,
 };

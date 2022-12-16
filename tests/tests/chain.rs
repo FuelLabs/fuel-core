@@ -2,10 +2,8 @@ use fuel_core::service::{
     Config,
     FuelService,
 };
-use fuel_core_client::{
-    client::FuelClient,
-    fuel_tx::Transaction,
-};
+use fuel_core_client::client::FuelClient;
+use fuel_core_types::fuel_tx::Transaction;
 
 #[tokio::test]
 async fn chain_info() {
