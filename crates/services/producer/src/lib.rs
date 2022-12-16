@@ -1,3 +1,5 @@
+// TODO: Uncomment `unused_crate_dependencies` when `fuel-core-txpool` will be removed from
+//  `dev-dependencies` #![deny(unused_crate_dependencies)]
 #![deny(unused_must_use)]
 
 pub mod adapters;

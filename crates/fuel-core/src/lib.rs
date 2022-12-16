@@ -1,3 +1,5 @@
+#![deny(unused_crate_dependencies)]
+
 pub use fuel_core_chain_config as chain_config;
 pub mod database;
 pub mod executor;
