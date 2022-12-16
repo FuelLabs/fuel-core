@@ -41,7 +41,10 @@ use fuel_core_storage::tables::{
 use fuel_core_types::{
     blockchain::{
         block::Block,
-        consensus::Genesis,
+        consensus::{
+            Consensus,
+            Genesis,
+        },
         header::{
             ApplicationHeader,
             ConsensusHeader,
@@ -50,7 +53,10 @@ use fuel_core_types::{
         primitives::Empty,
     },
     entities::{
-        coin::Coin,
+        coin::{
+            Coin,
+            CoinStatus,
+        },
         message::Message,
     },
 };
@@ -127,7 +133,7 @@ impl FuelService {
             &message_ids,
         );
 
-        let seal = FuelBlockConsensus::Genesis(genesis);
+        let seal = Consensus::Genesis(genesis);
         let block_id = block.id();
         database
             .storage::<FuelBlocks>()

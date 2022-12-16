@@ -1503,7 +1503,7 @@ mod tests {
         (create, script)
     }
 
-    fn test_block(num_txs: usize) -> FuelBlock {
+    fn test_block(num_txs: usize) -> Block {
         let transactions = (1..num_txs + 1)
             .into_iter()
             .map(|i| {
@@ -1519,7 +1519,7 @@ mod tests {
             })
             .collect_vec();
 
-        let mut block = FuelBlock::default();
+        let mut block = Block::default();
         *block.transactions_mut() = transactions;
         block
     }
@@ -1666,7 +1666,7 @@ mod tests {
             .total();
             let invalid_duplicate_tx = script.clone().into();
 
-            let mut block = FuelBlock::default();
+            let mut block = Block::default();
             *block.transactions_mut() = vec![script.into(), invalid_duplicate_tx];
 
             let ExecutionResult {
@@ -1726,7 +1726,7 @@ mod tests {
                 .transaction_parameters
                 .gas_price_factor = gas_price_factor;
 
-            let mut block = FuelBlock::default();
+            let mut block = Block::default();
             *block.transactions_mut() = vec![script.into()];
 
             let ExecutionResult {
@@ -1807,7 +1807,7 @@ mod tests {
                 };
                 producer.config.block_producer.coinbase_recipient = config_coinbase;
 
-                let mut block = FuelBlock::default();
+                let mut block = Block::default();
                 *block.transactions_mut() = vec![script.clone().into()];
 
                 assert!(producer
@@ -1849,7 +1849,7 @@ mod tests {
         fn invalidate_is_not_first() {
             let mint = Transaction::mint(TxPointer::new(0, 1), vec![]);
 
-            let mut block = FuelBlock::default();
+            let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
 
             let validator = Executor {
@@ -1869,7 +1869,7 @@ mod tests {
         fn invalidate_block_height() {
             let mint = Transaction::mint(TxPointer::new(1, 0), vec![]);
 
-            let mut block = FuelBlock::default();
+            let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
 
             let validator = Executor {
@@ -1891,7 +1891,7 @@ mod tests {
         fn invalidate_zero_outputs() {
             let mint = Transaction::mint(TxPointer::new(0, 0), vec![]);
 
-            let mut block = FuelBlock::default();
+            let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
 
             let validator = Executor {
@@ -1914,7 +1914,7 @@ mod tests {
                 ],
             );
 
-            let mut block = FuelBlock::default();
+            let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
 
             let validator = Executor {
@@ -1938,7 +1938,7 @@ mod tests {
                 )],
             );
 
-            let mut block = FuelBlock::default();
+            let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
 
             let validator = Executor {
@@ -1958,7 +1958,7 @@ mod tests {
                 vec![Output::coin(Address::from([1u8; 32]), 123, AssetId::BASE)],
             );
 
-            let mut block = FuelBlock::default();
+            let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
 
             let validator = Executor {
@@ -1973,7 +1973,7 @@ mod tests {
 
         #[test]
         fn invalidate_more_than_one_mint_is_not_allowed() {
-            let mut block = FuelBlock::default();
+            let mut block = Block::default();
             *block.transactions_mut() = vec![
                 Transaction::mint(
                     TxPointer::new(0, 0),
@@ -2342,7 +2342,7 @@ mod tests {
             config: Config::local_node(),
         };
 
-        let mut block = FuelBlock::default();
+        let mut block = Block::default();
         *block.transactions_mut() = vec![tx];
 
         let ExecutionResult { mut block, .. } = producer
@@ -2388,7 +2388,7 @@ mod tests {
             config: Config::local_node(),
         };
 
-        let mut block = FuelBlock::default();
+        let mut block = Block::default();
         *block.transactions_mut() = vec![tx];
 
         let ExecutionResult { mut block, .. } = producer
@@ -3369,7 +3369,7 @@ mod tests {
 
         let (tx, _message) = make_tx_and_message(&mut rng, 0);
 
-        let mut block = FuelBlock::default();
+        let mut block = Block::default();
         *block.transactions_mut() = vec![tx.clone()];
 
         let ExecutionResult {
@@ -3408,7 +3408,7 @@ mod tests {
 
         let (tx, message) = make_tx_and_message(&mut rng, 1); // Block has zero da_height
 
-        let mut block = FuelBlock::default();
+        let mut block = Block::default();
         *block.transactions_mut() = vec![tx.clone()];
 
         let ExecutionResult {
