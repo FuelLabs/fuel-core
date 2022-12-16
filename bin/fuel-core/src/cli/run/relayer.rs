@@ -1,6 +1,6 @@
 use clap::Args;
 use core::time::Duration;
-use fuel_core_relayer::{
+use fuel_core::relayer::{
     Config,
     H160,
 };

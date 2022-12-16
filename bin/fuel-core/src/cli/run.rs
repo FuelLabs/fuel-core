@@ -10,12 +10,14 @@ use anyhow::{
 use clap::Parser;
 use fuel_core::{
     chain_config::ChainConfig,
+    producer::Config as ProducerConfig,
     service::{
         config::default_consensus_dev_key,
         Config,
         DbType,
         VMConfig,
     },
+    txpool::Config as TxPoolConfig,
 };
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
@@ -182,13 +184,9 @@ impl Command {
             vm: VMConfig {
                 backtrace: vm_backtrace,
             },
-            txpool: fuel_core_txpool::Config::new(
-                chain_conf,
-                min_gas_price,
-                utxo_validation,
-            ),
+            txpool: TxPoolConfig::new(chain_conf, min_gas_price, utxo_validation),
             block_importer: Default::default(),
-            block_producer: fuel_core_producer::Config {
+            block_producer: ProducerConfig {
                 utxo_validation,
                 coinbase_recipient,
                 metrics,
