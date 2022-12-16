@@ -503,7 +503,7 @@ impl Transaction {
 }
 
 pub(super) async fn get_tx_status(
-    id: fuel_core_interfaces::common::fuel_types::Bytes32,
+    id: fuel_core_types::fuel_types::Bytes32,
     db: &Database,
     txpool: &TxPoolService,
 ) -> async_graphql::Result<Option<TransactionStatus>> {
