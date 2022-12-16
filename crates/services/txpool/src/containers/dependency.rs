@@ -722,6 +722,8 @@ mod tests {
 
     #[test]
     fn test_check_between_input_output() {
+        use fuel_core_txpool as _;
+
         let output = Output::Coin {
             to: Address::default(),
             amount: 10,
