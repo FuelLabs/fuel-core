@@ -33,7 +33,6 @@ fuel-core-relayer = { path = "../crates/services/relayer", features = [
     "test-helpers",
 ] }
 fuel-core-storage = { path = "../crates/storage", features = ["test-helpers"] }
-fuel-core-txpool = { path = "../crates/services/txpool", features = ["test-helpers"] }
 fuel-core-types = { path = "../crates/types", features = ["test-helpers"] }
 fuel-core-txpool = { path = "../crates/services/txpool", features = ["test-helpers"] }
 futures = "0.3"
