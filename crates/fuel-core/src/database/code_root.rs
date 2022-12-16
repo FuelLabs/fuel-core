@@ -2,20 +2,16 @@ use crate::database::{
     Column,
     Database,
 };
-use fuel_core_interfaces::common::{
-    fuel_storage::{
-        StorageInspect,
-        StorageMutate,
-    },
-    fuel_vm::prelude::{
-        Bytes32,
-        ContractId,
-        Salt,
-    },
-};
 use fuel_core_storage::{
     tables::ContractsInfo,
     Error as StorageError,
+    StorageInspect,
+    StorageMutate,
+};
+use fuel_core_types::fuel_types::{
+    Bytes32,
+    ContractId,
+    Salt,
 };
 use std::borrow::Cow;
 
@@ -23,11 +19,11 @@ impl StorageInspect<ContractsInfo> for Database {
     type Error = StorageError;
 
     fn get(&self, key: &ContractId) -> Result<Option<Cow<(Salt, Bytes32)>>, Self::Error> {
-        Ok(Database::get(self, key.as_ref(), Column::ContractsInfo)?)
+        Database::get(self, key.as_ref(), Column::ContractsInfo).map_err(Into::into)
     }
 
     fn contains_key(&self, key: &ContractId) -> Result<bool, Self::Error> {
-        Ok(Database::exists(self, key.as_ref(), Column::ContractsInfo)?)
+        Database::exists(self, key.as_ref(), Column::ContractsInfo).map_err(Into::into)
     }
 }
 
@@ -37,29 +33,23 @@ impl StorageMutate<ContractsInfo> for Database {
         key: &ContractId,
         value: &(Salt, Bytes32),
     ) -> Result<Option<(Salt, Bytes32)>, Self::Error> {
-        Ok(Database::insert(
-            self,
-            key.as_ref(),
-            Column::ContractsInfo,
-            *value,
-        )?)
+        Database::insert(self, key.as_ref(), Column::ContractsInfo, *value)
+            .map_err(Into::into)
     }
 
     fn remove(
         &mut self,
         key: &ContractId,
     ) -> Result<Option<(Salt, Bytes32)>, Self::Error> {
-        Ok(Database::remove(self, key.as_ref(), Column::ContractsInfo)?)
+        Database::remove(self, key.as_ref(), Column::ContractsInfo).map_err(Into::into)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_interfaces::common::{
-        fuel_storage::StorageAsMut,
-        fuel_vm::prelude::Contract,
-    };
+    use fuel_core_storage::StorageAsMut;
+    use fuel_core_types::fuel_vm::Contract;
     use rand::{
         rngs::StdRng,
         Rng,

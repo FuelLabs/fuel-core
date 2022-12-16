@@ -1,5 +1,6 @@
 //! # Fuel Relayer
 
+#![deny(unused_crate_dependencies)]
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 

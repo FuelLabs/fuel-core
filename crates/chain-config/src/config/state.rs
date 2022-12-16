@@ -1,6 +1,6 @@
 use crate::serialization::HexNumber;
 
-use fuel_core_storage::Error as StorageError;
+use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::blockchain::primitives::BlockHeight;
 
 use serde::{
@@ -36,7 +36,7 @@ pub struct StateConfig {
 }
 
 impl StateConfig {
-    pub fn generate_state_config<T>(db: T) -> Result<Self, StorageError>
+    pub fn generate_state_config<T>(db: T) -> StorageResult<Self>
     where
         T: ChainConfigDb,
     {
@@ -51,11 +51,11 @@ impl StateConfig {
 
 pub trait ChainConfigDb {
     /// Returns *all* unspent coin configs available in the database.
-    fn get_coin_config(&self) -> Result<Option<Vec<CoinConfig>>, StorageError>;
+    fn get_coin_config(&self) -> StorageResult<Option<Vec<CoinConfig>>>;
     /// Returns *alive* contract configs available in the database.
-    fn get_contract_config(&self) -> Result<Option<Vec<ContractConfig>>, StorageError>;
+    fn get_contract_config(&self) -> StorageResult<Option<Vec<ContractConfig>>>;
     /// Returns *all* unspent message configs available in the database.
-    fn get_message_config(&self) -> Result<Option<Vec<MessageConfig>>, StorageError>;
+    fn get_message_config(&self) -> StorageResult<Option<Vec<MessageConfig>>>;
     /// Returns the last available block height.
-    fn get_block_height(&self) -> Result<Option<BlockHeight>, StorageError>;
+    fn get_block_height(&self) -> StorageResult<Option<BlockHeight>>;
 }

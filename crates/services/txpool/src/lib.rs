@@ -1,3 +1,5 @@
+#![deny(unused_crate_dependencies)]
+
 pub mod config;
 mod containers;
 pub mod service;
@@ -10,7 +12,7 @@ pub mod mock_db;
 pub use mock_db::MockDb;
 
 pub use config::Config;
-pub use fuel_core_interfaces::txpool::Error;
+pub use fuel_core_types::services::txpool::Error;
 pub use service::{
     Service,
     ServiceBuilder,

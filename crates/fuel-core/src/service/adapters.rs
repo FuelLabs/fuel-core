@@ -3,27 +3,29 @@ use crate::{
     executor::Executor,
     service::Config,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_tx::{
-            Receipt,
-            Transaction,
-        },
-        fuel_types::Word,
+use fuel_core_interfaces::relayer::RelayerDb;
+use fuel_core_types::{
+    fuel_tx::{
+        Receipt,
+        Transaction,
     },
-    relayer::RelayerDb,
+    fuel_types::Word,
 };
+
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::RelayerSynced;
-use fuel_core_storage::transactional::StorageTransaction;
+use fuel_core_storage::{
+    transactional::StorageTransaction,
+    Result as StorageResult,
+};
 use fuel_core_types::{
     blockchain::{
         primitives,
         primitives::BlockHeight,
     },
     services::executor::{
-        Error,
         ExecutionBlock,
+        Result as ExecutorResult,
         UncommittedResult,
     },
 };
@@ -39,7 +41,7 @@ impl fuel_core_producer::ports::Executor<Database> for ExecutorAdapter {
     fn execute_without_commit(
         &self,
         block: ExecutionBlock,
-    ) -> Result<UncommittedResult<StorageTransaction<Database>>, Error> {
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
         let executor = Executor {
             database: self.database.clone(),
             config: self.config.clone(),
@@ -51,7 +53,7 @@ impl fuel_core_producer::ports::Executor<Database> for ExecutorAdapter {
         &self,
         block: ExecutionBlock,
         utxo_validation: Option<bool>,
-    ) -> Result<Vec<Vec<Receipt>>, Error> {
+    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
         let executor = Executor {
             database: self.database.clone(),
             config: self.config.clone(),
@@ -70,7 +72,7 @@ pub struct MaybeRelayerAdapter {
 impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
     async fn get_best_finalized_da_height(
         &self,
-    ) -> anyhow::Result<primitives::DaBlockHeight> {
+    ) -> StorageResult<primitives::DaBlockHeight> {
         #[cfg(feature = "relayer")]
         {
             if let Some(sync) = self.relayer_synced.as_ref() {

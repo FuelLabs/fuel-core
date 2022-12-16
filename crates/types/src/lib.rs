@@ -2,6 +2,7 @@
 //! libraries. This crate doesn't contain any business logic and is to be such primitive as that
 //! is possible.
 
+#![deny(unused_crate_dependencies)]
 #![deny(missing_docs)]
 
 #[doc(no_inline)]
@@ -23,16 +24,32 @@ pub mod services;
 
 /// Re-export of some fuel-vm types
 pub mod fuel_vm {
+    #[cfg(feature = "debug")]
     #[doc(no_inline)]
-    pub use fuel_vm_private::crypto;
+    pub use fuel_vm_private::prelude::Breakpoint;
+
     #[doc(no_inline)]
-    pub use fuel_vm_private::prelude::{
-        Backtrace,
-        Contract,
-        Interpreter,
-        InterpreterError,
-        InterpreterStorage,
-        PredicateStorage,
-        ProgramState,
+    pub use fuel_vm_private::{
+        consts,
+        crypto,
+        interpreter,
+        prelude::{
+            Backtrace,
+            Call,
+            CallFrame,
+            Contract,
+            Interpreter,
+            InterpreterError,
+            InterpreterStorage,
+            PredicateStorage,
+            ProgramState,
+            Salt,
+            SecretKey,
+            Signature,
+            Transactor,
+        },
+        script_with_data_offset,
+        state,
+        util,
     };
 }

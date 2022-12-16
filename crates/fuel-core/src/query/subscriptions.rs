@@ -2,10 +2,8 @@ use crate::schema::tx::types::{
     SqueezedOutStatus,
     TransactionStatus,
 };
-use fuel_core_interfaces::{
-    common::prelude::Bytes32,
-    txpool::TxUpdate,
-};
+use fuel_core_txpool::service::TxUpdate;
+use fuel_core_types::fuel_types::Bytes32;
 use futures::{
     stream::BoxStream,
     Stream,
@@ -23,7 +21,7 @@ pub(crate) trait TxnStatusChangeState {
     /// Return the transaction status from the tx pool and database.
     async fn get_tx_status(
         &self,
-        id: fuel_core_interfaces::common::fuel_types::Bytes32,
+        id: fuel_core_types::fuel_types::Bytes32,
     ) -> anyhow::Result<Option<TransactionStatus>>;
 }
 

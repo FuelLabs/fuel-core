@@ -12,7 +12,12 @@ use fuel_core_client::client::{
     PageDirection,
     PaginationRequest,
 };
-use fuel_core_interfaces::common::fuel_vm::prelude::*;
+use fuel_core_types::{
+    fuel_asm::*,
+    fuel_tx::*,
+    fuel_types::bytes::*,
+    fuel_vm::*,
+};
 use rstest::rstest;
 
 const SEED: u64 = 2322;
@@ -114,10 +119,7 @@ fn key(i: u8) -> Bytes32 {
 
 #[tokio::test]
 async fn can_get_message_proof() {
-    use fuel_core_client::{
-        consts::*,
-        prelude::*,
-    };
+    use fuel_core_types::fuel_vm::consts::*;
 
     let config = Config::local_node();
     let coin = config

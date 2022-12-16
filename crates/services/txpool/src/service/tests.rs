@@ -1,10 +1,10 @@
 use super::*;
 use crate::service::test_helpers::TestContext;
-use fuel_core_interfaces::txpool::{
-    Error as TxpoolError,
-    TxPoolMpsc,
+use fuel_core_interfaces::txpool::TxPoolMpsc;
+use fuel_core_types::{
+    fuel_tx::UniqueIdentifier,
+    services::txpool::Error as TxpoolError,
 };
-use fuel_core_types::fuel_tx::UniqueIdentifier;
 use tokio::sync::oneshot;
 
 #[tokio::test]
@@ -170,7 +170,7 @@ async fn simple_insert_removal_subscription() {
         tokio::time::timeout(std::time::Duration::from_secs(2), subscribe_status.recv())
             .await,
         Ok(Ok(TxStatus::SqueezedOut {
-            reason: TxpoolError::Removed.to_string()
+            reason: TxpoolError::Removed
         })),
         "First removed should be tx1"
     );
@@ -185,7 +185,7 @@ async fn simple_insert_removal_subscription() {
         tokio::time::timeout(std::time::Duration::from_secs(2), subscribe_status.recv())
             .await,
         Ok(Ok(TxStatus::SqueezedOut {
-            reason: TxpoolError::Removed.to_string()
+            reason: TxpoolError::Removed
         })),
         "Second removed should be tx2"
     );

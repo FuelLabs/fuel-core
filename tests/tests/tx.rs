@@ -13,14 +13,6 @@ use fuel_core_client::client::{
     PageDirection,
     PaginationRequest,
 };
-use fuel_core_interfaces::common::{
-    fuel_tx,
-    fuel_vm::{
-        consts::*,
-        prelude::*,
-    },
-    tai64::Tai64,
-};
 use fuel_core_types::{
     blockchain::{
         block::PartialFuelBlock,
@@ -29,7 +21,11 @@ use fuel_core_types::{
             PartialBlockHeader,
         },
     },
+    fuel_asm::*,
+    fuel_tx::*,
+    fuel_vm::consts::*,
     services::executor::ExecutionBlock,
+    tai64::Tai64,
 };
 use itertools::Itertools;
 use rand::{
@@ -83,7 +79,7 @@ async fn dry_run_script() {
         .flat_map(|op| u32::from(*op).to_be_bytes())
         .collect();
 
-    let tx = fuel_tx::Transaction::script(
+    let tx = Transaction::script(
         gas_price,
         gas_limit,
         maturity,
@@ -124,9 +120,9 @@ async fn dry_run_create() {
 
     let salt: Salt = rng.gen();
     let contract_code = vec![];
-    let contract = fuel_tx::Contract::from(contract_code.clone());
+    let contract = Contract::from(contract_code.clone());
     let root = contract.root();
-    let state_root = fuel_tx::Contract::default_state_root();
+    let state_root = Contract::default_state_root();
     let contract_id = contract.id(&salt, &root, &state_root);
 
     let tx = Transaction::create(
@@ -173,7 +169,7 @@ async fn submit() {
         .flat_map(|op| u32::from(*op).to_be_bytes())
         .collect();
 
-    let tx = fuel_tx::Transaction::script(
+    let tx = Transaction::script(
         gas_price,
         gas_limit,
         maturity,
@@ -209,7 +205,7 @@ async fn transaction_status_submitted() {
 
 #[tokio::test]
 async fn receipts() {
-    let transaction = fuel_tx::Transaction::default();
+    let transaction = Transaction::default();
     let id = transaction.id();
     // setup server & client
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
@@ -227,7 +223,7 @@ async fn receipts() {
 #[tokio::test]
 async fn get_transaction_by_id() {
     // setup test data in the node
-    let transaction = fuel_tx::Transaction::default();
+    let transaction = Transaction::default();
     let id = transaction.id();
 
     // setup server & client
@@ -249,7 +245,7 @@ async fn get_transaction_by_id() {
 
 #[tokio::test]
 async fn get_transparent_transaction_by_id() {
-    let transaction = fuel_tx::Transaction::default();
+    let transaction = Transaction::default();
     let id = transaction.id();
 
     // setup server & client
@@ -600,7 +596,7 @@ async fn initialize_client(db: Database) -> FuelClient {
 
 // add random val for unique tx
 fn create_mock_tx(val: u64) -> Transaction {
-    fuel_tx::Transaction::script(
+    Transaction::script(
         0,
         0,
         0,

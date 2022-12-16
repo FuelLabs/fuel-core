@@ -3,15 +3,6 @@
 use anyhow::anyhow;
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
-    common::{
-        consts::REG_ZERO,
-        fuel_tx::TransactionBuilder,
-        prelude::*,
-        secrecy::{
-            ExposeSecret,
-            Secret,
-        },
-    },
     poa_coordinator::TransactionPool,
 };
 use fuel_core_poa::{
@@ -28,7 +19,7 @@ use fuel_core_storage::{
         StorageTransaction,
         Transactional,
     },
-    Error as StorageError,
+    Result as StorageResult,
 };
 use fuel_core_types::{
     blockchain::{
@@ -43,6 +34,14 @@ use fuel_core_types::{
             BlockId,
             SecretKeyWrapper,
         },
+    },
+    fuel_asm::*,
+    fuel_crypto::SecretKey,
+    fuel_tx::*,
+    fuel_vm::consts::REG_ZERO,
+    secrecy::{
+        ExposeSecret,
+        Secret,
     },
     services::{
         executor::{
@@ -96,7 +95,7 @@ impl MockBlockProducer {
 }
 
 impl Transactional<MockDatabase> for MockDatabase {
-    fn commit(&mut self) -> Result<(), StorageError> {
+    fn commit(&mut self) -> StorageResult<()> {
         Ok(())
     }
 }

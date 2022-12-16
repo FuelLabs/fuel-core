@@ -19,7 +19,10 @@ use fuel_core_types::{
         Bytes32,
         ContractId,
     },
-    services::executor::Error,
+    services::executor::{
+        Error as ExecutorError,
+        Result as ExecutorResult,
+    },
 };
 use std::{
     borrow::Cow,
@@ -56,7 +59,7 @@ impl<Database> ContractRef<Database> {
 impl<Database> ContractRef<Database>
 where
     Database: StorageInspect<ContractsLatestUtxo>,
-    Error: From<Database::Error>,
+    ExecutorError: From<Database::Error>,
 {
     pub fn utxo(
         &self,
@@ -71,19 +74,19 @@ where
 impl<Database> ContractRef<Database>
 where
     Database: StorageInspect<ContractsLatestUtxo>,
-    Error: From<Database::Error>,
+    ExecutorError: From<Database::Error>,
 {
     pub fn validated_utxo(
         &self,
         utxo_validation: bool,
-    ) -> Result<<ContractsLatestUtxo as Mappable>::GetValue, Error> {
+    ) -> ExecutorResult<<ContractsLatestUtxo as Mappable>::GetValue> {
         let maybe_utxo_id = self.utxo()?.map(|utxo| utxo.into_owned());
         let expected_utxo_id = if utxo_validation {
-            maybe_utxo_id.ok_or(Error::ContractUtxoMissing(self.contract_id))?
+            maybe_utxo_id.ok_or(ExecutorError::ContractUtxoMissing(self.contract_id))?
         } else {
             maybe_utxo_id.unwrap_or_default()
         };
-        Result::<_, Error>::Ok(expected_utxo_id)
+        Ok(expected_utxo_id)
     }
 }
 
@@ -93,7 +96,7 @@ where
 {
     pub fn balance_root(
         &mut self,
-    ) -> Result<Bytes32, <Database as StorageInspect<ContractsAssets<'_>>>::Error> {
+    ) -> Result<Bytes32, <Database as StorageInspect<ContractsAssets>>::Error> {
         self.database.root(&self.contract_id).map(Into::into)
     }
 }
@@ -104,7 +107,7 @@ where
 {
     pub fn state_root(
         &mut self,
-    ) -> Result<Bytes32, <Database as StorageInspect<ContractsState<'_>>>::Error> {
+    ) -> Result<Bytes32, <Database as StorageInspect<ContractsState>>::Error> {
         self.database.root(&self.contract_id).map(Into::into)
     }
 }

@@ -33,13 +33,13 @@ impl StorageInspect<ContractsAssets<'_>> for Database {
     fn get(
         &self,
         key: &(&ContractId, &AssetId),
-    ) -> Result<Option<Cow<Word>>, StorageError> {
+    ) -> Result<Option<Cow<Word>>, Self::Error> {
         let key = MultiKey::new(key);
         self.get(key.as_ref(), Column::ContractsAssets)
             .map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &(&ContractId, &AssetId)) -> Result<bool, StorageError> {
+    fn contains_key(&self, key: &(&ContractId, &AssetId)) -> Result<bool, Self::Error> {
         let key = MultiKey::new(key);
         self.exists(key.as_ref(), Column::ContractsAssets)
             .map_err(Into::into)
@@ -51,7 +51,7 @@ impl StorageMutate<ContractsAssets<'_>> for Database {
         &mut self,
         key: &(&ContractId, &AssetId),
         value: &Word,
-    ) -> Result<Option<Word>, StorageError> {
+    ) -> Result<Option<Word>, Self::Error> {
         let key = MultiKey::new(key);
         Database::insert(self, key.as_ref(), Column::ContractsAssets, *value)
             .map_err(Into::into)
@@ -60,14 +60,14 @@ impl StorageMutate<ContractsAssets<'_>> for Database {
     fn remove(
         &mut self,
         key: &(&ContractId, &AssetId),
-    ) -> Result<Option<Word>, StorageError> {
+    ) -> Result<Option<Word>, Self::Error> {
         let key = MultiKey::new(key);
         Database::remove(self, key.as_ref(), Column::ContractsAssets).map_err(Into::into)
     }
 }
 
 impl MerkleRootStorage<ContractId, ContractsAssets<'_>> for Database {
-    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, StorageError> {
+    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Self::Error> {
         let items: Vec<_> = Database::iter_all::<Vec<u8>, Word>(
             self,
             Column::ContractsAssets,
@@ -92,7 +92,7 @@ impl MerkleRootStorage<ContractId, ContractsAssets<'_>> for Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_interfaces::common::fuel_storage::StorageAsMut;
+    use fuel_core_storage::StorageAsMut;
 
     #[test]
     fn get() {

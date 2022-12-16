@@ -11,13 +11,9 @@ use crate::{
         Config,
     },
 };
-use anyhow::Result;
-use fuel_core_interfaces::{
-    self,
-    txpool::{
-        Sender,
-        TxPoolDb,
-    },
+use fuel_core_interfaces::txpool::{
+    Sender,
+    TxPoolDb,
 };
 use fuel_core_txpool::service::TxStatusChange;
 use futures::future::join_all;
@@ -78,7 +74,10 @@ impl CoordinatorService {
     }
 }
 
-pub async fn start_modules(config: &Config, database: &Database) -> Result<Modules> {
+pub async fn start_modules(
+    config: &Config,
+    database: &Database,
+) -> anyhow::Result<Modules> {
     let db = ();
 
     // Initialize and bind all components

@@ -5,10 +5,10 @@ use crate::client::schema::{
     },
     ConversionError,
 };
-use fuel_vm::{
+use fuel_core_types::{
     fuel_tx::Transaction,
     fuel_types::bytes::Deserializable,
-    prelude::ProgramState,
+    fuel_vm::ProgramState,
 };
 use serde::{
     Deserialize,
@@ -77,9 +77,8 @@ impl TryFrom<OpaqueTransaction> for TransactionResponse {
 
     fn try_from(value: OpaqueTransaction) -> Result<Self, Self::Error> {
         let bytes = value.raw_payload.0 .0;
-        let tx: ::fuel_vm::fuel_tx::Transaction =
-            ::fuel_vm::fuel_tx::Transaction::from_bytes(bytes.as_slice())
-                .map_err(ConversionError::TransactionFromBytesError)?;
+        let tx: Transaction = Transaction::from_bytes(bytes.as_slice())
+            .map_err(ConversionError::TransactionFromBytesError)?;
         let status = value
             .status
             .ok_or_else(|| ConversionError::MissingField("status".to_string()))?

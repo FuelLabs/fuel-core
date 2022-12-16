@@ -2,10 +2,11 @@ use crate::{
     database::{
         Column,
         Database,
+        Error as DatabaseError,
+        Result as DatabaseResult,
     },
     state::IterDirection,
 };
-use fuel_core_database::Error as DatabaseError;
 use fuel_core_storage::{
     not_found,
     tables::{
@@ -13,6 +14,7 @@ use fuel_core_storage::{
         Transactions,
     },
     Error as StorageError,
+    Result as StorageResult,
     StorageAsRef,
     StorageInspect,
     StorageMutate,
@@ -80,7 +82,7 @@ impl StorageMutate<FuelBlocks> for Database {
 }
 
 impl Database {
-    pub fn get_block_height(&self) -> Result<Option<BlockHeight>, DatabaseError> {
+    pub fn get_block_height(&self) -> DatabaseResult<Option<BlockHeight>> {
         let block_entry = self.latest_block()?;
         // get block height from most recently indexed block
         let mut id = block_entry.map(|(height, _)| {
@@ -96,9 +98,7 @@ impl Database {
     }
 
     /// Get the current block at the head of the chain.
-    pub fn get_current_block(
-        &self,
-    ) -> Result<Option<Cow<CompressedBlock>>, DatabaseError> {
+    pub fn get_current_block(&self) -> StorageResult<Option<Cow<CompressedBlock>>> {
         let block_entry = self.latest_block()?;
         match block_entry {
             Some((_, id)) => Ok(StorageAsRef::storage::<FuelBlocks>(self).get(&id)?),
@@ -106,7 +106,7 @@ impl Database {
         }
     }
 
-    pub fn block_time(&self, height: u32) -> Result<Tai64, StorageError> {
+    pub fn block_time(&self, height: u32) -> StorageResult<Tai64> {
         let id = self.get_block_id(height.into())?.unwrap_or_default();
         let block = self
             .storage::<FuelBlocks>()
@@ -115,10 +115,7 @@ impl Database {
         Ok(block.header().time().to_owned())
     }
 
-    pub fn get_block_id(
-        &self,
-        height: BlockHeight,
-    ) -> Result<Option<Bytes32>, StorageError> {
+    pub fn get_block_id(&self, height: BlockHeight) -> StorageResult<Option<Bytes32>> {
         Database::get(self, &height.to_bytes()[..], Column::FuelBlockIds)
             .map_err(Into::into)
     }
@@ -127,7 +124,7 @@ impl Database {
         &self,
         start: Option<BlockHeight>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = Result<(BlockHeight, Bytes32), DatabaseError>> + '_ {
+    ) -> impl Iterator<Item = DatabaseResult<(BlockHeight, Bytes32)>> + '_ {
         let start = start.map(|b| b.to_bytes().to_vec());
         self.iter_all::<Vec<u8>, Bytes32>(Column::FuelBlockIds, None, start, direction)
             .map(|res| {
@@ -141,7 +138,7 @@ impl Database {
             })
     }
 
-    pub fn genesis_block_ids(&self) -> Result<(BlockHeight, Bytes32), DatabaseError> {
+    pub fn genesis_block_ids(&self) -> DatabaseResult<(BlockHeight, Bytes32)> {
         self.iter_all(
             Column::FuelBlockIds,
             None,
@@ -157,7 +154,7 @@ impl Database {
         })
     }
 
-    fn latest_block(&self) -> Result<Option<(Vec<u8>, Bytes32)>, DatabaseError> {
+    fn latest_block(&self) -> DatabaseResult<Option<(Vec<u8>, Bytes32)>> {
         self.iter_all(
             Column::FuelBlockIds,
             None,
@@ -172,7 +169,7 @@ impl Database {
     pub(crate) fn get_full_block(
         &self,
         block_id: &Bytes32,
-    ) -> Result<Option<Block>, DatabaseError> {
+    ) -> StorageResult<Option<Block>> {
         let db_block = self.storage::<FuelBlocks>().get(block_id)?;
         if let Some(block) = db_block {
             // fetch all the transactions

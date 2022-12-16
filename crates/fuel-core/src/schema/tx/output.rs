@@ -11,7 +11,7 @@ use async_graphql::{
     Object,
     Union,
 };
-use fuel_core_interfaces::common::{
+use fuel_core_types::{
     fuel_asm::Word,
     fuel_tx,
     fuel_types,

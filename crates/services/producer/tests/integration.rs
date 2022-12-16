@@ -1,29 +1,6 @@
 use anyhow::Result;
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
-    common::{
-        fuel_asm::Opcode,
-        fuel_crypto::{
-            PublicKey,
-            SecretKey,
-        },
-        fuel_merkle::common::Bytes32,
-        fuel_tx::{
-            Chargeable,
-            ConsensusParameters,
-            Output,
-            Script,
-            Signable,
-            TransactionBuilder,
-            UtxoId,
-        },
-        fuel_types::{
-            Address,
-            AssetId,
-        },
-        fuel_vm::consts::REG_ZERO,
-        prelude::StorageAsMut,
-    },
     txpool::Sender as TxPoolSender,
 };
 use fuel_core_producer::{
@@ -35,7 +12,10 @@ use fuel_core_producer::{
     },
     Producer,
 };
-use fuel_core_storage::tables::Coins;
+use fuel_core_storage::{
+    tables::Coins,
+    StorageAsMut,
+};
 use fuel_core_txpool::{
     service::TxStatusChange,
     Config as TxPoolConfig,
@@ -44,10 +24,11 @@ use fuel_core_txpool::{
 };
 use fuel_core_types::{
     blockchain::block::CompressedBlock,
-    entities::coin::{
-        Coin,
-        CoinStatus,
-    },
+    entities::coin::*,
+    fuel_asm::Opcode,
+    fuel_crypto::*,
+    fuel_tx::*,
+    fuel_vm::consts::REG_ZERO,
     services::executor::ExecutionResult,
 };
 use rand::{
@@ -106,7 +87,7 @@ async fn block_producer() -> Result<()> {
         txpool_db
             .storage::<Coins>()
             .insert(
-                &UtxoId::new(coin.id.into(), coin.index),
+                &UtxoId::new(coin.id, coin.index),
                 &Coin {
                     owner: coin.address(),
                     amount: COIN_AMOUNT,
@@ -169,7 +150,7 @@ async fn block_producer() -> Result<()> {
             sender: txpool.sender().clone(),
         }),
         executor: Arc::new(MockExecutor(mock_db.clone())),
-        relayer: Box::new(MockRelayer::default()),
+        relayer: Box::<MockRelayer>::default(),
         lock: Default::default(),
         dry_run_semaphore: Semaphore::new(1),
     };
@@ -303,7 +284,7 @@ impl CoinInfo {
     }
 
     pub fn utxo_id(&self) -> UtxoId {
-        UtxoId::new(self.id.into(), self.index)
+        UtxoId::new(self.id, self.index)
     }
 }
 

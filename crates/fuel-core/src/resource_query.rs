@@ -9,7 +9,6 @@ use crate::database::{
     Database,
 };
 use core::mem::swap;
-use fuel_core_database::Error as DatabaseError;
 use fuel_core_storage::Error as StorageError;
 use fuel_core_types::{
     entities::{
@@ -34,8 +33,6 @@ use thiserror::Error;
 pub enum ResourceQueryError {
     #[error("store error occurred")]
     StorageError(StorageError),
-    #[error("state error occurred")]
-    DatabaseError(DatabaseError),
     #[error("not enough resources to fit the target")]
     InsufficientResources {
         asset_id: AssetId,
@@ -211,37 +208,23 @@ impl From<StorageError> for ResourceQueryError {
     }
 }
 
-impl From<DatabaseError> for ResourceQueryError {
-    fn from(e: DatabaseError) -> Self {
-        ResourceQueryError::DatabaseError(e)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::database::Database;
     use assert_matches::assert_matches;
-    use fuel_core_interfaces::common::{
-        fuel_asm::Word,
-        fuel_storage::{
-            StorageAsMut,
-            StorageAsRef,
+    use fuel_core_storage::{
+        tables::{
+            Coins,
+            Messages,
         },
-        fuel_tx::{
-            Address,
-            AssetId,
-            Bytes32,
-            UtxoId,
-        },
-        fuel_types::MessageId,
-    };
-    use fuel_core_storage::tables::{
-        Coins,
-        Messages,
+        StorageAsMut,
+        StorageAsRef,
     };
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         entities::coin::CoinStatus,
+        fuel_asm::Word,
+        fuel_tx::*,
     };
     use itertools::Itertools;
 

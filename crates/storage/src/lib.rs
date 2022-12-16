@@ -4,14 +4,19 @@
 //! defined here are used by services but are flexible enough to customize the
 //! logic when the `Database` is known.
 
+#![deny(unused_crate_dependencies)]
 #![deny(missing_docs)]
 
+use fuel_core_types::services::executor::Error as ExecutorError;
 use std::io::ErrorKind;
 
 pub use fuel_vm_private::fuel_storage::*;
 
 pub mod tables;
 pub mod transactional;
+
+/// The storage result alias.
+pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(thiserror::Error, Debug)]
 #[non_exhaustive]
@@ -38,17 +43,9 @@ impl From<Error> for std::io::Error {
     }
 }
 
-impl From<Error> for fuel_core_types::services::executor::Error {
+impl From<Error> for ExecutorError {
     fn from(e: Error) -> Self {
-        fuel_core_types::services::executor::Error::CorruptedBlockState(Box::new(e))
-    }
-}
-
-impl From<Error> for fuel_core_types::services::executor::TransactionValidityError {
-    fn from(e: Error) -> Self {
-        fuel_core_types::services::executor::TransactionValidityError::DataStoreError(
-            Box::new(e),
-        )
+        ExecutorError::StorageError(Box::new(e))
     }
 }
 
@@ -91,7 +88,7 @@ mod test {
         #[rustfmt::skip]
         assert_eq!(
             format!("{}", not_found!(Coins)),
-            format!("resource of type `fuel_core_interfaces::model::coin::Coin` was not found at the: {}:{}", file!(), line!() - 1)
+            format!("resource of type `fuel_core_types::entities::coin::Coin` was not found at the: {}:{}", file!(), line!() - 1)
         );
     }
 }

@@ -15,7 +15,7 @@ use async_graphql::{
     Object,
 };
 use derive_more::Display;
-use fuel_core_interfaces::common::{
+use fuel_core_types::{
     fuel_asm::Word,
     fuel_tx,
     fuel_types::bytes::SerializableVec,

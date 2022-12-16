@@ -67,7 +67,7 @@ where
             let event: EthEventLog = (&event).try_into()?;
             match event {
                 EthEventLog::Message(m) => {
-                    use fuel_core_interfaces::common::fuel_storage::StorageMutate;
+                    use fuel_core_storage::StorageMutate;
                     let m: Message = (&m).into();
                     // Add messages to database
                     StorageMutate::<Messages>::insert(database, &m.id(), &m)?;

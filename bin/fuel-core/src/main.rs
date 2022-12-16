@@ -1,3 +1,5 @@
+#![deny(unused_crate_dependencies)]
+
 use fuel_core::service::FuelService;
 
 mod cli;

@@ -409,27 +409,20 @@ pub fn seal_block(
 #[cfg(test)]
 mod test {
     use super::*;
-    use fuel_core_interfaces::{
-        common::{
-            fuel_crypto::SecretKey,
-            fuel_tx::{
-                Receipt,
-                Transaction,
-                TransactionBuilder,
-                TxId,
-            },
-        },
-        txpool::Error::NoMetadata,
-    };
     use fuel_core_storage::{
         transactional::Transactional,
-        Error as StorageError,
+        Result as StorageResult,
     };
     use fuel_core_types::{
         blockchain::primitives::BlockId,
+        fuel_crypto::SecretKey,
+        fuel_tx::*,
         services::{
             executor::Error as ExecutorError,
-            txpool::ArcPoolTx,
+            txpool::{
+                ArcPoolTx,
+                Error as TxPoolError,
+            },
         },
     };
     use rand::{
@@ -473,7 +466,7 @@ mod test {
         }
 
         impl Transactional<MockDatabase> for Database {
-            fn commit(&mut self) -> Result<(), StorageError>;
+            fn commit(&mut self) -> StorageResult<()>;
         }
 
         impl AsRef<MockDatabase> for Database {
@@ -660,7 +653,7 @@ mod test {
         task.on_txpool_event(&TxStatus::Submitted).await.unwrap();
         task.on_txpool_event(&TxStatus::Completed).await.unwrap();
         task.on_txpool_event(&TxStatus::SqueezedOut {
-            reason: NoMetadata.to_string(),
+            reason: TxPoolError::NoMetadata,
         })
         .await
         .unwrap();
@@ -722,7 +715,7 @@ mod test {
         txpool_tx.send(TxStatus::Completed).unwrap();
         txpool_tx
             .send(TxStatus::SqueezedOut {
-                reason: NoMetadata.to_string(),
+                reason: TxPoolError::NoMetadata,
             })
             .unwrap();
 

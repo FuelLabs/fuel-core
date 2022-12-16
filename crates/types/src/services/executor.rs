@@ -26,8 +26,9 @@ use crate::{
     },
 };
 use std::error::Error as StdError;
-use tai64::Tai64;
-use thiserror::Error;
+
+/// The alias for executor result.
+pub type Result<T> = core::result::Result<T, Error>;
 
 /// The result of transactions execution.
 #[derive(Debug)]
@@ -55,19 +56,11 @@ pub struct TransactionExecutionStatus {
 pub enum TransactionExecutionResult {
     /// Transaction was successfully executed.
     Success {
-        /// Included in this block
-        block_id: Option<BlockId>,
-        /// Time when the block was generated
-        time: Tai64,
         /// The result of successful transaction execution.
         result: Option<ProgramState>,
     },
     /// The execution of the transaction failed.
     Failed {
-        /// Included in this block
-        block_id: Option<BlockId>,
-        /// Time when the block was generated
-        time: Tai64,
         /// The result of failed transaction execution.
         result: Option<ProgramState>,
         /// The reason of execution failure.
@@ -281,7 +274,7 @@ impl ExecutionKind {
 }
 
 #[allow(missing_docs)]
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 #[non_exhaustive]
 pub enum Error {
     #[error("Transaction id was already used: {0:#x}")]
@@ -302,8 +295,10 @@ pub enum Error {
     CoinbaseAmountMismatch,
     #[error("Invalid transaction: {0}")]
     TransactionValidity(#[from] TransactionValidityError),
-    #[error("corrupted block state")]
-    CorruptedBlockState(Box<dyn StdError + Send + Sync>),
+    // TODO: Replace with `fuel_core_storage::Error` when execution error will live in the
+    //  `fuel-core-executor`.
+    #[error("got error during work with storage {0}")]
+    StorageError(Box<dyn StdError + Send + Sync>),
     #[error("Transaction({transaction_id:#x}) execution error: {error:?}")]
     VmExecution {
         error: InterpreterError,
@@ -332,7 +327,7 @@ impl From<Backtrace> for Error {
 }
 
 #[allow(missing_docs)]
-#[derive(Debug, Error)]
+#[derive(thiserror::Error, Debug)]
 #[non_exhaustive]
 pub enum TransactionValidityError {
     #[error("Coin input was already spent")]
@@ -361,6 +356,4 @@ pub enum TransactionValidityError {
     InvalidPredicate(TxId),
     #[error("Transaction validity: {0:#?}")]
     Validation(#[from] CheckError),
-    #[error("Datastore error occurred")]
-    DataStoreError(Box<dyn StdError + Send + Sync>),
 }

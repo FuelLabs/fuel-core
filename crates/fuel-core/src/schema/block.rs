@@ -28,11 +28,6 @@ use async_graphql::{
     SimpleObject,
     Union,
 };
-use fuel_core_interfaces::common::{
-    fuel_storage::StorageAsRef,
-    fuel_types,
-    tai64::Tai64,
-};
 use fuel_core_poa::service::seal_block;
 use fuel_core_producer::ports::Executor as ExecutorTrait;
 use fuel_core_storage::{
@@ -42,6 +37,8 @@ use fuel_core_storage::{
         SealedBlockConsensus,
         Transactions,
     },
+    Result as StorageResult,
+    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{
@@ -56,10 +53,12 @@ use fuel_core_types::{
             PartialBlockHeader,
         },
     },
+    fuel_types,
     services::executor::{
         ExecutionBlock,
         ExecutionResult,
     },
+    tai64::Tai64,
 };
 use itertools::Itertools;
 use std::convert::TryInto;
@@ -76,6 +75,9 @@ pub enum Consensus {
     Genesis(Genesis),
     PoA(PoAConsensus),
 }
+
+type CoreGenesis = fuel_core_types::blockchain::consensus::Genesis;
+type CoreConsensus = fuel_core_types::blockchain::consensus::Consensus;
 
 #[derive(SimpleObject)]
 pub struct Genesis {
@@ -97,8 +99,7 @@ pub struct PoAConsensus {
 #[Object]
 impl Block {
     async fn id(&self) -> BlockId {
-        let bytes: fuel_core_interfaces::common::prelude::Bytes32 =
-            self.header.0.id().into();
+        let bytes: fuel_core_types::fuel_types::Bytes32 = self.header.0.id().into();
         bytes.into()
     }
 
@@ -141,7 +142,7 @@ impl Block {
 impl Header {
     /// Hash of the header
     async fn id(&self) -> BlockId {
-        let bytes: fuel_core_interfaces::common::prelude::Bytes32 = self.0.id().into();
+        let bytes: fuel_core_types::fuel_types::Bytes32 = self.0.id().into();
         bytes.into()
     }
 
@@ -288,11 +289,12 @@ fn blocks_query<T>(
     db: &Database,
     start: Option<usize>,
     direction: IterDirection,
-) -> anyhow::Result<impl Iterator<Item = anyhow::Result<(usize, T)>> + '_>
+) -> StorageResult<impl Iterator<Item = StorageResult<(usize, T)>> + '_>
 where
     T: async_graphql::OutputType,
     T: From<CompressedBlock>,
 {
+    // TODO: Remove `try_collect`
     let blocks: Vec<_> = db
         .all_block_ids(start.map(Into::into), Some(direction))
         .try_collect()?;
@@ -413,7 +415,7 @@ fn check_start_after_latest_block(db: &Database, start_time: u64) -> anyhow::Res
     }
 
     let latest_time = db.block_time(current_height.into())?.0;
-    if latest_time as u64 > start_time {
+    if latest_time > start_time {
         return Err(anyhow!(
             "The start time must be set after the latest block time: {}",
             latest_time
@@ -456,8 +458,8 @@ impl From<CompressedBlock> for Header {
     }
 }
 
-impl From<fuel_core_types::blockchain::consensus::Genesis> for Genesis {
-    fn from(genesis: fuel_core_types::blockchain::consensus::Genesis) -> Self {
+impl From<CoreGenesis> for Genesis {
+    fn from(genesis: CoreGenesis) -> Self {
         Genesis {
             chain_config_hash: genesis.chain_config_hash.into(),
             coins_root: genesis.coins_root.into(),
@@ -467,17 +469,13 @@ impl From<fuel_core_types::blockchain::consensus::Genesis> for Genesis {
     }
 }
 
-impl From<fuel_core_types::blockchain::consensus::Consensus> for Consensus {
-    fn from(consensus: fuel_core_types::blockchain::consensus::Consensus) -> Self {
+impl From<CoreConsensus> for Consensus {
+    fn from(consensus: CoreConsensus) -> Self {
         match consensus {
-            fuel_core_types::blockchain::consensus::Consensus::Genesis(genesis) => {
-                Consensus::Genesis(genesis.into())
-            }
-            fuel_core_types::blockchain::consensus::Consensus::PoA(poa) => {
-                Consensus::PoA(PoAConsensus {
-                    signature: poa.signature.into(),
-                })
-            }
+            CoreConsensus::Genesis(genesis) => Consensus::Genesis(genesis.into()),
+            CoreConsensus::PoA(poa) => Consensus::PoA(PoAConsensus {
+                signature: poa.signature.into(),
+            }),
         }
     }
 }

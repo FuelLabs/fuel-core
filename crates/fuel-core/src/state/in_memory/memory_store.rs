@@ -1,5 +1,8 @@
 use crate::{
-    database::Column,
+    database::{
+        Column,
+        Result as DatabaseResult,
+    },
     state::{
         in_memory::{
             column_key,
@@ -9,7 +12,6 @@ use crate::{
         ColumnId,
         IterDirection,
         KeyValueStore,
-        Result,
         TransactableStorage,
     },
 };
@@ -27,7 +29,7 @@ pub struct MemoryStore {
 }
 
 impl KeyValueStore for MemoryStore {
-    fn get(&self, key: &[u8], column: Column) -> Result<Option<Vec<u8>>> {
+    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
         Ok(self
             .inner
             .lock()
@@ -36,7 +38,12 @@ impl KeyValueStore for MemoryStore {
             .cloned())
     }
 
-    fn put(&self, key: &[u8], column: Column, value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+    fn put(
+        &self,
+        key: &[u8],
+        column: Column,
+        value: Vec<u8>,
+    ) -> DatabaseResult<Option<Vec<u8>>> {
         Ok(self
             .inner
             .lock()
@@ -44,7 +51,7 @@ impl KeyValueStore for MemoryStore {
             .insert(column_key(key, column), value))
     }
 
-    fn delete(&self, key: &[u8], column: Column) -> Result<Option<Vec<u8>>> {
+    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
         Ok(self
             .inner
             .lock()
@@ -52,7 +59,7 @@ impl KeyValueStore for MemoryStore {
             .remove(&column_key(key, column)))
     }
 
-    fn exists(&self, key: &[u8], column: Column) -> Result<bool> {
+    fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
         Ok(self
             .inner
             .lock()
@@ -66,7 +73,7 @@ impl KeyValueStore for MemoryStore {
         prefix: Option<Vec<u8>>,
         start: Option<Vec<u8>>,
         direction: IterDirection,
-    ) -> Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>)>> + '_> {
+    ) -> Box<dyn Iterator<Item = DatabaseResult<(Vec<u8>, Vec<u8>)>> + '_> {
         // clone entire set so we can drop the lock
         let mut copy: Vec<(Vec<u8>, Vec<u8>)> = self
             .inner

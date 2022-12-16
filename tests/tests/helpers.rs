@@ -11,12 +11,9 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::FuelClient;
-use fuel_core_interfaces::common::{
-    fuel_tx::{
-        field::Inputs,
-        Contract,
-    },
-    fuel_vm::prelude::*,
+use fuel_core_types::fuel_tx::{
+    field::Inputs,
+    *,
 };
 use itertools::Itertools;
 use rand::{

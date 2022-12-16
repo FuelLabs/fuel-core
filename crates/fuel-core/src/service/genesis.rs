@@ -12,21 +12,6 @@ use fuel_core_chain_config::{
     StateConfig,
 };
 use fuel_core_executor::refs::ContractRef;
-use fuel_core_interfaces::common::{
-    fuel_merkle::binary,
-    fuel_storage::StorageAsMut,
-    fuel_tx::{
-        Contract,
-        MessageId,
-        UtxoId,
-    },
-    fuel_types::{
-        bytes::WORD_SIZE,
-        Bytes32,
-        ContractId,
-    },
-    prelude::MerkleRoot,
-};
 use fuel_core_poa::ports::BlockDb;
 use fuel_core_storage::{
     tables::{
@@ -40,6 +25,8 @@ use fuel_core_storage::{
         Messages,
     },
     transactional::Transactional,
+    MerkleRoot,
+    StorageAsMut,
 };
 use fuel_core_types::{
     blockchain::{
@@ -61,6 +48,17 @@ use fuel_core_types::{
             CoinStatus,
         },
         message::Message,
+    },
+    fuel_merkle::binary,
+    fuel_tx::{
+        Contract,
+        MessageId,
+        UtxoId,
+    },
+    fuel_types::{
+        bytes::WORD_SIZE,
+        Bytes32,
+        ContractId,
     },
 };
 use itertools::Itertools;
@@ -126,7 +124,7 @@ impl FuelService {
                         .as_ref()
                         .map(|config| config.height.unwrap_or_else(|| 0u32.into()))
                         .unwrap_or_else(|| 0u32.into()),
-                    time: fuel_core_interfaces::common::tai64::Tai64::UNIX_EPOCH,
+                    time: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
                     generated: Empty,
                 },
                 metadata: None,
@@ -351,18 +349,18 @@ mod tests {
         CoinConfig,
         MessageConfig,
     };
-    use fuel_core_interfaces::common::{
+    use fuel_core_storage::StorageAsRef;
+    use fuel_core_types::{
+        blockchain::primitives::{
+            BlockHeight,
+            DaBlockHeight,
+        },
         fuel_asm::Opcode,
-        fuel_crypto::fuel_types::Salt,
-        fuel_storage::StorageAsRef,
         fuel_types::{
             Address,
             AssetId,
+            Salt,
         },
-    };
-    use fuel_core_types::blockchain::primitives::{
-        BlockHeight,
-        DaBlockHeight,
     };
     use itertools::Itertools;
     use rand::{
@@ -645,14 +643,12 @@ mod tests {
     fn get_coins(db: &Database, owner: &Address) -> Vec<(UtxoId, Coin)> {
         db.owned_coins_ids(owner, None, None)
             .map(|r| {
-                r.and_then(|coin_id| {
-                    Ok(db
-                        .storage::<Coins>()
-                        .get(&coin_id)
-                        .map(|v| (coin_id, v.unwrap().into_owned()))?)
-                })
+                let coin_id = r.unwrap();
+                db.storage::<Coins>()
+                    .get(&coin_id)
+                    .map(|v| (coin_id, v.unwrap().into_owned()))
+                    .unwrap()
             })
-            .try_collect()
-            .unwrap()
+            .collect()
     }
 }

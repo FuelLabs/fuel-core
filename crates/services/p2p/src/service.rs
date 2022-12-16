@@ -461,16 +461,18 @@ mod tests {
         service::FuelP2PEvent,
     };
     use ctor::ctor;
-    use fuel_core_interfaces::common::fuel_tx::Transaction;
-    use fuel_core_types::blockchain::{
-        block::Block,
-        consensus::{
-            poa::PoAConsensus,
-            Consensus,
-            ConsensusVote,
+    use fuel_core_types::{
+        blockchain::{
+            block::Block,
+            consensus::{
+                poa::PoAConsensus,
+                Consensus,
+                ConsensusVote,
+            },
+            header::PartialBlockHeader,
+            SealedBlock,
         },
-        header::PartialBlockHeader,
-        SealedBlock,
+        fuel_tx::Transaction,
     };
     use futures::StreamExt;
     use libp2p::{
@@ -1002,7 +1004,7 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn request_response_works() {
-        use fuel_core_interfaces::common::fuel_tx::Transaction;
+        use fuel_core_types::fuel_tx::Transaction;
 
         let mut p2p_config = P2PConfig::default_initialized("request_response_works");
 

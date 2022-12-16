@@ -14,6 +14,7 @@ use async_graphql::{
     Schema,
     SchemaBuilder,
 };
+use fuel_core_storage::Result as StorageResult;
 use itertools::Itertools;
 
 pub mod balance;
@@ -76,8 +77,8 @@ where
     // TODO: Optimization: Support `count` here including skipping of entities.
     //  It means also returning `has_previous_page` and `has_next_page` values.
     // entries(start_key: Option<DBKey>)
-    F: FnOnce(&Option<SchemaKey>, IterDirection) -> anyhow::Result<Entries>,
-    Entries: Iterator<Item = anyhow::Result<(SchemaKey, SchemaValue)>>,
+    F: FnOnce(&Option<SchemaKey>, IterDirection) -> StorageResult<Entries>,
+    Entries: Iterator<Item = StorageResult<(SchemaKey, SchemaValue)>>,
     SchemaKey: Eq,
 {
     match (after.as_ref(), before.as_ref(), first, last) {

@@ -5,8 +5,10 @@
 //! logic when the `Database` is known.
 
 #![deny(missing_docs)]
+#![deny(unused_crate_dependencies)]
 
 use fuel_core_storage::Error as StorageError;
+use fuel_core_types::services::executor::Error as ExecutorError;
 use std::{
     array::TryFromSliceError,
     io::ErrorKind,
@@ -45,20 +47,14 @@ impl From<Error> for StorageError {
     }
 }
 
-impl From<StorageError> for Error {
-    fn from(e: StorageError) -> Self {
-        Self::Other(anyhow::anyhow!(e))
-    }
-}
-
 impl From<TryFromSliceError> for Error {
     fn from(e: TryFromSliceError) -> Self {
         Self::Other(anyhow::anyhow!(e))
     }
 }
 
-impl From<Error> for fuel_core_types::services::executor::Error {
+impl From<Error> for ExecutorError {
     fn from(e: Error) -> Self {
-        fuel_core_types::services::executor::Error::CorruptedBlockState(Box::new(e))
+        ExecutorError::StorageError(Box::new(StorageError::from(e)))
     }
 }

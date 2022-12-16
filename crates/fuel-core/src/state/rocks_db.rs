@@ -5,6 +5,8 @@ use crate::{
             DB_VERSION_KEY,
         },
         Column,
+        Error as DatabaseError,
+        Result as DatabaseResult,
     },
     state::{
         BatchOperations,
@@ -15,7 +17,6 @@ use crate::{
         WriteOperation,
     },
 };
-use fuel_core_database::Error as DatabaseError;
 #[cfg(feature = "metrics")]
 use fuel_core_metrics::core_metrics::DATABASE_METRICS;
 use rocksdb::{
@@ -43,14 +44,14 @@ pub struct RocksDb {
 }
 
 impl RocksDb {
-    pub fn default_open<P: AsRef<Path>>(path: P) -> Result<RocksDb, DatabaseError> {
+    pub fn default_open<P: AsRef<Path>>(path: P) -> DatabaseResult<RocksDb> {
         Self::open(path, enum_iterator::all::<Column>().collect::<Vec<_>>())
     }
 
     pub fn open<P: AsRef<Path>>(
         path: P,
         columns: Vec<Column>,
-    ) -> Result<RocksDb, DatabaseError> {
+    ) -> DatabaseResult<RocksDb> {
         let cf_descriptors: Vec<_> = columns
             .clone()
             .into_iter()
@@ -82,7 +83,7 @@ impl RocksDb {
         Ok(rocks_db)
     }
 
-    fn validate_or_set_db_version(&self) -> Result<(), DatabaseError> {
+    fn validate_or_set_db_version(&self) -> DatabaseResult<()> {
         let data = self.get(DB_VERSION_KEY, Column::Metadata)?;
         match data {
             None => {
@@ -131,7 +132,7 @@ impl RocksDb {
 }
 
 impl KeyValueStore for RocksDb {
-    fn get(&self, key: &[u8], column: Column) -> crate::state::Result<Option<Vec<u8>>> {
+    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
         #[cfg(feature = "metrics")]
         DATABASE_METRICS.read_meter.inc();
         let value = self
@@ -155,7 +156,7 @@ impl KeyValueStore for RocksDb {
         key: &[u8],
         column: Column,
         value: Vec<u8>,
-    ) -> crate::state::Result<Option<Vec<u8>>> {
+    ) -> DatabaseResult<Option<Vec<u8>>> {
         #[cfg(feature = "metrics")]
         {
             DATABASE_METRICS.write_meter.inc();
@@ -168,11 +169,7 @@ impl KeyValueStore for RocksDb {
             .map(|_| prev)
     }
 
-    fn delete(
-        &self,
-        key: &[u8],
-        column: Column,
-    ) -> crate::state::Result<Option<Vec<u8>>> {
+    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
         let prev = self.get(key, column)?;
         self.db
             .delete_cf(&self.cf(column), key)
@@ -180,7 +177,7 @@ impl KeyValueStore for RocksDb {
             .map(|_| prev)
     }
 
-    fn exists(&self, key: &[u8], column: Column) -> crate::state::Result<bool> {
+    fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
         // use pinnable mem ref to avoid memcpy of values associated with the key
         // since we're just checking for the existence of the key
         self.db
@@ -262,7 +259,7 @@ impl BatchOperations for RocksDb {
     fn batch_write(
         &self,
         entries: &mut dyn Iterator<Item = WriteOperation>,
-    ) -> Result<(), DatabaseError> {
+    ) -> DatabaseResult<()> {
         let mut batch = WriteBatch::default();
 
         for entry in entries {

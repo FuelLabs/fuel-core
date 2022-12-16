@@ -1,5 +1,8 @@
 use async_trait::async_trait;
-use fuel_core_storage::transactional::StorageTransaction;
+use fuel_core_storage::{
+    transactional::StorageTransaction,
+    Result as StorageResult,
+};
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
@@ -11,11 +14,14 @@ use fuel_core_types::{
     fuel_tx::Receipt,
     services::{
         executor::{
-            Error as ExecutorError,
             ExecutionBlock,
+            Result as ExecutorResult,
             UncommittedResult,
         },
-        txpool::ArcPoolTx,
+        txpool::{
+            ArcPoolTx,
+            Error as TxPoolError,
+        },
     },
 };
 use std::borrow::Cow;
@@ -25,10 +31,10 @@ pub trait BlockProducerDatabase: Send + Sync {
     fn get_block(
         &self,
         fuel_height: BlockHeight,
-    ) -> anyhow::Result<Option<Cow<CompressedBlock>>>;
+    ) -> StorageResult<Option<Cow<CompressedBlock>>>;
 
     /// Fetch the current block height.
-    fn current_block_height(&self) -> anyhow::Result<BlockHeight>;
+    fn current_block_height(&self) -> StorageResult<BlockHeight>;
 }
 
 #[async_trait]
@@ -39,13 +45,13 @@ pub trait TxPool: Sync + Send {
         block_height: BlockHeight,
         // The upper limit for the total amount of gas of these txs
         max_gas: u64,
-    ) -> anyhow::Result<Vec<ArcPoolTx>>;
+    ) -> Result<Vec<ArcPoolTx>, TxPoolError>;
 }
 
 #[async_trait::async_trait]
 pub trait Relayer: Sync + Send {
     /// Get the best finalized height from the DA layer
-    async fn get_best_finalized_da_height(&self) -> anyhow::Result<DaBlockHeight>;
+    async fn get_best_finalized_da_height(&self) -> StorageResult<DaBlockHeight>;
 }
 
 pub trait Executor<Database>: Sync + Send {
@@ -54,7 +60,7 @@ pub trait Executor<Database>: Sync + Send {
     fn execute_without_commit(
         &self,
         block: ExecutionBlock,
-    ) -> Result<UncommittedResult<StorageTransaction<Database>>, ExecutorError>;
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>>;
 
     /// Executes the block without committing it to the database. During execution collects the
     /// receipts to return them. The `utxo_validation` field can be used to disable the validation
@@ -63,5 +69,5 @@ pub trait Executor<Database>: Sync + Send {
         &self,
         block: ExecutionBlock,
         utxo_validation: Option<bool>,
-    ) -> Result<Vec<Vec<Receipt>>, ExecutorError>;
+    ) -> ExecutorResult<Vec<Vec<Receipt>>>;
 }

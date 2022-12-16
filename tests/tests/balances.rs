@@ -9,24 +9,17 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_client::{
-    client::{
-        schema::resource::Resource,
-        FuelClient,
-        PageDirection,
-        PaginationRequest,
-    },
-    fuel_tx::TransactionBuilder,
+use fuel_core_client::client::{
+    schema::resource::Resource,
+    FuelClient,
+    PageDirection,
+    PaginationRequest,
 };
-use fuel_core_interfaces::common::{
-    fuel_tx::{
-        AssetId,
-        Input,
-        Output,
-    },
-    fuel_vm::prelude::Address,
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_tx::*,
+    fuel_types::Address,
 };
-use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
 #[tokio::test]
 async fn balance() {

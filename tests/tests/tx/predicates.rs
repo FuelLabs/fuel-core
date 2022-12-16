@@ -1,21 +1,13 @@
 // Tests related to the predicate execution feature
 
 use crate::helpers::TestSetupBuilder;
-use fuel_core_interfaces::common::{
+use fuel_core_types::{
+    fuel_asm::*,
     fuel_tx::{
         field::Outputs,
-        Input,
-        Output,
-        TransactionBuilder,
-        UniqueIdentifier,
+        *,
     },
-    fuel_vm::{
-        consts::{
-            REG_ONE,
-            REG_ZERO,
-        },
-        prelude::Opcode,
-    },
+    fuel_vm::consts::*,
 };
 use rand::{
     rngs::StdRng,

@@ -2,6 +2,12 @@ use super::run_group;
 
 use criterion::Criterion;
 use fuel_core_benches::*;
+use fuel_core_types::{
+    fuel_asm::*,
+    fuel_crypto::*,
+    fuel_types::*,
+    fuel_vm::consts::*,
+};
 use rand::{
     rngs::StdRng,
     SeedableRng,

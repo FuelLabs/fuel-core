@@ -11,8 +11,8 @@ use fuel_core_chain_config::{
     ChainConfigDb,
     CoinConfig,
     ContractConfig,
+    MessageConfig,
 };
-use fuel_core_database::Error as DatabaseError;
 use fuel_core_executor::refs::ContractStorageTrait;
 use fuel_core_interfaces::{
     p2p::P2pDb,
@@ -28,6 +28,7 @@ use fuel_core_storage::{
         SealedBlockConsensus,
     },
     Error as StorageError,
+    Result as StorageResult,
     StorageAsMut,
     StorageAsRef,
 };
@@ -54,6 +55,12 @@ use std::{
     marker::Send,
     sync::Arc,
 };
+
+pub use fuel_core_database::Error;
+pub type Result<T> = core::result::Result<T, Error>;
+
+type DatabaseError = Error;
+type DatabaseResult<T> = Result<T>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 
@@ -170,7 +177,7 @@ unsafe impl Sync for Database {}
 
 impl Database {
     #[cfg(feature = "rocksdb")]
-    pub fn open(path: &Path) -> Result<Self, DatabaseError> {
+    pub fn open(path: &Path) -> DatabaseResult<Self> {
         let db = RocksDb::default_open(path)?;
 
         Ok(Database {
@@ -194,7 +201,7 @@ impl Database {
         key: K,
         column: Column,
         value: V,
-    ) -> Result<Option<R>, DatabaseError> {
+    ) -> DatabaseResult<Option<R>> {
         let result = self.data.put(
             key.as_ref(),
             column,
@@ -213,7 +220,7 @@ impl Database {
         &self,
         key: &[u8],
         column: Column,
-    ) -> Result<Option<V>, DatabaseError> {
+    ) -> DatabaseResult<Option<V>> {
         self.data
             .delete(key, column)?
             .map(|val| bincode::deserialize(&val).map_err(|_| DatabaseError::Codec))
@@ -224,7 +231,7 @@ impl Database {
         &self,
         key: &[u8],
         column: Column,
-    ) -> Result<Option<V>, DatabaseError> {
+    ) -> DatabaseResult<Option<V>> {
         self.data
             .get(key, column)?
             .map(|val| bincode::deserialize(&val).map_err(|_| DatabaseError::Codec))
@@ -233,7 +240,7 @@ impl Database {
 
     // TODO: Rename to `contains_key` to be the same as `StorageInspect`
     //  https://github.com/FuelLabs/fuel-core/issues/622
-    fn exists(&self, key: &[u8], column: Column) -> Result<bool, DatabaseError> {
+    fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
         self.data.exists(key, column)
     }
 
@@ -243,7 +250,7 @@ impl Database {
         prefix: Option<Vec<u8>>,
         start: Option<Vec<u8>>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = Result<(K, V), DatabaseError>> + '_
+    ) -> impl Iterator<Item = DatabaseResult<(K, V)>> + '_
     where
         K: From<Vec<u8>>,
         V: DeserializeOwned,
@@ -325,7 +332,7 @@ impl BlockDb for Database {
 }
 
 impl TxPoolDb for Database {
-    fn current_block_height(&self) -> Result<BlockHeight, StorageError> {
+    fn current_block_height(&self) -> StorageResult<BlockHeight> {
         self.get_block_height()
             .map(|h| h.unwrap_or_default())
             .map_err(Into::into)
@@ -336,14 +343,14 @@ impl BlockProducerDatabase for Database {
     fn get_block(
         &self,
         fuel_height: BlockHeight,
-    ) -> anyhow::Result<Option<Cow<CompressedBlock>>> {
+    ) -> StorageResult<Option<Cow<CompressedBlock>>> {
         let id = self
             .get_block_id(fuel_height)?
             .ok_or(not_found!("BlockId"))?;
         self.storage::<FuelBlocks>().get(&id).map_err(Into::into)
     }
 
-    fn current_block_height(&self) -> anyhow::Result<BlockHeight> {
+    fn current_block_height(&self) -> StorageResult<BlockHeight> {
         self.get_block_height()
             .map(|h| h.unwrap_or_default())
             .map_err(Into::into)
@@ -360,22 +367,20 @@ impl P2pDb for Database {
 /// Implement `ChainConfigDb` so that `Database` can be passed to
 /// `StateConfig's` `generate_state_config()` method
 impl ChainConfigDb for Database {
-    fn get_coin_config(&self) -> Result<Option<Vec<CoinConfig>>, StorageError> {
-        Ok(Self::get_coin_config(self)?)
+    fn get_coin_config(&self) -> StorageResult<Option<Vec<CoinConfig>>> {
+        Self::get_coin_config(self).map_err(Into::into)
     }
 
-    fn get_contract_config(&self) -> Result<Option<Vec<ContractConfig>>, StorageError> {
-        Ok(Self::get_contract_config(self)?)
+    fn get_contract_config(&self) -> StorageResult<Option<Vec<ContractConfig>>> {
+        Self::get_contract_config(self)
     }
 
-    fn get_message_config(
-        &self,
-    ) -> Result<Option<Vec<fuel_core_chain_config::MessageConfig>>, StorageError> {
-        Ok(Self::get_message_config(self)?)
+    fn get_message_config(&self) -> StorageResult<Option<Vec<MessageConfig>>> {
+        Self::get_message_config(self).map_err(Into::into)
     }
 
-    fn get_block_height(&self) -> Result<Option<BlockHeight>, StorageError> {
-        Ok(Self::get_block_height(self)?)
+    fn get_block_height(&self) -> StorageResult<Option<BlockHeight>> {
+        Self::get_block_height(self).map_err(Into::into)
     }
 }
 
@@ -396,6 +401,7 @@ mod relayer {
     };
     use std::sync::Arc;
 
+    // TODO: Return `Result` instead of panics
     #[async_trait::async_trait]
     impl RelayerDb for Database {
         async fn get_chain_height(&self) -> BlockHeight {
@@ -413,6 +419,7 @@ mod relayer {
             &self,
             height: BlockHeight,
         ) -> Option<Arc<SealedBlock>> {
+            // TODO: Return an error otherwise it will fail with panic in runtime.
             let block_id = self
                 .get_block_id(height)
                 .unwrap_or_else(|_| panic!("nonexistent block height {}", height))?;

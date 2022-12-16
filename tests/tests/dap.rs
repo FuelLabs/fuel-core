@@ -3,9 +3,9 @@ use fuel_core::service::{
     FuelService,
 };
 use fuel_core_client::client::FuelClient;
-use fuel_core_interfaces::common::fuel_vm::{
-    consts::*,
-    prelude::*,
+use fuel_core_types::{
+    fuel_asm::*,
+    fuel_vm::consts::*,
 };
 use std::convert::TryInto;
 

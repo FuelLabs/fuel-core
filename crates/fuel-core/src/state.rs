@@ -1,15 +1,16 @@
 use crate::{
-    database::Column,
+    database::{
+        Column,
+        Result as DatabaseResult,
+    },
     state::in_memory::transaction::MemoryTransactionView,
 };
-use fuel_core_database::Error as DatabaseError;
 use std::{
     fmt::Debug,
     marker::PhantomData,
     sync::Arc,
 };
 
-pub type Result<T> = core::result::Result<T, DatabaseError>;
 pub type DataSource = Arc<dyn TransactableStorage>;
 pub type ColumnId = u32;
 
@@ -48,13 +49,18 @@ impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> From<MultiKey<K1, K2>> for Vec<u8> {
     }
 }
 
-pub type KVItem = Result<(Vec<u8>, Vec<u8>)>;
+pub type KVItem = DatabaseResult<(Vec<u8>, Vec<u8>)>;
 
 pub trait KeyValueStore {
-    fn get(&self, key: &[u8], column: Column) -> Result<Option<Vec<u8>>>;
-    fn put(&self, key: &[u8], column: Column, value: Vec<u8>) -> Result<Option<Vec<u8>>>;
-    fn delete(&self, key: &[u8], column: Column) -> Result<Option<Vec<u8>>>;
-    fn exists(&self, key: &[u8], column: Column) -> Result<bool>;
+    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>>;
+    fn put(
+        &self,
+        key: &[u8],
+        column: Column,
+        value: Vec<u8>,
+    ) -> DatabaseResult<Option<Vec<u8>>>;
+    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>>;
+    fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool>;
     // TODO: Use `Option<&[u8]>` instead of `Option<Vec<u8>>`. Also decide, do we really need usage
     //  of `Option`? If `len` is zero it is the same as `None`. Apply the same change for all upper
     //  functions.
@@ -84,7 +90,7 @@ pub trait BatchOperations: KeyValueStore {
     fn batch_write(
         &self,
         entries: &mut dyn Iterator<Item = WriteOperation>,
-    ) -> Result<()> {
+    ) -> DatabaseResult<()> {
         for entry in entries {
             match entry {
                 // TODO: error handling

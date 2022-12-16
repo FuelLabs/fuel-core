@@ -1,5 +1,6 @@
 use crate::{
     Config,
+    Error as TxPoolError,
     TxPool,
 };
 use anyhow::anyhow;
@@ -13,10 +14,8 @@ use fuel_core_interfaces::{
     },
     txpool::{
         self,
-        Error,
         TxPoolDb,
         TxPoolMpsc,
-        TxUpdate,
     },
 };
 use fuel_core_types::{
@@ -71,9 +70,9 @@ impl TxStatusChange {
         self.updated(id);
     }
 
-    pub fn send_squeezed_out(&self, id: Bytes32, reason: Error) {
+    pub fn send_squeezed_out(&self, id: Bytes32, reason: TxPoolError) {
         let _ = self.status_sender.send(TxStatus::SqueezedOut {
-            reason: reason.to_string(),
+            reason: reason.clone(),
         });
         let _ = self.update_sender.send(TxUpdate::squeezed_out(id, reason));
     }
@@ -380,6 +379,40 @@ impl Service {
 
     pub fn sender(&self) -> &txpool::Sender {
         &self.txpool_sender
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TxUpdate {
+    tx_id: Bytes32,
+    squeezed_out: Option<TxPoolError>,
+}
+
+impl TxUpdate {
+    pub fn updated(tx_id: Bytes32) -> Self {
+        Self {
+            tx_id,
+            squeezed_out: None,
+        }
+    }
+
+    pub fn squeezed_out(tx_id: Bytes32, reason: TxPoolError) -> Self {
+        Self {
+            tx_id,
+            squeezed_out: Some(reason),
+        }
+    }
+
+    pub fn tx_id(&self) -> &Bytes32 {
+        &self.tx_id
+    }
+
+    pub fn was_squeezed_out(&self) -> bool {
+        self.squeezed_out.is_some()
+    }
+
+    pub fn into_squeezed_out_reason(self) -> Option<TxPoolError> {
+        self.squeezed_out
     }
 }
 
