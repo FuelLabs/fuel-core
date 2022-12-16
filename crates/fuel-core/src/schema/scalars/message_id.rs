@@ -6,7 +6,7 @@ use async_graphql::{
     ScalarType,
     Value,
 };
-use fuel_core_interfaces::common::fuel_tx;
+use fuel_core_types::fuel_tx;
 use std::{
     fmt::{
         Display,
