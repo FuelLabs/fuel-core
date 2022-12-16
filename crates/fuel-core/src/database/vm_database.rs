@@ -2,6 +2,7 @@ use crate::{
     database::{
         Column,
         Database,
+        Error as DatabaseError,
     },
     state::{
         IterDirection,
@@ -9,7 +10,6 @@ use crate::{
     },
 };
 use anyhow::anyhow;
-use fuel_core_database::Error;
 use fuel_core_storage::{
     not_found,
     Error as StorageError,
@@ -224,7 +224,7 @@ impl InterpreterStorage for VmDatabase {
         current_key
             .checked_add(U256::from(values.len()))
             .ok_or_else(|| {
-                Error::Other(anyhow!("range op exceeded available keyspace"))
+                DatabaseError::Other(anyhow!("range op exceeded available keyspace"))
             })?;
 
         let mut key_bytes = [0u8; 32];

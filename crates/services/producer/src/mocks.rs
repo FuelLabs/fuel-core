@@ -4,14 +4,6 @@ use crate::ports::{
     Relayer,
     TxPool,
 };
-use anyhow::Result;
-use fuel_core_interfaces::common::{
-    fuel_tx::{
-        MessageId,
-        Receipt,
-    },
-    fuel_types::Address,
-};
 use fuel_core_storage::{
     transactional::{
         StorageTransaction,
@@ -28,6 +20,11 @@ use fuel_core_types::{
         },
     },
     entities::message::Message,
+    fuel_tx::Receipt,
+    fuel_types::{
+        Address,
+        MessageId,
+    },
     services::{
         executor::{
             Error as ExecutorError,
@@ -35,7 +32,10 @@ use fuel_core_types::{
             ExecutionResult,
             UncommittedResult,
         },
-        txpool::ArcPoolTx,
+        txpool::{
+            ArcPoolTx,
+            Error as TxPoolError,
+        },
     },
 };
 use std::{
@@ -56,7 +56,7 @@ pub struct MockRelayer {
 #[async_trait::async_trait]
 impl Relayer for MockRelayer {
     /// Get the best finalized height from the DA layer
-    async fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight> {
+    async fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight, StorageError> {
         Ok(self.best_finalized_height)
     }
 }
@@ -70,7 +70,7 @@ impl TxPool for MockTxPool {
         &self,
         _block_height: BlockHeight,
         _max_gas: u64,
-    ) -> Result<Vec<ArcPoolTx>> {
+    ) -> Result<Vec<ArcPoolTx>, TxPoolError> {
         Ok(self.0.clone().into_iter().collect())
     }
 }
@@ -181,7 +181,7 @@ impl Executor<MockDb> for FailingMockExecutor {
         &self,
         _block: ExecutionBlock,
         _utxo_validation: Option<bool>,
-    ) -> std::result::Result<Vec<Vec<Receipt>>, ExecutorError> {
+    ) -> Result<Vec<Vec<Receipt>>, ExecutorError> {
         let mut err = self.0.lock().unwrap();
         if let Some(err) = err.take() {
             Err(err)
@@ -201,13 +201,13 @@ impl BlockProducerDatabase for MockDb {
     fn get_block(
         &self,
         fuel_height: BlockHeight,
-    ) -> Result<Option<Cow<CompressedBlock>>> {
+    ) -> Result<Option<Cow<CompressedBlock>>, StorageError> {
         let blocks = self.blocks.lock().unwrap();
 
         Ok(blocks.get(&fuel_height).cloned().map(Cow::Owned))
     }
 
-    fn current_block_height(&self) -> Result<BlockHeight> {
+    fn current_block_height(&self) -> Result<BlockHeight, StorageError> {
         let blocks = self.blocks.lock().unwrap();
 
         Ok(blocks.keys().max().cloned().unwrap_or_default())

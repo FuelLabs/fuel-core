@@ -1,9 +1,10 @@
 use crate::database::{
     Column,
     Database,
+    Error as DatabaseError,
+    Result as DatabaseResult,
 };
 use fuel_core_chain_config::ChainConfig;
-use fuel_core_database::Error as DatabaseError;
 use fuel_core_types::blockchain::primitives::BlockHeight;
 
 pub(crate) const DB_VERSION_KEY: &[u8] = b"version";
@@ -16,7 +17,7 @@ pub(crate) const LAST_PUBLISHED_BLOCK_HEIGHT_KEY: &[u8] = b"last_publish_block_h
 pub(crate) const DB_VERSION: u32 = 0;
 
 impl Database {
-    pub fn init(&self, config: &ChainConfig) -> Result<(), DatabaseError> {
+    pub fn init(&self, config: &ChainConfig) -> DatabaseResult<()> {
         // check only for one field if it initialized or not.
         self.insert(CHAIN_NAME_KEY, Column::Metadata, config.chain_name.clone())
             .and_then(|v: Option<String>| {
@@ -39,13 +40,11 @@ impl Database {
         Ok(())
     }
 
-    pub fn get_chain_name(&self) -> Result<Option<String>, DatabaseError> {
+    pub fn get_chain_name(&self) -> DatabaseResult<Option<String>> {
         self.get(CHAIN_NAME_KEY, Column::Metadata)
     }
 
-    pub fn get_starting_chain_height(
-        &self,
-    ) -> Result<Option<BlockHeight>, DatabaseError> {
+    pub fn get_starting_chain_height(&self) -> DatabaseResult<Option<BlockHeight>> {
         self.get(CHAIN_HEIGHT_KEY, Column::Metadata)
     }
 }

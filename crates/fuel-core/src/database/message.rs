@@ -2,11 +2,11 @@ use crate::{
     database::{
         Column,
         Database,
+        Result as DatabaseResult,
     },
     state::IterDirection,
 };
 use fuel_core_chain_config::MessageConfig;
-use fuel_core_database::Error as DatabaseError;
 use fuel_core_storage::{
     tables::Messages,
     Error as StorageError,
@@ -81,7 +81,7 @@ impl Database {
         owner: &Address,
         start_message_id: Option<MessageId>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = Result<MessageId, DatabaseError>> + '_ {
+    ) -> impl Iterator<Item = DatabaseResult<MessageId>> + '_ {
         self.iter_all::<Vec<u8>, bool>(
             Column::OwnedMessageIds,
             Some(owner.to_vec()),
@@ -100,15 +100,13 @@ impl Database {
         &self,
         start: Option<MessageId>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = Result<Message, DatabaseError>> + '_ {
+    ) -> impl Iterator<Item = DatabaseResult<Message>> + '_ {
         let start = start.map(|v| v.deref().to_vec());
         self.iter_all::<Vec<u8>, Message>(Column::Messages, None, start, direction)
             .map(|res| res.map(|(_, message)| message))
     }
 
-    pub fn get_message_config(
-        &self,
-    ) -> Result<Option<Vec<MessageConfig>>, DatabaseError> {
+    pub fn get_message_config(&self) -> DatabaseResult<Option<Vec<MessageConfig>>> {
         let configs = self
             .all_messages(None, None)
             .filter_map(|msg| {
@@ -123,7 +121,7 @@ impl Database {
                     Some(msg)
                 }
             })
-            .map(|msg| -> Result<MessageConfig, DatabaseError> {
+            .map(|msg| -> DatabaseResult<MessageConfig> {
                 let msg = msg?;
 
                 Ok(MessageConfig {
@@ -135,7 +133,7 @@ impl Database {
                     da_height: msg.da_height,
                 })
             })
-            .collect::<Result<Vec<MessageConfig>, DatabaseError>>()?;
+            .collect::<DatabaseResult<Vec<MessageConfig>>>()?;
 
         Ok(Some(configs))
     }

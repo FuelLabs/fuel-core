@@ -40,15 +40,7 @@ impl From<Error> for std::io::Error {
 
 impl From<Error> for fuel_core_types::services::executor::Error {
     fn from(e: Error) -> Self {
-        fuel_core_types::services::executor::Error::CorruptedBlockState(Box::new(e))
-    }
-}
-
-impl From<Error> for fuel_core_types::services::executor::TransactionValidityError {
-    fn from(e: Error) -> Self {
-        fuel_core_types::services::executor::TransactionValidityError::DataStoreError(
-            Box::new(e),
-        )
+        fuel_core_types::services::executor::Error::StorageError(Box::new(e))
     }
 }
 

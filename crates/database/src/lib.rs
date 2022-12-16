@@ -45,12 +45,6 @@ impl From<Error> for StorageError {
     }
 }
 
-impl From<StorageError> for Error {
-    fn from(e: StorageError) -> Self {
-        Self::Other(anyhow::anyhow!(e))
-    }
-}
-
 impl From<TryFromSliceError> for Error {
     fn from(e: TryFromSliceError) -> Self {
         Self::Other(anyhow::anyhow!(e))
@@ -59,6 +53,8 @@ impl From<TryFromSliceError> for Error {
 
 impl From<Error> for fuel_core_types::services::executor::Error {
     fn from(e: Error) -> Self {
-        fuel_core_types::services::executor::Error::CorruptedBlockState(Box::new(e))
+        fuel_core_types::services::executor::Error::StorageError(Box::new(
+            StorageError::from(e),
+        ))
     }
 }

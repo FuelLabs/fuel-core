@@ -5,7 +5,10 @@ use crate::{
 use fuel_core_interfaces::txpool::Sender;
 use fuel_core_types::{
     blockchain::primitives::BlockHeight,
-    services::txpool::ArcPoolTx,
+    services::txpool::{
+        ArcPoolTx,
+        Error as TxPoolError,
+    },
 };
 
 pub mod transaction_selector;
@@ -20,9 +23,14 @@ impl TxPool for TxPoolAdapter {
         &self,
         _block_height: BlockHeight,
         max_gas: u64,
-    ) -> anyhow::Result<Vec<ArcPoolTx>> {
-        let includable_txs =
-            select_transactions(self.sender.includable().await?, max_gas);
+    ) -> Result<Vec<ArcPoolTx>, TxPoolError> {
+        let includable_txs = select_transactions(
+            self.sender
+                .includable()
+                .await
+                .map_err(|e| TxPoolError::Other(e.to_string()))?,
+            max_gas,
+        );
 
         Ok(includable_txs)
     }

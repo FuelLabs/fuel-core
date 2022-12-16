@@ -2,11 +2,12 @@ use crate::{
     database::{
         Column,
         Database,
+        Error as DatabaseError,
+        Result as DatabaseResult,
     },
     state::IterDirection,
 };
 use fuel_core_chain_config::CoinConfig;
-use fuel_core_database::Error as DatabaseError;
 use fuel_core_storage::{
     tables::Coins,
     Error as StorageError,
@@ -93,7 +94,7 @@ impl Database {
         owner: &Address,
         start_coin: Option<UtxoId>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = Result<UtxoId, DatabaseError>> + '_ {
+    ) -> impl Iterator<Item = DatabaseResult<UtxoId>> + '_ {
         self.iter_all::<Vec<u8>, bool>(
             Column::OwnedCoins,
             Some(owner.as_ref().to_vec()),
@@ -111,7 +112,7 @@ impl Database {
         })
     }
 
-    pub fn get_coin_config(&self) -> Result<Option<Vec<CoinConfig>>, DatabaseError> {
+    pub fn get_coin_config(&self) -> DatabaseResult<Option<Vec<CoinConfig>>> {
         let configs = self
             .iter_all::<Vec<u8>, Coin>(Column::Coins, None, None, None)
             .filter_map(|coin| {
@@ -126,10 +127,11 @@ impl Database {
                     Some(coin)
                 }
             })
-            .map(|raw_coin| -> Result<CoinConfig, anyhow::Error> {
+            .map(|raw_coin| -> DatabaseResult<CoinConfig> {
                 let coin = raw_coin?;
 
-                let byte_id = Bytes32::new(coin.0[..32].try_into()?);
+                let byte_id =
+                    Bytes32::new(coin.0[..32].try_into().map_err(DatabaseError::from)?);
                 let output_index = coin.0[32];
 
                 Ok(CoinConfig {
@@ -142,7 +144,7 @@ impl Database {
                     asset_id: coin.1.asset_id,
                 })
             })
-            .collect::<Result<Vec<CoinConfig>, anyhow::Error>>()?;
+            .collect::<DatabaseResult<Vec<CoinConfig>>>()?;
 
         Ok(Some(configs))
     }

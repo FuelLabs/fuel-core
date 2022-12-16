@@ -1,5 +1,8 @@
 use crate::{
-    database::Column,
+    database::{
+        Column,
+        Result as DatabaseResult,
+    },
     state::{
         in_memory::{
             column_key,
@@ -9,7 +12,6 @@ use crate::{
         DataSource,
         IterDirection,
         KeyValueStore,
-        Result,
         TransactableStorage,
         Transaction,
         TransactionError,
@@ -48,7 +50,7 @@ impl MemoryTransactionView {
         }
     }
 
-    pub fn commit(&self) -> crate::state::Result<()> {
+    pub fn commit(&self) -> DatabaseResult<()> {
         self.data_source.batch_write(
             &mut self
                 .changes
@@ -61,7 +63,7 @@ impl MemoryTransactionView {
 }
 
 impl KeyValueStore for MemoryTransactionView {
-    fn get(&self, key: &[u8], column: Column) -> Result<Option<Vec<u8>>> {
+    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
         // try to fetch data from View layer if any changes to the key
         if self
             .changes
@@ -76,7 +78,12 @@ impl KeyValueStore for MemoryTransactionView {
         }
     }
 
-    fn put(&self, key: &[u8], column: Column, value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+    fn put(
+        &self,
+        key: &[u8],
+        column: Column,
+        value: Vec<u8>,
+    ) -> DatabaseResult<Option<Vec<u8>>> {
         let k = column_key(key, column);
         let contained_key = self.changes.lock().expect("poisoned lock").contains_key(&k);
         self.changes
@@ -91,7 +98,7 @@ impl KeyValueStore for MemoryTransactionView {
         }
     }
 
-    fn delete(&self, key: &[u8], column: Column) -> Result<Option<Vec<u8>>> {
+    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
         let k = column_key(key, column);
         let contained_key = self.changes.lock().expect("poisoned lock").contains_key(&k);
         self.changes
@@ -106,7 +113,7 @@ impl KeyValueStore for MemoryTransactionView {
         }
     }
 
-    fn exists(&self, key: &[u8], column: Column) -> Result<bool> {
+    fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
         let k = column_key(key, column);
         if self.changes.lock().expect("poisoned lock").contains_key(&k) {
             self.view_layer.exists(key, column)
@@ -121,7 +128,7 @@ impl KeyValueStore for MemoryTransactionView {
         prefix: Option<Vec<u8>>,
         start: Option<Vec<u8>>,
         direction: IterDirection,
-    ) -> Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>)>> + '_> {
+    ) -> Box<dyn Iterator<Item = DatabaseResult<(Vec<u8>, Vec<u8>)>> + '_> {
         // iterate over inmemory + db while also filtering deleted entries
         let changes = self.changes.clone();
         Box::new(

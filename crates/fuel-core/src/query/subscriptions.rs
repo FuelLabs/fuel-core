@@ -2,10 +2,8 @@ use crate::schema::tx::types::{
     SqueezedOutStatus,
     TransactionStatus,
 };
-use fuel_core_interfaces::{
-    common::prelude::Bytes32,
-    txpool::TxUpdate,
-};
+use fuel_core_interfaces::common::prelude::Bytes32;
+use fuel_core_txpool::service::TxUpdate;
 use futures::{
     stream::BoxStream,
     Stream,

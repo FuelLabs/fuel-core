@@ -23,8 +23,8 @@ use async_graphql::{
     InputObject,
     Object,
 };
-use fuel_core_database::Error;
 use fuel_core_interfaces::common::fuel_types;
+use fuel_core_storage::Error as StorageError;
 use itertools::Itertools;
 use std::{
     cmp::Ordering,
@@ -87,7 +87,7 @@ impl BalanceQuery {
                 amount: 0u64,
                 asset_id,
             },
-            |mut balance, res| -> Result<_, Error> {
+            |mut balance, res| -> Result<_, StorageError> {
                 let amount = res?;
 
                 // Increase the balance

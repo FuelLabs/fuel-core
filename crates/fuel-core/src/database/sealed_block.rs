@@ -2,7 +2,6 @@ use crate::database::{
     Column,
     Database,
 };
-use fuel_core_database::Error as DatabaseError;
 use fuel_core_storage::{
     not_found,
     tables::{
@@ -60,7 +59,7 @@ impl Database {
     pub fn get_sealed_block(
         &self,
         block_id: &Bytes32,
-    ) -> Result<Option<SealedBlock>, DatabaseError> {
+    ) -> Result<Option<SealedBlock>, StorageError> {
         // combine the block and consensus metadata into a sealed fuel block type
 
         let block = self.get_full_block(block_id)?;
@@ -78,7 +77,7 @@ impl Database {
         }
     }
 
-    pub fn get_genesis(&self) -> Result<Genesis, DatabaseError> {
+    pub fn get_genesis(&self) -> Result<Genesis, StorageError> {
         let (_, genesis_block_id) = self.genesis_block_ids()?;
         let consensus = self
             .storage::<SealedBlockConsensus>()
@@ -88,14 +87,14 @@ impl Database {
         if let Some(Consensus::Genesis(genesis)) = consensus {
             Ok(genesis)
         } else {
-            Err(not_found!(SealedBlockConsensus)).map_err(Into::into)
+            Err(not_found!(SealedBlockConsensus))
         }
     }
 
     pub fn get_sealed_block_header(
         &self,
         block_id: &Bytes32,
-    ) -> Result<Option<SealedBlockHeader>, DatabaseError> {
+    ) -> Result<Option<SealedBlockHeader>, StorageError> {
         let header = self.storage::<FuelBlocks>().get(block_id)?;
         let consensus = self.storage::<SealedBlockConsensus>().get(block_id)?;
 

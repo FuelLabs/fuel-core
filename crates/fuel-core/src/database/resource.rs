@@ -1,5 +1,4 @@
 use crate::database::Database;
-use fuel_core_database::Error as DatabaseError;
 use fuel_core_storage::{
     not_found,
     tables::{
@@ -102,7 +101,7 @@ impl<'a> AssetsQuery<'a> {
     //  https://github.com/FuelLabs/fuel-core/issues/588
     pub fn unspent_resources(
         &self,
-    ) -> impl Iterator<Item = Result<Resource<Cow<Coin>, Cow<Message>>, DatabaseError>> + '_
+    ) -> impl Iterator<Item = Result<Resource<Cow<Coin>, Cow<Message>>, StorageError>> + '_
     {
         let coins_iter = self
             .database
@@ -210,7 +209,7 @@ impl<'a> AssetQuery<'a> {
     /// for the `asset_id`.
     pub fn unspent_resources(
         &self,
-    ) -> impl Iterator<Item = Result<Resource<Cow<Coin>, Cow<Message>>, DatabaseError>> + '_
+    ) -> impl Iterator<Item = Result<Resource<Cow<Coin>, Cow<Message>>, StorageError>> + '_
     {
         self.query.unspent_resources()
     }

@@ -17,9 +17,15 @@ use crate::{
         Output,
         Script,
         Transaction,
+        TxId,
         UniqueIdentifier,
+        UtxoId,
     },
-    fuel_types::Bytes32,
+    fuel_types::{
+        Bytes32,
+        ContractId,
+        MessageId,
+    },
     fuel_vm::{
         Interpreter,
         PredicateStorage,
@@ -233,4 +239,80 @@ pub enum TxStatus {
     Completed,
     /// removed from txpool.
     SqueezedOut { reason: String },
+}
+
+#[allow(missing_docs)]
+#[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
+#[non_exhaustive]
+pub enum Error {
+    #[error("TxPool required that transaction contains metadata")]
+    NoMetadata,
+    #[error("TxPool doesn't support this type of transaction.")]
+    NotSupportedTransactionType,
+    #[error("Transaction is not inserted. Hash is already known")]
+    NotInsertedTxKnown,
+    #[error("Transaction is not inserted. Pool limit is hit, try to increase gas_price")]
+    NotInsertedLimitHit,
+    #[error("Transaction is not inserted. The gas price is too low.")]
+    NotInsertedGasPriceTooLow,
+    #[error(
+        "Transaction is not inserted. More priced tx {0:#x} already spend this UTXO output: {1:#x}"
+    )]
+    NotInsertedCollision(TxId, UtxoId),
+    #[error(
+        "Transaction is not inserted. More priced tx has created contract with ContractId {0:#x}"
+    )]
+    NotInsertedCollisionContractId(ContractId),
+    #[error(
+        "Transaction is not inserted. A higher priced tx {0:#x} is already spending this messageId: {1:#x}"
+    )]
+    NotInsertedCollisionMessageId(TxId, MessageId),
+    #[error(
+        "Transaction is not inserted. Dependent UTXO output is not existing: {0:#x}"
+    )]
+    NotInsertedOutputNotExisting(UtxoId),
+    #[error("Transaction is not inserted. UTXO input contract is not existing: {0:#x}")]
+    NotInsertedInputContractNotExisting(ContractId),
+    #[error("Transaction is not inserted. ContractId is already taken {0:#x}")]
+    NotInsertedContractIdAlreadyTaken(ContractId),
+    #[error("Transaction is not inserted. UTXO is not existing: {0:#x}")]
+    NotInsertedInputUtxoIdNotExisting(UtxoId),
+    #[error("Transaction is not inserted. UTXO is spent: {0:#x}")]
+    NotInsertedInputUtxoIdSpent(UtxoId),
+    #[error("Transaction is not inserted. Message is spent: {0:#x}")]
+    NotInsertedInputMessageIdSpent(MessageId),
+    #[error("Transaction is not inserted. Message id {0:#x} does not match any received message from the DA layer.")]
+    NotInsertedInputMessageUnknown(MessageId),
+    #[error(
+        "Transaction is not inserted. UTXO requires Contract input {0:#x} that is priced lower"
+    )]
+    NotInsertedContractPricedLower(ContractId),
+    #[error("Transaction is not inserted. Input output mismatch. Coin owner is different from expected input")]
+    NotInsertedIoWrongOwner,
+    #[error("Transaction is not inserted. Input output mismatch. Coin output does not match expected input")]
+    NotInsertedIoWrongAmount,
+    #[error("Transaction is not inserted. Input output mismatch. Coin output asset_id does not match expected inputs")]
+    NotInsertedIoWrongAssetId,
+    #[error("Transaction is not inserted. The computed message id doesn't match the provided message id.")]
+    NotInsertedIoWrongMessageId,
+    #[error(
+        "Transaction is not inserted. Input output mismatch. Expected coin but output is contract"
+    )]
+    NotInsertedIoContractOutput,
+    #[error(
+        "Transaction is not inserted. Input output mismatch. Expected coin but output is message"
+    )]
+    NotInsertedIoMessageInput,
+    #[error("Transaction is not inserted. Maximum depth of dependent transaction chain reached")]
+    NotInsertedMaxDepth,
+    #[error("Transaction exceeds the max gas per block limit. Tx gas: {tx_gas}, block limit {block_limit}")]
+    NotInsertedMaxGasLimit { tx_gas: Word, block_limit: Word },
+    // small todo for now it can pass but in future we should include better messages
+    #[error("Transaction removed.")]
+    Removed,
+    #[error("Transaction squeezed out because {0}")]
+    SqueezedOut(String),
+    // TODO: We need it for now until channels are removed from TxPool.
+    #[error("Got some unexpected error: {0}")]
+    Other(String),
 }

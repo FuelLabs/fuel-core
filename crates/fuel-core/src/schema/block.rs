@@ -42,6 +42,7 @@ use fuel_core_storage::{
         SealedBlockConsensus,
         Transactions,
     },
+    Error as StorageError,
 };
 use fuel_core_types::{
     blockchain::{
@@ -288,11 +289,12 @@ fn blocks_query<T>(
     db: &Database,
     start: Option<usize>,
     direction: IterDirection,
-) -> anyhow::Result<impl Iterator<Item = anyhow::Result<(usize, T)>> + '_>
+) -> Result<impl Iterator<Item = Result<(usize, T), StorageError>> + '_, StorageError>
 where
     T: async_graphql::OutputType,
     T: From<CompressedBlock>,
 {
+    // TODO: Remove `try_collect`
     let blocks: Vec<_> = db
         .all_block_ids(start.map(Into::into), Some(direction))
         .try_collect()?;

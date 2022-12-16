@@ -42,6 +42,7 @@ use fuel_core_storage::{
         FuelBlocks,
         Transactions,
     },
+    Error as StorageError,
 };
 use fuel_core_txpool::Service as TxPoolService;
 use futures::{
@@ -119,29 +120,30 @@ impl TxQuery {
 
                 let all_txs = all_block_ids
                     .flat_map(move |block| {
-                        block.map(|(block_height, block_id)| {
-                            db.storage::<FuelBlocks>()
-                                .get(&block_id)
-                                .transpose()
-                                .ok_or(not_found!(FuelBlocks))?
-                                .map(|fuel_block| {
-                                    let mut txs = fuel_block.into_owned().into_inner().1;
+                        block.map_err(StorageError::from).map(
+                            |(block_height, block_id)| {
+                                db.storage::<FuelBlocks>()
+                                    .get(&block_id)
+                                    .transpose()
+                                    .ok_or(not_found!(FuelBlocks))?
+                                    .map(|fuel_block| {
+                                        let mut txs =
+                                            fuel_block.into_owned().into_inner().1;
 
-                                    if direction == IterDirection::Reverse {
-                                        txs.reverse();
-                                    }
+                                        if direction == IterDirection::Reverse {
+                                            txs.reverse();
+                                        }
 
-                                    txs.into_iter().zip(iter::repeat(block_height))
-                                })
-                        })
+                                        txs.into_iter().zip(iter::repeat(block_height))
+                                    })
+                            },
+                        )
                     })
                     .flatten_ok()
                     .map(|result| {
-                        result
-                            .map(|(tx_id, block_height)| {
-                                SortedTxCursor::new(block_height, tx_id.into())
-                            })
-                            .map_err(anyhow::Error::from)
+                        result.map(|(tx_id, block_height)| {
+                            SortedTxCursor::new(block_height, tx_id.into())
+                        })
                     })
                     .skip_while(move |result| {
                         if let Ok(sorted) = result {
@@ -152,7 +154,7 @@ impl TxQuery {
                         false
                     });
                 let all_txs =
-                    all_txs.map(|result: Result<SortedTxCursor, anyhow::Error>| {
+                    all_txs.map(|result: Result<SortedTxCursor, StorageError>| {
                         result.and_then(|sorted| {
                             let tx = db
                                 .storage::<Transactions>()
@@ -196,6 +198,7 @@ impl TxQuery {
                     .owned_transactions(&owner, start.as_ref(), Some(direction))
                     .map(|result| {
                         result
+                            .map_err(StorageError::from)
                             .and_then(|(cursor, tx_id)| {
                                 let tx = db
                                     .storage::<Transactions>()
@@ -204,7 +207,6 @@ impl TxQuery {
                                     .into_owned();
                                 Ok((cursor.into(), tx.into()))
                             })
-                            .map_err(Into::into)
                     });
                 Ok(txs)
             },
