@@ -86,7 +86,7 @@ mod test {
         #[rustfmt::skip]
         assert_eq!(
             format!("{}", not_found!(Coins)),
-            format!("resource of type `fuel_core_interfaces::model::coin::Coin` was not found at the: {}:{}", file!(), line!() - 1)
+            format!("resource of type `fuel_core_types::entities::coin::Coin` was not found at the: {}:{}", file!(), line!() - 1)
         );
     }
 }
