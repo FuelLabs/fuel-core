@@ -2,6 +2,7 @@ use crate::database::{
     Column,
     Database,
 };
+use fuel_core_database::Error;
 use fuel_core_interfaces::common::{
     fuel_storage::{
         StorageInspect,
@@ -13,7 +14,7 @@ use fuel_core_interfaces::common::{
         Salt,
     },
 };
-use fuel_core_storage::Error as StorageError;
+use fuel_core_storage::tables::ContractsInfo;
 use std::borrow::Cow;
 
 impl StorageInspect<ContractsInfo> for Database {

@@ -16,7 +16,9 @@ pub struct StorageTransaction<Storage> {
 impl<Storage> StorageTransaction<Storage> {
     /// Create a new storage transaction.
     pub fn new<T: Transactional<Storage> + 'static>(t: T) -> Self {
-        Self { transaction: Box::new(t) }
+        Self {
+            transaction: Box::new(t),
+        }
     }
 }
 

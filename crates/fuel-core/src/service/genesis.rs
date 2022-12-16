@@ -12,47 +12,48 @@ use fuel_core_chain_config::{
     StateConfig,
 };
 use fuel_core_executor::refs::ContractRef;
-use fuel_core_interfaces::{
-    common::{
-        fuel_merkle::binary,
-        fuel_storage::StorageAsMut,
-        fuel_tx::{
-            Contract,
-            MessageId,
-            UtxoId,
-        },
-        fuel_types::{
-            bytes::WORD_SIZE,
-            Bytes32,
-            ContractId,
-        },
-        prelude::MerkleRoot,
+use fuel_core_interfaces::common::{
+    fuel_merkle::binary,
+    fuel_storage::StorageAsMut,
+    fuel_tx::{
+        Contract,
+        MessageId,
+        UtxoId,
     },
-    db::{
-        Coins,
-        ContractsAssets,
-        ContractsInfo,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        FuelBlocks,
-        Messages,
-        Transactional,
+    fuel_types::{
+        bytes::WORD_SIZE,
+        Bytes32,
+        ContractId,
     },
-    model::{
-        Coin,
-        CoinStatus,
-        Empty,
-        FuelApplicationHeader,
-        FuelBlock,
-        FuelBlockConsensus,
-        ConsensusHeader,
-        Genesis,
-        Message,
-        PartialBlockHeader,
-    },
+    prelude::MerkleRoot,
 };
 use fuel_core_poa::ports::BlockDb;
+use fuel_core_storage::tables::{
+    Coins,
+    ContractsAssets,
+    ContractsInfo,
+    ContractsLatestUtxo,
+    ContractsRawCode,
+    ContractsState,
+    FuelBlocks,
+    Messages,
+};
+use fuel_core_types::{
+    blockchain::{
+        block::Block,
+        consensus::Genesis,
+        header::{
+            ApplicationHeader,
+            ConsensusHeader,
+            PartialBlockHeader,
+        },
+        primitives::Empty,
+    },
+    entities::{
+        coin::Coin,
+        message::Message,
+    },
+};
 use itertools::Itertools;
 
 impl FuelService {
@@ -99,9 +100,9 @@ impl FuelService {
             messages_root,
         };
 
-        let block = FuelBlock::new(
+        let block = Block::new(
             PartialBlockHeader {
-                application: FuelApplicationHeader::<Empty> {
+                application: ApplicationHeader::<Empty> {
                     da_height: Default::default(),
                     generated: Empty,
                 },
@@ -335,30 +336,24 @@ impl FuelService {
 mod tests {
     use super::*;
 
-    use crate::{
-        model::BlockHeight,
-        service::config::Config,
-    };
+    use crate::service::config::Config;
     use fuel_core_chain_config::{
         ChainConfig,
         CoinConfig,
         MessageConfig,
     };
-    use fuel_core_interfaces::{
-        common::{
-            fuel_asm::Opcode,
-            fuel_crypto::fuel_types::Salt,
-            fuel_storage::StorageAsRef,
-            fuel_types::{
-                Address,
-                AssetId,
-            },
+    use fuel_core_interfaces::common::{
+        fuel_asm::Opcode,
+        fuel_crypto::fuel_types::Salt,
+        fuel_storage::StorageAsRef,
+        fuel_types::{
+            Address,
+            AssetId,
         },
-        db::Coins,
-        model::{
-            DaBlockHeight,
-            Message,
-        },
+    };
+    use fuel_core_types::blockchain::primitives::{
+        BlockHeight,
+        DaBlockHeight,
     };
     use itertools::Itertools;
     use rand::{

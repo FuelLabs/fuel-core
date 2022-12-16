@@ -12,16 +12,14 @@ use async_graphql::{
     SchemaBuilder,
     ID,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_tx::ConsensusParameters,
-        fuel_vm::{
-            consts,
-            prelude::*,
-        },
+use fuel_core_interfaces::common::{
+    fuel_tx::ConsensusParameters,
+    fuel_vm::{
+        consts,
+        prelude::*,
     },
-    not_found,
 };
+use fuel_core_storage::not_found;
 use futures::lock::Mutex;
 use std::{
     collections::HashMap,

@@ -25,8 +25,8 @@ use fuel_core_interfaces::{
     executor::ExecutionBlock,
     model::{
         ConsensusHeader,
-        PartialFuelBlock,
         PartialBlockHeader,
+        PartialFuelBlock,
     },
 };
 use itertools::Itertools;

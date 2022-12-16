@@ -51,7 +51,8 @@ use fuel_core_types::{
         },
         txpool::{
             ArcPoolTx,
-            PoolTransaction, TxStatus,
+            PoolTransaction,
+            TxStatus,
         },
     },
 };
@@ -111,7 +112,6 @@ impl AsRef<MockDatabase> for MockDatabase {
         &self
     }
 }
-
 
 #[async_trait::async_trait]
 impl BlockProducer<MockDatabase> for MockBlockProducer {

@@ -2,12 +2,8 @@ use crate::{
     database::{
         Column,
         Database,
-        StorageError,
     },
-    state::{
-        Error,
-        IterDirection,
-    },
+    state::IterDirection,
 };
 use fuel_core_chain_config::CoinConfig;
 use fuel_core_database::Error as DatabaseError;

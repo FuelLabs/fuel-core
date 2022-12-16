@@ -21,20 +21,20 @@ use async_graphql::{
     Context,
     Object,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::StorageAsRef,
-        fuel_tx,
-    },
-    db::StorageError,
-    not_found,
+use fuel_core_interfaces::common::{
+    fuel_storage::StorageAsRef,
+    fuel_tx,
 };
-use fuel_core_storage::tables::{
-    FuelBlocks,
-    Messages,
-    Receipts,
-    SealedBlockConsensus,
-    Transactions,
+use fuel_core_storage::{
+    not_found,
+    tables::{
+        FuelBlocks,
+        Messages,
+        Receipts,
+        SealedBlockConsensus,
+        Transactions,
+    },
+    Error as StorageError,
 };
 use fuel_core_types::{
     blockchain::{

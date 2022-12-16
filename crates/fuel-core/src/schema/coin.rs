@@ -17,8 +17,8 @@ use async_graphql::{
     InputObject,
     Object,
 };
-use fuel_core_interfaces::not_found;
 use fuel_core_storage::{
+    not_found,
     tables::Coins,
     StorageAsRef,
 };

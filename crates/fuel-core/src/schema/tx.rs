@@ -34,12 +34,14 @@ use fuel_core_interfaces::{
         fuel_types,
         fuel_vm::prelude::Deserializable,
     },
-    not_found,
     txpool::TxPoolMpsc,
 };
-use fuel_core_storage::tables::{
-    FuelBlocks,
-    Transactions,
+use fuel_core_storage::{
+    not_found,
+    tables::{
+        FuelBlocks,
+        Transactions,
+    },
 };
 use fuel_core_txpool::Service as TxPoolService;
 use futures::{

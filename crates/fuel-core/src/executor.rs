@@ -51,25 +51,36 @@ use fuel_core_interfaces::common::{
     state::StateTransition,
 };
 use fuel_core_producer::ports::Executor as ExecutorTrait;
-use fuel_core_storage::{tables::{
-    Coins,
-    FuelBlocks,
-    Messages,
-    Receipts,
-    Transactions,
-}, transactional::StorageTransaction};
+use fuel_core_storage::{
+    tables::{
+        Coins,
+        ContractsLatestUtxo,
+        FuelBlocks,
+        Messages,
+        Receipts,
+        Transactions,
+    },
+    transactional::StorageTransaction,
+};
 use fuel_core_types::{
     blockchain::{
-        block::PartialFuelBlock,
+        block::{
+            Block,
+            PartialFuelBlock,
+        },
         header::PartialBlockHeader,
         primitives::{
             BlockHeight,
+            BlockId,
             DaBlockHeight,
         },
     },
-    entities::coin::{
-        Coin,
-        CoinStatus,
+    entities::{
+        coin::{
+            Coin,
+            CoinStatus,
+        },
+        message::Message,
     },
     services::{
         executor::{
@@ -78,7 +89,10 @@ use fuel_core_types::{
             ExecutionKind,
             ExecutionResult,
             ExecutionType,
-            ExecutionTypes, TransactionExecutionStatus, UncommittedResult, TransactionValidityError,
+            ExecutionTypes,
+            TransactionExecutionStatus,
+            TransactionValidityError,
+            UncommittedResult,
         },
         txpool::TransactionStatus,
     },
@@ -1360,59 +1374,52 @@ impl Fee for CreateCheckedMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::FuelBlock;
-    use fuel_core_interfaces::{
-        common::{
-            consts::REG_PC,
-            fuel_asm::Opcode,
-            fuel_crypto::SecretKey,
-            fuel_merkle::binary::empty_sum,
-            fuel_tx,
-            fuel_tx::{
-                field::{
-                    Inputs,
-                    Outputs,
-                },
-                Buildable,
-                Chargeable,
-                CheckError,
-                ConsensusParameters,
-                Create,
-                Script,
-                Transaction,
-                TransactionBuilder,
+    use fuel_core_interfaces::common::{
+        consts::REG_PC,
+        fuel_asm::Opcode,
+        fuel_crypto::SecretKey,
+        fuel_merkle::binary::empty_sum,
+        fuel_tx,
+        fuel_tx::{
+            field::{
+                Inputs,
+                Outputs,
             },
-            fuel_types::{
-                bytes::SerializableVec,
-                ContractId,
-                Immediate12,
-                Immediate18,
-                Salt,
-            },
-            fuel_vm::{
-                consts::{
-                    REG_CGAS,
-                    REG_FP,
-                    REG_ONE,
-                    REG_ZERO,
-                },
-                prelude::{
-                    Call,
-                    CallFrame,
-                },
-                script_with_data_offset,
-                util::test_helpers::TestBuilder as TxBuilder,
-            },
-            tai64::Tai64,
+            Buildable,
+            Chargeable,
+            CheckError,
+            ConsensusParameters,
+            Create,
+            Script,
+            Transaction,
+            TransactionBuilder,
         },
-        executor::ExecutionTypes,
-        model::{
-            CheckedMessage,
-            ConsensusHeader,
-            DaBlockHeight,
-            Message,
-            PartialBlockHeader,
+        fuel_types::{
+            bytes::SerializableVec,
+            ContractId,
+            Immediate12,
+            Immediate18,
+            Salt,
         },
+        fuel_vm::{
+            consts::{
+                REG_CGAS,
+                REG_FP,
+                REG_ONE,
+                REG_ZERO,
+            },
+            prelude::{
+                Call,
+                CallFrame,
+            },
+            script_with_data_offset,
+            util::test_helpers::TestBuilder as TxBuilder,
+        },
+        tai64::Tai64,
+    };
+    use fuel_core_types::{
+        blockchain::header::ConsensusHeader,
+        entities::message::CheckedMessage,
     };
     use itertools::Itertools;
     use rand::{

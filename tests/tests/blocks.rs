@@ -39,8 +39,8 @@ use fuel_core_interfaces::{
         SealedBlockConsensus,
     },
     model::{
-        FuelBlockConsensus,
         ConsensusHeader,
+        FuelBlockConsensus,
     },
 };
 use itertools::{

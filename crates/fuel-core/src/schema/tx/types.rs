@@ -53,12 +53,14 @@ use fuel_core_interfaces::{
         fuel_vm::prelude::ProgramState as VmProgramState,
         tai64::Tai64,
     },
-    not_found,
     txpool::TxPoolMpsc,
 };
-use fuel_core_storage::tables::{
-    FuelBlocks,
-    Receipts,
+use fuel_core_storage::{
+    not_found,
+    tables::{
+        FuelBlocks,
+        Receipts,
+    },
 };
 use fuel_core_txpool::Service as TxPoolService;
 use fuel_core_types::{

@@ -2,15 +2,13 @@ use crate::{
     database::{
         Column,
         Database,
-        StorageError,
     },
-    state::{
-        Error,
-        IterDirection,
-    },
+    state::IterDirection,
 };
+use fuel_core_database::Error as DatabaseError;
 use fuel_core_storage::{
     tables::Transactions,
+    Error as StorageError,
     StorageInspect,
     StorageMutate,
 };
@@ -61,7 +59,7 @@ impl Database {
         &self,
         start: Option<&Bytes32>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = Result<Transaction, Error>> + '_ {
+    ) -> impl Iterator<Item = Result<Transaction, DatabaseError>> + '_ {
         let start = start.map(|b| b.as_ref().to_vec());
         self.iter_all::<Vec<u8>, Transaction>(
             Column::Transactions,
@@ -81,7 +79,7 @@ impl Database {
         owner: &Address,
         start: Option<&OwnedTransactionIndexCursor>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = Result<(OwnedTransactionIndexCursor, Bytes32), Error>> + '_
+    ) -> impl Iterator<Item = Result<(OwnedTransactionIndexCursor, Bytes32), DatabaseError>> + '_
     {
         let start = start
             .map(|cursor| owned_tx_index_key(owner, cursor.block_height, cursor.tx_idx));
@@ -100,7 +98,7 @@ impl Database {
         block_height: BlockHeight,
         tx_idx: TransactionIndex,
         tx_id: &Bytes32,
-    ) -> Result<Option<Bytes32>, Error> {
+    ) -> Result<Option<Bytes32>, DatabaseError> {
         self.insert(
             owned_tx_index_key(owner, block_height, tx_idx),
             Column::TransactionsByOwnerBlockIdx,
@@ -112,14 +110,14 @@ impl Database {
         &self,
         id: &Bytes32,
         status: TransactionStatus,
-    ) -> Result<Option<TransactionStatus>, Error> {
+    ) -> Result<Option<TransactionStatus>, DatabaseError> {
         self.insert(id, Column::TransactionStatus, status)
     }
 
     pub fn get_tx_status(
         &self,
         id: &Bytes32,
-    ) -> Result<Option<TransactionStatus>, Error> {
+    ) -> Result<Option<TransactionStatus>, DatabaseError> {
         self.get(&id.deref()[..], Column::TransactionStatus)
     }
 }

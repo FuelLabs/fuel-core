@@ -1,8 +1,6 @@
 use super::*;
 use crate::service::test_helpers::TestContext;
-use fuel_core_interfaces::txpool::{
-    TxPoolMpsc,
-};
+use fuel_core_interfaces::txpool::TxPoolMpsc;
 use fuel_core_types::fuel_tx::{
     Transaction,
     UniqueIdentifier,

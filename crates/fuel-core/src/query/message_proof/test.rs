@@ -1,15 +1,12 @@
 use std::collections::HashMap;
 
-use fuel_core_interfaces::{
-    common::{
-        fuel_tx::Script,
-        tai64::Tai64,
-    },
-    model::{
-        FuelApplicationHeader,
-        ConsensusHeader,
-        PartialBlockHeader,
-    },
+use fuel_core_interfaces::common::{
+    fuel_tx::Script,
+    tai64::Tai64,
+};
+use fuel_core_types::blockchain::header::{
+    ConsensusHeader,
+    PartialBlockHeader,
 };
 
 use super::*;

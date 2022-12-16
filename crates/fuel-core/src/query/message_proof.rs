@@ -1,16 +1,15 @@
-use fuel_core_interfaces::{
-    common::{
-        fuel_crypto,
-        fuel_merkle,
-        fuel_tx::field::Outputs,
-        fuel_types::MessageId,
-        prelude::*,
-    },
-    db::StorageError,
+use fuel_core_interfaces::common::{
+    fuel_crypto,
+    fuel_merkle,
+    fuel_tx::field::Outputs,
+    fuel_types::MessageId,
+    prelude::*,
 };
+use fuel_core_storage::Error as StorageError;
 use fuel_core_types::{
     blockchain::block::CompressedBlock,
-    entities::message::MessageProof, services::txpool::TransactionStatus,
+    entities::message::MessageProof,
+    services::txpool::TransactionStatus,
 };
 
 #[cfg(test)]

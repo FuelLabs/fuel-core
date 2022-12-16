@@ -8,7 +8,6 @@ use crate::{
         MultiKey,
     },
 };
-use fuel_core_database::Error as DatabaseError;
 use fuel_core_storage::{
     tables::ContractsState,
     Error as StorageError,

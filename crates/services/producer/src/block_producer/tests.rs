@@ -182,9 +182,7 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
 async fn production_fails_on_execution_error() {
     let ctx = TestContext {
         executor: Arc::new(FailingMockExecutor(Mutex::new(Some(
-            ExecutorError::TransactionIdCollision(
-                Default::default(),
-            ),
+            ExecutorError::TransactionIdCollision(Default::default()),
         )))),
         ..TestContext::default()
     };
@@ -199,9 +197,7 @@ async fn production_fails_on_execution_error() {
     assert!(
         matches!(
             err.downcast_ref::<ExecutorError>(),
-            Some(
-                ExecutorError::TransactionIdCollision { .. }
-            )
+            Some(ExecutorError::TransactionIdCollision { .. })
         ),
         "unexpected err {:?}",
         err

@@ -10,14 +10,14 @@ use async_graphql::{
     Context,
     Object,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::StorageAsRef,
-        fuel_tx,
-    },
-    not_found,
+use fuel_core_interfaces::common::{
+    fuel_storage::StorageAsRef,
+    fuel_tx,
 };
-use fuel_core_storage::tables::FuelBlocks;
+use fuel_core_storage::{
+    not_found,
+    tables::FuelBlocks,
+};
 
 pub const DEFAULT_NAME: &str = "Fuel.testnet";
 

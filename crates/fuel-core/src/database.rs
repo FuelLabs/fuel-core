@@ -3,7 +3,6 @@ use crate::{
     state::{
         in_memory::memory_store::MemoryStore,
         DataSource,
-        Error,
         IterDirection,
     },
 };

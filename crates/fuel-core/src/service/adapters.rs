@@ -11,19 +11,21 @@ use fuel_core_interfaces::{
         },
         fuel_types::Word,
     },
-    executor::{
+    relayer::RelayerDb,
+};
+#[cfg(feature = "relayer")]
+use fuel_core_relayer::RelayerSynced;
+use fuel_core_storage::transactional::StorageTransaction;
+use fuel_core_types::{
+    blockchain::{
+        primitives,
+        primitives::BlockHeight,
+    },
+    services::executor::{
         Error,
         ExecutionBlock,
         UncommittedResult,
     },
-    relayer::RelayerDb,
-};
-use fuel_core_producer::ports::StorageTransaction;
-#[cfg(feature = "relayer")]
-use fuel_core_relayer::RelayerSynced;
-use fuel_core_types::blockchain::{
-    primitives,
-    primitives::BlockHeight,
 };
 use std::sync::Arc;
 

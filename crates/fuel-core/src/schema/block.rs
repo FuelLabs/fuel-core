@@ -28,26 +28,37 @@ use async_graphql::{
     SimpleObject,
     Union,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::StorageAsRef,
-        fuel_types,
-        tai64::Tai64,
-    },
-    executor::{
-        ExecutionBlock,
-        ExecutionResult,
-    },
-    not_found,
+use fuel_core_interfaces::common::{
+    fuel_storage::StorageAsRef,
+    fuel_types,
+    tai64::Tai64,
 };
 use fuel_core_poa::service::seal_block;
 use fuel_core_producer::ports::Executor as ExecutorTrait;
-use fuel_core_storage::tables::{
-    FuelBlocks,
-    SealedBlockConsensus,
-    Transactions,
+use fuel_core_storage::{
+    not_found,
+    tables::{
+        FuelBlocks,
+        SealedBlockConsensus,
+        Transactions,
+    },
 };
-use fuel_core_types::blockchain::block::PartialFuelBlock;
+use fuel_core_types::{
+    blockchain::{
+        block::{
+            CompressedBlock,
+            PartialFuelBlock,
+        },
+        header::{
+            ConsensusHeader,
+            PartialBlockHeader,
+        },
+    },
+    services::executor::{
+        ExecutionBlock,
+        ExecutionResult,
+    },
+};
 use itertools::Itertools;
 use std::convert::TryInto;
 
