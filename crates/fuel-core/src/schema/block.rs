@@ -374,8 +374,8 @@ impl BlockMutation {
             let (ExecutionResult { block, .. }, mut db_transaction) = executor
                 .execute_without_commit(ExecutionBlock::Production(block))?
                 .into();
-            seal_block(&config.consensus_key, &block, db_transaction.database_mut())?;
-            db_transaction.commit_box()?;
+            seal_block(&config.consensus_key, &block, db_transaction.as_mut())?;
+            db_transaction.commit()?;
         }
 
         db.get_block_height()?
@@ -455,7 +455,7 @@ impl From<CompressedBlock> for Block {
 
 impl From<CompressedBlock> for Header {
     fn from(block: CompressedBlock) -> Self {
-        Header(block.header)
+        Header(block.into_inner().0)
     }
 }
 

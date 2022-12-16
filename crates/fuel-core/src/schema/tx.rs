@@ -125,7 +125,7 @@ impl TxQuery {
                                 .transpose()
                                 .ok_or(not_found!(FuelBlocks))?
                                 .map(|fuel_block| {
-                                    let mut txs = fuel_block.into_owned().transactions;
+                                    let mut txs = fuel_block.into_owned().into_inner().1;
 
                                     if direction == IterDirection::Reverse {
                                         txs.reverse();

@@ -127,7 +127,7 @@ impl Service {
         let maybe_running = self.running.lock().take();
         if let Some(running) = maybe_running {
             // Ignore possible send error, as the JoinHandle will report errors anyway
-            let r = running.stop.send(()).await;
+            let _ = running.stop.send(()).await;
             Some(running.join)
         } else {
             warn!("Trying to stop a service that is not running");

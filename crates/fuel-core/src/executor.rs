@@ -60,7 +60,10 @@ use fuel_core_storage::{
         Receipts,
         Transactions,
     },
-    transactional::StorageTransaction,
+    transactional::{
+        StorageTransaction,
+        Transactional,
+    },
 };
 use fuel_core_types::{
     blockchain::{
@@ -137,7 +140,7 @@ impl Executor {
         block: ExecutionBlock,
     ) -> Result<ExecutionResult, Error> {
         let (result, db_transaction) = self.execute_without_commit(block)?.into();
-        db_transaction.commit_box()?;
+        db_transaction.commit()?;
         Ok(result)
     }
 }
@@ -188,7 +191,7 @@ impl ExecutorTrait<Database> for Executor {
             .iter()
             .map(|tx| {
                 let id = tx.id();
-                StorageInspect::<Receipts>::get(temporary_db.database(), &id)
+                StorageInspect::<Receipts>::get(temporary_db.as_ref(), &id)
                     .transpose()
                     .unwrap_or_else(|| Ok(Default::default()))
                     .map(|v| v.into_owned())
@@ -274,7 +277,7 @@ impl Executor {
         block_db_transaction
             .deref_mut()
             .storage::<FuelBlocks>()
-            .insert(&finalized_block_id.into(), &block.to_db_block())?;
+            .insert(&finalized_block_id.into(), &block.compress())?;
 
         // Get the complete fuel block.
         Ok(UncommittedResult::new(
@@ -283,7 +286,7 @@ impl Executor {
                 skipped_transactions,
                 tx_status,
             },
-            Box::new(block_db_transaction),
+            StorageTransaction::new(block_db_transaction),
         ))
     }
 
@@ -473,7 +476,11 @@ impl Executor {
             0,
             TransactionExecutionStatus {
                 id: coinbase_id,
-                result: TransactionExecutionResult::Success { result: None },
+                result: TransactionExecutionResult::Success {
+                    block_id: Default::default(),
+                    time: *block.header.time(),
+                    result: None,
+                },
             },
         );
         if block_db_transaction
@@ -680,16 +687,16 @@ impl Executor {
                 })
                 .unwrap_or_else(|| format!("{:?}", vm_result.state()));
 
-            TransactionStatus::Failed {
-                block_id: Default::default(),
+            TransactionExecutionResult::Failed {
+                block_id: None,
                 time: *header.time(),
                 reason,
                 result: Some(*vm_result.state()),
             }
         } else {
             // else tx was a success
-            TransactionStatus::Success {
-                block_id: Default::default(),
+            TransactionExecutionResult::Success {
+                block_id: None,
                 time: *header.time(),
                 result: Some(*vm_result.state()),
             }
@@ -701,9 +708,10 @@ impl Executor {
             .checked_add(tx_fee)
             .ok_or(Error::FeeOverflow)?;
         // queue up status for this tx to be stored once block id is finalized.
-        execution_data
-            .tx_status
-            .push(TransactionExecutionStatus { id: tx_id, result: status.into() });
+        execution_data.tx_status.push(TransactionExecutionStatus {
+            id: tx_id,
+            result: status,
+        });
         execution_data
             .message_ids
             .extend(vm_result.receipts().iter().filter_map(|r| match r {
@@ -1323,20 +1331,41 @@ impl Executor {
         tx_status: &mut [TransactionExecutionStatus],
         db: &Database,
     ) -> Result<(), Error> {
-        for TransactionExecutionStatus { id, result} in tx_status {
-            match result { 
-                TransactionStatus::Submitted { .. } => {}
-                TransactionStatus::Success { block_id, .. } => {
-                    *block_id = finalized_block_id;
+        for TransactionExecutionStatus { id, result } in tx_status {
+            match result {
+                TransactionExecutionResult::Success {
+                    block_id,
+                    time,
+                    result,
+                } => {
+                    *block_id = Some(finalized_block_id);
+                    db.update_tx_status(
+                        id,
+                        TransactionStatus::Success {
+                            block_id: finalized_block_id,
+                            time: *time,
+                            result: result.clone(),
+                        },
+                    )?;
                 }
-                TransactionStatus::Failed { block_id, .. } => {
-                    *block_id = finalized_block_id;
-                }
-                TransactionStatus::SqueezedOut { .. } => {
-                    unreachable!("A squeezed out transaction will never make it to here")
+                TransactionExecutionResult::Failed {
+                    block_id,
+                    time,
+                    result,
+                    reason,
+                } => {
+                    *block_id = Some(finalized_block_id);
+                    db.update_tx_status(
+                        id,
+                        TransactionStatus::Failed {
+                            block_id: finalized_block_id,
+                            time: *time,
+                            result: result.clone(),
+                            reason: reason.clone(),
+                        },
+                    )?;
                 }
             }
-            db.update_tx_status(id, status.clone())?;
         }
         Ok(())
     }
@@ -2687,8 +2716,8 @@ mod tests {
         let empty_state = Bytes32::from(*empty_sum());
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
-            tx_status[2].status,
-            TransactionStatus::Success { .. }
+            tx_status[2].result,
+            TransactionExecutionResult::Success { .. }
         ));
         assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
         assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
@@ -2753,8 +2782,8 @@ mod tests {
         let empty_state = Bytes32::from(*empty_sum());
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
-            tx_status[2].status,
-            TransactionStatus::Failed { .. }
+            tx_status[2].result,
+            TransactionExecutionResult::Failed { .. }
         ));
         assert_eq!(
             executed_tx.inputs()[0].state_root(),
@@ -2864,8 +2893,8 @@ mod tests {
         let empty_state = Bytes32::from(*empty_sum());
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
-            tx_status[2].status,
-            TransactionStatus::Success { .. }
+            tx_status[2].result,
+            TransactionExecutionResult::Success { .. }
         ));
         assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
         assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));

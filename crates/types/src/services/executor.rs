@@ -26,6 +26,7 @@ use crate::{
     },
 };
 use std::error::Error as StdError;
+use tai64::Tai64;
 use thiserror::Error;
 
 /// The result of transactions execution.
@@ -54,11 +55,19 @@ pub struct TransactionExecutionStatus {
 pub enum TransactionExecutionResult {
     /// Transaction was successfully executed.
     Success {
+        /// Included in this block
+        block_id: Option<BlockId>,
+        /// Time when the block was generated
+        time: Tai64,
         /// The result of successful transaction execution.
         result: Option<ProgramState>,
     },
     /// The execution of the transaction failed.
     Failed {
+        /// Included in this block
+        block_id: Option<BlockId>,
+        /// Time when the block was generated
+        time: Tai64,
         /// The result of failed transaction execution.
         result: Option<ProgramState>,
         /// The reason of execution failure.

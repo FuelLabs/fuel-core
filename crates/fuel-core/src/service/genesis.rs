@@ -28,15 +28,18 @@ use fuel_core_interfaces::common::{
     prelude::MerkleRoot,
 };
 use fuel_core_poa::ports::BlockDb;
-use fuel_core_storage::tables::{
-    Coins,
-    ContractsAssets,
-    ContractsInfo,
-    ContractsLatestUtxo,
-    ContractsRawCode,
-    ContractsState,
-    FuelBlocks,
-    Messages,
+use fuel_core_storage::{
+    tables::{
+        Coins,
+        ContractsAssets,
+        ContractsInfo,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
+        FuelBlocks,
+        Messages,
+    },
+    transactional::Transactional,
 };
 use fuel_core_types::{
     blockchain::{
@@ -137,7 +140,7 @@ impl FuelService {
         let block_id = block.id();
         database
             .storage::<FuelBlocks>()
-            .insert(&block_id.into(), &block.to_db_block())?;
+            .insert(&block_id.into(), &block.compress())?;
         database.seal_block(block_id, seal)
     }
 

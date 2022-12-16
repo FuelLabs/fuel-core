@@ -336,7 +336,7 @@ impl BlockProducerDatabase for Database {
     fn get_block(
         &self,
         fuel_height: BlockHeight,
-    ) -> Result<Option<Cow<CompressedBlock>>, StorageError> {
+    ) -> anyhow::Result<Option<Cow<CompressedBlock>>> {
         let id = self
             .get_block_id(fuel_height)?
             .ok_or(not_found!("BlockId"))?;
@@ -361,21 +361,21 @@ impl P2pDb for Database {
 /// `StateConfig's` `generate_state_config()` method
 impl ChainConfigDb for Database {
     fn get_coin_config(&self) -> Result<Option<Vec<CoinConfig>>, StorageError> {
-        Self::get_coin_config(self)
+        Ok(Self::get_coin_config(self)?)
     }
 
     fn get_contract_config(&self) -> Result<Option<Vec<ContractConfig>>, StorageError> {
-        Self::get_contract_config(self)
+        Ok(Self::get_contract_config(self)?)
     }
 
     fn get_message_config(
         &self,
     ) -> Result<Option<Vec<fuel_core_chain_config::MessageConfig>>, StorageError> {
-        Self::get_message_config(self)
+        Ok(Self::get_message_config(self)?)
     }
 
     fn get_block_height(&self) -> Result<Option<BlockHeight>, StorageError> {
-        Self::get_block_height(self)
+        Ok(Self::get_block_height(self)?)
     }
 }
 
