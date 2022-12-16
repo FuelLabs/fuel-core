@@ -16,17 +16,10 @@ use fuel_core_client::client::{
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    fuel_asm::Opcode,
-    fuel_crypto::SecretKey,
-    fuel_tx::{
-        Input,
-        TransactionBuilder,
-    },
-    fuel_types::{
-        Address,
-        Bytes64,
-        MessageId,
-    },
+    fuel_asm::*,
+    fuel_crypto::*,
+    fuel_tx::*,
+    fuel_vm::consts::*,
 };
 use rand::{
     rngs::StdRng,
@@ -222,11 +215,6 @@ async fn messages_empty_results_for_owner_with_no_messages(
 
 #[tokio::test]
 async fn can_get_message_proof() {
-    use fuel_core_client::{
-        consts::*,
-        prelude::*,
-    };
-
     for n in [1, 2, 10] {
         let config = Config::local_node();
         let coin = config
@@ -461,7 +449,7 @@ async fn can_get_message_proof() {
 
             // Generate a proof to compare
             let mut tree =
-                fuel_core_client::fuel_merkle::binary::in_memory::MerkleTree::new();
+                fuel_core_types::fuel_merkle::binary::in_memory::MerkleTree::new();
             for id in &message_ids {
                 tree.push(id.as_ref());
             }
@@ -470,7 +458,7 @@ async fn can_get_message_proof() {
             let result_proof = result
                 .proof_set
                 .iter()
-                .map(|p| *fuel_core_client::fuel_types::Bytes32::from(p.clone()))
+                .map(|p| *Bytes32::from(p.clone()))
                 .collect::<Vec<_>>();
             assert_eq!(result_proof, expected_set);
 
@@ -489,9 +477,9 @@ async fn can_get_message_proof() {
 // TODO: Others test:  Data missing etc.
 
 fn verify_merkle(
-    _root: fuel_core_client::prelude::Bytes32,
+    _root: Bytes32,
     _index: u64,
-    _set: Vec<fuel_core_client::prelude::Bytes32>,
+    _set: Vec<Bytes32>,
     _leaf_count: u64,
     _message_id: MessageId,
 ) -> bool {
@@ -503,7 +491,7 @@ fn verify_signature(
     block_id: fuel_core_types::blockchain::primitives::BlockId,
     signature: fuel_core_client::client::schema::Signature,
 ) -> bool {
-    let signature = fuel_core_client::prelude::Signature::from(Bytes64::from(signature));
+    let signature = Signature::from(Bytes64::from(signature));
     let m = block_id.as_message();
     let public_key = signature.recover(m).unwrap();
     signature.verify(&public_key, m).is_ok()

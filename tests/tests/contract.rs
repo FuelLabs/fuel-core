@@ -13,29 +13,10 @@ use fuel_core_client::client::{
     PaginationRequest,
 };
 use fuel_core_types::{
-    fuel_asm::{
-        GTFArgs,
-        Immediate12,
-        Opcode,
-    },
-    fuel_tx::{
-        Contract,
-        Input,
-        Output,
-        Transaction,
-        TransactionBuilder,
-        TxPointer,
-        UniqueIdentifier,
-        UtxoId,
-        Witness,
-    },
-    fuel_types::{
-        bytes::SerializableVec,
-        AssetId,
-        Bytes32,
-        Salt,
-    },
-    fuel_vm::Call,
+    fuel_asm::*,
+    fuel_tx::*,
+    fuel_types::bytes::*,
+    fuel_vm::*,
 };
 use rstest::rstest;
 
