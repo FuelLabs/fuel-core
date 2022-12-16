@@ -29,4 +29,4 @@ rand = "0.8"
 rstest = "0.15"
 
 [features]
-test-helpers = ["fuel-core-interfaces/test-helpers"]
+test-helpers = ["fuel-core-types/test-helpers"]

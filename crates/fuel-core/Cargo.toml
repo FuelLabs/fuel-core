@@ -85,7 +85,6 @@ uuid = { version = "1.1", features = ["v4"] }
 assert_matches = "1.5"
 fuel-core-interfaces = { path = "../fuel-core-interfaces", features = [
     "serde",
-    "test-helpers",
 ] }
 fuel-core-storage = { path = "../storage", features = ["test-helpers"] }
 fuel-core-types = { path = "../types", features = ["test-helpers"] }
@@ -94,7 +93,7 @@ mockall = "0.11"
 test-case = "2.2"
 
 [features]
-debug = ["fuel-core-interfaces/debug", "fuel-core-types/debug"]
+debug = ["fuel-core-types/debug"]
 default = ["debug", "metrics", "rocksdb"]
 metrics = ["dep:fuel-core-metrics"]
 p2p = ["dep:fuel-core-p2p"]

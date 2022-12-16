@@ -28,7 +28,6 @@ fuel-core-txpool = { path = "", features = ["test-helpers"] }
 
 [features]
 test-helpers = [
-    "fuel-core-interfaces/test-helpers",
     "fuel-core-types/test-helpers",
     "fuel-core-storage/test-helpers"
 ]

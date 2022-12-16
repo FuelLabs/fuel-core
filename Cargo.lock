@@ -2367,7 +2367,6 @@ version = "0.15.1"
 dependencies = [
  "anyhow",
  "bincode",
- "fuel-core-interfaces",
  "fuel-core-poa",
  "fuel-core-storage",
  "fuel-core-types",
@@ -2446,7 +2445,6 @@ dependencies = [
  "derive_more",
  "fuel-core-storage",
  "fuel-core-types",
- "fuel-vm",
  "lazy_static",
  "parking_lot 0.12.1",
  "secrecy",

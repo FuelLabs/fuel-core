@@ -206,7 +206,7 @@ impl MessageProofData for MessageProofContext<'_> {
     fn receipts(
         &self,
         transaction_id: &fuel_core_types::fuel_types::Bytes32,
-    ) -> StorageResult<Vec<fuel_core_interfaces::common::prelude::Receipt>> {
+    ) -> StorageResult<Vec<fuel_tx::Receipt>> {
         Ok(self
             .0
             .storage::<Receipts>()

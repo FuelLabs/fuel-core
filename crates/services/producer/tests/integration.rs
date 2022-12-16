@@ -24,29 +24,10 @@ use fuel_core_txpool::{
 };
 use fuel_core_types::{
     blockchain::block::CompressedBlock,
-    entities::coin::{
-        Coin,
-        CoinStatus,
-    },
+    entities::coin::*,
     fuel_asm::Opcode,
-    fuel_crypto::{
-        PublicKey,
-        SecretKey,
-    },
-    fuel_merkle::common::Bytes32,
-    fuel_tx::{
-        Chargeable,
-        ConsensusParameters,
-        Output,
-        Script,
-        Signable,
-        TransactionBuilder,
-        UtxoId,
-    },
-    fuel_types::{
-        Address,
-        AssetId,
-    },
+    fuel_crypto::*,
+    fuel_tx::*,
     fuel_vm::consts::REG_ZERO,
     services::executor::ExecutionResult,
 };
@@ -106,7 +87,7 @@ async fn block_producer() -> Result<()> {
         txpool_db
             .storage::<Coins>()
             .insert(
-                &UtxoId::new(coin.id.into(), coin.index),
+                &UtxoId::new(coin.id, coin.index),
                 &Coin {
                     owner: coin.address(),
                     amount: COIN_AMOUNT,
@@ -303,7 +284,7 @@ impl CoinInfo {
     }
 
     pub fn utxo_id(&self) -> UtxoId {
-        UtxoId::new(self.id.into(), self.index)
+        UtxoId::new(self.id, self.index)
     }
 }
 
