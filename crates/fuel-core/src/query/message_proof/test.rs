@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use fuel_core_types::{
     blockchain::header::{
         ApplicationHeader,

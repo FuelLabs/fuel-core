@@ -99,8 +99,7 @@ pub struct PoAConsensus {
 #[Object]
 impl Block {
     async fn id(&self) -> BlockId {
-        let bytes: fuel_core_interfaces::common::prelude::Bytes32 =
-            self.header.0.id().into();
+        let bytes: fuel_core_types::fuel_types::Bytes32 = self.header.0.id().into();
         bytes.into()
     }
 
@@ -143,7 +142,7 @@ impl Block {
 impl Header {
     /// Hash of the header
     async fn id(&self) -> BlockId {
-        let bytes: fuel_core_interfaces::common::prelude::Bytes32 = self.0.id().into();
+        let bytes: fuel_core_types::fuel_types::Bytes32 = self.0.id().into();
         bytes.into()
     }
 

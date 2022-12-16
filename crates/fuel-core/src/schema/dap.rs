@@ -12,14 +12,12 @@ use async_graphql::{
     SchemaBuilder,
     ID,
 };
-use fuel_core_interfaces::common::{
-    fuel_tx::ConsensusParameters,
-    fuel_vm::{
-        consts,
-        prelude::*,
-    },
+use fuel_core_interfaces::common::fuel_vm::{
+    consts,
+    prelude::*,
 };
 use fuel_core_storage::not_found;
+use fuel_core_types::fuel_tx::ConsensusParameters;
 use futures::lock::Mutex;
 use std::{
     collections::HashMap,
@@ -434,7 +432,7 @@ impl DapMutation {
         let state = match vm.resume() {
             Ok(state) => state,
             // The transaction was already completed earlier, so it cannot be resumed
-            Err(fuel_core_interfaces::common::fuel_vm::error::InterpreterError::DebugStateNotInitialized) => {
+            Err(fuel_core_types::fuel_vm::InterpreterError::DebugStateNotInitialized) => {
                 return Ok(self::gql_types::RunResult {
                     state: self::gql_types::RunState::Completed,
                     breakpoint: None,
@@ -442,7 +440,9 @@ impl DapMutation {
                 })
             }
             // The transaction was already completed earlier, so it cannot be resumed
-            Err(err) => return Err(async_graphql::Error::new(format!("VM error: {err:?}"))),
+            Err(err) => {
+                return Err(async_graphql::Error::new(format!("VM error: {err:?}")))
+            }
         };
 
         let json_receipts = vm

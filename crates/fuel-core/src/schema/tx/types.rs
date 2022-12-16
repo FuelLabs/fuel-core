@@ -26,46 +26,42 @@ use async_graphql::{
     Object,
     Union,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::StorageAsRef,
-        fuel_tx,
-        fuel_tx::{
-            field::{
-                BytecodeLength,
-                BytecodeWitnessIndex,
-                Inputs,
-                Maturity,
-                Outputs,
-                ReceiptsRoot,
-                Salt as SaltField,
-                Script as ScriptField,
-                ScriptData,
-                StorageSlots,
-                TxPointer as TxPointerField,
-                Witnesses,
-            },
-            Chargeable,
-            Executable,
-            UniqueIdentifier,
-        },
-        fuel_types::bytes::SerializableVec,
-        fuel_vm::prelude::ProgramState as VmProgramState,
-        tai64::Tai64,
-    },
-    txpool::TxPoolMpsc,
-};
+use fuel_core_interfaces::txpool::TxPoolMpsc;
 use fuel_core_storage::{
     not_found,
     tables::{
         FuelBlocks,
         Receipts,
     },
+    StorageAsRef,
 };
 use fuel_core_txpool::Service as TxPoolService;
 use fuel_core_types::{
     blockchain::primitives,
+    fuel_tx::{
+        self,
+        field::{
+            BytecodeLength,
+            BytecodeWitnessIndex,
+            Inputs,
+            Maturity,
+            Outputs,
+            ReceiptsRoot,
+            Salt as SaltField,
+            Script as ScriptField,
+            ScriptData,
+            StorageSlots,
+            TxPointer as TxPointerField,
+            Witnesses,
+        },
+        Chargeable,
+        Executable,
+        UniqueIdentifier,
+    },
+    fuel_types::bytes::SerializableVec,
+    fuel_vm::ProgramState as VmProgramState,
     services::txpool::TransactionStatus as TxStatus,
+    tai64::Tai64,
 };
 use std::sync::Arc;
 use tokio::sync::oneshot;

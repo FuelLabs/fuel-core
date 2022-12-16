@@ -11,12 +11,9 @@ use crate::{
         Config,
     },
 };
-use fuel_core_interfaces::{
-    self,
-    txpool::{
-        Sender,
-        TxPoolDb,
-    },
+use fuel_core_interfaces::txpool::{
+    Sender,
+    TxPoolDb,
 };
 use fuel_core_txpool::service::TxStatusChange;
 use futures::future::join_all;
