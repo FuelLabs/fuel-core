@@ -645,14 +645,12 @@ mod tests {
     fn get_coins(db: &Database, owner: &Address) -> Vec<(UtxoId, Coin)> {
         db.owned_coins_ids(owner, None, None)
             .map(|r| {
-                r.and_then(|coin_id| {
-                    Ok(db
-                        .storage::<Coins>()
-                        .get(&coin_id)
-                        .map(|v| (coin_id, v.unwrap().into_owned()))?)
-                })
+                let coin_id = r.unwrap();
+                db.storage::<Coins>()
+                    .get(&coin_id)
+                    .map(|v| (coin_id, v.unwrap().into_owned()))
+                    .unwrap()
             })
-            .try_collect()
-            .unwrap()
+            .collect()
     }
 }

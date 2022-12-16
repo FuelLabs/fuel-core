@@ -409,17 +409,14 @@ pub fn seal_block(
 #[cfg(test)]
 mod test {
     use super::*;
-    use fuel_core_interfaces::{
-        common::{
-            fuel_crypto::SecretKey,
-            fuel_tx::{
-                Receipt,
-                Transaction,
-                TransactionBuilder,
-                TxId,
-            },
+    use fuel_core_interfaces::common::{
+        fuel_crypto::SecretKey,
+        fuel_tx::{
+            Receipt,
+            Transaction,
+            TransactionBuilder,
+            TxId,
         },
-        txpool::Error::NoMetadata,
     };
     use fuel_core_storage::{
         transactional::Transactional,
@@ -429,7 +426,10 @@ mod test {
         blockchain::primitives::BlockId,
         services::{
             executor::Error as ExecutorError,
-            txpool::ArcPoolTx,
+            txpool::{
+                ArcPoolTx,
+                Error::NoMetadata,
+            },
         },
     };
     use rand::{
