@@ -1,14 +1,19 @@
-use fuel_core_interfaces::common::{
-    fuel_crypto,
-    fuel_merkle,
-    fuel_tx::field::Outputs,
-    fuel_types::MessageId,
-    prelude::*,
-};
-use fuel_core_storage::Error as StorageError;
+use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::block::CompressedBlock,
     entities::message::MessageProof,
+    fuel_crypto::Signature,
+    fuel_merkle,
+    fuel_tx::{
+        field::Outputs,
+        Output,
+        Receipt,
+        Transaction,
+    },
+    fuel_types::{
+        Bytes32,
+        MessageId,
+    },
     services::txpool::TransactionStatus,
 };
 
@@ -19,29 +24,21 @@ mod test;
 /// Trait that specifies all the data required by the output message query.
 pub trait MessageProofData {
     /// Return all receipts in the given transaction.
-    fn receipts(&self, transaction_id: &Bytes32) -> Result<Vec<Receipt>, StorageError>;
+    fn receipts(&self, transaction_id: &Bytes32) -> StorageResult<Vec<Receipt>>;
     /// Get the transaction.
-    fn transaction(
-        &self,
-        transaction_id: &Bytes32,
-    ) -> Result<Option<Transaction>, StorageError>;
+    fn transaction(&self, transaction_id: &Bytes32)
+        -> StorageResult<Option<Transaction>>;
     /// Get the status of a transaction.
     fn transaction_status(
         &self,
         transaction_id: &Bytes32,
-    ) -> Result<Option<TransactionStatus>, StorageError>;
+    ) -> StorageResult<Option<TransactionStatus>>;
     /// Get all transactions on a block.
-    fn transactions_on_block(
-        &self,
-        block_id: &Bytes32,
-    ) -> Result<Vec<Bytes32>, StorageError>;
+    fn transactions_on_block(&self, block_id: &Bytes32) -> StorageResult<Vec<Bytes32>>;
     /// Get the signature of a fuel block.
-    fn signature(
-        &self,
-        block_id: &Bytes32,
-    ) -> Result<Option<fuel_crypto::Signature>, StorageError>;
+    fn signature(&self, block_id: &Bytes32) -> StorageResult<Option<Signature>>;
     /// Get the fuel block.
-    fn block(&self, block_id: &Bytes32) -> Result<Option<CompressedBlock>, StorageError>;
+    fn block(&self, block_id: &Bytes32) -> StorageResult<Option<CompressedBlock>>;
 }
 
 /// Generate an output proof.
@@ -49,7 +46,7 @@ pub async fn message_proof(
     data: &(dyn MessageProofData + Send + Sync),
     transaction_id: Bytes32,
     message_id: MessageId,
-) -> Result<Option<MessageProof>, StorageError> {
+) -> StorageResult<Option<MessageProof>> {
     // Check if the receipts for this transaction actually contain this message id or exit.
     let receipt = data
         .receipts(&transaction_id)?

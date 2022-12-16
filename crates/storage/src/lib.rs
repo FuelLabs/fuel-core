@@ -13,6 +13,9 @@ pub use fuel_vm_private::fuel_storage::*;
 pub mod tables;
 pub mod transactional;
 
+/// The storage result alias.
+pub type Result<T> = core::result::Result<T, Error>;
+
 #[derive(thiserror::Error, Debug)]
 #[non_exhaustive]
 /// Error occurring during interaction with storage
