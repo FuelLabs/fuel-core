@@ -5,6 +5,7 @@ use fuel_core_interfaces::common::{
     tai64::Tai64,
 };
 use fuel_core_types::blockchain::header::{
+    ApplicationHeader,
     ConsensusHeader,
     PartialBlockHeader,
 };
@@ -136,7 +137,7 @@ async fn can_build_message_proof() {
         .returning(|_| Ok(Some(fuel_crypto::Signature::default())));
 
     let header = PartialBlockHeader {
-        application: FuelApplicationHeader {
+        application: ApplicationHeader {
             da_height: 0u64.into(),
             generated: Default::default(),
         },

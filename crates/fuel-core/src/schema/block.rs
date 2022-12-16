@@ -50,6 +50,8 @@ use fuel_core_types::{
             PartialFuelBlock,
         },
         header::{
+            ApplicationHeader,
+            BlockHeader,
             ConsensusHeader,
             PartialBlockHeader,
         },
@@ -67,7 +69,7 @@ pub struct Block {
     pub(crate) transactions: Vec<fuel_types::Bytes32>,
 }
 
-pub struct Header(pub(crate) FuelBlockHeader);
+pub struct Header(pub(crate) BlockHeader);
 
 #[derive(Union)]
 pub enum Consensus {
@@ -356,7 +358,7 @@ impl BlockMutation {
                         prev_root: Default::default(),
                         generated: Default::default(),
                     },
-                    application: FuelApplicationHeader {
+                    application: ApplicationHeader {
                         da_height: Default::default(),
                         generated: Default::default(),
                     },
@@ -457,8 +459,8 @@ impl From<CompressedBlock> for Header {
     }
 }
 
-impl From<FuelGenesis> for Genesis {
-    fn from(genesis: FuelGenesis) -> Self {
+impl From<Genesis> for Genesis {
+    fn from(genesis: Genesis) -> Self {
         Genesis {
             chain_config_hash: genesis.chain_config_hash.into(),
             coins_root: genesis.coins_root.into(),
@@ -468,13 +470,17 @@ impl From<FuelGenesis> for Genesis {
     }
 }
 
-impl From<FuelBlockConsensus> for Consensus {
-    fn from(consensus: FuelBlockConsensus) -> Self {
+impl From<fuel_core_types::blockchain::consensus::Consensus> for Consensus {
+    fn from(consensus: fuel_core_types::blockchain::consensus::Consensus) -> Self {
         match consensus {
-            Consensus::Genesis(genesis) => Consensus::Genesis(genesis.into()),
-            Consensus::PoA(poa) => Consensus::PoA(PoAConsensus {
-                signature: poa.signature.into(),
-            }),
+            fuel_core_types::blockchain::consensus::Consensus::Genesis(genesis) => {
+                Consensus::Genesis(genesis.into())
+            }
+            fuel_core_types::blockchain::consensus::Consensus::PoA(poa) => {
+                Consensus::PoA(PoAConsensus {
+                    signature: poa.signature.into(),
+                })
+            }
         }
     }
 }
