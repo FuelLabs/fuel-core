@@ -87,6 +87,7 @@ fuel-core-interfaces = { path = "../fuel-core-interfaces", features = [
     "serde",
     "test-helpers",
 ] }
+fuel-core-types = { path = "../types", features = ["test-helpers"] }
 fuel-core-storage = { path = "../storage", features = ["test-helpers"] }
 insta = "1.8"
 mockall = "0.11"
