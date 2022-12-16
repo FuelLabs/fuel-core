@@ -101,6 +101,24 @@ impl AsRef<MockDb> for DatabaseTransaction {
     }
 }
 
+impl Transactional<MockDb> for MockDb {
+    fn commit(&mut self) -> Result<(), StorageError> {
+        Ok(())
+    }
+}
+
+impl AsMut<MockDb> for MockDb {
+    fn as_mut(&mut self) -> &mut MockDb {
+        self
+    }
+}
+
+impl AsRef<MockDb> for MockDb {
+    fn as_ref(&self) -> &MockDb {
+        &self
+    }
+}
+
 impl Executor<MockDb> for MockExecutor {
     fn execute_without_commit(
         &self,
@@ -119,9 +137,7 @@ impl Executor<MockDb> for MockExecutor {
                 skipped_transactions: vec![],
                 tx_status: vec![],
             },
-            DatabaseTransaction {
-                database: self.0.clone(),
-            },
+            StorageTransaction::new(self.0.clone()),
         ))
     }
 
@@ -156,9 +172,7 @@ impl Executor<MockDb> for FailingMockExecutor {
                     skipped_transactions: vec![],
                     tx_status: vec![],
                 },
-                Box::new(DatabaseTransaction {
-                    database: MockDb::default(),
-                }),
+                StorageTransaction::new(MockDb::default()),
             ))
         }
     }

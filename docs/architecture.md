@@ -335,9 +335,9 @@ pub enum GossipValidity {
 }
 
 pub trait Database:
-    StorageInspect<Coins, Error = KvStoreError>
-    + StorageInspect<ContractsRawCode, Error = KvStoreError>
-    + StorageInspect<Messages, Error = KvStoreError>
+    StorageInspect<Coins, Error = StorageError>
+    + StorageInspect<ContractsRawCode, Error = StorageError>
+    + StorageInspect<Messages, Error = StorageError>
     + Send
     + Sync
 {}
@@ -359,12 +359,12 @@ impl block_producer::ports::TransactionPool for Service<TransactionPool> {
 #### Ports: fuel_core_executor::ports
 ```rust
 trait Database: IntepreterStorage 
-  + StorageMut<Coins, Error = KvStoreError>
-  + StorageMut<Messages, Erorr = KvStoreError>
-  + StorageMut<Contracts, Error = KvStoreError>
-  + StorageMut<Blocks, Error = KvStoreError>
-  + StorageMut<ContractUtxos, Error = KvStoreError>
-  + StorageMut<Transactions, Error = KvStoreError>
+  + StorageMut<Coins, Error = StorageError>
+  + StorageMut<Messages, Erorr = StorageError>
+  + StorageMut<Contracts, Error = StorageError>
+  + StorageMut<Blocks, Error = StorageError>
+  + StorageMut<ContractUtxos, Error = StorageError>
+  + StorageMut<Transactions, Error = StorageError>
   + Send
   + Sync {
     // start a nested transaction to allow changes to be rolled-back
@@ -392,7 +392,7 @@ impl fuel_core_importer::ports::Executor for Service<Executor> {
 
 #### Ports: fuel_core_relayer::ports
 ```rust
-trait Database: StorageMutate<Messages, Error = KvStoreError> {
+trait Database: StorageMutate<Messages, Error = StorageError> {
     fn get_da_synced_height(&self) -> Result<DaBlockHeight>;
     fn set_da_synced_height(&self, height: DaBlockHeight) -> Result<()>;
 }

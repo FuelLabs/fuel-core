@@ -2,7 +2,7 @@ use crate::{
     database::{
         Column,
         Database,
-        KvStoreError,
+        StorageError,
     },
     state::{
         Error,

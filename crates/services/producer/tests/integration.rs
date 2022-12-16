@@ -43,14 +43,12 @@ use fuel_core_txpool::{
     ServiceBuilder as TxPoolServiceBuilder,
 };
 use fuel_core_types::{
-    blockchain::block::{
-        CompressedBlock,
-        ExecutionResult,
-    },
+    blockchain::block::CompressedBlock,
     entities::coin::{
         Coin,
         CoinStatus,
     },
+    services::executor::ExecutionResult,
 };
 use rand::{
     prelude::StdRng,

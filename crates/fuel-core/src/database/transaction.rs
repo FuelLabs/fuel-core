@@ -2,7 +2,7 @@ use crate::{
     database::{
         Column,
         Database,
-        KvStoreError,
+        StorageError,
     },
     state::{
         Error,
@@ -30,7 +30,7 @@ use std::{
 };
 
 impl StorageInspect<Transactions> for Database {
-    type Error = KvStoreError;
+    type Error = StorageError;
 
     fn get(&self, key: &Bytes32) -> Result<Option<Cow<Transaction>>, Self::Error> {
         Database::get(self, key.as_ref(), Column::Transactions).map_err(Into::into)

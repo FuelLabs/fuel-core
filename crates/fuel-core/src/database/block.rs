@@ -38,7 +38,7 @@ use std::{
 };
 
 impl StorageInspect<FuelBlocks> for Database {
-    type Error = KvStoreError;
+    type Error = StorageError;
 
     fn get(&self, key: &Bytes32) -> Result<Option<Cow<CompressedBlock>>, Self::Error> {
         Database::get(self, key.as_ref(), Column::FuelBlocks).map_err(Into::into)

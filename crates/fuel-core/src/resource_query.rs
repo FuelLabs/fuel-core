@@ -1,18 +1,16 @@
-use crate::{
-    database::{
-        resource::{
-            AssetQuery,
-            AssetSpendTarget,
-            Exclude,
-            Resource,
-            ResourceId,
-        },
-        Database,
-        KvStoreError,
+use crate::database::{
+    resource::{
+        AssetQuery,
+        AssetSpendTarget,
+        Exclude,
+        Resource,
+        ResourceId,
     },
-    state::Error as StateError,
+    Database,
 };
 use core::mem::swap;
+use fuel_core_database::Error as DatabaseError;
+use fuel_core_storage::Error as StorageError;
 use fuel_core_types::{
     entities::{
         coin::Coin,
@@ -35,9 +33,9 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum ResourceQueryError {
     #[error("store error occurred")]
-    KvStoreError(KvStoreError),
+    StorageError(StorageError),
     #[error("state error occurred")]
-    StateError(StateError),
+    DatabaseError(DatabaseError),
     #[error("not enough resources to fit the target")]
     InsufficientResources {
         asset_id: AssetId,
@@ -207,51 +205,35 @@ pub fn random_improve(
     Ok(resources_per_asset)
 }
 
-impl From<KvStoreError> for ResourceQueryError {
-    fn from(e: KvStoreError) -> Self {
-        ResourceQueryError::KvStoreError(e)
+impl From<StorageError> for ResourceQueryError {
+    fn from(e: StorageError) -> Self {
+        ResourceQueryError::StorageError(e)
     }
 }
 
-impl From<StateError> for ResourceQueryError {
-    fn from(e: StateError) -> Self {
-        ResourceQueryError::StateError(e)
+impl From<DatabaseError> for ResourceQueryError {
+    fn from(e: DatabaseError) -> Self {
+        ResourceQueryError::DatabaseError(e)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        database::Database,
-        model::{
-            Coin,
-            CoinStatus,
-        },
-    };
+    use crate::database::Database;
     use assert_matches::assert_matches;
-    use fuel_core_interfaces::{
-        common::{
-            fuel_asm::Word,
-            fuel_storage::{
-                StorageAsMut,
-                StorageAsRef,
-            },
-            fuel_tx::{
-                Address,
-                AssetId,
-                Bytes32,
-                UtxoId,
-            },
-            fuel_types::MessageId,
+    use fuel_core_interfaces::common::{
+        fuel_asm::Word,
+        fuel_storage::{
+            StorageAsMut,
+            StorageAsRef,
         },
-        db::{
-            Coins,
-            Messages,
+        fuel_tx::{
+            Address,
+            AssetId,
+            Bytes32,
+            UtxoId,
         },
-        model::{
-            DaBlockHeight,
-            Message,
-        },
+        fuel_types::MessageId,
     };
     use fuel_core_storage::tables::{
         Coins,

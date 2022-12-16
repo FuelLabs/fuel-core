@@ -50,38 +50,38 @@ use fuel_core_interfaces::common::{
     },
     state::StateTransition,
 };
-use fuel_core_producer::ports::{
-    StorageTransaction,
-    Executor as ExecutorTrait,
-};
-use fuel_core_storage::{
-    tables::{
-        Coins,
-        FuelBlocks,
-        Messages,
-        Receipts,
-        Transactions,
-    },
-    UncommittedResult,
+use fuel_core_producer::ports::Executor as ExecutorTrait;
+use fuel_core_storage::tables::{
+    Coins,
+    FuelBlocks,
+    Messages,
+    Receipts,
+    Transactions,
 };
 use fuel_core_types::{
     blockchain::{
-        block::{
-            Error,
-            ExecutionBlock,
-            ExecutionResult,
-            ExecutionType,
-            PartialFuelBlock,
-            TransactionExecutionStatus, ExecutionKind, ExecutionTypes,
-        },
+        block::PartialFuelBlock,
         header::PartialBlockHeader,
         primitives::{
             BlockHeight,
             DaBlockHeight,
-        }, transaction::TransactionValidityError,
+        },
     },
-    entities::coin::{CoinStatus, Coin},
-    services::txpool::TransactionStatus,
+    entities::coin::{
+        Coin,
+        CoinStatus,
+    },
+    services::{
+        executor::{
+            Error,
+            ExecutionBlock,
+            ExecutionKind,
+            ExecutionResult,
+            ExecutionType,
+            ExecutionTypes,
+        },
+        txpool::TransactionStatus,
+    },
 };
 use fuel_storage::{
     StorageAsMut,

@@ -38,7 +38,7 @@ impl From<Error> for std::io::Error {
     }
 }
 
-/// Creates `KvStoreError::NotFound` error with file and line information inside.
+/// Creates `StorageError::NotFound` error with file and line information inside.
 ///
 /// # Examples
 ///
