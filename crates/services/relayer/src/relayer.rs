@@ -4,6 +4,7 @@
 
 use crate::{
     log::EthEventLog,
+    ports::RelayerDb,
     Config,
 };
 use anyhow::Result;
@@ -22,7 +23,6 @@ use ethers_providers::{
     Provider,
     ProviderError,
 };
-use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_core_storage::tables::Messages;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,

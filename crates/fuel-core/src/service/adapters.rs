@@ -3,12 +3,12 @@ use crate::{
     executor::Executor,
     service::Config,
 };
-use fuel_core_interfaces::relayer::RelayerDb;
 #[cfg(feature = "p2p")]
 use fuel_core_p2p::{
     orchestrator::Service as P2pService,
     ports::Database as P2pDb,
 };
+use fuel_core_relayer::ports::RelayerDb;
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::RelayerSynced;
 use fuel_core_storage::{

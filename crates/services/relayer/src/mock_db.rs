@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use fuel_core_interfaces::relayer::RelayerDb;
+use crate::ports::RelayerDb;
 use fuel_core_storage::{
     tables::Messages,
     Error as StorageError,
