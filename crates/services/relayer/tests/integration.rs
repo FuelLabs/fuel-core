@@ -1,9 +1,9 @@
 #![cfg(feature = "test-helpers")]
 
-use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_core_relayer::{
     bridge::message::SentMessageFilter,
     mock_db::MockDb,
+    ports::RelayerDb,
     test_helpers::{
         middleware::MockMiddleware,
         EvtToLog,
