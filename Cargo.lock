@@ -2191,6 +2191,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-cli"
+version = "0.15.1"
+dependencies = [
+ "clap",
+ "fuel-core-client",
+ "fuel-core-types",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "fuel-core"
 version = "0.15.1"
 dependencies = [
@@ -2300,7 +2311,6 @@ name = "fuel-core-client"
 version = "0.15.1"
 dependencies = [
  "anyhow",
- "clap",
  "cynic",
  "derive_more",
  "eventsource-client",
@@ -2316,7 +2326,6 @@ dependencies = [
  "serde_json",
  "tai64",
  "thiserror",
- "tokio",
 ]
 
 [[package]]

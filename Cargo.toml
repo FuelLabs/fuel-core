@@ -3,6 +3,7 @@
 resolver = "2"
 members = [
   "benches",
+  "bin/fuel-cli",
   "bin/fuel-core",
   "crates/chain-config",
   "crates/client",

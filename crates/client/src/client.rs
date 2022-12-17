@@ -187,6 +187,7 @@ impl FuelClient {
         ResponseData: serde::de::DeserializeOwned + 'static,
     {
         use eventsource_client as es;
+        use hyper_rustls as _;
         let mut url = self.url.clone();
         url.set_path("/graphql-sub");
         let json_query = serde_json::to_string(&q)?;
