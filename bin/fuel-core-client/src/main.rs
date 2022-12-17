@@ -1,3 +1,4 @@
+#![deny(unused_crate_dependencies)]
 use clap::Parser;
 use fuel_core_client::client::FuelClient;
 use fuel_core_types::fuel_tx::Transaction;
