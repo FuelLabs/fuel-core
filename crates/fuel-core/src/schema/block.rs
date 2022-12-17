@@ -221,19 +221,26 @@ impl BlockQuery {
             (Some(id), None) => id.into(),
             (None, Some(height)) => {
                 let height: u64 = height.into();
-                db.get_block_id(height.try_into()?)?
-                    .ok_or("Block height non-existent")?
+                let data = BlockQueryContext(ctx.data_unchecked());
+                let id = data.block_id(height.try_into()?).or_else(|_| {
+                    Err(async_graphql::Error::new(format!(
+                        "Block with height {} not found",
+                        height
+                    )))
+                })?;
+
+                id
             }
             (None, None) => {
                 return Err(async_graphql::Error::new("Missing either id or height"))
             }
         };
 
-        let block = db
-            .storage::<FuelBlocks>()
-            .get(&id)?
-            .map(|b| Block::from(b.into_owned()));
-        Ok(block)
+        let data = BlockQueryContext(ctx.data_unchecked());
+        let block = data.block(id)??;
+
+        Ok(Some(Block{header: crate::schema::block::Header(block.0), transactions: block.1}))
+
     }
 
     async fn blocks(
@@ -251,6 +258,35 @@ impl BlockQuery {
         .await
     }
 }
+
+use crate::query::BlockQueryData;
+
+struct BlockQueryContext<'a>(&'a Database);
+
+impl BlockQueryData for BlockQueryContext<'_> {
+    fn block(&self, id: fuel_types::Bytes32) -> std::result::Result<StorageResult<(BlockHeader, Vec<fuel_types::Bytes32>)>, anyhow::Error> {
+        let db = self.0;
+
+        let mut block = db
+            .storage::<FuelBlocks>()
+            .get(&id)?.ok_or(anyhow!("Block height non-existent"))?.into_owned();
+
+        let tx_ids: Vec<fuel_core_types::fuel_types::Bytes32> = block.transactions_mut().iter().map(|tx| tx.to_owned()).collect();
+
+        let header = block.header().clone();
+
+        Ok(Ok((header, tx_ids)))
+    }
+
+    fn block_id(&self, height: u64) -> std::result::Result<fuel_types::Bytes32, anyhow::Error> {
+        let db = self.0;
+        let id = db.get_block_id(height.try_into()?)?
+            .ok_or(anyhow!("Block height non-existent"))?;
+
+        Ok(id)
+    }
+}
+
 
 #[derive(Default)]
 pub struct HeaderQuery;
