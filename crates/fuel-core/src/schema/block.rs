@@ -211,7 +211,6 @@ impl BlockQuery {
         #[graphql(desc = "ID of the block")] id: Option<BlockId>,
         #[graphql(desc = "Height of the block")] height: Option<U64>,
     ) -> async_graphql::Result<Option<Block>> {
-        let db = ctx.data_unchecked::<Database>();
         let id = match (id, height) {
             (Some(_), Some(_)) => {
                 return Err(async_graphql::Error::new(
@@ -222,14 +221,10 @@ impl BlockQuery {
             (None, Some(height)) => {
                 let height: u64 = height.into();
                 let data = BlockQueryContext(ctx.data_unchecked());
-                let id = data.block_id(height.try_into()?).or_else(|_| {
-                    Err(async_graphql::Error::new(format!(
-                        "Block with height {} not found",
-                        height
-                    )))
-                })?;
-
-                id
+                data.block_id(height).map_err(|_| async_graphql::Error::new(format!(
+                    "Block with height {} not found",
+                    height
+                )))?
             }
             (None, None) => {
                 return Err(async_graphql::Error::new("Missing either id or height"))
@@ -239,8 +234,10 @@ impl BlockQuery {
         let data = BlockQueryContext(ctx.data_unchecked());
         let block = data.block(id)??;
 
-        Ok(Some(Block{header: crate::schema::block::Header(block.0), transactions: block.1}))
-
+        Ok(Some(Block {
+            header: crate::schema::block::Header(block.0),
+            transactions: block.1,
+        }))
     }
 
     async fn blocks(
@@ -264,29 +261,44 @@ use crate::query::BlockQueryData;
 struct BlockQueryContext<'a>(&'a Database);
 
 impl BlockQueryData for BlockQueryContext<'_> {
-    fn block(&self, id: fuel_types::Bytes32) -> std::result::Result<StorageResult<(BlockHeader, Vec<fuel_types::Bytes32>)>, anyhow::Error> {
+    fn block(
+        &self,
+        id: fuel_types::Bytes32,
+    ) -> std::result::Result<
+        StorageResult<(BlockHeader, Vec<fuel_types::Bytes32>)>,
+        anyhow::Error,
+    > {
         let db = self.0;
 
         let mut block = db
             .storage::<FuelBlocks>()
-            .get(&id)?.ok_or(anyhow!("Block height non-existent"))?.into_owned();
+            .get(&id)?
+            .ok_or_else(|| anyhow!("Block height non-existent"))?
+            .into_owned();
 
-        let tx_ids: Vec<fuel_core_types::fuel_types::Bytes32> = block.transactions_mut().iter().map(|tx| tx.to_owned()).collect();
+        let tx_ids: Vec<fuel_core_types::fuel_types::Bytes32> = block
+            .transactions_mut()
+            .iter()
+            .map(|tx| tx.to_owned())
+            .collect();
 
         let header = block.header().clone();
 
         Ok(Ok((header, tx_ids)))
     }
 
-    fn block_id(&self, height: u64) -> std::result::Result<fuel_types::Bytes32, anyhow::Error> {
+    fn block_id(
+        &self,
+        height: u64,
+    ) -> std::result::Result<fuel_types::Bytes32, anyhow::Error> {
         let db = self.0;
-        let id = db.get_block_id(height.try_into()?)?
-            .ok_or(anyhow!("Block height non-existent"))?;
+        let id = db
+            .get_block_id(height.try_into()?)?
+            .ok_or_else(|| anyhow!("Block height non-existent"))?;
 
         Ok(id)
     }
 }
-
 
 #[derive(Default)]
 pub struct HeaderQuery;

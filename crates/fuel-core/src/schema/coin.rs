@@ -94,7 +94,7 @@ impl CoinQuery {
         #[graphql(desc = "The ID of the coin")] utxo_id: UtxoId,
     ) -> async_graphql::Result<Option<Coin>> {
         let data = CoinQueryContext(ctx.data_unchecked());
-        let coin = data.coin(utxo_id.0.clone())?;
+        let coin = data.coin(utxo_id.0)?;
 
         let coin = coin.map(|coin| Coin(utxo_id.0, coin));
 
