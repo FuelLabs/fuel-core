@@ -1,6 +1,9 @@
 use fuel_core_types::{
     fuel_tx::Transaction,
-    services::p2p::NetworkData,
+    services::p2p::{
+        GossipsubMessageAcceptance,
+        NetworkData,
+    },
 };
 use std::sync::Arc;
 
@@ -18,16 +21,6 @@ pub trait PeerToPeer: Send + Sync {
     fn notify_gossip_transaction_validity(
         &self,
         message: &Self::GossipedTransaction,
-        validity: GossipValidity,
+        validity: GossipsubMessageAcceptance,
     );
-}
-
-pub enum GossipValidity {
-    // Report whether the gossiped message is valid and safe to rebroadcast
-    Accept,
-    // Ignore the received message and prevent further gossiping
-    Ignore,
-    // Punish the gossip sender for providing invalid
-    // (or malicious) data and prevent further gossiping
-    Invalid,
 }
