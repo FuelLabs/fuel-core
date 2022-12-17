@@ -1,8 +1,10 @@
-use async_trait::async_trait;
 use fuel_core_types::{
     blockchain::{
         block::Block,
-        consensus::ConsensusVote,
+        consensus::{
+            Consensus,
+            ConsensusVote,
+        },
         primitives::BlockHeight,
         SealedBlock,
     },
@@ -13,17 +15,6 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::oneshot;
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum ConsensusBroadcast {
-    NewVote(ConsensusVote),
-}
-
-#[derive(Debug, Clone)]
-pub enum BlockBroadcast {
-    /// fuel block without consensus data
-    NewBlock(Block),
-}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum GossipsubMessageAcceptance {
@@ -77,9 +68,9 @@ pub struct GossipData<T> {
     pub message_id: Vec<u8>,
 }
 
-pub type ConsensusGossipData = GossipData<ConsensusBroadcast>;
+pub type ConsensusGossipData = GossipData<Consensus>;
 pub type TransactionGossipData = GossipData<Transaction>;
-pub type BlockGossipData = GossipData<BlockBroadcast>;
+pub type BlockGossipData = GossipData<Block>;
 
 impl<T> GossipData<T> {
     pub fn new(
