@@ -17,12 +17,16 @@ use fuel_core_types::{
         Word,
     },
 };
+use futures::stream::BoxStream;
 use mockall::mock;
 use std::{
     any::Any,
     cell::RefCell,
 };
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::{
+    mpsc::Receiver,
+    oneshot,
+};
 
 pub struct TestContext {
     pub(crate) service: Service,
@@ -127,25 +131,65 @@ impl TestContextBuilder {
 
 type GossipedTransaction = GossipData<Transaction>;
 
-mock! {
-    pub P2PAdapter {}
+pub struct MockP2PAdapter {
+    gossip_txs: Mutex<Vec<Transaction>>,
+    broadcasted_txs: (
+        broadcast::Sender<Arc<Transaction>>,
+        broadcast::Receiver<Arc<Transaction>>,
+    ),
+}
 
-    #[async_trait::async_trait]
-    impl PeerToPeer for P2PAdapter {
-        type GossipedTransaction = GossipedTransaction;
-        // Gossip broadcast a transaction inserted via API.
-        async fn broadcast_transaction(
-            &self,
-            transaction: Arc<Transaction>,
-        ) -> anyhow::Result<()>;
-        // Await the next transaction from network gossip (similar to stream.next()).
-        async fn next_gossiped_transaction(&self) -> GossipedTransaction;
-        // Report the validity of a transaction received from the network.
-        fn notify_gossip_transaction_validity(
-            &self,
-            message: &GossipedTransaction,
-            validity: GossipValidity,
-        );
+impl Default for MockP2PAdapter {
+    fn default() -> Self {
+        MockP2PAdapter::new(vec![])
+    }
+}
+
+impl MockP2PAdapter {
+    pub fn new(gossip_txs: Vec<Transaction>) -> Self {
+        Self {
+            gossip_txs: Mutex::new(gossip_txs),
+            broadcasted_txs: broadcast::channel(100),
+        }
     }
 
+    pub fn broadcast_subscribe(&self) -> broadcast::Receiver<Arc<Transaction>> {
+        self.broadcasted_txs.0.subscribe()
+    }
+}
+
+#[async_trait::async_trait]
+impl PeerToPeer for MockP2PAdapter {
+    type GossipedTransaction = GossipedTransaction;
+    // Gossip broadcast a transaction inserted via API.
+    async fn broadcast_transaction(
+        &self,
+        transaction: Arc<Transaction>,
+    ) -> anyhow::Result<()> {
+        self.broadcasted_txs.0.send(transaction).unwrap();
+        Ok(())
+    }
+
+    // Await the next transaction from network gossip (similar to stream.next()).
+    async fn next_gossiped_transaction(&self) -> GossipedTransaction {
+        let mut gossip_txs = self.gossip_txs.lock().await;
+        if let Some(tx) = gossip_txs.pop() {
+            // TODO: provide peer id and message id for testing validity reporting
+            GossipedTransaction::new(tx, vec![], vec![])
+        } else {
+            // await indefinitely
+            let (_tx, rx) = oneshot::channel::<()>();
+            rx.await.unwrap();
+            unreachable!()
+        }
+    }
+
+    // Report the validity of a transaction received from the network.
+    fn notify_gossip_transaction_validity(
+        &self,
+        _message: &GossipedTransaction,
+        _validity: GossipValidity,
+    ) {
+        // do nothing
+    }
 }
