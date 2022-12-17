@@ -15,6 +15,7 @@ use fuel_core_storage::{
     tables::FuelBlocks,
     StorageAsRef,
 };
+use crate::query::ChainQueryData;
 use fuel_core_types::fuel_tx;
 
 pub const DEFAULT_NAME: &str = "Fuel.testnet";
@@ -81,22 +82,17 @@ impl ConsensusParameters {
 #[Object]
 impl ChainInfo {
     async fn name(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
-        let db = ctx.data_unchecked::<Database>().clone();
-        let name = db
-            .get_chain_name()?
-            .unwrap_or_else(|| DEFAULT_NAME.to_string());
-        Ok(name)
+        let data = ChainQueryContext(ctx.data_unchecked());
+    
+        Ok(data.name()?)
     }
 
     async fn latest_block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let db = ctx.data_unchecked::<Database>().clone();
-        let height = db.get_block_height()?.unwrap_or_default();
-        let id = db.get_block_id(height)?.unwrap_or_default();
-        let block = db
-            .storage::<FuelBlocks>()
-            .get(&id)?
-            .ok_or(not_found!(FuelBlocks))?;
-        Ok(Block::from(block.into_owned()))
+        let data = ChainQueryContext(ctx.data_unchecked());
+
+        let latest_block = data.latest_block()?;
+
+        Ok(Block{header: crate::schema::block::Header(latest_block.0), transactions: latest_block.1})
     }
 
     async fn base_chain_height(&self) -> U64 {
@@ -126,5 +122,36 @@ pub struct ChainQuery;
 impl ChainQuery {
     async fn chain(&self) -> ChainInfo {
         ChainInfo
+    }
+}
+
+struct ChainQueryContext<'a>(&'a Database);
+
+impl ChainQueryData for ChainQueryContext<'_> {
+    fn latest_block(&self) -> fuel_core_storage::Result<(fuel_core_types::blockchain::header::BlockHeader,Vec<fuel_core_types::fuel_types::Bytes32>)> {
+        let db = self.0;
+
+        let height = db.get_block_height()?.unwrap_or_default();
+        let id = db.get_block_id(height)?.unwrap_or_default();
+        let mut block = db
+            .storage::<FuelBlocks>()
+            .get(&id)?
+            .ok_or(not_found!(FuelBlocks))?.into_owned();
+
+        let tx_ids: Vec<fuel_core_types::fuel_types::Bytes32> = block.transactions_mut().iter().map(|tx| tx.to_owned()).collect();
+
+        let header = block.header().clone();
+
+        Ok((header, tx_ids))
+    }
+
+    fn name(&self) -> fuel_core_storage::Result<String> {
+        let db = self.0;
+
+        let name = db
+            .get_chain_name()?
+            .unwrap_or_else(|| DEFAULT_NAME.to_string());
+
+        Ok(name)
     }
 }
