@@ -1,0 +1,44 @@
+[package]
+authors = ["Fuel Labs <contact@fuel.sh>"]
+categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
+description = "Fuel client binary."
+edition = "2021"
+homepage = "https://fuel.network/"
+keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
+license = "BUSL-1.1"
+repository = "https://github.com/FuelLabs/fuel-core"
+version = "0.15.1"
+name = "fuel-core-bin"
+publish = false
+
+[[bin]]
+name = "fuel-core"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "3.2", features = ["derive", "env"] }
+dirs = "4.0"
+fuel-core = { path = "../../crates/fuel-core", version = "0.15.1" }
+lazy_static = "1.4"
+serde_json = { version = "1.0", features = ["raw_value"], optional = true }
+strum = "0.24"
+tokio = { version = "1.21", features = ["macros", "rt-multi-thread"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = [
+    "ansi",
+    "env-filter",
+    "json",
+] }
+url = { version = "2.2", optional = true }
+
+[features]
+debug = ["fuel-core/debug"]
+default = ["debug", "metrics", "relayer", "rocksdb"]
+metrics = ["fuel-core/metrics"]
+p2p = ["fuel-core/p2p"]
+relayer = ["fuel-core/relayer", "dep:url", "dep:serde_json"]
+rocksdb = ["fuel-core/rocksdb"]
+rocksdb-production = ["fuel-core/rocksdb-production"]
+# features to enable in production, but increase build times
+production = ["metrics", "relayer", "rocksdb-production"]

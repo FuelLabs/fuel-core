@@ -43,7 +43,6 @@ impl Service {
     pub async fn start(
         &self,
         _p2p_block: mpsc::Receiver<BlockGossipData>,
-        _p2p_request: mpsc::Sender<P2pRequestEvent>,
         // TODO: re-introduce this when sync actually depends on the coordinator
         // _bft: mpsc::Sender<BftMpsc>,
         _block_importer: mpsc::Sender<ImportBlockMpsc>,

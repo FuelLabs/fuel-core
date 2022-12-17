@@ -6,6 +6,7 @@ use fuel_core_types::{
     fuel_asm::*,
     fuel_crypto::*,
     fuel_types::*,
+    fuel_vm::consts::*,
 };
 use rand::{
     rngs::StdRng,

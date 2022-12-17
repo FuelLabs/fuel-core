@@ -1,8 +1,10 @@
-use crate::common::fuel_types::Bytes32;
-use fuel_core_types::blockchain::{
-    block::Block,
-    consensus::ConsensusVote,
-    SealedBlock,
+use fuel_core_types::{
+    blockchain::{
+        block::Block,
+        consensus::ConsensusVote,
+        SealedBlock,
+    },
+    fuel_types::Bytes32,
 };
 use std::sync::Arc;
 

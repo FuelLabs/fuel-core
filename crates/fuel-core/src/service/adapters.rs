@@ -7,28 +7,31 @@ use fuel_core_interfaces::{
     p2p::TransactionGossipData,
     relayer::RelayerDb,
 };
-use fuel_core_types::{
-    blockchain::{
-        primitives::BlockId,
-        SealedBlock,
-    },
-    fuel_tx::{
-        Receipt,
-        Transaction,
-    },
-    fuel_types::Word,
+#[cfg(feature = "p2p")]
+use fuel_core_p2p::{
+    orchestrator::Service as P2pService,
+    ports::Database as P2pDb,
 };
-
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::RelayerSynced;
 use fuel_core_storage::{
     transactional::StorageTransaction,
     Result as StorageResult,
 };
+use fuel_core_txpool::{
+    ports::GossipValidity,
+    types::Word,
+};
+#[cfg(feature = "p2p")]
+use fuel_core_types::blockchain::SealedBlock;
 use fuel_core_types::{
     blockchain::{
         primitives,
         primitives::BlockHeight,
+    },
+    fuel_tx::{
+        Receipt,
+        Transaction,
     },
     services::executor::{
         ExecutionBlock,
@@ -37,12 +40,7 @@ use fuel_core_types::{
     },
 };
 use std::sync::Arc;
-
-#[cfg(feature = "p2p")]
-use fuel_core_p2p::{
-    orchestrator::Service as P2pService,
-    ports::Database as P2pDb,
-};
+use tokio::sync::oneshot;
 
 pub struct ExecutorAdapter {
     pub database: Database,
@@ -129,17 +127,19 @@ impl fuel_core_poa::ports::BlockProducer<Database> for PoACoordinatorAdapter {
     }
 }
 
-#[cfg(feature = "p2p")]
 pub struct P2pAdapter {
+    #[cfg(feature = "p2p")]
     p2p_service: P2pService,
 }
 
+#[cfg(feature = "p2p")]
 impl P2pAdapter {
     pub fn new(p2p_service: P2pService) -> Self {
         Self { p2p_service }
     }
 }
 
+#[cfg(feature = "p2p")]
 #[async_trait::async_trait]
 impl fuel_core_txpool::ports::PeerToPeer for P2pAdapter {
     type GossipedTransaction = TransactionGossipData;
@@ -165,6 +165,35 @@ impl fuel_core_txpool::ports::PeerToPeer for P2pAdapter {
     }
 }
 
+#[cfg(not(feature = "p2p"))]
+#[async_trait::async_trait]
+impl fuel_core_txpool::ports::PeerToPeer for P2pAdapter {
+    type GossipedTransaction = TransactionGossipData;
+
+    async fn broadcast_transaction(
+        &self,
+        _transaction: Arc<Transaction>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn next_gossiped_transaction(&self) -> Self::GossipedTransaction {
+        // hold the await and never return
+        let (_tx, rx) = oneshot::channel::<()>();
+        let _ = rx.await;
+        // the await should never yield
+        unreachable!();
+    }
+
+    fn notify_gossip_transaction_validity(
+        &self,
+        _message: &Self::GossipedTransaction,
+        _validity: GossipValidity,
+    ) {
+        // no-op
+    }
+}
+
 pub struct DbAdapter {
     database: Database,
 }
@@ -175,6 +204,7 @@ impl DbAdapter {
     }
 }
 
+#[cfg(feature = "p2p")]
 #[async_trait::async_trait]
 impl P2pDb for DbAdapter {
     async fn get_sealed_block(

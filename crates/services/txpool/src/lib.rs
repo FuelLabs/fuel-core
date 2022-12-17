@@ -1,3 +1,5 @@
+#![deny(unused_crate_dependencies)]
+
 pub mod config;
 mod containers;
 pub mod ports;

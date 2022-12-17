@@ -1,5 +1,6 @@
 # Stage 1: Build
-FROM lukemathwalker/cargo-chef:latest-rust-1.64 as chef
+FROM rust:1.66 AS chef
+RUN cargo install cargo-chef
 WORKDIR /build/
 # hadolint ignore=DL3008
 RUN apt-get update && \
@@ -19,11 +20,11 @@ FROM chef as builder
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 COPY --from=planner /build/recipe.json recipe.json
 # Build our project dependecies, not our application!
-RUN cargo chef cook --release --features "production" -p fuel-core --recipe-path recipe.json
+RUN cargo chef cook --release --features "production" -p fuel-core-bin --recipe-path recipe.json
 # Up to this point, if our dependency tree stays the same,
 # all layers should be cached.
 COPY . .
-RUN cargo build --release --features "production" -p fuel-core
+RUN cargo build --release --features "production" -p fuel-core-bin
 
 # Stage 2: Run
 FROM ubuntu:22.04 as run

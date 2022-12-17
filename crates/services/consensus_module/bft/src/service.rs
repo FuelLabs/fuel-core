@@ -32,7 +32,6 @@ impl Service {
 
     pub async fn start(
         &self,
-        _p2p_consensus: mpsc::Sender<P2pRequestEvent>,
         _block_importer_sender: mpsc::Sender<ImportBlockMpsc>,
         _block_importer_broadcast: broadcast::Receiver<ImportBlockBroadcast>,
     ) {

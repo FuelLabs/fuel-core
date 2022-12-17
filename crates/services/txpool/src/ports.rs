@@ -1,9 +1,9 @@
-use std::sync::Arc;
-
-use fuel_core_interfaces::{
-    common::prelude::Transaction,
-    p2p::NetworkData,
+use fuel_core_interfaces::p2p::{
+    GossipData,
+    NetworkData,
 };
+use fuel_core_types::fuel_tx::Transaction;
+use std::sync::Arc;
 
 #[async_trait::async_trait]
 pub trait PeerToPeer: Send + Sync {

@@ -5,6 +5,7 @@ use derive_more::{
 use fuel_core_storage::{
     tables::{
         Coins,
+        ContractsRawCode,
         Messages,
     },
     Error as StorageError,
@@ -33,7 +34,6 @@ use fuel_core_types::{
         TxInfo,
     },
 };
-use fuel_vm::storage::ContractsRawCode;
 use std::{
     fmt::Debug,
     sync::Arc,

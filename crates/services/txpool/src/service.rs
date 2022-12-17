@@ -45,7 +45,6 @@ pub struct ServiceBuilder {
     tx_status_sender: Option<TxStatusChange>,
     import_block_receiver: Option<broadcast::Receiver<ImportBlockBroadcast>>,
     p2p_port: Option<PeerToPeerForTx>,
-    network_sender: Option<mpsc::Sender<P2pRequestEvent>>,
 }
 
 #[derive(Clone)]
@@ -101,7 +100,6 @@ impl ServiceBuilder {
             tx_status_sender: None,
             import_block_receiver: None,
             p2p_port: None,
-            network_sender: None,
         }
     }
 
@@ -153,14 +151,6 @@ impl ServiceBuilder {
         self
     }
 
-    pub fn network_sender(
-        &mut self,
-        network_sender: mpsc::Sender<P2pRequestEvent>,
-    ) -> &mut Self {
-        self.network_sender = Some(network_sender);
-        self
-    }
-
     pub fn import_block_event(
         &mut self,
         import_block_receiver: broadcast::Receiver<ImportBlockBroadcast>,
@@ -181,7 +171,6 @@ impl ServiceBuilder {
             || self.txpool_sender.is_none()
             || self.tx_status_sender.is_none()
             || self.txpool_receiver.is_none()
-            || self.network_sender.is_none()
         {
             return Err(anyhow!("One of context items are not set"))
         }
@@ -196,7 +185,6 @@ impl ServiceBuilder {
                 tx_status_sender: self.tx_status_sender.unwrap(),
                 import_block_receiver: self.import_block_receiver.unwrap(),
                 p2p_port: self.p2p_port.unwrap(),
-                network_sender: self.network_sender.unwrap(),
             },
         )?;
         Ok(service)
@@ -210,7 +198,6 @@ pub struct Context {
     pub tx_status_sender: TxStatusChange,
     pub import_block_receiver: broadcast::Receiver<ImportBlockBroadcast>,
     pub p2p_port: PeerToPeerForTx,
-    pub network_sender: mpsc::Sender<P2pRequestEvent>,
 }
 
 impl Context {
@@ -246,7 +233,7 @@ impl Context {
                     let db = self.db.clone();
                     let tx_status_sender = self.tx_status_sender.clone();
 
-                    let network_sender = self.network_sender.clone();
+                    let p2p = self.p2p_port.clone();
 
                     // This is little bit risky but we can always add semaphore to limit number of requests.
                     tokio::spawn( async move {
@@ -266,9 +253,7 @@ impl Context {
                             for (ret, tx) in insert.iter().zip(txs.into_iter()) {
                                 match ret {
                                     Ok(_) => {
-                                        let _ = network_sender.send(P2pRequestEvent::BroadcastNewTransaction {
-                                            transaction: tx.clone(),
-                                        }).await;
+                                        let _ = p2p.broadcast_transaction(tx.clone()).await;
                                     }
                                     Err(_) => {}
                                 }

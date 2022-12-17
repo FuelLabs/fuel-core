@@ -224,13 +224,7 @@ mod tests {
         blockchain::primitives::DaBlockHeight,
         entities::coin::CoinStatus,
         fuel_asm::Word,
-        fuel_tx::{
-            Address,
-            AssetId,
-            Bytes32,
-            UtxoId,
-        },
-        fuel_types::MessageId,
+        fuel_tx::*,
     };
     use itertools::Itertools;
 

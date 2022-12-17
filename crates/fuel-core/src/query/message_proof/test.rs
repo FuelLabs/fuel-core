@@ -7,13 +7,7 @@ use fuel_core_types::{
         PartialBlockHeader,
     },
     fuel_tx::Script,
-    fuel_types::{
-        Address,
-        AssetId,
-        Bytes32,
-        ContractId,
-        MessageId,
-    },
+    fuel_types::*,
     tai64::Tai64,
 };
 

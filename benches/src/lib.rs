@@ -1,38 +1,11 @@
 use fuel_core::database::vm_database::VmDatabase;
 pub use fuel_core::database::Database;
-pub use fuel_core_types::fuel_vm::consts::*;
 use fuel_core_types::{
-    fuel_asm::{
-        GTFArgs,
-        Immediate12,
-        Instruction,
-        Opcode,
-        OpcodeRepr,
-        RegisterId,
-        Word,
-    },
-    fuel_tx::{
-        ConsensusParameters,
-        Contract,
-        Input,
-        Output,
-        Script,
-        StorageSlot,
-        TransactionBuilder,
-        TxPointer,
-        UtxoId,
-        Witness,
-    },
-    fuel_types::{
-        AssetId,
-        Bytes32,
-        ContractId,
-        Salt,
-    },
+    fuel_asm::*,
+    fuel_tx::*,
     fuel_vm::{
-        Interpreter,
-        InterpreterStorage,
-        Transactor,
+        consts::*,
+        *,
     },
 };
 pub use rand::Rng;

@@ -68,7 +68,6 @@ tracing = "0.1"
 ctor = "0.1"
 fuel-core-interfaces = { path = "../../fuel-core-interfaces", features = [
     "serde",
-    "test-helpers",
 ], version = "0.15.1" }
 fuel-core-types = { path = "../../types", features = [
     "serde",
@@ -81,4 +80,4 @@ tracing-attributes = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [features]
-test-helpers = ["fuel-core-interfaces/test-helpers"]
+test-helpers = ["fuel-core-types/test-helpers"]

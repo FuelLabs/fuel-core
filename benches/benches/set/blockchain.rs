@@ -5,7 +5,10 @@ use fuel_core_benches::*;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_types::*,
-    fuel_vm::*,
+    fuel_vm::{
+        consts::*,
+        InterpreterStorage,
+    },
 };
 use rand::{
     rngs::StdRng,

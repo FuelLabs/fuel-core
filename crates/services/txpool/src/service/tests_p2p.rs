@@ -1,31 +1,37 @@
 use super::*;
-use crate::service::test_helpers::TestContext;
+use crate::service::test_helpers::{
+    MockP2PAdapter,
+    TestContext,
+    TestContextBuilder,
+};
 use fuel_core_interfaces::txpool::TxPoolMpsc;
 use fuel_core_types::fuel_tx::{
     Transaction,
     UniqueIdentifier,
 };
+use mockall::predicate::eq;
 use std::ops::Deref;
-use tokio::sync::{
-    mpsc::error::TryRecvError,
-    oneshot,
-};
+use tokio::sync::oneshot;
 
 #[tokio::test]
 async fn can_insert_from_p2p() {
-    let ctx = TestContext::new().await;
+    let mut ctx_builder = TestContextBuilder::new();
+    let tx1 = ctx_builder.setup_script_tx(10);
+
+    let mut p2p_adapter = MockP2PAdapter::default();
+    let mock_tx1 = tx1.clone();
+    p2p_adapter
+        .expect_next_gossiped_transaction()
+        .returning(move || GossipData::new(mock_tx1.clone(), vec![], vec![]));
+    ctx_builder.with_p2p(p2p_adapter);
+
+    let ctx = ctx_builder.build().await;
     let service = ctx.service();
     let tx1 = ctx.setup_script_tx(10);
 
-    let broadcast_tx = TransactionGossipData::new(
-        TransactionBroadcast::NewTransaction(tx1.clone()),
-        vec![],
-        vec![],
-    );
     let mut receiver = service.tx_update_subscribe();
-    let res = ctx.gossip_tx.send(broadcast_tx).unwrap();
-    let _ = receiver.recv().await;
-    assert_eq!(1, res);
+    let res = receiver.recv().await;
+    assert!(res.is_ok());
 
     let (response, receiver) = oneshot::channel();
     let _ = service
@@ -43,7 +49,23 @@ async fn can_insert_from_p2p() {
 
 #[tokio::test]
 async fn insert_from_local_broadcasts_to_p2p() {
-    let ctx = TestContext::new().await;
+    let mut ctx_builder = TestContextBuilder::new();
+    let tx1 = ctx_builder.setup_script_tx(10);
+
+    let mut p2p_adapter = MockP2PAdapter::default();
+    let mock_tx1 = tx1.clone();
+    p2p_adapter
+        .expect_next_gossiped_transaction()
+        .returning(move || GossipData::new(mock_tx1.clone(), vec![], vec![]));
+    p2p_adapter
+        .expect_broadcast_transaction()
+        .times(1)
+        .withf(|l: &Transaction, r: &u32| x == y)
+        .with(eq(tx1));
+    ctx_builder.with_p2p(p2p_adapter);
+
+    let ctx = ctx_builder.build().await;
+
     let tx1 = Arc::new(ctx.setup_script_tx(10));
     let service = ctx.service();
     let mut subscribe_status = service.tx_status_subscribe();
@@ -75,14 +97,6 @@ async fn insert_from_local_broadcasts_to_p2p() {
     } else {
         panic!("Tx1 should be OK, got err");
     }
-
-    let ret = ctx.p2p_request_rx.lock().await.recv().await.unwrap();
-
-    if let P2pRequestEvent::BroadcastNewTransaction { transaction } = ret {
-        assert_eq!(tx1, transaction);
-    } else {
-        panic!("Transaction Broadcast Unwrap Failed");
-    }
 }
 
 #[tokio::test]
@@ -91,17 +105,10 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
     let service = ctx.service();
 
     let tx1 = ctx.setup_script_tx(10);
-    let broadcast_tx = TransactionGossipData::new(
-        TransactionBroadcast::NewTransaction(tx1.clone()),
-        vec![],
-        vec![],
-    );
+    ctx.p2p
+        .expect_next_gossiped_transaction()
+        .returning(|| GossipData::new(tx1.clone(), vec![], vec![]));
     let mut receiver = service.tx_update_subscribe();
-    let res = ctx.gossip_tx.send(broadcast_tx).unwrap();
-    let _ = receiver.recv().await;
-    assert_eq!(1, res);
-
-    let ret = ctx.p2p_request_rx.lock().await.try_recv();
-    assert!(ret.is_err());
-    assert_eq!(Some(TryRecvError::Empty), ret.err());
+    let res = receiver.recv().await;
+    assert!(res.is_ok());
 }

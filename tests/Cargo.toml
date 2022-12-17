@@ -24,7 +24,6 @@ name = "metrics_tests"
 path = "tests/metrics.rs"
 
 [dependencies]
-async-std = "1.12"
 ethers = "1.0.2"
 fuel-core = { path = "../crates/fuel-core", default-features = false }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
@@ -51,8 +50,6 @@ tokio = { version = "1.21", features = [
     "rt-multi-thread",
     "test-util",
 ] }
-tracing = "0.1"
-tracing-subscriber = "0.3"
 
 [features]
 debug = ["fuel-core-types/debug"]

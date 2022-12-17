@@ -29,10 +29,8 @@ use tokio::{
 };
 
 #[cfg(feature = "p2p")]
-use super::adapters::{
-    DbAdapter,
-    P2pAdapter,
-};
+use super::adapters::DbAdapter;
+use super::adapters::P2pAdapter;
 #[cfg(feature = "p2p")]
 use fuel_core_p2p::ports::Database as P2pDb;
 
@@ -114,13 +112,11 @@ pub async fn start_modules(
         None
     };
 
-    let (block_event_sender, block_event_receiver) = mpsc::channel(100);
+    let (_block_event_sender, block_event_receiver) = mpsc::channel(100);
     let (block_import_tx, block_import_rx) = broadcast::channel(16);
 
     #[cfg(feature = "p2p")]
     let (p2p_request_event_sender, p2p_request_event_receiver) = mpsc::channel(100);
-    #[cfg(not(feature = "p2p"))]
-    let (p2p_request_event_sender, mut p2p_request_event_receiver) = mpsc::channel(100);
 
     #[cfg(feature = "p2p")]
     let network_service = {
@@ -138,20 +134,10 @@ pub async fn start_modules(
     }
 
     #[cfg(feature = "p2p")]
-    let p2p_adapter = Arc::new(P2pAdapter::new(network_service));
-
+    let p2p_adapter = P2pAdapter::new(network_service);
     #[cfg(not(feature = "p2p"))]
-    {
-        let keep_alive = Box::new(incoming_tx_sender);
-        Box::leak(keep_alive);
-
-        let keep_alive = Box::new(block_event_sender);
-        Box::leak(keep_alive);
-
-        tokio::spawn(async move {
-            while (p2p_request_event_receiver.recv().await).is_some() {}
-        });
-    }
+    let p2p_adapter = P2pAdapter {};
+    let p2p_adapter = Arc::new(p2p_adapter);
 
     let tx_status_sender = TxStatusChange::new(100);
 
@@ -166,8 +152,6 @@ pub async fn start_modules(
         .tx_status_sender(tx_status_sender.clone())
         .txpool_sender(Sender::new(txpool_sender))
         .txpool_receiver(txpool_receiver);
-
-    txpool_builder.network_sender(p2p_request_event_sender.clone());
 
     // restrict the max number of concurrent dry runs to the number of CPUs
     // as execution in the worst case will be CPU bound rather than I/O bound.
@@ -209,18 +193,13 @@ pub async fn start_modules(
             .await;
         }
         CoordinatorService::Bft(bft) => {
-            bft.start(
-                p2p_request_event_sender.clone(),
-                block_importer.sender().clone(),
-                block_importer.subscribe(),
-            )
-            .await;
+            bft.start(block_importer.sender().clone(), block_importer.subscribe())
+                .await;
         }
     }
 
     sync.start(
         block_event_receiver,
-        p2p_request_event_sender.clone(),
         // TODO: re-introduce this when sync actually depends on the coordinator
         // bft.sender().clone(),
         block_importer.sender().clone(),
