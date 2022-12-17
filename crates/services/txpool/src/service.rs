@@ -7,10 +7,6 @@ use crate::{
 use anyhow::anyhow;
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
-    p2p::{
-        GossipData,
-        TransactionGossipData,
-    },
     txpool::{
         self,
         TxPoolDb,
@@ -19,7 +15,13 @@ use fuel_core_interfaces::{
 };
 use fuel_core_types::{
     fuel_types::Bytes32,
-    services::txpool::TxStatus,
+    services::{
+        p2p::{
+            GossipData,
+            TransactionGossipData,
+        },
+        txpool::TxStatus,
+    },
 };
 use std::sync::Arc;
 use tokio::{

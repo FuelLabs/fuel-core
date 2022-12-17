@@ -5,7 +5,6 @@ use fuel_core_interfaces::{
         ImportBlockBroadcast,
         ImportBlockMpsc,
     },
-    p2p::P2pRequestEvent,
 };
 use parking_lot::Mutex;
 use tokio::{

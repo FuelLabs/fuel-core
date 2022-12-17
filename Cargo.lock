@@ -2367,7 +2367,6 @@ dependencies = [
  "derive_more",
  "fuel-core-storage",
  "fuel-core-types",
- "serde",
  "thiserror",
  "tokio",
 ]
@@ -2503,6 +2502,7 @@ version = "0.15.1"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
+ "fuel-core-types",
  "parking_lot 0.12.1",
  "tokio",
 ]

@@ -43,7 +43,7 @@ pub struct Modules {
     #[cfg(feature = "relayer")]
     pub relayer: Option<fuel_core_relayer::RelayerHandle>,
     #[cfg(feature = "p2p")]
-    pub network_service: Arc<fuel_core_p2p::orchestrator::Service>,
+    pub network_service: Arc<P2pAdapter>,
 }
 
 impl Modules {
@@ -114,9 +114,6 @@ pub async fn start_modules(
 
     let (_block_event_sender, block_event_receiver) = mpsc::channel(100);
     let (block_import_tx, block_import_rx) = broadcast::channel(16);
-
-    #[cfg(feature = "p2p")]
-    let (p2p_request_event_sender, p2p_request_event_receiver) = mpsc::channel(100);
 
     #[cfg(feature = "p2p")]
     let network_service = {
@@ -218,6 +215,6 @@ pub async fn start_modules(
         #[cfg(feature = "relayer")]
         relayer,
         #[cfg(feature = "p2p")]
-        network_service: todo!(), // todo: replace with P2pAdapter?,
+        network_service: p2p_adapter,
     })
 }

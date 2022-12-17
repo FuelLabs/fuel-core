@@ -16,6 +16,5 @@ async-trait = "0.1"
 derive_more = { version = "0.99" }
 fuel-core-storage = { version = "0.15.1", path = "../storage" }
 fuel-core-types = { version = "0.15.1", path = "../types" }
-serde = { version = "1.0", features = ["derive"], optional = true }
 thiserror = "1.0"
 tokio = { version = "1.21", features = ["full"] }

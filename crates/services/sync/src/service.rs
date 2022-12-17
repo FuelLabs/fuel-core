@@ -1,11 +1,6 @@
 use crate::Config;
-use fuel_core_interfaces::{
-    block_importer::ImportBlockMpsc,
-    p2p::{
-        BlockGossipData,
-        P2pRequestEvent,
-    },
-};
+use fuel_core_interfaces::block_importer::ImportBlockMpsc;
+use fuel_core_types::services::p2p::BlockGossipData;
 use parking_lot::Mutex;
 use tokio::{
     sync::{

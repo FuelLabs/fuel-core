@@ -6,7 +6,6 @@ use crate::{
         IterDirection,
     },
 };
-use async_trait::async_trait;
 use fuel_core_chain_config::{
     ChainConfigDb,
     CoinConfig,
@@ -14,10 +13,7 @@ use fuel_core_chain_config::{
     MessageConfig,
 };
 use fuel_core_executor::refs::ContractStorageTrait;
-use fuel_core_interfaces::{
-    relayer::RelayerDb,
-    txpool::TxPoolDb,
-};
+use fuel_core_interfaces::txpool::TxPoolDb;
 use fuel_core_poa::ports::BlockDb;
 use fuel_core_producer::ports::BlockProducerDatabase;
 use fuel_core_storage::{
@@ -38,7 +34,6 @@ use fuel_core_types::blockchain::{
         BlockHeight,
         BlockId,
     },
-    SealedBlock,
 };
 use serde::{
     de::DeserializeOwned,

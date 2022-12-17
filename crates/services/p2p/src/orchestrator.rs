@@ -1,20 +1,13 @@
-use std::{
-    collections::VecDeque,
-    fmt::Debug,
-    sync::Arc,
-};
-
 use anyhow::anyhow;
-
-use fuel_core_interfaces::p2p::{
-    GossipData,
-    GossipsubMessageAcceptance,
-    GossipsubMessageInfo,
-    TransactionGossipData,
-};
 use fuel_core_types::{
     blockchain::SealedBlock,
     fuel_tx::Transaction,
+    services::p2p::{
+        GossipData,
+        GossipsubMessageAcceptance,
+        GossipsubMessageInfo,
+        TransactionGossipData,
+    },
 };
 use libp2p::{
     gossipsub::MessageAcceptance,
@@ -24,6 +17,11 @@ use libp2p::{
 use libp2p_gossipsub::{
     error::PublishError,
     MessageId,
+};
+use std::{
+    collections::VecDeque,
+    fmt::Debug,
+    sync::Arc,
 };
 use tokio::{
     sync::{

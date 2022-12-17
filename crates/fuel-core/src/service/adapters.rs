@@ -3,10 +3,7 @@ use crate::{
     executor::Executor,
     service::Config,
 };
-use fuel_core_interfaces::{
-    p2p::TransactionGossipData,
-    relayer::RelayerDb,
-};
+use fuel_core_interfaces::relayer::RelayerDb;
 #[cfg(feature = "p2p")]
 use fuel_core_p2p::{
     orchestrator::Service as P2pService,
@@ -33,10 +30,13 @@ use fuel_core_types::{
         Receipt,
         Transaction,
     },
-    services::executor::{
-        ExecutionBlock,
-        Result as ExecutorResult,
-        UncommittedResult,
+    services::{
+        executor::{
+            ExecutionBlock,
+            Result as ExecutorResult,
+            UncommittedResult,
+        },
+        p2p::TransactionGossipData,
     },
 };
 use std::sync::Arc;
@@ -136,6 +136,10 @@ pub struct P2pAdapter {
 impl P2pAdapter {
     pub fn new(p2p_service: P2pService) -> Self {
         Self { p2p_service }
+    }
+
+    pub async fn stop(&self) -> Option<JoinHandle<()>> {
+        self.p2p_service.stop().await
     }
 }
 

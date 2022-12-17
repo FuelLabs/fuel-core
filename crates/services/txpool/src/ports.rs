@@ -1,5 +1,7 @@
-use fuel_core_interfaces::p2p::NetworkData;
-use fuel_core_types::fuel_tx::Transaction;
+use fuel_core_types::{
+    fuel_tx::Transaction,
+    services::p2p::NetworkData,
+};
 use std::sync::Arc;
 
 #[async_trait::async_trait]
