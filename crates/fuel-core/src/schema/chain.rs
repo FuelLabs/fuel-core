@@ -1,5 +1,6 @@
 use crate::{
     database::Database,
+    query::ChainQueryData,
     schema::{
         block::Block,
         scalars::U64,
@@ -15,7 +16,6 @@ use fuel_core_storage::{
     tables::FuelBlocks,
     StorageAsRef,
 };
-use crate::query::ChainQueryData;
 use fuel_core_types::fuel_tx;
 
 pub const DEFAULT_NAME: &str = "Fuel.testnet";
@@ -83,7 +83,7 @@ impl ConsensusParameters {
 impl ChainInfo {
     async fn name(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
         let data = ChainQueryContext(ctx.data_unchecked());
-    
+
         Ok(data.name()?)
     }
 
@@ -92,7 +92,10 @@ impl ChainInfo {
 
         let latest_block = data.latest_block()?;
 
-        Ok(Block{header: crate::schema::block::Header(latest_block.0), transactions: latest_block.1})
+        Ok(Block {
+            header: crate::schema::block::Header(latest_block.0),
+            transactions: latest_block.1,
+        })
     }
 
     async fn base_chain_height(&self) -> U64 {
@@ -128,7 +131,12 @@ impl ChainQuery {
 struct ChainQueryContext<'a>(&'a Database);
 
 impl ChainQueryData for ChainQueryContext<'_> {
-    fn latest_block(&self) -> fuel_core_storage::Result<(fuel_core_types::blockchain::header::BlockHeader,Vec<fuel_core_types::fuel_types::Bytes32>)> {
+    fn latest_block(
+        &self,
+    ) -> fuel_core_storage::Result<(
+        fuel_core_types::blockchain::header::BlockHeader,
+        Vec<fuel_core_types::fuel_types::Bytes32>,
+    )> {
         let db = self.0;
 
         let height = db.get_block_height()?.unwrap_or_default();
@@ -136,9 +144,14 @@ impl ChainQueryData for ChainQueryContext<'_> {
         let mut block = db
             .storage::<FuelBlocks>()
             .get(&id)?
-            .ok_or(not_found!(FuelBlocks))?.into_owned();
+            .ok_or(not_found!(FuelBlocks))?
+            .into_owned();
 
-        let tx_ids: Vec<fuel_core_types::fuel_types::Bytes32> = block.transactions_mut().iter().map(|tx| tx.to_owned()).collect();
+        let tx_ids: Vec<fuel_core_types::fuel_types::Bytes32> = block
+            .transactions_mut()
+            .iter()
+            .map(|tx| tx.to_owned())
+            .collect();
 
         let header = block.header().clone();
 
