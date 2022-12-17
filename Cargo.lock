@@ -2527,7 +2527,6 @@ name = "fuel-core-txpool"
 version = "0.15.1"
 dependencies = [
  "anyhow",
- "async-trait",
  "fuel-core-chain-config",
  "fuel-core-interfaces",
  "fuel-core-metrics",

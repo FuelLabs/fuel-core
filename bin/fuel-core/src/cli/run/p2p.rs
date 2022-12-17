@@ -11,7 +11,6 @@ use fuel_core::{
     },
     types::fuel_crypto,
 };
-use fuel_core_types::fuel_crypto;
 use std::{
     net::{
         IpAddr,
