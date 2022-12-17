@@ -1,0 +1,18 @@
+[package]
+name = "fuel-core-benches"
+version = "0.0.0"
+edition = "2021"
+license = "BUSL-1.1"
+publish = false
+
+[dependencies]
+fuel-core = { path = "../crates/fuel-core" }
+fuel-core-types = { path = "../crates/types", features = ["test-helpers"] }
+rand = "0.8"
+
+[dev-dependencies]
+criterion = { version = "0.4", features = ["html_reports"] }
+
+[[bench]]
+name = "vm"
+harness = false

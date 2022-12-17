@@ -126,7 +126,7 @@ trait BlockProducer {
 trait BlockImporter {
     // After the PoA node has signed over the block, send it to the block importer for inclusion
     // into the finalized state of the node.
-    async fn commit(sealed_block: SealedFuelBlock) -> Result<()>;
+    async fn commit(sealed_block: SealedBlock) -> Result<()>;
 }
 
 trait Relayer {
@@ -142,19 +142,19 @@ trait Database {
     // get the current fuel chain height
     fn get_current_height() -> Result<BlockHeight>;
     // insert consensus information associated with a sealed block that was locally produced
-    fn insert_consensus_data(sealed_block: &SealedFuelBlock) -> Result<()>;
+    fn insert_consensus_data(sealed_block: &SealedBlock) -> Result<()>;
 }
 ```
 #### Adapters: fuel_core::service::adapters::poa_consensus
 ```rust
-impl fuel_sync::ports::Consensus for Service<PoA> {
+impl fuel_core_sync::ports::Consensus for Service<PoA> {
     // insert impl here
 }
 ```
 
 ### Block Producer
 
-#### Ports: fuel_block_producer::ports
+#### Ports: fuel_core_producer::ports
 
 ```rust
 trait TransactionPool {
@@ -179,7 +179,7 @@ impl fuel_poa_consensus::ports::BlockProducer for Service<BlockProducer> {
 
 ### Block Importer
 
-#### Ports: fuel_block_importer::ports
+#### Ports: fuel_core_importer::ports
 
 ```rust
 trait Relayer {
@@ -200,12 +200,12 @@ trait TransactionPool {
 
 trait Database {
     // insert consensus information associated with a sealed block
-    fn insert_consensus_data(sealed_block: &SealedFuelBlock) -> Result<()>;
+    fn insert_consensus_data(sealed_block: &SealedBlock) -> Result<()>;
 }
 
 trait PeerToPeer {
    // broadcast the finalized header to peers who may need to sync
-   async fn broadcast_sealed_header(sealed_block_header: SealedFuelBlockHeader) -> Result<()>;
+   async fn broadcast_sealed_header(sealed_block_header: SealedBlockHeader) -> Result<()>;
 }
 
 ```
@@ -215,20 +215,20 @@ impl fuel_poa_consensus::ports::BlockImporter for Service<BlockImporter> {
     // insert impl here
 }
 
-impl fuel_sync::ports::BlockImporter for Service<BlockImporter> {
+impl fuel_core_sync::ports::BlockImporter for Service<BlockImporter> {
     // insert impl here
 }
 ```
 
 ### Synchronizer
 
-#### Ports: fuel_sync::ports
+#### Ports: fuel_core_sync::ports
 
 ```rust
 trait PeerToPeer {
-    type SealedHeaderResponse: NetworkData<SealedFuelBlockHeader>;
-    type BlockResponse: NetworkData<Vec<SealedFuelBlock>>;
-    type GossipedBlockHeader: NetworkData<SealedFuelBlockHeader>;
+    type SealedHeaderResponse: NetworkData<SealedBlockHeader>;
+    type BlockResponse: NetworkData<Vec<SealedBlock>>;
+    type GossipedBlockHeader: NetworkData<SealedBlockHeader>;
     
     async fn fetch_best_network_block_header() -> Result<Option<Self::SealedHeaderResponse>>;
     async fn fetch_blocks(query: Range<BlockHeight>) -> Result<Self::BlockResponse>;
@@ -237,7 +237,7 @@ trait PeerToPeer {
     // punish the sender for providing a set of blocks that aren't valid
     fn report_invalid_blocks(invalid_blocks: &Self::BlockResponse) -> Result<()>;
     // await a newly produced block from the network (similar to stream.next())
-    async fn next_gossiped_block_header() -> Result<Self::SealedFuelBlockHeader>;
+    async fn next_gossiped_block_header() -> Result<Self::SealedBlockHeader>;
     // notify the p2p network whether to continue gossiping this message to others or
     // punish the peer that sent it
     fn notify_gossip_block_validity(message: &Self::GossipedBlockHeader, validity: GossipValidity);
@@ -262,12 +262,12 @@ pub enum GossipValidity {
 
 trait BlockImporter {
     // commit a sealed block to the chain
-    async fn commit(block: SealedFuelBlock) -> Result<()>;
+    async fn commit(block: SealedBlock) -> Result<()>;
 }
 
 trait Consensus {
     // check with the consensus layer whether a block header passes consensus rules
-    async fn validate_sealed_block_header(block: SealedFuelBlockHeader) -> Result<()>;
+    async fn validate_sealed_block_header(block: SealedBlockHeader) -> Result<()>;
 }
 
 trait Database {
@@ -275,16 +275,16 @@ trait Database {
     fn get_current_height() -> Result<BlockHeight>;
 }
 ```
-#### Adapters: fuel_core::service::adapters::fuel_sync
+#### Adapters: fuel_core::service::adapters::fuel_core_sync
 _N/A_
 
 ### P2P
 
-#### Ports: fuel_p2p::ports
+#### Ports: fuel_core_p2p::ports
 ```rust
 trait Database {
     // used when other peers are syncing
-    fn get_sealed_block(height: BlockHeight) -> Result<SealedFuelBlock>; 
+    fn get_sealed_block(height: BlockHeight) -> Result<SealedBlock>; 
 }
 ```
 
@@ -294,18 +294,18 @@ impl fuel_poa_consensus::ports::PeerToPeer for Service<P2pService> {
     // insert impl here
 }
 
-impl fuel_sync::ports::PeerToPeer for Service<P2pService> {
+impl fuel_core_sync::ports::PeerToPeer for Service<P2pService> {
     // insert impl here
 }
 
-impl fuel_txpool::ports::PeerToPeer for Service<P2pService> {
+impl fuel_core_txpool::ports::PeerToPeer for Service<P2pService> {
     // insert impl here
 }
 ```
 
 ### Transaction Pool
 
-#### Ports: fuel_txpool::ports
+#### Ports: fuel_core_txpool::ports
 ```rust
 trait PeerToPeer {
     type GossipedTransaction: NetworkData<Transaction>;
@@ -335,9 +335,9 @@ pub enum GossipValidity {
 }
 
 pub trait Database:
-    StorageInspect<Coins, Error = KvStoreError>
-    + StorageInspect<ContractsRawCode, Error = KvStoreError>
-    + StorageInspect<Messages, Error = KvStoreError>
+    StorageInspect<Coins, Error = StorageError>
+    + StorageInspect<ContractsRawCode, Error = StorageError>
+    + StorageInspect<Messages, Error = StorageError>
     + Send
     + Sync
 {}
@@ -356,15 +356,15 @@ impl block_producer::ports::TransactionPool for Service<TransactionPool> {
 
 ### Executor
 
-#### Ports: fuel_block_executor::ports
+#### Ports: fuel_core_executor::ports
 ```rust
 trait Database: IntepreterStorage 
-  + StorageMut<Coins, Error = KvStoreError>
-  + StorageMut<Messages, Erorr = KvStoreError>
-  + StorageMut<Contracts, Error = KvStoreError>
-  + StorageMut<Blocks, Error = KvStoreError>
-  + StorageMut<ContractUtxos, Error = KvStoreError>
-  + StorageMut<Transactions, Error = KvStoreError>
+  + StorageMut<Coins, Error = StorageError>
+  + StorageMut<Messages, Erorr = StorageError>
+  + StorageMut<Contracts, Error = StorageError>
+  + StorageMut<Blocks, Error = StorageError>
+  + StorageMut<ContractUtxos, Error = StorageError>
+  + StorageMut<Transactions, Error = StorageError>
   + Send
   + Sync {
     // start a nested transaction to allow changes to be rolled-back
@@ -379,20 +379,20 @@ trait DatabaseTransaction: AsRef<Box<dyn Database>> {
 ```
 #### Adapters: fuel_core::service::adapters::executor
 ```rust
-impl fuel_block_producer::ports::Executor for Service<Executor> {
+impl fuel_core_producer::ports::Executor for Service<Executor> {
     // insert impl here
 }
 
-impl fuel_block_importer::ports::Executor for Service<Executor> {
+impl fuel_core_importer::ports::Executor for Service<Executor> {
     // insert impl here
 }
 ```
 
 ### Relayer
 
-#### Ports: fuel_relayer::ports
+#### Ports: fuel_core_relayer::ports
 ```rust
-trait Database: StorageMutate<Messages, Error = KvStoreError> {
+trait Database: StorageMutate<Messages, Error = StorageError> {
     fn get_da_synced_height(&self) -> Result<DaBlockHeight>;
     fn set_da_synced_height(&self, height: DaBlockHeight) -> Result<()>;
 }
@@ -408,11 +408,11 @@ pub struct DaBlockHeight(u64);
 
 #### Adapters: fuel_core::service::adapters::relayer
 ```rust
-impl fuel_block_importer::ports::Relayer for Service<Relayer> {
+impl fuel_core_importer::ports::Relayer for Service<Relayer> {
     // insert impl here
 }
 
-impl fuel_block_producer::ports::Relayer for Service<Relayer> {
+impl fuel_core_producer::ports::Relayer for Service<Relayer> {
     // insert impl here
 }
 

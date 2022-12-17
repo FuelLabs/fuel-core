@@ -15,7 +15,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_VERSION: 1.65.0
+  RUST_VERSION: 1.66.0
   NIGHTLY_RUST_VERSION: nightly-2022-12-14
   RUSTFLAGS: -D warnings
   REGISTRY: ghcr.io
@@ -46,10 +46,10 @@ jobs:
       - name: Install Cargo.toml linter
         uses: baptiste0928/cargo-install@v1
         with:
-          crate: cargo-toml-lint
-          version: '0.1'
-      - name: Run Cargo.toml linter
-        run: git ls-files | grep Cargo.toml$ | xargs --verbose -n 1 cargo-toml-lint
+          crate: cargo-sort
+          version: '1.0.9'
+      - name: Run Cargo.toml sort check
+        run: cargo sort -w --check
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v2
         if: always() && github.ref == 'refs/heads/master'
@@ -167,20 +167,25 @@ jobs:
 
       - name: Verify tag version
         run: |
+          # TODO: Automate running `verify_tag` only for "publish = true" crates
           curl -sSLf "https://github.com/TomWright/dasel/releases/download/v1.24.3/dasel_linux_amd64" -L -o dasel && chmod +x dasel
           mv ./dasel /usr/local/bin/dasel
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-executor/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-importer/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-producer/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-chain-config/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-client/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-bft/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-interfaces/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-p2p/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-sync/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-txpool/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-relayer/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/fuel-client/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/fuel-core/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/types/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/storage/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/metrics/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/executor/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/importer/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/producer/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/chain-config/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/p2p/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/sync/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/txpool/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/relayer/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/consensus_module/bft/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/consensus_module/poa/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/fuel-core-interfaces/Cargo.toml
 
       - name: Verify helm chart version
         run: |
@@ -336,7 +341,7 @@ jobs:
 
       - name: Build fuel-core
         run: |
-          cross build --profile=release --target ${{ matrix.job.target }} --features "production" -p fuel-core
+          cross build --profile=release --target ${{ matrix.job.target }} --features "production" -p fuel-core-bin
 
       - name: Strip release binary linux x86_64
         if: matrix.job.platform == 'linux'

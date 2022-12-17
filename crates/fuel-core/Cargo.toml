@@ -1,0 +1,82 @@
+[package]
+authors = ["Fuel Labs <contact@fuel.sh>"]
+categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
+description = "Fuel client library is aggregation of all fuels service. It contains the all business logic of the fuel protocol."
+edition = "2021"
+homepage = "https://fuel.network/"
+keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
+license = "BUSL-1.1"
+name = "fuel-core"
+repository = "https://github.com/FuelLabs/fuel-core"
+version = "0.15.1"
+
+[dependencies]
+anyhow = "1.0"
+async-graphql = { version = "4.0", features = [
+    "tracing",
+], default-features = false }
+async-trait = "0.1"
+axum = { version = "0.5" }
+bincode = "1.3"
+derive_more = { version = "0.99" }
+enum-iterator = "1.2"
+fuel-core-bft = { path = "../services/consensus_module/bft", version = "0.15.1" }
+fuel-core-chain-config = { path = "../chain-config", version = "0.15.1" }
+fuel-core-database = { path = "../database", version = "0.15.1" }
+fuel-core-executor = { path = "../services/executor", version = "0.15.1" }
+fuel-core-importer = { path = "../services/importer", version = "0.15.1" }
+fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.15.1", features = [
+    "serde",
+] }
+fuel-core-metrics = { path = "../metrics", version = "0.15.1", optional = true }
+fuel-core-p2p = { path = "../services/p2p", version = "0.15.1", optional = true }
+fuel-core-poa = { path = "../services/consensus_module/poa", version = "0.15.1" }
+fuel-core-producer = { path = "../services/producer", version = "0.15.1" }
+fuel-core-relayer = { path = "../services/relayer", version = "0.15.1", optional = true }
+fuel-core-storage = { path = "../storage", version = "0.15.1" }
+fuel-core-sync = { path = "../services/sync", version = "0.15.1" }
+fuel-core-txpool = { path = "../services/txpool", version = "0.15.1" }
+fuel-core-types = { path = "../types", version = "0.15.1", features = [
+    "serde",
+] }
+futures = "0.3"
+hex = { version = "0.4", features = ["serde"] }
+itertools = "0.10"
+num_cpus = "1.13"
+primitive-types = "0.12"
+rand = "0.8"
+rocksdb = { version = "0.19", default-features = false, features = [
+    "lz4",
+    "multi-threaded-cf",
+], optional = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["raw_value"] }
+strum = "0.24"
+strum_macros = "0.24"
+tempfile = "3.3"
+thiserror = "1.0"
+tokio = { version = "1.21", features = ["macros", "rt-multi-thread"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+tower-http = { version = "0.3", features = ["set-header", "trace"] }
+tracing = "0.1"
+uuid = { version = "1.1", features = ["v4"] }
+
+[dev-dependencies]
+assert_matches = "1.5"
+fuel-core-interfaces = { path = "../fuel-core-interfaces", features = [
+    "serde",
+] }
+fuel-core-storage = { path = "../storage", features = ["test-helpers"] }
+fuel-core-types = { path = "../types", features = ["test-helpers"] }
+mockall = "0.11"
+test-case = "2.2"
+
+[features]
+debug = ["fuel-core-types/debug"]
+default = ["debug", "metrics", "rocksdb"]
+metrics = ["dep:fuel-core-metrics"]
+p2p = ["dep:fuel-core-p2p"]
+relayer = ["dep:fuel-core-relayer"]
+rocksdb = ["dep:rocksdb"]
+# features to enable in production, but increase build times
+rocksdb-production = ["rocksdb?/jemalloc"]

@@ -1,0 +1,31 @@
+[package]
+authors = ["Fuel Labs <contact@fuel.sh>"]
+description = "Fuel Block Producer"
+edition = "2021"
+homepage = "https://fuel.network/"
+keywords = ["blockchain", "fuel", "fuel-vm"]
+license = "BUSL-1.1"
+name = "fuel-core-producer"
+repository = "https://github.com/FuelLabs/fuel-core"
+version = "0.15.1"
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+fuel-core-interfaces = { path = "../../fuel-core-interfaces", version = "0.15.1" }
+fuel-core-storage = { path = "../../storage", version = "0.15.1" }
+fuel-core-types = { path = "../../types", version = "0.15.1" }
+thiserror = "1.0"
+tokio = { version = "1.21", features = ["full"] }
+tracing = { version = "0.1" }
+
+[dev-dependencies]
+fuel-core-producer = { path = "", features = ["test-helpers"] }
+fuel-core-txpool = { path = "../txpool", features = ["test-helpers"] }
+fuel-core-types = { path = "../../types", features = ["test-helpers"] }
+itertools = "0.10"
+rand = "0.8"
+rstest = "0.15"
+
+[features]
+test-helpers = ["fuel-core-types/test-helpers"]

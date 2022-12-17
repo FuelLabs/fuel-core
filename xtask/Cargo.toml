@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 clap = { version = "3.1", features = ["env", "derive"] }
-fuel-core = { path = "../fuel-core", default-features = false }
+fuel-core = { path = "../crates/fuel-core", default-features = false }
 
 [features]
 default = ["fuel-core/default"]

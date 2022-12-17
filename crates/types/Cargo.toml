@@ -1,0 +1,34 @@
+[package]
+authors = ["Fuel Labs <contact@fuel.sh>"]
+categories = ["cryptography::cryptocurrencies"]
+description = "The primitives and types use by Fuel core protocol."
+edition = "2021"
+homepage = "https://fuel.network/"
+keywords = [
+    "blockchain",
+    "cryptocurrencies",
+    "fuel-client",
+    "fuel-core",
+    "fuel-types",
+]
+license = "BUSL-1.1"
+name = "fuel-core-types"
+repository = "https://github.com/FuelLabs/fuel-core"
+version = "0.15.1"
+
+[dependencies]
+anyhow = "1.0"
+derive_more = { version = "0.99" }
+fuel-vm-private = { version = "0.22", package = "fuel-vm" }
+secrecy = "0.8"
+serde = { version = "1.0", features = ["derive"], optional = true }
+tai64 = { version = "4.0", features = ["serde"] }
+thiserror = "1.0"
+zeroize = "1.5"
+
+[features]
+default = []
+serde = ["dep:serde", "fuel-vm-private/serde"]
+random = ["fuel-vm-private/random"]
+test-helpers = ["random", "fuel-vm-private/test-helpers"]
+debug = ["fuel-vm-private/debug"]
