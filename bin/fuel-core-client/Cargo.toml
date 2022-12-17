@@ -1,5 +1,5 @@
 [package]
-name = "fuel-cli"
+name = "fuel-core-client-bin"
 version = "0.15.1"
 authors = ["Fuel Labs <contact@fuel.sh>"]
 categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
@@ -11,7 +11,7 @@ repository = "https://github.com/FuelLabs/fuel-core"
 description = "The fuel cli to interact with `fuel-core` client."
 
 [[bin]]
-name = "fuel-cli"
+name = "fuel-core-client"
 path = "src/main.rs"
 
 [dependencies]
