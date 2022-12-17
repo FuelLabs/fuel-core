@@ -12,11 +12,12 @@ use std::fmt::Debug;
 /// Reporting levels on the status of a message received via Gossip
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum GossipsubMessageAcceptance {
-    /// Message is valid and free to be re-gossipped to the network
+    /// Report whether the gossiped message is valid and safe to rebroadcast
     Accept,
-    /// Message is invalid - punish the sender and don't re-gossip
+    /// Ignore the received message and prevent further gossiping
     Reject,
-    /// Message is invalid - don't re-gossip or punish
+    /// Punish the gossip sender for providing invalid
+    /// (or malicious) data and prevent further gossiping
     Ignore,
 }
 

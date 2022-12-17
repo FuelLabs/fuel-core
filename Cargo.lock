@@ -2470,7 +2470,6 @@ dependencies = [
  "ethers-contract",
  "ethers-core",
  "ethers-providers",
- "fuel-core-interfaces",
  "fuel-core-storage",
  "fuel-core-types",
  "futures",

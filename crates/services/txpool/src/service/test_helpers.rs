@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    ports::GossipValidity,
-    MockDb,
-};
+use crate::MockDb;
 use fuel_core_interfaces::txpool::Sender;
 use fuel_core_types::{
     entities::coin::Coin,
@@ -16,6 +13,7 @@ use fuel_core_types::{
         TransactionBuilder,
         Word,
     },
+    services::p2p::GossipsubMessageAcceptance,
 };
 use std::{
     any::Any,
@@ -181,7 +179,7 @@ impl PeerToPeer for MockP2PAdapter {
     fn notify_gossip_transaction_validity(
         &self,
         _message: &GossipedTransaction,
-        _validity: GossipValidity,
+        _validity: GossipsubMessageAcceptance,
     ) {
         // do nothing
     }

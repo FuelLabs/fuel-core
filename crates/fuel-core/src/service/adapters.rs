@@ -15,10 +15,7 @@ use fuel_core_storage::{
     transactional::StorageTransaction,
     Result as StorageResult,
 };
-use fuel_core_txpool::{
-    ports::GossipValidity,
-    types::Word,
-};
+use fuel_core_txpool::types::Word;
 #[cfg(feature = "p2p")]
 use fuel_core_types::blockchain::SealedBlock;
 use fuel_core_types::{
@@ -36,7 +33,10 @@ use fuel_core_types::{
             Result as ExecutorResult,
             UncommittedResult,
         },
-        p2p::TransactionGossipData,
+        p2p::{
+            GossipsubMessageAcceptance,
+            TransactionGossipData,
+        },
     },
 };
 use std::sync::Arc;
@@ -163,7 +163,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2pAdapter {
     fn notify_gossip_transaction_validity(
         &self,
         message: &Self::GossipedTransaction,
-        validity: fuel_core_txpool::ports::GossipValidity,
+        validity: GossipsubMessageAcceptance,
     ) {
         todo!()
     }
@@ -192,7 +192,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2pAdapter {
     fn notify_gossip_transaction_validity(
         &self,
         _message: &Self::GossipedTransaction,
-        _validity: GossipValidity,
+        _validity: GossipsubMessageAcceptance,
     ) {
         // no-op
     }

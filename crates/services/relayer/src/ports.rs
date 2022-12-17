@@ -1,3 +1,5 @@
+//! Ports used by the relayer to access the outside world
+
 use async_trait::async_trait;
 use fuel_core_storage::{
     tables::Messages,
@@ -17,7 +19,7 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-// Manages state related to supported external chains.
+/// Manages state related to supported external chains.
 #[async_trait]
 pub trait RelayerDb: StorageMutate<Messages, Error = StorageError> + Send + Sync {
     /// Add bridge message to database. Messages are not revertible.
@@ -30,6 +32,7 @@ pub trait RelayerDb: StorageMutate<Messages, Error = StorageError> + Send + Sync
     /// current best block number
     async fn get_chain_height(&self) -> BlockHeight;
 
+    /// Get the fully sealed block by height (block + consensus info)
     async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedBlock>>;
 
     /// set finalized da height that represent last block from da layer that got finalized.
