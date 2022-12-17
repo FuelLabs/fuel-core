@@ -15,11 +15,6 @@ use std::{
 use tokio::sync::oneshot;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum TransactionBroadcast {
-    NewTransaction(Transaction),
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ConsensusBroadcast {
     NewVote(ConsensusVote),
 }
@@ -108,9 +103,4 @@ impl<T: Debug + Send + 'static> NetworkData<T> for GossipData<T> {
     fn take_data(&mut self) -> Option<T> {
         self.data.take()
     }
-}
-
-#[async_trait]
-pub trait P2pDb: Send + Sync {
-    async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedBlock>>;
 }

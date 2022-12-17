@@ -15,7 +15,6 @@ use fuel_core_chain_config::{
 };
 use fuel_core_executor::refs::ContractStorageTrait;
 use fuel_core_interfaces::{
-    p2p::P2pDb,
     relayer::RelayerDb,
     txpool::TxPoolDb,
 };
@@ -354,13 +353,6 @@ impl BlockProducerDatabase for Database {
         self.get_block_height()
             .map(|h| h.unwrap_or_default())
             .map_err(Into::into)
-    }
-}
-
-#[async_trait]
-impl P2pDb for Database {
-    async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedBlock>> {
-        <Self as RelayerDb>::get_sealed_block(self, height).await
     }
 }
 
