@@ -90,9 +90,9 @@ impl TestContextBuilder {
     }
 
     pub async fn build(self) -> TestContext {
-        let rng = RefCell::new(StdRng::seed_from_u64(0));
+        let rng = RefCell::new(self.rng);
         let config = Config::default();
-        let mock_db = Box::<MockDb>::default();
+        let mock_db = self.mock_db;
         let (block_tx, block_rx) = broadcast::channel(10);
         let status_tx = TxStatusChange::new(100);
         let (txpool_tx, txpool_rx) = Sender::channel(100);
@@ -102,7 +102,7 @@ impl TestContextBuilder {
         let mut builder = ServiceBuilder::new();
         builder
             .config(config)
-            .db(mock_db.clone())
+            .db(Box::new(mock_db.clone()))
             .import_block_event(block_rx)
             .tx_status_sender(status_tx)
             .txpool_sender(txpool_tx)
@@ -117,7 +117,7 @@ impl TestContextBuilder {
 
         TestContext {
             service,
-            mock_db,
+            mock_db: Box::new(mock_db),
             _drop_resources: drop_resources,
             rng,
             p2p,
