@@ -1,7 +1,6 @@
 use super::*;
 use crate::service::test_helpers::{
     MockP2PAdapter,
-    TestContext,
     TestContextBuilder,
 };
 use fuel_core_interfaces::txpool::TxPoolMpsc;
@@ -9,17 +8,13 @@ use fuel_core_types::fuel_tx::{
     Transaction,
     UniqueIdentifier,
 };
-use mockall::predicate::eq;
 use std::{
     ops::Deref,
     time::Duration,
 };
 use tokio::{
     sync::oneshot,
-    time::{
-        error::Elapsed,
-        timeout,
-    },
+    time::timeout,
 };
 
 #[tokio::test]
@@ -27,7 +22,7 @@ async fn can_insert_from_p2p() {
     let mut ctx_builder = TestContextBuilder::new();
     let tx1 = ctx_builder.setup_script_tx(10);
 
-    let mut p2p_adapter = MockP2PAdapter::new(vec![tx1.clone()]);
+    let p2p_adapter = MockP2PAdapter::new(vec![tx1.clone()]);
     ctx_builder.with_p2p(p2p_adapter);
 
     let ctx = ctx_builder.build().await;
@@ -59,7 +54,7 @@ async fn insert_from_local_broadcasts_to_p2p() {
     // add coin to builder db and generate a valid tx
     let tx1 = ctx_builder.setup_script_tx(10);
     // setup p2p mock
-    let mut p2p_adapter = MockP2PAdapter::new(vec![]);
+    let p2p_adapter = MockP2PAdapter::new(vec![]);
     let mut broadcasted_txs = p2p_adapter.broadcast_subscribe();
     ctx_builder.with_p2p(p2p_adapter);
     // build and start the txpool service
@@ -109,7 +104,7 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
     // add coin to builder db and generate a valid tx
     let tx1 = ctx_builder.setup_script_tx(10);
     // setup p2p mock - with tx incoming from p2p
-    let mut p2p_adapter = MockP2PAdapter::new(vec![tx1]);
+    let p2p_adapter = MockP2PAdapter::new(vec![tx1]);
     let mut broadcasted_txs = p2p_adapter.broadcast_subscribe();
     ctx_builder.with_p2p(p2p_adapter);
     // build and start the txpool service

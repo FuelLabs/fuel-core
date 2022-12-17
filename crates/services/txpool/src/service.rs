@@ -9,8 +9,6 @@ use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
     p2p::{
         GossipData,
-        P2pRequestEvent,
-        TransactionBroadcast,
         TransactionGossipData,
     },
     txpool::{
@@ -33,7 +31,6 @@ use tokio::{
     },
     task::JoinHandle,
 };
-use tracing::error;
 
 type PeerToPeerForTx = Arc<dyn PeerToPeer<GossipedTransaction = TransactionGossipData>>;
 
@@ -207,11 +204,6 @@ impl Context {
         loop {
             tokio::select! {
                 new_transaction = self.p2p_port.next_gossiped_transaction() => {
-                    // if new_transaction.is_err() {
-                    //     error!("Incoming tx receiver channel closed unexpectedly; shutting down transaction pool service.");
-                    //     break;
-                    // }
-
                     let txpool = txpool.clone();
                     let db = self.db.clone();
                     let tx_status_sender = self.tx_status_sender.clone();

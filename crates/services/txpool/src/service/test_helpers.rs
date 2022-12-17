@@ -17,23 +17,17 @@ use fuel_core_types::{
         Word,
     },
 };
-use futures::stream::BoxStream;
-use mockall::mock;
 use std::{
     any::Any,
     cell::RefCell,
 };
-use tokio::sync::{
-    mpsc::Receiver,
-    oneshot,
-};
+use tokio::sync::oneshot;
 
 pub struct TestContext {
     pub(crate) service: Service,
     mock_db: Box<MockDb>,
     _drop_resources: Vec<Box<dyn Any>>,
     rng: RefCell<StdRng>,
-    pub(crate) p2p: Arc<MockP2PAdapter>,
 }
 
 impl TestContext {
@@ -65,7 +59,7 @@ impl TestContext {
 pub struct TestContextBuilder {
     mock_db: MockDb,
     rng: StdRng,
-    pub(crate) p2p: Option<MockP2PAdapter>,
+    p2p: Option<MockP2PAdapter>,
 }
 
 impl TestContextBuilder {
@@ -111,7 +105,7 @@ impl TestContextBuilder {
             .tx_status_sender(status_tx)
             .txpool_sender(txpool_tx)
             .txpool_receiver(txpool_rx)
-            .p2p_port(p2p.clone());
+            .p2p_port(p2p);
 
         let service = builder.build().unwrap();
         service.start().await.unwrap();
@@ -124,7 +118,6 @@ impl TestContextBuilder {
             mock_db: Box::new(mock_db),
             _drop_resources: drop_resources,
             rng,
-            p2p,
         }
     }
 }

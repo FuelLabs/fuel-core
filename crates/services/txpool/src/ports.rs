@@ -1,7 +1,4 @@
-use fuel_core_interfaces::p2p::{
-    GossipData,
-    NetworkData,
-};
+use fuel_core_interfaces::p2p::NetworkData;
 use fuel_core_types::fuel_tx::Transaction;
 use std::sync::Arc;
 

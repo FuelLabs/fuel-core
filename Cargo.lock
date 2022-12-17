@@ -2543,8 +2543,6 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-txpool",
  "fuel-core-types",
- "futures",
- "mockall",
  "tokio",
  "tracing",
 ]
