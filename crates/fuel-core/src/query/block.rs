@@ -1,5 +1,5 @@
-use anyhow::anyhow;
 use crate::database::Database;
+use anyhow::anyhow;
 use fuel_core_storage::{
     tables::FuelBlocks,
     Result as StorageResult,
@@ -17,7 +17,10 @@ pub trait BlockQueryData {
         &self,
         id: Bytes32,
     ) -> std::result::Result<StorageResult<(BlockHeader, Vec<Bytes32>)>, anyhow::Error>;
+
     fn block_id(&self, height: u64) -> std::result::Result<Bytes32, anyhow::Error>;
+
+    // FnOnce(&Option<SchemaKey>, IterDirection) -> StorageResult<Entries>;
 }
 
 pub struct BlockQueryContext<'a>(pub &'a Database);
