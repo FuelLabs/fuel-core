@@ -2253,7 +2253,6 @@ name = "fuel-core-bft"
 version = "0.15.1"
 dependencies = [
  "anyhow",
- "fuel-core-interfaces",
  "parking_lot 0.12.1",
  "tokio",
 ]
@@ -2352,19 +2351,7 @@ name = "fuel-core-importer"
 version = "0.15.1"
 dependencies = [
  "anyhow",
- "fuel-core-interfaces",
  "parking_lot 0.12.1",
- "tokio",
-]
-
-[[package]]
-name = "fuel-core-interfaces"
-version = "0.15.1"
-dependencies = [
- "anyhow",
- "async-trait",
- "fuel-core-types",
- "thiserror",
  "tokio",
 ]
 
@@ -2387,7 +2374,6 @@ dependencies = [
  "bincode",
  "ctor",
  "fuel-core-chain-config",
- "fuel-core-interfaces",
  "fuel-core-metrics",
  "fuel-core-types",
  "futures",
@@ -2492,7 +2478,6 @@ name = "fuel-core-sync"
 version = "0.15.1"
 dependencies = [
  "anyhow",
- "fuel-core-interfaces",
  "fuel-core-types",
  "parking_lot 0.12.1",
  "tokio",

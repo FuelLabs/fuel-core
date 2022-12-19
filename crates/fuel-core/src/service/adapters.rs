@@ -18,8 +18,9 @@ use fuel_core_types::{
 use std::sync::Arc;
 use tokio::sync::{
     broadcast::Receiver,
-    oneshot,
 };
+#[cfg(not(feature = "p2p"))]
+use tokio::sync::oneshot;
 #[cfg(feature = "p2p")]
 use tokio::task::JoinHandle;
 

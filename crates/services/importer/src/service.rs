@@ -1,5 +1,4 @@
 use crate::Config;
-use fuel_core_interfaces::block_importer::ImportBlockMpsc;
 use parking_lot::Mutex;
 use tokio::{
     sync::mpsc,
@@ -8,7 +7,7 @@ use tokio::{
 
 pub struct Service {
     join: Mutex<Option<JoinHandle<()>>>,
-    sender: mpsc::Sender<ImportBlockMpsc>,
+    sender: mpsc::Sender<()>,
 }
 
 impl Service {
@@ -30,12 +29,12 @@ impl Service {
     pub async fn stop(&self) -> Option<JoinHandle<()>> {
         let join = self.join.lock().take();
         if join.is_some() {
-            let _ = self.sender.send(ImportBlockMpsc::Stop);
+            let _ = self.sender.send(());
         }
         join
     }
 
-    pub fn sender(&self) -> &mpsc::Sender<ImportBlockMpsc> {
+    pub fn sender(&self) -> &mpsc::Sender<()> {
         &self.sender
     }
 }
