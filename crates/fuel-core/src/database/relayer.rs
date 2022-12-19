@@ -13,6 +13,8 @@ use fuel_core_types::blockchain::{
 };
 use std::sync::Arc;
 
+use super::get_sealed_block;
+
 // TODO: Return `Result` instead of panics
 #[async_trait::async_trait]
 impl RelayerDb for Database {
@@ -28,14 +30,7 @@ impl RelayerDb for Database {
     }
 
     async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedBlock>> {
-        // TODO: Return an error otherwise it will fail with panic in runtime.
-        let block_id = self
-            .get_block_id(height)
-            .unwrap_or_else(|_| panic!("nonexistent block height {}", height))?;
-
-        self.get_sealed_block(&block_id)
-            .expect("expected to find sealed block")
-            .map(Arc::new)
+        get_sealed_block(self, height)
     }
 
     async fn set_finalized_da_height(&self, block: DaBlockHeight) {

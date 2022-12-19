@@ -8,8 +8,5 @@ use fuel_core_types::blockchain::{
 
 #[async_trait]
 pub trait P2pDb: Send + Sync {
-    async fn get_sealed_block(
-        &self,
-        block_height: BlockHeight,
-    ) -> Option<Arc<SealedBlock>>;
+    async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedBlock>>;
 }

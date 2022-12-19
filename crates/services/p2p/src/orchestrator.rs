@@ -383,7 +383,7 @@ pub mod tests {
     impl P2pDb for FakeDb {
         async fn get_sealed_block(
             &self,
-            block_height: BlockHeight,
+            _height: BlockHeight,
         ) -> Option<Arc<SealedBlock>> {
             let block = Block::new(Default::default(), vec![], &[]);
 

@@ -34,6 +34,7 @@ use fuel_core_types::blockchain::{
         BlockHeight,
         BlockId,
     },
+    SealedBlock,
 };
 use serde::{
     de::DeserializeOwned,
@@ -372,4 +373,20 @@ impl ChainConfigDb for Database {
     fn get_block_height(&self) -> StorageResult<Option<BlockHeight>> {
         Self::get_block_height(self).map_err(Into::into)
     }
+}
+
+/// Given a `&Database` and `BlockHeight` it returns `SealedBlock`.
+/// Reusable across different trait implementations
+pub(super) fn get_sealed_block(
+    db: &Database,
+    height: BlockHeight,
+) -> Option<Arc<SealedBlock>> {
+    // TODO: Return an error otherwise it will fail with panic in runtime.
+    let block_id = db
+        .get_block_id(height)
+        .unwrap_or_else(|_| panic!("nonexistent block height {}", height))?;
+
+    db.get_sealed_block(&block_id)
+        .expect("expected to find sealed block")
+        .map(Arc::new)
 }
