@@ -1,6 +1,6 @@
 use super::*;
 use crate::service::test_helpers::{
-    MockP2PAdapter,
+    MockP2P,
     TestContextBuilder,
 };
 use fuel_core_interfaces::txpool::TxPoolMpsc;
@@ -12,18 +12,15 @@ use std::{
     ops::Deref,
     time::Duration,
 };
-use tokio::{
-    sync::oneshot,
-    time::timeout,
-};
+use tokio::sync::oneshot;
 
 #[tokio::test]
 async fn can_insert_from_p2p() {
     let mut ctx_builder = TestContextBuilder::new();
     let tx1 = ctx_builder.setup_script_tx(10);
 
-    let p2p_adapter = MockP2PAdapter::new(vec![tx1.clone()]);
-    ctx_builder.with_p2p(p2p_adapter);
+    let p2p = MockP2P::with_txs(vec![tx1.clone()]);
+    ctx_builder.with_p2p(p2p);
 
     let ctx = ctx_builder.build().await;
     let service = ctx.service();
@@ -53,10 +50,15 @@ async fn insert_from_local_broadcasts_to_p2p() {
     let mut ctx_builder = TestContextBuilder::new();
     // add coin to builder db and generate a valid tx
     let tx1 = ctx_builder.setup_script_tx(10);
-    // setup p2p mock
-    let p2p_adapter = MockP2PAdapter::new(vec![]);
-    let mut broadcasted_txs = p2p_adapter.broadcast_subscribe();
-    ctx_builder.with_p2p(p2p_adapter);
+
+    let mut p2p = MockP2P::with_txs(vec![]);
+    let mock_tx1 = tx1.clone();
+    p2p.expect_broadcast_transaction()
+        .withf(move |receive: &Arc<Transaction>| **receive == mock_tx1)
+        .times(1)
+        .returning(|_| Ok(()));
+
+    ctx_builder.with_p2p(p2p);
     // build and start the txpool service
     let ctx = ctx_builder.build().await;
 
@@ -89,10 +91,6 @@ async fn insert_from_local_broadcasts_to_p2p() {
             result.inserted.id(),
             "First added should be tx1"
         );
-
-        // verify p2p received tx
-        let p2p_broadcast = broadcasted_txs.recv().await.unwrap();
-        assert_eq!(p2p_broadcast.id(), tx1.id())
     } else {
         panic!("Tx1 should be OK, got err");
     }
@@ -104,9 +102,15 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
     // add coin to builder db and generate a valid tx
     let tx1 = ctx_builder.setup_script_tx(10);
     // setup p2p mock - with tx incoming from p2p
-    let p2p_adapter = MockP2PAdapter::new(vec![tx1]);
-    let mut broadcasted_txs = p2p_adapter.broadcast_subscribe();
-    ctx_builder.with_p2p(p2p_adapter);
+    let txs = vec![tx1.clone()];
+    let mut p2p = MockP2P::with_txs(txs);
+    let (send, mut receive) = broadcast::channel::<()>(1);
+    p2p.expect_broadcast_transaction().returning(move |_| {
+        send.send(()).unwrap();
+        Ok(())
+    });
+    ctx_builder.with_p2p(p2p);
+
     // build and start the txpool service
     let ctx = ctx_builder.build().await;
     let service = ctx.service();
@@ -117,7 +121,8 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
     assert!(res.is_ok());
 
     // verify tx was not broadcast to p2p
-    let not_broadcast = timeout(Duration::from_millis(100), broadcasted_txs.recv()).await;
+    let not_broadcast =
+        tokio::time::timeout(Duration::from_millis(100), receive.recv()).await;
     assert!(
         not_broadcast.is_err(),
         "expected a timeout because no broadcast should have occurred"

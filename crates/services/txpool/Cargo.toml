@@ -23,6 +23,7 @@ tracing = "0.1"
 
 [dev-dependencies]
 fuel-core-txpool = { path = "", features = ["test-helpers"] }
+mockall = "0.11"
 
 [features]
 test-helpers = [
