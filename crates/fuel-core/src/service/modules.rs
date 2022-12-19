@@ -28,7 +28,6 @@ use tokio::{
     task::JoinHandle,
 };
 
-#[cfg(feature = "p2p")]
 use super::adapters::P2pAdapter;
 
 pub struct Modules {
