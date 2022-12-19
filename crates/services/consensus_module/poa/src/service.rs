@@ -28,6 +28,7 @@ use fuel_core_types::{
             BlockHeight,
             SecretKeyWrapper,
         },
+        SealedBlock,
     },
     fuel_asm::Word,
     fuel_crypto::Signature,
@@ -195,7 +196,7 @@ where
         ) = self.signal_produce_block().await?.into();
 
         // sign the block and seal it
-        seal_block(&self.signing_key, &block, db_transaction.as_mut())?;
+        let seal = seal_block(&self.signing_key, &block, db_transaction.as_mut())?;
         db_transaction.commit()?;
 
         let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
@@ -216,9 +217,14 @@ where
 
         // Send the block back to the txpool
         // TODO: this probably must be done differently with multi-node configuration
+        let sealed_block = SealedBlock {
+            entity: block,
+            consensus: seal,
+        };
         self.import_block_events_tx
-            .send(ImportBlockBroadcast::PendingFuelBlockImported {
-                block: Arc::new(block),
+            .send(ImportBlockBroadcast::SealedBlockImported {
+                block: Arc::new(sealed_block),
+                is_created_by_self: true,
             })
             .expect("Failed to import the generated block");
 
@@ -388,7 +394,7 @@ pub fn seal_block(
     signing_key: &Option<Secret<SecretKeyWrapper>>,
     block: &Block,
     database: &mut dyn BlockDb,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Consensus> {
     if let Some(key) = signing_key {
         let block_hash = block.id();
         let message = block_hash.into_message();
@@ -398,7 +404,8 @@ pub fn seal_block(
 
         let poa_signature = Signature::sign(signing_key, &message);
         let seal = Consensus::PoA(PoAConsensus::new(poa_signature));
-        database.seal_block(block_hash, seal)
+        database.seal_block(block_hash, seal.clone())?;
+        Ok(seal)
     } else {
         Err(anyhow!("no PoA signing key configured"))
     }
