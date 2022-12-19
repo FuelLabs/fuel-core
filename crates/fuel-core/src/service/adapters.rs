@@ -162,12 +162,14 @@ impl fuel_core_txpool::ports::PeerToPeer for P2pAdapter {
         self.p2p_service.next_gossiped_transaction().await.unwrap()
     }
 
-    fn notify_gossip_transaction_validity(
+    async fn notify_gossip_transaction_validity(
         &self,
         message: &Self::GossipedTransaction,
         validity: GossipsubMessageAcceptance,
     ) {
-        todo!()
+        self.p2p_service
+            .notify_gossip_transaction_validity(message, validity)
+            .await;
     }
 }
 
@@ -191,7 +193,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2pAdapter {
         unreachable!();
     }
 
-    fn notify_gossip_transaction_validity(
+    async fn notify_gossip_transaction_validity(
         &self,
         _message: &Self::GossipedTransaction,
         _validity: GossipsubMessageAcceptance,

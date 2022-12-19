@@ -82,6 +82,7 @@ enum OrchestratorRequest {
             oneshot::Sender<Result<MessageId, PublishError>>,
         ),
     ),
+    GossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
     NextTransaction(oneshot::Sender<Option<TransactionGossipData>>),
     RespondWithRequestedBlock((Option<Arc<SealedBlock>>, RequestId)),
 }
@@ -137,7 +138,10 @@ impl NetworkOrchestrator {
                         Some(OrchestratorRequest::NextTransaction(sender)) => {
                             let _ = sender.send(self.transactions.pop_front());
                         }
-                        _ => {}
+                        Some(OrchestratorRequest::GossipsubMessageReport((message, acceptance))) => {
+                            report_message(message, acceptance, &mut p2p_service);
+                        }
+                        None => {}
                     }
                 }
                 p2p_event = p2p_service.next_event() => {
@@ -194,9 +198,6 @@ impl NetworkOrchestrator {
                 //                 let broadcast = GossipsubBroadcastRequest::ConsensusVote(vote);
                 //                 let _ = p2p_service.publish_message(broadcast);
                 //             },
-                //             P2pRequestEvent::GossipsubMessageReport { message, acceptance } => {
-                //                 report_message(message, acceptance, &mut p2p_service);
-                //             }
                 //             P2pRequestEvent::Stop => break,
                 //         }
                 //     } else {
@@ -271,6 +272,23 @@ impl Service {
             network_orchestrator: Arc::new(Mutex::new(Some(network_orchestrator))),
             tx_orchestrator_request,
         }
+    }
+
+    pub async fn notify_gossip_transaction_validity<'a, T>(
+        &self,
+        message: &'a T,
+        acceptance: GossipsubMessageAcceptance,
+    ) where
+        GossipsubMessageInfo: From<&'a T>,
+    {
+        let msg_info = message.into();
+
+        let _ = self
+            .tx_orchestrator_request
+            .send(OrchestratorRequest::GossipsubMessageReport((
+                msg_info, acceptance,
+            )))
+            .await;
     }
 
     pub async fn next_gossiped_transaction(
