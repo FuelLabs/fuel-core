@@ -144,7 +144,6 @@ pub async fn start_modules(
         .importer(Box::new(BlockImportAdapter::new(block_import_rx)))
         .tx_status_sender(tx_status_sender.clone());
 
-    let txpool_broadcast = txpool_builder.tx_status_subscribe();
     let txpool_service = Arc::new(txpool_builder.build()?);
     txpool_service.start().await?;
 
@@ -156,6 +155,7 @@ pub async fn start_modules(
         db: database.clone(),
         txpool: Box::new(TxPoolAdapter {
             service: txpool_service.clone(),
+            tx_status_rx: txpool_service.tx_status_subscribe(),
         }),
         executor: Arc::new(ExecutorAdapter {
             database: database.clone(),
@@ -177,9 +177,9 @@ pub async fn start_modules(
     match &coordinator {
         CoordinatorService::Poa(poa) => {
             poa.start(
-                txpool_broadcast,
                 TxPoolAdapter {
                     service: txpool_service.clone(),
+                    tx_status_rx: txpool_service.tx_status_subscribe(),
                 },
                 block_import_tx,
                 PoACoordinatorAdapter {

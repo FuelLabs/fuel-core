@@ -10,15 +10,16 @@ use fuel_core_txpool::Service;
 use fuel_core_types::{
     blockchain::SealedBlock,
     fuel_tx::Transaction,
-    services::p2p::{
-        GossipsubMessageAcceptance,
-        TransactionGossipData,
+    services::{
+        p2p::{
+            GossipsubMessageAcceptance,
+            TransactionGossipData,
+        },
+        txpool::TxStatus,
     },
 };
 use std::sync::Arc;
-use tokio::sync::{
-    broadcast::Receiver,
-};
+use tokio::sync::broadcast::Receiver;
 #[cfg(not(feature = "p2p"))]
 use tokio::sync::oneshot;
 #[cfg(feature = "p2p")]
@@ -36,6 +37,7 @@ pub struct BlockImportAdapter {
 
 pub struct TxPoolAdapter {
     pub service: Arc<Service>,
+    pub tx_status_rx: Receiver<TxStatus>,
 }
 
 pub struct ExecutorAdapter {

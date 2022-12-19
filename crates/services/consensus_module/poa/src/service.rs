@@ -79,8 +79,6 @@ impl Service {
 
     pub async fn start<D, T, B>(
         &self,
-        // TODO: Make `txpool_broadcast` a port to `TxPool`
-        txpool_broadcast: broadcast::Receiver<TxStatus>,
         txpool: T,
         import_block_events_tx: broadcast::Sender<SealedBlock>,
         block_producer: B,
@@ -105,7 +103,6 @@ impl Service {
             signing_key: self.config.signing_key.clone(),
             db,
             block_producer,
-            txpool_broadcast,
             txpool,
             last_block_created: Instant::now(),
             import_block_events_tx,
@@ -144,7 +141,6 @@ where
     db: D,
     block_producer: B,
     txpool: T,
-    txpool_broadcast: broadcast::Receiver<TxStatus>,
     import_block_events_tx: broadcast::Sender<SealedBlock>,
     /// Last block creation time. When starting up, this is initialized
     /// to `Instant::now()`, which delays the first block on startup for
@@ -339,8 +335,8 @@ where
             //       for each tx after they've already been included into a block.
             //       The poa service also doesn't care about events unrelated to new tx submissions,
             //       and shouldn't be awoken when txs are completed or squeezed out of the pool.
-            txpool_event = self.txpool_broadcast.recv() => {
-                self.on_txpool_event(&txpool_event.context("Broadcast receive error")?).await.context("While processing txpool event")?;
+            txpool_event = self.txpool.next_transaction_status_update() => {
+                self.on_txpool_event(&txpool_event).await.context("While processing txpool event")?;
                 Ok(true)
             }
             at = self.timer.wait() => {

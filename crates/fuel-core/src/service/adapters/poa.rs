@@ -17,7 +17,10 @@ use fuel_core_types::{
     },
     services::{
         executor::UncommittedResult,
-        txpool::ArcPoolTx,
+        txpool::{
+            ArcPoolTx,
+            TxStatus,
+        },
     },
 };
 
@@ -33,6 +36,15 @@ impl TransactionPool for TxPoolAdapter {
 
     async fn remove_txs(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>> {
         self.service.remove_txs(ids).await
+    }
+
+    async fn next_transaction_status_update(&mut self) -> TxStatus {
+        match self.tx_status_rx.recv().await {
+            Ok(status) => return status,
+            Err(err) => {
+                panic!("Tx Status Channel errored unexpectedly: {err:?}");
+            }
+        }
     }
 }
 

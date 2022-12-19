@@ -4,9 +4,6 @@ use fuel_core_types::{
 };
 use std::cmp::Reverse;
 
-// TODO: This logic should be housed in the txpool,
-//  as it will have the most efficient way to select txs.
-
 // transaction selection could use a plugin based approach in the
 // future for block producers to customize block building (e.g. alternative priorities besides gas fees)
 
