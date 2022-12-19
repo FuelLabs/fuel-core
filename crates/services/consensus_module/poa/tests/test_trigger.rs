@@ -22,7 +22,10 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         block::PartialFuelBlock,
-        consensus::Consensus,
+        consensus::{
+            Consensus,
+            Sealed,
+        },
         header::{
             ConsensusHeader,
             PartialBlockHeader,
@@ -32,6 +35,7 @@ use fuel_core_types::{
             BlockId,
             SecretKeyWrapper,
         },
+        SealedBlock,
     },
     fuel_asm::*,
     fuel_crypto::SecretKey,
@@ -229,7 +233,7 @@ impl BlockDb for MockDatabase {
 pub struct MockTxPool {
     transactions: Arc<Mutex<Vec<ArcPoolTx>>>,
     broadcast_tx: broadcast::Sender<TxStatus>,
-    import_block_tx: broadcast::Sender<ImportBlockBroadcast>,
+    import_block_tx: broadcast::Sender<SealedBlock>,
     sender: MockTxPoolSender,
     stopper: oneshot::Sender<()>,
     join: JoinHandle<()>,
@@ -248,7 +252,8 @@ impl MockTxPool {
         let (stopper_tx, mut stopper_rx) = oneshot::channel();
         let (txpool_tx, mut txpool_rx) = mpsc::channel(16);
         let (broadcast_tx, broadcast_rx) = broadcast::channel(16);
-        let (import_block_tx, mut import_block_rx) = broadcast::channel(16);
+        let (import_block_tx, mut import_block_rx) =
+            broadcast::channel::<SealedBlock>(16);
 
         let txs = transactions.clone();
         let join = tokio::spawn(async move {
@@ -282,20 +287,16 @@ impl MockTxPool {
                             }
                         }
                     },
-                    msg = import_block_rx.recv() => {
-                        match msg.expect("Closed unexpectedly") {
-                            ImportBlockBroadcast::PendingFuelBlockImported { block } => {
-                                let mut g = txs.lock().await;
-                                let block_tx_ids: Vec<_> = block
-                                        .transactions()
-                                        .iter()
-                                        .map(|tx| tx.id())
-                                        .collect();
-                                g.retain(|tx| !block_tx_ids.contains(&tx.id()));
-                                block_event_tx.send(block.transactions().len()).await.unwrap();
-                            },
-                            _ => todo!("This block import type is not mocked yet"),
-                        }
+                    r = import_block_rx.recv() => {
+                        let block = r.expect("Block receive error");
+                        let mut g = txs.lock().await;
+                        let block_tx_ids: Vec<_> = block
+                                .entity.transactions()
+                                .iter()
+                                .map(|tx| tx.id())
+                                .collect();
+                        g.retain(|tx| !block_tx_ids.contains(&tx.id()));
+                        block_event_tx.send(block.entity.transactions().len()).await.unwrap();
                     },
                 }
             }

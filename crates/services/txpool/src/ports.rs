@@ -1,4 +1,5 @@
 use fuel_core_types::{
+    blockchain::SealedBlock,
     fuel_tx::Transaction,
     services::p2p::{
         GossipsubMessageAcceptance,
@@ -24,4 +25,10 @@ pub trait PeerToPeer: Send + Sync {
         message: &Self::GossipedTransaction,
         validity: GossipsubMessageAcceptance,
     );
+}
+
+#[async_trait::async_trait]
+pub trait BlockImport: Send + Sync {
+    /// Wait until the next block is available
+    async fn next_block(&mut self) -> SealedBlock;
 }

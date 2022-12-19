@@ -85,7 +85,7 @@ impl Service {
         &self,
         txpool_broadcast: broadcast::Receiver<TxStatus>,
         txpool: T,
-        import_block_events_tx: broadcast::Sender<ImportBlockBroadcast>,
+        import_block_events_tx: broadcast::Sender<SealedBlock>,
         block_producer: B,
         db: D,
     ) where
@@ -148,7 +148,7 @@ where
     block_producer: B,
     txpool: T,
     txpool_broadcast: broadcast::Receiver<TxStatus>,
-    import_block_events_tx: broadcast::Sender<ImportBlockBroadcast>,
+    import_block_events_tx: broadcast::Sender<SealedBlock>,
     /// Last block creation time. When starting up, this is initialized
     /// to `Instant::now()`, which delays the first block on startup for
     /// a bit, but doesn't cause any other issues.
@@ -222,10 +222,7 @@ where
             consensus: seal,
         };
         self.import_block_events_tx
-            .send(ImportBlockBroadcast::SealedBlockImported {
-                block: Arc::new(sealed_block),
-                is_created_by_self: true,
-            })
+            .send(sealed_block)
             .expect("Failed to import the generated block");
 
         // Update last block time

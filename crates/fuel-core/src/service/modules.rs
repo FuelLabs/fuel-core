@@ -5,6 +5,7 @@ use crate::{
     service::{
         adapters::{
             poa::TxPoolAdapter,
+            txpool::BlockImportAdapter,
             ExecutorAdapter,
             MaybeRelayerAdapter,
             PoACoordinatorAdapter,
@@ -143,7 +144,7 @@ pub async fn start_modules(
         .config(config.txpool.clone())
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
         .p2p_port(p2p_adapter.clone())
-        .import_block_event(block_import_rx)
+        .importer(Box::new(BlockImportAdapter::new(block_import_rx)))
         .tx_status_sender(tx_status_sender.clone())
         .txpool_sender(Sender::new(txpool_sender))
         .txpool_receiver(txpool_receiver);

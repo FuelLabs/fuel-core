@@ -41,6 +41,7 @@ use tokio::{
 };
 
 pub mod poa;
+pub mod txpool;
 
 pub struct ExecutorAdapter {
     pub database: Database,

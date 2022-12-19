@@ -153,7 +153,7 @@ impl TestContextBuilder {
         builder
             .config(config)
             .db(Box::new(mock_db.clone()))
-            .import_block_event(block_rx)
+            .importer(block_rx)
             .tx_status_sender(status_tx)
             .txpool_sender(txpool_tx)
             .txpool_receiver(txpool_rx)

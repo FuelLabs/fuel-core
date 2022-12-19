@@ -1,5 +1,8 @@
 use crate::{
-    ports::PeerToPeer,
+    ports::{
+        BlockImport,
+        PeerToPeer,
+    },
     Config,
     Error as TxPoolError,
     TxPool,
@@ -42,7 +45,7 @@ pub struct ServiceBuilder {
     txpool_sender: Option<txpool::Sender>,
     txpool_receiver: Option<mpsc::Receiver<TxPoolMpsc>>,
     tx_status_sender: Option<TxStatusChange>,
-    import_block_receiver: Option<broadcast::Receiver<ImportBlockBroadcast>>,
+    importer: Option<Box<dyn BlockImport>>,
     p2p_port: Option<PeerToPeerForTx>,
 }
 
@@ -97,7 +100,7 @@ impl ServiceBuilder {
             txpool_sender: None,
             txpool_receiver: None,
             tx_status_sender: None,
-            import_block_receiver: None,
+            importer: None,
             p2p_port: None,
         }
     }
@@ -150,11 +153,8 @@ impl ServiceBuilder {
         self
     }
 
-    pub fn import_block_event(
-        &mut self,
-        import_block_receiver: broadcast::Receiver<ImportBlockBroadcast>,
-    ) -> &mut Self {
-        self.import_block_receiver = Some(import_block_receiver);
+    pub fn importer(&mut self, importer: Box<dyn BlockImport>) -> &mut Self {
+        self.importer = Some(importer);
         self
     }
 
@@ -165,7 +165,7 @@ impl ServiceBuilder {
 
     pub fn build(self) -> anyhow::Result<Service> {
         if self.db.is_none()
-            || self.import_block_receiver.is_none()
+            || self.importer.is_none()
             || self.p2p_port.is_none()
             || self.txpool_sender.is_none()
             || self.tx_status_sender.is_none()
@@ -182,7 +182,7 @@ impl ServiceBuilder {
                 db: Arc::new(self.db.unwrap()),
                 txpool_receiver: self.txpool_receiver.unwrap(),
                 tx_status_sender: self.tx_status_sender.unwrap(),
-                import_block_receiver: self.import_block_receiver.unwrap(),
+                importer: self.importer.unwrap(),
                 p2p_port: self.p2p_port.unwrap(),
             },
         )?;
@@ -195,7 +195,7 @@ pub struct Context {
     pub db: Arc<Box<dyn TxPoolDb>>,
     pub txpool_receiver: mpsc::Receiver<TxPoolMpsc>,
     pub tx_status_sender: TxStatusChange,
-    pub import_block_receiver: broadcast::Receiver<ImportBlockBroadcast>,
+    pub importer: Box<dyn BlockImport>,
     pub p2p_port: PeerToPeerForTx,
 }
 
@@ -273,23 +273,9 @@ impl Context {
                     }});
                 }
 
-                block_updated = self.import_block_receiver.recv() => {
-                  if let Ok(block_updated) = block_updated {
-                        match block_updated {
-                            ImportBlockBroadcast::PendingFuelBlockImported { block } => {
-                                let txpool = txpool.clone();
-                                TxPool::block_update(txpool.as_ref(), &self.tx_status_sender, block).await
-                                // TODO: Should this be done in a separate task? Like this:
-                                // tokio::spawn( async move {
-                                //     TxPool::block_update(txpool.as_ref(), block).await
-                                // });
-                            },
-                            ImportBlockBroadcast::SealedBlockImported { block: _, is_created_by_self: _ } => {
-                                // TODO: what to do with sealed blocks?
-                                todo!("Sealed block");
-                            }
-                        };
-                    }
+                block = self.importer.next_block() => {
+                    let txpool = txpool.clone();
+                    TxPool::block_update(txpool.as_ref(), &self.tx_status_sender, block).await;
                 }
             }
         }
