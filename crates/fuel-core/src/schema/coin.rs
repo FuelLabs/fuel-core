@@ -1,6 +1,9 @@
 use crate::{
     database::Database,
-    query::CoinQueryData,
+    query::{
+        CoinQueryContext,
+        CoinQueryData,
+    },
     schema::scalars::{
         Address,
         AssetId,
@@ -21,7 +24,6 @@ use async_graphql::{
 use fuel_core_storage::{
     not_found,
     tables::Coins,
-    Result as StorageResult,
     StorageAsRef,
 };
 use fuel_core_types::{
@@ -31,7 +33,6 @@ use fuel_core_types::{
     },
     fuel_tx,
 };
-use fuel_tx::UtxoId as UtxoIdModel;
 use itertools::Itertools;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -146,23 +147,5 @@ impl CoinQuery {
             Ok(coins)
         })
         .await
-    }
-}
-
-struct CoinQueryContext<'a>(&'a Database);
-
-impl CoinQueryData for CoinQueryContext<'_> {
-    fn coin(
-        &self,
-        utxo_id: UtxoIdModel,
-    ) -> StorageResult<Option<fuel_core_types::entities::coin::Coin>> {
-        let db = self.0;
-
-        let block = db
-            .storage::<Coins>()
-            .get(&utxo_id)?
-            .map(|coin| coin.clone().into_owned());
-
-        Ok(block)
     }
 }

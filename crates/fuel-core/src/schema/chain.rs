@@ -1,6 +1,8 @@
 use crate::{
-    database::Database,
-    query::ChainQueryData,
+    query::{
+        ChainQueryContext,
+        ChainQueryData,
+    },
     schema::{
         block::Block,
         scalars::U64,
@@ -11,14 +13,7 @@ use async_graphql::{
     Context,
     Object,
 };
-use fuel_core_storage::{
-    not_found,
-    tables::FuelBlocks,
-    StorageAsRef,
-};
 use fuel_core_types::fuel_tx;
-
-pub const DEFAULT_NAME: &str = "Fuel.testnet";
 
 pub struct ChainInfo;
 
@@ -125,46 +120,5 @@ pub struct ChainQuery;
 impl ChainQuery {
     async fn chain(&self) -> ChainInfo {
         ChainInfo
-    }
-}
-
-struct ChainQueryContext<'a>(&'a Database);
-
-impl ChainQueryData for ChainQueryContext<'_> {
-    fn latest_block(
-        &self,
-    ) -> fuel_core_storage::Result<(
-        fuel_core_types::blockchain::header::BlockHeader,
-        Vec<fuel_core_types::fuel_types::Bytes32>,
-    )> {
-        let db = self.0;
-
-        let height = db.get_block_height()?.unwrap_or_default();
-        let id = db.get_block_id(height)?.unwrap_or_default();
-        let mut block = db
-            .storage::<FuelBlocks>()
-            .get(&id)?
-            .ok_or(not_found!(FuelBlocks))?
-            .into_owned();
-
-        let tx_ids: Vec<fuel_core_types::fuel_types::Bytes32> = block
-            .transactions_mut()
-            .iter()
-            .map(|tx| tx.to_owned())
-            .collect();
-
-        let header = block.header().clone();
-
-        Ok((header, tx_ids))
-    }
-
-    fn name(&self) -> fuel_core_storage::Result<String> {
-        let db = self.0;
-
-        let name = db
-            .get_chain_name()?
-            .unwrap_or_else(|| DEFAULT_NAME.to_string());
-
-        Ok(name)
     }
 }

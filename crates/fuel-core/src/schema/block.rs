@@ -5,6 +5,10 @@ use super::scalars::{
 use crate::{
     database::Database,
     executor::Executor,
+    query::{
+        BlockQueryContext,
+        BlockQueryData,
+    },
     schema::{
         scalars::{
             BlockId,
@@ -61,7 +65,6 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use itertools::Itertools;
-use std::convert::TryInto;
 
 pub struct Block {
     pub(crate) header: Header,
@@ -221,10 +224,12 @@ impl BlockQuery {
             (None, Some(height)) => {
                 let height: u64 = height.into();
                 let data = BlockQueryContext(ctx.data_unchecked());
-                data.block_id(height).map_err(|_| async_graphql::Error::new(format!(
-                    "Block with height {} not found",
-                    height
-                )))?
+                data.block_id(height).map_err(|_| {
+                    async_graphql::Error::new(format!(
+                        "Block with height {} not found",
+                        height
+                    ))
+                })?
             }
             (None, None) => {
                 return Err(async_graphql::Error::new("Missing either id or height"))
@@ -253,50 +258,6 @@ impl BlockQuery {
             blocks_query(db, *start, direction)
         })
         .await
-    }
-}
-
-use crate::query::BlockQueryData;
-
-struct BlockQueryContext<'a>(&'a Database);
-
-impl BlockQueryData for BlockQueryContext<'_> {
-    fn block(
-        &self,
-        id: fuel_types::Bytes32,
-    ) -> std::result::Result<
-        StorageResult<(BlockHeader, Vec<fuel_types::Bytes32>)>,
-        anyhow::Error,
-    > {
-        let db = self.0;
-
-        let mut block = db
-            .storage::<FuelBlocks>()
-            .get(&id)?
-            .ok_or_else(|| anyhow!("Block height non-existent"))?
-            .into_owned();
-
-        let tx_ids: Vec<fuel_core_types::fuel_types::Bytes32> = block
-            .transactions_mut()
-            .iter()
-            .map(|tx| tx.to_owned())
-            .collect();
-
-        let header = block.header().clone();
-
-        Ok(Ok((header, tx_ids)))
-    }
-
-    fn block_id(
-        &self,
-        height: u64,
-    ) -> std::result::Result<fuel_types::Bytes32, anyhow::Error> {
-        let db = self.0;
-        let id = db
-            .get_block_id(height.try_into()?)?
-            .ok_or_else(|| anyhow!("Block height non-existent"))?;
-
-        Ok(id)
     }
 }
 
