@@ -40,7 +40,10 @@ use fuel_core_types::{
     },
 };
 use std::sync::Arc;
-use tokio::sync::oneshot;
+use tokio::{
+    sync::oneshot,
+    task::JoinHandle,
+};
 
 pub struct ExecutorAdapter {
     pub database: Database,
