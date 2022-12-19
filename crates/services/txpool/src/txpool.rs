@@ -53,6 +53,7 @@ impl TxPool {
             config,
         }
     }
+
     pub fn txs(&self) -> &HashMap<TxId, TxInfo> {
         &self.by_hash
     }
@@ -62,7 +63,7 @@ impl TxPool {
     }
 
     // this is atomic operation. Return removed(pushed out/replaced) transactions
-    async fn insert_inner(
+    fn insert_inner(
         &mut self,
         // TODO: Pass `&Transaction`
         tx: Arc<Transaction>,
@@ -143,7 +144,7 @@ impl TxPool {
                 .observe(tx.metered_bytes_size() as f64);
         }
         // check and insert dependency
-        let rem = self.by_dependency.insert(&self.by_hash, db, &tx).await?;
+        let rem = self.by_dependency.insert(&self.by_hash, db, &tx)?;
         self.by_hash.insert(tx.id(), TxInfo::new(tx.clone()));
         self.by_gas_price.insert(&tx);
 
@@ -234,7 +235,7 @@ impl TxPool {
         let mut res = Vec::new();
         for tx in txs.iter() {
             let mut pool = txpool.write().await;
-            res.push(pool.insert_inner(tx.clone(), db).await)
+            res.push(pool.insert_inner(tx.clone(), db))
         }
         // announce to subscribers
         for ret in res.iter() {
