@@ -126,12 +126,13 @@ pub async fn start_modules(
     };
 
     #[cfg(feature = "p2p")]
-    if !config.p2p.network_name.is_empty() {
-        network_service.start().await?;
-    }
+    let p2p_adapter = P2pAdapter::new(network_service);
 
     #[cfg(feature = "p2p")]
-    let p2p_adapter = P2pAdapter::new(network_service);
+    if !config.p2p.network_name.is_empty() {
+        p2p_adapter.start().await?;
+    }
+
     #[cfg(not(feature = "p2p"))]
     let p2p_adapter = P2pAdapter {};
     let p2p_adapter = Arc::new(p2p_adapter);

@@ -40,10 +40,7 @@ use fuel_core_types::{
     },
 };
 use std::sync::Arc;
-use tokio::{
-    sync::oneshot,
-    task::JoinHandle,
-};
+use tokio::task::JoinHandle;
 
 pub struct ExecutorAdapter {
     pub database: Database,
@@ -143,6 +140,10 @@ impl P2pAdapter {
 
     pub async fn stop(&self) -> Option<JoinHandle<()>> {
         self.p2p_service.stop().await
+    }
+
+    pub async fn start(&self) -> anyhow::Result<()> {
+        self.p2p_service.start().await
     }
 }
 
