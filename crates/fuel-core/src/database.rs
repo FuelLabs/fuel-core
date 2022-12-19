@@ -72,6 +72,8 @@ mod code_root;
 mod coin;
 mod contracts;
 mod message;
+#[cfg(feature = "p2p")]
+mod p2p;
 mod receipts;
 mod relayer;
 mod sealed_block;

@@ -4,10 +4,7 @@ use crate::{
     service::Config,
 };
 #[cfg(feature = "p2p")]
-use fuel_core_p2p::{
-    orchestrator::Service as P2pService,
-    ports::Database as P2pDb,
-};
+use fuel_core_p2p::orchestrator::Service as P2pService;
 use fuel_core_relayer::ports::RelayerDb;
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::RelayerSynced;
@@ -16,8 +13,6 @@ use fuel_core_storage::{
     Result as StorageResult,
 };
 use fuel_core_txpool::types::Word;
-#[cfg(feature = "p2p")]
-use fuel_core_types::blockchain::SealedBlock;
 use fuel_core_types::{
     blockchain::{
         primitives,
@@ -199,27 +194,5 @@ impl fuel_core_txpool::ports::PeerToPeer for P2pAdapter {
         _validity: GossipsubMessageAcceptance,
     ) {
         // no-op
-    }
-}
-
-pub struct DbAdapter {
-    database: Database,
-}
-
-impl DbAdapter {
-    pub fn new(database: Database) -> Self {
-        Self { database }
-    }
-}
-
-#[cfg(feature = "p2p")]
-#[async_trait::async_trait]
-impl P2pDb for DbAdapter {
-    async fn get_sealed_block(
-        &self,
-        block_height: BlockHeight,
-    ) -> Option<Arc<SealedBlock>> {
-        // todo: current signatures do not match?
-        todo!()
     }
 }

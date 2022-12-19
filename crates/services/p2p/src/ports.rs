@@ -7,7 +7,7 @@ use fuel_core_types::blockchain::{
 };
 
 #[async_trait]
-pub trait Database: Send + Sync {
+pub trait P2pDb: Send + Sync {
     async fn get_sealed_block(
         &self,
         block_height: BlockHeight,

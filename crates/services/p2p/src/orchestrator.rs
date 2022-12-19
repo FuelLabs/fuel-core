@@ -50,7 +50,7 @@ use crate::{
         GossipsubBroadcastRequest,
         GossipsubMessage,
     },
-    ports::Database,
+    ports::P2pDb,
     request_response::messages::{
         OutboundResponse,
         RequestMessage,
@@ -65,7 +65,7 @@ use crate::{
 /// and the top level `NetworkService`.
 struct NetworkOrchestrator {
     p2p_config: P2PConfig,
-    db: Arc<dyn Database>,
+    db: Arc<dyn P2pDb>,
     /// Receive internal Orchestrator Requests
     rx_orchestrator_request: Receiver<OrchestratorRequest>,
     /// Generate internal Orchestrator Requests
@@ -95,7 +95,7 @@ impl Debug for OrchestratorRequest {
 impl NetworkOrchestrator {
     fn new(
         p2p_config: P2PConfig,
-        db: Arc<dyn Database>,
+        db: Arc<dyn P2pDb>,
         orchestrator_request_channels: (
             Receiver<OrchestratorRequest>,
             Sender<OrchestratorRequest>,
@@ -256,7 +256,7 @@ pub struct Service {
 }
 
 impl Service {
-    pub fn new(p2p_config: P2PConfig, db: Arc<dyn Database>) -> Self {
+    pub fn new(p2p_config: P2PConfig, db: Arc<dyn P2pDb>) -> Self {
         let (tx_orchestrator_request, rx_orchestrator_request) =
             tokio::sync::mpsc::channel(100);
 
@@ -358,7 +358,7 @@ impl Service {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::ports::Database;
+    use crate::ports::P2pDb;
 
     use super::*;
     use async_trait::async_trait;
@@ -380,7 +380,7 @@ pub mod tests {
     struct FakeDb;
 
     #[async_trait]
-    impl Database for FakeDb {
+    impl P2pDb for FakeDb {
         async fn get_sealed_block(
             &self,
             block_height: BlockHeight,
@@ -397,7 +397,7 @@ pub mod tests {
     #[tokio::test]
     async fn start_stop_works() {
         let p2p_config = P2PConfig::default_initialized("start_stop_works");
-        let db: Arc<dyn Database> = Arc::new(FakeDb);
+        let db: Arc<dyn P2pDb> = Arc::new(FakeDb);
 
         let service = Service::new(p2p_config, db.clone());
 
