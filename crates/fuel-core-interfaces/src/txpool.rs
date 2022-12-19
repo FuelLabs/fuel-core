@@ -43,32 +43,6 @@ use tokio::sync::{
     oneshot,
 };
 
-pub trait TxPoolDb:
-    StorageInspect<Coins, Error = StorageError>
-    + StorageInspect<ContractsRawCode, Error = StorageError>
-    + StorageInspect<Messages, Error = StorageError>
-    + Send
-    + Sync
-{
-    fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<Coin>> {
-        self.storage::<Coins>()
-            .get(utxo_id)
-            .map(|t| t.map(|t| t.as_ref().clone()))
-    }
-
-    fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool> {
-        self.storage::<ContractsRawCode>().contains_key(contract_id)
-    }
-
-    fn message(&self, message_id: &MessageId) -> StorageResult<Option<Message>> {
-        self.storage::<Messages>()
-            .get(message_id)
-            .map(|t| t.map(|t| t.as_ref().clone()))
-    }
-
-    fn current_block_height(&self) -> StorageResult<BlockHeight>;
-}
-
 /// RPC client for doing calls to the TxPool through an MPSC channel.
 #[derive(Clone, Deref, DerefMut)]
 pub struct Sender(mpsc::Sender<TxPoolMpsc>);

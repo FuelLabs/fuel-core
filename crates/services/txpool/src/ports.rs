@@ -1,6 +1,31 @@
+use fuel_core_storage::{
+    tables::{
+        Coins,
+        ContractsRawCode,
+        Messages,
+    },
+    Error as StorageError,
+    Result as StorageResult,
+    StorageAsRef,
+    StorageInspect,
+};
 use fuel_core_types::{
-    blockchain::SealedBlock,
-    fuel_tx::Transaction,
+    blockchain::{
+        primitives::BlockHeight,
+        SealedBlock,
+    },
+    entities::{
+        coin::Coin,
+        message::Message,
+    },
+    fuel_tx::{
+        Transaction,
+        UtxoId,
+    },
+    fuel_types::{
+        ContractId,
+        MessageId,
+    },
     services::p2p::{
         GossipsubMessageAcceptance,
         NetworkData,
@@ -31,4 +56,30 @@ pub trait PeerToPeer: Send + Sync {
 pub trait BlockImport: Send + Sync {
     /// Wait until the next block is available
     async fn next_block(&mut self) -> SealedBlock;
+}
+
+pub trait TxPoolDb:
+    StorageInspect<Coins, Error = StorageError>
+    + StorageInspect<ContractsRawCode, Error = StorageError>
+    + StorageInspect<Messages, Error = StorageError>
+    + Send
+    + Sync
+{
+    fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<Coin>> {
+        self.storage::<Coins>()
+            .get(utxo_id)
+            .map(|t| t.map(|t| t.as_ref().clone()))
+    }
+
+    fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool> {
+        self.storage::<ContractsRawCode>().contains_key(contract_id)
+    }
+
+    fn message(&self, message_id: &MessageId) -> StorageResult<Option<Message>> {
+        self.storage::<Messages>()
+            .get(message_id)
+            .map(|t| t.map(|t| t.as_ref().clone()))
+    }
+
+    fn current_block_height(&self) -> StorageResult<BlockHeight>;
 }

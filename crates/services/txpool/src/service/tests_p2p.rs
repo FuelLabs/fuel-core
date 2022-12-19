@@ -19,7 +19,7 @@ async fn can_insert_from_p2p() {
     let mut ctx_builder = TestContextBuilder::new();
     let tx1 = ctx_builder.setup_script_tx(10);
 
-    let p2p = MockP2P::with_txs(vec![tx1.clone()]);
+    let p2p = MockP2P::new_with_txs(vec![tx1.clone()]);
     ctx_builder.with_p2p(p2p);
 
     let ctx = ctx_builder.build().await;
@@ -51,7 +51,7 @@ async fn insert_from_local_broadcasts_to_p2p() {
     // add coin to builder db and generate a valid tx
     let tx1 = ctx_builder.setup_script_tx(10);
 
-    let mut p2p = MockP2P::with_txs(vec![]);
+    let mut p2p = MockP2P::new_with_txs(vec![]);
     let mock_tx1 = tx1.clone();
     p2p.expect_broadcast_transaction()
         .withf(move |receive: &Arc<Transaction>| **receive == mock_tx1)
@@ -103,7 +103,7 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
     let tx1 = ctx_builder.setup_script_tx(10);
     // setup p2p mock - with tx incoming from p2p
     let txs = vec![tx1.clone()];
-    let mut p2p = MockP2P::with_txs(txs);
+    let mut p2p = MockP2P::new_with_txs(txs);
     let (send, mut receive) = broadcast::channel::<()>(1);
     p2p.expect_broadcast_transaction().returning(move |_| {
         send.send(()).unwrap();

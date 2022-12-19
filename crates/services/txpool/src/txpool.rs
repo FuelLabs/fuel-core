@@ -3,13 +3,13 @@ use crate::{
         dependency::Dependency,
         price_sort::PriceSort,
     },
+    ports::TxPoolDb,
     service::TxStatusChange,
     types::*,
     Config,
     Error,
 };
 use anyhow::anyhow;
-use fuel_core_interfaces::txpool::TxPoolDb;
 use fuel_core_metrics::txpool_metrics::TXPOOL_METRICS;
 use fuel_core_types::{
     blockchain::{

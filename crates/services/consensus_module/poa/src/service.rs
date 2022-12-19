@@ -15,7 +15,6 @@ use anyhow::{
     anyhow,
     Context,
 };
-use fuel_core_interfaces::block_importer::ImportBlockBroadcast;
 use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
     blockchain::{

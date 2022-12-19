@@ -2,19 +2,16 @@ use crate::{
     ports::{
         BlockImport,
         PeerToPeer,
+        TxPoolDb,
     },
     Config,
     Error as TxPoolError,
     TxPool,
 };
 use anyhow::anyhow;
-use fuel_core_interfaces::{
-    block_importer::ImportBlockBroadcast,
-    txpool::{
-        self,
-        TxPoolDb,
-        TxPoolMpsc,
-    },
+use fuel_core_interfaces::txpool::{
+    self,
+    TxPoolMpsc,
 };
 use fuel_core_types::{
     fuel_types::Bytes32,

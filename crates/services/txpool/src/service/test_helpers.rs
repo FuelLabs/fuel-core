@@ -101,6 +101,8 @@ impl MockP2P {
                 }
             })
         });
+        p2p.expect_broadcast_transaction()
+            .returning(move |_| Ok(()));
         p2p
     }
 }
@@ -185,7 +187,7 @@ impl TestContextBuilder {
         let status_tx = TxStatusChange::new(100);
         let (txpool_tx, txpool_rx) = Sender::channel(100);
 
-        let p2p = Arc::new(self.p2p.unwrap_or_else(|| MockP2P::with_txs(vec![])));
+        let p2p = Arc::new(self.p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![])));
         let importer = Box::new(
             self.importer
                 .unwrap_or_else(|| MockImporter::with_blocks(vec![])),
