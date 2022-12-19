@@ -176,7 +176,7 @@ impl PeerToPeer for MockP2PAdapter {
     }
 
     // Report the validity of a transaction received from the network.
-    fn notify_gossip_transaction_validity(
+    async fn notify_gossip_transaction_validity(
         &self,
         _message: &GossipedTransaction,
         _validity: GossipsubMessageAcceptance,
