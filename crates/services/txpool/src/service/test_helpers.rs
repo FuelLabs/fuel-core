@@ -89,7 +89,7 @@ mockall::mock! {
 }
 
 impl MockP2P {
-    pub fn with_txs(mut txs: Vec<Transaction>) -> Self {
+    pub fn new_with_txs(mut txs: Vec<Transaction>) -> Self {
         let mut p2p = MockP2P::default();
         p2p.expect_next_gossiped_transaction().returning(move || {
             let tx = txs.pop();
