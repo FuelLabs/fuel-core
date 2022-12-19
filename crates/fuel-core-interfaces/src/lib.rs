@@ -3,4 +3,3 @@
 pub mod bft;
 pub mod block_importer;
 pub mod signer;
-pub mod txpool;

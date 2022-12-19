@@ -27,7 +27,7 @@ pub trait TransactionPool {
 
     async fn total_consumable_gas(&self) -> Result<u64>;
 
-    async fn remove_txs(&mut self, tx_ids: Vec<TxId>) -> Result<Vec<ArcPoolTx>>;
+    async fn remove_txs(&self, tx_ids: Vec<TxId>) -> Result<Vec<ArcPoolTx>>;
 }
 
 pub trait BlockDb: Send + Sync {

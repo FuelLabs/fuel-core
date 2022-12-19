@@ -1,14 +1,8 @@
 use crate::Config;
-use fuel_core_interfaces::{
-    bft::BftMpsc,
-    block_importer::ImportBlockMpsc,
-};
+use fuel_core_interfaces::bft::BftMpsc;
 use parking_lot::Mutex;
 use tokio::{
-    sync::{
-        broadcast,
-        mpsc,
-    },
+    sync::mpsc,
     task::JoinHandle,
 };
 

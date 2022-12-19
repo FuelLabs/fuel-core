@@ -4,16 +4,15 @@ use crate::{
     database::Database,
     service::{
         adapters::{
-            poa::TxPoolAdapter,
-            txpool::BlockImportAdapter,
+            BlockImportAdapter,
             ExecutorAdapter,
             MaybeRelayerAdapter,
             PoACoordinatorAdapter,
+            TxPoolAdapter,
         },
         Config,
     },
 };
-use fuel_core_interfaces::txpool::Sender;
 use fuel_core_txpool::{
     ports::TxPoolDb,
     service::TxStatusChange,
@@ -137,17 +136,17 @@ pub async fn start_modules(
 
     let tx_status_sender = TxStatusChange::new(100);
 
-    let (txpool_sender, txpool_receiver) = mpsc::channel(100);
-
     let mut txpool_builder = fuel_core_txpool::ServiceBuilder::new();
     txpool_builder
         .config(config.txpool.clone())
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
         .p2p_port(p2p_adapter.clone())
         .importer(Box::new(BlockImportAdapter::new(block_import_rx)))
-        .tx_status_sender(tx_status_sender.clone())
-        .txpool_sender(Sender::new(txpool_sender))
-        .txpool_receiver(txpool_receiver);
+        .tx_status_sender(tx_status_sender.clone());
+
+    let txpool_broadcast = txpool_builder.tx_status_subscribe();
+    let txpool_service = Arc::new(txpool_builder.build()?);
+    txpool_service.start().await?;
 
     // restrict the max number of concurrent dry runs to the number of CPUs
     // as execution in the worst case will be CPU bound rather than I/O bound.
@@ -155,8 +154,8 @@ pub async fn start_modules(
     let block_producer = Arc::new(fuel_core_producer::Producer {
         config: config.block_producer.clone(),
         db: database.clone(),
-        txpool: Box::new(fuel_core_producer::adapters::TxPoolAdapter {
-            sender: txpool_builder.sender().clone(),
+        txpool: Box::new(TxPoolAdapter {
+            service: txpool_service.clone(),
         }),
         executor: Arc::new(ExecutorAdapter {
             database: database.clone(),
@@ -178,9 +177,9 @@ pub async fn start_modules(
     match &coordinator {
         CoordinatorService::Poa(poa) => {
             poa.start(
-                txpool_builder.tx_status_subscribe(),
+                txpool_broadcast,
                 TxPoolAdapter {
-                    sender: txpool_builder.sender().clone(),
+                    service: txpool_service.clone(),
                 },
                 block_import_tx,
                 PoACoordinatorAdapter {
@@ -203,11 +202,8 @@ pub async fn start_modules(
     )
     .await;
 
-    let txpool = txpool_builder.build()?;
-    txpool.start().await?;
-
     Ok(Modules {
-        txpool: Arc::new(txpool),
+        txpool: txpool_service,
         block_importer: Arc::new(block_importer),
         block_producer,
         coordinator: Arc::new(coordinator),

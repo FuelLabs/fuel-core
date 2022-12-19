@@ -1,7 +1,6 @@
 #![deny(unused_crate_dependencies)]
 #![deny(unused_must_use)]
 
-pub mod adapters;
 pub mod block_producer;
 pub mod config;
 pub mod ports;

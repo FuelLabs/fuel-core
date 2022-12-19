@@ -1,7 +1,6 @@
 #![deny(unused_must_use)]
 
 use anyhow::anyhow;
-use fuel_core_interfaces::block_importer::ImportBlockBroadcast;
 use fuel_core_poa::{
     ports::{
         BlockDb,
@@ -22,10 +21,7 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         block::PartialFuelBlock,
-        consensus::{
-            Consensus,
-            Sealed,
-        },
+        consensus::Consensus,
         header::{
             ConsensusHeader,
             PartialBlockHeader,
@@ -395,7 +391,7 @@ impl TransactionPool for MockTxPoolSender {
             .expect("MockTxPool panicked in total_consumable_gas query"))
     }
 
-    async fn remove_txs(&mut self, tx_ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>> {
+    async fn remove_txs(&self, tx_ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>> {
         let (response, rx) = oneshot::channel();
         self.0
             .send(MockTxPoolMsg::Remove { tx_ids, response })

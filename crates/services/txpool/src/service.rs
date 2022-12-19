@@ -4,23 +4,30 @@ use crate::{
         PeerToPeer,
         TxPoolDb,
     },
+    transaction_selector::select_transactions,
     Config,
     Error as TxPoolError,
     TxPool,
 };
 use anyhow::anyhow;
-use fuel_core_interfaces::txpool::{
-    self,
-    TxPoolMpsc,
-};
 use fuel_core_types::{
+    fuel_tx::{
+        Transaction,
+        TxId,
+    },
     fuel_types::Bytes32,
     services::{
         p2p::{
             GossipData,
             TransactionGossipData,
         },
-        txpool::TxStatus,
+        txpool::{
+            ArcPoolTx,
+            InsertionResult,
+            Result as TxPoolResult,
+            TxInfo,
+            TxStatus,
+        },
     },
 };
 use std::sync::Arc;
@@ -28,6 +35,7 @@ use tokio::{
     sync::{
         broadcast,
         mpsc,
+        oneshot,
         Mutex,
         RwLock,
     },
@@ -39,8 +47,6 @@ type PeerToPeerForTx = Arc<dyn PeerToPeer<GossipedTransaction = TransactionGossi
 pub struct ServiceBuilder {
     config: Config,
     db: Option<Box<dyn TxPoolDb>>,
-    txpool_sender: Option<txpool::Sender>,
-    txpool_receiver: Option<mpsc::Receiver<TxPoolMpsc>>,
     tx_status_sender: Option<TxStatusChange>,
     importer: Option<Box<dyn BlockImport>>,
     p2p_port: Option<PeerToPeerForTx>,
@@ -94,16 +100,10 @@ impl ServiceBuilder {
         Self {
             config: Default::default(),
             db: None,
-            txpool_sender: None,
-            txpool_receiver: None,
             tx_status_sender: None,
             importer: None,
             p2p_port: None,
         }
-    }
-
-    pub fn sender(&self) -> &txpool::Sender {
-        self.txpool_sender.as_ref().unwrap()
     }
 
     pub fn tx_status_subscribe(&self) -> broadcast::Receiver<TxStatus> {
@@ -124,19 +124,6 @@ impl ServiceBuilder {
 
     pub fn db(&mut self, db: Box<dyn TxPoolDb>) -> &mut Self {
         self.db = Some(db);
-        self
-    }
-
-    pub fn txpool_sender(&mut self, txpool_sender: txpool::Sender) -> &mut Self {
-        self.txpool_sender = Some(txpool_sender);
-        self
-    }
-
-    pub fn txpool_receiver(
-        &mut self,
-        txpool_receiver: mpsc::Receiver<TxPoolMpsc>,
-    ) -> &mut Self {
-        self.txpool_receiver = Some(txpool_receiver);
         self
     }
 
@@ -164,20 +151,20 @@ impl ServiceBuilder {
         if self.db.is_none()
             || self.importer.is_none()
             || self.p2p_port.is_none()
-            || self.txpool_sender.is_none()
             || self.tx_status_sender.is_none()
-            || self.txpool_receiver.is_none()
         {
             return Err(anyhow!("One of context items are not set"))
         }
 
+        let (sender, receiver) = mpsc::channel(100);
+
         let service = Service::new(
-            self.txpool_sender.unwrap(),
+            sender,
             self.tx_status_sender.clone().unwrap(),
             Context {
                 config: self.config,
                 db: Arc::new(self.db.unwrap()),
-                txpool_receiver: self.txpool_receiver.unwrap(),
+                txpool_receiver: receiver,
                 tx_status_sender: self.tx_status_sender.unwrap(),
                 importer: self.importer.unwrap(),
                 p2p_port: self.p2p_port.unwrap(),
@@ -281,7 +268,7 @@ impl Context {
 }
 
 pub struct Service {
-    txpool_sender: txpool::Sender,
+    txpool_sender: mpsc::Sender<TxPoolMpsc>,
     tx_status_sender: TxStatusChange,
     join: Mutex<Option<JoinHandle<Context>>>,
     context: Arc<Mutex<Option<Context>>>,
@@ -289,7 +276,7 @@ pub struct Service {
 
 impl Service {
     pub fn new(
-        txpool_sender: txpool::Sender,
+        txpool_sender: mpsc::Sender<TxPoolMpsc>,
         tx_status_sender: TxStatusChange,
         context: Context,
     ) -> anyhow::Result<Self> {
@@ -338,10 +325,154 @@ impl Service {
     pub fn tx_update_subscribe(&self) -> broadcast::Receiver<TxUpdate> {
         self.tx_status_sender.update_sender.subscribe()
     }
+}
 
-    pub fn sender(&self) -> &txpool::Sender {
-        &self.txpool_sender
+// TODO: Return `TxPoolResutl`
+impl Service {
+    pub async fn pending_number(&self) -> anyhow::Result<usize> {
+        let (response, receiver) = oneshot::channel();
+        self.txpool_sender
+            .send(TxPoolMpsc::PendingNumber { response })
+            .await?;
+        receiver.await.map_err(Into::into)
     }
+
+    pub async fn total_consumable_gas(&self) -> anyhow::Result<u64> {
+        let (response, receiver) = oneshot::channel();
+        self.txpool_sender
+            .send(TxPoolMpsc::ConsumableGas { response })
+            .await?;
+        receiver.await.map_err(Into::into)
+    }
+
+    pub async fn remove_txs(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>> {
+        let (response, receiver) = oneshot::channel();
+        self.txpool_sender
+            .send(TxPoolMpsc::Remove { ids, response })
+            .await?;
+        receiver.await.map_err(Into::into)
+    }
+
+    pub async fn insert(
+        &self,
+        txs: Vec<Arc<Transaction>>,
+    ) -> anyhow::Result<Vec<anyhow::Result<InsertionResult>>> {
+        let (response, receiver) = oneshot::channel();
+        self.txpool_sender
+            .send(TxPoolMpsc::Insert { txs, response })
+            .await?;
+        receiver.await.map_err(Into::into)
+    }
+
+    pub async fn find(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<Option<TxInfo>>> {
+        let (response, receiver) = oneshot::channel();
+        self.txpool_sender
+            .send(TxPoolMpsc::Find { ids, response })
+            .await?;
+        receiver.await.map_err(Into::into)
+    }
+
+    pub async fn find_one(&self, id: TxId) -> anyhow::Result<Option<TxInfo>> {
+        let (response, receiver) = oneshot::channel();
+        self.txpool_sender
+            .send(TxPoolMpsc::FindOne { id, response })
+            .await?;
+        receiver.await.map_err(Into::into)
+    }
+
+    pub async fn find_dependent(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>> {
+        let (response, receiver) = oneshot::channel();
+        self.txpool_sender
+            .send(TxPoolMpsc::FindDependent { ids, response })
+            .await?;
+        receiver.await.map_err(Into::into)
+    }
+
+    pub async fn filter_by_negative(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<TxId>> {
+        let (response, receiver) = oneshot::channel();
+        self.txpool_sender
+            .send(TxPoolMpsc::FilterByNegative { ids, response })
+            .await?;
+        receiver.await.map_err(Into::into)
+    }
+
+    pub async fn select_transactions(
+        &self,
+        max_gas: u64,
+    ) -> TxPoolResult<Vec<ArcPoolTx>> {
+        let (response, receiver) = oneshot::channel();
+        self.txpool_sender
+            .send(TxPoolMpsc::Includable { response })
+            .await
+            .map_err(|e| TxPoolError::Other(e.to_string()))?;
+        let txs = receiver
+            .await
+            .map_err(|e| TxPoolError::Other(e.to_string()))?;
+        Ok(select_transactions(txs, max_gas))
+    }
+
+    pub async fn remove(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>> {
+        let (response, receiver) = oneshot::channel();
+        self.txpool_sender
+            .send(TxPoolMpsc::Remove { ids, response })
+            .await?;
+        receiver.await.map_err(Into::into)
+    }
+}
+
+/// RPC commands that can be sent to the TxPool through an MPSC channel.
+/// Responses are returned using `response` oneshot channel.
+#[derive(Debug)]
+pub enum TxPoolMpsc {
+    /// The number of pending transactions in the pool.
+    PendingNumber { response: oneshot::Sender<usize> },
+    /// The amount of gas in all includable transactions combined
+    ConsumableGas { response: oneshot::Sender<u64> },
+    /// Return all sorted transactions that are includable in next block.
+    /// This is going to be heavy operation, use it only when needed.
+    Includable {
+        response: oneshot::Sender<Vec<ArcPoolTx>>,
+    },
+    /// import list of transaction into txpool. All needed parents need to be known
+    /// and parent->child order should be enforced in Vec, we will not do that check inside
+    /// txpool and will just drop child and include only parent. Additional restrain is that
+    /// child gas_price needs to be lower then parent gas_price. Transaction can be received
+    /// from p2p **RespondTransactions** or from userland. Because of userland we are returning
+    /// error for every insert for better user experience.
+    Insert {
+        txs: Vec<Arc<Transaction>>,
+        response: oneshot::Sender<Vec<anyhow::Result<InsertionResult>>>,
+    },
+    /// find all tx by their hash
+    Find {
+        ids: Vec<TxId>,
+        response: oneshot::Sender<Vec<Option<TxInfo>>>,
+    },
+    /// find one tx by its hash
+    FindOne {
+        id: TxId,
+        response: oneshot::Sender<Option<TxInfo>>,
+    },
+    /// find all dependent tx and return them with requested dependencies in one list sorted by Price.
+    FindDependent {
+        ids: Vec<TxId>,
+        response: oneshot::Sender<Vec<ArcPoolTx>>,
+    },
+    /// remove transaction from pool needed on user demand. Low priority
+    Remove {
+        ids: Vec<TxId>,
+        response: oneshot::Sender<Vec<ArcPoolTx>>,
+    },
+    /// Iterate over `hashes` and return all hashes that we don't have.
+    /// Needed when we receive list of new hashed from peer with
+    /// **BroadcastTransactionHashes**, so txpool needs to return
+    /// tx that we don't have, and request them from that particular peer.
+    FilterByNegative {
+        ids: Vec<TxId>,
+        response: oneshot::Sender<Vec<TxId>>,
+    },
+    /// stop txpool
+    Stop,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -3,7 +3,6 @@ use crate::service::test_helpers::{
     MockP2P,
     TestContextBuilder,
 };
-use fuel_core_interfaces::txpool::TxPoolMpsc;
 use fuel_core_types::fuel_tx::{
     Transaction,
     UniqueIdentifier,
@@ -12,7 +11,6 @@ use std::{
     ops::Deref,
     time::Duration,
 };
-use tokio::sync::oneshot;
 
 #[tokio::test]
 async fn can_insert_from_p2p() {
@@ -30,15 +28,7 @@ async fn can_insert_from_p2p() {
     assert!(res.is_ok());
 
     // fetch tx from pool
-    let (response, receiver) = oneshot::channel();
-    let _ = service
-        .sender()
-        .send(TxPoolMpsc::Find {
-            ids: vec![tx1.id()],
-            response,
-        })
-        .await;
-    let out = receiver.await.unwrap();
+    let out = service.find(vec![tx1.id()]).await.unwrap();
 
     let got_tx: Transaction = out[0].as_ref().unwrap().tx().clone().deref().into();
     assert_eq!(tx1, got_tx);
@@ -66,15 +56,7 @@ async fn insert_from_local_broadcasts_to_p2p() {
     let mut subscribe_status = service.tx_status_subscribe();
     let mut subscribe_update = service.tx_update_subscribe();
 
-    let (response, receiver) = oneshot::channel();
-    let _ = service
-        .sender()
-        .send(TxPoolMpsc::Insert {
-            txs: vec![Arc::new(tx1.clone())],
-            response,
-        })
-        .await;
-    let out = receiver.await.unwrap();
+    let out = service.insert(vec![Arc::new(tx1.clone())]).await.unwrap();
 
     if let Ok(result) = &out[0] {
         // we are sure that included tx are already broadcasted.

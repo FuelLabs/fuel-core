@@ -13,8 +13,6 @@ description = "Fuel core interfaces"
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
-derive_more = { version = "0.99" }
-fuel-core-storage = { version = "0.15.1", path = "../storage" }
 fuel-core-types = { version = "0.15.1", path = "../types" }
 thiserror = "1.0"
 tokio = { version = "1.21", features = ["full"] }

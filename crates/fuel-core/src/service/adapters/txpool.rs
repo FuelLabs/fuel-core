@@ -1,13 +1,9 @@
+use crate::service::adapters::BlockImportAdapter;
 use async_trait::async_trait;
 use fuel_core_txpool::ports::BlockImport;
 use fuel_core_types::blockchain::SealedBlock;
 use tokio::sync::broadcast::Receiver;
 
-/// This is used to get block import events from coordinator source
-/// and pass them to the txpool.
-pub struct BlockImportAdapter {
-    rx: Receiver<SealedBlock>,
-}
 impl BlockImportAdapter {
     pub fn new(rx: Receiver<SealedBlock>) -> Self {
         Self { rx }

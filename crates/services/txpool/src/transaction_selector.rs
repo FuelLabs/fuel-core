@@ -44,7 +44,6 @@ pub fn select_transactions(
 
 #[cfg(test)]
 mod tests {
-    use fuel_core_producer as _;
     use fuel_core_txpool as _;
     use fuel_core_types::{
         fuel_asm::Opcode,

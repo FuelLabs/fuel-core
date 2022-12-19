@@ -3,7 +3,6 @@ use crate::{
     ports::BlockImport,
     MockDb,
 };
-use fuel_core_interfaces::txpool::Sender;
 use fuel_core_types::{
     blockchain::SealedBlock,
     entities::coin::Coin,
@@ -19,10 +18,7 @@ use fuel_core_types::{
     },
     services::p2p::GossipsubMessageAcceptance,
 };
-use std::{
-    any::Any,
-    cell::RefCell,
-};
+use std::cell::RefCell;
 
 type GossipedTransaction = GossipData<Transaction>;
 
@@ -185,7 +181,6 @@ impl TestContextBuilder {
         let config = Config::default();
         let mock_db = self.mock_db;
         let status_tx = TxStatusChange::new(100);
-        let (txpool_tx, txpool_rx) = Sender::channel(100);
 
         let p2p = Arc::new(self.p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![])));
         let importer = Box::new(
@@ -199,8 +194,6 @@ impl TestContextBuilder {
             .db(Box::new(mock_db.clone()))
             .importer(importer)
             .tx_status_sender(status_tx)
-            .txpool_sender(txpool_tx)
-            .txpool_receiver(txpool_rx)
             .p2p_port(p2p);
 
         let service = builder.build().unwrap();

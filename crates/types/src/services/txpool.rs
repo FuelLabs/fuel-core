@@ -38,6 +38,8 @@ use std::{
 };
 use tai64::Tai64;
 
+/// The alias for transaction pool result.
+pub type Result<T> = core::result::Result<T, Error>;
 /// Pool transaction wrapped in an Arc for thread-safe sharing
 pub type ArcPoolTx = Arc<PoolTransaction>;
 

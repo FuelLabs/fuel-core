@@ -45,10 +45,7 @@ use fuel_core_types::{
     },
 };
 use parking_lot::Mutex;
-use std::{
-    ops::Deref,
-    sync::Arc,
-};
+use std::ops::Deref;
 use tokio::{
     sync::{
         broadcast,
@@ -82,6 +79,7 @@ impl Service {
 
     pub async fn start<D, T, B>(
         &self,
+        // TODO: Make `txpool_broadcast` a port to `TxPool`
         txpool_broadcast: broadcast::Receiver<TxStatus>,
         txpool: T,
         import_block_events_tx: broadcast::Sender<SealedBlock>,
@@ -446,7 +444,7 @@ mod test {
 
             async fn total_consumable_gas(&self) -> anyhow::Result<u64>;
 
-            async fn remove_txs(&mut self, tx_ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>>;
+            async fn remove_txs(&self, tx_ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>>;
         }
     }
 

@@ -12,10 +12,7 @@ use crate::{
 use anyhow::anyhow;
 use fuel_core_metrics::txpool_metrics::TXPOOL_METRICS;
 use fuel_core_types::{
-    blockchain::{
-        block::Block,
-        SealedBlock,
-    },
+    blockchain::SealedBlock,
     fuel_tx::{
         Chargeable,
         CheckedTransaction,

@@ -2,10 +2,7 @@ use crate::Config;
 use fuel_core_interfaces::block_importer::ImportBlockMpsc;
 use parking_lot::Mutex;
 use tokio::{
-    sync::{
-        broadcast,
-        mpsc,
-    },
+    sync::mpsc,
     task::JoinHandle,
 };
 

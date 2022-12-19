@@ -24,7 +24,6 @@ use async_graphql::{
     Object,
     Subscription,
 };
-use fuel_core_interfaces::txpool::TxPoolMpsc;
 use fuel_core_storage::{
     not_found,
     tables::{
@@ -55,7 +54,6 @@ use std::{
     ops::Deref,
     sync::Arc,
 };
-use tokio::sync::oneshot;
 use tokio_stream::wrappers::BroadcastStream;
 use types::Transaction;
 
@@ -80,13 +78,7 @@ impl TxQuery {
         let id = id.0;
         let txpool = ctx.data_unchecked::<Arc<TxPoolService>>();
 
-        let (response, receiver) = oneshot::channel();
-        let _ = txpool
-            .sender()
-            .send(TxPoolMpsc::FindOne { id, response })
-            .await;
-
-        if let Ok(Some(transaction)) = receiver.await {
+        if let Ok(Some(transaction)) = txpool.find_one(id).await {
             Ok(Some(Transaction(transaction.tx().clone().deref().into())))
         } else {
             Ok(db
@@ -248,7 +240,6 @@ impl TxMutation {
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute();
         let _: Vec<_> = txpool
-            .sender()
             .insert(vec![Arc::new(tx.clone())])
             .await?
             .into_iter()
