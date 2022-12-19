@@ -1,3 +1,4 @@
+use anyhow::Result;
 use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
     blockchain::{
@@ -11,9 +12,23 @@ use fuel_core_types::{
     fuel_tx::{
         Receipt,
         Transaction,
+        TxId,
     },
-    services::executor::UncommittedResult,
+    services::{
+        executor::UncommittedResult,
+        txpool::ArcPoolTx,
+    },
 };
+
+#[async_trait::async_trait]
+pub trait TransactionPool {
+    /// Returns the number of pending transactions in the `TxPool`.
+    async fn pending_number(&self) -> Result<usize>;
+
+    async fn total_consumable_gas(&self) -> Result<u64>;
+
+    async fn remove_txs(&mut self, tx_ids: Vec<TxId>) -> Result<Vec<ArcPoolTx>>;
+}
 
 pub trait BlockDb: Send + Sync {
     fn block_height(&self) -> anyhow::Result<BlockHeight>;

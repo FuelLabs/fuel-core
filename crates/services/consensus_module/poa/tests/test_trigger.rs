@@ -1,14 +1,12 @@
 #![deny(unused_must_use)]
 
 use anyhow::anyhow;
-use fuel_core_interfaces::{
-    block_importer::ImportBlockBroadcast,
-    poa_coordinator::TransactionPool,
-};
+use fuel_core_interfaces::block_importer::ImportBlockBroadcast;
 use fuel_core_poa::{
     ports::{
         BlockDb,
         BlockProducer,
+        TransactionPool,
     },
     Config,
     Service,

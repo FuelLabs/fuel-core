@@ -4,6 +4,7 @@ use crate::{
     database::Database,
     service::{
         adapters::{
+            poa::TxPoolAdapter,
             ExecutorAdapter,
             MaybeRelayerAdapter,
             PoACoordinatorAdapter,
@@ -177,7 +178,9 @@ pub async fn start_modules(
         CoordinatorService::Poa(poa) => {
             poa.start(
                 txpool_builder.tx_status_subscribe(),
-                txpool_builder.sender().clone(),
+                TxPoolAdapter {
+                    sender: txpool_builder.sender().clone(),
+                },
                 block_import_tx,
                 PoACoordinatorAdapter {
                     block_producer: block_producer.clone(),

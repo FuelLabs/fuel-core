@@ -131,27 +131,6 @@ impl Sender {
     }
 }
 
-#[async_trait::async_trait]
-impl super::poa_coordinator::TransactionPool for Sender {
-    async fn pending_number(&self) -> anyhow::Result<usize> {
-        let (response, receiver) = oneshot::channel();
-        self.send(TxPoolMpsc::PendingNumber { response }).await?;
-        receiver.await.map_err(Into::into)
-    }
-
-    async fn total_consumable_gas(&self) -> anyhow::Result<u64> {
-        let (response, receiver) = oneshot::channel();
-        self.send(TxPoolMpsc::ConsumableGas { response }).await?;
-        receiver.await.map_err(Into::into)
-    }
-
-    async fn remove_txs(&mut self, ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>> {
-        let (response, receiver) = oneshot::channel();
-        self.send(TxPoolMpsc::Remove { ids, response }).await?;
-        receiver.await.map_err(Into::into)
-    }
-}
-
 /// RPC commands that can be sent to the TxPool through an MPSC channel.
 /// Responses are returned using `response` oneshot channel.
 #[derive(Debug)]

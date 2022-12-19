@@ -40,6 +40,8 @@ use tokio::{
     task::JoinHandle,
 };
 
+pub mod poa;
+
 pub struct ExecutorAdapter {
     pub database: Database,
     pub config: Config,
