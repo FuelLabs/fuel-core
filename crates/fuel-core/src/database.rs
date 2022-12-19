@@ -13,7 +13,6 @@ use fuel_core_chain_config::{
     MessageConfig,
 };
 use fuel_core_executor::refs::ContractStorageTrait;
-use fuel_core_interfaces::txpool::TxPoolDb;
 use fuel_core_poa::ports::BlockDb;
 use fuel_core_producer::ports::BlockProducerDatabase;
 use fuel_core_storage::{
@@ -61,6 +60,7 @@ type DatabaseResult<T> = Result<T>;
 
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
+use fuel_core_txpool::ports::TxPoolDb;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 #[cfg(feature = "rocksdb")]

@@ -1,10 +1,7 @@
 use crate::Config;
 use fuel_core_interfaces::{
     bft::BftMpsc,
-    block_importer::{
-        ImportBlockBroadcast,
-        ImportBlockMpsc,
-    },
+    block_importer::ImportBlockMpsc,
 };
 use parking_lot::Mutex;
 use tokio::{
@@ -29,11 +26,7 @@ impl Service {
         })
     }
 
-    pub async fn start(
-        &self,
-        _block_importer_sender: mpsc::Sender<ImportBlockMpsc>,
-        _block_importer_broadcast: broadcast::Receiver<ImportBlockBroadcast>,
-    ) {
+    pub async fn start(&self) {
         let mut join = self.join.lock();
         if join.is_none() {
             *join = Some(tokio::spawn(async {}));

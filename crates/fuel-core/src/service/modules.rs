@@ -13,11 +13,11 @@ use crate::{
         Config,
     },
 };
-use fuel_core_interfaces::txpool::{
-    Sender,
-    TxPoolDb,
+use fuel_core_interfaces::txpool::Sender;
+use fuel_core_txpool::{
+    ports::TxPoolDb,
+    service::TxStatusChange,
 };
-use fuel_core_txpool::service::TxStatusChange;
 use futures::future::join_all;
 use std::sync::Arc;
 use tokio::{
@@ -191,8 +191,7 @@ pub async fn start_modules(
             .await;
         }
         CoordinatorService::Bft(bft) => {
-            bft.start(block_importer.sender().clone(), block_importer.subscribe())
-                .await;
+            bft.start().await;
         }
     }
 
