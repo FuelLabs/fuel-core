@@ -1,7 +1,11 @@
 use super::*;
-use crate::MockDb;
+use crate::{
+    ports::BlockImport,
+    MockDb,
+};
 use fuel_core_interfaces::txpool::Sender;
 use fuel_core_types::{
+    blockchain::SealedBlock,
     entities::coin::Coin,
     fuel_crypto::rand::{
         rngs::StdRng,
@@ -25,7 +29,6 @@ type GossipedTransaction = GossipData<Transaction>;
 pub struct TestContext {
     pub(crate) service: Service,
     mock_db: Box<MockDb>,
-    _drop_resources: Vec<Box<dyn Any>>,
     rng: RefCell<StdRng>,
 }
 
@@ -102,10 +105,41 @@ impl MockP2P {
     }
 }
 
+mockall::mock! {
+    pub Importer {}
+
+    #[async_trait::async_trait]
+    impl BlockImport for Importer {
+        fn next_block<'_self, 'a>(&'_self mut self) -> BoxFuture<'a, SealedBlock>
+        where
+            '_self: 'a,
+            Self: Sync + 'a;
+
+    }
+}
+
+impl MockImporter {
+    fn with_blocks(mut blocks: Vec<SealedBlock>) -> Self {
+        let mut importer = MockImporter::default();
+        importer.expect_next_block().returning(move || {
+            let block = blocks.pop();
+            Box::pin(async move {
+                if let Some(block) = block {
+                    block
+                } else {
+                    core::future::pending::<SealedBlock>().await
+                }
+            })
+        });
+        importer
+    }
+}
+
 pub struct TestContextBuilder {
     mock_db: MockDb,
     rng: StdRng,
     p2p: Option<MockP2P>,
+    importer: Option<MockImporter>,
 }
 
 impl Default for TestContextBuilder {
@@ -120,7 +154,12 @@ impl TestContextBuilder {
             mock_db: MockDb::default(),
             rng: StdRng::seed_from_u64(10),
             p2p: None,
+            importer: None,
         }
+    }
+
+    pub fn with_importer(&mut self, importer: MockImporter) {
+        self.importer = Some(importer)
     }
 
     pub fn with_p2p(&mut self, p2p: MockP2P) {
@@ -143,17 +182,20 @@ impl TestContextBuilder {
         let rng = RefCell::new(self.rng);
         let config = Config::default();
         let mock_db = self.mock_db;
-        let (block_tx, block_rx) = broadcast::channel(10);
         let status_tx = TxStatusChange::new(100);
         let (txpool_tx, txpool_rx) = Sender::channel(100);
 
-        let p2p = Arc::new(self.p2p.unwrap_or_else(MockP2P::default));
+        let p2p = Arc::new(self.p2p.unwrap_or_else(|| MockP2P::with_txs(vec![])));
+        let importer = Box::new(
+            self.importer
+                .unwrap_or_else(|| MockImporter::with_blocks(vec![])),
+        );
 
         let mut builder = ServiceBuilder::new();
         builder
             .config(config)
             .db(Box::new(mock_db.clone()))
-            .importer(block_rx)
+            .importer(importer)
             .tx_status_sender(status_tx)
             .txpool_sender(txpool_tx)
             .txpool_receiver(txpool_rx)
@@ -162,13 +204,9 @@ impl TestContextBuilder {
         let service = builder.build().unwrap();
         service.start().await.unwrap();
 
-        // resources to keep alive for the during of the test context
-        let drop_resources: Vec<Box<dyn Any>> = vec![Box::new(block_tx)];
-
         TestContext {
             service,
             mock_db: Box::new(mock_db),
-            _drop_resources: drop_resources,
             rng,
         }
     }
