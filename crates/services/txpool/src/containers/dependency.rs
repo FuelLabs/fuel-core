@@ -1,9 +1,9 @@
 use crate::{
+    ports::TxPoolDb,
     types::*,
     Error,
 };
 use anyhow::anyhow;
-use fuel_core_interfaces::txpool::TxPoolDb;
 use fuel_core_types::{
     entities::coin::{
         Coin,

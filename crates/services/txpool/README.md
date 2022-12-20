@@ -19,7 +19,7 @@ All Tx should be wrapped inside Arc so that we can easily move them if there is 
 
 TxPool should be periodically flush to disk so that we can recover transactions is case of client restart. Omitted for first version.
 
-TxPoolDb trait is interface that TxPool is going to implement and can be found [here](../../fuel-core-interfaces/src/txpool.rs)
+TxPoolDb trait is interface that TxPool is going to implement and can be found [here](src/ports.rs)
 
 ## Design
 

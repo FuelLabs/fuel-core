@@ -14,7 +14,6 @@ description = "Transaction pool"
 anyhow = "1.0"
 async-trait = "0.1"
 fuel-core-chain-config = { path = "../../chain-config", version = "0.15.1" }
-fuel-core-interfaces = { path = "../../fuel-core-interfaces", version = "0.15.1" }
 fuel-core-metrics = { path = "../../metrics", version = "0.15.1" }
 fuel-core-storage = { path = "../../storage", version = "0.15.1", optional = true }
 fuel-core-types = { path = "../../types", version = "0.15.1" }
@@ -23,7 +22,9 @@ tracing = "0.1"
 
 [dev-dependencies]
 fuel-core-txpool = { path = "", features = ["test-helpers"] }
+itertools = "0.10"
 mockall = "0.11"
+rstest = "0.15"
 
 [features]
 test-helpers = [

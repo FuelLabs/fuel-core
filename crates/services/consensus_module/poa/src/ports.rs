@@ -16,7 +16,10 @@ use fuel_core_types::{
     },
     services::{
         executor::UncommittedResult,
-        txpool::ArcPoolTx,
+        txpool::{
+            ArcPoolTx,
+            TxStatus,
+        },
     },
 };
 
@@ -27,7 +30,9 @@ pub trait TransactionPool {
 
     async fn total_consumable_gas(&self) -> Result<u64>;
 
-    async fn remove_txs(&mut self, tx_ids: Vec<TxId>) -> Result<Vec<ArcPoolTx>>;
+    async fn remove_txs(&self, tx_ids: Vec<TxId>) -> Result<Vec<ArcPoolTx>>;
+
+    async fn next_transaction_status_update(&mut self) -> TxStatus;
 }
 
 pub trait BlockDb: Send + Sync {

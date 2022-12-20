@@ -13,7 +13,6 @@ use fuel_core_chain_config::{
     MessageConfig,
 };
 use fuel_core_executor::refs::ContractStorageTrait;
-use fuel_core_interfaces::txpool::TxPoolDb;
 use fuel_core_poa::ports::BlockDb;
 use fuel_core_producer::ports::BlockProducerDatabase;
 use fuel_core_storage::{
@@ -61,6 +60,7 @@ type DatabaseResult<T> = Result<T>;
 
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
+use fuel_core_txpool::ports::TxPoolDb;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 #[cfg(feature = "rocksdb")]
@@ -95,33 +95,33 @@ pub mod vm_database;
 pub enum Column {
     /// The column id of metadata about the blockchain
     Metadata = 0,
-    /// See [`ContractsRawCode`](fuel_core_interfaces::db::ContractsRawCode)
+    /// See [`ContractsRawCode`](fuel_core_storage::tables::ContractsRawCode)
     ContractsRawCode = 1,
-    /// See [`ContractsRawCode`](fuel_core_interfaces::db::ContractsRawCode)
+    /// See [`ContractsInfo`](fuel_core_storage::tables::ContractsInfo)
     ContractsInfo = 2,
-    /// See [`ContractsState`](fuel_core_interfaces::db::ContractsState)
+    /// See [`ContractsState`](fuel_core_storage::tables::ContractsState)
     ContractsState = 3,
-    /// See [`ContractsLatestUtxo`](fuel_core_interfaces::db::ContractsLatestUtxo)
+    /// See [`ContractsLatestUtxo`](fuel_core_storage::tables::ContractsLatestUtxo)
     ContractsLatestUtxo = 4,
-    /// See [`ContractsAssets`](fuel_vm::storage::ContractsAssets)
+    /// See [`ContractsAssets`](fuel_core_storage::tables::ContractsAssets)
     ContractsAssets = 5,
-    /// See [`Coins`](fuel_core_interfaces::db::Coins)
+    /// See [`Coins`](fuel_core_storage::tables::Coins)
     Coins = 6,
     /// The column of the table that stores `true` if `owner` owns `Coin` with `coin_id`
     OwnedCoins = 7,
-    /// See [`Transactions`](fuel_core_interfaces::db::Transactions)
+    /// See [`Transactions`](fuel_core_storage::tables::Transactions)
     Transactions = 8,
     /// Transaction id to current status
     TransactionStatus = 9,
     /// The column of the table of all `owner`'s transactions
     TransactionsByOwnerBlockIdx = 10,
-    /// See [`Receipts`](fuel_core_interfaces::db::Receipts)
+    /// See [`Receipts`](fuel_core_storage::tables::Receipts)
     Receipts = 11,
-    /// See [`FuelBlocks`](fuel_core_interfaces::db::FuelBlocks)
+    /// See [`FuelBlocks`](fuel_core_storage::tables::FuelBlocks)
     FuelBlocks = 12,
     /// Maps fuel block id to fuel block hash
     FuelBlockIds = 13,
-    /// See [`Messages`](fuel_core_interfaces::db::Messages)
+    /// See [`Messages`](fuel_core_storage::tables::Messages)
     Messages = 14,
     /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
     OwnedMessageIds = 15,

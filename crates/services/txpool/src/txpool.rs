@@ -3,16 +3,16 @@ use crate::{
         dependency::Dependency,
         price_sort::PriceSort,
     },
+    ports::TxPoolDb,
     service::TxStatusChange,
     types::*,
     Config,
     Error,
 };
 use anyhow::anyhow;
-use fuel_core_interfaces::txpool::TxPoolDb;
 use fuel_core_metrics::txpool_metrics::TXPOOL_METRICS;
 use fuel_core_types::{
-    blockchain::block::Block,
+    blockchain::SealedBlock,
     fuel_tx::{
         Chargeable,
         CheckedTransaction,
@@ -330,13 +330,12 @@ impl TxPool {
     pub async fn block_update(
         txpool: &RwLock<Self>,
         tx_status_sender: &TxStatusChange,
-        block: Arc<Block>,
+        block: SealedBlock,
         // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
         let mut guard = txpool.write().await;
-        // TODO https://github.com/FuelLabs/fuel-core/issues/465
 
-        for tx in block.transactions() {
+        for tx in block.entity.transactions() {
             tx_status_sender.send_complete(tx.id());
             let _removed = guard.remove_by_tx_id(&tx.id());
         }

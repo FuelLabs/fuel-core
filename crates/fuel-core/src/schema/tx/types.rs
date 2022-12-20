@@ -26,7 +26,6 @@ use async_graphql::{
     Object,
     Union,
 };
-use fuel_core_interfaces::txpool::TxPoolMpsc;
 use fuel_core_storage::{
     not_found,
     tables::{
@@ -64,7 +63,6 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use std::sync::Arc;
-use tokio::sync::oneshot;
 
 pub struct ProgramState {
     return_type: ReturnType,
@@ -505,20 +503,13 @@ pub(super) async fn get_tx_status(
 ) -> async_graphql::Result<Option<TransactionStatus>> {
     match db.get_tx_status(&id)? {
         Some(status) => Ok(Some(status.into())),
-        None => {
-            let (response, receiver) = oneshot::channel();
-            let _ = txpool
-                .sender()
-                .send(TxPoolMpsc::FindOne { id, response })
-                .await;
-            match receiver.await {
-                Ok(Some(transaction_in_pool)) => {
-                    let time = transaction_in_pool.submitted_time();
-                    Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
-                }
-                _ => Ok(None),
+        None => match txpool.find_one(id).await {
+            Ok(Some(transaction_in_pool)) => {
+                let time = transaction_in_pool.submitted_time();
+                Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
             }
-        }
+            _ => Ok(None),
+        },
     }
 }
 

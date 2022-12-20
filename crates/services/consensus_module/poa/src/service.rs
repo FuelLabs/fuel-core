@@ -15,7 +15,6 @@ use anyhow::{
     anyhow,
     Context,
 };
-use fuel_core_interfaces::block_importer::ImportBlockBroadcast;
 use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
     blockchain::{
@@ -28,6 +27,7 @@ use fuel_core_types::{
             BlockHeight,
             SecretKeyWrapper,
         },
+        SealedBlock,
     },
     fuel_asm::Word,
     fuel_crypto::Signature,
@@ -45,10 +45,7 @@ use fuel_core_types::{
     },
 };
 use parking_lot::Mutex;
-use std::{
-    ops::Deref,
-    sync::Arc,
-};
+use std::ops::Deref;
 use tokio::{
     sync::{
         broadcast,
@@ -82,9 +79,8 @@ impl Service {
 
     pub async fn start<D, T, B>(
         &self,
-        txpool_broadcast: broadcast::Receiver<TxStatus>,
         txpool: T,
-        import_block_events_tx: broadcast::Sender<ImportBlockBroadcast>,
+        import_block_events_tx: broadcast::Sender<SealedBlock>,
         block_producer: B,
         db: D,
     ) where
@@ -107,7 +103,6 @@ impl Service {
             signing_key: self.config.signing_key.clone(),
             db,
             block_producer,
-            txpool_broadcast,
             txpool,
             last_block_created: Instant::now(),
             import_block_events_tx,
@@ -146,8 +141,7 @@ where
     db: D,
     block_producer: B,
     txpool: T,
-    txpool_broadcast: broadcast::Receiver<TxStatus>,
-    import_block_events_tx: broadcast::Sender<ImportBlockBroadcast>,
+    import_block_events_tx: broadcast::Sender<SealedBlock>,
     /// Last block creation time. When starting up, this is initialized
     /// to `Instant::now()`, which delays the first block on startup for
     /// a bit, but doesn't cause any other issues.
@@ -195,7 +189,7 @@ where
         ) = self.signal_produce_block().await?.into();
 
         // sign the block and seal it
-        seal_block(&self.signing_key, &block, db_transaction.as_mut())?;
+        let seal = seal_block(&self.signing_key, &block, db_transaction.as_mut())?;
         db_transaction.commit()?;
 
         let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
@@ -216,10 +210,12 @@ where
 
         // Send the block back to the txpool
         // TODO: this probably must be done differently with multi-node configuration
+        let sealed_block = SealedBlock {
+            entity: block,
+            consensus: seal,
+        };
         self.import_block_events_tx
-            .send(ImportBlockBroadcast::PendingFuelBlockImported {
-                block: Arc::new(block),
-            })
+            .send(sealed_block)
             .expect("Failed to import the generated block");
 
         // Update last block time
@@ -339,8 +335,8 @@ where
             //       for each tx after they've already been included into a block.
             //       The poa service also doesn't care about events unrelated to new tx submissions,
             //       and shouldn't be awoken when txs are completed or squeezed out of the pool.
-            txpool_event = self.txpool_broadcast.recv() => {
-                self.on_txpool_event(&txpool_event.context("Broadcast receive error")?).await.context("While processing txpool event")?;
+            txpool_event = self.txpool.next_transaction_status_update() => {
+                self.on_txpool_event(&txpool_event).await.context("While processing txpool event")?;
                 Ok(true)
             }
             at = self.timer.wait() => {
@@ -388,7 +384,7 @@ pub fn seal_block(
     signing_key: &Option<Secret<SecretKeyWrapper>>,
     block: &Block,
     database: &mut dyn BlockDb,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Consensus> {
     if let Some(key) = signing_key {
         let block_hash = block.id();
         let message = block_hash.into_message();
@@ -398,7 +394,8 @@ pub fn seal_block(
 
         let poa_signature = Signature::sign(signing_key, &message);
         let seal = Consensus::PoA(PoAConsensus::new(poa_signature));
-        database.seal_block(block_hash, seal)
+        database.seal_block(block_hash, seal.clone())?;
+        Ok(seal)
     } else {
         Err(anyhow!("no PoA signing key configured"))
     }
@@ -443,7 +440,7 @@ mod test {
 
             async fn total_consumable_gas(&self) -> anyhow::Result<u64>;
 
-            async fn remove_txs(&mut self, tx_ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>>;
+            async fn remove_txs(&self, tx_ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>>;
         }
     }
 

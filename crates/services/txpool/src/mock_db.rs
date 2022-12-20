@@ -1,4 +1,4 @@
-use fuel_core_interfaces::txpool::TxPoolDb;
+use crate::ports::TxPoolDb;
 use fuel_core_storage::{
     tables::{
         Coins,

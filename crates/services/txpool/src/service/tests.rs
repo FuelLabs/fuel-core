@@ -1,11 +1,12 @@
 use super::*;
-use crate::service::test_helpers::TestContext;
-use fuel_core_interfaces::txpool::TxPoolMpsc;
+use crate::service::test_helpers::{
+    TestContext,
+    TestContextBuilder,
+};
 use fuel_core_types::{
     fuel_tx::UniqueIdentifier,
     services::txpool::Error as TxpoolError,
 };
-use tokio::sync::oneshot;
 
 #[tokio::test]
 async fn test_start_stop() {
@@ -33,29 +34,19 @@ async fn test_filter_by_negative() {
 
     let service = ctx.service();
 
-    let (response, receiver) = oneshot::channel();
-    let _ = service
-        .sender()
-        .send(TxPoolMpsc::Insert {
-            txs: vec![tx1.clone(), tx2.clone()],
-            response,
-        })
-        .await;
-    let out = receiver.await.unwrap();
+    let out = service
+        .insert(vec![tx1.clone(), tx2.clone()])
+        .await
+        .unwrap();
 
     assert_eq!(out.len(), 2, "Should be len 2:{:?}", out);
     assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
     assert!(out[1].is_ok(), "Tx2 should be OK, got err:{:?}", out);
 
-    let (response, receiver) = oneshot::channel();
-    let _ = service
-        .sender()
-        .send(TxPoolMpsc::FilterByNegative {
-            ids: vec![tx1.id(), tx2.id(), tx3.id()],
-            response,
-        })
-        .await;
-    let out = receiver.await.unwrap();
+    let out = service
+        .filter_by_negative(vec![tx1.id(), tx2.id(), tx3.id()])
+        .await
+        .unwrap();
 
     assert_eq!(out.len(), 1, "Should be len 1:{:?}", out);
     assert_eq!(out[0], tx3.id(), "Found tx id match{:?}", out);
@@ -72,28 +63,15 @@ async fn test_find() {
 
     let service = ctx.service();
 
-    let (response, receiver) = oneshot::channel();
-    let _ = service
-        .sender()
-        .send(TxPoolMpsc::Insert {
-            txs: vec![tx1.clone(), tx2.clone()],
-            response,
-        })
-        .await;
-    let out = receiver.await.unwrap();
+    let out = service
+        .insert(vec![tx1.clone(), tx2.clone()])
+        .await
+        .unwrap();
 
     assert_eq!(out.len(), 2, "Should be len 2:{:?}", out);
     assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
     assert!(out[1].is_ok(), "Tx2 should be OK, got err:{:?}", out);
-    let (response, receiver) = oneshot::channel();
-    let _ = service
-        .sender()
-        .send(TxPoolMpsc::Find {
-            ids: vec![tx1.id(), tx3.id()],
-            response,
-        })
-        .await;
-    let out = receiver.await.unwrap();
+    let out = service.find(vec![tx1.id(), tx3.id()]).await.unwrap();
     assert_eq!(out.len(), 2, "Should be len 2:{:?}", out);
     assert!(out[0].is_some(), "Tx1 should be some:{:?}", out);
     let id = out[0].as_ref().unwrap().id();
@@ -104,7 +82,7 @@ async fn test_find() {
 
 #[tokio::test]
 async fn simple_insert_removal_subscription() {
-    let ctx = TestContext::new().await;
+    let ctx = TestContextBuilder::new().build().await;
 
     let tx1 = Arc::new(ctx.setup_script_tx(10));
     let tx2 = Arc::new(ctx.setup_script_tx(20));
@@ -113,15 +91,10 @@ async fn simple_insert_removal_subscription() {
     let mut subscribe_status = service.tx_status_subscribe();
     let mut subscribe_update = service.tx_update_subscribe();
 
-    let (response, receiver) = oneshot::channel();
-    let _ = service
-        .sender()
-        .send(TxPoolMpsc::Insert {
-            txs: vec![tx1.clone(), tx2.clone()],
-            response,
-        })
-        .await;
-    let out = receiver.await.unwrap();
+    let out = service
+        .insert(vec![tx1.clone(), tx2.clone()])
+        .await
+        .unwrap();
 
     if let Ok(tx) = &out[0] {
         assert_eq!(
@@ -156,15 +129,7 @@ async fn simple_insert_removal_subscription() {
     }
 
     // remove them
-    let (response, receiver) = oneshot::channel();
-    let _ = service
-        .sender()
-        .send(TxPoolMpsc::Remove {
-            ids: vec![tx1.id(), tx2.id()],
-            response,
-        })
-        .await;
-    let rem = receiver.await.unwrap();
+    let rem = service.remove(vec![tx1.id(), tx2.id()]).await.unwrap();
 
     assert_eq!(
         tokio::time::timeout(std::time::Duration::from_secs(2), subscribe_status.recv())

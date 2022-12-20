@@ -1,5 +1,4 @@
 use crate::Config;
-use fuel_core_interfaces::block_importer::ImportBlockMpsc;
 use fuel_core_types::services::p2p::BlockGossipData;
 use parking_lot::Mutex;
 use tokio::{
@@ -40,7 +39,7 @@ impl Service {
         _p2p_block: mpsc::Receiver<BlockGossipData>,
         // TODO: re-introduce this when sync actually depends on the coordinator
         // _bft: mpsc::Sender<BftMpsc>,
-        _block_importer: mpsc::Sender<ImportBlockMpsc>,
+        _block_importer: mpsc::Sender<()>,
     ) {
         let mut join = self.join.lock();
         if join.is_none() {
