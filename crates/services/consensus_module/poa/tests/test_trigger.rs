@@ -369,6 +369,10 @@ fn test_signing_key() -> Secret<SecretKeyWrapper> {
 
 #[async_trait::async_trait]
 impl TransactionPool for MockTxPoolSender {
+    async fn next_transaction_status_update(&mut self) -> TxStatus {
+        todo!()
+    }
+
     async fn pending_number(&self) -> anyhow::Result<usize> {
         let (tx, rx) = oneshot::channel();
         self.0
@@ -424,12 +428,11 @@ async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
             metrics: false,
         });
 
-        let (txpool, broadcast_rx) = MockTxPool::spawn();
+        let (txpool, _broadcast_rx) = MockTxPool::spawn();
 
         service
             .start(
-                broadcast_rx,
-                txpool.sender(),
+                txpool.sender.clone(),
                 txpool.import_block_tx.clone(),
                 MockBlockProducer::new(txpool.sender(), db.clone()),
                 db,
@@ -500,11 +503,10 @@ async fn never_trigger_never_produces_blocks() -> anyhow::Result<()> {
         metrics: false,
     });
 
-    let (mut txpool, broadcast_rx) = MockTxPool::spawn();
+    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
     service
         .start(
-            broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
             producer,
@@ -546,11 +548,10 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
         metrics: false,
     });
 
-    let (mut txpool, broadcast_rx) = MockTxPool::spawn();
+    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
     service
         .start(
-            broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
             producer,
@@ -609,11 +610,10 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
         metrics: false,
     });
 
-    let (mut txpool, broadcast_rx) = MockTxPool::spawn();
+    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
     service
         .start(
-            broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
             producer,
@@ -704,11 +704,10 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
         metrics: false,
     });
 
-    let (mut txpool, broadcast_rx) = MockTxPool::spawn();
+    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
     service
         .start(
-            broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
             producer,
@@ -763,11 +762,10 @@ async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
         metrics: false,
     });
 
-    let (mut txpool, broadcast_rx) = MockTxPool::spawn();
+    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
     service
         .start(
-            broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
             producer,
@@ -845,11 +843,10 @@ async fn hybrid_trigger_reacts_correctly_to_full_txpool() -> anyhow::Result<()> 
         metrics: false,
     });
 
-    let (mut txpool, broadcast_rx) = MockTxPool::spawn();
+    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
     service
         .start(
-            broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
             producer,
