@@ -92,7 +92,7 @@ enum OrchestratorRequest {
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
     RespondWithRequestedBlock((Option<Arc<SealedBlock>>, RequestId)),
-    // Request to subscribe to the streams of data from p2p network
+    // Request to subscribe to the stream of data from p2p network
     SubscribeTransactions(oneshot::Sender<Option<TransactionGossipData>>),
     // Request to Stop the Network Orchestrator / Service
     Stop,
