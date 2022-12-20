@@ -596,6 +596,17 @@ impl FuelClient {
         Ok(blocks)
     }
 
+    pub async fn blocks_with_transactions(
+        &self,
+        request: PaginationRequest<String>,
+    ) -> io::Result<PaginatedResult<schema::block::BlockWithTransactions, String>> {
+        let query = schema::block::BlocksWithTransactionsQuery::build(request.into());
+
+        let blocks = self.query(query).await?.blocks.into();
+
+        Ok(blocks)
+    }
+
     pub async fn coin(&self, id: &str) -> io::Result<Option<Coin>> {
         let query = schema::coin::CoinByIdQuery::build(CoinByIdArgs {
             utxo_id: id.parse()?,

@@ -13,7 +13,10 @@ use crate::client::{
 use fuel_core_types::fuel_crypto;
 
 use super::{
-    tx::TransactionIdFragment,
+    tx::{
+        OpaqueTransaction,
+        TransactionIdFragment,
+    },
     Bytes32,
 };
 
@@ -86,12 +89,59 @@ pub struct BlockEdge {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    variables = "BlahConnectionArgs"
+)]
+pub struct BlocksWithTransactionsQuery {
+    #[arguments(after: $after, before: $before, first: $first, last: $last)]
+    pub blocks: BlockWithTransactionsConnection,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct BlockWithTransactionsConnection {
+    pub edges: Vec<BlockWithTransactionsEdge>,
+    pub page_info: PageInfo,
+}
+
+impl From<BlockWithTransactionsConnection>
+    for PaginatedResult<BlockWithTransactions, String>
+{
+    fn from(conn: BlockWithTransactionsConnection) -> Self {
+        PaginatedResult {
+            cursor: conn.page_info.end_cursor,
+            has_next_page: conn.page_info.has_next_page,
+            has_previous_page: conn.page_info.has_previous_page,
+            results: conn.edges.into_iter().map(|e| e.node).collect(),
+        }
+    }
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct BlockWithTransactionsEdge {
+    pub cursor: String,
+    pub node: BlockWithTransactions,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Block {
     pub id: BlockId,
     pub header: Header,
     pub consensus: Consensus,
     pub transactions: Vec<TransactionIdFragment>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct BlockWithTransactions {
+    pub id: BlockId,
+    pub header: Header,
+    pub consensus: Consensus,
+    pub transactions: Vec<OpaqueTransaction>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
