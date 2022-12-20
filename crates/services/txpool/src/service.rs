@@ -46,7 +46,7 @@ type PeerToPeerForTx = Arc<dyn PeerToPeer<GossipedTransaction = TransactionGossi
 
 pub struct ServiceBuilder {
     config: Config,
-    db: Option<Box<dyn TxPoolDb>>,
+    db: Option<Arc<dyn TxPoolDb>>,
     tx_status_sender: Option<TxStatusChange>,
     importer: Option<Box<dyn BlockImport>>,
     p2p_port: Option<PeerToPeerForTx>,
@@ -122,7 +122,7 @@ impl ServiceBuilder {
             .subscribe()
     }
 
-    pub fn db(&mut self, db: Box<dyn TxPoolDb>) -> &mut Self {
+    pub fn db(&mut self, db: Arc<dyn TxPoolDb>) -> &mut Self {
         self.db = Some(db);
         self
     }
@@ -163,7 +163,7 @@ impl ServiceBuilder {
             self.tx_status_sender.clone().unwrap(),
             Context {
                 config: self.config,
-                db: Arc::new(self.db.unwrap()),
+                db: self.db.unwrap(),
                 txpool_receiver: receiver,
                 tx_status_sender: self.tx_status_sender.unwrap(),
                 importer: self.importer.unwrap(),
@@ -176,7 +176,7 @@ impl ServiceBuilder {
 
 pub struct Context {
     pub config: Config,
-    pub db: Arc<Box<dyn TxPoolDb>>,
+    pub db: Arc<dyn TxPoolDb>,
     pub txpool_receiver: mpsc::Receiver<TxPoolMpsc>,
     pub tx_status_sender: TxStatusChange,
     pub importer: Box<dyn BlockImport>,
@@ -198,7 +198,7 @@ impl Context {
                         let txpool = txpool.as_ref();
                         if let GossipData { data: Some(tx), .. } = new_transaction {
                             let txs = vec!(Arc::new(tx));
-                            TxPool::insert(txpool, db.as_ref().as_ref(), &tx_status_sender, &txs).await;
+                            TxPool::insert(txpool, db.as_ref(), &tx_status_sender, &txs).await;
                         }
                     });
                 }
@@ -227,7 +227,7 @@ impl Context {
                             let _ = response.send(TxPool::includable(txpool).await);
                         }
                         TxPoolMpsc::Insert { txs, response } => {
-                            let insert = TxPool::insert(txpool, db.as_ref().as_ref(), &tx_status_sender, &txs).await;
+                            let insert = TxPool::insert(txpool, db.as_ref(), &tx_status_sender, &txs).await;
                             for (ret, tx) in insert.iter().zip(txs.into_iter()) {
                                 match ret {
                                     Ok(_) => {

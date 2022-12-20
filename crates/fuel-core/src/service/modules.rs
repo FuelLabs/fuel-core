@@ -139,7 +139,7 @@ pub async fn start_modules(
     let mut txpool_builder = fuel_core_txpool::ServiceBuilder::new();
     txpool_builder
         .config(config.txpool.clone())
-        .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
+        .db(Arc::new(database.clone()) as Arc<dyn TxPoolDb>)
         .p2p_port(p2p_adapter.clone())
         .importer(Box::new(BlockImportAdapter::new(block_import_rx)))
         .tx_status_sender(tx_status_sender.clone());
