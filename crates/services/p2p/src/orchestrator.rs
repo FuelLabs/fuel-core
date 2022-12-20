@@ -1,6 +1,11 @@
 use anyhow::anyhow;
 use fuel_core_types::{
-    blockchain::SealedBlock,
+    blockchain::{
+        block::Block,
+        consensus::ConsensusVote,
+        primitives::BlockHeight,
+        SealedBlock,
+    },
     fuel_tx::Transaction,
     services::p2p::{
         GossipData,
@@ -54,6 +59,7 @@ use crate::{
     request_response::messages::{
         OutboundResponse,
         RequestMessage,
+        ResponseChannelItem,
     },
     service::{
         FuelP2PEvent,
@@ -73,18 +79,23 @@ struct NetworkOrchestrator {
     transactions: VecDeque<TransactionGossipData>,
 }
 
+type BroadcastResponse = Result<MessageId, PublishError>;
+
 enum OrchestratorRequest {
-    Stop,
+    // Broadcast requests to p2p network
+    BroadcastTransaction((Arc<Transaction>, oneshot::Sender<BroadcastResponse>)),
+    BroadcastBlock((Arc<Block>, oneshot::Sender<BroadcastResponse>)),
+    BroadcastVote((Arc<ConsensusVote>, oneshot::Sender<BroadcastResponse>)),
+    // Request to get one-off data from p2p network
     GetPeersIds(oneshot::Sender<Vec<PeerId>>),
-    BroadcastTransaction(
-        (
-            Arc<Transaction>,
-            oneshot::Sender<Result<MessageId, PublishError>>,
-        ),
-    ),
-    GossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
-    NextTransaction(oneshot::Sender<Option<TransactionGossipData>>),
+    GetBlock((BlockHeight, oneshot::Sender<SealedBlock>)),
+    // Responds back to the p2p network
+    RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
     RespondWithRequestedBlock((Option<Arc<SealedBlock>>, RequestId)),
+    // Request to subscribe to the streams of data from p2p network
+    SubscribeTransactions(oneshot::Sender<Option<TransactionGossipData>>),
+    // Request to Stop the Network Orchestrator / Service
+    Stop,
 }
 
 impl Debug for OrchestratorRequest {
@@ -124,23 +135,36 @@ impl NetworkOrchestrator {
             tokio::select! {
                 next_service_request = self.rx_orchestrator_request.recv() => {
                     match next_service_request {
-                        Some(OrchestratorRequest::Stop) => break,
-                        Some(OrchestratorRequest::GetPeersIds(channel)) => {
-                            let _ = channel.send(p2p_service.get_peers_ids());
-                        }
                         Some(OrchestratorRequest::BroadcastTransaction((transaction, sender))) => {
                             let broadcast = GossipsubBroadcastRequest::NewTx(transaction);
                             let _ = sender.send(p2p_service.publish_message(broadcast));
                         }
+                        Some(OrchestratorRequest::BroadcastBlock((block, sender))) => {
+                            let broadcast = GossipsubBroadcastRequest::NewBlock(block);
+                            let _ = sender.send(p2p_service.publish_message(broadcast));
+                        }
+                        Some(OrchestratorRequest::BroadcastVote((vote, sender))) => {
+                            let broadcast = GossipsubBroadcastRequest::ConsensusVote(vote);
+                            let _ = sender.send(p2p_service.publish_message(broadcast));
+                        }
+                        Some(OrchestratorRequest::GetPeersIds(channel)) => {
+                            let _ = channel.send(p2p_service.get_peers_ids());
+                        }
+                        Some(OrchestratorRequest::GetBlock((height, response))) => {
+                            let request_msg = RequestMessage::RequestBlock(height);
+                            let channel_item = ResponseChannelItem::ResponseBlock(response);
+                            let _ = p2p_service.send_request_msg(None, request_msg, channel_item);
+                        }
+                        Some(OrchestratorRequest::RespondWithGossipsubMessageReport((message, acceptance))) => {
+                            report_message(message, acceptance, &mut p2p_service);
+                        }
                         Some(OrchestratorRequest::RespondWithRequestedBlock((response, request_id))) => {
                             let _ = p2p_service.send_response_msg(request_id, response.map(OutboundResponse::ResponseBlock));
                         }
-                        Some(OrchestratorRequest::NextTransaction(sender)) => {
+                        Some(OrchestratorRequest::SubscribeTransactions(sender)) => {
                             let _ = sender.send(self.transactions.pop_front());
                         }
-                        Some(OrchestratorRequest::GossipsubMessageReport((message, acceptance))) => {
-                            report_message(message, acceptance, &mut p2p_service);
-                        }
+                        Some(OrchestratorRequest::Stop) => break,
                         None => {}
                     }
                 }
@@ -150,15 +174,17 @@ impl NetworkOrchestrator {
                             let message_id = message_id.0;
 
                             match message {
-                                GossipsubMessage::NewTx(tx) => {
-                                    let next_tx = GossipData::new(tx, peer_id, message_id);
-                                    self.transactions.push_back(next_tx);
+                                GossipsubMessage::NewTx(transaction) => {
+                                    let next_transaction = GossipData::new(transaction, peer_id, message_id);
+                                    self.transactions.push_back(next_transaction);
                                 },
                                 GossipsubMessage::NewBlock(block) => {
-                                    //let _ = self.tx_block.send(GossipData::new(BlockBroadcast::NewBlock(block), peer_id, message_id));
+                                    // todo: add logic to gossip newly received blocks
+                                    let _new_block = GossipData::new(block, peer_id, message_id);
                                 },
                                 GossipsubMessage::ConsensusVote(vote) => {
-                                    //let _ = self.tx_consensus.send(GossipData::new(ConsensusBroadcast::NewVote(vote), peer_id, message_id));
+                                    // todo: add logic to gossip newly received votes
+                                    let _new_vote = GossipData::new(vote, peer_id, message_id);
                                 },
                             }
                         },
@@ -178,32 +204,6 @@ impl NetworkOrchestrator {
                         _ => {}
                     }
                 },
-                // module_request_msg = self.rx_p2p_request.recv() => {
-                //     if let Some(request_event) = module_request_msg {
-                //         match request_event {
-                //             P2pRequestEvent::RequestBlock { height, response } => {
-                //                 let request_msg = RequestMessage::RequestBlock(height);
-                //                 let channel_item = ResponseChannelItem::ResponseBlock(response);
-                //                 let _ = p2p_service.send_request_msg(None, request_msg, channel_item);
-                //             },
-                //             P2pRequestEvent::BroadcastNewBlock { block } => {
-                //                 let broadcast = GossipsubBroadcastRequest::NewBlock(block);
-                //                 let _ = p2p_service.publish_message(broadcast);
-                //             },
-                //             P2pRequestEvent::BroadcastNewTransaction { transaction } => {
-                //                 let broadcast = GossipsubBroadcastRequest::NewTx(transaction);
-                //                 let _ = p2p_service.publish_message(broadcast);
-                //             },
-                //             P2pRequestEvent::BroadcastConsensusVote { vote } => {
-                //                 let broadcast = GossipsubBroadcastRequest::ConsensusVote(vote);
-                //                 let _ = p2p_service.publish_message(broadcast);
-                //             },
-                //             P2pRequestEvent::Stop => break,
-                //         }
-                //     } else {
-                //         warn!(target: "fuel-libp2p", "Failed to receive P2PRequestEvent");
-                //     }
-                // }
             }
         }
 
@@ -285,7 +285,7 @@ impl Service {
 
         let _ = self
             .tx_orchestrator_request
-            .send(OrchestratorRequest::GossipsubMessageReport((
+            .send(OrchestratorRequest::RespondWithGossipsubMessageReport((
                 msg_info, acceptance,
             )))
             .await;
@@ -298,7 +298,7 @@ impl Service {
             let (sender, receiver) = oneshot::channel();
 
             self.tx_orchestrator_request
-                .send(OrchestratorRequest::NextTransaction(sender))
+                .send(OrchestratorRequest::SubscribeTransactions(sender))
                 .await?;
 
             match receiver.await? {
@@ -307,6 +307,37 @@ impl Service {
                 None => tokio::task::yield_now().await,
             }
         }
+    }
+
+    pub async fn get_block(&self, height: BlockHeight) -> anyhow::Result<SealedBlock> {
+        let (sender, receiver) = oneshot::channel();
+
+        let _ = self
+            .tx_orchestrator_request
+            .send(OrchestratorRequest::GetBlock((height, sender)))
+            .await?;
+
+        receiver.await.map_err(|e| anyhow!("{}", e))
+    }
+
+    pub async fn broadcast_vote(&self, vote: Arc<ConsensusVote>) -> anyhow::Result<()> {
+        let (sender, receiver) = oneshot::channel();
+
+        self.tx_orchestrator_request
+            .send(OrchestratorRequest::BroadcastVote((vote, sender)))
+            .await?;
+
+        receiver.await?.map(|_| ()).map_err(|e| anyhow!("{}", e))
+    }
+
+    pub async fn broadcast_block(&self, block: Arc<Block>) -> anyhow::Result<()> {
+        let (sender, receiver) = oneshot::channel();
+
+        self.tx_orchestrator_request
+            .send(OrchestratorRequest::BroadcastBlock((block, sender)))
+            .await?;
+
+        receiver.await?.map(|_| ()).map_err(|e| anyhow!("{}", e))
     }
 
     pub async fn broadcast_transaction(
