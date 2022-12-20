@@ -441,6 +441,8 @@ mod test {
             async fn total_consumable_gas(&self) -> anyhow::Result<u64>;
 
             async fn remove_txs(&self, tx_ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>>;
+
+            async fn next_transaction_status_update(&mut self) -> TxStatus;
         }
     }
 
@@ -508,7 +510,6 @@ mod test {
         let secret_key = SecretKey::random(&mut rng);
 
         let (_, stop) = mpsc::channel(1);
-        let (_, txpool_broadcast) = broadcast::channel(1);
         let (import_block_events_tx, mut import_block_receiver_tx) =
             broadcast::channel(1);
         tokio::spawn(async move {
@@ -591,7 +592,6 @@ mod test {
             db,
             block_producer,
             txpool,
-            txpool_broadcast,
             import_block_events_tx,
             last_block_created: Instant::now(),
             trigger: Trigger::Instant,
@@ -609,7 +609,6 @@ mod test {
         let secret_key = SecretKey::random(&mut rng);
 
         let (_stop_tx, stop) = mpsc::channel(1);
-        let (_txpool_tx, txpool_broadcast) = broadcast::channel(1);
         let (import_block_events_tx, mut import_block_receiver_tx) =
             broadcast::channel(1);
         tokio::spawn(async move {
@@ -637,7 +636,6 @@ mod test {
             db,
             block_producer,
             txpool,
-            txpool_broadcast,
             import_block_events_tx,
             last_block_created: Instant::now(),
             trigger: Trigger::Instant,
@@ -664,7 +662,7 @@ mod test {
         const TX_IDLE_TIME_MS: u64 = 50u64;
 
         let (stop_tx, stop) = mpsc::channel(1);
-        let (txpool_tx, txpool_broadcast) = broadcast::channel(10);
+        let (txpool_tx, _txpool_broadcast) = broadcast::channel(10);
         let (import_block_events_tx, mut import_block_receiver_tx) =
             broadcast::channel(1);
         tokio::spawn(async move {
@@ -692,7 +690,6 @@ mod test {
             db,
             block_producer,
             txpool,
-            txpool_broadcast,
             import_block_events_tx,
             last_block_created: Instant::now(),
             trigger: Trigger::Hybrid {
