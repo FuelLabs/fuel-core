@@ -191,7 +191,7 @@ impl TestContextBuilder {
         let mut builder = ServiceBuilder::new();
         builder
             .config(config)
-            .db(Box::new(mock_db.clone()))
+            .db(Arc::new(mock_db.clone()))
             .importer(importer)
             .tx_status_sender(status_tx)
             .p2p_port(p2p);
