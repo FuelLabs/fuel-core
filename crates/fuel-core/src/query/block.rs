@@ -20,7 +20,6 @@ pub trait BlockQueryData {
 
     fn block_id(&self, height: u64) -> std::result::Result<Bytes32, anyhow::Error>;
 
-    // FnOnce(&Option<SchemaKey>, IterDirection) -> StorageResult<Entries>;
 }
 
 pub struct BlockQueryContext<'a>(pub &'a Database);
