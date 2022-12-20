@@ -19,7 +19,6 @@ pub trait BlockQueryData {
     ) -> std::result::Result<StorageResult<(BlockHeader, Vec<Bytes32>)>, anyhow::Error>;
 
     fn block_id(&self, height: u64) -> std::result::Result<Bytes32, anyhow::Error>;
-
 }
 
 pub struct BlockQueryContext<'a>(pub &'a Database);
