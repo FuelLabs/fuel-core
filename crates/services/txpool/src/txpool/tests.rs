@@ -349,7 +349,7 @@ async fn underpriced_tx1_not_included_coin_collision() {
         .expect("Tx2 should be Ok, got Err");
 
     let err = txpool
-        .insert_inner(tx3.clone(), &db)
+        .insert_inner(tx3, &db)
         .expect_err("Tx3 should be Err, got Ok");
     assert!(matches!(
         err.downcast_ref::<Error>(),
@@ -469,7 +469,7 @@ async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
     let tx2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(9)
-            .add_input(input.clone())
+            .add_input(input)
             .finalize_as_transaction(),
     );
     let tx3 = Arc::new(
@@ -486,7 +486,7 @@ async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
         .insert_inner(tx2.clone(), &db)
         .expect("Tx2 should be OK, got Err");
     let vec = txpool
-        .insert_inner(tx3.clone(), &db)
+        .insert_inner(tx3, &db)
         .expect("Tx3 should be OK, got Err");
     assert_eq!(
         vec.removed.len(),
@@ -526,14 +526,14 @@ async fn more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
     );
 
     txpool
-        .insert_inner(tx1.clone(), &db)
+        .insert_inner(tx1, &db)
         .expect("Tx1 should be OK, got Err");
     let squeezed = txpool
-        .insert_inner(tx2.clone(), &db)
+        .insert_inner(tx2, &db)
         .expect("Tx2 should be OK, got Err");
     assert_eq!(squeezed.removed.len(), 1);
     let squeezed = txpool
-        .insert_inner(tx3.clone(), &db)
+        .insert_inner(tx3, &db)
         .expect("Tx3 should be OK, got Err");
     assert_eq!(
         squeezed.removed.len(),
@@ -827,7 +827,7 @@ async fn tx_rejected_when_input_message_id_is_spent() {
     let mut txpool = TxPool::new(Default::default());
 
     let err = txpool
-        .insert_inner(tx.clone(), &db)
+        .insert_inner(tx, &db)
         .expect_err("should fail");
 
     // check error
@@ -853,7 +853,7 @@ async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
     let mut txpool = TxPool::new(Default::default());
 
     let err = txpool
-        .insert_inner(tx.clone(), &db)
+        .insert_inner(tx, &db)
         .expect_err("should fail");
 
     // check error
@@ -903,7 +903,7 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
     // prices of both the new and existing transactions. Since the existing transaction's gas
     // price is higher, we must now reject the new transaction.
     let err = txpool
-        .insert_inner(tx_low.clone(), &db)
+        .insert_inner(tx_low, &db)
         .expect_err("expected failure");
 
     // check error
@@ -952,7 +952,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
     );
 
     let squeezed_out_txs = txpool
-        .insert_inner(tx_high.clone(), &db)
+        .insert_inner(tx_high, &db)
         .expect("should succeed");
 
     assert_eq!(squeezed_out_txs.removed.len(), 1);
@@ -984,14 +984,14 @@ async fn message_of_squeezed_out_tx_can_be_resubmitted_at_lower_gas_price() {
     let tx_2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(3)
-            .add_input(message_input_1.clone())
+            .add_input(message_input_1)
             .finalize_as_transaction(),
     );
 
     let tx_3 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(1)
-            .add_input(message_input_2.clone())
+            .add_input(message_input_2)
             .finalize_as_transaction(),
     );
 

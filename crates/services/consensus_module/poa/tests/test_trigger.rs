@@ -297,13 +297,13 @@ impl MockTxPool {
                 }
             }
         });
-
+        let broadcast_rx_sender = broadcast_tx.subscribe();
         (
             Self {
                 transactions,
                 broadcast_tx,
                 import_block_tx,
-                sender: MockTxPoolSender(txpool_tx),
+                sender: MockTxPoolSender(txpool_tx, broadcast_rx_sender),
                 stopper: stopper_tx,
                 join,
                 block_event_rx,
@@ -313,7 +313,7 @@ impl MockTxPool {
     }
 
     fn sender(&self) -> MockTxPoolSender {
-        self.sender.clone()
+        MockTxPoolSender(self.sender.0.clone(), self.broadcast_tx.subscribe())
     }
 
     async fn add_tx(&mut self, tx: ArcPoolTx) {
@@ -347,8 +347,7 @@ pub enum MockTxPoolMsg {
     },
 }
 
-#[derive(Clone)]
-pub struct MockTxPoolSender(mpsc::Sender<MockTxPoolMsg>);
+pub struct MockTxPoolSender(mpsc::Sender<MockTxPoolMsg>, broadcast::Receiver<TxStatus>);
 
 impl MockTxPoolSender {
     async fn includable(&self) -> Vec<ArcPoolTx> {
@@ -369,10 +368,6 @@ fn test_signing_key() -> Secret<SecretKeyWrapper> {
 
 #[async_trait::async_trait]
 impl TransactionPool for MockTxPoolSender {
-    async fn next_transaction_status_update(&mut self) -> TxStatus {
-        todo!()
-    }
-
     async fn pending_number(&self) -> anyhow::Result<usize> {
         let (tx, rx) = oneshot::channel();
         self.0
@@ -403,6 +398,10 @@ impl TransactionPool for MockTxPoolSender {
             .expect("Send error");
         Ok(rx.await.expect("MockTxPool panicked in remove_txs query"))
     }
+
+    async fn next_transaction_status_update(&mut self) -> TxStatus {
+        self.1.recv().await.expect("unexpected close of stream")
+    }
 }
 
 #[tokio::test(start_paused = true)] // Run with time paused, start/stop must still work
@@ -432,7 +431,7 @@ async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
 
         service
             .start(
-                txpool.sender.clone(),
+                txpool.sender(),
                 txpool.import_block_tx.clone(),
                 MockBlockProducer::new(txpool.sender(), db.clone()),
                 db,

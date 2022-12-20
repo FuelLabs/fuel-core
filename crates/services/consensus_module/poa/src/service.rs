@@ -431,6 +431,9 @@ mod test {
     };
     use tokio::time;
 
+    pub type BoxFuture<'a, T> =
+        core::pin::Pin<Box<dyn core::future::Future<Output = T> + Send + 'a>>;
+
     mockall::mock! {
         TxPool {}
 
@@ -442,7 +445,24 @@ mod test {
 
             async fn remove_txs(&self, tx_ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>>;
 
-            async fn next_transaction_status_update(&mut self) -> TxStatus;
+            fn next_transaction_status_update<'_self, 'a>(
+                &'_self mut self,
+            ) -> BoxFuture<'a, TxStatus>
+            where
+                '_self: 'a,
+                Self: Sync + 'a;
+        }
+    }
+
+    impl MockTxPool {
+        pub fn no_tx_updates() -> Self {
+            let mut txpool = MockTxPool::default();
+            txpool
+                .expect_next_transaction_status_update()
+                .returning(|| {
+                    Box::pin(async { core::future::pending::<TxStatus>().await })
+                });
+            txpool
         }
     }
 
@@ -679,7 +699,7 @@ mod test {
         db.expect_block_height()
             .returning(|| Ok(BlockHeight::from(1u32)));
 
-        let mut txpool = MockTxPool::default();
+        let mut txpool = MockTxPool::no_tx_updates();
         txpool.expect_total_consumable_gas().returning(|| Ok(0));
         txpool.expect_pending_number().returning(|| Ok(0));
 
