@@ -276,8 +276,7 @@ impl Service {
     pub async fn get_block(&self, height: BlockHeight) -> anyhow::Result<SealedBlock> {
         let (sender, receiver) = oneshot::channel();
 
-        self
-            .tx_orchestrator_request
+        self.tx_orchestrator_request
             .send(OrchestratorRequest::GetBlock((height, sender)))
             .await?;
 
@@ -323,8 +322,7 @@ impl Service {
     pub async fn get_peers_ids(&self) -> anyhow::Result<Vec<PeerId>> {
         let (sender, receiver) = oneshot::channel();
 
-        self
-            .tx_orchestrator_request
+        self.tx_orchestrator_request
             .send(OrchestratorRequest::GetPeersIds(sender))
             .await?;
 

@@ -826,9 +826,7 @@ async fn tx_rejected_when_input_message_id_is_spent() {
         .unwrap();
     let mut txpool = TxPool::new(Default::default());
 
-    let err = txpool
-        .insert_inner(tx, &db)
-        .expect_err("should fail");
+    let err = txpool.insert_inner(tx, &db).expect_err("should fail");
 
     // check error
     assert!(matches!(
@@ -852,9 +850,7 @@ async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
 
     let mut txpool = TxPool::new(Default::default());
 
-    let err = txpool
-        .insert_inner(tx, &db)
-        .expect_err("should fail");
+    let err = txpool.insert_inner(tx, &db).expect_err("should fail");
 
     // check error
     assert!(matches!(
@@ -951,9 +947,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
             .finalize_as_transaction(),
     );
 
-    let squeezed_out_txs = txpool
-        .insert_inner(tx_high, &db)
-        .expect("should succeed");
+    let squeezed_out_txs = txpool.insert_inner(tx_high, &db).expect("should succeed");
 
     assert_eq!(squeezed_out_txs.removed.len(), 1);
     assert_eq!(squeezed_out_txs.removed[0].id(), tx_low.id());
