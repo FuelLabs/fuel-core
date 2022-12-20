@@ -327,7 +327,7 @@ impl Service {
     }
 }
 
-// TODO: Return `TxPoolResutl`
+// TODO: Return `TxPoolResult`
 impl Service {
     pub async fn pending_number(&self) -> anyhow::Result<usize> {
         let (response, receiver) = oneshot::channel();
