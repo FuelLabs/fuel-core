@@ -54,15 +54,15 @@ use crate::{
         GossipsubBroadcastRequest,
         GossipsubMessage,
     },
+    p2p_service::{
+        FuelP2PEvent,
+        FuelP2PService,
+    },
     ports::P2pDb,
     request_response::messages::{
         OutboundResponse,
         RequestMessage,
         ResponseChannelItem,
-    },
-    service::{
-        FuelP2PEvent,
-        FuelP2PService,
     },
 };
 
