@@ -46,8 +46,18 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     }
 
     async fn next_gossiped_transaction(&mut self) -> Self::GossipedTransaction {
+        // lazily instantiate a long-lived tx receiver only when there
+        // is consumer for the messages to avoid lagging the channel
+        if self.tx_receiver.is_none() {
+            self.tx_receiver = Some(self.p2p_service.subscribe_tx());
+        }
         // todo: handle unwrap
-        self.tx_receiver.recv().await.unwrap()
+        self.tx_receiver
+            .as_mut()
+            .expect("Should always be some")
+            .recv()
+            .await
+            .unwrap()
     }
 
     async fn notify_gossip_transaction_validity(
