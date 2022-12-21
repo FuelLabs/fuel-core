@@ -2482,6 +2482,7 @@ name = "fuel-core-sync"
 version = "0.15.1"
 dependencies = [
  "anyhow",
+ "async-trait",
  "fuel-core-types",
  "parking_lot 0.12.1",
  "tokio",

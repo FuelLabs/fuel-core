@@ -11,6 +11,7 @@ description = "Fuel Synchronizer"
 
 [dependencies]
 anyhow = "1.0"
+async-trait = "0.1"
 fuel-core-types = { path = "../../types", version = "0.15.1" }
 parking_lot = "0.12"
-tokio = { version = "1.21", features = ["full"] }
+tokio = { version = "1.21", features = ["rt", "sync"] }
