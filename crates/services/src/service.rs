@@ -212,7 +212,7 @@ where
         service
             .initialize()
             .await
-            .expect("The initialization of the service field.");
+            .expect("The initialization of the service failed.");
         loop {
             tokio::select! {
                 biased;
