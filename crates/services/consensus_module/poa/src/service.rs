@@ -15,6 +15,13 @@ use anyhow::{
     anyhow,
     Context,
 };
+use fuel_core_services::{
+    empty_shared,
+    EmptyShared,
+    RunnableService,
+    ServiceRunner,
+    Shared,
+};
 use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
     blockchain::{
@@ -44,98 +51,16 @@ use fuel_core_types::{
         txpool::TxStatus,
     },
 };
-use parking_lot::Mutex;
 use std::ops::Deref;
 use tokio::{
-    sync::{
-        broadcast,
-        mpsc,
-    },
-    task::JoinHandle,
+    sync::broadcast,
     time::Instant,
 };
-use tracing::{
-    error,
-    warn,
-};
+use tracing::error;
 
-pub struct RunningService {
-    join: JoinHandle<()>,
-    stop: mpsc::Sender<()>,
-}
+pub type Service<D, T, B> = ServiceRunner<Task<D, T, B>>;
 
-pub struct Service {
-    running: Mutex<Option<RunningService>>,
-    config: Config,
-}
-
-impl Service {
-    pub fn new(config: &Config) -> Self {
-        Self {
-            running: Mutex::new(None),
-            config: config.clone(),
-        }
-    }
-
-    pub async fn start<D, T, B>(
-        &self,
-        txpool: T,
-        import_block_events_tx: broadcast::Sender<SealedBlock>,
-        block_producer: B,
-        db: D,
-    ) where
-        D: BlockDb + Send + Clone + 'static,
-        T: TransactionPool + Send + Sync + 'static,
-        B: BlockProducer<D> + 'static,
-    {
-        let mut running = self.running.lock();
-
-        if running.is_some() {
-            warn!("Trying to start a service that is already running");
-            return
-        }
-
-        let (stop_tx, stop_rx) = mpsc::channel(1);
-
-        let task = Task {
-            stop: stop_rx,
-            block_gas_limit: self.config.block_gas_limit,
-            signing_key: self.config.signing_key.clone(),
-            db,
-            block_producer,
-            txpool,
-            last_block_created: Instant::now(),
-            import_block_events_tx,
-            trigger: self.config.trigger,
-            timer: DeadlineClock::new(),
-        };
-
-        *running = Some(RunningService {
-            join: tokio::spawn(task.run()),
-            stop: stop_tx,
-        });
-    }
-
-    pub async fn stop(&self) -> Option<JoinHandle<()>> {
-        let maybe_running = self.running.lock().take();
-        if let Some(running) = maybe_running {
-            // Ignore possible send error, as the JoinHandle will report errors anyway
-            let _ = running.stop.send(()).await;
-            Some(running.join)
-        } else {
-            warn!("Trying to stop a service that is not running");
-            None
-        }
-    }
-}
-
-pub struct Task<D, T, B>
-where
-    D: BlockDb + Send + Sync,
-    T: TransactionPool,
-    B: BlockProducer<D>,
-{
-    stop: mpsc::Receiver<()>,
+pub struct Task<D, T, B> {
     block_gas_limit: Word,
     signing_key: Option<Secret<SecretKeyWrapper>>,
     db: D,
@@ -151,15 +76,43 @@ where
     timer: DeadlineClock,
 }
 
+impl<D, T, B> core::fmt::Debug for Task<D, T, B> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("poa::Task").finish()
+    }
+}
+
+impl<D, T, B> Task<D, T, B> {
+    pub fn new(
+        config: Config,
+        txpool: T,
+        import_block_events_tx: broadcast::Sender<SealedBlock>,
+        block_producer: B,
+        db: D,
+    ) -> Self {
+        Self {
+            block_gas_limit: config.block_gas_limit,
+            signing_key: config.signing_key,
+            db,
+            block_producer,
+            txpool,
+            last_block_created: Instant::now(),
+            import_block_events_tx,
+            trigger: config.trigger,
+            timer: DeadlineClock::new(),
+        }
+    }
+}
+
 impl<D, T, B> Task<D, T, B>
 where
-    D: BlockDb + Send,
+    D: BlockDb,
     T: TransactionPool,
     B: BlockProducer<D>,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(
-        &mut self,
+        &self,
     ) -> anyhow::Result<UncommittedResult<StorageTransaction<D>>> {
         let current_height = self
             .db
@@ -326,9 +279,6 @@ where
     /// Returns Ok(false) if the event loop should stop.
     async fn process_next_event(&mut self) -> anyhow::Result<bool> {
         tokio::select! {
-            _ = self.stop.recv() => {
-                Ok(false)
-            }
             // TODO: This should likely be refactored to use something like tokio::sync::Notify.
             //       Otherwise, if a bunch of txs are submitted at once and all the txs are included
             //       into the first block production trigger, we'll still call the event handler
@@ -345,8 +295,22 @@ where
             }
         }
     }
+}
 
-    async fn init_timers(&mut self) {
+#[async_trait::async_trait]
+impl<D, T, B> RunnableService for Task<D, T, B>
+where
+    D: BlockDb,
+    T: TransactionPool,
+    B: BlockProducer<D>,
+{
+    type SharedData = EmptyShared;
+
+    fn shared_data(&self) -> Shared<Self::SharedData> {
+        empty_shared()
+    }
+
+    async fn initialize(&mut self) -> anyhow::Result<()> {
         match self.trigger {
             Trigger::Never | Trigger::Instant => {}
             Trigger::Interval { block_time } => {
@@ -359,25 +323,34 @@ where
                     .set_timeout(max_block_time, OnConflict::Overwrite)
                     .await;
             }
-        }
+        };
+        Ok(())
     }
 
-    /// Start event loop
-    async fn run(mut self) {
-        self.init_timers().await;
-        loop {
-            match self.process_next_event().await {
-                Ok(should_continue) => {
-                    if !should_continue {
-                        break
-                    }
-                }
-                Err(err) => {
-                    error!("PoA module encountered an error: {err:?}");
-                }
-            }
-        }
+    async fn run(&mut self) -> anyhow::Result<bool> {
+        self.process_next_event().await
     }
+}
+
+pub fn new_service<D, T, B>(
+    config: Config,
+    txpool: T,
+    import_block_events_tx: broadcast::Sender<SealedBlock>,
+    block_producer: B,
+    db: D,
+) -> Service<D, T, B>
+where
+    T: TransactionPool + 'static,
+    D: BlockDb + 'static,
+    B: BlockProducer<D> + 'static,
+{
+    Service::new(Task::new(
+        config,
+        txpool,
+        import_block_events_tx,
+        block_producer,
+        db,
+    ))
 }
 
 pub fn seal_block(
@@ -404,6 +377,7 @@ pub fn seal_block(
 #[cfg(test)]
 mod test {
     use super::*;
+    use fuel_core_services::Service as ServiceTrait;
     use fuel_core_storage::{
         transactional::Transactional,
         Result as StorageResult,
@@ -529,7 +503,6 @@ mod test {
         let mut rng = StdRng::seed_from_u64(2322);
         let secret_key = SecretKey::random(&mut rng);
 
-        let (_, stop) = mpsc::channel(1);
         let (import_block_events_tx, mut import_block_receiver_tx) =
             broadcast::channel(1);
         tokio::spawn(async move {
@@ -606,7 +579,6 @@ mod test {
         });
 
         let mut task = Task {
-            stop,
             block_gas_limit: 1000000,
             signing_key: Some(Secret::new(secret_key.into())),
             db,
@@ -628,7 +600,6 @@ mod test {
         let mut rng = StdRng::seed_from_u64(2322);
         let secret_key = SecretKey::random(&mut rng);
 
-        let (_stop_tx, stop) = mpsc::channel(1);
         let (import_block_events_tx, mut import_block_receiver_tx) =
             broadcast::channel(1);
         tokio::spawn(async move {
@@ -650,7 +621,6 @@ mod test {
         txpool.expect_pending_number().returning(|| Ok(0));
 
         let mut task = Task {
-            stop,
             block_gas_limit: 1000000,
             signing_key: Some(Secret::new(secret_key.into())),
             db,
@@ -681,7 +651,6 @@ mod test {
 
         const TX_IDLE_TIME_MS: u64 = 50u64;
 
-        let (stop_tx, stop) = mpsc::channel(1);
         let (txpool_tx, _txpool_broadcast) = broadcast::channel(10);
         let (import_block_events_tx, mut import_block_receiver_tx) =
             broadcast::channel(1);
@@ -704,7 +673,6 @@ mod test {
         txpool.expect_pending_number().returning(|| Ok(0));
 
         let task = Task {
-            stop,
             block_gas_limit: 1000000,
             signing_key: Some(Secret::new(secret_key.into())),
             db,
@@ -720,7 +688,8 @@ mod test {
             timer: DeadlineClock::new(),
         };
 
-        let jh = tokio::spawn(task.run());
+        let service = Service::new(task);
+        service.start().unwrap();
 
         // simulate some txpool events to see if any block production is erroneously triggered
         txpool_tx.send(TxStatus::Submitted).unwrap();
@@ -735,10 +704,7 @@ mod test {
         // pending txs > 0 is not checked.
         time::sleep(Duration::from_millis(TX_IDLE_TIME_MS)).await;
 
-        // send stop
-        stop_tx.send(()).await.unwrap();
-
-        // await shutdown and capture any errors
-        jh.await.unwrap();
+        service.stop_and_await().await.unwrap();
+        assert!(service.state().stopped());
     }
 }

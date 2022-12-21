@@ -2202,7 +2202,6 @@ dependencies = [
  "bincode",
  "derive_more",
  "enum-iterator",
- "fuel-core-bft",
  "fuel-core-chain-config",
  "fuel-core-database",
  "fuel-core-executor",
@@ -2212,6 +2211,7 @@ dependencies = [
  "fuel-core-poa",
  "fuel-core-producer",
  "fuel-core-relayer",
+ "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-sync",
  "fuel-core-txpool",
@@ -2413,11 +2413,11 @@ version = "0.15.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-types",
  "humantime-serde",
  "mockall",
- "parking_lot 0.12.1",
  "rand 0.8.5",
  "serde",
  "tokio",
@@ -2463,6 +2463,16 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "fuel-core-services"
+version = "0.15.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

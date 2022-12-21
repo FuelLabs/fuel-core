@@ -45,7 +45,7 @@ pub struct MaybeRelayerAdapter {
     pub relayer_synced: Option<RelayerSynced>,
 }
 
-pub struct PoACoordinatorAdapter {
+pub struct BlockProducerAdapter {
     pub block_producer: Arc<fuel_core_producer::Producer<Database>>,
 }
 

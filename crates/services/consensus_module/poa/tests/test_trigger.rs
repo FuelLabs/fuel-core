@@ -7,10 +7,11 @@ use fuel_core_poa::{
         BlockProducer,
         TransactionPool,
     },
+    service::new_service,
     Config,
-    Service,
     Trigger,
 };
+use fuel_core_services::Service as StorageTrait;
 use fuel_core_storage::{
     transactional::{
         StorageTransaction,
@@ -53,7 +54,6 @@ use fuel_core_types::{
         },
     },
 };
-use parking_lot::RwLock;
 use rand::{
     prelude::StdRng,
     Rng,
@@ -124,7 +124,7 @@ impl BlockProducer<MockDatabase> for MockBlockProducer {
             .map(|c| c.as_ref().into())
             .collect();
 
-        self.database.inner.write().height += 1;
+        self.database.inner.lock().unwrap().height += 1;
 
         let block = PartialFuelBlock {
             header: PartialBlockHeader {
@@ -191,7 +191,7 @@ fn select_transactions(
 
 #[derive(Clone, Default, Debug)]
 pub struct MockDatabase {
-    inner: Arc<RwLock<MockDatabaseInner>>,
+    inner: Arc<std::sync::Mutex<MockDatabaseInner>>,
 }
 
 #[derive(Default, Debug)]
@@ -208,7 +208,7 @@ impl MockDatabase {
 
 impl BlockDb for MockDatabase {
     fn block_height(&self) -> anyhow::Result<BlockHeight> {
-        Ok(BlockHeight::from(self.inner.read().height))
+        Ok(BlockHeight::from(self.inner.lock().unwrap().height))
     }
 
     fn seal_block(
@@ -216,10 +216,14 @@ impl BlockDb for MockDatabase {
         block_id: BlockId,
         consensus: Consensus,
     ) -> anyhow::Result<()> {
-        if self.inner.read().consensus.contains_key(&block_id) {
+        if self.inner.lock().unwrap().consensus.contains_key(&block_id) {
             Err(anyhow!("block already sealed"))
         } else {
-            self.inner.write().consensus.insert(block_id, consensus);
+            self.inner
+                .lock()
+                .unwrap()
+                .consensus
+                .insert(block_id, consensus);
             Ok(())
         }
     }
@@ -421,28 +425,24 @@ async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
         },
     ] {
         let db = MockDatabase::new();
-
-        let service = Service::new(&Config {
+        let (txpool, _broadcast_rx) = MockTxPool::spawn();
+        let config = Config {
             trigger,
             block_gas_limit: 100_000,
             signing_key: Some(test_signing_key()),
             metrics: false,
-        });
+        };
 
-        let (txpool, _broadcast_rx) = MockTxPool::spawn();
+        let service = new_service(
+            config,
+            txpool.sender(),
+            txpool.import_block_tx.clone(),
+            MockBlockProducer::new(txpool.sender(), db.clone()),
+            db,
+        );
+        service.start()?;
 
-        service
-            .start(
-                txpool.sender(),
-                txpool.import_block_tx.clone(),
-                MockBlockProducer::new(txpool.sender(), db.clone()),
-                db,
-            )
-            .await;
-
-        let handle = service.stop().await.expect("Get join handle");
-
-        handle.await?;
+        service.stop_and_await().await?;
     }
 
     Ok(())
@@ -496,24 +496,23 @@ fn make_tx(rng: &mut StdRng) -> PoolTransaction {
 #[tokio::test(start_paused = true)]
 async fn never_trigger_never_produces_blocks() -> anyhow::Result<()> {
     let db = MockDatabase::new();
-
-    let service = Service::new(&Config {
+    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
+    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
+    let config = Config {
         trigger: Trigger::Never,
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
         metrics: false,
-    });
+    };
 
-    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    service
-        .start(
-            txpool.sender(),
-            txpool.import_block_tx.clone(),
-            producer,
-            db,
-        )
-        .await;
+    let service = new_service(
+        config,
+        txpool.sender(),
+        txpool.import_block_tx.clone(),
+        producer,
+        db,
+    );
+    service.start()?;
 
     // Submit some txs
     let mut rng = StdRng::seed_from_u64(1234u64);
@@ -531,9 +530,9 @@ async fn never_trigger_never_produces_blocks() -> anyhow::Result<()> {
     );
 
     // Stop
-    let handle = service.stop().await.expect("Get join handle");
+    service.stop();
     txpool.stop().await?;
-    handle.await?;
+    service.stop_and_await().await?;
 
     Ok(())
 }
@@ -541,24 +540,23 @@ async fn never_trigger_never_produces_blocks() -> anyhow::Result<()> {
 #[tokio::test(start_paused = true)]
 async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
     let db = MockDatabase::new();
-
-    let service = Service::new(&Config {
+    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
+    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
+    let config = Config {
         trigger: Trigger::Instant,
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
         metrics: false,
-    });
+    };
 
-    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    service
-        .start(
-            txpool.sender(),
-            txpool.import_block_tx.clone(),
-            producer,
-            db.clone(),
-        )
-        .await;
+    let service = new_service(
+        config,
+        txpool.sender(),
+        txpool.import_block_tx.clone(),
+        producer,
+        db.clone(),
+    );
+    service.start()?;
 
     // Submit tx
     let mut rng = StdRng::seed_from_u64(1234u64);
@@ -569,7 +567,7 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
 
     // Checked that it's sealed and signature is valid
     {
-        let db_lock = db.inner.read();
+        let db_lock = db.inner.lock().unwrap();
         let (id, consensus) = db_lock
             .consensus
             .iter()
@@ -591,9 +589,9 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
     }
 
     // Stop
-    let handle = service.stop().await.expect("Get join handle");
+    service.stop();
     txpool.stop().await?;
-    handle.await?;
+    service.stop_and_await().await?;
 
     Ok(())
 }
@@ -601,26 +599,25 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
 #[tokio::test(start_paused = true)]
 async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     let db = MockDatabase::new();
-
-    let service = Service::new(&Config {
+    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
+    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
+    let config = Config {
         trigger: Trigger::Interval {
             block_time: Duration::new(2, 0),
         },
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
         metrics: false,
-    });
+    };
 
-    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    service
-        .start(
-            txpool.sender(),
-            txpool.import_block_tx.clone(),
-            producer,
-            db,
-        )
-        .await;
+    let service = new_service(
+        config,
+        txpool.sender(),
+        txpool.import_block_tx.clone(),
+        producer,
+        db,
+    );
+    service.start()?;
 
     // Make sure no blocks are produced yet
     assert_eq!(
@@ -685,9 +682,9 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     );
 
     // Stop
-    let handle = service.stop().await.expect("Get join handle");
+    service.stop();
     txpool.stop().await?;
-    handle.await?;
+    service.stop_and_await().await?;
 
     Ok(())
 }
@@ -695,26 +692,25 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
 #[tokio::test(start_paused = true)]
 async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
     let db = MockDatabase::new();
-
-    let service = Service::new(&Config {
+    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
+    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
+    let config = Config {
         trigger: Trigger::Interval {
             block_time: Duration::new(2, 0),
         },
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
         metrics: false,
-    });
+    };
 
-    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    service
-        .start(
-            txpool.sender(),
-            txpool.import_block_tx.clone(),
-            producer,
-            db,
-        )
-        .await;
+    let service = new_service(
+        config,
+        txpool.sender(),
+        txpool.import_block_tx.clone(),
+        producer,
+        db,
+    );
+    service.start()?;
 
     // Fill txpool completely
     let mut rng = StdRng::seed_from_u64(1234u64);
@@ -741,9 +737,9 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
     }
 
     // Stop
-    let handle = service.stop().await.expect("Get join handle");
+    service.stop();
     txpool.stop().await?;
-    handle.await?;
+    service.stop_and_await().await?;
 
     Ok(())
 }
@@ -751,8 +747,9 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
 #[tokio::test(start_paused = true)]
 async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
     let db = MockDatabase::new();
-
-    let service = Service::new(&Config {
+    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
+    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
+    let config = Config {
         trigger: Trigger::Hybrid {
             min_block_time: Duration::new(2, 0),
             max_tx_idle_time: Duration::new(3, 0),
@@ -761,18 +758,16 @@ async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
         metrics: false,
-    });
+    };
 
-    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    service
-        .start(
-            txpool.sender(),
-            txpool.import_block_tx.clone(),
-            producer,
-            db,
-        )
-        .await;
+    let service = new_service(
+        config,
+        txpool.sender(),
+        txpool.import_block_tx.clone(),
+        producer,
+        db,
+    );
+    service.start()?;
 
     // Make sure no blocks are produced yet
     assert_eq!(
@@ -822,9 +817,9 @@ async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
     assert_eq!(txpool.check_block_produced(), Ok(2));
 
     // Stop
-    let handle = service.stop().await.expect("Get join handle");
+    service.stop();
     txpool.stop().await?;
-    handle.await?;
+    service.stop_and_await().await?;
 
     Ok(())
 }
@@ -832,8 +827,9 @@ async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
 #[tokio::test(start_paused = true)]
 async fn hybrid_trigger_reacts_correctly_to_full_txpool() -> anyhow::Result<()> {
     let db = MockDatabase::new();
-
-    let service = Service::new(&Config {
+    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
+    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
+    let config = Config {
         trigger: Trigger::Hybrid {
             min_block_time: Duration::new(2, 0),
             max_tx_idle_time: Duration::new(3, 0),
@@ -842,18 +838,16 @@ async fn hybrid_trigger_reacts_correctly_to_full_txpool() -> anyhow::Result<()> 
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
         metrics: false,
-    });
+    };
 
-    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    service
-        .start(
-            txpool.sender(),
-            txpool.import_block_tx.clone(),
-            producer,
-            db,
-        )
-        .await;
+    let service = new_service(
+        config,
+        txpool.sender(),
+        txpool.import_block_tx.clone(),
+        producer,
+        db,
+    );
+    service.start()?;
 
     // Fill txpool completely
     let mut rng = StdRng::seed_from_u64(1234u64);
@@ -882,9 +876,9 @@ async fn hybrid_trigger_reacts_correctly_to_full_txpool() -> anyhow::Result<()> 
     }
 
     // Stop
-    let handle = service.stop().await.expect("Get join handle");
+    service.stop();
     txpool.stop().await?;
-    handle.await?;
+    service.stop_and_await().await?;
 
     Ok(())
 }

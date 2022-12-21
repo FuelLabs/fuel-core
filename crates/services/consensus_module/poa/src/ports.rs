@@ -23,7 +23,7 @@ use fuel_core_types::{
 };
 
 #[async_trait::async_trait]
-pub trait TransactionPool {
+pub trait TransactionPool: Sync + Send {
     /// Returns the number of pending transactions in the `TxPool`.
     async fn pending_number(&self) -> anyhow::Result<usize>;
 

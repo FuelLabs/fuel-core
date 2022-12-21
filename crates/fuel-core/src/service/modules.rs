@@ -6,14 +6,15 @@ use crate::{
     service::{
         adapters::{
             BlockImportAdapter,
+            BlockProducerAdapter,
             ExecutorAdapter,
             MaybeRelayerAdapter,
-            PoACoordinatorAdapter,
             TxPoolAdapter,
         },
         Config,
     },
 };
+use fuel_core_services::Service as ServiceTrait;
 use fuel_core_txpool::{
     ports::TxPoolDb,
     service::TxStatusChange,
@@ -30,11 +31,13 @@ use tokio::{
     task::JoinHandle,
 };
 
+type POA = fuel_core_poa::Service<Database, TxPoolAdapter, BlockProducerAdapter>;
+
 pub struct Modules {
     pub txpool: Arc<fuel_core_txpool::Service>,
     pub block_importer: Arc<fuel_core_importer::Service>,
     pub block_producer: Arc<fuel_core_producer::Producer<Database>>,
-    pub coordinator: Arc<CoordinatorService>,
+    pub consensus_module: POA,
     pub sync: Arc<fuel_core_sync::Service>,
     #[cfg(feature = "relayer")]
     pub relayer: Option<fuel_core_relayer::RelayerHandle>,
@@ -44,8 +47,8 @@ pub struct Modules {
 
 impl Modules {
     pub async fn stop(&self) {
+        self.consensus_module.stop_and_await().await.unwrap();
         let stops: Vec<JoinHandle<()>> = vec![
-            self.coordinator.stop().await,
             #[cfg(feature = "p2p")]
             self.network_service.stop().await,
             self.txpool.stop().await,
@@ -60,19 +63,6 @@ impl Modules {
     }
 }
 
-pub enum CoordinatorService {
-    Poa(fuel_core_poa::Service),
-    Bft(fuel_core_bft::Service),
-}
-impl CoordinatorService {
-    pub async fn stop(&self) -> Option<tokio::task::JoinHandle<()>> {
-        match self {
-            CoordinatorService::Poa(s) => s.stop().await,
-            CoordinatorService::Bft(s) => s.stop().await,
-        }
-    }
-}
-
 pub async fn start_modules(
     config: &Config,
     database: &Database,
@@ -83,20 +73,6 @@ pub async fn start_modules(
     let block_importer =
         fuel_core_importer::Service::new(&config.block_importer, db).await?;
     let sync = fuel_core_sync::Service::new(&config.sync).await?;
-
-    let coordinator = match &config.chain_conf.block_production {
-        BlockProduction::ProofOfAuthority { trigger } => {
-            CoordinatorService::Poa(fuel_core_poa::Service::new(&fuel_core_poa::Config {
-                trigger: *trigger,
-                block_gas_limit: config.chain_conf.block_gas_limit,
-                signing_key: config.consensus_key.clone(),
-                metrics: false,
-            }))
-        } /* TODO: enable when bft config is ready to use
-           * CoordinatorConfig::Bft { config } => {
-           *     CoordinatorService::Bft(fuel_core_bft::Service::new(config, db).await?)
-           * } */
-    };
 
     #[cfg(feature = "relayer")]
     let relayer = if config.relayer.eth_client.is_some() {
@@ -171,25 +147,26 @@ pub async fn start_modules(
 
     block_importer.start().await;
 
-    match &coordinator {
-        CoordinatorService::Poa(poa) => {
-            poa.start(
-                TxPoolAdapter {
-                    service: txpool_service.clone(),
-                    tx_status_rx: txpool_service.tx_status_subscribe(),
-                },
-                block_import_tx,
-                PoACoordinatorAdapter {
-                    block_producer: block_producer.clone(),
-                },
-                database.clone(),
-            )
-            .await;
-        }
-        CoordinatorService::Bft(bft) => {
-            bft.start().await;
-        }
-    }
+    let poa = match &config.chain_conf.block_production {
+        BlockProduction::ProofOfAuthority { trigger } => fuel_core_poa::new_service(
+            fuel_core_poa::Config {
+                trigger: *trigger,
+                block_gas_limit: config.chain_conf.block_gas_limit,
+                signing_key: config.consensus_key.clone(),
+                metrics: false,
+            },
+            TxPoolAdapter {
+                service: txpool_service.clone(),
+                tx_status_rx: txpool_service.tx_status_subscribe(),
+            },
+            block_import_tx,
+            BlockProducerAdapter {
+                block_producer: block_producer.clone(),
+            },
+            database.clone(),
+        ),
+    };
+    poa.start()?;
 
     sync.start(
         block_event_receiver,
@@ -203,7 +180,7 @@ pub async fn start_modules(
         txpool: txpool_service,
         block_importer: Arc::new(block_importer),
         block_producer,
-        coordinator: Arc::new(coordinator),
+        consensus_module: poa,
         sync: Arc::new(sync),
         #[cfg(feature = "relayer")]
         relayer,

@@ -11,4 +11,7 @@ pub use config::{
     Config,
     Trigger,
 };
-pub use service::Service;
+pub use service::{
+    new_service,
+    Service,
+};
