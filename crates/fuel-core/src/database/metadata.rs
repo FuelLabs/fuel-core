@@ -10,6 +10,7 @@ use fuel_core_types::blockchain::primitives::BlockHeight;
 pub(crate) const DB_VERSION_KEY: &[u8] = b"version";
 pub(crate) const CHAIN_NAME_KEY: &[u8] = b"chain_name";
 pub(crate) const CHAIN_HEIGHT_KEY: &[u8] = b"chain_height";
+#[cfg(feature = "relayer")]
 pub(crate) const FINALIZED_DA_HEIGHT_KEY: &[u8] = b"finalized_da_height";
 
 /// Can be used to perform migrations in the future.

@@ -91,6 +91,7 @@ mod message;
 #[cfg(feature = "p2p")]
 mod p2p;
 mod receipts;
+#[cfg(feature = "relayer")]
 mod relayer;
 mod sealed_block;
 mod state;

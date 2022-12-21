@@ -254,7 +254,7 @@ async fn tx_try_to_use_spent_coin() {
     let (mut coin, input) = setup_coin(&mut rng, None);
     let utxo_id = *input.utxo_id().unwrap();
     coin.status = CoinStatus::Spent;
-    db.insert_coin(utxo_id.clone(), coin);
+    db.insert_coin(utxo_id, coin);
 
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])

@@ -9,10 +9,7 @@ use fuel_core_relayer::RelayerSynced;
 use fuel_core_txpool::Service;
 use fuel_core_types::{
     blockchain::SealedBlock,
-    services::{
-        p2p::TransactionGossipData,
-        txpool::TxStatus,
-    },
+    services::txpool::TxStatus,
 };
 use std::sync::Arc;
 use tokio::{
@@ -57,7 +54,7 @@ pub struct P2PAdapter {
     #[cfg(feature = "p2p")]
     p2p_service: Arc<P2PService>,
     #[cfg(feature = "p2p")]
-    tx_receiver: Receiver<TransactionGossipData>,
+    tx_receiver: Receiver<fuel_core_types::services::p2p::TransactionGossipData>,
 }
 
 #[cfg(feature = "p2p")]

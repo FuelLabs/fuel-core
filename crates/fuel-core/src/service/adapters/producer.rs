@@ -8,7 +8,6 @@ use crate::{
     },
 };
 use fuel_core_producer::ports::TxPool;
-use fuel_core_relayer::ports::RelayerDb;
 use fuel_core_storage::{
     transactional::StorageTransaction,
     Result as StorageResult,
@@ -76,15 +75,20 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
     ) -> StorageResult<primitives::DaBlockHeight> {
         #[cfg(feature = "relayer")]
         {
+            use fuel_core_relayer::ports::RelayerDb;
             if let Some(sync) = self.relayer_synced.as_ref() {
                 sync.await_synced().await?;
             }
-        }
 
-        Ok(self
-            .database
-            .get_finalized_da_height()
-            .await
-            .unwrap_or_default())
+            Ok(self
+                .database
+                .get_finalized_da_height()
+                .await
+                .unwrap_or_default())
+        }
+        #[cfg(not(feature = "relayer"))]
+        {
+            Ok(Default::default())
+        }
     }
 }
