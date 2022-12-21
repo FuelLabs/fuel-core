@@ -5,7 +5,6 @@
 mod service;
 
 pub use service::{
-    empty_shared,
     EmptyShared,
     RunnableService,
     Service,

@@ -2450,6 +2450,7 @@ dependencies = [
  "ethers-core",
  "ethers-providers",
  "fuel-core-relayer",
+ "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-types",
  "futures",

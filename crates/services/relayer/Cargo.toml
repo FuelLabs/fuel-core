@@ -21,6 +21,7 @@ ethers-providers = { version = "1.0.2", default-features = false, features = [
     "ws",
     "rustls",
 ] }
+fuel-core-services = { path = "..", version = "0.15.1" }
 fuel-core-storage = { path = "../../storage", version = "0.15.1" }
 fuel-core-types = { path = "../../types", version = "0.15.1" }
 futures = "0.3"

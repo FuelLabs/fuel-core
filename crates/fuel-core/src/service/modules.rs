@@ -31,16 +31,18 @@ use tokio::{
     task::JoinHandle,
 };
 
-type POA = fuel_core_poa::Service<Database, TxPoolAdapter, BlockProducerAdapter>;
+type PoAService = fuel_core_poa::Service<Database, TxPoolAdapter, BlockProducerAdapter>;
+#[cfg(feature = "relayer")]
+type RelayerService = fuel_core_relayer::Service;
 
 pub struct Modules {
     pub txpool: Arc<fuel_core_txpool::Service>,
     pub block_importer: Arc<fuel_core_importer::Service>,
     pub block_producer: Arc<fuel_core_producer::Producer<Database>>,
-    pub consensus_module: POA,
+    pub consensus_module: PoAService,
     pub sync: Arc<fuel_core_sync::Service>,
     #[cfg(feature = "relayer")]
-    pub relayer: Option<fuel_core_relayer::RelayerHandle>,
+    pub relayer: Option<RelayerService>,
     #[cfg(feature = "p2p")]
     pub network_service: P2PAdapter,
 }
@@ -76,7 +78,7 @@ pub async fn start_modules(
 
     #[cfg(feature = "relayer")]
     let relayer = if config.relayer.eth_client.is_some() {
-        Some(fuel_core_relayer::RelayerHandle::start(
+        Some(fuel_core_relayer::new_service(
             Box::new(database.clone()),
             config.relayer.clone(),
         )?)
@@ -137,7 +139,7 @@ pub async fn start_modules(
         relayer: Box::new(MaybeRelayerAdapter {
             database: database.clone(),
             #[cfg(feature = "relayer")]
-            relayer_synced: relayer.as_ref().map(|r| r.listen_synced()),
+            relayer_synced: relayer.as_ref().map(|r| r.shared.clone()),
         }),
         lock: Mutex::new(()),
         dry_run_semaphore: Semaphore::new(max_dry_run_concurrency),
@@ -167,6 +169,10 @@ pub async fn start_modules(
         ),
     };
     poa.start()?;
+    #[cfg(feature = "relayer")]
+    relayer
+        .as_ref()
+        .map(|relayer| relayer.start().expect("Should start relayer"));
 
     sync.start(
         block_event_receiver,

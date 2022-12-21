@@ -3,6 +3,7 @@
 use fuel_core_relayer::{
     bridge::message::SentMessageFilter,
     mock_db::MockDb,
+    new_service_test,
     ports::RelayerDb,
     test_helpers::{
         middleware::MockMiddleware,
@@ -10,8 +11,8 @@ use fuel_core_relayer::{
         LogTestHelper,
     },
     Config,
-    RelayerHandle,
 };
+use fuel_core_services::Service;
 
 #[tokio::test(start_paused = true)]
 async fn can_set_da_height() {
@@ -20,13 +21,11 @@ async fn can_set_da_height() {
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
     eth_node.update_data(|data| data.best_block.number = Some(200.into()));
-    let relayer = RelayerHandle::start_test(
-        eth_node,
-        Box::new(mock_db.clone()),
-        Default::default(),
-    );
+    let relayer =
+        new_service_test(eth_node, Box::new(mock_db.clone()), Default::default());
+    relayer.start().unwrap();
 
-    relayer.listen_synced().await_synced().await.unwrap();
+    relayer.shared.await_synced().await.unwrap();
 
     assert_eq!(*mock_db.get_finalized_da_height().await.unwrap(), 100);
 }
@@ -55,9 +54,10 @@ async fn can_get_messages() {
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
     eth_node.update_data(|data| data.best_block.number = Some(200.into()));
-    let relayer = RelayerHandle::start_test(eth_node, Box::new(mock_db.clone()), config);
+    let relayer = new_service_test(eth_node, Box::new(mock_db.clone()), config);
+    relayer.start().unwrap();
 
-    relayer.listen_synced().await_synced().await.unwrap();
+    relayer.shared.await_synced().await.unwrap();
 
     for msg in expected_messages {
         assert_eq!(&mock_db.get_message(msg.id()).unwrap(), msg.message());
@@ -98,9 +98,10 @@ async fn deploy_height_is_set() {
             }
         }
     });
-    let relayer = RelayerHandle::start_test(eth_node, Box::new(mock_db.clone()), config);
+    let relayer = new_service_test(eth_node, Box::new(mock_db.clone()), config);
+    relayer.start().unwrap();
 
-    relayer.listen_synced().await_synced().await.unwrap();
+    relayer.shared.await_synced().await.unwrap();
     rx.await.unwrap();
 
     assert_eq!(*mock_db.get_finalized_da_height().await.unwrap(), 53);

@@ -16,11 +16,9 @@ use anyhow::{
     Context,
 };
 use fuel_core_services::{
-    empty_shared,
     EmptyShared,
     RunnableService,
     ServiceRunner,
-    Shared,
 };
 use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
@@ -58,9 +56,9 @@ use tokio::{
 };
 use tracing::error;
 
-pub type Service<D, T, B> = ServiceRunner<Task<D, T, B>>;
+pub type Service<D, T, B> = ServiceRunner<PoA<D, T, B>>;
 
-pub struct Task<D, T, B> {
+pub struct PoA<D, T, B> {
     block_gas_limit: Word,
     signing_key: Option<Secret<SecretKeyWrapper>>,
     db: D,
@@ -76,13 +74,13 @@ pub struct Task<D, T, B> {
     timer: DeadlineClock,
 }
 
-impl<D, T, B> core::fmt::Debug for Task<D, T, B> {
+impl<D, T, B> core::fmt::Debug for PoA<D, T, B> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("poa::Task").finish()
+        f.debug_struct("PoA").finish()
     }
 }
 
-impl<D, T, B> Task<D, T, B> {
+impl<D, T, B> PoA<D, T, B> {
     pub fn new(
         config: Config,
         txpool: T,
@@ -104,7 +102,7 @@ impl<D, T, B> Task<D, T, B> {
     }
 }
 
-impl<D, T, B> Task<D, T, B>
+impl<D, T, B> PoA<D, T, B>
 where
     D: BlockDb,
     T: TransactionPool,
@@ -298,7 +296,7 @@ where
 }
 
 #[async_trait::async_trait]
-impl<D, T, B> RunnableService for Task<D, T, B>
+impl<D, T, B> RunnableService for PoA<D, T, B>
 where
     D: BlockDb,
     T: TransactionPool,
@@ -306,8 +304,8 @@ where
 {
     type SharedData = EmptyShared;
 
-    fn shared_data(&self) -> Shared<Self::SharedData> {
-        empty_shared()
+    fn shared_data(&self) -> Self::SharedData {
+        EmptyShared
     }
 
     async fn initialize(&mut self) -> anyhow::Result<()> {
@@ -344,7 +342,7 @@ where
     D: BlockDb + 'static,
     B: BlockProducer<D> + 'static,
 {
-    Service::new(Task::new(
+    Service::new(PoA::new(
         config,
         txpool,
         import_block_events_tx,
@@ -578,7 +576,7 @@ mod test {
             Ok(vec![])
         });
 
-        let mut task = Task {
+        let mut task = PoA {
             block_gas_limit: 1000000,
             signing_key: Some(Secret::new(secret_key.into())),
             db,
@@ -620,7 +618,7 @@ mod test {
         txpool.expect_total_consumable_gas().returning(|| Ok(0));
         txpool.expect_pending_number().returning(|| Ok(0));
 
-        let mut task = Task {
+        let mut task = PoA {
             block_gas_limit: 1000000,
             signing_key: Some(Secret::new(secret_key.into())),
             db,
@@ -672,7 +670,7 @@ mod test {
         txpool.expect_total_consumable_gas().returning(|| Ok(0));
         txpool.expect_pending_number().returning(|| Ok(0));
 
-        let task = Task {
+        let task = PoA {
             block_gas_limit: 1000000,
             signing_key: Some(Secret::new(secret_key.into())),
             db,

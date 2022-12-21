@@ -9,10 +9,6 @@ pub type Shared<T> = std::sync::Arc<T>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EmptyShared;
 
-pub fn empty_shared() -> Shared<EmptyShared> {
-    Shared::new(EmptyShared)
-}
-
 #[async_trait::async_trait]
 pub trait Service {
     fn start(&self) -> anyhow::Result<()>;
@@ -26,9 +22,9 @@ pub trait Service {
 
 #[async_trait::async_trait]
 pub trait RunnableService: Send + Sync {
-    type SharedData: Send + Sync;
+    type SharedData: Clone + Send + Sync;
 
-    fn shared_data(&self) -> Shared<Self::SharedData>;
+    fn shared_data(&self) -> Self::SharedData;
 
     async fn initialize(&mut self) -> anyhow::Result<()>;
 
@@ -55,10 +51,7 @@ impl State {
     }
 
     pub fn stopped(&self) -> bool {
-        match self {
-            State::Stopped | State::StoppedWithError(_) => true,
-            _ => false,
-        }
+        matches!(self, State::Stopped | State::StoppedWithError(_))
     }
 }
 
@@ -80,7 +73,7 @@ pub struct ServiceRunner<S>
 where
     S: RunnableService,
 {
-    pub shared: Shared<S::SharedData>,
+    pub shared: S::SharedData,
     state: Shared<watch::Sender<State>>,
 }
 
@@ -218,7 +211,7 @@ where
                 biased;
 
                 _ = state.changed() => {
-                    if state.borrow_and_update().started() {
+                    if !state.borrow_and_update().started() {
                         return
                     }
                 }
