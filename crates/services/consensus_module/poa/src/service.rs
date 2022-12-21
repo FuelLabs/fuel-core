@@ -74,12 +74,6 @@ pub struct PoA<D, T, B> {
     timer: DeadlineClock,
 }
 
-impl<D, T, B> core::fmt::Debug for PoA<D, T, B> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("PoA").finish()
-    }
-}
-
 impl<D, T, B> PoA<D, T, B> {
     pub fn new(
         config: Config,
@@ -302,6 +296,8 @@ where
     T: TransactionPool,
     B: BlockProducer<D>,
 {
+    const NAME: &'static str = "PoA";
+
     type SharedData = EmptyShared;
 
     fn shared_data(&self) -> Self::SharedData {

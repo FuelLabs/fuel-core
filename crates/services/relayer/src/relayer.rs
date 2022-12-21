@@ -63,7 +63,7 @@ pub type Service = CustomizableService<Provider<Http>>;
 type CustomizableService<P> = ServiceRunner<Relayer<P>>;
 
 /// Receives signals when the relayer reaches consistency with the DA layer.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RelayerSynced {
     synced: Synced,
 }
@@ -79,12 +79,6 @@ pub struct Relayer<P> {
     database: Database,
     /// Configuration settings.
     config: Config,
-}
-
-impl<P> core::fmt::Debug for Relayer<P> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("Relayer").finish()
-    }
 }
 
 impl<P> Relayer<P>
@@ -160,6 +154,8 @@ impl<P> RunnableService for Relayer<P>
 where
     P: Middleware<Error = ProviderError> + 'static,
 {
+    const NAME: &'static str = "Relayer";
+
     type SharedData = RelayerSynced;
 
     fn shared_data(&self) -> Self::SharedData {

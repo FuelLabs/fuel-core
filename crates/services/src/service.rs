@@ -15,13 +15,17 @@ pub trait Service {
 
     fn stop(&self) -> bool;
 
-    async fn stop_and_await(&self) -> anyhow::Result<()>;
+    async fn stop_and_await(&self) -> anyhow::Result<State>;
+
+    async fn await_stop(&self) -> anyhow::Result<State>;
 
     fn state(&self) -> State;
 }
 
 #[async_trait::async_trait]
 pub trait RunnableService: Send + Sync {
+    const NAME: &'static str;
+
     type SharedData: Clone + Send + Sync;
 
     fn shared_data(&self) -> Self::SharedData;
@@ -98,13 +102,33 @@ where
         let state = initialize_loop(service);
         Self { shared, state }
     }
+
+    async fn await_stop_and_maybe_call<F>(&self, call: F) -> anyhow::Result<State>
+    where
+        F: Fn(&Self),
+    {
+        let mut stop = self.state.subscribe();
+        let state = stop.borrow().clone();
+        if state.stopped() {
+            Ok(state)
+        } else {
+            call(self);
+
+            loop {
+                let state = stop.borrow_and_update().clone();
+                if state.stopped() {
+                    return Ok(state)
+                }
+                stop.changed().await?;
+            }
+        }
+    }
 }
 
 #[async_trait::async_trait]
 impl<S> Service for ServiceRunner<S>
 where
-    S: RunnableService + core::fmt::Debug,
-    S::SharedData: core::fmt::Debug,
+    S: RunnableService + 'static,
 {
     fn start(&self) -> anyhow::Result<()> {
         let started = self.state.send_if_modified(|state| {
@@ -119,7 +143,10 @@ where
         if started {
             Ok(())
         } else {
-            Err(anyhow!("The service {:?} already has been started", self))
+            Err(anyhow!(
+                "The service `{}` already has been started.",
+                S::NAME
+            ))
         }
     }
 
@@ -134,20 +161,15 @@ where
         })
     }
 
-    async fn stop_and_await(&self) -> anyhow::Result<()> {
-        let mut stop = self.state.subscribe();
-        if stop.borrow().stopped() {
-            Ok(())
-        } else {
-            self.stop();
+    async fn stop_and_await(&self) -> anyhow::Result<State> {
+        self.await_stop_and_maybe_call(|runner| {
+            runner.stop();
+        })
+        .await
+    }
 
-            loop {
-                if stop.borrow_and_update().stopped() {
-                    return Ok(())
-                }
-                stop.changed().await?;
-            }
-        }
+    async fn await_stop(&self) -> anyhow::Result<State> {
+        self.await_stop_and_maybe_call(|_| {}).await
     }
 
     fn state(&self) -> State {
