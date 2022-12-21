@@ -170,9 +170,9 @@ pub async fn start_modules(
     };
     poa.start()?;
     #[cfg(feature = "relayer")]
-    relayer
-        .as_ref()
-        .map(|relayer| relayer.start().expect("Should start relayer"));
+    if let Some(relayer) = relayer.as_ref() {
+        relayer.start().expect("Should start relayer")
+    }
 
     sync.start(
         block_event_receiver,

@@ -49,13 +49,15 @@ pub struct BlockProducerAdapter {
     pub block_producer: Arc<fuel_core_producer::Producer<Database>>,
 }
 
-#[cfg_attr(not(feature = "p2p"), derive(Clone))]
+#[cfg(feature = "p2p")]
 pub struct P2PAdapter {
-    #[cfg(feature = "p2p")]
     p2p_service: Arc<P2PService>,
-    #[cfg(feature = "p2p")]
     tx_receiver: Option<Receiver<fuel_core_types::services::p2p::TransactionGossipData>>,
 }
+
+#[cfg(not(feature = "p2p"))]
+#[derive(Default, Clone)]
+pub struct P2PAdapter;
 
 #[cfg(feature = "p2p")]
 impl Clone for P2PAdapter {
@@ -88,7 +90,7 @@ impl P2PAdapter {
 #[cfg(not(feature = "p2p"))]
 impl P2PAdapter {
     pub fn new() -> Self {
-        Self {}
+        Default::default()
     }
 
     pub async fn stop(&self) -> Option<JoinHandle<()>> {

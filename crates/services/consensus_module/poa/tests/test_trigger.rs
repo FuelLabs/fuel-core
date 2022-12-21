@@ -61,7 +61,10 @@ use rand::{
 };
 use std::{
     cmp::Reverse,
-    collections::HashMap,
+    collections::{
+        hash_map::Entry,
+        HashMap,
+    },
     sync::Arc,
 };
 use tokio::{
@@ -216,15 +219,11 @@ impl BlockDb for MockDatabase {
         block_id: BlockId,
         consensus: Consensus,
     ) -> anyhow::Result<()> {
-        if self.inner.lock().unwrap().consensus.contains_key(&block_id) {
-            Err(anyhow!("block already sealed"))
-        } else {
-            self.inner
-                .lock()
-                .unwrap()
-                .consensus
-                .insert(block_id, consensus);
+        if let Entry::Vacant(e) = self.inner.lock().unwrap().consensus.entry(block_id) {
+            e.insert(consensus);
             Ok(())
+        } else {
+            Err(anyhow!("block already sealed"))
         }
     }
 }
