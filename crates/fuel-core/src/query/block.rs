@@ -1,5 +1,4 @@
 use crate::database::Database;
-use anyhow::anyhow;
 use fuel_core_storage::{
     tables::FuelBlocks,
     Result as StorageResult,
@@ -36,7 +35,7 @@ impl BlockQueryData for BlockQueryContext<'_> {
         let mut block = db
             .storage::<FuelBlocks>()
             .get(&id)?
-            .ok_or_else(|| anyhow!("Block height non-existent"))?
+            .ok_or_else(|| fuel_core_storage::Error::NotFound("Block Not Found", ""))?
             .into_owned();
 
         let tx_ids: Vec<fuel_core_types::fuel_types::Bytes32> = block
@@ -57,7 +56,7 @@ impl BlockQueryData for BlockQueryContext<'_> {
         let db = self.0;
         let id = db
             .get_block_id(height.try_into()?)?
-            .ok_or_else(|| anyhow!("Block height non-existent"))?;
+            .ok_or_else(|| fuel_core_storage::Error::NotFound("Block Not Found", ""))?;
 
         Ok(id)
     }

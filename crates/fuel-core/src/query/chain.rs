@@ -23,7 +23,7 @@ pub struct ChainQueryContext<'a>(pub &'a Database);
 impl ChainQueryData for ChainQueryContext<'_> {
     fn latest_block(
         &self,
-    ) -> fuel_core_storage::Result<(
+    ) -> StorageResult<(
         fuel_core_types::blockchain::header::BlockHeader,
         Vec<fuel_core_types::fuel_types::Bytes32>,
     )> {

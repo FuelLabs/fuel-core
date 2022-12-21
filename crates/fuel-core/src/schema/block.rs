@@ -214,6 +214,7 @@ impl BlockQuery {
         #[graphql(desc = "ID of the block")] id: Option<BlockId>,
         #[graphql(desc = "Height of the block")] height: Option<U64>,
     ) -> async_graphql::Result<Option<Block>> {
+        let data = BlockQueryContext(ctx.data_unchecked());
         let id = match (id, height) {
             (Some(_), Some(_)) => {
                 return Err(async_graphql::Error::new(
@@ -223,7 +224,6 @@ impl BlockQuery {
             (Some(id), None) => id.into(),
             (None, Some(height)) => {
                 let height: u64 = height.into();
-                let data = BlockQueryContext(ctx.data_unchecked());
                 data.block_id(height).map_err(|_| {
                     async_graphql::Error::new(format!(
                         "Block with height {} not found",
@@ -236,7 +236,6 @@ impl BlockQuery {
             }
         };
 
-        let data = BlockQueryContext(ctx.data_unchecked());
         let block = data.block(id)??;
 
         Ok(Some(Block {
