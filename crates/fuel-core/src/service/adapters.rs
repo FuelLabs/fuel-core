@@ -54,7 +54,7 @@ pub struct P2PAdapter {
     #[cfg(feature = "p2p")]
     p2p_service: Arc<P2PService>,
     #[cfg(feature = "p2p")]
-    tx_receiver: Receiver<fuel_core_types::services::p2p::TransactionGossipData>,
+    tx_receiver: Option<Receiver<fuel_core_types::services::p2p::TransactionGossipData>>,
 }
 
 #[cfg(feature = "p2p")]
@@ -67,10 +67,12 @@ impl Clone for P2PAdapter {
 #[cfg(feature = "p2p")]
 impl P2PAdapter {
     pub fn new(p2p_service: Arc<P2PService>) -> Self {
-        let tx_receiver = p2p_service.subscribe_tx();
         Self {
             p2p_service,
-            tx_receiver,
+            // don't autogenerate a fresh receiver unless it is actually used
+            // otherwise we may encounter "lagged" errors on recv
+            // https://docs.rs/tokio/latest/tokio/sync/broadcast/index.html#lagging
+            tx_receiver: None,
         }
     }
 
