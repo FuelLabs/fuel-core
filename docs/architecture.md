@@ -309,12 +309,15 @@ impl fuel_core_txpool::ports::PeerToPeer for Service<P2pService> {
 ```rust
 trait PeerToPeer {
     type GossipedTransaction: NetworkData<Transaction>;
+   
     // Gossip broadcast a transaction inserted via API.
     async fn broadcast_transaction(transaction: Transaction) -> Result<()>;
+
     // Await the next transaction from network gossip (similar to stream.next()).
-    async fn next_gossiped_transaction(&self) -> Self::GossipedTransaction;
+    async fn next_gossiped_transaction(&mut self) -> Self::GossipedTransaction;
+   
     // Report the validity of a transaction received from the network.
-    fn notify_gossip_transaction_validity(message: &Self::GossipedTransaction, validity: GossipValidity);
+    async fn notify_gossip_transaction_validity(message: &Self::GossipedTransaction, validity: GossipValidity);
 }
 
 // Generic wrapper for data received from peers while abstracting

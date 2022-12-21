@@ -1,24 +1,13 @@
 use crate::Config;
-use fuel_core_interfaces::{
-    bft::BftMpsc,
-    block_importer::{
-        ImportBlockBroadcast,
-        ImportBlockMpsc,
-    },
-    p2p::P2pRequestEvent,
-};
 use parking_lot::Mutex;
 use tokio::{
-    sync::{
-        broadcast,
-        mpsc,
-    },
+    sync::mpsc,
     task::JoinHandle,
 };
 
 pub struct Service {
     join: Mutex<Option<JoinHandle<()>>>,
-    sender: mpsc::Sender<BftMpsc>,
+    sender: mpsc::Sender<()>,
 }
 
 impl Service {
@@ -30,12 +19,7 @@ impl Service {
         })
     }
 
-    pub async fn start(
-        &self,
-        _p2p_consensus: mpsc::Sender<P2pRequestEvent>,
-        _block_importer_sender: mpsc::Sender<ImportBlockMpsc>,
-        _block_importer_broadcast: broadcast::Receiver<ImportBlockBroadcast>,
-    ) {
+    pub async fn start(&self) {
         let mut join = self.join.lock();
         if join.is_none() {
             *join = Some(tokio::spawn(async {}));
@@ -45,12 +29,12 @@ impl Service {
     pub async fn stop(&self) -> Option<JoinHandle<()>> {
         let join = self.join.lock().take();
         if join.is_some() {
-            let _ = self.sender.send(BftMpsc::Stop);
+            let _ = self.sender.send(());
         }
         join
     }
 
-    pub fn sender(&self) -> &mpsc::Sender<BftMpsc> {
+    pub fn sender(&self) -> &mpsc::Sender<()> {
         &self.sender
     }
 }

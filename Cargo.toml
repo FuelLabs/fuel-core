@@ -9,7 +9,6 @@ members = [
   "crates/client",
   "crates/database",
   "crates/fuel-core",
-  "crates/fuel-core-interfaces",
   "crates/metrics",
   "crates/services/consensus_module/bft",
   "crates/services/consensus_module/poa",

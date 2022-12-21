@@ -1,7 +1,10 @@
 use super::*;
-use crate::MockDb;
-use fuel_core_interfaces::txpool::Sender;
+use crate::{
+    ports::BlockImport,
+    MockDb,
+};
 use fuel_core_types::{
+    blockchain::SealedBlock,
     entities::coin::Coin,
     fuel_crypto::rand::{
         rngs::StdRng,
@@ -13,58 +16,21 @@ use fuel_core_types::{
         TransactionBuilder,
         Word,
     },
+    services::p2p::GossipsubMessageAcceptance,
 };
-use std::{
-    any::Any,
-    cell::RefCell,
-};
-use tokio::sync::mpsc::Receiver;
+use std::cell::RefCell;
+
+type GossipedTransaction = GossipData<Transaction>;
 
 pub struct TestContext {
     pub(crate) service: Service,
     mock_db: Box<MockDb>,
-    _drop_resources: Vec<Box<dyn Any>>,
     rng: RefCell<StdRng>,
-    pub(crate) p2p_request_rx: Mutex<Receiver<P2pRequestEvent>>,
-    pub(crate) gossip_tx: broadcast::Sender<TransactionGossipData>,
 }
 
 impl TestContext {
     pub async fn new() -> Self {
-        let rng = RefCell::new(StdRng::seed_from_u64(0));
-        let config = Config::default();
-        let mock_db = Box::<MockDb>::default();
-        let (block_tx, block_rx) = broadcast::channel(10);
-        let (p2p_request_tx, p2p_request_rx) = mpsc::channel(100);
-        let (gossip_tx, gossip_rx) = broadcast::channel(100);
-        let status_tx = TxStatusChange::new(100);
-        let (txpool_tx, txpool_rx) = Sender::channel(100);
-
-        let mut builder = ServiceBuilder::new();
-        builder
-            .config(config)
-            .db(mock_db.clone())
-            .incoming_tx_receiver(gossip_rx)
-            .import_block_event(block_rx)
-            .tx_status_sender(status_tx)
-            .txpool_sender(txpool_tx)
-            .txpool_receiver(txpool_rx)
-            .network_sender(p2p_request_tx);
-
-        let service = builder.build().unwrap();
-        service.start().await.unwrap();
-
-        // resources to keep alive for the during of the test context
-        let drop_resources: Vec<Box<dyn Any>> = vec![Box::new(block_tx)];
-
-        Self {
-            service,
-            mock_db,
-            _drop_resources: drop_resources,
-            rng,
-            p2p_request_rx: Mutex::new(p2p_request_rx),
-            gossip_tx,
-        }
+        TestContextBuilder::new().build().await
     }
 
     pub fn service(&self) -> &Service {
@@ -85,5 +51,158 @@ impl TestContext {
 
     pub async fn stop(&self) {
         self.service.stop().await.unwrap().await.unwrap();
+    }
+}
+
+pub type BoxFuture<'a, T> =
+    core::pin::Pin<Box<dyn core::future::Future<Output = T> + Send + 'a>>;
+
+mockall::mock! {
+    pub P2P {}
+
+    #[async_trait::async_trait]
+    impl PeerToPeer for P2P {
+        type GossipedTransaction = GossipedTransaction;
+
+        async fn broadcast_transaction(
+            &self,
+            transaction: Arc<Transaction>,
+        ) -> anyhow::Result<()>;
+
+        fn next_gossiped_transaction<'_self, 'a>(
+            &'_self mut self,
+        ) -> BoxFuture<'a, GossipedTransaction>
+        where
+            '_self: 'a,
+            Self: Sync + 'a;
+
+        async fn notify_gossip_transaction_validity(
+            &self,
+            message: &GossipedTransaction,
+            validity: GossipsubMessageAcceptance,
+        );
+    }
+}
+
+impl MockP2P {
+    pub fn new_with_txs(mut txs: Vec<Transaction>) -> Self {
+        let mut p2p = MockP2P::default();
+        p2p.expect_next_gossiped_transaction().returning(move || {
+            let tx = txs.pop();
+            Box::pin(async move {
+                if let Some(tx) = tx {
+                    GossipData::new(tx, vec![], vec![])
+                } else {
+                    core::future::pending::<GossipData<Transaction>>().await
+                }
+            })
+        });
+        p2p.expect_broadcast_transaction()
+            .returning(move |_| Ok(()));
+        p2p
+    }
+}
+
+mockall::mock! {
+    pub Importer {}
+
+    #[async_trait::async_trait]
+    impl BlockImport for Importer {
+        fn next_block<'_self, 'a>(&'_self mut self) -> BoxFuture<'a, SealedBlock>
+        where
+            '_self: 'a,
+            Self: Sync + 'a;
+
+    }
+}
+
+impl MockImporter {
+    fn with_blocks(mut blocks: Vec<SealedBlock>) -> Self {
+        let mut importer = MockImporter::default();
+        importer.expect_next_block().returning(move || {
+            let block = blocks.pop();
+            Box::pin(async move {
+                if let Some(block) = block {
+                    block
+                } else {
+                    core::future::pending::<SealedBlock>().await
+                }
+            })
+        });
+        importer
+    }
+}
+
+pub struct TestContextBuilder {
+    mock_db: MockDb,
+    rng: StdRng,
+    p2p: Option<MockP2P>,
+    importer: Option<MockImporter>,
+}
+
+impl Default for TestContextBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TestContextBuilder {
+    pub fn new() -> Self {
+        Self {
+            mock_db: MockDb::default(),
+            rng: StdRng::seed_from_u64(10),
+            p2p: None,
+            importer: None,
+        }
+    }
+
+    pub fn with_importer(&mut self, importer: MockImporter) {
+        self.importer = Some(importer)
+    }
+
+    pub fn with_p2p(&mut self, p2p: MockP2P) {
+        self.p2p = Some(p2p)
+    }
+
+    pub fn setup_script_tx(&mut self, gas_price: Word) -> Transaction {
+        let (_, gas_coin) = self.setup_coin();
+        TransactionBuilder::script(vec![], vec![])
+            .gas_price(gas_price)
+            .add_input(gas_coin)
+            .finalize_as_transaction()
+    }
+
+    pub fn setup_coin(&mut self) -> (Coin, Input) {
+        crate::test_helpers::setup_coin(&mut self.rng, Some(&self.mock_db))
+    }
+
+    pub async fn build(self) -> TestContext {
+        let rng = RefCell::new(self.rng);
+        let config = Config::default();
+        let mock_db = self.mock_db;
+        let status_tx = TxStatusChange::new(100);
+
+        let p2p = Box::new(self.p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![])));
+        let importer = Box::new(
+            self.importer
+                .unwrap_or_else(|| MockImporter::with_blocks(vec![])),
+        );
+
+        let mut builder = ServiceBuilder::new();
+        builder
+            .config(config)
+            .db(Arc::new(mock_db.clone()))
+            .importer(importer)
+            .tx_status_sender(status_tx)
+            .p2p_port(p2p);
+
+        let service = builder.build().unwrap();
+        service.start().await.unwrap();
+
+        TestContext {
+            service,
+            mock_db: Box::new(mock_db),
+            rng,
+        }
     }
 }

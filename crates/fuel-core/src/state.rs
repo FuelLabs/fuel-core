@@ -120,10 +120,7 @@ pub trait Transaction {
 
 pub type TransactionResult<T> = core::result::Result<T, TransactionError>;
 
-pub trait TransactableStorage:
-    KeyValueStore + BatchOperations + Debug + Send + Sync
-{
-}
+pub trait TransactableStorage: BatchOperations + Debug + Send + Sync {}
 
 #[derive(Clone, Debug)]
 pub enum TransactionError {

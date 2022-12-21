@@ -43,8 +43,8 @@ async fn can_download_logs() {
 
 #[tokio::test]
 async fn deploy_height_does_not_override() {
-    let mock_db = crate::mock_db::MockDb::default();
-    mock_db.set_finalized_da_height(50u64.into()).await;
+    let mut mock_db = crate::mock_db::MockDb::default();
+    mock_db.set_finalized_da_height(50u64.into()).await.unwrap();
     let config = Config {
         da_deploy_height: 20u64.into(),
         da_finalization: 1u64.into(),
@@ -52,7 +52,7 @@ async fn deploy_height_does_not_override() {
     };
     let eth_node = MockMiddleware::default();
     let (tx, _) = watch::channel(false);
-    let relayer = Relayer::new(tx, eth_node, Box::new(mock_db.clone()), config);
+    let mut relayer = Relayer::new(tx, eth_node, Box::new(mock_db.clone()), config);
     relayer.set_deploy_height().await;
 
     assert_eq!(*mock_db.get_finalized_da_height().await.unwrap(), 50);
@@ -60,8 +60,8 @@ async fn deploy_height_does_not_override() {
 
 #[tokio::test]
 async fn deploy_height_does_override() {
-    let mock_db = crate::mock_db::MockDb::default();
-    mock_db.set_finalized_da_height(50u64.into()).await;
+    let mut mock_db = crate::mock_db::MockDb::default();
+    mock_db.set_finalized_da_height(50u64.into()).await.unwrap();
     let config = Config {
         da_deploy_height: 52u64.into(),
         da_finalization: 1u64.into(),
@@ -69,7 +69,7 @@ async fn deploy_height_does_override() {
     };
     let eth_node = MockMiddleware::default();
     let (tx, _) = watch::channel(false);
-    let relayer = Relayer::new(tx, eth_node, Box::new(mock_db.clone()), config);
+    let mut relayer = Relayer::new(tx, eth_node, Box::new(mock_db.clone()), config);
     relayer.set_deploy_height().await;
 
     assert_eq!(*mock_db.get_finalized_da_height().await.unwrap(), 52);

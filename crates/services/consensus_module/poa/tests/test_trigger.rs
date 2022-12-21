@@ -1,14 +1,11 @@
 #![deny(unused_must_use)]
 
 use anyhow::anyhow;
-use fuel_core_interfaces::{
-    block_importer::ImportBlockBroadcast,
-    poa_coordinator::TransactionPool,
-};
 use fuel_core_poa::{
     ports::{
         BlockDb,
         BlockProducer,
+        TransactionPool,
     },
     Config,
     Service,
@@ -34,6 +31,7 @@ use fuel_core_types::{
             BlockId,
             SecretKeyWrapper,
         },
+        SealedBlock,
     },
     fuel_asm::*,
     fuel_crypto::SecretKey,
@@ -227,11 +225,13 @@ impl BlockDb for MockDatabase {
     }
 }
 
+// TODO: Refactor this test module to use `mockall` instead of `MockTxPool` that simulates the real
+//  logic of the `TxPool` with channels.
 /// Txpool with manually controllable contents
 pub struct MockTxPool {
     transactions: Arc<Mutex<Vec<ArcPoolTx>>>,
     broadcast_tx: broadcast::Sender<TxStatus>,
-    import_block_tx: broadcast::Sender<ImportBlockBroadcast>,
+    import_block_tx: broadcast::Sender<SealedBlock>,
     sender: MockTxPoolSender,
     stopper: oneshot::Sender<()>,
     join: JoinHandle<()>,
@@ -250,7 +250,8 @@ impl MockTxPool {
         let (stopper_tx, mut stopper_rx) = oneshot::channel();
         let (txpool_tx, mut txpool_rx) = mpsc::channel(16);
         let (broadcast_tx, broadcast_rx) = broadcast::channel(16);
-        let (import_block_tx, mut import_block_rx) = broadcast::channel(16);
+        let (import_block_tx, mut import_block_rx) =
+            broadcast::channel::<SealedBlock>(16);
 
         let txs = transactions.clone();
         let join = tokio::spawn(async move {
@@ -284,31 +285,27 @@ impl MockTxPool {
                             }
                         }
                     },
-                    msg = import_block_rx.recv() => {
-                        match msg.expect("Closed unexpectedly") {
-                            ImportBlockBroadcast::PendingFuelBlockImported { block } => {
-                                let mut g = txs.lock().await;
-                                let block_tx_ids: Vec<_> = block
-                                        .transactions()
-                                        .iter()
-                                        .map(|tx| tx.id())
-                                        .collect();
-                                g.retain(|tx| !block_tx_ids.contains(&tx.id()));
-                                block_event_tx.send(block.transactions().len()).await.unwrap();
-                            },
-                            _ => todo!("This block import type is not mocked yet"),
-                        }
+                    r = import_block_rx.recv() => {
+                        let block = r.expect("Block receive error");
+                        let mut g = txs.lock().await;
+                        let block_tx_ids: Vec<_> = block
+                                .entity.transactions()
+                                .iter()
+                                .map(|tx| tx.id())
+                                .collect();
+                        g.retain(|tx| !block_tx_ids.contains(&tx.id()));
+                        block_event_tx.send(block.entity.transactions().len()).await.unwrap();
                     },
                 }
             }
         });
-
+        let broadcast_rx_sender = broadcast_tx.subscribe();
         (
             Self {
                 transactions,
                 broadcast_tx,
                 import_block_tx,
-                sender: MockTxPoolSender(txpool_tx),
+                sender: MockTxPoolSender(txpool_tx, broadcast_rx_sender),
                 stopper: stopper_tx,
                 join,
                 block_event_rx,
@@ -318,7 +315,7 @@ impl MockTxPool {
     }
 
     fn sender(&self) -> MockTxPoolSender {
-        self.sender.clone()
+        MockTxPoolSender(self.sender.0.clone(), self.broadcast_tx.subscribe())
     }
 
     async fn add_tx(&mut self, tx: ArcPoolTx) {
@@ -352,8 +349,7 @@ pub enum MockTxPoolMsg {
     },
 }
 
-#[derive(Clone)]
-pub struct MockTxPoolSender(mpsc::Sender<MockTxPoolMsg>);
+pub struct MockTxPoolSender(mpsc::Sender<MockTxPoolMsg>, broadcast::Receiver<TxStatus>);
 
 impl MockTxPoolSender {
     async fn includable(&self) -> Vec<ArcPoolTx> {
@@ -396,13 +392,17 @@ impl TransactionPool for MockTxPoolSender {
             .expect("MockTxPool panicked in total_consumable_gas query"))
     }
 
-    async fn remove_txs(&mut self, tx_ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>> {
+    async fn remove_txs(&self, tx_ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>> {
         let (response, rx) = oneshot::channel();
         self.0
             .send(MockTxPoolMsg::Remove { tx_ids, response })
             .await
             .expect("Send error");
         Ok(rx.await.expect("MockTxPool panicked in remove_txs query"))
+    }
+
+    async fn next_transaction_status_update(&mut self) -> TxStatus {
+        self.1.recv().await.expect("unexpected close of stream")
     }
 }
 
@@ -429,11 +429,10 @@ async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
             metrics: false,
         });
 
-        let (txpool, broadcast_rx) = MockTxPool::spawn();
+        let (txpool, _broadcast_rx) = MockTxPool::spawn();
 
         service
             .start(
-                broadcast_rx,
                 txpool.sender(),
                 txpool.import_block_tx.clone(),
                 MockBlockProducer::new(txpool.sender(), db.clone()),
@@ -505,11 +504,10 @@ async fn never_trigger_never_produces_blocks() -> anyhow::Result<()> {
         metrics: false,
     });
 
-    let (mut txpool, broadcast_rx) = MockTxPool::spawn();
+    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
     service
         .start(
-            broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
             producer,
@@ -551,11 +549,10 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
         metrics: false,
     });
 
-    let (mut txpool, broadcast_rx) = MockTxPool::spawn();
+    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
     service
         .start(
-            broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
             producer,
@@ -614,11 +611,10 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
         metrics: false,
     });
 
-    let (mut txpool, broadcast_rx) = MockTxPool::spawn();
+    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
     service
         .start(
-            broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
             producer,
@@ -709,11 +705,10 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
         metrics: false,
     });
 
-    let (mut txpool, broadcast_rx) = MockTxPool::spawn();
+    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
     service
         .start(
-            broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
             producer,
@@ -768,11 +763,10 @@ async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
         metrics: false,
     });
 
-    let (mut txpool, broadcast_rx) = MockTxPool::spawn();
+    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
     service
         .start(
-            broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
             producer,
@@ -850,11 +844,10 @@ async fn hybrid_trigger_reacts_correctly_to_full_txpool() -> anyhow::Result<()> 
         metrics: false,
     });
 
-    let (mut txpool, broadcast_rx) = MockTxPool::spawn();
+    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
     service
         .start(
-            broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
             producer,

@@ -1,21 +1,23 @@
 #![allow(clippy::let_unit_value)]
+use super::adapters::P2PAdapter;
 use crate::{
     chain_config::BlockProduction,
     database::Database,
     service::{
         adapters::{
+            BlockImportAdapter,
             ExecutorAdapter,
             MaybeRelayerAdapter,
             PoACoordinatorAdapter,
+            TxPoolAdapter,
         },
         Config,
     },
 };
-use fuel_core_interfaces::txpool::{
-    Sender,
-    TxPoolDb,
+use fuel_core_txpool::{
+    ports::TxPoolDb,
+    service::TxStatusChange,
 };
-use fuel_core_txpool::service::TxStatusChange;
 use futures::future::join_all;
 use std::sync::Arc;
 use tokio::{
@@ -28,9 +30,6 @@ use tokio::{
     task::JoinHandle,
 };
 
-#[cfg(feature = "p2p")]
-use fuel_core_interfaces::p2p::P2pDb;
-
 pub struct Modules {
     pub txpool: Arc<fuel_core_txpool::Service>,
     pub block_importer: Arc<fuel_core_importer::Service>,
@@ -40,7 +39,7 @@ pub struct Modules {
     #[cfg(feature = "relayer")]
     pub relayer: Option<fuel_core_relayer::RelayerHandle>,
     #[cfg(feature = "p2p")]
-    pub network_service: Arc<fuel_core_p2p::orchestrator::Service>,
+    pub network_service: P2PAdapter,
 }
 
 impl Modules {
@@ -109,61 +108,41 @@ pub async fn start_modules(
         None
     };
 
-    let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
-    let (block_event_sender, block_event_receiver) = mpsc::channel(100);
+    let (_block_event_sender, block_event_receiver) = mpsc::channel(100);
     let (block_import_tx, block_import_rx) = broadcast::channel(16);
 
     #[cfg(feature = "p2p")]
-    let (p2p_request_event_sender, p2p_request_event_receiver) = mpsc::channel(100);
-    #[cfg(not(feature = "p2p"))]
-    let (p2p_request_event_sender, mut p2p_request_event_receiver) = mpsc::channel(100);
-
-    #[cfg(feature = "p2p")]
     let network_service = {
-        let p2p_db: Arc<dyn P2pDb> = Arc::new(database.clone());
-        let (tx_consensus, _) = mpsc::channel(100);
+        let p2p_db = Arc::new(database.clone());
 
         let genesis = database.get_genesis()?;
         let p2p_config = config.p2p.clone().init(genesis)?;
 
-        fuel_core_p2p::orchestrator::Service::new(
-            p2p_config,
-            p2p_db,
-            p2p_request_event_receiver,
-            tx_consensus,
-            incoming_tx_sender,
-            block_event_sender,
-        )
+        Arc::new(fuel_core_p2p::orchestrator::Service::new(
+            p2p_config, p2p_db,
+        ))
     };
 
+    #[cfg(feature = "p2p")]
+    let p2p_adapter = P2PAdapter::new(network_service);
     #[cfg(not(feature = "p2p"))]
-    {
-        let keep_alive = Box::new(incoming_tx_sender);
-        Box::leak(keep_alive);
+    let p2p_adapter = P2PAdapter::new();
 
-        let keep_alive = Box::new(block_event_sender);
-        Box::leak(keep_alive);
-
-        tokio::spawn(async move {
-            while (p2p_request_event_receiver.recv().await).is_some() {}
-        });
-    }
+    let p2p_adapter = p2p_adapter;
+    p2p_adapter.start().await?;
 
     let tx_status_sender = TxStatusChange::new(100);
-
-    let (txpool_sender, txpool_receiver) = mpsc::channel(100);
 
     let mut txpool_builder = fuel_core_txpool::ServiceBuilder::new();
     txpool_builder
         .config(config.txpool.clone())
-        .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
-        .incoming_tx_receiver(incoming_tx_receiver)
-        .import_block_event(block_import_rx)
-        .tx_status_sender(tx_status_sender.clone())
-        .txpool_sender(Sender::new(txpool_sender))
-        .txpool_receiver(txpool_receiver);
+        .db(Arc::new(database.clone()) as Arc<dyn TxPoolDb>)
+        .p2p_port(Box::new(p2p_adapter.clone()))
+        .importer(Box::new(BlockImportAdapter::new(block_import_rx)))
+        .tx_status_sender(tx_status_sender.clone());
 
-    txpool_builder.network_sender(p2p_request_event_sender.clone());
+    let txpool_service = Arc::new(txpool_builder.build()?);
+    txpool_service.start().await?;
 
     // restrict the max number of concurrent dry runs to the number of CPUs
     // as execution in the worst case will be CPU bound rather than I/O bound.
@@ -171,8 +150,9 @@ pub async fn start_modules(
     let block_producer = Arc::new(fuel_core_producer::Producer {
         config: config.block_producer.clone(),
         db: database.clone(),
-        txpool: Box::new(fuel_core_producer::adapters::TxPoolAdapter {
-            sender: txpool_builder.sender().clone(),
+        txpool: Box::new(TxPoolAdapter {
+            service: txpool_service.clone(),
+            tx_status_rx: txpool_service.tx_status_subscribe(),
         }),
         executor: Arc::new(ExecutorAdapter {
             database: database.clone(),
@@ -194,8 +174,10 @@ pub async fn start_modules(
     match &coordinator {
         CoordinatorService::Poa(poa) => {
             poa.start(
-                txpool_builder.tx_status_subscribe(),
-                txpool_builder.sender().clone(),
+                TxPoolAdapter {
+                    service: txpool_service.clone(),
+                    tx_status_rx: txpool_service.tx_status_subscribe(),
+                },
                 block_import_tx,
                 PoACoordinatorAdapter {
                     block_producer: block_producer.clone(),
@@ -205,34 +187,20 @@ pub async fn start_modules(
             .await;
         }
         CoordinatorService::Bft(bft) => {
-            bft.start(
-                p2p_request_event_sender.clone(),
-                block_importer.sender().clone(),
-                block_importer.subscribe(),
-            )
-            .await;
+            bft.start().await;
         }
     }
 
     sync.start(
         block_event_receiver,
-        p2p_request_event_sender.clone(),
         // TODO: re-introduce this when sync actually depends on the coordinator
         // bft.sender().clone(),
         block_importer.sender().clone(),
     )
     .await;
 
-    #[cfg(feature = "p2p")]
-    if !config.p2p.network_name.is_empty() {
-        network_service.start().await?;
-    }
-
-    let txpool = txpool_builder.build()?;
-    txpool.start().await?;
-
     Ok(Modules {
-        txpool: Arc::new(txpool),
+        txpool: txpool_service,
         block_importer: Arc::new(block_importer),
         block_producer,
         coordinator: Arc::new(coordinator),
@@ -240,6 +208,6 @@ pub async fn start_modules(
         #[cfg(feature = "relayer")]
         relayer,
         #[cfg(feature = "p2p")]
-        network_service: Arc::new(network_service),
+        network_service: p2p_adapter,
     })
 }

@@ -12,7 +12,6 @@ version = "0.15.1"
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
-fuel-core-interfaces = { path = "../../fuel-core-interfaces", version = "0.15.1" }
 fuel-core-storage = { path = "../../storage", version = "0.15.1" }
 fuel-core-types = { path = "../../types", version = "0.15.1" }
 thiserror = "1.0"
@@ -21,11 +20,8 @@ tracing = { version = "0.1" }
 
 [dev-dependencies]
 fuel-core-producer = { path = "", features = ["test-helpers"] }
-fuel-core-txpool = { path = "../txpool", features = ["test-helpers"] }
 fuel-core-types = { path = "../../types", features = ["test-helpers"] }
-itertools = "0.10"
 rand = "0.8"
-rstest = "0.15"
 
 [features]
 test-helpers = ["fuel-core-types/test-helpers"]

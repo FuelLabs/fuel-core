@@ -1,4 +1,5 @@
 use super::*;
+use anyhow::anyhow;
 use futures::TryStreamExt;
 
 #[cfg(test)]
@@ -67,16 +68,20 @@ where
             let event: EthEventLog = (&event).try_into()?;
             match event {
                 EthEventLog::Message(m) => {
-                    use fuel_core_storage::StorageMutate;
-                    let m: Message = (&m).into();
-                    // Add messages to database
-                    StorageMutate::<Messages>::insert(database, &m.id(), &m)?;
+                    let m = Message::from(&m).check();
+                    if database.insert_message(&m).await?.is_some() {
+                        // TODO: https://github.com/FuelLabs/fuel-core/issues/681
+                        return Err(anyhow!(
+                            "The message for {:?} already existed",
+                            m.id()
+                        ))
+                    }
                 }
                 // TODO: Log out ignored messages.
                 EthEventLog::Ignored => (),
             }
         }
-        database.set_finalized_da_height(to_block.into()).await;
+        database.set_finalized_da_height(to_block.into()).await?;
     }
     Ok(())
 }

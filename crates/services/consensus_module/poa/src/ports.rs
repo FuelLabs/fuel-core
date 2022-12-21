@@ -11,9 +11,28 @@ use fuel_core_types::{
     fuel_tx::{
         Receipt,
         Transaction,
+        TxId,
     },
-    services::executor::UncommittedResult,
+    services::{
+        executor::UncommittedResult,
+        txpool::{
+            ArcPoolTx,
+            TxStatus,
+        },
+    },
 };
+
+#[async_trait::async_trait]
+pub trait TransactionPool {
+    /// Returns the number of pending transactions in the `TxPool`.
+    async fn pending_number(&self) -> anyhow::Result<usize>;
+
+    async fn total_consumable_gas(&self) -> anyhow::Result<u64>;
+
+    async fn remove_txs(&self, tx_ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>>;
+
+    async fn next_transaction_status_update(&mut self) -> TxStatus;
+}
 
 pub trait BlockDb: Send + Sync {
     fn block_height(&self) -> anyhow::Result<BlockHeight>;

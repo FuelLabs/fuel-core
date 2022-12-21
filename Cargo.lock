@@ -2207,7 +2207,6 @@ dependencies = [
  "fuel-core-database",
  "fuel-core-executor",
  "fuel-core-importer",
- "fuel-core-interfaces",
  "fuel-core-metrics",
  "fuel-core-p2p",
  "fuel-core-poa",
@@ -2254,7 +2253,6 @@ name = "fuel-core-bft"
 version = "0.15.1"
 dependencies = [
  "anyhow",
- "fuel-core-interfaces",
  "parking_lot 0.12.1",
  "tokio",
 ]
@@ -2353,22 +2351,7 @@ name = "fuel-core-importer"
 version = "0.15.1"
 dependencies = [
  "anyhow",
- "fuel-core-interfaces",
  "parking_lot 0.12.1",
- "tokio",
-]
-
-[[package]]
-name = "fuel-core-interfaces"
-version = "0.15.1"
-dependencies = [
- "anyhow",
- "async-trait",
- "derive_more",
- "fuel-core-storage",
- "fuel-core-types",
- "serde",
- "thiserror",
  "tokio",
 ]
 
@@ -2391,8 +2374,8 @@ dependencies = [
  "bincode",
  "ctor",
  "fuel-core-chain-config",
- "fuel-core-interfaces",
  "fuel-core-metrics",
+ "fuel-core-storage",
  "fuel-core-types",
  "futures",
  "futures-timer",
@@ -2430,7 +2413,6 @@ version = "0.15.1"
 dependencies = [
  "anyhow",
  "async-trait",
- "fuel-core-interfaces",
  "fuel-core-storage",
  "fuel-core-types",
  "humantime-serde",
@@ -2448,14 +2430,10 @@ version = "0.15.1"
 dependencies = [
  "anyhow",
  "async-trait",
- "fuel-core-interfaces",
  "fuel-core-producer",
  "fuel-core-storage",
- "fuel-core-txpool",
  "fuel-core-types",
- "itertools",
  "rand 0.8.5",
- "rstest",
  "thiserror",
  "tokio",
  "tracing",
@@ -2471,7 +2449,7 @@ dependencies = [
  "ethers-contract",
  "ethers-core",
  "ethers-providers",
- "fuel-core-interfaces",
+ "fuel-core-relayer",
  "fuel-core-storage",
  "fuel-core-types",
  "futures",
@@ -2502,7 +2480,7 @@ name = "fuel-core-sync"
 version = "0.15.1"
 dependencies = [
  "anyhow",
- "fuel-core-interfaces",
+ "fuel-core-types",
  "parking_lot 0.12.1",
  "tokio",
 ]
@@ -2536,12 +2514,15 @@ name = "fuel-core-txpool"
 version = "0.15.1"
 dependencies = [
  "anyhow",
+ "async-trait",
  "fuel-core-chain-config",
- "fuel-core-interfaces",
  "fuel-core-metrics",
  "fuel-core-storage",
  "fuel-core-txpool",
  "fuel-core-types",
+ "itertools",
+ "mockall",
+ "rstest",
  "tokio",
  "tracing",
 ]

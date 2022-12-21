@@ -103,9 +103,19 @@ impl MessageProof {
 }
 
 impl CheckedMessage {
-    /// Compute message id from the proof
+    /// Returned computed message id.
     pub fn id(&self) -> &MessageId {
         &self.id
+    }
+
+    /// Returns the message.
+    pub fn message(&self) -> &Message {
+        &self.message
+    }
+
+    /// Unpacks inner values of the checked message.
+    pub fn unpack(self) -> (MessageId, Message) {
+        (self.id, self.message)
     }
 }
 

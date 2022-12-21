@@ -11,6 +11,7 @@ use crate::{
     Config,
     Producer,
 };
+use fuel_core_producer as _;
 use fuel_core_types::{
     blockchain::{
         block::{

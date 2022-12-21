@@ -4,9 +4,9 @@
 
 use crate::{
     log::EthEventLog,
+    ports::RelayerDb,
     Config,
 };
-use anyhow::Result;
 use async_trait::async_trait;
 use core::time::Duration;
 use ethers_core::types::{
@@ -22,8 +22,7 @@ use ethers_providers::{
     Provider,
     ProviderError,
 };
-use fuel_core_interfaces::relayer::RelayerDb;
-use fuel_core_storage::tables::Messages;
+use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::message::Message,
@@ -114,11 +113,12 @@ where
         }
     }
 
-    async fn set_deploy_height(&self) {
+    async fn set_deploy_height(&mut self) {
         if self.finalized().await.unwrap_or_default() < *self.config.da_deploy_height {
             self.database
                 .set_finalized_da_height(self.config.da_deploy_height)
-                .await;
+                .await
+                .expect("Should be able to set the finalized da height");
         }
     }
 }
@@ -141,7 +141,10 @@ where
         write_logs(self.database.as_mut(), logs).await
     }
 
-    async fn set_finalized_da_height(&self, height: DaBlockHeight) {
+    async fn set_finalized_da_height(
+        &mut self,
+        height: DaBlockHeight,
+    ) -> StorageResult<()> {
         self.database.set_finalized_da_height(height).await
     }
 
@@ -225,7 +228,7 @@ impl RelayerSynced {
     /// The only guarantee is that if this future completes then
     /// the relayer did reach consistency with the da layer for
     /// some period of time.
-    pub async fn await_synced(&self) -> Result<()> {
+    pub async fn await_synced(&self) -> anyhow::Result<()> {
         let mut rx = self.synced.clone();
         if !rx.borrow_and_update().deref() {
             rx.changed().await?;
@@ -254,7 +257,11 @@ where
     P: Middleware<Error = ProviderError>,
 {
     async fn finalized(&self) -> Option<u64> {
-        self.database.get_finalized_da_height().await.map(|h| *h)
+        self.database
+            .get_finalized_da_height()
+            .await
+            .map(|h| *h)
+            .ok()
     }
 }
 

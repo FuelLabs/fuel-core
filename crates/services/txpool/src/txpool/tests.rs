@@ -17,13 +17,6 @@ use crate::{
     MockDb,
     TxPool,
 };
-use fuel_core_storage::{
-    tables::{
-        Coins,
-        Messages,
-    },
-    StorageAsMut,
-};
 use fuel_core_types::{
     entities::coin::CoinStatus,
     fuel_crypto::rand::{
@@ -62,7 +55,6 @@ async fn insert_simple_tx_succeeds() {
 
     txpool
         .insert_inner(tx, &db)
-        .await
         .expect("Transaction should be OK, got Err");
 }
 
@@ -94,11 +86,9 @@ async fn insert_simple_tx_dependency_chain_succeeds() {
 
     txpool
         .insert_inner(tx1, &db)
-        .await
         .expect("Tx1 should be OK, got Err");
     txpool
         .insert_inner(tx2, &db)
-        .await
         .expect("Tx2 dependent should be OK, got Err");
 }
 
@@ -150,12 +140,10 @@ async fn faulty_t2_collided_on_contract_id_from_tx1() {
 
     txpool
         .insert_inner(tx, &db)
-        .await
         .expect("Tx1 should be Ok, got Err");
 
     let err = txpool
         .insert_inner(tx_faulty, &db)
-        .await
         .expect_err("Tx2 should be Err, got Ok");
     assert!(matches!(
         err.downcast_ref::<Error>(),
@@ -201,12 +189,10 @@ async fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
 
     txpool
         .insert_inner(tx_faulty.clone(), &db)
-        .await
         .expect("Tx1 should be Ok, got Err");
 
     let err = txpool
         .insert_inner(tx, &db)
-        .await
         .expect_err("Tx2 should be Err, got Ok");
     assert!(matches!(
         err.downcast_ref::<Error>(),
@@ -224,12 +210,10 @@ async fn not_inserted_known_tx() {
 
     txpool
         .insert_inner(tx.clone(), &db)
-        .await
         .expect("Tx1 should be Ok, got Err");
 
     let err = txpool
         .insert_inner(tx, &db)
-        .await
         .expect_err("Second insertion of Tx1 should be Err, got Ok");
     assert!(matches!(
         err.downcast_ref::<Error>(),
@@ -253,7 +237,6 @@ async fn try_to_insert_tx2_missing_utxo() {
 
     let err = txpool
         .insert_inner(tx, &db)
-        .await
         .expect_err("Tx should be Err, got Ok");
     assert!(matches!(
         err.downcast_ref::<Error>(),
@@ -271,7 +254,7 @@ async fn tx_try_to_use_spent_coin() {
     let (mut coin, input) = setup_coin(&mut rng, None);
     let utxo_id = *input.utxo_id().unwrap();
     coin.status = CoinStatus::Spent;
-    db.storage::<Coins>().insert(&utxo_id, &coin).unwrap();
+    db.insert_coin(utxo_id, coin);
 
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
@@ -283,7 +266,6 @@ async fn tx_try_to_use_spent_coin() {
     // attempt to insert the tx with an already spent coin
     let err = txpool
         .insert_inner(tx, &db)
-        .await
         .expect_err("Tx should be Err, got Ok");
     assert!(matches!(
         err.downcast_ref::<Error>(),
@@ -314,12 +296,10 @@ async fn higher_priced_tx_removes_lower_priced_tx() {
 
     txpool
         .insert_inner(tx1.clone(), &db)
-        .await
         .expect("Tx1 should be Ok, got Err");
 
     let vec = txpool
         .insert_inner(tx2, &db)
-        .await
         .expect("Tx2 should be Ok, got Err");
     assert_eq!(vec.removed[0].id(), tx1.id(), "Tx1 id should be removed");
 }
@@ -356,16 +336,13 @@ async fn underpriced_tx1_not_included_coin_collision() {
 
     txpool
         .insert_inner(tx1.clone(), &db)
-        .await
         .expect("Tx1 should be Ok, got Err");
     txpool
         .insert_inner(tx2.clone(), &db)
-        .await
         .expect("Tx2 should be Ok, got Err");
 
     let err = txpool
-        .insert_inner(tx3.clone(), &db)
-        .await
+        .insert_inner(tx3, &db)
         .expect_err("Tx3 should be Err, got Ok");
     assert!(matches!(
         err.downcast_ref::<Error>(),
@@ -408,12 +385,10 @@ async fn overpriced_tx_contract_input_not_inserted() {
 
     txpool
         .insert_inner(tx1, &db)
-        .await
         .expect("Tx1 should be Ok, got err");
 
     let err = txpool
         .insert_inner(tx2, &db)
-        .await
         .expect_err("Tx2 should be Err, got Ok");
     assert!(
         matches!(
@@ -460,11 +435,9 @@ async fn dependent_contract_input_inserted() {
 
     txpool
         .insert_inner(tx1, &db)
-        .await
         .expect("Tx1 should be Ok, got Err");
     txpool
         .insert_inner(tx2, &db)
-        .await
         .expect("Tx2 should be Ok, got Err");
 }
 
@@ -489,7 +462,7 @@ async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
     let tx2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(9)
-            .add_input(input.clone())
+            .add_input(input)
             .finalize_as_transaction(),
     );
     let tx3 = Arc::new(
@@ -501,15 +474,12 @@ async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
 
     txpool
         .insert_inner(tx1.clone(), &db)
-        .await
         .expect("Tx1 should be OK, got Err");
     txpool
         .insert_inner(tx2.clone(), &db)
-        .await
         .expect("Tx2 should be OK, got Err");
     let vec = txpool
-        .insert_inner(tx3.clone(), &db)
-        .await
+        .insert_inner(tx3, &db)
         .expect("Tx3 should be OK, got Err");
     assert_eq!(
         vec.removed.len(),
@@ -549,17 +519,14 @@ async fn more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
     );
 
     txpool
-        .insert_inner(tx1.clone(), &db)
-        .await
+        .insert_inner(tx1, &db)
         .expect("Tx1 should be OK, got Err");
     let squeezed = txpool
-        .insert_inner(tx2.clone(), &db)
-        .await
+        .insert_inner(tx2, &db)
         .expect("Tx2 should be OK, got Err");
     assert_eq!(squeezed.removed.len(), 1);
     let squeezed = txpool
-        .insert_inner(tx3.clone(), &db)
-        .await
+        .insert_inner(tx3, &db)
         .expect("Tx3 should be OK, got Err");
     assert_eq!(
         squeezed.removed.len(),
@@ -594,12 +561,10 @@ async fn tx_limit_hit() {
 
     txpool
         .insert_inner(tx1, &db)
-        .await
         .expect("Tx1 should be Ok, got Err");
 
     let err = txpool
         .insert_inner(tx2, &db)
-        .await
         .expect_err("Tx2 should be Err, got Ok");
     assert!(matches!(
         err.downcast_ref::<Error>(),
@@ -643,16 +608,13 @@ async fn tx_depth_hit() {
 
     txpool
         .insert_inner(tx1, &db)
-        .await
         .expect("Tx1 should be OK, got Err");
     txpool
         .insert_inner(tx2, &db)
-        .await
         .expect("Tx2 should be OK, got Err");
 
     let err = txpool
         .insert_inner(tx3, &db)
-        .await
         .expect_err("Tx3 should be Err, got Ok");
     assert!(matches!(
         err.downcast_ref::<Error>(),
@@ -692,15 +654,12 @@ async fn sorted_out_tx1_2_4() {
 
     txpool
         .insert_inner(tx1.clone(), &db)
-        .await
         .expect("Tx1 should be Ok, got Err");
     txpool
         .insert_inner(tx2.clone(), &db)
-        .await
         .expect("Tx2 should be Ok, got Err");
     txpool
         .insert_inner(tx3.clone(), &db)
-        .await
         .expect("Tx4 should be Ok, got Err");
 
     let txs = txpool.sorted_includable();
@@ -747,15 +706,12 @@ async fn find_dependent_tx1_tx2() {
 
     txpool
         .insert_inner(tx1.clone(), &db)
-        .await
         .expect("Tx0 should be Ok, got Err");
     txpool
         .insert_inner(tx2.clone(), &db)
-        .await
         .expect("Tx1 should be Ok, got Err");
     let tx3_result = txpool
         .insert_inner(tx3.clone(), &db)
-        .await
         .expect("Tx2 should be Ok, got Err");
 
     let mut seen = HashMap::new();
@@ -791,7 +747,6 @@ async fn tx_at_least_min_gas_price_is_insertable() {
 
     txpool
         .insert_inner(tx, &db)
-        .await
         .expect("Tx should be Ok, got Err");
 }
 
@@ -814,7 +769,6 @@ async fn tx_below_min_gas_price_is_not_insertable() {
 
     let err = txpool
         .insert_inner(tx, &db)
-        .await
         .expect_err("expected insertion failure");
     assert!(matches!(
         err.root_cause().downcast_ref::<Error>().unwrap(),
@@ -833,14 +787,11 @@ async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
     );
 
     let mut db = MockDb::default();
-    db.storage::<Messages>()
-        .insert(&message.id(), &message)
-        .unwrap();
+    db.insert_message(message);
     let mut txpool = TxPool::new(Default::default());
 
     txpool
         .insert_inner(tx.clone(), &db)
-        .await
         .expect("should succeed");
 
     let tx_info = TxPool::find_one(&RwLock::new(txpool), &tx.id())
@@ -861,15 +812,10 @@ async fn tx_rejected_when_input_message_id_is_spent() {
     );
 
     let mut db = MockDb::default();
-    db.storage::<Messages>()
-        .insert(&message.id(), &message)
-        .unwrap();
+    db.insert_message(message.clone());
     let mut txpool = TxPool::new(Default::default());
 
-    let err = txpool
-        .insert_inner(tx.clone(), &db)
-        .await
-        .expect_err("should fail");
+    let err = txpool.insert_inner(tx, &db).expect_err("should fail");
 
     // check error
     assert!(matches!(
@@ -893,10 +839,7 @@ async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
 
     let mut txpool = TxPool::new(Default::default());
 
-    let err = txpool
-        .insert_inner(tx.clone(), &db)
-        .await
-        .expect_err("should fail");
+    let err = txpool.insert_inner(tx, &db).expect_err("should fail");
 
     // check error
     assert!(matches!(
@@ -929,16 +872,13 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
     );
 
     let mut db = MockDb::default();
-    db.storage::<Messages>()
-        .insert(&message.id(), &message)
-        .unwrap();
+    db.insert_message(message.clone());
 
     let mut txpool = TxPool::new(Default::default());
 
     // Insert a tx for the message id with a high gas amount
     txpool
         .insert_inner(tx_high.clone(), &db)
-        .await
         .expect("expected successful insertion");
 
     // Insert a tx for the message id with a low gas amount
@@ -946,8 +886,7 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
     // prices of both the new and existing transactions. Since the existing transaction's gas
     // price is higher, we must now reject the new transaction.
     let err = txpool
-        .insert_inner(tx_low.clone(), &db)
-        .await
+        .insert_inner(tx_low, &db)
         .expect_err("expected failure");
 
     // check error
@@ -974,15 +913,12 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
     );
 
     let mut db = MockDb::default();
-    db.storage::<Messages>()
-        .insert(&message.id(), &message)
-        .unwrap();
+    db.insert_message(message);
 
     let mut txpool = TxPool::new(Default::default());
 
     txpool
         .insert_inner(tx_low.clone(), &db)
-        .await
         .expect("should succeed");
 
     // Insert a tx for the message id with a high gas amount
@@ -996,10 +932,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
             .finalize_as_transaction(),
     );
 
-    let squeezed_out_txs = txpool
-        .insert_inner(tx_high.clone(), &db)
-        .await
-        .expect("should succeed");
+    let squeezed_out_txs = txpool.insert_inner(tx_high, &db).expect("should succeed");
 
     assert_eq!(squeezed_out_txs.removed.len(), 1);
     assert_eq!(squeezed_out_txs.removed[0].id(), tx_low.id());
@@ -1030,38 +963,25 @@ async fn message_of_squeezed_out_tx_can_be_resubmitted_at_lower_gas_price() {
     let tx_2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(3)
-            .add_input(message_input_1.clone())
+            .add_input(message_input_1)
             .finalize_as_transaction(),
     );
 
     let tx_3 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(1)
-            .add_input(message_input_2.clone())
+            .add_input(message_input_2)
             .finalize_as_transaction(),
     );
 
     let mut db = MockDb::default();
-    db.storage::<Messages>()
-        .insert(&message_1.id(), &message_1)
-        .unwrap();
-    db.storage::<Messages>()
-        .insert(&message_2.id(), &message_2)
-        .unwrap();
+    db.insert_message(message_1);
+    db.insert_message(message_2);
     let mut txpool = TxPool::new(Default::default());
 
-    txpool
-        .insert_inner(tx_1, &db)
-        .await
-        .expect("should succeed");
+    txpool.insert_inner(tx_1, &db).expect("should succeed");
 
-    txpool
-        .insert_inner(tx_2, &db)
-        .await
-        .expect("should succeed");
+    txpool.insert_inner(tx_2, &db).expect("should succeed");
 
-    txpool
-        .insert_inner(tx_3, &db)
-        .await
-        .expect("should succeed");
+    txpool.insert_inner(tx_3, &db).expect("should succeed");
 }

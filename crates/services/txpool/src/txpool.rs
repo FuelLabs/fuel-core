@@ -3,16 +3,16 @@ use crate::{
         dependency::Dependency,
         price_sort::PriceSort,
     },
+    ports::TxPoolDb,
     service::TxStatusChange,
     types::*,
     Config,
     Error,
 };
 use anyhow::anyhow;
-use fuel_core_interfaces::txpool::TxPoolDb;
 use fuel_core_metrics::txpool_metrics::TXPOOL_METRICS;
 use fuel_core_types::{
-    blockchain::block::Block,
+    blockchain::SealedBlock,
     fuel_tx::{
         Chargeable,
         CheckedTransaction,
@@ -53,6 +53,7 @@ impl TxPool {
             config,
         }
     }
+
     pub fn txs(&self) -> &HashMap<TxId, TxInfo> {
         &self.by_hash
     }
@@ -62,7 +63,7 @@ impl TxPool {
     }
 
     // this is atomic operation. Return removed(pushed out/replaced) transactions
-    async fn insert_inner(
+    fn insert_inner(
         &mut self,
         // TODO: Pass `&Transaction`
         tx: Arc<Transaction>,
@@ -143,7 +144,7 @@ impl TxPool {
                 .observe(tx.metered_bytes_size() as f64);
         }
         // check and insert dependency
-        let rem = self.by_dependency.insert(&self.by_hash, db, &tx).await?;
+        let rem = self.by_dependency.insert(&self.by_hash, db, &tx)?;
         self.by_hash.insert(tx.id(), TxInfo::new(tx.clone()));
         self.by_gas_price.insert(&tx);
 
@@ -234,7 +235,7 @@ impl TxPool {
         let mut res = Vec::new();
         for tx in txs.iter() {
             let mut pool = txpool.write().await;
-            res.push(pool.insert_inner(tx.clone(), db).await)
+            res.push(pool.insert_inner(tx.clone(), db))
         }
         // announce to subscribers
         for ret in res.iter() {
@@ -329,13 +330,12 @@ impl TxPool {
     pub async fn block_update(
         txpool: &RwLock<Self>,
         tx_status_sender: &TxStatusChange,
-        block: Arc<Block>,
+        block: SealedBlock,
         // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
         let mut guard = txpool.write().await;
-        // TODO https://github.com/FuelLabs/fuel-core/issues/465
 
-        for tx in block.transactions() {
+        for tx in block.entity.transactions() {
             tx_status_sender.send_complete(tx.id());
             let _removed = guard.remove_by_tx_id(&tx.id());
         }

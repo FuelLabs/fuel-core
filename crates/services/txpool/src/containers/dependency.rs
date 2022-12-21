@@ -1,9 +1,9 @@
 use crate::{
+    ports::TxPoolDb,
     types::*,
     Error,
 };
 use anyhow::anyhow;
-use fuel_core_interfaces::txpool::TxPoolDb;
 use fuel_core_types::{
     entities::coin::{
         Coin,
@@ -517,7 +517,7 @@ impl Dependency {
 
     /// insert tx inside dependency
     /// return list of transactions that are removed from txpool
-    pub(crate) async fn insert<'a>(
+    pub(crate) fn insert<'a>(
         &'a mut self,
         txs: &'a HashMap<TxId, TxInfo>,
         db: &dyn TxPoolDb,

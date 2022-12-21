@@ -1,65 +1,42 @@
 use crate::{
     database::Database,
-    executor::Executor,
     service::Config,
 };
-use fuel_core_interfaces::relayer::RelayerDb;
-use fuel_core_types::{
-    fuel_tx::{
-        Receipt,
-        Transaction,
-    },
-    fuel_types::Word,
-};
-
+#[cfg(feature = "p2p")]
+use fuel_core_p2p::orchestrator::Service as P2PService;
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::RelayerSynced;
-use fuel_core_storage::{
-    transactional::StorageTransaction,
-    Result as StorageResult,
-};
+use fuel_core_txpool::Service;
 use fuel_core_types::{
-    blockchain::{
-        primitives,
-        primitives::BlockHeight,
-    },
-    services::executor::{
-        ExecutionBlock,
-        Result as ExecutorResult,
-        UncommittedResult,
-    },
+    blockchain::SealedBlock,
+    services::txpool::TxStatus,
 };
 use std::sync::Arc;
+use tokio::{
+    sync::broadcast::Receiver,
+    task::JoinHandle,
+};
+
+pub mod poa;
+pub mod producer;
+pub mod txpool;
+
+/// This is used to get block import events from coordinator source
+/// and pass them to the txpool.
+pub struct BlockImportAdapter {
+    // TODO: We should use `fuel_core_poa::Service here but for that we need to fix
+    //  the `start` of the process and store the task inside of the `Service`.
+    rx: Receiver<SealedBlock>,
+}
+
+pub struct TxPoolAdapter {
+    pub service: Arc<Service>,
+    pub tx_status_rx: Receiver<TxStatus>,
+}
 
 pub struct ExecutorAdapter {
     pub database: Database,
     pub config: Config,
-}
-
-#[async_trait::async_trait]
-impl fuel_core_producer::ports::Executor<Database> for ExecutorAdapter {
-    fn execute_without_commit(
-        &self,
-        block: ExecutionBlock,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
-        let executor = Executor {
-            database: self.database.clone(),
-            config: self.config.clone(),
-        };
-        executor.execute_without_commit(block)
-    }
-
-    fn dry_run(
-        &self,
-        block: ExecutionBlock,
-        utxo_validation: Option<bool>,
-    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
-        let executor = Executor {
-            database: self.database.clone(),
-            config: self.config.clone(),
-        };
-        executor.dry_run(block, utxo_validation)
-    }
 }
 
 pub struct MaybeRelayerAdapter {
@@ -68,50 +45,57 @@ pub struct MaybeRelayerAdapter {
     pub relayer_synced: Option<RelayerSynced>,
 }
 
-#[async_trait::async_trait]
-impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
-    async fn get_best_finalized_da_height(
-        &self,
-    ) -> StorageResult<primitives::DaBlockHeight> {
-        #[cfg(feature = "relayer")]
-        {
-            if let Some(sync) = self.relayer_synced.as_ref() {
-                sync.await_synced().await?;
-            }
-        }
-
-        Ok(self
-            .database
-            .get_finalized_da_height()
-            .await
-            .unwrap_or_default())
-    }
-}
-
 pub struct PoACoordinatorAdapter {
     pub block_producer: Arc<fuel_core_producer::Producer<Database>>,
 }
 
-#[async_trait::async_trait]
-impl fuel_core_poa::ports::BlockProducer<Database> for PoACoordinatorAdapter {
-    async fn produce_and_execute_block(
-        &self,
-        height: BlockHeight,
-        max_gas: Word,
-    ) -> anyhow::Result<UncommittedResult<StorageTransaction<Database>>> {
-        self.block_producer
-            .produce_and_execute_block(height, max_gas)
-            .await
-    }
+#[cfg_attr(not(feature = "p2p"), derive(Clone))]
+pub struct P2PAdapter {
+    #[cfg(feature = "p2p")]
+    p2p_service: Arc<P2PService>,
+    #[cfg(feature = "p2p")]
+    tx_receiver: Receiver<fuel_core_types::services::p2p::TransactionGossipData>,
+}
 
-    async fn dry_run(
-        &self,
-        transaction: Transaction,
-        height: Option<BlockHeight>,
-        utxo_validation: Option<bool>,
-    ) -> anyhow::Result<Vec<Receipt>> {
-        self.block_producer
-            .dry_run(transaction, height, utxo_validation)
-            .await
+#[cfg(feature = "p2p")]
+impl Clone for P2PAdapter {
+    fn clone(&self) -> Self {
+        Self::new(self.p2p_service.clone())
     }
 }
+
+#[cfg(feature = "p2p")]
+impl P2PAdapter {
+    pub fn new(p2p_service: Arc<P2PService>) -> Self {
+        let tx_receiver = p2p_service.subscribe_tx();
+        Self {
+            p2p_service,
+            tx_receiver,
+        }
+    }
+
+    pub async fn stop(&self) -> Option<JoinHandle<()>> {
+        self.p2p_service.stop().await
+    }
+
+    pub async fn start(&self) -> anyhow::Result<()> {
+        self.p2p_service.start().await
+    }
+}
+
+#[cfg(not(feature = "p2p"))]
+impl P2PAdapter {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    pub async fn stop(&self) -> Option<JoinHandle<()>> {
+        None
+    }
+
+    pub async fn start(&self) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+// TODO: Create generic `Service` type that support `start` and `stop`.

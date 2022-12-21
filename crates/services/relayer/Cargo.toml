@@ -21,7 +21,6 @@ ethers-providers = { version = "1.0.2", default-features = false, features = [
     "ws",
     "rustls",
 ] }
-fuel-core-interfaces = { path = "../../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.15.1" }
 fuel-core-storage = { path = "../../storage", version = "0.15.1" }
 fuel-core-types = { path = "../../types", version = "0.15.1" }
 futures = "0.3"
@@ -35,7 +34,7 @@ tracing = "0.1"
 url = "2.2"
 
 [dev-dependencies]
-fuel-core-interfaces = { path = "../../fuel-core-interfaces", package = "fuel-core-interfaces" }
+fuel-core-relayer = { path = "", features = ["test-helpers"] }
 mockall = "0.11"
 test-case = "2.2"
 tokio = { version = "1.21", features = ["macros", "test-util"] }

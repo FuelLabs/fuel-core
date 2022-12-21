@@ -67,7 +67,7 @@ async fn can_get_sealed_block_from_poa_produced_block() {
 
     // check sealed block is correct
     let sealed_block = db
-        .get_sealed_block(&block_id.into())
+        .get_sealed_block_by_id(&block_id.into())
         .unwrap()
         .expect("expected sealed header to be available");
 

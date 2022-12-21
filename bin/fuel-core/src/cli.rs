@@ -1,4 +1,3 @@
-use anyhow::Result;
 use clap::Parser;
 use std::{
     env,
@@ -37,7 +36,7 @@ pub enum Fuel {
 pub const LOG_FILTER: &str = "RUST_LOG";
 pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
 
-pub async fn init_logging() -> Result<()> {
+pub async fn init_logging() -> anyhow::Result<()> {
     let filter = match env::var_os(LOG_FILTER) {
         Some(_) => {
             EnvFilter::try_from_default_env().expect("Invalid `RUST_LOG` provided")
@@ -76,7 +75,7 @@ pub async fn init_logging() -> Result<()> {
     Ok(())
 }
 
-pub async fn run_cli() -> Result<()> {
+pub async fn run_cli() -> anyhow::Result<()> {
     init_logging().await?;
 
     let opt = Opt::try_parse();

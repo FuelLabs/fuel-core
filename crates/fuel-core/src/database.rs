@@ -6,7 +6,6 @@ use crate::{
         IterDirection,
     },
 };
-use async_trait::async_trait;
 use fuel_core_chain_config::{
     ChainConfigDb,
     CoinConfig,
@@ -14,11 +13,6 @@ use fuel_core_chain_config::{
     MessageConfig,
 };
 use fuel_core_executor::refs::ContractStorageTrait;
-use fuel_core_interfaces::{
-    p2p::P2pDb,
-    relayer::RelayerDb,
-    txpool::TxPoolDb,
-};
 use fuel_core_poa::ports::BlockDb;
 use fuel_core_producer::ports::BlockProducerDatabase;
 use fuel_core_storage::{
@@ -39,7 +33,6 @@ use fuel_core_types::blockchain::{
         BlockHeight,
         BlockId,
     },
-    SealedBlock,
 };
 use serde::{
     de::DeserializeOwned,
@@ -66,6 +59,23 @@ type DatabaseResult<T> = Result<T>;
 
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
+use fuel_core_storage::tables::{
+    Coins,
+    ContractsRawCode,
+    Messages,
+};
+use fuel_core_txpool::ports::TxPoolDb;
+use fuel_core_types::{
+    entities::{
+        coin::Coin,
+        message::Message,
+    },
+    fuel_tx::UtxoId,
+    fuel_types::{
+        ContractId,
+        MessageId,
+    },
+};
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 #[cfg(feature = "rocksdb")]
@@ -78,7 +88,11 @@ mod code_root;
 mod coin;
 mod contracts;
 mod message;
+#[cfg(feature = "p2p")]
+mod p2p;
 mod receipts;
+#[cfg(feature = "relayer")]
+mod relayer;
 mod sealed_block;
 mod state;
 
@@ -97,33 +111,33 @@ pub mod vm_database;
 pub enum Column {
     /// The column id of metadata about the blockchain
     Metadata = 0,
-    /// See [`ContractsRawCode`](fuel_core_interfaces::db::ContractsRawCode)
+    /// See [`ContractsRawCode`](fuel_core_storage::tables::ContractsRawCode)
     ContractsRawCode = 1,
-    /// See [`ContractsRawCode`](fuel_core_interfaces::db::ContractsRawCode)
+    /// See [`ContractsInfo`](fuel_core_storage::tables::ContractsInfo)
     ContractsInfo = 2,
-    /// See [`ContractsState`](fuel_core_interfaces::db::ContractsState)
+    /// See [`ContractsState`](fuel_core_storage::tables::ContractsState)
     ContractsState = 3,
-    /// See [`ContractsLatestUtxo`](fuel_core_interfaces::db::ContractsLatestUtxo)
+    /// See [`ContractsLatestUtxo`](fuel_core_storage::tables::ContractsLatestUtxo)
     ContractsLatestUtxo = 4,
-    /// See [`ContractsAssets`](fuel_vm::storage::ContractsAssets)
+    /// See [`ContractsAssets`](fuel_core_storage::tables::ContractsAssets)
     ContractsAssets = 5,
-    /// See [`Coins`](fuel_core_interfaces::db::Coins)
+    /// See [`Coins`](fuel_core_storage::tables::Coins)
     Coins = 6,
     /// The column of the table that stores `true` if `owner` owns `Coin` with `coin_id`
     OwnedCoins = 7,
-    /// See [`Transactions`](fuel_core_interfaces::db::Transactions)
+    /// See [`Transactions`](fuel_core_storage::tables::Transactions)
     Transactions = 8,
     /// Transaction id to current status
     TransactionStatus = 9,
     /// The column of the table of all `owner`'s transactions
     TransactionsByOwnerBlockIdx = 10,
-    /// See [`Receipts`](fuel_core_interfaces::db::Receipts)
+    /// See [`Receipts`](fuel_core_storage::tables::Receipts)
     Receipts = 11,
-    /// See [`FuelBlocks`](fuel_core_interfaces::db::FuelBlocks)
+    /// See [`FuelBlocks`](fuel_core_storage::tables::FuelBlocks)
     FuelBlocks = 12,
     /// Maps fuel block id to fuel block hash
     FuelBlockIds = 13,
-    /// See [`Messages`](fuel_core_interfaces::db::Messages)
+    /// See [`Messages`](fuel_core_storage::tables::Messages)
     Messages = 14,
     /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
     OwnedMessageIds = 15,
@@ -332,6 +346,22 @@ impl BlockDb for Database {
 }
 
 impl TxPoolDb for Database {
+    fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<Coin>> {
+        self.storage::<Coins>()
+            .get(utxo_id)
+            .map(|t| t.map(|t| t.as_ref().clone()))
+    }
+
+    fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool> {
+        self.storage::<ContractsRawCode>().contains_key(contract_id)
+    }
+
+    fn message(&self, message_id: &MessageId) -> StorageResult<Option<Message>> {
+        self.storage::<Messages>()
+            .get(message_id)
+            .map(|t| t.map(|t| t.as_ref().clone()))
+    }
+
     fn current_block_height(&self) -> StorageResult<BlockHeight> {
         self.get_block_height()
             .map(|h| h.unwrap_or_default())
@@ -357,13 +387,6 @@ impl BlockProducerDatabase for Database {
     }
 }
 
-#[async_trait]
-impl P2pDb for Database {
-    async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedBlock>> {
-        <Self as RelayerDb>::get_sealed_block(self, height).await
-    }
-}
-
 /// Implement `ChainConfigDb` so that `Database` can be passed to
 /// `StateConfig's` `generate_state_config()` method
 impl ChainConfigDb for Database {
@@ -381,94 +404,5 @@ impl ChainConfigDb for Database {
 
     fn get_block_height(&self) -> StorageResult<Option<BlockHeight>> {
         Self::get_block_height(self).map_err(Into::into)
-    }
-}
-
-// TODO: Move to a separate file `database/relayer.rs`
-mod relayer {
-    use crate::database::{
-        metadata,
-        Column,
-        Database,
-    };
-    use fuel_core_interfaces::relayer::RelayerDb;
-    use fuel_core_types::blockchain::{
-        primitives::{
-            BlockHeight,
-            DaBlockHeight,
-        },
-        SealedBlock,
-    };
-    use std::sync::Arc;
-
-    // TODO: Return `Result` instead of panics
-    #[async_trait::async_trait]
-    impl RelayerDb for Database {
-        async fn get_chain_height(&self) -> BlockHeight {
-            match self.get_block_height() {
-                Ok(res) => {
-                    res.expect("get_block_height value should be always present and set")
-                }
-                Err(err) => {
-                    panic!("get_block_height database corruption, err:{:?}", err);
-                }
-            }
-        }
-
-        async fn get_sealed_block(
-            &self,
-            height: BlockHeight,
-        ) -> Option<Arc<SealedBlock>> {
-            // TODO: Return an error otherwise it will fail with panic in runtime.
-            let block_id = self
-                .get_block_id(height)
-                .unwrap_or_else(|_| panic!("nonexistent block height {}", height))?;
-
-            self.get_sealed_block(&block_id)
-                .expect("expected to find sealed block")
-                .map(Arc::new)
-        }
-
-        async fn set_finalized_da_height(&self, block: DaBlockHeight) {
-            let _: Option<BlockHeight> = self
-                .insert(metadata::FINALIZED_DA_HEIGHT_KEY, Column::Metadata, block)
-                .unwrap_or_else(|err| {
-                    panic!("set_finalized_da_height should always succeed: {:?}", err);
-                });
-        }
-
-        async fn get_finalized_da_height(&self) -> Option<DaBlockHeight> {
-            match self.get(metadata::FINALIZED_DA_HEIGHT_KEY, Column::Metadata) {
-                Ok(res) => res,
-                Err(err) => {
-                    panic!("get_finalized_da_height database corruption, err:{:?}", err);
-                }
-            }
-        }
-
-        async fn get_last_published_fuel_height(&self) -> Option<BlockHeight> {
-            match self.get(metadata::LAST_PUBLISHED_BLOCK_HEIGHT_KEY, Column::Metadata) {
-                Ok(res) => res,
-                Err(err) => {
-                    panic!(
-                    "set_last_committed_finalized_fuel_height database corruption, err:{:?}",
-                    err
-                );
-                }
-            }
-        }
-
-        async fn set_last_published_fuel_height(&self, block_height: BlockHeight) {
-            if let Err(err) = self.insert::<_, _, BlockHeight>(
-                metadata::LAST_PUBLISHED_BLOCK_HEIGHT_KEY,
-                Column::Metadata,
-                block_height,
-            ) {
-                panic!(
-                    "set_pending_committed_fuel_height should always succeed: {:?}",
-                    err
-                );
-            }
-        }
     }
 }

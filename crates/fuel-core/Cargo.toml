@@ -25,9 +25,6 @@ fuel-core-chain-config = { path = "../chain-config", version = "0.15.1" }
 fuel-core-database = { path = "../database", version = "0.15.1" }
 fuel-core-executor = { path = "../services/executor", version = "0.15.1" }
 fuel-core-importer = { path = "../services/importer", version = "0.15.1" }
-fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.15.1", features = [
-    "serde",
-] }
 fuel-core-metrics = { path = "../metrics", version = "0.15.1", optional = true }
 fuel-core-p2p = { path = "../services/p2p", version = "0.15.1", optional = true }
 fuel-core-poa = { path = "../services/consensus_module/poa", version = "0.15.1" }
@@ -63,9 +60,6 @@ uuid = { version = "1.1", features = ["v4"] }
 
 [dev-dependencies]
 assert_matches = "1.5"
-fuel-core-interfaces = { path = "../fuel-core-interfaces", features = [
-    "serde",
-] }
 fuel-core-storage = { path = "../storage", features = ["test-helpers"] }
 fuel-core-types = { path = "../types", features = ["test-helpers"] }
 mockall = "0.11"
