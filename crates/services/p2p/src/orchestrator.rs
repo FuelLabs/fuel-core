@@ -10,7 +10,6 @@ use fuel_core_types::{
     services::p2p::{
         GossipData,
         GossipsubMessageAcceptance,
-        GossipsubMessageInfo,
         TransactionGossipData,
     },
 };
@@ -24,12 +23,12 @@ use libp2p_gossipsub::{
     MessageId,
 };
 use std::{
-    collections::VecDeque,
     fmt::Debug,
     sync::Arc,
 };
 use tokio::{
     sync::{
+        broadcast,
         mpsc::{
             Receiver,
             Sender,
@@ -76,7 +75,7 @@ struct NetworkOrchestrator {
     rx_orchestrator_request: Receiver<OrchestratorRequest>,
     /// Generate internal Orchestrator Requests
     tx_orchestrator_request: Sender<OrchestratorRequest>,
-    transactions: VecDeque<TransactionGossipData>,
+    tx_broadcast: Arc<broadcast::Sender<TransactionGossipData>>,
 }
 
 type BroadcastResponse = Result<MessageId, PublishError>;
@@ -92,8 +91,6 @@ enum OrchestratorRequest {
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
     RespondWithRequestedBlock((Option<Arc<SealedBlock>>, RequestId)),
-    // Request to subscribe to the stream of data from p2p network
-    SubscribeTransactions(oneshot::Sender<Option<TransactionGossipData>>),
     // Request to Stop the Network Orchestrator / Service
     Stop,
 }
@@ -115,13 +112,14 @@ impl NetworkOrchestrator {
     ) -> Self {
         let (rx_orchestrator_request, tx_orchestrator_request) =
             orchestrator_request_channels;
+        let (tx_broadcast, _) = broadcast::channel(100);
 
         Self {
             p2p_config,
             db,
             rx_orchestrator_request,
             tx_orchestrator_request,
-            transactions: VecDeque::default(),
+            tx_broadcast: Arc::new(tx_broadcast),
         }
     }
 
@@ -161,9 +159,6 @@ impl NetworkOrchestrator {
                         Some(OrchestratorRequest::RespondWithRequestedBlock((response, request_id))) => {
                             let _ = p2p_service.send_response_msg(request_id, response.map(OutboundResponse::ResponseBlock));
                         }
-                        Some(OrchestratorRequest::SubscribeTransactions(sender)) => {
-                            let _ = sender.send(self.transactions.pop_front());
-                        }
                         Some(OrchestratorRequest::Stop) => break,
                         None => {}
                     }
@@ -176,7 +171,7 @@ impl NetworkOrchestrator {
                             match message {
                                 GossipsubMessage::NewTx(transaction) => {
                                     let next_transaction = GossipData::new(transaction, peer_id, message_id);
-                                    self.transactions.push_back(next_transaction);
+                                    let _ = self.tx_broadcast.send(next_transaction);
                                 },
                                 GossipsubMessage::NewBlock(block) => {
                                     // todo: add logic to gossip newly received blocks
@@ -195,7 +190,11 @@ impl NetworkOrchestrator {
                                     let tx_orchestrator_request = self.tx_orchestrator_request.clone();
 
                                     tokio::spawn(async move {
-                                        let block_response = db.get_sealed_block(block_height).await;
+                                        // TODO: Process `StorageError` somehow.
+                                        let block_response = db.get_sealed_block(block_height)
+                                            .await
+                                            .expect("Didn't expect error from database")
+                                            .map(Arc::new);
                                         let _ = tx_orchestrator_request.send(OrchestratorRequest::RespondWithRequestedBlock((block_response, request_id)));
                                     });
                                 }
@@ -209,6 +208,10 @@ impl NetworkOrchestrator {
 
         Ok(self)
     }
+
+    pub fn sender(&self) -> Arc<broadcast::Sender<TransactionGossipData>> {
+        self.tx_broadcast.clone()
+    }
 }
 
 pub struct Service {
@@ -218,6 +221,8 @@ pub struct Service {
     join: Mutex<Option<JoinHandle<Result<NetworkOrchestrator, anyhow::Error>>>>,
     /// Used for communicating with the Orchestrator
     tx_orchestrator_request: Sender<OrchestratorRequest>,
+    /// Sender of p2p transaction used for subscribing.
+    tx_broadcast: Arc<broadcast::Sender<TransactionGossipData>>,
 }
 
 impl Service {
@@ -230,11 +235,13 @@ impl Service {
             db,
             (rx_orchestrator_request, tx_orchestrator_request.clone()),
         );
+        let tx_broadcast = network_orchestrator.sender();
 
         Self {
             join: Mutex::new(None),
             network_orchestrator: Arc::new(Mutex::new(Some(network_orchestrator))),
             tx_orchestrator_request,
+            tx_broadcast,
         }
     }
 
@@ -253,24 +260,6 @@ impl Service {
                 msg_info, acceptance,
             )))
             .await;
-    }
-
-    pub async fn next_gossiped_transaction(
-        &self,
-    ) -> anyhow::Result<TransactionGossipData> {
-        loop {
-            let (sender, receiver) = oneshot::channel();
-
-            self.tx_orchestrator_request
-                .send(OrchestratorRequest::SubscribeTransactions(sender))
-                .await?;
-
-            match receiver.await? {
-                Some(tx) => return anyhow::Result::Ok(tx),
-                // currently no transactions to propagate to the txpool
-                None => tokio::task::yield_now().await,
-            }
-        }
     }
 
     pub async fn get_block(&self, height: BlockHeight) -> anyhow::Result<SealedBlock> {
@@ -365,6 +354,10 @@ impl Service {
             None
         }
     }
+
+    pub fn subscribe_tx(&self) -> broadcast::Receiver<TransactionGossipData> {
+        self.tx_broadcast.subscribe()
+    }
 }
 
 fn report_message<T: NetworkCodec>(
@@ -403,6 +396,25 @@ fn report_message<T: NetworkCodec>(
     }
 }
 
+/// Lightweight representation of gossipped data that only includes IDs
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct GossipsubMessageInfo {
+    /// The message id that corresponds to a message payload (typically a unique hash)
+    pub message_id: Vec<u8>,
+    /// The ID of the network peer that sent this message
+    pub peer_id: Vec<u8>,
+}
+
+impl<T> From<&GossipData<T>> for GossipsubMessageInfo {
+    fn from(gossip_data: &GossipData<T>) -> Self {
+        Self {
+            message_id: gossip_data.message_id.clone(),
+            peer_id: gossip_data.peer_id.clone(),
+        }
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use crate::ports::P2pDb;
@@ -410,6 +422,7 @@ pub mod tests {
     use super::*;
     use async_trait::async_trait;
 
+    use fuel_core_storage::Result as StorageResult;
     use fuel_core_types::blockchain::{
         block::Block,
         consensus::{
@@ -431,10 +444,10 @@ pub mod tests {
         async fn get_sealed_block(
             &self,
             _height: BlockHeight,
-        ) -> Option<Arc<SealedBlock>> {
+        ) -> StorageResult<Option<SealedBlock>> {
             let block = Block::new(Default::default(), vec![], &[]);
 
-            Some(Arc::new(SealedBlock {
+            Ok(Some(SealedBlock {
                 entity: block,
                 consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
             }))

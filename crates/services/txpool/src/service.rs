@@ -42,7 +42,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-type PeerToPeerForTx = Arc<dyn PeerToPeer<GossipedTransaction = TransactionGossipData>>;
+type PeerToPeerForTx = Box<dyn PeerToPeer<GossipedTransaction = TransactionGossipData>>;
 
 pub struct ServiceBuilder {
     config: Config,
@@ -175,12 +175,12 @@ impl ServiceBuilder {
 }
 
 pub struct Context {
-    pub config: Config,
-    pub db: Arc<dyn TxPoolDb>,
-    pub txpool_receiver: mpsc::Receiver<TxPoolMpsc>,
-    pub tx_status_sender: TxStatusChange,
-    pub importer: Box<dyn BlockImport>,
-    pub p2p_port: PeerToPeerForTx,
+    config: Config,
+    db: Arc<dyn TxPoolDb>,
+    txpool_receiver: mpsc::Receiver<TxPoolMpsc>,
+    tx_status_sender: TxStatusChange,
+    importer: Box<dyn BlockImport>,
+    p2p_port: PeerToPeerForTx,
 }
 
 impl Context {
@@ -211,10 +211,7 @@ impl Context {
                     let db = self.db.clone();
                     let tx_status_sender = self.tx_status_sender.clone();
 
-                    let p2p = self.p2p_port.clone();
-
                     // This is little bit risky but we can always add semaphore to limit number of requests.
-                    tokio::spawn( async move {
                         let txpool = txpool.as_ref();
                     match event.unwrap() {
                         TxPoolMpsc::PendingNumber { response } => {
@@ -231,7 +228,7 @@ impl Context {
                             for (ret, tx) in insert.iter().zip(txs.into_iter()) {
                                 match ret {
                                     Ok(_) => {
-                                        let _ = p2p.broadcast_transaction(tx.clone()).await;
+                                        let _ = self.p2p_port.broadcast_transaction(tx.clone()).await;
                                     }
                                     Err(_) => {}
                                 }
@@ -254,7 +251,7 @@ impl Context {
                             let _ = response.send(TxPool::remove(txpool, &tx_status_sender ,&ids).await);
                         }
                         TxPoolMpsc::Stop => {}
-                    }});
+                    };
                 }
 
                 block = self.importer.next_block() => {
@@ -275,7 +272,7 @@ pub struct Service {
 }
 
 impl Service {
-    pub fn new(
+    fn new(
         txpool_sender: mpsc::Sender<TxPoolMpsc>,
         tx_status_sender: TxStatusChange,
         context: Context,
@@ -328,6 +325,10 @@ impl Service {
 }
 
 // TODO: Return `TxPoolResult`
+// TODO: Remove `find` and `find_one` methods from `txpool`. It is used only by GraphQL.
+//  Instead, `fuel-core` can create a `DatabaseWithTxPool` that aggregates `TxPool` and
+//  storage `Database` together. GraphQL will retrieve data from this `DatabaseWithTxPool` via
+//  `StorageInspect` trait.
 impl Service {
     pub async fn pending_number(&self) -> anyhow::Result<usize> {
         let (response, receiver) = oneshot::channel();
@@ -423,7 +424,7 @@ impl Service {
 /// RPC commands that can be sent to the TxPool through an MPSC channel.
 /// Responses are returned using `response` oneshot channel.
 #[derive(Debug)]
-pub enum TxPoolMpsc {
+enum TxPoolMpsc {
     /// The number of pending transactions in the pool.
     PendingNumber { response: oneshot::Sender<usize> },
     /// The amount of gas in all includable transactions combined

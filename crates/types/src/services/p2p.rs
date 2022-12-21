@@ -9,6 +9,8 @@ use crate::{
 };
 use std::fmt::Debug;
 
+// TODO: Maybe we can remove most of types from here directly into P2P
+
 /// Reporting levels on the status of a message received via Gossip
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum GossipsubMessageAcceptance {
@@ -19,25 +21,6 @@ pub enum GossipsubMessageAcceptance {
     /// Punish the gossip sender for providing invalid
     /// (or malicious) data and prevent further gossiping
     Ignore,
-}
-
-/// Lightweight representation of gossipped data that only includes IDs
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct GossipsubMessageInfo {
-    /// The message id that corresponds to a message payload (typically a unique hash)
-    pub message_id: Vec<u8>,
-    /// The ID of the network peer that sent this message
-    pub peer_id: Vec<u8>,
-}
-
-impl<T> From<&GossipData<T>> for GossipsubMessageInfo {
-    fn from(gossip_data: &GossipData<T>) -> Self {
-        Self {
-            message_id: gossip_data.message_id.clone(),
-            peer_id: gossip_data.peer_id.clone(),
-        }
-    }
 }
 
 /// A gossipped message from the network containing all relevant data.

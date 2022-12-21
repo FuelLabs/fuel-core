@@ -1,4 +1,5 @@
 #![allow(clippy::let_unit_value)]
+use super::adapters::P2PAdapter;
 use crate::{
     chain_config::BlockProduction,
     database::Database,
@@ -29,8 +30,6 @@ use tokio::{
     task::JoinHandle,
 };
 
-use super::adapters::P2pAdapter;
-
 pub struct Modules {
     pub txpool: Arc<fuel_core_txpool::Service>,
     pub block_importer: Arc<fuel_core_importer::Service>,
@@ -40,7 +39,7 @@ pub struct Modules {
     #[cfg(feature = "relayer")]
     pub relayer: Option<fuel_core_relayer::RelayerHandle>,
     #[cfg(feature = "p2p")]
-    pub network_service: Arc<P2pAdapter>,
+    pub network_service: P2PAdapter,
 }
 
 impl Modules {
@@ -119,20 +118,18 @@ pub async fn start_modules(
         let genesis = database.get_genesis()?;
         let p2p_config = config.p2p.clone().init(genesis)?;
 
-        fuel_core_p2p::orchestrator::Service::new(p2p_config, p2p_db)
+        Arc::new(fuel_core_p2p::orchestrator::Service::new(
+            p2p_config, p2p_db,
+        ))
     };
 
     #[cfg(feature = "p2p")]
-    let p2p_adapter = P2pAdapter::new(network_service);
-
-    #[cfg(feature = "p2p")]
-    if !config.p2p.network_name.is_empty() {
-        p2p_adapter.start().await?;
-    }
-
+    let p2p_adapter = P2PAdapter::new(network_service);
     #[cfg(not(feature = "p2p"))]
-    let p2p_adapter = P2pAdapter {};
-    let p2p_adapter = Arc::new(p2p_adapter);
+    let p2p_adapter = P2PAdapter::new();
+
+    let p2p_adapter = p2p_adapter;
+    p2p_adapter.start().await?;
 
     let tx_status_sender = TxStatusChange::new(100);
 
@@ -140,7 +137,7 @@ pub async fn start_modules(
     txpool_builder
         .config(config.txpool.clone())
         .db(Arc::new(database.clone()) as Arc<dyn TxPoolDb>)
-        .p2p_port(p2p_adapter.clone())
+        .p2p_port(Box::new(p2p_adapter.clone()))
         .importer(Box::new(BlockImportAdapter::new(block_import_rx)))
         .tx_status_sender(tx_status_sender.clone());
 

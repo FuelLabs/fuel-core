@@ -13,7 +13,7 @@ async fn can_set_da_height() {
         .expect_set_finalized_da_height()
         .once()
         .with(eq(DaBlockHeight(200)))
-        .return_const(());
+        .returning(|_| Ok(()));
     test_data_source(
         &mut relayer,
         TestDataSource {
@@ -30,7 +30,9 @@ async fn logs_are_downloaded_and_written() {
     let mut relayer = MockRelayerData::default();
     relayer.expect_wait_if_eth_syncing().returning(|| Ok(()));
     relayer.expect_update_synced().return_const(());
-    relayer.expect_set_finalized_da_height().return_const(());
+    relayer
+        .expect_set_finalized_da_height()
+        .returning(|_| Ok(()));
     relayer
         .expect_download_logs()
         .withf(|gap| gap.oldest() == 0 && gap.latest() == 200)
@@ -69,12 +71,10 @@ mockall::mock! {
             eth_sync_gap: &state::EthSyncGap,
         ) -> anyhow::Result<()>;
 
-        async fn set_finalized_da_height(&self, height: DaBlockHeight);
+        async fn set_finalized_da_height(&mut self, height: DaBlockHeight) -> StorageResult<()>;
 
         fn update_synced(&self, state: &EthState);
-
     }
-
 }
 
 fn test_data_source(mock: &mut MockRelayerData, data: TestDataSource) {

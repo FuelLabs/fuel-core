@@ -33,7 +33,6 @@ use fuel_core_types::blockchain::{
         BlockHeight,
         BlockId,
     },
-    SealedBlock,
 };
 use serde::{
     de::DeserializeOwned,
@@ -60,7 +59,23 @@ type DatabaseResult<T> = Result<T>;
 
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
+use fuel_core_storage::tables::{
+    Coins,
+    ContractsRawCode,
+    Messages,
+};
 use fuel_core_txpool::ports::TxPoolDb;
+use fuel_core_types::{
+    entities::{
+        coin::Coin,
+        message::Message,
+    },
+    fuel_tx::UtxoId,
+    fuel_types::{
+        ContractId,
+        MessageId,
+    },
+};
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 #[cfg(feature = "rocksdb")]
@@ -330,6 +345,22 @@ impl BlockDb for Database {
 }
 
 impl TxPoolDb for Database {
+    fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<Coin>> {
+        self.storage::<Coins>()
+            .get(utxo_id)
+            .map(|t| t.map(|t| t.as_ref().clone()))
+    }
+
+    fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool> {
+        self.storage::<ContractsRawCode>().contains_key(contract_id)
+    }
+
+    fn message(&self, message_id: &MessageId) -> StorageResult<Option<Message>> {
+        self.storage::<Messages>()
+            .get(message_id)
+            .map(|t| t.map(|t| t.as_ref().clone()))
+    }
+
     fn current_block_height(&self) -> StorageResult<BlockHeight> {
         self.get_block_height()
             .map(|h| h.unwrap_or_default())
@@ -373,20 +404,4 @@ impl ChainConfigDb for Database {
     fn get_block_height(&self) -> StorageResult<Option<BlockHeight>> {
         Self::get_block_height(self).map_err(Into::into)
     }
-}
-
-/// Given a `&Database` and `BlockHeight` it returns `SealedBlock`.
-/// Reusable across different trait implementations
-pub(super) fn get_sealed_block(
-    db: &Database,
-    height: BlockHeight,
-) -> Option<Arc<SealedBlock>> {
-    // TODO: Return an error otherwise it will fail with panic in runtime.
-    let block_id = db
-        .get_block_id(height)
-        .unwrap_or_else(|_| panic!("nonexistent block height {}", height))?;
-
-    db.get_sealed_block(&block_id)
-        .expect("expected to find sealed block")
-        .map(Arc::new)
 }

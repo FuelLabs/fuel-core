@@ -11,7 +11,6 @@ use crate::{
         Config,
     },
 };
-use anyhow::Result;
 use async_graphql::{
     extensions::Tracing,
     http::{
@@ -67,7 +66,7 @@ pub async fn start_server(
     db: Database,
     modules: &Modules,
     stop: oneshot::Receiver<()>,
-) -> Result<(SocketAddr, JoinHandle<Result<()>>)> {
+) -> anyhow::Result<(SocketAddr, JoinHandle<anyhow::Result<()>>)> {
     let network_addr = config.addr;
     let params = config.chain_conf.transaction_parameters;
     let schema = build_schema()
@@ -145,7 +144,7 @@ async fn graphql_handler(
 async fn graphql_subscription_handler(
     schema: Extension<CoreSchema>,
     req: Json<Request>,
-) -> Sse<impl Stream<Item = Result<Event, serde_json::Error>>> {
+) -> Sse<impl Stream<Item = anyhow::Result<Event, serde_json::Error>>> {
     let stream = schema
         .execute_stream(req.0)
         .map(|r| Ok(Event::default().json_data(r).unwrap()));
@@ -153,6 +152,6 @@ async fn graphql_subscription_handler(
         .keep_alive(axum::response::sse::KeepAlive::new().text("keep-alive-text"))
 }
 
-async fn ok() -> Result<(), ()> {
+async fn ok() -> anyhow::Result<(), ()> {
     Ok(())
 }

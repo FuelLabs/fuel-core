@@ -17,13 +17,6 @@ use crate::{
     MockDb,
     TxPool,
 };
-use fuel_core_storage::{
-    tables::{
-        Coins,
-        Messages,
-    },
-    StorageAsMut,
-};
 use fuel_core_types::{
     entities::coin::CoinStatus,
     fuel_crypto::rand::{
@@ -261,7 +254,7 @@ async fn tx_try_to_use_spent_coin() {
     let (mut coin, input) = setup_coin(&mut rng, None);
     let utxo_id = *input.utxo_id().unwrap();
     coin.status = CoinStatus::Spent;
-    db.storage::<Coins>().insert(&utxo_id, &coin).unwrap();
+    db.insert_coin(utxo_id.clone(), coin);
 
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
@@ -794,9 +787,7 @@ async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
     );
 
     let mut db = MockDb::default();
-    db.storage::<Messages>()
-        .insert(&message.id(), &message)
-        .unwrap();
+    db.insert_message(message);
     let mut txpool = TxPool::new(Default::default());
 
     txpool
@@ -821,9 +812,7 @@ async fn tx_rejected_when_input_message_id_is_spent() {
     );
 
     let mut db = MockDb::default();
-    db.storage::<Messages>()
-        .insert(&message.id(), &message)
-        .unwrap();
+    db.insert_message(message.clone());
     let mut txpool = TxPool::new(Default::default());
 
     let err = txpool.insert_inner(tx, &db).expect_err("should fail");
@@ -883,9 +872,7 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
     );
 
     let mut db = MockDb::default();
-    db.storage::<Messages>()
-        .insert(&message.id(), &message)
-        .unwrap();
+    db.insert_message(message.clone());
 
     let mut txpool = TxPool::new(Default::default());
 
@@ -926,9 +913,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
     );
 
     let mut db = MockDb::default();
-    db.storage::<Messages>()
-        .insert(&message.id(), &message)
-        .unwrap();
+    db.insert_message(message);
 
     let mut txpool = TxPool::new(Default::default());
 
@@ -990,12 +975,8 @@ async fn message_of_squeezed_out_tx_can_be_resubmitted_at_lower_gas_price() {
     );
 
     let mut db = MockDb::default();
-    db.storage::<Messages>()
-        .insert(&message_1.id(), &message_1)
-        .unwrap();
-    db.storage::<Messages>()
-        .insert(&message_2.id(), &message_2)
-        .unwrap();
+    db.insert_message(message_1);
+    db.insert_message(message_2);
     let mut txpool = TxPool::new(Default::default());
 
     txpool.insert_inner(tx_1, &db).expect("should succeed");

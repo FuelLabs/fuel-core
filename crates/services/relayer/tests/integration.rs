@@ -12,10 +12,6 @@ use fuel_core_relayer::{
     Config,
     RelayerHandle,
 };
-use fuel_core_storage::{
-    tables::Messages,
-    StorageAsRef,
-};
 
 #[tokio::test(start_paused = true)]
 async fn can_set_da_height() {
@@ -64,14 +60,7 @@ async fn can_get_messages() {
     relayer.listen_synced().await_synced().await.unwrap();
 
     for msg in expected_messages {
-        assert_eq!(
-            &*mock_db
-                .storage::<Messages>()
-                .get(msg.id())
-                .unwrap()
-                .unwrap(),
-            &*msg
-        );
+        assert_eq!(&mock_db.get_message(msg.id()).unwrap(), msg.message());
     }
 }
 

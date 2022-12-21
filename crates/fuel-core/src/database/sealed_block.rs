@@ -20,6 +20,7 @@ use fuel_core_types::{
             Consensus,
             Genesis,
         },
+        primitives::BlockHeight,
         SealedBlock,
         SealedBlockHeader,
     },
@@ -57,7 +58,7 @@ impl StorageMutate<SealedBlockConsensus> for Database {
 }
 
 impl Database {
-    pub fn get_sealed_block(
+    pub fn get_sealed_block_by_id(
         &self,
         block_id: &Bytes32,
     ) -> StorageResult<Option<SealedBlock>> {
@@ -76,6 +77,16 @@ impl Database {
         } else {
             Ok(None)
         }
+    }
+
+    /// Returns `SealedBlock` by `height`.
+    /// Reusable across different trait implementations
+    pub fn get_sealed_block_by_height(
+        &self,
+        height: BlockHeight,
+    ) -> StorageResult<Option<SealedBlock>> {
+        let block_id = self.get_block_id(height)?.ok_or(not_found!("BlockId"))?;
+        self.get_sealed_block_by_id(&block_id)
     }
 
     pub fn get_genesis(&self) -> StorageResult<Genesis> {

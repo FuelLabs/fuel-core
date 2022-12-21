@@ -225,6 +225,8 @@ impl BlockDb for MockDatabase {
     }
 }
 
+// TODO: Refactor this test module to use `mockall` instead of `MockTxPool` that simulates the real
+//  logic of the `TxPool` with channels.
 /// Txpool with manually controllable contents
 pub struct MockTxPool {
     transactions: Arc<Mutex<Vec<ArcPoolTx>>>,

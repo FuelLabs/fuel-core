@@ -1,14 +1,4 @@
-use fuel_core_storage::{
-    tables::{
-        Coins,
-        ContractsRawCode,
-        Messages,
-    },
-    Error as StorageError,
-    Result as StorageResult,
-    StorageAsRef,
-    StorageInspect,
-};
+use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::{
         primitives::BlockHeight,
@@ -42,8 +32,10 @@ pub trait PeerToPeer: Send + Sync {
         &self,
         transaction: Arc<Transaction>,
     ) -> anyhow::Result<()>;
+
     // Await the next transaction from network gossip (similar to stream.next()).
-    async fn next_gossiped_transaction(&self) -> Self::GossipedTransaction;
+    async fn next_gossiped_transaction(&mut self) -> Self::GossipedTransaction;
+
     // Report the validity of a transaction received from the network.
     async fn notify_gossip_transaction_validity(
         &self,
@@ -58,28 +50,12 @@ pub trait BlockImport: Send + Sync {
     async fn next_block(&mut self) -> SealedBlock;
 }
 
-pub trait TxPoolDb:
-    StorageInspect<Coins, Error = StorageError>
-    + StorageInspect<ContractsRawCode, Error = StorageError>
-    + StorageInspect<Messages, Error = StorageError>
-    + Send
-    + Sync
-{
-    fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<Coin>> {
-        self.storage::<Coins>()
-            .get(utxo_id)
-            .map(|t| t.map(|t| t.as_ref().clone()))
-    }
+pub trait TxPoolDb: Send + Sync {
+    fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<Coin>>;
 
-    fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool> {
-        self.storage::<ContractsRawCode>().contains_key(contract_id)
-    }
+    fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool>;
 
-    fn message(&self, message_id: &MessageId) -> StorageResult<Option<Message>> {
-        self.storage::<Messages>()
-            .get(message_id)
-            .map(|t| t.map(|t| t.as_ref().clone()))
-    }
+    fn message(&self, message_id: &MessageId) -> StorageResult<Option<Message>>;
 
     fn current_block_height(&self) -> StorageResult<BlockHeight>;
 }
