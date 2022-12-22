@@ -309,7 +309,7 @@ fn make_tx(rng: &mut StdRng) -> Script {
     TransactionBuilder::script(vec![], vec![])
         .gas_price(rng.gen())
         .gas_limit(rng.gen())
-        .finalize_without_signature_as_transaction()
+        .finalize_without_signature()
 }
 
 #[tokio::test]
