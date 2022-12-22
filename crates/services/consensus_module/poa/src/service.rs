@@ -175,22 +175,22 @@ where
                 min_block_time,
                 max_tx_idle_time,
             } => {
-                self.timer
-                    .set_timeout(max_block_time, OnConflict::Min)
-                    .await;
-
                 let consumable_gas = self.txpool.total_consumable_gas();
 
                 // If txpool still has more than a full block of transactions available,
                 // produce new block in min_block_time.
                 if consumable_gas > self.block_gas_limit {
                     self.timer
-                        .set_timeout(min_block_time, OnConflict::Min)
+                        .set_timeout(min_block_time, OnConflict::Max)
                         .await;
                 } else if self.txpool.pending_number() > 0 {
                     // If we still have available txs, reduce the timeout to max idle time
                     self.timer
-                        .set_timeout(max_tx_idle_time, OnConflict::Min)
+                        .set_timeout(max_tx_idle_time, OnConflict::Max)
+                        .await;
+                } else {
+                    self.timer
+                        .set_timeout(max_block_time, OnConflict::Max)
                         .await;
                 }
             }

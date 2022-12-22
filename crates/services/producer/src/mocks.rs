@@ -33,10 +33,7 @@ use fuel_core_types::{
             Result as ExecutorResult,
             UncommittedResult,
         },
-        txpool::{
-            ArcPoolTx,
-            Error as TxPoolError,
-        },
+        txpool::ArcPoolTx,
     },
 };
 use std::{

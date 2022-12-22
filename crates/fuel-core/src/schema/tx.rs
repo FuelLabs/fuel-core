@@ -277,7 +277,7 @@ impl TxStatusSubscription {
         ctx: &Context<'_>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> impl Stream<Item = async_graphql::Result<TransactionStatus>> {
-        let txpool = ctx.data_unchecked::<TxPoolService>();
+        let txpool = ctx.data_unchecked::<TxPoolService>().clone();
         let db = ctx.data_unchecked::<Database>().clone();
         let rx = BroadcastStream::new(txpool.shared.tx_update_subscribe());
         let state = Box::new(StreamState { txpool, db });

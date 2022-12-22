@@ -11,11 +11,7 @@ use crate::{
     Service,
     Trigger,
 };
-use anyhow::anyhow;
-use fuel_core_services::{
-    Service as StorageTrait,
-    Service as ServiceTrait,
-};
+use fuel_core_services::Service as StorageTrait;
 use fuel_core_storage::{
     transactional::{
         StorageTransaction,
@@ -25,12 +21,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::PartialFuelBlock,
         consensus::Consensus,
-        header::{
-            ConsensusHeader,
-            PartialBlockHeader,
-        },
         primitives::{
             BlockHeight,
             BlockId,
@@ -40,12 +31,11 @@ use fuel_core_types::{
     },
     fuel_asm::*,
     fuel_crypto::SecretKey,
-    fuel_tx::*,
-    fuel_vm::consts::REG_ZERO,
-    secrecy::{
-        ExposeSecret,
-        Secret,
+    fuel_tx::{
+        field::GasLimit,
+        *,
     },
+    secrecy::Secret,
     services::{
         executor::{
             Error as ExecutorError,
@@ -55,7 +45,6 @@ use fuel_core_types::{
         txpool::{
             ArcPoolTx,
             Error as TxPoolError,
-            PoolTransaction,
             TxStatus,
         },
     },
@@ -66,26 +55,19 @@ use rand::{
     SeedableRng,
 };
 use std::{
-    cmp::Reverse,
-    collections::{
-        hash_map::Entry,
-        HashMap,
-        HashSet,
-    },
-    ops::Deref,
+    collections::HashSet,
     sync::{
         Arc,
         Mutex as StdMutex,
+        Mutex,
     },
     time::Duration,
 };
 use tokio::{
     sync::{
         broadcast,
-        mpsc,
-        oneshot,
+        watch,
     },
-    task::JoinHandle,
     time,
     time::Instant,
 };
@@ -97,7 +79,6 @@ type BoxFuture<'a, T> =
 
 struct TestContextBuilder {
     mock_db: Option<MockDatabase>,
-    rng: StdRng,
     producer: Option<MockBlockProducer>,
     txpool: Option<MockTxPool>,
     config: Option<Config>,
@@ -107,21 +88,10 @@ impl TestContextBuilder {
     fn new() -> Self {
         Self {
             mock_db: None,
-            rng: StdRng::seed_from_u64(100),
             producer: None,
             txpool: None,
             config: None,
         }
-    }
-
-    fn with_database(&mut self, database: MockDatabase) -> &mut Self {
-        self.mock_db = Some(database);
-        self
-    }
-
-    fn with_producer(&mut self, producer: MockBlockProducer) -> &mut Self {
-        self.producer = Some(producer);
-        self
     }
 
     fn with_txpool(&mut self, txpool: MockTxPool) -> &mut Self {
@@ -134,13 +104,34 @@ impl TestContextBuilder {
         self
     }
 
-    fn build(mut self) -> TestContext {
+    fn build(self) -> TestContext {
         let (block_import_tx, _) = broadcast::channel(100);
         let config = self.config.unwrap_or_default();
-        let producer = self
-            .producer
-            .unwrap_or_else(|| MockBlockProducer::default());
-        let txpool = self.txpool.unwrap_or_else(|| MockTxPool::no_tx_updates());
+        let producer = self.producer.unwrap_or_else(|| {
+            let mut producer = MockBlockProducer::default();
+            producer
+                .expect_produce_and_execute_block()
+                .returning(|_, _| {
+                    let mut db = MockDatabase::default();
+                    db.expect_as_mut().returning(move || {
+                        let mut tx_db = MockDatabase::default();
+                        tx_db.expect_seal_block().returning(|_, _| Ok(()));
+                        tx_db
+                    });
+                    db.expect_commit().returning(|| Ok(()));
+
+                    Ok(UncommittedResult::new(
+                        ExecutionResult {
+                            block: Default::default(),
+                            skipped_transactions: Default::default(),
+                            tx_status: Default::default(),
+                        },
+                        StorageTransaction::new(db),
+                    ))
+                });
+            producer
+        });
+        let txpool = self.txpool.unwrap_or_else(MockTxPool::no_tx_updates);
         let mock_db = self.mock_db.unwrap_or_else(|| {
             // default db
             let mut mock_db = MockDatabase::default();
@@ -193,6 +184,12 @@ mockall::mock! {
     }
 }
 
+struct TxPoolContext {
+    pub txpool: MockTxPool,
+    pub txs: Arc<Mutex<Vec<Script>>>,
+    pub status_sender: Arc<watch::Sender<Option<TxStatus>>>,
+}
+
 impl MockTxPool {
     pub fn no_tx_updates() -> Self {
         let mut txpool = MockTxPool::default();
@@ -202,22 +199,27 @@ impl MockTxPool {
         txpool
     }
 
-    pub fn new_with_txs(mut txs: Vec<(Script, TxStatus)>) -> Self {
+    pub fn new_with_txs(txs: Vec<Script>) -> TxPoolContext {
         let mut txpool = MockTxPool::default();
-        let mut status_updates = txs.iter().map(|tx| tx.1.clone()).collect::<Vec<_>>();
-        let mut txs = Arc::new(StdMutex::new(
-            txs.into_iter().map(|tx| tx.0).collect::<Vec<_>>(),
-        ));
+        let txs = Arc::new(StdMutex::new(txs));
+        let (status_sender, status_receiver) = watch::channel(None);
+        let status_sender = Arc::new(status_sender);
+        let status_sender_clone = status_sender.clone();
 
         txpool
             .expect_next_transaction_status_update()
             .returning(move || {
-                let status_update = status_updates.pop();
+                let mut status_receiver_clone = status_receiver.clone();
+                let status_sender_clone = status_sender_clone.clone();
                 Box::pin(async move {
-                    if let Some(status_update) = status_update {
-                        status_update
-                    } else {
-                        core::future::pending::<TxStatus>().await
+                    loop {
+                        let status = status_receiver_clone.borrow().clone();
+                        if let Some(status) = status {
+                            status_sender_clone.send_replace(None);
+                            return status
+                        } else {
+                            status_receiver_clone.changed().await.unwrap();
+                        }
                     }
                 })
             });
@@ -232,14 +234,7 @@ impl MockTxPool {
                 .lock()
                 .unwrap()
                 .iter()
-                .map(|tx| {
-                    tx.clone()
-                        .into_checked_basic(0, &Default::default())
-                        .unwrap()
-                        .metadata()
-                        .fee
-                        .total()
-                })
+                .map(|tx| *tx.gas_limit())
                 .sum()
         });
         let removed = txs.clone();
@@ -252,7 +247,12 @@ impl MockTxPool {
                 }
                 vec![]
             });
-        txpool
+
+        TxPoolContext {
+            txpool,
+            txs,
+            status_sender,
+        }
     }
 }
 
@@ -307,8 +307,8 @@ mockall::mock! {
 
 fn make_tx(rng: &mut StdRng) -> Script {
     TransactionBuilder::script(vec![], vec![])
-        .gas_price(rng.gen())
-        .gas_limit(rng.gen())
+        .gas_price(0)
+        .gas_limit(rng.gen_range(1..ConsensusParameters::default().max_gas_per_tx))
         .finalize_without_signature()
 }
 
@@ -518,39 +518,6 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
 
     service.stop_and_await().await.unwrap();
     assert!(service.state().stopped());
-}
-
-struct CoinInfo {
-    index: u8,
-    id: Bytes32,
-    secret_key: SecretKey,
-}
-
-impl CoinInfo {
-    pub fn utxo_id(&self) -> UtxoId {
-        UtxoId::new(self.id, self.index)
-    }
-}
-
-fn _make_tx(coin: &CoinInfo, gas_price: u64, gas_limit: u64) -> PoolTransaction {
-    TransactionBuilder::script(vec![Opcode::RET(REG_ZERO)].into_iter().collect(), vec![])
-        .gas_price(gas_price)
-        .gas_limit(gas_limit)
-        .add_unsigned_coin_input(
-            coin.secret_key,
-            coin.utxo_id(),
-            1_000_000_000,
-            AssetId::zeroed(),
-            Default::default(),
-            0,
-        )
-        .add_output(Output::Change {
-            to: Default::default(),
-            amount: 0,
-            asset_id: AssetId::zeroed(),
-        })
-        .finalize_checked_basic(Default::default(), &Default::default())
-        .into()
 }
 
 fn test_signing_key() -> Secret<SecretKeyWrapper> {
