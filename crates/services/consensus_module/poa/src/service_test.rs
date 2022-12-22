@@ -1,22 +1,17 @@
 use crate::{
     deadline_clock::DeadlineClock,
     new_service,
+    ports::{
+        BlockDb,
+        BlockProducer,
+        TransactionPool,
+    },
     service::PoA,
     Config,
     Service,
     Trigger,
 };
 use anyhow::anyhow;
-use fuel_core_poa::{
-    ports::{
-        BlockDb,
-        BlockProducer,
-        TransactionPool,
-    },
-    service::new_service,
-    Config,
-    Trigger,
-};
 use fuel_core_services::{
     Service as StorageTrait,
     Service as ServiceTrait,
@@ -77,7 +72,11 @@ use std::{
         HashMap,
         HashSet,
     },
-    sync::Arc,
+    ops::Deref,
+    sync::{
+        Arc,
+        Mutex as StdMutex,
+    },
     time::Duration,
 };
 use tokio::{
@@ -85,17 +84,94 @@ use tokio::{
         broadcast,
         mpsc,
         oneshot,
-        Mutex,
     },
     task::JoinHandle,
     time,
     time::Instant,
 };
 
-struct TestContextBuilder {}
+mod trigger_tests;
 
 type BoxFuture<'a, T> =
     core::pin::Pin<Box<dyn core::future::Future<Output = T> + Send + 'a>>;
+
+struct TestContextBuilder {
+    mock_db: Option<MockDatabase>,
+    rng: StdRng,
+    producer: Option<MockBlockProducer>,
+    txpool: Option<MockTxPool>,
+    config: Option<Config>,
+}
+
+impl TestContextBuilder {
+    fn new() -> Self {
+        Self {
+            mock_db: None,
+            rng: StdRng::seed_from_u64(100),
+            producer: None,
+            txpool: None,
+            config: None,
+        }
+    }
+
+    fn with_database(&mut self, database: MockDatabase) -> &mut Self {
+        self.mock_db = Some(database);
+        self
+    }
+
+    fn with_producer(&mut self, producer: MockBlockProducer) -> &mut Self {
+        self.producer = Some(producer);
+        self
+    }
+
+    fn with_txpool(&mut self, txpool: MockTxPool) -> &mut Self {
+        self.txpool = Some(txpool);
+        self
+    }
+
+    fn with_config(&mut self, config: Config) -> &mut Self {
+        self.config = Some(config);
+        self
+    }
+
+    fn build(mut self) -> TestContext {
+        let (block_import_tx, _) = broadcast::channel(100);
+        let config = self.config.unwrap_or_default();
+        let producer = self
+            .producer
+            .unwrap_or_else(|| MockBlockProducer::default());
+        let txpool = self.txpool.unwrap_or_else(|| MockTxPool::no_tx_updates());
+        let mock_db = self.mock_db.unwrap_or_else(|| {
+            // default db
+            let mut mock_db = MockDatabase::default();
+            mock_db.expect_block_height().returning(|| Ok(1u64.into()));
+            mock_db
+        });
+
+        let service =
+            new_service(config, txpool, block_import_tx.clone(), producer, mock_db);
+        service.start().unwrap();
+        TestContext {
+            block_import_tx,
+            service,
+        }
+    }
+}
+
+struct TestContext {
+    block_import_tx: broadcast::Sender<SealedBlock>,
+    service: Service<MockDatabase, MockTxPool, MockBlockProducer>,
+}
+
+impl TestContext {
+    fn subscribe_import(&self) -> broadcast::Receiver<SealedBlock> {
+        self.block_import_tx.subscribe()
+    }
+
+    async fn stop(&self) {
+        let _ = self.service.stop_and_await().await.unwrap();
+    }
+}
 
 mockall::mock! {
     TxPool {}
@@ -123,6 +199,59 @@ impl MockTxPool {
         txpool
             .expect_next_transaction_status_update()
             .returning(|| Box::pin(async { core::future::pending::<TxStatus>().await }));
+        txpool
+    }
+
+    pub fn new_with_txs(mut txs: Vec<(Script, TxStatus)>) -> Self {
+        let mut txpool = MockTxPool::default();
+        let mut status_updates = txs.iter().map(|tx| tx.1.clone()).collect::<Vec<_>>();
+        let mut txs = Arc::new(StdMutex::new(
+            txs.into_iter().map(|tx| tx.0).collect::<Vec<_>>(),
+        ));
+
+        txpool
+            .expect_next_transaction_status_update()
+            .returning(move || {
+                let status_update = status_updates.pop();
+                Box::pin(async move {
+                    if let Some(status_update) = status_update {
+                        status_update
+                    } else {
+                        core::future::pending::<TxStatus>().await
+                    }
+                })
+            });
+
+        let pending = txs.clone();
+        txpool
+            .expect_pending_number()
+            .returning(move || pending.lock().unwrap().len());
+        let consumable = txs.clone();
+        txpool.expect_total_consumable_gas().returning(move || {
+            consumable
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|tx| {
+                    tx.clone()
+                        .into_checked_basic(0, &Default::default())
+                        .unwrap()
+                        .metadata()
+                        .fee
+                        .total()
+                })
+                .sum()
+        });
+        let removed = txs.clone();
+        txpool
+            .expect_remove_txs()
+            .returning(move |tx_ids: Vec<TxId>| {
+                let mut guard = removed.lock().unwrap();
+                for id in tx_ids {
+                    guard.retain(|tx| tx.id() == id);
+                }
+                vec![]
+            });
         txpool
     }
 }
@@ -176,8 +305,8 @@ mockall::mock! {
     }
 }
 
-fn make_tx(rng: &mut StdRng) -> Transaction {
-    TransactionBuilder::create(rng.gen(), rng.gen(), vec![])
+fn make_tx(rng: &mut StdRng) -> Script {
+    TransactionBuilder::script(vec![], vec![])
         .gas_price(rng.gen())
         .gas_limit(rng.gen())
         .finalize_without_signature_as_transaction()
@@ -232,7 +361,7 @@ async fn remove_skipped_transactions() {
                     skipped_transactions: mock_skipped_txs
                         .clone()
                         .into_iter()
-                        .map(|tx| (tx, ExecutorError::OutputAlreadyExists))
+                        .map(|tx| (tx.into(), ExecutorError::OutputAlreadyExists))
                         .collect(),
                     tx_status: Default::default(),
                 },
@@ -391,44 +520,6 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
     assert!(service.state().stopped());
 }
 
-#[tokio::test(start_paused = true)] // Run with time paused, start/stop must still work
-async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
-    for trigger in [
-        Trigger::Never,
-        Trigger::Instant,
-        Trigger::Interval {
-            block_time: Duration::new(1, 0),
-        },
-        Trigger::Hybrid {
-            min_block_time: Duration::new(1, 0),
-            max_tx_idle_time: Duration::new(1, 0),
-            max_block_time: Duration::new(1, 0),
-        },
-    ] {
-        let db = MockDatabase::new();
-        let (txpool, _broadcast_rx) = MockTxPool::spawn();
-        let config = Config {
-            trigger,
-            block_gas_limit: 100_000,
-            signing_key: Some(test_signing_key()),
-            metrics: false,
-        };
-
-        let service = new_service(
-            config,
-            txpool.sender(),
-            txpool.import_block_tx.clone(),
-            MockBlockProducer::new(txpool.sender(), db.clone()),
-            db,
-        );
-        service.start()?;
-
-        service.stop_and_await().await?;
-    }
-
-    Ok(())
-}
-
 struct CoinInfo {
     index: u8,
     id: Bytes32,
@@ -460,375 +551,6 @@ fn _make_tx(coin: &CoinInfo, gas_price: u64, gas_limit: u64) -> PoolTransaction 
         })
         .finalize_checked_basic(Default::default(), &Default::default())
         .into()
-}
-
-fn make_tx_trigger(rng: &mut StdRng) -> PoolTransaction {
-    _make_tx(
-        &CoinInfo {
-            index: 0,
-            id: rng.gen(),
-            secret_key: SecretKey::random(rng),
-        },
-        1,
-        10_000,
-    )
-}
-
-#[tokio::test(start_paused = true)]
-async fn never_trigger_never_produces_blocks() -> anyhow::Result<()> {
-    let db = MockDatabase::new();
-    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    let config = Config {
-        trigger: Trigger::Never,
-        block_gas_limit: 100_000,
-        signing_key: Some(test_signing_key()),
-        metrics: false,
-    };
-
-    let service = new_service(
-        config,
-        txpool.sender(),
-        txpool.import_block_tx.clone(),
-        producer,
-        db,
-    );
-    service.start()?;
-
-    // Submit some txs
-    let mut rng = StdRng::seed_from_u64(1234u64);
-    for _ in 0..10 {
-        txpool.add_tx(Arc::new(make_tx(&mut rng))).await;
-    }
-
-    // Make sure enough time passes for the block to be produced
-    time::sleep(Duration::new(10, 0)).await;
-
-    // Make sure no blocks are produced
-    assert_eq!(
-        txpool.check_block_produced(),
-        Err(mpsc::error::TryRecvError::Empty)
-    );
-
-    // Stop
-    service.stop_and_await().await?;
-
-    Ok(())
-}
-
-#[tokio::test(start_paused = true)]
-async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
-    let db = MockDatabase::new();
-    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    let config = Config {
-        trigger: Trigger::Instant,
-        block_gas_limit: 100_000,
-        signing_key: Some(test_signing_key()),
-        metrics: false,
-    };
-
-    let service = new_service(
-        config,
-        txpool.sender(),
-        txpool.import_block_tx.clone(),
-        producer,
-        db.clone(),
-    );
-    service.start()?;
-
-    // Submit tx
-    let mut rng = StdRng::seed_from_u64(1234u64);
-    txpool.add_tx(Arc::new(make_tx(&mut rng))).await;
-
-    // Make sure it's produced
-    assert_eq!(txpool.wait_block_produced().await, 1);
-
-    // TODO: Check block_import is triggered
-
-    // Stop
-    service.stop_and_await().await?;
-
-    Ok(())
-}
-
-#[tokio::test(start_paused = true)]
-async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
-    let db = MockDatabase::new();
-    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    let config = Config {
-        trigger: Trigger::Interval {
-            block_time: Duration::new(2, 0),
-        },
-        block_gas_limit: 100_000,
-        signing_key: Some(test_signing_key()),
-        metrics: false,
-    };
-
-    let service = new_service(
-        config,
-        txpool.sender(),
-        txpool.import_block_tx.clone(),
-        producer,
-        db,
-    );
-    service.start()?;
-
-    // Make sure no blocks are produced yet
-    assert_eq!(
-        txpool.check_block_produced(),
-        Err(mpsc::error::TryRecvError::Empty)
-    );
-
-    // Pass time until a single block is produced, and a bit more
-    time::sleep(Duration::new(3, 0)).await;
-
-    // Make sure the empty block is actually produced
-    assert_eq!(txpool.check_block_produced(), Ok(0));
-
-    // Submit tx
-    let mut rng = StdRng::seed_from_u64(1234u64);
-    txpool.add_tx(Arc::new(make_tx(&mut rng))).await;
-
-    // Make sure no blocks are produced before next interval
-    assert_eq!(
-        txpool.check_block_produced(),
-        Err(mpsc::error::TryRecvError::Empty)
-    );
-
-    // Pass time until a the next block is produced
-    time::sleep(Duration::new(2, 0)).await;
-
-    // Make sure it's produced
-    assert_eq!(txpool.check_block_produced(), Ok(1));
-
-    // Submit two tx
-    let mut rng = StdRng::seed_from_u64(1234u64);
-    for _ in 0..2 {
-        txpool.add_tx(Arc::new(make_tx(&mut rng))).await;
-    }
-
-    time::sleep(Duration::from_millis(1)).await;
-
-    // Make sure blocks are not produced before the block time is used
-    assert_eq!(
-        txpool.check_block_produced(),
-        Err(mpsc::error::TryRecvError::Empty)
-    );
-
-    // Pass time until a the next block is produced
-    time::sleep(Duration::new(2, 0)).await;
-
-    // Make sure only one block is produced
-    assert_eq!(txpool.check_block_produced(), Ok(2));
-    assert_eq!(
-        txpool.check_block_produced(),
-        Err(mpsc::error::TryRecvError::Empty)
-    );
-
-    // Pass time until a the next block is produced
-    time::sleep(Duration::new(2, 0)).await;
-
-    // Make sure only one block is produced
-    assert_eq!(txpool.check_block_produced(), Ok(0));
-    assert_eq!(
-        txpool.check_block_produced(),
-        Err(mpsc::error::TryRecvError::Empty)
-    );
-
-    // Stop
-    service.stop_and_await().await?;
-
-    Ok(())
-}
-
-#[tokio::test(start_paused = true)]
-async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
-    let db = MockDatabase::new();
-    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    let config = Config {
-        trigger: Trigger::Interval {
-            block_time: Duration::new(2, 0),
-        },
-        block_gas_limit: 100_000,
-        signing_key: Some(test_signing_key()),
-        metrics: false,
-    };
-
-    let service = new_service(
-        config,
-        txpool.sender(),
-        txpool.import_block_tx.clone(),
-        producer,
-        db,
-    );
-    service.start()?;
-
-    // Fill txpool completely
-    let mut rng = StdRng::seed_from_u64(1234u64);
-    for _ in 0..1_000 {
-        txpool.add_tx(Arc::new(make_tx(&mut rng))).await;
-        tokio::spawn(async {}).await.unwrap(); // Process messages so the channel doesn't lag
-    }
-
-    // Make sure blocks are not produced before the block time has elapsed
-    time::sleep(Duration::new(1, 0)).await;
-    assert_eq!(
-        txpool.check_block_produced(),
-        Err(mpsc::error::TryRecvError::Empty)
-    );
-
-    // Make sure only one block per round is produced
-    for _ in 0..5 {
-        time::sleep(Duration::new(2, 0)).await;
-        assert!(txpool.check_block_produced().is_ok());
-        assert_eq!(
-            txpool.check_block_produced(),
-            Err(mpsc::error::TryRecvError::Empty)
-        );
-    }
-
-    // Stop
-    service.stop_and_await().await?;
-
-    Ok(())
-}
-
-#[tokio::test(start_paused = true)]
-async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
-    let db = MockDatabase::new();
-    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    let config = Config {
-        trigger: Trigger::Hybrid {
-            min_block_time: Duration::new(2, 0),
-            max_tx_idle_time: Duration::new(3, 0),
-            max_block_time: Duration::new(10, 0),
-        },
-        block_gas_limit: 100_000,
-        signing_key: Some(test_signing_key()),
-        metrics: false,
-    };
-
-    let service = new_service(
-        config,
-        txpool.sender(),
-        txpool.import_block_tx.clone(),
-        producer,
-        db,
-    );
-    service.start()?;
-
-    // Make sure no blocks are produced yet
-    assert_eq!(
-        txpool.check_block_produced(),
-        Err(mpsc::error::TryRecvError::Empty)
-    );
-
-    // Make sure no blocks are produced when txpool is empty and max_block_time is not exceeded
-    time::sleep(Duration::new(9, 0)).await;
-
-    // Make sure the empty block is actually produced
-    assert_eq!(
-        txpool.check_block_produced(),
-        Err(mpsc::error::TryRecvError::Empty)
-    );
-
-    // Submit tx
-    let mut rng = StdRng::seed_from_u64(1234u64);
-    txpool.add_tx(Arc::new(make_tx(&mut rng))).await;
-
-    // Make sure no block is produced immediately, as none of the timers has expired yet
-    assert_eq!(
-        txpool.check_block_produced(),
-        Err(mpsc::error::TryRecvError::Empty)
-    );
-
-    // Pass time until a single block is produced after idle time
-    time::sleep(Duration::new(4, 0)).await;
-    assert_eq!(txpool.check_block_produced(), Ok(1));
-    assert_eq!(
-        txpool.check_block_produced(),
-        Err(mpsc::error::TryRecvError::Empty)
-    );
-
-    // Make sure the empty block is produced after max_block_time
-    time::sleep(Duration::new(10, 0)).await;
-    assert_eq!(txpool.check_block_produced(), Ok(0));
-
-    // Submit two tx
-    let mut rng = StdRng::seed_from_u64(1234u64);
-    for _ in 0..2 {
-        txpool.add_tx(Arc::new(make_tx(&mut rng))).await;
-    }
-
-    // Wait for both max_tx_idle_time and min_block_time to pass, and see that the block is produced
-    time::sleep(Duration::new(4, 0)).await;
-    assert_eq!(txpool.check_block_produced(), Ok(2));
-
-    // Stop
-    service.stop_and_await().await?;
-
-    Ok(())
-}
-
-#[tokio::test(start_paused = true)]
-async fn hybrid_trigger_reacts_correctly_to_full_txpool() -> anyhow::Result<()> {
-    let db = MockDatabase::new();
-    let (mut txpool, _broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    let config = Config {
-        trigger: Trigger::Hybrid {
-            min_block_time: Duration::new(2, 0),
-            max_tx_idle_time: Duration::new(3, 0),
-            max_block_time: Duration::new(10, 0),
-        },
-        block_gas_limit: 100_000,
-        signing_key: Some(test_signing_key()),
-        metrics: false,
-    };
-
-    let service = new_service(
-        config,
-        txpool.sender(),
-        txpool.import_block_tx.clone(),
-        producer,
-        db,
-    );
-    service.start()?;
-
-    // Fill txpool completely
-    let mut rng = StdRng::seed_from_u64(1234u64);
-    for _ in 0..100 {
-        txpool.add_tx(Arc::new(make_tx(&mut rng))).await;
-        tokio::task::yield_now().await; // Process messages so the channel doesn't lag
-    }
-
-    // Make sure blocks are not produced before the min block time has elapsed
-    time::sleep(Duration::new(1, 0)).await;
-    assert_eq!(
-        txpool.check_block_produced(),
-        Err(mpsc::error::TryRecvError::Empty)
-    );
-
-    // Make sure only blocks are produced immediately after min_block_time, but no sooner
-    for _ in 0..5 {
-        time::sleep(Duration::new(2, 0)).await;
-        tokio::task::yield_now().await;
-        let result = txpool.check_block_produced();
-        assert!(result.is_ok());
-        assert_eq!(
-            txpool.check_block_produced(),
-            Err(mpsc::error::TryRecvError::Empty)
-        );
-    }
-
-    // Stop
-    service.stop_and_await().await?;
-
-    Ok(())
 }
 
 fn test_signing_key() -> Secret<SecretKeyWrapper> {
