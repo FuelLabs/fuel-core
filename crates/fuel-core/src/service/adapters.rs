@@ -6,7 +6,7 @@ use crate::{
 use fuel_core_p2p::orchestrator::Service as P2PService;
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::RelayerSynced;
-use fuel_core_txpool::Service;
+use fuel_core_txpool::Service as TxPoolService;
 use fuel_core_types::{
     blockchain::SealedBlock,
     services::txpool::TxStatus,
@@ -30,8 +30,17 @@ pub struct BlockImportAdapter {
 }
 
 pub struct TxPoolAdapter {
-    pub service: Arc<Service>,
-    pub tx_status_rx: Receiver<TxStatus>,
+    service: TxPoolService,
+    tx_status_rx: Option<Receiver<TxStatus>>,
+}
+
+impl TxPoolAdapter {
+    pub fn new(service: TxPoolService) -> Self {
+        Self {
+            service,
+            tx_status_rx: None,
+        }
+    }
 }
 
 pub struct ExecutorAdapter {

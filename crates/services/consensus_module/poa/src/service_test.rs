@@ -1,5 +1,11 @@
-#![deny(unused_must_use)]
-
+use crate::{
+    deadline_clock::DeadlineClock,
+    new_service,
+    service::PoA,
+    Config,
+    Service,
+    Trigger,
+};
 use anyhow::anyhow;
 use fuel_core_poa::{
     ports::{
@@ -11,7 +17,10 @@ use fuel_core_poa::{
     Config,
     Trigger,
 };
-use fuel_core_services::Service as StorageTrait;
+use fuel_core_services::{
+    Service as StorageTrait,
+    Service as ServiceTrait,
+};
 use fuel_core_storage::{
     transactional::{
         StorageTransaction,
@@ -44,11 +53,13 @@ use fuel_core_types::{
     },
     services::{
         executor::{
+            Error as ExecutorError,
             ExecutionResult,
             UncommittedResult,
         },
         txpool::{
             ArcPoolTx,
+            Error as TxPoolError,
             PoolTransaction,
             TxStatus,
         },
@@ -64,8 +75,10 @@ use std::{
     collections::{
         hash_map::Entry,
         HashMap,
+        HashSet,
     },
     sync::Arc,
+    time::Duration,
 };
 use tokio::{
     sync::{
@@ -75,338 +88,307 @@ use tokio::{
         Mutex,
     },
     task::JoinHandle,
-    time::{
-        self,
-        Duration,
-    },
+    time,
+    time::Instant,
 };
 
-pub struct MockBlockProducer {
-    txpool_sender: MockTxPoolSender,
-    database: MockDatabase,
-}
+struct TestContextBuilder {}
 
-impl MockBlockProducer {
-    pub fn new(txpool_sender: MockTxPoolSender, database: MockDatabase) -> Self {
-        Self {
-            txpool_sender,
-            database,
-        }
+type BoxFuture<'a, T> =
+    core::pin::Pin<Box<dyn core::future::Future<Output = T> + Send + 'a>>;
+
+mockall::mock! {
+    TxPool {}
+
+    #[async_trait::async_trait]
+    impl TransactionPool for TxPool {
+        fn pending_number(&self) -> usize;
+
+        fn total_consumable_gas(&self) -> u64;
+
+        fn remove_txs(&self, tx_ids: Vec<TxId>) -> Vec<ArcPoolTx>;
+
+        fn next_transaction_status_update<'_self, 'a>(
+            &'_self mut self,
+        ) -> BoxFuture<'a, TxStatus>
+        where
+            '_self: 'a,
+            Self: Sync + 'a;
     }
-}
-
-impl Transactional<MockDatabase> for MockDatabase {
-    fn commit(&mut self) -> StorageResult<()> {
-        Ok(())
-    }
-}
-
-impl AsMut<MockDatabase> for MockDatabase {
-    fn as_mut(&mut self) -> &mut MockDatabase {
-        self
-    }
-}
-
-impl AsRef<MockDatabase> for MockDatabase {
-    fn as_ref(&self) -> &MockDatabase {
-        self
-    }
-}
-
-#[async_trait::async_trait]
-impl BlockProducer<MockDatabase> for MockBlockProducer {
-    async fn produce_and_execute_block(
-        &self,
-        height: BlockHeight,
-        max_gas: Word,
-    ) -> anyhow::Result<UncommittedResult<StorageTransaction<MockDatabase>>> {
-        let includable_txs: Vec<_> = self.txpool_sender.includable().await;
-
-        let transactions: Vec<Transaction> = select_transactions(includable_txs, max_gas)
-            .into_iter()
-            .map(|c| c.as_ref().into())
-            .collect();
-
-        self.database.inner.lock().unwrap().height += 1;
-
-        let block = PartialFuelBlock {
-            header: PartialBlockHeader {
-                consensus: ConsensusHeader {
-                    height,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            transactions,
-        }
-        .generate(&[]);
-
-        Ok(UncommittedResult::new(
-            ExecutionResult {
-                block,
-                skipped_transactions: vec![],
-                tx_status: vec![],
-            },
-            StorageTransaction::new(self.database.clone()),
-        ))
-    }
-
-    async fn dry_run(
-        &self,
-        _transaction: Transaction,
-        _height: Option<BlockHeight>,
-        _utxo_validation: Option<bool>,
-    ) -> anyhow::Result<Vec<Receipt>> {
-        Ok(vec![])
-    }
-}
-
-// TODO: The same code is in the `adapters::transaction_selector::select_transactions`. We need
-//  to move transaction selection logic into `TxPool` to avoid duplication of the code in tests.
-/// Select all txs that fit into the block, preferring ones with higher gas price.
-fn select_transactions(
-    mut includable_txs: Vec<ArcPoolTx>,
-    max_gas: u64,
-) -> Vec<ArcPoolTx> {
-    let mut used_block_space: Word = 0;
-
-    // Sort transactions by gas price, highest first
-    includable_txs.sort_by_key(|a| Reverse(a.price()));
-
-    // Pick as many transactions as we can fit into the block (greedy)
-    includable_txs
-        .into_iter()
-        .filter(|tx| {
-            let tx_block_space = tx.max_gas();
-            if let Some(new_used_space) = used_block_space.checked_add(tx_block_space) {
-                if new_used_space <= max_gas {
-                    used_block_space = new_used_space;
-                    true
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        })
-        .collect()
-}
-
-#[derive(Clone, Default, Debug)]
-pub struct MockDatabase {
-    inner: Arc<std::sync::Mutex<MockDatabaseInner>>,
-}
-
-#[derive(Default, Debug)]
-pub struct MockDatabaseInner {
-    height: u32,
-    consensus: HashMap<BlockId, Consensus>,
-}
-
-impl MockDatabase {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl BlockDb for MockDatabase {
-    fn block_height(&self) -> anyhow::Result<BlockHeight> {
-        Ok(BlockHeight::from(self.inner.lock().unwrap().height))
-    }
-
-    fn seal_block(
-        &mut self,
-        block_id: BlockId,
-        consensus: Consensus,
-    ) -> anyhow::Result<()> {
-        if let Entry::Vacant(e) = self.inner.lock().unwrap().consensus.entry(block_id) {
-            e.insert(consensus);
-            Ok(())
-        } else {
-            Err(anyhow!("block already sealed"))
-        }
-    }
-}
-
-// TODO: Refactor this test module to use `mockall` instead of `MockTxPool` that simulates the real
-//  logic of the `TxPool` with channels.
-/// Txpool with manually controllable contents
-pub struct MockTxPool {
-    transactions: Arc<Mutex<Vec<ArcPoolTx>>>,
-    broadcast_tx: broadcast::Sender<TxStatus>,
-    import_block_tx: broadcast::Sender<SealedBlock>,
-    sender: MockTxPoolSender,
-    stopper: oneshot::Sender<()>,
-    join: JoinHandle<()>,
-    /// New blocks will be broadcast here.
-    /// Messages contain the amount of transactions in the block
-    block_event_rx: mpsc::Receiver<usize>,
 }
 
 impl MockTxPool {
-    /// Spawn a background task for handling the messages
-    fn spawn() -> (Self, broadcast::Receiver<TxStatus>) {
-        let transactions = Arc::new(Mutex::new(Vec::<ArcPoolTx>::new()));
-
-        let (block_event_tx, block_event_rx) = mpsc::channel(16);
-
-        let (stopper_tx, mut stopper_rx) = oneshot::channel();
-        let (txpool_tx, mut txpool_rx) = mpsc::channel(16);
-        let (broadcast_tx, broadcast_rx) = broadcast::channel(16);
-        let (import_block_tx, mut import_block_rx) =
-            broadcast::channel::<SealedBlock>(16);
-
-        let txs = transactions.clone();
-        let join = tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    _ = &mut stopper_rx => {
-                        break;
-                    },
-                    msg = txpool_rx.recv() => {
-                        match msg.expect("Closed unexpectedly") {
-                            MockTxPoolMsg::PendingNumber(response) => {
-                                let t = txs.lock().await.clone();
-                                let resp = t.len();
-                                response.send(resp).unwrap();
-                            },
-                            MockTxPoolMsg::ConsumableGas(response) => {
-                                let t = txs.lock().await.clone();
-                                let resp = t.into_iter().map(|t| t.limit()).sum();
-                                response.send(resp).unwrap();
-                            },
-                            MockTxPoolMsg::Includable(response) => {
-                                let resp = txs.lock().await.clone();
-                                response.send(resp).unwrap();
-                            },
-                            MockTxPoolMsg::Remove { tx_ids, response } => {
-                                let mut g = txs.lock().await;
-                                let mut removed = g.clone();
-                                removed.retain(|tx| tx_ids.contains(&tx.id()));
-                                g.retain(|tx| !tx_ids.contains(&tx.id()));
-                                response.send(removed).unwrap();
-                            }
-                        }
-                    },
-                    r = import_block_rx.recv() => {
-                        let block = r.expect("Block receive error");
-                        let mut g = txs.lock().await;
-                        let block_tx_ids: Vec<_> = block
-                                .entity.transactions()
-                                .iter()
-                                .map(|tx| tx.id())
-                                .collect();
-                        g.retain(|tx| !block_tx_ids.contains(&tx.id()));
-                        block_event_tx.send(block.entity.transactions().len()).await.unwrap();
-                    },
-                }
-            }
-        });
-        let broadcast_rx_sender = broadcast_tx.subscribe();
-        (
-            Self {
-                transactions,
-                broadcast_tx,
-                import_block_tx,
-                sender: MockTxPoolSender(txpool_tx, broadcast_rx_sender),
-                stopper: stopper_tx,
-                join,
-                block_event_rx,
-            },
-            broadcast_rx,
-        )
-    }
-
-    fn sender(&self) -> MockTxPoolSender {
-        MockTxPoolSender(self.sender.0.clone(), self.broadcast_tx.subscribe())
-    }
-
-    async fn add_tx(&mut self, tx: ArcPoolTx) {
-        self.transactions.lock().await.push(tx.clone());
-        self.broadcast_tx.send(TxStatus::Submitted).unwrap();
-    }
-
-    fn check_block_produced(&mut self) -> Result<usize, mpsc::error::TryRecvError> {
-        self.block_event_rx.try_recv()
-    }
-
-    async fn wait_block_produced(&mut self) -> usize {
-        self.block_event_rx.recv().await.expect("Disconnected")
-    }
-
-    async fn stop(self) -> anyhow::Result<()> {
-        self.stopper.send(()).expect("Stopping failed");
-        self.join.await?;
-        Ok(())
+    pub fn no_tx_updates() -> Self {
+        let mut txpool = MockTxPool::default();
+        txpool
+            .expect_next_transaction_status_update()
+            .returning(|| Box::pin(async { core::future::pending::<TxStatus>().await }));
+        txpool
     }
 }
 
-#[derive(Debug)]
-pub enum MockTxPoolMsg {
-    PendingNumber(oneshot::Sender<usize>),
-    ConsumableGas(oneshot::Sender<u64>),
-    Includable(oneshot::Sender<Vec<ArcPoolTx>>),
-    Remove {
-        tx_ids: Vec<TxId>,
-        response: oneshot::Sender<Vec<ArcPoolTx>>,
-    },
-}
+mockall::mock! {
+    Database {}
 
-pub struct MockTxPoolSender(mpsc::Sender<MockTxPoolMsg>, broadcast::Receiver<TxStatus>);
+    unsafe impl Sync for Database {}
+    unsafe impl Send for Database {}
 
-impl MockTxPoolSender {
-    async fn includable(&self) -> Vec<ArcPoolTx> {
-        let (tx, rx) = oneshot::channel();
-        self.0
-            .send(MockTxPoolMsg::Includable(tx))
-            .await
-            .expect("Send error");
-        rx.await.expect("MockTxPool panicked in includable query")
+    impl BlockDb for Database {
+        fn block_height(&self) -> anyhow::Result<BlockHeight>;
+
+        fn seal_block(
+            &mut self,
+            block_id: BlockId,
+            consensus: Consensus,
+        ) -> anyhow::Result<()>;
+    }
+
+    impl Transactional<MockDatabase> for Database {
+        fn commit(&mut self) -> StorageResult<()>;
+    }
+
+    impl AsRef<MockDatabase> for Database {
+        fn as_ref(&self) -> &Self;
+    }
+
+    impl AsMut<MockDatabase> for Database {
+        fn as_mut(&mut self) -> &mut Self;
     }
 }
 
-fn test_signing_key() -> Secret<SecretKeyWrapper> {
-    let mut rng = StdRng::seed_from_u64(0);
+mockall::mock! {
+    BlockProducer {}
+
+    #[async_trait::async_trait]
+    impl BlockProducer<MockDatabase> for BlockProducer {
+        async fn produce_and_execute_block(
+            &self,
+            _height: BlockHeight,
+            _max_gas: Word,
+        ) -> anyhow::Result<UncommittedResult<StorageTransaction<MockDatabase>>>;
+
+        async fn dry_run(
+            &self,
+            _transaction: Transaction,
+            _height: Option<BlockHeight>,
+            _utxo_validation: Option<bool>,
+        ) -> anyhow::Result<Vec<Receipt>>;
+    }
+}
+
+fn make_tx(rng: &mut StdRng) -> Transaction {
+    TransactionBuilder::create(rng.gen(), rng.gen(), vec![])
+        .gas_price(rng.gen())
+        .gas_limit(rng.gen())
+        .finalize_without_signature_as_transaction()
+}
+
+#[tokio::test]
+async fn remove_skipped_transactions() {
+    // The test verifies that if `BlockProducer` returns skipped transactions, they would
+    // be propagated to `TxPool` for removal.
+    let mut rng = StdRng::seed_from_u64(2322);
     let secret_key = SecretKey::random(&mut rng);
-    Secret::new(secret_key.into())
+
+    let (import_block_events_tx, mut import_block_receiver_tx) = broadcast::channel(1);
+    tokio::spawn(async move {
+        import_block_receiver_tx.recv().await.unwrap();
+    });
+
+    const TX_NUM: usize = 100;
+    let skipped_transactions: Vec<_> = (0..TX_NUM).map(|_| make_tx(&mut rng)).collect();
+
+    let mock_skipped_txs = skipped_transactions.clone();
+
+    let mut seq = mockall::Sequence::new();
+
+    let mut block_producer = MockBlockProducer::default();
+    block_producer
+        .expect_produce_and_execute_block()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(move |_, _| {
+            let mut db = MockDatabase::default();
+
+            let mut db_inner = MockDatabase::default();
+            // We expect that `seal_block` should be called 1 time after `produce_and_execute_block`.
+            db_inner
+                .expect_seal_block()
+                .times(1)
+                .in_sequence(&mut seq)
+                .returning(|_, _| Ok(()));
+            db
+                .expect_commit()
+                // Verifies that `commit` have been called.
+                .times(1)
+                .in_sequence(&mut seq)
+                .returning(|| Ok(()));
+            // Check that `commit` is called after `seal_block`.
+            db.expect_as_mut().times(1).return_var(db_inner);
+
+            Ok(UncommittedResult::new(
+                ExecutionResult {
+                    block: Default::default(),
+                    skipped_transactions: mock_skipped_txs
+                        .clone()
+                        .into_iter()
+                        .map(|tx| (tx, ExecutorError::OutputAlreadyExists))
+                        .collect(),
+                    tx_status: Default::default(),
+                },
+                StorageTransaction::new(db),
+            ))
+        });
+
+    let mut db = MockDatabase::default();
+    db.expect_block_height()
+        .returning(|| Ok(BlockHeight::from(1u32)));
+
+    let mut txpool = MockTxPool::default();
+    // Test created for only for this check.
+    txpool.expect_remove_txs().returning(move |skipped_ids| {
+        // Transform transactions into ids.
+        let skipped_transactions: Vec<_> =
+            skipped_transactions.iter().map(|tx| tx.id()).collect();
+
+        // Check that all transactions are unique.
+        let expected_skipped_ids_set: HashSet<_> =
+            skipped_transactions.clone().into_iter().collect();
+        assert_eq!(expected_skipped_ids_set.len(), TX_NUM);
+
+        // Check that `TxPool::remove_txs` was called with the same ids in the same order.
+        assert_eq!(skipped_ids.len(), TX_NUM);
+        assert_eq!(skipped_transactions.len(), TX_NUM);
+        assert_eq!(skipped_transactions, skipped_ids);
+        vec![]
+    });
+
+    let mut task = PoA {
+        block_gas_limit: 1000000,
+        signing_key: Some(Secret::new(secret_key.into())),
+        db,
+        block_producer,
+        txpool,
+        import_block_events_tx,
+        last_block_created: Instant::now(),
+        trigger: Trigger::Instant,
+        timer: DeadlineClock::new(),
+    };
+
+    assert!(task.produce_block().await.is_ok());
 }
 
-#[async_trait::async_trait]
-impl TransactionPool for MockTxPoolSender {
-    async fn pending_number(&self) -> anyhow::Result<usize> {
-        let (tx, rx) = oneshot::channel();
-        self.0
-            .send(MockTxPoolMsg::PendingNumber(tx))
-            .await
-            .expect("Send error");
-        Ok(rx
-            .await
-            .expect("MockTxPool panicked in total_consumable_gas query"))
-    }
+#[tokio::test]
+async fn does_not_produce_when_txpool_empty_in_instant_mode() {
+    // verify the PoA service doesn't trigger empty blocks to be produced when there are
+    // irrelevant updates from the txpool
+    let mut rng = StdRng::seed_from_u64(2322);
+    let secret_key = SecretKey::random(&mut rng);
 
-    async fn total_consumable_gas(&self) -> anyhow::Result<u64> {
-        let (tx, rx) = oneshot::channel();
-        self.0
-            .send(MockTxPoolMsg::ConsumableGas(tx))
-            .await
-            .expect("Send error");
-        Ok(rx
-            .await
-            .expect("MockTxPool panicked in total_consumable_gas query"))
-    }
+    let (import_block_events_tx, mut import_block_receiver_tx) = broadcast::channel(1);
+    tokio::spawn(async move {
+        import_block_receiver_tx.recv().await.unwrap();
+    });
 
-    async fn remove_txs(&self, tx_ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>> {
-        let (response, rx) = oneshot::channel();
-        self.0
-            .send(MockTxPoolMsg::Remove { tx_ids, response })
-            .await
-            .expect("Send error");
-        Ok(rx.await.expect("MockTxPool panicked in remove_txs query"))
-    }
+    let mut block_producer = MockBlockProducer::default();
 
-    async fn next_transaction_status_update(&mut self) -> TxStatus {
-        self.1.recv().await.expect("unexpected close of stream")
-    }
+    block_producer
+        .expect_produce_and_execute_block()
+        .returning(|_, _| panic!("Block production should not be called"));
+
+    let mut db = MockDatabase::default();
+    db.expect_block_height()
+        .returning(|| Ok(BlockHeight::from(1u32)));
+
+    let mut txpool = MockTxPool::default();
+    txpool.expect_total_consumable_gas().returning(|| 0);
+    txpool.expect_pending_number().returning(|| 0);
+
+    let mut task = PoA {
+        block_gas_limit: 1000000,
+        signing_key: Some(Secret::new(secret_key.into())),
+        db,
+        block_producer,
+        txpool,
+        import_block_events_tx,
+        last_block_created: Instant::now(),
+        trigger: Trigger::Instant,
+        timer: DeadlineClock::new(),
+    };
+
+    // simulate some txpool events to see if any block production is erroneously triggered
+    task.on_txpool_event(&TxStatus::Submitted).await.unwrap();
+    task.on_txpool_event(&TxStatus::Completed).await.unwrap();
+    task.on_txpool_event(&TxStatus::SqueezedOut {
+        reason: TxPoolError::NoMetadata,
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
+    // verify the PoA service doesn't alter the hybrid block timing when
+    // receiving txpool events if txpool is actually empty
+    let mut rng = StdRng::seed_from_u64(2322);
+    let secret_key = SecretKey::random(&mut rng);
+
+    const TX_IDLE_TIME_MS: u64 = 50u64;
+
+    let (txpool_tx, _txpool_broadcast) = broadcast::channel(10);
+    let (import_block_events_tx, mut import_block_receiver_tx) = broadcast::channel(1);
+    tokio::spawn(async move {
+        let _ = import_block_receiver_tx.recv().await;
+    });
+
+    let mut block_producer = MockBlockProducer::default();
+
+    block_producer
+        .expect_produce_and_execute_block()
+        .returning(|_, _| panic!("Block production should not be called"));
+
+    let mut db = MockDatabase::default();
+    db.expect_block_height()
+        .returning(|| Ok(BlockHeight::from(1u32)));
+
+    let mut txpool = MockTxPool::no_tx_updates();
+    txpool.expect_total_consumable_gas().returning(|| 0);
+    txpool.expect_pending_number().returning(|| 0);
+
+    let task = PoA {
+        block_gas_limit: 1000000,
+        signing_key: Some(Secret::new(secret_key.into())),
+        db,
+        block_producer,
+        txpool,
+        import_block_events_tx,
+        last_block_created: Instant::now(),
+        trigger: Trigger::Hybrid {
+            min_block_time: Duration::from_millis(100),
+            max_tx_idle_time: Duration::from_millis(TX_IDLE_TIME_MS),
+            max_block_time: Duration::from_millis(1000),
+        },
+        timer: DeadlineClock::new(),
+    };
+
+    let service = Service::new(task);
+    service.start().unwrap();
+
+    // simulate some txpool events to see if any block production is erroneously triggered
+    txpool_tx.send(TxStatus::Submitted).unwrap();
+    txpool_tx.send(TxStatus::Completed).unwrap();
+    txpool_tx
+        .send(TxStatus::SqueezedOut {
+            reason: TxPoolError::NoMetadata,
+        })
+        .unwrap();
+
+    // wait max_tx_idle_time - causes block production to occur if
+    // pending txs > 0 is not checked.
+    time::sleep(Duration::from_millis(TX_IDLE_TIME_MS)).await;
+
+    service.stop_and_await().await.unwrap();
+    assert!(service.state().stopped());
 }
 
 #[tokio::test(start_paused = true)] // Run with time paused, start/stop must still work
@@ -480,7 +462,7 @@ fn _make_tx(coin: &CoinInfo, gas_price: u64, gas_limit: u64) -> PoolTransaction 
         .into()
 }
 
-fn make_tx(rng: &mut StdRng) -> PoolTransaction {
+fn make_tx_trigger(rng: &mut StdRng) -> PoolTransaction {
     _make_tx(
         &CoinInfo {
             index: 0,
@@ -529,8 +511,6 @@ async fn never_trigger_never_produces_blocks() -> anyhow::Result<()> {
     );
 
     // Stop
-    service.stop();
-    txpool.stop().await?;
     service.stop_and_await().await?;
 
     Ok(())
@@ -564,32 +544,9 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
     // Make sure it's produced
     assert_eq!(txpool.wait_block_produced().await, 1);
 
-    // Checked that it's sealed and signature is valid
-    {
-        let db_lock = db.inner.lock().unwrap();
-        let (id, consensus) = db_lock
-            .consensus
-            .iter()
-            .next()
-            .expect("expected sealed block info");
-        match consensus {
-            Consensus::PoA(poa) => {
-                // verify against public key from test config
-                let pk = test_signing_key().expose_secret().public_key();
-
-                let message = id.into_message();
-
-                poa.signature
-                    .verify(&pk, &message)
-                    .expect("expected signature to be valid");
-            }
-            _ => panic!("invalid sealed data"),
-        }
-    }
+    // TODO: Check block_import is triggered
 
     // Stop
-    service.stop();
-    txpool.stop().await?;
     service.stop_and_await().await?;
 
     Ok(())
@@ -681,8 +638,6 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     );
 
     // Stop
-    service.stop();
-    txpool.stop().await?;
     service.stop_and_await().await?;
 
     Ok(())
@@ -736,8 +691,6 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
     }
 
     // Stop
-    service.stop();
-    txpool.stop().await?;
     service.stop_and_await().await?;
 
     Ok(())
@@ -816,8 +769,6 @@ async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
     assert_eq!(txpool.check_block_produced(), Ok(2));
 
     // Stop
-    service.stop();
-    txpool.stop().await?;
     service.stop_and_await().await?;
 
     Ok(())
@@ -875,9 +826,13 @@ async fn hybrid_trigger_reacts_correctly_to_full_txpool() -> anyhow::Result<()> 
     }
 
     // Stop
-    service.stop();
-    txpool.stop().await?;
     service.stop_and_await().await?;
 
     Ok(())
+}
+
+fn test_signing_key() -> Secret<SecretKeyWrapper> {
+    let mut rng = StdRng::seed_from_u64(0);
+    let secret_key = SecretKey::random(&mut rng);
+    Secret::new(secret_key.into())
 }

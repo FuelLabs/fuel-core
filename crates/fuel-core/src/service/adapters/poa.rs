@@ -26,25 +26,32 @@ use fuel_core_types::{
 
 #[async_trait::async_trait]
 impl TransactionPool for TxPoolAdapter {
-    async fn pending_number(&self) -> anyhow::Result<usize> {
-        self.service.pending_number().await
+    fn pending_number(&self) -> usize {
+        self.service.shared.pending_number()
     }
 
-    async fn total_consumable_gas(&self) -> anyhow::Result<u64> {
-        self.service.total_consumable_gas().await
+    fn total_consumable_gas(&self) -> u64 {
+        self.service.shared.total_consumable_gas()
     }
 
-    async fn remove_txs(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>> {
-        self.service.remove_txs(ids).await
+    fn remove_txs(&self, ids: Vec<TxId>) -> Vec<ArcPoolTx> {
+        self.service.shared.remove_txs(ids)
     }
 
     async fn next_transaction_status_update(&mut self) -> TxStatus {
-        match self.tx_status_rx.recv().await {
-            Ok(status) => return status,
-            Err(err) => {
-                panic!("Tx Status Channel errored unexpectedly: {err:?}");
-            }
+        // lazily instantiate a long-lived tx receiver only when there
+        // is consumer for the messages to avoid lagging the channel
+        if self.tx_status_rx.is_none() {
+            self.tx_status_rx = Some(self.service.shared.tx_status_subscribe());
         }
+
+        // TODO: Handle unwrap
+        self.tx_status_rx
+            .as_mut()
+            .expect("Should always be some because we checked that above")
+            .recv()
+            .await
+            .expect("Tx Status Channel errored unexpectedly")
     }
 }
 

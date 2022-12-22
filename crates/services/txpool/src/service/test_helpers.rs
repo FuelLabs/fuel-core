@@ -3,6 +3,7 @@ use crate::{
     ports::BlockImport,
     MockDb,
 };
+use fuel_core_services::Service as ServiceTrait;
 use fuel_core_types::{
     blockchain::SealedBlock,
     entities::coin::Coin,
@@ -47,10 +48,6 @@ impl TestContext {
 
     pub fn setup_coin(&self) -> (Coin, Input) {
         crate::test_helpers::setup_coin(&mut self.rng.borrow_mut(), Some(&self.mock_db))
-    }
-
-    pub async fn stop(&self) {
-        self.service.stop().await.unwrap().await.unwrap();
     }
 }
 
@@ -197,7 +194,7 @@ impl TestContextBuilder {
             .p2p_port(p2p);
 
         let service = builder.build().unwrap();
-        service.start().await.unwrap();
+        service.start().unwrap();
 
         TestContext {
             service,

@@ -3,6 +3,9 @@
 
 mod deadline_clock;
 
+#[cfg(test)]
+mod service_test;
+
 pub mod config;
 pub mod ports;
 pub mod service;

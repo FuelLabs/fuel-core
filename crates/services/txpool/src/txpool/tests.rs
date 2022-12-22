@@ -38,7 +38,6 @@ use std::{
     sync::Arc,
     vec,
 };
-use tokio::sync::RwLock;
 
 #[tokio::test]
 async fn insert_simple_tx_succeeds() {
@@ -794,9 +793,7 @@ async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
         .insert_inner(tx.clone(), &db)
         .expect("should succeed");
 
-    let tx_info = TxPool::find_one(&RwLock::new(txpool), &tx.id())
-        .await
-        .unwrap();
+    let tx_info = txpool.find_one(&tx.id()).unwrap();
     assert_eq!(tx_info.tx().id(), tx.id());
 }
 

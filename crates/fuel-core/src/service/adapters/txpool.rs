@@ -51,10 +51,10 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         if self.tx_receiver.is_none() {
             self.tx_receiver = Some(self.p2p_service.subscribe_tx());
         }
-        // todo: handle unwrap
+        // TODO: Handle unwrap
         self.tx_receiver
             .as_mut()
-            .expect("Should always be some")
+            .expect("Should always be some because we checked that above")
             .recv()
             .await
             .unwrap()

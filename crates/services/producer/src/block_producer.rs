@@ -97,7 +97,7 @@ where
         // prevent simultaneous block production calls, the guard will drop at the end of this fn.
         let _production_guard = self.lock.lock().await;
 
-        let best_transactions = self.txpool.get_includable_txs(height, max_gas).await?;
+        let best_transactions = self.txpool.get_includable_txs(height, max_gas);
 
         let header = self.new_header(height).await?;
         let block = PartialFuelBlock::new(
