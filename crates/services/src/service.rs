@@ -152,7 +152,7 @@ where
 
     fn stop(&self) -> bool {
         self.state.send_if_modified(|state| {
-            if state.started() {
+            if state.not_started() || state.started() {
                 *state = State::Stopping;
                 true
             } else {
@@ -257,3 +257,49 @@ where
 }
 
 // TODO: Add tests
+#[cfg(test)]
+mod tests {
+    use crate::{
+        EmptyShared,
+        RunnableService,
+        Service as ServiceTrait,
+        ServiceRunner,
+    };
+
+    mockall::mock! {
+        Service {}
+
+        #[async_trait::async_trait]
+        impl RunnableService for Service {
+            const NAME: &'static str = "MockService";
+
+            type SharedData = EmptyShared;
+
+            fn shared_data(&self) -> EmptyShared {
+                EmptyShared
+            }
+
+            async fn initialize(&mut self) -> anyhow::Result<()> {
+                Ok(())
+            }
+
+            async fn run(&mut self) -> anyhow::Result<bool>;
+        }
+    }
+
+    impl MockService {
+        fn new_empty() -> Self {
+            let mut mock = MockService::default();
+            mock.expect_shared_data().returning(|| EmptyShared);
+            mock.expect_initialize().returning(|| Ok(()));
+            mock.expect_run().returning(|| Ok(true));
+            mock
+        }
+    }
+
+    #[tokio::test]
+    async fn stop_without_start() {
+        let service = ServiceRunner::new(MockService::new_empty());
+        service.stop_and_await().await.unwrap();
+    }
+}

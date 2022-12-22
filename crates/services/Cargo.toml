@@ -14,3 +14,6 @@ anyhow = "1.0"
 async-trait = "0.1"
 tokio = { version = "1.21", features = ["full"] }
 tracing = "0.1"
+
+[dev-dependencies]
+mockall = "0.11"
