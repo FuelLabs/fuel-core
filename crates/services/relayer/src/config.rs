@@ -23,7 +23,7 @@ pub struct Config {
     pub da_finalization: DaBlockHeight,
     /// Uri address to ethereum client.
     pub eth_client: Option<url::Url>,
-    // TODO: Create `EthAddress` into `fuel_types`.
+    // TODO: Create `EthAddress` into `fuel_core_types`.
     /// Ethereum contract address.
     pub eth_v2_listening_contracts: Vec<H160>,
     /// Number of pages or blocks containing logs that

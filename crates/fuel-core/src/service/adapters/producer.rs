@@ -24,21 +24,18 @@ use fuel_core_types::{
             Result as ExecutorResult,
             UncommittedResult,
         },
-        txpool::{
-            ArcPoolTx,
-            Error as TxPoolError,
-        },
+        txpool::ArcPoolTx,
     },
 };
 
 #[async_trait::async_trait]
 impl TxPool for TxPoolAdapter {
-    async fn get_includable_txs(
+    fn get_includable_txs(
         &self,
         _block_height: BlockHeight,
         max_gas: u64,
-    ) -> Result<Vec<ArcPoolTx>, TxPoolError> {
-        self.service.select_transactions(max_gas).await
+    ) -> Vec<ArcPoolTx> {
+        self.service.shared.select_transactions(max_gas)
     }
 }
 
