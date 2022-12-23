@@ -296,7 +296,6 @@ jobs:
           - os: macos-latest
             platform: darwin-arm
             target: aarch64-apple-darwin
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
