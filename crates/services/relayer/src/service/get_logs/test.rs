@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     abi::bridge::SentMessageFilter,
-    relayer::state::EthSyncGap,
+    service::state::EthSyncGap,
     test_helpers::{
         middleware::{
             MockMiddleware,

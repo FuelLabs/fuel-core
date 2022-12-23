@@ -1,11 +1,9 @@
-//! # Relayer
-//! This module handles bridge communications between
-//! the fuel node and the data availability layer.
+//! This module handles bridge communications between the fuel node and the data availability layer.
 
 use crate::{
     log::EthEventLog,
     ports::RelayerDb,
-    relayer::state::EthLocal,
+    service::state::EthLocal,
     Config,
 };
 use async_trait::async_trait;
@@ -56,11 +54,10 @@ mod test;
 
 type Synced = watch::Receiver<bool>;
 type NotifySynced = watch::Sender<bool>;
-type Database = Box<dyn RelayerDb>;
 
 /// The alias of runnable relayer service.
-pub type Service = CustomizableService<Provider<Http>>;
-type CustomizableService<P> = ServiceRunner<Relayer<P>>;
+pub type Service<D> = CustomizableService<Provider<Http>, D>;
+type CustomizableService<P, D> = ServiceRunner<Task<P, D>>;
 
 /// Receives signals when the relayer reaches consistency with the DA layer.
 #[derive(Clone)]
@@ -70,28 +67,20 @@ pub struct RelayerSynced {
 
 /// The actual relayer that runs on a background task
 /// to sync with the DA layer.
-pub struct Relayer<P> {
+pub struct Task<P, D> {
     /// Sends signals when the relayer reaches consistency with the DA layer.
     synced: NotifySynced,
     /// The node that communicates with Ethereum.
     eth_node: Arc<P>,
     /// The fuel database.
-    database: Database,
+    database: D,
     /// Configuration settings.
     config: Config,
 }
 
-impl<P> Relayer<P>
-where
-    P: Middleware<Error = ProviderError> + 'static,
-{
-    /// Create a new relayer.
-    fn new(
-        synced: NotifySynced,
-        eth_node: P,
-        database: Database,
-        config: Config,
-    ) -> Self {
+impl<P, D> Task<P, D> {
+    /// Create a new relayer task.
+    fn new(synced: NotifySynced, eth_node: P, database: D, config: Config) -> Self {
         Self {
             synced,
             eth_node: Arc::new(eth_node),
@@ -99,7 +88,13 @@ where
             config,
         }
     }
+}
 
+impl<P, D> Task<P, D>
+where
+    P: Middleware<Error = ProviderError> + 'static,
+    D: RelayerDb + 'static,
+{
     async fn set_deploy_height(&mut self) {
         if self.finalized().await.unwrap_or_default() < *self.config.da_deploy_height {
             self.database
@@ -111,10 +106,20 @@ where
 }
 
 #[async_trait]
-impl<P> RelayerData for Relayer<P>
+impl<P, D> RelayerData for Task<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
+    D: RelayerDb + 'static,
 {
+    async fn wait_if_eth_syncing(&self) -> anyhow::Result<()> {
+        syncing::wait_if_eth_syncing(
+            &self.eth_node,
+            self.config.syncing_call_frequency,
+            self.config.syncing_log_frequency,
+        )
+        .await
+    }
+
     async fn download_logs(
         &mut self,
         eth_sync_gap: &state::EthSyncGap,
@@ -125,7 +130,7 @@ where
             self.eth_node.clone(),
             self.config.log_page_size,
         );
-        write_logs(self.database.as_mut(), logs).await
+        write_logs(&mut self.database, logs).await
     }
 
     async fn set_finalized_da_height(
@@ -138,21 +143,13 @@ where
     fn update_synced(&self, state: &state::EthState) {
         update_synced(&self.synced, state)
     }
-
-    async fn wait_if_eth_syncing(&self) -> anyhow::Result<()> {
-        syncing::wait_if_eth_syncing(
-            &self.eth_node,
-            self.config.syncing_call_frequency,
-            self.config.syncing_log_frequency,
-        )
-        .await
-    }
 }
 
 #[async_trait]
-impl<P> RunnableService for Relayer<P>
+impl<P, D> RunnableService for Task<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
+    D: RelayerDb + 'static,
 {
     const NAME: &'static str = "Relayer";
 
@@ -186,7 +183,7 @@ where
 }
 
 impl RelayerSynced {
-    /// Wait for the [`Relayer`] to be in sync with
+    /// Wait for the [`Task`] to be in sync with
     /// the data availability layer.
     ///
     /// Yields until the relayer reaches a point where it
@@ -207,9 +204,10 @@ impl RelayerSynced {
 }
 
 #[async_trait]
-impl<P> state::EthRemote for Relayer<P>
+impl<P, D> state::EthRemote for Task<P, D>
 where
     P: Middleware<Error = ProviderError>,
+    D: RelayerDb + 'static,
 {
     async fn current(&self) -> anyhow::Result<u64> {
         Ok(self.eth_node.get_block_number().await?.as_u64())
@@ -221,9 +219,10 @@ where
 }
 
 #[async_trait]
-impl<P> EthLocal for Relayer<P>
+impl<P, D> EthLocal for Task<P, D>
 where
     P: Middleware<Error = ProviderError>,
+    D: RelayerDb + 'static,
 {
     async fn finalized(&self) -> Option<u64> {
         self.database
@@ -235,7 +234,10 @@ where
 }
 
 /// Creates an instance of runnable relayer service.
-pub fn new_service(database: Database, config: Config) -> anyhow::Result<Service> {
+pub fn new_service<D>(database: D, config: Config) -> anyhow::Result<Service<D>>
+where
+    D: RelayerDb + 'static,
+{
     let url = config.eth_client.clone().ok_or_else(|| {
         anyhow::anyhow!(
             "Tried to start Relayer without setting an eth_client in the config"
@@ -249,27 +251,29 @@ pub fn new_service(database: Database, config: Config) -> anyhow::Result<Service
 
 #[cfg(any(test, feature = "test-helpers"))]
 /// Start a test relayer.
-pub fn new_service_test<P>(
+pub fn new_service_test<P, D>(
     eth_node: P,
-    database: Database,
+    database: D,
     config: Config,
-) -> CustomizableService<P>
+) -> CustomizableService<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
+    D: RelayerDb + 'static,
 {
     new_service_internal(eth_node, database, config)
 }
 
-fn new_service_internal<P>(
+fn new_service_internal<P, D>(
     eth_node: P,
-    database: Database,
+    database: D,
     config: Config,
-) -> CustomizableService<P>
+) -> CustomizableService<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
+    D: RelayerDb + 'static,
 {
     let (tx, _) = watch::channel(false);
-    let relayer = Relayer::new(tx, eth_node, database, config);
+    let task = Task::new(tx, eth_node, database, config);
 
-    CustomizableService::new(relayer)
+    CustomizableService::new(task)
 }

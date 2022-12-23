@@ -73,9 +73,7 @@ pub async fn start_server(
         .data(config)
         .data(db)
         .data(modules.txpool.clone())
-        .data(modules.block_importer.clone())
         .data(modules.block_producer.clone())
-        .data(modules.sync.clone())
         .data(modules.consensus_module.clone());
     let schema = dap::init(schema, params).extension(Tracing).finish();
 

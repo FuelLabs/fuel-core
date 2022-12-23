@@ -68,7 +68,7 @@ use crate::{
 
 /// Orchestrates various p2p-related events between the inner `P2pService`
 /// and the top level `NetworkService`.
-struct NetworkOrchestrator {
+struct Task {
     p2p_config: P2PConfig,
     db: Arc<dyn P2pDb>,
     /// Receive internal Orchestrator Requests
@@ -101,7 +101,7 @@ impl Debug for OrchestratorRequest {
     }
 }
 
-impl NetworkOrchestrator {
+impl Task {
     fn new(
         p2p_config: P2PConfig,
         db: Arc<dyn P2pDb>,
@@ -219,9 +219,9 @@ impl NetworkOrchestrator {
 
 pub struct Service {
     /// Network Orchestrator that handles p2p network and inter-module communication
-    network_orchestrator: Arc<Mutex<Option<NetworkOrchestrator>>>,
+    network_orchestrator: Arc<Mutex<Option<Task>>>,
     /// Holds the spawned task when Netowrk Orchestrator is started
-    join: Mutex<Option<JoinHandle<Result<NetworkOrchestrator, anyhow::Error>>>>,
+    join: Mutex<Option<JoinHandle<Result<Task, anyhow::Error>>>>,
     /// Used for communicating with the Orchestrator
     tx_orchestrator_request: Sender<OrchestratorRequest>,
     /// Sender of p2p transaction used for subscribing.
@@ -229,13 +229,16 @@ pub struct Service {
 }
 
 impl Service {
-    pub fn new(p2p_config: P2PConfig, db: Arc<dyn P2pDb>) -> Self {
+    pub fn new<D>(p2p_config: P2PConfig, db: D) -> Self
+    where
+        D: P2pDb + 'static,
+    {
         let (tx_orchestrator_request, rx_orchestrator_request) =
             tokio::sync::mpsc::channel(100);
 
-        let network_orchestrator = NetworkOrchestrator::new(
+        let network_orchestrator = Task::new(
             p2p_config,
-            db,
+            Arc::new(db),
             (rx_orchestrator_request, tx_orchestrator_request.clone()),
         );
         let tx_broadcast = network_orchestrator.sender();
@@ -458,9 +461,7 @@ pub mod tests {
     #[tokio::test]
     async fn start_stop_works() {
         let p2p_config = P2PConfig::default_initialized("start_stop_works");
-        let db: Arc<dyn P2pDb> = Arc::new(FakeDb);
-
-        let service = Service::new(p2p_config, db.clone());
+        let service = Service::new(p2p_config, FakeDb);
 
         // Node with p2p service started
         assert!(service.start().await.is_ok());

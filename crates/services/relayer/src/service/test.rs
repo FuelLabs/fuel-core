@@ -52,7 +52,7 @@ async fn deploy_height_does_not_override() {
     };
     let eth_node = MockMiddleware::default();
     let (tx, _) = watch::channel(false);
-    let mut relayer = Relayer::new(tx, eth_node, Box::new(mock_db.clone()), config);
+    let mut relayer = Task::new(tx, eth_node, mock_db.clone(), config);
     relayer.set_deploy_height().await;
 
     assert_eq!(*mock_db.get_finalized_da_height().await.unwrap(), 50);
@@ -69,7 +69,7 @@ async fn deploy_height_does_override() {
     };
     let eth_node = MockMiddleware::default();
     let (tx, _) = watch::channel(false);
-    let mut relayer = Relayer::new(tx, eth_node, Box::new(mock_db.clone()), config);
+    let mut relayer = Task::new(tx, eth_node, mock_db.clone(), config);
     relayer.set_deploy_height().await;
 
     assert_eq!(*mock_db.get_finalized_da_height().await.unwrap(), 52);

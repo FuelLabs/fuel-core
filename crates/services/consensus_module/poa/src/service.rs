@@ -58,9 +58,9 @@ use tokio::{
 use tokio_stream::StreamExt;
 use tracing::error;
 
-pub type Service<D, T, B> = ServiceRunner<PoA<D, T, B>>;
+pub type Service<D, T, B> = ServiceRunner<Task<D, T, B>>;
 
-pub struct PoA<D, T, B> {
+pub struct Task<D, T, B> {
     pub(crate) block_gas_limit: Word,
     pub(crate) signing_key: Option<Secret<SecretKeyWrapper>>,
     pub(crate) db: D,
@@ -77,7 +77,7 @@ pub struct PoA<D, T, B> {
     pub(crate) timer: DeadlineClock,
 }
 
-impl<D, T, B> PoA<D, T, B>
+impl<D, T, B> Task<D, T, B>
 where
     T: TransactionPool,
 {
@@ -104,7 +104,7 @@ where
     }
 }
 
-impl<D, T, B> PoA<D, T, B>
+impl<D, T, B> Task<D, T, B>
 where
     D: BlockDb,
     T: TransactionPool,
@@ -300,7 +300,7 @@ where
 }
 
 #[async_trait::async_trait]
-impl<D, T, B> RunnableService for PoA<D, T, B>
+impl<D, T, B> RunnableService for Task<D, T, B>
 where
     D: BlockDb,
     T: TransactionPool,
@@ -348,7 +348,7 @@ where
     D: BlockDb + 'static,
     B: BlockProducer<D> + 'static,
 {
-    Service::new(PoA::new(
+    Service::new(Task::new(
         config,
         txpool,
         import_block_events_tx,

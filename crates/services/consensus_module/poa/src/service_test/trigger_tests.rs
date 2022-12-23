@@ -414,55 +414,57 @@ async fn hybrid_trigger_produces_blocks_correctly_min_block_time_min_block_gas_l
     Ok(())
 }
 
-// TODO: We found a bug in the hybrid logic, we need to fix it=)
-//  Don't remove this test. Uncomment when bug is resolved.
-// #[tokio::test(start_paused = true)]
-// async fn hybrid_trigger_produces_blocks_correctly_min_block_time_max_block_gas_limit() -> anyhow::Result<()> {
-//     const MIN_BLOCK_TIME: u64 = 6;
-//     const MAX_TX_IDLE_TIME: u64 = 1;
-//     const MAX_BLOCK_TIME: u64 = 10;
-//     let mut ctx = DefaultContext::new(Config {
-//         trigger: Trigger::Hybrid {
-//             min_block_time: Duration::new(MIN_BLOCK_TIME, 0),
-//             max_tx_idle_time: Duration::new(MAX_TX_IDLE_TIME, 0),
-//             max_block_time: Duration::new(MAX_BLOCK_TIME, 0),
-//         },
-//         // We want to test behaviour when the gas of all transactions < `block_gas_limit`
-//         block_gas_limit: Word::MAX,
-//         signing_key: Some(test_signing_key()),
-//         metrics: false,
-//     });
-//
-//     // Emulate tx status update to trigger the execution.
-//     ctx.status_sender.send_replace(Some(TxStatus::Submitted));
-//
-//     time::sleep(Duration::new(2, 0)).await;
-//     assert!(matches!(ctx.block_import.try_recv(), Ok(_)));
-//     assert!(matches!(
-//         ctx.block_import.try_recv(),
-//         Err(broadcast::error::TryRecvError::Empty)
-//     ));
-//
-//     // Emulate tx status update to trigger the execution.
-//     ctx.status_sender.send_replace(Some(TxStatus::Submitted));
-//
-//     time::sleep(Duration::new(2, 0)).await;
-//     assert!(matches!(
-//         ctx.block_import.try_recv(),
-//         Err(broadcast::error::TryRecvError::Empty)
-//     ));
-//
-//     time::sleep(Duration::new(2, 0)).await;
-//     assert!(matches!(
-//         ctx.block_import.try_recv(),
-//         Err(broadcast::error::TryRecvError::Empty)
-//     ));
-//
-//     time::sleep(Duration::new(3, 0)).await;
-//     assert!(matches!(ctx.block_import.try_recv(), Ok(_)));
-//
-//     // Stop
-//     ctx.test_ctx.service.stop_and_await().await?;
-//
-//     Ok(())
-// }
+// TODO: We found a bug https://github.com/FuelLabs/fuel-core/issues/866 in the hybrid logic,
+//  we need to fix it=) Don't remove this test. Remove `ignore` when bug is resolved.
+#[ignore]
+#[tokio::test(start_paused = true)]
+async fn hybrid_trigger_produces_blocks_correctly_min_block_time_max_block_gas_limit(
+) -> anyhow::Result<()> {
+    const MIN_BLOCK_TIME: u64 = 6;
+    const MAX_TX_IDLE_TIME: u64 = 1;
+    const MAX_BLOCK_TIME: u64 = 10;
+    let mut ctx = DefaultContext::new(Config {
+        trigger: Trigger::Hybrid {
+            min_block_time: Duration::new(MIN_BLOCK_TIME, 0),
+            max_tx_idle_time: Duration::new(MAX_TX_IDLE_TIME, 0),
+            max_block_time: Duration::new(MAX_BLOCK_TIME, 0),
+        },
+        // We want to test behaviour when the gas of all transactions < `block_gas_limit`
+        block_gas_limit: Word::MAX,
+        signing_key: Some(test_signing_key()),
+        metrics: false,
+    });
+
+    // Emulate tx status update to trigger the execution.
+    ctx.status_sender.send_replace(Some(TxStatus::Submitted));
+
+    time::sleep(Duration::new(2, 0)).await;
+    assert!(matches!(ctx.block_import.try_recv(), Ok(_)));
+    assert!(matches!(
+        ctx.block_import.try_recv(),
+        Err(broadcast::error::TryRecvError::Empty)
+    ));
+
+    // Emulate tx status update to trigger the execution.
+    ctx.status_sender.send_replace(Some(TxStatus::Submitted));
+
+    time::sleep(Duration::new(2, 0)).await;
+    assert!(matches!(
+        ctx.block_import.try_recv(),
+        Err(broadcast::error::TryRecvError::Empty)
+    ));
+
+    time::sleep(Duration::new(2, 0)).await;
+    assert!(matches!(
+        ctx.block_import.try_recv(),
+        Err(broadcast::error::TryRecvError::Empty)
+    ));
+
+    time::sleep(Duration::new(3, 0)).await;
+    assert!(matches!(ctx.block_import.try_recv(), Ok(_)));
+
+    // Stop
+    ctx.test_ctx.service.stop_and_await().await?;
+
+    Ok(())
+}
