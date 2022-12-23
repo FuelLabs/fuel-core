@@ -517,12 +517,15 @@ impl Dependency {
 
     /// insert tx inside dependency
     /// return list of transactions that are removed from txpool
-    pub(crate) fn insert<'a>(
+    pub(crate) fn insert<'a, DB>(
         &'a mut self,
         txs: &'a HashMap<TxId, TxInfo>,
-        db: &dyn TxPoolDb,
+        db: &DB,
         tx: &'a ArcPoolTx,
-    ) -> anyhow::Result<Vec<ArcPoolTx>> {
+    ) -> anyhow::Result<Vec<ArcPoolTx>>
+    where
+        DB: TxPoolDb,
+    {
         let (max_depth, db_coins, db_contracts, db_messages, collided) =
             self.check_for_collision(txs, db, tx)?;
 

@@ -34,15 +34,19 @@ use std::{
 };
 
 #[derive(Debug, Clone)]
-pub struct TxPool {
+pub struct TxPool<DB> {
     by_hash: HashMap<TxId, TxInfo>,
     by_gas_price: PriceSort,
     by_dependency: Dependency,
     config: Config,
+    database: DB,
 }
 
-impl TxPool {
-    pub fn new(config: Config) -> Self {
+impl<DB> TxPool<DB>
+where
+    DB: TxPoolDb,
+{
+    pub fn new(config: Config, database: DB) -> Self {
         let max_depth = config.max_depth;
 
         Self {
@@ -50,6 +54,7 @@ impl TxPool {
             by_gas_price: PriceSort::default(),
             by_dependency: Dependency::new(max_depth, config.utxo_validation),
             config,
+            database,
         }
     }
 
@@ -66,9 +71,8 @@ impl TxPool {
         &mut self,
         // TODO: Pass `&Transaction`
         tx: Arc<Transaction>,
-        db: &dyn TxPoolDb,
     ) -> anyhow::Result<InsertionResult> {
-        let current_height = db.current_block_height()?;
+        let current_height = self.database.current_block_height()?;
 
         if tx.is_mint() {
             return Err(Error::NotSupportedTransactionType.into())
@@ -143,7 +147,9 @@ impl TxPool {
                 .observe(tx.metered_bytes_size() as f64);
         }
         // check and insert dependency
-        let rem = self.by_dependency.insert(&self.by_hash, db, &tx)?;
+        let rem = self
+            .by_dependency
+            .insert(&self.by_hash, &self.database, &tx)?;
         self.by_hash.insert(tx.id(), TxInfo::new(tx.clone()));
         self.by_gas_price.insert(&tx);
 
@@ -232,20 +238,16 @@ impl TxPool {
     }
 
     /// Import a set of transactions from network gossip or GraphQL endpoints.
-    pub fn insert<DB>(
+    pub fn insert(
         &mut self,
-        db: &DB,
         tx_status_sender: &TxStatusChange,
         txs: &[Arc<Transaction>],
-    ) -> Vec<anyhow::Result<InsertionResult>>
-    where
-        DB: TxPoolDb,
-    {
+    ) -> Vec<anyhow::Result<InsertionResult>> {
         // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
         // should be done before transaction comes to txpool, or before it enters RwLocked region.
         let mut res = Vec::new();
         for tx in txs.iter() {
-            res.push(self.insert_inner(tx.clone(), db))
+            res.push(self.insert_inner(tx.clone()))
         }
         // announce to subscribers
         for ret in res.iter() {

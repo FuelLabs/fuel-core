@@ -80,16 +80,14 @@ impl TxStatusChange {
 }
 
 pub struct SharedState<P2P, DB> {
-    db: Arc<DB>,
     tx_status_sender: TxStatusChange,
-    txpool: Arc<ParkingMutex<TxPool>>,
+    txpool: Arc<ParkingMutex<TxPool<DB>>>,
     p2p: Arc<P2P>,
 }
 
 impl<P2P, DB> Clone for SharedState<P2P, DB> {
     fn clone(&self) -> Self {
         Self {
-            db: self.db.clone(),
             tx_status_sender: self.tx_status_sender.clone(),
             txpool: self.txpool.clone(),
             p2p: self.p2p.clone(),
@@ -127,7 +125,6 @@ where
                 if let Some(GossipData { data: Some(tx), .. }) = new_transaction {
                     let txs = vec!(Arc::new(tx));
                     self.shared.txpool.lock().insert(
-                        self.shared.db.as_ref(),
                         &self.shared.tx_status_sender,
                         &txs
                     );
@@ -154,7 +151,10 @@ where
 //  Instead, `fuel-core` can create a `DatabaseWithTxPool` that aggregates `TxPool` and
 //  storage `Database` together. GraphQL will retrieve data from this `DatabaseWithTxPool` via
 //  `StorageInspect` trait.
-impl<P2P, DB> SharedState<P2P, DB> {
+impl<P2P, DB> SharedState<P2P, DB>
+where
+    DB: TxPoolDb,
+{
     pub fn pending_number(&self) -> usize {
         self.txpool.lock().pending_number()
     }
@@ -212,11 +212,7 @@ where
         &self,
         txs: Vec<Arc<Transaction>>,
     ) -> Vec<anyhow::Result<InsertionResult>> {
-        let insert = {
-            self.txpool
-                .lock()
-                .insert(self.db.as_ref(), &self.tx_status_sender, &txs)
-        };
+        let insert = { self.txpool.lock().insert(&self.tx_status_sender, &txs) };
 
         for (ret, tx) in insert.iter().zip(txs.into_iter()) {
             match ret {
@@ -286,13 +282,11 @@ where
     let p2p = Arc::new(p2p);
     let gossiped_tx_stream = p2p.gossiped_transaction_events();
     let committed_block_stream = importer.block_events();
-    let txpool = Arc::new(ParkingMutex::new(TxPool::new(config)));
-    let db = Arc::new(db);
+    let txpool = Arc::new(ParkingMutex::new(TxPool::new(config, db)));
     let task = Task {
         gossiped_tx_stream,
         committed_block_stream,
         shared: SharedState {
-            db,
             tx_status_sender,
             txpool,
             p2p,
