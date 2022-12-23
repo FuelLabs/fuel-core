@@ -215,7 +215,8 @@ where
                         // the rest of these p2p events don't require any action here
                     },
                     None => {
-                        panic!("The libp2p service is unavailable, shutting down task.");
+                        // "The libp2p service is unavailable, shutting down task."
+                        return Ok(false);
                     }
                 }
             },
