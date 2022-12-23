@@ -296,10 +296,6 @@ jobs:
           - os: macos-latest
             platform: darwin-arm
             target: aarch64-apple-darwin
-          - os: ubuntu-latest
-            platform: windows
-            target: x86_64-pc-windows-gnu
-            cross_image: mingw-w64
 
     steps:
       - name: Checkout repository
