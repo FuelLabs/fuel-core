@@ -1,7 +1,11 @@
 [package]
 name = "fuel-core-keygen"
-version = "0.1.0"
+version = "0.15.1"
 edition = "2021"
+homepage = "https://fuel.network/"
+keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
+license = "BUSL-1.1"
+repository = "https://github.com/FuelLabs/fuel-core"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

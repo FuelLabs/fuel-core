@@ -12,6 +12,7 @@ use fuel_core_types::{
 use serde_json::json;
 use std::str::FromStr;
 
+/// Key management utilities for configuring fuel-core
 #[derive(Debug, Parser)]
 pub(crate) enum Command {
     New(NewKey),
@@ -27,6 +28,7 @@ impl Command {
     }
 }
 
+/// Generate a random new secret & public key in the format expected by fuel-core
 #[derive(Debug, clap::Args)]
 #[clap(author, version, about)]
 pub(crate) struct NewKey {
@@ -49,6 +51,7 @@ impl NewKey {
     }
 }
 
+/// Parse a secret key to view the associated public key
 #[derive(Debug, clap::Args)]
 #[clap(author, version, about)]
 pub(crate) struct ParseSecret {
