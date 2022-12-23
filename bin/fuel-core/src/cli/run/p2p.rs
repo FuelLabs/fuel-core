@@ -3,8 +3,8 @@ use fuel_core::{
     p2p::{
         config::{
             convert_to_libp2p_keypair,
+            Config,
             NotInitialized,
-            P2PConfig,
         },
         gossipsub_config::default_gossipsub_builder,
         Multiaddr,
@@ -136,7 +136,7 @@ pub struct P2PArgs {
 }
 
 impl P2PArgs {
-    pub fn into_config(self, metrics: bool) -> anyhow::Result<P2PConfig<NotInitialized>> {
+    pub fn into_config(self, metrics: bool) -> anyhow::Result<Config<NotInitialized>> {
         let local_keypair = {
             match self.keypair {
                 Some(path) => {
@@ -179,7 +179,7 @@ impl P2PArgs {
             Some(Duration::from_secs(self.random_walk))
         };
 
-        Ok(P2PConfig {
+        Ok(Config {
             keypair: local_keypair,
             network_name: self.network,
             checksum: Default::default(),

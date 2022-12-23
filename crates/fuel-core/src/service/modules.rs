@@ -27,7 +27,9 @@ pub type PoAService =
     fuel_core_poa::Service<Database, TxPoolAdapter, BlockProducerAdapter>;
 #[cfg(feature = "relayer")]
 pub type RelayerService = fuel_core_relayer::Service<Database>;
-pub type TxPoolService = fuel_core_txpool::Service<P2PAdapter>;
+#[cfg(feature = "p2p")]
+pub type P2PService = fuel_core_p2p::service::Service<Database>;
+pub type TxPoolService = fuel_core_txpool::Service<P2PAdapter, Database>;
 
 pub struct Modules {
     pub txpool: TxPoolService,
@@ -36,7 +38,7 @@ pub struct Modules {
     #[cfg(feature = "relayer")]
     pub relayer: Option<RelayerService>,
     #[cfg(feature = "p2p")]
-    pub network_service: P2PAdapter,
+    pub network_service: P2PService,
 }
 
 impl Modules {
@@ -44,7 +46,7 @@ impl Modules {
         self.consensus_module.stop_and_await().await.unwrap();
         self.txpool.stop_and_await().await.unwrap();
         #[cfg(feature = "p2p")]
-        self.network_service.stop().await;
+        self.network_service.stop_and_await().await.unwrap();
     }
 }
 
@@ -71,16 +73,15 @@ pub async fn start_modules(
         let genesis = p2p_db.get_genesis()?;
         let p2p_config = config.p2p.clone().init(genesis)?;
 
-        Arc::new(fuel_core_p2p::service::Service::new(p2p_config, p2p_db))
+        fuel_core_p2p::service::new_service(p2p_config, p2p_db)
     };
 
     #[cfg(feature = "p2p")]
-    let p2p_adapter = P2PAdapter::new(network_service);
+    let p2p_adapter = P2PAdapter::new(network_service.shared.clone());
     #[cfg(not(feature = "p2p"))]
     let p2p_adapter = P2PAdapter::new();
 
     let p2p_adapter = p2p_adapter;
-    p2p_adapter.start().await?;
 
     let importer_adapter = BlockImportAdapter::new(block_import_tx);
 
@@ -89,7 +90,7 @@ pub async fn start_modules(
         database.clone(),
         TxStatusChange::new(100),
         importer_adapter.clone(),
-        p2p_adapter.clone(),
+        p2p_adapter,
     );
 
     // restrict the max number of concurrent dry runs to the number of CPUs
@@ -98,7 +99,7 @@ pub async fn start_modules(
     let block_producer = Arc::new(fuel_core_producer::Producer {
         config: config.block_producer.clone(),
         db: database.clone(),
-        txpool: Box::new(TxPoolAdapter::new(txpool_service.clone())),
+        txpool: Box::new(TxPoolAdapter::new(txpool_service.shared.clone())),
         executor: Arc::new(ExecutorAdapter {
             database: database.clone(),
             config: config.clone(),
@@ -122,7 +123,7 @@ pub async fn start_modules(
                 signing_key: config.consensus_key.clone(),
                 metrics: false,
             },
-            TxPoolAdapter::new(txpool_service.clone()),
+            TxPoolAdapter::new(txpool_service.shared.clone()),
             // TODO: Pass Importer
             importer_adapter.tx,
             BlockProducerAdapter {
@@ -138,6 +139,8 @@ pub async fn start_modules(
         relayer.start().expect("Should start relayer")
     }
     txpool_service.start()?;
+    #[cfg(feature = "p2p")]
+    network_service.start()?;
 
     Ok(Modules {
         txpool: txpool_service,
@@ -146,6 +149,6 @@ pub async fn start_modules(
         #[cfg(feature = "relayer")]
         relayer,
         #[cfg(feature = "p2p")]
-        network_service: p2p_adapter,
+        network_service,
     })
 }

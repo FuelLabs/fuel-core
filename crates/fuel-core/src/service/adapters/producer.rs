@@ -35,7 +35,7 @@ impl TxPool for TxPoolAdapter {
         _block_height: BlockHeight,
         max_gas: u64,
     ) -> Vec<ArcPoolTx> {
-        self.service.shared.select_transactions(max_gas)
+        self.service.select_transactions(max_gas)
     }
 }
 

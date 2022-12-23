@@ -6,7 +6,7 @@ use crate::{
     codecs::NetworkCodec,
     config::{
         build_transport,
-        P2PConfig,
+        Config,
     },
     discovery::DiscoveryEvent,
     gossipsub::{
@@ -70,6 +70,13 @@ use tracing::{
 pub struct FuelP2PService<Codec: NetworkCodec> {
     /// Store the local peer id
     pub local_peer_id: PeerId,
+
+    /// IP address for Swarm to listen on
+    local_address: std::net::IpAddr,
+
+    /// The TCP port that Swarm listens on
+    tcp_port: u16,
+
     /// Swarm handler for FuelBehaviour
     swarm: Swarm<FuelBehaviour<Codec>>,
 
@@ -118,7 +125,7 @@ pub enum FuelP2PEvent {
 }
 
 impl<Codec: NetworkCodec> FuelP2PService<Codec> {
-    pub fn new(config: P2PConfig, codec: Codec) -> anyhow::Result<Self> {
+    pub fn new(config: Config, codec: Codec) -> Self {
         let local_peer_id = PeerId::from(config.keypair.public());
 
         // configure and build P2P Service
@@ -128,21 +135,11 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             SwarmBuilder::with_tokio_executor(transport, behaviour, local_peer_id)
                 .build();
 
-        // set up node's address to listen on
-        let listen_multiaddr = {
-            let mut m = Multiaddr::from(config.address);
-            m.push(Protocol::Tcp(config.tcp_port));
-            m
-        };
-
         // subscribe to gossipsub topics with the network name suffix
         for topic in config.topics {
             let t = Topic::new(format!("{}/{}", topic, config.network_name));
             swarm.behaviour_mut().subscribe_to_topic(&t).unwrap();
         }
-
-        // start listening at the given address
-        swarm.listen_on(listen_multiaddr)?;
 
         let gossipsub_topics = GossipsubTopics::new(&config.network_name);
         let network_metadata = NetworkMetadata { gossipsub_topics };
@@ -153,15 +150,30 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             let _ = swarm.add_external_address(public_address, AddressScore::Infinite);
         }
 
-        Ok(Self {
+        Self {
             local_peer_id,
+            local_address: config.address,
+            tcp_port: config.tcp_port,
             swarm,
             network_codec: codec,
             outbound_requests_table: HashMap::default(),
             inbound_requests_table: HashMap::default(),
             network_metadata,
             metrics,
-        })
+        }
+    }
+
+    pub fn start(&mut self) -> anyhow::Result<()> {
+        // set up node's address to listen on
+        let listen_multiaddr = {
+            let mut m = Multiaddr::from(self.local_address);
+            m.push(Protocol::Tcp(self.tcp_port));
+            m
+        };
+
+        // start listening at the given address
+        self.swarm.listen_on(listen_multiaddr)?;
+        Ok(())
     }
 
     pub fn get_peers_info(&self) -> &HashMap<PeerId, PeerInfo> {
@@ -279,6 +291,8 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     /// Handles P2P Events.
     /// Returns only events that are of interest to the Network Orchestrator.
     pub async fn next_event(&mut self) -> Option<FuelP2PEvent> {
+        // TODO: add handling for when the stream closes and return None only when there are no
+        //       more events to consume
         if let SwarmEvent::Behaviour(fuel_behaviour) = self.swarm.select_next_some().await
         {
             self.handle_behaviour_event(fuel_behaviour)
@@ -438,7 +452,7 @@ mod tests {
     use super::FuelP2PService;
     use crate::{
         codecs::bincode::BincodeCodec,
-        config::P2PConfig,
+        config::Config,
         gossipsub::{
             messages::{
                 GossipsubBroadcastRequest,
@@ -532,13 +546,14 @@ mod tests {
     }
 
     /// helper function for building FuelP2PService
-    fn build_service_from_config(
-        mut p2p_config: P2PConfig,
-    ) -> FuelP2PService<BincodeCodec> {
+    fn build_service_from_config(mut p2p_config: Config) -> FuelP2PService<BincodeCodec> {
         p2p_config.keypair = Keypair::generate_secp256k1(); // change keypair for each Node
         let max_block_size = p2p_config.max_block_size;
 
-        FuelP2PService::new(p2p_config, BincodeCodec::new(max_block_size)).unwrap()
+        let mut service =
+            FuelP2PService::new(p2p_config, BincodeCodec::new(max_block_size));
+        service.start().unwrap();
+        service
     }
 
     /// returns a free tcp port number for a node to listen on
@@ -583,24 +598,23 @@ mod tests {
         }
 
         /// Combines `NodeData` with `P2pConfig` to create a `FuelP2PService`
-        fn create_service(
-            &self,
-            mut p2p_config: P2PConfig,
-        ) -> FuelP2PService<BincodeCodec> {
+        fn create_service(&self, mut p2p_config: Config) -> FuelP2PService<BincodeCodec> {
             let max_block_size = p2p_config.max_block_size;
             p2p_config.tcp_port = self.tcp_port;
             p2p_config.keypair = self.keypair.clone();
 
-            FuelP2PService::new(p2p_config, BincodeCodec::new(max_block_size)).unwrap()
+            let mut service =
+                FuelP2PService::new(p2p_config, BincodeCodec::new(max_block_size));
+            service.start().unwrap();
+            service
         }
     }
 
     #[tokio::test]
     #[instrument]
     async fn p2p_service_works() {
-        let mut fuel_p2p_service = build_service_from_config(
-            P2PConfig::default_initialized("p2p_service_works"),
-        );
+        let mut fuel_p2p_service =
+            build_service_from_config(Config::default_initialized("p2p_service_works"));
 
         loop {
             match fuel_p2p_service.swarm.select_next_some().await {
@@ -625,7 +639,7 @@ mod tests {
         let reserved_nodes_size = 4;
         let double_reserved_nodes_size = reserved_nodes_size * 2;
 
-        let mut p2p_config = P2PConfig::default_initialized("sentry_nodes_working");
+        let mut p2p_config = Config::default_initialized("sentry_nodes_working");
         // enable mdns for faster discovery of nodes
         p2p_config.enable_mdns = true;
 
@@ -742,7 +756,7 @@ mod tests {
     #[instrument]
     async fn nodes_connected_via_mdns() {
         // Node A
-        let mut p2p_config = P2PConfig::default_initialized("nodes_connected_via_mdns");
+        let mut p2p_config = Config::default_initialized("nodes_connected_via_mdns");
         p2p_config.enable_mdns = true;
         let mut node_a = build_service_from_config(p2p_config.clone());
 
@@ -776,9 +790,8 @@ mod tests {
             TransportError,
         };
         // Node A
-        let mut p2p_config = P2PConfig::default_initialized(
-            "nodes_cannot_connect_due_to_different_checksum",
-        );
+        let mut p2p_config =
+            Config::default_initialized("nodes_cannot_connect_due_to_different_checksum");
         p2p_config.enable_mdns = true;
         let mut node_a = build_service_from_config(p2p_config.clone());
 
@@ -815,8 +828,7 @@ mod tests {
     #[instrument]
     async fn nodes_connected_via_identify() {
         // Node A
-        let mut p2p_config =
-            P2PConfig::default_initialized("nodes_connected_via_identify");
+        let mut p2p_config = Config::default_initialized("nodes_connected_via_identify");
 
         let node_a_data = NodeData::random();
         let mut node_a = node_a_data.create_service(p2p_config.clone());
@@ -855,7 +867,7 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn peer_info_updates_work() {
-        let mut p2p_config = P2PConfig::default_initialized("peer_info_updates_work");
+        let mut p2p_config = Config::default_initialized("peer_info_updates_work");
 
         // Node A
         let node_a_data = NodeData::random();
@@ -918,8 +930,7 @@ mod tests {
 
     /// Reusable helper function for Broadcasting Gossipsub requests
     async fn gossipsub_broadcast(broadcast_request: GossipsubBroadcastRequest) {
-        let mut p2p_config =
-            P2PConfig::default_initialized("gossipsub_exchanges_messages");
+        let mut p2p_config = Config::default_initialized("gossipsub_exchanges_messages");
 
         let selected_topic: GossipTopic = {
             let topic = match broadcast_request {
@@ -1006,7 +1017,7 @@ mod tests {
     async fn request_response_works() {
         use fuel_core_types::fuel_tx::Transaction;
 
-        let mut p2p_config = P2PConfig::default_initialized("request_response_works");
+        let mut p2p_config = Config::default_initialized("request_response_works");
 
         // Node A
         let node_a_data = NodeData::random();
@@ -1082,7 +1093,7 @@ mod tests {
     #[instrument]
     async fn req_res_outbound_timeout_works() {
         let mut p2p_config =
-            P2PConfig::default_initialized("req_res_outbound_timeout_works");
+            Config::default_initialized("req_res_outbound_timeout_works");
 
         // Node A
         // setup request timeout to 0 in order for the Request to fail

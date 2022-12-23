@@ -39,7 +39,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio_stream::StreamExt;
 
-pub type Service<P2P> = ServiceRunner<Task<P2P>>;
+pub type Service<P2P, DB> = ServiceRunner<Task<P2P, DB>>;
 
 #[derive(Clone)]
 pub struct TxStatusChange {
@@ -79,17 +79,15 @@ impl TxStatusChange {
     }
 }
 
-pub struct SharedState<P2P> {
-    db: Arc<dyn TxPoolDb>,
+pub struct SharedState<P2P, DB> {
     tx_status_sender: TxStatusChange,
-    txpool: Arc<ParkingMutex<TxPool>>,
+    txpool: Arc<ParkingMutex<TxPool<DB>>>,
     p2p: Arc<P2P>,
 }
 
-impl<P2P> Clone for SharedState<P2P> {
+impl<P2P, DB> Clone for SharedState<P2P, DB> {
     fn clone(&self) -> Self {
         Self {
-            db: self.db.clone(),
             tx_status_sender: self.tx_status_sender.clone(),
             txpool: self.txpool.clone(),
             p2p: self.p2p.clone(),
@@ -97,20 +95,21 @@ impl<P2P> Clone for SharedState<P2P> {
     }
 }
 
-pub struct Task<P2P> {
+pub struct Task<P2P, DB> {
     gossiped_tx_stream: BoxStream<TransactionGossipData>,
     committed_block_stream: BoxStream<SealedBlock>,
-    shared: SharedState<P2P>,
+    shared: SharedState<P2P, DB>,
 }
 
 #[async_trait::async_trait]
-impl<P2P> RunnableService for Task<P2P>
+impl<P2P, DB> RunnableService for Task<P2P, DB>
 where
     P2P: Send + Sync,
+    DB: TxPoolDb,
 {
     const NAME: &'static str = "TxPool";
 
-    type SharedData = SharedState<P2P>;
+    type SharedData = SharedState<P2P, DB>;
 
     fn shared_data(&self) -> Self::SharedData {
         self.shared.clone()
@@ -126,7 +125,6 @@ where
                 if let Some(GossipData { data: Some(tx), .. }) = new_transaction {
                     let txs = vec!(Arc::new(tx));
                     self.shared.txpool.lock().insert(
-                        self.shared.db.as_ref(),
                         &self.shared.tx_status_sender,
                         &txs
                     );
@@ -153,7 +151,10 @@ where
 //  Instead, `fuel-core` can create a `DatabaseWithTxPool` that aggregates `TxPool` and
 //  storage `Database` together. GraphQL will retrieve data from this `DatabaseWithTxPool` via
 //  `StorageInspect` trait.
-impl<P2P> SharedState<P2P> {
+impl<P2P, DB> SharedState<P2P, DB>
+where
+    DB: TxPoolDb,
+{
     pub fn pending_number(&self) -> usize {
         self.txpool.lock().pending_number()
     }
@@ -202,24 +203,28 @@ impl<P2P> SharedState<P2P> {
     }
 }
 
-impl<P2P> SharedState<P2P>
+impl<P2P, DB> SharedState<P2P, DB>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
+    DB: TxPoolDb,
 {
     pub fn insert(
         &self,
         txs: Vec<Arc<Transaction>>,
     ) -> Vec<anyhow::Result<InsertionResult>> {
-        let insert = {
-            self.txpool
-                .lock()
-                .insert(self.db.as_ref(), &self.tx_status_sender, &txs)
-        };
+        let insert = { self.txpool.lock().insert(&self.tx_status_sender, &txs) };
 
         for (ret, tx) in insert.iter().zip(txs.into_iter()) {
             match ret {
                 Ok(_) => {
-                    let _ = self.p2p.broadcast_transaction(tx.clone());
+                    let result = self.p2p.broadcast_transaction(tx.clone());
+                    if let Err(e) = result {
+                        // It can be only in the case of p2p being down or requests overloading it.
+                        tracing::error!(
+                            "Unable to broadcast transaction, got an {} error",
+                            e
+                        );
+                    }
                 }
                 Err(_) => {}
             }
@@ -268,7 +273,7 @@ pub fn new_service<P2P, Importer, DB>(
     tx_status_sender: TxStatusChange,
     importer: Importer,
     p2p: P2P,
-) -> Service<P2P>
+) -> Service<P2P, DB>
 where
     Importer: BlockImport,
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + 'static,
@@ -277,13 +282,11 @@ where
     let p2p = Arc::new(p2p);
     let gossiped_tx_stream = p2p.gossiped_transaction_events();
     let committed_block_stream = importer.block_events();
-    let txpool = Arc::new(ParkingMutex::new(TxPool::new(config)));
-    let db: Arc<dyn TxPoolDb> = Arc::new(db);
+    let txpool = Arc::new(ParkingMutex::new(TxPool::new(config, db)));
     let task = Task {
         gossiped_tx_stream,
         committed_block_stream,
         shared: SharedState {
-            db,
             tx_status_sender,
             txpool,
             p2p,

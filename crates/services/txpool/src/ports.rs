@@ -24,7 +24,6 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-#[async_trait::async_trait]
 pub trait PeerToPeer: Send + Sync {
     type GossipedTransaction: NetworkData<Transaction>;
 
@@ -35,11 +34,11 @@ pub trait PeerToPeer: Send + Sync {
     fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction>;
 
     // Report the validity of a transaction received from the network.
-    async fn notify_gossip_transaction_validity(
+    fn notify_gossip_transaction_validity(
         &self,
         message: &Self::GossipedTransaction,
         validity: GossipsubMessageAcceptance,
-    );
+    ) -> anyhow::Result<()>;
 }
 
 pub trait BlockImport: Send + Sync {

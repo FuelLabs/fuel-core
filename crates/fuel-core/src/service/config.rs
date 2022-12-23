@@ -19,8 +19,8 @@ use strum_macros::{
 
 #[cfg(feature = "p2p")]
 use fuel_core_p2p::config::{
+    Config as P2PConfig,
     NotInitialized,
-    P2PConfig,
 };
 
 #[derive(Clone, Debug)]
