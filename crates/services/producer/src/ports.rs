@@ -35,7 +35,7 @@ pub trait BlockProducerDatabase: Send + Sync {
 }
 
 #[async_trait]
-pub trait TxPool: Sync + Send {
+pub trait TxPool: Send + Sync {
     fn get_includable_txs(
         &self,
         // could be used by the txpool to filter txs based on maturity
@@ -46,12 +46,12 @@ pub trait TxPool: Sync + Send {
 }
 
 #[async_trait::async_trait]
-pub trait Relayer: Sync + Send {
+pub trait Relayer: Send + Sync {
     /// Get the best finalized height from the DA layer
     async fn get_best_finalized_da_height(&self) -> StorageResult<DaBlockHeight>;
 }
 
-pub trait Executor<Database>: Sync + Send {
+pub trait Executor<Database>: Send + Sync {
     /// Executes the block and returns the result of execution with uncommitted database
     /// transaction.
     fn execute_without_commit(

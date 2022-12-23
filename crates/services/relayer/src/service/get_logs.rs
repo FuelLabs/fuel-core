@@ -55,11 +55,9 @@ where
 }
 
 /// Write the logs to the database.
-pub(crate) async fn write_logs<S>(
-    database: &mut dyn RelayerDb,
-    logs: S,
-) -> anyhow::Result<()>
+pub(crate) async fn write_logs<D, S>(database: &mut D, logs: S) -> anyhow::Result<()>
 where
+    D: RelayerDb,
     S: futures::Stream<Item = Result<(u64, Vec<Log>), ProviderError>>,
 {
     tokio::pin!(logs);

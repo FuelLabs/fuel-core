@@ -6,7 +6,7 @@ use crate::{
         BlockProducer,
         TransactionPool,
     },
-    service::PoA,
+    service::Task,
     Config,
     Service,
     Trigger,
@@ -393,7 +393,7 @@ async fn remove_skipped_transactions() {
     });
 
     let tx_status_update_stream = txpool.transaction_status_events();
-    let mut task = PoA {
+    let mut task = Task {
         block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
         db,
@@ -436,7 +436,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
     txpool.expect_pending_number().returning(|| 0);
 
     let tx_status_update_stream = txpool.transaction_status_events();
-    let mut task = PoA {
+    let mut task = Task {
         block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
         db,
@@ -489,7 +489,7 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
     txpool.expect_pending_number().returning(|| 0);
 
     let tx_status_update_stream = txpool.transaction_status_events();
-    let task = PoA {
+    let task = Task {
         block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
         db,

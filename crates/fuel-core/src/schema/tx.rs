@@ -13,6 +13,7 @@ use crate::{
         SortedTxCursor,
         TransactionId,
     },
+    service::modules::TxPoolService,
     state::IterDirection,
 };
 use async_graphql::{
@@ -34,7 +35,6 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
 };
-use fuel_core_txpool::Service as TxPoolService;
 use fuel_core_types::{
     fuel_tx::{
         Cacheable,
