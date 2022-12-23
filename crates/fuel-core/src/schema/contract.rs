@@ -28,6 +28,7 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 use fuel_core_types::fuel_types;
+use crate::query::{ContractQueryContext, ContractQueryData};
 
 pub struct Contract(pub(crate) fuel_types::ContractId);
 
@@ -78,14 +79,15 @@ impl ContractQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "ID of the Contract")] id: ContractId,
     ) -> async_graphql::Result<Option<Contract>> {
-        let id: fuel_types::ContractId = id.0;
-        let db = ctx.data_unchecked::<Database>().clone();
-        let contract_exists = db.storage::<ContractsRawCode>().contains_key(&id)?;
-        if !contract_exists {
-            return Ok(None)
-        }
-        let contract = Contract(id);
-        Ok(Some(contract))
+        let data = ContractQueryContext(ctx.data_unchecked());
+        let contract = data.contract(id.0)?;
+
+        if let Some(id) = contract {
+            // Guranteed to exist otherwise contract would be `None`
+            Ok(Some(Contract::from(id)))
+        } else {
+            Ok(None)
+        }        
     }
 }
 
