@@ -11,7 +11,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use fuel_core_services::{
-    BoxStream,
+    stream::BoxStream,
     RunnableService,
     ServiceRunner,
 };

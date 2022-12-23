@@ -12,8 +12,10 @@ use crate::{
     Trigger,
 };
 use fuel_core_services::{
-    pending,
-    BoxStream,
+    stream::{
+        pending,
+        BoxStream,
+    },
     Service as StorageTrait,
 };
 use fuel_core_storage::{
@@ -206,7 +208,7 @@ impl MockTxPool {
             .returning(move || {
                 let status_channel =
                     (status_sender_clone.clone(), status_receiver.clone());
-                let stream = fuel_core_services::unfold(
+                let stream = fuel_core_services::stream::unfold(
                     status_channel,
                     |(sender, mut receiver)| async {
                         loop {

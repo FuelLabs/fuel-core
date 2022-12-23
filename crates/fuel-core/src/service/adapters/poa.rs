@@ -6,7 +6,7 @@ use crate::{
     },
 };
 use fuel_core_poa::ports::TransactionPool;
-use fuel_core_services::BoxStream;
+use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
     blockchain::primitives::BlockHeight,

@@ -4,7 +4,7 @@ use crate::{
     MockDb,
 };
 use fuel_core_services::{
-    BoxStream,
+    stream::BoxStream,
     Service as ServiceTrait,
 };
 use fuel_core_types::{
@@ -78,7 +78,7 @@ impl MockP2P {
         let mut p2p = MockP2P::default();
         p2p.expect_gossiped_transaction_events().returning(move || {
             let txs_clone = txs.clone();
-            let stream = fuel_core_services::unfold(txs_clone, |mut txs| async {
+            let stream = fuel_core_services::stream::unfold(txs_clone, |mut txs| async {
                 let tx = txs.pop();
                 if let Some(tx) = tx {
                     Some((GossipData::new(tx, vec![], vec![]), txs))
@@ -107,7 +107,7 @@ impl MockImporter {
         let mut importer = MockImporter::default();
         importer.expect_block_events().returning(move || {
             let blocks = blocks.clone();
-            let stream = fuel_core_services::unfold(blocks, |mut blocks| async {
+            let stream = fuel_core_services::stream::unfold(blocks, |mut blocks| async {
                 let block = blocks.pop();
                 if let Some(block) = block {
                     Some((block, blocks))

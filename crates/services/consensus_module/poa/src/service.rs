@@ -16,7 +16,7 @@ use anyhow::{
     Context,
 };
 use fuel_core_services::{
-    BoxStream,
+    stream::BoxStream,
     EmptyShared,
     RunnableService,
     ServiceRunner,

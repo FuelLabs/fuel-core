@@ -1,4 +1,4 @@
-use fuel_core_services::BoxStream;
+use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::{

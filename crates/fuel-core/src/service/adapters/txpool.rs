@@ -3,7 +3,7 @@ use crate::service::adapters::{
     P2PAdapter,
 };
 use async_trait::async_trait;
-use fuel_core_services::BoxStream;
+use fuel_core_services::stream::BoxStream;
 use fuel_core_txpool::ports::BlockImport;
 use fuel_core_types::{
     blockchain::SealedBlock,
