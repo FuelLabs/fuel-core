@@ -78,7 +78,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     }
 
     fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction> {
-        Box::pin(fuel_core_services::pending())
+        Box::pin(fuel_core_services::stream::pending())
     }
 
     async fn notify_gossip_transaction_validity(
