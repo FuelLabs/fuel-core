@@ -4,9 +4,9 @@ version = "0.15.1"
 edition = "2021"
 homepage = "https://fuel.network/"
 keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
-license = "BUSL-1.1"
+license = "Apache-2.0"
 repository = "https://github.com/FuelLabs/fuel-core"
-
+description = "Command line utilities for fuel-core key management"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
