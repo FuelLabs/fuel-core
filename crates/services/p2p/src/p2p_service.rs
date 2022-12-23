@@ -291,6 +291,8 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     /// Handles P2P Events.
     /// Returns only events that are of interest to the Network Orchestrator.
     pub async fn next_event(&mut self) -> Option<FuelP2PEvent> {
+        // TODO: add handling for when the stream closes and return None only when there are no
+        //       more events to consume
         if let SwarmEvent::Behaviour(fuel_behaviour) = self.swarm.select_next_some().await
         {
             self.handle_behaviour_event(fuel_behaviour)

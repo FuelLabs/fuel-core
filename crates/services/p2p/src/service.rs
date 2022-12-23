@@ -211,13 +211,7 @@ where
                             }
                         }
                     },
-                    Some(_) => {
-                        // the rest of these p2p events don't require any action here
-                    },
-                    None => {
-                        // "The libp2p service is unavailable, shutting down task."
-                        return Ok(false);
-                    }
+                    _ => {}
                 }
             },
         }
