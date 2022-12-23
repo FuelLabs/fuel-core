@@ -263,6 +263,6 @@ async fn shutdown_signal(stop_graphql_api: oneshot::Sender<()>) {
             .await
             .expect("failed to install CTRL+C signal handler");
         let _ = stop_graphql_api.send(());
-        info!("CTRL+C received");
+        tracing::log::info!("CTRL+C received");
     }
 }
