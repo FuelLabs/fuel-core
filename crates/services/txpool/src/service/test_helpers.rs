@@ -3,6 +3,10 @@ use crate::{
     ports::BlockImport,
     MockDb,
 };
+use fuel_core_services::{
+    stream::BoxStream,
+    Service as ServiceTrait,
+};
 use fuel_core_types::{
     blockchain::SealedBlock,
     entities::coin::Coin,
@@ -48,14 +52,7 @@ impl TestContext {
     pub fn setup_coin(&self) -> (Coin, Input) {
         crate::test_helpers::setup_coin(&mut self.rng.borrow_mut(), Some(&self.mock_db))
     }
-
-    pub async fn stop(&self) {
-        self.service.stop().await.unwrap().await.unwrap();
-    }
 }
-
-pub type BoxFuture<'a, T> =
-    core::pin::Pin<Box<dyn core::future::Future<Output = T> + Send + 'a>>;
 
 mockall::mock! {
     pub P2P {}
@@ -64,17 +61,9 @@ mockall::mock! {
     impl PeerToPeer for P2P {
         type GossipedTransaction = GossipedTransaction;
 
-        async fn broadcast_transaction(
-            &self,
-            transaction: Arc<Transaction>,
-        ) -> anyhow::Result<()>;
+        fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()>;
 
-        fn next_gossiped_transaction<'_self, 'a>(
-            &'_self mut self,
-        ) -> BoxFuture<'a, GossipedTransaction>
-        where
-            '_self: 'a,
-            Self: Sync + 'a;
+        fn gossiped_transaction_events(&self) -> BoxStream<GossipedTransaction>;
 
         async fn notify_gossip_transaction_validity(
             &self,
@@ -85,17 +74,19 @@ mockall::mock! {
 }
 
 impl MockP2P {
-    pub fn new_with_txs(mut txs: Vec<Transaction>) -> Self {
+    pub fn new_with_txs(txs: Vec<Transaction>) -> Self {
         let mut p2p = MockP2P::default();
-        p2p.expect_next_gossiped_transaction().returning(move || {
-            let tx = txs.pop();
-            Box::pin(async move {
+        p2p.expect_gossiped_transaction_events().returning(move || {
+            let txs_clone = txs.clone();
+            let stream = fuel_core_services::stream::unfold(txs_clone, |mut txs| async {
+                let tx = txs.pop();
                 if let Some(tx) = tx {
-                    GossipData::new(tx, vec![], vec![])
+                    Some((GossipData::new(tx, vec![], vec![]), txs))
                 } else {
-                    core::future::pending::<GossipData<Transaction>>().await
+                    core::future::pending().await
                 }
-            })
+            });
+            Box::pin(stream)
         });
         p2p.expect_broadcast_transaction()
             .returning(move |_| Ok(()));
@@ -106,28 +97,25 @@ impl MockP2P {
 mockall::mock! {
     pub Importer {}
 
-    #[async_trait::async_trait]
     impl BlockImport for Importer {
-        fn next_block<'_self, 'a>(&'_self mut self) -> BoxFuture<'a, SealedBlock>
-        where
-            '_self: 'a,
-            Self: Sync + 'a;
-
+        fn block_events(&self) -> BoxStream<SealedBlock>;
     }
 }
 
 impl MockImporter {
-    fn with_blocks(mut blocks: Vec<SealedBlock>) -> Self {
+    fn with_blocks(blocks: Vec<SealedBlock>) -> Self {
         let mut importer = MockImporter::default();
-        importer.expect_next_block().returning(move || {
-            let block = blocks.pop();
-            Box::pin(async move {
+        importer.expect_block_events().returning(move || {
+            let blocks = blocks.clone();
+            let stream = fuel_core_services::stream::unfold(blocks, |mut blocks| async {
+                let block = blocks.pop();
                 if let Some(block) = block {
-                    block
+                    Some((block, blocks))
                 } else {
-                    core::future::pending::<SealedBlock>().await
+                    core::future::pending().await
                 }
-            })
+            });
+            Box::pin(stream)
         });
         importer
     }
@@ -194,10 +182,10 @@ impl TestContextBuilder {
             .db(Arc::new(mock_db.clone()))
             .importer(importer)
             .tx_status_sender(status_tx)
-            .p2p_port(p2p);
+            .p2p(p2p);
 
         let service = builder.build().unwrap();
-        service.start().await.unwrap();
+        service.start().unwrap();
 
         TestContext {
             service,

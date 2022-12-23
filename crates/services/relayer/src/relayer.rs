@@ -5,6 +5,7 @@
 use crate::{
     log::EthEventLog,
     ports::RelayerDb,
+    relayer::state::EthLocal,
     Config,
 };
 use async_trait::async_trait;
@@ -22,6 +23,10 @@ use ethers_providers::{
     Provider,
     ProviderError,
 };
+use fuel_core_services::{
+    RunnableService,
+    ServiceRunner,
+};
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -30,10 +35,7 @@ use fuel_core_types::{
 use std::{
     convert::TryInto,
     ops::Deref,
-    sync::{
-        atomic::AtomicBool,
-        Arc,
-    },
+    sync::Arc,
 };
 use synced::update_synced;
 use tokio::sync::watch;
@@ -41,7 +43,6 @@ use tokio::sync::watch;
 use self::{
     get_logs::*,
     run::RelayerData,
-    state::EthLocal,
 };
 
 mod get_logs;
@@ -57,13 +58,9 @@ type Synced = watch::Receiver<bool>;
 type NotifySynced = watch::Sender<bool>;
 type Database = Box<dyn RelayerDb>;
 
-/// Handle for interacting with the [`Relayer`].
-pub struct RelayerHandle {
-    /// Receives signals when the relayer reaches consistency with the DA layer.
-    synced: RelayerSynced,
-    /// Gracefully shuts down the relayer.
-    shutdown: RelayerShutdown,
-}
+/// The alias of runnable relayer service.
+pub type Service = CustomizableService<Provider<Http>>;
+type CustomizableService<P> = ServiceRunner<Relayer<P>>;
 
 /// Receives signals when the relayer reaches consistency with the DA layer.
 #[derive(Clone)]
@@ -73,10 +70,7 @@ pub struct RelayerSynced {
 
 /// The actual relayer that runs on a background task
 /// to sync with the DA layer.
-struct Relayer<P>
-where
-    P: Middleware<Error = ProviderError>,
-{
+pub struct Relayer<P> {
     /// Sends signals when the relayer reaches consistency with the DA layer.
     synced: NotifySynced,
     /// The node that communicates with Ethereum.
@@ -85,13 +79,6 @@ where
     database: Database,
     /// Configuration settings.
     config: Config,
-}
-
-/// Shutdown handle for gracefully ending
-/// the background relayer task.
-struct RelayerShutdown {
-    join_handle: tokio::task::JoinHandle<()>,
-    shutdown: Arc<AtomicBool>,
 }
 
 impl<P> Relayer<P>
@@ -162,57 +149,39 @@ where
     }
 }
 
-impl RelayerHandle {
-    /// Start a http [`Relayer`] running and return the handle to it.
-    pub fn start(database: Database, config: Config) -> anyhow::Result<Self> {
-        let url = config.eth_client.clone().ok_or_else(|| {
-            anyhow::anyhow!(
-                "Tried to start Relayer without setting an eth_client in the config"
-            )
-        })?;
-        // TODO: Does this handle https?
-        let http = Http::new(url);
-        let eth_node = Provider::new(http);
-        Ok(Self::start_inner::<Provider<Http>>(
-            eth_node, database, config,
-        ))
+#[async_trait]
+impl<P> RunnableService for Relayer<P>
+where
+    P: Middleware<Error = ProviderError> + 'static,
+{
+    const NAME: &'static str = "Relayer";
+
+    type SharedData = RelayerSynced;
+
+    fn shared_data(&self) -> Self::SharedData {
+        let synced = self.synced.subscribe();
+
+        RelayerSynced { synced }
     }
 
-    #[cfg(any(test, feature = "test-helpers"))]
-    /// Start a test relayer.
-    pub fn start_test<P>(eth_node: P, database: Database, config: Config) -> Self
-    where
-        P: Middleware<Error = ProviderError> + 'static,
-    {
-        Self::start_inner(eth_node, database, config)
+    async fn initialize(&mut self) -> anyhow::Result<()> {
+        self.set_deploy_height().await;
+        Ok(())
     }
 
-    fn start_inner<P>(eth_node: P, database: Database, config: Config) -> Self
-    where
-        P: Middleware<Error = ProviderError> + 'static,
-    {
-        let (tx, rx) = watch::channel(false);
-        let synced = RelayerSynced { synced: rx };
-        let shutdown = run(Relayer::new(tx, eth_node, database, config));
-        Self { synced, shutdown }
-    }
+    async fn run(&mut self) -> anyhow::Result<bool> {
+        let now = tokio::time::Instant::now();
+        let result = run::run(self).await;
 
-    /// Gets a handle to the synced notification
-    pub fn listen_synced(&self) -> RelayerSynced {
-        self.synced.clone()
-    }
+        // Sleep the loop so the da node is not spammed.
+        tokio::time::sleep(
+            self.config
+                .sync_minimum_duration
+                .saturating_sub(now.elapsed()),
+        )
+        .await;
 
-    /// Check if the [`Relayer`] is still running.
-    pub fn is_running(&self) -> bool {
-        !self.shutdown.join_handle.is_finished()
-    }
-
-    /// Gracefully shutdown the [`Relayer`].
-    pub async fn shutdown(self) -> anyhow::Result<()> {
-        self.shutdown
-            .shutdown
-            .store(true, core::sync::atomic::Ordering::Relaxed);
-        Ok(self.shutdown.join_handle.await?)
+        result.map(|_| true)
     }
 }
 
@@ -252,7 +221,7 @@ where
 }
 
 #[async_trait]
-impl<P> state::EthLocal for Relayer<P>
+impl<P> EthLocal for Relayer<P>
 where
     P: Middleware<Error = ProviderError>,
 {
@@ -265,38 +234,42 @@ where
     }
 }
 
-/// Main background run loop.
-fn run<P>(mut relayer: Relayer<P>) -> RelayerShutdown
+/// Creates an instance of runnable relayer service.
+pub fn new_service(database: Database, config: Config) -> anyhow::Result<Service> {
+    let url = config.eth_client.clone().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Tried to start Relayer without setting an eth_client in the config"
+        )
+    })?;
+    // TODO: Does this handle https?
+    let http = Http::new(url);
+    let eth_node = Provider::new(http);
+    Ok(new_service_internal(eth_node, database, config))
+}
+
+#[cfg(any(test, feature = "test-helpers"))]
+/// Start a test relayer.
+pub fn new_service_test<P>(
+    eth_node: P,
+    database: Database,
+    config: Config,
+) -> CustomizableService<P>
 where
     P: Middleware<Error = ProviderError> + 'static,
 {
-    let shutdown = Arc::new(AtomicBool::new(false));
-    let join_handle = tokio::task::spawn({
-        let shutdown = shutdown.clone();
-        async move {
-            // Set deploy height
-            relayer.set_deploy_height().await;
-            while !shutdown.load(core::sync::atomic::Ordering::Relaxed) {
-                let now = tokio::time::Instant::now();
+    new_service_internal(eth_node, database, config)
+}
 
-                if let Err(e) = run::run(&mut relayer).await {
-                    let e: &dyn std::error::Error = &*e;
-                    tracing::error!(e);
-                }
+fn new_service_internal<P>(
+    eth_node: P,
+    database: Database,
+    config: Config,
+) -> CustomizableService<P>
+where
+    P: Middleware<Error = ProviderError> + 'static,
+{
+    let (tx, _) = watch::channel(false);
+    let relayer = Relayer::new(tx, eth_node, database, config);
 
-                // Sleep the loop so the da node is not spammed.
-                tokio::time::sleep(
-                    relayer
-                        .config
-                        .sync_minimum_duration
-                        .saturating_sub(now.elapsed()),
-                )
-                .await;
-            }
-        }
-    });
-    RelayerShutdown {
-        join_handle,
-        shutdown,
-    }
+    CustomizableService::new(relayer)
 }

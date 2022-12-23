@@ -12,12 +12,13 @@ version = "0.15.1"
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
+fuel-core-services = { path = "../.." }
 fuel-core-storage = { path = "../../../storage", version = "0.15.1" }
 fuel-core-types = { path = "../../../types", version = "0.15.1" }
 humantime-serde = "1.1.1"
-parking_lot = "0.12"
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.21", features = ["full"] }
+tokio-stream = "0.1"
 tracing = "0.1"
 
 [dev-dependencies]

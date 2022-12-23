@@ -452,13 +452,13 @@ mod tests {
             },
         },
         gossipsub_config::default_gossipsub_builder,
+        p2p_service::FuelP2PEvent,
         peer_info::PeerInfo,
         request_response::messages::{
             OutboundResponse,
             RequestMessage,
             ResponseChannelItem,
         },
-        service::FuelP2PEvent,
     };
     use ctor::ctor;
     use fuel_core_types::{

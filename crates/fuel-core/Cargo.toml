@@ -20,7 +20,6 @@ axum = { version = "0.5" }
 bincode = "1.3"
 derive_more = { version = "0.99" }
 enum-iterator = "1.2"
-fuel-core-bft = { path = "../services/consensus_module/bft", version = "0.15.1" }
 fuel-core-chain-config = { path = "../chain-config", version = "0.15.1" }
 fuel-core-database = { path = "../database", version = "0.15.1" }
 fuel-core-executor = { path = "../services/executor", version = "0.15.1" }
@@ -30,6 +29,7 @@ fuel-core-p2p = { path = "../services/p2p", version = "0.15.1", optional = true 
 fuel-core-poa = { path = "../services/consensus_module/poa", version = "0.15.1" }
 fuel-core-producer = { path = "../services/producer", version = "0.15.1" }
 fuel-core-relayer = { path = "../services/relayer", version = "0.15.1", optional = true }
+fuel-core-services = { path = "../services", version = "0.15.1" }
 fuel-core-storage = { path = "../storage", version = "0.15.1" }
 fuel-core-sync = { path = "../services/sync", version = "0.15.1" }
 fuel-core-txpool = { path = "../services/txpool", version = "0.15.1" }

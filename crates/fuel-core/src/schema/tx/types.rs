@@ -62,7 +62,6 @@ use fuel_core_types::{
     services::txpool::TransactionStatus as TxStatus,
     tai64::Tai64,
 };
-use std::sync::Arc;
 
 pub struct ProgramState {
     return_type: ReturnType,
@@ -406,7 +405,7 @@ impl Transaction {
     ) -> async_graphql::Result<Option<TransactionStatus>> {
         let id = self.0.id();
         let db = ctx.data_unchecked::<Database>();
-        let txpool = ctx.data_unchecked::<Arc<TxPoolService>>();
+        let txpool = ctx.data_unchecked::<TxPoolService>();
         get_tx_status(id, db, txpool).await
     }
 
@@ -503,8 +502,8 @@ pub(super) async fn get_tx_status(
 ) -> async_graphql::Result<Option<TransactionStatus>> {
     match db.get_tx_status(&id)? {
         Some(status) => Ok(Some(status.into())),
-        None => match txpool.find_one(id).await {
-            Ok(Some(transaction_in_pool)) => {
+        None => match txpool.shared.find_one(id) {
+            Some(transaction_in_pool) => {
                 let time = transaction_in_pool.submitted_time();
                 Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
             }

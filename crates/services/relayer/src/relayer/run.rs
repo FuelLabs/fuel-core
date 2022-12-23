@@ -40,7 +40,10 @@ pub trait RelayerData: EthRemote + EthLocal {
 }
 
 /// A single iteration of the run loop.
-pub async fn run(relayer: &mut (dyn RelayerData + Send + Sync)) -> anyhow::Result<()> {
+pub async fn run<R>(relayer: &mut R) -> anyhow::Result<()>
+where
+    R: RelayerData,
+{
     // Await the eth node to sync.
     relayer.wait_if_eth_syncing().await?;
 
