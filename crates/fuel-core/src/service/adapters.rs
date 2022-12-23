@@ -77,13 +77,6 @@ impl P2PAdapter {
 }
 
 #[cfg(not(feature = "p2p"))]
-impl Default for P2PAdapter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(not(feature = "p2p"))]
 impl P2PAdapter {
     pub fn new() -> Self {
         Default::default()
