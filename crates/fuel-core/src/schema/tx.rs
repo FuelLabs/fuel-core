@@ -76,9 +76,9 @@ impl TxQuery {
     ) -> async_graphql::Result<Option<Transaction>> {
         let db = ctx.data_unchecked::<Database>();
         let id = id.0;
-        let txpool = ctx.data_unchecked::<Arc<TxPoolService>>();
+        let txpool = ctx.data_unchecked::<TxPoolService>();
 
-        if let Ok(Some(transaction)) = txpool.find_one(id).await {
+        if let Some(transaction) = txpool.shared.find_one(id) {
             Ok(Some(Transaction(transaction.tx().clone().deref().into())))
         } else {
             Ok(db
@@ -236,12 +236,12 @@ impl TxMutation {
         ctx: &Context<'_>,
         tx: HexString,
     ) -> async_graphql::Result<Transaction> {
-        let txpool = ctx.data_unchecked::<Arc<TxPoolService>>();
+        let txpool = ctx.data_unchecked::<TxPoolService>();
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute();
         let _: Vec<_> = txpool
+            .shared
             .insert(vec![Arc::new(tx.clone())])
-            .await?
             .into_iter()
             .try_collect()?;
 
@@ -254,7 +254,7 @@ impl TxMutation {
 pub struct TxStatusSubscription;
 
 struct StreamState {
-    txpool: Arc<TxPoolService>,
+    txpool: TxPoolService,
     db: Database,
 }
 
@@ -277,9 +277,9 @@ impl TxStatusSubscription {
         ctx: &Context<'_>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> impl Stream<Item = async_graphql::Result<TransactionStatus>> {
-        let txpool = ctx.data_unchecked::<Arc<TxPoolService>>().clone();
+        let txpool = ctx.data_unchecked::<TxPoolService>().clone();
         let db = ctx.data_unchecked::<Database>().clone();
-        let rx = BroadcastStream::new(txpool.tx_update_subscribe());
+        let rx = BroadcastStream::new(txpool.shared.tx_update_subscribe());
         let state = Box::new(StreamState { txpool, db });
 
         transaction_status_change(state, rx.boxed(), id.into())

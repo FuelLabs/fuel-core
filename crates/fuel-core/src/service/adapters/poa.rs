@@ -6,6 +6,7 @@ use crate::{
     },
 };
 use fuel_core_poa::ports::TransactionPool;
+use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
     blockchain::primitives::BlockHeight,
@@ -24,27 +25,28 @@ use fuel_core_types::{
     },
 };
 
-#[async_trait::async_trait]
 impl TransactionPool for TxPoolAdapter {
-    async fn pending_number(&self) -> anyhow::Result<usize> {
-        self.service.pending_number().await
+    fn pending_number(&self) -> usize {
+        self.service.shared.pending_number()
     }
 
-    async fn total_consumable_gas(&self) -> anyhow::Result<u64> {
-        self.service.total_consumable_gas().await
+    fn total_consumable_gas(&self) -> u64 {
+        self.service.shared.total_consumable_gas()
     }
 
-    async fn remove_txs(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>> {
-        self.service.remove_txs(ids).await
+    fn remove_txs(&self, ids: Vec<TxId>) -> Vec<ArcPoolTx> {
+        self.service.shared.remove_txs(ids)
     }
 
-    async fn next_transaction_status_update(&mut self) -> TxStatus {
-        match self.tx_status_rx.recv().await {
-            Ok(status) => return status,
-            Err(err) => {
-                panic!("Tx Status Channel errored unexpectedly: {err:?}");
-            }
-        }
+    fn transaction_status_events(&self) -> BoxStream<TxStatus> {
+        use tokio_stream::{
+            wrappers::BroadcastStream,
+            StreamExt,
+        };
+        Box::pin(
+            BroadcastStream::new(self.service.shared.tx_status_subscribe())
+                .filter_map(|result| result.ok()),
+        )
     }
 }
 

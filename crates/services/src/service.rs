@@ -23,7 +23,7 @@ pub trait Service {
 }
 
 #[async_trait::async_trait]
-pub trait RunnableService: Send + Sync {
+pub trait RunnableService: Send {
     const NAME: &'static str;
 
     type SharedData: Clone + Send + Sync;
@@ -36,7 +36,7 @@ pub trait RunnableService: Send + Sync {
     async fn run(&mut self) -> anyhow::Result<bool>;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum State {
     NotStarted,
     Started,
@@ -56,19 +56,6 @@ impl State {
 
     pub fn stopped(&self) -> bool {
         matches!(self, State::Stopped | State::StoppedWithError(_))
-    }
-}
-
-impl PartialEq for State {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::NotStarted, Self::NotStarted) => true,
-            (Self::Started, Self::Started) => true,
-            (Self::Stopping, Self::Stopping) => true,
-            (Self::Stopped, Self::Stopped) => true,
-            (Self::StoppedWithError(_), Self::StoppedWithError(_)) => true,
-            (_, _) => false,
-        }
     }
 }
 
@@ -152,7 +139,7 @@ where
 
     fn stop(&self) -> bool {
         self.state.send_if_modified(|state| {
-            if state.started() {
+            if state.not_started() || state.started() {
                 *state = State::Stopping;
                 true
             } else {
@@ -257,3 +244,86 @@ where
 }
 
 // TODO: Add tests
+#[cfg(test)]
+mod tests {
+    use crate::{
+        EmptyShared,
+        RunnableService,
+        Service as ServiceTrait,
+        ServiceRunner,
+        State,
+    };
+
+    mockall::mock! {
+        Service {}
+
+        #[async_trait::async_trait]
+        impl RunnableService for Service {
+            const NAME: &'static str = "MockService";
+
+            type SharedData = EmptyShared;
+
+            fn shared_data(&self) -> EmptyShared {
+                EmptyShared
+            }
+
+            async fn initialize(&mut self) -> anyhow::Result<()> {
+                Ok(())
+            }
+
+            async fn run(&mut self) -> anyhow::Result<bool>;
+        }
+    }
+
+    impl MockService {
+        fn new_empty() -> Self {
+            let mut mock = MockService::default();
+            mock.expect_shared_data().returning(|| EmptyShared);
+            mock.expect_initialize().returning(|| Ok(()));
+            mock.expect_run().returning(|| Ok(true));
+            mock
+        }
+    }
+
+    #[tokio::test]
+    async fn stop_without_start() {
+        let service = ServiceRunner::new(MockService::new_empty());
+        service.stop_and_await().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn panic_during_run() {
+        let mut mock = MockService::default();
+        mock.expect_shared_data().returning(|| EmptyShared);
+        mock.expect_initialize().returning(|| Ok(()));
+        mock.expect_run().returning(|| panic!("Should fail"));
+        let service = ServiceRunner::new(mock);
+        service.start().unwrap();
+
+        let state = service.await_stop().await.unwrap();
+        assert!(matches!(state, State::StoppedWithError(_)));
+    }
+
+    #[tokio::test]
+    async fn double_await_stop_works() {
+        let service = ServiceRunner::new(MockService::new_empty());
+        service.start().unwrap();
+        service.stop();
+
+        let state = service.await_stop().await.unwrap();
+        assert!(state.stopped());
+        let state = service.await_stop().await.unwrap();
+        assert!(state.stopped());
+    }
+
+    #[tokio::test]
+    async fn double_stop_and_await_works() {
+        let service = ServiceRunner::new(MockService::new_empty());
+        service.start().unwrap();
+
+        let state = service.stop_and_await().await.unwrap();
+        assert!(state.stopped());
+        let state = service.stop_and_await().await.unwrap();
+        assert!(state.stopped());
+    }
+}

@@ -2421,6 +2421,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "tokio",
+ "tokio-stream",
  "tracing",
 ]
 
@@ -2472,6 +2473,8 @@ version = "0.15.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "futures",
+ "mockall",
  "tokio",
  "tracing",
 ]
@@ -2528,13 +2531,16 @@ dependencies = [
  "async-trait",
  "fuel-core-chain-config",
  "fuel-core-metrics",
+ "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-txpool",
  "fuel-core-types",
  "itertools",
  "mockall",
+ "parking_lot 0.12.1",
  "rstest",
  "tokio",
+ "tokio-stream",
  "tracing",
 ]
 

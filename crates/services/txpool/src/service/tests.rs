@@ -3,6 +3,7 @@ use crate::service::test_helpers::{
     TestContext,
     TestContextBuilder,
 };
+use fuel_core_services::Service as ServiceTrait;
 use fuel_core_types::{
     fuel_tx::UniqueIdentifier,
     services::txpool::Error as TxpoolError,
@@ -15,42 +16,10 @@ async fn test_start_stop() {
     let service = ctx.service();
 
     // Double start will return false.
-    assert!(service.start().await.is_err(), "double start should fail");
+    assert!(service.start().is_err(), "double start should fail");
 
-    let stop_handle = service.stop().await;
-    assert!(stop_handle.is_some());
-    let _ = stop_handle.unwrap().await;
-
-    assert!(service.start().await.is_ok(), "Should start again");
-}
-
-#[tokio::test]
-async fn test_filter_by_negative() {
-    let ctx = TestContext::new().await;
-
-    let tx1 = Arc::new(ctx.setup_script_tx(10));
-    let tx2 = Arc::new(ctx.setup_script_tx(20));
-    let tx3 = Arc::new(ctx.setup_script_tx(30));
-
-    let service = ctx.service();
-
-    let out = service
-        .insert(vec![tx1.clone(), tx2.clone()])
-        .await
-        .unwrap();
-
-    assert_eq!(out.len(), 2, "Should be len 2:{:?}", out);
-    assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
-    assert!(out[1].is_ok(), "Tx2 should be OK, got err:{:?}", out);
-
-    let out = service
-        .filter_by_negative(vec![tx1.id(), tx2.id(), tx3.id()])
-        .await
-        .unwrap();
-
-    assert_eq!(out.len(), 1, "Should be len 1:{:?}", out);
-    assert_eq!(out[0], tx3.id(), "Found tx id match{:?}", out);
-    service.stop().await.unwrap().await.unwrap();
+    let state = service.stop_and_await().await.unwrap();
+    assert!(state.stopped());
 }
 
 #[tokio::test]
@@ -63,21 +32,18 @@ async fn test_find() {
 
     let service = ctx.service();
 
-    let out = service
-        .insert(vec![tx1.clone(), tx2.clone()])
-        .await
-        .unwrap();
+    let out = service.shared.insert(vec![tx1.clone(), tx2.clone()]);
 
     assert_eq!(out.len(), 2, "Should be len 2:{:?}", out);
     assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
     assert!(out[1].is_ok(), "Tx2 should be OK, got err:{:?}", out);
-    let out = service.find(vec![tx1.id(), tx3.id()]).await.unwrap();
+    let out = service.shared.find(vec![tx1.id(), tx3.id()]);
     assert_eq!(out.len(), 2, "Should be len 2:{:?}", out);
     assert!(out[0].is_some(), "Tx1 should be some:{:?}", out);
     let id = out[0].as_ref().unwrap().id();
     assert_eq!(id, tx1.id(), "Found tx id match{:?}", out);
     assert!(out[1].is_none(), "Tx3 should not be found:{:?}", out);
-    service.stop().await.unwrap().await.unwrap();
+    service.stop_and_await().await.unwrap();
 }
 
 #[tokio::test]
@@ -88,13 +54,10 @@ async fn simple_insert_removal_subscription() {
     let tx2 = Arc::new(ctx.setup_script_tx(20));
     let service = ctx.service();
 
-    let mut subscribe_status = service.tx_status_subscribe();
-    let mut subscribe_update = service.tx_update_subscribe();
+    let mut subscribe_status = service.shared.tx_status_subscribe();
+    let mut subscribe_update = service.shared.tx_update_subscribe();
 
-    let out = service
-        .insert(vec![tx1.clone(), tx2.clone()])
-        .await
-        .unwrap();
+    let out = service.shared.insert(vec![tx1.clone(), tx2.clone()]);
 
     if let Ok(tx) = &out[0] {
         assert_eq!(
@@ -129,7 +92,7 @@ async fn simple_insert_removal_subscription() {
     }
 
     // remove them
-    let rem = service.remove(vec![tx1.id(), tx2.id()]).await.unwrap();
+    let rem = service.shared.remove(vec![tx1.id(), tx2.id()]);
 
     assert_eq!(
         tokio::time::timeout(std::time::Duration::from_secs(2), subscribe_status.recv())
@@ -161,5 +124,5 @@ async fn simple_insert_removal_subscription() {
             .unwrap();
     assert_eq!(*update.tx_id(), rem[1].id(), "Second removed should be tx2");
 
-    service.stop().await.unwrap().await.unwrap();
+    service.stop_and_await().await.unwrap();
 }

@@ -6,14 +6,11 @@ use crate::{
 use fuel_core_p2p::orchestrator::Service as P2PService;
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::RelayerSynced;
-use fuel_core_txpool::Service;
-use fuel_core_types::{
-    blockchain::SealedBlock,
-    services::txpool::TxStatus,
-};
+use fuel_core_txpool::Service as TxPoolService;
+use fuel_core_types::blockchain::SealedBlock;
 use std::sync::Arc;
 use tokio::{
-    sync::broadcast::Receiver,
+    sync::broadcast::Sender,
     task::JoinHandle,
 };
 
@@ -26,12 +23,17 @@ pub mod txpool;
 pub struct BlockImportAdapter {
     // TODO: We should use `fuel_core_poa::Service here but for that we need to fix
     //  the `start` of the process and store the task inside of the `Service`.
-    rx: Receiver<SealedBlock>,
+    tx: Sender<SealedBlock>,
 }
 
 pub struct TxPoolAdapter {
-    pub service: Arc<Service>,
-    pub tx_status_rx: Receiver<TxStatus>,
+    service: TxPoolService,
+}
+
+impl TxPoolAdapter {
+    pub fn new(service: TxPoolService) -> Self {
+        Self { service }
+    }
 }
 
 pub struct ExecutorAdapter {
@@ -50,9 +52,9 @@ pub struct BlockProducerAdapter {
 }
 
 #[cfg(feature = "p2p")]
+#[derive(Clone)]
 pub struct P2PAdapter {
-    p2p_service: Arc<P2PService>,
-    tx_receiver: Option<Receiver<fuel_core_types::services::p2p::TransactionGossipData>>,
+    service: Arc<P2PService>,
 }
 
 #[cfg(not(feature = "p2p"))]
@@ -60,30 +62,17 @@ pub struct P2PAdapter {
 pub struct P2PAdapter;
 
 #[cfg(feature = "p2p")]
-impl Clone for P2PAdapter {
-    fn clone(&self) -> Self {
-        Self::new(self.p2p_service.clone())
-    }
-}
-
-#[cfg(feature = "p2p")]
 impl P2PAdapter {
-    pub fn new(p2p_service: Arc<P2PService>) -> Self {
-        Self {
-            p2p_service,
-            // don't autogenerate a fresh receiver unless it is actually used
-            // otherwise we may encounter "lagged" errors on recv
-            // https://docs.rs/tokio/latest/tokio/sync/broadcast/index.html#lagging
-            tx_receiver: None,
-        }
+    pub fn new(service: Arc<P2PService>) -> Self {
+        Self { service }
     }
 
     pub async fn stop(&self) -> Option<JoinHandle<()>> {
-        self.p2p_service.stop().await
+        self.service.stop().await
     }
 
     pub async fn start(&self) -> anyhow::Result<()> {
-        self.p2p_service.start().await
+        self.service.start().await
     }
 }
 
