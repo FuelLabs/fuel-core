@@ -27,7 +27,7 @@ use std::cell::RefCell;
 type GossipedTransaction = GossipData<Transaction>;
 
 pub struct TestContext {
-    pub(crate) service: Service<MockP2P>,
+    pub(crate) service: Service<MockP2P, MockDb>,
     mock_db: MockDb,
     rng: RefCell<StdRng>,
 }
@@ -37,7 +37,7 @@ impl TestContext {
         TestContextBuilder::new().build().await
     }
 
-    pub fn service(&self) -> &Service<MockP2P> {
+    pub fn service(&self) -> &Service<MockP2P, MockDb> {
         &self.service
     }
 
@@ -57,7 +57,6 @@ impl TestContext {
 mockall::mock! {
     pub P2P {}
 
-    #[async_trait::async_trait]
     impl PeerToPeer for P2P {
         type GossipedTransaction = GossipedTransaction;
 
@@ -65,11 +64,11 @@ mockall::mock! {
 
         fn gossiped_transaction_events(&self) -> BoxStream<GossipedTransaction>;
 
-        async fn notify_gossip_transaction_validity(
+        fn notify_gossip_transaction_validity(
             &self,
             message: &GossipedTransaction,
             validity: GossipsubMessageAcceptance,
-        );
+        ) -> anyhow::Result<()>;
     }
 }
 

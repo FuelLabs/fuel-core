@@ -2,7 +2,6 @@ use crate::service::adapters::{
     BlockImportAdapter,
     P2PAdapter,
 };
-use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_txpool::ports::BlockImport;
 use fuel_core_types::{
@@ -35,7 +34,6 @@ impl BlockImport for BlockImportAdapter {
 }
 
 #[cfg(feature = "p2p")]
-#[async_trait]
 impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 
@@ -54,19 +52,17 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         )
     }
 
-    async fn notify_gossip_transaction_validity(
+    fn notify_gossip_transaction_validity(
         &self,
         message: &Self::GossipedTransaction,
         validity: GossipsubMessageAcceptance,
-    ) {
+    ) -> anyhow::Result<()> {
         self.service
             .notify_gossip_transaction_validity(message, validity)
-            .await;
     }
 }
 
 #[cfg(not(feature = "p2p"))]
-#[async_trait]
 impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 
@@ -81,11 +77,11 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         Box::pin(fuel_core_services::stream::pending())
     }
 
-    async fn notify_gossip_transaction_validity(
+    fn notify_gossip_transaction_validity(
         &self,
         _message: &Self::GossipedTransaction,
         _validity: GossipsubMessageAcceptance,
-    ) {
-        // no-op
+    ) -> anyhow::Result<()> {
+        Ok(())
     }
 }

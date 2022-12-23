@@ -85,7 +85,7 @@ impl From<[u8; 32]> for Checksum {
 }
 
 #[derive(Clone, Debug)]
-pub struct P2PConfig<State = Initialized> {
+pub struct Config<State = Initialized> {
     /// The keypair used for for handshake during communication with other p2p nodes.
     pub keypair: Keypair,
 
@@ -155,12 +155,12 @@ pub struct Initialized(());
 #[derive(Clone, Debug)]
 pub struct NotInitialized;
 
-impl P2PConfig<NotInitialized> {
+impl Config<NotInitialized> {
     /// Inits the `P2PConfig` with some lazily loaded data.
-    pub fn init(self, mut genesis: Genesis) -> anyhow::Result<P2PConfig<Initialized>> {
+    pub fn init(self, mut genesis: Genesis) -> anyhow::Result<Config<Initialized>> {
         use fuel_core_chain_config::GenesisCommitment;
 
-        Ok(P2PConfig {
+        Ok(Config {
             keypair: self.keypair,
             network_name: self.network_name,
             checksum: genesis.root()?.into(),
@@ -198,7 +198,7 @@ pub fn convert_to_libp2p_keypair(
     Ok(Keypair::Secp256k1(secret_key.into()))
 }
 
-impl P2PConfig<NotInitialized> {
+impl Config<NotInitialized> {
     pub fn default(network_name: &str) -> Self {
         let keypair = Keypair::generate_secp256k1();
 
@@ -235,9 +235,9 @@ impl P2PConfig<NotInitialized> {
 }
 
 #[cfg(any(feature = "test-helpers", test))]
-impl P2PConfig<Initialized> {
+impl Config<Initialized> {
     pub fn default_initialized(network_name: &str) -> Self {
-        P2PConfig::<NotInitialized>::default(network_name)
+        Config::<NotInitialized>::default(network_name)
             .init(Default::default())
             .expect("Expected correct initialization of config")
     }
@@ -247,7 +247,7 @@ impl P2PConfig<Initialized> {
 /// TCP/IP, Websocket
 /// Noise as encryption layer
 /// mplex or yamux for multiplexing
-pub(crate) fn build_transport(p2p_config: &P2PConfig) -> Boxed<(PeerId, StreamMuxerBox)> {
+pub(crate) fn build_transport(p2p_config: &Config) -> Boxed<(PeerId, StreamMuxerBox)> {
     let transport = {
         let generate_tcp_transport =
             || TokioTcpTransport::new(TcpConfig::new().port_reuse(true).nodelay(true));

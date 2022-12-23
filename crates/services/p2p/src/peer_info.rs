@@ -1,4 +1,4 @@
-use crate::config::P2PConfig;
+use crate::config::Config;
 use libp2p::{
     core::{
         connection::ConnectionId,
@@ -91,7 +91,7 @@ pub struct PeerInfoBehaviour {
 }
 
 impl PeerInfoBehaviour {
-    pub fn new(local_public_key: PublicKey, config: &P2PConfig) -> Self {
+    pub fn new(local_public_key: PublicKey, config: &Config) -> Self {
         let identify = {
             let identify_config =
                 IdentifyConfig::new("/fuel/1.0".to_string(), local_public_key);
