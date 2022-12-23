@@ -21,7 +21,10 @@ use async_graphql::{
     Response,
 };
 use axum::{
-    extract::Extension,
+    extract::{
+        DefaultBodyLimit,
+        Extension,
+    },
     http::{
         header::{
             ACCESS_CONTROL_ALLOW_HEADERS,
@@ -99,7 +102,8 @@ pub async fn start_server(
         .layer(SetResponseHeaderLayer::<_>::overriding(
             ACCESS_CONTROL_ALLOW_HEADERS,
             HeaderValue::from_static("*"),
-        ));
+        ))
+        .layer(DefaultBodyLimit::disable());
 
     let (tx, rx) = tokio::sync::oneshot::channel();
     let listener = TcpListener::bind(network_addr)?;
