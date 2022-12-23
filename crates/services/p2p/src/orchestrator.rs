@@ -54,15 +54,15 @@ use crate::{
         GossipsubBroadcastRequest,
         GossipsubMessage,
     },
+    p2p_service::{
+        FuelP2PEvent,
+        FuelP2PService,
+    },
     ports::P2pDb,
     request_response::messages::{
         OutboundResponse,
         RequestMessage,
         ResponseChannelItem,
-    },
-    service::{
-        FuelP2PEvent,
-        FuelP2PService,
     },
 };
 
@@ -82,7 +82,7 @@ type BroadcastResponse = Result<MessageId, PublishError>;
 
 enum OrchestratorRequest {
     // Broadcast requests to p2p network
-    BroadcastTransaction((Arc<Transaction>, oneshot::Sender<BroadcastResponse>)),
+    BroadcastTransaction(Arc<Transaction>),
     BroadcastBlock((Arc<Block>, oneshot::Sender<BroadcastResponse>)),
     BroadcastVote((Arc<ConsensusVote>, oneshot::Sender<BroadcastResponse>)),
     // Request to get one-off data from p2p network
@@ -133,9 +133,12 @@ impl NetworkOrchestrator {
             tokio::select! {
                 next_service_request = self.rx_orchestrator_request.recv() => {
                     match next_service_request {
-                        Some(OrchestratorRequest::BroadcastTransaction((transaction, sender))) => {
+                        Some(OrchestratorRequest::BroadcastTransaction(transaction)) => {
                             let broadcast = GossipsubBroadcastRequest::NewTx(transaction);
-                            let _ = sender.send(p2p_service.publish_message(broadcast));
+                            let result = p2p_service.publish_message(broadcast);
+                            if let Err(e) = result {
+                                tracing::error!("Got an error during transaction broadcasting {}", e);
+                            }
                         }
                         Some(OrchestratorRequest::BroadcastBlock((block, sender))) => {
                             let broadcast = GossipsubBroadcastRequest::NewBlock(block);
@@ -292,20 +295,18 @@ impl Service {
         receiver.await?.map(|_| ()).map_err(|e| anyhow!("{}", e))
     }
 
-    pub async fn broadcast_transaction(
+    pub fn broadcast_transaction(
         &self,
         transaction: Arc<Transaction>,
     ) -> anyhow::Result<()> {
-        let (sender, receiver) = oneshot::channel();
-
-        self.tx_orchestrator_request
-            .send(OrchestratorRequest::BroadcastTransaction((
-                transaction,
-                sender,
-            )))
-            .await?;
-
-        receiver.await?.map(|_| ()).map_err(|e| anyhow!("{}", e))
+        let request = self.tx_orchestrator_request.clone();
+        // TODO: Fix me
+        tokio::spawn(async move {
+            let _ = request
+                .send(OrchestratorRequest::BroadcastTransaction(transaction))
+                .await;
+        });
+        Ok(())
     }
 
     pub async fn get_peers_ids(&self) -> anyhow::Result<Vec<PeerId>> {

@@ -18,6 +18,8 @@ pub mod test_helpers;
 
 #[cfg(any(test, feature = "test-helpers"))]
 pub use abi::*;
+#[cfg(any(test, feature = "test-helpers"))]
+pub use relayer::new_service_test;
 
 pub use config::Config;
 pub use ethers_core::types::{
@@ -25,6 +27,7 @@ pub use ethers_core::types::{
     H256,
 };
 pub use relayer::{
-    RelayerHandle,
+    new_service,
     RelayerSynced,
+    Service,
 };

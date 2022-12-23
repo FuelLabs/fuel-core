@@ -18,10 +18,7 @@ use fuel_core_types::{
             Result as ExecutorResult,
             UncommittedResult,
         },
-        txpool::{
-            ArcPoolTx,
-            Error as TxPoolError,
-        },
+        txpool::ArcPoolTx,
     },
 };
 use std::borrow::Cow;
@@ -39,13 +36,13 @@ pub trait BlockProducerDatabase: Send + Sync {
 
 #[async_trait]
 pub trait TxPool: Sync + Send {
-    async fn get_includable_txs(
+    fn get_includable_txs(
         &self,
         // could be used by the txpool to filter txs based on maturity
         block_height: BlockHeight,
         // The upper limit for the total amount of gas of these txs
         max_gas: u64,
-    ) -> Result<Vec<ArcPoolTx>, TxPoolError>;
+    ) -> Vec<ArcPoolTx>;
 }
 
 #[async_trait::async_trait]

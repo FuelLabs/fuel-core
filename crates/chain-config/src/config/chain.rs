@@ -157,7 +157,4 @@ pub enum BlockProduction {
         #[serde(flatten)]
         trigger: fuel_core_poa::Trigger,
     },
-    // TODO:
-    // RoundRobin,
-    // ProofOfStake,
 }

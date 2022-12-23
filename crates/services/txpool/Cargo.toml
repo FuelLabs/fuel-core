@@ -15,9 +15,12 @@ anyhow = "1.0"
 async-trait = "0.1"
 fuel-core-chain-config = { path = "../../chain-config", version = "0.15.1" }
 fuel-core-metrics = { path = "../../metrics", version = "0.15.1" }
+fuel-core-services = { path = "..", version = "0.15.1" }
 fuel-core-storage = { path = "../../storage", version = "0.15.1" }
 fuel-core-types = { path = "../../types", version = "0.15.1" }
+parking_lot = "0.12"
 tokio = { version = "1.21", default-features = false, features = ["sync"] }
+tokio-stream = "0.1"
 tracing = "0.1"
 
 [dev-dependencies]
@@ -29,5 +32,5 @@ rstest = "0.15"
 [features]
 test-helpers = [
     "fuel-core-types/test-helpers",
-    "fuel-core-storage/test-helpers"
+    "fuel-core-storage/test-helpers",
 ]
