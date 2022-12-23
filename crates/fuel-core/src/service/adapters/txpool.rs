@@ -3,6 +3,7 @@ use crate::service::adapters::{
     P2PAdapter,
 };
 use async_trait::async_trait;
+use fuel_core_services::BoxStream;
 use fuel_core_txpool::ports::BlockImport;
 use fuel_core_types::{
     blockchain::SealedBlock,
@@ -38,26 +39,19 @@ impl BlockImport for BlockImportAdapter {
 impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 
-    async fn broadcast_transaction(
-        &self,
-        transaction: Arc<Transaction>,
-    ) -> anyhow::Result<()> {
-        self.p2p_service.broadcast_transaction(transaction).await
+    fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()> {
+        self.service.broadcast_transaction(transaction)
     }
 
-    async fn next_gossiped_transaction(&mut self) -> Self::GossipedTransaction {
-        // lazily instantiate a long-lived tx receiver only when there
-        // is consumer for the messages to avoid lagging the channel
-        if self.tx_receiver.is_none() {
-            self.tx_receiver = Some(self.p2p_service.subscribe_tx());
-        }
-        // TODO: Handle unwrap
-        self.tx_receiver
-            .as_mut()
-            .expect("Should always be some because we checked that above")
-            .recv()
-            .await
-            .unwrap()
+    fn next_gossiped_transaction(&self) -> BoxStream<Self::GossipedTransaction> {
+        use tokio_stream::{
+            wrappers::BroadcastStream,
+            StreamExt,
+        };
+        Box::pin(
+            BroadcastStream::new(self.service.subscribe_tx())
+                .filter_map(|result| result.ok()),
+        )
     }
 
     async fn notify_gossip_transaction_validity(
@@ -65,7 +59,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         message: &Self::GossipedTransaction,
         validity: GossipsubMessageAcceptance,
     ) {
-        self.p2p_service
+        self.service
             .notify_gossip_transaction_validity(message, validity)
             .await;
     }
@@ -76,15 +70,15 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
 impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 
-    async fn broadcast_transaction(
+    fn broadcast_transaction(
         &self,
         _transaction: Arc<Transaction>,
     ) -> anyhow::Result<()> {
         Ok(())
     }
 
-    async fn next_gossiped_transaction(&mut self) -> Self::GossipedTransaction {
-        core::future::pending::<Self::GossipedTransaction>().await
+    fn next_gossiped_transaction(&self) -> BoxStream<Self::GossipedTransaction> {
+        Box::pin(fuel_core_services::pending())
     }
 
     async fn notify_gossip_transaction_validity(

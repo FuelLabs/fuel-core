@@ -61,17 +61,9 @@ mockall::mock! {
     impl PeerToPeer for P2P {
         type GossipedTransaction = GossipedTransaction;
 
-        async fn broadcast_transaction(
-            &self,
-            transaction: Arc<Transaction>,
-        ) -> anyhow::Result<()>;
+        fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()>;
 
-        fn next_gossiped_transaction<'_self, 'a>(
-            &'_self mut self,
-        ) -> BoxFuture<'a, GossipedTransaction>
-        where
-            '_self: 'a,
-            Self: Sync + 'a;
+        fn next_gossiped_transaction(&self) -> BoxStream<GossipedTransaction>;
 
         async fn notify_gossip_transaction_validity(
             &self,
@@ -82,17 +74,19 @@ mockall::mock! {
 }
 
 impl MockP2P {
-    pub fn new_with_txs(mut txs: Vec<Transaction>) -> Self {
+    pub fn new_with_txs(txs: Vec<Transaction>) -> Self {
         let mut p2p = MockP2P::default();
         p2p.expect_next_gossiped_transaction().returning(move || {
-            let tx = txs.pop();
-            Box::pin(async move {
+            let txs_clone = txs.clone();
+            let stream = fuel_core_services::unfold(txs_clone, |mut txs| async {
+                let tx = txs.pop();
                 if let Some(tx) = tx {
-                    GossipData::new(tx, vec![], vec![])
+                    Some((GossipData::new(tx, vec![], vec![]), txs))
                 } else {
-                    core::future::pending::<GossipData<Transaction>>().await
+                    core::future::pending().await
                 }
-            })
+            });
+            Box::pin(stream)
         });
         p2p.expect_broadcast_transaction()
             .returning(move |_| Ok(()));
@@ -191,7 +185,7 @@ impl TestContextBuilder {
             .db(Arc::new(mock_db.clone()))
             .importer(importer)
             .tx_status_sender(status_tx)
-            .p2p_port(p2p);
+            .p2p(p2p);
 
         let service = builder.build().unwrap();
         service.start().unwrap();

@@ -2421,6 +2421,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "tokio",
+ "tokio-stream",
  "tracing",
 ]
 
@@ -2472,6 +2473,7 @@ version = "0.15.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "futures",
  "mockall",
  "tokio",
  "tracing",
@@ -2538,6 +2540,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "rstest",
  "tokio",
+ "tokio-stream",
  "tracing",
 ]
 

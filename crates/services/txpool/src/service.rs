@@ -11,6 +11,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use fuel_core_services::{
+    BoxStream,
     RunnableService,
     ServiceRunner,
 };
@@ -36,6 +37,7 @@ use fuel_core_types::{
 use parking_lot::Mutex as ParkingMutex;
 use std::sync::Arc;
 use tokio::sync::broadcast;
+use tokio_stream::StreamExt;
 
 pub type Service = ServiceRunner<Context>;
 
@@ -46,7 +48,7 @@ pub struct ServiceBuilder {
     db: Option<Arc<dyn TxPoolDb>>,
     tx_status_sender: Option<TxStatusChange>,
     importer: Option<Box<dyn BlockImport>>,
-    p2p_port: Option<PeerToPeerForTx>,
+    p2p: Option<PeerToPeerForTx>,
 }
 
 #[derive(Clone)]
@@ -64,6 +66,7 @@ impl TxStatusChange {
             update_sender,
         }
     }
+
     pub fn send_complete(&self, id: Bytes32) {
         let _ = self.status_sender.send(TxStatus::Completed);
         self.updated(id);
@@ -99,7 +102,7 @@ impl ServiceBuilder {
             db: None,
             tx_status_sender: None,
             importer: None,
-            p2p_port: None,
+            p2p: None,
         }
     }
 
@@ -129,8 +132,8 @@ impl ServiceBuilder {
         self
     }
 
-    pub fn p2p_port(&mut self, p2p_port: PeerToPeerForTx) -> &mut Self {
-        self.p2p_port = Some(p2p_port);
+    pub fn p2p(&mut self, p2p: PeerToPeerForTx) -> &mut Self {
+        self.p2p = Some(p2p);
         self
     }
 
@@ -147,21 +150,24 @@ impl ServiceBuilder {
     pub fn build(self) -> anyhow::Result<Service> {
         if self.db.is_none()
             || self.importer.is_none()
-            || self.p2p_port.is_none()
+            || self.p2p.is_none()
             || self.tx_status_sender.is_none()
         {
             return Err(anyhow!("One of context items are not set"))
         }
 
+        let p2p = Arc::new(self.p2p.unwrap());
+        let gossiped_tx_stream = p2p.next_gossiped_transaction();
         let tx_status_sender = self.tx_status_sender.clone().unwrap();
         let txpool = Arc::new(ParkingMutex::new(TxPool::new(self.config)));
         let context = Context {
             importer: self.importer.unwrap(),
-            p2p_port: self.p2p_port.unwrap(),
+            gossiped_tx_stream,
             shared: SharedState {
+                db: self.db.unwrap(),
                 tx_status_sender,
                 txpool,
-                db: self.db.unwrap(),
+                p2p,
             },
         };
 
@@ -174,11 +180,12 @@ pub struct SharedState {
     db: Arc<dyn TxPoolDb>,
     tx_status_sender: TxStatusChange,
     txpool: Arc<ParkingMutex<TxPool>>,
+    p2p: Arc<PeerToPeerForTx>,
 }
 
 pub struct Context {
     importer: Box<dyn BlockImport>,
-    p2p_port: PeerToPeerForTx,
+    gossiped_tx_stream: BoxStream<TransactionGossipData>,
     shared: SharedState,
 }
 
@@ -198,14 +205,17 @@ impl RunnableService for Context {
 
     async fn run(&mut self) -> anyhow::Result<bool> {
         tokio::select! {
-            new_transaction = self.p2p_port.next_gossiped_transaction() => {
-                if let GossipData { data: Some(tx), .. } = new_transaction {
+            new_transaction = self.gossiped_tx_stream.next() => {
+                if let Some(GossipData { data: Some(tx), .. }) = new_transaction {
                     let txs = vec!(Arc::new(tx));
                     self.shared.txpool.lock().insert(
                         self.shared.db.as_ref(),
                         &self.shared.tx_status_sender,
                         &txs
                     );
+                } else {
+                    let should_continue = false;
+                    return Ok(should_continue);
                 }
             }
 
@@ -238,9 +248,21 @@ impl SharedState {
         &self,
         txs: Vec<Arc<Transaction>>,
     ) -> Vec<anyhow::Result<InsertionResult>> {
-        self.txpool
-            .lock()
-            .insert(self.db.as_ref(), &self.tx_status_sender, &txs)
+        let insert = {
+            self.txpool
+                .lock()
+                .insert(self.db.as_ref(), &self.tx_status_sender, &txs)
+        };
+
+        for (ret, tx) in insert.iter().zip(txs.into_iter()) {
+            match ret {
+                Ok(_) => {
+                    let _ = self.p2p.broadcast_transaction(tx.clone());
+                }
+                Err(_) => {}
+            }
+        }
+        insert
     }
 
     pub fn find(&self, ids: Vec<TxId>) -> Vec<Option<TxInfo>> {

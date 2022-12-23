@@ -11,7 +11,11 @@ use crate::{
     Service,
     Trigger,
 };
-use fuel_core_services::Service as StorageTrait;
+use fuel_core_services::{
+    pending,
+    BoxStream,
+    Service as StorageTrait,
+};
 use fuel_core_storage::{
     transactional::{
         StorageTransaction,
@@ -73,9 +77,6 @@ use tokio::{
 };
 
 mod trigger_tests;
-
-type BoxFuture<'a, T> =
-    core::pin::Pin<Box<dyn core::future::Future<Output = T> + Send + 'a>>;
 
 struct TestContextBuilder {
     mock_db: Option<MockDatabase>,
@@ -167,7 +168,6 @@ impl TestContext {
 mockall::mock! {
     TxPool {}
 
-    #[async_trait::async_trait]
     impl TransactionPool for TxPool {
         fn pending_number(&self) -> usize;
 
@@ -175,12 +175,7 @@ mockall::mock! {
 
         fn remove_txs(&self, tx_ids: Vec<TxId>) -> Vec<ArcPoolTx>;
 
-        fn next_transaction_status_update<'_self, 'a>(
-            &'_self mut self,
-        ) -> BoxFuture<'a, TxStatus>
-        where
-            '_self: 'a,
-            Self: Sync + 'a;
+        fn next_transaction_status_update(&self) -> BoxStream<TxStatus>;
     }
 }
 
@@ -195,7 +190,7 @@ impl MockTxPool {
         let mut txpool = MockTxPool::default();
         txpool
             .expect_next_transaction_status_update()
-            .returning(|| Box::pin(async { core::future::pending::<TxStatus>().await }));
+            .returning(|| Box::pin(pending()));
         txpool
     }
 
@@ -209,19 +204,22 @@ impl MockTxPool {
         txpool
             .expect_next_transaction_status_update()
             .returning(move || {
-                let mut status_receiver_clone = status_receiver.clone();
-                let status_sender_clone = status_sender_clone.clone();
-                Box::pin(async move {
-                    loop {
-                        let status = status_receiver_clone.borrow().clone();
-                        if let Some(status) = status {
-                            status_sender_clone.send_replace(None);
-                            return status
-                        } else {
-                            status_receiver_clone.changed().await.unwrap();
+                let status_channel =
+                    (status_sender_clone.clone(), status_receiver.clone());
+                let stream = fuel_core_services::unfold(
+                    status_channel,
+                    |(sender, mut receiver)| async {
+                        loop {
+                            let status = receiver.borrow_and_update().clone();
+                            if let Some(status) = status {
+                                sender.send_replace(None);
+                                return Some((status, (sender, receiver)))
+                            }
+                            receiver.changed().await.unwrap();
                         }
-                    }
-                })
+                    },
+                );
+                Box::pin(stream)
             });
 
         let pending = txs.clone();
@@ -373,7 +371,7 @@ async fn remove_skipped_transactions() {
     db.expect_block_height()
         .returning(|| Ok(BlockHeight::from(1u32)));
 
-    let mut txpool = MockTxPool::default();
+    let mut txpool = MockTxPool::no_tx_updates();
     // Test created for only for this check.
     txpool.expect_remove_txs().returning(move |skipped_ids| {
         // Transform transactions into ids.
@@ -392,6 +390,7 @@ async fn remove_skipped_transactions() {
         vec![]
     });
 
+    let tx_status_update_stream = txpool.next_transaction_status_update();
     let mut task = PoA {
         block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
@@ -399,6 +398,7 @@ async fn remove_skipped_transactions() {
         block_producer,
         txpool,
         import_block_events_tx,
+        tx_status_update_stream,
         last_block_created: Instant::now(),
         trigger: Trigger::Instant,
         timer: DeadlineClock::new(),
@@ -429,10 +429,11 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
     db.expect_block_height()
         .returning(|| Ok(BlockHeight::from(1u32)));
 
-    let mut txpool = MockTxPool::default();
+    let mut txpool = MockTxPool::no_tx_updates();
     txpool.expect_total_consumable_gas().returning(|| 0);
     txpool.expect_pending_number().returning(|| 0);
 
+    let tx_status_update_stream = txpool.next_transaction_status_update();
     let mut task = PoA {
         block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
@@ -440,15 +441,16 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         block_producer,
         txpool,
         import_block_events_tx,
+        tx_status_update_stream,
         last_block_created: Instant::now(),
         trigger: Trigger::Instant,
         timer: DeadlineClock::new(),
     };
 
     // simulate some txpool events to see if any block production is erroneously triggered
-    task.on_txpool_event(&TxStatus::Submitted).await.unwrap();
-    task.on_txpool_event(&TxStatus::Completed).await.unwrap();
-    task.on_txpool_event(&TxStatus::SqueezedOut {
+    task.on_txpool_event(TxStatus::Submitted).await.unwrap();
+    task.on_txpool_event(TxStatus::Completed).await.unwrap();
+    task.on_txpool_event(TxStatus::SqueezedOut {
         reason: TxPoolError::NoMetadata,
     })
     .await
@@ -484,6 +486,7 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
     txpool.expect_total_consumable_gas().returning(|| 0);
     txpool.expect_pending_number().returning(|| 0);
 
+    let tx_status_update_stream = txpool.next_transaction_status_update();
     let task = PoA {
         block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
@@ -491,6 +494,7 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
         block_producer,
         txpool,
         import_block_events_tx,
+        tx_status_update_stream,
         last_block_created: Instant::now(),
         trigger: Trigger::Hybrid {
             min_block_time: Duration::from_millis(100),

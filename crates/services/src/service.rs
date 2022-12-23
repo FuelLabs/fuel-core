@@ -23,7 +23,7 @@ pub trait Service {
 }
 
 #[async_trait::async_trait]
-pub trait RunnableService: Send + Sync {
+pub trait RunnableService: Send {
     const NAME: &'static str;
 
     type SharedData: Clone + Send + Sync;

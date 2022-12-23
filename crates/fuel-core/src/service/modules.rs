@@ -116,7 +116,7 @@ pub async fn start_modules(
     txpool_builder
         .config(config.txpool.clone())
         .db(Arc::new(database.clone()) as Arc<dyn TxPoolDb>)
-        .p2p_port(Box::new(p2p_adapter.clone()))
+        .p2p(Box::new(p2p_adapter.clone()))
         .importer(Box::new(BlockImportAdapter::new(block_import_rx)))
         .tx_status_sender(tx_status_sender.clone());
 

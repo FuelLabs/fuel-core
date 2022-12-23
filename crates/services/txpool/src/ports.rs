@@ -1,3 +1,4 @@
+use fuel_core_services::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::{
@@ -28,13 +29,10 @@ pub trait PeerToPeer: Send + Sync {
     type GossipedTransaction: NetworkData<Transaction>;
 
     // Gossip broadcast a transaction inserted via API.
-    async fn broadcast_transaction(
-        &self,
-        transaction: Arc<Transaction>,
-    ) -> anyhow::Result<()>;
+    fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()>;
 
-    // Await the next transaction from network gossip (similar to stream.next()).
-    async fn next_gossiped_transaction(&mut self) -> Self::GossipedTransaction;
+    /// Creates a stream of next transactions gossiped from the network.
+    fn next_gossiped_transaction(&self) -> BoxStream<Self::GossipedTransaction>;
 
     // Report the validity of a transaction received from the network.
     async fn notify_gossip_transaction_validity(

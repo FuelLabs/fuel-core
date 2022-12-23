@@ -1,3 +1,4 @@
+use fuel_core_services::BoxStream;
 use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
     blockchain::{
@@ -22,8 +23,7 @@ use fuel_core_types::{
     },
 };
 
-#[async_trait::async_trait]
-pub trait TransactionPool: Sync + Send {
+pub trait TransactionPool: Send + Sync {
     /// Returns the number of pending transactions in the `TxPool`.
     fn pending_number(&self) -> usize;
 
@@ -31,7 +31,7 @@ pub trait TransactionPool: Sync + Send {
 
     fn remove_txs(&self, tx_ids: Vec<TxId>) -> Vec<ArcPoolTx>;
 
-    async fn next_transaction_status_update(&mut self) -> TxStatus;
+    fn next_transaction_status_update(&self) -> BoxStream<TxStatus>;
 }
 
 pub trait BlockDb: Send + Sync {

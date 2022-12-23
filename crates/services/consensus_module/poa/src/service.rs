@@ -16,6 +16,7 @@ use anyhow::{
     Context,
 };
 use fuel_core_services::{
+    BoxStream,
     EmptyShared,
     RunnableService,
     ServiceRunner,
@@ -54,6 +55,7 @@ use tokio::{
     sync::broadcast,
     time::Instant,
 };
+use tokio_stream::StreamExt;
 use tracing::error;
 
 pub type Service<D, T, B> = ServiceRunner<PoA<D, T, B>>;
@@ -64,6 +66,7 @@ pub struct PoA<D, T, B> {
     pub(crate) db: D,
     pub(crate) block_producer: B,
     pub(crate) txpool: T,
+    pub(crate) tx_status_update_stream: BoxStream<TxStatus>,
     pub(crate) import_block_events_tx: broadcast::Sender<SealedBlock>,
     /// Last block creation time. When starting up, this is initialized
     /// to `Instant::now()`, which delays the first block on startup for
@@ -74,7 +77,10 @@ pub struct PoA<D, T, B> {
     pub(crate) timer: DeadlineClock,
 }
 
-impl<D, T, B> PoA<D, T, B> {
+impl<D, T, B> PoA<D, T, B>
+where
+    T: TransactionPool,
+{
     pub fn new(
         config: Config,
         txpool: T,
@@ -82,12 +88,14 @@ impl<D, T, B> PoA<D, T, B> {
         block_producer: B,
         db: D,
     ) -> Self {
+        let tx_status_update_stream = txpool.next_transaction_status_update();
         Self {
             block_gas_limit: config.block_gas_limit,
             signing_key: config.signing_key,
             db,
             block_producer,
             txpool,
+            tx_status_update_stream,
             last_block_created: Instant::now(),
             import_block_events_tx,
             trigger: config.trigger,
@@ -201,7 +209,7 @@ where
 
     pub(crate) async fn on_txpool_event(
         &mut self,
-        txpool_event: &TxStatus,
+        txpool_event: TxStatus,
     ) -> anyhow::Result<()> {
         match txpool_event {
             TxStatus::Submitted => match self.trigger {
@@ -274,9 +282,14 @@ where
             //       for each tx after they've already been included into a block.
             //       The poa service also doesn't care about events unrelated to new tx submissions,
             //       and shouldn't be awoken when txs are completed or squeezed out of the pool.
-            txpool_event = self.txpool.next_transaction_status_update() => {
-                self.on_txpool_event(&txpool_event).await.context("While processing txpool event")?;
-                Ok(true)
+            txpool_event = self.tx_status_update_stream.next() => {
+                if let Some(txpool_event) = txpool_event {
+                    self.on_txpool_event(txpool_event).await.context("While processing txpool event")?;
+                    Ok(true)
+                } else {
+                    let should_continue = false;
+                    Ok(should_continue)
+                }
             }
             at = self.timer.wait() => {
                 self.on_timer(at).await.context("While processing timer event")?;
