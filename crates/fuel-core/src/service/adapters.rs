@@ -1,12 +1,14 @@
 use crate::{
     database::Database,
-    service::Config,
+    service::{
+        modules::TxPoolService,
+        Config,
+    },
 };
 #[cfg(feature = "p2p")]
-use fuel_core_p2p::orchestrator::Service as P2PService;
+use fuel_core_p2p::service::Service as P2PService;
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::RelayerSynced;
-use fuel_core_txpool::Service as TxPoolService;
 use fuel_core_types::blockchain::SealedBlock;
 use std::sync::Arc;
 use tokio::{
@@ -20,10 +22,11 @@ pub mod txpool;
 
 /// This is used to get block import events from coordinator source
 /// and pass them to the txpool.
+#[derive(Clone)]
 pub struct BlockImportAdapter {
     // TODO: We should use `fuel_core_poa::Service here but for that we need to fix
     //  the `start` of the process and store the task inside of the `Service`.
-    tx: Sender<SealedBlock>,
+    pub tx: Sender<SealedBlock>,
 }
 
 pub struct TxPoolAdapter {

@@ -8,7 +8,7 @@ pub(crate) mod abi;
 pub(crate) mod config;
 pub(crate) mod log;
 
-mod relayer;
+mod service;
 
 #[cfg(any(test, feature = "test-helpers"))]
 pub mod mock_db;
@@ -19,14 +19,14 @@ pub mod test_helpers;
 #[cfg(any(test, feature = "test-helpers"))]
 pub use abi::*;
 #[cfg(any(test, feature = "test-helpers"))]
-pub use relayer::new_service_test;
+pub use service::new_service_test;
 
 pub use config::Config;
 pub use ethers_core::types::{
     H160,
     H256,
 };
-pub use relayer::{
+pub use service::{
     new_service,
     RelayerSynced,
     Service,

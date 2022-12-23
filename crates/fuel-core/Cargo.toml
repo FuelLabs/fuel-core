@@ -23,7 +23,6 @@ enum-iterator = "1.2"
 fuel-core-chain-config = { path = "../chain-config", version = "0.15.1" }
 fuel-core-database = { path = "../database", version = "0.15.1" }
 fuel-core-executor = { path = "../services/executor", version = "0.15.1" }
-fuel-core-importer = { path = "../services/importer", version = "0.15.1" }
 fuel-core-metrics = { path = "../metrics", version = "0.15.1", optional = true }
 fuel-core-p2p = { path = "../services/p2p", version = "0.15.1", optional = true }
 fuel-core-poa = { path = "../services/consensus_module/poa", version = "0.15.1" }
@@ -31,7 +30,6 @@ fuel-core-producer = { path = "../services/producer", version = "0.15.1" }
 fuel-core-relayer = { path = "../services/relayer", version = "0.15.1", optional = true }
 fuel-core-services = { path = "../services", version = "0.15.1" }
 fuel-core-storage = { path = "../storage", version = "0.15.1" }
-fuel-core-sync = { path = "../services/sync", version = "0.15.1" }
 fuel-core-txpool = { path = "../services/txpool", version = "0.15.1" }
 fuel-core-types = { path = "../types", version = "0.15.1", features = [
     "serde",
