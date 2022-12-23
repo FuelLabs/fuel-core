@@ -16,6 +16,7 @@ async-trait = "0.1"
 bincode = "1.3"
 fuel-core-chain-config = { path = "../../chain-config", version = "0.15.1" }
 fuel-core-metrics = { path = "../../metrics", version = "0.15.1" } # TODO make this a feature
+fuel-core-services = { path = "../../services", version = "0.15.1" }
 fuel-core-storage = { path = "../../storage", version = "0.15.1" }
 fuel-core-types = { path = "../../types", features = [
     "serde",

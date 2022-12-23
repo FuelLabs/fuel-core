@@ -1,4 +1,4 @@
-use crate::config::P2PConfig;
+use crate::config::Config;
 use fuel_core_metrics::p2p_metrics::P2P_METRICS;
 use libp2p::gossipsub::{
     metrics::Config as MetricsConfig,
@@ -52,7 +52,7 @@ pub(crate) fn default_gossipsub_config() -> GossipsubConfig {
 }
 
 /// Given a `P2pConfig` containing `GossipsubConfig` creates a Gossipsub Behaviour
-pub(crate) fn build_gossipsub_behaviour(p2p_config: &P2PConfig) -> Gossipsub {
+pub(crate) fn build_gossipsub_behaviour(p2p_config: &Config) -> Gossipsub {
     if p2p_config.metrics {
         // Move to Metrics related feature flag
         let mut p2p_registry = Registry::default();

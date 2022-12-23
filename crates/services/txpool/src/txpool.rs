@@ -32,18 +32,21 @@ use std::{
     ops::Deref,
     sync::Arc,
 };
-use tokio::sync::RwLock;
 
 #[derive(Debug, Clone)]
-pub struct TxPool {
+pub struct TxPool<DB> {
     by_hash: HashMap<TxId, TxInfo>,
     by_gas_price: PriceSort,
     by_dependency: Dependency,
     config: Config,
+    database: DB,
 }
 
-impl TxPool {
-    pub fn new(config: Config) -> Self {
+impl<DB> TxPool<DB>
+where
+    DB: TxPoolDb,
+{
+    pub fn new(config: Config, database: DB) -> Self {
         let max_depth = config.max_depth;
 
         Self {
@@ -51,6 +54,7 @@ impl TxPool {
             by_gas_price: PriceSort::default(),
             by_dependency: Dependency::new(max_depth, config.utxo_validation),
             config,
+            database,
         }
     }
 
@@ -67,9 +71,8 @@ impl TxPool {
         &mut self,
         // TODO: Pass `&Transaction`
         tx: Arc<Transaction>,
-        db: &dyn TxPoolDb,
     ) -> anyhow::Result<InsertionResult> {
-        let current_height = db.current_block_height()?;
+        let current_height = self.database.current_block_height()?;
 
         if tx.is_mint() {
             return Err(Error::NotSupportedTransactionType.into())
@@ -144,7 +147,9 @@ impl TxPool {
                 .observe(tx.metered_bytes_size() as f64);
         }
         // check and insert dependency
-        let rem = self.by_dependency.insert(&self.by_hash, db, &tx)?;
+        let rem = self
+            .by_dependency
+            .insert(&self.by_hash, &self.database, &tx)?;
         self.by_hash.insert(tx.id(), TxInfo::new(tx.clone()));
         self.by_gas_price.insert(&tx);
 
@@ -205,6 +210,15 @@ impl TxPool {
         Vec::new()
     }
 
+    /// Removes transaction from `TxPool` with assumption that it is committed into teh blockchain.
+    // TODO: Don't remove recursively dependent transactions on block commit.
+    //  The same logic should be fixed in the `select_transactions`.
+    //  This method is used during `select_transactions`, so we need to handle the case
+    //  when transaction was skipped during block execution(`ExecutionResult.skipped_transaction`).
+    pub fn remove_committed_tx(&mut self, tx_id: &TxId) -> Vec<ArcPoolTx> {
+        self.remove_by_tx_id(tx_id)
+    }
+
     fn verify_tx_min_gas_price(&mut self, tx: &Transaction) -> Result<(), Error> {
         let price = match tx {
             Transaction::Script(script) => script.price(),
@@ -224,9 +238,8 @@ impl TxPool {
     }
 
     /// Import a set of transactions from network gossip or GraphQL endpoints.
-    pub async fn insert(
-        txpool: &RwLock<Self>,
-        db: &dyn TxPoolDb,
+    pub fn insert(
+        &mut self,
         tx_status_sender: &TxStatusChange,
         txs: &[Arc<Transaction>],
     ) -> Vec<anyhow::Result<InsertionResult>> {
@@ -234,8 +247,7 @@ impl TxPool {
         // should be done before transaction comes to txpool, or before it enters RwLocked region.
         let mut res = Vec::new();
         for tx in txs.iter() {
-            let mut pool = txpool.write().await;
-            res.push(pool.insert_inner(tx.clone(), db))
+            res.push(self.insert_inner(tx.clone()))
         }
         // announce to subscribers
         for ret in res.iter() {
@@ -257,33 +269,28 @@ impl TxPool {
     }
 
     /// find all tx by its hash
-    pub async fn find(txpool: &RwLock<Self>, hashes: &[TxId]) -> Vec<Option<TxInfo>> {
+    pub fn find(&self, hashes: &[TxId]) -> Vec<Option<TxInfo>> {
         let mut res = Vec::with_capacity(hashes.len());
-        let pool = txpool.read().await;
         for hash in hashes {
-            res.push(pool.txs().get(hash).cloned());
+            res.push(self.txs().get(hash).cloned());
         }
         res
     }
 
-    pub async fn find_one(txpool: &RwLock<Self>, hash: &TxId) -> Option<TxInfo> {
-        txpool.read().await.txs().get(hash).cloned()
+    pub fn find_one(&self, hash: &TxId) -> Option<TxInfo> {
+        self.txs().get(hash).cloned()
     }
 
     /// find all dependent tx and return them with requested dependencies in one list sorted by Price.
-    pub async fn find_dependent(
-        txpool: &RwLock<Self>,
-        hashes: &[TxId],
-    ) -> Vec<ArcPoolTx> {
+    pub fn find_dependent(&self, hashes: &[TxId]) -> Vec<ArcPoolTx> {
         let mut seen = HashMap::new();
         {
-            let pool = txpool.read().await;
             for hash in hashes {
-                if let Some(tx) = pool.txs().get(hash) {
-                    pool.dependency().find_dependent(
+                if let Some(tx) = self.txs().get(hash) {
+                    self.dependency().find_dependent(
                         tx.tx().clone(),
                         &mut seen,
-                        pool.txs(),
+                        self.txs(),
                     );
                 }
             }
@@ -295,61 +302,44 @@ impl TxPool {
         list
     }
 
-    /// Iterate over `hashes` and return all hashes that we don't have.
-    pub async fn filter_by_negative(txpool: &RwLock<Self>, tx_ids: &[TxId]) -> Vec<TxId> {
-        let mut res = Vec::new();
-        let pool = txpool.read().await;
-        for tx_id in tx_ids {
-            if pool.txs().get(tx_id).is_none() {
-                res.push(*tx_id)
-            }
-        }
-        res
-    }
-
     /// The number of pending transaction in the pool.
-    pub async fn pending_number(txpool: &RwLock<Self>) -> usize {
-        let pool = txpool.read().await;
-        pool.by_hash.len()
+    pub fn pending_number(&self) -> usize {
+        self.by_hash.len()
     }
 
     /// The amount of gas in all includable transactions combined
-    pub async fn consumable_gas(txpool: &RwLock<Self>) -> u64 {
-        let pool = txpool.read().await;
-        pool.by_hash.values().map(|tx| tx.limit()).sum()
+    pub fn consumable_gas(&self) -> u64 {
+        self.by_hash.values().map(|tx| tx.limit()).sum()
     }
 
     /// Return all sorted transactions that are includable in next block.
     /// This is going to be heavy operation, use it only when needed.
-    pub async fn includable(txpool: &RwLock<Self>) -> Vec<ArcPoolTx> {
-        let pool = txpool.read().await;
-        pool.sorted_includable()
+    pub fn includable(&mut self) -> Vec<ArcPoolTx> {
+        self.sorted_includable()
     }
 
     /// When block is updated we need to receive all spend outputs and remove them from txpool.
-    pub async fn block_update(
-        txpool: &RwLock<Self>,
+    pub fn block_update(
+        &mut self,
         tx_status_sender: &TxStatusChange,
         block: SealedBlock,
         // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
-        let mut guard = txpool.write().await;
-
         for tx in block.entity.transactions() {
             tx_status_sender.send_complete(tx.id());
-            let _removed = guard.remove_by_tx_id(&tx.id());
+            self.remove_committed_tx(&tx.id());
         }
     }
 
     /// remove transaction from pool needed on user demand. Low priority
-    pub async fn remove(
-        txpool: &RwLock<Self>,
+    pub fn remove(
+        &mut self,
         tx_status_sender: &TxStatusChange,
         tx_ids: &[TxId],
     ) -> Vec<ArcPoolTx> {
         let mut removed = Vec::new();
         for tx_id in tx_ids {
-            let rem = { txpool.write().await.remove_by_tx_id(tx_id) };
+            let rem = self.remove_by_tx_id(tx_id);
             tx_status_sender.send_squeezed_out(*tx_id, Error::Removed);
             removed.extend(rem.into_iter());
         }

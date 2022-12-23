@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 cargo +nightly fmt --all -- --check &&
 cargo sort -w --check &&
 source .github/workflows/scripts/verify_openssl.sh &&

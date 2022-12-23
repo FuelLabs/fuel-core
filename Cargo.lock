@@ -2202,18 +2202,16 @@ dependencies = [
  "bincode",
  "derive_more",
  "enum-iterator",
- "fuel-core-bft",
  "fuel-core-chain-config",
  "fuel-core-database",
  "fuel-core-executor",
- "fuel-core-importer",
  "fuel-core-metrics",
  "fuel-core-p2p",
  "fuel-core-poa",
  "fuel-core-producer",
  "fuel-core-relayer",
+ "fuel-core-services",
  "fuel-core-storage",
- "fuel-core-sync",
  "fuel-core-txpool",
  "fuel-core-types",
  "futures",
@@ -2385,6 +2383,7 @@ dependencies = [
  "ctor",
  "fuel-core-chain-config",
  "fuel-core-metrics",
+ "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-types",
  "futures",
@@ -2423,14 +2422,15 @@ version = "0.15.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-types",
  "humantime-serde",
  "mockall",
- "parking_lot 0.12.1",
  "rand 0.8.5",
  "serde",
  "tokio",
+ "tokio-stream",
  "tracing",
 ]
 
@@ -2460,6 +2460,7 @@ dependencies = [
  "ethers-core",
  "ethers-providers",
  "fuel-core-relayer",
+ "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-types",
  "futures",
@@ -2473,6 +2474,18 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "fuel-core-services"
+version = "0.15.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "mockall",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2527,13 +2540,16 @@ dependencies = [
  "async-trait",
  "fuel-core-chain-config",
  "fuel-core-metrics",
+ "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-txpool",
  "fuel-core-types",
  "itertools",
  "mockall",
+ "parking_lot 0.12.1",
  "rstest",
  "tokio",
+ "tokio-stream",
  "tracing",
 ]
 

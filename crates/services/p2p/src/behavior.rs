@@ -1,6 +1,6 @@
 use crate::{
     codecs::NetworkCodec,
-    config::P2PConfig,
+    config::Config,
     discovery::{
         DiscoveryBehaviour,
         DiscoveryConfig,
@@ -71,7 +71,7 @@ pub struct FuelBehaviour<Codec: NetworkCodec> {
 }
 
 impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
-    pub fn new(p2p_config: &P2PConfig, codec: Codec) -> Self {
+    pub fn new(p2p_config: &Config, codec: Codec) -> Self {
         let local_public_key = p2p_config.keypair.public();
         let local_peer_id = PeerId::from_public_key(&local_public_key);
 

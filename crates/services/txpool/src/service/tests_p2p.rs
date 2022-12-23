@@ -23,12 +23,12 @@ async fn can_insert_from_p2p() {
     let ctx = ctx_builder.build().await;
     let service = ctx.service();
 
-    let mut receiver = service.tx_update_subscribe();
+    let mut receiver = service.shared.tx_update_subscribe();
     let res = receiver.recv().await;
     assert!(res.is_ok());
 
     // fetch tx from pool
-    let out = service.find(vec![tx1.id()]).await.unwrap();
+    let out = service.shared.find(vec![tx1.id()]);
 
     let got_tx: Transaction = out[0].as_ref().unwrap().tx().clone().deref().into();
     assert_eq!(tx1, got_tx);
@@ -53,10 +53,10 @@ async fn insert_from_local_broadcasts_to_p2p() {
     let ctx = ctx_builder.build().await;
 
     let service = ctx.service();
-    let mut subscribe_status = service.tx_status_subscribe();
-    let mut subscribe_update = service.tx_update_subscribe();
+    let mut subscribe_status = service.shared.tx_status_subscribe();
+    let mut subscribe_update = service.shared.tx_update_subscribe();
 
-    let out = service.insert(vec![Arc::new(tx1.clone())]).await.unwrap();
+    let out = service.shared.insert(vec![Arc::new(tx1.clone())]);
 
     if let Ok(result) = &out[0] {
         // we are sure that included tx are already broadcasted.
@@ -98,7 +98,7 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
     let service = ctx.service();
 
     // verify tx status update from p2p injected tx is successful
-    let mut receiver = service.tx_update_subscribe();
+    let mut receiver = service.shared.tx_update_subscribe();
     let res = receiver.recv().await;
     assert!(res.is_ok());
 
