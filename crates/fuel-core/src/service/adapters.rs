@@ -2,6 +2,7 @@ use crate::{
     database::Database,
     service::Config,
 };
+use fuel_core_txpool::service::SharedState as TxPoolSharedState;
 use fuel_core_types::blockchain::SealedBlock;
 use std::sync::Arc;
 use tokio::sync::broadcast::Sender;
@@ -20,12 +21,12 @@ pub struct BlockImportAdapter {
 }
 
 pub struct TxPoolAdapter {
-    shared_state: fuel_core_txpool::service::SharedState<P2PAdapter>,
+    service: TxPoolSharedState<P2PAdapter, Database>,
 }
 
 impl TxPoolAdapter {
-    pub fn new(shared_state: fuel_core_txpool::service::SharedState<P2PAdapter>) -> Self {
-        Self { shared_state }
+    pub fn new(service: TxPoolSharedState<P2PAdapter, Database>) -> Self {
+        Self { service }
     }
 }
 
@@ -47,7 +48,7 @@ pub struct BlockProducerAdapter {
 #[cfg(feature = "p2p")]
 #[derive(Clone)]
 pub struct P2PAdapter {
-    shared_state: fuel_core_p2p::service::SharedState,
+    service: fuel_core_p2p::service::SharedState,
 }
 
 #[cfg(not(feature = "p2p"))]
@@ -56,8 +57,8 @@ pub struct P2PAdapter;
 
 #[cfg(feature = "p2p")]
 impl P2PAdapter {
-    pub fn new(shared_state: fuel_core_p2p::service::SharedState) -> Self {
-        Self { shared_state }
+    pub fn new(service: fuel_core_p2p::service::SharedState) -> Self {
+        Self { service }
     }
 }
 

@@ -232,12 +232,15 @@ impl TxPool {
     }
 
     /// Import a set of transactions from network gossip or GraphQL endpoints.
-    pub fn insert(
+    pub fn insert<DB>(
         &mut self,
-        db: &dyn TxPoolDb,
+        db: &DB,
         tx_status_sender: &TxStatusChange,
         txs: &[Arc<Transaction>],
-    ) -> Vec<anyhow::Result<InsertionResult>> {
+    ) -> Vec<anyhow::Result<InsertionResult>>
+    where
+        DB: TxPoolDb,
+    {
         // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
         // should be done before transaction comes to txpool, or before it enters RwLocked region.
         let mut res = Vec::new();

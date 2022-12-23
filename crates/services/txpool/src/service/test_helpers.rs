@@ -27,7 +27,7 @@ use std::cell::RefCell;
 type GossipedTransaction = GossipData<Transaction>;
 
 pub struct TestContext {
-    pub(crate) service: Service<MockP2P>,
+    pub(crate) service: Service<MockP2P, MockDb>,
     mock_db: MockDb,
     rng: RefCell<StdRng>,
 }
@@ -37,7 +37,7 @@ impl TestContext {
         TestContextBuilder::new().build().await
     }
 
-    pub fn service(&self) -> &Service<MockP2P> {
+    pub fn service(&self) -> &Service<MockP2P, MockDb> {
         &self.service
     }
 

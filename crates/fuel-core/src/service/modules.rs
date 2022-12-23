@@ -29,7 +29,7 @@ pub type PoAService =
 pub type RelayerService = fuel_core_relayer::Service<Database>;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database>;
-pub type TxPoolService = fuel_core_txpool::Service<P2PAdapter>;
+pub type TxPoolService = fuel_core_txpool::Service<P2PAdapter, Database>;
 
 pub struct Modules {
     pub txpool: TxPoolService,

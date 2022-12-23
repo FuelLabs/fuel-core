@@ -40,7 +40,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 
     fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()> {
-        self.shared_state.broadcast_transaction(transaction)
+        self.service.broadcast_transaction(transaction)
     }
 
     fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction> {
@@ -49,7 +49,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
             StreamExt,
         };
         Box::pin(
-            BroadcastStream::new(self.shared_state.subscribe_tx())
+            BroadcastStream::new(self.service.subscribe_tx())
                 .filter_map(|result| result.ok()),
         )
     }
@@ -59,7 +59,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         message: &Self::GossipedTransaction,
         validity: GossipsubMessageAcceptance,
     ) -> anyhow::Result<()> {
-        self.shared_state
+        self.service
             .notify_gossip_transaction_validity(message, validity)
     }
 }
