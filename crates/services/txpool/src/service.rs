@@ -219,7 +219,14 @@ where
         for (ret, tx) in insert.iter().zip(txs.into_iter()) {
             match ret {
                 Ok(_) => {
-                    let _ = self.p2p.broadcast_transaction(tx.clone());
+                    let result = self.p2p.broadcast_transaction(tx.clone());
+                    if let Err(e) = result {
+                        // It can be only in the case of p2p being down or requests overloading it.
+                        tracing::error!(
+                            "Unable to broadcast transaction, got an {} error",
+                            e
+                        );
+                    }
                 }
                 Err(_) => {}
             }

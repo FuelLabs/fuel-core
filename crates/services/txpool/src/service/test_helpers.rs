@@ -65,11 +65,11 @@ mockall::mock! {
 
         fn gossiped_transaction_events(&self) -> BoxStream<GossipedTransaction>;
 
-        async fn notify_gossip_transaction_validity(
+        fn notify_gossip_transaction_validity(
             &self,
             message: &GossipedTransaction,
             validity: GossipsubMessageAcceptance,
-        );
+        ) -> anyhow::Result<()>;
     }
 }
 

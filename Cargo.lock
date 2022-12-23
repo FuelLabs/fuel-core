@@ -2373,6 +2373,7 @@ dependencies = [
  "ctor",
  "fuel-core-chain-config",
  "fuel-core-metrics",
+ "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-types",
  "futures",

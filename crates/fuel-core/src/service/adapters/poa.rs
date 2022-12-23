@@ -27,15 +27,15 @@ use fuel_core_types::{
 
 impl TransactionPool for TxPoolAdapter {
     fn pending_number(&self) -> usize {
-        self.service.shared.pending_number()
+        self.shared_state.pending_number()
     }
 
     fn total_consumable_gas(&self) -> u64 {
-        self.service.shared.total_consumable_gas()
+        self.shared_state.total_consumable_gas()
     }
 
     fn remove_txs(&self, ids: Vec<TxId>) -> Vec<ArcPoolTx> {
-        self.service.shared.remove_txs(ids)
+        self.shared_state.remove_txs(ids)
     }
 
     fn transaction_status_events(&self) -> BoxStream<TxStatus> {
@@ -44,7 +44,7 @@ impl TransactionPool for TxPoolAdapter {
             StreamExt,
         };
         Box::pin(
-            BroadcastStream::new(self.service.shared.tx_status_subscribe())
+            BroadcastStream::new(self.shared_state.tx_status_subscribe())
                 .filter_map(|result| result.ok()),
         )
     }
