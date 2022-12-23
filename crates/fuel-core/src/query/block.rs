@@ -32,14 +32,14 @@ impl BlockQueryData for BlockQueryContext<'_> {
     > {
         let db = self.0;
 
-        let mut block = db
+        let block = db
             .storage::<FuelBlocks>()
             .get(&id)?
             .ok_or_else(|| fuel_core_storage::Error::NotFound("Block Not Found", ""))?
             .into_owned();
 
         let tx_ids: Vec<fuel_core_types::fuel_types::Bytes32> = block
-            .transactions_mut()
+            .transactions()
             .iter()
             .map(|tx| tx.to_owned())
             .collect();

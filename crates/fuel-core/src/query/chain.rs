@@ -31,14 +31,14 @@ impl ChainQueryData for ChainQueryContext<'_> {
 
         let height = db.get_block_height()?.unwrap_or_default();
         let id = db.get_block_id(height)?.unwrap_or_default();
-        let mut block = db
+        let block = db
             .storage::<FuelBlocks>()
             .get(&id)?
             .ok_or(not_found!(FuelBlocks))?
             .into_owned();
 
         let tx_ids: Vec<fuel_core_types::fuel_types::Bytes32> = block
-            .transactions_mut()
+            .transactions()
             .iter()
             .map(|tx| tx.to_owned())
             .collect();
