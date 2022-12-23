@@ -66,7 +66,7 @@ enum TaskRequest {
     BroadcastBlock(Arc<Block>),
     BroadcastVote(Arc<ConsensusVote>),
     // Request to get one-off data from p2p network
-    GetPeersIds(oneshot::Sender<Vec<PeerId>>),
+    GetPeerIds(oneshot::Sender<Vec<PeerId>>),
     GetBlock((BlockHeight, oneshot::Sender<SealedBlock>)),
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
@@ -151,7 +151,7 @@ where
                             tracing::error!("Got an error during vote broadcasting {}", e);
                         }
                     }
-                    Some(TaskRequest::GetPeersIds(channel)) => {
+                    Some(TaskRequest::GetPeerIds(channel)) => {
                         let _ = channel.send(self.p2p_service.get_peers_ids());
                     }
                     Some(TaskRequest::GetBlock((height, response))) => {
@@ -211,7 +211,12 @@ where
                             }
                         }
                     },
-                    _ => {}
+                    Some(_) => {
+                        // the rest of these p2p events don't require any action here
+                    },
+                    None => {
+                        panic!("The libp2p service is unavailable, shutting down task.");
+                    }
                 }
             },
         }
@@ -279,11 +284,11 @@ impl SharedState {
         Ok(())
     }
 
-    pub async fn get_peers_ids(&self) -> anyhow::Result<Vec<PeerId>> {
+    pub async fn get_peer_ids(&self) -> anyhow::Result<Vec<PeerId>> {
         let (sender, receiver) = oneshot::channel();
 
         self.request_sender
-            .send(TaskRequest::GetPeersIds(sender))
+            .send(TaskRequest::GetPeerIds(sender))
             .await?;
 
         receiver.await.map_err(|e| anyhow!("{}", e))
