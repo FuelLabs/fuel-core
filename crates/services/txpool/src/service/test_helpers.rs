@@ -57,7 +57,6 @@ impl TestContext {
 mockall::mock! {
     pub P2P {}
 
-    #[async_trait::async_trait]
     impl PeerToPeer for P2P {
         type GossipedTransaction = GossipedTransaction;
 

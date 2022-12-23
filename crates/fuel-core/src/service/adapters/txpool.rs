@@ -2,7 +2,6 @@ use crate::service::adapters::{
     BlockImportAdapter,
     P2PAdapter,
 };
-use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_txpool::ports::BlockImport;
 use fuel_core_types::{
@@ -35,7 +34,6 @@ impl BlockImport for BlockImportAdapter {
 }
 
 #[cfg(feature = "p2p")]
-#[async_trait]
 impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 
@@ -65,7 +63,6 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
 }
 
 #[cfg(not(feature = "p2p"))]
-#[async_trait]
 impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 

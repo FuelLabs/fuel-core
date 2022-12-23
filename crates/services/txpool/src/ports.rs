@@ -24,7 +24,6 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-#[async_trait::async_trait]
 pub trait PeerToPeer: Send + Sync {
     type GossipedTransaction: NetworkData<Transaction>;
 
