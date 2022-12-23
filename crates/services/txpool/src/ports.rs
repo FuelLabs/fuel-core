@@ -32,7 +32,7 @@ pub trait PeerToPeer: Send + Sync {
     fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()>;
 
     /// Creates a stream of next transactions gossiped from the network.
-    fn next_gossiped_transaction(&self) -> BoxStream<Self::GossipedTransaction>;
+    fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction>;
 
     // Report the validity of a transaction received from the network.
     async fn notify_gossip_transaction_validity(
@@ -42,10 +42,9 @@ pub trait PeerToPeer: Send + Sync {
     );
 }
 
-#[async_trait::async_trait]
 pub trait BlockImport: Send + Sync {
     /// Wait until the next block is available
-    async fn next_block(&mut self) -> SealedBlock;
+    fn block_events(&self) -> BoxStream<SealedBlock>;
 }
 
 pub trait TxPoolDb: Send + Sync {

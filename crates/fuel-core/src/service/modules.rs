@@ -88,7 +88,7 @@ pub async fn start_modules(
     };
 
     let (_block_event_sender, block_event_receiver) = mpsc::channel(100);
-    let (block_import_tx, block_import_rx) = broadcast::channel(16);
+    let (block_import_tx, _) = broadcast::channel(16);
 
     #[cfg(feature = "p2p")]
     let network_service = {
@@ -117,7 +117,7 @@ pub async fn start_modules(
         .config(config.txpool.clone())
         .db(Arc::new(database.clone()) as Arc<dyn TxPoolDb>)
         .p2p(Box::new(p2p_adapter.clone()))
-        .importer(Box::new(BlockImportAdapter::new(block_import_rx)))
+        .importer(Box::new(BlockImportAdapter::new(block_import_tx.clone())))
         .tx_status_sender(tx_status_sender.clone());
 
     let txpool_service = txpool_builder.build()?;

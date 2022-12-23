@@ -38,7 +38,7 @@ impl TransactionPool for TxPoolAdapter {
         self.service.shared.remove_txs(ids)
     }
 
-    fn next_transaction_status_update(&self) -> BoxStream<TxStatus> {
+    fn transaction_status_events(&self) -> BoxStream<TxStatus> {
         use tokio_stream::{
             wrappers::BroadcastStream,
             StreamExt,

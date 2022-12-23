@@ -16,6 +16,7 @@ use fuel_core_services::{
     ServiceRunner,
 };
 use fuel_core_types::{
+    blockchain::SealedBlock,
     fuel_tx::{
         Transaction,
         TxId,
@@ -157,12 +158,13 @@ impl ServiceBuilder {
         }
 
         let p2p = Arc::new(self.p2p.unwrap());
-        let gossiped_tx_stream = p2p.next_gossiped_transaction();
+        let gossiped_tx_stream = p2p.gossiped_transaction_events();
+        let committed_block_stream = self.importer.unwrap().block_events();
         let tx_status_sender = self.tx_status_sender.clone().unwrap();
         let txpool = Arc::new(ParkingMutex::new(TxPool::new(self.config)));
         let context = Context {
-            importer: self.importer.unwrap(),
             gossiped_tx_stream,
+            committed_block_stream,
             shared: SharedState {
                 db: self.db.unwrap(),
                 tx_status_sender,
@@ -184,8 +186,8 @@ pub struct SharedState {
 }
 
 pub struct Context {
-    importer: Box<dyn BlockImport>,
     gossiped_tx_stream: BoxStream<TransactionGossipData>,
+    committed_block_stream: BoxStream<SealedBlock>,
     shared: SharedState,
 }
 
@@ -219,8 +221,13 @@ impl RunnableService for Context {
                 }
             }
 
-            block = self.importer.next_block() => {
-                self.shared.txpool.lock().block_update(&self.shared.tx_status_sender, block);
+            block = self.committed_block_stream.next() => {
+                if let Some(block) = block {
+                    self.shared.txpool.lock().block_update(&self.shared.tx_status_sender, block);
+                } else {
+                    let should_continue = false;
+                    return Ok(should_continue);
+                }
             }
         }
         Ok(true /* should_continue */)

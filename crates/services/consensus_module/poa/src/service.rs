@@ -88,7 +88,7 @@ where
         block_producer: B,
         db: D,
     ) -> Self {
-        let tx_status_update_stream = txpool.next_transaction_status_update();
+        let tx_status_update_stream = txpool.transaction_status_events();
         Self {
             block_gas_limit: config.block_gas_limit,
             signing_key: config.signing_key,

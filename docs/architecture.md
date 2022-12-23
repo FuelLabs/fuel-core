@@ -230,17 +230,17 @@ trait PeerToPeer {
     type BlockResponse: NetworkData<Vec<SealedBlock>>;
     type GossipedBlockHeader: NetworkData<SealedBlockHeader>;
     
-    async fn fetch_best_network_block_header() -> Result<Option<Self::SealedHeaderResponse>>;
-    async fn fetch_blocks(query: Range<BlockHeight>) -> Result<Self::BlockResponse>;
+    async fn fetch_best_network_block_header(&self) -> Result<Option<Self::SealedHeaderResponse>>;
+    async fn fetch_blocks(&self, query: Range<BlockHeight>) -> Result<Self::BlockResponse>;
     // punish the sender for providing an invalid block header
-    fn report_invalid_block_header(invalid_header: &Self::SealedHeaderResponse) -> Result<()>;
+    fn report_invalid_block_header(&self, invalid_header: &Self::SealedHeaderResponse) -> Result<()>;
     // punish the sender for providing a set of blocks that aren't valid
-    fn report_invalid_blocks(invalid_blocks: &Self::BlockResponse) -> Result<()>;
-    // await a newly produced block from the network (similar to stream.next())
-    async fn next_gossiped_block_header() -> Result<Self::SealedBlockHeader>;
+    fn report_invalid_blocks(&self, invalid_blocks: &Self::BlockResponse) -> Result<()>;
+    // provides a stream of gossiped block header events
+    fn gossiped_block_header_events(&self) -> BoxStream<Self::SealedBlockHeader>;
     // notify the p2p network whether to continue gossiping this message to others or
     // punish the peer that sent it
-    fn notify_gossip_block_validity(message: &Self::GossipedBlockHeader, validity: GossipValidity);
+    fn notify_gossip_block_validity(&self, message: &Self::GossipedBlockHeader, validity: GossipValidity);
 }
 
 // Generic wrapper for data received from peers while abstracting
@@ -313,11 +313,16 @@ trait PeerToPeer {
     // Gossip broadcast a transaction inserted via API.
     async fn broadcast_transaction(transaction: Transaction) -> Result<()>;
 
-    // Await the next transaction from network gossip (similar to stream.next()).
-    async fn next_gossiped_transaction(&mut self) -> Self::GossipedTransaction;
+    // Provides a stream of gossiped transactions.
+    fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction>;
    
     // Report the validity of a transaction received from the network.
     async fn notify_gossip_transaction_validity(message: &Self::GossipedTransaction, validity: GossipValidity);
+}
+
+trait BlockImporter {
+   // used to update the transaction pool from imported blocks
+   fn committed_block_events(&self) -> BoxStream<SealedBlock>;
 }
 
 // Generic wrapper for data received from peers while abstracting
@@ -355,6 +360,14 @@ impl block_importer::ports::TransactionPool for Service<TransactionPool> {
 impl block_producer::ports::TransactionPool for Service<TransactionPool> {
     // insert impl here
 }
+```
+
+#### Adapters: fuel_core::service::adapters::block_importer
+```rust
+impl transaction_pool::ports::BlockImporter for Service<BlockImporter> {
+   // insert impl here
+}
+
 ```
 
 ### Executor

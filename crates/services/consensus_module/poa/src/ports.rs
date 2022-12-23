@@ -31,7 +31,7 @@ pub trait TransactionPool: Send + Sync {
 
     fn remove_txs(&self, tx_ids: Vec<TxId>) -> Vec<ArcPoolTx>;
 
-    fn next_transaction_status_update(&self) -> BoxStream<TxStatus>;
+    fn transaction_status_events(&self) -> BoxStream<TxStatus>;
 }
 
 pub trait BlockDb: Send + Sync {

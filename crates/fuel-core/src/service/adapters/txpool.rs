@@ -14,23 +14,23 @@ use fuel_core_types::{
     },
 };
 use std::sync::Arc;
-use tokio::sync::broadcast::Receiver;
+use tokio::sync::broadcast::Sender;
 
 impl BlockImportAdapter {
-    pub fn new(rx: Receiver<SealedBlock>) -> Self {
-        Self { rx }
+    pub fn new(tx: Sender<SealedBlock>) -> Self {
+        Self { tx }
     }
 }
 
-#[async_trait]
 impl BlockImport for BlockImportAdapter {
-    async fn next_block(&mut self) -> SealedBlock {
-        match self.rx.recv().await {
-            Ok(block) => return block,
-            Err(err) => {
-                panic!("Block import channel errored unexpectedly: {err:?}");
-            }
-        }
+    fn block_events(&self) -> BoxStream<SealedBlock> {
+        use tokio_stream::{
+            wrappers::BroadcastStream,
+            StreamExt,
+        };
+        Box::pin(
+            BroadcastStream::new(self.tx.subscribe()).filter_map(|result| result.ok()),
+        )
     }
 }
 
@@ -43,7 +43,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         self.service.broadcast_transaction(transaction)
     }
 
-    fn next_gossiped_transaction(&self) -> BoxStream<Self::GossipedTransaction> {
+    fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction> {
         use tokio_stream::{
             wrappers::BroadcastStream,
             StreamExt,
@@ -77,7 +77,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         Ok(())
     }
 
-    fn next_gossiped_transaction(&self) -> BoxStream<Self::GossipedTransaction> {
+    fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction> {
         Box::pin(fuel_core_services::pending())
     }
 

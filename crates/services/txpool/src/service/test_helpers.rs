@@ -3,7 +3,10 @@ use crate::{
     ports::BlockImport,
     MockDb,
 };
-use fuel_core_services::Service as ServiceTrait;
+use fuel_core_services::{
+    BoxStream,
+    Service as ServiceTrait,
+};
 use fuel_core_types::{
     blockchain::SealedBlock,
     entities::coin::Coin,
@@ -51,9 +54,6 @@ impl TestContext {
     }
 }
 
-pub type BoxFuture<'a, T> =
-    core::pin::Pin<Box<dyn core::future::Future<Output = T> + Send + 'a>>;
-
 mockall::mock! {
     pub P2P {}
 
@@ -63,7 +63,7 @@ mockall::mock! {
 
         fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()>;
 
-        fn next_gossiped_transaction(&self) -> BoxStream<GossipedTransaction>;
+        fn gossiped_transaction_events(&self) -> BoxStream<GossipedTransaction>;
 
         async fn notify_gossip_transaction_validity(
             &self,
@@ -76,7 +76,7 @@ mockall::mock! {
 impl MockP2P {
     pub fn new_with_txs(txs: Vec<Transaction>) -> Self {
         let mut p2p = MockP2P::default();
-        p2p.expect_next_gossiped_transaction().returning(move || {
+        p2p.expect_gossiped_transaction_events().returning(move || {
             let txs_clone = txs.clone();
             let stream = fuel_core_services::unfold(txs_clone, |mut txs| async {
                 let tx = txs.pop();
@@ -97,28 +97,25 @@ impl MockP2P {
 mockall::mock! {
     pub Importer {}
 
-    #[async_trait::async_trait]
     impl BlockImport for Importer {
-        fn next_block<'_self, 'a>(&'_self mut self) -> BoxFuture<'a, SealedBlock>
-        where
-            '_self: 'a,
-            Self: Sync + 'a;
-
+        fn block_events(&self) -> BoxStream<SealedBlock>;
     }
 }
 
 impl MockImporter {
-    fn with_blocks(mut blocks: Vec<SealedBlock>) -> Self {
+    fn with_blocks(blocks: Vec<SealedBlock>) -> Self {
         let mut importer = MockImporter::default();
-        importer.expect_next_block().returning(move || {
-            let block = blocks.pop();
-            Box::pin(async move {
+        importer.expect_block_events().returning(move || {
+            let blocks = blocks.clone();
+            let stream = fuel_core_services::unfold(blocks, |mut blocks| async {
+                let block = blocks.pop();
                 if let Some(block) = block {
-                    block
+                    Some((block, blocks))
                 } else {
-                    core::future::pending::<SealedBlock>().await
+                    core::future::pending().await
                 }
-            })
+            });
+            Box::pin(stream)
         });
         importer
     }

@@ -175,7 +175,7 @@ mockall::mock! {
 
         fn remove_txs(&self, tx_ids: Vec<TxId>) -> Vec<ArcPoolTx>;
 
-        fn next_transaction_status_update(&self) -> BoxStream<TxStatus>;
+        fn transaction_status_events(&self) -> BoxStream<TxStatus>;
     }
 }
 
@@ -189,7 +189,7 @@ impl MockTxPool {
     pub fn no_tx_updates() -> Self {
         let mut txpool = MockTxPool::default();
         txpool
-            .expect_next_transaction_status_update()
+            .expect_transaction_status_events()
             .returning(|| Box::pin(pending()));
         txpool
     }
@@ -202,7 +202,7 @@ impl MockTxPool {
         let status_sender_clone = status_sender.clone();
 
         txpool
-            .expect_next_transaction_status_update()
+            .expect_transaction_status_events()
             .returning(move || {
                 let status_channel =
                     (status_sender_clone.clone(), status_receiver.clone());
@@ -390,7 +390,7 @@ async fn remove_skipped_transactions() {
         vec![]
     });
 
-    let tx_status_update_stream = txpool.next_transaction_status_update();
+    let tx_status_update_stream = txpool.transaction_status_events();
     let mut task = PoA {
         block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
@@ -433,7 +433,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
     txpool.expect_total_consumable_gas().returning(|| 0);
     txpool.expect_pending_number().returning(|| 0);
 
-    let tx_status_update_stream = txpool.next_transaction_status_update();
+    let tx_status_update_stream = txpool.transaction_status_events();
     let mut task = PoA {
         block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
@@ -486,7 +486,7 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
     txpool.expect_total_consumable_gas().returning(|| 0);
     txpool.expect_pending_number().returning(|| 0);
 
-    let tx_status_update_stream = txpool.next_transaction_status_update();
+    let tx_status_update_stream = txpool.transaction_status_events();
     let task = PoA {
         block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),

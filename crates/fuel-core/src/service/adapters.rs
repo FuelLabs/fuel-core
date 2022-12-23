@@ -10,7 +10,7 @@ use fuel_core_txpool::Service as TxPoolService;
 use fuel_core_types::blockchain::SealedBlock;
 use std::sync::Arc;
 use tokio::{
-    sync::broadcast::Receiver,
+    sync::broadcast::Sender,
     task::JoinHandle,
 };
 
@@ -23,7 +23,7 @@ pub mod txpool;
 pub struct BlockImportAdapter {
     // TODO: We should use `fuel_core_poa::Service here but for that we need to fix
     //  the `start` of the process and store the task inside of the `Service`.
-    rx: Receiver<SealedBlock>,
+    tx: Sender<SealedBlock>,
 }
 
 pub struct TxPoolAdapter {
