@@ -27,8 +27,8 @@ use std::cell::RefCell;
 type GossipedTransaction = GossipData<Transaction>;
 
 pub struct TestContext {
-    pub(crate) service: Service,
-    mock_db: Box<MockDb>,
+    pub(crate) service: Service<MockP2P>,
+    mock_db: MockDb,
     rng: RefCell<StdRng>,
 }
 
@@ -37,7 +37,7 @@ impl TestContext {
         TestContextBuilder::new().build().await
     }
 
-    pub fn service(&self) -> &Service {
+    pub fn service(&self) -> &Service<MockP2P> {
         &self.service
     }
 
@@ -170,26 +170,17 @@ impl TestContextBuilder {
         let mock_db = self.mock_db;
         let status_tx = TxStatusChange::new(100);
 
-        let p2p = Box::new(self.p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![])));
-        let importer = Box::new(
-            self.importer
-                .unwrap_or_else(|| MockImporter::with_blocks(vec![])),
-        );
+        let p2p = self.p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![]));
+        let importer = self
+            .importer
+            .unwrap_or_else(|| MockImporter::with_blocks(vec![]));
 
-        let mut builder = ServiceBuilder::new();
-        builder
-            .config(config)
-            .db(Arc::new(mock_db.clone()))
-            .importer(importer)
-            .tx_status_sender(status_tx)
-            .p2p(p2p);
-
-        let service = builder.build().unwrap();
+        let service = new_service(config, mock_db.clone(), status_tx, importer, p2p);
         service.start().unwrap();
 
         TestContext {
             service,
-            mock_db: Box::new(mock_db),
+            mock_db,
             rng,
         }
     }

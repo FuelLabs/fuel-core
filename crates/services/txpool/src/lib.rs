@@ -16,8 +16,8 @@ pub use mock_db::MockDb;
 pub use config::Config;
 pub use fuel_core_types::services::txpool::Error;
 pub use service::{
+    new_service,
     Service,
-    ServiceBuilder,
 };
 pub use txpool::TxPool;
 

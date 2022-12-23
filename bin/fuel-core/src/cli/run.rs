@@ -185,7 +185,6 @@ impl Command {
                 backtrace: vm_backtrace,
             },
             txpool: TxPoolConfig::new(chain_conf, min_gas_price, utxo_validation),
-            block_importer: Default::default(),
             block_producer: ProducerConfig {
                 utxo_validation,
                 coinbase_recipient,
@@ -194,7 +193,6 @@ impl Command {
             block_executor: Default::default(),
             #[cfg(feature = "relayer")]
             relayer: relayer_args.into(),
-            sync: Default::default(),
             #[cfg(feature = "p2p")]
             p2p: p2p_cfg,
             consensus_key,

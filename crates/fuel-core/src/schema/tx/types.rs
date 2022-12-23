@@ -19,6 +19,7 @@ use crate::{
             U64,
         },
     },
+    service::modules::TxPoolService,
 };
 use async_graphql::{
     Context,
@@ -34,7 +35,6 @@ use fuel_core_storage::{
     },
     StorageAsRef,
 };
-use fuel_core_txpool::Service as TxPoolService;
 use fuel_core_types::{
     blockchain::primitives,
     fuel_tx::{

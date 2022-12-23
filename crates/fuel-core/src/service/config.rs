@@ -34,10 +34,8 @@ pub struct Config {
     pub manual_blocks_enabled: bool,
     pub vm: VMConfig,
     pub txpool: fuel_core_txpool::Config,
-    pub block_importer: fuel_core_importer::Config,
     pub block_producer: fuel_core_producer::Config,
     pub block_executor: fuel_core_executor::Config,
-    pub sync: fuel_core_sync::Config,
     #[cfg(feature = "relayer")]
     pub relayer: fuel_core_relayer::Config,
     #[cfg(feature = "p2p")]
@@ -63,10 +61,8 @@ impl Config {
                 min_gas_price,
                 utxo_validation,
             ),
-            block_importer: Default::default(),
             block_producer: Default::default(),
             block_executor: Default::default(),
-            sync: Default::default(),
             #[cfg(feature = "relayer")]
             relayer: Default::default(),
             #[cfg(feature = "p2p")]

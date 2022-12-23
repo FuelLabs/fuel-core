@@ -15,33 +15,24 @@ use crate::{
     },
 };
 use fuel_core_services::Service as ServiceTrait;
-use fuel_core_txpool::{
-    ports::TxPoolDb,
-    service::TxStatusChange,
-};
-use futures::future::join_all;
+use fuel_core_txpool::service::TxStatusChange;
 use std::sync::Arc;
-use tokio::{
-    sync::{
-        broadcast,
-        mpsc,
-        Mutex,
-        Semaphore,
-    },
-    task::JoinHandle,
+use tokio::sync::{
+    broadcast,
+    Mutex,
+    Semaphore,
 };
 
-type PoAService = fuel_core_poa::Service<Database, TxPoolAdapter, BlockProducerAdapter>;
+pub type PoAService =
+    fuel_core_poa::Service<Database, TxPoolAdapter, BlockProducerAdapter>;
 #[cfg(feature = "relayer")]
-type RelayerService = fuel_core_relayer::Service;
-type TxPoolService = fuel_core_txpool::Service;
+pub type RelayerService = fuel_core_relayer::Service<Database>;
+pub type TxPoolService = fuel_core_txpool::Service<P2PAdapter>;
 
 pub struct Modules {
     pub txpool: TxPoolService,
-    pub block_importer: Arc<fuel_core_importer::Service>,
     pub block_producer: Arc<fuel_core_producer::Producer<Database>>,
     pub consensus_module: PoAService,
-    pub sync: Arc<fuel_core_sync::Service>,
     #[cfg(feature = "relayer")]
     pub relayer: Option<RelayerService>,
     #[cfg(feature = "p2p")]
@@ -52,17 +43,8 @@ impl Modules {
     pub async fn stop(&self) {
         self.consensus_module.stop_and_await().await.unwrap();
         self.txpool.stop_and_await().await.unwrap();
-        let stops: Vec<JoinHandle<()>> = vec![
-            #[cfg(feature = "p2p")]
-            self.network_service.stop().await,
-            self.block_importer.stop().await,
-            self.sync.stop().await,
-        ]
-        .into_iter()
-        .flatten()
-        .collect();
-
-        join_all(stops).await;
+        #[cfg(feature = "p2p")]
+        self.network_service.stop().await;
     }
 }
 
@@ -70,36 +52,26 @@ pub async fn start_modules(
     config: &Config,
     database: &Database,
 ) -> anyhow::Result<Modules> {
-    let db = ();
-
-    // Initialize and bind all components
-    let block_importer =
-        fuel_core_importer::Service::new(&config.block_importer, db).await?;
-    let sync = fuel_core_sync::Service::new(&config.sync).await?;
-
     #[cfg(feature = "relayer")]
     let relayer = if config.relayer.eth_client.is_some() {
         Some(fuel_core_relayer::new_service(
-            Box::new(database.clone()),
+            database.clone(),
             config.relayer.clone(),
         )?)
     } else {
         None
     };
 
-    let (_block_event_sender, block_event_receiver) = mpsc::channel(100);
     let (block_import_tx, _) = broadcast::channel(16);
 
     #[cfg(feature = "p2p")]
     let network_service = {
-        let p2p_db = Arc::new(database.clone());
+        let p2p_db = database.clone();
 
-        let genesis = database.get_genesis()?;
+        let genesis = p2p_db.get_genesis()?;
         let p2p_config = config.p2p.clone().init(genesis)?;
 
-        Arc::new(fuel_core_p2p::orchestrator::Service::new(
-            p2p_config, p2p_db,
-        ))
+        Arc::new(fuel_core_p2p::service::Service::new(p2p_config, p2p_db))
     };
 
     #[cfg(feature = "p2p")]
@@ -110,17 +82,15 @@ pub async fn start_modules(
     let p2p_adapter = p2p_adapter;
     p2p_adapter.start().await?;
 
-    let tx_status_sender = TxStatusChange::new(100);
+    let importer_adapter = BlockImportAdapter::new(block_import_tx);
 
-    let mut txpool_builder = fuel_core_txpool::ServiceBuilder::new();
-    txpool_builder
-        .config(config.txpool.clone())
-        .db(Arc::new(database.clone()) as Arc<dyn TxPoolDb>)
-        .p2p(Box::new(p2p_adapter.clone()))
-        .importer(Box::new(BlockImportAdapter::new(block_import_tx.clone())))
-        .tx_status_sender(tx_status_sender.clone());
-
-    let txpool_service = txpool_builder.build()?;
+    let txpool_service = fuel_core_txpool::new_service(
+        config.txpool.clone(),
+        database.clone(),
+        TxStatusChange::new(100),
+        importer_adapter.clone(),
+        p2p_adapter.clone(),
+    );
 
     // restrict the max number of concurrent dry runs to the number of CPUs
     // as execution in the worst case will be CPU bound rather than I/O bound.
@@ -144,8 +114,6 @@ pub async fn start_modules(
 
     // start services
 
-    block_importer.start().await;
-
     let poa = match &config.chain_conf.block_production {
         BlockProduction::ProofOfAuthority { trigger } => fuel_core_poa::new_service(
             fuel_core_poa::Config {
@@ -155,7 +123,8 @@ pub async fn start_modules(
                 metrics: false,
             },
             TxPoolAdapter::new(txpool_service.clone()),
-            block_import_tx,
+            // TODO: Pass Importer
+            importer_adapter.tx,
             BlockProducerAdapter {
                 block_producer: block_producer.clone(),
             },
@@ -170,20 +139,10 @@ pub async fn start_modules(
     }
     txpool_service.start()?;
 
-    sync.start(
-        block_event_receiver,
-        // TODO: re-introduce this when sync actually depends on the coordinator
-        // bft.sender().clone(),
-        block_importer.sender().clone(),
-    )
-    .await;
-
     Ok(Modules {
         txpool: txpool_service,
-        block_importer: Arc::new(block_importer),
         block_producer,
         consensus_module: poa,
-        sync: Arc::new(sync),
         #[cfg(feature = "relayer")]
         relayer,
         #[cfg(feature = "p2p")]
