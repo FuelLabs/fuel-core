@@ -110,7 +110,7 @@ pub struct Config<State = Initialized> {
     // `DiscoveryBehaviour` related fields
     pub bootstrap_nodes: Vec<Multiaddr>,
     pub enable_mdns: bool,
-    pub max_peers_connected: usize,
+    pub max_peers_connected: u32,
     pub allow_private_addresses: bool,
     pub random_walk: Option<Duration>,
     pub connection_idle_timeout: Option<Duration>,

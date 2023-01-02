@@ -26,6 +26,7 @@ use libp2p::{
 use libp2p_swarm::derive_prelude::{
     ConnectionClosed,
     ConnectionEstablished,
+    FromSwarm,
 };
 use std::{
     collections::{
@@ -121,18 +122,13 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             .on_connection_handler_event(peer_id, connection, event);
     }
 
-    fn on_swarm_event(
-        &mut self,
-        event: libp2p_swarm::derive_prelude::FromSwarm<Self::ConnectionHandler>,
-    ) {
+    fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
         match &event {
-            libp2p_swarm::derive_prelude::FromSwarm::ConnectionEstablished(
-                ConnectionEstablished {
-                    peer_id,
-                    other_established,
-                    ..
-                },
-            ) => {
+            FromSwarm::ConnectionEstablished(ConnectionEstablished {
+                peer_id,
+                other_established,
+                ..
+            }) => {
                 if *other_established == 0 {
                     self.connected_peers.insert(*peer_id);
                     let addresses = self.addresses_of_peer(peer_id);
@@ -143,13 +139,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                     trace!("Connected to a peer {:?}", peer_id);
                 }
             }
-            libp2p_swarm::derive_prelude::FromSwarm::ConnectionClosed(
-                ConnectionClosed {
-                    peer_id,
-                    remaining_established,
-                    ..
-                },
-            ) => {
+            FromSwarm::ConnectionClosed(ConnectionClosed {
+                peer_id,
+                remaining_established,
+                ..
+            }) => {
                 if *remaining_established == 0 {
                     self.connected_peers.remove(peer_id);
                     self.events
