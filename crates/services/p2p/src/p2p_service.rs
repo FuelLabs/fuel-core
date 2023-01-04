@@ -647,6 +647,89 @@ mod tests {
         }
     }
 
+    // We start with two nodes, node_5 and node_10, bootstrapped with 100 other nodes
+    // yet node_5 is only allowed to connect to 5 other nodes, and node_10 to 10
+    #[tokio::test]
+    #[instrument]
+    async fn max_peers_connected_works() {
+        let mut p2p_config = Config::default_initialized("max_peers_connected_works");
+        // enable mdns for faster discovery of nodes
+        p2p_config.enable_mdns = true;
+
+        let nodes: Vec<NodeData> = (0..100).map(|_| NodeData::random()).collect();
+
+        // this node is allowed to only connect to 5 other nodes
+        let mut node_5 = {
+            let mut p2p_config = p2p_config.clone();
+            p2p_config.max_peers_connected = 5;
+            // it still tries to dial all 100 nodes!
+            p2p_config.bootstrap_nodes =
+                nodes.iter().map(|node| node.multiaddr.clone()).collect();
+
+            NodeData::random().create_service(p2p_config)
+        };
+
+        // this node is allowed to only connect to 10 other nodes
+        let mut node_10 = {
+            let mut p2p_config = p2p_config.clone();
+            p2p_config.max_peers_connected = 10;
+            // it still tries to dial all 100 nodes!
+            p2p_config.bootstrap_nodes =
+                nodes.iter().map(|node| node.multiaddr.clone()).collect();
+
+            NodeData::random().create_service(p2p_config)
+        };
+
+        let mut node_services: Vec<_> = nodes
+            .into_iter()
+            .map(|node| node.create_service(p2p_config.clone()))
+            .collect();
+
+        // this node will only connect to node_5 and node_10 at the beginning
+        // then it will slowly discover other nodes in the network
+        // it serves as our exit from the loop
+        let mut bootstrapped_node = node_services.pop().unwrap();
+
+        loop {
+            tokio::select! {
+                event_from_node_5 = node_5.next_event() => {
+                    if let Some(FuelP2PEvent::PeerConnected(_)) = event_from_node_5 {
+                        let connected_nodes: Vec<_> = node_5.swarm.connected_peers().collect();
+                        if connected_nodes.len() > 5 {
+                            panic!("The node should only connect to max 5 peers");
+                        }
+                    }
+                    tracing::info!("Event from the node_5: {:?}", event_from_node_5);
+                },
+                event_from_node_10 = node_10.next_event() => {
+                    if let Some(FuelP2PEvent::PeerConnected(_)) = event_from_node_10 {
+                        let connected_nodes: Vec<_> = node_10.swarm.connected_peers().collect();
+                        if connected_nodes.len() > 10 {
+                            panic!("The node should only connect to max 10 peers");
+                        }
+                    }
+                    tracing::info!("Event from the node_10: {:?}", event_from_node_10);
+                },
+                event_from_bootstrapped_node = bootstrapped_node.next_event() => {
+                    if let Some(FuelP2PEvent::PeerConnected(_)) = event_from_bootstrapped_node {
+                        let connected_nodes: Vec<_> = bootstrapped_node.swarm.connected_peers().collect();
+                        // if the test was broken, it would panic! by the time this node discovers more peers
+                        // and connects to them
+                        if connected_nodes.len() > 20 {
+                            break
+                        }
+                    }
+                    tracing::info!("Event from the bootstrapped_node: {:?}", event_from_bootstrapped_node);
+                },
+                _ = async {
+                    for node in &mut node_services {
+                        node.next_event().await;
+                    }
+                } => {}
+            }
+        }
+    }
+
     // Simulate 2 Sets of Sentry nodes.
     // In both Sets, a single Guarded Node should only be connected to their sentry nodes.
     // While other nodes can and should connect to nodes outside of the Sentry Set.
@@ -677,7 +760,7 @@ mod tests {
                 guarded_node.create_service(p2p_config)
             };
 
-            let sentry_nodes: Vec<FuelP2PService<BincodeCodec>> = reserved_nodes
+            let sentry_nodes: Vec<FuelP2PService<_>> = reserved_nodes
                 .into_iter()
                 .map(|node| {
                     let mut p2p_config = p2p_config.clone();
