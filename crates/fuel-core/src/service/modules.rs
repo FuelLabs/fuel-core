@@ -3,6 +3,7 @@ use super::adapters::P2PAdapter;
 use crate::{
     chain_config::BlockProduction,
     database::Database,
+    graph_api::Config as GraphQLConfig,
     service::{
         adapters::{
             BlockImportAdapter,
@@ -30,6 +31,7 @@ pub type RelayerService = fuel_core_relayer::Service<Database>;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database>;
 pub type TxPoolService = fuel_core_txpool::Service<P2PAdapter, Database>;
+pub type GraphQL = crate::graph_api::service::Service;
 
 pub struct Modules {
     pub txpool: TxPoolService,
@@ -39,6 +41,7 @@ pub struct Modules {
     pub relayer: Option<RelayerService>,
     #[cfg(feature = "p2p")]
     pub network_service: P2PService,
+    pub graph_ql: GraphQL,
 }
 
 impl Modules {
@@ -85,7 +88,7 @@ pub async fn start_modules(
 
     let importer_adapter = BlockImportAdapter::new(block_import_tx);
 
-    let txpool_service = fuel_core_txpool::new_service(
+    let txpool = fuel_core_txpool::new_service(
         config.txpool.clone(),
         database.clone(),
         TxStatusChange::new(100),
@@ -93,17 +96,19 @@ pub async fn start_modules(
         p2p_adapter,
     );
 
+    let executor = ExecutorAdapter {
+        database: database.clone(),
+        config: config.clone(),
+    };
+
     // restrict the max number of concurrent dry runs to the number of CPUs
     // as execution in the worst case will be CPU bound rather than I/O bound.
     let max_dry_run_concurrency = num_cpus::get();
     let block_producer = Arc::new(fuel_core_producer::Producer {
         config: config.block_producer.clone(),
         db: database.clone(),
-        txpool: Box::new(TxPoolAdapter::new(txpool_service.shared.clone())),
-        executor: Arc::new(ExecutorAdapter {
-            database: database.clone(),
-            config: config.clone(),
-        }),
+        txpool: Box::new(TxPoolAdapter::new(txpool.shared.clone())),
+        executor: Arc::new(executor.clone()),
         relayer: Box::new(MaybeRelayerAdapter {
             database: database.clone(),
             #[cfg(feature = "relayer")]
@@ -123,7 +128,7 @@ pub async fn start_modules(
                 signing_key: config.consensus_key.clone(),
                 metrics: false,
             },
-            TxPoolAdapter::new(txpool_service.shared.clone()),
+            TxPoolAdapter::new(txpool.shared.clone()),
             // TODO: Pass Importer
             importer_adapter.tx,
             BlockProducerAdapter {
@@ -138,17 +143,37 @@ pub async fn start_modules(
     if let Some(relayer) = relayer.as_ref() {
         relayer.start().expect("Should start relayer")
     }
-    txpool_service.start()?;
+    txpool.start()?;
     #[cfg(feature = "p2p")]
     network_service.start()?;
 
+    let graph_ql = crate::graph_api::service::new_service(
+        GraphQLConfig {
+            addr: config.addr,
+            utxo_validation: config.utxo_validation,
+            manual_blocks_enabled: config.manual_blocks_enabled,
+            vm_backtrace: config.vm.backtrace,
+            min_gas_price: config.txpool.min_gas_price,
+            max_tx: config.txpool.max_tx,
+            max_depth: config.txpool.max_depth,
+            transaction_parameters: config.chain_conf.transaction_parameters,
+            consensus_key: config.consensus_key.clone(),
+        },
+        database.clone(),
+        block_producer.clone(),
+        txpool.clone(),
+        executor,
+    )?;
+    graph_ql.start()?;
+
     Ok(Modules {
-        txpool: txpool_service,
+        txpool,
         block_producer,
         consensus_module: poa,
         #[cfg(feature = "relayer")]
         relayer,
         #[cfg(feature = "p2p")]
         network_service,
+        graph_ql,
     })
 }

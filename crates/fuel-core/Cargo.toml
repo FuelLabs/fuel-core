@@ -35,6 +35,7 @@ fuel-core-types = { path = "../types", version = "0.15.1", features = [
     "serde",
 ] }
 futures = "0.3"
+hyper = { version = "0.14" }
 hex = { version = "0.4", features = ["serde"] }
 itertools = "0.10"
 num_cpus = "1.13"

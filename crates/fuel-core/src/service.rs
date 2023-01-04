@@ -1,7 +1,6 @@
 use crate::database::Database;
 use anyhow::Error as AnyError;
 use futures::FutureExt;
-use modules::Modules;
 use std::{
     net::SocketAddr,
     panic,
@@ -25,25 +24,29 @@ pub mod graph_api;
 pub mod metrics;
 pub mod modules;
 
+pub struct SharedState {
+    #[cfg(feature = "relayer")]
+    /// The Relayer shared state.
+    pub relayer: Option<fuel_core_relayer::SharedState>,
+    /// The GraphQL shared state.
+    pub graph_ql: crate::graph_api::service::SharedState,
+}
+
 pub struct FuelService {
     handle: JoinHandle<()>,
     /// Shutdown the fuel service.
     shutdown: oneshot::Sender<()>,
     #[cfg(feature = "relayer")]
     /// Relayer handle
-    relayer_handle: Option<fuel_core_relayer::RelayerSynced>,
+    relayer_handle: Option<fuel_core_relayer::SharedState>,
     /// The address bound by the system for serving the API
     pub bound_address: SocketAddr,
 }
 
-struct FuelServiceInner {
+struct Task {
     tasks: Vec<JoinHandle<Result<(), AnyError>>>,
-    /// handler for all modules.
-    modules: Modules,
     /// The address bound by the system for serving the API
-    pub bound_address: SocketAddr,
-    /// Shutdown the graphql api
-    stop_graphql_api: oneshot::Sender<()>,
+    pub shared: SharedState,
 }
 
 impl FuelService {
@@ -65,16 +68,12 @@ impl FuelService {
         ))
     }
 
-    fn spawn_service(service: FuelServiceInner) -> Self {
-        let bound_address = service.bound_address;
+    fn spawn_service(service: Task) -> Self {
+        let bound_address = service.shared.graph_ql.bound_addr;
         let (shutdown, stop_rx) = oneshot::channel();
 
         #[cfg(feature = "relayer")]
-        let relayer_handle = service
-            .modules
-            .relayer
-            .as_ref()
-            .map(|relayer| relayer.shared.clone());
+        let relayer_handle = service.shared.relayer.clone();
 
         let handle = tokio::spawn(async move {
             let run_fut = service.run();
@@ -126,31 +125,21 @@ impl FuelService {
     }
 
     /// Private inner method for initializing the fuel service
-    async fn init_service(
-        database: Database,
-        config: Config,
-    ) -> Result<FuelServiceInner, AnyError> {
+    async fn init_service(database: Database, config: Config) -> Result<Task, AnyError> {
         // initialize state
         Self::initialize_state(&config, &database)?;
 
         // start modules
         let modules = modules::start_modules(&config, &database).await?;
+        let shared = SharedState {
+            #[cfg(feature = "relayer")]
+            relayer: modules.relayer.map(|r| r.shared.clone()),
+            graph_ql: modules.graph_ql.shared,
+        };
 
-        let (stop_tx, stop_rx) = oneshot::channel();
         // start background tasks
-        let mut tasks = vec![];
-        let (bound_address, api_server) =
-            graph_api::start_server(config.clone(), database, &modules, stop_rx).await?;
-        tasks.push(api_server);
-        // Socket is ignored for now, but as more services are added
-        // it may be helpful to have a way to list all services and their ports
-
-        Ok(FuelServiceInner {
-            tasks,
-            bound_address,
-            modules,
-            stop_graphql_api: stop_tx,
-        })
+        let tasks = vec![];
+        Ok(Task { tasks, shared })
     }
 
     /// Awaits for the completion of any server background tasks
@@ -196,21 +185,17 @@ impl FuelService {
     }
 }
 
-impl FuelServiceInner {
+impl Task {
     /// Awaits for the completion of any server background tasks
     pub async fn run(self) {
-        let Self {
-            tasks,
-            modules,
-            stop_graphql_api,
-            ..
-        } = self;
+        let Self { tasks, .. } = self;
         let run_fut = Self::run_inner(tasks);
-        let shutdown_fut = shutdown_signal(stop_graphql_api);
+        let shutdown_fut = shutdown_signal();
         tokio::pin!(run_fut);
         tokio::pin!(shutdown_fut);
         futures::future::select(shutdown_fut, run_fut).await;
-        modules.stop().await;
+        // TODO: Stop after receiving shutdown signal
+        // modules.stop().await;
     }
 
     /// Awaits for the completion of any server background tasks
@@ -232,7 +217,7 @@ impl FuelServiceInner {
     }
 }
 
-async fn shutdown_signal(stop_graphql_api: oneshot::Sender<()>) {
+async fn shutdown_signal() {
     #[cfg(unix)]
     {
         let mut sigterm =
@@ -246,12 +231,10 @@ async fn shutdown_signal(stop_graphql_api: oneshot::Sender<()>) {
             tokio::select! {
                 _ = sigterm.recv() => {
                     tracing::info!("sigterm received");
-                    let _ = stop_graphql_api.send(());
                     break;
                 }
                 _ = sigint.recv() => {
                     tracing::log::info!("sigint received");
-                    let _ = stop_graphql_api.send(());
                     break;
                 }
             }
@@ -262,7 +245,6 @@ async fn shutdown_signal(stop_graphql_api: oneshot::Sender<()>) {
         tokio::signal::ctrl_c()
             .await
             .expect("failed to install CTRL+C signal handler");
-        let _ = stop_graphql_api.send(());
         tracing::log::info!("CTRL+C received");
     }
 }

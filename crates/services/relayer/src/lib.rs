@@ -28,6 +28,6 @@ pub use ethers_core::types::{
 };
 pub use service::{
     new_service,
-    RelayerSynced,
     Service,
+    SharedState,
 };

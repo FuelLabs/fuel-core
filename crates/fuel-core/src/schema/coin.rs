@@ -1,5 +1,5 @@
 use crate::{
-    database::Database,
+    graph_api::service::Database,
     schema::scalars::{
         Address,
         AssetId,

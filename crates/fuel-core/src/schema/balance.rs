@@ -1,12 +1,10 @@
 use crate::{
-    database::{
-        resource::{
-            AssetQuery,
-            AssetSpendTarget,
-            AssetsQuery,
-        },
-        Database,
+    database::resource::{
+        AssetQuery,
+        AssetSpendTarget,
+        AssetsQuery,
     },
+    graph_api::service::Database,
     schema::scalars::{
         Address,
         AssetId,

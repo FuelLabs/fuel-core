@@ -19,7 +19,9 @@ use fuel_core_services::{
     stream::BoxStream,
     EmptyShared,
     RunnableService,
+    RunnableTask,
     ServiceRunner,
+    StateWatcher,
 };
 use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
@@ -302,19 +304,18 @@ where
 #[async_trait::async_trait]
 impl<D, T, B> RunnableService for Task<D, T, B>
 where
-    D: BlockDb,
-    T: TransactionPool,
-    B: BlockProducer<D>,
+    Self: RunnableTask,
 {
     const NAME: &'static str = "PoA";
 
     type SharedData = EmptyShared;
+    type Task = Task<D, T, B>;
 
     fn shared_data(&self) -> Self::SharedData {
         EmptyShared
     }
 
-    async fn initialize(&mut self) -> anyhow::Result<()> {
+    async fn into_task(self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
         match self.trigger {
             Trigger::Never | Trigger::Instant => {}
             Trigger::Interval { block_time } => {
@@ -328,9 +329,17 @@ where
                     .await;
             }
         };
-        Ok(())
+        Ok(self)
     }
+}
 
+#[async_trait::async_trait]
+impl<D, T, B> RunnableTask for Task<D, T, B>
+where
+    D: BlockDb,
+    T: TransactionPool,
+    B: BlockProducer<D>,
+{
     async fn run(&mut self) -> anyhow::Result<bool> {
         self.process_next_event().await
     }

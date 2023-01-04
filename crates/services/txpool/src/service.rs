@@ -12,7 +12,9 @@ use crate::{
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
+    RunnableTask,
     ServiceRunner,
+    StateWatcher,
 };
 use fuel_core_types::{
     blockchain::SealedBlock,
@@ -110,15 +112,23 @@ where
     const NAME: &'static str = "TxPool";
 
     type SharedData = SharedState<P2P, DB>;
+    type Task = Task<P2P, DB>;
 
     fn shared_data(&self) -> Self::SharedData {
         self.shared.clone()
     }
 
-    async fn initialize(&mut self) -> anyhow::Result<()> {
-        Ok(())
+    async fn into_task(self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
+        Ok(self)
     }
+}
 
+#[async_trait::async_trait]
+impl<P2P, DB> RunnableTask for Task<P2P, DB>
+where
+    P2P: Send + Sync,
+    DB: TxPoolDb,
+{
     async fn run(&mut self) -> anyhow::Result<bool> {
         tokio::select! {
             new_transaction = self.gossiped_tx_stream.next() => {
