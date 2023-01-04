@@ -16,10 +16,7 @@ use crate::{
         },
         topics::GossipsubTopics,
     },
-    peer_info::{
-        PeerInfo,
-        PeerInfoEvent,
-    },
+    peer_info::PeerInfoEvent,
     request_response::messages::{
         IntermediateResponse,
         OutboundResponse,
@@ -182,12 +179,8 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         Ok(())
     }
 
-    pub fn get_peers_info(&self) -> &HashMap<PeerId, PeerInfo> {
-        self.swarm.behaviour().get_peers()
-    }
-
-    pub fn get_peers_ids(&self) -> Vec<PeerId> {
-        self.get_peers_info().iter().map(|(id, _)| *id).collect()
+    pub fn get_peers_ids(&self) -> Vec<&PeerId> {
+        self.swarm.behaviour().get_peers_ids()
     }
 
     pub fn publish_message(
@@ -219,19 +212,19 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let peer_id = match peer_id {
             Some(peer_id) => peer_id,
             _ => {
-                let connected_peers = self.get_peers_info();
+                let connected_peers = self.get_peers_ids();
                 if connected_peers.is_empty() {
                     return Err(RequestError::NoPeersConnected)
                 }
                 let rand_index = rand::thread_rng().gen_range(0..connected_peers.len());
-                *connected_peers.keys().nth(rand_index).unwrap()
+                **connected_peers.get(rand_index).unwrap()
             }
         };
 
         let request_id = self
             .swarm
             .behaviour_mut()
-            .send_request_msg(message_request, peer_id);
+            .send_request_msg(message_request, &peer_id);
 
         self.outbound_requests_table
             .insert(request_id, channel_item);
@@ -312,19 +305,15 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         event: FuelBehaviourEvent,
     ) -> Option<FuelP2PEvent> {
         match event {
-            FuelBehaviourEvent::Discovery(discovery_event) => match discovery_event {
-                DiscoveryEvent::Connected(peer_id, addresses) => {
+            FuelBehaviourEvent::Discovery(discovery_event) => {
+                if let DiscoveryEvent::PeerInfoOnConnect { peer_id, addresses } =
+                    discovery_event
+                {
                     self.swarm
                         .behaviour_mut()
                         .add_addresses_to_peer_info(&peer_id, addresses);
-
-                    return Some(FuelP2PEvent::PeerConnected(peer_id))
                 }
-                DiscoveryEvent::Disconnected(peer_id) => {
-                    return Some(FuelP2PEvent::PeerDisconnected(peer_id))
-                }
-                _ => {}
-            },
+            }
             FuelBehaviourEvent::Gossipsub(gossipsub_event) => {
                 if let GossipsubEvent::Message {
                     propagation_source,
@@ -383,6 +372,29 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 }
                 PeerInfoEvent::PeerInfoUpdated { peer_id } => {
                     return Some(FuelP2PEvent::PeerInfoUpdated(peer_id))
+                }
+                PeerInfoEvent::PeerConnected(peer_id) => {
+                    return Some(FuelP2PEvent::PeerConnected(peer_id))
+                }
+                PeerInfoEvent::PeerDisconnected {
+                    peer_id,
+                    should_reconnect,
+                } => {
+                    if should_reconnect {
+                        let _ = self.swarm.dial(peer_id);
+                    }
+                    return Some(FuelP2PEvent::PeerDisconnected(peer_id))
+                }
+                PeerInfoEvent::TooManyPeers {
+                    peer_to_disconnect,
+                    peer_to_connect,
+                } => {
+                    // disconnect the surplus peer
+                    let _ = self.swarm.disconnect_peer_id(peer_to_disconnect);
+                    // reconnect the reserved peer
+                    if let Some(peer_id) = peer_to_connect {
+                        let _ = self.swarm.dial(peer_id);
+                    }
                 }
             },
             FuelBehaviourEvent::RequestResponse(req_res_event) => match req_res_event {

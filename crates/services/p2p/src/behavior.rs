@@ -43,7 +43,6 @@ use libp2p::{
     Multiaddr,
     PeerId,
 };
-use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum FuelBehaviourEvent {
@@ -136,8 +135,8 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         }
     }
 
-    pub fn get_peers(&self) -> &HashMap<PeerId, PeerInfo> {
-        self.peer_info.peers()
+    pub fn get_peers_ids(&self) -> Vec<&PeerId> {
+        self.peer_info.get_peers_ids()
     }
 
     pub fn publish_message(
@@ -158,10 +157,9 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
     pub fn send_request_msg(
         &mut self,
         message_request: RequestMessage,
-        peer_id: PeerId,
+        peer_id: &PeerId,
     ) -> RequestId {
-        self.request_response
-            .send_request(&peer_id, message_request)
+        self.request_response.send_request(peer_id, message_request)
     }
 
     pub fn send_response_msg(
@@ -187,7 +185,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
 
     // Currently only used in testing, but should be useful for the NetworkOrchestrator API
     #[allow(dead_code)]
-    pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<&PeerInfo> {
+    pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<PeerInfo> {
         self.peer_info.get_peer_info(peer_id)
     }
 }

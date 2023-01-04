@@ -3,7 +3,6 @@ use libp2p::{
     core::{
         connection::ConnectionId,
         either::EitherOutput,
-        ConnectedPoint,
     },
     identify::{
         Behaviour as Identify,
@@ -30,6 +29,7 @@ use libp2p::{
 };
 use libp2p_swarm::derive_prelude::{
     ConnectionClosed,
+    ConnectionEstablished,
     DialFailure,
     FromSwarm,
     ListenFailure,
@@ -38,6 +38,7 @@ use std::{
     collections::{
         HashMap,
         HashSet,
+        VecDeque,
     },
     task::{
         Context,
@@ -53,6 +54,15 @@ const MAX_IDENTIFY_ADDRESSES: usize = 10;
 /// Events emitted by PeerInfoBehaviour
 #[derive(Debug)]
 pub enum PeerInfoEvent {
+    PeerConnected(PeerId),
+    PeerDisconnected {
+        peer_id: PeerId,
+        should_reconnect: bool,
+    },
+    TooManyPeers {
+        peer_to_disconnect: PeerId,
+        peer_to_connect: Option<PeerId>,
+    },
     PeerIdentified {
         peer_id: PeerId,
         addresses: Vec<Multiaddr>,
@@ -62,31 +72,56 @@ pub enum PeerInfoEvent {
     },
 }
 
+#[derive(Debug, Clone)]
+pub struct PeerInfo<'a> {
+    pub peer_addresses: &'a HashSet<Multiaddr>,
+    pub client_version: &'a Option<String>,
+    pub latest_ping: &'a Option<Duration>,
+}
+
+impl<'a> From<&'a ConnectedPeerInfo> for PeerInfo<'a> {
+    fn from(value: &'a ConnectedPeerInfo) -> Self {
+        PeerInfo {
+            peer_addresses: &value.peer_addresses,
+            client_version: &value.client_version,
+            latest_ping: &value.latest_ping,
+        }
+    }
+}
+
+impl<'a> From<&'a ReservedPeerInfo> for PeerInfo<'a> {
+    fn from(value: &'a ReservedPeerInfo) -> Self {
+        PeerInfo {
+            peer_addresses: &value.peer_addresses,
+            client_version: &value.client_version,
+            latest_ping: &value.latest_ping,
+        }
+    }
+}
+
 // Info about a single Peer that we're connected to
-#[derive(Debug)]
-pub struct PeerInfo {
+#[derive(Debug, Default, Clone)]
+pub struct ConnectedPeerInfo {
     pub peer_addresses: HashSet<Multiaddr>,
     pub client_version: Option<String>,
-    pub connected_point: ConnectedPoint,
     pub latest_ping: Option<Duration>,
 }
 
-impl PeerInfo {
-    pub fn new(connected_point: ConnectedPoint) -> Self {
-        Self {
-            peer_addresses: HashSet::default(),
-            client_version: None,
-            connected_point,
-            latest_ping: None,
-        }
-    }
+#[derive(Debug, Default, Clone)]
+struct ReservedPeerInfo {
+    peer_addresses: HashSet<Multiaddr>,
+    client_version: Option<String>,
+    latest_ping: Option<Duration>,
+    is_connected: bool,
 }
 
 // `Behaviour` that holds info about peers
 pub struct PeerInfoBehaviour {
     ping: Ping,
     identify: Identify,
-    peers: HashMap<PeerId, PeerInfo>,
+    pending_events: VecDeque<PeerInfoEvent>,
+    connected_peers: HashMap<PeerId, ConnectedPeerInfo>,
+    reserved_peers: HashMap<PeerId, ReservedPeerInfo>,
 }
 
 impl PeerInfoBehaviour {
@@ -110,67 +145,134 @@ impl PeerInfoBehaviour {
             }
         };
 
+        let reserved_peers: HashMap<PeerId, ReservedPeerInfo> = config
+            .reserved_nodes
+            .iter()
+            .filter_map(|addr| {
+                Some((
+                    PeerId::try_from_multiaddr(addr)?,
+                    ReservedPeerInfo::default(),
+                ))
+            })
+            .collect();
+
+        let non_reserved_peers_capacity =
+            config.max_peers_connected as usize - reserved_peers.len();
+
         Self {
             ping,
             identify,
-            peers: HashMap::default(),
+            pending_events: VecDeque::default(),
+            connected_peers: HashMap::with_capacity(non_reserved_peers_capacity),
+            reserved_peers,
         }
     }
 
-    pub fn peers(&self) -> &HashMap<PeerId, PeerInfo> {
-        &self.peers
+    pub fn get_peers_ids(&self) -> Vec<&PeerId> {
+        let connected_peers = self.connected_peers.keys();
+        let reserved_peers = self.reserved_peers.keys();
+        connected_peers.chain(reserved_peers).collect()
     }
 
-    pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<&PeerInfo> {
-        self.peers.get(peer_id)
+    pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<PeerInfo> {
+        self.connected_peers
+            .get(peer_id)
+            .map(Into::into)
+            .or_else(|| self.reserved_peers.get(peer_id).map(Into::into))
     }
 
-    /// Insert peer addresses to a connected Node
     pub fn insert_peer_addresses(&mut self, peer_id: &PeerId, addresses: Vec<Multiaddr>) {
-        match self.peers.get_mut(peer_id) {
-            Some(peer_info) => {
-                for address in addresses {
-                    peer_info.peer_addresses.insert(address);
-                }
+        if let Some(reserved_peer) = self.reserved_peers.get_mut(peer_id) {
+            for address in addresses {
+                reserved_peer.peer_addresses.insert(address);
             }
-            _ => {
-                debug!(target: "fuel-libp2p", "Peer with PeerId: {:?} is not among the connected peers", peer_id)
+        } else if let Some(peer) = self.connected_peers.get_mut(peer_id) {
+            for address in addresses {
+                peer.peer_addresses.insert(address);
             }
-        }
-    }
-
-    /// Store newly connected peer
-    fn insert_peer(&mut self, peer_id: &PeerId, connected_point: ConnectedPoint) {
-        match self.peers.get_mut(peer_id) {
-            Some(peer_info) => {
-                peer_info.connected_point = connected_point;
-            }
-            _ => {
-                self.peers.insert(*peer_id, PeerInfo::new(connected_point));
-            }
-        }
-    }
-
-    /// Insert client version to a connected Node
-    fn insert_client_version(&mut self, peer_id: &PeerId, client_version: String) {
-        match self.peers.get_mut(peer_id) {
-            Some(peer_info) => {
-                peer_info.client_version = Some(client_version);
-            }
-            _ => {
-                debug!(target: "fuel-libp2p", "Peer with PeerId: {:?} is not among the connected peers", peer_id)
-            }
+        } else {
+            log_missing_peer(peer_id);
         }
     }
 
     /// Insert latest ping to a connected Node
     fn insert_latest_ping(&mut self, peer_id: &PeerId, duration: Duration) {
-        if let Some(peer_info) = self.peers.get_mut(peer_id) {
-            peer_info.latest_ping = Some(duration);
+        if let Some(reserved_peer) = self.reserved_peers.get_mut(peer_id) {
+            reserved_peer.latest_ping = Some(duration);
+        } else if let Some(peer) = self.connected_peers.get_mut(peer_id) {
+            peer.latest_ping = Some(duration);
         } else {
-            debug!(target: "fuel-libp2p", "Peer with PeerId: {:?} is not among the connected peers", peer_id)
+            log_missing_peer(peer_id);
         }
     }
+
+    fn insert_client_version(&mut self, peer_id: &PeerId, client_version: String) {
+        if let Some(reserved_peer) = self.reserved_peers.get_mut(peer_id) {
+            reserved_peer.client_version = Some(client_version);
+        } else if let Some(peer) = self.connected_peers.get_mut(peer_id) {
+            peer.client_version = Some(client_version);
+        } else {
+            log_missing_peer(peer_id);
+        }
+    }
+
+    /// Handles the first connnection established with a Peer
+    fn handle_initial_connection(&mut self, peer_id: PeerId) {
+        if let Some(reserved_peer) = self.reserved_peers.get_mut(&peer_id) {
+            // Reserved Peers are never removed, just their connection is tracked
+            reserved_peer.is_connected = true;
+        } else if self.connected_peers.len() == self.connected_peers.capacity() {
+            // we are at max capacity of non-reserved peers allowed
+            // disconnect the newly connected peer
+            // this should only happen when one of our reserved nodes is not currently connected
+            // so there is some extra space for connections
+
+            let disconnected_reserved_peeer = self
+                .reserved_peers
+                .iter()
+                .find(|(_, peer_info)| !peer_info.is_connected)
+                .map(|(peer_id, _)| *peer_id);
+
+            // todo/potential improvement: once `Peer Reputation` is implemented we could check if there are peers
+            // with poor reputation and disconnect them instead?
+            self.pending_events.push_back(PeerInfoEvent::TooManyPeers {
+                peer_to_disconnect: peer_id,
+                peer_to_connect: disconnected_reserved_peeer,
+            });
+
+            // early return, no need to report on newly established connection
+            // since the peer will be disconnected
+            return
+        } else {
+            self.connected_peers
+                .insert(peer_id, ConnectedPeerInfo::default());
+        }
+
+        self.pending_events
+            .push_back(PeerInfoEvent::PeerConnected(peer_id));
+    }
+
+    fn handle_last_connection(&mut self, peer_id: PeerId) {
+        let should_reconnect =
+            if let Some(reserved_peer) = self.reserved_peers.get_mut(&peer_id) {
+                reserved_peer.is_connected = false;
+                // we need to connect to this peer again
+                true
+            } else {
+                self.connected_peers.remove(&peer_id);
+                false
+            };
+
+        self.pending_events
+            .push_back(PeerInfoEvent::PeerDisconnected {
+                peer_id,
+                should_reconnect,
+            })
+    }
+}
+
+fn log_missing_peer(peer_id: &PeerId) {
+    debug!(target: "fuel-libp2p", "Peer with PeerId: {:?} is not among the connected peers", peer_id)
 }
 
 impl NetworkBehaviour for PeerInfoBehaviour {
@@ -187,7 +289,7 @@ impl NetworkBehaviour for PeerInfoBehaviour {
         )
     }
 
-    fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<libp2p::Multiaddr> {
+    fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
         let mut list = self.ping.addresses_of_peer(peer_id);
         list.extend_from_slice(&self.identify.addresses_of_peer(peer_id));
         list
@@ -195,37 +297,62 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 
     fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
         match event {
-            FromSwarm::ConnectionEstablished(e) => {
-                self.ping
-                    .on_swarm_event(FromSwarm::ConnectionEstablished(e));
-                self.identify
-                    .on_swarm_event(FromSwarm::ConnectionEstablished(e));
-                self.insert_peer(&e.peer_id, e.endpoint.clone());
+            FromSwarm::ConnectionEstablished(connection_established) => {
+                let ConnectionEstablished {
+                    peer_id,
+                    other_established,
+                    ..
+                } = connection_established;
 
-                let addresses = self.addresses_of_peer(&e.peer_id);
-                self.insert_peer_addresses(&e.peer_id, addresses);
+                self.ping.on_swarm_event(FromSwarm::ConnectionEstablished(
+                    connection_established,
+                ));
+                self.identify
+                    .on_swarm_event(FromSwarm::ConnectionEstablished(
+                        connection_established,
+                    ));
+
+                let addresses = self.addresses_of_peer(&peer_id);
+                self.insert_peer_addresses(&peer_id, addresses);
+
+                if other_established == 0 {
+                    // this is the first connection to a given Peer
+                    self.handle_initial_connection(peer_id);
+                }
             }
-            FromSwarm::ConnectionClosed(e) => {
-                let (ping_handler, identity_handler) = e.handler.into_inner();
+            FromSwarm::ConnectionClosed(connection_closed) => {
+                let ConnectionClosed {
+                    remaining_established,
+                    peer_id,
+                    ..
+                } = connection_closed;
+
+                let (ping_handler, identity_handler) =
+                    connection_closed.handler.into_inner();
                 let ping_event = ConnectionClosed {
                     handler: ping_handler,
-                    peer_id: e.peer_id,
-                    connection_id: e.connection_id,
-                    endpoint: e.endpoint,
-                    remaining_established: e.remaining_established,
+                    peer_id: connection_closed.peer_id,
+                    connection_id: connection_closed.connection_id,
+                    endpoint: connection_closed.endpoint,
+                    remaining_established: connection_closed.remaining_established,
                 };
                 self.ping
                     .on_swarm_event(FromSwarm::ConnectionClosed(ping_event));
+
                 let identify_event = ConnectionClosed {
                     handler: identity_handler,
-                    peer_id: e.peer_id,
-                    connection_id: e.connection_id,
-                    endpoint: e.endpoint,
-                    remaining_established: e.remaining_established,
+                    peer_id: connection_closed.peer_id,
+                    connection_id: connection_closed.connection_id,
+                    endpoint: connection_closed.endpoint,
+                    remaining_established: connection_closed.remaining_established,
                 };
                 self.identify
                     .on_swarm_event(FromSwarm::ConnectionClosed(identify_event));
-                self.peers.remove(&e.peer_id);
+
+                if remaining_established == 0 {
+                    // this was the last connection to a given Peer
+                    self.handle_last_connection(peer_id);
+                }
             }
             FromSwarm::AddressChange(e) => {
                 self.ping.on_swarm_event(FromSwarm::AddressChange(e));
@@ -302,6 +429,10 @@ impl NetworkBehaviour for PeerInfoBehaviour {
         cx: &mut Context<'_>,
         params: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+        if let Some(event) = self.pending_events.pop_front() {
+            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
+        }
+
         loop {
             match self.ping.poll(cx, params) {
                 Poll::Pending => break,
