@@ -694,8 +694,7 @@ mod tests {
             tokio::select! {
                 event_from_node_5 = node_5.next_event() => {
                     if let Some(FuelP2PEvent::PeerConnected(_)) = event_from_node_5 {
-                        let connected_nodes: Vec<_> = node_5.swarm.connected_peers().collect();
-                        if connected_nodes.len() > 5 {
+                        if node_5.swarm.connected_peers().count() > 5 {
                             panic!("The node should only connect to max 5 peers");
                         }
                     }
@@ -703,8 +702,7 @@ mod tests {
                 },
                 event_from_node_10 = node_10.next_event() => {
                     if let Some(FuelP2PEvent::PeerConnected(_)) = event_from_node_10 {
-                        let connected_nodes: Vec<_> = node_10.swarm.connected_peers().collect();
-                        if connected_nodes.len() > 10 {
+                        if node_10.swarm.connected_peers().count() > 10 {
                             panic!("The node should only connect to max 10 peers");
                         }
                     }
@@ -712,10 +710,9 @@ mod tests {
                 },
                 event_from_bootstrapped_node = bootstrapped_node.next_event() => {
                     if let Some(FuelP2PEvent::PeerConnected(_)) = event_from_bootstrapped_node {
-                        let connected_nodes: Vec<_> = bootstrapped_node.swarm.connected_peers().collect();
                         // if the test was broken, it would panic! by the time this node discovers more peers
                         // and connects to them
-                        if connected_nodes.len() > 20 {
+                        if bootstrapped_node.swarm.connected_peers().count() > 20 {
                             break
                         }
                     }
