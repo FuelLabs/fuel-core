@@ -160,7 +160,7 @@ impl P2PArgs {
         };
 
         // Reserved nodes do not count against the configured peer input/output limits.
-        let max_peers_allowed =
+        let max_peers_connected =
             self.max_peers_connected + self.reserved_nodes.len() as u32;
 
         let gossipsub_config = default_gossipsub_builder()
@@ -194,7 +194,7 @@ impl P2PArgs {
             reserved_nodes: self.reserved_nodes,
             reserved_nodes_only_mode: self.reserved_nodes_only_mode,
             enable_mdns: self.enable_mdns,
-            max_peers_connected: max_peers_allowed,
+            max_peers_connected,
             allow_private_addresses: self.allow_private_addresses,
             random_walk,
             connection_idle_timeout: Some(Duration::from_secs(
