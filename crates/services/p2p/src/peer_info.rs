@@ -324,28 +324,32 @@ impl NetworkBehaviour for PeerInfoBehaviour {
                 let ConnectionClosed {
                     remaining_established,
                     peer_id,
+                    connection_id,
+                    endpoint,
                     ..
                 } = connection_closed;
 
                 let (ping_handler, identity_handler) =
                     connection_closed.handler.into_inner();
+
                 let ping_event = ConnectionClosed {
                     handler: ping_handler,
-                    peer_id: connection_closed.peer_id,
-                    connection_id: connection_closed.connection_id,
-                    endpoint: connection_closed.endpoint,
-                    remaining_established: connection_closed.remaining_established,
+                    peer_id,
+                    connection_id,
+                    endpoint,
+                    remaining_established,
                 };
                 self.ping
                     .on_swarm_event(FromSwarm::ConnectionClosed(ping_event));
 
                 let identify_event = ConnectionClosed {
                     handler: identity_handler,
-                    peer_id: connection_closed.peer_id,
-                    connection_id: connection_closed.connection_id,
-                    endpoint: connection_closed.endpoint,
-                    remaining_established: connection_closed.remaining_established,
+                    peer_id,
+                    connection_id,
+                    endpoint,
+                    remaining_established,
                 };
+
                 self.identify
                     .on_swarm_event(FromSwarm::ConnectionClosed(identify_event));
 
