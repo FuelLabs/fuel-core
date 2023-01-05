@@ -22,7 +22,7 @@ async fn can_set_da_height() {
     // will be some finalized blocks.
     eth_node.update_data(|data| data.best_block.number = Some(200.into()));
     let relayer = new_service_test(eth_node, mock_db.clone(), Default::default());
-    relayer.start().unwrap();
+    relayer.start_and_await().await.unwrap();
 
     relayer.shared.await_synced().await.unwrap();
 
@@ -54,7 +54,7 @@ async fn can_get_messages() {
     // will be some finalized blocks.
     eth_node.update_data(|data| data.best_block.number = Some(200.into()));
     let relayer = new_service_test(eth_node, mock_db.clone(), config);
-    relayer.start().unwrap();
+    relayer.start_and_await().await.unwrap();
 
     relayer.shared.await_synced().await.unwrap();
 
@@ -98,7 +98,7 @@ async fn deploy_height_is_set() {
         }
     });
     let relayer = new_service_test(eth_node, mock_db.clone(), config);
-    relayer.start().unwrap();
+    relayer.start_and_await().await.unwrap();
 
     relayer.shared.await_synced().await.unwrap();
     rx.await.unwrap();

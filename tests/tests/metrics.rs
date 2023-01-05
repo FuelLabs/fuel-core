@@ -2,6 +2,7 @@ use fuel_core::service::{
     Config,
     DbType,
     FuelService,
+    ServiceTrait,
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_types::{
@@ -60,7 +61,7 @@ async fn test_metrics_endpoint() {
 
     let categories = resp.split('\n').collect::<Vec<&str>>();
 
-    srv.stop().await;
+    srv.stop_and_await().await.unwrap();
 
     // Gt check exists because testing can be weird with multiple instances running
     assert!(categories.len() == 16);
