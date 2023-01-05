@@ -299,6 +299,11 @@ mod tests {
             if i < task.sub_services().len() {
                 task.sub_services()[i].stop_and_await().await.unwrap();
                 assert!(!task.run().await.unwrap());
+
+                for service in task.sub_services() {
+                    // Check that the state is `Stopped`(not `StoppedWithError`)
+                    assert_eq!(service.state(), State::Stopped);
+                }
             } else {
                 break
             }
