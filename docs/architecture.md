@@ -317,7 +317,7 @@ trait PeerToPeer {
     fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction>;
    
     // Report the validity of a transaction received from the network.
-    async fn notify_gossip_transaction_validity(message: &Self::GossipedTransaction, validity: GossipValidity);
+    fn notify_gossip_transaction_validity(message: &Self::GossipedTransaction, validity: GossipValidity) -> anyhow::Result<()>;
 }
 
 trait BlockImporter {

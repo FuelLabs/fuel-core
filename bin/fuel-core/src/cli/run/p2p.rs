@@ -3,8 +3,8 @@ use fuel_core::{
     p2p::{
         config::{
             convert_to_libp2p_keypair,
+            Config,
             NotInitialized,
-            P2PConfig,
         },
         gossipsub_config::default_gossipsub_builder,
         Multiaddr,
@@ -67,7 +67,7 @@ pub struct P2PArgs {
 
     /// Maximum amount of allowed connected peers
     #[clap(long = "max_peers_connected", default_value = "50")]
-    pub max_peers_connected: usize,
+    pub max_peers_connected: u32,
 
     /// Set the delay between random walks for p2p node discovery in seconds.
     /// If it's not set the random walk will be disabled.
@@ -136,7 +136,7 @@ pub struct P2PArgs {
 }
 
 impl P2PArgs {
-    pub fn into_config(self, metrics: bool) -> anyhow::Result<P2PConfig<NotInitialized>> {
+    pub fn into_config(self, metrics: bool) -> anyhow::Result<Config<NotInitialized>> {
         let local_keypair = {
             match self.keypair {
                 Some(path) => {
@@ -160,12 +160,13 @@ impl P2PArgs {
         };
 
         // Reserved nodes do not count against the configured peer input/output limits.
-        let reserved_nodes_count = self.reserved_nodes.len();
+        let max_peers_connected =
+            self.max_peers_connected + self.reserved_nodes.len() as u32;
 
         let gossipsub_config = default_gossipsub_builder()
-            .mesh_n(self.ideal_mesh_size + reserved_nodes_count)
-            .mesh_n_low(self.min_mesh_size + reserved_nodes_count)
-            .mesh_n_high(self.max_mesh_size + reserved_nodes_count)
+            .mesh_n(self.ideal_mesh_size)
+            .mesh_n_low(self.min_mesh_size)
+            .mesh_n_high(self.max_mesh_size)
             .history_length(self.history_length)
             .history_gossip(self.history_gossip)
             .heartbeat_interval(Duration::from_secs(self.heartbeat_interval))
@@ -179,7 +180,7 @@ impl P2PArgs {
             Some(Duration::from_secs(self.random_walk))
         };
 
-        Ok(P2PConfig {
+        Ok(Config {
             keypair: local_keypair,
             network_name: self.network,
             checksum: Default::default(),
@@ -193,7 +194,7 @@ impl P2PArgs {
             reserved_nodes: self.reserved_nodes,
             reserved_nodes_only_mode: self.reserved_nodes_only_mode,
             enable_mdns: self.enable_mdns,
-            max_peers_connected: self.max_peers_connected,
+            max_peers_connected,
             allow_private_addresses: self.allow_private_addresses,
             random_walk,
             connection_idle_timeout: Some(Duration::from_secs(

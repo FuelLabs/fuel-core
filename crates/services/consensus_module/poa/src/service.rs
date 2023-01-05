@@ -19,7 +19,9 @@ use fuel_core_services::{
     stream::BoxStream,
     EmptyShared,
     RunnableService,
+    RunnableTask,
     ServiceRunner,
+    StateWatcher,
 };
 use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
@@ -275,6 +277,7 @@ where
     /// Processes the next incoming event. Called by the main event loop.
     /// Returns Ok(false) if the event loop should stop.
     async fn process_next_event(&mut self) -> anyhow::Result<bool> {
+        let should_continue;
         tokio::select! {
             // TODO: This should likely be refactored to use something like tokio::sync::Notify.
             //       Otherwise, if a bunch of txs are submitted at once and all the txs are included
@@ -285,36 +288,35 @@ where
             txpool_event = self.tx_status_update_stream.next() => {
                 if let Some(txpool_event) = txpool_event {
                     self.on_txpool_event(txpool_event).await.context("While processing txpool event")?;
-                    Ok(true)
+                    should_continue = true;
                 } else {
-                    let should_continue = false;
-                    Ok(should_continue)
+                    should_continue = false;
                 }
             }
             at = self.timer.wait() => {
                 self.on_timer(at).await.context("While processing timer event")?;
-                Ok(true)
+                should_continue = true;
             }
         }
+        Ok(should_continue)
     }
 }
 
 #[async_trait::async_trait]
 impl<D, T, B> RunnableService for Task<D, T, B>
 where
-    D: BlockDb,
-    T: TransactionPool,
-    B: BlockProducer<D>,
+    Self: RunnableTask,
 {
     const NAME: &'static str = "PoA";
 
     type SharedData = EmptyShared;
+    type Task = Task<D, T, B>;
 
     fn shared_data(&self) -> Self::SharedData {
         EmptyShared
     }
 
-    async fn initialize(&mut self) -> anyhow::Result<()> {
+    async fn into_task(self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
         match self.trigger {
             Trigger::Never | Trigger::Instant => {}
             Trigger::Interval { block_time } => {
@@ -328,9 +330,17 @@ where
                     .await;
             }
         };
-        Ok(())
+        Ok(self)
     }
+}
 
+#[async_trait::async_trait]
+impl<D, T, B> RunnableTask for Task<D, T, B>
+where
+    D: BlockDb,
+    T: TransactionPool,
+    B: BlockProducer<D>,
+{
     async fn run(&mut self) -> anyhow::Result<bool> {
         self.process_next_event().await
     }

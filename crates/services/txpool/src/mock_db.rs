@@ -34,11 +34,11 @@ pub struct MockDb {
 }
 
 impl MockDb {
-    pub fn insert_coin(&mut self, id: UtxoId, coin: Coin) {
+    pub fn insert_coin(&self, id: UtxoId, coin: Coin) {
         self.data.lock().unwrap().coins.insert(id, coin);
     }
 
-    pub fn insert_message(&mut self, message: Message) {
+    pub fn insert_message(&self, message: Message) {
         self.data
             .lock()
             .unwrap()

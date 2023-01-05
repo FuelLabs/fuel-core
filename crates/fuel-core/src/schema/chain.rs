@@ -1,4 +1,5 @@
 use crate::{
+    fuel_core_graphql_api::Config as GraphQLConfig,
     query::{
         ChainQueryContext,
         ChainQueryData,
@@ -7,7 +8,6 @@ use crate::{
         block::Block,
         scalars::U64,
     },
-    service::Config,
 };
 use async_graphql::{
     Context,
@@ -105,11 +105,9 @@ impl ChainInfo {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<ConsensusParameters> {
-        let config = ctx.data_unchecked::<Config>();
+        let config = ctx.data_unchecked::<GraphQLConfig>();
 
-        Ok(ConsensusParameters(
-            config.chain_conf.transaction_parameters,
-        ))
+        Ok(ConsensusParameters(config.transaction_parameters))
     }
 }
 

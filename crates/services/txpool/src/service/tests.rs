@@ -48,7 +48,7 @@ async fn test_find() {
 
 #[tokio::test]
 async fn simple_insert_removal_subscription() {
-    let ctx = TestContextBuilder::new().build().await;
+    let ctx = TestContextBuilder::new().build_and_start().await;
 
     let tx1 = Arc::new(ctx.setup_script_tx(10));
     let tx2 = Arc::new(ctx.setup_script_tx(20));

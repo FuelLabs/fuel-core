@@ -1,16 +1,15 @@
 use crate::database::Database;
 use fuel_core_storage::{
+    tables::ContractsRawCode,
     Result as StorageResult,
     StorageAsRef,
-    tables::ContractsRawCode
 };
 use fuel_core_types::fuel_types::ContractId;
-
 
 #[cfg_attr(test, mockall::automock)]
 /// Trait that specifies all the data required by the output message query.
 pub trait ContractQueryData {
-    fn contract(&self, id: ContractId) -> StorageResult<Option<ContractId>> ;
+    fn contract(&self, id: ContractId) -> StorageResult<Option<ContractId>>;
 }
 
 pub struct ContractQueryContext<'a>(pub &'a Database);
@@ -22,7 +21,7 @@ impl ContractQueryData for ContractQueryContext<'_> {
         if !contract_exists {
             return Ok(None)
         }
-        
+
         Ok(Some(id))
     }
 }

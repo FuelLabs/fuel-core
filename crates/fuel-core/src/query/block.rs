@@ -33,11 +33,11 @@ pub trait BlockQueryData {
 
     fn block_id(&self, height: u64) -> std::result::Result<Bytes32, anyhow::Error>;
 
-    fn blocks<'a>(
-        &'a self,
+    fn blocks(
+        &self,
         start: Option<usize>,
         direction: IterDirection,
-    ) -> StorageResult<Self::Iter<'a>>;
+    ) -> StorageResult<Self::Iter<'_>>;
 }
 
 pub struct BlockQueryContext<'a>(pub &'a Database);
@@ -84,11 +84,11 @@ impl BlockQueryData for BlockQueryContext<'_> {
         Ok(id)
     }
 
-    fn blocks<'a>(
-        &'a self,
+    fn blocks(
+        &self,
         start: Option<usize>,
         direction: IterDirection,
-    ) -> StorageResult<Self::Iter<'a>> {
+    ) -> StorageResult<Self::Iter<'_>> {
         let db = self.0;
 
         let blocks = db.all_block_ids(start.map(Into::into), Some(direction));

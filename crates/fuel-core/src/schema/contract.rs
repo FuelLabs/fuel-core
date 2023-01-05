@@ -1,5 +1,9 @@
 use crate::{
-    database::Database,
+    fuel_core_graphql_api::service::Database,
+    query::{
+        ContractQueryContext,
+        ContractQueryData,
+    },
     schema::scalars::{
         AssetId,
         ContractId,
@@ -28,7 +32,6 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 use fuel_core_types::fuel_types;
-use crate::query::{ContractQueryContext, ContractQueryData};
 
 pub struct Contract(pub(crate) fuel_types::ContractId);
 
@@ -87,7 +90,7 @@ impl ContractQuery {
             Ok(Some(Contract::from(id)))
         } else {
             Ok(None)
-        }        
+        }
     }
 }
 

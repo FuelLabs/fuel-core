@@ -21,8 +21,10 @@ pub mod stream {
 pub use service::{
     EmptyShared,
     RunnableService,
+    RunnableTask,
     Service,
     ServiceRunner,
     Shared,
     State,
+    StateWatcher,
 };

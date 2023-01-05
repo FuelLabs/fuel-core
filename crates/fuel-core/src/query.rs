@@ -1,9 +1,9 @@
 mod block;
 mod chain;
 mod coin;
+mod contract;
 mod message_proof;
 mod subscriptions;
-mod contract;
 
 pub use block::*;
 pub use chain::*;
