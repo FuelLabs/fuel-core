@@ -11,7 +11,7 @@ use std::{
 };
 
 // stored in the root of the workspace
-const SCHEMA_URL: &str = "../fuel-client/assets/schema.sdl";
+const SCHEMA_URL: &str = "../crates/client/assets/schema.sdl";
 
 #[derive(Debug, Parser)]
 pub struct DumpCommand {}
@@ -28,7 +28,7 @@ pub fn dump_schema() -> Result<(), Box<dyn std::error::Error>> {
         })
         .expect("Failed to fetch assets path");
 
-    File::create(&assets)
+    File::create(assets)
         .and_then(|mut f| {
             f.write_all(build_schema().finish().sdl().as_bytes())?;
             f.sync_all()

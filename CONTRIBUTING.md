@@ -126,10 +126,10 @@ If you are planning something big, for example, relates to multiple components o
 
 The Client team actively develops and maintains several dependencies used in Fuel Core, which you may be also interested in:
 
--   [fuel-types](https://github.com/FuelLabs/fuel-types)
--   [fuel-merkle](https://github.com/FuelLabs/fuel-merkle)
--   [fuel-tx](https://github.com/FuelLabs/fuel-tx)
--   [fuel-asm](https://github.com/FuelLabs/fuel-asm)
+-   [fuel-types](https://github.com/FuelLabs/fuel-vm/tree/master/fuel-types)
+-   [fuel-merkle](https://github.com/FuelLabs/fuel-vm/tree/master/fuel-merkle)
+-   [fuel-tx](https://github.com/FuelLabs/fuel-vm/tree/master/fuel-tx)
+-   [fuel-asm](https://github.com/FuelLabs/fuel-vm/tree/master/fuel-asm)
 -   [fuel-vm](https://github.com/FuelLabs/fuel-vm)
 
 ### Linking issues

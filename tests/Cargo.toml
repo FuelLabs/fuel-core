@@ -1,0 +1,59 @@
+[package]
+edition = "2021"
+license = "BUSL-1.1"
+name = "fuel-core-tests"
+publish = false
+version = "0.0.0"
+# Disable automatic test target discovery. This allows us to run all the integ tests as a single binary target (lib.rs)
+# instead of each integ test file being its own compiled & linked binary which is the default behavior. Linking with
+# RocksDB is expensive so we want to minimize the amount of work on ld. This is also how other projects like diesel-rs
+# structure their integ tests.
+autobenches = false
+autotests = false
+
+[[test]]
+harness = true
+name = "integration_tests"
+path = "tests/lib.rs"
+
+# Metrics tests need to query /metrics without and explicit endpoint, and without
+# a seperate endpoint, the noise can cause issues
+[[test]]
+harness = true
+name = "metrics_tests"
+path = "tests/metrics.rs"
+
+[dependencies]
+ethers = "1.0.2"
+fuel-core = { path = "../crates/fuel-core", default-features = false }
+fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
+fuel-core-poa = { path = "../crates/services/consensus_module/poa" }
+fuel-core-relayer = { path = "../crates/services/relayer", features = [
+    "test-helpers",
+] }
+fuel-core-storage = { path = "../crates/storage", features = ["test-helpers"] }
+fuel-core-txpool = { path = "../crates/services/txpool", features = ["test-helpers"] }
+fuel-core-types = { path = "../crates/types", features = ["test-helpers"] }
+futures = "0.3"
+hyper = { version = "0.14", features = ["server"] }
+insta = "1.8"
+itertools = "0.10"
+rand = "0.8"
+reqwest = { version = "0.11", default-features = false, features = [
+    "rustls-tls",
+] }
+rstest = "0.15"
+serde_json = "1.0"
+tempfile = "3.3"
+tokio = { version = "1.21", features = [
+    "macros",
+    "rt-multi-thread",
+    "test-util",
+] }
+
+[features]
+debug = ["fuel-core-types/debug"]
+default = ["fuel-core/default", "metrics", "relayer"]
+metrics = ["fuel-core/metrics", "fuel-core/rocksdb"]
+p2p = ["fuel-core/p2p"]
+relayer = ["fuel-core/relayer"]

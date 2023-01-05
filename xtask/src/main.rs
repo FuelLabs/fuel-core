@@ -1,3 +1,5 @@
+#![deny(unused_crate_dependencies)]
+
 use clap::Parser;
 use commands::{
     build::{
