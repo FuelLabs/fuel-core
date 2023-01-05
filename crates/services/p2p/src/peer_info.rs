@@ -46,10 +46,12 @@ use std::{
     },
     time::Duration,
 };
+use tokio::time::Interval;
 use tracing::debug;
 
 /// Maximum amount of peer's addresses that we are ready to store per peer
 const MAX_IDENTIFY_ADDRESSES: usize = 10;
+const HEALTH_CHECK_INTERVAL_IN_SECONDS: u64 = 10;
 
 /// Events emitted by PeerInfoBehaviour
 #[derive(Debug, Clone)]
@@ -63,6 +65,7 @@ pub enum PeerInfoEvent {
         peer_to_disconnect: PeerId,
         peer_to_connect: Option<PeerId>,
     },
+    ReconnectToPeer(PeerId),
     PeerIdentified {
         peer_id: PeerId,
         addresses: Vec<Multiaddr>,
@@ -77,6 +80,8 @@ pub struct PeerInfoBehaviour {
     ping: Ping,
     identify: Identify,
     peer_manager: PeerManager,
+    // regulary checks if reserved nodes are connected
+    health_check: Interval,
 }
 
 impl PeerInfoBehaviour {
@@ -113,6 +118,9 @@ impl PeerInfoBehaviour {
             ping,
             identify,
             peer_manager,
+            health_check: tokio::time::interval(Duration::from_secs(
+                HEALTH_CHECK_INTERVAL_IN_SECONDS,
+            )),
         }
     }
 
@@ -297,6 +305,14 @@ impl NetworkBehaviour for PeerInfoBehaviour {
     ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
         if let Some(event) = self.peer_manager.pending_events.pop_front() {
             return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
+        }
+
+        if let Poll::Ready(_) = self.health_check.poll_tick(cx) {
+            if let Some(peer_id) = self.peer_manager.get_disconnected_reserved_peer() {
+                return Poll::Ready(NetworkBehaviourAction::GenerateEvent(
+                    PeerInfoEvent::ReconnectToPeer(*peer_id),
+                ))
+            }
         }
 
         loop {
@@ -492,7 +508,6 @@ impl PeerManager {
         }
     }
 
-    /// Insert latest ping to a connected Node
     fn insert_latest_ping(&mut self, peer_id: &PeerId, duration: Duration) {
         if let Some(peer) = self.connected_peers.get_mut(peer_id) {
             peer.latest_ping = Some(duration);
@@ -507,6 +522,12 @@ impl PeerManager {
         } else {
             log_missing_peer(peer_id);
         }
+    }
+
+    fn get_disconnected_reserved_peer(&self) -> Option<&PeerId> {
+        self.reserved_peers
+            .iter()
+            .find(|peer_id| !self.connected_peers.contains_key(peer_id))
     }
 
     fn reserved_peers_connected_count(&self) -> usize {
