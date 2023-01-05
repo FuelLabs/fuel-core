@@ -379,6 +379,9 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 PeerInfoEvent::PeerConnected(peer_id) => {
                     return Some(FuelP2PEvent::PeerConnected(peer_id))
                 }
+                PeerInfoEvent::ReconnectToPeer(peer_id) => {
+                    let _ = self.swarm.dial(peer_id);
+                }
                 PeerInfoEvent::PeerDisconnected {
                     peer_id,
                     should_reconnect,
