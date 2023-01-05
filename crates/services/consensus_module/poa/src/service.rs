@@ -277,6 +277,7 @@ where
     /// Processes the next incoming event. Called by the main event loop.
     /// Returns Ok(false) if the event loop should stop.
     async fn process_next_event(&mut self) -> anyhow::Result<bool> {
+        let should_continue;
         tokio::select! {
             // TODO: This should likely be refactored to use something like tokio::sync::Notify.
             //       Otherwise, if a bunch of txs are submitted at once and all the txs are included
@@ -287,17 +288,17 @@ where
             txpool_event = self.tx_status_update_stream.next() => {
                 if let Some(txpool_event) = txpool_event {
                     self.on_txpool_event(txpool_event).await.context("While processing txpool event")?;
-                    Ok(true)
+                    should_continue = true;
                 } else {
-                    let should_continue = false;
-                    Ok(should_continue)
+                    should_continue = false;
                 }
             }
             at = self.timer.wait() => {
                 self.on_timer(at).await.context("While processing timer event")?;
-                Ok(true)
+                should_continue = true;
             }
         }
+        Ok(should_continue)
     }
 }
 

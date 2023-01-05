@@ -1,4 +1,7 @@
-use crate::database::Database;
+use crate::{
+    database::Database,
+    service::adapters::P2PAdapter,
+};
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
@@ -12,13 +15,11 @@ use std::{
 };
 use tracing::log::warn;
 
-use crate::service::adapters::P2PAdapter;
 pub use config::{
     Config,
     DbType,
     VMConfig,
 };
-
 pub use fuel_core_services::Service as ServiceTrait;
 
 pub mod adapters;
@@ -106,7 +107,7 @@ impl FuelService {
         config: Config,
     ) -> anyhow::Result<Self> {
         let service = Self::new(database, config)?;
-        service.runner.start()?;
+        service.runner.start_and_await().await?;
         Ok(service)
     }
 
@@ -134,6 +135,14 @@ impl FuelService {
 impl ServiceTrait for FuelService {
     fn start(&self) -> anyhow::Result<()> {
         self.runner.start()
+    }
+
+    async fn start_and_await(&self) -> anyhow::Result<State> {
+        self.runner.start_and_await().await
+    }
+
+    async fn await_start_or_stop(&self) -> anyhow::Result<State> {
+        self.runner.await_start_or_stop().await
     }
 
     fn stop(&self) -> bool {
@@ -191,7 +200,7 @@ impl RunnableService for Task {
 
     async fn into_task(self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
         for service in &self.services {
-            service.start()?;
+            service.start_and_await().await?;
         }
         Ok(self)
     }
@@ -225,7 +234,7 @@ impl RunnableTask for Task {
             }
         }
 
-        Ok(true /* should_stop */)
+        Ok(false /* should_continue */)
     }
 }
 
@@ -279,7 +288,7 @@ mod tests {
         let mut i = 0;
         loop {
             let task = Task::new(Default::default(), Config::local_node()).unwrap();
-            let (_sender, receiver) = tokio::sync::watch::channel(State::NotStarted);
+            let (_, receiver) = tokio::sync::watch::channel(State::NotStarted);
             let mut task = task.into_task(&receiver).await.unwrap();
             sleep(Duration::from_secs(1));
             for service in task.sub_services() {
@@ -288,7 +297,7 @@ mod tests {
 
             if i < task.sub_services().len() {
                 task.sub_services()[i].stop_and_await().await.unwrap();
-                assert!(task.run().await.unwrap());
+                assert!(!task.run().await.unwrap());
             } else {
                 break
             }

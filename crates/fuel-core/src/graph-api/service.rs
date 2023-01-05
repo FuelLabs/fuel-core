@@ -134,7 +134,7 @@ impl RunnableTask for Task {
         self.server.as_mut().await?;
         // The `axum::Server` has its internal loop. If `await` is finished, we get an internal
         // error or stop signal.
-        Ok(true /* should_stop */)
+        Ok(false /* should_continue */)
     }
 }
 

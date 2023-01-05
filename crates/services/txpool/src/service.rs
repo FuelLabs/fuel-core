@@ -130,6 +130,7 @@ where
     DB: TxPoolDb,
 {
     async fn run(&mut self) -> anyhow::Result<bool> {
+        let should_continue;
         tokio::select! {
             new_transaction = self.gossiped_tx_stream.next() => {
                 if let Some(GossipData { data: Some(tx), .. }) = new_transaction {
@@ -138,22 +139,22 @@ where
                         &self.shared.tx_status_sender,
                         &txs
                     );
+                    should_continue = true;
                 } else {
-                    let should_continue = false;
-                    return Ok(should_continue);
+                    should_continue = false;
                 }
             }
 
             block = self.committed_block_stream.next() => {
                 if let Some(block) = block {
                     self.shared.txpool.lock().block_update(&self.shared.tx_status_sender, block);
+                    should_continue = true;
                 } else {
-                    let should_continue = false;
-                    return Ok(should_continue);
+                    should_continue = false;
                 }
             }
         }
-        Ok(true /* should_continue */)
+        Ok(should_continue)
     }
 }
 

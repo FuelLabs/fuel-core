@@ -383,10 +383,6 @@ pub mod tests {
         },
         primitives::BlockHeight,
     };
-    use tokio::time::{
-        sleep,
-        Duration,
-    };
 
     #[derive(Clone, Debug)]
     struct FakeDb;
@@ -407,13 +403,12 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn start_stop_works() {
+    async fn start_and_stop_awaits_works() {
         let p2p_config = Config::default_initialized("start_stop_works");
         let service = new_service(p2p_config, FakeDb);
 
         // Node with p2p service started
-        assert!(service.start().is_ok());
-        sleep(Duration::from_secs(1)).await;
+        assert!(service.start_and_await().await.unwrap().started());
         // Node with p2p service stopped
         assert!(service.stop_and_await().await.unwrap().stopped());
     }
