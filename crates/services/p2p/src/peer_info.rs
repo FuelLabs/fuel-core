@@ -108,7 +108,7 @@ impl PeerInfoBehaviour {
         let reserved_peers: HashSet<PeerId> = config
             .reserved_nodes
             .iter()
-            .filter_map(|addr| PeerId::try_from_multiaddr(addr))
+            .filter_map(PeerId::try_from_multiaddr)
             .collect();
 
         let peer_manager =
@@ -130,10 +130,7 @@ impl PeerInfoBehaviour {
 
     /// returns an iterator over the connected peers
     pub fn get_peers_ids(&self) -> impl Iterator<Item = &PeerId> {
-        self.peer_manager
-            .connected_peers
-            .iter()
-            .map(|(peer_id, _)| peer_id)
+        self.peer_manager.connected_peers.keys()
     }
 
     pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<&PeerInfo> {
@@ -307,7 +304,7 @@ impl NetworkBehaviour for PeerInfoBehaviour {
             return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
         }
 
-        if let Poll::Ready(_) = self.health_check.poll_tick(cx) {
+        if self.health_check.poll_tick(cx).is_ready() {
             if let Some(peer_id) = self.peer_manager.get_disconnected_reserved_peer() {
                 return Poll::Ready(NetworkBehaviourAction::GenerateEvent(
                     PeerInfoEvent::ReconnectToPeer(*peer_id),
