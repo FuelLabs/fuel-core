@@ -178,6 +178,14 @@ impl BlockHeader {
             self.hash()
         }
     }
+
+    /// Validate the transactions match the header.
+    pub fn validate_transactions(&self, transactions: &[Vec<u8>]) -> bool {
+        // Generate the transaction merkle root.
+        let transactions_root = generate_txns_root(transactions);
+
+        transactions_root != self.application.transactions_root
+    }
 }
 
 impl PartialBlockHeader {
@@ -199,11 +207,7 @@ impl PartialBlockHeader {
         message_ids: &[MessageId],
     ) -> BlockHeader {
         // Generate the transaction merkle root.
-        let mut transaction_tree = fuel_merkle::binary::in_memory::MerkleTree::new();
-        for id in transactions {
-            transaction_tree.push(id.as_ref());
-        }
-        let transactions_root = transaction_tree.root().into();
+        let transactions_root = generate_txns_root(transactions);
 
         // Generate the message merkle root.
         let mut message_tree = fuel_merkle::binary::in_memory::MerkleTree::new();
@@ -239,6 +243,15 @@ impl PartialBlockHeader {
         header.recalculate_metadata();
         header
     }
+}
+
+fn generate_txns_root(transactions: &[Vec<u8>]) -> Bytes32 {
+    // Generate the transaction merkle root.
+    let mut transaction_tree = fuel_merkle::binary::in_memory::MerkleTree::new();
+    for id in transactions {
+        transaction_tree.push(id.as_ref());
+    }
+    transaction_tree.root().into()
 }
 
 impl ApplicationHeader<GeneratedApplicationFields> {

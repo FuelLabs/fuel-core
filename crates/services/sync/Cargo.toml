@@ -1,16 +1,25 @@
 [package]
-name = "fuel-core-sync"
-version = "0.15.1"
 authors = ["Fuel Labs <contact@fuel.sh>"]
+description = "Fuel Synchronizer"
 edition = "2021"
 homepage = "https://fuel.network/"
 keywords = ["blockchain", "fuel", "fuel-vm"]
 license = "BUSL-1.1"
+name = "fuel-core-sync"
 repository = "https://github.com/FuelLabs/fuel-core"
-description = "Fuel Synchronizer"
+version = "0.15.1"
 
 [dependencies]
 anyhow = "1.0"
+async-trait = "0.1.60"
+fuel-core-services = { path = "../" }
 fuel-core-types = { path = "../../types", version = "0.15.1" }
-parking_lot = "0.12"
+futures = "0.3.25"
 tokio = { version = "1.21", features = ["full"] }
+
+[dev-dependencies]
+fuel-core-types = { path = "../../types", features = [
+    "test-helpers",
+] }
+mockall = "0.11.3"
+test-case = "2.2.2"
