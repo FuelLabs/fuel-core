@@ -4,7 +4,7 @@ use super::{
     receipt::Receipt,
 };
 use crate::{
-    graph_api::service::{
+    fuel_core_graphql_api::service::{
         Database,
         TxPool,
     },

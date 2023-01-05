@@ -24,6 +24,9 @@ pub mod schema;
 pub mod service;
 pub mod state;
 
-// In the future this module will be a separate crate for `fuel-core-graph-api`.
-#[path = "graph-api/mod.rs"]
-pub mod graph_api;
+// In the future this module will be a separate crate for `fuel-core-graphql-api`.
+mod graphql_api;
+
+pub mod fuel_core_graphql_api {
+    pub use crate::graphql_api::*;
+}

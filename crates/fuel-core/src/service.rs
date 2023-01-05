@@ -39,7 +39,7 @@ pub struct SharedState {
     /// The Relayer shared state.
     pub relayer: Option<fuel_core_relayer::SharedState>,
     /// The GraphQL shared state.
-    pub graph_ql: crate::graph_api::service::SharedState,
+    pub graph_ql: crate::fuel_core_graphql_api::service::SharedState,
 }
 
 pub struct FuelService {

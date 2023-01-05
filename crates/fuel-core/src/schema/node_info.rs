@@ -1,5 +1,5 @@
 use super::scalars::U64;
-use crate::graph_api::Config as GraphQLConfig;
+use crate::fuel_core_graphql_api::Config as GraphQLConfig;
 use async_graphql::{
     Context,
     Object,

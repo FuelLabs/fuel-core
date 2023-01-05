@@ -3,7 +3,7 @@ use super::adapters::P2PAdapter;
 use crate::{
     chain_config::BlockProduction,
     database::Database,
-    graph_api::Config as GraphQLConfig,
+    fuel_core_graphql_api::Config as GraphQLConfig,
     service::{
         adapters::{
             BlockImportAdapter,
@@ -32,7 +32,7 @@ pub type RelayerService = fuel_core_relayer::Service<Database>;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database>;
 pub type TxPoolService = fuel_core_txpool::Service<P2PAdapter, Database>;
-pub type GraphQL = crate::graph_api::service::Service;
+pub type GraphQL = crate::fuel_core_graphql_api::service::Service;
 
 pub fn init_sub_services(
     config: &Config,
@@ -117,7 +117,7 @@ pub fn init_sub_services(
         ),
     };
 
-    let graph_ql = crate::graph_api::service::new_service(
+    let graph_ql = crate::fuel_core_graphql_api::service::new_service(
         GraphQLConfig {
             addr: config.addr,
             utxo_validation: config.utxo_validation,

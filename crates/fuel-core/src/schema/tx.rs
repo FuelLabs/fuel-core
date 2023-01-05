@@ -1,6 +1,6 @@
 use crate::{
     database::transaction::OwnedTransactionIndexCursor,
-    graph_api::service::{
+    fuel_core_graphql_api::service::{
         BlockProducer,
         Database,
         TxPool,

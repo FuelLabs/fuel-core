@@ -1,5 +1,5 @@
 use crate::{
-    graph_api::Config,
+    graphql_api::Config,
     schema::{
         build_schema,
         dap,

@@ -3,7 +3,7 @@ use super::scalars::{
     Tai64Timestamp,
 };
 use crate::{
-    graph_api::{
+    fuel_core_graphql_api::{
         service::{
             Database,
             Executor,
