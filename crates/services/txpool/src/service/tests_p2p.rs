@@ -3,6 +3,7 @@ use crate::service::test_helpers::{
     MockP2P,
     TestContextBuilder,
 };
+use fuel_core_services::Service;
 use fuel_core_types::fuel_tx::{
     Transaction,
     UniqueIdentifier,
@@ -20,10 +21,12 @@ async fn can_insert_from_p2p() {
     let p2p = MockP2P::new_with_txs(vec![tx1.clone()]);
     ctx_builder.with_p2p(p2p);
 
-    let ctx = ctx_builder.build().await;
+    let ctx = ctx_builder.build();
     let service = ctx.service();
-
     let mut receiver = service.shared.tx_update_subscribe();
+
+    service.start_and_await().await.unwrap();
+
     let res = receiver.recv().await;
     assert!(res.is_ok());
 
@@ -50,7 +53,7 @@ async fn insert_from_local_broadcasts_to_p2p() {
 
     ctx_builder.with_p2p(p2p);
     // build and start the txpool service
-    let ctx = ctx_builder.build().await;
+    let ctx = ctx_builder.build_and_start().await;
 
     let service = ctx.service();
     let mut subscribe_status = service.shared.tx_status_subscribe();
@@ -94,11 +97,13 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
     ctx_builder.with_p2p(p2p);
 
     // build and start the txpool service
-    let ctx = ctx_builder.build().await;
+    let ctx = ctx_builder.build();
     let service = ctx.service();
-
     // verify tx status update from p2p injected tx is successful
     let mut receiver = service.shared.tx_update_subscribe();
+
+    service.start_and_await().await.unwrap();
+
     let res = receiver.recv().await;
     assert!(res.is_ok());
 

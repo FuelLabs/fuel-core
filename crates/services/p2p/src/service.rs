@@ -22,7 +22,9 @@ use crate::{
 use anyhow::anyhow;
 use fuel_core_services::{
     RunnableService,
+    RunnableTask,
     ServiceRunner,
+    StateWatcher,
 };
 use fuel_core_types::{
     blockchain::{
@@ -111,20 +113,28 @@ impl<D> Task<D> {
 #[async_trait::async_trait]
 impl<D> RunnableService for Task<D>
 where
-    D: P2pDb + 'static,
+    Self: RunnableTask,
 {
     const NAME: &'static str = "P2P";
 
     type SharedData = SharedState;
+    type Task = Task<D>;
 
     fn shared_data(&self) -> Self::SharedData {
         self.shared.clone()
     }
 
-    async fn initialize(&mut self) -> anyhow::Result<()> {
-        self.p2p_service.start()
+    async fn into_task(mut self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
+        self.p2p_service.start()?;
+        Ok(self)
     }
+}
 
+#[async_trait::async_trait]
+impl<D> RunnableTask for Task<D>
+where
+    D: P2pDb + 'static,
+{
     async fn run(&mut self) -> anyhow::Result<bool> {
         tokio::select! {
             // TODO: Maybe we want to use `biased;` to first process requests asked by us.
@@ -373,10 +383,6 @@ pub mod tests {
         },
         primitives::BlockHeight,
     };
-    use tokio::time::{
-        sleep,
-        Duration,
-    };
 
     #[derive(Clone, Debug)]
     struct FakeDb;
@@ -397,13 +403,12 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn start_stop_works() {
+    async fn start_and_stop_awaits_works() {
         let p2p_config = Config::default_initialized("start_stop_works");
         let service = new_service(p2p_config, FakeDb);
 
         // Node with p2p service started
-        assert!(service.start().is_ok());
-        sleep(Duration::from_secs(1)).await;
+        assert!(service.start_and_await().await.unwrap().started());
         // Node with p2p service stopped
         assert!(service.stop_and_await().await.unwrap().stopped());
     }

@@ -1,7 +1,9 @@
 use crate::{
-    database::{
-        transaction::OwnedTransactionIndexCursor,
+    database::transaction::OwnedTransactionIndexCursor,
+    fuel_core_graphql_api::service::{
+        BlockProducer,
         Database,
+        TxPool,
     },
     query::{
         transaction_status_change,
@@ -13,7 +15,6 @@ use crate::{
         SortedTxCursor,
         TransactionId,
     },
-    service::modules::TxPoolService,
     state::IterDirection,
 };
 use async_graphql::{
@@ -76,7 +77,7 @@ impl TxQuery {
     ) -> async_graphql::Result<Option<Transaction>> {
         let db = ctx.data_unchecked::<Database>();
         let id = id.0;
-        let txpool = ctx.data_unchecked::<TxPoolService>();
+        let txpool = ctx.data_unchecked::<TxPool>();
 
         if let Some(transaction) = txpool.shared.find_one(id) {
             Ok(Some(Transaction(transaction.tx().clone().deref().into())))
@@ -220,8 +221,7 @@ impl TxMutation {
         // for read-only calls.
         utxo_validation: Option<bool>,
     ) -> async_graphql::Result<Vec<receipt::Receipt>> {
-        let block_producer =
-            ctx.data_unchecked::<Arc<fuel_core_producer::Producer<Database>>>();
+        let block_producer = ctx.data_unchecked::<BlockProducer>();
 
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute();
@@ -236,7 +236,7 @@ impl TxMutation {
         ctx: &Context<'_>,
         tx: HexString,
     ) -> async_graphql::Result<Transaction> {
-        let txpool = ctx.data_unchecked::<TxPoolService>();
+        let txpool = ctx.data_unchecked::<TxPool>();
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute();
         let _: Vec<_> = txpool
@@ -254,7 +254,7 @@ impl TxMutation {
 pub struct TxStatusSubscription;
 
 struct StreamState {
-    txpool: TxPoolService,
+    txpool: TxPool,
     db: Database,
 }
 
@@ -277,7 +277,7 @@ impl TxStatusSubscription {
         ctx: &Context<'_>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> impl Stream<Item = async_graphql::Result<TransactionStatus>> {
-        let txpool = ctx.data_unchecked::<TxPoolService>().clone();
+        let txpool = ctx.data_unchecked::<TxPool>().clone();
         let db = ctx.data_unchecked::<Database>().clone();
         let rx = BroadcastStream::new(txpool.shared.tx_update_subscribe());
         let state = Box::new(StreamState { txpool, db });

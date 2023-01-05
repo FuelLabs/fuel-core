@@ -1,5 +1,5 @@
 use crate::{
-    database::Database,
+    fuel_core_graphql_api::service::Database,
     schema::scalars::{
         AssetId,
         ContractId,

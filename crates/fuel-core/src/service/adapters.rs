@@ -30,6 +30,7 @@ impl TxPoolAdapter {
     }
 }
 
+#[derive(Clone)]
 pub struct ExecutorAdapter {
     pub database: Database,
     pub config: Config,
@@ -38,7 +39,7 @@ pub struct ExecutorAdapter {
 pub struct MaybeRelayerAdapter {
     pub database: Database,
     #[cfg(feature = "relayer")]
-    pub relayer_synced: Option<fuel_core_relayer::RelayerSynced>,
+    pub relayer_synced: Option<fuel_core_relayer::SharedState>,
 }
 
 pub struct BlockProducerAdapter {

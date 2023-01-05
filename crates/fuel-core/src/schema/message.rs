@@ -10,7 +10,7 @@ use super::{
     },
 };
 use crate::{
-    database::Database,
+    fuel_core_graphql_api::service::Database,
     query::MessageProofData,
 };
 use async_graphql::{
