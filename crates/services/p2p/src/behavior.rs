@@ -81,7 +81,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
 
             discovery_config
                 .enable_mdns(p2p_config.enable_mdns)
-                .discovery_limit(p2p_config.max_peers_connected)
+                .discovery_limit(p2p_config.max_peers_connected as usize)
                 .allow_private_addresses(p2p_config.allow_private_addresses)
                 .with_bootstrap_nodes(p2p_config.bootstrap_nodes.clone())
                 .with_reserved_nodes(p2p_config.reserved_nodes.clone())
@@ -98,7 +98,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
             discovery_config
         };
 
-        let peer_info = PeerInfoBehaviour::new(local_public_key, p2p_config);
+        let peer_info = PeerInfoBehaviour::new(p2p_config);
 
         let req_res_protocol =
             std::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
