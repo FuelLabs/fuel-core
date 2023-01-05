@@ -575,3 +575,89 @@ impl PeerManager {
 fn log_missing_peer(peer_id: &PeerId) {
     debug!(target: "fuel-libp2p", "Peer with PeerId: {:?} is not among the connected peers", peer_id)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn get_random_peers(size: usize) -> Vec<PeerId> {
+        (0..size).map(|_| PeerId::random()).collect()
+    }
+
+    #[test]
+    fn test_peer_manager_struct() {
+        let reserved_peer_size = 5;
+        let max_connetions_allowed = 20;
+        let reserved_peers = get_random_peers(reserved_peer_size);
+        let random_peers = get_random_peers(max_connetions_allowed * 2);
+
+        let mut peer_manager = PeerManager::new(
+            reserved_peers.clone().into_iter().collect(),
+            max_connetions_allowed,
+        );
+
+        // try connecting only random peers
+        for peer_id in &random_peers {
+            peer_manager.handle_initial_connection(*peer_id);
+        }
+
+        // only amount of non-reserved peers allowed should be connected
+        assert_eq!(
+            peer_manager.connected_peers.len(),
+            peer_manager.non_reserved_peers_allowed
+        );
+        // or in other words:
+        assert_eq!(
+            peer_manager.connected_peers.len(),
+            random_peers.len() / 2 - reserved_peer_size
+        );
+
+        // connect resereved peers
+        for peer_id in &reserved_peers {
+            peer_manager.handle_initial_connection(*peer_id);
+        }
+
+        // the connections should be at max now
+        assert_eq!(peer_manager.connected_peers.len(), max_connetions_allowed);
+
+        // disconnect a reserved peer
+        peer_manager.handle_peer_disconnect(*reserved_peers.first().unwrap());
+        assert_eq!(
+            peer_manager.connected_peers.len(),
+            max_connetions_allowed - 1
+        );
+
+        // assert that the last random peer is not already connected
+        assert!(!peer_manager
+            .connected_peers
+            .contains_key(random_peers.last().unwrap()));
+
+        // try to connect the last random peer in the list
+        peer_manager.handle_initial_connection(*random_peers.last().unwrap());
+
+        // the connection count should remain the same as when the reserved peer disconnected
+        // that is, the connection has been refused
+        assert_eq!(
+            peer_manager.connected_peers.len(),
+            max_connetions_allowed - 1
+        );
+
+        // reconnect the first reserved peer that was disconnected
+        peer_manager.handle_initial_connection(*reserved_peers.first().unwrap());
+        assert_eq!(peer_manager.connected_peers.len(), max_connetions_allowed);
+
+        // disconnect a single non-reserved peer
+        peer_manager.handle_peer_disconnect(*random_peers.first().unwrap());
+        assert_eq!(
+            peer_manager.connected_peers.len(),
+            max_connetions_allowed - 1
+        );
+
+        // connect a different non-reserved peer
+        peer_manager.handle_initial_connection(*random_peers.last().unwrap());
+
+        // the connection should be successful,
+        // and we should be up to our max connections count again
+        assert_eq!(peer_manager.connected_peers.len(), max_connetions_allowed);
+    }
+}
