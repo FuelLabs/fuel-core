@@ -57,6 +57,7 @@ use libp2p::{
     PeerId,
     Swarm,
 };
+use libp2p_swarm::ConnectionLimits;
 use rand::Rng;
 use std::collections::HashMap;
 use tracing::{
@@ -131,8 +132,13 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         // configure and build P2P Service
         let transport = build_transport(&config);
         let behaviour = FuelBehaviour::new(&config, codec.clone());
+
+        let connection_limits = ConnectionLimits::default()
+            .with_max_established(Some(config.max_peers_connected));
+
         let mut swarm =
             SwarmBuilder::with_tokio_executor(transport, behaviour, local_peer_id)
+                .connection_limits(connection_limits)
                 .build();
 
         // subscribe to gossipsub topics with the network name suffix
@@ -465,7 +471,6 @@ mod tests {
                 NEW_TX_GOSSIP_TOPIC,
             },
         },
-        gossipsub_config::default_gossipsub_builder,
         p2p_service::FuelP2PEvent,
         peer_info::PeerInfo,
         request_response::messages::{
@@ -637,23 +642,10 @@ mod tests {
     #[instrument]
     async fn sentry_nodes_working() {
         let reserved_nodes_size = 4;
-        let double_reserved_nodes_size = reserved_nodes_size * 2;
 
         let mut p2p_config = Config::default_initialized("sentry_nodes_working");
         // enable mdns for faster discovery of nodes
         p2p_config.enable_mdns = true;
-
-        // The desired mesh number is double of the size of the reserved nodes.
-        // This way the non-guarded nodes will want to try to connect to as many nodes as possible in the network.
-        // This still should not affect the guarded nodes that are enabling `reserved_nodes_only_mode`.
-        let gossipsub_config = default_gossipsub_builder()
-            .mesh_n(double_reserved_nodes_size)
-            .mesh_n_low(double_reserved_nodes_size)
-            .mesh_n_high(double_reserved_nodes_size)
-            .build()
-            .expect("valid gossipsub configuration");
-
-        p2p_config.gossipsub_config = gossipsub_config;
 
         let build_sentry_nodes = || {
             let guarded_node = NodeData::random();
@@ -700,7 +692,7 @@ mod tests {
             .collect();
 
         let mut single_sentry_node = first_sentry_nodes.pop().unwrap();
-        let mut sentry_node_connetions = HashSet::new();
+        let mut sentry_node_connections = HashSet::new();
 
         loop {
             tokio::select! {
@@ -723,11 +715,11 @@ mod tests {
                 // Poll one of the reserved, sentry nodes
                 sentry_node_event = single_sentry_node.next_event() => {
                     if let Some(FuelP2PEvent::PeerConnected(peer_id)) = sentry_node_event {
-                        sentry_node_connetions.insert(peer_id);
+                        sentry_node_connections.insert(peer_id);
                     }
                     // This reserved node has connected to more than the number of reserved nodes it is part of.
                     // It means it has discovered other nodes in the network.
-                    if sentry_node_connetions.len() > reserved_nodes_size {
+                    if sentry_node_connections.len() > reserved_nodes_size {
                         // At the same time, the guarded nodes have only connected to their reserved nodes.
                         if first_sentry_set.is_empty() && first_sentry_set.is_empty() {
                             break;
