@@ -145,8 +145,13 @@ pub fn init_sub_services(
     };
 
     #[allow(unused_mut)]
-    let mut services: SubServices =
-        vec![Box::new(poa), Box::new(txpool), Box::new(graph_ql)];
+    // `FuelService` starts and shutdowns all sub-services in the `services` order
+    let mut services: SubServices = vec![
+        // GraphQL should be shutdown first, so let's start it first.
+        Box::new(graph_ql),
+        Box::new(poa),
+        Box::new(txpool),
+    ];
 
     #[cfg(feature = "relayer")]
     if let Some(relayer) = relayer {

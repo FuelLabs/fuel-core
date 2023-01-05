@@ -57,6 +57,7 @@ pub struct FuelService {
 
 impl FuelService {
     /// Creates a `FuelService` instance from service config
+    #[tracing::instrument(skip_all)]
     pub fn new(database: Database, mut config: Config) -> anyhow::Result<Self> {
         Self::make_config_consistent(&mut config);
         let task = Task::new(database, config)?;
@@ -71,7 +72,6 @@ impl FuelService {
     }
 
     /// Creates and starts fuel node instance from service config
-    #[tracing::instrument(skip(config))]
     pub async fn new_node(config: Config) -> anyhow::Result<Self> {
         // initialize database
         let database = match config.database_type {
@@ -83,22 +83,6 @@ impl FuelService {
         };
 
         Self::from_database(database, config).await
-    }
-
-    // TODO: Rework our configs system to avoid nesting of the same configs.
-    fn make_config_consistent(config: &mut Config) {
-        if config.txpool.chain_config != config.chain_conf {
-            warn!("The `ChainConfig` of `TxPool` was inconsistent");
-            config.txpool.chain_config = config.chain_conf.clone();
-        }
-        if config.txpool.utxo_validation != config.utxo_validation {
-            warn!("The `utxo_validation` of `TxPool` was inconsistent");
-            config.txpool.utxo_validation = config.utxo_validation;
-        }
-        if config.block_producer.utxo_validation != config.utxo_validation {
-            warn!("The `utxo_validation` of `BlockProducer` was inconsistent");
-            config.block_producer.utxo_validation = config.utxo_validation;
-        }
     }
 
     /// Creates and starts fuel node instance from service config and a pre-existing database
@@ -128,6 +112,22 @@ impl FuelService {
             relayer_handle.await_synced().await?;
         }
         Ok(())
+    }
+
+    // TODO: Rework our configs system to avoid nesting of the same configs.
+    fn make_config_consistent(config: &mut Config) {
+        if config.txpool.chain_config != config.chain_conf {
+            warn!("The `ChainConfig` of `TxPool` was inconsistent");
+            config.txpool.chain_config = config.chain_conf.clone();
+        }
+        if config.txpool.utxo_validation != config.utxo_validation {
+            warn!("The `utxo_validation` of `TxPool` was inconsistent");
+            config.txpool.utxo_validation = config.utxo_validation;
+        }
+        if config.block_producer.utxo_validation != config.utxo_validation {
+            warn!("The `utxo_validation` of `BlockProducer` was inconsistent");
+            config.block_producer.utxo_validation = config.utxo_validation;
+        }
     }
 }
 
@@ -285,6 +285,7 @@ mod tests {
 
     #[tokio::test]
     async fn run_start_and_stop() {
+        // The test verify that if we stop any of sub-services
         let mut i = 0;
         loop {
             let task = Task::new(Default::default(), Config::local_node()).unwrap();
