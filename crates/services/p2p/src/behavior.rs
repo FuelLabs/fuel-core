@@ -135,8 +135,12 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         }
     }
 
-    pub fn get_peers_ids(&self) -> Vec<&PeerId> {
+    pub fn get_peers_ids(&self) -> impl Iterator<Item = &PeerId> {
         self.peer_info.get_peers_ids()
+    }
+
+    pub fn total_peers_connected(&self) -> usize {
+        self.peer_info.total_peers_connected()
     }
 
     pub fn publish_message(
@@ -183,9 +187,9 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         )
     }
 
-    // Currently only used in testing, but should be useful for the NetworkOrchestrator API
+    // Currently only used in testing, but should be useful for the P2P Service API
     #[allow(dead_code)]
-    pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<PeerInfo> {
+    pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<&PeerInfo> {
         self.peer_info.get_peer_info(peer_id)
     }
 }

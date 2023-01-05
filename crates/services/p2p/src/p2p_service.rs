@@ -179,7 +179,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         Ok(())
     }
 
-    pub fn get_peers_ids(&self) -> Vec<&PeerId> {
+    pub fn get_peers_ids(&self) -> impl Iterator<Item = &PeerId> {
         self.swarm.behaviour().get_peers_ids()
     }
 
@@ -212,12 +212,15 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let peer_id = match peer_id {
             Some(peer_id) => peer_id,
             _ => {
-                let connected_peers = self.get_peers_ids();
-                if connected_peers.is_empty() {
+                let mut peers = self.get_peers_ids();
+                let peers_count = self.swarm.behaviour().total_peers_connected();
+
+                if peers_count == 0 {
                     return Err(RequestError::NoPeersConnected)
                 }
-                let rand_index = rand::thread_rng().gen_range(0..connected_peers.len());
-                **connected_peers.get(rand_index).unwrap()
+
+                let rand_index = rand::thread_rng().gen_range(0..peers_count);
+                *peers.nth(rand_index).unwrap()
             }
         };
 

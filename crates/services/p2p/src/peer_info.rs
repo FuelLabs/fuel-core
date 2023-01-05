@@ -52,7 +52,7 @@ use tracing::debug;
 const MAX_IDENTIFY_ADDRESSES: usize = 10;
 
 /// Events emitted by PeerInfoBehaviour
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PeerInfoEvent {
     PeerConnected(PeerId),
     PeerDisconnected {
@@ -72,56 +72,11 @@ pub enum PeerInfoEvent {
     },
 }
 
-#[derive(Debug, Clone)]
-pub struct PeerInfo<'a> {
-    pub peer_addresses: &'a HashSet<Multiaddr>,
-    pub client_version: &'a Option<String>,
-    pub latest_ping: &'a Option<Duration>,
-}
-
-impl<'a> From<&'a ConnectedPeerInfo> for PeerInfo<'a> {
-    fn from(value: &'a ConnectedPeerInfo) -> Self {
-        PeerInfo {
-            peer_addresses: &value.peer_addresses,
-            client_version: &value.client_version,
-            latest_ping: &value.latest_ping,
-        }
-    }
-}
-
-impl<'a> From<&'a ReservedPeerInfo> for PeerInfo<'a> {
-    fn from(value: &'a ReservedPeerInfo) -> Self {
-        PeerInfo {
-            peer_addresses: &value.peer_addresses,
-            client_version: &value.client_version,
-            latest_ping: &value.latest_ping,
-        }
-    }
-}
-
-// Info about a single Peer that we're connected to
-#[derive(Debug, Default, Clone)]
-pub struct ConnectedPeerInfo {
-    pub peer_addresses: HashSet<Multiaddr>,
-    pub client_version: Option<String>,
-    pub latest_ping: Option<Duration>,
-}
-
-#[derive(Debug, Default, Clone)]
-struct ReservedPeerInfo {
-    peer_addresses: HashSet<Multiaddr>,
-    client_version: Option<String>,
-    latest_ping: Option<Duration>,
-    is_connected: bool,
-}
-
 // `Behaviour` that holds info about peers
 pub struct PeerInfoBehaviour {
     ping: Ping,
     identify: Identify,
-    pending_events: VecDeque<PeerInfoEvent>,
-    connected_peers: HashMap<PeerId, ConnectedPeerInfo>,
-    reserved_peers: HashMap<PeerId, ReservedPeerInfo>,
+    peer_manager: PeerManager,
 }
 
 impl PeerInfoBehaviour {
@@ -145,134 +100,41 @@ impl PeerInfoBehaviour {
             }
         };
 
-        let reserved_peers: HashMap<PeerId, ReservedPeerInfo> = config
+        let reserved_peers: HashSet<PeerId> = config
             .reserved_nodes
             .iter()
-            .filter_map(|addr| {
-                Some((
-                    PeerId::try_from_multiaddr(addr)?,
-                    ReservedPeerInfo::default(),
-                ))
-            })
+            .filter_map(|addr| PeerId::try_from_multiaddr(addr))
             .collect();
 
-        let non_reserved_peers_capacity =
-            config.max_peers_connected as usize - reserved_peers.len();
+        let peer_manager =
+            PeerManager::new(reserved_peers, config.max_peers_connected as usize);
 
         Self {
             ping,
             identify,
-            pending_events: VecDeque::default(),
-            connected_peers: HashMap::with_capacity(non_reserved_peers_capacity),
-            reserved_peers,
+            peer_manager,
         }
     }
 
-    pub fn get_peers_ids(&self) -> Vec<&PeerId> {
-        let connected_peers = self.connected_peers.keys();
-        let reserved_peers = self.reserved_peers.keys();
-        connected_peers.chain(reserved_peers).collect()
+    pub fn total_peers_connected(&self) -> usize {
+        self.peer_manager.connected_peers.len()
     }
 
-    pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<PeerInfo> {
-        self.connected_peers
-            .get(peer_id)
-            .map(Into::into)
-            .or_else(|| self.reserved_peers.get(peer_id).map(Into::into))
+    /// returns an iterator over the connected peers
+    pub fn get_peers_ids(&self) -> impl Iterator<Item = &PeerId> {
+        self.peer_manager
+            .connected_peers
+            .iter()
+            .map(|(peer_id, _)| peer_id)
+    }
+
+    pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<&PeerInfo> {
+        self.peer_manager.connected_peers.get(peer_id)
     }
 
     pub fn insert_peer_addresses(&mut self, peer_id: &PeerId, addresses: Vec<Multiaddr>) {
-        if let Some(reserved_peer) = self.reserved_peers.get_mut(peer_id) {
-            for address in addresses {
-                reserved_peer.peer_addresses.insert(address);
-            }
-        } else if let Some(peer) = self.connected_peers.get_mut(peer_id) {
-            for address in addresses {
-                peer.peer_addresses.insert(address);
-            }
-        } else {
-            log_missing_peer(peer_id);
-        }
+        self.peer_manager.insert_peer_addresses(peer_id, addresses)
     }
-
-    /// Insert latest ping to a connected Node
-    fn insert_latest_ping(&mut self, peer_id: &PeerId, duration: Duration) {
-        if let Some(reserved_peer) = self.reserved_peers.get_mut(peer_id) {
-            reserved_peer.latest_ping = Some(duration);
-        } else if let Some(peer) = self.connected_peers.get_mut(peer_id) {
-            peer.latest_ping = Some(duration);
-        } else {
-            log_missing_peer(peer_id);
-        }
-    }
-
-    fn insert_client_version(&mut self, peer_id: &PeerId, client_version: String) {
-        if let Some(reserved_peer) = self.reserved_peers.get_mut(peer_id) {
-            reserved_peer.client_version = Some(client_version);
-        } else if let Some(peer) = self.connected_peers.get_mut(peer_id) {
-            peer.client_version = Some(client_version);
-        } else {
-            log_missing_peer(peer_id);
-        }
-    }
-
-    /// Handles the first connnection established with a Peer
-    fn handle_initial_connection(&mut self, peer_id: PeerId) {
-        if let Some(reserved_peer) = self.reserved_peers.get_mut(&peer_id) {
-            // Reserved Peers are never removed, just their connection is tracked
-            reserved_peer.is_connected = true;
-        } else if self.connected_peers.len() == self.connected_peers.capacity() {
-            // we are at max capacity of non-reserved peers allowed
-            // disconnect the newly connected peer
-            // this should only happen when one of our reserved nodes is not currently connected
-            // so there is some extra space for connections
-
-            let disconnected_reserved_peeer = self
-                .reserved_peers
-                .iter()
-                .find(|(_, peer_info)| !peer_info.is_connected)
-                .map(|(peer_id, _)| *peer_id);
-
-            // todo/potential improvement: once `Peer Reputation` is implemented we could check if there are peers
-            // with poor reputation and disconnect them instead?
-            self.pending_events.push_back(PeerInfoEvent::TooManyPeers {
-                peer_to_disconnect: peer_id,
-                peer_to_connect: disconnected_reserved_peeer,
-            });
-
-            // early return, no need to report on newly established connection
-            // since the peer will be disconnected
-            return
-        } else {
-            self.connected_peers
-                .insert(peer_id, ConnectedPeerInfo::default());
-        }
-
-        self.pending_events
-            .push_back(PeerInfoEvent::PeerConnected(peer_id));
-    }
-
-    fn handle_last_connection(&mut self, peer_id: PeerId) {
-        let should_reconnect =
-            if let Some(reserved_peer) = self.reserved_peers.get_mut(&peer_id) {
-                reserved_peer.is_connected = false;
-                // we need to connect to this peer again
-                true
-            } else {
-                self.connected_peers.remove(&peer_id);
-                false
-            };
-
-        self.pending_events
-            .push_back(PeerInfoEvent::PeerDisconnected {
-                peer_id,
-                should_reconnect,
-            })
-    }
-}
-
-fn log_missing_peer(peer_id: &PeerId) {
-    debug!(target: "fuel-libp2p", "Peer with PeerId: {:?} is not among the connected peers", peer_id)
 }
 
 impl NetworkBehaviour for PeerInfoBehaviour {
@@ -317,7 +179,7 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 
                 if other_established == 0 {
                     // this is the first connection to a given Peer
-                    self.handle_initial_connection(peer_id);
+                    self.peer_manager.handle_initial_connection(peer_id);
                 }
             }
             FromSwarm::ConnectionClosed(connection_closed) => {
@@ -355,7 +217,7 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 
                 if remaining_established == 0 {
                     // this was the last connection to a given Peer
-                    self.handle_last_connection(peer_id);
+                    self.peer_manager.handle_peer_disconnect(peer_id);
                 }
             }
             FromSwarm::AddressChange(e) => {
@@ -433,7 +295,7 @@ impl NetworkBehaviour for PeerInfoBehaviour {
         cx: &mut Context<'_>,
         params: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
-        if let Some(event) = self.pending_events.pop_front() {
+        if let Some(event) = self.peer_manager.pending_events.pop_front() {
             return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
         }
 
@@ -481,7 +343,7 @@ impl NetworkBehaviour for PeerInfoBehaviour {
                     peer,
                     result: Ok(PingSuccess::Ping { rtt }),
                 })) => {
-                    self.insert_latest_ping(&peer, rtt);
+                    self.peer_manager.insert_latest_ping(&peer, rtt);
                     let event = PeerInfoEvent::PeerInfoUpdated { peer_id: peer };
                     return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
                 }
@@ -547,8 +409,11 @@ impl NetworkBehaviour for PeerInfoBehaviour {
                                 listen_addrs.truncate(MAX_IDENTIFY_ADDRESSES);
                             }
 
-                            self.insert_client_version(&peer_id, agent_version);
-                            self.insert_peer_addresses(&peer_id, listen_addrs.clone());
+                            self.peer_manager
+                                .insert_client_version(&peer_id, agent_version);
+
+                            self.peer_manager
+                                .insert_peer_addresses(&peer_id, listen_addrs.clone());
 
                             let event = PeerInfoEvent::PeerIdentified {
                                 peer_id,
@@ -587,4 +452,126 @@ impl NetworkBehaviour for PeerInfoBehaviour {
                 .on_connection_handler_event(peer_id, connection_id, identify_event),
         }
     }
+}
+
+// Info about a single Peer that we're connected to
+#[derive(Debug, Default, Clone)]
+pub struct PeerInfo {
+    pub peer_addresses: HashSet<Multiaddr>,
+    pub client_version: Option<String>,
+    pub latest_ping: Option<Duration>,
+}
+
+#[derive(Debug, Default, Clone)]
+struct PeerManager {
+    pending_events: VecDeque<PeerInfoEvent>,
+    connected_peers: HashMap<PeerId, PeerInfo>,
+    reserved_peers: HashSet<PeerId>,
+    non_reserved_peers_allowed: usize,
+}
+
+impl PeerManager {
+    fn new(reserved_peers: HashSet<PeerId>, max_connections_allowed: usize) -> Self {
+        let reserved_peers_size = reserved_peers.len();
+
+        Self {
+            pending_events: VecDeque::default(),
+            connected_peers: HashMap::with_capacity(max_connections_allowed),
+            reserved_peers,
+            non_reserved_peers_allowed: max_connections_allowed - reserved_peers_size,
+        }
+    }
+
+    fn insert_peer_addresses(&mut self, peer_id: &PeerId, addresses: Vec<Multiaddr>) {
+        if let Some(peer) = self.connected_peers.get_mut(peer_id) {
+            for address in addresses {
+                peer.peer_addresses.insert(address);
+            }
+        } else {
+            log_missing_peer(peer_id);
+        }
+    }
+
+    /// Insert latest ping to a connected Node
+    fn insert_latest_ping(&mut self, peer_id: &PeerId, duration: Duration) {
+        if let Some(peer) = self.connected_peers.get_mut(peer_id) {
+            peer.latest_ping = Some(duration);
+        } else {
+            log_missing_peer(peer_id);
+        }
+    }
+
+    fn insert_client_version(&mut self, peer_id: &PeerId, client_version: String) {
+        if let Some(peer) = self.connected_peers.get_mut(peer_id) {
+            peer.client_version = Some(client_version);
+        } else {
+            log_missing_peer(peer_id);
+        }
+    }
+
+    fn reserved_peers_connected_count(&self) -> usize {
+        self.reserved_peers.iter().fold(0, |count, peer_id| {
+            if self.connected_peers.contains_key(peer_id) {
+                count + 1
+            } else {
+                count
+            }
+        })
+    }
+
+    fn find_disconnected_reserved_peer(&self) -> Option<PeerId> {
+        self.reserved_peers
+            .iter()
+            .find(|peer_id| self.connected_peers.contains_key(peer_id))
+            .cloned()
+    }
+
+    /// Handles the first connnection established with a Peer
+    fn handle_initial_connection(&mut self, peer_id: PeerId) {
+        // if the connected Peer is not from the reserved peers
+        if !self.reserved_peers.contains(&peer_id) {
+            let non_reserved_peers_connected =
+                self.connected_peers.len() - self.reserved_peers_connected_count();
+
+            // check if there is no more space for non-resereved peers
+            if non_reserved_peers_connected >= self.non_reserved_peers_allowed {
+                // todo/potential improvement: once `Peer Reputation` is implemented we could check if there are peers
+                // with poor reputation and disconnect them instead?
+
+                // Too many peers already connected, disconnect the Peer
+                self.pending_events.push_back(PeerInfoEvent::TooManyPeers {
+                    peer_to_disconnect: peer_id,
+                    peer_to_connect: self.find_disconnected_reserved_peer(),
+                });
+
+                // early exit, we don't want to report new peer connection
+                // nor insert it in `connected_peers`
+                // since we're going to disconnect it anyways
+                return
+            }
+        }
+
+        // insert and report on new Peer Connection
+        // for either, reserved peer or non-reserved
+        self.connected_peers.insert(peer_id, PeerInfo::default());
+        self.pending_events
+            .push_back(PeerInfoEvent::PeerConnected(peer_id));
+    }
+
+    /// Handles on peer's last connection getting disconnected
+    fn handle_peer_disconnect(&mut self, peer_id: PeerId) {
+        // try immediate reconnect if it's a reserved peer
+        let should_reconnect = self.reserved_peers.contains(&peer_id);
+        self.connected_peers.remove(&peer_id);
+
+        self.pending_events
+            .push_back(PeerInfoEvent::PeerDisconnected {
+                peer_id,
+                should_reconnect,
+            })
+    }
+}
+
+fn log_missing_peer(peer_id: &PeerId) {
+    debug!(target: "fuel-libp2p", "Peer with PeerId: {:?} is not among the connected peers", peer_id)
 }
