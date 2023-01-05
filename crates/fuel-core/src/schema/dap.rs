@@ -29,7 +29,6 @@ use fuel_core_types::{
     fuel_types::Address,
     fuel_vm::{
         consts,
-        state::DebugEval,
         GasCosts,
         Interpreter,
         InterpreterError,
@@ -46,6 +45,9 @@ use tracing::{
     trace,
 };
 use uuid::Uuid;
+
+#[cfg(feature = "debug")]
+use fuel_core_types::fuel_vm::state::DebugEval;
 
 #[derive(Debug, Clone, Default)]
 pub struct ConcreteStorage {

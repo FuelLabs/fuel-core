@@ -655,21 +655,25 @@ mod tests {
         eprintln!("{}", state.to_rust_code());
         let path = PathBuf::from(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../fuel-benches-outputs/src/test_gas_costs_output.rs"
+            "/benches-outputs/src/test_gas_costs_output.rs"
+        ));
+        let manifest_path = PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/benches-outputs/Cargo.toml"
         ));
         std::fs::write(&path, state.to_rust_code()).unwrap();
         let output = std::process::Command::new("cargo")
             .arg("check")
-            .arg("-p")
-            .arg("fuel-benches-outputs")
+            .arg("--manifest-path")
+            .arg(&manifest_path)
             .output()
             .unwrap();
         assert!(output.status.success());
         let output = std::process::Command::new("cargo")
             .arg("+nightly")
             .arg("fmt")
-            .arg("-p")
-            .arg("fuel-benches-outputs")
+            .arg("--manifest-path")
+            .arg(manifest_path)
             .arg("--")
             .arg("--check")
             .output()
