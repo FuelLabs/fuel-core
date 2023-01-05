@@ -16,7 +16,7 @@ use crate::{
         },
         topics::GossipsubTopics,
     },
-    peer_info::PeerInfoEvent,
+    peer_manager::PeerInfoEvent,
     request_response::messages::{
         IntermediateResponse,
         OutboundResponse,
@@ -490,7 +490,7 @@ mod tests {
             },
         },
         p2p_service::FuelP2PEvent,
-        peer_info::PeerInfo,
+        peer_manager::PeerInfo,
         request_response::messages::{
             OutboundResponse,
             RequestMessage,

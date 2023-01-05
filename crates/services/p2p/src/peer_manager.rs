@@ -76,7 +76,7 @@ pub enum PeerInfoEvent {
 }
 
 // `Behaviour` that holds info about peers
-pub struct PeerInfoBehaviour {
+pub struct PeerManagerBehaviour {
     ping: Ping,
     identify: Identify,
     peer_manager: PeerManager,
@@ -84,7 +84,7 @@ pub struct PeerInfoBehaviour {
     health_check: Interval,
 }
 
-impl PeerInfoBehaviour {
+impl PeerManagerBehaviour {
     pub fn new(config: &Config) -> Self {
         let identify = {
             let identify_config =
@@ -142,7 +142,7 @@ impl PeerInfoBehaviour {
     }
 }
 
-impl NetworkBehaviour for PeerInfoBehaviour {
+impl NetworkBehaviour for PeerManagerBehaviour {
     type ConnectionHandler = IntoConnectionHandlerSelect<
         <Ping as NetworkBehaviour>::ConnectionHandler,
         <Identify as NetworkBehaviour>::ConnectionHandler,
@@ -475,6 +475,7 @@ pub struct PeerInfo {
     pub latest_ping: Option<Duration>,
 }
 
+/// Manages Peers and their events
 #[derive(Debug, Default, Clone)]
 struct PeerManager {
     pending_events: VecDeque<PeerInfoEvent>,

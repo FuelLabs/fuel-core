@@ -10,10 +10,10 @@ use crate::{
         config::build_gossipsub_behaviour,
         topics::GossipTopic,
     },
-    peer_info::{
+    peer_manager::{
         PeerInfo,
-        PeerInfoBehaviour,
         PeerInfoEvent,
+        PeerManagerBehaviour,
     },
     request_response::messages::{
         IntermediateResponse,
@@ -60,7 +60,7 @@ pub struct FuelBehaviour<Codec: NetworkCodec> {
     discovery: DiscoveryBehaviour,
 
     /// Identify and periodically ping nodes
-    peer_info: PeerInfoBehaviour,
+    peer_info: PeerManagerBehaviour,
 
     /// Message propagation for p2p
     gossipsub: Gossipsub,
@@ -97,7 +97,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
             discovery_config
         };
 
-        let peer_info = PeerInfoBehaviour::new(p2p_config);
+        let peer_info = PeerManagerBehaviour::new(p2p_config);
 
         let req_res_protocol =
             std::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
