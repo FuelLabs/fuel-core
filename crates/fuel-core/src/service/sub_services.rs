@@ -13,9 +13,10 @@ use crate::{
             TxPoolAdapter,
         },
         Config,
+        SharedState,
+        SubServices,
     },
 };
-use fuel_core_services::Service as ServiceTrait;
 use fuel_core_txpool::service::TxStatusChange;
 use std::sync::Arc;
 use tokio::sync::{
@@ -33,30 +34,10 @@ pub type P2PService = fuel_core_p2p::service::Service<Database>;
 pub type TxPoolService = fuel_core_txpool::Service<P2PAdapter, Database>;
 pub type GraphQL = crate::graph_api::service::Service;
 
-pub struct Modules {
-    pub txpool: TxPoolService,
-    pub block_producer: Arc<fuel_core_producer::Producer<Database>>,
-    pub consensus_module: PoAService,
-    #[cfg(feature = "relayer")]
-    pub relayer: Option<RelayerService>,
-    #[cfg(feature = "p2p")]
-    pub network_service: P2PService,
-    pub graph_ql: GraphQL,
-}
-
-impl Modules {
-    pub async fn stop(&self) {
-        self.consensus_module.stop_and_await().await.unwrap();
-        self.txpool.stop_and_await().await.unwrap();
-        #[cfg(feature = "p2p")]
-        self.network_service.stop_and_await().await.unwrap();
-    }
-}
-
-pub async fn start_modules(
+pub fn init_sub_services(
     config: &Config,
     database: &Database,
-) -> anyhow::Result<Modules> {
+) -> anyhow::Result<(SubServices, SharedState)> {
     #[cfg(feature = "relayer")]
     let relayer = if config.relayer.eth_client.is_some() {
         Some(fuel_core_relayer::new_service(
@@ -70,7 +51,7 @@ pub async fn start_modules(
     let (block_import_tx, _) = broadcast::channel(16);
 
     #[cfg(feature = "p2p")]
-    let network_service = {
+    let network = {
         let p2p_db = database.clone();
 
         let genesis = p2p_db.get_genesis()?;
@@ -80,7 +61,7 @@ pub async fn start_modules(
     };
 
     #[cfg(feature = "p2p")]
-    let p2p_adapter = P2PAdapter::new(network_service.shared.clone());
+    let p2p_adapter = P2PAdapter::new(network.shared.clone());
     #[cfg(not(feature = "p2p"))]
     let p2p_adapter = P2PAdapter::new();
 
@@ -118,8 +99,6 @@ pub async fn start_modules(
         dry_run_semaphore: Semaphore::new(max_dry_run_concurrency),
     });
 
-    // start services
-
     let poa = match &config.chain_conf.block_production {
         BlockProduction::ProofOfAuthority { trigger } => fuel_core_poa::new_service(
             fuel_core_poa::Config {
@@ -138,15 +117,6 @@ pub async fn start_modules(
         ),
     };
 
-    poa.start()?;
-    #[cfg(feature = "relayer")]
-    if let Some(relayer) = relayer.as_ref() {
-        relayer.start().expect("Should start relayer")
-    }
-    txpool.start()?;
-    #[cfg(feature = "p2p")]
-    network_service.start()?;
-
     let graph_ql = crate::graph_api::service::new_service(
         GraphQLConfig {
             addr: config.addr,
@@ -160,20 +130,33 @@ pub async fn start_modules(
             consensus_key: config.consensus_key.clone(),
         },
         database.clone(),
-        block_producer.clone(),
+        block_producer,
         txpool.clone(),
         executor,
     )?;
-    graph_ql.start()?;
 
-    Ok(Modules {
-        txpool,
-        block_producer,
-        consensus_module: poa,
-        #[cfg(feature = "relayer")]
-        relayer,
+    let shared = SharedState {
+        txpool: txpool.shared.clone(),
         #[cfg(feature = "p2p")]
-        network_service,
-        graph_ql,
-    })
+        network: network.shared.clone(),
+        #[cfg(feature = "relayer")]
+        relayer: relayer.as_ref().map(|r| r.shared.clone()),
+        graph_ql: graph_ql.shared.clone(),
+    };
+
+    #[allow(unused_mut)]
+    let mut services: SubServices =
+        vec![Box::new(poa), Box::new(txpool), Box::new(graph_ql)];
+
+    #[cfg(feature = "relayer")]
+    if let Some(relayer) = relayer {
+        services.push(Box::new(relayer));
+    }
+
+    #[cfg(feature = "p2p")]
+    {
+        services.push(Box::new(network));
+    }
+
+    Ok((services, shared))
 }

@@ -5,7 +5,6 @@ use fuel_core_types::{
 };
 use std::net::SocketAddr;
 
-pub mod ports;
 pub mod service;
 
 #[derive(Clone, Debug)]

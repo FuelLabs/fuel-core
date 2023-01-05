@@ -1,30 +1,39 @@
 use crate::database::Database;
-use anyhow::Error as AnyError;
-use futures::FutureExt;
+use fuel_core_services::{
+    RunnableService,
+    RunnableTask,
+    ServiceRunner,
+    State,
+    StateWatcher,
+};
 use std::{
     net::SocketAddr,
     panic,
 };
-use tokio::{
-    sync::oneshot,
-    task::JoinHandle,
-};
 use tracing::log::warn;
 
+use crate::service::adapters::P2PAdapter;
 pub use config::{
     Config,
     DbType,
     VMConfig,
 };
 
+pub use fuel_core_services::Service as ServiceTrait;
+
 pub mod adapters;
 pub mod config;
 pub(crate) mod genesis;
-pub mod graph_api;
 pub mod metrics;
-pub mod modules;
+pub mod sub_services;
 
+#[derive(Clone)]
 pub struct SharedState {
+    /// The transaction pool shared state.
+    pub txpool: fuel_core_txpool::service::SharedState<P2PAdapter, Database>,
+    /// The P2P network shared state.
+    #[cfg(feature = "p2p")]
+    pub network: fuel_core_p2p::service::SharedState,
     #[cfg(feature = "relayer")]
     /// The Relayer shared state.
     pub relayer: Option<fuel_core_relayer::SharedState>,
@@ -33,27 +42,36 @@ pub struct SharedState {
 }
 
 pub struct FuelService {
-    handle: JoinHandle<()>,
-    /// Shutdown the fuel service.
-    shutdown: oneshot::Sender<()>,
-    #[cfg(feature = "relayer")]
-    /// Relayer handle
-    relayer_handle: Option<fuel_core_relayer::SharedState>,
+    /// The `ServiceRunner` used for `FuelService`.
+    ///
+    /// # Dev-note: The `FuelService` is already exposed as a public API and used by many crates.
+    /// To provide a user-friendly API and avoid breaking many downstream crates, `ServiceRunner`
+    /// is wrapped inside.
+    runner: ServiceRunner<Task>,
+    /// The shared state of the service
+    pub shared: SharedState,
     /// The address bound by the system for serving the API
     pub bound_address: SocketAddr,
 }
 
-struct Task {
-    tasks: Vec<JoinHandle<Result<(), AnyError>>>,
-    /// The address bound by the system for serving the API
-    pub shared: SharedState,
-}
-
 impl FuelService {
-    /// Create a fuel node instance from service config
-    #[tracing::instrument(skip(config))]
-    pub async fn new_node(mut config: Config) -> Result<Self, AnyError> {
+    /// Creates a `FuelService` instance from service config
+    pub fn new(database: Database, mut config: Config) -> anyhow::Result<Self> {
         Self::make_config_consistent(&mut config);
+        let task = Task::new(database, config)?;
+        let runner = ServiceRunner::new(task);
+        let shared = runner.shared.clone();
+        let bound_address = runner.shared.graph_ql.bound_address;
+        Ok(FuelService {
+            bound_address,
+            shared,
+            runner,
+        })
+    }
+
+    /// Creates and starts fuel node instance from service config
+    #[tracing::instrument(skip(config))]
+    pub async fn new_node(config: Config) -> anyhow::Result<Self> {
         // initialize database
         let database = match config.database_type {
             #[cfg(feature = "rocksdb")]
@@ -62,40 +80,8 @@ impl FuelService {
             #[cfg(not(feature = "rocksdb"))]
             _ => Database::in_memory(),
         };
-        // initialize service
-        Ok(Self::spawn_service(
-            Self::init_service(database, config).await?,
-        ))
-    }
 
-    fn spawn_service(service: Task) -> Self {
-        let bound_address = service.shared.graph_ql.bound_addr;
-        let (shutdown, stop_rx) = oneshot::channel();
-
-        #[cfg(feature = "relayer")]
-        let relayer_handle = service.shared.relayer.clone();
-
-        let handle = tokio::spawn(async move {
-            let run_fut = service.run();
-            let shutdown_fut = stop_rx.then(|stop| async move {
-                if stop.is_err() {
-                    // If the handle is dropped we don't want
-                    // this to ever shutdown the service.
-                    futures::future::pending::<()>().await;
-                }
-                // Only a successful recv results in a shutdown.
-            });
-            tokio::pin!(run_fut);
-            tokio::pin!(shutdown_fut);
-            futures::future::select(shutdown_fut, run_fut).await;
-        });
-        Self {
-            handle,
-            shutdown,
-            bound_address,
-            #[cfg(feature = "relayer")]
-            relayer_handle,
-        }
+        Self::from_database(database, config).await
     }
 
     // TODO: Rework our configs system to avoid nesting of the same configs.
@@ -114,55 +100,14 @@ impl FuelService {
         }
     }
 
-    /// Used to initialize a service with a pre-existing database
+    /// Creates and starts fuel node instance from service config and a pre-existing database
     pub async fn from_database(
         database: Database,
         config: Config,
-    ) -> Result<Self, AnyError> {
-        Ok(Self::spawn_service(
-            Self::init_service(database, config).await?,
-        ))
-    }
-
-    /// Private inner method for initializing the fuel service
-    async fn init_service(database: Database, config: Config) -> Result<Task, AnyError> {
-        // initialize state
-        Self::initialize_state(&config, &database)?;
-
-        // start modules
-        let modules = modules::start_modules(&config, &database).await?;
-        let shared = SharedState {
-            #[cfg(feature = "relayer")]
-            relayer: modules.relayer.map(|r| r.shared.clone()),
-            graph_ql: modules.graph_ql.shared,
-        };
-
-        // start background tasks
-        let tasks = vec![];
-        Ok(Task { tasks, shared })
-    }
-
-    /// Awaits for the completion of any server background tasks
-    pub async fn run(self) {
-        Self::wait_for_handle(self.handle).await;
-    }
-
-    /// Shutdown background tasks
-    pub async fn stop(self) {
-        let Self {
-            handle, shutdown, ..
-        } = self;
-        let _ = shutdown.send(());
-        Self::wait_for_handle(handle).await;
-    }
-
-    async fn wait_for_handle(handle: JoinHandle<()>) {
-        if let Err(err) = handle.await {
-            if err.is_panic() {
-                // Resume the panic on the main task
-                panic::resume_unwind(err.into_panic());
-            }
-        }
+    ) -> anyhow::Result<Self> {
+        let service = Self::new(database, config)?;
+        service.runner.start()?;
+        Ok(service)
     }
 
     #[cfg(feature = "relayer")]
@@ -178,55 +123,120 @@ impl FuelService {
     /// the relayer did reach consistency with the da layer for
     /// some period of time.
     pub async fn await_relayer_synced(&self) -> anyhow::Result<()> {
-        if let Some(relayer_handle) = &self.relayer_handle {
+        if let Some(relayer_handle) = &self.runner.shared.relayer {
             relayer_handle.await_synced().await?;
         }
         Ok(())
     }
 }
 
-impl Task {
-    /// Awaits for the completion of any server background tasks
-    pub async fn run(self) {
-        let Self { tasks, .. } = self;
-        let run_fut = Self::run_inner(tasks);
-        let shutdown_fut = shutdown_signal();
-        tokio::pin!(run_fut);
-        tokio::pin!(shutdown_fut);
-        futures::future::select(shutdown_fut, run_fut).await;
-        // TODO: Stop after receiving shutdown signal
-        // modules.stop().await;
+#[async_trait::async_trait]
+impl ServiceTrait for FuelService {
+    fn start(&self) -> anyhow::Result<()> {
+        self.runner.start()
     }
 
-    /// Awaits for the completion of any server background tasks
-    async fn run_inner(tasks: Vec<JoinHandle<anyhow::Result<()>>>) {
-        for task in tasks {
-            match task.await {
-                Err(err) => {
-                    if err.is_panic() {
-                        // Resume the panic on the main task
-                        panic::resume_unwind(err.into_panic());
-                    }
-                }
-                Ok(Err(e)) => {
-                    eprintln!("server error: {:?}", e);
-                }
-                Ok(Ok(_)) => {}
-            }
-        }
+    fn stop(&self) -> bool {
+        self.runner.stop()
+    }
+
+    async fn stop_and_await(&self) -> anyhow::Result<State> {
+        self.runner.stop_and_await().await
+    }
+
+    async fn await_stop(&self) -> anyhow::Result<State> {
+        self.runner.await_stop().await
+    }
+
+    fn state(&self) -> State {
+        self.runner.state()
     }
 }
 
-async fn shutdown_signal() {
+pub type SubServices = Vec<Box<dyn ServiceTrait + Send + Sync + 'static>>;
+
+pub struct Task {
+    /// The list of started sub services.
+    services: SubServices,
+    /// The address bound by the system for serving the API
+    pub shared: SharedState,
+}
+
+impl Task {
+    /// Private inner method for initializing the fuel service task
+    pub fn new(database: Database, config: Config) -> anyhow::Result<Task> {
+        // initialize state
+        genesis::initialize_state(&config, &database)?;
+
+        // initialize sub services
+        let (services, shared) = sub_services::init_sub_services(&config, &database)?;
+        Ok(Task { services, shared })
+    }
+
+    #[cfg(test)]
+    pub fn sub_services(&mut self) -> &mut SubServices {
+        &mut self.services
+    }
+}
+
+#[async_trait::async_trait]
+impl RunnableService for Task {
+    const NAME: &'static str = "FuelService";
+    type SharedData = SharedState;
+    type Task = Task;
+
+    fn shared_data(&self) -> Self::SharedData {
+        self.shared.clone()
+    }
+
+    async fn into_task(self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
+        for service in &self.services {
+            service.start()?;
+        }
+        Ok(self)
+    }
+}
+
+#[async_trait::async_trait]
+impl RunnableTask for Task {
+    async fn run(&mut self) -> anyhow::Result<bool> {
+        let mut stop_signals = vec![];
+        for service in &self.services {
+            stop_signals.push(service.await_stop())
+        }
+        stop_signals.push(Box::pin(shutdown_signal()));
+
+        let (result, _, _) = futures::future::select_all(stop_signals).await;
+
+        if let Err(err) = result {
+            tracing::error!("Got an error during listen for shutdown: {}", err);
+        }
+
+        // We received the stop signal from any of one source, so stop this service and
+        // all sub-services.
+        for service in &self.services {
+            let result = service.stop_and_await().await;
+
+            if let Err(err) = result {
+                tracing::error!(
+                    "Got and error during awaiting for stop of the service: {}",
+                    err
+                );
+            }
+        }
+
+        Ok(true /* should_stop */)
+    }
+}
+
+async fn shutdown_signal() -> anyhow::Result<State> {
     #[cfg(unix)]
     {
         let mut sigterm =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                .expect("failed to install sigterm handler");
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
 
         let mut sigint =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
-                .expect("failed to install sigint handler");
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
         loop {
             tokio::select! {
                 _ = sigterm.recv() => {
@@ -242,9 +252,63 @@ async fn shutdown_signal() {
     }
     #[cfg(not(unix))]
     {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("failed to install CTRL+C signal handler");
+        tokio::signal::ctrl_c().await?;
         tracing::log::info!("CTRL+C received");
+    }
+    Ok(State::Stopped)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::service::{
+        Config,
+        Task,
+    };
+    use fuel_core_services::{
+        RunnableService,
+        RunnableTask,
+        State,
+    };
+    use std::{
+        thread::sleep,
+        time::Duration,
+    };
+
+    #[tokio::test]
+    async fn run_start_and_stop() {
+        let mut i = 0;
+        loop {
+            let task = Task::new(Default::default(), Config::local_node()).unwrap();
+            let (_sender, receiver) = tokio::sync::watch::channel(State::NotStarted);
+            let mut task = task.into_task(&receiver).await.unwrap();
+            sleep(Duration::from_secs(1));
+            for service in task.sub_services() {
+                assert_eq!(service.state(), State::Started);
+            }
+
+            if i < task.sub_services().len() {
+                task.sub_services()[i].stop_and_await().await.unwrap();
+                assert!(task.run().await.unwrap());
+            } else {
+                break
+            }
+            i += 1;
+        }
+
+        #[allow(unused_mut)]
+        let mut expected_services = 3;
+
+        // Relayer service is disabled with `Config::local_node`.
+        // #[cfg(feature = "relayer")]
+        // {
+        //     expected_services += 1;
+        // }
+        #[cfg(feature = "p2p")]
+        {
+            expected_services += 1;
+        }
+
+        // # Dev-note: Update the `expected_services` when we add/remove a new/old service.
+        assert_eq!(i, expected_services);
     }
 }

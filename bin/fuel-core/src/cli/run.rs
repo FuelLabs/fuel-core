@@ -15,6 +15,7 @@ use fuel_core::{
         config::default_consensus_dev_key,
         Config,
         DbType,
+        ServiceTrait,
         VMConfig,
     },
     txpool::Config as TxPoolConfig,
@@ -208,7 +209,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     // initialize the server
     let server = FuelService::new_node(config).await?;
     // pause the main task while service is running
-    server.run().await;
+    server.await_stop().await?;
 
     Ok(())
 }

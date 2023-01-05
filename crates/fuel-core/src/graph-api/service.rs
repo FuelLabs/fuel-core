@@ -76,17 +76,17 @@ pub type BlockProducer = Arc<fuel_core_producer::Producer<crate::database::Datab
 // TODO: When the port of TxPool will exist we need to replace it with
 //  `Box<dyn TxPoolPort>. In the future GraphQL should not be aware of `TxPool`. It should
 //  use only `Database` to receive all information about
-pub type TxPool = crate::service::modules::TxPoolService;
+pub type TxPool = crate::service::sub_services::TxPoolService;
 
 #[derive(Clone)]
 pub struct SharedState {
-    pub bound_addr: SocketAddr,
+    pub bound_address: SocketAddr,
 }
 
 pub struct NotInitializedTask {
     router: Router,
     listener: TcpListener,
-    bound_addr: SocketAddr,
+    bound_address: SocketAddr,
 }
 
 pub struct Task {
@@ -103,7 +103,7 @@ impl RunnableService for NotInitializedTask {
 
     fn shared_data(&self) -> Self::SharedData {
         SharedState {
-            bound_addr: self.bound_addr.clone(),
+            bound_address: self.bound_address,
         }
     }
 
@@ -181,14 +181,14 @@ pub fn new_service(
         .layer(DefaultBodyLimit::disable());
 
     let listener = TcpListener::bind(network_addr)?;
-    let bound_addr = listener.local_addr()?;
+    let bound_address = listener.local_addr()?;
 
-    tracing::info!("Binding GraphQL provider to {}", bound_addr);
+    tracing::info!("Binding GraphQL provider to {}", bound_address);
 
     Ok(Service::new(NotInitializedTask {
         router,
         listener,
-        bound_addr,
+        bound_address,
     }))
 }
 
