@@ -300,16 +300,24 @@ impl NetworkBehaviour for PeerManagerBehaviour {
         cx: &mut Context<'_>,
         params: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
-        if let Some(event) = self.peer_manager.pending_events.pop_front() {
-            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
+        if self.health_check.poll_tick(cx).is_ready() {
+            let disconnected_peers: Vec<_> = self
+                .peer_manager
+                .get_disconnected_reserved_peers()
+                .copied()
+                .collect();
+
+            for peer_id in disconnected_peers {
+                debug!(target: "fuel-libp2p", "Trying to reconnect to reserved peer {:?}", peer_id);
+
+                self.peer_manager
+                    .pending_events
+                    .push_back(PeerInfoEvent::ReconnectToPeer(peer_id));
+            }
         }
 
-        if self.health_check.poll_tick(cx).is_ready() {
-            if let Some(peer_id) = self.peer_manager.get_disconnected_reserved_peer() {
-                return Poll::Ready(NetworkBehaviourAction::GenerateEvent(
-                    PeerInfoEvent::ReconnectToPeer(*peer_id),
-                ))
-            }
+        if let Some(event) = self.peer_manager.pending_events.pop_front() {
+            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
         }
 
         loop {
@@ -522,10 +530,10 @@ impl PeerManager {
         }
     }
 
-    fn get_disconnected_reserved_peer(&self) -> Option<&PeerId> {
+    fn get_disconnected_reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
         self.reserved_peers
             .iter()
-            .find(|peer_id| !self.connected_peers.contains_key(peer_id))
+            .filter(|peer_id| !self.connected_peers.contains_key(peer_id))
     }
 
     fn reserved_peers_connected_count(&self) -> usize {
