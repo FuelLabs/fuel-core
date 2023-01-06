@@ -55,7 +55,7 @@ use libp2p::{
     Swarm,
 };
 use libp2p_swarm::ConnectionLimits;
-use rand::Rng;
+use rand::seq::IteratorRandom;
 use std::collections::HashMap;
 use tracing::{
     debug,
@@ -212,15 +212,15 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let peer_id = match peer_id {
             Some(peer_id) => peer_id,
             _ => {
-                let mut peers = self.get_peers_ids();
+                let peers = self.get_peers_ids();
                 let peers_count = self.swarm.behaviour().total_peers_connected();
 
                 if peers_count == 0 {
                     return Err(RequestError::NoPeersConnected)
                 }
 
-                let rand_index = rand::thread_rng().gen_range(0..peers_count);
-                *peers.nth(rand_index).unwrap()
+                let mut range = rand::thread_rng();
+                *peers.choose(&mut range).unwrap()
             }
         };
 
