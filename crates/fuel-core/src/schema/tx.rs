@@ -1,5 +1,5 @@
 use crate::{
-    database::transaction::OwnedTransactionIndexCursor,
+    database::transactions::OwnedTransactionIndexCursor,
     fuel_core_graphql_api::service::{
         BlockProducer,
         Database,

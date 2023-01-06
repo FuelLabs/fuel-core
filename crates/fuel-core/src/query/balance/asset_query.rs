@@ -1,4 +1,11 @@
-use crate::database::Database;
+use crate::{
+    fuel_core_graphql_api::service::DatabaseTemp,
+    query::{
+        CoinQueryContext,
+        MessageQueryContext,
+    },
+    state::IterDirection,
+};
 use fuel_core_storage::{
     not_found,
     tables::{
@@ -77,7 +84,7 @@ pub struct AssetsQuery<'a> {
     pub owner: &'a Address,
     pub assets: Option<HashSet<&'a AssetId>>,
     pub exclude: Option<&'a Exclude>,
-    pub database: &'a Database,
+    pub database: &'a DatabaseTemp,
 }
 
 impl<'a> AssetsQuery<'a> {
@@ -85,7 +92,7 @@ impl<'a> AssetsQuery<'a> {
         owner: &'a Address,
         assets: Option<HashSet<&'a AssetId>>,
         exclude: Option<&'a Exclude>,
-        database: &'a Database,
+        database: &'a DatabaseTemp,
     ) -> Self {
         Self {
             owner,
@@ -103,8 +110,8 @@ impl<'a> AssetsQuery<'a> {
     pub fn unspent_resources(
         &self,
     ) -> impl Iterator<Item = StorageResult<Resource<Cow<Coin>, Cow<Message>>>> + '_ {
-        let coins_iter = self
-            .database
+        let coin_query = CoinQueryContext(self.database);
+        let coins_iter = coin_query
             .owned_coins_ids(self.owner, None, None)
             .filter_ok(|id| {
                 if let Some(exclude) = self.exclude {
@@ -136,9 +143,9 @@ impl<'a> AssetsQuery<'a> {
                 }
             });
 
-        let messages_iter = self
-            .database
-            .owned_message_ids(self.owner, None, None)
+        let message_query = MessageQueryContext(self.database);
+        let messages_iter = message_query
+            .owned_message_ids(self.owner, None, IterDirection::Forward)
             .filter_ok(|id| {
                 if let Some(exclude) = self.exclude {
                     !exclude.messages.contains(id)
@@ -147,7 +154,7 @@ impl<'a> AssetsQuery<'a> {
                 }
             })
             .map(|res| {
-                res.map_err(StorageError::from).and_then(|id| {
+                res.and_then(|id| {
                     let message = self
                         .database
                         .storage::<Messages>()
@@ -181,7 +188,7 @@ pub struct AssetQuery<'a> {
     pub owner: &'a Address,
     pub asset: &'a AssetSpendTarget,
     pub exclude: Option<&'a Exclude>,
-    pub database: &'a Database,
+    pub database: &'a DatabaseTemp,
     query: AssetsQuery<'a>,
 }
 
@@ -190,7 +197,7 @@ impl<'a> AssetQuery<'a> {
         owner: &'a Address,
         asset: &'a AssetSpendTarget,
         exclude: Option<&'a Exclude>,
-        database: &'a Database,
+        database: &'a DatabaseTemp,
     ) -> Self {
         let mut allowed = HashSet::new();
         allowed.insert(&asset.id);

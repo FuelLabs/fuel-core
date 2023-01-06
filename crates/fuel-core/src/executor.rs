@@ -1,7 +1,7 @@
 use crate::{
     database::{
-        transaction::TransactionIndex,
-        transactional::DatabaseTransaction,
+        transaction::DatabaseTransaction,
+        transactions::TransactionIndex,
         vm_database::VmDatabase,
         Database,
     },

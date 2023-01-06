@@ -1,12 +1,12 @@
-use crate::database::{
-    resource::{
+use crate::{
+    database::Database,
+    query::asset_query::{
         AssetQuery,
         AssetSpendTarget,
         Exclude,
         Resource,
         ResourceId,
     },
-    Database,
 };
 use core::mem::swap;
 use fuel_core_storage::Error as StorageError;

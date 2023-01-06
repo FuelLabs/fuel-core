@@ -1,5 +1,5 @@
 use crate::{
-    database::transactional::DatabaseTransaction,
+    database::transaction::DatabaseTransaction,
     state::{
         in_memory::memory_store::MemoryStore,
         DataSource,
@@ -98,9 +98,8 @@ mod state;
 
 pub mod balances;
 pub mod metadata;
-pub mod resource;
 pub mod transaction;
-pub mod transactional;
+pub mod transactions;
 pub mod vm_database;
 
 /// Database tables column ids.
@@ -135,7 +134,7 @@ pub enum Column {
     Receipts = 11,
     /// See [`FuelBlocks`](fuel_core_storage::tables::FuelBlocks)
     FuelBlocks = 12,
-    /// Maps fuel block id to fuel block hash
+    /// Maps fuel block height to fuel block id
     FuelBlockIds = 13,
     /// See [`Messages`](fuel_core_storage::tables::Messages)
     Messages = 14,

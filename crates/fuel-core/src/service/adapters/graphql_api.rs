@@ -15,7 +15,6 @@ use fuel_core_storage::{
     },
     not_found,
     Error as StorageError,
-    Result,
     Result as StorageResult,
 };
 use fuel_core_txpool::types::TxId;
@@ -57,11 +56,11 @@ impl DatabaseBlocks for Database {
 }
 
 impl DatabaseTransactions for Database {
-    fn tx_status(&self, tx_id: &TxId) -> Result<TransactionStatus> {
+    fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
         Ok(self
             .get_tx_status(tx_id)
             .transpose()
-            .ok_or(not_found!("BlockIds"))??)
+            .ok_or(not_found!("TransactionId"))??)
     }
 }
 
@@ -71,7 +70,7 @@ impl DatabaseMessages for Database {
         owner: &Address,
         start_message_id: Option<MessageId>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, Result<MessageId>> {
+    ) -> BoxedIter<'_, StorageResult<MessageId>> {
         self.owned_message_ids(owner, start_message_id, Some(direction))
             .map(|result| result.map_err(StorageError::from))
             .into_boxed()
@@ -81,7 +80,7 @@ impl DatabaseMessages for Database {
         &self,
         start_message_id: Option<MessageId>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, Result<Message>> {
+    ) -> BoxedIter<'_, StorageResult<Message>> {
         self.all_messages(start_message_id, Some(direction))
             .map(|result| result.map_err(StorageError::from))
             .into_boxed()

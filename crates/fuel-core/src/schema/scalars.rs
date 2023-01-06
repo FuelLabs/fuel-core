@@ -1,4 +1,4 @@
-use crate::database::transaction::OwnedTransactionIndexCursor;
+use crate::database::transactions::OwnedTransactionIndexCursor;
 use async_graphql::{
     connection::CursorType,
     InputValueError,

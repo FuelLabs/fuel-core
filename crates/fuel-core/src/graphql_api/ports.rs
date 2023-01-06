@@ -2,6 +2,7 @@ use crate::state::IterDirection;
 use fuel_core_storage::{
     iter::BoxedIter,
     tables::{
+        Coins,
         FuelBlocks,
         Messages,
         Receipts,
@@ -18,7 +19,10 @@ use fuel_core_types::{
         BlockId,
     },
     entities::message::Message,
-    fuel_tx::TxId,
+    fuel_tx::{
+        TxId,
+        UtxoId,
+    },
     fuel_types::{
         Address,
         MessageId,
@@ -28,7 +32,7 @@ use fuel_core_types::{
 
 /// The database port expected by GraphQL API service.
 pub trait DatabasePort:
-    Send + Sync + DatabaseBlocks + DatabaseTransactions + DatabaseMessages
+    Send + Sync + DatabaseBlocks + DatabaseTransactions + DatabaseMessages + DatabaseCoins
 {
 }
 
@@ -70,4 +74,14 @@ pub trait DatabaseMessages: StorageInspect<Messages, Error = StorageError> {
         start_message_id: Option<MessageId>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<Message>>;
+}
+
+/// Trait that specifies all the getters required for coins.
+pub trait DatabaseCoins: StorageInspect<Coins, Error = StorageError> {
+    fn owned_coins_ids(
+        &self,
+        owner: &Address,
+        start_coin: Option<UtxoId>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<UtxoId>>;
 }

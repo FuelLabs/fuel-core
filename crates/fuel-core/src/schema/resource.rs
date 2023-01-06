@@ -1,9 +1,9 @@
 use crate::{
-    database::resource::AssetSpendTarget,
     fuel_core_graphql_api::{
         service::Database,
         Config as GraphQLConfig,
     },
+    query::asset_query::AssetSpendTarget,
     resource_query::{
         random_improve,
         SpendQuery,
@@ -99,11 +99,11 @@ impl ResourceQuery {
             let utxos = exclude
                 .utxos
                 .into_iter()
-                .map(|utxo| crate::database::resource::ResourceId::Utxo(utxo.0));
+                .map(|utxo| crate::query::asset_query::ResourceId::Utxo(utxo.0));
             let messages = exclude
                 .messages
                 .into_iter()
-                .map(|message| crate::database::resource::ResourceId::Message(message.0));
+                .map(|message| crate::query::asset_query::ResourceId::Message(message.0));
             utxos.chain(messages).collect()
         });
 
@@ -117,10 +117,10 @@ impl ResourceQuery {
                 resources
                     .into_iter()
                     .map(|resource| match resource {
-                        crate::database::resource::Resource::Coin { id, fields } => {
+                        crate::query::asset_query::Resource::Coin { id, fields } => {
                             Resource::Coin(Coin(id, fields))
                         }
-                        crate::database::resource::Resource::Message {
+                        crate::query::asset_query::Resource::Message {
                             fields, ..
                         } => Resource::Message(Message(fields)),
                     })

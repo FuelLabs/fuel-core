@@ -1,4 +1,7 @@
-use crate::database::Database;
+use crate::{
+    graphql_api::service::DatabaseTemp,
+    state::IterDirection,
+};
 use fuel_core_storage::{
     tables::Coins,
     Result as StorageResult,
@@ -10,17 +13,13 @@ use fuel_core_types::{
         UtxoId,
         UtxoId as UtxoIdModel,
     },
+    fuel_types::Address,
 };
 
-/// Trait that specifies all the data required by the output message query.
-pub trait CoinQueryData {
-    fn coin(&self, utxo_id: UtxoId) -> StorageResult<Option<Coin>>;
-}
+pub struct CoinQueryContext<'a>(pub &'a DatabaseTemp);
 
-pub struct CoinQueryContext<'a>(pub &'a Database);
-
-impl CoinQueryData for CoinQueryContext<'_> {
-    fn coin(
+impl CoinQueryContext<'_> {
+    pub fn coin(
         &self,
         utxo_id: UtxoIdModel,
     ) -> StorageResult<Option<fuel_core_types::entities::coin::Coin>> {
@@ -32,6 +31,15 @@ impl CoinQueryData for CoinQueryContext<'_> {
             .map(|coin| coin.clone().into_owned());
 
         Ok(block)
+    }
+
+    pub fn owned_coins_ids(
+        &self,
+        owner: &Address,
+        start_coin: Option<UtxoId>,
+        direction: IterDirection,
+    ) -> impl Iterator<Item = StorageResult<UtxoId>> + '_ {
+        self.0.owned_coins_ids(owner, start_coin, direction)
     }
 }
 
