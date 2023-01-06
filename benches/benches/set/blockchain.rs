@@ -72,6 +72,19 @@ pub fn run(c: &mut Criterion) {
                 Ok(db)
             }),
     );
+    {
+        let mut input = VmBench::contract(rng, Opcode::SRW(0x13, 0x14, 0x15))
+            .expect("failed to prepare contract")
+            .with_prepare_db(move |mut db| {
+                let key = Bytes32::zeroed();
+
+                db.merkle_contract_state_insert(&ContractId::zeroed(), &key, &key)?;
+
+                Ok(db)
+            });
+        input.prepare_script.extend(vec![Opcode::MOVI(0x15, 2000)]);
+        run_group_ref(&mut c.benchmark_group("srw"), "srw", input);
+    }
 
     let mut scwq = c.benchmark_group("scwq");
 
@@ -100,6 +113,34 @@ pub fn run(c: &mut Criterion) {
     }
 
     scwq.finish();
+
+    let mut swwq = c.benchmark_group("swwq");
+
+    for i in 1..=1 {
+        let mut key = Bytes32::zeroed();
+
+        key.as_mut()[..8].copy_from_slice(&(i as u64).to_be_bytes());
+        let data = key.iter().copied().collect::<Vec<_>>();
+
+        let post_call = vec![
+            Opcode::gtf(0x10, 0x00, GTFArgs::ScriptData),
+            Opcode::ADDI(0x11, 0x10, ContractId::LEN as Immediate12),
+            Opcode::ADDI(0x11, 0x11, WORD_SIZE as Immediate12),
+            Opcode::ADDI(0x11, 0x11, WORD_SIZE as Immediate12),
+        ];
+        let mut bench = VmBench::contract(rng, Opcode::SWWQ(0x10, 0x11, 0x20, REG_ONE))
+            .expect("failed to prepare contract")
+            .with_post_call(post_call)
+            .with_prepare_db(move |mut db| {
+                db.merkle_contract_state_insert(&contract, &key, &key)?;
+
+                Ok(db)
+            });
+        bench.data.extend(data);
+        run_group_ref(&mut swwq, "swwq", bench);
+    }
+
+    swwq.finish();
 
     let mut call = c.benchmark_group("call");
 
@@ -182,6 +223,53 @@ pub fn run(c: &mut Criterion) {
 
     ldc.finish();
 
+    let mut ccp = c.benchmark_group("ccp");
+
+    for i in linear.clone() {
+        let mut code = vec![0u8; i as usize];
+
+        rng.fill_bytes(&mut code);
+
+        let code = ContractCode::from(code);
+        let id = code.id;
+
+        let data = id
+            .iter()
+            .copied()
+            .chain((0 as Word).to_be_bytes().iter().copied())
+            .chain((0 as Word).to_be_bytes().iter().copied())
+            .chain(AssetId::default().iter().copied())
+            .collect();
+
+        let prepare_script = vec![
+            Opcode::gtf(0x10, 0x00, GTFArgs::ScriptData),
+            Opcode::ADDI(0x11, 0x10, ContractId::LEN as Immediate12),
+            Opcode::ADDI(0x11, 0x11, WORD_SIZE as Immediate12),
+            Opcode::ADDI(0x11, 0x11, WORD_SIZE as Immediate12),
+            Opcode::MOVI(0x12, 100_000),
+            Opcode::MOVI(0x13, i as Immediate18),
+            Opcode::MOVI(0x14, i as Immediate18),
+            Opcode::MOVI(0x15, i as Immediate18),
+            Opcode::ADD(0x15, 0x15, 0x15),
+            Opcode::ADDI(0x15, 0x15, 32),
+            Opcode::ALOC(0x15),
+            Opcode::ADDI(0x15, REG_HP, 1),
+        ];
+
+        ccp.throughput(Throughput::Bytes(i));
+
+        run_group_ref(
+            &mut ccp,
+            format!("{i}"),
+            VmBench::new(Opcode::CCP(0x15, 0x10, REG_ZERO, 0x13))
+                .with_contract_code(code)
+                .with_data(data)
+                .with_prepare_script(prepare_script),
+        );
+    }
+
+    ccp.finish();
+
     let mut csiz = c.benchmark_group("csiz");
 
     for i in linear {
@@ -248,5 +336,53 @@ pub fn run(c: &mut Criterion) {
             Opcode::ALOC(0x10),
             Opcode::ADDI(0x10, REG_HP, 1),
         ]),
+    );
+
+    {
+        let mut input = VmBench::contract(rng, Opcode::TR(0x15, 0x14, 0x15))
+            .expect("failed to prepare contract")
+            .with_prepare_db(move |mut db| {
+                db.merkle_contract_asset_id_balance_insert(
+                    &ContractId::zeroed(),
+                    &AssetId::zeroed(),
+                    200,
+                )?;
+
+                Ok(db)
+            });
+        input
+            .prepare_script
+            .extend(vec![Opcode::MOVI(0x15, 2000), Opcode::MOVI(0x14, 100)]);
+        run_group_ref(&mut c.benchmark_group("tr"), "tr", input);
+    }
+
+    run_group_ref(
+        &mut c.benchmark_group("cfsi"),
+        "cfsi",
+        VmBench::new(Opcode::CFSI(1)),
+    );
+
+    {
+        let mut input = VmBench::contract(rng, Opcode::CROO(0x14, 0x16))
+            .expect("failed to prepare contract");
+        input.post_call.extend(vec![
+            Opcode::gtf(0x16, 0x00, GTFArgs::ScriptData),
+            Opcode::MOVI(0x15, 2000),
+            Opcode::ALOC(0x15),
+            Opcode::ADDI(0x14, REG_HP, 1),
+        ]);
+        run_group_ref(&mut c.benchmark_group("croo"), "croo", input);
+    }
+
+    run_group_ref(
+        &mut c.benchmark_group("flag"),
+        "flag",
+        VmBench::new(Opcode::FLAG(0x10)),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("gm"),
+        "gm",
+        VmBench::contract(rng, Opcode::GM(0x10, 1)).unwrap(),
     );
 }

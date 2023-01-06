@@ -346,14 +346,10 @@ impl State {
             .unwrap()
             .keys()
             .map(|k| k.as_str().unwrap())
-            .map(|k| match k {
-                "mod_op" => "mod",
-                "move_op" => "move",
-                k => k,
-            })
             .collect::<HashSet<_>>();
 
-        let diff = have.symmetric_difference(&all_keys).collect::<Vec<_>>();
+        let mut diff = have.symmetric_difference(&all_keys).collect::<Vec<_>>();
+        diff.sort_unstable();
 
         eprintln!("Warning the following keys were not set by this bench:\n{:?}\nWas this intentional?", diff);
 
@@ -517,8 +513,9 @@ impl State {
 
         let relative = groups.into_iter().filter_map(|(name, samples)| {
             let relative = samples
-                .first()
-                .and_then(|sample| ids.remove(sample))
+                .into_iter()
+                .find(|sample| sample.ends_with(&name))
+                .and_then(|sample| ids.remove(&sample))
                 .map(|mean| Cost::Relative(map_to_ratio(baseline, mean)))?;
             Some((name, relative))
         });

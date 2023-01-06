@@ -19,6 +19,14 @@ use rand::{
 pub fn run(c: &mut Criterion) {
     let rng = &mut StdRng::seed_from_u64(2322u64);
 
+    let mut linear = vec![1, 10, 100, 1000, 10_000];
+    let mut l = successors(Some(100_000.0f64), |n| Some(n / 1.5))
+        .take(5)
+        .map(|f| f as u32)
+        .collect::<Vec<_>>();
+    l.sort_unstable();
+    linear.extend(l);
+
     run_group_ref(
         &mut c.benchmark_group("jmp"),
         "jmp",
@@ -62,6 +70,32 @@ pub fn run(c: &mut Criterion) {
         VmBench::contract(rng, Opcode::RET(REG_ONE)).unwrap(),
     );
 
+    let mut retd_contract = c.benchmark_group("retd_contract");
+    for i in &linear {
+        retd_contract.throughput(Throughput::Bytes(*i as u64));
+        run_group_ref(
+            &mut retd_contract,
+            format!("{}", i),
+            VmBench::contract(rng, Opcode::RETD(REG_ONE, 0x10))
+                .unwrap()
+                .with_post_call(vec![Opcode::MOVI(0x10, *i)]),
+        );
+    }
+    retd_contract.finish();
+
+    let mut retd_script = c.benchmark_group("retd_script");
+    for i in &linear {
+        retd_script.throughput(Throughput::Bytes(*i as u64));
+        run_group_ref(
+            &mut retd_script,
+            format!("{}", i),
+            VmBench::contract(rng, Opcode::RETD(REG_ONE, 0x10))
+                .unwrap()
+                .with_post_call(vec![Opcode::MOVI(0x10, *i)]),
+        );
+    }
+    retd_script.finish();
+
     run_group_ref(
         &mut c.benchmark_group("rvrt"),
         "rvrt (script)",
@@ -79,14 +113,6 @@ pub fn run(c: &mut Criterion) {
         "log",
         VmBench::new(Opcode::LOG(0x10, 0x11, 0x12, 0x13)),
     );
-
-    let mut linear = vec![1, 10, 100, 1000, 10_000];
-    let mut l = successors(Some(100_000.0f64), |n| Some(n / 1.5))
-        .take(5)
-        .map(|f| f as u32)
-        .collect::<Vec<_>>();
-    l.sort_unstable();
-    linear.extend(l);
 
     let mut logd = c.benchmark_group("logd");
     for i in &linear {

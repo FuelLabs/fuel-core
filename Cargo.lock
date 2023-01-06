@@ -2250,6 +2250,7 @@ checksum = "2022715d62ab30faffd124d40b76f4134a550a87792276512b18d63272333394"
 [[package]]
 name = "fuel-asm"
 version = "0.24.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#e343ebb2c0aa21ea8d77f4506f1e1f7d7c58b00e"
 dependencies = [
  "fuel-types",
  "serde",
@@ -2631,6 +2632,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.24.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#e343ebb2c0aa21ea8d77f4506f1e1f7d7c58b00e"
 dependencies = [
  "borrown",
  "coins-bip32",
@@ -2668,10 +2670,12 @@ checksum = "b0f895423d18472d60eb078cf949608ff3fe6e42e91d41b85993b11528d2c4c3"
 [[package]]
 name = "fuel-storage"
 version = "0.24.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#e343ebb2c0aa21ea8d77f4506f1e1f7d7c58b00e"
 
 [[package]]
 name = "fuel-tx"
 version = "0.24.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#e343ebb2c0aa21ea8d77f4506f1e1f7d7c58b00e"
 dependencies = [
  "bitflags",
  "derivative",
@@ -2689,6 +2693,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.24.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#e343ebb2c0aa21ea8d77f4506f1e1f7d7c58b00e"
 dependencies = [
  "rand 0.8.5",
  "serde",
@@ -2697,6 +2702,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.24.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#e343ebb2c0aa21ea8d77f4506f1e1f7d7c58b00e"
 dependencies = [
  "anyhow",
  "fuel-asm",

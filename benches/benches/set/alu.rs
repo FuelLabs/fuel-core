@@ -25,6 +25,12 @@ pub fn run(c: &mut Criterion) {
     );
 
     run_group_ref(
+        &mut c.benchmark_group("aloc"),
+        "aloc",
+        VmBench::new(Opcode::ALOC(0x10)),
+    );
+
+    run_group_ref(
         &mut c.benchmark_group("and"),
         "and",
         VmBench::new(Opcode::AND(0x10, 0x11, 0x12)).with_prepare_script(vec![
