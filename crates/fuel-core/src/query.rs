@@ -1,3 +1,4 @@
+mod balance;
 mod block;
 mod chain;
 mod coin;
@@ -7,6 +8,7 @@ mod subscriptions;
 mod tx;
 
 // TODO: Remove reexporting of everything
+pub use balance::*;
 pub use block::*;
 pub use chain::*;
 pub use coin::*;

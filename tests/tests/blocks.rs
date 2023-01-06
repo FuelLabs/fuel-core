@@ -86,6 +86,7 @@ async fn get_genesis_block() {
 #[tokio::test]
 async fn produce_block() {
     let config = Config::local_node();
+
     let srv = FuelService::from_database(Database::default(), config.clone())
         .await
         .unwrap();
