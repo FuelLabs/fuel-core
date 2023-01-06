@@ -142,7 +142,7 @@ impl SuccessStatus {
         let db = ctx.data_unchecked::<Database>();
         let block = db
             .storage::<FuelBlocks>()
-            .get(&self.block_id.into())?
+            .get(&self.block_id)?
             .ok_or(not_found!(FuelBlocks))?
             .into_owned();
         let block = Block::from(block);
@@ -172,7 +172,7 @@ impl FailureStatus {
         let db = ctx.data_unchecked::<Database>();
         let block = db
             .storage::<FuelBlocks>()
-            .get(&self.block_id.into())?
+            .get(&self.block_id)?
             .ok_or(not_found!(FuelBlocks))?
             .into_owned();
         let block = Block::from(block);

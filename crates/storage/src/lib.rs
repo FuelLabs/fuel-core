@@ -12,6 +12,7 @@ use std::io::ErrorKind;
 
 pub use fuel_vm_private::fuel_storage::*;
 
+pub mod iter;
 pub mod tables;
 pub mod transactional;
 

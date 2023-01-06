@@ -21,7 +21,7 @@ use fuel_core_services::{
 use fuel_core_storage::{
     transactional::{
         StorageTransaction,
-        Transactional,
+        Transaction as StorageTransactionTrait,
     },
     Result as StorageResult,
 };
@@ -272,7 +272,7 @@ mockall::mock! {
         ) -> anyhow::Result<()>;
     }
 
-    impl Transactional<MockDatabase> for Database {
+    impl StorageTransactionTrait<MockDatabase> for Database {
         fn commit(&mut self) -> StorageResult<()>;
     }
 

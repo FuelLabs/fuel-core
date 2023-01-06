@@ -7,6 +7,8 @@ use crate::{
     },
     query::{
         transaction_status_change,
+        BlockQueryContext,
+        TransactionQueryContext,
         TxnStatusChangeState,
     },
     schema::scalars::{
@@ -28,10 +30,7 @@ use async_graphql::{
 };
 use fuel_core_storage::{
     not_found,
-    tables::{
-        FuelBlocks,
-        Transactions,
-    },
+    tables::Transactions,
     Error as StorageError,
     Result as StorageResult,
     StorageAsRef,
@@ -99,7 +98,9 @@ impl TxQuery {
     ) -> async_graphql::Result<
         Connection<SortedTxCursor, Transaction, EmptyFields, EmptyFields>,
     > {
-        let db = ctx.data_unchecked::<Database>();
+        let db = ctx.data_unchecked();
+        let db_query = BlockQueryContext(db);
+        let tx_query = TransactionQueryContext(db);
         crate::schema::query_pagination(
             after,
             before,
@@ -108,28 +109,19 @@ impl TxQuery {
             |start: &Option<SortedTxCursor>, direction| {
                 let start = *start;
                 let block_id = start.map(|sorted| sorted.block_height);
-                let all_block_ids = db.all_block_ids(block_id, Some(direction));
+                let all_block_ids = db_query.compressed_blocks(block_id, direction);
 
                 let all_txs = all_block_ids
-                    .flat_map(move |block| {
-                        block.map_err(StorageError::from).map(
-                            |(block_height, block_id)| {
-                                db.storage::<FuelBlocks>()
-                                    .get(&block_id)
-                                    .transpose()
-                                    .ok_or(not_found!(FuelBlocks))?
-                                    .map(|fuel_block| {
-                                        let mut txs =
-                                            fuel_block.into_owned().into_inner().1;
+                    .map(move |block| {
+                        block.map(|fuel_block| {
+                            let (header, mut txs) = fuel_block.into_inner();
 
-                                        if direction == IterDirection::Reverse {
-                                            txs.reverse();
-                                        }
+                            if direction == IterDirection::Reverse {
+                                txs.reverse();
+                            }
 
-                                        txs.into_iter().zip(iter::repeat(block_height))
-                                    })
-                            },
-                        )
+                            txs.into_iter().zip(iter::repeat(*header.height()))
+                        })
                     })
                     .flatten_ok()
                     .map(|result| {
@@ -147,12 +139,7 @@ impl TxQuery {
                     });
                 let all_txs = all_txs.map(|result: StorageResult<SortedTxCursor>| {
                     result.and_then(|sorted| {
-                        let tx = db
-                            .storage::<Transactions>()
-                            .get(&sorted.tx_id.0)
-                            .transpose()
-                            .ok_or(not_found!(Transactions))??
-                            .into_owned();
+                        let tx = tx_query.transaction(&sorted.tx_id.0)?;
 
                         Ok((sorted, tx.into()))
                     })

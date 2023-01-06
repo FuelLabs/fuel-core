@@ -5,6 +5,7 @@ use crate::{
     },
     state::in_memory::transaction::MemoryTransactionView,
 };
+use fuel_core_storage::iter::BoxedIter;
 use std::{
     fmt::Debug,
     marker::PhantomData,
@@ -71,7 +72,7 @@ pub trait KeyValueStore {
         prefix: Option<Vec<u8>>,
         start: Option<Vec<u8>>,
         direction: IterDirection,
-    ) -> Box<dyn Iterator<Item = KVItem> + '_>;
+    ) -> BoxedIter<KVItem>;
 }
 
 #[derive(Copy, Clone, Debug, PartialOrd, Eq, PartialEq)]
