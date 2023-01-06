@@ -1,10 +1,16 @@
 use crate::{
-    query::BalanceQueryContext,
+    database::resource::AssetsQuery,
+    fuel_core_graphql_api::service::Database,
+    query::{
+        BalanceQueryContext,
+        BalanceQueryData,
+    },
     schema::scalars::{
         Address,
         AssetId,
         U64,
     },
+    state::IterDirection,
 };
 use async_graphql::{
     connection::{
@@ -15,9 +21,11 @@ use async_graphql::{
     InputObject,
     Object,
 };
-use fuel_core_types::{
-    fuel_types,
-    services::graphql_api,
+use fuel_core_types::fuel_types;
+use itertools::Itertools;
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
 };
 
 pub struct Balance {
@@ -59,8 +67,13 @@ impl BalanceQuery {
         #[graphql(desc = "asset_id of the coin")] asset_id: AssetId,
     ) -> async_graphql::Result<Balance> {
         let data = BalanceQueryContext(ctx.data_unchecked());
-        let balance = data.balance(owner.0, asset_id.0)?.into();
-        Ok(balance)
+        let balance = data.balance(owner.0, asset_id.0)?;
+
+        Ok(Balance {
+            owner: balance.0.into(),
+            amount: balance.1,
+            asset_id: balance.2,
+        })
     }
 
     // TODO: We can't paginate over `AssetId` because it is not unique.
@@ -75,23 +88,43 @@ impl BalanceQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<AssetId, Balance, EmptyFields, EmptyFields>>
     {
-        let query = BalanceQueryContext(ctx.data_unchecked());
+        let db = ctx.data_unchecked::<Database>();
         crate::schema::query_pagination(after, before, first, last, |_, direction| {
             let owner = filter.owner.into();
-            Ok(query.balances(owner, direction).map(|result| {
-                result.map(|balance| (balance.asset_id.into(), balance.into()))
-            }))
+
+            let mut amounts_per_asset = HashMap::new();
+
+            for resource in AssetsQuery::new(&owner, None, None, db).unspent_resources() {
+                let resource = resource?;
+                *amounts_per_asset.entry(*resource.asset_id()).or_default() +=
+                    resource.amount();
+            }
+
+            let mut balances = amounts_per_asset
+                .into_iter()
+                .map(|(asset_id, amount)| Balance {
+                    owner,
+                    amount,
+                    asset_id,
+                })
+                .collect_vec();
+            balances.sort_by(|l, r| {
+                if l.asset_id < r.asset_id {
+                    Ordering::Less
+                } else {
+                    Ordering::Greater
+                }
+            });
+            if direction == IterDirection::Reverse {
+                balances.reverse();
+            }
+
+            let balances = balances
+                .into_iter()
+                .map(|balance| Ok((balance.asset_id.into(), balance)));
+
+            Ok(balances)
         })
         .await
-    }
-}
-
-impl From<graphql_api::Balance> for Balance {
-    fn from(value: graphql_api::Balance) -> Self {
-        Balance {
-            owner: value.owner,
-            amount: value.amount,
-            asset_id: value.asset_id,
-        }
     }
 }

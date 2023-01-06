@@ -12,7 +12,6 @@ use crate::{
         U64,
     },
 };
-use anyhow::anyhow;
 use async_graphql::{
     connection::{
         Connection,
@@ -21,15 +20,6 @@ use async_graphql::{
     Context,
     InputObject,
     Object,
-};
-use fuel_core_storage::{
-    not_found,
-    tables::{
-        ContractsAssets,
-        ContractsInfo,
-        ContractsRawCode,
-    },
-    StorageAsRef,
 };
 use fuel_core_types::fuel_types;
 
@@ -48,27 +38,17 @@ impl Contract {
     }
 
     async fn bytecode(&self, ctx: &Context<'_>) -> async_graphql::Result<HexString> {
-        let db = ctx.data_unchecked::<Database>().clone();
-        let contract = db
-            .storage::<ContractsRawCode>()
-            .get(&self.0)?
-            .ok_or(not_found!(ContractsRawCode))?
-            .into_owned();
-        Ok(HexString(contract.into()))
+        let data = ContractQueryContext(ctx.data_unchecked());
+        let bytecode = data.contract_bytecode(self.0)?;
+
+        Ok(HexString(bytecode.into()))
     }
+
     async fn salt(&self, ctx: &Context<'_>) -> async_graphql::Result<Salt> {
-        let contract_id = self.0;
+        let data = ContractQueryContext(ctx.data_unchecked());
+        let salt = data.contract_salt(self.0)?;
 
-        let db = ctx.data_unchecked::<Database>().clone();
-        let (salt, _) = db
-            .storage::<ContractsInfo>()
-            .get(&contract_id)?
-            .ok_or_else(|| anyhow!("Contract does not exist"))?
-            .into_owned();
-
-        let cleaned_salt: Salt = salt.into();
-
-        Ok(cleaned_salt)
+        Ok(salt.into())
     }
 }
 
@@ -132,21 +112,13 @@ impl ContractBalanceQuery {
         contract: ContractId,
         asset: AssetId,
     ) -> async_graphql::Result<ContractBalance> {
-        let contract_id: fuel_types::ContractId = contract.0;
-
-        let db = ctx.data_unchecked::<Database>().clone();
-
-        let asset_id: fuel_types::AssetId = asset.into();
-
-        let result = db
-            .storage::<ContractsAssets>()
-            .get(&(&contract_id, &asset_id))?;
-        let balance = result.unwrap_or_default().into_owned();
+        let data = ContractQueryContext(ctx.data_unchecked());
+        let balance = data.contract_balance(contract.0, asset.0)?;
 
         Ok(ContractBalance {
-            contract: contract.into(),
-            amount: balance,
-            asset_id,
+            contract: balance.0,
+            amount: balance.1,
+            asset_id: balance.2,
         })
     }
 

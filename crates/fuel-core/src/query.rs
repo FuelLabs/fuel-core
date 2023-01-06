@@ -14,5 +14,6 @@ pub use chain::*;
 pub use coin::*;
 pub use contract::*;
 pub use message::*;
+pub use resources::*;
 pub(crate) use subscriptions::*;
 pub use tx::*;
