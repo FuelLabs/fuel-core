@@ -69,6 +69,8 @@ pub type Service = fuel_core_services::ServiceRunner<NotInitializedTask>;
 
 // TODO: When the port of DB will exist we need to replace it with `Box<dyn DatabasePort>
 pub type Database = crate::database::Database;
+// TODO: When all ports will be ready, we need to remove `Database`(and related code)
+//  and rename `DatabaseTemp` into `Database`
 pub type DatabaseTemp = Box<dyn DatabasePort>;
 // TODO: When the port for `Executor` will exist we need to replace it with `Box<dyn ExecutorPort>
 pub type Executor = crate::service::adapters::ExecutorAdapter;

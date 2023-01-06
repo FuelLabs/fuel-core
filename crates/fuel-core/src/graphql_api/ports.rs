@@ -26,6 +26,7 @@ use fuel_core_types::{
     services::txpool::TransactionStatus,
 };
 
+/// The database port expected by GraphQL API service.
 pub trait DatabasePort:
     Send + Sync + DatabaseBlocks + DatabaseTransactions + DatabaseMessages
 {
