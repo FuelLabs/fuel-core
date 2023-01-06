@@ -1,5 +1,5 @@
 use crate::{
-    database::Database,
+    fuel_core_graphql_api::service::DatabaseTemp,
     query::asset_query::{
         AssetQuery,
         AssetSpendTarget,
@@ -94,7 +94,7 @@ impl SpendQuery {
     }
 
     /// Return [`AssetQuery`]s.
-    pub fn asset_queries<'a>(&'a self, db: &'a Database) -> Vec<AssetQuery<'a>> {
+    pub fn asset_queries<'a>(&'a self, db: &'a DatabaseTemp) -> Vec<AssetQuery<'a>> {
         self.query_per_asset
             .iter()
             .map(|asset| AssetQuery::new(&self.owner, asset, Some(&self.exclude), db))
@@ -137,7 +137,7 @@ pub fn largest_first(
 
         // Add to list
         collected_amount = collected_amount.saturating_add(*resource.amount());
-        resources.push(resource.into_owned());
+        resources.push(resource);
     }
 
     if collected_amount < query.asset.target {
@@ -152,7 +152,7 @@ pub fn largest_first(
 
 // An implementation of the method described on: https://iohk.io/en/blog/posts/2018/07/03/self-organisation-in-coin-selection/
 pub fn random_improve(
-    db: &Database,
+    db: &DatabaseTemp,
     spend_query: &SpendQuery,
 ) -> Result<Vec<Vec<Resource<Coin, Message>>>, ResourceQueryError> {
     let mut resources_per_asset = vec![];
@@ -188,7 +188,7 @@ pub fn random_improve(
 
             // Add to list
             collected_amount = collected_amount.saturating_add(*resource.amount());
-            resources.push(resource.into_owned());
+            resources.push(resource);
         }
 
         // Fallback to largest_first if we can't fit more coins
@@ -210,15 +210,21 @@ impl From<StorageError> for ResourceQueryError {
 
 #[cfg(test)]
 mod tests {
-    use crate::database::Database;
+    use crate::{
+        database::Database,
+        query::{
+            CoinQueryContext,
+            MessageQueryContext,
+        },
+        state::IterDirection,
+    };
     use assert_matches::assert_matches;
     use fuel_core_storage::{
         tables::{
             Coins,
             Messages,
         },
-        StorageAsMut,
-        StorageAsRef,
+        StorageMutate,
     };
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
@@ -233,7 +239,7 @@ mod tests {
     fn setup_coins() -> (Address, [AssetId; 2], TestDatabase) {
         let owner = Address::default();
         let asset_ids = [AssetId::new([1u8; 32]), AssetId::new([2u8; 32])];
-        let mut db = TestDatabase::default();
+        let mut db = TestDatabase::new();
         (0..5usize).for_each(|i| {
             db.make_coin(owner, (i + 1) as Word, asset_ids[0]);
             db.make_coin(owner, (i + 1) as Word, asset_ids[1]);
@@ -245,7 +251,7 @@ mod tests {
     fn setup_messages() -> (Address, AssetId, TestDatabase) {
         let owner = Address::default();
         let asset_id = AssetId::BASE;
-        let mut db = TestDatabase::default();
+        let mut db = TestDatabase::new();
         (0..5usize).for_each(|i| {
             db.make_message(owner, (i + 1) as Word);
         });
@@ -256,7 +262,7 @@ mod tests {
     fn setup_coins_and_messages() -> (Address, [AssetId; 2], TestDatabase) {
         let owner = Address::default();
         let asset_ids = [AssetId::BASE, AssetId::new([1u8; 32])];
-        let mut db = TestDatabase::default();
+        let mut db = TestDatabase::new();
         // 2 coins and 3 messages
         (0..2usize).for_each(|i| {
             db.make_coin(owner, (i + 1) as Word, asset_ids[0]);
@@ -278,7 +284,7 @@ mod tests {
         fn query(
             spend_query: &[AssetSpendTarget],
             owner: &Address,
-            db: &Database,
+            db: &DatabaseTemp,
         ) -> Result<Vec<Vec<(AssetId, Word)>>, ResourceQueryError> {
             let result: Vec<_> = spend_query
                 .iter()
@@ -423,7 +429,7 @@ mod tests {
             query_per_asset: Vec<AssetSpendTarget>,
             owner: Address,
             asset_ids: &[AssetId],
-            db: &Database,
+            db: &DatabaseTemp,
         ) -> Result<Vec<(AssetId, u64)>, ResourceQueryError> {
             let coins =
                 random_improve(db, &SpendQuery::new(owner, &query_per_asset, None)?);
@@ -776,7 +782,7 @@ mod tests {
             } = case;
             let owner = Address::default();
             let asset_ids = vec![AssetId::BASE];
-            let mut db = TestDatabase::default();
+            let mut db = TestDatabase::new();
             for amount in db_amount {
                 match resource_type {
                     ResourceType::Coin => {
@@ -812,11 +818,20 @@ mod tests {
         coin_result
     }
 
-    #[derive(Default)]
     pub struct TestDatabase {
-        database: Database,
+        database: DatabaseTemp,
         last_coin_index: u64,
         last_message_index: u64,
+    }
+
+    impl TestDatabase {
+        pub fn new() -> Self {
+            Self {
+                database: Box::<Database>::default(),
+                last_coin_index: Default::default(),
+                last_message_index: Default::default(),
+            }
+        }
     }
 
     impl TestDatabase {
@@ -839,8 +854,8 @@ mod tests {
                 block_created: Default::default(),
             };
 
-            let db = &mut self.database;
-            db.storage::<Coins>().insert(&id, &coin).unwrap();
+            let db = self.database.as_mut();
+            StorageMutate::<Coins>::insert(db, &id, &coin).unwrap();
 
             (id, coin)
         }
@@ -863,22 +878,20 @@ mod tests {
                 fuel_block_spend: None,
             };
 
-            let db = &mut self.database;
-            db.storage::<Messages>()
-                .insert(&message.id(), &message)
-                .unwrap();
+            let db = self.database.as_mut();
+            StorageMutate::<Messages>::insert(db, &message.id(), &message).unwrap();
 
             (message.id(), message)
         }
 
         pub fn owned_coins(&self, owner: &Address) -> Vec<(UtxoId, Coin)> {
-            self.database
-                .owned_coins_ids(owner, None, None)
+            let query = CoinQueryContext(&self.database);
+            query
+                .owned_coins_ids(owner, None, IterDirection::Forward)
                 .map(|res| {
                     res.map(|id| {
-                        let coin =
-                            self.database.storage::<Coins>().get(&id).unwrap().unwrap();
-                        (id, coin.into_owned())
+                        let coin = query.coin(&id).unwrap();
+                        (id, coin)
                     })
                 })
                 .try_collect()
@@ -886,27 +899,18 @@ mod tests {
         }
 
         pub fn owned_messages(&self, owner: &Address) -> Vec<Message> {
-            self.database
-                .owned_message_ids(owner, None, None)
-                .map(|res| {
-                    res.map(|id| {
-                        let message = self
-                            .database
-                            .storage::<Messages>()
-                            .get(&id)
-                            .unwrap()
-                            .unwrap();
-                        message.into_owned()
-                    })
-                })
+            let query = MessageQueryContext(&self.database);
+            query
+                .owned_message_ids(owner, None, IterDirection::Forward)
+                .map(|res| res.map(|id| query.message(&id).unwrap()))
                 .try_collect()
                 .unwrap()
         }
     }
 
-    impl AsRef<Database> for TestDatabase {
-        fn as_ref(&self) -> &Database {
-            self.database.as_ref()
+    impl AsRef<DatabaseTemp> for TestDatabase {
+        fn as_ref(&self) -> &DatabaseTemp {
+            &self.database
         }
     }
 }

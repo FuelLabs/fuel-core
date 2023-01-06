@@ -1,5 +1,5 @@
 use crate::{
-    database::Database,
+    fuel_core_graphql_api::service::DatabaseTemp,
     state::IterDirection,
 };
 use asset_query::{
@@ -23,7 +23,7 @@ use std::{
 
 pub mod asset_query;
 
-pub struct BalanceQueryContext<'a>(pub &'a Database);
+pub struct BalanceQueryContext<'a>(pub &'a DatabaseTemp);
 
 impl BalanceQueryContext<'_> {
     pub fn balance(&self, owner: Address, asset_id: AssetId) -> StorageResult<Balance> {
@@ -84,7 +84,7 @@ impl BalanceQueryContext<'_> {
             .collect_vec();
 
         balances.sort_by(|l, r| {
-            if l.amount < r.amount {
+            if l.asset_id < r.asset_id {
                 Ordering::Less
             } else {
                 Ordering::Greater

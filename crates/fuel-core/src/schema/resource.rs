@@ -1,6 +1,6 @@
 use crate::{
     fuel_core_graphql_api::{
-        service::Database,
+        service::DatabaseTemp,
         Config as GraphQLConfig,
     },
     query::asset_query::AssetSpendTarget,
@@ -109,7 +109,7 @@ impl ResourceQuery {
 
         let spend_query = SpendQuery::new(owner, &query_per_asset, excluded_ids)?;
 
-        let db = ctx.data_unchecked::<Database>();
+        let db = ctx.data_unchecked::<DatabaseTemp>();
 
         let resources = random_improve(db, &spend_query)?
             .into_iter()

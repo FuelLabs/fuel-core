@@ -1,9 +1,5 @@
 use crate::{
-    database::Database,
-    query::{
-        CoinQueryContext,
-        CoinQueryData,
-    },
+    query::CoinQueryContext,
     schema::scalars::{
         Address,
         AssetId,
@@ -21,11 +17,7 @@ use async_graphql::{
     InputObject,
     Object,
 };
-use fuel_core_storage::{
-    not_found,
-    tables::Coins,
-    StorageAsRef,
-};
+use fuel_core_storage::Error as StorageError;
 use fuel_core_types::{
     entities::coin::{
         Coin as CoinModel,
@@ -33,7 +25,6 @@ use fuel_core_types::{
     },
     fuel_tx,
 };
-use itertools::Itertools;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 #[graphql(remote = "CoinStatusModel")]
@@ -95,11 +86,13 @@ impl CoinQuery {
         #[graphql(desc = "The ID of the coin")] utxo_id: UtxoId,
     ) -> async_graphql::Result<Option<Coin>> {
         let data = CoinQueryContext(ctx.data_unchecked());
-        let coin = data.coin(utxo_id.0)?;
+        let coin = data.coin(&utxo_id.0);
 
-        let coin = coin.map(|coin| Coin(utxo_id.0, coin));
-
-        Ok(coin)
+        match coin {
+            Ok(coin) => Ok(Some((utxo_id.0, coin).into())),
+            Err(StorageError::NotFound(_, _)) => Ok(None),
+            Err(err) => Err(err.into()),
+        }
     }
 
     /// Gets all coins of some `owner` maybe filtered with by `asset_id` per page.
@@ -113,39 +106,33 @@ impl CoinQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<UtxoId, Coin, EmptyFields, EmptyFields>> {
+        let query = CoinQueryContext(ctx.data_unchecked());
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            let db = ctx.data_unchecked::<Database>();
             let owner: fuel_tx::Address = filter.owner.into();
-            let coin_ids: Vec<_> = db
-                .owned_coins_ids(&owner, (*start).map(Into::into), Some(direction))
-                .try_collect()?;
-            let coins = coin_ids
+            let coins = query
+                .owned_coins(&owner, (*start).map(Into::into), direction)
                 .into_iter()
-                .map(|id| {
-                    let value = db
-                        .storage::<Coins>()
-                        .get(&id)
-                        .transpose()
-                        .ok_or(not_found!(Coins))?
-                        .map(|coin| Coin(id, coin.into_owned()))?;
-                    let utxo_id: UtxoId = id.into();
-
-                    Ok((utxo_id, value))
-                })
                 .filter_map(|result| {
                     if let (Ok((_, coin)), Some(filter_asset_id)) =
                         (&result, &filter.asset_id)
                     {
-                        if coin.1.asset_id != filter_asset_id.0 {
+                        if coin.asset_id != filter_asset_id.0 {
                             return None
                         }
                     }
 
                     Some(result)
-                });
+                })
+                .map(|res| res.map(|coin| (coin.0.into(), coin.into())));
 
             Ok(coins)
         })
         .await
+    }
+}
+
+impl From<(fuel_tx::UtxoId, CoinModel)> for Coin {
+    fn from(value: (fuel_tx::UtxoId, CoinModel)) -> Self {
+        Coin(value.0, value.1)
     }
 }

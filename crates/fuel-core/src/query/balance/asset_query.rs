@@ -7,14 +7,8 @@ use crate::{
     state::IterDirection,
 };
 use fuel_core_storage::{
-    not_found,
-    tables::{
-        Coins,
-        Messages,
-    },
     Error as StorageError,
     Result as StorageResult,
-    StorageAsRef,
 };
 use fuel_core_types::{
     entities::{
@@ -109,10 +103,9 @@ impl<'a> AssetsQuery<'a> {
     //  https://github.com/FuelLabs/fuel-core/issues/588
     pub fn unspent_resources(
         &self,
-    ) -> impl Iterator<Item = StorageResult<Resource<Cow<Coin>, Cow<Message>>>> + '_ {
-        let coin_query = CoinQueryContext(self.database);
-        let coins_iter = coin_query
-            .owned_coins_ids(self.owner, None, None)
+    ) -> impl Iterator<Item = StorageResult<Resource<Coin, Message>>> + '_ {
+        let coins_iter = CoinQueryContext(self.database)
+            .owned_coins_ids(self.owner, None, IterDirection::Forward)
             .filter_ok(|id| {
                 if let Some(exclude) = self.exclude {
                     !exclude.utxos.contains(id)
@@ -120,13 +113,9 @@ impl<'a> AssetsQuery<'a> {
                     true
                 }
             })
-            .map(|res| {
+            .map(move |res| {
                 res.map_err(StorageError::from).and_then(|id| {
-                    let coin = self
-                        .database
-                        .storage::<Coins>()
-                        .get(&id)?
-                        .ok_or(not_found!(Coins))?;
+                    let coin = CoinQueryContext(self.database).coin(&id)?;
 
                     Ok(Resource::Coin { id, fields: coin })
                 })
@@ -143,8 +132,7 @@ impl<'a> AssetsQuery<'a> {
                 }
             });
 
-        let message_query = MessageQueryContext(self.database);
-        let messages_iter = message_query
+        let messages_iter = MessageQueryContext(self.database)
             .owned_message_ids(self.owner, None, IterDirection::Forward)
             .filter_ok(|id| {
                 if let Some(exclude) = self.exclude {
@@ -153,13 +141,9 @@ impl<'a> AssetsQuery<'a> {
                     true
                 }
             })
-            .map(|res| {
+            .map(move |res| {
                 res.and_then(|id| {
-                    let message = self
-                        .database
-                        .storage::<Messages>()
-                        .get(&id)?
-                        .ok_or(not_found!(Messages))?;
+                    let message = MessageQueryContext(self.database).message(&id)?;
 
                     Ok(Resource::Message {
                         id,
@@ -214,7 +198,7 @@ impl<'a> AssetQuery<'a> {
     /// for the `asset_id`.
     pub fn unspent_resources(
         &self,
-    ) -> impl Iterator<Item = StorageResult<Resource<Cow<Coin>, Cow<Message>>>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<Resource<Coin, Message>>> + '_ {
         self.query.unspent_resources()
     }
 }

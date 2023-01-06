@@ -31,8 +31,23 @@ use fuel_core_types::{
 };
 
 /// The database port expected by GraphQL API service.
+#[cfg(not(test))]
 pub trait DatabasePort:
     Send + Sync + DatabaseBlocks + DatabaseTransactions + DatabaseMessages + DatabaseCoins
+{
+}
+
+/// The database port expected by GraphQL API service.
+#[cfg(test)]
+pub trait DatabasePort:
+    Send
+    + Sync
+    + DatabaseBlocks
+    + DatabaseTransactions
+    + DatabaseMessages
+    + DatabaseCoins
+    + fuel_core_storage::StorageMutate<Coins, Error = StorageError>
+    + fuel_core_storage::StorageMutate<Messages, Error = StorageError>
 {
 }
 

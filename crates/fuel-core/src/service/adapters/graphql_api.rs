@@ -2,6 +2,7 @@ use crate::{
     database::Database,
     fuel_core_graphql_api::ports::{
         DatabaseBlocks,
+        DatabaseCoins,
         DatabaseMessages,
         DatabasePort,
         DatabaseTransactions,
@@ -27,6 +28,7 @@ use fuel_core_types::{
     fuel_tx::{
         Address,
         MessageId,
+        UtxoId,
     },
     services::txpool::TransactionStatus,
 };
@@ -83,6 +85,19 @@ impl DatabaseMessages for Database {
     ) -> BoxedIter<'_, StorageResult<Message>> {
         self.all_messages(start_message_id, Some(direction))
             .map(|result| result.map_err(StorageError::from))
+            .into_boxed()
+    }
+}
+
+impl DatabaseCoins for Database {
+    fn owned_coins_ids(
+        &self,
+        owner: &Address,
+        start_coin: Option<UtxoId>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<UtxoId>> {
+        self.owned_coins_ids(owner, start_coin, Some(direction))
+            .map(|res| res.map_err(StorageError::from))
             .into_boxed()
     }
 }
