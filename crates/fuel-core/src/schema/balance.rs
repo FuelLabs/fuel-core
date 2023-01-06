@@ -1,10 +1,10 @@
 use crate::{
-    database::resource::{
-        AssetQuery,
-        AssetSpendTarget,
-        AssetsQuery,
-    },
+    database::resource::AssetsQuery,
     fuel_core_graphql_api::service::Database,
+    query::{
+        BalanceQueryContext,
+        BalanceQueryData,
+    },
     schema::scalars::{
         Address,
         AssetId,
@@ -21,7 +21,6 @@ use async_graphql::{
     InputObject,
     Object,
 };
-use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::fuel_types;
 use itertools::Itertools;
 use std::{
@@ -67,35 +66,14 @@ impl BalanceQuery {
         #[graphql(desc = "address of the owner")] owner: Address,
         #[graphql(desc = "asset_id of the coin")] asset_id: AssetId,
     ) -> async_graphql::Result<Balance> {
-        let db = ctx.data_unchecked::<Database>();
-        let owner = owner.into();
-        let asset_id = asset_id.into();
+        let data = BalanceQueryContext(ctx.data_unchecked());
+        let balance = data.balance(owner.0, asset_id.0)?;
 
-        let balance = AssetQuery::new(
-            &owner,
-            &AssetSpendTarget::new(asset_id, u64::MAX, u64::MAX),
-            None,
-            db,
-        )
-        .unspent_resources()
-        .map(|res| res.map(|resource| *resource.amount()))
-        .try_fold(
-            Balance {
-                owner,
-                amount: 0u64,
-                asset_id,
-            },
-            |mut balance, res| -> StorageResult<_> {
-                let amount = res?;
-
-                // Increase the balance
-                balance.amount += amount;
-
-                Ok(balance)
-            },
-        )?;
-
-        Ok(balance)
+        Ok(Balance {
+            owner: balance.0.into(),
+            amount: balance.1,
+            asset_id: balance.2,
+        })
     }
 
     // TODO: We can't paginate over `AssetId` because it is not unique.

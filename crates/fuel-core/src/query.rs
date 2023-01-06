@@ -1,3 +1,4 @@
+mod balance;
 mod block;
 mod chain;
 mod coin;
@@ -5,6 +6,7 @@ mod contract;
 mod message_proof;
 mod subscriptions;
 
+pub use balance::*;
 pub use block::*;
 pub use chain::*;
 pub use coin::*;
