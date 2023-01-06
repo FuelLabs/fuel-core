@@ -47,7 +47,7 @@ mod test;
 
 pub struct MessageQueryContext<'a>(pub &'a DatabaseTemp);
 
-impl MessageQueryContext<'_> {
+impl<'a> MessageQueryContext<'a> {
     pub fn message(&self, message_id: &MessageId) -> StorageResult<Message> {
         self.0
             .as_ref()
@@ -62,7 +62,7 @@ impl MessageQueryContext<'_> {
         owner: &Address,
         start_message_id: Option<MessageId>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = StorageResult<MessageId>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<MessageId>> + 'a {
         self.0.owned_message_ids(owner, start_message_id, direction)
     }
 
@@ -80,7 +80,7 @@ impl MessageQueryContext<'_> {
         &self,
         start_message_id: Option<MessageId>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = StorageResult<Message>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<Message>> + 'a {
         self.0.all_messages(start_message_id, direction)
     }
 }
