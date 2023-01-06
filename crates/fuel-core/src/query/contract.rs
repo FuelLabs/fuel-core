@@ -57,9 +57,12 @@ impl ContractQueryData for ContractQueryContext<'_> {
             .storage::<ContractsAssets>()
             .get(&(&contract_id, &asset_id))?;
 
-        let balance = result.unwrap_or_else(|| not_found!(ContractsAssets));
+        let balance = match result {
+            Some(balance) => balance.into_owned(),
+            None => return Err(not_found!(ContractsAssets)),
+        };
 
-        Ok((contract_id, *balance, asset_id))
+        Ok((contract_id, balance, asset_id))
     }
 
     fn contract_bytecode(&self, id: ContractId) -> StorageResult<Vec<u8>> {
@@ -80,7 +83,7 @@ impl ContractQueryData for ContractQueryContext<'_> {
         let (salt, _) = db
             .storage::<ContractsInfo>()
             .get(&id)?
-            .ok_or_else(|| not_found!(ContractId))?
+            .ok_or(not_found!(ContractsInfo))?
             .into_owned();
 
         Ok(salt)
