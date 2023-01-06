@@ -1,7 +1,8 @@
 use crate::{
-    database::{
-        resource::AssetSpendTarget,
-        Database,
+    database::resource::AssetSpendTarget,
+    fuel_core_graphql_api::{
+        service::Database,
+        Config as GraphQLConfig,
     },
     resource_query::{
         random_improve,
@@ -18,7 +19,6 @@ use crate::{
             U64,
         },
     },
-    service::Config,
 };
 use async_graphql::{
     Context,
@@ -80,7 +80,7 @@ impl ResourceQuery {
         #[graphql(desc = "The excluded resources from the selection.")]
         excluded_ids: Option<ExcludeInput>,
     ) -> async_graphql::Result<Vec<Vec<Resource>>> {
-        let config = ctx.data_unchecked::<Config>();
+        let config = ctx.data_unchecked::<GraphQLConfig>();
 
         let owner: fuel_tx::Address = owner.0;
         let query_per_asset = query_per_asset
@@ -91,7 +91,7 @@ impl ResourceQuery {
                     e.amount.0,
                     e.max
                         .map(|max| max.0)
-                        .unwrap_or(config.chain_conf.transaction_parameters.max_inputs),
+                        .unwrap_or(config.transaction_parameters.max_inputs),
                 )
             })
             .collect_vec();

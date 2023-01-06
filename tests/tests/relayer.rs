@@ -10,6 +10,7 @@ use fuel_core::{
     service::{
         Config,
         FuelService,
+        ServiceTrait,
     },
 };
 use fuel_core_client::client::{
@@ -112,7 +113,7 @@ async fn relayer_can_download_logs() {
             &*msg
         );
     }
-    srv.stop().await;
+    srv.stop_and_await().await.unwrap();
     eth_node_handle.shutdown.send(()).unwrap();
 }
 
@@ -217,7 +218,7 @@ async fn messages_are_spendable_after_relayer_is_synced() {
         Some(1u64)
     );
 
-    srv.stop().await;
+    srv.stop_and_await().await.unwrap();
     eth_node_handle.shutdown.send(()).unwrap();
 }
 

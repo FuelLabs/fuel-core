@@ -6,6 +6,8 @@ use tokio::{
 
 /// Alias for Arc<T>
 pub type Shared<T> = std::sync::Arc<T>;
+/// The alias for `State` watcher to re-export `watch::Receiver`.
+pub type StateWatcher = watch::Receiver<State>;
 
 /// Used if services have no asynchronously shared data
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -15,9 +17,16 @@ pub struct EmptyShared;
 /// the lifecycle of services such as start/stop and health status.
 #[async_trait::async_trait]
 pub trait Service {
-    /// Send a start signal to the `ServiceRunner`. Returns an error if the service was already
-    /// started.
+    /// Send a start signal to the service without waiting for it to start.
+    /// Returns an error if the service was already started.
     fn start(&self) -> anyhow::Result<()>;
+
+    /// Send a start signal to the service and wait for it to start up.
+    /// Returns an error if the service was already started.
+    async fn start_and_await(&self) -> anyhow::Result<State>;
+
+    /// Wait for service to start or stop (without sending any signal).
+    async fn await_start_or_stop(&self) -> anyhow::Result<State>;
 
     /// Send a stop signal to the service without waiting for it to shutdown.
     /// Returns false if the service was already stopped, true if it is running.
@@ -26,7 +35,7 @@ pub trait Service {
     /// Send stop signal to service and wait for it to shutdown.
     async fn stop_and_await(&self) -> anyhow::Result<State>;
 
-    /// Wait for service to stop (without sending a stop signal)
+    /// Wait for service to stop (without sending a stop signal).
     async fn await_stop(&self) -> anyhow::Result<State>;
 
     /// The current state of the service (i.e. `Started`, `Stopped`, etc..)
@@ -45,14 +54,25 @@ pub trait RunnableService: Send {
     /// to be shared between asynchronous processes.
     type SharedData: Clone + Send + Sync;
 
+    /// The initialized runnable task type.
+    type Task: RunnableTask;
+
     /// A cloned instance of the shared data
     fn shared_data(&self) -> Self::SharedData;
 
-    /// Service specific initialization logic before main task run loop.
-    async fn initialize(&mut self) -> anyhow::Result<()>;
+    /// Converts the service into a runnable task before the main run loop.
+    ///
+    /// The `state` is a `State` watcher of the service. Some tasks may handle state changes
+    /// on their own.
+    async fn into_task(self, state: &StateWatcher) -> anyhow::Result<Self::Task>;
+}
 
-    /// This function should contain the main business logic of the service. It will run until the
-    /// service either returns false, panics or a stop signal is received.
+/// The trait is implemented by the service task and contains a single iteration of the infinity
+/// loop.
+#[async_trait::async_trait]
+pub trait RunnableTask: Send {
+    /// This function should contain the main business logic of the service task. It will run until
+    /// the service either returns false, panics or a stop signal is received.
     /// If the service returns an error, it will be logged and execution will resume.
     /// This is intended to be called only by the `ServiceRunner`.
     async fn run(&mut self) -> anyhow::Result<bool>;
@@ -63,6 +83,8 @@ pub trait RunnableService: Send {
 pub enum State {
     /// Service is initialized but not started
     NotStarted,
+    /// Service is starting up
+    Starting,
     /// Service is running as normal
     Started,
     /// Service is shutting down
@@ -77,6 +99,11 @@ impl State {
     /// is not started
     pub fn not_started(&self) -> bool {
         self == &State::NotStarted
+    }
+
+    /// is starting
+    pub fn starting(&self) -> bool {
+        self == &State::Starting
     }
 
     /// is started
@@ -125,24 +152,26 @@ where
         Self { shared, state }
     }
 
-    async fn await_stop_and_maybe_call<F>(&self, call: F) -> anyhow::Result<State>
-    where
-        F: Fn(&Self),
-    {
-        let mut stop = self.state.subscribe();
-        let state = stop.borrow().clone();
-        if state.stopped() {
-            Ok(state)
-        } else {
-            call(self);
-
-            loop {
-                let state = stop.borrow_and_update().clone();
-                if state.stopped() {
-                    return Ok(state)
-                }
-                stop.changed().await?;
+    async fn _await_start_or_stop(
+        &self,
+        mut start: StateWatcher,
+    ) -> anyhow::Result<State> {
+        loop {
+            let state = start.borrow().clone();
+            if !state.starting() {
+                return Ok(state)
             }
+            start.changed().await?;
+        }
+    }
+
+    async fn _await_stop(&self, mut stop: StateWatcher) -> anyhow::Result<State> {
+        loop {
+            let state = stop.borrow().clone();
+            if state.stopped() {
+                return Ok(state)
+            }
+            stop.changed().await?;
         }
     }
 }
@@ -155,7 +184,7 @@ where
     fn start(&self) -> anyhow::Result<()> {
         let started = self.state.send_if_modified(|state| {
             if state.not_started() {
-                *state = State::Started;
+                *state = State::Starting;
                 true
             } else {
                 false
@@ -172,9 +201,20 @@ where
         }
     }
 
+    async fn start_and_await(&self) -> anyhow::Result<State> {
+        let start = self.state.subscribe();
+        self.start()?;
+        self._await_start_or_stop(start).await
+    }
+
+    async fn await_start_or_stop(&self) -> anyhow::Result<State> {
+        let start = self.state.subscribe();
+        self._await_start_or_stop(start).await
+    }
+
     fn stop(&self) -> bool {
         self.state.send_if_modified(|state| {
-            if state.not_started() || state.started() {
+            if state.not_started() || state.starting() || state.started() {
                 *state = State::Stopping;
                 true
             } else {
@@ -184,14 +224,14 @@ where
     }
 
     async fn stop_and_await(&self) -> anyhow::Result<State> {
-        self.await_stop_and_maybe_call(|runner| {
-            runner.stop();
-        })
-        .await
+        let stop = self.state.subscribe();
+        self.stop();
+        self._await_stop(stop).await
     }
 
     async fn await_stop(&self) -> anyhow::Result<State> {
-        self.await_stop_and_maybe_call(|_| {}).await
+        let stop = self.state.subscribe();
+        self._await_stop(stop).await
     }
 
     fn state(&self) -> State {
@@ -204,12 +244,12 @@ fn initialize_loop<S>(service: S) -> Shared<watch::Sender<State>>
 where
     S: RunnableService + 'static,
 {
-    let (sender, receiver) = watch::channel(State::NotStarted);
+    let (sender, _) = watch::channel(State::NotStarted);
     let state = Shared::new(sender);
     let stop_sender = state.clone();
     // Spawned as a task to check if the service is already running and to capture any panics.
     tokio::task::spawn(async move {
-        let join_handler = run(service, receiver.clone());
+        let join_handler = run(service, stop_sender.clone());
         let result = join_handler.await;
 
         let stopped_state = if let Err(e) = result {
@@ -231,26 +271,41 @@ where
 }
 
 /// Spawns a task for the main background run loop.
-fn run<S>(mut service: S, mut state: watch::Receiver<State>) -> JoinHandle<()>
+fn run<S>(service: S, sender: Shared<watch::Sender<State>>) -> JoinHandle<()>
 where
     S: RunnableService + 'static,
 {
+    let mut state = sender.subscribe();
     tokio::task::spawn(async move {
         if state.borrow_and_update().not_started() {
             // We can panic here, because it is inside of the task.
             state.changed().await.expect("The service is destroyed");
         }
 
-        // If the state after update is not `Started` then return to stop the service.
-        if !state.borrow().started() {
+        // If the state after update is not `Starting` then return to stop the service.
+        if !state.borrow().starting() {
             return
         }
 
         // We can panic here, because it is inside of the task.
-        service
-            .initialize()
+        let mut task = service
+            .into_task(&state)
             .await
             .expect("The initialization of the service failed.");
+
+        let started = sender.send_if_modified(|s| {
+            if s.starting() {
+                *s = State::Started;
+                true
+            } else {
+                false
+            }
+        });
+
+        if !started {
+            return
+        }
+
         loop {
             tokio::select! {
                 biased;
@@ -261,7 +316,7 @@ where
                     }
                 }
 
-                result = service.run() => {
+                result = task.run() => {
                     match result {
                         Ok(should_continue) => {
                             if !should_continue {
@@ -282,13 +337,8 @@ where
 // TODO: Add tests
 #[cfg(test)]
 mod tests {
-    use crate::{
-        EmptyShared,
-        RunnableService,
-        Service as ServiceTrait,
-        ServiceRunner,
-        State,
-    };
+    use super::*;
+    use futures::future::BoxFuture;
 
     mockall::mock! {
         Service {}
@@ -298,16 +348,23 @@ mod tests {
             const NAME: &'static str = "MockService";
 
             type SharedData = EmptyShared;
+            type Task = MockTask;
 
-            fn shared_data(&self) -> EmptyShared {
-                EmptyShared
-            }
+            fn shared_data(&self) -> EmptyShared;
 
-            async fn initialize(&mut self) -> anyhow::Result<()> {
-                Ok(())
-            }
+            async fn into_task(self, state: &StateWatcher) -> anyhow::Result<MockTask>;
+        }
+    }
 
-            async fn run(&mut self) -> anyhow::Result<bool>;
+    mockall::mock! {
+        Task {}
+
+        #[async_trait::async_trait]
+        impl RunnableTask for Task {
+            fn run<'_self, 'a>(&'_self mut self) -> BoxFuture<'a, anyhow::Result<bool>>
+            where
+                '_self: 'a,
+                Self: Sync + 'a;
         }
     }
 
@@ -315,10 +372,37 @@ mod tests {
         fn new_empty() -> Self {
             let mut mock = MockService::default();
             mock.expect_shared_data().returning(|| EmptyShared);
-            mock.expect_initialize().returning(|| Ok(()));
-            mock.expect_run().returning(|| Ok(true));
+            mock.expect_into_task().returning(|_| {
+                let mut mock = MockTask::default();
+                mock.expect_run()
+                    .returning(|| Box::pin(core::future::pending()));
+                Ok(mock)
+            });
             mock
         }
+    }
+
+    #[tokio::test]
+    async fn start_and_await_stop_and_await_works() {
+        let service = ServiceRunner::new(MockService::new_empty());
+        let state = service.start_and_await().await.unwrap();
+        assert!(state.started());
+        let state = service.stop_and_await().await.unwrap();
+        assert!(state.stopped());
+    }
+
+    #[tokio::test]
+    async fn double_start_fails() {
+        let service = ServiceRunner::new(MockService::new_empty());
+        assert!(service.start().is_ok());
+        assert!(service.start().is_err());
+    }
+
+    #[tokio::test]
+    async fn double_start_and_await_fails() {
+        let service = ServiceRunner::new(MockService::new_empty());
+        assert!(service.start_and_await().await.is_ok());
+        assert!(service.start_and_await().await.is_err());
     }
 
     #[tokio::test]
@@ -331,10 +415,14 @@ mod tests {
     async fn panic_during_run() {
         let mut mock = MockService::default();
         mock.expect_shared_data().returning(|| EmptyShared);
-        mock.expect_initialize().returning(|| Ok(()));
-        mock.expect_run().returning(|| panic!("Should fail"));
+        mock.expect_into_task().returning(|_| {
+            let mut mock = MockTask::default();
+            mock.expect_run().returning(|| panic!("Should fail"));
+            Ok(mock)
+        });
         let service = ServiceRunner::new(mock);
-        service.start().unwrap();
+        let state = service.start_and_await().await.unwrap();
+        assert!(matches!(state, State::StoppedWithError(_)));
 
         let state = service.await_stop().await.unwrap();
         assert!(matches!(state, State::StoppedWithError(_)));

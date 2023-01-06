@@ -1,5 +1,5 @@
 use super::scalars::U64;
-use crate::service::Config;
+use crate::fuel_core_graphql_api::Config as GraphQLConfig;
 use async_graphql::{
     Context,
     Object,
@@ -47,21 +47,16 @@ pub struct NodeQuery {}
 #[Object]
 impl NodeQuery {
     async fn node_info(&self, ctx: &Context<'_>) -> async_graphql::Result<NodeInfo> {
-        let Config {
-            utxo_validation,
-            vm,
-            txpool,
-            ..
-        } = ctx.data_unchecked::<Config>();
+        let config = ctx.data_unchecked::<GraphQLConfig>();
 
         const VERSION: &str = env!("CARGO_PKG_VERSION");
 
         Ok(NodeInfo {
-            utxo_validation: *utxo_validation,
-            vm_backtrace: vm.backtrace,
-            min_gas_price: txpool.min_gas_price.into(),
-            max_tx: (txpool.max_tx as u64).into(),
-            max_depth: (txpool.max_depth as u64).into(),
+            utxo_validation: config.utxo_validation,
+            vm_backtrace: config.vm_backtrace,
+            min_gas_price: config.min_gas_price.into(),
+            max_tx: (config.max_tx as u64).into(),
+            max_depth: (config.max_depth as u64).into(),
             node_version: VERSION.to_owned(),
         })
     }

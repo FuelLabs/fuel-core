@@ -2,8 +2,8 @@ use crate::{
     database::{
         transactional::DatabaseTransaction,
         vm_database::VmDatabase,
-        Database,
     },
+    fuel_core_graphql_api::service::Database,
     schema::scalars::U64,
 };
 use async_graphql::{

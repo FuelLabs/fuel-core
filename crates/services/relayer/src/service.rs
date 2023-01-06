@@ -23,7 +23,9 @@ use ethers_providers::{
 };
 use fuel_core_services::{
     RunnableService,
+    RunnableTask,
     ServiceRunner,
+    StateWatcher,
 };
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
@@ -59,9 +61,10 @@ type NotifySynced = watch::Sender<bool>;
 pub type Service<D> = CustomizableService<Provider<Http>, D>;
 type CustomizableService<P, D> = ServiceRunner<Task<P, D>>;
 
-/// Receives signals when the relayer reaches consistency with the DA layer.
+/// The shared state of the relayer task.
 #[derive(Clone)]
-pub struct RelayerSynced {
+pub struct SharedState {
+    /// Receives signals when the relayer reaches consistency with the DA layer.
     synced: Synced,
 }
 
@@ -153,19 +156,27 @@ where
 {
     const NAME: &'static str = "Relayer";
 
-    type SharedData = RelayerSynced;
+    type SharedData = SharedState;
+    type Task = Task<P, D>;
 
     fn shared_data(&self) -> Self::SharedData {
         let synced = self.synced.subscribe();
 
-        RelayerSynced { synced }
+        SharedState { synced }
     }
 
-    async fn initialize(&mut self) -> anyhow::Result<()> {
+    async fn into_task(mut self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
         self.set_deploy_height().await;
-        Ok(())
+        Ok(self)
     }
+}
 
+#[async_trait]
+impl<P, D> RunnableTask for Task<P, D>
+where
+    P: Middleware<Error = ProviderError> + 'static,
+    D: RelayerDb + 'static,
+{
     async fn run(&mut self) -> anyhow::Result<bool> {
         let now = tokio::time::Instant::now();
         let result = run::run(self).await;
@@ -182,7 +193,7 @@ where
     }
 }
 
-impl RelayerSynced {
+impl SharedState {
     /// Wait for the [`Task`] to be in sync with
     /// the data availability layer.
     ///
