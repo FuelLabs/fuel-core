@@ -29,7 +29,7 @@ impl ChainQueryData for ChainQueryContext<'_> {
     )> {
         let db = self.0;
 
-        let height = db.get_block_height()?.unwrap_or_default();
+        let height = db.latest_height()?.unwrap_or_default();
         let id = db.get_block_id(height)?.unwrap_or_default();
         let block = db
             .storage::<FuelBlocks>()

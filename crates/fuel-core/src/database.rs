@@ -330,7 +330,7 @@ impl Default for Database {
 
 impl BlockDb for Database {
     fn block_height(&self) -> anyhow::Result<BlockHeight> {
-        Ok(self.get_block_height()?.unwrap_or_default())
+        Ok(self.latest_height()?.unwrap_or_default())
     }
 
     fn seal_block(
@@ -339,7 +339,7 @@ impl BlockDb for Database {
         consensus: Consensus,
     ) -> anyhow::Result<()> {
         self.storage::<SealedBlockConsensus>()
-            .insert(&block_id.into(), &consensus)
+            .insert(&block_id, &consensus)
             .map(|_| ())
             .map_err(Into::into)
     }
@@ -363,7 +363,7 @@ impl TxPoolDb for Database {
     }
 
     fn current_block_height(&self) -> StorageResult<BlockHeight> {
-        self.get_block_height()
+        self.latest_height()
             .map(|h| h.unwrap_or_default())
             .map_err(Into::into)
     }
@@ -381,7 +381,7 @@ impl BlockProducerDatabase for Database {
     }
 
     fn current_block_height(&self) -> StorageResult<BlockHeight> {
-        self.get_block_height()
+        self.latest_height()
             .map(|h| h.unwrap_or_default())
             .map_err(Into::into)
     }
@@ -403,6 +403,6 @@ impl ChainConfigDb for Database {
     }
 
     fn get_block_height(&self) -> StorageResult<Option<BlockHeight>> {
-        Self::get_block_height(self).map_err(Into::into)
+        Self::latest_height(self).map_err(Into::into)
     }
 }

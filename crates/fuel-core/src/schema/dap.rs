@@ -349,7 +349,7 @@ impl DapMutation {
 
         let checked_tx = tx
             .into_checked_basic(
-                db.get_block_height()?.unwrap_or_default().into(),
+                db.latest_height()?.unwrap_or_default().into(),
                 &locked.params,
             )?
             .into();

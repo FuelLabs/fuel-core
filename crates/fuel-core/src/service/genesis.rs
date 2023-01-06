@@ -21,7 +21,7 @@ use fuel_core_storage::{
         FuelBlocks,
         Messages,
     },
-    transactional::Transactional,
+    transactional::Transaction,
     MerkleRoot,
     StorageAsMut,
 };
@@ -130,7 +130,7 @@ fn add_genesis_block(config: &Config, database: &mut Database) -> anyhow::Result
     let block_id = block.id();
     database
         .storage::<FuelBlocks>()
-        .insert(&block_id.into(), &block.compress())?;
+        .insert(&block_id, &block.compress())?;
     database.seal_block(block_id, seal)
 }
 
@@ -408,7 +408,7 @@ mod tests {
 
         assert_eq!(
             test_height,
-            db.get_block_height()
+            db.latest_height()
                 .unwrap()
                 .expect("Expected a block height to be set")
         )

@@ -20,7 +20,7 @@ use fuel_core_storage::{
     },
     transactional::{
         StorageTransaction,
-        Transactional,
+        Transaction as StorageTransactionTrait,
     },
     StorageAsMut,
     StorageAsRef,
@@ -274,7 +274,7 @@ impl Executor {
         block_db_transaction
             .deref_mut()
             .storage::<FuelBlocks>()
-            .insert(&finalized_block_id.into(), &result.block.compress())?;
+            .insert(&finalized_block_id, &result.block.compress())?;
 
         // Get the complete fuel block.
         Ok(UncommittedResult::new(

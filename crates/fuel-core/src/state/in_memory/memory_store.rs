@@ -15,6 +15,10 @@ use crate::{
         TransactableStorage,
     },
 };
+use fuel_core_storage::iter::{
+    BoxedIter,
+    IntoBoxedIter,
+};
 use itertools::Itertools;
 use std::{
     collections::HashMap,
@@ -73,7 +77,7 @@ impl KeyValueStore for MemoryStore {
         prefix: Option<Vec<u8>>,
         start: Option<Vec<u8>>,
         direction: IterDirection,
-    ) -> Box<dyn Iterator<Item = DatabaseResult<(Vec<u8>, Vec<u8>)>> + '_> {
+    ) -> BoxedIter<DatabaseResult<(Vec<u8>, Vec<u8>)>> {
         // clone entire set so we can drop the lock
         let mut copy: Vec<(Vec<u8>, Vec<u8>)> = self
             .inner
@@ -99,13 +103,12 @@ impl KeyValueStore for MemoryStore {
         }
 
         if let Some(start) = start {
-            Box::new(
-                copy.into_iter()
-                    .skip_while(move |(key, _)| key.as_slice() != start.as_slice())
-                    .map(Ok),
-            )
+            copy.into_iter()
+                .skip_while(move |(key, _)| key.as_slice() != start.as_slice())
+                .map(Ok)
+                .into_boxed()
         } else {
-            Box::new(copy.into_iter().map(Ok))
+            copy.into_iter().map(Ok).into_boxed()
         }
     }
 }

@@ -2,27 +2,33 @@
 
 use crate::Result as StorageResult;
 
-/// The type is transactional and holds uncommitted state.
-pub trait Transactional<Storage>: AsRef<Storage> + AsMut<Storage> + Send + Sync {
+/// The types is transactional and may create `StorageTransaction`.
+pub trait Transactional<Storage> {
+    /// Creates and returns the storage transaction.
+    fn transaction(&self) -> StorageTransaction<Storage>;
+}
+
+/// The type is storage transaction and holds uncommitted state.
+pub trait Transaction<Storage>: AsRef<Storage> + AsMut<Storage> + Send + Sync {
     /// Commits the pending state changes into the storage.
     fn commit(&mut self) -> StorageResult<()>;
 }
 
 /// The storage transaction for the `Storage` type.
 pub struct StorageTransaction<Storage> {
-    transaction: Box<dyn Transactional<Storage>>,
+    transaction: Box<dyn Transaction<Storage>>,
 }
 
 impl<Storage> StorageTransaction<Storage> {
     /// Create a new storage transaction.
-    pub fn new<T: Transactional<Storage> + 'static>(t: T) -> Self {
+    pub fn new<T: Transaction<Storage> + 'static>(t: T) -> Self {
         Self {
             transaction: Box::new(t),
         }
     }
 }
 
-impl<Storage> Transactional<Storage> for StorageTransaction<Storage> {
+impl<Storage> Transaction<Storage> for StorageTransaction<Storage> {
     fn commit(&mut self) -> StorageResult<()> {
         self.transaction.commit()
     }

@@ -3,7 +3,7 @@ use crate::{
     state::in_memory::transaction::MemoryTransactionView,
 };
 use fuel_core_storage::{
-    transactional::Transactional,
+    transactional::Transaction,
     Result as StorageResult,
 };
 use std::{
@@ -55,7 +55,7 @@ impl Default for DatabaseTransaction {
     }
 }
 
-impl Transactional<Database> for DatabaseTransaction {
+impl Transaction<Database> for DatabaseTransaction {
     fn commit(&mut self) -> StorageResult<()> {
         // TODO: should commit be fallible if this api is meant to be atomic?
         Ok(self.changes.commit()?)

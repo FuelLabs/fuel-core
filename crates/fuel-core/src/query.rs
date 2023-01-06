@@ -2,12 +2,15 @@ mod block;
 mod chain;
 mod coin;
 mod contract;
-mod message_proof;
+mod message;
 mod subscriptions;
+mod tx;
 
+// TODO: Remove reexporting of everything
 pub use block::*;
 pub use chain::*;
 pub use coin::*;
 pub use contract::*;
-pub use message_proof::*;
+pub use message::*;
 pub(crate) use subscriptions::*;
+pub use tx::*;
