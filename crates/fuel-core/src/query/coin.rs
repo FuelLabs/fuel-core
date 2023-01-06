@@ -10,10 +10,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     entities::coin::Coin,
-    fuel_tx::{
-        UtxoId,
-        UtxoId as UtxoIdModel,
-    },
+    fuel_tx::UtxoId,
     fuel_types::Address,
 };
 
