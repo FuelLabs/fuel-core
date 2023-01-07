@@ -42,7 +42,7 @@ impl Contract {
 
         let bytecode = context.contract_bytecode(self.0)?;
 
-        Ok(HexString(bytecode.into()))
+        Ok(HexString(bytecode))
     }
     async fn salt(&self, ctx: &Context<'_>) -> async_graphql::Result<Salt> {
         let context = ContractQueryContext(ctx.data_unchecked());
