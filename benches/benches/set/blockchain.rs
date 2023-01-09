@@ -113,6 +113,7 @@ pub fn run(c: &mut Criterion) {
                 Ok(db)
             });
         bench.data.extend(data);
+        scwq.throughput(Throughput::Bytes(i));
         run_group_ref(&mut scwq, format!("{i}"), bench);
     }
 
@@ -141,6 +142,7 @@ pub fn run(c: &mut Criterion) {
                 Ok(db)
             });
         bench.data.extend(data);
+        swwq.throughput(Throughput::Bytes(i));
         run_group_ref(&mut swwq, format!("{i}"), bench);
     }
 
@@ -427,6 +429,8 @@ pub fn run(c: &mut Criterion) {
         VmBench::contract(rng, Opcode::GM(0x10, 1)).unwrap(),
     );
 
+    let mut smo = c.benchmark_group("smo");
+
     for i in linear.clone() {
         let mut input = VmBench::contract(rng, Opcode::SMO(0x15, 0x16, 0x17, 0x18))
             .expect("failed to prepare contract");
@@ -451,7 +455,7 @@ pub fn run(c: &mut Criterion) {
         let coin_input = Input::coin_predicate(
             Default::default(),
             owner,
-            1000,
+            Word::MAX,
             AssetId::zeroed(),
             Default::default(),
             Default::default(),
@@ -459,8 +463,11 @@ pub fn run(c: &mut Criterion) {
             vec![],
         );
         input.inputs.push(coin_input);
-        run_group_ref(&mut c.benchmark_group("smo"), format!("{i}"), input);
+        smo.throughput(Throughput::Bytes(i));
+        run_group_ref(&mut smo, format!("{i}"), input);
     }
+
+    smo.finish();
 
     let mut srwq = c.benchmark_group("srwq");
 
@@ -488,6 +495,7 @@ pub fn run(c: &mut Criterion) {
                 Ok(db)
             });
         bench.data.extend(data);
+        srwq.throughput(Throughput::Bytes(i));
         run_group_ref(&mut srwq, format!("{i}"), bench);
     }
 
