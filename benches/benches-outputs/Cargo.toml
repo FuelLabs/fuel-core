@@ -6,7 +6,7 @@ license = "BUSL-1.1"
 publish = false
 
 [dependencies]
-fuel-vm = { version = "0.24", default-features = false, features = ["random", "test-helpers", "bench-helpers"] }
+fuel-vm = { version = "0.24", default-features = false, features = ["random", "test-helpers"] }
 
 [workspace]
 

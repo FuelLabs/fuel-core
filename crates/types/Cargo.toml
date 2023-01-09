@@ -28,7 +28,6 @@ zeroize = "1.5"
 
 [features]
 default = []
-bench-helpers = ["fuel-vm-private/bench-helpers"]
 serde = ["dep:serde", "fuel-vm-private/serde"]
 random = ["fuel-vm-private/random"]
 test-helpers = ["random", "fuel-vm-private/test-helpers"]

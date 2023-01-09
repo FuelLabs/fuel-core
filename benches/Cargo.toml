@@ -13,10 +13,7 @@ fuel-core = { path = "../crates/fuel-core", default-features = false, features =
     "rocksdb",
 ] }
 fuel-core-storage = { path = "../crates/storage" }
-fuel-core-types = { path = "../crates/types", features = [
-    "bench-helpers",
-    "test-helpers",
-] }
+fuel-core-types = { path = "../crates/types", features = ["test-helpers"] }
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.86"
