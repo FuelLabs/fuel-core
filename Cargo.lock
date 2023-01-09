@@ -2250,7 +2250,7 @@ checksum = "2022715d62ab30faffd124d40b76f4134a550a87792276512b18d63272333394"
 [[package]]
 name = "fuel-asm"
 version = "0.24.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#92cf9ba1bc5ec11bcd5e1060eda2ad27411a8489"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#092447c6ff28d5f4bf96f9e9d02de6362a5c9db3"
 dependencies = [
  "fuel-types",
  "serde",
@@ -2632,7 +2632,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.24.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#92cf9ba1bc5ec11bcd5e1060eda2ad27411a8489"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#092447c6ff28d5f4bf96f9e9d02de6362a5c9db3"
 dependencies = [
  "borrown",
  "coins-bip32",
@@ -2670,12 +2670,12 @@ checksum = "b0f895423d18472d60eb078cf949608ff3fe6e42e91d41b85993b11528d2c4c3"
 [[package]]
 name = "fuel-storage"
 version = "0.24.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#92cf9ba1bc5ec11bcd5e1060eda2ad27411a8489"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#092447c6ff28d5f4bf96f9e9d02de6362a5c9db3"
 
 [[package]]
 name = "fuel-tx"
 version = "0.24.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#92cf9ba1bc5ec11bcd5e1060eda2ad27411a8489"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#092447c6ff28d5f4bf96f9e9d02de6362a5c9db3"
 dependencies = [
  "bitflags",
  "derivative",
@@ -2693,7 +2693,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.24.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#92cf9ba1bc5ec11bcd5e1060eda2ad27411a8489"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#092447c6ff28d5f4bf96f9e9d02de6362a5c9db3"
 dependencies = [
  "rand 0.8.5",
  "serde",
@@ -2702,7 +2702,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.24.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#92cf9ba1bc5ec11bcd5e1060eda2ad27411a8489"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#092447c6ff28d5f4bf96f9e9d02de6362a5c9db3"
 dependencies = [
  "anyhow",
  "fuel-asm",
