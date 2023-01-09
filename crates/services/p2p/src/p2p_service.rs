@@ -47,6 +47,7 @@ use libp2p::{
     },
     swarm::{
         AddressScore,
+        ConnectionLimits,
         SwarmBuilder,
         SwarmEvent,
     },
@@ -54,7 +55,7 @@ use libp2p::{
     PeerId,
     Swarm,
 };
-use libp2p_swarm::ConnectionLimits;
+
 use rand::seq::IteratorRandom;
 use std::collections::HashMap;
 use tracing::{

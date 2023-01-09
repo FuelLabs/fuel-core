@@ -17,6 +17,13 @@ use libp2p::{
         Success as PingSuccess,
     },
     swarm::{
+        derive_prelude::{
+            ConnectionClosed,
+            ConnectionEstablished,
+            DialFailure,
+            FromSwarm,
+            ListenFailure,
+        },
         ConnectionHandler,
         IntoConnectionHandler,
         IntoConnectionHandlerSelect,
@@ -27,13 +34,7 @@ use libp2p::{
     Multiaddr,
     PeerId,
 };
-use libp2p_swarm::derive_prelude::{
-    ConnectionClosed,
-    ConnectionEstablished,
-    DialFailure,
-    FromSwarm,
-    ListenFailure,
-};
+
 use std::{
     collections::{
         HashMap,

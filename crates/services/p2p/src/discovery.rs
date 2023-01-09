@@ -14,6 +14,11 @@ use libp2p::{
     mdns::Event as MdnsEvent,
     multiaddr::Protocol,
     swarm::{
+        derive_prelude::{
+            ConnectionClosed,
+            ConnectionEstablished,
+            FromSwarm,
+        },
         ConnectionHandler,
         IntoConnectionHandler,
         NetworkBehaviour,
@@ -22,11 +27,6 @@ use libp2p::{
     },
     Multiaddr,
     PeerId,
-};
-use libp2p_swarm::derive_prelude::{
-    ConnectionClosed,
-    ConnectionEstablished,
-    FromSwarm,
 };
 use std::{
     collections::{
