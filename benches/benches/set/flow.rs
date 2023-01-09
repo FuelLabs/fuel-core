@@ -59,7 +59,7 @@ pub fn run(c: &mut Criterion) {
     );
 
     run_group_ref(
-        &mut c.benchmark_group("ret"),
+        &mut c.benchmark_group("ret_script"),
         "ret (script)",
         VmBench::new(Opcode::RET(REG_ONE)),
     );
@@ -97,7 +97,7 @@ pub fn run(c: &mut Criterion) {
     retd_script.finish();
 
     run_group_ref(
-        &mut c.benchmark_group("rvrt"),
+        &mut c.benchmark_group("rvrt_script"),
         "rvrt (script)",
         VmBench::new(Opcode::RVRT(REG_ONE)),
     );

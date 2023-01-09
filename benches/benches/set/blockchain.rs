@@ -9,6 +9,10 @@ use criterion::{
 use fuel_core_benches::*;
 use fuel_core_types::{
     fuel_asm::*,
+    fuel_tx::{
+        Input,
+        Output,
+    },
     fuel_types::*,
     fuel_vm::{
         consts::*,
@@ -88,7 +92,7 @@ pub fn run(c: &mut Criterion) {
 
     let mut scwq = c.benchmark_group("scwq");
 
-    for i in 1..=1 {
+    for i in linear.clone() {
         let mut key = Bytes32::zeroed();
 
         key.as_mut()[..8].copy_from_slice(&(i as u64).to_be_bytes());
@@ -109,14 +113,14 @@ pub fn run(c: &mut Criterion) {
                 Ok(db)
             });
         bench.data.extend(data);
-        run_group_ref(&mut scwq, "scwq", bench);
+        run_group_ref(&mut scwq, format!("{i}"), bench);
     }
 
     scwq.finish();
 
     let mut swwq = c.benchmark_group("swwq");
 
-    for i in 1..=1 {
+    for i in linear.clone() {
         let mut key = Bytes32::zeroed();
 
         key.as_mut()[..8].copy_from_slice(&(i as u64).to_be_bytes());
@@ -137,7 +141,7 @@ pub fn run(c: &mut Criterion) {
                 Ok(db)
             });
         bench.data.extend(data);
-        run_group_ref(&mut swwq, "swwq", bench);
+        run_group_ref(&mut swwq, format!("{i}"), bench);
     }
 
     swwq.finish();
@@ -272,7 +276,7 @@ pub fn run(c: &mut Criterion) {
 
     let mut csiz = c.benchmark_group("csiz");
 
-    for i in linear {
+    for i in linear.clone() {
         let mut code = vec![0u8; i as usize];
 
         rng.fill_bytes(&mut code);
@@ -288,7 +292,7 @@ pub fn run(c: &mut Criterion) {
 
         run_group_ref(
             &mut csiz,
-            format!("{}", i),
+            format!("{i}"),
             VmBench::new(Opcode::CSIZ(0x11, 0x10))
                 .with_contract_code(code)
                 .with_data(data)
@@ -356,6 +360,43 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(&mut c.benchmark_group("tr"), "tr", input);
     }
 
+    {
+        let mut input = VmBench::contract(rng, Opcode::TRO(0x15, 0x16, 0x14, 0x15))
+            .expect("failed to prepare contract")
+            .with_prepare_db(move |mut db| {
+                db.merkle_contract_asset_id_balance_insert(
+                    &ContractId::zeroed(),
+                    &AssetId::zeroed(),
+                    200,
+                )?;
+
+                Ok(db)
+            });
+        let coin_output = Output::variable(Address::zeroed(), 100, AssetId::zeroed());
+        input.outputs.push(coin_output);
+        let predicate = Opcode::RET(REG_ONE).to_bytes().to_vec();
+        let owner = Input::predicate_owner(&predicate);
+        let coin_input = Input::coin_predicate(
+            Default::default(),
+            owner,
+            1000,
+            AssetId::zeroed(),
+            Default::default(),
+            Default::default(),
+            predicate,
+            vec![],
+        );
+        input.inputs.push(coin_input);
+
+        let index = input.outputs.len() - 1;
+        input.prepare_script.extend(vec![
+            Opcode::MOVI(0x15, 2000),
+            Opcode::MOVI(0x14, 100),
+            Opcode::MOVI(0x16, index as Immediate18),
+        ]);
+        run_group_ref(&mut c.benchmark_group("tro"), "tro", input);
+    }
+
     run_group_ref(
         &mut c.benchmark_group("cfsi"),
         "cfsi",
@@ -384,5 +425,78 @@ pub fn run(c: &mut Criterion) {
         &mut c.benchmark_group("gm"),
         "gm",
         VmBench::contract(rng, Opcode::GM(0x10, 1)).unwrap(),
+    );
+
+    for i in linear.clone() {
+        let mut input = VmBench::contract(rng, Opcode::SMO(0x15, 0x16, 0x17, 0x18))
+            .expect("failed to prepare contract");
+        input.outputs.push(Output::message(Address::zeroed(), 1));
+        let index = input.outputs.len() - 1;
+        input.post_call.extend(vec![
+            Opcode::gtf(0x15, 0x00, GTFArgs::ScriptData),
+            // Offset 32 + 8+ 8 + 32
+            Opcode::ADDI(0x15, 0x15, 32 + 8 + 8 + 32),
+            Opcode::MOVI(0x16, i as Immediate18),
+            Opcode::MOVI(0x17, index as Immediate18),
+            Opcode::MOVI(0x18, 10),
+        ]);
+        input.data.extend(
+            Address::new([1u8; 32])
+                .iter()
+                .copied()
+                .chain(vec![2u8; i as usize]),
+        );
+        let predicate = Opcode::RET(REG_ONE).to_bytes().to_vec();
+        let owner = Input::predicate_owner(&predicate);
+        let coin_input = Input::coin_predicate(
+            Default::default(),
+            owner,
+            1000,
+            AssetId::zeroed(),
+            Default::default(),
+            Default::default(),
+            predicate,
+            vec![],
+        );
+        input.inputs.push(coin_input);
+        run_group_ref(&mut c.benchmark_group("smo"), format!("{i}"), input);
+    }
+
+    let mut srwq = c.benchmark_group("srwq");
+
+    for i in linear.clone() {
+        let mut key = Bytes32::zeroed();
+
+        key.as_mut()[..8].copy_from_slice(&(i as u64).to_be_bytes());
+        let data = key.iter().copied().collect::<Vec<_>>();
+
+        let post_call = vec![
+            Opcode::MOVI(0x16, i as Immediate18),
+            Opcode::MOVI(0x17, 2000),
+            Opcode::MOVE(0x15, 0x16),
+            Opcode::MULI(0x15, 0x15, 32),
+            Opcode::ADDI(0x15, 0x15, 1),
+            Opcode::ALOC(0x15),
+            Opcode::ADDI(0x14, REG_HP, 1),
+        ];
+        let mut bench = VmBench::contract(rng, Opcode::SRWQ(0x14, 0x11, 0x27, 0x16))
+            .expect("failed to prepare contract")
+            .with_post_call(post_call)
+            .with_prepare_db(move |mut db| {
+                db.merkle_contract_state_insert(&contract, &key, &key)?;
+
+                Ok(db)
+            });
+        bench.data.extend(data);
+        run_group_ref(&mut srwq, format!("{i}"), bench);
+    }
+
+    srwq.finish();
+
+    run_group_ref(
+        &mut c.benchmark_group("time"),
+        "time",
+        VmBench::new(Opcode::TIME(0x11, 0x10))
+            .with_prepare_script(vec![Opcode::MOVI(0x10, 0)]),
     );
 }
