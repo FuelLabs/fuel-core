@@ -131,8 +131,33 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let transport = build_transport(&config);
         let behaviour = FuelBehaviour::new(&config, codec.clone());
 
+        let total_connections = {
+            // Reserved nodes do not count against the configured peer input/output limits.
+            let total_peers =
+                config.max_peers_connected + config.reserved_nodes.len() as u32;
+
+            total_peers * config.max_connections_per_peer
+        };
+
+        let max_established_incoming = {
+            if config.reserved_nodes_only_mode {
+                // If this is a guarded node,
+                // it should not receive any incoming connection requests.
+                // Rather, it will send outgoing connection requests to its reserved nodes
+                0
+            } else {
+                total_connections / 2
+            }
+        };
+
         let connection_limits = ConnectionLimits::default()
-            .with_max_established(Some(config.max_peers_connected));
+            .with_max_established_incoming(Some(max_established_incoming))
+            .with_max_established_per_peer(Some(config.max_connections_per_peer))
+            // libp2p does not manage how many different peers we're connected to
+            // it only takes care that there are 'N' amount of connections established.
+            // Our `PeerManagerBehaviour` will keep track of different peers connected
+            // and disconnect any surplus peers
+            .with_max_established(Some(total_connections));
 
         let mut swarm =
             SwarmBuilder::with_tokio_executor(transport, behaviour, local_peer_id)

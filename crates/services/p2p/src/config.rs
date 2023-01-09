@@ -110,7 +110,6 @@ pub struct Config<State = Initialized> {
     // `DiscoveryBehaviour` related fields
     pub bootstrap_nodes: Vec<Multiaddr>,
     pub enable_mdns: bool,
-    pub max_peers_connected: u32,
     pub allow_private_addresses: bool,
     pub random_walk: Option<Duration>,
     pub connection_idle_timeout: Option<Duration>,
@@ -121,7 +120,14 @@ pub struct Config<State = Initialized> {
     /// Should the node only accept connection requests from the Reserved Nodes
     pub reserved_nodes_only_mode: bool,
 
-    // `PeerInfo` fields
+    // `PeerManager` fields
+    /// Max number of unique peers connected
+    /// This number should be at least number of `mesh_n` from `Gossipsub` configuration.
+    /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
+    pub max_peers_connected: u32,
+    /// Max number of connections per single peer
+    /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
+    pub max_connections_per_peer: u32,
     /// The interval at which identification requests are sent to
     /// the remote on established connections after the first request
     pub identify_interval: Option<Duration>,
@@ -171,6 +177,7 @@ impl Config<NotInitialized> {
             bootstrap_nodes: self.bootstrap_nodes,
             enable_mdns: self.enable_mdns,
             max_peers_connected: self.max_peers_connected,
+            max_connections_per_peer: self.max_connections_per_peer,
             allow_private_addresses: self.allow_private_addresses,
             random_walk: self.random_walk,
             connection_idle_timeout: self.connection_idle_timeout,
@@ -213,6 +220,7 @@ impl Config<NotInitialized> {
             bootstrap_nodes: vec![],
             enable_mdns: false,
             max_peers_connected: 50,
+            max_connections_per_peer: 3,
             allow_private_addresses: true,
             random_walk: Some(Duration::from_secs(5)),
             connection_idle_timeout: Some(Duration::from_secs(120)),

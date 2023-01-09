@@ -59,8 +59,9 @@ pub struct FuelBehaviour<Codec: NetworkCodec> {
     /// Node discovery
     discovery: DiscoveryBehaviour,
 
-    /// Identify and periodically ping nodes
-    peer_info: PeerManagerBehaviour,
+    /// Handles Peer Connections
+    /// Identifies and periodically pings nodes
+    peer_manager: PeerManagerBehaviour,
 
     /// Message propagation for p2p
     gossipsub: Gossipsub,
@@ -97,7 +98,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
             discovery_config
         };
 
-        let peer_info = PeerManagerBehaviour::new(p2p_config);
+        let peer_manager = PeerManagerBehaviour::new(p2p_config);
 
         let req_res_protocol =
             std::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
@@ -112,7 +113,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         Self {
             discovery: discovery_config.finish(),
             gossipsub: build_gossipsub_behaviour(p2p_config),
-            peer_info,
+            peer_manager,
             request_response,
         }
     }
@@ -122,7 +123,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         peer_id: &PeerId,
         addresses: Vec<Multiaddr>,
     ) {
-        self.peer_info.insert_peer_addresses(peer_id, addresses);
+        self.peer_manager.insert_peer_addresses(peer_id, addresses);
     }
 
     pub fn add_addresses_to_discovery(
@@ -136,11 +137,11 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
     }
 
     pub fn get_peers_ids(&self) -> impl Iterator<Item = &PeerId> {
-        self.peer_info.get_peers_ids()
+        self.peer_manager.get_peers_ids()
     }
 
     pub fn total_peers_connected(&self) -> usize {
-        self.peer_info.total_peers_connected()
+        self.peer_manager.total_peers_connected()
     }
 
     pub fn publish_message(
@@ -190,7 +191,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
     // Currently only used in testing, but should be useful for the P2P Service API
     #[allow(dead_code)]
     pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<&PeerInfo> {
-        self.peer_info.get_peer_info(peer_id)
+        self.peer_manager.get_peer_info(peer_id)
     }
 }
 
