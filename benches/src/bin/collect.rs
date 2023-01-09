@@ -54,6 +54,7 @@ struct Args {
 }
 
 #[derive(clap::ValueEnum, Debug, Clone, Copy)]
+/// The format the output should be written to.
 enum OutputFormat {
     Yaml,
     Json,
@@ -61,30 +62,47 @@ enum OutputFormat {
 }
 
 #[derive(Debug)]
+/// Output from a given measurement.
 enum Output {
+    /// The mean time of an op measurement.
     Mean(Mean),
+    /// The ids linked to a group.
     Group(Group),
 }
 
 #[derive(Debug)]
+/// The mean time of an op measurement.
 struct Mean {
+    /// The id of the measurement.
     id: String,
+    /// The mean time of the measurement.
     mean: Duration,
+    /// The throughput of the measurement
+    /// if this measurement has one.
     throughput: Option<u64>,
 }
 
 #[derive(Debug)]
+/// The ids linked to a group.
 struct Group {
+    /// The id of the group.
     id: String,
+    /// The ids of the measurements in the group.
     benches: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
+/// The state of the collector.
 struct State {
+    /// The baseline to compare against.
     baseline: String,
+    /// Should all measurements be included.
     all: bool,
+    /// Map of ids to their mean times.
     ids: HashMap<String, Duration>,
+    /// Map of ids to their throughput.
     throughput: HashMap<String, u64>,
+    /// Map of groups to their ids.
     groups: HashMap<String, Vec<String>>,
 }
 
