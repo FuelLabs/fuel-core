@@ -679,6 +679,100 @@ mod tests {
         }
     }
 
+    // Single sentry node connects to multiple reserved nodes and `max_peers_allowed` amount of non-reserved nodes.
+    // It also tries to dial extra non-reserved nodes to establish the connection.
+    // Once the connection is established with a selected (last in the list) reserved node
+    // we disconnect that reserved node, ban it and then unban it later.
+    // The unbanned reserved node should contest with other nodes in the network
+    // for establishing the connection with our sentry node.
+    // It should win every time, that is, there is always one slot reserved for it by the `PeerManager`.
+    #[tokio::test]
+    #[instrument]
+    async fn reserved_nodes_reconnect_works() {
+        let mut p2p_config =
+            Config::default_initialized("reserved_nodes_reconnect_works");
+        // enable mdns for faster discovery of nodes
+        p2p_config.enable_mdns = true;
+
+        // total amount will be `max_peers_allowed` + `reserved_nodes.len()`
+        let max_peers_allowed = 3;
+
+        let bootstrap_nodes_data: Vec<NodeData> = (0..max_peers_allowed * 5)
+            .map(|_| NodeData::random())
+            .collect();
+
+        let reserved_nodes_data: Vec<NodeData> =
+            (0..3).map(|_| NodeData::random()).collect();
+
+        let mut sentry_node = {
+            let mut p2p_config = p2p_config.clone();
+            p2p_config.max_peers_connected = max_peers_allowed as u32;
+
+            p2p_config.bootstrap_nodes = bootstrap_nodes_data
+                .iter()
+                .map(|node| node.multiaddr.clone())
+                .collect();
+
+            p2p_config.reserved_nodes = reserved_nodes_data
+                .iter()
+                .map(|node| node.multiaddr.clone())
+                .collect();
+
+            NodeData::random().create_service(p2p_config)
+        };
+
+        let reserved_node = reserved_nodes_data.last().unwrap().clone();
+        let reserved_node_peer_id =
+            PeerId::from_public_key(&reserved_node.keypair.public());
+
+        let mut all_node_services: Vec<_> = bootstrap_nodes_data
+            .iter()
+            .chain(reserved_nodes_data.iter())
+            .map(|node| node.create_service(p2p_config.clone()))
+            .collect();
+
+        let mut previously_connected = false;
+
+        loop {
+            tokio::select! {
+                sentry_node_event = sentry_node.next_event() => {
+                    if let Some(FuelP2PEvent::PeerConnected(peer_id)) = sentry_node_event {
+                        // we connected to the desired reserved node
+                        if peer_id == reserved_node_peer_id {
+                            // 0. This is the initial connection with the reserved node
+                            if !previously_connected {
+                                // 1. Disconnect and ban the reserved node
+                                // this is done so that other nodes in the network try to take the slot of the reserved node
+                                let _ = sentry_node.swarm.disconnect_peer_id(reserved_node_peer_id);
+                                sentry_node.swarm.ban_peer_id(reserved_node_peer_id);
+                                previously_connected = true;
+                            } else {
+                                // 3. We have successfully re-connected.
+                                // Multiple other nodes in the meantime have tried to establish the connection
+                                // with `sentry_node` but `PeerManagerBehaviour` disconnected them and kept a slot for
+                                // the reserved node, we can exit successfully!
+                                break
+                            }
+                        }
+
+                    } else if let Some(FuelP2PEvent::PeerDisconnected(peer_id)) = sentry_node_event {
+                        // 2. We successfully disconnected from the reserved node
+                        // unban it and make it available for re-connection
+                        if peer_id == reserved_node_peer_id {
+                            sentry_node.swarm.unban_peer_id(reserved_node_peer_id)
+                        }
+                    }
+                },
+                _ = async {
+                    for node in &mut all_node_services {
+                        node.next_event().await;
+                    }
+                } => {}
+
+            }
+        }
+    }
+
     // We start with two nodes, node_5 and node_10, bootstrapped with 100 other nodes
     // yet node_5 is only allowed to connect to 5 other nodes, and node_10 to 10
     #[tokio::test]
