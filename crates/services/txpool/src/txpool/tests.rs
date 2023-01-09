@@ -245,9 +245,8 @@ async fn tx_try_to_use_spent_coin() {
 
     // put a spent coin into the database
     let (mut coin, input) = setup_coin(&mut rng, None);
-    let utxo_id = *input.utxo_id().unwrap();
     coin.status = CoinStatus::Spent;
-    txpool.database.insert_coin(utxo_id, coin);
+    txpool.database.insert_coin(coin.clone());
 
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
@@ -262,7 +261,7 @@ async fn tx_try_to_use_spent_coin() {
         .expect_err("Tx should be Err, got Ok");
     assert!(matches!(
         err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedInputUtxoIdSpent(id)) if id == &utxo_id
+        Some(Error::NotInsertedInputUtxoIdSpent(id)) if id == &coin.utxo_id
     ));
 }
 

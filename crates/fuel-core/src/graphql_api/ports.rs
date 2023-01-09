@@ -3,6 +3,9 @@ use fuel_core_storage::{
     iter::BoxedIter,
     tables::{
         Coins,
+        ContractsAssets,
+        ContractsInfo,
+        ContractsRawCode,
         FuelBlocks,
         Messages,
         Receipts,
@@ -21,19 +24,32 @@ use fuel_core_types::{
     entities::message::Message,
     fuel_tx::{
         TxId,
+        TxPointer,
         UtxoId,
     },
     fuel_types::{
         Address,
+        AssetId,
+        ContractId,
         MessageId,
     },
-    services::txpool::TransactionStatus,
+    services::{
+        graphql_api::ContractBalance,
+        txpool::TransactionStatus,
+    },
 };
 
 /// The database port expected by GraphQL API service.
 #[cfg(not(test))]
 pub trait DatabasePort:
-    Send + Sync + DatabaseBlocks + DatabaseTransactions + DatabaseMessages + DatabaseCoins
+    Send
+    + Sync
+    + DatabaseBlocks
+    + DatabaseTransactions
+    + DatabaseMessages
+    + DatabaseCoins
+    + DatabaseContracts
+    + DatabaseChain
 {
 }
 
@@ -46,6 +62,8 @@ pub trait DatabasePort:
     + DatabaseTransactions
     + DatabaseMessages
     + DatabaseCoins
+    + DatabaseContracts
+    + DatabaseChain
     + fuel_core_storage::StorageMutate<Coins, Error = StorageError>
     + fuel_core_storage::StorageMutate<Messages, Error = StorageError>
 {
@@ -64,7 +82,7 @@ pub trait DatabaseBlocks:
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<(BlockHeight, BlockId)>>;
 
-    fn latest_block_ids(&self) -> StorageResult<(BlockHeight, BlockId)>;
+    fn ids_of_latest_block(&self) -> StorageResult<(BlockHeight, BlockId)>;
 }
 
 /// Trait that specifies all the getters required for transactions.
@@ -73,6 +91,13 @@ pub trait DatabaseTransactions:
     + StorageInspect<Receipts, Error = StorageError>
 {
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
+
+    fn owned_transactions_ids(
+        &self,
+        owner: &Address,
+        start: Option<TxPointer>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<(TxPointer, TxId)>>;
 }
 
 /// Trait that specifies all the getters required for messages.
@@ -99,4 +124,23 @@ pub trait DatabaseCoins: StorageInspect<Coins, Error = StorageError> {
         start_coin: Option<UtxoId>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<UtxoId>>;
+}
+
+/// Trait that specifies all the getters required for contract.
+pub trait DatabaseContracts:
+    StorageInspect<ContractsRawCode, Error = StorageError>
+    + StorageInspect<ContractsInfo, Error = StorageError>
+    + for<'a> StorageInspect<ContractsAssets<'a>, Error = StorageError>
+{
+    fn contract_balances(
+        &self,
+        contract: ContractId,
+        start_asset: Option<AssetId>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<ContractBalance>>;
+}
+
+/// Trait that specifies all the getters required for chain metadata.
+pub trait DatabaseChain {
+    fn chain_name(&self) -> StorageResult<String>;
 }

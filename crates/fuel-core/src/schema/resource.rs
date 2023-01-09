@@ -26,7 +26,10 @@ use async_graphql::{
     Object,
     Union,
 };
-use fuel_core_types::fuel_tx;
+use fuel_core_types::{
+    entities::resource,
+    fuel_tx,
+};
 use itertools::Itertools;
 
 #[derive(InputObject)]
@@ -47,7 +50,7 @@ pub struct ExcludeInput {
     messages: Vec<MessageId>,
 }
 
-/// The schema analog of the [`crate::database::utils::Resource`].
+/// The schema analog of the [`resource::Resource`].
 #[derive(Union)]
 pub enum Resource {
     Coin(Coin),
@@ -99,11 +102,11 @@ impl ResourceQuery {
             let utxos = exclude
                 .utxos
                 .into_iter()
-                .map(|utxo| crate::query::asset_query::ResourceId::Utxo(utxo.0));
+                .map(|utxo| resource::ResourceId::Utxo(utxo.0));
             let messages = exclude
                 .messages
                 .into_iter()
-                .map(|message| crate::query::asset_query::ResourceId::Message(message.0));
+                .map(|message| resource::ResourceId::Message(message.0));
             utxos.chain(messages).collect()
         });
 
@@ -117,12 +120,10 @@ impl ResourceQuery {
                 resources
                     .into_iter()
                     .map(|resource| match resource {
-                        crate::query::asset_query::Resource::Coin { id, fields } => {
-                            Resource::Coin(Coin(id, fields))
+                        resource::Resource::Coin(coin) => Resource::Coin(coin.into()),
+                        resource::Resource::Message(message) => {
+                            Resource::Message(message.into())
                         }
-                        crate::query::asset_query::Resource::Message {
-                            fields, ..
-                        } => Resource::Message(Message(fields)),
                     })
                     .collect_vec()
             })

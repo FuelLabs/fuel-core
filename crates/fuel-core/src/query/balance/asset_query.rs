@@ -12,28 +12,21 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     entities::{
-        coin::{
-            Coin,
-            CoinStatus,
+        coin::CoinStatus,
+        resource::{
+            Resource,
+            ResourceId,
         },
-        message::Message,
     },
     fuel_tx::UtxoId,
     fuel_types::{
         Address,
         AssetId,
         MessageId,
-        Word,
     },
 };
 use itertools::Itertools;
-use std::{
-    borrow::{
-        Borrow,
-        Cow,
-    },
-    collections::HashSet,
-};
+use std::collections::HashSet;
 
 /// At least required `target` of the query per asset's `id` with `max` resources.
 #[derive(Clone)]
@@ -103,7 +96,7 @@ impl<'a> AssetsQuery<'a> {
     //  https://github.com/FuelLabs/fuel-core/issues/588
     pub fn unspent_resources(
         &self,
-    ) -> impl Iterator<Item = StorageResult<Resource<Coin, Message>>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<Resource>> + '_ {
         let coins_iter = CoinQueryContext(self.database)
             .owned_coins_ids(self.owner, None, IterDirection::Forward)
             .filter_ok(|id| {
@@ -115,17 +108,17 @@ impl<'a> AssetsQuery<'a> {
             })
             .map(move |res| {
                 res.map_err(StorageError::from).and_then(|id| {
-                    let coin = CoinQueryContext(self.database).coin(&id)?;
+                    let coin = CoinQueryContext(self.database).coin(id)?;
 
-                    Ok(Resource::Coin { id, fields: coin })
+                    Ok(Resource::Coin(coin))
                 })
             })
             .filter_ok(|coin| {
-                if let Resource::Coin { fields, .. } = coin {
-                    let is_unspent = fields.status == CoinStatus::Unspent;
+                if let Resource::Coin(coin) = coin {
+                    let is_unspent = coin.status == CoinStatus::Unspent;
                     self.assets
                         .as_ref()
-                        .map(|assets| assets.contains(&fields.asset_id) && is_unspent)
+                        .map(|assets| assets.contains(&coin.asset_id) && is_unspent)
                         .unwrap_or(is_unspent)
                 } else {
                     true
@@ -144,16 +137,12 @@ impl<'a> AssetsQuery<'a> {
             .map(move |res| {
                 res.and_then(|id| {
                     let message = MessageQueryContext(self.database).message(&id)?;
-
-                    Ok(Resource::Message {
-                        id,
-                        fields: message,
-                    })
+                    Ok(Resource::Message(message))
                 })
             })
             .filter_ok(|message| {
-                if let Resource::Message { fields, .. } = message {
-                    fields.fuel_block_spend.is_none()
+                if let Resource::Message(message) = message {
+                    message.fuel_block_spend.is_none()
                 } else {
                     true
                 }
@@ -198,62 +187,7 @@ impl<'a> AssetQuery<'a> {
     /// for the `asset_id`.
     pub fn unspent_resources(
         &self,
-    ) -> impl Iterator<Item = StorageResult<Resource<Coin, Message>>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<Resource>> + '_ {
         self.query.unspent_resources()
-    }
-}
-
-/// The id of the resource.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ResourceId {
-    Utxo(UtxoId),
-    Message(MessageId),
-}
-
-/// The primary type of spent or not spent resources(coins, messages, etc). The not spent resource
-/// can be used as a source of information for the creation of the transaction's input.
-#[derive(Debug)]
-pub enum Resource<C, M> {
-    Coin { id: UtxoId, fields: C },
-    Message { id: MessageId, fields: M },
-}
-
-impl<C, M> Resource<C, M>
-where
-    C: Borrow<Coin>,
-    M: Borrow<Message>,
-{
-    pub fn amount(&self) -> &Word {
-        match self {
-            Resource::Coin { fields, .. } => &fields.borrow().amount,
-            Resource::Message { fields, .. } => &fields.borrow().amount,
-        }
-    }
-
-    pub fn asset_id(&self) -> &AssetId {
-        match self {
-            Resource::Coin { fields, .. } => &fields.borrow().asset_id,
-            Resource::Message { .. } => &AssetId::BASE,
-        }
-    }
-}
-
-impl<'c, 'm, C, M> Resource<Cow<'c, C>, Cow<'m, M>>
-where
-    C: Clone,
-    M: Clone,
-{
-    /// Return owned `C` or `M`. Will clone if is borrowed.
-    pub fn into_owned(self) -> Resource<C, M> {
-        match self {
-            Resource::Coin { id, fields } => Resource::Coin {
-                id,
-                fields: fields.into_owned(),
-            },
-            Resource::Message { id, fields } => Resource::Message {
-                id,
-                fields: fields.into_owned(),
-            },
-        }
     }
 }

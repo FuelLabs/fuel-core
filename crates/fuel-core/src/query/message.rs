@@ -1,5 +1,8 @@
 use crate::{
-    fuel_core_graphql_api::service::DatabaseTemp,
+    fuel_core_graphql_api::{
+        service::DatabaseTemp,
+        IntoApiResult,
+    },
     query::{
         BlockQueryContext,
         TransactionQueryContext,
@@ -7,7 +10,6 @@ use crate::{
     state::IterDirection,
 };
 use fuel_core_storage::{
-    iter::IntoBoxedIter,
     not_found,
     tables::Messages,
     Error as StorageError,
@@ -40,6 +42,7 @@ use fuel_core_types::{
     },
     services::txpool::TransactionStatus,
 };
+use itertools::Itertools;
 use std::borrow::Cow;
 
 #[cfg(test)]
@@ -171,56 +174,46 @@ pub fn message_proof<Data: MessageProofData>(
     };
 
     // Get the block id from the transaction status if it's ready.
-    let block_id = match data.transaction_status(&transaction_id) {
-        Ok(status) => match status {
-            TransactionStatus::Failed { block_id, .. }
-            | TransactionStatus::Success { block_id, .. } => Some(block_id),
-            TransactionStatus::Submitted { .. }
-            | TransactionStatus::SqueezedOut { .. } => None,
-        },
-        Err(StorageError::NotFound(_, _)) => return Ok(None),
-        Err(err) => return Err(err),
-    };
-
-    // Exit if the status doesn't exist or is not ready.
-    let block_id = match block_id {
-        Some(b) => b,
-        None => return Ok(None),
+    let block_id = match data
+        .transaction_status(&transaction_id)
+        .into_api_result::<TransactionStatus, StorageError>()?
+    {
+        Some(TransactionStatus::Success { block_id, .. }) => block_id,
+        _ => return Ok(None),
     };
 
     // Get the message ids in the same order as the transactions.
-    let leaves = data
+    let leaves: Vec<Vec<Receipt>> = data
         .transactions_on_block(&block_id)?
         .into_iter()
-        // Filter out transactions that contain no messages 
-        // and get the receipts for the rest.
-        .filter_map(|transaction_id| match data.transaction(&transaction_id) {
-            Ok(transaction) => match &transaction {
-                Transaction::Script(script) => script.outputs(),
-                Transaction::Create(create) => create.outputs(),
-                Transaction::Mint(mint) => mint.outputs(),
-            }
-                .iter()
-                .any(Output::is_message)
-                .then(|| data.receipts(&transaction_id)),
-            Err(StorageError::NotFound(_, _)) => None,
-            Err(e) => Some(Err(e)),
+        .filter_map(|id| {
+            // Filter out transactions that contain no messages
+            // and get the receipts for the rest.
+            let result = data.transaction(&id).and_then(|tx| {
+                let outputs = match &tx {
+                    Transaction::Script(script) => script.outputs(),
+                    Transaction::Create(create) => create.outputs(),
+                    Transaction::Mint(mint) => mint.outputs(),
+                };
+                outputs
+                    .iter()
+                    .any(Output::is_message)
+                    .then(|| data.receipts(&id))
+                    .transpose()
+            });
+            result.transpose()
         })
+        .filter_map(|result| result.into_api_result::<_, StorageError>().transpose())
+        .try_collect()?;
+
+    let leaves = leaves.into_iter()
         // Flatten the receipts after filtering on output messages
         // and mapping to message ids.
-        .flat_map(|receipts| match receipts {
-            Ok(receipts) => {
-                receipts.into_iter().filter_map(|r| match r {
-                        Receipt::MessageOut { message_id, .. } => Some(Ok(message_id)),
-                        _ => None,
-                    }).into_boxed()
-            }
-            Err(e) => {
-                // Boxing is required because of the different iterator types
-                // returned depending on the error case.
-                std::iter::once(Err(e)).into_boxed()
-            }
-        }).enumerate();
+        .flat_map(|receipts|
+            receipts.into_iter().filter_map(|r| match r {
+                    Receipt::MessageOut { message_id, .. } => Some(message_id),
+                    _ => None,
+                })).enumerate();
 
     // Build the merkle proof from the above iterator.
     let mut tree = fuel_merkle::binary::in_memory::MerkleTree::new();
@@ -228,8 +221,6 @@ pub fn message_proof<Data: MessageProofData>(
     let mut proof_index = None;
 
     for (index, id) in leaves {
-        let id = id?;
-
         // Check id this is the message.
         if message_id == id {
             // Save the index of this message to use as the proof index.
@@ -250,17 +241,21 @@ pub fn message_proof<Data: MessageProofData>(
             };
 
             // Get the signature.
-            let signature = match data.signature(&block_id) {
-                Ok(t) => t,
-                Err(StorageError::NotFound(_, _)) => return Ok(None),
-                Err(err) => return Err(err),
+            let signature = match data
+                .signature(&block_id)
+                .into_api_result::<_, StorageError>()?
+            {
+                Some(t) => t,
+                None => return Ok(None),
             };
 
             // Get the fuel block.
-            let header = match data.block(&block_id) {
-                Ok(t) => t.into_inner().0,
-                Err(StorageError::NotFound(_, _)) => return Ok(None),
-                Err(err) => return Err(err),
+            let header = match data
+                .block(&block_id)
+                .into_api_result::<CompressedBlock, StorageError>()?
+            {
+                Some(t) => t.into_inner().0,
+                None => return Ok(None),
             };
 
             if *header.output_messages_root != proof.0 {

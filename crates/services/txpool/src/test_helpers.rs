@@ -6,6 +6,7 @@ use fuel_core_types::{
     entities::coin::{
         Coin,
         CoinStatus,
+        CompressedCoin,
     },
     fuel_asm::Opcode,
     fuel_crypto::rand::{
@@ -29,7 +30,7 @@ pub const TEST_COIN_AMOUNT: u64 = 100_000_000u64;
 
 pub(crate) fn setup_coin(rng: &mut StdRng, mock_db: Option<&MockDb>) -> (Coin, Input) {
     let input = random_predicate(rng, AssetId::BASE, TEST_COIN_AMOUNT, None);
-    let coin = Coin {
+    let coin = CompressedCoin {
         owner: *input.input_owner().unwrap(),
         amount: TEST_COIN_AMOUNT,
         asset_id: *input.asset_id().unwrap(),
@@ -37,15 +38,16 @@ pub(crate) fn setup_coin(rng: &mut StdRng, mock_db: Option<&MockDb>) -> (Coin, I
         status: CoinStatus::Unspent,
         block_created: Default::default(),
     };
+    let utxo_id = *input.utxo_id().unwrap();
     if let Some(mock_db) = mock_db {
         mock_db
             .data
             .lock()
             .unwrap()
             .coins
-            .insert(*input.utxo_id().unwrap(), coin.clone());
+            .insert(utxo_id, coin.clone());
     }
-    (coin, input)
+    (coin.uncompress(utxo_id), input)
 }
 
 pub(crate) fn create_output_and_input(

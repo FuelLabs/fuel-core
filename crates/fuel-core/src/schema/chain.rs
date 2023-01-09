@@ -1,8 +1,8 @@
 use crate::{
     fuel_core_graphql_api::Config as GraphQLConfig,
     query::{
+        BlockQueryContext,
         ChainQueryContext,
-        ChainQueryData,
     },
     schema::{
         block::Block,
@@ -78,19 +78,14 @@ impl ConsensusParameters {
 impl ChainInfo {
     async fn name(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
         let data = ChainQueryContext(ctx.data_unchecked());
-
         Ok(data.name()?)
     }
 
     async fn latest_block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let data = ChainQueryContext(ctx.data_unchecked());
+        let query = BlockQueryContext(ctx.data_unchecked());
 
-        let latest_block = data.latest_block()?;
-
-        Ok(Block {
-            header: crate::schema::block::Header(latest_block.0),
-            transactions: latest_block.1,
-        })
+        let latest_block = query.latest_block()?.into();
+        Ok(latest_block)
     }
 
     async fn base_chain_height(&self) -> U64 {

@@ -79,10 +79,6 @@ impl VmDatabase {
             database,
         }
     }
-
-    pub fn block_height(&self) -> u32 {
-        self.current_block_height
-    }
 }
 
 impl<M: Mappable> StorageInspect<M> for VmDatabase

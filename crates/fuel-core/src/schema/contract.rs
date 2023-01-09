@@ -1,9 +1,6 @@
 use crate::{
-    fuel_core_graphql_api::service::Database,
-    query::{
-        ContractQueryContext,
-        ContractQueryData,
-    },
+    fuel_core_graphql_api::IntoApiResult,
+    query::ContractQueryContext,
     schema::scalars::{
         AssetId,
         ContractId,
@@ -21,7 +18,10 @@ use async_graphql::{
     InputObject,
     Object,
 };
-use fuel_core_types::fuel_types;
+use fuel_core_types::{
+    fuel_types,
+    services::graphql_api,
+};
 
 pub struct Contract(pub(crate) fuel_types::ContractId);
 
@@ -39,17 +39,18 @@ impl Contract {
 
     async fn bytecode(&self, ctx: &Context<'_>) -> async_graphql::Result<HexString> {
         let context = ContractQueryContext(ctx.data_unchecked());
-
-        let bytecode = context.contract_bytecode(self.0)?;
-
-        Ok(HexString(bytecode))
+        context
+            .contract_bytecode(self.0)
+            .map(HexString)
+            .map_err(Into::into)
     }
+
     async fn salt(&self, ctx: &Context<'_>) -> async_graphql::Result<Salt> {
         let context = ContractQueryContext(ctx.data_unchecked());
-
-        let salt = context.contract_salt(self.0)?;
-
-        Ok(salt.into())
+        context
+            .contract_salt(self.0)
+            .map(Into::into)
+            .map_err(Into::into)
     }
 }
 
@@ -64,35 +65,24 @@ impl ContractQuery {
         #[graphql(desc = "ID of the Contract")] id: ContractId,
     ) -> async_graphql::Result<Option<Contract>> {
         let data = ContractQueryContext(ctx.data_unchecked());
-        let contract = data.contract(id.0)?;
-
-        if let Some(id) = contract {
-            // Guranteed to exist otherwise contract would be `None`
-            Ok(Some(Contract::from(id)))
-        } else {
-            Ok(None)
-        }
+        data.contract_id(id.0).into_api_result()
     }
 }
 
-pub struct ContractBalance {
-    contract: fuel_types::ContractId,
-    amount: u64,
-    asset_id: fuel_types::AssetId,
-}
+pub struct ContractBalance(graphql_api::ContractBalance);
 
 #[Object]
 impl ContractBalance {
     async fn contract(&self) -> ContractId {
-        self.contract.into()
+        self.0.owner.into()
     }
 
     async fn amount(&self) -> U64 {
-        self.amount.into()
+        self.0.amount.into()
     }
 
     async fn asset_id(&self) -> AssetId {
-        self.asset_id.into()
+        self.0.asset_id.into()
     }
 }
 
@@ -113,15 +103,22 @@ impl ContractBalanceQuery {
         contract: ContractId,
         asset: AssetId,
     ) -> async_graphql::Result<ContractBalance> {
+        let contract_id = contract.into();
+        let asset_id = asset.into();
         let context = ContractQueryContext(ctx.data_unchecked());
-
-        let balance = context.contract_balance(contract.into(), asset.into())?;
-
-        Ok(ContractBalance {
-            contract: balance.0,
-            amount: balance.1,
-            asset_id: balance.2,
-        })
+        context
+            .contract_balance(contract_id, asset_id)
+            .into_api_result()
+            .map(|result| {
+                result.unwrap_or_else(|| {
+                    graphql_api::ContractBalance {
+                        owner: contract_id,
+                        amount: 0,
+                        asset_id,
+                    }
+                    .into()
+                })
+            })
     }
 
     async fn contract_balances(
@@ -135,30 +132,29 @@ impl ContractBalanceQuery {
     ) -> async_graphql::Result<
         Connection<AssetId, ContractBalance, EmptyFields, EmptyFields>,
     > {
-        let db = ctx.data_unchecked::<Database>().clone();
+        let query = ContractQueryContext(ctx.data_unchecked());
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            let balances = db
+            let balances = query
                 .contract_balances(
                     filter.contract.into(),
                     (*start).map(Into::into),
-                    Some(direction),
+                    direction,
                 )
                 .map(move |balance| {
                     let balance = balance?;
-                    let asset_id: AssetId = balance.0.into();
+                    let asset_id = balance.asset_id;
 
-                    Ok((
-                        asset_id,
-                        ContractBalance {
-                            contract: filter.contract.into(),
-                            amount: balance.1,
-                            asset_id: balance.0,
-                        },
-                    ))
+                    Ok((asset_id.into(), balance.into()))
                 });
 
             Ok(balances)
         })
         .await
+    }
+}
+
+impl From<graphql_api::ContractBalance> for ContractBalance {
+    fn from(balance: graphql_api::ContractBalance) -> Self {
+        ContractBalance(balance)
     }
 }

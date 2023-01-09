@@ -15,29 +15,22 @@ use async_graphql::{
     InputObject,
     Object,
 };
-use fuel_core_types::{
-    fuel_types,
-    services::graphql_api,
-};
+use fuel_core_types::services::graphql_api;
 
-pub struct Balance {
-    owner: fuel_types::Address,
-    amount: u64,
-    asset_id: fuel_types::AssetId,
-}
+pub struct Balance(graphql_api::AddressBalance);
 
 #[Object]
 impl Balance {
     async fn owner(&self) -> Address {
-        self.owner.into()
+        self.0.owner.into()
     }
 
     async fn amount(&self) -> U64 {
-        self.amount.into()
+        self.0.amount.into()
     }
 
     async fn asset_id(&self) -> AssetId {
-        self.asset_id.into()
+        self.0.asset_id.into()
     }
 }
 
@@ -86,12 +79,8 @@ impl BalanceQuery {
     }
 }
 
-impl From<graphql_api::Balance> for Balance {
-    fn from(value: graphql_api::Balance) -> Self {
-        Balance {
-            owner: value.owner,
-            amount: value.amount,
-            asset_id: value.asset_id,
-        }
+impl From<graphql_api::AddressBalance> for Balance {
+    fn from(balance: graphql_api::AddressBalance) -> Self {
+        Balance(balance)
     }
 }

@@ -13,7 +13,7 @@ use fuel_core_types::{
         Address,
         AssetId,
     },
-    services::graphql_api::Balance,
+    services::graphql_api::AddressBalance,
 };
 use itertools::Itertools;
 use std::{
@@ -26,7 +26,11 @@ pub mod asset_query;
 pub struct BalanceQueryContext<'a>(pub &'a DatabaseTemp);
 
 impl BalanceQueryContext<'_> {
-    pub fn balance(&self, owner: Address, asset_id: AssetId) -> StorageResult<Balance> {
+    pub fn balance(
+        &self,
+        owner: Address,
+        asset_id: AssetId,
+    ) -> StorageResult<AddressBalance> {
         let db = self.0;
         let amount = AssetQuery::new(
             &owner,
@@ -45,7 +49,7 @@ impl BalanceQueryContext<'_> {
             Ok(balance)
         })?;
 
-        Ok(Balance {
+        Ok(AddressBalance {
             owner,
             amount,
             asset_id,
@@ -56,7 +60,7 @@ impl BalanceQueryContext<'_> {
         &self,
         owner: Address,
         direction: IterDirection,
-    ) -> impl Iterator<Item = StorageResult<Balance>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<AddressBalance>> + '_ {
         let db = self.0;
 
         let mut amounts_per_asset = HashMap::new();
@@ -76,7 +80,7 @@ impl BalanceQueryContext<'_> {
 
         let mut balances = amounts_per_asset
             .into_iter()
-            .map(|(asset_id, amount)| Balance {
+            .map(|(asset_id, amount)| AddressBalance {
                 owner,
                 amount,
                 asset_id,

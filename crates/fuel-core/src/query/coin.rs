@@ -17,16 +17,16 @@ use fuel_core_types::{
 pub struct CoinQueryContext<'a>(pub &'a DatabaseTemp);
 
 impl<'a> CoinQueryContext<'a> {
-    pub fn coin(&self, utxo_id: &UtxoId) -> StorageResult<Coin> {
+    pub fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin> {
         let coin = self
             .0
             .as_ref()
             .storage::<Coins>()
-            .get(utxo_id)?
+            .get(&utxo_id)?
             .ok_or(not_found!(Coins))?
             .into_owned();
 
-        Ok(coin)
+        Ok(coin.uncompress(utxo_id))
     }
 
     pub fn owned_coins_ids(
@@ -43,10 +43,8 @@ impl<'a> CoinQueryContext<'a> {
         owner: &Address,
         start_coin: Option<UtxoId>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = StorageResult<(UtxoId, Coin)>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<Coin>> + '_ {
         self.owned_coins_ids(owner, start_coin, direction)
-            .map(|res| res.and_then(|id| Ok((id, self.coin(&id)?))))
+            .map(|res| res.and_then(|id| self.coin(id)))
     }
 }
-
-// FilterMap<Map<IntoIter<UtxoId>, |UtxoId| -> Result<(UtxoId, Coin), Error>>, |Result<(UtxoId, Coin), Error>| -> Option<Result<(UtxoId, Coin), Error>>>

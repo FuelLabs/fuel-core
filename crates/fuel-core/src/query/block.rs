@@ -41,11 +41,11 @@ impl BlockQueryContext<'_> {
     }
 
     pub fn latest_block_id(&self) -> StorageResult<BlockId> {
-        self.0.latest_block_ids().map(|(_, id)| id)
+        self.0.ids_of_latest_block().map(|(_, id)| id)
     }
 
     pub fn latest_block_height(&self) -> StorageResult<BlockHeight> {
-        self.0.latest_block_ids().map(|(height, _)| height)
+        self.0.ids_of_latest_block().map(|(height, _)| height)
     }
 
     pub fn latest_block(&self) -> StorageResult<CompressedBlock> {

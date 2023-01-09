@@ -86,7 +86,7 @@ impl StorageMutate<FuelBlocks> for Database {
 
 impl Database {
     pub fn latest_height(&self) -> DatabaseResult<Option<BlockHeight>> {
-        let id = self.latest_block_ids()?;
+        let id = self.ids_of_latest_block()?;
         // if no blocks, check if chain was configured with a base height
         let id = match id {
             Some((id, _)) => Some(id),
@@ -98,8 +98,8 @@ impl Database {
 
     /// Get the current block at the head of the chain.
     pub fn get_current_block(&self) -> StorageResult<Option<Cow<CompressedBlock>>> {
-        let block_entry = self.latest_block_ids()?;
-        match block_entry {
+        let block_ids = self.ids_of_latest_block()?;
+        match block_ids {
             Some((_, id)) => Ok(StorageAsRef::storage::<FuelBlocks>(self).get(&id)?),
             None => Ok(None),
         }
@@ -158,7 +158,7 @@ impl Database {
         })
     }
 
-    pub fn latest_block_ids(&self) -> DatabaseResult<Option<(BlockHeight, BlockId)>> {
+    pub fn ids_of_latest_block(&self) -> DatabaseResult<Option<(BlockHeight, BlockId)>> {
         let ids = self
             .iter_all::<Vec<u8>, BlockId>(
                 Column::FuelBlockIds,

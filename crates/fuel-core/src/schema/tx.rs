@@ -1,9 +1,11 @@
 use crate::{
-    database::transactions::OwnedTransactionIndexCursor,
-    fuel_core_graphql_api::service::{
-        BlockProducer,
-        Database,
-        TxPool,
+    fuel_core_graphql_api::{
+        service::{
+            BlockProducer,
+            DatabaseTemp,
+            TxPool,
+        },
+        IntoApiResult,
     },
     query::{
         transaction_status_change,
@@ -16,6 +18,7 @@ use crate::{
         HexString,
         SortedTxCursor,
         TransactionId,
+        TxPointer,
     },
     state::IterDirection,
 };
@@ -28,13 +31,7 @@ use async_graphql::{
     Object,
     Subscription,
 };
-use fuel_core_storage::{
-    not_found,
-    tables::Transactions,
-    Error as StorageError,
-    Result as StorageResult,
-    StorageAsRef,
-};
+use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     fuel_tx::{
         Cacheable,
@@ -74,17 +71,14 @@ impl TxQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> async_graphql::Result<Option<Transaction>> {
-        let db = ctx.data_unchecked::<Database>();
+        let query = TransactionQueryContext(ctx.data_unchecked());
         let id = id.0;
         let txpool = ctx.data_unchecked::<TxPool>();
 
         if let Some(transaction) = txpool.shared.find_one(id) {
             Ok(Some(Transaction(transaction.tx().clone().deref().into())))
         } else {
-            Ok(db
-                .storage::<Transactions>()
-                .get(&id)?
-                .map(|tx| Transaction(tx.into_owned())))
+            query.transaction(&id).into_api_result()
         }
     }
 
@@ -159,9 +153,9 @@ impl TxQuery {
         after: Option<String>,
         last: Option<i32>,
         before: Option<String>,
-    ) -> async_graphql::Result<Connection<HexString, Transaction, EmptyFields, EmptyFields>>
+    ) -> async_graphql::Result<Connection<TxPointer, Transaction, EmptyFields, EmptyFields>>
     {
-        let db = ctx.data_unchecked::<Database>();
+        let query = TransactionQueryContext(ctx.data_unchecked());
         let owner = fuel_types::Address::from(owner);
 
         crate::schema::query_pagination(
@@ -169,23 +163,11 @@ impl TxQuery {
             before,
             first,
             last,
-            |start: &Option<HexString>, direction| {
-                let start: Option<OwnedTransactionIndexCursor> =
-                    start.clone().map(Into::into);
-                let txs = db
-                    .owned_transactions(&owner, start.as_ref(), Some(direction))
-                    .map(|result| {
-                        result
-                            .map_err(StorageError::from)
-                            .and_then(|(cursor, tx_id)| {
-                                let tx = db
-                                    .storage::<Transactions>()
-                                    .get(&tx_id)?
-                                    .ok_or(not_found!(Transactions))?
-                                    .into_owned();
-                                Ok((cursor.into(), tx.into()))
-                            })
-                    });
+            |start: &Option<TxPointer>, direction| {
+                let start = (*start).map(Into::into);
+                let txs = query
+                    .owned_transactions(&owner, start, direction)
+                    .map(|result| result.map(|(cursor, tx)| (cursor.into(), tx.into())));
                 Ok(txs)
             },
         )
@@ -240,9 +222,9 @@ impl TxMutation {
 #[derive(Default)]
 pub struct TxStatusSubscription;
 
-struct StreamState {
+struct StreamState<'a> {
     txpool: TxPool,
-    db: Database,
+    db: &'a DatabaseTemp,
 }
 
 #[Subscription]
@@ -259,15 +241,15 @@ impl TxStatusSubscription {
     /// then the updates arrive. In such a case the stream will close without
     /// a status. If this occurs the stream can simply be restarted to return
     /// the latest status.
-    async fn status_change(
+    async fn status_change<'a>(
         &self,
-        ctx: &Context<'_>,
+        ctx: &Context<'a>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
-    ) -> impl Stream<Item = async_graphql::Result<TransactionStatus>> {
+    ) -> impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a {
         let txpool = ctx.data_unchecked::<TxPool>().clone();
-        let db = ctx.data_unchecked::<Database>().clone();
+        let db = ctx.data_unchecked::<DatabaseTemp>();
         let rx = BroadcastStream::new(txpool.shared.tx_update_subscribe());
-        let state = Box::new(StreamState { txpool, db });
+        let state = StreamState { txpool, db };
 
         transaction_status_change(state, rx.boxed(), id.into())
             .await
@@ -276,13 +258,11 @@ impl TxStatusSubscription {
 }
 
 #[async_trait::async_trait]
-impl TxnStatusChangeState for StreamState {
+impl<'a> TxnStatusChangeState for StreamState<'a> {
     async fn get_tx_status(
         &self,
-        id: fuel_core_types::fuel_types::Bytes32,
-    ) -> anyhow::Result<Option<TransactionStatus>> {
-        Ok(types::get_tx_status(id, &self.db, &self.txpool)
-            .await
-            .map_err(|e| anyhow::anyhow!("Database lookup failed {:?}", e))?)
+        id: fuel_types::Bytes32,
+    ) -> StorageResult<Option<TransactionStatus>> {
+        types::get_tx_status(id, &TransactionQueryContext(self.db), &self.txpool).await
     }
 }

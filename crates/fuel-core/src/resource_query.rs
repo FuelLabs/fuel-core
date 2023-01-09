@@ -4,16 +4,14 @@ use crate::{
         AssetQuery,
         AssetSpendTarget,
         Exclude,
-        Resource,
-        ResourceId,
     },
 };
 use core::mem::swap;
 use fuel_core_storage::Error as StorageError;
 use fuel_core_types::{
-    entities::{
-        coin::Coin,
-        message::Message,
+    entities::resource::{
+        Resource,
+        ResourceId,
     },
     fuel_types::{
         Address,
@@ -115,9 +113,7 @@ impl SpendQuery {
 /// Returns the biggest inputs of the `owner` to satisfy the required `target` of the asset. The
 /// number of inputs for each asset can't exceed `max_inputs`, otherwise throw an error that query
 /// can't be satisfied.
-pub fn largest_first(
-    query: &AssetQuery,
-) -> Result<Vec<Resource<Coin, Message>>, ResourceQueryError> {
+pub fn largest_first(query: &AssetQuery) -> Result<Vec<Resource>, ResourceQueryError> {
     let mut inputs: Vec<_> = query.unspent_resources().try_collect()?;
     inputs.sort_by_key(|resource| Reverse(*resource.amount()));
 
@@ -154,7 +150,7 @@ pub fn largest_first(
 pub fn random_improve(
     db: &DatabaseTemp,
     spend_query: &SpendQuery,
-) -> Result<Vec<Vec<Resource<Coin, Message>>>, ResourceQueryError> {
+) -> Result<Vec<Vec<Resource>>, ResourceQueryError> {
     let mut resources_per_asset = vec![];
 
     for query in spend_query.asset_queries(db) {
@@ -228,7 +224,14 @@ mod tests {
     };
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
-        entities::coin::CoinStatus,
+        entities::{
+            coin::{
+                Coin,
+                CoinStatus,
+                CompressedCoin,
+            },
+            message::Message,
+        },
         fuel_asm::Word,
         fuel_tx::*,
     };
@@ -686,8 +689,8 @@ mod tests {
             let excluded_ids = db
                 .owned_coins(&owner)
                 .into_iter()
-                .filter(|(_, coin)| coin.amount == 5)
-                .map(|(utxo_id, _)| ResourceId::Utxo(utxo_id))
+                .filter(|coin| coin.amount == 5)
+                .map(|coin| ResourceId::Utxo(coin.utxo_id))
                 .collect_vec();
 
             exclusion_assert(owner, &asset_ids, db, excluded_ids);
@@ -840,12 +843,12 @@ mod tests {
             owner: Address,
             amount: Word,
             asset_id: AssetId,
-        ) -> (UtxoId, Coin) {
+        ) -> Coin {
             let index = self.last_coin_index;
             self.last_coin_index += 1;
 
             let id = UtxoId::new(Bytes32::from([0u8; 32]), index.try_into().unwrap());
-            let coin = Coin {
+            let coin = CompressedCoin {
                 owner,
                 amount,
                 asset_id,
@@ -857,14 +860,10 @@ mod tests {
             let db = self.database.as_mut();
             StorageMutate::<Coins>::insert(db, &id, &coin).unwrap();
 
-            (id, coin)
+            coin.uncompress(id)
         }
 
-        pub fn make_message(
-            &mut self,
-            owner: Address,
-            amount: Word,
-        ) -> (MessageId, Message) {
+        pub fn make_message(&mut self, owner: Address, amount: Word) -> Message {
             let nonce = self.last_message_index;
             self.last_message_index += 1;
 
@@ -881,19 +880,14 @@ mod tests {
             let db = self.database.as_mut();
             StorageMutate::<Messages>::insert(db, &message.id(), &message).unwrap();
 
-            (message.id(), message)
+            message
         }
 
-        pub fn owned_coins(&self, owner: &Address) -> Vec<(UtxoId, Coin)> {
+        pub fn owned_coins(&self, owner: &Address) -> Vec<Coin> {
             let query = CoinQueryContext(&self.database);
             query
                 .owned_coins_ids(owner, None, IterDirection::Forward)
-                .map(|res| {
-                    res.map(|id| {
-                        let coin = query.coin(&id).unwrap();
-                        (id, coin)
-                    })
-                })
+                .map(|res| res.map(|id| query.coin(id).unwrap()))
                 .try_collect()
                 .unwrap()
         }

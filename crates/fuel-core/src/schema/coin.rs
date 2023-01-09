@@ -1,4 +1,5 @@
 use crate::{
+    fuel_core_graphql_api::IntoApiResult,
     query::CoinQueryContext,
     schema::scalars::{
         Address,
@@ -17,7 +18,6 @@ use async_graphql::{
     InputObject,
     Object,
 };
-use fuel_core_storage::Error as StorageError;
 use fuel_core_types::{
     entities::coin::{
         Coin as CoinModel,
@@ -33,36 +33,36 @@ pub enum CoinStatus {
     Spent,
 }
 
-pub struct Coin(pub(crate) fuel_tx::UtxoId, pub(crate) CoinModel);
+pub struct Coin(pub(crate) CoinModel);
 
 #[Object]
 impl Coin {
     async fn utxo_id(&self) -> UtxoId {
-        self.0.into()
+        self.0.utxo_id.into()
     }
 
     async fn owner(&self) -> Address {
-        self.1.owner.into()
+        self.0.owner.into()
     }
 
     async fn amount(&self) -> U64 {
-        self.1.amount.into()
+        self.0.amount.into()
     }
 
     async fn asset_id(&self) -> AssetId {
-        self.1.asset_id.into()
+        self.0.asset_id.into()
     }
 
     async fn maturity(&self) -> U64 {
-        self.1.maturity.into()
+        self.0.maturity.into()
     }
 
     async fn status(&self) -> CoinStatus {
-        self.1.status.into()
+        self.0.status.into()
     }
 
     async fn block_created(&self) -> U64 {
-        self.1.block_created.into()
+        self.0.block_created.into()
     }
 }
 
@@ -86,13 +86,7 @@ impl CoinQuery {
         #[graphql(desc = "The ID of the coin")] utxo_id: UtxoId,
     ) -> async_graphql::Result<Option<Coin>> {
         let data = CoinQueryContext(ctx.data_unchecked());
-        let coin = data.coin(&utxo_id.0);
-
-        match coin {
-            Ok(coin) => Ok(Some((utxo_id.0, coin).into())),
-            Err(StorageError::NotFound(_, _)) => Ok(None),
-            Err(err) => Err(err.into()),
-        }
+        data.coin(utxo_id.0).into_api_result()
     }
 
     /// Gets all coins of some `owner` maybe filtered with by `asset_id` per page.
@@ -113,8 +107,7 @@ impl CoinQuery {
                 .owned_coins(&owner, (*start).map(Into::into), direction)
                 .into_iter()
                 .filter_map(|result| {
-                    if let (Ok((_, coin)), Some(filter_asset_id)) =
-                        (&result, &filter.asset_id)
+                    if let (Ok(coin), Some(filter_asset_id)) = (&result, &filter.asset_id)
                     {
                         if coin.asset_id != filter_asset_id.0 {
                             return None
@@ -123,7 +116,7 @@ impl CoinQuery {
 
                     Some(result)
                 })
-                .map(|res| res.map(|coin| (coin.0.into(), coin.into())));
+                .map(|res| res.map(|coin| (coin.utxo_id.into(), coin.into())));
 
             Ok(coins)
         })
@@ -131,8 +124,8 @@ impl CoinQuery {
     }
 }
 
-impl From<(fuel_tx::UtxoId, CoinModel)> for Coin {
-    fn from(value: (fuel_tx::UtxoId, CoinModel)) -> Self {
-        Coin(value.0, value.1)
+impl From<CoinModel> for Coin {
+    fn from(value: CoinModel) -> Self {
+        Coin(value)
     }
 }

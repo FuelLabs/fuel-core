@@ -6,6 +6,7 @@ use crate::{
     fuel_core_graphql_api::{
         service::Executor,
         Config as GraphQLConfig,
+        IntoApiResult,
     },
     query::{
         BlockQueryContext,
@@ -37,7 +38,6 @@ use fuel_core_poa::service::seal_block;
 use fuel_core_producer::ports::Executor as ExecutorTrait;
 use fuel_core_storage::{
     iter::IntoBoxedIter,
-    Error as StorageError,
     Result as StorageResult,
 };
 use fuel_core_types::{
@@ -61,10 +61,7 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 
-pub struct Block {
-    pub(crate) header: Header,
-    pub(crate) transactions: Vec<fuel_types::Bytes32>,
-}
+pub struct Block(pub(crate) CompressedBlock);
 
 pub struct Header(pub(crate) BlockHeader);
 
@@ -97,17 +94,17 @@ pub struct PoAConsensus {
 #[Object]
 impl Block {
     async fn id(&self) -> BlockId {
-        let bytes: fuel_types::Bytes32 = self.header.0.id().into();
+        let bytes: fuel_types::Bytes32 = self.0.header().id().into();
         bytes.into()
     }
 
-    async fn header(&self) -> &Header {
-        &self.header
+    async fn header(&self) -> Header {
+        self.0.header().clone().into()
     }
 
     async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
         let query = BlockQueryContext(ctx.data_unchecked());
-        let id = self.header.0.id();
+        let id = self.0.header().id();
         let consensus = query.consensus(&id)?;
 
         Ok(consensus.into())
@@ -118,7 +115,8 @@ impl Block {
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Vec<Transaction>> {
         let query = TransactionQueryContext(ctx.data_unchecked());
-        self.transactions
+        self.0
+            .transactions()
             .iter()
             .map(|tx_id| {
                 let tx = query.transaction(tx_id)?;
@@ -219,16 +217,7 @@ impl BlockQuery {
             }
         };
 
-        let block = id.and_then(|id| data.block(&id)).map(Into::into);
-
-        // TODO: Do we want to return an `Option`?
-        let block = match block {
-            Ok(block) => Some(block),
-            Err(StorageError::NotFound(_, _)) => None,
-            Err(err) => Err(err)?,
-        };
-
-        Ok(block)
+        id.and_then(|id| data.block(&id)).into_api_result()
     }
 
     async fn blocks(
@@ -261,7 +250,7 @@ impl HeaderQuery {
         Ok(BlockQuery {}
             .block(ctx, id, height)
             .await?
-            .map(|b| b.header))
+            .map(|b| b.0.header().clone().into()))
     }
 
     async fn headers(
@@ -433,11 +422,13 @@ fn check_block_time_overflow(
 
 impl From<CompressedBlock> for Block {
     fn from(block: CompressedBlock) -> Self {
-        let (header, transactions) = block.into_inner();
-        Block {
-            header: Header(header),
-            transactions,
-        }
+        Block(block)
+    }
+}
+
+impl From<BlockHeader> for Header {
+    fn from(header: BlockHeader) -> Self {
+        Header(header)
     }
 }
 

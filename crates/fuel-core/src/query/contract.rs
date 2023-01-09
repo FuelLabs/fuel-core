@@ -1,4 +1,7 @@
-use crate::database::Database;
+use crate::{
+    graphql_api::service::DatabaseTemp,
+    state::IterDirection,
+};
 use fuel_core_storage::{
     not_found,
     tables::{
@@ -15,60 +18,29 @@ use fuel_core_types::{
         ContractId,
     },
     fuel_vm::Salt,
+    services::graphql_api::ContractBalance,
 };
 
-#[cfg_attr(test, mockall::automock)]
-/// Trait that specifies all the data required by the output message query.
-pub trait ContractQueryData {
-    fn contract(&self, id: ContractId) -> StorageResult<Option<ContractId>>;
+pub struct ContractQueryContext<'a>(pub &'a DatabaseTemp);
 
-    fn contract_bytecode(&self, id: ContractId) -> StorageResult<Vec<u8>>;
-
-    fn contract_salt(&self, id: ContractId) -> StorageResult<Salt>;
-
-    fn contract_balance(
-        &self,
-        contract: ContractId,
-        asset: AssetId,
-    ) -> StorageResult<(ContractId, u64, AssetId)>;
-}
-
-pub struct ContractQueryContext<'a>(pub &'a Database);
-
-impl ContractQueryData for ContractQueryContext<'_> {
-    fn contract(&self, id: ContractId) -> StorageResult<Option<ContractId>> {
-        let db = self.0;
-        let contract_exists = db.storage::<ContractsRawCode>().contains_key(&id)?;
-        if !contract_exists {
-            return Ok(None)
+impl ContractQueryContext<'_> {
+    pub fn contract_id(&self, id: ContractId) -> StorageResult<ContractId> {
+        let contract_exists = self
+            .0
+            .as_ref()
+            .storage::<ContractsRawCode>()
+            .contains_key(&id)?;
+        if contract_exists {
+            Ok(id)
+        } else {
+            Err(not_found!(ContractsRawCode))
         }
-
-        Ok(Some(id))
     }
 
-    fn contract_balance(
-        &self,
-        contract_id: ContractId,
-        asset_id: AssetId,
-    ) -> StorageResult<(ContractId, u64, AssetId)> {
-        let db = self.0;
-
-        let result = db
-            .storage::<ContractsAssets>()
-            .get(&(&contract_id, &asset_id))?;
-
-        let balance = match result {
-            Some(balance) => balance.into_owned(),
-            None => return Err(not_found!(ContractsAssets)),
-        };
-
-        Ok((contract_id, balance, asset_id))
-    }
-
-    fn contract_bytecode(&self, id: ContractId) -> StorageResult<Vec<u8>> {
-        let db = self.0;
-
-        let contract = db
+    pub fn contract_bytecode(&self, id: ContractId) -> StorageResult<Vec<u8>> {
+        let contract = self
+            .0
+            .as_ref()
             .storage::<ContractsRawCode>()
             .get(&id)?
             .ok_or(not_found!(ContractsRawCode))?
@@ -77,15 +49,45 @@ impl ContractQueryData for ContractQueryContext<'_> {
         Ok(contract.into())
     }
 
-    fn contract_salt(&self, id: ContractId) -> StorageResult<Salt> {
-        let db = self.0;
-
-        let (salt, _) = db
+    pub fn contract_salt(&self, id: ContractId) -> StorageResult<Salt> {
+        let (salt, _) = self
+            .0
+            .as_ref()
             .storage::<ContractsInfo>()
             .get(&id)?
             .ok_or(not_found!(ContractsInfo))?
             .into_owned();
 
         Ok(salt)
+    }
+
+    pub fn contract_balance(
+        &self,
+        contract_id: ContractId,
+        asset_id: AssetId,
+    ) -> StorageResult<ContractBalance> {
+        let amount = self
+            .0
+            .as_ref()
+            .storage::<ContractsAssets>()
+            .get(&(&contract_id, &asset_id))?
+            .ok_or(not_found!(ContractsAssets))?
+            .into_owned();
+
+        Ok(ContractBalance {
+            owner: contract_id,
+            amount,
+            asset_id,
+        })
+    }
+
+    pub fn contract_balances(
+        &self,
+        contract_id: ContractId,
+        start_asset: Option<AssetId>,
+        direction: IterDirection,
+    ) -> impl Iterator<Item = StorageResult<ContractBalance>> + '_ {
+        self.0
+            .contract_balances(contract_id, start_asset, direction)
     }
 }

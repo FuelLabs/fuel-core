@@ -15,7 +15,7 @@ use std::{
     str::FromStr,
 };
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TxPointer(pub(crate) fuel_tx::TxPointer);
 
 #[Scalar(name = "TxPointer")]

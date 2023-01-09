@@ -1,4 +1,7 @@
-use crate::fuel_core_graphql_api::service::DatabaseTemp;
+use crate::{
+    fuel_core_graphql_api::service::DatabaseTemp,
+    state::IterDirection,
+};
 use fuel_core_storage::{
     not_found,
     tables::{
@@ -13,7 +16,9 @@ use fuel_core_types::{
     fuel_tx::{
         Receipt,
         Transaction,
+        TxPointer,
     },
+    fuel_types::Address,
     services::txpool::TransactionStatus,
 };
 
@@ -38,5 +43,22 @@ impl TransactionQueryContext<'_> {
 
     pub fn status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
         self.0.tx_status(tx_id)
+    }
+
+    pub fn owned_transactions<'a>(
+        &'a self,
+        owner: &Address,
+        start: Option<TxPointer>,
+        direction: IterDirection,
+    ) -> impl Iterator<Item = StorageResult<(TxPointer, Transaction)>> + 'a {
+        self.0
+            .owned_transactions_ids(owner, start, direction)
+            .map(|result| {
+                result.and_then(|(tx_pointer, tx_id)| {
+                    let tx = self.transaction(&tx_id)?;
+
+                    Ok((tx_pointer, tx))
+                })
+            })
     }
 }

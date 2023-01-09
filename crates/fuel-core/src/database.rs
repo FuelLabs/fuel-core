@@ -67,7 +67,7 @@ use fuel_core_storage::tables::{
 use fuel_core_txpool::ports::TxPoolDb;
 use fuel_core_types::{
     entities::{
-        coin::Coin,
+        coin::CompressedCoin,
         message::Message,
     },
     fuel_tx::UtxoId,
@@ -345,7 +345,7 @@ impl BlockDb for Database {
 }
 
 impl TxPoolDb for Database {
-    fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<Coin>> {
+    fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>> {
         self.storage::<Coins>()
             .get(utxo_id)
             .map(|t| t.map(|t| t.as_ref().clone()))

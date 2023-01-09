@@ -9,7 +9,7 @@ use fuel_core_types::{
         primitives::BlockId,
     },
     entities::{
-        coin::Coin,
+        coin::CompressedCoin,
         message::Message,
     },
     fuel_tx::{
@@ -73,12 +73,14 @@ impl Mappable for SealedBlockConsensus {
     type GetValue = Self::SetValue;
 }
 
-/// The storage table of coins. Each [`Coin`](crate::model::Coin) is represented by unique `UtxoId`.
+/// The storage table of coins. Each
+/// [`CompressedCoin`](fuel_core_types::entities::coin::CompressedCoin)
+/// is represented by unique `UtxoId`.
 pub struct Coins;
 
 impl Mappable for Coins {
     type Key = UtxoId;
-    type SetValue = Coin;
+    type SetValue = CompressedCoin;
     type GetValue = Self::SetValue;
 }
 
