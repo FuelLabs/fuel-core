@@ -90,12 +90,10 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(&mut c.benchmark_group("srw"), "srw", input);
     }
 
-    let mut scwq = c.benchmark_group("scwq");
-
-    for i in linear.clone() {
+    {
         let mut key = Bytes32::zeroed();
 
-        key.as_mut()[..8].copy_from_slice(&(i as u64).to_be_bytes());
+        key.as_mut()[..8].copy_from_slice(&1u64.to_be_bytes());
         let data = key.iter().copied().collect::<Vec<_>>();
 
         let post_call = vec![
@@ -113,18 +111,13 @@ pub fn run(c: &mut Criterion) {
                 Ok(db)
             });
         bench.data.extend(data);
-        scwq.throughput(Throughput::Bytes(i));
-        run_group_ref(&mut scwq, format!("{i}"), bench);
+        run_group_ref(&mut c.benchmark_group("scwq"), "scwq", bench);
     }
 
-    scwq.finish();
-
-    let mut swwq = c.benchmark_group("swwq");
-
-    for i in linear.clone() {
+    {
         let mut key = Bytes32::zeroed();
 
-        key.as_mut()[..8].copy_from_slice(&(i as u64).to_be_bytes());
+        key.as_mut()[..8].copy_from_slice(&1u64.to_be_bytes());
         let data = key.iter().copied().collect::<Vec<_>>();
 
         let post_call = vec![
@@ -142,11 +135,8 @@ pub fn run(c: &mut Criterion) {
                 Ok(db)
             });
         bench.data.extend(data);
-        swwq.throughput(Throughput::Bytes(i));
-        run_group_ref(&mut swwq, format!("{i}"), bench);
+        run_group_ref(&mut c.benchmark_group("swwq"), "swwq", bench);
     }
-
-    swwq.finish();
 
     let mut call = c.benchmark_group("call");
 
