@@ -1,6 +1,6 @@
 use crate::{
     database::{
-        transaction::DatabaseTransaction,
+        transactional::DatabaseTransaction,
         vm_database::VmDatabase,
     },
     fuel_core_graphql_api::service::Database,

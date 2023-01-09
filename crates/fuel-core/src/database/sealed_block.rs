@@ -91,7 +91,7 @@ impl Database {
     }
 
     pub fn get_genesis(&self) -> StorageResult<Genesis> {
-        let (_, genesis_block_id) = self.genesis_block_ids()?;
+        let (_, genesis_block_id) = self.ids_of_genesis_block()?;
         let consensus = self
             .storage::<SealedBlockConsensus>()
             .get(&genesis_block_id)?

@@ -142,7 +142,7 @@ impl Database {
         })
     }
 
-    pub fn genesis_block_ids(&self) -> DatabaseResult<(BlockHeight, BlockId)> {
+    pub fn ids_of_genesis_block(&self) -> DatabaseResult<(BlockHeight, BlockId)> {
         self.iter_all(
             Column::FuelBlockIds,
             None,
