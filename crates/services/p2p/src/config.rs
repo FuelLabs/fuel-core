@@ -1,10 +1,13 @@
-use crate::gossipsub::{
-    config::default_gossipsub_config,
-    topics::{
-        CON_VOTE_GOSSIP_TOPIC,
-        NEW_BLOCK_GOSSIP_TOPIC,
-        NEW_TX_GOSSIP_TOPIC,
+use crate::{
+    gossipsub::{
+        config::default_gossipsub_config,
+        topics::{
+            CON_VOTE_GOSSIP_TOPIC,
+            NEW_BLOCK_GOSSIP_TOPIC,
+            NEW_TX_GOSSIP_TOPIC,
+        },
     },
+    peer_manager::ConnectionState,
 };
 use fuel_core_types::{
     blockchain::consensus::Genesis,
@@ -62,6 +65,10 @@ use std::{
         Ipv4Addr,
     },
     pin::Pin,
+    sync::{
+        Arc,
+        RwLock,
+    },
     time::Duration,
 };
 
@@ -255,7 +262,12 @@ impl Config<Initialized> {
 /// TCP/IP, Websocket
 /// Noise as encryption layer
 /// mplex or yamux for multiplexing
-pub(crate) fn build_transport(p2p_config: &Config) -> Boxed<(PeerId, StreamMuxerBox)> {
+pub(crate) fn build_transport(
+    p2p_config: &Config,
+) -> (
+    Boxed<(PeerId, StreamMuxerBox)>,
+    Arc<RwLock<ConnectionState>>,
+) {
     let transport = {
         let generate_tcp_transport =
             || TokioTcpTransport::new(TcpConfig::new().port_reuse(true).nodelay(true));
@@ -286,10 +298,11 @@ pub(crate) fn build_transport(p2p_config: &Config) -> Boxed<(PeerId, StreamMuxer
     };
 
     let fuel_upgrade = FuelUpgrade::new(p2p_config.checksum);
+    let connection_state = ConnectionState::new();
 
-    if p2p_config.reserved_nodes_only_mode {
+    let transport = if p2p_config.reserved_nodes_only_mode {
         transport
-            .authenticate(NoiseWithReservedNodes::new(
+            .authenticate(GuardedNodeAuthentication::new(
                 noise_authenticated,
                 &p2p_config.reserved_nodes,
             ))
@@ -299,11 +312,119 @@ pub(crate) fn build_transport(p2p_config: &Config) -> Boxed<(PeerId, StreamMuxer
             .boxed()
     } else {
         transport
-            .authenticate(noise_authenticated)
+            .authenticate(FuelNodeAuthentication::new(
+                noise_authenticated,
+                &p2p_config.reserved_nodes,
+                connection_state.clone(),
+            ))
             .apply(fuel_upgrade)
             .multiplex(multiplex_config)
             .timeout(TRANSPORT_TIMEOUT)
             .boxed()
+    };
+
+    (transport, connection_state)
+}
+
+#[derive(Clone)]
+struct FuelNodeAuthentication<P, C: Zeroize, R> {
+    noise_authenticated: NoiseAuthenticated<P, C, R>,
+    reserved_nodes: HashSet<PeerId>,
+    connection_state: Arc<RwLock<ConnectionState>>,
+}
+
+impl<P, C: Zeroize, R> FuelNodeAuthentication<P, C, R> {
+    fn new(
+        noise_authenticated: NoiseAuthenticated<P, C, R>,
+        reserved_nodes: &[Multiaddr],
+        connection_state: Arc<RwLock<ConnectionState>>,
+    ) -> Self {
+        Self {
+            noise_authenticated,
+            reserved_nodes: reserved_nodes
+                .iter()
+                // Safety: as is the case with `bootstrap_nodes` it is assumed that `reserved_nodes` [`Multiadr`]
+                // come with PeerId included, in case they are not the `unwrap()` will only panic when the node is started.
+                .map(|address| PeerId::try_from_multiaddr(address).unwrap())
+                .collect(),
+            connection_state,
+        }
+    }
+}
+
+impl<P, C: Zeroize, R> UpgradeInfo for FuelNodeAuthentication<P, C, R>
+where
+    NoiseAuthenticated<P, C, R>: UpgradeInfo,
+{
+    type Info = <NoiseAuthenticated<P, C, R> as UpgradeInfo>::Info;
+    type InfoIter = <NoiseAuthenticated<P, C, R> as UpgradeInfo>::InfoIter;
+
+    fn protocol_info(&self) -> Self::InfoIter {
+        self.noise_authenticated.protocol_info()
+    }
+}
+
+impl<T, P, C, R> InboundUpgrade<T> for FuelNodeAuthentication<P, C, R>
+where
+    NoiseAuthenticated<P, C, R>: UpgradeInfo
+        + InboundUpgrade<T, Output = (PeerId, NoiseOutput<T>), Error = NoiseError>
+        + 'static,
+    <NoiseAuthenticated<P, C, R> as InboundUpgrade<T>>::Future: Send,
+    T: AsyncRead + AsyncWrite + Send + 'static,
+    C: Protocol<C> + AsRef<[u8]> + Zeroize + Send + 'static,
+{
+    type Output = (PeerId, NoiseOutput<T>);
+    type Error = NoiseError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
+
+    fn upgrade_inbound(self, socket: T, info: Self::Info) -> Self::Future {
+        Box::pin(
+            self.noise_authenticated
+                .upgrade_inbound(socket, info)
+                .and_then(move |(remote_peer_id, io)| {
+                    let available_slot =
+                        self.connection_state.read().unwrap().available_slot();
+
+                    accept_any_node(
+                        &self.reserved_nodes,
+                        remote_peer_id,
+                        available_slot,
+                        io,
+                    )
+                }),
+        )
+    }
+}
+
+impl<T, P, C, R> OutboundUpgrade<T> for FuelNodeAuthentication<P, C, R>
+where
+    NoiseAuthenticated<P, C, R>: UpgradeInfo
+        + OutboundUpgrade<T, Output = (PeerId, NoiseOutput<T>), Error = NoiseError>
+        + 'static,
+    <NoiseAuthenticated<P, C, R> as OutboundUpgrade<T>>::Future: Send,
+    T: AsyncRead + AsyncWrite + Send + 'static,
+    C: Protocol<C> + AsRef<[u8]> + Zeroize + Send + 'static,
+{
+    type Output = (PeerId, NoiseOutput<T>);
+    type Error = NoiseError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
+
+    fn upgrade_outbound(self, socket: T, info: Self::Info) -> Self::Future {
+        Box::pin(
+            self.noise_authenticated
+                .upgrade_outbound(socket, info)
+                .and_then(move |(remote_peer_id, io)| {
+                    let available_slot =
+                        self.connection_state.read().unwrap().available_slot();
+
+                    accept_any_node(
+                        &self.reserved_nodes,
+                        remote_peer_id,
+                        available_slot,
+                        io,
+                    )
+                }),
+        )
     }
 }
 
@@ -314,12 +435,12 @@ pub(crate) fn build_transport(p2p_config: &Config) -> Boxed<(PeerId, StreamMuxer
 /// comes from a whitelisted peer, in case it's not the connection is rejected.
 /// Same check is added to any outbound connections, just in case.
 #[derive(Clone)]
-struct NoiseWithReservedNodes<P, C: Zeroize, R> {
+struct GuardedNodeAuthentication<P, C: Zeroize, R> {
     noise_authenticated: NoiseAuthenticated<P, C, R>,
     reserved_nodes: HashSet<PeerId>,
 }
 
-impl<P, C: Zeroize, R> NoiseWithReservedNodes<P, C, R> {
+impl<P, C: Zeroize, R> GuardedNodeAuthentication<P, C, R> {
     fn new(
         noise_authenticated: NoiseAuthenticated<P, C, R>,
         reserved_nodes: &[Multiaddr],
@@ -333,6 +454,20 @@ impl<P, C: Zeroize, R> NoiseWithReservedNodes<P, C, R> {
                 .map(|address| PeerId::try_from_multiaddr(address).unwrap())
                 .collect(),
         }
+    }
+}
+
+/// Accepts a reserved node, or a non-reserved node if there is a free slot
+fn accept_any_node<T>(
+    reserved_nodes: &HashSet<PeerId>,
+    remote_peer_id: PeerId,
+    non_reserved_peers_allowed: bool,
+    io: NoiseOutput<T>,
+) -> future::Ready<Result<(PeerId, NoiseOutput<T>), NoiseError>> {
+    if reserved_nodes.contains(&remote_peer_id) || non_reserved_peers_allowed {
+        future::ok((remote_peer_id, io))
+    } else {
+        future::err(NoiseError::AuthenticationFailed)
     }
 }
 
@@ -350,7 +485,7 @@ fn accept_reserved_node<T>(
     }
 }
 
-impl<P, C: Zeroize, R> UpgradeInfo for NoiseWithReservedNodes<P, C, R>
+impl<P, C: Zeroize, R> UpgradeInfo for GuardedNodeAuthentication<P, C, R>
 where
     NoiseAuthenticated<P, C, R>: UpgradeInfo,
 {
@@ -362,7 +497,7 @@ where
     }
 }
 
-impl<T, P, C, R> InboundUpgrade<T> for NoiseWithReservedNodes<P, C, R>
+impl<T, P, C, R> InboundUpgrade<T> for GuardedNodeAuthentication<P, C, R>
 where
     NoiseAuthenticated<P, C, R>: UpgradeInfo
         + InboundUpgrade<T, Output = (PeerId, NoiseOutput<T>), Error = NoiseError>
@@ -386,7 +521,7 @@ where
     }
 }
 
-impl<T, P, C, R> OutboundUpgrade<T> for NoiseWithReservedNodes<P, C, R>
+impl<T, P, C, R> OutboundUpgrade<T> for GuardedNodeAuthentication<P, C, R>
 where
     NoiseAuthenticated<P, C, R>: UpgradeInfo
         + OutboundUpgrade<T, Output = (PeerId, NoiseOutput<T>), Error = NoiseError>

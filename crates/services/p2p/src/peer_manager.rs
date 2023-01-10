@@ -41,6 +41,10 @@ use std::{
         HashSet,
         VecDeque,
     },
+    sync::{
+        Arc,
+        RwLock,
+    },
     task::{
         Context,
         Poll,
@@ -86,7 +90,10 @@ pub struct PeerManagerBehaviour {
 }
 
 impl PeerManagerBehaviour {
-    pub fn new(config: &Config) -> Self {
+    pub(crate) fn new(
+        config: &Config,
+        connection_state: Arc<RwLock<ConnectionState>>,
+    ) -> Self {
         let identify = {
             let identify_config =
                 IdentifyConfig::new("/fuel/1.0".to_string(), config.keypair.public());
@@ -112,8 +119,11 @@ impl PeerManagerBehaviour {
             .filter_map(PeerId::try_from_multiaddr)
             .collect();
 
-        let peer_manager =
-            PeerManager::new(reserved_peers, config.max_peers_connected as usize);
+        let peer_manager = PeerManager::new(
+            reserved_peers,
+            config.max_peers_connected as usize,
+            connection_state,
+        );
 
         Self {
             ping,
@@ -490,18 +500,22 @@ struct PeerManager {
     pending_events: VecDeque<PeerInfoEvent>,
     connected_peers: HashMap<PeerId, PeerInfo>,
     reserved_peers: HashSet<PeerId>,
-    non_reserved_peers_allowed: usize,
+    number_of_non_reserved_peers_allowed: usize,
+    connection_state: Arc<RwLock<ConnectionState>>,
 }
 
 impl PeerManager {
-    fn new(reserved_peers: HashSet<PeerId>, max_connections_allowed: usize) -> Self {
-        let reserved_peers_size = reserved_peers.len();
-
+    fn new(
+        reserved_peers: HashSet<PeerId>,
+        max_connections_allowed: usize,
+        connection_state: Arc<RwLock<ConnectionState>>,
+    ) -> Self {
         Self {
             pending_events: VecDeque::default(),
             connected_peers: HashMap::with_capacity(max_connections_allowed),
             reserved_peers,
-            non_reserved_peers_allowed: max_connections_allowed - reserved_peers_size,
+            number_of_non_reserved_peers_allowed: max_connections_allowed,
+            connection_state,
         }
     }
 
@@ -558,11 +572,13 @@ impl PeerManager {
     fn handle_initial_connection(&mut self, peer_id: PeerId) {
         // if the connected Peer is not from the reserved peers
         if !self.reserved_peers.contains(&peer_id) {
-            let non_reserved_peers_connected =
+            let number_of_non_reserved_peers_connected =
                 self.connected_peers.len() - self.reserved_peers_connected_count();
 
             // check if there is no more space for non-resereved peers
-            if non_reserved_peers_connected >= self.non_reserved_peers_allowed {
+            if number_of_non_reserved_peers_connected
+                >= self.number_of_non_reserved_peers_allowed
+            {
                 // todo/potential improvement: once `Peer Reputation` is implemented we could check if there are peers
                 // with poor reputation and disconnect them instead?
 
@@ -576,6 +592,15 @@ impl PeerManager {
                 // nor insert it in `connected_peers`
                 // since we're going to disconnect it anyways
                 return
+            } else if self.number_of_non_reserved_peers_allowed
+                - number_of_non_reserved_peers_connected
+                == 1
+            {
+                // this is the last peer allowed no more!
+                self.connection_state
+                    .write()
+                    .unwrap()
+                    .non_reserved_peers_allowed = false;
             }
         }
 
@@ -592,11 +617,41 @@ impl PeerManager {
         let should_reconnect = self.reserved_peers.contains(&peer_id);
         self.connected_peers.remove(&peer_id);
 
+        if !should_reconnect
+            && !self
+                .connection_state
+                .read()
+                .unwrap()
+                .non_reserved_peers_allowed
+        {
+            self.connection_state
+                .write()
+                .unwrap()
+                .non_reserved_peers_allowed = true;
+        }
+
         self.pending_events
             .push_back(PeerInfoEvent::PeerDisconnected {
                 peer_id,
                 should_reconnect,
             })
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct ConnectionState {
+    non_reserved_peers_allowed: bool,
+}
+
+impl ConnectionState {
+    pub fn new() -> Arc<RwLock<Self>> {
+        Arc::new(RwLock::new(Self {
+            non_reserved_peers_allowed: true,
+        }))
+    }
+
+    pub fn available_slot(&self) -> bool {
+        self.non_reserved_peers_allowed
     }
 }
 
@@ -615,13 +670,17 @@ mod tests {
     #[test]
     fn test_peer_manager_struct() {
         let reserved_peer_size = 5;
-        let max_connetions_allowed = 20;
+        let max_non_reserved_allowed = 15;
+        let total_connections = max_non_reserved_allowed + reserved_peer_size;
         let reserved_peers = get_random_peers(reserved_peer_size);
-        let random_peers = get_random_peers(max_connetions_allowed * 2);
+        let random_peers = get_random_peers(max_non_reserved_allowed * 2);
+
+        let connection_state = ConnectionState::new();
 
         let mut peer_manager = PeerManager::new(
             reserved_peers.clone().into_iter().collect(),
-            max_connetions_allowed,
+            max_non_reserved_allowed,
+            connection_state,
         );
 
         // try connecting only random peers
@@ -632,13 +691,10 @@ mod tests {
         // only amount of non-reserved peers allowed should be connected
         assert_eq!(
             peer_manager.connected_peers.len(),
-            peer_manager.non_reserved_peers_allowed
+            peer_manager.number_of_non_reserved_peers_allowed
         );
         // or in other words:
-        assert_eq!(
-            peer_manager.connected_peers.len(),
-            random_peers.len() / 2 - reserved_peer_size
-        );
+        assert_eq!(peer_manager.connected_peers.len(), random_peers.len() / 2);
 
         // connect resereved peers
         for peer_id in &reserved_peers {
@@ -646,14 +702,11 @@ mod tests {
         }
 
         // the connections should be at max now
-        assert_eq!(peer_manager.connected_peers.len(), max_connetions_allowed);
+        assert_eq!(peer_manager.connected_peers.len(), total_connections);
 
         // disconnect a reserved peer
         peer_manager.handle_peer_disconnect(*reserved_peers.first().unwrap());
-        assert_eq!(
-            peer_manager.connected_peers.len(),
-            max_connetions_allowed - 1
-        );
+        assert_eq!(peer_manager.connected_peers.len(), total_connections - 1);
 
         // assert that the last random peer is not already connected
         assert!(!peer_manager
@@ -665,27 +718,21 @@ mod tests {
 
         // the connection count should remain the same as when the reserved peer disconnected
         // that is, the connection has been refused
-        assert_eq!(
-            peer_manager.connected_peers.len(),
-            max_connetions_allowed - 1
-        );
+        assert_eq!(peer_manager.connected_peers.len(), total_connections - 1);
 
         // reconnect the first reserved peer that was disconnected
         peer_manager.handle_initial_connection(*reserved_peers.first().unwrap());
-        assert_eq!(peer_manager.connected_peers.len(), max_connetions_allowed);
+        assert_eq!(peer_manager.connected_peers.len(), total_connections);
 
         // disconnect a single non-reserved peer
         peer_manager.handle_peer_disconnect(*random_peers.first().unwrap());
-        assert_eq!(
-            peer_manager.connected_peers.len(),
-            max_connetions_allowed - 1
-        );
+        assert_eq!(peer_manager.connected_peers.len(), total_connections - 1);
 
         // connect a different non-reserved peer
         peer_manager.handle_initial_connection(*random_peers.last().unwrap());
 
         // the connection should be successful,
         // and we should be up to our max connections count again
-        assert_eq!(peer_manager.connected_peers.len(), max_connetions_allowed);
+        assert_eq!(peer_manager.connected_peers.len(), total_connections);
     }
 }

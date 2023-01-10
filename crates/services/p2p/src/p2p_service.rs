@@ -128,8 +128,8 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let local_peer_id = PeerId::from(config.keypair.public());
 
         // configure and build P2P Service
-        let transport = build_transport(&config);
-        let behaviour = FuelBehaviour::new(&config, codec.clone());
+        let (transport, connection_state) = build_transport(&config);
+        let behaviour = FuelBehaviour::new(&config, codec.clone(), connection_state);
 
         let total_connections = {
             // Reserved nodes do not count against the configured peer input/output limits.
