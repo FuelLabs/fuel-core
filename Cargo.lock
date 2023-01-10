@@ -2282,6 +2282,7 @@ dependencies = [
  "fuel-core-types",
  "futures",
  "hex",
+ "hyper",
  "itertools",
  "mockall",
  "num_cpus",

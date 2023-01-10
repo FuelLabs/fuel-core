@@ -507,7 +507,7 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
     };
 
     let service = Service::new(task);
-    service.start().unwrap();
+    service.start_and_await().await.unwrap();
 
     // simulate some txpool events to see if any block production is erroneously triggered
     txpool_tx.send(TxStatus::Submitted).unwrap();

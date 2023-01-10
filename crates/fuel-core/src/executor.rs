@@ -112,7 +112,7 @@ use tracing::{
 /// the transactions contained in the block and persist changes to the underlying database as needed.
 /// In production mode, block fields like transaction commitments are set based on the executed txs.
 /// In validation mode, the processed block commitments are compared with the proposed block.
-
+#[derive(Clone, Debug)]
 pub struct Executor {
     pub database: Database,
     pub config: Config,
