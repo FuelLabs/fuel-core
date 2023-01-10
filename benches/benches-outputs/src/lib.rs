@@ -1,5 +1,5 @@
 use fuel_vm::gas::{
-    DependantCost,
+    DependentCost,
     GasCostsValues,
 };
 #[allow(dead_code)]

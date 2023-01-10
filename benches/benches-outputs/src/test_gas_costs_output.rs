@@ -75,31 +75,31 @@ pub fn default_gas_costs() -> GasCostsValues {
         gtf: 1,
         tr: 1,
         tro: 1,
-        mcl: DependantCost {
+        mcl: DependentCost {
             base: 1,
             dep_per_unit: 0,
         },
-        mcli: DependantCost {
+        mcli: DependentCost {
             base: 1,
             dep_per_unit: 0,
         },
-        mcp: DependantCost {
+        mcp: DependentCost {
             base: 10,
             dep_per_unit: 1475,
         },
-        mcpi: DependantCost {
+        mcpi: DependentCost {
             base: 1,
             dep_per_unit: 0,
         },
-        ccp: DependantCost {
+        ccp: DependentCost {
             base: 1,
             dep_per_unit: 0,
         },
-        meq: DependantCost {
+        meq: DependentCost {
             base: 1,
             dep_per_unit: 0,
         },
-        call: DependantCost {
+        call: DependentCost {
             base: 1,
             dep_per_unit: 0,
         },

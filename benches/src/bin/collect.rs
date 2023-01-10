@@ -113,11 +113,11 @@ struct Costs(HashMap<String, Cost>);
 #[serde(untagged)]
 enum Cost {
     Relative(u64),
-    Dependant {
+    Dependent {
         base: u64,
         dep_per_unit: u64,
     },
-    DependantAll {
+    DependentAll {
         samples: Vec<Sample>,
         dep_per_unit: u64,
     },
@@ -383,7 +383,7 @@ impl State {
                     }
                     serde_yaml::Value::Mapping(m) => {
                         format!(
-                            "\n{}{}: DependantCost {{\n{}    base: {},\n{}    dep_per_unit: {},\n{}}},",
+                            "\n{}{}: DependentCost {{\n{}    base: {},\n{}    dep_per_unit: {},\n{}}},",
                             indent,
                             name,
                             indent,
@@ -495,7 +495,7 @@ impl State {
                 let dep_per_unit = (1.0 / slope(x_y)) as u64;
                 (
                     name,
-                    Cost::DependantAll {
+                    Cost::DependentAll {
                         samples,
                         dep_per_unit,
                     },
@@ -507,7 +507,7 @@ impl State {
                 groups.remove(&name);
                 let base = x_y.first().unwrap().1;
                 let dep_per_unit = (1.0 / slope(x_y)) as u64;
-                (name, Cost::Dependant { base, dep_per_unit })
+                (name, Cost::Dependent { base, dep_per_unit })
             });
             costs.0.extend(iter);
         }
