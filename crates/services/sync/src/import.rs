@@ -46,7 +46,7 @@ pub struct Params {
     pub max_get_txns_requests: usize,
 }
 
-async fn import(
+pub(super) async fn import(
     state: SharedMutex<State>,
     notify: Arc<Notify>,
     params: Params,

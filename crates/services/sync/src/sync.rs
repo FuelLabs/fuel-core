@@ -13,7 +13,7 @@ use crate::State;
 #[cfg(test)]
 mod tests;
 
-async fn sync(
+pub(super) async fn sync(
     height_stream: BoxStream<'static, BlockHeight>,
     state: SharedMutex<State>,
     notify: Arc<Notify>,
