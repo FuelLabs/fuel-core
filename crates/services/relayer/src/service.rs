@@ -165,7 +165,7 @@ where
         SharedState { synced }
     }
 
-    async fn into_task(mut self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
+    async fn into_task(mut self, _watcher: &StateWatcher) -> anyhow::Result<Self::Task> {
         self.set_deploy_height().await;
         Ok(self)
     }
@@ -177,19 +177,32 @@ where
     P: Middleware<Error = ProviderError> + 'static,
     D: RelayerDb + 'static,
 {
-    async fn run(&mut self, state_watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let now = tokio::time::Instant::now();
-        let result = run::run(self).await;
+        let should_continue;
 
-        // Sleep the loop so the da node is not spammed.
-        tokio::time::sleep(
-            self.config
-                .sync_minimum_duration
-                .saturating_sub(now.elapsed()),
-        )
-        .await;
+        tokio::select! {
+            // TODO: Pass `watcher` into `Task` to handle graceful shutdown for
+            //  `download_logs`, `wait_if_eth_syncing`, `build_eth` methods.
+            //  Otherwise we could lost the actual state of the synchronization if we stop in
+            //  `download_logs`(before the `set_finalized_da_height`).
+            _ = watcher.while_started() => {
+                should_continue = false;
+                Ok(should_continue)
+            }
+            result = run::run(self) => {
+                // Sleep the loop so the da node is not spammed.
+                tokio::time::sleep(
+                    self.config
+                        .sync_minimum_duration
+                        .saturating_sub(now.elapsed()),
+                )
+                .await;
 
-        result.map(|_| true)
+                should_continue = true;
+                result.map(|_| should_continue)
+            }
+        }
     }
 }
 
