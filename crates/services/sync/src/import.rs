@@ -5,21 +5,14 @@ use std::{
 
 use fuel_core_services::{
     SharedMutex,
+    Shutdown,
     SourcePeer,
 };
-use fuel_core_types::{
-    blockchain::{
-        block::Block,
-        consensus::Sealed,
-        primitives::{
-            BlockHeight,
-            BlockId,
-        },
-        SealedBlock,
-        SealedBlockHeader,
-    },
-    fuel_tx::Transaction,
-    services::executor::ExecutionBlock,
+use fuel_core_types::blockchain::{
+    block::Block,
+    consensus::Sealed,
+    SealedBlock,
+    SealedBlockHeader,
 };
 use futures::{
     stream,
@@ -52,6 +45,7 @@ pub(super) async fn import(
     params: Params,
     p2p: Arc<impl PeerToPeer + 'static>,
     executor: Arc<impl Executor + 'static>,
+    shutdown: Shutdown,
 ) {
     loop {
         if let Some(range) = state.apply(|s| {
@@ -105,6 +99,10 @@ pub(super) async fn import(
                 })
                 .buffered(params.max_get_txns_requests)
                 .scan((), |_, block| futures::future::ready(block))
+                .take_until({
+                    let s = shutdown.clone();
+                    async move { s.wait().await }
+                })
                 .for_each(|block| {
                     let state = state.clone();
                     let height = *block.entity.header().height();
@@ -122,7 +120,14 @@ pub(super) async fn import(
                 })
                 .await;
         }
-        notify.notified().await;
+        let n = notify.notified();
+        let s = shutdown.wait();
+        futures::pin_mut!(n);
+        futures::pin_mut!(s);
+        let s = futures::future::select(n, s).await;
+        if let futures::future::Either::Right(_) = s {
+            return
+        }
     }
 }
 
@@ -143,41 +148,5 @@ fn get_header_range(
     stream::iter(range).map(move |height| {
         let p2p = p2p.clone();
         async move { p2p.get_sealed_block_header(height.into()).await.unwrap() }
-    })
-}
-
-fn get_txns_buffered(
-    block_ids: impl Iterator<Item = SourcePeer<BlockId>>,
-    params: Params,
-    p2p: Arc<impl PeerToPeer + 'static>,
-) -> impl Stream<Item = Vec<Transaction>> {
-    stream::iter(block_ids)
-        .map({
-            move |block_id| {
-                let p2p = p2p.clone();
-                async move { p2p.get_transactions(block_id).await.unwrap() }
-            }
-        })
-        .buffered(params.max_get_txns_requests)
-        .scan((), |_, h| futures::future::ready(h))
-}
-
-fn range_iterator(
-    range: std::ops::RangeInclusive<u64>,
-    chunk_size: u64,
-) -> impl Iterator<Item = std::ops::RangeInclusive<u64>> {
-    let start = *range.start();
-    let end = *range.end();
-    let mut current_start = start;
-    let mut current_end = std::cmp::min(current_start + chunk_size - 1, end);
-    std::iter::from_fn(move || {
-        if current_start > end {
-            None
-        } else {
-            let result = current_start..=current_end;
-            current_start = current_end + 1;
-            current_end = std::cmp::min(current_start + chunk_size - 1, end);
-            Some(result)
-        }
     })
 }

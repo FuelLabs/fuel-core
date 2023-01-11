@@ -1,10 +1,16 @@
 use std::sync::Arc;
 
-use fuel_core_services::SharedMutex;
+use fuel_core_services::{
+    SharedMutex,
+    Shutdown,
+};
 use fuel_core_types::blockchain::primitives::BlockHeight;
-use futures::stream::{
-    BoxStream,
-    StreamExt,
+use futures::{
+    stream::{
+        BoxStream,
+        StreamExt,
+    },
+    Stream,
 };
 use tokio::sync::Notify;
 
@@ -13,8 +19,20 @@ use crate::State;
 #[cfg(test)]
 mod tests;
 
-pub(super) async fn sync(
+pub(crate) fn spawn_sync(
     height_stream: BoxStream<'static, BlockHeight>,
+    state: SharedMutex<State>,
+    notify: Arc<Notify>,
+    shutdown: Shutdown,
+) -> tokio::task::JoinHandle<()> {
+    let height_stream = height_stream.take_until(async move {
+        shutdown.wait().await;
+    });
+    tokio::spawn(async move { sync(height_stream, state, notify).await })
+}
+
+async fn sync(
+    height_stream: impl Stream<Item = BlockHeight>,
     state: SharedMutex<State>,
     notify: Arc<Notify>,
 ) {

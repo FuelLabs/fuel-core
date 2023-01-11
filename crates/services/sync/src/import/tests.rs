@@ -1,6 +1,9 @@
 use std::time::Duration;
 
-use fuel_core_services::PeerId;
+use fuel_core_services::{
+    KillSwitch,
+    PeerId,
+};
 use fuel_core_types::{
     blockchain::{
         consensus::Consensus,
@@ -54,9 +57,10 @@ async fn test_import() {
         })
     });
     let executor = Arc::new(executor);
+    let ks = KillSwitch::new();
     let _ = tokio::time::timeout(
         Duration::from_secs(2),
-        import(state, notify, params, p2p, executor),
+        import(state, notify, params, p2p, executor, ks.handle()),
     )
     .await;
 }

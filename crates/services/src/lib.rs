@@ -32,12 +32,14 @@ pub struct PeerId;
 
 pub use service::{
     EmptyShared,
+    KillSwitch,
     RunnableService,
     RunnableTask,
     Service,
     ServiceRunner,
     Shared,
     SharedMutex,
+    Shutdown,
 };
 pub use state::{
     State,

@@ -1,61 +1,130 @@
-use crate::Config;
-use fuel_core_types::services::p2p::BlockGossipData;
-use parking_lot::Mutex;
+use std::sync::Arc;
+
+use crate::{
+    import::Params,
+    ports,
+    State,
+};
+
+use super::{
+    import,
+    sync,
+};
+use fuel_core_services::{
+    KillSwitch,
+    RunnableService,
+    RunnableTask,
+    SharedMutex,
+    StateWatcher,
+};
+use fuel_core_types::blockchain::primitives::BlockHeight;
+use futures::{
+    stream::BoxStream,
+    FutureExt,
+};
 use tokio::{
-    sync::{
-        mpsc,
-        oneshot,
-    },
+    sync::Notify,
     task::JoinHandle,
 };
 
-pub enum SyncStatus {
-    Stopped,
-    InitialSync,
+pub struct TaskSetup<P, E> {
+    height_stream: BoxStream<'static, BlockHeight>,
+    state: SharedMutex<State>,
+    params: Params,
+    p2p: Arc<P>,
+    executor: Arc<E>,
+}
+pub struct Task {
+    sync_task: Option<JoinHandle<()>>,
+    import_task: Option<JoinHandle<()>>,
+    kill_switch: KillSwitch,
 }
 
-pub enum SyncMpsc {
-    Status { ret: oneshot::Sender<SyncStatus> },
-    Start,
-    Stop,
+#[async_trait::async_trait]
+impl RunnableTask for Task {
+    async fn run(
+        &mut self,
+        watcher: &mut fuel_core_services::StateWatcher,
+    ) -> anyhow::Result<bool> {
+        use futures::future::{
+            select,
+            Either,
+        };
+        if let (Some(sync_task), Some(import_task)) =
+            (&mut self.sync_task, &mut self.import_task)
+        {
+            if let Either::Right((join_handles, _)) =
+                select(watcher.changed().boxed(), select(sync_task, import_task)).await
+            {
+                match join_handles {
+                    Either::Left((_, import_task)) => {
+                        self.kill_switch.kill_all();
+                        let _ = import_task.await;
+                        return Ok(false)
+                    }
+                    Either::Right((import_result, _)) => {
+                        return Ok(import_result.map(|_| true)?)
+                    }
+                }
+            }
+        }
+        if !watcher.borrow().started() {
+            self.kill_switch.kill_all();
+            if let Some(sync_task) = self.sync_task.take() {
+                let _ = sync_task.await;
+            }
+            if let Some(import_task) = self.import_task.take() {
+                let _ = import_task.await;
+            }
+            Ok(false)
+        } else {
+            Ok(true)
+        }
+    }
 }
 
-pub struct Service {
-    join: Mutex<Option<JoinHandle<()>>>,
-    sender: mpsc::Sender<SyncMpsc>,
-}
+#[async_trait::async_trait]
+impl<P, E> RunnableService for TaskSetup<P, E>
+where
+    P: ports::PeerToPeer + Send + Sync + 'static,
+    E: ports::Executor + Send + Sync + 'static,
+{
+    const NAME: &'static str = "fuel-core-sync";
 
-impl Service {
-    pub async fn new(_config: &Config) -> anyhow::Result<Self> {
-        let (sender, _receiver) = mpsc::channel(100);
-        Ok(Self {
-            sender,
-            join: Mutex::new(None),
+    type SharedData = ();
+
+    type Task = Task;
+
+    fn shared_data(&self) -> Self::SharedData {}
+
+    async fn into_task(self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
+        let TaskSetup {
+            height_stream,
+            state,
+            params,
+            p2p,
+            executor,
+        } = self;
+        let kill_switch = KillSwitch::new();
+        let notify = Arc::new(Notify::new());
+        let sync_task = sync::spawn_sync(
+            height_stream,
+            state.clone(),
+            notify.clone(),
+            kill_switch.handle(),
+        );
+        let import_task = tokio::spawn(import::import(
+            state,
+            notify,
+            params,
+            p2p,
+            executor,
+            kill_switch.handle(),
+        ));
+        Ok(Task {
+            sync_task: Some(sync_task),
+            import_task: Some(import_task),
+            kill_switch,
         })
-    }
-
-    pub async fn start(
-        &self,
-        _p2p_block: mpsc::Receiver<BlockGossipData>,
-        // TODO: re-introduce this when sync actually depends on the coordinator
-        // _bft: mpsc::Sender<BftMpsc>,
-        _block_importer: mpsc::Sender<()>,
-    ) {
-        let mut join = self.join.lock();
-        if join.is_none() {
-            *join = Some(tokio::spawn(async {}));
-        }
-    }
-
-    pub async fn stop(&self) -> Option<JoinHandle<()>> {
-        let join = self.join.lock().take();
-        if join.is_some() {
-            let _ = self.sender.send(SyncMpsc::Stop);
-        }
-        join
-    }
-
-    pub fn sender(&self) -> &mpsc::Sender<SyncMpsc> {
-        &self.sender
     }
 }
