@@ -52,26 +52,22 @@ async fn first_5_coins(
     let owner = Address::default();
 
     // setup test data in the node
-    let coins: Vec<(UtxoId, fuel_core_types::entities::coin::Coin)> = (1..10usize)
-        .map(|i| {
-            let coin = fuel_core_types::entities::coin::Coin {
-                owner,
-                amount: i as Word,
-                asset_id: Default::default(),
-                maturity: Default::default(),
-                status: fuel_core_types::entities::coin::CoinStatus::Unspent,
-                block_created: Default::default(),
-            };
-
-            let utxo_id = UtxoId::new(Bytes32::from([i as u8; 32]), 0);
-            (utxo_id, coin)
+    let coins: Vec<_> = (1..10usize)
+        .map(|i| Coin {
+            utxo_id: UtxoId::new(Bytes32::from([i as u8; 32]), 0),
+            owner,
+            amount: i as Word,
+            asset_id: Default::default(),
+            maturity: Default::default(),
+            status: fuel_core_types::entities::coin::CoinStatus::Unspent,
+            block_created: Default::default(),
         })
         .collect();
 
     let mut db = Database::default();
-    for (utxo_id, coin) in coins {
-        db.storage::<fuel_core_storage::tables::Coins>()
-            .insert(&utxo_id, &coin)
+    for coin in coins {
+        db.storage::<Coins>()
+            .insert(&coin.utxo_id.clone(), &coin.compress())
             .unwrap();
     }
 
@@ -104,25 +100,23 @@ async fn only_asset_id_filtered_coins() {
     let asset_id = AssetId::new([1u8; 32]);
 
     // setup test data in the node
-    let coins: Vec<(UtxoId, Coin)> = (1..10usize)
-        .map(|i| {
-            let coin = Coin {
-                owner,
-                amount: i as Word,
-                asset_id: if i <= 5 { asset_id } else { Default::default() },
-                maturity: Default::default(),
-                status: CoinStatus::Unspent,
-                block_created: Default::default(),
-            };
-
-            let utxo_id = UtxoId::new(Bytes32::from([i as u8; 32]), 0);
-            (utxo_id, coin)
+    let coins: Vec<_> = (1..10usize)
+        .map(|i| Coin {
+            utxo_id: UtxoId::new(Bytes32::from([i as u8; 32]), 0),
+            owner,
+            amount: i as Word,
+            asset_id: if i <= 5 { asset_id } else { Default::default() },
+            maturity: Default::default(),
+            status: CoinStatus::Unspent,
+            block_created: Default::default(),
         })
         .collect();
 
     let mut db = Database::default();
-    for (id, coin) in coins {
-        db.storage::<Coins>().insert(&id, &coin).unwrap();
+    for coin in coins {
+        db.storage::<Coins>()
+            .insert(&coin.utxo_id.clone(), &coin.compress())
+            .unwrap();
     }
 
     // setup server & client
@@ -159,29 +153,27 @@ async fn get_unspent_and_spent_coins(
     #[values(AssetId::from([1u8; 32]), AssetId::from([32u8; 32]))] asset_id: AssetId,
 ) {
     // setup test data in the node
-    let coins: Vec<(UtxoId, Coin)> = (1..11usize)
-        .map(|i| {
-            let coin = Coin {
-                owner,
-                amount: i as Word,
-                asset_id,
-                maturity: Default::default(),
-                status: if i <= 5 {
-                    CoinStatus::Unspent
-                } else {
-                    CoinStatus::Spent
-                },
-                block_created: Default::default(),
-            };
-
-            let utxo_id = UtxoId::new(Bytes32::from([i as u8; 32]), 0);
-            (utxo_id, coin)
+    let coins: Vec<Coin> = (1..11usize)
+        .map(|i| Coin {
+            utxo_id: UtxoId::new(Bytes32::from([i as u8; 32]), 0),
+            owner,
+            amount: i as Word,
+            asset_id,
+            maturity: Default::default(),
+            status: if i <= 5 {
+                CoinStatus::Unspent
+            } else {
+                CoinStatus::Spent
+            },
+            block_created: Default::default(),
         })
         .collect();
 
     let mut db = Database::default();
-    for (id, coin) in coins {
-        db.storage::<Coins>().insert(&id, &coin).unwrap();
+    for coin in coins {
+        db.storage::<Coins>()
+            .insert(&coin.utxo_id.clone(), &coin.compress())
+            .unwrap();
     }
 
     // setup server & client

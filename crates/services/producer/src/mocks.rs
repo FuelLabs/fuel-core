@@ -7,7 +7,7 @@ use crate::ports::{
 use fuel_core_storage::{
     transactional::{
         StorageTransaction,
-        Transactional,
+        Transaction,
     },
     Result as StorageResult,
 };
@@ -81,7 +81,7 @@ struct DatabaseTransaction {
     database: MockDb,
 }
 
-impl Transactional<MockDb> for DatabaseTransaction {
+impl Transaction<MockDb> for DatabaseTransaction {
     fn commit(&mut self) -> StorageResult<()> {
         Ok(())
     }
@@ -99,7 +99,7 @@ impl AsRef<MockDb> for DatabaseTransaction {
     }
 }
 
-impl Transactional<MockDb> for MockDb {
+impl Transaction<MockDb> for MockDb {
     fn commit(&mut self) -> StorageResult<()> {
         Ok(())
     }

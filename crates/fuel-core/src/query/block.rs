@@ -1,111 +1,80 @@
 use crate::{
-    database::Database,
+    fuel_core_graphql_api::service::DatabaseTemp,
     state::IterDirection,
 };
 use fuel_core_storage::{
-    tables::FuelBlocks,
-    Error as StorageError,
+    not_found,
+    tables::{
+        FuelBlocks,
+        SealedBlockConsensus,
+    },
     Result as StorageResult,
     StorageAsRef,
 };
-use fuel_core_types::{
-    blockchain::{
-        block::CompressedBlock as Block,
-        header::BlockHeader,
-        primitives::BlockHeight,
+use fuel_core_types::blockchain::{
+    block::CompressedBlock,
+    consensus::Consensus,
+    primitives::{
+        BlockHeight,
+        BlockId,
     },
-    fuel_types::Bytes32,
 };
 
-/// Trait that specifies all the data required by the output message query.
-pub trait BlockQueryData {
-    type Item<'a>
-    where
-        Self: 'a;
-    type Iter<'a>: Iterator<Item = Self::Item<'a>>
-    where
-        Self: 'a;
+pub struct BlockQueryContext<'a>(pub &'a DatabaseTemp);
 
-    fn block(
-        &self,
-        id: Bytes32,
-    ) -> std::result::Result<StorageResult<(BlockHeader, Vec<Bytes32>)>, anyhow::Error>;
-
-    fn block_id(&self, height: u64) -> std::result::Result<Bytes32, anyhow::Error>;
-
-    fn blocks(
-        &self,
-        start: Option<usize>,
-        direction: IterDirection,
-    ) -> StorageResult<Self::Iter<'_>>;
-}
-
-pub struct BlockQueryContext<'a>(pub &'a Database);
-
-impl BlockQueryData for BlockQueryContext<'_> {
-    type Item<'a> = StorageResult<(BlockHeight, Block)> where Self: 'a;
-    type Iter<'a> = Box< dyn Iterator<Item = StorageResult<(BlockHeight, Block)>> + 'a> where Self: 'a;
-
-    fn block(
-        &self,
-        id: fuel_core_types::fuel_types::Bytes32,
-    ) -> std::result::Result<
-        StorageResult<(BlockHeader, Vec<fuel_core_types::fuel_types::Bytes32>)>,
-        anyhow::Error,
-    > {
+impl BlockQueryContext<'_> {
+    pub fn block(&self, id: &BlockId) -> StorageResult<CompressedBlock> {
         let db = self.0;
 
         let block = db
+            .as_ref()
             .storage::<FuelBlocks>()
-            .get(&id)?
-            .ok_or_else(|| fuel_core_storage::Error::NotFound("Block Not Found", ""))?
+            .get(id)?
+            .ok_or_else(|| not_found!(FuelBlocks))?
             .into_owned();
 
-        let tx_ids: Vec<fuel_core_types::fuel_types::Bytes32> = block
-            .transactions()
-            .iter()
-            .map(|tx| tx.to_owned())
-            .collect();
-
-        let header = block.header().clone();
-
-        Ok(Ok((header, tx_ids)))
+        Ok(block)
     }
 
-    fn block_id(
-        &self,
-        height: u64,
-    ) -> std::result::Result<fuel_core_types::fuel_types::Bytes32, anyhow::Error> {
-        let db = self.0;
-        let id = db
-            .get_block_id(height.try_into()?)?
-            .ok_or_else(|| fuel_core_storage::Error::NotFound("Block Not Found", ""))?;
-
-        Ok(id)
+    pub fn block_id(&self, height: BlockHeight) -> StorageResult<BlockId> {
+        self.0.block_id(height)
     }
 
-    fn blocks(
+    pub fn latest_block_id(&self) -> StorageResult<BlockId> {
+        self.0.ids_of_latest_block().map(|(_, id)| id)
+    }
+
+    pub fn latest_block_height(&self) -> StorageResult<BlockHeight> {
+        self.0.ids_of_latest_block().map(|(height, _)| height)
+    }
+
+    pub fn latest_block(&self) -> StorageResult<CompressedBlock> {
+        self.latest_block_id().and_then(|id| self.block(&id))
+    }
+
+    pub fn compressed_blocks(
         &self,
-        start: Option<usize>,
+        start: Option<BlockHeight>,
         direction: IterDirection,
-    ) -> StorageResult<Self::Iter<'_>> {
+    ) -> impl Iterator<Item = StorageResult<CompressedBlock>> + '_ {
         let db = self.0;
+        db.blocks_ids(start.map(Into::into), direction)
+            .into_iter()
+            .map(|result| {
+                result.and_then(|(_, id)| {
+                    let block = self.block(&id)?;
 
-        let blocks = db.all_block_ids(start.map(Into::into), Some(direction));
-
-        let blocks = blocks.into_iter().map(|result| {
-            result.map_err(StorageError::from).and_then(|(height, id)| {
-                let block = db
-                    .storage::<FuelBlocks>()
-                    .get(&id)
-                    .transpose()
-                    .ok_or(fuel_core_storage::not_found!(FuelBlocks))??
-                    .into_owned();
-
-                Ok((height, block))
+                    Ok(block)
+                })
             })
-        });
+    }
 
-        Ok(Box::new(blocks))
+    pub fn consensus(&self, id: &BlockId) -> StorageResult<Consensus> {
+        self.0
+            .as_ref()
+            .storage::<SealedBlockConsensus>()
+            .get(id)
+            .map(|c| c.map(|c| c.into_owned()))?
+            .ok_or(not_found!(SealedBlockConsensus))
     }
 }

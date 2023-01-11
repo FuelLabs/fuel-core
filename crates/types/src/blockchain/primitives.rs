@@ -69,6 +69,11 @@ impl BlockId {
         // Without this, the signature would be using a hash of the id making it more
         // difficult to verify.
     }
+
+    /// Represents `BlockId` as slice of bytes.
+    pub fn as_slice(&self) -> &[u8] {
+        self.0.as_slice()
+    }
 }
 
 /// Block height

@@ -7,6 +7,7 @@ use fuel_core_types::blockchain::SealedBlock;
 use std::sync::Arc;
 use tokio::sync::broadcast::Sender;
 
+pub mod graphql_api;
 pub mod poa;
 pub mod producer;
 pub mod txpool;

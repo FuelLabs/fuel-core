@@ -19,6 +19,10 @@ use crate::{
         WriteOperation,
     },
 };
+use fuel_core_storage::iter::{
+    BoxedIter,
+    IntoBoxedIter,
+};
 use itertools::{
     EitherOrBoth,
     Itertools,
@@ -128,11 +132,11 @@ impl KeyValueStore for MemoryTransactionView {
         prefix: Option<Vec<u8>>,
         start: Option<Vec<u8>>,
         direction: IterDirection,
-    ) -> Box<dyn Iterator<Item = DatabaseResult<(Vec<u8>, Vec<u8>)>> + '_> {
+    ) -> BoxedIter<DatabaseResult<(Vec<u8>, Vec<u8>)>> {
         // iterate over inmemory + db while also filtering deleted entries
         let changes = self.changes.clone();
-        Box::new(
-            self.view_layer
+
+        self.view_layer
                 // iter_all returns items in sorted order
                 .iter_all(column, prefix.clone(), start.clone(), direction)
                 // Merge two sorted iterators (our current view overlay + backing data source)
@@ -177,8 +181,7 @@ impl KeyValueStore for MemoryTransactionView {
                         // ensure errors are propagated
                         true
                     }
-                }),
-        )
+                }).into_boxed()
     }
 }
 

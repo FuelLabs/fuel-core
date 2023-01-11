@@ -13,7 +13,7 @@ use test_case::test_case;
 
 struct Input<I>
 where
-    I: Iterator<Item = anyhow::Result<Option<TransactionStatus>>> + Send + 'static,
+    I: Iterator<Item = StorageResult<Option<TransactionStatus>>> + Send + 'static,
 {
     requested_id: Bytes32,
     status_updates: Vec<Result<TxUpdate, BroadcastStreamRecvError>>,
@@ -41,34 +41,34 @@ fn txn_squeezed(tx_id: Bytes32) -> TxUpdate {
 
 fn db_always_some(
     mut f: impl FnMut() -> TransactionStatus,
-) -> impl Iterator<Item = anyhow::Result<Option<TransactionStatus>>> {
+) -> impl Iterator<Item = StorageResult<Option<TransactionStatus>>> {
     std::iter::repeat_with(move || Ok(Some(f())))
 }
 
-fn db_always_none() -> impl Iterator<Item = anyhow::Result<Option<TransactionStatus>>> {
+fn db_always_none() -> impl Iterator<Item = StorageResult<Option<TransactionStatus>>> {
     std::iter::repeat_with(|| Ok(None))
 }
 
 fn db_always_error(
     mut f: impl FnMut() -> anyhow::Error,
-) -> impl Iterator<Item = anyhow::Result<Option<TransactionStatus>>> {
-    std::iter::repeat_with(move || Err(f()))
+) -> impl Iterator<Item = StorageResult<Option<TransactionStatus>>> {
+    std::iter::repeat_with(move || Err(f().into()))
 }
 
 fn db_some(
     f: Vec<TransactionStatus>,
-) -> impl Iterator<Item = anyhow::Result<Option<TransactionStatus>>> {
+) -> impl Iterator<Item = StorageResult<Option<TransactionStatus>>> {
     f.into_iter().map(|t| Ok(Some(t)))
 }
 
-fn db_none(n: usize) -> impl Iterator<Item = anyhow::Result<Option<TransactionStatus>>> {
+fn db_none(n: usize) -> impl Iterator<Item = StorageResult<Option<TransactionStatus>>> {
     (0..n).map(|_| Ok(None))
 }
 
 fn db_error(
     f: Vec<anyhow::Error>,
-) -> impl Iterator<Item = anyhow::Result<Option<TransactionStatus>>> {
-    f.into_iter().map(Err)
+) -> impl Iterator<Item = StorageResult<Option<TransactionStatus>>> {
+    f.into_iter().map(|e| Err(e.into()))
 }
 
 fn submitted() -> TransactionStatus {
@@ -227,7 +227,7 @@ fn squeezed() -> TransactionStatus {
 #[tokio::test]
 async fn create_tx_status_change_stream<I>(input: Input<I>) -> Expected
 where
-    I: Iterator<Item = anyhow::Result<Option<TransactionStatus>>> + Send + 'static,
+    I: Iterator<Item = StorageResult<Option<TransactionStatus>>> + Send + 'static,
 {
     let Input {
         requested_id: transaction_id,
@@ -238,7 +238,6 @@ where
     state
         .expect_get_tx_status()
         .returning(move |_| db_statuses.next().unwrap().map(|t| t.map(|t| t.into())));
-    let state = Box::new(state);
     let ids = status_updates.to_vec();
     let reached_end = Arc::new(AtomicBool::new(false));
     let re = reached_end.clone();

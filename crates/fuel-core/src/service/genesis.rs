@@ -21,7 +21,7 @@ use fuel_core_storage::{
         FuelBlocks,
         Messages,
     },
-    transactional::Transactional,
+    transactional::Transaction,
     MerkleRoot,
     StorageAsMut,
 };
@@ -41,8 +41,8 @@ use fuel_core_types::{
     },
     entities::{
         coin::{
-            Coin,
             CoinStatus,
+            CompressedCoin,
         },
         message::Message,
     },
@@ -130,7 +130,7 @@ fn add_genesis_block(config: &Config, database: &mut Database) -> anyhow::Result
     let block_id = block.id();
     database
         .storage::<FuelBlocks>()
-        .insert(&block_id.into(), &block.compress())?;
+        .insert(&block_id, &block.compress())?;
     database.seal_block(block_id, seal)
 }
 
@@ -166,7 +166,7 @@ fn init_coin_state(
                     }),
                 );
 
-                let mut coin = Coin {
+                let mut coin = CompressedCoin {
                     owner: coin.owner,
                     amount: coin.amount,
                     asset_id: coin.asset_id,
@@ -347,6 +347,7 @@ mod tests {
             BlockHeight,
             DaBlockHeight,
         },
+        entities::coin::Coin,
         fuel_asm::Opcode,
         fuel_types::{
             Address,
@@ -354,7 +355,6 @@ mod tests {
             Salt,
         },
     };
-    use itertools::Itertools;
     use rand::{
         rngs::StdRng,
         Rng,
@@ -408,7 +408,7 @@ mod tests {
 
         assert_eq!(
             test_height,
-            db.get_block_height()
+            db.latest_height()
                 .unwrap()
                 .expect("Expected a block height to be set")
         )
@@ -477,21 +477,19 @@ mod tests {
             .unwrap();
 
         let alice_coins = get_coins(&db, &alice);
-        let bob_coins = get_coins(&db, &bob)
-            .into_iter()
-            .map(|(_, coin)| coin)
-            .collect_vec();
+        let bob_coins = get_coins(&db, &bob);
 
         assert!(matches!(
             alice_coins.as_slice(),
-            &[(utxo_id, Coin {
+            &[Coin {
+                utxo_id,
                 owner,
                 amount,
                 asset_id,
                 block_created,
                 maturity,
                 ..
-            })] if utxo_id == alice_utxo_id
+            }] if utxo_id == alice_utxo_id
             && owner == alice
             && amount == alice_value
             && asset_id == asset_id_alice
@@ -623,7 +621,7 @@ mod tests {
             .unwrap();
 
         let ret = db
-            .storage::<ContractsAssets<'_>>()
+            .storage::<ContractsAssets>()
             .get(&(&id, &test_asset_id))
             .unwrap()
             .expect("Expected a balance to be present")
@@ -632,13 +630,13 @@ mod tests {
         assert_eq!(test_balance, ret)
     }
 
-    fn get_coins(db: &Database, owner: &Address) -> Vec<(UtxoId, Coin)> {
+    fn get_coins(db: &Database, owner: &Address) -> Vec<Coin> {
         db.owned_coins_ids(owner, None, None)
             .map(|r| {
                 let coin_id = r.unwrap();
                 db.storage::<Coins>()
                     .get(&coin_id)
-                    .map(|v| (coin_id, v.unwrap().into_owned()))
+                    .map(|v| v.unwrap().into_owned().uncompress(coin_id))
                     .unwrap()
             })
             .collect()

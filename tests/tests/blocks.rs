@@ -29,7 +29,6 @@ use fuel_core_types::{
         consensus::Consensus,
     },
     fuel_tx::*,
-    fuel_types::Bytes32,
     secrecy::ExposeSecret,
     tai64::Tai64,
 };
@@ -46,11 +45,9 @@ async fn block() {
     let block = CompressedBlock::default();
     let id = block.id();
     let mut db = Database::default();
-    db.storage::<FuelBlocks>()
-        .insert(&id.into(), &block)
-        .unwrap();
+    db.storage::<FuelBlocks>().insert(&id, &block).unwrap();
     db.storage::<SealedBlockConsensus>()
-        .insert(&id.into(), &Consensus::PoA(Default::default()))
+        .insert(&id, &Consensus::PoA(Default::default()))
         .unwrap();
 
     // setup server & client
@@ -89,6 +86,7 @@ async fn get_genesis_block() {
 #[tokio::test]
 async fn produce_block() {
     let config = Config::local_node();
+
     let srv = FuelService::from_database(Database::default(), config.clone())
         .await
         .unwrap();
@@ -222,11 +220,11 @@ async fn produce_block_custom_time() {
 
     assert_eq!(5, new_height);
 
-    assert_eq!(db.block_time(1).unwrap().0, 100);
-    assert_eq!(db.block_time(2).unwrap().0, 110);
-    assert_eq!(db.block_time(3).unwrap().0, 120);
-    assert_eq!(db.block_time(4).unwrap().0, 130);
-    assert_eq!(db.block_time(5).unwrap().0, 140);
+    assert_eq!(db.block_time(1u32.into()).unwrap().0, 100);
+    assert_eq!(db.block_time(2u32.into()).unwrap().0, 110);
+    assert_eq!(db.block_time(3u32.into()).unwrap().0, 120);
+    assert_eq!(db.block_time(4u32.into()).unwrap().0, 130);
+    assert_eq!(db.block_time(5u32.into()).unwrap().0, 140);
 }
 
 #[tokio::test]
@@ -318,11 +316,9 @@ async fn block_connection_5(
     let mut db = Database::default();
     for block in blocks {
         let id = block.id();
-        db.storage::<FuelBlocks>()
-            .insert(&id.into(), &block)
-            .unwrap();
+        db.storage::<FuelBlocks>().insert(&id, &block).unwrap();
         db.storage::<SealedBlockConsensus>()
-            .insert(&id.into(), &Consensus::PoA(Default::default()))
+            .insert(&id, &Consensus::PoA(Default::default()))
             .unwrap();
     }
 

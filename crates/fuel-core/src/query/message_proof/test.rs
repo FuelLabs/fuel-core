@@ -113,29 +113,35 @@ async fn can_build_message_proof() {
     data.expect_transaction_status()
         .with(eq(transaction_id))
         .returning(|_| {
-            Ok(Some(TransactionStatus::Success {
+            Ok(TransactionStatus::Success {
                 block_id: Default::default(),
                 time: Tai64::UNIX_EPOCH,
                 result: None,
-            }))
+            })
         });
     data.expect_transactions_on_block()
         .once()
-        .with(eq(Bytes32::default()))
+        .with(eq(BlockId::default()))
         .returning(|_| Ok(TXNS.to_vec()));
 
     data.expect_transaction().returning(move |txn_id| {
-        Ok(TXNS.iter().find(|t| *t == txn_id).map(|_| {
-            let mut txn = Script::default();
-            txn.outputs_mut().extend(out.get(txn_id).unwrap());
-            txn.into()
-        }))
+        let tx = TXNS
+            .iter()
+            .find(|t| *t == txn_id)
+            .map(|_| {
+                let mut txn = Script::default();
+                txn.outputs_mut().extend(out.get(txn_id).unwrap());
+                txn.into()
+            })
+            .ok_or(not_found!("Transaction in `TXNS`"))?;
+
+        Ok(tx)
     });
 
     data.expect_signature()
         .once()
-        .with(eq(Bytes32::default()))
-        .returning(|_| Ok(Some(Signature::default())));
+        .with(eq(BlockId::default()))
+        .returning(|_| Ok(Signature::default()));
 
     let header = PartialBlockHeader {
         application: ApplicationHeader {
@@ -152,19 +158,18 @@ async fn can_build_message_proof() {
     };
     data.expect_block()
         .once()
-        .with(eq(Bytes32::default()))
+        .with(eq(BlockId::default()))
         .returning({
             let header = header.clone();
             let message_ids = message_ids.clone();
             move |_| {
                 let header = header.clone().generate(&[vec![]], &message_ids);
                 let transactions = TXNS.to_vec();
-                Ok(Some(CompressedBlock::test(header, transactions)))
+                Ok(CompressedBlock::test(header, transactions))
             }
         });
 
     let p = message_proof(&data, transaction_id, message_id)
-        .await
         .unwrap()
         .unwrap();
     assert_eq!(p.message_id(), message_id);

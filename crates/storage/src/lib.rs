@@ -10,8 +10,12 @@
 use fuel_core_types::services::executor::Error as ExecutorError;
 use std::io::ErrorKind;
 
-pub use fuel_vm_private::fuel_storage::*;
+pub use fuel_vm_private::{
+    fuel_storage::*,
+    storage::InterpreterStorage,
+};
 
+pub mod iter;
 pub mod tables;
 pub mod transactional;
 
@@ -88,7 +92,7 @@ mod test {
         #[rustfmt::skip]
         assert_eq!(
             format!("{}", not_found!(Coins)),
-            format!("resource of type `fuel_core_types::entities::coin::Coin` was not found at the: {}:{}", file!(), line!() - 1)
+            format!("resource of type `fuel_core_types::entities::coin::CompressedCoin` was not found at the: {}:{}", file!(), line!() - 1)
         );
     }
 }

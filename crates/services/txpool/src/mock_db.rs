@@ -3,7 +3,10 @@ use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::primitives::BlockHeight,
     entities::{
-        coin::Coin,
+        coin::{
+            Coin,
+            CompressedCoin,
+        },
         message::Message,
     },
     fuel_tx::{
@@ -23,7 +26,7 @@ use std::{
 
 #[derive(Default)]
 pub struct Data {
-    pub coins: HashMap<UtxoId, Coin>,
+    pub coins: HashMap<UtxoId, CompressedCoin>,
     pub contracts: HashMap<ContractId, Contract>,
     pub messages: HashMap<MessageId, Message>,
 }
@@ -34,8 +37,12 @@ pub struct MockDb {
 }
 
 impl MockDb {
-    pub fn insert_coin(&self, id: UtxoId, coin: Coin) {
-        self.data.lock().unwrap().coins.insert(id, coin);
+    pub fn insert_coin(&self, coin: Coin) {
+        self.data
+            .lock()
+            .unwrap()
+            .coins
+            .insert(coin.utxo_id, coin.compress());
     }
 
     pub fn insert_message(&self, message: Message) {
@@ -48,7 +55,7 @@ impl MockDb {
 }
 
 impl TxPoolDb for MockDb {
-    fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<Coin>> {
+    fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>> {
         Ok(self
             .data
             .lock()
