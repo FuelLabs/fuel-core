@@ -177,32 +177,23 @@ where
     P: Middleware<Error = ProviderError> + 'static,
     D: RelayerDb + 'static,
 {
-    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+    async fn run(&mut self, _watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let now = tokio::time::Instant::now();
-        let should_continue;
+        let should_continue = true;
 
-        tokio::select! {
-            // TODO: Pass `watcher` into `Task` to handle graceful shutdown for
-            //  `download_logs`, `wait_if_eth_syncing`, `build_eth` methods.
-            //  Otherwise we could lost the actual state of the synchronization if we stop in
-            //  `download_logs`(before the `set_finalized_da_height`).
-            _ = watcher.while_started() => {
-                should_continue = false;
-                Ok(should_continue)
-            }
-            result = run::run(self) => {
-                // Sleep the loop so the da node is not spammed.
-                tokio::time::sleep(
-                    self.config
-                        .sync_minimum_duration
-                        .saturating_sub(now.elapsed()),
-                )
-                .await;
+        // TODO: Pass `_watcher` into `Task` to handle graceful shutdown for
+        //  `download_logs`, `wait_if_eth_syncing`, `build_eth` methods.
+        //  Otherwise, the shutdown process can take a lot of time.
+        let result = run::run(self).await;
+        // Sleep the loop so the da node is not spammed.
+        tokio::time::sleep(
+            self.config
+                .sync_minimum_duration
+                .saturating_sub(now.elapsed()),
+        )
+        .await;
 
-                should_continue = true;
-                result.map(|_| should_continue)
-            }
-        }
+        result.map(|_| should_continue)
     }
 }
 
