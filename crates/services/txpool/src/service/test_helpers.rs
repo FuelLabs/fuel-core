@@ -34,7 +34,7 @@ pub struct TestContext {
 
 impl TestContext {
     pub async fn new() -> Self {
-        TestContextBuilder::new().build().await
+        TestContextBuilder::new().build_and_start().await
     }
 
     pub fn service(&self) -> &Service<MockP2P, MockDb> {
@@ -162,8 +162,7 @@ impl TestContextBuilder {
     pub fn setup_coin(&mut self) -> (Coin, Input) {
         crate::test_helpers::setup_coin(&mut self.rng, Some(&self.mock_db))
     }
-
-    pub async fn build(self) -> TestContext {
+    pub fn build(self) -> TestContext {
         let rng = RefCell::new(self.rng);
         let config = Config::default();
         let mock_db = self.mock_db;
@@ -175,12 +174,17 @@ impl TestContextBuilder {
             .unwrap_or_else(|| MockImporter::with_blocks(vec![]));
 
         let service = new_service(config, mock_db.clone(), status_tx, importer, p2p);
-        service.start().unwrap();
 
         TestContext {
             service,
             mock_db,
             rng,
         }
+    }
+
+    pub async fn build_and_start(self) -> TestContext {
+        let context = self.build();
+        context.service.start_and_await().await.unwrap();
+        context
     }
 }

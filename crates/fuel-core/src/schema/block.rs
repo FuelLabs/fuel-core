@@ -3,8 +3,13 @@ use super::scalars::{
     Tai64Timestamp,
 };
 use crate::{
-    database::Database,
-    executor::Executor,
+    fuel_core_graphql_api::{
+        service::{
+            Database,
+            Executor,
+        },
+        Config as GraphQLConfig,
+    },
     schema::{
         scalars::{
             BlockId,
@@ -13,7 +18,6 @@ use crate::{
         },
         tx::types::Transaction,
     },
-    service::Config,
     state::IterDirection,
 };
 use anyhow::anyhow;
@@ -332,7 +336,8 @@ impl BlockMutation {
         time: Option<TimeParameters>,
     ) -> async_graphql::Result<U64> {
         let db = ctx.data_unchecked::<Database>();
-        let config = ctx.data_unchecked::<Config>().clone();
+        let executor = ctx.data_unchecked::<Executor>().clone();
+        let config = ctx.data_unchecked::<GraphQLConfig>().clone();
 
         if !config.manual_blocks_enabled {
             return Err(
@@ -340,11 +345,6 @@ impl BlockMutation {
             )
         }
         // todo!("trigger block production manually");
-
-        let executor = Executor {
-            database: db.clone(),
-            config: config.clone(),
-        };
 
         let block_time = get_time_closure(db, time, blocks_to_produce.0)?;
 

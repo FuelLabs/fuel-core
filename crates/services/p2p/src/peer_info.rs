@@ -4,7 +4,6 @@ use libp2p::{
         connection::ConnectionId,
         either::EitherOutput,
         ConnectedPoint,
-        PublicKey,
     },
     identify::{
         Behaviour as Identify,
@@ -91,10 +90,10 @@ pub struct PeerInfoBehaviour {
 }
 
 impl PeerInfoBehaviour {
-    pub fn new(local_public_key: PublicKey, config: &Config) -> Self {
+    pub fn new(config: &Config) -> Self {
         let identify = {
             let identify_config =
-                IdentifyConfig::new("/fuel/1.0".to_string(), local_public_key);
+                IdentifyConfig::new("/fuel/1.0".to_string(), config.keypair.public());
             if let Some(interval) = config.identify_interval {
                 Identify::new(identify_config.with_interval(interval))
             } else {

@@ -4,7 +4,10 @@ use super::{
     receipt::Receipt,
 };
 use crate::{
-    database::Database,
+    fuel_core_graphql_api::service::{
+        Database,
+        TxPool,
+    },
     schema::{
         block::Block,
         contract::Contract,
@@ -19,7 +22,6 @@ use crate::{
             U64,
         },
     },
-    service::modules::TxPoolService,
 };
 use async_graphql::{
     Context,
@@ -405,7 +407,7 @@ impl Transaction {
     ) -> async_graphql::Result<Option<TransactionStatus>> {
         let id = self.0.id();
         let db = ctx.data_unchecked::<Database>();
-        let txpool = ctx.data_unchecked::<TxPoolService>();
+        let txpool = ctx.data_unchecked::<TxPool>();
         get_tx_status(id, db, txpool).await
     }
 
@@ -498,7 +500,7 @@ impl Transaction {
 pub(super) async fn get_tx_status(
     id: fuel_core_types::fuel_types::Bytes32,
     db: &Database,
-    txpool: &TxPoolService,
+    txpool: &TxPool,
 ) -> async_graphql::Result<Option<TransactionStatus>> {
     match db.get_tx_status(&id)? {
         Some(status) => Ok(Some(status.into())),
