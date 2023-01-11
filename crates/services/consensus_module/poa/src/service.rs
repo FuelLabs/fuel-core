@@ -341,7 +341,7 @@ where
     T: TransactionPool,
     B: BlockProducer<D>,
 {
-    async fn run(&mut self) -> anyhow::Result<bool> {
+    async fn run(&mut self, state_watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         self.process_next_event().await
     }
 }

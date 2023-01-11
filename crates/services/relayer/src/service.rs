@@ -177,7 +177,7 @@ where
     P: Middleware<Error = ProviderError> + 'static,
     D: RelayerDb + 'static,
 {
-    async fn run(&mut self) -> anyhow::Result<bool> {
+    async fn run(&mut self, state_watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let now = tokio::time::Instant::now();
         let result = run::run(self).await;
 

@@ -64,7 +64,7 @@ pub trait RunnableService: Send {
     ///
     /// The `state` is a `State` watcher of the service. Some tasks may handle state changes
     /// on their own.
-    async fn into_task(self, state: &StateWatcher) -> anyhow::Result<Self::Task>;
+    async fn into_task(self, state_watcher: &StateWatcher) -> anyhow::Result<Self::Task>;
 }
 
 /// The trait is implemented by the service task and contains a single iteration of the infinity
@@ -75,7 +75,7 @@ pub trait RunnableTask: Send {
     /// the service either returns false, panics or a stop signal is received.
     /// If the service returns an error, it will be logged and execution will resume.
     /// This is intended to be called only by the `ServiceRunner`.
-    async fn run(&mut self) -> anyhow::Result<bool>;
+    async fn run(&mut self, state: &mut StateWatcher) -> anyhow::Result<bool>;
 }
 
 /// The lifecycle state of the service
@@ -306,28 +306,16 @@ where
             return
         }
 
-        loop {
-            tokio::select! {
-                biased;
-
-                _ = state.changed() => {
-                    if !state.borrow_and_update().started() {
+        while state.borrow_and_update().started() {
+            match task.run(&mut state).await {
+                Ok(should_continue) => {
+                    if !should_continue {
                         return
                     }
                 }
-
-                result = task.run() => {
-                    match result {
-                        Ok(should_continue) => {
-                            if !should_continue {
-                                return
-                            }
-                        }
-                        Err(e) => {
-                            let e: &dyn std::error::Error = &*e;
-                            tracing::error!(e);
-                        }
-                    }
+                Err(e) => {
+                    let e: &dyn std::error::Error = &*e;
+                    tracing::error!(e);
                 }
             }
         }
@@ -361,9 +349,10 @@ mod tests {
 
         #[async_trait::async_trait]
         impl RunnableTask for Task {
-            fn run<'_self, 'a>(&'_self mut self) -> BoxFuture<'a, anyhow::Result<bool>>
+            fn run<'_self, '_state, 'a>(&'_self mut self, state: &'_state mut watch::Receiver<State>) -> BoxFuture<'a, anyhow::Result<bool>>
             where
                 '_self: 'a,
+                '_state: 'a,
                 Self: Sync + 'a;
         }
     }
@@ -375,7 +364,7 @@ mod tests {
             mock.expect_into_task().returning(|_| {
                 let mut mock = MockTask::default();
                 mock.expect_run()
-                    .returning(|| Box::pin(core::future::pending()));
+                    .returning(|_| Box::pin(core::future::pending()));
                 Ok(mock)
             });
             mock
@@ -417,7 +406,7 @@ mod tests {
         mock.expect_shared_data().returning(|| EmptyShared);
         mock.expect_into_task().returning(|_| {
             let mut mock = MockTask::default();
-            mock.expect_run().returning(|| panic!("Should fail"));
+            mock.expect_run().returning(|_| panic!("Should fail"));
             Ok(mock)
         });
         let service = ServiceRunner::new(mock);

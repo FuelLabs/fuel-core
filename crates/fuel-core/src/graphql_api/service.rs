@@ -130,7 +130,7 @@ impl RunnableService for NotInitializedTask {
 
 #[async_trait::async_trait]
 impl RunnableTask for Task {
-    async fn run(&mut self) -> anyhow::Result<bool> {
+    async fn run(&mut self, state_watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         self.server.as_mut().await?;
         // The `axum::Server` has its internal loop. If `await` is finished, we get an internal
         // error or stop signal.

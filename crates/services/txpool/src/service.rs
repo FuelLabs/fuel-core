@@ -129,7 +129,7 @@ where
     P2P: Send + Sync,
     DB: TxPoolDb,
 {
-    async fn run(&mut self) -> anyhow::Result<bool> {
+    async fn run(&mut self, state_watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
         tokio::select! {
             new_transaction = self.gossiped_tx_stream.next() => {

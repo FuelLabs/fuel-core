@@ -208,7 +208,7 @@ impl RunnableService for Task {
 
 #[async_trait::async_trait]
 impl RunnableTask for Task {
-    async fn run(&mut self) -> anyhow::Result<bool> {
+    async fn run(&mut self, state_watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let mut stop_signals = vec![];
         for service in &self.services {
             stop_signals.push(service.await_stop())
@@ -289,7 +289,7 @@ mod tests {
         let mut i = 0;
         loop {
             let task = Task::new(Default::default(), Config::local_node()).unwrap();
-            let (_, receiver) = tokio::sync::watch::channel(State::NotStarted);
+            let (_, mut receiver) = tokio::sync::watch::channel(State::NotStarted);
             let mut task = task.into_task(&receiver).await.unwrap();
             sleep(Duration::from_secs(1));
             for service in task.sub_services() {
@@ -298,7 +298,7 @@ mod tests {
 
             if i < task.sub_services().len() {
                 task.sub_services()[i].stop_and_await().await.unwrap();
-                assert!(!task.run().await.unwrap());
+                assert!(!task.run(&mut receiver).await.unwrap());
 
                 for service in task.sub_services() {
                     // Check that the state is `Stopped`(not `StoppedWithError`)

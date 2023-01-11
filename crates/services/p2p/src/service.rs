@@ -135,7 +135,7 @@ impl<D> RunnableTask for Task<D>
 where
     D: P2pDb + 'static,
 {
-    async fn run(&mut self) -> anyhow::Result<bool> {
+    async fn run(&mut self, state_watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         tokio::select! {
             // TODO: Maybe we want to use `biased;` to first process requests asked by us.
             next_service_request = self.request_receiver.recv() => {
