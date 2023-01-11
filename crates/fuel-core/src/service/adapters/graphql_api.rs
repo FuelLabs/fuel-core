@@ -66,7 +66,7 @@ impl DatabaseBlocks for Database {
         Ok(self
             .ids_of_latest_block()
             .transpose()
-            .ok_or(not_found!("BlockIds"))??)
+            .ok_or(not_found!("BlockId"))??)
     }
 }
 
