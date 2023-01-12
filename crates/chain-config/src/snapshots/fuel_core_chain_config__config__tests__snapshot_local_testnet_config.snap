@@ -53,5 +53,122 @@ expression: json
     "gas_price_factor": 1000000000,
     "gas_per_byte": 4,
     "max_message_data_length": 1048576
+  },
+  "gas_costs": {
+    "add": 1,
+    "addi": 1,
+    "aloc": 1,
+    "and": 1,
+    "andi": 1,
+    "bal": 155,
+    "bhei": 1,
+    "bhsh": 1,
+    "burn": 35,
+    "cb": 2,
+    "cfei": 1,
+    "cfsi": 1,
+    "croo": 163,
+    "div": 1,
+    "divi": 1,
+    "ecr": 1601,
+    "eq": 1,
+    "exp": 1,
+    "expi": 1,
+    "flag": 1,
+    "gm": 1,
+    "gt": 1,
+    "gtf": 1,
+    "ji": 1,
+    "jmp": 1,
+    "jne": 1,
+    "jnei": 1,
+    "jnzi": 1,
+    "k256": 18,
+    "lb": 1,
+    "log": 40,
+    "lt": 1,
+    "lw": 1,
+    "mcpi": 3,
+    "mint": 34,
+    "mlog": 1,
+    "mod": 1,
+    "modi": 1,
+    "move": 1,
+    "movi": 1,
+    "mroo": 2,
+    "mul": 1,
+    "muli": 1,
+    "noop": 1,
+    "not": 1,
+    "or": 1,
+    "ori": 1,
+    "ret_contract": 61,
+    "rvrt_contract": 62,
+    "s256": 5,
+    "sb": 1,
+    "scwq": 10,
+    "sll": 1,
+    "slli": 1,
+    "srl": 1,
+    "srli": 1,
+    "srw": 160,
+    "sub": 1,
+    "subi": 1,
+    "sw": 1,
+    "sww": 80,
+    "swwq": 69,
+    "time": 1,
+    "tr": 113,
+    "tro": 94,
+    "xor": 1,
+    "xori": 1,
+    "call": {
+      "base": 311,
+      "dep_per_unit": 14
+    },
+    "ccp": {
+      "base": 155,
+      "dep_per_unit": 15
+    },
+    "csiz": {
+      "base": 148,
+      "dep_per_unit": 16
+    },
+    "ldc": {
+      "base": 156,
+      "dep_per_unit": 14
+    },
+    "logd": {
+      "base": 47,
+      "dep_per_unit": 21
+    },
+    "mcl": {
+      "base": 1,
+      "dep_per_unit": 2539
+    },
+    "mcli": {
+      "base": 1,
+      "dep_per_unit": 2610
+    },
+    "mcp": {
+      "base": 1,
+      "dep_per_unit": 1377
+    },
+    "meq": {
+      "base": 1,
+      "dep_per_unit": 2802
+    },
+    "retd_contract": {
+      "base": 64,
+      "dep_per_unit": 21
+    },
+    "smo": {
+      "base": 79,
+      "dep_per_unit": 14
+    },
+    "srwq": {
+      "base": 424,
+      "dep_per_unit": 6
+    }
   }
 }

@@ -2250,7 +2250,7 @@ checksum = "2022715d62ab30faffd124d40b76f4134a550a87792276512b18d63272333394"
 [[package]]
 name = "fuel-asm"
 version = "0.24.0"
-source = "git+https://github.com/FuelLabs/fuel-vm#c663a278e86ba0a8ba89792f889d5abc7b00c7c3"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/object-safe-vm-storage#ddd98298e4886b04bbb13be26ae4fd73ca7aac2d"
 dependencies = [
  "fuel-types",
  "serde",
@@ -2431,7 +2431,7 @@ name = "fuel-core-keygen"
 version = "0.15.1"
 dependencies = [
  "anyhow",
- "clap",
+ "clap 3.2.23",
  "fuel-core-types",
  "serde_json",
 ]
@@ -2643,7 +2643,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.24.0"
-source = "git+https://github.com/FuelLabs/fuel-vm#c663a278e86ba0a8ba89792f889d5abc7b00c7c3"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/object-safe-vm-storage#ddd98298e4886b04bbb13be26ae4fd73ca7aac2d"
 dependencies = [
  "borrown",
  "coins-bip32",
@@ -2681,12 +2681,12 @@ checksum = "b0f895423d18472d60eb078cf949608ff3fe6e42e91d41b85993b11528d2c4c3"
 [[package]]
 name = "fuel-storage"
 version = "0.24.0"
-source = "git+https://github.com/FuelLabs/fuel-vm#c663a278e86ba0a8ba89792f889d5abc7b00c7c3"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/object-safe-vm-storage#ddd98298e4886b04bbb13be26ae4fd73ca7aac2d"
 
 [[package]]
 name = "fuel-tx"
 version = "0.24.0"
-source = "git+https://github.com/FuelLabs/fuel-vm#c663a278e86ba0a8ba89792f889d5abc7b00c7c3"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/object-safe-vm-storage#ddd98298e4886b04bbb13be26ae4fd73ca7aac2d"
 dependencies = [
  "bitflags",
  "derivative",
@@ -2704,7 +2704,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.24.0"
-source = "git+https://github.com/FuelLabs/fuel-vm#c663a278e86ba0a8ba89792f889d5abc7b00c7c3"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/object-safe-vm-storage#ddd98298e4886b04bbb13be26ae4fd73ca7aac2d"
 dependencies = [
  "rand 0.8.5",
  "serde",
@@ -2713,7 +2713,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.24.0"
-source = "git+https://github.com/FuelLabs/fuel-vm#c663a278e86ba0a8ba89792f889d5abc7b00c7c3"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/object-safe-vm-storage#ddd98298e4886b04bbb13be26ae4fd73ca7aac2d"
 dependencies = [
  "anyhow",
  "fuel-asm",
@@ -2729,6 +2729,7 @@ dependencies = [
  "tai64",
  "thiserror",
  "tracing",
+ "tuples",
 ]
 
 [[package]]
@@ -6714,6 +6715,12 @@ dependencies = [
  "utf-8",
  "webpki 0.22.0",
 ]
+
+[[package]]
+name = "tuples"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "446791a5e330a0dc5939f32eba8704c39b39e6f308740e666e4217bf4f50c3f0"
 
 [[package]]
 name = "turn"

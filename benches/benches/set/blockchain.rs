@@ -28,7 +28,7 @@ use rand::{
 pub fn run(c: &mut Criterion) {
     let rng = &mut StdRng::seed_from_u64(2322u64);
 
-    let mut linear = vec![1, 10, 100, 1000, 10_000];
+    let mut linear: Vec<u64> = vec![1, 10, 100, 1000, 10_000];
     let mut l = successors(Some(100_000.0f64), |n| Some(n / 1.5))
         .take(5)
         .map(|f| f as u64)
@@ -464,7 +464,7 @@ pub fn run(c: &mut Criterion) {
     for i in linear.clone() {
         let mut key = Bytes32::zeroed();
 
-        key.as_mut()[..8].copy_from_slice(&(i as u64).to_be_bytes());
+        key.as_mut()[..8].copy_from_slice(&i.to_be_bytes());
         let data = key.iter().copied().collect::<Vec<_>>();
 
         let post_call = vec![

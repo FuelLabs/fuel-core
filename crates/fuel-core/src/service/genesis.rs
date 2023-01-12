@@ -623,7 +623,7 @@ mod tests {
             .unwrap();
 
         let ret = db
-            .storage::<ContractsAssets<'_>>()
+            .storage::<ContractsAssets>()
             .get(&(&id, &test_asset_id))
             .unwrap()
             .expect("Expected a balance to be present")

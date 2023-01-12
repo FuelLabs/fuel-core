@@ -656,25 +656,25 @@ mod tests {
         assert!(state.ids.contains_key("mcpi/10000"));
     }
 
-    #[test]
-    fn to_yaml() {
-        let input =
-            std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/test.json"))
-                .unwrap();
-
-        let mut state = State {
-            all: true,
-            baseline: "noop/noop".into(),
-            ids: Default::default(),
-            throughput: Default::default(),
-            groups: Default::default(),
-        };
-        for line in input.lines() {
-            extract_state(line, &mut state, true);
-        }
-
-        eprintln!("{}", serde_yaml::to_string(&state.to_yaml()).unwrap());
-    }
+    // #[test]
+    // fn to_yaml() {
+    //     let input =
+    //         std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/test.json"))
+    //             .unwrap();
+    //
+    //     let mut state = State {
+    //         all: true,
+    //         baseline: "noop/noop".into(),
+    //         ids: Default::default(),
+    //         throughput: Default::default(),
+    //         groups: Default::default(),
+    //     };
+    //     for line in input.lines() {
+    //         extract_state(line, &mut state, true);
+    //     }
+    //
+    //     eprintln!("{}", serde_yaml::to_string(&state.to_yaml()).unwrap());
+    // }
 
     #[test]
     fn serialize_gas_costs() {
@@ -714,7 +714,7 @@ mod tests {
             env!("CARGO_MANIFEST_DIR"),
             "/benches-outputs/Cargo.toml"
         ));
-        std::fs::write(&path, state.to_rust_code()).unwrap();
+        std::fs::write(path, state.to_rust_code()).unwrap();
         let output = std::process::Command::new("cargo")
             .arg("check")
             .arg("--manifest-path")
