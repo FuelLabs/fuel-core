@@ -14,7 +14,7 @@ use futures::{
 };
 use tokio::sync::Notify;
 
-use crate::State;
+use crate::state::State;
 
 #[cfg(test)]
 mod tests;
@@ -38,17 +38,7 @@ async fn sync(
 ) {
     height_stream
         .for_each(|h| {
-            let state_change = state.apply(|s| match s.best_seen_height.as_mut() {
-                Some(b) => {
-                    let s = h > *b;
-                    *b = h.max(*b);
-                    s
-                }
-                None => {
-                    s.best_seen_height = Some(h);
-                    true
-                }
-            });
+            let state_change = state.apply(|s| s.see(*h));
             if state_change {
                 notify.notify_one();
             }

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     import::Params,
     ports,
-    State,
+    state::State,
 };
 
 use super::{
@@ -26,6 +26,9 @@ use tokio::{
     sync::Notify,
     task::JoinHandle,
 };
+
+#[cfg(test)]
+mod tests;
 
 pub struct TaskSetup<P, E> {
     height_stream: BoxStream<'static, BlockHeight>,

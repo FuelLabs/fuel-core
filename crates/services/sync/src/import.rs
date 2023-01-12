@@ -27,7 +27,7 @@ use crate::{
         Executor,
         PeerToPeer,
     },
-    State,
+    state::State,
 };
 
 #[cfg(test)]
@@ -49,27 +49,9 @@ pub(super) async fn import(
 ) {
     loop {
         if let Some(range) = state.apply(|s| {
-            match (s.in_flight_height.as_mut(), s.best_seen_height.as_mut()) {
-                (Some(in_flight), Some(best)) if !in_flight.is_empty() => {
-                    in_flight.end = *best;
-                    Some(in_flight.start..=*best)
-                }
-                (Some(in_flight), None) if !in_flight.is_empty() => {
-                    Some(in_flight.start..=in_flight.end)
-                }
-                (Some(in_flight), Some(best)) if *best > in_flight.end => {
-                    in_flight.start = in_flight.end + 1u32.into();
-                    in_flight.end = *best;
-                    Some(in_flight.start..=in_flight.end)
-                }
-                (None, Some(best)) => {
-                    s.in_flight_height = Some(0u32.into()..*best);
-                    Some(0u32.into()..=*best)
-                }
-                _ => None,
-            }
+            s.process();
+            s.process_range()
         }) {
-            let range = (**range.start())..=(**range.end());
             get_header_range_buffered(range, params, p2p.clone())
                 .map(|header| {
                     let SourcePeer {
@@ -105,13 +87,12 @@ pub(super) async fn import(
                 })
                 .for_each(|block| {
                     let state = state.clone();
-                    let height = *block.entity.header().height();
                     let executor = executor.clone();
                     async move {
                         match executor.execute_and_commit(block).await {
                             Ok(_) => {
                                 state.apply(|s| {
-                                    s.in_flight_height.as_mut().unwrap().start = height;
+                                    s.execute_and_commit();
                                 });
                             }
                             Err(_) => todo!(),
