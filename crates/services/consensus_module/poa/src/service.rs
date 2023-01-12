@@ -273,33 +273,6 @@ where
             }
         }
     }
-
-    /// Processes the next incoming event. Called by the main event loop.
-    /// Returns Ok(false) if the event loop should stop.
-    async fn process_next_event(&mut self) -> anyhow::Result<bool> {
-        let should_continue;
-        tokio::select! {
-            // TODO: This should likely be refactored to use something like tokio::sync::Notify.
-            //       Otherwise, if a bunch of txs are submitted at once and all the txs are included
-            //       into the first block production trigger, we'll still call the event handler
-            //       for each tx after they've already been included into a block.
-            //       The poa service also doesn't care about events unrelated to new tx submissions,
-            //       and shouldn't be awoken when txs are completed or squeezed out of the pool.
-            txpool_event = self.tx_status_update_stream.next() => {
-                if let Some(txpool_event) = txpool_event {
-                    self.on_txpool_event(txpool_event).await.context("While processing txpool event")?;
-                    should_continue = true;
-                } else {
-                    should_continue = false;
-                }
-            }
-            at = self.timer.wait() => {
-                self.on_timer(at).await.context("While processing timer event")?;
-                should_continue = true;
-            }
-        }
-        Ok(should_continue)
-    }
 }
 
 #[async_trait::async_trait]
@@ -341,8 +314,32 @@ where
     T: TransactionPool,
     B: BlockProducer<D>,
 {
-    async fn run(&mut self) -> anyhow::Result<bool> {
-        self.process_next_event().await
+    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+        let should_continue;
+        tokio::select! {
+            _ = watcher.while_started() => {
+                should_continue = false;
+            }
+            // TODO: This should likely be refactored to use something like tokio::sync::Notify.
+            //       Otherwise, if a bunch of txs are submitted at once and all the txs are included
+            //       into the first block production trigger, we'll still call the event handler
+            //       for each tx after they've already been included into a block.
+            //       The poa service also doesn't care about events unrelated to new tx submissions,
+            //       and shouldn't be awoken when txs are completed or squeezed out of the pool.
+            txpool_event = self.tx_status_update_stream.next() => {
+                if let Some(txpool_event) = txpool_event {
+                    self.on_txpool_event(txpool_event).await.context("While processing txpool event")?;
+                    should_continue = true;
+                } else {
+                    should_continue = false;
+                }
+            }
+            at = self.timer.wait() => {
+                self.on_timer(at).await.context("While processing timer event")?;
+                should_continue = true;
+            }
+        }
+        Ok(should_continue)
     }
 }
 

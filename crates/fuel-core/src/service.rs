@@ -208,12 +208,13 @@ impl RunnableService for Task {
 
 #[async_trait::async_trait]
 impl RunnableTask for Task {
-    async fn run(&mut self) -> anyhow::Result<bool> {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let mut stop_signals = vec![];
         for service in &self.services {
             stop_signals.push(service.await_stop())
         }
         stop_signals.push(Box::pin(shutdown_signal()));
+        stop_signals.push(Box::pin(watcher.while_started()));
 
         let (result, _, _) = futures::future::select_all(stop_signals).await;
 
@@ -290,7 +291,8 @@ mod tests {
         loop {
             let task = Task::new(Default::default(), Config::local_node()).unwrap();
             let (_, receiver) = tokio::sync::watch::channel(State::NotStarted);
-            let mut task = task.into_task(&receiver).await.unwrap();
+            let mut watcher = receiver.into();
+            let mut task = task.into_task(&watcher).await.unwrap();
             sleep(Duration::from_secs(1));
             for service in task.sub_services() {
                 assert_eq!(service.state(), State::Started);
@@ -298,7 +300,7 @@ mod tests {
 
             if i < task.sub_services().len() {
                 task.sub_services()[i].stop_and_await().await.unwrap();
-                assert!(!task.run().await.unwrap());
+                assert!(!task.run(&mut watcher).await.unwrap());
 
                 for service in task.sub_services() {
                     // Check that the state is `Stopped`(not `StoppedWithError`)

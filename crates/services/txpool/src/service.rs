@@ -129,9 +129,12 @@ where
     P2P: Send + Sync,
     DB: TxPoolDb,
 {
-    async fn run(&mut self) -> anyhow::Result<bool> {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
         tokio::select! {
+            _ = watcher.while_started() => {
+                should_continue = false;
+            }
             new_transaction = self.gossiped_tx_stream.next() => {
                 if let Some(GossipData { data: Some(tx), .. }) = new_transaction {
                     let txs = vec!(Arc::new(tx));
