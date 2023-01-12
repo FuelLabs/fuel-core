@@ -656,7 +656,6 @@ mod tests {
         assert!(state.ids.contains_key("mcpi/10000"));
     }
 
-
     #[test]
     fn serialize_gas_costs() {
         let input = r#"
