@@ -4,6 +4,7 @@ members = [
   "benches",
   "bin/fuel-core",
   "bin/fuel-core-client",
+  "bin/fuel-core-keygen",
   "crates/chain-config",
   "crates/client",
   "crates/database",

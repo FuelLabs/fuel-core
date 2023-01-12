@@ -113,13 +113,10 @@ impl RunnableService for NotInitializedTask {
             .unwrap()
             .serve(self.router.into_make_service())
             .with_graceful_shutdown(async move {
-                loop {
-                    state.changed().await.expect("The service is destroyed");
-
-                    if !state.borrow().started() {
-                        return
-                    }
-                }
+                state
+                    .while_started()
+                    .await
+                    .expect("The service is destroyed");
             });
 
         Ok(Task {
@@ -130,7 +127,7 @@ impl RunnableService for NotInitializedTask {
 
 #[async_trait::async_trait]
 impl RunnableTask for Task {
-    async fn run(&mut self) -> anyhow::Result<bool> {
+    async fn run(&mut self, _: &mut StateWatcher) -> anyhow::Result<bool> {
         self.server.as_mut().await?;
         // The `axum::Server` has its internal loop. If `await` is finished, we get an internal
         // error or stop signal.
