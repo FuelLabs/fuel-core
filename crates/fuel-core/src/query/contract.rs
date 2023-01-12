@@ -1,5 +1,5 @@
 use crate::{
-    graphql_api::service::DatabaseTemp,
+    graphql_api::service::Database,
     state::IterDirection,
 };
 use fuel_core_storage::{
@@ -21,7 +21,7 @@ use fuel_core_types::{
     services::graphql_api::ContractBalance,
 };
 
-pub struct ContractQueryContext<'a>(pub &'a DatabaseTemp);
+pub struct ContractQueryContext<'a>(pub &'a Database);
 
 impl ContractQueryContext<'_> {
     pub fn contract_id(&self, id: ContractId) -> StorageResult<ContractId> {

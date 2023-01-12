@@ -2,9 +2,8 @@ use crate::{
     fuel_core_graphql_api::ports::DatabasePort,
     graphql_api::Config,
     schema::{
-        build_schema,
-        dap,
         CoreSchema,
+        CoreSchemaBuilder,
     },
     service::metrics::metrics,
 };
@@ -67,11 +66,7 @@ use tower_http::{
 
 pub type Service = fuel_core_services::ServiceRunner<NotInitializedTask>;
 
-// TODO: When the port of DB will exist we need to replace it with `Box<dyn DatabasePort>
-pub type Database = crate::database::Database;
-// TODO: When all ports will be ready, we need to remove `Database`(and related code)
-//  and rename `DatabaseTemp` into `Database`
-pub type DatabaseTemp = Box<dyn DatabasePort>;
+pub type Database = Box<dyn DatabasePort>;
 // TODO: When the port for `Executor` will exist we need to replace it with `Box<dyn ExecutorPort>
 pub type Executor = crate::service::adapters::ExecutorAdapter;
 // TODO: When the port of BlockProducer will exist we need to replace it with
@@ -145,21 +140,20 @@ impl RunnableTask for Task {
 pub fn new_service(
     config: Config,
     database: Database,
+    schema: CoreSchemaBuilder,
     producer: BlockProducer,
     txpool: TxPool,
     executor: Executor,
 ) -> anyhow::Result<Service> {
-    let database_temp: DatabaseTemp = Box::new(database.clone());
     let network_addr = config.addr;
-    let params = config.transaction_parameters;
-    let schema = build_schema()
+    let schema = schema
         .data(config)
         .data(database)
-        .data(database_temp)
         .data(producer)
         .data(txpool)
-        .data(executor);
-    let schema = dap::init(schema, params).extension(Tracing).finish();
+        .data(executor)
+        .extension(Tracing)
+        .finish();
 
     let router = Router::new()
         .route("/playground", get(graphql_playground))

@@ -1,5 +1,5 @@
 use crate::{
-    fuel_core_graphql_api::service::DatabaseTemp,
+    fuel_core_graphql_api::service::Database,
     query::asset_query::{
         AssetQuery,
         AssetSpendTarget,
@@ -92,7 +92,7 @@ impl SpendQuery {
     }
 
     /// Return [`AssetQuery`]s.
-    pub fn asset_queries<'a>(&'a self, db: &'a DatabaseTemp) -> Vec<AssetQuery<'a>> {
+    pub fn asset_queries<'a>(&'a self, db: &'a Database) -> Vec<AssetQuery<'a>> {
         self.query_per_asset
             .iter()
             .map(|asset| AssetQuery::new(&self.owner, asset, Some(&self.exclude), db))
@@ -148,7 +148,7 @@ pub fn largest_first(query: &AssetQuery) -> Result<Vec<Resource>, ResourceQueryE
 
 // An implementation of the method described on: https://iohk.io/en/blog/posts/2018/07/03/self-organisation-in-coin-selection/
 pub fn random_improve(
-    db: &DatabaseTemp,
+    db: &Database,
     spend_query: &SpendQuery,
 ) -> Result<Vec<Vec<Resource>>, ResourceQueryError> {
     let mut resources_per_asset = vec![];
@@ -207,10 +207,20 @@ impl From<StorageError> for ResourceQueryError {
 #[cfg(test)]
 mod tests {
     use crate::{
-        database::Database,
+        fuel_core_graphql_api::service::Database,
         query::{
+            asset_query::{
+                AssetQuery,
+                AssetSpendTarget,
+            },
             CoinQueryContext,
             MessageQueryContext,
+        },
+        resource_query::{
+            largest_first,
+            random_improve,
+            ResourceQueryError,
+            SpendQuery,
         },
         state::IterDirection,
     };
@@ -236,8 +246,7 @@ mod tests {
         fuel_tx::*,
     };
     use itertools::Itertools;
-
-    use super::*;
+    use std::cmp::Reverse;
 
     fn setup_coins() -> (Address, [AssetId; 2], TestDatabase) {
         let owner = Address::default();
@@ -287,7 +296,7 @@ mod tests {
         fn query(
             spend_query: &[AssetSpendTarget],
             owner: &Address,
-            db: &DatabaseTemp,
+            db: &Database,
         ) -> Result<Vec<Vec<(AssetId, Word)>>, ResourceQueryError> {
             let result: Vec<_> = spend_query
                 .iter()
@@ -432,7 +441,7 @@ mod tests {
             query_per_asset: Vec<AssetSpendTarget>,
             owner: Address,
             asset_ids: &[AssetId],
-            db: &DatabaseTemp,
+            db: &Database,
         ) -> Result<Vec<(AssetId, u64)>, ResourceQueryError> {
             let coins =
                 random_improve(db, &SpendQuery::new(owner, &query_per_asset, None)?);
@@ -592,6 +601,7 @@ mod tests {
 
     mod exclusion {
         use super::*;
+        use fuel_core_types::entities::resource::ResourceId;
 
         fn exclusion_assert(
             owner: Address,
@@ -822,7 +832,7 @@ mod tests {
     }
 
     pub struct TestDatabase {
-        database: DatabaseTemp,
+        database: Database,
         last_coin_index: u64,
         last_message_index: u64,
     }
@@ -830,7 +840,7 @@ mod tests {
     impl TestDatabase {
         pub fn new() -> Self {
             Self {
-                database: Box::<Database>::default(),
+                database: Box::<crate::database::Database>::default(),
                 last_coin_index: Default::default(),
                 last_message_index: Default::default(),
             }
@@ -902,8 +912,8 @@ mod tests {
         }
     }
 
-    impl AsRef<DatabaseTemp> for TestDatabase {
-        fn as_ref(&self) -> &DatabaseTemp {
+    impl AsRef<Database> for TestDatabase {
+        fn as_ref(&self) -> &Database {
             &self.database
         }
     }

@@ -1,5 +1,5 @@
 use crate::{
-    fuel_core_graphql_api::service::DatabaseTemp,
+    fuel_core_graphql_api::service::Database,
     state::IterDirection,
 };
 use fuel_core_storage::{
@@ -20,7 +20,7 @@ use fuel_core_types::blockchain::{
     },
 };
 
-pub struct BlockQueryContext<'a>(pub &'a DatabaseTemp);
+pub struct BlockQueryContext<'a>(pub &'a Database);
 
 impl BlockQueryContext<'_> {
     pub fn block(&self, id: &BlockId) -> StorageResult<CompressedBlock> {
