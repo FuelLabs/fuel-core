@@ -2355,6 +2355,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-keygen"
+version = "0.15.1"
+dependencies = [
+ "anyhow",
+ "clap",
+ "fuel-core-types",
+ "serde_json",
+]
+
+[[package]]
 name = "fuel-core-metrics"
 version = "0.15.1"
 dependencies = [
