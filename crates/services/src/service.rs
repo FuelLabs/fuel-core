@@ -1,3 +1,7 @@
+use crate::state::{
+    State,
+    StateWatcher,
+};
 use anyhow::anyhow;
 use tokio::{
     sync::watch,
@@ -6,8 +10,6 @@ use tokio::{
 
 /// Alias for Arc<T>
 pub type Shared<T> = std::sync::Arc<T>;
-/// The alias for `State` watcher to re-export `watch::Receiver`.
-pub type StateWatcher = watch::Receiver<State>;
 
 /// Used if services have no asynchronously shared data
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,7 +66,7 @@ pub trait RunnableService: Send {
     ///
     /// The `state` is a `State` watcher of the service. Some tasks may handle state changes
     /// on their own.
-    async fn into_task(self, state: &StateWatcher) -> anyhow::Result<Self::Task>;
+    async fn into_task(self, state_watcher: &StateWatcher) -> anyhow::Result<Self::Task>;
 }
 
 /// The trait is implemented by the service task and contains a single iteration of the infinity
@@ -75,46 +77,12 @@ pub trait RunnableTask: Send {
     /// the service either returns false, panics or a stop signal is received.
     /// If the service returns an error, it will be logged and execution will resume.
     /// This is intended to be called only by the `ServiceRunner`.
-    async fn run(&mut self) -> anyhow::Result<bool>;
-}
-
-/// The lifecycle state of the service
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum State {
-    /// Service is initialized but not started
-    NotStarted,
-    /// Service is starting up
-    Starting,
-    /// Service is running as normal
-    Started,
-    /// Service is shutting down
-    Stopping,
-    /// Service is stopped
-    Stopped,
-    /// Service shutdown due to an error (panic)
-    StoppedWithError(String),
-}
-
-impl State {
-    /// is not started
-    pub fn not_started(&self) -> bool {
-        self == &State::NotStarted
-    }
-
-    /// is starting
-    pub fn starting(&self) -> bool {
-        self == &State::Starting
-    }
-
-    /// is started
-    pub fn started(&self) -> bool {
-        self == &State::Started
-    }
-
-    /// is stopped
-    pub fn stopped(&self) -> bool {
-        matches!(self, State::Stopped | State::StoppedWithError(_))
-    }
+    ///
+    /// The `ServiceRunner` continue to call the `run` method in the loop while the state is
+    /// `State::Started`. So first, the `run` method should return a value, and after, the service
+    /// will stop. If the service should react to the state change earlier, it should handle it in
+    /// the `run` loop on its own. See [`StateWatcher::while_started`].
+    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool>;
 }
 
 /// The service runner manages the lifecycle, execution and error handling of a `RunnableService`.
@@ -202,13 +170,13 @@ where
     }
 
     async fn start_and_await(&self) -> anyhow::Result<State> {
-        let start = self.state.subscribe();
+        let start = self.state.subscribe().into();
         self.start()?;
         self._await_start_or_stop(start).await
     }
 
     async fn await_start_or_stop(&self) -> anyhow::Result<State> {
-        let start = self.state.subscribe();
+        let start = self.state.subscribe().into();
         self._await_start_or_stop(start).await
     }
 
@@ -224,13 +192,13 @@ where
     }
 
     async fn stop_and_await(&self) -> anyhow::Result<State> {
-        let stop = self.state.subscribe();
+        let stop = self.state.subscribe().into();
         self.stop();
         self._await_stop(stop).await
     }
 
     async fn await_stop(&self) -> anyhow::Result<State> {
-        let stop = self.state.subscribe();
+        let stop = self.state.subscribe().into();
         self._await_stop(stop).await
     }
 
@@ -275,7 +243,7 @@ fn run<S>(service: S, sender: Shared<watch::Sender<State>>) -> JoinHandle<()>
 where
     S: RunnableService + 'static,
 {
-    let mut state = sender.subscribe();
+    let mut state: StateWatcher = sender.subscribe().into();
     tokio::task::spawn(async move {
         if state.borrow_and_update().not_started() {
             // We can panic here, because it is inside of the task.
@@ -306,28 +274,16 @@ where
             return
         }
 
-        loop {
-            tokio::select! {
-                biased;
-
-                _ = state.changed() => {
-                    if !state.borrow_and_update().started() {
+        while state.borrow_and_update().started() {
+            match task.run(&mut state).await {
+                Ok(should_continue) => {
+                    if !should_continue {
                         return
                     }
                 }
-
-                result = task.run() => {
-                    match result {
-                        Ok(should_continue) => {
-                            if !should_continue {
-                                return
-                            }
-                        }
-                        Err(e) => {
-                            let e: &dyn std::error::Error = &*e;
-                            tracing::error!(e);
-                        }
-                    }
+                Err(e) => {
+                    let e: &dyn std::error::Error = &*e;
+                    tracing::error!(e);
                 }
             }
         }
@@ -361,9 +317,13 @@ mod tests {
 
         #[async_trait::async_trait]
         impl RunnableTask for Task {
-            fn run<'_self, 'a>(&'_self mut self) -> BoxFuture<'a, anyhow::Result<bool>>
+            fn run<'_self, '_state, 'a>(
+                &'_self mut self,
+                state: &'_state mut StateWatcher
+            ) -> BoxFuture<'a, anyhow::Result<bool>>
             where
                 '_self: 'a,
+                '_state: 'a,
                 Self: Sync + 'a;
         }
     }
@@ -374,8 +334,13 @@ mod tests {
             mock.expect_shared_data().returning(|| EmptyShared);
             mock.expect_into_task().returning(|_| {
                 let mut mock = MockTask::default();
-                mock.expect_run()
-                    .returning(|| Box::pin(core::future::pending()));
+                mock.expect_run().returning(|watcher| {
+                    let mut watcher = watcher.clone();
+                    Box::pin(async move {
+                        watcher.while_started().await.unwrap();
+                        Ok(false)
+                    })
+                });
                 Ok(mock)
             });
             mock
@@ -417,7 +382,7 @@ mod tests {
         mock.expect_shared_data().returning(|| EmptyShared);
         mock.expect_into_task().returning(|_| {
             let mut mock = MockTask::default();
-            mock.expect_run().returning(|| panic!("Should fail"));
+            mock.expect_run().returning(|_| panic!("Should fail"));
             Ok(mock)
         });
         let service = ServiceRunner::new(mock);
