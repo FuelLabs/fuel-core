@@ -1,6 +1,6 @@
 use crate::{
     fuel_core_graphql_api::{
-        service::DatabaseTemp,
+        service::Database,
         IntoApiResult,
     },
     query::{
@@ -48,7 +48,7 @@ use std::borrow::Cow;
 #[cfg(test)]
 mod test;
 
-pub struct MessageQueryContext<'a>(pub &'a DatabaseTemp);
+pub struct MessageQueryContext<'a>(pub &'a Database);
 
 impl<'a> MessageQueryContext<'a> {
     pub fn message(&self, message_id: &MessageId) -> StorageResult<Message> {

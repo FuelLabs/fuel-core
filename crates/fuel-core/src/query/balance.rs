@@ -1,5 +1,5 @@
 use crate::{
-    fuel_core_graphql_api::service::DatabaseTemp,
+    fuel_core_graphql_api::service::Database,
     state::IterDirection,
 };
 use asset_query::{
@@ -23,7 +23,7 @@ use std::{
 
 pub mod asset_query;
 
-pub struct BalanceQueryContext<'a>(pub &'a DatabaseTemp);
+pub struct BalanceQueryContext<'a>(pub &'a Database);
 
 impl BalanceQueryContext<'_> {
     pub fn balance(

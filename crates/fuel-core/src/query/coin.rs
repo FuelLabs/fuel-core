@@ -1,5 +1,5 @@
 use crate::{
-    graphql_api::service::DatabaseTemp,
+    graphql_api::service::Database,
     state::IterDirection,
 };
 use fuel_core_storage::{
@@ -14,7 +14,7 @@ use fuel_core_types::{
     fuel_types::Address,
 };
 
-pub struct CoinQueryContext<'a>(pub &'a DatabaseTemp);
+pub struct CoinQueryContext<'a>(pub &'a Database);
 
 impl<'a> CoinQueryContext<'a> {
     pub fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin> {

@@ -2,7 +2,7 @@ use crate::{
     fuel_core_graphql_api::{
         service::{
             BlockProducer,
-            DatabaseTemp,
+            Database,
             TxPool,
         },
         IntoApiResult,
@@ -224,7 +224,7 @@ pub struct TxStatusSubscription;
 
 struct StreamState<'a> {
     txpool: TxPool,
-    db: &'a DatabaseTemp,
+    db: &'a Database,
 }
 
 #[Subscription]
@@ -247,7 +247,7 @@ impl TxStatusSubscription {
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a {
         let txpool = ctx.data_unchecked::<TxPool>().clone();
-        let db = ctx.data_unchecked::<DatabaseTemp>();
+        let db = ctx.data_unchecked::<Database>();
         let rx = BroadcastStream::new(txpool.shared.tx_update_subscribe());
         let state = StreamState { txpool, db };
 

@@ -1,7 +1,7 @@
-use crate::fuel_core_graphql_api::service::DatabaseTemp;
+use crate::fuel_core_graphql_api::service::Database;
 use fuel_core_storage::Result as StorageResult;
 
-pub struct ChainQueryContext<'a>(pub &'a DatabaseTemp);
+pub struct ChainQueryContext<'a>(pub &'a Database);
 
 impl ChainQueryContext<'_> {
     pub fn name(&self) -> StorageResult<String> {

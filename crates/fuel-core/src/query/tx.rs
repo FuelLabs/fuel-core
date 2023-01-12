@@ -1,5 +1,5 @@
 use crate::{
-    fuel_core_graphql_api::service::DatabaseTemp,
+    fuel_core_graphql_api::service::Database,
     state::IterDirection,
 };
 use fuel_core_storage::{
@@ -22,7 +22,7 @@ use fuel_core_types::{
     services::txpool::TransactionStatus,
 };
 
-pub struct TransactionQueryContext<'a>(pub &'a DatabaseTemp);
+pub struct TransactionQueryContext<'a>(pub &'a Database);
 
 impl TransactionQueryContext<'_> {
     pub fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
