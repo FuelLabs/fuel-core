@@ -1,6 +1,5 @@
 [workspace]
 # Use the new resolver to prevent dev-deps and build-deps from enabling debugging or test features in production.
-resolver = "2"
 members = [
   "benches",
   "bin/fuel-core",
@@ -25,17 +24,15 @@ members = [
   "tests",
   "xtask",
 ]
+resolver = "2"
 
-exclude = [
-  "version-compatibility",
-]
+exclude = ["version-compatibility"]
 
 [profile.release]
 codegen-units = 1
 lto = "fat"
 panic = "abort"
 
-
 [patch.crates-io]
-fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "freesig/gas-cost-input" }
-# fuel-vm = { path = "../fuel-vm/fuel-vm" } 
+fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm" }
+# fuel-vm = { path = "../fuel-vm/fuel-vm" }

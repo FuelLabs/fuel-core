@@ -60,13 +60,13 @@ pub fn run(c: &mut Criterion) {
 
     run_group_ref(
         &mut c.benchmark_group("ret_script"),
-        "ret (script)",
+        "ret_script",
         VmBench::new(Opcode::RET(REG_ONE)),
     );
 
     run_group_ref(
         &mut c.benchmark_group("ret_contract"),
-        "ret (contract)",
+        "ret_contract",
         VmBench::contract(rng, Opcode::RET(REG_ONE)).unwrap(),
     );
 
@@ -98,13 +98,13 @@ pub fn run(c: &mut Criterion) {
 
     run_group_ref(
         &mut c.benchmark_group("rvrt_script"),
-        "rvrt (script)",
+        "rvrt_script",
         VmBench::new(Opcode::RVRT(REG_ONE)),
     );
 
     run_group_ref(
         &mut c.benchmark_group("rvrt_contract"),
-        "rvrt (contract)",
+        "rvrt_script",
         VmBench::contract(rng, Opcode::RET(REG_ONE)).unwrap(),
     );
 
