@@ -41,6 +41,10 @@ use std::{
         HashSet,
         VecDeque,
     },
+    sync::{
+        Arc,
+        RwLock,
+    },
     task::{
         Context,
         Poll,
@@ -86,7 +90,10 @@ pub struct PeerManagerBehaviour {
 }
 
 impl PeerManagerBehaviour {
-    pub fn new(config: &Config) -> Self {
+    pub(crate) fn new(
+        config: &Config,
+        connection_state: Arc<RwLock<ConnectionState>>,
+    ) -> Self {
         let identify = {
             let identify_config =
                 IdentifyConfig::new("/fuel/1.0".to_string(), config.keypair.public());
@@ -112,8 +119,11 @@ impl PeerManagerBehaviour {
             .filter_map(PeerId::try_from_multiaddr)
             .collect();
 
-        let peer_manager =
-            PeerManager::new(reserved_peers, config.max_peers_connected as usize);
+        let peer_manager = PeerManager::new(
+            reserved_peers,
+            connection_state,
+            config.max_peers_connected as usize,
+        );
 
         Self {
             ping,
@@ -126,20 +136,21 @@ impl PeerManagerBehaviour {
     }
 
     pub fn total_peers_connected(&self) -> usize {
-        self.peer_manager.connected_peers.len()
+        self.peer_manager.total_peers_connected()
     }
 
     /// returns an iterator over the connected peers
     pub fn get_peers_ids(&self) -> impl Iterator<Item = &PeerId> {
-        self.peer_manager.connected_peers.keys()
+        self.peer_manager.get_peers_ids()
     }
 
     pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<&PeerInfo> {
-        self.peer_manager.connected_peers.get(peer_id)
+        self.peer_manager.get_peer_info(peer_id)
     }
 
     pub fn insert_peer_addresses(&mut self, peer_id: &PeerId, addresses: Vec<Multiaddr>) {
-        self.peer_manager.insert_peer_addresses(peer_id, addresses)
+        self.peer_manager
+            .insert_peer_info(peer_id, PeerInfoInsert::Addresses(addresses));
     }
 }
 
@@ -365,7 +376,9 @@ impl NetworkBehaviour for PeerManagerBehaviour {
                     peer,
                     result: Ok(PingSuccess::Ping { rtt }),
                 })) => {
-                    self.peer_manager.insert_latest_ping(&peer, rtt);
+                    self.peer_manager
+                        .insert_peer_info(&peer, PeerInfoInsert::LatestPing(rtt));
+
                     let event = PeerInfoEvent::PeerInfoUpdated { peer_id: peer };
                     return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
                 }
@@ -431,11 +444,14 @@ impl NetworkBehaviour for PeerManagerBehaviour {
                                 listen_addrs.truncate(MAX_IDENTIFY_ADDRESSES);
                             }
 
-                            self.peer_manager
-                                .insert_client_version(&peer_id, agent_version);
-
-                            self.peer_manager
-                                .insert_peer_addresses(&peer_id, listen_addrs.clone());
+                            self.peer_manager.insert_peer_info(
+                                &peer_id,
+                                PeerInfoInsert::ClientVersion(agent_version),
+                            );
+                            self.peer_manager.insert_peer_info(
+                                &peer_id,
+                                PeerInfoInsert::Addresses(listen_addrs.clone()),
+                            );
 
                             let event = PeerInfoEvent::PeerIdentified {
                                 peer_id,
@@ -484,88 +500,96 @@ pub struct PeerInfo {
     pub latest_ping: Option<Duration>,
 }
 
+enum PeerInfoInsert {
+    Addresses(Vec<Multiaddr>),
+    ClientVersion(String),
+    LatestPing(Duration),
+}
+
 /// Manages Peers and their events
 #[derive(Debug, Default, Clone)]
 struct PeerManager {
     pending_events: VecDeque<PeerInfoEvent>,
-    connected_peers: HashMap<PeerId, PeerInfo>,
+    non_reserved_connected_peers: HashMap<PeerId, PeerInfo>,
+    reserved_connected_peers: HashMap<PeerId, PeerInfo>,
     reserved_peers: HashSet<PeerId>,
-    non_reserved_peers_allowed: usize,
+    connection_state: Arc<RwLock<ConnectionState>>,
+    max_non_reserved_peers: usize,
 }
 
 impl PeerManager {
-    fn new(reserved_peers: HashSet<PeerId>, max_connections_allowed: usize) -> Self {
-        let reserved_peers_size = reserved_peers.len();
-
+    fn new(
+        reserved_peers: HashSet<PeerId>,
+        connection_state: Arc<RwLock<ConnectionState>>,
+        max_non_reserved_peers: usize,
+    ) -> Self {
         Self {
             pending_events: VecDeque::default(),
-            connected_peers: HashMap::with_capacity(max_connections_allowed),
+            non_reserved_connected_peers: HashMap::with_capacity(max_non_reserved_peers),
+            reserved_connected_peers: HashMap::with_capacity(reserved_peers.len()),
             reserved_peers,
-            non_reserved_peers_allowed: max_connections_allowed - reserved_peers_size,
+            connection_state,
+            max_non_reserved_peers,
         }
     }
 
-    fn insert_peer_addresses(&mut self, peer_id: &PeerId, addresses: Vec<Multiaddr>) {
-        if let Some(peer) = self.connected_peers.get_mut(peer_id) {
-            for address in addresses {
-                peer.peer_addresses.insert(address);
+    fn total_peers_connected(&self) -> usize {
+        self.reserved_connected_peers.len() + self.non_reserved_connected_peers.len()
+    }
+
+    fn get_peers_ids(&self) -> impl Iterator<Item = &PeerId> {
+        self.non_reserved_connected_peers
+            .keys()
+            .chain(self.reserved_connected_peers.keys())
+    }
+
+    fn get_peer_info(&self, peer_id: &PeerId) -> Option<&PeerInfo> {
+        if self.reserved_peers.contains(peer_id) {
+            return self.reserved_connected_peers.get(peer_id)
+        }
+        self.non_reserved_connected_peers.get(peer_id)
+    }
+
+    fn insert_peer_info(&mut self, peer_id: &PeerId, data: PeerInfoInsert) {
+        let peers = if self.reserved_peers.contains(peer_id) {
+            &mut self.reserved_connected_peers
+        } else {
+            &mut self.non_reserved_connected_peers
+        };
+        match data {
+            PeerInfoInsert::Addresses(addresses) => {
+                insert_peer_addresses(peers, peer_id, addresses)
             }
-        } else {
-            log_missing_peer(peer_id);
-        }
-    }
-
-    fn insert_latest_ping(&mut self, peer_id: &PeerId, duration: Duration) {
-        if let Some(peer) = self.connected_peers.get_mut(peer_id) {
-            peer.latest_ping = Some(duration);
-        } else {
-            log_missing_peer(peer_id);
-        }
-    }
-
-    fn insert_client_version(&mut self, peer_id: &PeerId, client_version: String) {
-        if let Some(peer) = self.connected_peers.get_mut(peer_id) {
-            peer.client_version = Some(client_version);
-        } else {
-            log_missing_peer(peer_id);
+            PeerInfoInsert::ClientVersion(client_version) => {
+                insert_client_version(peers, peer_id, client_version)
+            }
+            PeerInfoInsert::LatestPing(duration) => {
+                insert_latest_ping(peers, peer_id, duration)
+            }
         }
     }
 
     fn get_disconnected_reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
         self.reserved_peers
             .iter()
-            .filter(|peer_id| !self.connected_peers.contains_key(peer_id))
-    }
-
-    fn reserved_peers_connected_count(&self) -> usize {
-        self.reserved_peers.iter().fold(0, |count, peer_id| {
-            if self.connected_peers.contains_key(peer_id) {
-                count + 1
-            } else {
-                count
-            }
-        })
+            .filter(|peer_id| !self.reserved_connected_peers.contains_key(peer_id))
     }
 
     fn find_disconnected_reserved_peer(&self) -> Option<PeerId> {
         self.reserved_peers
             .iter()
-            .find(|peer_id| self.connected_peers.contains_key(peer_id))
+            .find(|peer_id| self.reserved_connected_peers.contains_key(peer_id))
             .cloned()
     }
 
     /// Handles the first connnection established with a Peer
     fn handle_initial_connection(&mut self, peer_id: PeerId) {
+        let non_reserved_peers_connected = self.non_reserved_connected_peers.len();
+
         // if the connected Peer is not from the reserved peers
         if !self.reserved_peers.contains(&peer_id) {
-            let non_reserved_peers_connected =
-                self.connected_peers.len() - self.reserved_peers_connected_count();
-
-            // check if there is no more space for non-resereved peers
-            if non_reserved_peers_connected >= self.non_reserved_peers_allowed {
-                // todo/potential improvement: once `Peer Reputation` is implemented we could check if there are peers
-                // with poor reputation and disconnect them instead?
-
+            // check if all the slots are already taken
+            if non_reserved_peers_connected >= self.max_non_reserved_peers {
                 // Too many peers already connected, disconnect the Peer
                 self.pending_events.push_back(PeerInfoEvent::TooManyPeers {
                     peer_to_disconnect: peer_id,
@@ -577,11 +601,21 @@ impl PeerManager {
                 // since we're going to disconnect it anyways
                 return
             }
+
+            if self.max_non_reserved_peers - non_reserved_peers_connected == 1 {
+                // this is the last non-reserved peer allowed
+                if let Ok(mut connection_state) = self.connection_state.write() {
+                    connection_state.deny_new_peers();
+                }
+            }
+
+            self.non_reserved_connected_peers
+                .insert(peer_id, PeerInfo::default());
+        } else {
+            self.reserved_connected_peers
+                .insert(peer_id, PeerInfo::default());
         }
 
-        // insert and report on new Peer Connection
-        // for either, reserved peer or non-reserved
-        self.connected_peers.insert(peer_id, PeerInfo::default());
         self.pending_events
             .push_back(PeerInfoEvent::PeerConnected(peer_id));
     }
@@ -589,14 +623,92 @@ impl PeerManager {
     /// Handles on peer's last connection getting disconnected
     fn handle_peer_disconnect(&mut self, peer_id: PeerId) {
         // try immediate reconnect if it's a reserved peer
-        let should_reconnect = self.reserved_peers.contains(&peer_id);
-        self.connected_peers.remove(&peer_id);
+        let is_reserved = self.reserved_peers.contains(&peer_id);
+
+        if !is_reserved {
+            // check were all the slots full prior to this disconnect
+            if self.max_non_reserved_peers - self.non_reserved_connected_peers.len() == 0
+            {
+                // since all the slots were full prior to this disconnect
+                // let's allow new peer non-reserved peers connections
+                if let Ok(mut connection_state) = self.connection_state.write() {
+                    connection_state.allow_new_peers();
+                }
+            }
+
+            self.non_reserved_connected_peers.remove(&peer_id);
+        } else {
+            self.reserved_connected_peers.remove(&peer_id);
+        }
 
         self.pending_events
             .push_back(PeerInfoEvent::PeerDisconnected {
                 peer_id,
-                should_reconnect,
+                should_reconnect: is_reserved,
             })
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct ConnectionState {
+    peers_allowed: bool,
+}
+
+impl ConnectionState {
+    pub fn new() -> Arc<RwLock<Self>> {
+        Arc::new(RwLock::new(Self {
+            peers_allowed: true,
+        }))
+    }
+
+    pub fn available_slot(&self) -> bool {
+        self.peers_allowed
+    }
+
+    fn allow_new_peers(&mut self) {
+        self.peers_allowed = true;
+    }
+
+    fn deny_new_peers(&mut self) {
+        self.peers_allowed = false;
+    }
+}
+
+fn insert_peer_addresses(
+    peers: &mut HashMap<PeerId, PeerInfo>,
+    peer_id: &PeerId,
+    addresses: Vec<Multiaddr>,
+) {
+    if let Some(peer) = peers.get_mut(peer_id) {
+        for address in addresses {
+            peer.peer_addresses.insert(address);
+        }
+    } else {
+        log_missing_peer(peer_id);
+    }
+}
+
+fn insert_latest_ping(
+    peers: &mut HashMap<PeerId, PeerInfo>,
+    peer_id: &PeerId,
+    duration: Duration,
+) {
+    if let Some(peer) = peers.get_mut(peer_id) {
+        peer.latest_ping = Some(duration);
+    } else {
+        log_missing_peer(peer_id);
+    }
+}
+
+fn insert_client_version(
+    peers: &mut HashMap<PeerId, PeerInfo>,
+    peer_id: &PeerId,
+    client_version: String,
+) {
+    if let Some(peer) = peers.get_mut(peer_id) {
+        peer.client_version = Some(client_version);
+    } else {
+        log_missing_peer(peer_id);
     }
 }
 
@@ -612,80 +724,92 @@ mod tests {
         (0..size).map(|_| PeerId::random()).collect()
     }
 
+    fn initialize_peer_manager(
+        reserved_peers: Vec<PeerId>,
+        max_non_reserved_peers: usize,
+    ) -> PeerManager {
+        let connection_state = ConnectionState::new();
+
+        PeerManager::new(
+            reserved_peers.into_iter().collect(),
+            connection_state,
+            max_non_reserved_peers,
+        )
+    }
+
     #[test]
-    fn test_peer_manager_struct() {
-        let reserved_peer_size = 5;
-        let max_connetions_allowed = 20;
-        let reserved_peers = get_random_peers(reserved_peer_size);
-        let random_peers = get_random_peers(max_connetions_allowed * 2);
+    fn only_allowed_number_of_non_reserved_peers_is_connected() {
+        let max_non_reserved_peers = 5;
+        let mut peer_manager = initialize_peer_manager(vec![], max_non_reserved_peers);
 
-        let mut peer_manager = PeerManager::new(
-            reserved_peers.clone().into_iter().collect(),
-            max_connetions_allowed,
-        );
+        let random_peers = get_random_peers(max_non_reserved_peers * 2);
 
-        // try connecting only random peers
+        // try connecting all the random peers
         for peer_id in &random_peers {
             peer_manager.handle_initial_connection(*peer_id);
         }
 
-        // only amount of non-reserved peers allowed should be connected
-        assert_eq!(
-            peer_manager.connected_peers.len(),
-            peer_manager.non_reserved_peers_allowed
-        );
-        // or in other words:
-        assert_eq!(
-            peer_manager.connected_peers.len(),
-            random_peers.len() / 2 - reserved_peer_size
-        );
+        assert_eq!(peer_manager.total_peers_connected(), max_non_reserved_peers);
+    }
 
-        // connect resereved peers
+    #[test]
+    fn only_reserved_peers_are_connected() {
+        let max_non_reserved_peers = 0;
+        let reserved_peers = get_random_peers(5);
+        let mut peer_manager =
+            initialize_peer_manager(reserved_peers.clone(), max_non_reserved_peers);
+
+        // try connecting all the reserved peers
         for peer_id in &reserved_peers {
             peer_manager.handle_initial_connection(*peer_id);
         }
 
-        // the connections should be at max now
-        assert_eq!(peer_manager.connected_peers.len(), max_connetions_allowed);
+        assert_eq!(peer_manager.total_peers_connected(), reserved_peers.len());
 
-        // disconnect a reserved peer
+        // try connecting random peers
+        let random_peers = get_random_peers(10);
+        for peer_id in &random_peers {
+            peer_manager.handle_initial_connection(*peer_id);
+        }
+
+        // the number should stay the same
+        assert_eq!(peer_manager.total_peers_connected(), reserved_peers.len());
+    }
+
+    #[test]
+    fn non_reserved_peer_does_not_take_reserved_slot() {
+        let max_non_reserved_peers = 5;
+        let reserved_peers = get_random_peers(5);
+        let mut peer_manager =
+            initialize_peer_manager(reserved_peers.clone(), max_non_reserved_peers);
+
+        // try connecting all the reserved peers
+        for peer_id in &reserved_peers {
+            peer_manager.handle_initial_connection(*peer_id);
+        }
+
+        // disconnect a single reserved peer
         peer_manager.handle_peer_disconnect(*reserved_peers.first().unwrap());
+
+        // try connecting random peers
+        let random_peers = get_random_peers(max_non_reserved_peers * 2);
+        for peer_id in &random_peers {
+            peer_manager.handle_initial_connection(*peer_id);
+        }
+
+        // there should be an available slot for a reserved peer
         assert_eq!(
-            peer_manager.connected_peers.len(),
-            max_connetions_allowed - 1
+            peer_manager.total_peers_connected(),
+            reserved_peers.len() - 1 + max_non_reserved_peers
         );
 
-        // assert that the last random peer is not already connected
-        assert!(!peer_manager
-            .connected_peers
-            .contains_key(random_peers.last().unwrap()));
-
-        // try to connect the last random peer in the list
-        peer_manager.handle_initial_connection(*random_peers.last().unwrap());
-
-        // the connection count should remain the same as when the reserved peer disconnected
-        // that is, the connection has been refused
-        assert_eq!(
-            peer_manager.connected_peers.len(),
-            max_connetions_allowed - 1
-        );
-
-        // reconnect the first reserved peer that was disconnected
+        // reconnect the disconnected reserved peer
         peer_manager.handle_initial_connection(*reserved_peers.first().unwrap());
-        assert_eq!(peer_manager.connected_peers.len(), max_connetions_allowed);
 
-        // disconnect a single non-reserved peer
-        peer_manager.handle_peer_disconnect(*random_peers.first().unwrap());
+        // all the slots should be taken now
         assert_eq!(
-            peer_manager.connected_peers.len(),
-            max_connetions_allowed - 1
+            peer_manager.total_peers_connected(),
+            reserved_peers.len() + max_non_reserved_peers
         );
-
-        // connect a different non-reserved peer
-        peer_manager.handle_initial_connection(*random_peers.last().unwrap());
-
-        // the connection should be successful,
-        // and we should be up to our max connections count again
-        assert_eq!(peer_manager.connected_peers.len(), max_connetions_allowed);
     }
 }

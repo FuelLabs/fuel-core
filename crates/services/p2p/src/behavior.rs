@@ -1,3 +1,8 @@
+use std::sync::{
+    Arc,
+    RwLock,
+};
+
 use crate::{
     codecs::NetworkCodec,
     config::Config,
@@ -11,6 +16,7 @@ use crate::{
         topics::GossipTopic,
     },
     peer_manager::{
+        ConnectionState,
         PeerInfo,
         PeerInfoEvent,
         PeerManagerBehaviour,
@@ -71,7 +77,11 @@ pub struct FuelBehaviour<Codec: NetworkCodec> {
 }
 
 impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
-    pub fn new(p2p_config: &Config, codec: Codec) -> Self {
+    pub(crate) fn new(
+        p2p_config: &Config,
+        codec: Codec,
+        connection_state: Arc<RwLock<ConnectionState>>,
+    ) -> Self {
         let local_public_key = p2p_config.keypair.public();
         let local_peer_id = PeerId::from_public_key(&local_public_key);
 
@@ -98,7 +108,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
             discovery_config
         };
 
-        let peer_manager = PeerManagerBehaviour::new(p2p_config);
+        let peer_manager = PeerManagerBehaviour::new(p2p_config, connection_state);
 
         let req_res_protocol =
             std::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
