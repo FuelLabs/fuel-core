@@ -18,19 +18,19 @@ use crate::{
 };
 use tai64::Tai64;
 
+/// A fuel block header that has all the fields generated because it
+/// has been executed.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
-/// A fuel block header that has all the fields generated because it
-/// has been executed.
 pub struct BlockHeader {
     /// The application header.
     pub application: ApplicationHeader<GeneratedApplicationFields>,
     /// The consensus header.
     pub consensus: ConsensusHeader<GeneratedConsensusFields>,
-    /// Header Metadata
-    #[cfg_attr(feature = "serde", serde(skip))]
-    pub metadata: Option<BlockHeaderMetadata>,
+    /// The header metadata calculated during creation.
+    /// The field is private to enforce the use of the [`PartialBlockHeader::generate`] method.
+    metadata: Option<BlockHeaderMetadata>,
 }
 
 #[derive(Clone, Debug)]
@@ -42,8 +42,6 @@ pub struct PartialBlockHeader {
     pub application: ApplicationHeader<Empty>,
     /// The consensus header.
     pub consensus: ConsensusHeader<Empty>,
-    /// Header Metadata
-    pub metadata: Option<BlockHeaderMetadata>,
 }
 
 #[derive(Clone, Debug)]

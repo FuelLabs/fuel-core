@@ -23,6 +23,7 @@ use fuel_core_types::{
     fuel_tx::Receipt,
     fuel_types::{
         Address,
+        Bytes32,
         MessageId,
     },
     services::{
@@ -196,13 +197,13 @@ pub struct MockDb {
 }
 
 impl BlockProducerDatabase for MockDb {
-    fn get_block(
-        &self,
-        fuel_height: BlockHeight,
-    ) -> StorageResult<Option<Cow<CompressedBlock>>> {
+    fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>> {
         let blocks = self.blocks.lock().unwrap();
+        Ok(blocks.get(height).cloned().map(Cow::Owned).unwrap())
+    }
 
-        Ok(blocks.get(&fuel_height).cloned().map(Cow::Owned))
+    fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32> {
+        Ok(Bytes32::new([height.as_usize() as u8; 32]))
     }
 
     fn current_block_height(&self) -> StorageResult<BlockHeight> {

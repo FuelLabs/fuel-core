@@ -11,5 +11,6 @@ description = "Fuel Block Importer"
 
 [dependencies]
 anyhow = "1.0"
-parking_lot = "0.12"
+fuel-core-storage = { path = "../../storage" }
+fuel-core-types = { path = "../../types" }
 tokio = { version = "1.21", features = ["full"] }

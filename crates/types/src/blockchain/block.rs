@@ -192,7 +192,6 @@ impl From<Block> for PartialFuelBlock {
                     time,
                     generated: Empty {},
                 },
-                metadata: None,
             },
             transactions,
         }

@@ -107,7 +107,9 @@ impl Database {
     }
 
     pub fn block_time(&self, height: u32) -> StorageResult<Tai64> {
-        let id = self.get_block_id(height.into())?.unwrap_or_default();
+        let id = self
+            .get_block_id(height.into().as_ref())?
+            .unwrap_or_default();
         let block = self
             .storage::<FuelBlocks>()
             .get(&id)?
@@ -115,7 +117,7 @@ impl Database {
         Ok(block.header().time().to_owned())
     }
 
-    pub fn get_block_id(&self, height: BlockHeight) -> StorageResult<Option<Bytes32>> {
+    pub fn get_block_id(&self, height: &BlockHeight) -> StorageResult<Option<Bytes32>> {
         Database::get(self, &height.to_bytes()[..], Column::FuelBlockIds)
             .map_err(Into::into)
     }

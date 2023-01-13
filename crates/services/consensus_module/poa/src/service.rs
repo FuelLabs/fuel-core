@@ -116,6 +116,9 @@ where
     async fn signal_produce_block(
         &self,
     ) -> anyhow::Result<UncommittedResult<StorageTransaction<D>>> {
+        // TODO: Track the height inside of the task.
+        //  We don't need to get it from the Database each time in the solo
+        //  PoA mode.
         let current_height = self
             .db
             .block_height()

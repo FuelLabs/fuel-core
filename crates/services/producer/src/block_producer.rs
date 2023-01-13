@@ -28,7 +28,6 @@ use fuel_core_types::{
         Transaction,
     },
     fuel_types::Bytes32,
-    fuel_vm::crypto::ephemeral_merkle_root,
     services::executor::{
         ExecutionBlock,
         UncommittedResult,
@@ -180,13 +179,11 @@ where
                 generated: Default::default(),
             },
             consensus: ConsensusHeader {
-                // TODO: this needs to be updated using a proper BMT MMR
                 prev_root: previous_block_info.prev_root,
                 height,
                 time: Tai64::now(),
                 generated: Default::default(),
             },
-            metadata: None,
         })
     }
 
@@ -217,15 +214,8 @@ where
         } else {
             // get info from previous block height
             let prev_height = height - 1u32.into();
-            let previous_block = self
-                .db
-                .get_block(prev_height)?
-                .ok_or(Error::MissingBlock(prev_height))?;
-            // TODO: this should use a proper BMT MMR
-            let hash = previous_block.id();
-            let prev_root = ephemeral_merkle_root(
-                vec![*previous_block.header().prev_root(), hash.into()].iter(),
-            );
+            let previous_block = self.db.get_block(&prev_height)?;
+            let prev_root = self.db.block_header_merkle_root(&prev_height)?;
 
             Ok(PreviousBlockInfo {
                 prev_root,

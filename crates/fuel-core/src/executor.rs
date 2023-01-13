@@ -204,8 +204,6 @@ impl Executor {
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
         // Compute the block id before execution if there is one.
         let pre_exec_block_id = block.id();
-        // Get the transaction root before execution if there is one.
-        let pre_exec_txs_root = block.txs_root();
 
         // If there is full fuel block for validation then map it into
         // a partial header.
@@ -226,16 +224,9 @@ impl Executor {
         } = execution_data;
 
         // Now that the transactions have been executed, generate the full header.
-        let block = block
+        let mut block = block
             .map(|b: PartialFuelBlock| b.generate(&message_ids[..]))
             .into_inner();
-
-        // check transaction commitment
-        if let Some(pre_exec_txs_root) = pre_exec_txs_root {
-            if block.header().transactions_root != pre_exec_txs_root {
-                return Err(ExecutorError::InvalidTransactionRoot)
-            }
-        }
 
         let finalized_block_id = block.id();
 
@@ -247,6 +238,7 @@ impl Executor {
 
         // check if block id doesn't match proposed block id
         if let Some(pre_exec_block_id) = pre_exec_block_id {
+            // The block id comparison compares the whole blocks including all fields.
             if pre_exec_block_id != finalized_block_id {
                 // In theory this shouldn't happen since any deviance in the block should've already
                 // been checked by now.
@@ -2427,10 +2419,7 @@ mod tests {
         let verify_result =
             verifier.execute_and_commit(ExecutionBlock::Validation(block));
 
-        assert!(matches!(
-            verify_result,
-            Err(ExecutorError::InvalidTransactionRoot)
-        ))
+        assert!(matches!(verify_result, Err(ExecutorError::InvalidBlockId)))
     }
 
     // invalidate a block if a tx is missing at least one coin input

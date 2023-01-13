@@ -72,6 +72,7 @@ use fuel_core_types::{
     },
     fuel_tx::UtxoId,
     fuel_types::{
+        Bytes32,
         ContractId,
         MessageId,
     },
@@ -370,14 +371,16 @@ impl TxPoolDb for Database {
 }
 
 impl BlockProducerDatabase for Database {
-    fn get_block(
-        &self,
-        fuel_height: BlockHeight,
-    ) -> StorageResult<Option<Cow<CompressedBlock>>> {
-        let id = self
-            .get_block_id(fuel_height)?
-            .ok_or(not_found!("BlockId"))?;
-        self.storage::<FuelBlocks>().get(&id).map_err(Into::into)
+    fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>> {
+        let id = self.get_block_id(height)?.ok_or(not_found!("BlockId"))?;
+        self.storage::<FuelBlocks>()
+            .get(&id)?
+            .ok_or(not_found!(FuelBlocks))
+    }
+
+    fn block_header_merkle_root(&self, _height: &BlockHeight) -> StorageResult<Bytes32> {
+        // TODO: Add a new column for roots.
+        todo!()
     }
 
     fn current_block_height(&self) -> StorageResult<BlockHeight> {

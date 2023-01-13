@@ -1,7 +1,8 @@
 #![deny(unused_crate_dependencies)]
 
 pub mod config;
-pub mod service;
+pub mod importer;
+pub mod ports;
 
 pub use config::Config;
-pub use service::Service;
+pub use importer::Importer;
