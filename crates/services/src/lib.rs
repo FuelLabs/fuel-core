@@ -3,6 +3,7 @@
 #![deny(missing_docs)]
 
 mod service;
+mod state;
 
 /// Re-exports for streaming utilities
 pub mod stream {
@@ -25,6 +26,8 @@ pub use service::{
     Service,
     ServiceRunner,
     Shared,
+};
+pub use state::{
     State,
     StateWatcher,
 };
