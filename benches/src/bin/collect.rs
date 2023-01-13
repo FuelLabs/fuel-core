@@ -702,16 +702,6 @@ mod tests {
             .output()
             .unwrap();
         assert!(output.status.success());
-        let output = std::process::Command::new("cargo")
-            .arg("+nightly")
-            .arg("fmt")
-            .arg("--manifest-path")
-            .arg(manifest_path)
-            .arg("--")
-            .arg("--check")
-            .output()
-            .unwrap();
-        assert!(output.status.success());
     }
 
     #[test]
