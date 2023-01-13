@@ -738,7 +738,7 @@ mod tests {
                     if sentry_node.swarm.behaviour().total_peers_connected() >= 5 {
                         // if the `reserved_node` is not included,
                         // create and insert it, to be polled with rest of the nodes
-                        if all_node_services
+                        if !all_node_services
                         .iter()
                         .any(|service| service.local_peer_id == reserved_node_peer_id) {
                             all_node_services.push(reserved_node.create_service(p2p_config.clone()));
