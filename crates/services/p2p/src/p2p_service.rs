@@ -681,11 +681,10 @@ mod tests {
 
     // Single sentry node connects to multiple reserved nodes and `max_peers_allowed` amount of non-reserved nodes.
     // It also tries to dial extra non-reserved nodes to establish the connection.
-    // Once the connection is established with a selected (last in the list) reserved node
-    // we disconnect that reserved node, ban it and then unban it later.
-    // The unbanned reserved node should contest with other nodes in the network
-    // for establishing the connection with our sentry node.
-    // It should win every time, that is, there is always one slot reserved for it by the `PeerManager`.
+    // A single reserved node is not started immediately with the rest of the nodes.
+    // Once sentry node establishes the connection with the allowed number of nodes
+    // we start the reserved node, and await for it to establish the connection.
+    // This test proves that there is always an available slot for the reserved node to connect to.
     #[tokio::test]
     #[instrument]
     async fn reserved_nodes_reconnect_works() {
@@ -701,7 +700,7 @@ mod tests {
             .map(|_| NodeData::random())
             .collect();
 
-        let reserved_nodes_data: Vec<NodeData> =
+        let mut reserved_nodes_data: Vec<NodeData> =
             (0..3).map(|_| NodeData::random()).collect();
 
         let mut sentry_node = {
@@ -721,7 +720,8 @@ mod tests {
             NodeData::random().create_service(p2p_config)
         };
 
-        let reserved_node = reserved_nodes_data.last().unwrap().clone();
+        // pop() a single reserved node, so it's not run with the rest of the nodes
+        let reserved_node = reserved_nodes_data.pop().unwrap().clone();
         let reserved_node_peer_id =
             PeerId::from_public_key(&reserved_node.keypair.public());
 
@@ -731,35 +731,23 @@ mod tests {
             .map(|node| node.create_service(p2p_config.clone()))
             .collect();
 
-        let mut previously_connected = false;
-
         loop {
             tokio::select! {
                 sentry_node_event = sentry_node.next_event() => {
+                    // we've connected to all other peers
+                    if sentry_node.swarm.behaviour().total_peers_connected() >= 5 {
+                        // if the `reserved_node` is not included,
+                        // create and insert it, to be polled with rest of the nodes
+                        if all_node_services
+                        .iter()
+                        .find(|service| service.local_peer_id == reserved_node_peer_id).is_none() {
+                            all_node_services.push(reserved_node.create_service(p2p_config.clone()));
+                        }
+                    }
                     if let Some(FuelP2PEvent::PeerConnected(peer_id)) = sentry_node_event {
                         // we connected to the desired reserved node
                         if peer_id == reserved_node_peer_id {
-                            // 0. This is the initial connection with the reserved node
-                            if !previously_connected {
-                                // 1. Disconnect and ban the reserved node
-                                // this is done so that other nodes in the network try to take the slot of the reserved node
-                                let _ = sentry_node.swarm.disconnect_peer_id(reserved_node_peer_id);
-                                sentry_node.swarm.ban_peer_id(reserved_node_peer_id);
-                                previously_connected = true;
-                            } else {
-                                // 3. We have successfully re-connected.
-                                // Multiple other nodes in the meantime have tried to establish the connection
-                                // with `sentry_node` but `PeerManagerBehaviour` disconnected them and kept a slot for
-                                // the reserved node, we can exit successfully!
-                                break
-                            }
-                        }
-
-                    } else if let Some(FuelP2PEvent::PeerDisconnected(peer_id)) = sentry_node_event {
-                        // 2. We successfully disconnected from the reserved node
-                        // unban it and make it available for re-connection
-                        if peer_id == reserved_node_peer_id {
-                            sentry_node.swarm.unban_peer_id(reserved_node_peer_id)
+                            break
                         }
                     }
                 },
@@ -768,7 +756,6 @@ mod tests {
                         node.next_event().await;
                     }
                 } => {}
-
             }
         }
     }
