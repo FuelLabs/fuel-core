@@ -740,7 +740,7 @@ mod tests {
                         // create and insert it, to be polled with rest of the nodes
                         if all_node_services
                         .iter()
-                        .find(|service| service.local_peer_id == reserved_node_peer_id).is_none() {
+                        .any(|service| service.local_peer_id == reserved_node_peer_id) {
                             all_node_services.push(reserved_node.create_service(p2p_config.clone()));
                         }
                     }
