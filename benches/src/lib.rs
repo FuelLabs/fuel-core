@@ -92,7 +92,7 @@ impl VmBench {
     pub fn new(instruction: Opcode) -> Self {
         Self {
             params: ConsensusParameters {
-                max_gas_per_tx: u64::MAX - 1000,
+                max_gas_per_tx: LARGE_GAS_LIMIT + 1,
                 ..Default::default()
             },
             gas_price: 0,
