@@ -41,3 +41,11 @@ pub trait Executor {
         block: SealedBlock,
     ) -> anyhow::Result<ExecutionResult>;
 }
+
+pub struct MerkleTree;
+
+#[cfg_attr(test, automock)]
+#[async_trait::async_trait]
+pub trait DatabasePort {
+    async fn get_height_tree(&self, height: BlockHeight) -> anyhow::Result<MerkleTree>;
+}

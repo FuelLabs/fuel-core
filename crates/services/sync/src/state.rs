@@ -1,387 +1,154 @@
-#![allow(clippy::type_complexity)]
-use std::{
-    marker::PhantomData,
-    ops::RangeInclusive,
-};
+use std::ops::RangeInclusive;
 
-use fuel_core_types::blockchain::primitives::BlockHeight;
+#[cfg(test)]
+mod test;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct State {
-    in_flight: InFlight,
-    seen: Seen,
-    executed: Executed,
+    status: Status,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum InFlight {
-    Empty(Empty<InFlight>),
-    Processing(Processing),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum Seen {
-    Empty(Empty<Seen>),
-    Proposed(Proposed),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum Executed {
-    Empty(Empty<Executed>),
-    Committed(Committed),
-}
-
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
-struct Empty<T>(PhantomData<T>);
-
-impl<T> Empty<T> {
-    fn new() -> Self {
-        Self(PhantomData)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct Processing(RangeInclusive<u32>);
-
-impl Processing {
-    fn inc(self) -> Processing {
-        let r = self.0;
-        Self((*r.start() + 1)..=*r.end())
-    }
-
-    fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-}
-
-impl Default for Processing {
-    fn default() -> Self {
-        Self(0..=0)
-    }
-}
-
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
-struct Proposed(u32);
-
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
-struct Committed(u32);
-
-struct Tracker<I, S, E> {
-    in_flight: I,
-    seen: S,
-    executed: E,
-}
-
-enum Either<A, B> {
-    A(A),
-    B(B),
+pub enum Status {
+    Uninitialized,
+    Processing(RangeInclusive<u32>),
+    Committed(u32),
 }
 
 impl State {
-    pub fn new_empty() -> Self {
-        Self {
-            in_flight: InFlight::Empty(Empty::new()),
-            seen: Seen::Empty(Empty::new()),
-            executed: Executed::Empty(Empty::new()),
-        }
-    }
-
-    pub fn new(executed: BlockHeight) -> Self {
-        Self {
-            in_flight: InFlight::Empty(Empty::new()),
-            seen: Seen::Empty(Empty::new()),
-            executed: Executed::Committed(Committed(*executed)),
-        }
-    }
-
-    #[cfg(test)]
-    pub fn test(
-        in_flight: Option<RangeInclusive<u32>>,
-        seen: Option<u32>,
-        executed: Option<u32>,
+    pub fn new(
+        committed: impl Into<Option<u32>>,
+        observed: impl Into<Option<u32>>,
     ) -> Self {
-        Self {
-            in_flight: in_flight.map_or(InFlight::Empty(Empty::new()), |r| {
-                InFlight::Processing(Processing(r))
-            }),
-            seen: seen.map_or(Seen::Empty(Empty::new()), |r| Seen::Proposed(Proposed(r))),
-            executed: executed.map_or(Executed::Empty(Empty::new()), |r| {
-                Executed::Committed(Committed(r))
-            }),
-        }
-    }
-
-    pub fn see(&mut self, height: u32) -> bool {
-        match self.clone() {
-            State {
-                in_flight,
-                seen: Seen::Proposed(seen),
-                executed,
-            } => {
-                let new_state: Self = seen.see(height, in_flight, executed);
-                let change = *self != new_state;
-                *self = new_state;
-                change
-            }
-            State {
-                in_flight,
-                seen: Seen::Empty(seen),
-                executed: Executed::Empty(executed),
-            } => {
-                let new_state: Self = seen.see(height, in_flight, executed);
-                let change = *self != new_state;
-                *self = new_state;
-                change
-            }
-            _ => false,
-        }
-    }
-
-    pub fn process(&mut self) {
-        if let State {
-            in_flight: InFlight::Empty(in_flight),
-            seen: Seen::Proposed(seen),
-            executed,
-        } = self.clone()
-        {
-            *self = executed.process(in_flight, seen);
-        }
-    }
-
-    pub fn execute_and_commit(&mut self) {
-        if let State {
-            in_flight: InFlight::Processing(in_flight),
-            seen: Seen::Proposed(seen),
-            executed,
-        } = self.clone()
-        {
-            *self = executed.execute_and_commit(in_flight, seen);
-        }
+        let status = match (committed.into(), observed.into()) {
+            (Some(committed), Some(observed)) => match committed.checked_add(1) {
+                Some(next) => {
+                    let range = next..=observed;
+                    if range.is_empty() {
+                        Status::Committed(committed)
+                    } else {
+                        Status::Processing(range)
+                    }
+                }
+                None => Status::Committed(committed),
+            },
+            (Some(committed), None) => Status::Committed(committed),
+            (None, Some(observed)) => Status::Processing(0..=observed),
+            (None, None) => Status::Uninitialized,
+        };
+        Self { status }
     }
 
     pub fn process_range(&self) -> Option<RangeInclusive<u32>> {
-        match &self.in_flight {
-            InFlight::Processing(Processing(r)) => Some(r.clone()),
+        match &self.status {
+            Status::Processing(range) => Some(range.clone()),
             _ => None,
         }
     }
 
-    #[cfg(test)]
-    pub fn committed_height(&self) -> Option<BlockHeight> {
-        match &self.executed {
-            Executed::Committed(c) => Some(BlockHeight::from(c.0)),
+    pub fn commit(&mut self, height: u32) {
+        match &self.status {
+            Status::Processing(range) => {
+                if height >= *range.end() {
+                    self.status = Status::Committed(height);
+                } else {
+                    self.status =
+                        Status::Processing(height.saturating_add(1)..=*range.end())
+                }
+            }
+            Status::Uninitialized => {
+                self.status = Status::Committed(height);
+            }
+            Status::Committed(existing) => {
+                match creates_new_processing(existing, &height) {
+                    Some(range) => {
+                        self.status = Status::Processing(range);
+                    }
+                    None => {
+                        self.status = Status::Committed(*existing.max(&height));
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn observe(&mut self, height: u32) -> bool {
+        let mut status_change = true;
+        match &self.status {
+            Status::Uninitialized => {
+                self.status = Status::Processing(0..=height);
+            }
+            Status::Processing(range) if *range.end() < height => {
+                self.status = Status::Processing(*range.start()..=height);
+            }
+            Status::Committed(committed) => {
+                if let Some(next) = committed.checked_add(1) {
+                    let r = next..=height;
+                    if !r.is_empty() {
+                        self.status = Status::Processing(r);
+                    }
+                }
+            }
+            _ => {
+                status_change = false;
+            }
+        }
+        status_change
+    }
+
+    pub fn failed_to_process(&mut self, range: RangeInclusive<u32>) {
+        if !range.is_empty() {
+            match &self.status {
+                Status::Uninitialized => (),
+                Status::Processing(processing) => {
+                    if range.contains(processing.start()) {
+                        match processing.start().checked_sub(1) {
+                            Some(prev) => {
+                                self.status = Status::Committed(prev);
+                            }
+                            None => {
+                                self.status = Status::Uninitialized;
+                            }
+                        }
+                    } else if range.contains(processing.end())
+                        || processing.contains(range.start())
+                    {
+                        match range.start().checked_sub(1) {
+                            Some(prev) => {
+                                self.status =
+                                    Status::Processing(*processing.start()..=prev);
+                            }
+                            None => {
+                                self.status = Status::Uninitialized;
+                            }
+                        }
+                    } else if processing.contains(range.end()) {
+                        match processing.start().checked_sub(1) {
+                            Some(prev) => {
+                                self.status = Status::Committed(prev);
+                            }
+                            None => {
+                                self.status = Status::Uninitialized;
+                            }
+                        }
+                    }
+                }
+                Status::Committed(_) => (),
+            }
+        }
+    }
+
+    pub fn proposed_height(&self) -> Option<&u32> {
+        match &self.status {
+            Status::Processing(range) => Some(range.end()),
             _ => None,
         }
     }
-
-    #[cfg(test)]
-    pub fn proposed_height(&self) -> Option<BlockHeight> {
-        match &self.seen {
-            Seen::Proposed(c) => Some(BlockHeight::from(c.0)),
-            _ => None,
-        }
-    }
 }
 
-impl<I> Tracker<I, Empty<Seen>, Empty<Executed>> {
-    fn see(self, height: u32) -> Tracker<I, Proposed, Empty<Executed>> {
-        Tracker {
-            in_flight: self.in_flight,
-            seen: Proposed(height),
-            executed: self.executed,
-        }
-    }
-}
-
-impl<I> Tracker<I, Proposed, Committed> {
-    fn see(self, height: u32) -> Tracker<I, Proposed, Committed> {
-        Tracker {
-            in_flight: self.in_flight,
-            seen: Proposed(self.seen.0.max(self.executed.0).max(height)),
-            executed: self.executed,
-        }
-    }
-}
-
-impl<I> Tracker<I, Proposed, Empty<Executed>> {
-    fn see(self, height: u32) -> Tracker<I, Proposed, Empty<Executed>> {
-        Tracker {
-            in_flight: self.in_flight,
-            seen: Proposed(self.seen.0.max(height)),
-            executed: self.executed,
-        }
-    }
-}
-
-impl Tracker<Empty<InFlight>, Proposed, Empty<Executed>> {
-    fn process(self) -> Tracker<Processing, Proposed, Empty<Executed>> {
-        Tracker {
-            in_flight: Processing(0..=(self.seen.0)),
-            seen: self.seen,
-            executed: self.executed,
-        }
-    }
-}
-
-impl Tracker<Empty<InFlight>, Proposed, Committed> {
-    fn process(self) -> Tracker<Processing, Proposed, Committed> {
-        Tracker {
-            in_flight: Processing((self.executed.0 + 1)..=(self.seen.0)),
-            seen: self.seen,
-            executed: self.executed,
-        }
-    }
-}
-
-impl<E> Tracker<Processing, Proposed, E> {
-    fn execute_and_commit(
-        self,
-    ) -> Either<
-        Tracker<Empty<InFlight>, Proposed, Committed>,
-        Tracker<Processing, Proposed, Committed>,
-    > {
-        let Self {
-            in_flight, seen, ..
-        } = self;
-        let executed = Committed(*in_flight.0.start());
-        let in_flight = in_flight.inc();
-
-        if in_flight.is_empty() {
-            Either::A(Tracker {
-                in_flight: Empty::<InFlight>::new(),
-                seen,
-                executed,
-            })
-        } else {
-            Either::B(Tracker {
-                in_flight,
-                seen,
-                executed,
-            })
-        }
-    }
-}
-
-impl Proposed {
-    fn see<I>(self, height: u32, in_flight: I, executed: Executed) -> State
-    where
-        I: Into<InFlight>,
-    {
-        match executed {
-            Executed::Empty(executed) => Tracker {
-                in_flight,
-                seen: self,
-                executed,
-            }
-            .see(height)
-            .into(),
-            Executed::Committed(executed) => Tracker {
-                in_flight,
-                seen: self,
-                executed,
-            }
-            .see(height)
-            .into(),
-        }
-    }
-}
-
-impl Empty<Seen> {
-    fn see<I>(self, height: u32, in_flight: I, executed: Empty<Executed>) -> State
-    where
-        I: Into<InFlight>,
-    {
-        Tracker {
-            in_flight,
-            seen: self,
-            executed,
-        }
-        .see(height)
-        .into()
-    }
-}
-
-impl Executed {
-    fn process(self, in_flight: Empty<InFlight>, seen: Proposed) -> State {
-        match self {
-            Executed::Empty(executed) => Tracker {
-                in_flight,
-                seen,
-                executed,
-            }
-            .process()
-            .into(),
-            Executed::Committed(executed) => Tracker {
-                in_flight,
-                seen,
-                executed,
-            }
-            .process()
-            .into(),
-        }
-    }
-}
-
-impl Executed {
-    fn execute_and_commit(self, in_flight: Processing, seen: Proposed) -> State {
-        Tracker {
-            in_flight,
-            seen,
-            executed: self,
-        }
-        .execute_and_commit()
-        .into()
-    }
-}
-
-macro_rules! impl_from {
-    ($from:ty, $to:ty, $v:ident) => {
-        impl From<$from> for $to {
-            fn from(t: $from) -> Self {
-                use $to::*;
-                $v(t)
-            }
-        }
-    };
-}
-
-impl_from!(Empty<InFlight>, InFlight, Empty);
-impl_from!(Processing, InFlight, Processing);
-
-impl_from!(Empty<Seen>, Seen, Empty);
-impl_from!(Proposed, Seen, Proposed);
-
-impl_from!(Empty<Executed>, Executed, Empty);
-impl_from!(Committed, Executed, Committed);
-
-impl<I, S, E> From<Tracker<I, S, E>> for State
-where
-    I: Into<InFlight>,
-    S: Into<Seen>,
-    E: Into<Executed>,
-{
-    fn from(t: Tracker<I, S, E>) -> Self {
-        Self {
-            in_flight: t.in_flight.into(),
-            seen: t.seen.into(),
-            executed: t.executed.into(),
-        }
-    }
-}
-
-impl<I, S, E, IB, SB, EB> From<Either<Tracker<I, S, E>, Tracker<IB, SB, EB>>> for State
-where
-    I: Into<InFlight>,
-    S: Into<Seen>,
-    E: Into<Executed>,
-    IB: Into<InFlight>,
-    SB: Into<Seen>,
-    EB: Into<Executed>,
-{
-    fn from(e: Either<Tracker<I, S, E>, Tracker<IB, SB, EB>>) -> Self {
-        match e {
-            Either::A(t) => t.into(),
-            Either::B(t) => t.into(),
-        }
-    }
+fn creates_new_processing(existing: &u32, commit: &u32) -> Option<RangeInclusive<u32>> {
+    let next = commit.checked_add(1)?;
+    let prev_existing = existing.checked_sub(1)?;
+    let r = next..=prev_existing;
+    (!r.is_empty()).then_some(r)
 }

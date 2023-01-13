@@ -38,7 +38,7 @@ async fn sync(
 ) {
     height_stream
         .for_each(|h| {
-            let state_change = state.apply(|s| s.see(*h));
+            let state_change = state.apply(|s| s.observe(*h));
             if state_change {
                 notify.notify_one();
             }
