@@ -31,6 +31,7 @@ use fuel_core_types::{
     blockchain::primitives::{
         BlockHeight,
         BlockId,
+        DaBlockHeight,
     },
     entities::message::Message,
     fuel_tx::{
@@ -158,6 +159,18 @@ impl DatabaseChain for Database {
         Ok(self
             .get_chain_name()?
             .unwrap_or_else(|| DEFAULT_NAME.to_string()))
+    }
+
+    fn base_chain_height(&self) -> StorageResult<DaBlockHeight> {
+        #[cfg(feature = "relayer")]
+        {
+            use fuel_core_relayer::ports::RelayerDb;
+            self.get_finalized_da_height()
+        }
+        #[cfg(not(feature = "relayer"))]
+        {
+            Ok(0u64.into())
+        }
     }
 }
 

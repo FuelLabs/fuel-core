@@ -207,7 +207,8 @@ impl From<StorageError> for ResourceQueryError {
 #[cfg(test)]
 mod tests {
     use crate::{
-        fuel_core_graphql_api::service::Database,
+        database::Database,
+        fuel_core_graphql_api::service::Database as ServiceDatabase,
         query::{
             asset_query::{
                 AssetQuery,
@@ -296,7 +297,7 @@ mod tests {
         fn query(
             spend_query: &[AssetSpendTarget],
             owner: &Address,
-            db: &Database,
+            db: &ServiceDatabase,
         ) -> Result<Vec<Vec<(AssetId, Word)>>, ResourceQueryError> {
             let result: Vec<_> = spend_query
                 .iter()
@@ -324,7 +325,7 @@ mod tests {
                 let resources = query(
                     &[AssetSpendTarget::new(asset_id, target, u64::MAX)],
                     &owner,
-                    db.as_ref(),
+                    &db.service_database(),
                 );
 
                 // Transform result for convenience
@@ -382,7 +383,7 @@ mod tests {
             let resources = query(
                 &[AssetSpendTarget::new(asset_id, 6, 1)],
                 &owner,
-                db.as_ref(),
+                &db.service_database(),
             );
             assert_matches!(resources, Err(ResourceQueryError::MaxResourcesReached));
         }
@@ -413,7 +414,7 @@ mod tests {
                     AssetSpendTarget::new(asset_ids[1], 6, u64::MAX),
                 ],
                 &owner,
-                db.as_ref(),
+                &db.service_database(),
             );
             assert_matches!(resources, Ok(resources)
             if resources == vec![
@@ -441,7 +442,7 @@ mod tests {
             query_per_asset: Vec<AssetSpendTarget>,
             owner: Address,
             asset_ids: &[AssetId],
-            db: &Database,
+            db: &ServiceDatabase,
         ) -> Result<Vec<(AssetId, u64)>, ResourceQueryError> {
             let coins =
                 random_improve(db, &SpendQuery::new(owner, &query_per_asset, None)?);
@@ -473,7 +474,7 @@ mod tests {
                     vec![AssetSpendTarget::new(asset_id, amount, u64::MAX)],
                     owner,
                     asset_ids,
-                    db.as_ref(),
+                    &db.service_database(),
                 );
 
                 // Transform result for convenience
@@ -524,7 +525,7 @@ mod tests {
                 )],
                 owner,
                 asset_ids,
-                db.as_ref(),
+                &db.service_database(),
             );
             assert_matches!(coins, Err(ResourceQueryError::MaxResourcesReached));
         }
@@ -565,7 +566,7 @@ mod tests {
                 ],
                 owner,
                 asset_ids,
-                db.as_ref(),
+                &db.service_database(),
             );
             assert_matches!(coins, Ok(ref coins) if coins.len() <= 6);
             let coins = coins.unwrap();
@@ -615,7 +616,7 @@ mod tests {
                          excluded_ids: Vec<ResourceId>|
              -> Result<Vec<(AssetId, u64)>, ResourceQueryError> {
                 let coins = random_improve(
-                    db.as_ref(),
+                    &db.service_database(),
                     &SpendQuery::new(owner, &query_per_asset, Some(excluded_ids))?,
                 );
 
@@ -808,7 +809,7 @@ mod tests {
             }
 
             let coins = random_improve(
-                db.as_ref(),
+                &db.service_database(),
                 &SpendQuery::new(
                     owner,
                     &[AssetSpendTarget {
@@ -838,12 +839,16 @@ mod tests {
     }
 
     impl TestDatabase {
-        pub fn new() -> Self {
+        fn new() -> Self {
             Self {
-                database: Box::<crate::database::Database>::default(),
+                database: Default::default(),
                 last_coin_index: Default::default(),
                 last_message_index: Default::default(),
             }
+        }
+
+        fn service_database(&self) -> ServiceDatabase {
+            Box::new(self.database.clone())
         }
     }
 
@@ -867,7 +872,7 @@ mod tests {
                 block_created: Default::default(),
             };
 
-            let db = self.database.as_mut();
+            let db = &mut self.database;
             StorageMutate::<Coins>::insert(db, &id, &coin).unwrap();
 
             coin.uncompress(id)
@@ -887,14 +892,15 @@ mod tests {
                 fuel_block_spend: None,
             };
 
-            let db = self.database.as_mut();
+            let db = &mut self.database;
             StorageMutate::<Messages>::insert(db, &message.id(), &message).unwrap();
 
             message
         }
 
         pub fn owned_coins(&self, owner: &Address) -> Vec<Coin> {
-            let query = CoinQueryContext(&self.database);
+            let db = self.service_database();
+            let query = CoinQueryContext(&db);
             query
                 .owned_coins_ids(owner, None, IterDirection::Forward)
                 .map(|res| res.map(|id| query.coin(id).unwrap()))
@@ -903,18 +909,13 @@ mod tests {
         }
 
         pub fn owned_messages(&self, owner: &Address) -> Vec<Message> {
-            let query = MessageQueryContext(&self.database);
+            let db = self.service_database();
+            let query = MessageQueryContext(&db);
             query
                 .owned_message_ids(owner, None, IterDirection::Forward)
                 .map(|res| res.map(|id| query.message(&id).unwrap()))
                 .try_collect()
                 .unwrap()
-        }
-    }
-
-    impl AsRef<Database> for TestDatabase {
-        fn as_ref(&self) -> &Database {
-            &self.database
         }
     }
 }

@@ -1,5 +1,8 @@
 use crate::{
-    fuel_core_graphql_api::Config as GraphQLConfig,
+    fuel_core_graphql_api::{
+        service::Database,
+        Config as GraphQLConfig,
+    },
     query::{
         BlockQueryContext,
         ChainQueryContext,
@@ -88,8 +91,12 @@ impl ChainInfo {
         Ok(latest_block)
     }
 
-    async fn base_chain_height(&self) -> U64 {
-        0.into()
+    async fn base_chain_height(&self, ctx: &Context<'_>) -> U64 {
+        let height = ctx
+            .data_unchecked::<Database>()
+            .base_chain_height()
+            .unwrap_or_default();
+        height.0.into()
     }
 
     async fn peer_count(&self) -> u16 {

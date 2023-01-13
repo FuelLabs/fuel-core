@@ -26,7 +26,7 @@ async fn can_set_da_height() {
 
     relayer.shared.await_synced().await.unwrap();
 
-    assert_eq!(*mock_db.get_finalized_da_height().await.unwrap(), 100);
+    assert_eq!(*mock_db.get_finalized_da_height().unwrap(), 100);
 }
 
 #[tokio::test(start_paused = true)]
@@ -103,5 +103,5 @@ async fn deploy_height_is_set() {
     relayer.shared.await_synced().await.unwrap();
     rx.await.unwrap();
 
-    assert_eq!(*mock_db.get_finalized_da_height().await.unwrap(), 53);
+    assert_eq!(*mock_db.get_finalized_da_height().unwrap(), 53);
 }

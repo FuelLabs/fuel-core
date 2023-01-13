@@ -20,6 +20,7 @@ use fuel_core_types::{
     blockchain::primitives::{
         BlockHeight,
         BlockId,
+        DaBlockHeight,
     },
     entities::message::Message,
     fuel_tx::{
@@ -40,7 +41,6 @@ use fuel_core_types::{
 };
 
 /// The database port expected by GraphQL API service.
-#[cfg(not(test))]
 pub trait DatabasePort:
     Send
     + Sync
@@ -50,22 +50,6 @@ pub trait DatabasePort:
     + DatabaseCoins
     + DatabaseContracts
     + DatabaseChain
-{
-}
-
-/// The database port expected by GraphQL API service.
-#[cfg(test)]
-pub trait DatabasePort:
-    Send
-    + Sync
-    + DatabaseBlocks
-    + DatabaseTransactions
-    + DatabaseMessages
-    + DatabaseCoins
-    + DatabaseContracts
-    + DatabaseChain
-    + fuel_core_storage::StorageMutate<Coins, Error = StorageError>
-    + fuel_core_storage::StorageMutate<Messages, Error = StorageError>
 {
 }
 
@@ -143,4 +127,6 @@ pub trait DatabaseContracts:
 /// Trait that specifies all the getters required for chain metadata.
 pub trait DatabaseChain {
     fn chain_name(&self) -> StorageResult<String>;
+
+    fn base_chain_height(&self) -> StorageResult<DaBlockHeight>;
 }

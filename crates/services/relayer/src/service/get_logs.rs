@@ -67,7 +67,7 @@ where
             match event {
                 EthEventLog::Message(m) => {
                     let m = Message::from(&m).check();
-                    if database.insert_message(&m).await?.is_some() {
+                    if database.insert_message(&m)?.is_some() {
                         // TODO: https://github.com/FuelLabs/fuel-core/issues/681
                         return Err(anyhow!(
                             "The message for {:?} already existed",
@@ -79,7 +79,7 @@ where
                 EthEventLog::Ignored => (),
             }
         }
-        database.set_finalized_da_height(to_block.into()).await?;
+        database.set_finalized_da_height(to_block.into())?;
     }
     Ok(())
 }
