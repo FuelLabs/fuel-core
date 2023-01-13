@@ -16,10 +16,7 @@ use crate::{
         },
         topics::GossipsubTopics,
     },
-    peer_info::{
-        PeerInfo,
-        PeerInfoEvent,
-    },
+    peer_manager::PeerInfoEvent,
     request_response::messages::{
         IntermediateResponse,
         OutboundResponse,
@@ -50,6 +47,7 @@ use libp2p::{
     },
     swarm::{
         AddressScore,
+        ConnectionLimits,
         SwarmBuilder,
         SwarmEvent,
     },
@@ -57,8 +55,8 @@ use libp2p::{
     PeerId,
     Swarm,
 };
-use libp2p_swarm::ConnectionLimits;
-use rand::Rng;
+
+use rand::seq::IteratorRandom;
 use std::collections::HashMap;
 use tracing::{
     debug,
@@ -130,11 +128,36 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let local_peer_id = PeerId::from(config.keypair.public());
 
         // configure and build P2P Service
-        let transport = build_transport(&config);
-        let behaviour = FuelBehaviour::new(&config, codec.clone());
+        let (transport, connection_state) = build_transport(&config);
+        let behaviour = FuelBehaviour::new(&config, codec.clone(), connection_state);
+
+        let total_connections = {
+            // Reserved nodes do not count against the configured peer input/output limits.
+            let total_peers =
+                config.max_peers_connected + config.reserved_nodes.len() as u32;
+
+            total_peers * config.max_connections_per_peer
+        };
+
+        let max_established_incoming = {
+            if config.reserved_nodes_only_mode {
+                // If this is a guarded node,
+                // it should not receive any incoming connection requests.
+                // Rather, it will send outgoing connection requests to its reserved nodes
+                0
+            } else {
+                total_connections / 2
+            }
+        };
 
         let connection_limits = ConnectionLimits::default()
-            .with_max_established(Some(config.max_peers_connected));
+            .with_max_established_incoming(Some(max_established_incoming))
+            .with_max_established_per_peer(Some(config.max_connections_per_peer))
+            // libp2p does not manage how many different peers we're connected to
+            // it only takes care that there are 'N' amount of connections established.
+            // Our `PeerManagerBehaviour` will keep track of different peers connected
+            // and disconnect any surplus peers
+            .with_max_established(Some(total_connections));
 
         let mut swarm =
             SwarmBuilder::with_tokio_executor(transport, behaviour, local_peer_id)
@@ -182,12 +205,8 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         Ok(())
     }
 
-    pub fn get_peers_info(&self) -> &HashMap<PeerId, PeerInfo> {
-        self.swarm.behaviour().get_peers()
-    }
-
-    pub fn get_peers_ids(&self) -> Vec<PeerId> {
-        self.get_peers_info().iter().map(|(id, _)| *id).collect()
+    pub fn get_peers_ids(&self) -> impl Iterator<Item = &PeerId> {
+        self.swarm.behaviour().get_peers_ids()
     }
 
     pub fn publish_message(
@@ -219,19 +238,22 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let peer_id = match peer_id {
             Some(peer_id) => peer_id,
             _ => {
-                let connected_peers = self.get_peers_info();
-                if connected_peers.is_empty() {
+                let peers = self.get_peers_ids();
+                let peers_count = self.swarm.behaviour().total_peers_connected();
+
+                if peers_count == 0 {
                     return Err(RequestError::NoPeersConnected)
                 }
-                let rand_index = rand::thread_rng().gen_range(0..connected_peers.len());
-                *connected_peers.keys().nth(rand_index).unwrap()
+
+                let mut range = rand::thread_rng();
+                *peers.choose(&mut range).unwrap()
             }
         };
 
         let request_id = self
             .swarm
             .behaviour_mut()
-            .send_request_msg(message_request, peer_id);
+            .send_request_msg(message_request, &peer_id);
 
         self.outbound_requests_table
             .insert(request_id, channel_item);
@@ -312,19 +334,15 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         event: FuelBehaviourEvent,
     ) -> Option<FuelP2PEvent> {
         match event {
-            FuelBehaviourEvent::Discovery(discovery_event) => match discovery_event {
-                DiscoveryEvent::Connected(peer_id, addresses) => {
+            FuelBehaviourEvent::Discovery(discovery_event) => {
+                if let DiscoveryEvent::PeerInfoOnConnect { peer_id, addresses } =
+                    discovery_event
+                {
                     self.swarm
                         .behaviour_mut()
                         .add_addresses_to_peer_info(&peer_id, addresses);
-
-                    return Some(FuelP2PEvent::PeerConnected(peer_id))
                 }
-                DiscoveryEvent::Disconnected(peer_id) => {
-                    return Some(FuelP2PEvent::PeerDisconnected(peer_id))
-                }
-                _ => {}
-            },
+            }
             FuelBehaviourEvent::Gossipsub(gossipsub_event) => {
                 if let GossipsubEvent::Message {
                     propagation_source,
@@ -383,6 +401,32 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 }
                 PeerInfoEvent::PeerInfoUpdated { peer_id } => {
                     return Some(FuelP2PEvent::PeerInfoUpdated(peer_id))
+                }
+                PeerInfoEvent::PeerConnected(peer_id) => {
+                    return Some(FuelP2PEvent::PeerConnected(peer_id))
+                }
+                PeerInfoEvent::ReconnectToPeer(peer_id) => {
+                    let _ = self.swarm.dial(peer_id);
+                }
+                PeerInfoEvent::PeerDisconnected {
+                    peer_id,
+                    should_reconnect,
+                } => {
+                    if should_reconnect {
+                        let _ = self.swarm.dial(peer_id);
+                    }
+                    return Some(FuelP2PEvent::PeerDisconnected(peer_id))
+                }
+                PeerInfoEvent::TooManyPeers {
+                    peer_to_disconnect,
+                    peer_to_connect,
+                } => {
+                    // disconnect the surplus peer
+                    let _ = self.swarm.disconnect_peer_id(peer_to_disconnect);
+                    // reconnect the reserved peer
+                    if let Some(peer_id) = peer_to_connect {
+                        let _ = self.swarm.dial(peer_id);
+                    }
                 }
             },
             FuelBehaviourEvent::RequestResponse(req_res_event) => match req_res_event {
@@ -472,7 +516,7 @@ mod tests {
             },
         },
         p2p_service::FuelP2PEvent,
-        peer_info::PeerInfo,
+        peer_manager::PeerInfo,
         request_response::messages::{
             OutboundResponse,
             RequestMessage,
@@ -635,6 +679,167 @@ mod tests {
         }
     }
 
+    // Single sentry node connects to multiple reserved nodes and `max_peers_allowed` amount of non-reserved nodes.
+    // It also tries to dial extra non-reserved nodes to establish the connection.
+    // A single reserved node is not started immediately with the rest of the nodes.
+    // Once sentry node establishes the connection with the allowed number of nodes
+    // we start the reserved node, and await for it to establish the connection.
+    // This test proves that there is always an available slot for the reserved node to connect to.
+    #[tokio::test]
+    #[instrument]
+    async fn reserved_nodes_reconnect_works() {
+        let mut p2p_config =
+            Config::default_initialized("reserved_nodes_reconnect_works");
+        // enable mdns for faster discovery of nodes
+        p2p_config.enable_mdns = true;
+
+        // total amount will be `max_peers_allowed` + `reserved_nodes.len()`
+        let max_peers_allowed = 3;
+
+        let bootstrap_nodes_data: Vec<NodeData> = (0..max_peers_allowed * 5)
+            .map(|_| NodeData::random())
+            .collect();
+
+        let mut reserved_nodes_data: Vec<NodeData> =
+            (0..3).map(|_| NodeData::random()).collect();
+
+        let mut sentry_node = {
+            let mut p2p_config = p2p_config.clone();
+            p2p_config.max_peers_connected = max_peers_allowed as u32;
+
+            p2p_config.bootstrap_nodes = bootstrap_nodes_data
+                .iter()
+                .map(|node| node.multiaddr.clone())
+                .collect();
+
+            p2p_config.reserved_nodes = reserved_nodes_data
+                .iter()
+                .map(|node| node.multiaddr.clone())
+                .collect();
+
+            NodeData::random().create_service(p2p_config)
+        };
+
+        // pop() a single reserved node, so it's not run with the rest of the nodes
+        let reserved_node = reserved_nodes_data.pop().unwrap().clone();
+        let reserved_node_peer_id =
+            PeerId::from_public_key(&reserved_node.keypair.public());
+
+        let mut all_node_services: Vec<_> = bootstrap_nodes_data
+            .iter()
+            .chain(reserved_nodes_data.iter())
+            .map(|node| node.create_service(p2p_config.clone()))
+            .collect();
+
+        loop {
+            tokio::select! {
+                sentry_node_event = sentry_node.next_event() => {
+                    // we've connected to all other peers
+                    if sentry_node.swarm.behaviour().total_peers_connected() >= 5 {
+                        // if the `reserved_node` is not included,
+                        // create and insert it, to be polled with rest of the nodes
+                        if !all_node_services
+                        .iter()
+                        .any(|service| service.local_peer_id == reserved_node_peer_id) {
+                            all_node_services.push(reserved_node.create_service(p2p_config.clone()));
+                        }
+                    }
+                    if let Some(FuelP2PEvent::PeerConnected(peer_id)) = sentry_node_event {
+                        // we connected to the desired reserved node
+                        if peer_id == reserved_node_peer_id {
+                            break
+                        }
+                    }
+                },
+                _ = async {
+                    for node in &mut all_node_services {
+                        node.next_event().await;
+                    }
+                } => {}
+            }
+        }
+    }
+
+    // We start with two nodes, node_5 and node_10, bootstrapped with 100 other nodes
+    // yet node_5 is only allowed to connect to 5 other nodes, and node_10 to 10
+    #[tokio::test]
+    #[instrument]
+    async fn max_peers_connected_works() {
+        let mut p2p_config = Config::default_initialized("max_peers_connected_works");
+        // enable mdns for faster discovery of nodes
+        p2p_config.enable_mdns = true;
+
+        let nodes: Vec<NodeData> = (0..100).map(|_| NodeData::random()).collect();
+
+        // this node is allowed to only connect to 5 other nodes
+        let mut node_5 = {
+            let mut p2p_config = p2p_config.clone();
+            p2p_config.max_peers_connected = 5;
+            // it still tries to dial all 100 nodes!
+            p2p_config.bootstrap_nodes =
+                nodes.iter().map(|node| node.multiaddr.clone()).collect();
+
+            NodeData::random().create_service(p2p_config)
+        };
+
+        // this node is allowed to only connect to 10 other nodes
+        let mut node_10 = {
+            let mut p2p_config = p2p_config.clone();
+            p2p_config.max_peers_connected = 10;
+            // it still tries to dial all 100 nodes!
+            p2p_config.bootstrap_nodes =
+                nodes.iter().map(|node| node.multiaddr.clone()).collect();
+
+            NodeData::random().create_service(p2p_config)
+        };
+
+        let mut node_services: Vec<_> = nodes
+            .into_iter()
+            .map(|node| node.create_service(p2p_config.clone()))
+            .collect();
+
+        // this node will only connect to node_5 and node_10 at the beginning
+        // then it will slowly discover other nodes in the network
+        // it serves as our exit from the loop
+        let mut bootstrapped_node = node_services.pop().unwrap();
+
+        loop {
+            tokio::select! {
+                event_from_node_5 = node_5.next_event() => {
+                    if let Some(FuelP2PEvent::PeerConnected(_)) = event_from_node_5 {
+                        if node_5.swarm.connected_peers().count() > 5 {
+                            panic!("The node should only connect to max 5 peers");
+                        }
+                    }
+                    tracing::info!("Event from the node_5: {:?}", event_from_node_5);
+                },
+                event_from_node_10 = node_10.next_event() => {
+                    if let Some(FuelP2PEvent::PeerConnected(_)) = event_from_node_10 {
+                        if node_10.swarm.connected_peers().count() > 10 {
+                            panic!("The node should only connect to max 10 peers");
+                        }
+                    }
+                    tracing::info!("Event from the node_10: {:?}", event_from_node_10);
+                },
+                event_from_bootstrapped_node = bootstrapped_node.next_event() => {
+                    if let Some(FuelP2PEvent::PeerConnected(_)) = event_from_bootstrapped_node {
+                        // if the test was broken, it would panic! by the time this node discovers more peers
+                        // and connects to them
+                        if bootstrapped_node.swarm.connected_peers().count() > 20 {
+                            break
+                        }
+                    }
+                    tracing::info!("Event from the bootstrapped_node: {:?}", event_from_bootstrapped_node);
+                },
+                _ = async {
+                    for node in &mut node_services {
+                        node.next_event().await;
+                    }
+                } => {}
+            }
+        }
+    }
+
     // Simulate 2 Sets of Sentry nodes.
     // In both Sets, a single Guarded Node should only be connected to their sentry nodes.
     // While other nodes can and should connect to nodes outside of the Sentry Set.
@@ -665,7 +870,7 @@ mod tests {
                 guarded_node.create_service(p2p_config)
             };
 
-            let sentry_nodes: Vec<FuelP2PService<BincodeCodec>> = reserved_nodes
+            let sentry_nodes: Vec<FuelP2PService<_>> = reserved_nodes
                 .into_iter()
                 .map(|node| {
                     let mut p2p_config = p2p_config.clone();

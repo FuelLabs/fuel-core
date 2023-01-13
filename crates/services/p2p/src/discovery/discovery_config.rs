@@ -182,7 +182,7 @@ impl DiscoveryConfig {
             bootstrap_nodes,
             reserved_nodes,
             connected_peers: HashSet::new(),
-            events: VecDeque::new(),
+            pending_events: VecDeque::new(),
             kademlia,
             next_kad_random_walk,
             duration_to_next_kad: Duration::from_secs(1),
