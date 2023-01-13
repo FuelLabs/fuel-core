@@ -2250,7 +2250,8 @@ checksum = "2022715d62ab30faffd124d40b76f4134a550a87792276512b18d63272333394"
 [[package]]
 name = "fuel-asm"
 version = "0.24.0"
-source = "git+https://github.com/FuelLabs/fuel-vm#c663a278e86ba0a8ba89792f889d5abc7b00c7c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c535ab9d0519595289e1c7f24cc1db8cbf86f057c0c154d9baabb1427ba2f9fe"
 dependencies = [
  "fuel-types",
  "serde",
@@ -2431,7 +2432,7 @@ name = "fuel-core-keygen"
 version = "0.15.1"
 dependencies = [
  "anyhow",
- "clap",
+ "clap 3.2.23",
  "fuel-core-types",
  "serde_json",
 ]
@@ -2643,7 +2644,8 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.24.0"
-source = "git+https://github.com/FuelLabs/fuel-vm#c663a278e86ba0a8ba89792f889d5abc7b00c7c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42d9e209ae6be1d42cd991111571d6feb2a0fe9ecb7f244be0834fde73c11bc6"
 dependencies = [
  "borrown",
  "coins-bip32",
@@ -2681,12 +2683,14 @@ checksum = "b0f895423d18472d60eb078cf949608ff3fe6e42e91d41b85993b11528d2c4c3"
 [[package]]
 name = "fuel-storage"
 version = "0.24.0"
-source = "git+https://github.com/FuelLabs/fuel-vm#c663a278e86ba0a8ba89792f889d5abc7b00c7c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b228fa0ae4259249b417a43dc703ff518eb4fba67619152031aa1bd4c2d9b8a5"
 
 [[package]]
 name = "fuel-tx"
 version = "0.24.0"
-source = "git+https://github.com/FuelLabs/fuel-vm#c663a278e86ba0a8ba89792f889d5abc7b00c7c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7830f9bab78cc19d78f35f4a0e508dfdd1e21c8f91d715a398e11c366e7da9b"
 dependencies = [
  "bitflags",
  "derivative",
@@ -2704,7 +2708,8 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.24.0"
-source = "git+https://github.com/FuelLabs/fuel-vm#c663a278e86ba0a8ba89792f889d5abc7b00c7c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be8e4ce7485340490bef3727ddf8fd1e6297744440482d3a7bbb57bf0de0c068"
 dependencies = [
  "rand 0.8.5",
  "serde",
@@ -2713,7 +2718,8 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.24.0"
-source = "git+https://github.com/FuelLabs/fuel-vm#c663a278e86ba0a8ba89792f889d5abc7b00c7c3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "986dcc57a67dd88e258e7db2772bcdd7f9177f0c5fd2684c656dc8a9f6aaf3d6"
 dependencies = [
  "anyhow",
  "fuel-asm",
@@ -2729,6 +2735,7 @@ dependencies = [
  "tai64",
  "thiserror",
  "tracing",
+ "tuples",
 ]
 
 [[package]]
@@ -6714,6 +6721,12 @@ dependencies = [
  "utf-8",
  "webpki 0.22.0",
 ]
+
+[[package]]
+name = "tuples"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "446791a5e330a0dc5939f32eba8704c39b39e6f308740e666e4217bf4f50c3f0"
 
 [[package]]
 name = "turn"

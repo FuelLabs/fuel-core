@@ -113,7 +113,7 @@ pub struct Command {
 
     #[cfg_attr(feature = "p2p", clap(flatten))]
     #[cfg(feature = "p2p")]
-    pub p2p_args: p2p::P2pArgs,
+    pub p2p_args: p2p::P2PArgs,
 
     #[clap(long = "metrics")]
     pub metrics: bool,

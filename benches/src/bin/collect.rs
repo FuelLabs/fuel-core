@@ -657,26 +657,6 @@ mod tests {
     }
 
     #[test]
-    fn to_yaml() {
-        let input =
-            std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/test.json"))
-                .unwrap();
-
-        let mut state = State {
-            all: true,
-            baseline: "noop/noop".into(),
-            ids: Default::default(),
-            throughput: Default::default(),
-            groups: Default::default(),
-        };
-        for line in input.lines() {
-            extract_state(line, &mut state, true);
-        }
-
-        eprintln!("{}", serde_yaml::to_string(&state.to_yaml()).unwrap());
-    }
-
-    #[test]
     fn serialize_gas_costs() {
         let input = r#"
         {"reason":"benchmark-complete","id":"noop","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[],"mean":{"estimate":14.6387085050968,"lower_bound":141.05228097712418,"upper_bound":142.32943553585415,"unit":"ns"},"median":{"estimate":140.51177523784355,"lower_bound":140.39754464285716,"upper_bound":140.73739964179842,"unit":"ns"}}
@@ -714,7 +694,7 @@ mod tests {
             env!("CARGO_MANIFEST_DIR"),
             "/benches-outputs/Cargo.toml"
         ));
-        std::fs::write(&path, state.to_rust_code()).unwrap();
+        std::fs::write(path, state.to_rust_code()).unwrap();
         let output = std::process::Command::new("cargo")
             .arg("check")
             .arg("--manifest-path")
