@@ -563,6 +563,7 @@ mod tests {
     use tokio::sync::{
         mpsc,
         oneshot,
+        watch,
     };
     use tracing_attributes::instrument;
     use tracing_subscriber::{
@@ -659,6 +660,20 @@ mod tests {
         }
     }
 
+    fn spawn(stop: &watch::Sender<()>, mut node: FuelP2PService<BincodeCodec>) {
+        let mut stop = stop.subscribe();
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = node.next_event() => {}
+                    _ = stop.changed() => {
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
     #[tokio::test]
     #[instrument]
     async fn p2p_service_works() {
@@ -685,7 +700,7 @@ mod tests {
     // Once sentry node establishes the connection with the allowed number of nodes
     // we start the reserved node, and await for it to establish the connection.
     // This test proves that there is always an available slot for the reserved node to connect to.
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[instrument]
     async fn reserved_nodes_reconnect_works() {
         let mut p2p_config =
@@ -725,11 +740,21 @@ mod tests {
         let reserved_node_peer_id =
             PeerId::from_public_key(&reserved_node.keypair.public());
 
-        let mut all_node_services: Vec<_> = bootstrap_nodes_data
+        let all_node_services: Vec<_> = bootstrap_nodes_data
             .iter()
             .chain(reserved_nodes_data.iter())
             .map(|node| node.create_service(p2p_config.clone()))
             .collect();
+
+        let mut all_nodes_ids: Vec<PeerId> = all_node_services
+            .iter()
+            .map(|service| service.local_peer_id)
+            .collect();
+
+        let (stop_sender, _) = watch::channel(());
+        all_node_services.into_iter().for_each(|node| {
+            spawn(&stop_sender, node);
+        });
 
         loop {
             tokio::select! {
@@ -738,10 +763,12 @@ mod tests {
                     if sentry_node.swarm.behaviour().total_peers_connected() >= 5 {
                         // if the `reserved_node` is not included,
                         // create and insert it, to be polled with rest of the nodes
-                        if !all_node_services
+                        if !all_nodes_ids
                         .iter()
-                        .any(|service| service.local_peer_id == reserved_node_peer_id) {
-                            all_node_services.push(reserved_node.create_service(p2p_config.clone()));
+                        .any(|local_peer_id| local_peer_id == &reserved_node_peer_id) {
+                            let node = reserved_node.create_service(p2p_config.clone());
+                            all_nodes_ids.push(node.local_peer_id);
+                            spawn(&stop_sender, node);
                         }
                     }
                     if let Some(FuelP2PEvent::PeerConnected(peer_id)) = sentry_node_event {
@@ -751,13 +778,9 @@ mod tests {
                         }
                     }
                 },
-                _ = async {
-                    for node in &mut all_node_services {
-                        node.next_event().await;
-                    }
-                } => {}
             }
         }
+        stop_sender.send(()).unwrap();
     }
 
     // We start with two nodes, node_5 and node_10, bootstrapped with 100 other nodes
@@ -843,7 +866,7 @@ mod tests {
     // Simulate 2 Sets of Sentry nodes.
     // In both Sets, a single Guarded Node should only be connected to their sentry nodes.
     // While other nodes can and should connect to nodes outside of the Sentry Set.
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[instrument]
     async fn sentry_nodes_working() {
         let reserved_nodes_size = 4;
@@ -884,7 +907,7 @@ mod tests {
         };
 
         let (mut first_guarded_node, mut first_sentry_nodes) = build_sentry_nodes();
-        let (mut second_guarded_node, mut second_sentry_nodes) = build_sentry_nodes();
+        let (mut second_guarded_node, second_sentry_nodes) = build_sentry_nodes();
 
         let mut first_sentry_set: HashSet<_> = first_sentry_nodes
             .iter()
@@ -898,6 +921,13 @@ mod tests {
 
         let mut single_sentry_node = first_sentry_nodes.pop().unwrap();
         let mut sentry_node_connections = HashSet::new();
+        let (stop_sender, _) = watch::channel(());
+        first_sentry_nodes
+            .into_iter()
+            .chain(second_sentry_nodes.into_iter())
+            .for_each(|node| {
+                spawn(&stop_sender, node);
+            });
 
         loop {
             tokio::select! {
@@ -932,19 +962,9 @@ mod tests {
                     }
 
                 }
-                // Keep polling other nodes to do their work
-                _ = async {
-                    for sentry_node in &mut first_sentry_nodes {
-                        sentry_node.next_event().await;
-                    }
-                } => {},
-                _ = async {
-                    for sentry_node in &mut second_sentry_nodes {
-                        sentry_node.next_event().await;
-                    }
-                } => {}
             };
         }
+        stop_sender.send(()).unwrap();
     }
 
     // Simulates 2 p2p nodes that are on the same network and should connect via mDNS
