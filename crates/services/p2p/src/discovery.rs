@@ -14,6 +14,11 @@ use libp2p::{
     mdns::Event as MdnsEvent,
     multiaddr::Protocol,
     swarm::{
+        derive_prelude::{
+            ConnectionClosed,
+            ConnectionEstablished,
+            FromSwarm,
+        },
         ConnectionHandler,
         IntoConnectionHandler,
         NetworkBehaviour,
@@ -22,11 +27,6 @@ use libp2p::{
     },
     Multiaddr,
     PeerId,
-};
-use libp2p_swarm::derive_prelude::{
-    ConnectionClosed,
-    ConnectionEstablished,
-    FromSwarm,
 };
 use std::{
     collections::{
@@ -52,11 +52,11 @@ pub enum DiscoveryEvent {
     /// Notify the swarm of an UnroutablePeer
     UnroutablePeer(PeerId),
 
-    /// Notify the swarm of a connected peer
-    Connected(PeerId, Vec<Multiaddr>),
-
-    /// Notify the swarm of a disconnected peer
-    Disconnected(PeerId),
+    /// Notify the swarm of a connected peer and its addresses
+    PeerInfoOnConnect {
+        peer_id: PeerId,
+        addresses: Vec<Multiaddr>,
+    },
 }
 
 /// NetworkBehavior for discovery of nodes
@@ -71,7 +71,7 @@ pub struct DiscoveryBehaviour {
     connected_peers: HashSet<PeerId>,
 
     /// Events to report to the swarm
-    events: VecDeque<DiscoveryEvent>,
+    pending_events: VecDeque<DiscoveryEvent>,
 
     /// For discovery on local network, optionally available
     mdns: MdnsWrapper,
@@ -133,8 +133,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                     self.connected_peers.insert(*peer_id);
                     let addresses = self.addresses_of_peer(peer_id);
 
-                    self.events
-                        .push_back(DiscoveryEvent::Connected(*peer_id, addresses));
+                    self.pending_events
+                        .push_back(DiscoveryEvent::PeerInfoOnConnect {
+                            peer_id: *peer_id,
+                            addresses,
+                        });
 
                     trace!("Connected to a peer {:?}", peer_id);
                 }
@@ -146,9 +149,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             }) => {
                 if *remaining_established == 0 {
                     self.connected_peers.remove(peer_id);
-                    self.events
-                        .push_back(DiscoveryEvent::Disconnected(*peer_id));
-
                     trace!("Disconnected from {:?}", peer_id);
                 }
             }
@@ -163,7 +163,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         cx: &mut Context<'_>,
         params: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
-        if let Some(next_event) = self.events.pop_front() {
+        if let Some(next_event) = self.pending_events.pop_front() {
             return Poll::Ready(NetworkBehaviourAction::GenerateEvent(next_event))
         }
 
@@ -257,7 +257,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             }
         }
 
-        if let Some(next_event) = self.events.pop_front() {
+        if let Some(next_event) = self.pending_events.pop_front() {
             return Poll::Ready(NetworkBehaviourAction::GenerateEvent(next_event))
         }
 
@@ -441,43 +441,41 @@ mod tests {
                     if let Poll::Ready(Some(event)) =
                         discovery_swarms[swarm_index].0.poll_next_unpin(cx)
                     {
-                        if let SwarmEvent::Behaviour(discovery_event) = event {
-                            match discovery_event {
+                        match event {
+                            SwarmEvent::ConnectionEstablished { peer_id, .. } => {
                                 // if peer has connected - remove it from the set
-                                DiscoveryEvent::Connected(connected_peer, _) => {
-                                    left_to_discover[swarm_index].remove(&connected_peer);
-                                }
-                                DiscoveryEvent::UnroutablePeer(unroutable_peer_id) => {
-                                    // kademlia discovered a peer but does not have it's address
-                                    // we simulate Identify happening and provide the address
-                                    let unroutable_peer_addr = discovery_swarms
-                                        .iter()
-                                        .find_map(|(_, next_addr, next_peer_id)| {
-                                            // identify the peer
-                                            if next_peer_id == &unroutable_peer_id {
-                                                // and return it's address
-                                                Some(next_addr.clone())
-                                            } else {
-                                                None
-                                            }
-                                        })
-                                        .unwrap();
-
-                                    // kademlia must be informed of a peer's address before
-                                    // adding it to the routing table
-                                    discovery_swarms[swarm_index]
-                                        .0
-                                        .behaviour_mut()
-                                        .kademlia
-                                        .add_address(
-                                            &unroutable_peer_id,
-                                            unroutable_peer_addr.clone(),
-                                        );
-                                }
-                                DiscoveryEvent::Disconnected(peer_id) => {
-                                    panic!("PeerId {:?} disconnected", peer_id);
-                                }
+                                left_to_discover[swarm_index].remove(&peer_id);
                             }
+                            SwarmEvent::Behaviour(DiscoveryEvent::UnroutablePeer(
+                                peer_id,
+                            )) => {
+                                // kademlia discovered a peer but does not have it's address
+                                // we simulate Identify happening and provide the address
+                                let unroutable_peer_addr = discovery_swarms
+                                    .iter()
+                                    .find_map(|(_, next_addr, next_peer_id)| {
+                                        // identify the peer
+                                        if next_peer_id == &peer_id {
+                                            // and return it's address
+                                            Some(next_addr.clone())
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .unwrap();
+
+                                // kademlia must be informed of a peer's address before
+                                // adding it to the routing table
+                                discovery_swarms[swarm_index]
+                                    .0
+                                    .behaviour_mut()
+                                    .kademlia
+                                    .add_address(&peer_id, unroutable_peer_addr.clone());
+                            }
+                            SwarmEvent::ConnectionClosed { peer_id, .. } => {
+                                panic!("PeerId {:?} disconnected", peer_id);
+                            }
+                            _ => {}
                         }
                         continue 'polling
                     }

@@ -2402,7 +2402,6 @@ dependencies = [
  "libp2p-ping",
  "libp2p-request-response",
  "libp2p-swarm",
- "libp2p-swarm-derive",
  "libp2p-tcp",
  "libp2p-websocket",
  "libp2p-yamux",
