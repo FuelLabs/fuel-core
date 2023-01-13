@@ -9,6 +9,3 @@ publish = false
 fuel-vm = { version = "0.24", default-features = false, features = ["random", "test-helpers"] }
 
 [workspace]
-
-[patch.crates-io]
-fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm/", branch = "feature/object-safe-vm-storage" }
