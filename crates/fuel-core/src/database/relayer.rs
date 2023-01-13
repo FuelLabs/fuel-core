@@ -19,7 +19,6 @@ use fuel_core_types::{
     },
 };
 
-#[async_trait::async_trait]
 impl RelayerDb for Database {
     fn insert_message(
         &mut self,
