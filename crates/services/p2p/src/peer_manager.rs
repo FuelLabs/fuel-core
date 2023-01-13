@@ -150,7 +150,7 @@ impl PeerManagerBehaviour {
 
     pub fn insert_peer_addresses(&mut self, peer_id: &PeerId, addresses: Vec<Multiaddr>) {
         self.peer_manager
-            .inser_peer_info(peer_id, PeerInfoInsert::Addresses(addresses));
+            .insert_peer_info(peer_id, PeerInfoInsert::Addresses(addresses));
     }
 }
 
@@ -377,7 +377,7 @@ impl NetworkBehaviour for PeerManagerBehaviour {
                     result: Ok(PingSuccess::Ping { rtt }),
                 })) => {
                     self.peer_manager
-                        .inser_peer_info(&peer, PeerInfoInsert::LatestPing(rtt));
+                        .insert_peer_info(&peer, PeerInfoInsert::LatestPing(rtt));
 
                     let event = PeerInfoEvent::PeerInfoUpdated { peer_id: peer };
                     return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
@@ -444,11 +444,11 @@ impl NetworkBehaviour for PeerManagerBehaviour {
                                 listen_addrs.truncate(MAX_IDENTIFY_ADDRESSES);
                             }
 
-                            self.peer_manager.inser_peer_info(
+                            self.peer_manager.insert_peer_info(
                                 &peer_id,
                                 PeerInfoInsert::ClientVersion(agent_version),
                             );
-                            self.peer_manager.inser_peer_info(
+                            self.peer_manager.insert_peer_info(
                                 &peer_id,
                                 PeerInfoInsert::Addresses(listen_addrs.clone()),
                             );
@@ -550,7 +550,7 @@ impl PeerManager {
         self.non_reserved_connected_peers.get(peer_id)
     }
 
-    fn inser_peer_info(&mut self, peer_id: &PeerId, data: PeerInfoInsert) {
+    fn insert_peer_info(&mut self, peer_id: &PeerId, data: PeerInfoInsert) {
         let peers = if self.reserved_peers.contains(peer_id) {
             &mut self.reserved_connected_peers
         } else {
