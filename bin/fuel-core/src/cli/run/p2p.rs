@@ -65,9 +65,16 @@ pub struct P2PArgs {
     #[clap(long = "enable_mdns")]
     pub enable_mdns: bool,
 
-    /// Maximum amount of allowed connected peers
+    /// Max number of unique peers connected
+    /// This number should be at least number of `mesh_n` from `Gossipsub` configuration.
+    /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
     #[clap(long = "max_peers_connected", default_value = "50")]
     pub max_peers_connected: u32,
+
+    /// Max number of connections per single peer
+    /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
+    #[clap(long = "max_connections_per_peer", default_value = "3")]
+    pub max_connections_per_peer: u32,
 
     /// Set the delay between random walks for p2p node discovery in seconds.
     /// If it's not set the random walk will be disabled.
@@ -159,10 +166,6 @@ impl P2PArgs {
             }
         };
 
-        // Reserved nodes do not count against the configured peer input/output limits.
-        let max_peers_connected =
-            self.max_peers_connected + self.reserved_nodes.len() as u32;
-
         let gossipsub_config = default_gossipsub_builder()
             .mesh_n(self.ideal_mesh_size)
             .mesh_n_low(self.min_mesh_size)
@@ -194,7 +197,8 @@ impl P2PArgs {
             reserved_nodes: self.reserved_nodes,
             reserved_nodes_only_mode: self.reserved_nodes_only_mode,
             enable_mdns: self.enable_mdns,
-            max_peers_connected,
+            max_peers_connected: self.max_peers_connected,
+            max_connections_per_peer: self.max_connections_per_peer,
             allow_private_addresses: self.allow_private_addresses,
             random_walk,
             connection_idle_timeout: Some(Duration::from_secs(

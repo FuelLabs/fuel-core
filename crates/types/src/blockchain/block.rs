@@ -16,11 +16,11 @@ use super::{
 use crate::{
     fuel_tx::{
         Transaction,
+        TxId,
         UniqueIdentifier,
     },
     fuel_types::{
         bytes::SerializableVec,
-        Bytes32,
         MessageId,
     },
 };
@@ -37,7 +37,7 @@ pub struct Block<TransactionRepresentation = Transaction> {
 }
 
 /// Compressed version of the fuel `Block`.
-pub type CompressedBlock = Block<Bytes32>;
+pub type CompressedBlock = Block<TxId>;
 
 /// Fuel block with all transaction data included
 /// but without any data generated.
@@ -202,7 +202,7 @@ impl From<Block> for PartialFuelBlock {
 #[cfg(any(test, feature = "test-helpers"))]
 impl CompressedBlock {
     /// Create a compressed header for testing. This does not generate fields.
-    pub fn test(header: BlockHeader, transactions: Vec<Bytes32>) -> Self {
+    pub fn test(header: BlockHeader, transactions: Vec<TxId>) -> Self {
         Self {
             header,
             transactions,

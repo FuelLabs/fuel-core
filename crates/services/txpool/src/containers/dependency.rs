@@ -6,8 +6,8 @@ use crate::{
 use anyhow::anyhow;
 use fuel_core_types::{
     entities::coin::{
-        Coin,
         CoinStatus,
+        CompressedCoin,
     },
     fuel_tx::{
         Input,
@@ -153,7 +153,7 @@ impl Dependency {
     }
 
     fn check_if_coin_input_can_spend_db_coin(
-        coin: &Coin,
+        coin: &CompressedCoin,
         input: &Input,
     ) -> anyhow::Result<()> {
         match input {

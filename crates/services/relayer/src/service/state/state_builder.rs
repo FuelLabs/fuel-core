@@ -15,7 +15,7 @@ pub trait EthRemote {
 #[async_trait]
 pub trait EthLocal {
     /// The current finalized eth block that the relayer has seen.
-    async fn finalized(&self) -> Option<u64>;
+    fn finalized(&self) -> Option<u64>;
 }
 
 /// Build the Ethereum state.
@@ -25,7 +25,7 @@ where
 {
     Ok(EthState {
         remote: EthHeights::new(t.current().await?, t.finalization_period()),
-        local: t.finalized().await,
+        local: t.finalized(),
     })
 }
 
@@ -49,9 +49,8 @@ pub mod test_builder {
         }
     }
 
-    #[async_trait]
     impl EthLocal for TestDataSource {
-        async fn finalized(&self) -> Option<u64> {
+        fn finalized(&self) -> Option<u64> {
             self.eth_local_finalized
         }
     }

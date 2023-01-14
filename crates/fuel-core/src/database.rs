@@ -67,7 +67,7 @@ use fuel_core_storage::tables::{
 use fuel_core_txpool::ports::TxPoolDb;
 use fuel_core_types::{
     entities::{
-        coin::Coin,
+        coin::CompressedCoin,
         message::Message,
     },
     fuel_tx::UtxoId,
@@ -98,9 +98,9 @@ mod state;
 
 pub mod balances;
 pub mod metadata;
-pub mod resource;
-pub mod transaction;
+// TODO: Rename in a separate PR into `transaction`
 pub mod transactional;
+pub mod transactions;
 pub mod vm_database;
 
 /// Database tables column ids.
@@ -135,7 +135,7 @@ pub enum Column {
     Receipts = 11,
     /// See [`FuelBlocks`](fuel_core_storage::tables::FuelBlocks)
     FuelBlocks = 12,
-    /// Maps fuel block id to fuel block hash
+    /// Maps fuel block height to fuel block id
     FuelBlockIds = 13,
     /// See [`Messages`](fuel_core_storage::tables::Messages)
     Messages = 14,
@@ -330,7 +330,7 @@ impl Default for Database {
 
 impl BlockDb for Database {
     fn block_height(&self) -> anyhow::Result<BlockHeight> {
-        Ok(self.get_block_height()?.unwrap_or_default())
+        Ok(self.latest_height()?.unwrap_or_default())
     }
 
     fn seal_block(
@@ -339,14 +339,14 @@ impl BlockDb for Database {
         consensus: Consensus,
     ) -> anyhow::Result<()> {
         self.storage::<SealedBlockConsensus>()
-            .insert(&block_id.into(), &consensus)
+            .insert(&block_id, &consensus)
             .map(|_| ())
             .map_err(Into::into)
     }
 }
 
 impl TxPoolDb for Database {
-    fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<Coin>> {
+    fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>> {
         self.storage::<Coins>()
             .get(utxo_id)
             .map(|t| t.map(|t| t.as_ref().clone()))
@@ -363,7 +363,7 @@ impl TxPoolDb for Database {
     }
 
     fn current_block_height(&self) -> StorageResult<BlockHeight> {
-        self.get_block_height()
+        self.latest_height()
             .map(|h| h.unwrap_or_default())
             .map_err(Into::into)
     }
@@ -381,7 +381,7 @@ impl BlockProducerDatabase for Database {
     }
 
     fn current_block_height(&self) -> StorageResult<BlockHeight> {
-        self.get_block_height()
+        self.latest_height()
             .map(|h| h.unwrap_or_default())
             .map_err(Into::into)
     }
@@ -403,6 +403,6 @@ impl ChainConfigDb for Database {
     }
 
     fn get_block_height(&self) -> StorageResult<Option<BlockHeight>> {
-        Self::get_block_height(self).map_err(Into::into)
+        Self::latest_height(self).map_err(Into::into)
     }
 }

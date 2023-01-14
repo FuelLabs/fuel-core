@@ -3,6 +3,10 @@ use crate::{
         service::Database,
         Config as GraphQLConfig,
     },
+    query::{
+        BlockQueryContext,
+        ChainQueryContext,
+    },
     schema::{
         block::Block,
         scalars::U64,
@@ -12,14 +16,7 @@ use async_graphql::{
     Context,
     Object,
 };
-use fuel_core_storage::{
-    not_found,
-    tables::FuelBlocks,
-    StorageAsRef,
-};
 use fuel_core_types::fuel_tx;
-
-pub const DEFAULT_NAME: &str = "Fuel.testnet";
 
 pub struct ChainInfo;
 
@@ -83,26 +80,23 @@ impl ConsensusParameters {
 #[Object]
 impl ChainInfo {
     async fn name(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
-        let db = ctx.data_unchecked::<Database>().clone();
-        let name = db
-            .get_chain_name()?
-            .unwrap_or_else(|| DEFAULT_NAME.to_string());
-        Ok(name)
+        let data = ChainQueryContext(ctx.data_unchecked());
+        Ok(data.name()?)
     }
 
     async fn latest_block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let db = ctx.data_unchecked::<Database>().clone();
-        let height = db.get_block_height()?.unwrap_or_default();
-        let id = db.get_block_id(height)?.unwrap_or_default();
-        let block = db
-            .storage::<FuelBlocks>()
-            .get(&id)?
-            .ok_or(not_found!(FuelBlocks))?;
-        Ok(Block::from(block.into_owned()))
+        let query = BlockQueryContext(ctx.data_unchecked());
+
+        let latest_block = query.latest_block()?.into();
+        Ok(latest_block)
     }
 
-    async fn base_chain_height(&self) -> U64 {
-        0.into()
+    async fn base_chain_height(&self, ctx: &Context<'_>) -> U64 {
+        let height = ctx
+            .data_unchecked::<Database>()
+            .base_chain_height()
+            .unwrap_or_default();
+        height.0.into()
     }
 
     async fn peer_count(&self) -> u16 {

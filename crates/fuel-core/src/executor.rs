@@ -1,7 +1,7 @@
 use crate::{
     database::{
-        transaction::TransactionIndex,
         transactional::DatabaseTransaction,
+        transactions::TransactionIndex,
         vm_database::VmDatabase,
         Database,
     },
@@ -20,7 +20,7 @@ use fuel_core_storage::{
     },
     transactional::{
         StorageTransaction,
-        Transactional,
+        Transaction as StorageTransactionTrait,
     },
     StorageAsMut,
     StorageAsRef,
@@ -40,8 +40,8 @@ use fuel_core_types::{
     },
     entities::{
         coin::{
-            Coin,
             CoinStatus,
+            CompressedCoin,
         },
         message::Message,
     },
@@ -274,7 +274,7 @@ impl Executor {
         block_db_transaction
             .deref_mut()
             .storage::<FuelBlocks>()
-            .insert(&finalized_block_id.into(), &result.block.compress())?;
+            .insert(&finalized_block_id, &result.block.compress())?;
 
         // Get the complete fuel block.
         Ok(UncommittedResult::new(
@@ -849,7 +849,7 @@ impl Executor {
 
                     db.storage::<Coins>().insert(
                         utxo_id,
-                        &Coin {
+                        &CompressedCoin {
                             owner: *owner,
                             amount: *amount,
                             asset_id: *asset_id,
@@ -1207,7 +1207,7 @@ impl Executor {
         // This is because variable or transfer outputs won't have any value
         // if there's a revert or panic and shouldn't be added to the utxo set.
         if *amount > Word::MIN {
-            let coin = Coin {
+            let coin = CompressedCoin {
                 owner: *to,
                 amount: *amount,
                 asset_id: *asset_id,
@@ -2153,7 +2153,7 @@ mod tests {
         let asset_id = Default::default();
         let maturity = Default::default();
         let block_created = Default::default();
-        let coin = Coin {
+        let coin = CompressedCoin {
             owner,
             amount,
             asset_id,
@@ -2501,7 +2501,7 @@ mod tests {
         db.storage::<Coins>()
             .insert(
                 &first_input.utxo_id().unwrap().clone(),
-                &Coin {
+                &CompressedCoin {
                     owner: *first_input.input_owner().unwrap(),
                     amount: 100,
                     asset_id: AssetId::default(),
@@ -2514,7 +2514,7 @@ mod tests {
         db.storage::<Coins>()
             .insert(
                 &second_input.utxo_id().unwrap().clone(),
-                &Coin {
+                &CompressedCoin {
                     owner: *second_input.input_owner().unwrap(),
                     amount: 100,
                     asset_id: AssetId::default(),
@@ -3030,7 +3030,7 @@ mod tests {
             db.storage::<Coins>()
                 .insert(
                     &utxo_id,
-                    &Coin {
+                    &CompressedCoin {
                         owner,
                         amount,
                         asset_id,
@@ -3576,7 +3576,7 @@ mod tests {
             .storage::<Coins>()
             .insert(
                 coin_input.utxo_id().unwrap(),
-                &Coin {
+                &CompressedCoin {
                     owner: *coin_input.input_owner().unwrap(),
                     amount: coin_input.amount().unwrap(),
                     asset_id: *coin_input.asset_id().unwrap(),
@@ -3653,7 +3653,7 @@ mod tests {
             .storage::<Coins>()
             .insert(
                 coin_input.utxo_id().unwrap(),
-                &Coin {
+                &CompressedCoin {
                     owner: *coin_input.input_owner().unwrap(),
                     amount: coin_input.amount().unwrap(),
                     asset_id: *coin_input.asset_id().unwrap(),

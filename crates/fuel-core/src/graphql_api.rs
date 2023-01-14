@@ -1,3 +1,4 @@
+use fuel_core_storage::Error as StorageError;
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
     fuel_tx::ConsensusParameters,
@@ -6,6 +7,7 @@ use fuel_core_types::{
 };
 use std::net::SocketAddr;
 
+pub mod ports;
 pub mod service;
 
 #[derive(Clone, Debug)]
@@ -20,4 +22,25 @@ pub struct Config {
     pub transaction_parameters: ConsensusParameters,
     pub gas_costs: GasCosts,
     pub consensus_key: Option<Secret<SecretKeyWrapper>>,
+}
+
+pub trait IntoApiResult<T> {
+    fn into_api_result<NewT, E>(self) -> Result<Option<NewT>, E>
+    where
+        NewT: From<T>,
+        E: From<StorageError>;
+}
+
+impl<T> IntoApiResult<T> for Result<T, StorageError> {
+    fn into_api_result<NewT, E>(self) -> Result<Option<NewT>, E>
+    where
+        NewT: From<T>,
+        E: From<StorageError>,
+    {
+        match self {
+            Ok(t) => Ok(Some(t.into())),
+            Err(StorageError::NotFound(_, _)) => Ok(None),
+            Err(err) => Err(err.into()),
+        }
+    }
 }

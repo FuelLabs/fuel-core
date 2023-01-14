@@ -4,7 +4,7 @@ pub mod config;
 mod discovery;
 mod gossipsub;
 mod p2p_service;
-mod peer_info;
+mod peer_manager;
 pub mod ports;
 mod request_response;
 pub mod service;

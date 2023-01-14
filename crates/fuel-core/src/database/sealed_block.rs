@@ -14,29 +14,30 @@ use fuel_core_storage::{
     StorageInspect,
     StorageMutate,
 };
-use fuel_core_types::{
-    blockchain::{
-        consensus::{
-            Consensus,
-            Genesis,
-        },
-        primitives::BlockHeight,
-        SealedBlock,
-        SealedBlockHeader,
+use fuel_core_types::blockchain::{
+    consensus::{
+        Consensus,
+        Genesis,
     },
-    fuel_tx::Bytes32,
+    primitives::{
+        BlockHeight,
+        BlockId,
+    },
+    SealedBlock,
+    SealedBlockHeader,
 };
 use std::borrow::Cow;
 
 impl StorageInspect<SealedBlockConsensus> for Database {
     type Error = StorageError;
 
-    fn get(&self, key: &Bytes32) -> Result<Option<Cow<Consensus>>, Self::Error> {
-        Database::get(self, key.as_ref(), Column::FuelBlockConsensus).map_err(Into::into)
+    fn get(&self, key: &BlockId) -> Result<Option<Cow<Consensus>>, Self::Error> {
+        Database::get(self, key.as_slice(), Column::FuelBlockConsensus)
+            .map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &Bytes32) -> Result<bool, Self::Error> {
-        Database::exists(self, key.as_ref(), Column::FuelBlockConsensus)
+    fn contains_key(&self, key: &BlockId) -> Result<bool, Self::Error> {
+        Database::exists(self, key.as_slice(), Column::FuelBlockConsensus)
             .map_err(Into::into)
     }
 }
@@ -44,15 +45,15 @@ impl StorageInspect<SealedBlockConsensus> for Database {
 impl StorageMutate<SealedBlockConsensus> for Database {
     fn insert(
         &mut self,
-        key: &Bytes32,
+        key: &BlockId,
         value: &Consensus,
     ) -> Result<Option<Consensus>, Self::Error> {
-        Database::insert(self, key.as_ref(), Column::FuelBlockConsensus, value)
+        Database::insert(self, key.as_slice(), Column::FuelBlockConsensus, value)
             .map_err(Into::into)
     }
 
-    fn remove(&mut self, key: &Bytes32) -> Result<Option<Consensus>, Self::Error> {
-        Database::remove(self, key.as_ref(), Column::FuelBlockConsensus)
+    fn remove(&mut self, key: &BlockId) -> Result<Option<Consensus>, Self::Error> {
+        Database::remove(self, key.as_slice(), Column::FuelBlockConsensus)
             .map_err(Into::into)
     }
 }
@@ -60,7 +61,7 @@ impl StorageMutate<SealedBlockConsensus> for Database {
 impl Database {
     pub fn get_sealed_block_by_id(
         &self,
-        block_id: &Bytes32,
+        block_id: &BlockId,
     ) -> StorageResult<Option<SealedBlock>> {
         // combine the block and consensus metadata into a sealed fuel block type
 
@@ -90,7 +91,7 @@ impl Database {
     }
 
     pub fn get_genesis(&self) -> StorageResult<Genesis> {
-        let (_, genesis_block_id) = self.genesis_block_ids()?;
+        let (_, genesis_block_id) = self.ids_of_genesis_block()?;
         let consensus = self
             .storage::<SealedBlockConsensus>()
             .get(&genesis_block_id)?
@@ -105,7 +106,7 @@ impl Database {
 
     pub fn get_sealed_block_header(
         &self,
-        block_id: &Bytes32,
+        block_id: &BlockId,
     ) -> StorageResult<Option<SealedBlockHeader>> {
         let header = self.storage::<FuelBlocks>().get(block_id)?;
         let consensus = self.storage::<SealedBlockConsensus>().get(block_id)?;
