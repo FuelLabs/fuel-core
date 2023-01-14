@@ -122,8 +122,12 @@ pub fn init_sub_services(
     };
 
     // TODO: Figure out on how to move it into `fuel-core-graphql-api`.
-    let schema = dap::init(build_schema(), config.chain_conf.transaction_parameters)
-        .data(database.clone());
+    let schema = dap::init(
+        build_schema(),
+        config.chain_conf.transaction_parameters,
+        config.chain_conf.gas_costs.clone(),
+    )
+    .data(database.clone());
     let graph_ql = crate::fuel_core_graphql_api::service::new_service(
         GraphQLConfig {
             addr: config.addr,
@@ -134,7 +138,6 @@ pub fn init_sub_services(
             max_tx: config.txpool.max_tx,
             max_depth: config.txpool.max_depth,
             transaction_parameters: config.chain_conf.transaction_parameters,
-            gas_costs: config.chain_conf.gas_costs.clone(),
             consensus_key: config.consensus_key.clone(),
         },
         Box::new(database.clone()),

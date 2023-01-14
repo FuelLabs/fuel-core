@@ -10,7 +10,7 @@ use criterion::{
 };
 
 use fuel_core_benches::*;
-use fuel_core_storage::transactional::Transactional;
+use fuel_core_storage::transactional::Transaction;
 use fuel_core_types::fuel_asm::OpcodeRepr;
 use set::*;
 
