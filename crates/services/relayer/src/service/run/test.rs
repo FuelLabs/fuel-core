@@ -57,9 +57,8 @@ mockall::mock! {
         fn finalization_period(&self) -> u64;
     }
 
-    #[async_trait]
     impl EthLocal for RelayerData {
-        async fn finalized(&self) -> Option<u64>;
+        fn finalized(&self) -> Option<u64>;
     }
 
     #[async_trait]
@@ -71,7 +70,7 @@ mockall::mock! {
             eth_sync_gap: &state::EthSyncGap,
         ) -> anyhow::Result<()>;
 
-        async fn set_finalized_da_height(&mut self, height: DaBlockHeight) -> StorageResult<()>;
+        fn set_finalized_da_height(&mut self, height: DaBlockHeight) -> StorageResult<()>;
 
         fn update_synced(&self, state: &EthState);
     }

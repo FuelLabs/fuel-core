@@ -98,11 +98,10 @@ where
     P: Middleware<Error = ProviderError> + 'static,
     D: RelayerDb + 'static,
 {
-    async fn set_deploy_height(&mut self) {
-        if self.finalized().await.unwrap_or_default() < *self.config.da_deploy_height {
+    fn set_deploy_height(&mut self) {
+        if self.finalized().unwrap_or_default() < *self.config.da_deploy_height {
             self.database
                 .set_finalized_da_height(self.config.da_deploy_height)
-                .await
                 .expect("Should be able to set the finalized da height");
         }
     }
@@ -136,11 +135,8 @@ where
         write_logs(&mut self.database, logs).await
     }
 
-    async fn set_finalized_da_height(
-        &mut self,
-        height: DaBlockHeight,
-    ) -> StorageResult<()> {
-        self.database.set_finalized_da_height(height).await
+    fn set_finalized_da_height(&mut self, height: DaBlockHeight) -> StorageResult<()> {
+        self.database.set_finalized_da_height(height)
     }
 
     fn update_synced(&self, state: &state::EthState) {
@@ -166,7 +162,7 @@ where
     }
 
     async fn into_task(mut self, _watcher: &StateWatcher) -> anyhow::Result<Self::Task> {
-        self.set_deploy_height().await;
+        self.set_deploy_height();
         Ok(self)
     }
 }
@@ -239,12 +235,8 @@ where
     P: Middleware<Error = ProviderError>,
     D: RelayerDb + 'static,
 {
-    async fn finalized(&self) -> Option<u64> {
-        self.database
-            .get_finalized_da_height()
-            .await
-            .map(|h| *h)
-            .ok()
+    fn finalized(&self) -> Option<u64> {
+        self.database.get_finalized_da_height().map(|h| *h).ok()
     }
 }
 

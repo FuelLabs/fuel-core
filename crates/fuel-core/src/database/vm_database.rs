@@ -79,10 +79,6 @@ impl VmDatabase {
             database,
         }
     }
-
-    pub fn block_height(&self) -> u32 {
-        self.current_block_height
-    }
 }
 
 impl<M: Mappable> StorageInspect<M> for VmDatabase
@@ -140,7 +136,7 @@ impl InterpreterStorage for VmDatabase {
                 return Err(anyhow!("block height too high for timestamp").into())
             }
             height if height == self.current_block_height => self.current_timestamp,
-            height => self.database.block_time(height)?,
+            height => self.database.block_time(height.into())?,
         };
         Ok(timestamp.0)
     }
@@ -155,6 +151,7 @@ impl InterpreterStorage for VmDatabase {
             self.database
                 .get_block_id(block_height.into())?
                 .ok_or(not_found!("BlockId"))
+                .map(Into::into)
         }
     }
 

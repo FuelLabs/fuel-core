@@ -2,3 +2,4 @@
 
 pub mod coin;
 pub mod message;
+pub mod resource;

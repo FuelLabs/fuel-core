@@ -25,7 +25,10 @@ use fuel_core_types::{
             Block,
             CompressedBlock,
         },
-        primitives::BlockHeight,
+        primitives::{
+            BlockHeight,
+            BlockId,
+        },
     },
     fuel_tx::Bytes32,
     tai64::Tai64,
@@ -42,19 +45,19 @@ use std::{
 impl StorageInspect<FuelBlocks> for Database {
     type Error = StorageError;
 
-    fn get(&self, key: &Bytes32) -> Result<Option<Cow<CompressedBlock>>, Self::Error> {
-        Database::get(self, key.as_ref(), Column::FuelBlocks).map_err(Into::into)
+    fn get(&self, key: &BlockId) -> Result<Option<Cow<CompressedBlock>>, Self::Error> {
+        Database::get(self, key.as_slice(), Column::FuelBlocks).map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &Bytes32) -> Result<bool, Self::Error> {
-        Database::exists(self, key.as_ref(), Column::FuelBlocks).map_err(Into::into)
+    fn contains_key(&self, key: &BlockId) -> Result<bool, Self::Error> {
+        Database::exists(self, key.as_slice(), Column::FuelBlocks).map_err(Into::into)
     }
 }
 
 impl StorageMutate<FuelBlocks> for Database {
     fn insert(
         &mut self,
-        key: &Bytes32,
+        key: &BlockId,
         value: &CompressedBlock,
     ) -> Result<Option<CompressedBlock>, Self::Error> {
         let _: Option<BlockHeight> = Database::insert(
@@ -63,13 +66,13 @@ impl StorageMutate<FuelBlocks> for Database {
             Column::FuelBlockIds,
             *key,
         )?;
-        Database::insert(self, key.as_ref(), Column::FuelBlocks, value)
+        Database::insert(self, key.as_slice(), Column::FuelBlocks, value)
             .map_err(Into::into)
     }
 
-    fn remove(&mut self, key: &Bytes32) -> Result<Option<CompressedBlock>, Self::Error> {
+    fn remove(&mut self, key: &BlockId) -> Result<Option<CompressedBlock>, Self::Error> {
         let block: Option<CompressedBlock> =
-            Database::remove(self, key.as_ref(), Column::FuelBlocks)?;
+            Database::remove(self, key.as_slice(), Column::FuelBlocks)?;
         if let Some(block) = &block {
             let _: Option<Bytes32> = Database::remove(
                 self,
@@ -82,32 +85,28 @@ impl StorageMutate<FuelBlocks> for Database {
 }
 
 impl Database {
-    pub fn get_block_height(&self) -> DatabaseResult<Option<BlockHeight>> {
-        let block_entry = self.latest_block()?;
-        // get block height from most recently indexed block
-        let mut id = block_entry.map(|(height, _)| {
-            // safety: we know that all block heights are stored with the correct amount of bytes
-            let bytes = <[u8; 4]>::try_from(height.as_slice()).unwrap();
-            u32::from_be_bytes(bytes).into()
-        });
+    pub fn latest_height(&self) -> DatabaseResult<Option<BlockHeight>> {
+        let id = self.ids_of_latest_block()?;
         // if no blocks, check if chain was configured with a base height
-        if id.is_none() {
-            id = self.get_starting_chain_height()?;
-        }
+        let id = match id {
+            Some((id, _)) => Some(id),
+            None => self.get_starting_chain_height()?,
+        };
+
         Ok(id)
     }
 
     /// Get the current block at the head of the chain.
     pub fn get_current_block(&self) -> StorageResult<Option<Cow<CompressedBlock>>> {
-        let block_entry = self.latest_block()?;
-        match block_entry {
+        let block_ids = self.ids_of_latest_block()?;
+        match block_ids {
             Some((_, id)) => Ok(StorageAsRef::storage::<FuelBlocks>(self).get(&id)?),
             None => Ok(None),
         }
     }
 
-    pub fn block_time(&self, height: u32) -> StorageResult<Tai64> {
-        let id = self.get_block_id(height.into())?.unwrap_or_default();
+    pub fn block_time(&self, height: BlockHeight) -> StorageResult<Tai64> {
+        let id = self.get_block_id(height)?.unwrap_or_default();
         let block = self
             .storage::<FuelBlocks>()
             .get(&id)?
@@ -115,7 +114,7 @@ impl Database {
         Ok(block.header().time().to_owned())
     }
 
-    pub fn get_block_id(&self, height: BlockHeight) -> StorageResult<Option<Bytes32>> {
+    pub fn get_block_id(&self, height: BlockHeight) -> StorageResult<Option<BlockId>> {
         Database::get(self, &height.to_bytes()[..], Column::FuelBlockIds)
             .map_err(Into::into)
     }
@@ -123,22 +122,27 @@ impl Database {
     pub fn all_block_ids(
         &self,
         start: Option<BlockHeight>,
-        direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<(BlockHeight, Bytes32)>> + '_ {
+        direction: IterDirection,
+    ) -> impl Iterator<Item = DatabaseResult<(BlockHeight, BlockId)>> + '_ {
         let start = start.map(|b| b.to_bytes().to_vec());
-        self.iter_all::<Vec<u8>, Bytes32>(Column::FuelBlockIds, None, start, direction)
-            .map(|res| {
-                let (height, id) = res?;
-                Ok((
-                    height
-                        .try_into()
-                        .expect("block height always has correct number of bytes"),
-                    id,
-                ))
-            })
+        self.iter_all::<Vec<u8>, BlockId>(
+            Column::FuelBlockIds,
+            None,
+            start,
+            Some(direction),
+        )
+        .map(|res| {
+            let (height, id) = res?;
+            Ok((
+                height
+                    .try_into()
+                    .expect("block height always has correct number of bytes"),
+                id,
+            ))
+        })
     }
 
-    pub fn genesis_block_ids(&self) -> DatabaseResult<(BlockHeight, Bytes32)> {
+    pub fn ids_of_genesis_block(&self) -> DatabaseResult<(BlockHeight, BlockId)> {
         self.iter_all(
             Column::FuelBlockIds,
             None,
@@ -147,28 +151,36 @@ impl Database {
         )
         .next()
         .ok_or(DatabaseError::ChainUninitialized)?
-        .map(|(height, id): (Vec<u8>, Bytes32)| {
+        .map(|(height, id): (Vec<u8>, BlockId)| {
             let bytes = <[u8; 4]>::try_from(height.as_slice())
                 .expect("all block heights are stored with the correct amount of bytes");
             (u32::from_be_bytes(bytes).into(), id)
         })
     }
 
-    fn latest_block(&self) -> DatabaseResult<Option<(Vec<u8>, Bytes32)>> {
-        self.iter_all(
-            Column::FuelBlockIds,
-            None,
-            None,
-            Some(IterDirection::Reverse),
-        )
-        .next()
-        .transpose()
+    pub fn ids_of_latest_block(&self) -> DatabaseResult<Option<(BlockHeight, BlockId)>> {
+        let ids = self
+            .iter_all::<Vec<u8>, BlockId>(
+                Column::FuelBlockIds,
+                None,
+                None,
+                Some(IterDirection::Reverse),
+            )
+            .next()
+            .transpose()?
+            .map(|(height, block)| {
+                // safety: we know that all block heights are stored with the correct amount of bytes
+                let bytes = <[u8; 4]>::try_from(height.as_slice()).unwrap();
+                (u32::from_be_bytes(bytes).into(), block)
+            });
+
+        Ok(ids)
     }
 
     /// Retrieve the full block and all associated transactions
     pub(crate) fn get_full_block(
         &self,
-        block_id: &Bytes32,
+        block_id: &BlockId,
     ) -> StorageResult<Option<Block>> {
         let db_block = self.storage::<FuelBlocks>().get(block_id)?;
         if let Some(block) = db_block {

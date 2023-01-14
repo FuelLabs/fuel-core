@@ -2,8 +2,8 @@ use crate::{
     database::{
         transactional::DatabaseTransaction,
         vm_database::VmDatabase,
+        Database,
     },
-    fuel_core_graphql_api::service::Database,
     schema::scalars::U64,
 };
 use async_graphql::{
@@ -12,7 +12,10 @@ use async_graphql::{
     SchemaBuilder,
     ID,
 };
-use fuel_core_storage::not_found;
+use fuel_core_storage::{
+    not_found,
+    InterpreterStorage,
+};
 use fuel_core_types::{
     fuel_asm::{
         Opcode,
@@ -88,7 +91,7 @@ impl ConcreteStorage {
         let vm_database = Self::vm_database(&storage)?;
         let tx = Script::default();
         let checked_tx =
-            tx.into_checked_basic(vm_database.block_height() as Word, &self.params)?;
+            tx.into_checked_basic(vm_database.block_height()? as Word, &self.params)?;
         self.tx
             .get_mut(&id)
             .map(|tx| tx.extend_from_slice(txs))
@@ -120,7 +123,7 @@ impl ConcreteStorage {
             .unwrap_or_default();
 
         let checked_tx =
-            tx.into_checked_basic(vm_database.block_height() as Word, &self.params)?;
+            tx.into_checked_basic(vm_database.block_height()? as Word, &self.params)?;
 
         let mut vm = Interpreter::with_storage(vm_database, self.params);
         vm.transact(checked_tx)?;
@@ -349,7 +352,7 @@ impl DapMutation {
 
         let checked_tx = tx
             .into_checked_basic(
-                db.get_block_height()?.unwrap_or_default().into(),
+                db.latest_height()?.unwrap_or_default().into(),
                 &locked.params,
             )?
             .into();

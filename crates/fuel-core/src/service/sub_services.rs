@@ -4,6 +4,10 @@ use crate::{
     chain_config::BlockProduction,
     database::Database,
     fuel_core_graphql_api::Config as GraphQLConfig,
+    schema::{
+        build_schema,
+        dap,
+    },
     service::{
         adapters::{
             BlockImportAdapter,
@@ -117,6 +121,9 @@ pub fn init_sub_services(
         ),
     };
 
+    // TODO: Figure out on how to move it into `fuel-core-graphql-api`.
+    let schema = dap::init(build_schema(), config.chain_conf.transaction_parameters)
+        .data(database.clone());
     let graph_ql = crate::fuel_core_graphql_api::service::new_service(
         GraphQLConfig {
             addr: config.addr,
@@ -129,7 +136,8 @@ pub fn init_sub_services(
             transaction_parameters: config.chain_conf.transaction_parameters,
             consensus_key: config.consensus_key.clone(),
         },
-        database.clone(),
+        Box::new(database.clone()),
+        schema,
         block_producer,
         txpool.clone(),
         executor,
