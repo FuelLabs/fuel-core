@@ -1,0 +1,58 @@
+---
+source: crates/client/src/client/schema/chain.rs
+expression: operation.query
+---
+query {
+  chain {
+    baseChainHeight
+    name
+    peerCount
+    latestBlock {
+      id
+      header {
+        id
+        daHeight
+        transactionsCount
+        outputMessagesCount
+        transactionsRoot
+        outputMessagesRoot
+        height
+        prevRoot
+        time
+        applicationHash
+      }
+      consensus {
+        __typename
+        ... on Genesis {
+          chainConfigHash
+          coinsRoot
+          contractsRoot
+          messagesRoot
+        }
+        ... on PoAConsensus {
+          signature
+        }
+      }
+      transactions {
+        id
+      }
+    }
+    consensusParameters {
+      contractMaxSize
+      maxInputs
+      maxOutputs
+      maxWitnesses
+      maxGasPerTx
+      maxScriptLength
+      maxScriptDataLength
+      maxStorageSlots
+      maxPredicateLength
+      maxPredicateDataLength
+      gasPriceFactor
+      gasPerByte
+      maxMessageDataLength
+    }
+  }
+}
+
+

@@ -1,0 +1,165 @@
+use super::{
+    block::Header,
+    scalars::{
+        Address,
+        Bytes32,
+        HexString,
+        MessageId,
+        TransactionId,
+        U64,
+    },
+};
+use crate::query::MessageQueryContext;
+use async_graphql::{
+    connection::{
+        Connection,
+        EmptyFields,
+    },
+    Context,
+    Object,
+};
+use fuel_core_storage::iter::IntoBoxedIter;
+use fuel_core_types::entities;
+
+pub struct Message(pub(crate) entities::message::Message);
+
+#[Object]
+impl Message {
+    async fn message_id(&self) -> MessageId {
+        self.0.id().into()
+    }
+
+    async fn amount(&self) -> U64 {
+        self.0.amount.into()
+    }
+
+    async fn sender(&self) -> Address {
+        self.0.sender.into()
+    }
+
+    async fn recipient(&self) -> Address {
+        self.0.recipient.into()
+    }
+
+    async fn nonce(&self) -> U64 {
+        self.0.nonce.into()
+    }
+
+    async fn data(&self) -> HexString {
+        self.0.data.clone().into()
+    }
+
+    async fn da_height(&self) -> U64 {
+        self.0.da_height.as_u64().into()
+    }
+
+    async fn fuel_block_spend(&self) -> Option<U64> {
+        self.0.fuel_block_spend.map(|v| v.into())
+    }
+}
+
+#[derive(Default)]
+pub struct MessageQuery {}
+
+#[Object]
+impl MessageQuery {
+    async fn messages(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(desc = "address of the owner")] owner: Option<Address>,
+        first: Option<i32>,
+        after: Option<String>,
+        last: Option<i32>,
+        before: Option<String>,
+    ) -> async_graphql::Result<Connection<MessageId, Message, EmptyFields, EmptyFields>>
+    {
+        let query = MessageQueryContext(ctx.data_unchecked());
+        crate::schema::query_pagination(after, before, first, last, |start, direction| {
+            let start = *start;
+
+            let messages = if let Some(owner) = owner {
+                query
+                    .owned_messages(&owner.0, start.map(Into::into), direction)
+                    .into_boxed()
+            } else {
+                query
+                    .all_messages(start.map(Into::into), direction)
+                    .into_boxed()
+            };
+
+            let messages = messages.map(|result| {
+                result
+                    .map(|message| (message.id().into(), message.into()))
+                    .map_err(Into::into)
+            });
+
+            Ok(messages)
+        })
+        .await
+    }
+
+    async fn message_proof(
+        &self,
+        ctx: &Context<'_>,
+        transaction_id: TransactionId,
+        message_id: MessageId,
+    ) -> async_graphql::Result<Option<MessageProof>> {
+        let data = MessageQueryContext(ctx.data_unchecked());
+        Ok(
+            crate::query::message_proof(&data, transaction_id.into(), message_id.into())?
+                .map(MessageProof),
+        )
+    }
+}
+
+pub struct MessageProof(pub(crate) entities::message::MessageProof);
+
+#[Object]
+impl MessageProof {
+    async fn proof_set(&self) -> Vec<Bytes32> {
+        self.0
+            .proof_set
+            .iter()
+            .cloned()
+            .map(Bytes32::from)
+            .collect()
+    }
+
+    async fn proof_index(&self) -> U64 {
+        self.0.proof_index.into()
+    }
+
+    async fn sender(&self) -> Address {
+        self.0.sender.into()
+    }
+
+    async fn recipient(&self) -> Address {
+        self.0.recipient.into()
+    }
+
+    async fn nonce(&self) -> Bytes32 {
+        self.0.nonce.into()
+    }
+
+    async fn amount(&self) -> U64 {
+        self.0.amount.into()
+    }
+
+    async fn data(&self) -> HexString {
+        self.0.data.clone().into()
+    }
+
+    async fn signature(&self) -> super::scalars::Signature {
+        self.0.signature.into()
+    }
+
+    async fn header(&self) -> Header {
+        Header(self.0.header.clone())
+    }
+}
+
+impl From<entities::message::Message> for Message {
+    fn from(message: entities::message::Message) -> Self {
+        Message(message)
+    }
+}

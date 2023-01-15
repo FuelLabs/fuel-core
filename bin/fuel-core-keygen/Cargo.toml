@@ -1,0 +1,16 @@
+[package]
+name = "fuel-core-keygen"
+version = "0.15.1"
+edition = "2021"
+homepage = "https://fuel.network/"
+keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
+license = "Apache-2.0"
+repository = "https://github.com/FuelLabs/fuel-core"
+description = "Command line utilities for fuel-core key management"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "3.2", features = ["derive", "env"] }
+fuel-core-types = { version = "0.15.1", path = "../../crates/types", features = ["serde", "random"] }
+serde_json = { version = "1.0", features = ["raw_value"] }
