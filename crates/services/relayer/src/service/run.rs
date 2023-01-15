@@ -30,10 +30,7 @@ pub trait RelayerData: EthRemote + EthLocal {
     ) -> anyhow::Result<()>;
 
     /// Set the finalized DA block height.
-    async fn set_finalized_da_height(
-        &mut self,
-        height: DaBlockHeight,
-    ) -> StorageResult<()>;
+    fn set_finalized_da_height(&mut self, height: DaBlockHeight) -> StorageResult<()>;
 
     /// Update the synced state.
     fn update_synced(&self, state: &EthState);
@@ -56,9 +53,7 @@ where
         relayer.download_logs(&eth_sync_gap).await?;
 
         // Update finalized height in database.
-        relayer
-            .set_finalized_da_height(eth_sync_gap.latest().into())
-            .await?;
+        relayer.set_finalized_da_height(eth_sync_gap.latest().into())?;
     }
 
     // Update the synced state.

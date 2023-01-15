@@ -588,7 +588,7 @@ enum ReceiptType {
 }
 
 """
-The schema analog of the [`crate::database::utils::Resource`].
+The schema analog of the [`resource::Resource`].
 """
 union Resource = Coin | Message
 

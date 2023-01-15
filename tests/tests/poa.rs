@@ -10,10 +10,12 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_types::{
-    blockchain::consensus::Consensus,
+    blockchain::{
+        consensus::Consensus,
+        primitives::BlockId,
+    },
     fuel_crypto::SecretKey,
     fuel_tx::Transaction,
-    fuel_types::Bytes32,
     secrecy::Secret,
 };
 use rand::{
@@ -47,7 +49,7 @@ async fn can_get_sealed_block_from_poa_produced_block() {
         }
     };
 
-    let block_id = Bytes32::from_str(&block_id).unwrap();
+    let block_id = BlockId::from_str(&block_id).unwrap();
 
     // check sealed block header is correct
     let sealed_block_header = db
@@ -67,7 +69,7 @@ async fn can_get_sealed_block_from_poa_produced_block() {
 
     // check sealed block is correct
     let sealed_block = db
-        .get_sealed_block_by_id(&block_id.into())
+        .get_sealed_block_by_id(&block_id)
         .unwrap()
         .expect("expected sealed header to be available");
 

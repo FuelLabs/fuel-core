@@ -53,8 +53,9 @@ pub struct Mutation(dap::DapMutation, tx::TxMutation, block::BlockMutation);
 pub struct Subscription(tx::TxStatusSubscription);
 
 pub type CoreSchema = Schema<Query, Mutation, Subscription>;
+pub type CoreSchemaBuilder = SchemaBuilder<Query, Mutation, Subscription>;
 
-pub fn build_schema() -> SchemaBuilder<Query, Mutation, Subscription> {
+pub fn build_schema() -> CoreSchemaBuilder {
     Schema::build_with_ignore_name_conflicts(
         Query::default(),
         Mutation::default(),

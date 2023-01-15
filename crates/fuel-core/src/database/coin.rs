@@ -16,8 +16,8 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     entities::coin::{
-        Coin,
         CoinStatus,
+        CompressedCoin,
     },
     fuel_tx::{
         Address,
@@ -49,7 +49,7 @@ fn utxo_id_to_bytes(utxo_id: &UtxoId) -> Vec<u8> {
 impl StorageInspect<Coins> for Database {
     type Error = StorageError;
 
-    fn get(&self, key: &UtxoId) -> Result<Option<Cow<Coin>>, Self::Error> {
+    fn get(&self, key: &UtxoId) -> Result<Option<Cow<CompressedCoin>>, Self::Error> {
         Database::get(self, &utxo_id_to_bytes(key), Column::Coins).map_err(Into::into)
     }
 
@@ -62,8 +62,8 @@ impl StorageMutate<Coins> for Database {
     fn insert(
         &mut self,
         key: &UtxoId,
-        value: &Coin,
-    ) -> Result<Option<Coin>, Self::Error> {
+        value: &CompressedCoin,
+    ) -> Result<Option<CompressedCoin>, Self::Error> {
         let coin_by_owner: Vec<u8> = owner_coin_id_key(&value.owner, key);
         // insert primary record
         let insert = Database::insert(self, utxo_id_to_bytes(key), Column::Coins, value)?;
@@ -73,8 +73,8 @@ impl StorageMutate<Coins> for Database {
         Ok(insert)
     }
 
-    fn remove(&mut self, key: &UtxoId) -> Result<Option<Coin>, Self::Error> {
-        let coin: Option<Coin> =
+    fn remove(&mut self, key: &UtxoId) -> Result<Option<CompressedCoin>, Self::Error> {
+        let coin: Option<CompressedCoin> =
             Database::remove(self, &utxo_id_to_bytes(key), Column::Coins)?;
 
         // cleanup secondary index
@@ -114,7 +114,7 @@ impl Database {
 
     pub fn get_coin_config(&self) -> DatabaseResult<Option<Vec<CoinConfig>>> {
         let configs = self
-            .iter_all::<Vec<u8>, Coin>(Column::Coins, None, None, None)
+            .iter_all::<Vec<u8>, CompressedCoin>(Column::Coins, None, None, None)
             .filter_map(|coin| {
                 // Return only unspent coins
                 if let Ok(coin) = coin {

@@ -1,3 +1,8 @@
+use std::sync::{
+    Arc,
+    RwLock,
+};
+
 use crate::{
     codecs::NetworkCodec,
     config::Config,
@@ -10,10 +15,11 @@ use crate::{
         config::build_gossipsub_behaviour,
         topics::GossipTopic,
     },
-    peer_info::{
+    peer_manager::{
+        ConnectionState,
         PeerInfo,
-        PeerInfoBehaviour,
         PeerInfoEvent,
+        PeerManagerBehaviour,
     },
     request_response::messages::{
         IntermediateResponse,
@@ -43,7 +49,6 @@ use libp2p::{
     Multiaddr,
     PeerId,
 };
-use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum FuelBehaviourEvent {
@@ -60,8 +65,9 @@ pub struct FuelBehaviour<Codec: NetworkCodec> {
     /// Node discovery
     discovery: DiscoveryBehaviour,
 
-    /// Identify and periodically ping nodes
-    peer_info: PeerInfoBehaviour,
+    /// Handles Peer Connections
+    /// Identifies and periodically pings nodes
+    peer_manager: PeerManagerBehaviour,
 
     /// Message propagation for p2p
     gossipsub: Gossipsub,
@@ -71,7 +77,11 @@ pub struct FuelBehaviour<Codec: NetworkCodec> {
 }
 
 impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
-    pub fn new(p2p_config: &Config, codec: Codec) -> Self {
+    pub(crate) fn new(
+        p2p_config: &Config,
+        codec: Codec,
+        connection_state: Arc<RwLock<ConnectionState>>,
+    ) -> Self {
         let local_public_key = p2p_config.keypair.public();
         let local_peer_id = PeerId::from_public_key(&local_public_key);
 
@@ -98,7 +108,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
             discovery_config
         };
 
-        let peer_info = PeerInfoBehaviour::new(p2p_config);
+        let peer_manager = PeerManagerBehaviour::new(p2p_config, connection_state);
 
         let req_res_protocol =
             std::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
@@ -113,7 +123,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         Self {
             discovery: discovery_config.finish(),
             gossipsub: build_gossipsub_behaviour(p2p_config),
-            peer_info,
+            peer_manager,
             request_response,
         }
     }
@@ -123,7 +133,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         peer_id: &PeerId,
         addresses: Vec<Multiaddr>,
     ) {
-        self.peer_info.insert_peer_addresses(peer_id, addresses);
+        self.peer_manager.insert_peer_addresses(peer_id, addresses);
     }
 
     pub fn add_addresses_to_discovery(
@@ -136,8 +146,12 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         }
     }
 
-    pub fn get_peers(&self) -> &HashMap<PeerId, PeerInfo> {
-        self.peer_info.peers()
+    pub fn get_peers_ids(&self) -> impl Iterator<Item = &PeerId> {
+        self.peer_manager.get_peers_ids()
+    }
+
+    pub fn total_peers_connected(&self) -> usize {
+        self.peer_manager.total_peers_connected()
     }
 
     pub fn publish_message(
@@ -158,10 +172,9 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
     pub fn send_request_msg(
         &mut self,
         message_request: RequestMessage,
-        peer_id: PeerId,
+        peer_id: &PeerId,
     ) -> RequestId {
-        self.request_response
-            .send_request(&peer_id, message_request)
+        self.request_response.send_request(peer_id, message_request)
     }
 
     pub fn send_response_msg(
@@ -185,10 +198,10 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         )
     }
 
-    // Currently only used in testing, but should be useful for the NetworkOrchestrator API
+    // Currently only used in testing, but should be useful for the P2P Service API
     #[allow(dead_code)]
     pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<&PeerInfo> {
-        self.peer_info.get_peer_info(peer_id)
+        self.peer_manager.get_peer_info(peer_id)
     }
 }
 
