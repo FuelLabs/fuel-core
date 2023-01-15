@@ -4,9 +4,13 @@ use super::{
     receipt::Receipt,
 };
 use crate::{
-    fuel_core_graphql_api::service::{
-        Database,
-        TxPool,
+    fuel_core_graphql_api::{
+        service::TxPool,
+        IntoApiResult,
+    },
+    query::{
+        BlockQueryContext,
+        TransactionQueryContext,
     },
     schema::{
         block::Block,
@@ -29,14 +33,7 @@ use async_graphql::{
     Object,
     Union,
 };
-use fuel_core_storage::{
-    not_found,
-    tables::{
-        FuelBlocks,
-        Receipts,
-    },
-    StorageAsRef,
-};
+use fuel_core_storage::Error as StorageError;
 use fuel_core_types::{
     blockchain::primitives,
     fuel_tx::{
@@ -61,7 +58,10 @@ use fuel_core_types::{
     },
     fuel_types::bytes::SerializableVec,
     fuel_vm::ProgramState as VmProgramState,
-    services::txpool::TransactionStatus as TxStatus,
+    services::{
+        txpool,
+        txpool::TransactionStatus as TxStatus,
+    },
     tai64::Tai64,
 };
 
@@ -139,14 +139,9 @@ pub struct SuccessStatus {
 #[Object]
 impl SuccessStatus {
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let db = ctx.data_unchecked::<Database>();
-        let block = db
-            .storage::<FuelBlocks>()
-            .get(&self.block_id.into())?
-            .ok_or(not_found!(FuelBlocks))?
-            .into_owned();
-        let block = Block::from(block);
-        Ok(block)
+        let query = BlockQueryContext(ctx.data_unchecked());
+        let block = query.block(&self.block_id)?;
+        Ok(block.into())
     }
 
     async fn time(&self) -> Tai64Timestamp {
@@ -169,14 +164,9 @@ pub struct FailureStatus {
 #[Object]
 impl FailureStatus {
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let db = ctx.data_unchecked::<Database>();
-        let block = db
-            .storage::<FuelBlocks>()
-            .get(&self.block_id.into())?
-            .ok_or(not_found!(FuelBlocks))?
-            .into_owned();
-        let block = Block::from(block);
-        Ok(block)
+        let query = BlockQueryContext(ctx.data_unchecked());
+        let block = query.block(&self.block_id)?;
+        Ok(block.into())
     }
 
     async fn time(&self) -> Tai64Timestamp {
@@ -406,18 +396,20 @@ impl Transaction {
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<TransactionStatus>> {
         let id = self.0.id();
-        let db = ctx.data_unchecked::<Database>();
+        let query = TransactionQueryContext(ctx.data_unchecked());
         let txpool = ctx.data_unchecked::<TxPool>();
-        get_tx_status(id, db, txpool).await
+        get_tx_status(id, &query, txpool).await.map_err(Into::into)
     }
 
     async fn receipts(
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<Vec<Receipt>>> {
-        let db = ctx.data_unchecked::<Database>();
-        let receipts = db.storage::<Receipts>().get(&self.0.id())?;
-        Ok(receipts.map(|receipts| receipts.iter().cloned().map(Receipt).collect()))
+        let query = TransactionQueryContext(ctx.data_unchecked());
+        let receipts = query
+            .receipts(&self.0.id())
+            .into_api_result::<Vec<_>, async_graphql::Error>()?;
+        Ok(receipts.map(|receipts| receipts.into_iter().map(Receipt).collect()))
     }
 
     async fn script(&self) -> Option<HexString> {
@@ -499,10 +491,13 @@ impl Transaction {
 
 pub(super) async fn get_tx_status(
     id: fuel_core_types::fuel_types::Bytes32,
-    db: &Database,
+    query: &TransactionQueryContext<'_>,
     txpool: &TxPool,
-) -> async_graphql::Result<Option<TransactionStatus>> {
-    match db.get_tx_status(&id)? {
+) -> Result<Option<TransactionStatus>, StorageError> {
+    match query
+        .status(&id)
+        .into_api_result::<txpool::TransactionStatus, StorageError>()?
+    {
         Some(status) => Ok(Some(status.into())),
         None => match txpool.shared.find_one(id) {
             Some(transaction_in_pool) => {

@@ -9,10 +9,7 @@ use super::{
         U64,
     },
 };
-use crate::{
-    fuel_core_graphql_api::service::Database,
-    query::MessageProofData,
-};
+use crate::query::MessageQueryContext;
 use async_graphql::{
     connection::{
         Connection,
@@ -21,29 +18,8 @@ use async_graphql::{
     Context,
     Object,
 };
-use fuel_core_storage::{
-    not_found,
-    tables::{
-        FuelBlocks,
-        Messages,
-        Receipts,
-        SealedBlockConsensus,
-        Transactions,
-    },
-    Result as StorageResult,
-    StorageAsRef,
-};
-use fuel_core_types::{
-    blockchain::{
-        block::CompressedBlock,
-        consensus::Consensus,
-    },
-    entities,
-    fuel_tx,
-    services::txpool::TransactionStatus,
-};
-use itertools::Itertools;
-use std::borrow::Cow;
+use fuel_core_storage::iter::IntoBoxedIter;
+use fuel_core_types::entities;
 
 pub struct Message(pub(crate) entities::message::Message);
 
@@ -97,42 +73,25 @@ impl MessageQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<MessageId, Message, EmptyFields, EmptyFields>>
     {
-        let db = ctx.data_unchecked::<Database>().clone();
+        let query = MessageQueryContext(ctx.data_unchecked());
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
             let start = *start;
-            // TODO: Avoid the `collect_vec`.
+
             let messages = if let Some(owner) = owner {
-                let message_ids: Vec<_> = db
-                    .owned_message_ids(&owner.0, start.map(Into::into), Some(direction))
-                    .try_collect()?;
-
-                let messages = message_ids
-                    .into_iter()
-                    .map(|msg_id| {
-                        let message = db
-                            .storage::<Messages>()
-                            .get(&msg_id)
-                            .transpose()
-                            .ok_or(not_found!(Messages))??
-                            .into_owned();
-
-                        Ok((msg_id.into(), message.into()))
-                    })
-                    .collect_vec()
-                    .into_iter();
-                Ok::<_, anyhow::Error>(messages)
+                query
+                    .owned_messages(&owner.0, start.map(Into::into), direction)
+                    .into_boxed()
             } else {
-                let messages = db
-                    .all_messages(start.map(Into::into), Some(direction))
-                    .map(|result| {
-                        result
-                            .map(|message| (message.id().into(), message.into()))
-                            .map_err(Into::into)
-                    })
-                    .collect_vec()
-                    .into_iter();
-                Ok(messages)
-            }?;
+                query
+                    .all_messages(start.map(Into::into), direction)
+                    .into_boxed()
+            };
+
+            let messages = messages.map(|result| {
+                result
+                    .map(|message| (message.id().into(), message.into()))
+                    .map_err(Into::into)
+            });
 
             Ok(messages)
         })
@@ -145,10 +104,9 @@ impl MessageQuery {
         transaction_id: TransactionId,
         message_id: MessageId,
     ) -> async_graphql::Result<Option<MessageProof>> {
-        let data = MessageProofContext(ctx.data_unchecked());
+        let data = MessageQueryContext(ctx.data_unchecked());
         Ok(
-            crate::query::message_proof(&data, transaction_id.into(), message_id.into())
-                .await?
+            crate::query::message_proof(&data, transaction_id.into(), message_id.into())?
                 .map(MessageProof),
         )
     }
@@ -197,80 +155,6 @@ impl MessageProof {
 
     async fn header(&self) -> Header {
         Header(self.0.header.clone())
-    }
-}
-
-struct MessageProofContext<'a>(&'a Database);
-
-impl MessageProofData for MessageProofContext<'_> {
-    fn receipts(
-        &self,
-        transaction_id: &fuel_core_types::fuel_types::Bytes32,
-    ) -> StorageResult<Vec<fuel_tx::Receipt>> {
-        Ok(self
-            .0
-            .storage::<Receipts>()
-            .get(transaction_id)?
-            .map(Cow::into_owned)
-            .unwrap_or_else(|| Vec::with_capacity(0)))
-    }
-
-    fn transaction(
-        &self,
-        transaction_id: &fuel_core_types::fuel_types::Bytes32,
-    ) -> StorageResult<Option<fuel_tx::Transaction>> {
-        Ok(self
-            .0
-            .storage::<Transactions>()
-            .get(transaction_id)?
-            .map(Cow::into_owned))
-    }
-
-    fn transaction_status(
-        &self,
-        transaction_id: &fuel_core_types::fuel_types::Bytes32,
-    ) -> StorageResult<Option<TransactionStatus>> {
-        Ok(self.0.get_tx_status(transaction_id)?)
-    }
-
-    fn transactions_on_block(
-        &self,
-        block_id: &fuel_core_types::fuel_types::Bytes32,
-    ) -> StorageResult<Vec<fuel_core_types::fuel_types::Bytes32>> {
-        Ok(self
-            .0
-            .storage::<FuelBlocks>()
-            .get(block_id)?
-            .map(|block| block.into_owned().transactions().to_vec())
-            .unwrap_or_else(|| Vec::with_capacity(0)))
-    }
-
-    fn signature(
-        &self,
-        block_id: &fuel_core_types::fuel_types::Bytes32,
-    ) -> StorageResult<Option<fuel_core_types::fuel_crypto::Signature>> {
-        match self
-            .0
-            .storage::<SealedBlockConsensus>()
-            .get(block_id)?
-            .map(Cow::into_owned)
-        {
-            // TODO: https://github.com/FuelLabs/fuel-core/issues/816
-            Some(Consensus::Genesis(_)) => Ok(Default::default()),
-            Some(Consensus::PoA(c)) => Ok(Some(c.signature)),
-            None => Ok(None),
-        }
-    }
-
-    fn block(
-        &self,
-        block_id: &fuel_core_types::fuel_types::Bytes32,
-    ) -> StorageResult<Option<CompressedBlock>> {
-        Ok(self
-            .0
-            .storage::<FuelBlocks>()
-            .get(block_id)?
-            .map(Cow::into_owned))
     }
 }
 

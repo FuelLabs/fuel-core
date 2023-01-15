@@ -6,7 +6,7 @@ use fuel_core_types::{
         SealedBlock,
     },
     entities::{
-        coin::Coin,
+        coin::CompressedCoin,
         message::Message,
     },
     fuel_tx::{
@@ -47,7 +47,7 @@ pub trait BlockImport: Send + Sync {
 }
 
 pub trait TxPoolDb: Send + Sync {
-    fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<Coin>>;
+    fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>>;
 
     fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool>;
 

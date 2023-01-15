@@ -165,7 +165,8 @@ where
                         }
                     }
                     Some(TaskRequest::GetPeerIds(channel)) => {
-                        let _ = channel.send(self.p2p_service.get_peers_ids());
+                        let peer_ids = self.p2p_service.get_peers_ids().into_iter().copied().collect();
+                        let _ = channel.send(peer_ids);
                     }
                     Some(TaskRequest::GetBlock((height, response))) => {
                         let request_msg = RequestMessage::RequestBlock(height);

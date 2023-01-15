@@ -1,4 +1,3 @@
-use crate::database::transaction::OwnedTransactionIndexCursor;
 use async_graphql::{
     connection::CursorType,
     InputValueError,
@@ -148,18 +147,6 @@ impl CursorType for HexString {
 
     fn encode_cursor(&self) -> String {
         self.to_string()
-    }
-}
-
-impl From<HexString> for OwnedTransactionIndexCursor {
-    fn from(string: HexString) -> Self {
-        string.0.into()
-    }
-}
-
-impl From<OwnedTransactionIndexCursor> for HexString {
-    fn from(cursor: OwnedTransactionIndexCursor) -> Self {
-        HexString(cursor.into())
     }
 }
 

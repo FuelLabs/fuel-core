@@ -2,6 +2,7 @@ use crate::schema::tx::types::{
     SqueezedOutStatus,
     TransactionStatus,
 };
+use fuel_core_storage::Result as StorageResult;
 use fuel_core_txpool::service::TxUpdate;
 use fuel_core_types::fuel_types::Bytes32;
 use futures::{
@@ -21,16 +22,23 @@ pub(crate) trait TxnStatusChangeState {
     /// Return the transaction status from the tx pool and database.
     async fn get_tx_status(
         &self,
-        id: fuel_core_types::fuel_types::Bytes32,
-    ) -> anyhow::Result<Option<TransactionStatus>>;
+        id: Bytes32,
+    ) -> StorageResult<Option<TransactionStatus>>;
 }
 
-pub(crate) async fn transaction_status_change(
-    state: Box<dyn TxnStatusChangeState + Send + Sync>,
-    stream: BoxStream<'static, Result<TxUpdate, BroadcastStreamRecvError>>,
+pub(crate) async fn transaction_status_change<'a, State>(
+    state: State,
+    stream: BoxStream<'a, Result<TxUpdate, BroadcastStreamRecvError>>,
     transaction_id: Bytes32,
-) -> impl Stream<Item = anyhow::Result<TransactionStatus>> {
-    let check_db_first = state.get_tx_status(transaction_id).await.transpose();
+) -> impl Stream<Item = anyhow::Result<TransactionStatus>> + 'a
+where
+    State: TxnStatusChangeState + Send + Sync + 'a,
+{
+    let check_db_first = state
+        .get_tx_status(transaction_id)
+        .await
+        .map_err(Into::into)
+        .transpose();
     let (close, mut closed) = tokio::sync::oneshot::channel();
     let mut close = Some(close);
 
@@ -71,7 +79,7 @@ pub(crate) async fn transaction_status_change(
                             // is to restart the stream.
                             Ok(None) => None,
                             // Got an error so return it.
-                            Err(e) => Some((Some(Err(e)), (state, stream))),
+                            Err(e) => Some((Some(Err(e.into())), (state, stream))),
                         }
                     }
                 }
@@ -80,7 +88,11 @@ pub(crate) async fn transaction_status_change(
                 // Buffer filled up before this stream was polled.
                 Some(Err(BroadcastStreamRecvError::Lagged(_))) => {
                     // Check the db incase a missed status was our transaction.
-                    let status = state.get_tx_status(transaction_id).await.transpose();
+                    let status = state
+                        .get_tx_status(transaction_id)
+                        .await
+                        .map_err(Into::into)
+                        .transpose();
                     Some((status, (state, stream)))
                 }
                 // Channel is closed.
