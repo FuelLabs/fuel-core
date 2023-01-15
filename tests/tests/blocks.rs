@@ -299,14 +299,15 @@ async fn block_connection_5(
     let blocks = (0..10u32)
         .map(|i| {
             CompressedBlock::test(
-                fuel_core_types::blockchain::header::BlockHeader {
+                fuel_core_types::blockchain::header::PartialBlockHeader {
                     consensus: fuel_core_types::blockchain::header::ConsensusHeader {
                         height: i.into(),
                         time: Tai64(i.into()),
                         ..Default::default()
                     },
                     ..Default::default()
-                },
+                }
+                .generate(&[], &[]),
                 vec![],
             )
         })
