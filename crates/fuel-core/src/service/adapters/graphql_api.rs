@@ -1,8 +1,11 @@
+use async_trait::async_trait;
+use anyhow::Result;
 use crate::{
     database::{
         transactions::OwnedTransactionIndexCursor,
         Database,
     },
+    producer::Producer,
     fuel_core_graphql_api::ports::{
         DatabaseBlocks,
         DatabaseChain,
@@ -13,6 +16,14 @@ use crate::{
         DatabaseTransactions,
     },
     state::IterDirection,
+    graphql_api::ports::{InsertTx, FindTx},
+    fuel_core_graphql_api::ports::{
+        TxSubscription,
+        TxPoolPort,
+        BlockProducerPort,
+        DryRunExecution,
+    },
+    service::sub_services::TxPoolService,
 };
 use fuel_core_storage::{
     iter::{
@@ -28,6 +39,11 @@ use fuel_core_txpool::types::{
     TxId,
 };
 use fuel_core_types::{
+    fuel_tx::{
+        Transaction,
+        Receipt as TxReceipt,
+    },
+    services::txpool::InsertionResult,
     blockchain::primitives::{
         BlockHeight,
         BlockId,
@@ -46,6 +62,7 @@ use fuel_core_types::{
         txpool::TransactionStatus,
     },
 };
+use std::sync::Arc;
 
 impl DatabaseBlocks for Database {
     fn block_id(&self, height: BlockHeight) -> StorageResult<BlockId> {
@@ -175,3 +192,34 @@ impl DatabaseChain for Database {
 }
 
 impl DatabasePort for Database {}
+
+impl InsertTx for TxPoolService {
+    fn insert(&self, txs: Vec<Arc<Transaction>>) -> Vec<anyhow::Result<InsertionResult>> {
+        self.shared.insert(txs)
+    }
+}
+
+impl TxSubscription for TxPoolService {
+    fn tx_update_subscribe(
+        &self,
+    ) -> tokio::sync::broadcast::Receiver<fuel_core_txpool::service::TxUpdate> {
+        self.shared.tx_update_subscribe()
+    }
+}
+
+impl FindTx for TxPoolService {
+    fn find_one(&self, id: TxId) -> Option<fuel_core_types::services::txpool::TxInfo> {
+        self.shared.find_one(id)
+    }
+}
+
+impl TxPoolPort for TxPoolService {}
+
+#[async_trait]
+impl DryRunExecution for Arc<Producer<Database>> {
+    async fn dry_run_tx(&self, transaction: Transaction, height: Option<BlockHeight>, utxo_validation: Option<bool>) -> Result<Vec<TxReceipt>> {
+        self.dry_run(transaction, height, utxo_validation).await
+    }
+}
+
+impl BlockProducerPort for Arc<Producer<Database>> {}

@@ -1,5 +1,9 @@
 use crate::{
-    fuel_core_graphql_api::ports::DatabasePort,
+    fuel_core_graphql_api::ports::{
+        DatabasePort,
+        TxPoolPort,
+        BlockProducerPort,
+    },
     graphql_api::Config,
     schema::{
         CoreSchema,
@@ -56,7 +60,6 @@ use std::{
         TcpListener,
     },
     pin::Pin,
-    sync::Arc,
 };
 use tokio_stream::StreamExt;
 use tower_http::{
@@ -69,13 +72,10 @@ pub type Service = fuel_core_services::ServiceRunner<NotInitializedTask>;
 pub type Database = Box<dyn DatabasePort>;
 // TODO: When the port for `Executor` will exist we need to replace it with `Box<dyn ExecutorPort>
 pub type Executor = crate::service::adapters::ExecutorAdapter;
-// TODO: When the port of BlockProducer will exist we need to replace it with
-//  `Box<dyn BlockProducerPort>
-pub type BlockProducer = Arc<fuel_core_producer::Producer<crate::database::Database>>;
-// TODO: When the port of TxPool will exist we need to replace it with
-//  `Box<dyn TxPoolPort>. In the future GraphQL should not be aware of `TxPool`. It should
-//  use only `Database` to receive all information about
-pub type TxPool = crate::service::sub_services::TxPoolService;
+pub type BlockProducer = Box<dyn BlockProducerPort>;
+// In the future GraphQL should not be aware of `TxPool`. It should
+//  use only `Database` to receive all information about transactions.
+pub type TxPool = Box<dyn TxPoolPort>;
 
 #[derive(Clone)]
 pub struct SharedState {

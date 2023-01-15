@@ -75,7 +75,7 @@ impl TxQuery {
         let id = id.0;
         let txpool = ctx.data_unchecked::<TxPool>();
 
-        if let Some(transaction) = txpool.shared.find_one(id) {
+        if let Some(transaction) = txpool.find_one(id) {
             Ok(Some(Transaction(transaction.tx().clone().deref().into())))
         } else {
             query.transaction(&id).into_api_result()
@@ -195,7 +195,7 @@ impl TxMutation {
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute();
 
-        let receipts = block_producer.dry_run(tx, None, utxo_validation).await?;
+        let receipts = block_producer.dry_run_tx(tx, None, utxo_validation).await?;
         Ok(receipts.iter().map(Into::into).collect())
     }
 
@@ -209,7 +209,6 @@ impl TxMutation {
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute();
         let _: Vec<_> = txpool
-            .shared
             .insert(vec![Arc::new(tx.clone())])
             .into_iter()
             .try_collect()?;
@@ -223,7 +222,7 @@ impl TxMutation {
 pub struct TxStatusSubscription;
 
 struct StreamState<'a> {
-    txpool: TxPool,
+    txpool: &'a TxPool,
     db: &'a Database,
 }
 
@@ -246,9 +245,9 @@ impl TxStatusSubscription {
         ctx: &Context<'a>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a {
-        let txpool = ctx.data_unchecked::<TxPool>().clone();
+        let txpool = ctx.data_unchecked::<TxPool>();
         let db = ctx.data_unchecked::<Database>();
-        let rx = BroadcastStream::new(txpool.shared.tx_update_subscribe());
+        let rx = BroadcastStream::new(txpool.tx_update_subscribe());
         let state = StreamState { txpool, db };
 
         transaction_status_change(state, rx.boxed(), id.into())
@@ -263,6 +262,6 @@ impl<'a> TxnStatusChangeState for StreamState<'a> {
         &self,
         id: fuel_types::Bytes32,
     ) -> StorageResult<Option<TransactionStatus>> {
-        types::get_tx_status(id, &TransactionQueryContext(self.db), &self.txpool).await
+        types::get_tx_status(id, &TransactionQueryContext(self.db), self.txpool).await
     }
 }

@@ -138,8 +138,8 @@ pub fn init_sub_services(
         },
         Box::new(database.clone()),
         schema,
-        block_producer,
-        txpool.clone(),
+        Box::new(block_producer),
+        Box::new(txpool.clone()),
         executor,
     )?;
 

@@ -1,4 +1,9 @@
-use crate::state::IterDirection;
+use async_trait::async_trait;
+use anyhow::Result;
+use crate::{
+    state::IterDirection,
+    txpool::service::TxUpdate,
+};
 use fuel_core_storage::{
     iter::BoxedIter,
     tables::{
@@ -27,6 +32,7 @@ use fuel_core_types::{
         TxId,
         TxPointer,
         UtxoId,
+        Receipt,
     },
     fuel_types::{
         Address,
@@ -39,6 +45,13 @@ use fuel_core_types::{
         txpool::TransactionStatus,
     },
 };
+use fuel_core_types::{
+    fuel_tx::Transaction,
+    services::txpool::InsertionResult,
+};
+use std::sync::Arc;
+use fuel_core_types::services::txpool::TxInfo;
+
 
 /// The database port expected by GraphQL API service.
 pub trait DatabasePort:
@@ -130,3 +143,24 @@ pub trait DatabaseChain {
 
     fn base_chain_height(&self) -> StorageResult<DaBlockHeight>;
 }
+
+pub trait FindTx {
+    fn find_one(&self, id: TxId) -> Option<TxInfo>;
+}
+
+pub trait InsertTx {
+    fn insert(&self, txs: Vec<Arc<Transaction>>) -> Vec<anyhow::Result<InsertionResult>>;
+}
+
+pub trait TxSubscription {
+    fn tx_update_subscribe(&self) -> tokio::sync::broadcast::Receiver<TxUpdate>;
+}
+
+pub trait TxPoolPort: Send + Sync + FindTx + InsertTx + TxSubscription {}
+
+#[async_trait]
+pub trait DryRunExecution {
+    async fn dry_run_tx(&self, transaction: Transaction, height: Option<BlockHeight>, utxo_validation: Option<bool>) -> Result<Vec<Receipt>>;
+}
+
+pub trait BlockProducerPort: Send + Sync + DryRunExecution {}
