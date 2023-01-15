@@ -65,7 +65,6 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use itertools::Itertools;
-use std::convert::TryInto;
 
 pub struct Block {
     pub(crate) header: Header,
@@ -225,7 +224,7 @@ impl BlockQuery {
             (Some(id), None) => id.into(),
             (None, Some(height)) => {
                 let height: u64 = height.into();
-                db.get_block_id(height.try_into()?)?
+                db.get_block_id(&height.into())?
                     .ok_or("Block height non-existent")?
             }
             (None, None) => {

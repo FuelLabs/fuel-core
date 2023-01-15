@@ -85,7 +85,7 @@ impl Database {
         &self,
         height: BlockHeight,
     ) -> StorageResult<Option<SealedBlock>> {
-        let block_id = self.get_block_id(height)?.ok_or(not_found!("BlockId"))?;
+        let block_id = self.get_block_id(&height)?.ok_or(not_found!("BlockId"))?;
         self.get_sealed_block_by_id(&block_id)
     }
 

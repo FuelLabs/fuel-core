@@ -133,14 +133,15 @@ impl InterpreterStorage for VmDatabase {
         Ok(self.current_block_height)
     }
 
+    // Should really use `BlockHeight` for height, but that would require a breaking change on fuel-vm
     fn timestamp(&self, height: u32) -> Result<Word, Self::DataError> {
         let timestamp = match height {
             // panic if $rB is greater than the current block height.
-            height if height > self.current_block_height => {
+            height if height > self.current_block_height.into() => {
                 return Err(anyhow!("block height too high for timestamp").into())
             }
             height if height == self.current_block_height => self.current_timestamp,
-            height => self.database.block_time(height)?,
+            height => self.database.block_time(height.into())?,
         };
         Ok(timestamp.0)
     }
@@ -153,7 +154,7 @@ impl InterpreterStorage for VmDatabase {
         } else {
             // this will return 0x00**32 for block height 0 as well
             self.database
-                .get_block_id(block_height.into())?
+                .get_block_id(&block_height.into())?
                 .ok_or(not_found!("BlockId"))
         }
     }

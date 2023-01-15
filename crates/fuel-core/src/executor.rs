@@ -224,7 +224,7 @@ impl Executor {
         } = execution_data;
 
         // Now that the transactions have been executed, generate the full header.
-        let mut block = block
+        let block = block
             .map(|b: PartialFuelBlock| b.generate(&message_ids[..]))
             .into_inner();
 

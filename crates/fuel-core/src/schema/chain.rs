@@ -93,7 +93,7 @@ impl ChainInfo {
     async fn latest_block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let db = ctx.data_unchecked::<Database>().clone();
         let height = db.get_block_height()?.unwrap_or_default();
-        let id = db.get_block_id(height)?.unwrap_or_default();
+        let id = db.get_block_id(&height)?.unwrap_or_default();
         let block = db
             .storage::<FuelBlocks>()
             .get(&id)?

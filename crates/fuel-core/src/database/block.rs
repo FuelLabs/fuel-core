@@ -106,10 +106,8 @@ impl Database {
         }
     }
 
-    pub fn block_time(&self, height: u32) -> StorageResult<Tai64> {
-        let id = self
-            .get_block_id(height.into().as_ref())?
-            .unwrap_or_default();
+    pub fn block_time(&self, height: BlockHeight) -> StorageResult<Tai64> {
+        let id = self.get_block_id(&height)?.unwrap_or_default();
         let block = self
             .storage::<FuelBlocks>()
             .get(&id)?
