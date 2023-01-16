@@ -21,17 +21,18 @@ impl State {
         observed: impl Into<Option<u32>>,
     ) -> Self {
         let status = match (committed.into(), observed.into()) {
-            (Some(committed), Some(observed)) => match committed.checked_add(1) {
-                Some(next) => {
-                    let range = next..=observed;
-                    if range.is_empty() {
-                        Status::Committed(committed)
-                    } else {
-                        Status::Processing(range)
-                    }
-                }
-                None => Status::Committed(committed),
-            },
+            (Some(committed), Some(observed)) => {
+                committed
+                    .checked_add(1)
+                    .map_or(Status::Committed(committed), |next| {
+                        let range = next..=observed;
+                        if range.is_empty() {
+                            Status::Committed(committed)
+                        } else {
+                            Status::Processing(range)
+                        }
+                    })
+            }
             (Some(committed), None) => Status::Committed(committed),
             (None, Some(observed)) => Status::Processing(0..=observed),
             (None, None) => Status::Uninitialized,
@@ -47,95 +48,80 @@ impl State {
     }
 
     pub fn commit(&mut self, height: u32) {
-        match &self.status {
-            Status::Processing(range) => {
-                if height >= *range.end() {
-                    self.status = Status::Committed(height);
-                } else {
-                    self.status =
-                        Status::Processing(height.saturating_add(1)..=*range.end())
+        let new_status = match &self.status {
+            Status::Processing(range) => match height.cmp(range.end()) {
+                std::cmp::Ordering::Less => {
+                    Some(Status::Processing(height.saturating_add(1)..=*range.end()))
                 }
-            }
-            Status::Uninitialized => {
-                self.status = Status::Committed(height);
-            }
+                std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => {
+                    Some(Status::Committed(height))
+                }
+            },
+            Status::Uninitialized => Some(Status::Committed(height)),
             Status::Committed(existing) => {
-                match creates_new_processing(existing, &height) {
-                    Some(range) => {
-                        self.status = Status::Processing(range);
-                    }
-                    None => {
-                        self.status = Status::Committed(*existing.max(&height));
-                    }
+                match commit_creates_processing(existing, &height) {
+                    Some(range) => Some(Status::Processing(range)),
+                    None => Some(Status::Committed(*existing.max(&height))),
                 }
             }
-        }
+        };
+        self.apply_status(new_status);
     }
 
     pub fn observe(&mut self, height: u32) -> bool {
-        let mut status_change = true;
-        match &self.status {
-            Status::Uninitialized => {
-                self.status = Status::Processing(0..=height);
-            }
-            Status::Processing(range) if *range.end() < height => {
-                self.status = Status::Processing(*range.start()..=height);
-            }
-            Status::Committed(committed) => {
-                if let Some(next) = committed.checked_add(1) {
-                    let r = next..=height;
-                    if !r.is_empty() {
-                        self.status = Status::Processing(r);
-                    }
+        let new_status = match &self.status {
+            Status::Uninitialized => Some(Status::Processing(0..=height)),
+            Status::Processing(range) => match range.end().cmp(&height) {
+                std::cmp::Ordering::Less => {
+                    Some(Status::Processing(*range.start()..=height))
                 }
-            }
-            _ => {
-                status_change = false;
-            }
-        }
+                std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => None,
+            },
+            Status::Committed(committed) => committed.checked_add(1).and_then(|next| {
+                let r = next..=height;
+                (!r.is_empty()).then_some(Status::Processing(r))
+            }),
+        };
+        let status_change = new_status.is_some();
+        self.apply_status(new_status);
         status_change
     }
 
     pub fn failed_to_process(&mut self, range: RangeInclusive<u32>) {
-        if !range.is_empty() {
-            match &self.status {
-                Status::Uninitialized => (),
-                Status::Processing(processing) => {
-                    if range.contains(processing.start()) {
-                        match processing.start().checked_sub(1) {
-                            Some(prev) => {
-                                self.status = Status::Committed(prev);
-                            }
-                            None => {
-                                self.status = Status::Uninitialized;
-                            }
-                        }
-                    } else if range.contains(processing.end())
-                        || processing.contains(range.start())
-                    {
-                        match range.start().checked_sub(1) {
-                            Some(prev) => {
-                                self.status =
-                                    Status::Processing(*processing.start()..=prev);
-                            }
-                            None => {
-                                self.status = Status::Uninitialized;
-                            }
-                        }
-                    } else if processing.contains(range.end()) {
-                        match processing.start().checked_sub(1) {
-                            Some(prev) => {
-                                self.status = Status::Committed(prev);
-                            }
-                            None => {
-                                self.status = Status::Uninitialized;
-                            }
-                        }
-                    }
-                }
-                Status::Committed(_) => (),
-            }
-        }
+        let status = (!range.is_empty())
+            .then_some(())
+            .and_then(|_| match &self.status {
+                Status::Uninitialized | Status::Committed(_) => None,
+                Status::Processing(processing) => range
+                    .contains(processing.start())
+                    .then(|| {
+                        processing
+                            .start()
+                            .checked_sub(1)
+                            .map_or(Status::Uninitialized, Status::Committed)
+                    })
+                    .or_else(|| {
+                        (range.contains(processing.end())
+                            || processing.contains(range.start()))
+                        .then(|| {
+                            range
+                                .start()
+                                .checked_sub(1)
+                                .map_or(Status::Uninitialized, |prev| {
+                                    Status::Processing(*processing.start()..=prev)
+                                })
+                        })
+                    })
+                    .or_else(|| {
+                        processing.contains(range.end()).then(|| {
+                            processing
+                                .start()
+                                .checked_sub(1)
+                                .map_or(Status::Uninitialized, Status::Committed)
+                        })
+                    }),
+            });
+        self.apply_status(status);
     }
 
     pub fn proposed_height(&self) -> Option<&u32> {
@@ -144,9 +130,18 @@ impl State {
             _ => None,
         }
     }
+
+    fn apply_status(&mut self, status: Option<Status>) {
+        if let Some(s) = status {
+            self.status = s;
+        }
+    }
 }
 
-fn creates_new_processing(existing: &u32, commit: &u32) -> Option<RangeInclusive<u32>> {
+fn commit_creates_processing(
+    existing: &u32,
+    commit: &u32,
+) -> Option<RangeInclusive<u32>> {
     let next = commit.checked_add(1)?;
     let prev_existing = existing.checked_sub(1)?;
     let r = next..=prev_existing;

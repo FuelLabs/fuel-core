@@ -45,7 +45,7 @@ fn test_commit(mut state: State, height: u32) -> Status {
 #[test_case(2, 0 => Some(1..=1))]
 #[test_case(30, 0 => Some(1..=29))]
 fn test_creates_new_existing(existing: u32, commit: u32) -> Option<RangeInclusive<u32>> {
-    creates_new_processing(&existing, &commit)
+    commit_creates_processing(&existing, &commit)
 }
 
 #[test_case(State::new(None, None), 0 => Status::Processing(0..=0))]

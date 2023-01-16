@@ -30,16 +30,20 @@ use tokio::{
 #[cfg(test)]
 mod tests;
 
-pub struct TaskSetup<P, E> {
+pub struct TaskSetup<P, E, C>
+where
+    P: ports::PeerToPeerPort + Send + Sync + 'static,
+    E: ports::ExecutorPort + Send + Sync + 'static,
+    C: ports::ConsensusPort + Send + Sync + 'static,
+{
     height_stream: BoxStream<'static, BlockHeight>,
     state: SharedMutex<State>,
     params: Params,
-    p2p: Arc<P>,
-    executor: Arc<E>,
+    ports: ports::Ports<P, E, C>,
 }
 pub struct Task {
     sync_task: Option<JoinHandle<()>>,
-    import_task: Option<JoinHandle<()>>,
+    import_task: Option<JoinHandle<anyhow::Result<bool>>>,
     kill_switch: KillSwitch,
 }
 
@@ -65,9 +69,7 @@ impl RunnableTask for Task {
                         let _ = import_task.await;
                         return Ok(false)
                     }
-                    Either::Right((import_result, _)) => {
-                        return Ok(import_result.map(|_| true)?)
-                    }
+                    Either::Right((import_result, _)) => return import_result?,
                 }
             }
         }
@@ -87,10 +89,11 @@ impl RunnableTask for Task {
 }
 
 #[async_trait::async_trait]
-impl<P, E> RunnableService for TaskSetup<P, E>
+impl<P, E, C> RunnableService for TaskSetup<P, E, C>
 where
-    P: ports::PeerToPeer + Send + Sync + 'static,
-    E: ports::Executor + Send + Sync + 'static,
+    P: ports::PeerToPeerPort + Send + Sync + 'static,
+    E: ports::ExecutorPort + Send + Sync + 'static,
+    C: ports::ConsensusPort + Send + Sync + 'static,
 {
     const NAME: &'static str = "fuel-core-sync";
 
@@ -105,8 +108,7 @@ where
             height_stream,
             state,
             params,
-            p2p,
-            executor,
+            ports,
         } = self;
         let kill_switch = KillSwitch::new();
         let notify = Arc::new(Notify::new());
@@ -120,9 +122,10 @@ where
             state,
             notify,
             params,
-            p2p,
-            executor,
+            ports,
             kill_switch.handle(),
+            #[cfg(test)]
+            || (),
         ));
         Ok(Task {
             sync_task: Some(sync_task),
