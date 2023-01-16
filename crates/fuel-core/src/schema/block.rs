@@ -35,7 +35,6 @@ use async_graphql::{
     Union,
 };
 use fuel_core_poa::service::seal_block;
-use fuel_core_producer::ports::Executor as ExecutorTrait;
 use fuel_core_storage::{
     iter::IntoBoxedIter,
     Result as StorageResult,
@@ -348,7 +347,7 @@ impl BlockMutation {
             //  inside CM for `blocks_to_produce` blocks. Also in this case `CM` will notify
             //  `TxPool` about a new block.
             let (ExecutionResult { block, .. }, mut db_transaction) = executor
-                .execute_without_commit(ExecutionBlock::Production(block))?
+                .execute_with_no_commit(ExecutionBlock::Production(block))?
                 .into();
             seal_block(&config.consensus_key, &block, db_transaction.as_mut())?;
             db_transaction.commit()?;

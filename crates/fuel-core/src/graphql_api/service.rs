@@ -1,8 +1,8 @@
 use crate::{
     fuel_core_graphql_api::ports::{
+        BlockProducerPort,
         DatabasePort,
         TxPoolPort,
-        BlockProducerPort,
     },
     graphql_api::Config,
     schema::{
@@ -67,11 +67,13 @@ use tower_http::{
     trace::TraceLayer,
 };
 
+use super::ports::ExecutorPort;
+
 pub type Service = fuel_core_services::ServiceRunner<NotInitializedTask>;
 
 pub type Database = Box<dyn DatabasePort>;
 // TODO: When the port for `Executor` will exist we need to replace it with `Box<dyn ExecutorPort>
-pub type Executor = crate::service::adapters::ExecutorAdapter;
+pub type Executor = Box<dyn ExecutorPort>;
 pub type BlockProducer = Box<dyn BlockProducerPort>;
 // In the future GraphQL should not be aware of `TxPool`. It should
 //  use only `Database` to receive all information about transactions.

@@ -1,11 +1,16 @@
-use async_trait::async_trait;
-use anyhow::Result;
 use crate::{
     database::{
         transactions::OwnedTransactionIndexCursor,
         Database,
     },
-    producer::Producer,
+    fuel_core_graphql_api::ports::{
+        BlockProducerPort,
+        DryRunExecution,
+        ExecuteWithoutCommit,
+        ExecutorPort,
+        TxPoolPort,
+        TxSubscription,
+    },
     fuel_core_graphql_api::ports::{
         DatabaseBlocks,
         DatabaseChain,
@@ -15,22 +20,24 @@ use crate::{
         DatabasePort,
         DatabaseTransactions,
     },
-    state::IterDirection,
-    graphql_api::ports::{InsertTx, FindTx},
-    fuel_core_graphql_api::ports::{
-        TxSubscription,
-        TxPoolPort,
-        BlockProducerPort,
-        DryRunExecution,
+    graphql_api::ports::{
+        FindTx,
+        InsertTx,
     },
+    // executor::Executor,
+    producer::Producer,
     service::sub_services::TxPoolService,
+    state::IterDirection,
 };
+use anyhow::Result;
+use async_trait::async_trait;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
         IntoBoxedIter,
     },
     not_found,
+    transactional::StorageTransaction,
     Error as StorageError,
     Result as StorageResult,
 };
@@ -39,11 +46,6 @@ use fuel_core_txpool::types::{
     TxId,
 };
 use fuel_core_types::{
-    fuel_tx::{
-        Transaction,
-        Receipt as TxReceipt,
-    },
-    services::txpool::InsertionResult,
     blockchain::primitives::{
         BlockHeight,
         BlockId,
@@ -54,12 +56,22 @@ use fuel_core_types::{
         Address,
         AssetId,
         MessageId,
+        Receipt as TxReceipt,
+        Transaction,
         TxPointer,
         UtxoId,
     },
     services::{
+        executor::{
+            ExecutionBlock,
+            Result as ExecutorResult,
+            UncommittedResult,
+        },
         graphql_api::ContractBalance,
-        txpool::TransactionStatus,
+        txpool::{
+            InsertionResult,
+            TransactionStatus,
+        },
     },
 };
 use std::sync::Arc;
@@ -217,9 +229,28 @@ impl TxPoolPort for TxPoolService {}
 
 #[async_trait]
 impl DryRunExecution for Arc<Producer<Database>> {
-    async fn dry_run_tx(&self, transaction: Transaction, height: Option<BlockHeight>, utxo_validation: Option<bool>) -> Result<Vec<TxReceipt>> {
+    async fn dry_run_tx(
+        &self,
+        transaction: Transaction,
+        height: Option<BlockHeight>,
+        utxo_validation: Option<bool>,
+    ) -> Result<Vec<TxReceipt>> {
         self.dry_run(transaction, height, utxo_validation).await
     }
 }
 
 impl BlockProducerPort for Arc<Producer<Database>> {}
+
+use crate::service::adapters::ExecutorAdapter;
+use fuel_core_producer::ports::Executor as ProducerExecutorPort;
+
+impl ExecuteWithoutCommit for ExecutorAdapter {
+    fn execute_with_no_commit(
+        &self,
+        block: ExecutionBlock,
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
+        self.execute_without_commit(block)
+    }
+}
+
+impl ExecutorPort for ExecutorAdapter {}

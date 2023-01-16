@@ -140,7 +140,7 @@ pub fn init_sub_services(
         schema,
         Box::new(block_producer),
         Box::new(txpool.clone()),
-        executor,
+        Box::new(executor),
     )?;
 
     let shared = SharedState {

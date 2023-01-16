@@ -1,9 +1,10 @@
-use async_trait::async_trait;
-use anyhow::Result;
 use crate::{
+    database::Database,
     state::IterDirection,
     txpool::service::TxUpdate,
 };
+use anyhow::Result;
+use async_trait::async_trait;
 use fuel_core_storage::{
     iter::BoxedIter,
     tables::{
@@ -17,6 +18,7 @@ use fuel_core_storage::{
         SealedBlockConsensus,
         Transactions,
     },
+    transactional::StorageTransaction,
     Error as StorageError,
     Result as StorageResult,
     StorageInspect,
@@ -29,10 +31,11 @@ use fuel_core_types::{
     },
     entities::message::Message,
     fuel_tx::{
+        Receipt,
+        Transaction,
         TxId,
         TxPointer,
         UtxoId,
-        Receipt,
     },
     fuel_types::{
         Address,
@@ -41,17 +44,20 @@ use fuel_core_types::{
         MessageId,
     },
     services::{
+        executor::{
+            ExecutionBlock,
+            Result as ExecutorResult,
+            UncommittedResult,
+        },
         graphql_api::ContractBalance,
-        txpool::TransactionStatus,
+        txpool::{
+            InsertionResult,
+            TransactionStatus,
+            TxInfo,
+        },
     },
 };
-use fuel_core_types::{
-    fuel_tx::Transaction,
-    services::txpool::InsertionResult,
-};
 use std::sync::Arc;
-use fuel_core_types::services::txpool::TxInfo;
-
 
 /// The database port expected by GraphQL API service.
 pub trait DatabasePort:
@@ -160,7 +166,21 @@ pub trait TxPoolPort: Send + Sync + FindTx + InsertTx + TxSubscription {}
 
 #[async_trait]
 pub trait DryRunExecution {
-    async fn dry_run_tx(&self, transaction: Transaction, height: Option<BlockHeight>, utxo_validation: Option<bool>) -> Result<Vec<Receipt>>;
+    async fn dry_run_tx(
+        &self,
+        transaction: Transaction,
+        height: Option<BlockHeight>,
+        utxo_validation: Option<bool>,
+    ) -> Result<Vec<Receipt>>;
 }
 
 pub trait BlockProducerPort: Send + Sync + DryRunExecution {}
+
+pub trait ExecuteWithoutCommit {
+    fn execute_with_no_commit(
+        &self,
+        block: ExecutionBlock,
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>>;
+}
+
+pub trait ExecutorPort: Send + Sync + ExecuteWithoutCommit {}
