@@ -17,8 +17,14 @@ use tokio::{
 pub type Shared<T> = std::sync::Arc<T>;
 
 /// A mutex that can safely be in async contexts and avoids deadlocks.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SharedMutex<T>(Shared<parking_lot::Mutex<T>>);
+
+impl<T> Clone for SharedMutex<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
 
 /// Used if services have no asynchronously shared data
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

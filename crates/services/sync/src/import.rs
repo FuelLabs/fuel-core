@@ -38,6 +38,9 @@ use crate::{
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+mod back_pressure_tests;
+
 #[derive(Clone, Copy, Debug)]
 pub struct Params {
     pub max_get_header_requests: usize,
