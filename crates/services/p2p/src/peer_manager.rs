@@ -334,61 +334,57 @@ impl NetworkBehaviour for PeerManagerBehaviour {
             return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
         }
 
-        loop {
-            match self.heartbeat.poll(cx, params) {
-                Poll::Pending => break,
-                Poll::Ready(NetworkBehaviourAction::NotifyHandler {
+        match self.heartbeat.poll(cx, params) {
+            Poll::Pending => {}
+            Poll::Ready(NetworkBehaviourAction::NotifyHandler {
+                peer_id,
+                handler,
+                event,
+            }) => {
+                return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
                     peer_id,
                     handler,
-                    event,
-                }) => {
-                    return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-                        peer_id,
-                        handler,
-                        event: EitherOutput::First(event),
-                    })
-                }
-                Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
+                    event: EitherOutput::First(event),
+                })
+            }
+            Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
+                address,
+                score,
+            }) => {
+                return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
                     address,
                     score,
-                }) => {
-                    return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-                        address,
-                        score,
-                    })
-                }
-                Poll::Ready(NetworkBehaviourAction::CloseConnection {
+                })
+            }
+            Poll::Ready(NetworkBehaviourAction::CloseConnection {
+                peer_id,
+                connection,
+            }) => {
+                return Poll::Ready(NetworkBehaviourAction::CloseConnection {
                     peer_id,
                     connection,
-                }) => {
-                    return Poll::Ready(NetworkBehaviourAction::CloseConnection {
-                        peer_id,
-                        connection,
-                    })
-                }
-                Poll::Ready(NetworkBehaviourAction::Dial { handler, opts }) => {
-                    let handler = IntoConnectionHandler::select(
-                        handler,
-                        self.identify.new_handler(),
-                    );
+                })
+            }
+            Poll::Ready(NetworkBehaviourAction::Dial { handler, opts }) => {
+                let handler =
+                    IntoConnectionHandler::select(handler, self.identify.new_handler());
 
-                    return Poll::Ready(NetworkBehaviourAction::Dial { handler, opts })
-                }
-                Poll::Ready(NetworkBehaviourAction::GenerateEvent(HeartbeatEvent {
+                return Poll::Ready(NetworkBehaviourAction::Dial { handler, opts })
+            }
+            Poll::Ready(NetworkBehaviourAction::GenerateEvent(HeartbeatEvent {
+                peer_id,
+                latest_block_height,
+            })) => {
+                self.peer_manager.insert_peer_info(
+                    &peer_id,
+                    PeerInfoInsert::BlockHeight(latest_block_height),
+                );
+
+                let event = PeerInfoEvent::PeerInfoUpdated {
                     peer_id,
-                    latest_block_height,
-                })) => {
-                    self.peer_manager.insert_peer_info(
-                        &peer_id,
-                        PeerInfoInsert::BlockHeight(latest_block_height),
-                    );
-
-                    let event = PeerInfoEvent::PeerInfoUpdated {
-                        peer_id,
-                        block_height: latest_block_height,
-                    };
-                    return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
-                }
+                    block_height: latest_block_height,
+                };
+                return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
             }
         }
 
