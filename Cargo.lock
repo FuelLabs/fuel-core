@@ -2284,7 +2284,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-block-executor"
-version = "0.15.2"
+version = "0.15.3"
 dependencies = [
  "anyhow",
  "fuel-chain-config",
@@ -2294,7 +2294,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-block-importer"
-version = "0.15.2"
+version = "0.15.3"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2304,7 +2304,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-block-producer"
-version = "0.15.2"
+version = "0.15.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2322,7 +2322,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-chain-config"
-version = "0.15.2"
+version = "0.15.3"
 dependencies = [
  "anyhow",
  "bincode",
@@ -2340,7 +2340,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core"
-version = "0.15.2"
+version = "0.15.3"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2406,7 +2406,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-bft"
-version = "0.15.2"
+version = "0.15.3"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2416,7 +2416,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-interfaces"
-version = "0.15.2"
+version = "0.15.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2452,7 +2452,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-gql-client"
-version = "0.15.2"
+version = "0.15.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -2490,7 +2490,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-metrics"
-version = "0.15.2"
+version = "0.15.3"
 dependencies = [
  "axum",
  "lazy_static",
@@ -2500,7 +2500,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-p2p"
-version = "0.15.2"
+version = "0.15.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2541,7 +2541,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-poa-coordinator"
-version = "0.15.2"
+version = "0.15.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2557,7 +2557,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-relayer"
-version = "0.15.2"
+version = "0.15.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2592,7 +2592,7 @@ checksum = "b0f895423d18472d60eb078cf949608ff3fe6e42e91d41b85993b11528d2c4c3"
 
 [[package]]
 name = "fuel-sync"
-version = "0.15.2"
+version = "0.15.3"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2648,7 +2648,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-txpool"
-version = "0.15.2"
+version = "0.15.3"
 dependencies = [
  "anyhow",
  "async-trait",
