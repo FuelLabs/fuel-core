@@ -1,3 +1,5 @@
+//! Ports this services requires to function.
+
 use std::sync::Arc;
 
 use fuel_core_services::SourcePeer;
@@ -19,27 +21,39 @@ use futures::stream::BoxStream;
 #[cfg(test)]
 use mockall::automock;
 
+/// All ports this service requires to function.
 pub struct Ports<P, E, C>
 where
     P: PeerToPeerPort + 'static,
     E: ExecutorPort + 'static,
     C: ConsensusPort + 'static,
 {
+    /// Network port.
     pub p2p: Arc<P>,
+    /// Executor port.
     pub executor: Arc<E>,
+    /// Consensus port.
     pub consensus: Arc<C>,
 }
 
 #[cfg_attr(test, automock)]
 #[async_trait::async_trait]
+/// Port for communication with the network.
 pub trait PeerToPeerPort {
+    /// Stream of newly observed block heights.
     fn height_stream(&self) -> BoxStream<'static, BlockHeight>;
 
+    /// Request sealed block header from the network
+    /// at the given height.
+    ///
+    /// Returns the source peer this header was received from.
     async fn get_sealed_block_header(
         &self,
         height: BlockHeight,
     ) -> anyhow::Result<Option<SourcePeer<SealedBlockHeader>>>;
 
+    /// Request transactions from the network for the given block
+    /// and source peer.
     async fn get_transactions(
         &self,
         block_id: SourcePeer<BlockId>,
@@ -48,7 +62,9 @@ pub trait PeerToPeerPort {
 
 #[cfg_attr(test, automock)]
 #[async_trait::async_trait]
+/// Port for communication with the consensus service.
 pub trait ConsensusPort {
+    /// Check if the given sealed block header is valid.
     async fn check_sealed_header(
         &self,
         header: &SealedBlockHeader,
@@ -57,7 +73,10 @@ pub trait ConsensusPort {
 
 #[cfg_attr(test, automock)]
 #[async_trait::async_trait]
+/// Port for communication with the executor service.
 pub trait ExecutorPort {
+    /// Execute the given sealed block
+    /// and commit it to the database.
     async fn execute_and_commit(
         &self,
         block: SealedBlock,
