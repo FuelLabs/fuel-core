@@ -199,7 +199,7 @@ use super::*;
     {
         let mut p2p = MockPeerToPeerPort::default();
         p2p.expect_get_sealed_block_header()
-            .times(2)
+            .times(1)
             .returning(|_| Err(anyhow::anyhow!("Some network error")));
         Mocks{
             p2p,
@@ -215,7 +215,7 @@ use super::*;
     {
         let mut p2p = MockPeerToPeerPort::default();
         p2p.expect_get_sealed_block_header()
-            .times(2)
+            .times(1)
             .returning(|h| if *h == 4 {
                 Err(anyhow::anyhow!("Some network error"))
             } else {
@@ -455,14 +455,55 @@ use super::*;
 )]
 #[tokio::test]
 async fn test_import(state: State, mocks: Mocks) -> (State, bool) {
+    let state = SharedMutex::new(state);
+    let notify = Arc::new(Notify::new());
+    test_import_inner(state, notify, mocks).await
+}
+
+#[test_case(
+    {
+        let s = SharedMutex::new(State::new(3, 5));
+        let state = s.clone();
+        let n = Arc::new(Notify::new());
+        let notify = n.clone();
+        let mut p2p = MockPeerToPeerPort::default();
+        p2p.expect_get_sealed_block_header()
+            .times(3)
+            .returning(move |h| {
+                state.apply(|s| s.observe(6));
+                notify.notify_one();
+                Ok(Some(empty_header(h)))
+            });
+        p2p.expect_get_transactions()
+            .times(3)
+            .returning(move|_| Ok(Some(vec![])));
+        (s, n, Mocks{
+            consensus_port: DefaultMocks::times([3]),
+            p2p,
+            count: DefaultMocks::times([2]),
+            executor: DefaultMocks::times([3]),
+        })
+    }
+    => (State::new(6, None), true) ; "Loop 1 with headers 4, 5. Loop 2 with header 6"
+)]
+#[tokio::test]
+async fn test_import_loop(
+    (state, notify, mocks): (SharedMutex<State>, Arc<Notify>, Mocks),
+) -> (State, bool) {
+    test_import_inner(state, notify, mocks).await
+}
+
+async fn test_import_inner(
+    state: SharedMutex<State>,
+    notify: Arc<Notify>,
+    mocks: Mocks,
+) -> (State, bool) {
     let Mocks {
         consensus_port,
         p2p,
         executor,
         count: Count(rx, loop_callback),
     } = mocks;
-    let state = SharedMutex::new(state);
-    let notify = Arc::new(Notify::new());
     let params = Params {
         max_get_header_requests: 10,
         max_get_txns_requests: 10,

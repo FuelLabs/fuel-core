@@ -18,7 +18,6 @@ use fuel_core_types::blockchain::{
 use futures::{
     stream::{
         self,
-        Scan,
         StreamExt,
     },
     Stream,
@@ -162,7 +161,7 @@ where
 fn get_header_range_buffered(
     range: RangeInclusive<u32>,
     params: Params,
-    p2p: Arc<impl PeerToPeerPort + 'static>,
+    p2p: Arc<impl PeerToPeerPort + Send + Sync + 'static>,
 ) -> impl Stream<Item = anyhow::Result<SourcePeer<SealedBlockHeader>>> {
     get_header_range(range, p2p)
         .buffered(params.max_get_header_requests)
@@ -212,21 +211,19 @@ impl<S> StreamUtil for S {}
 struct ScanNoneErr<S>(S);
 struct ScanErr<S>(S);
 
-type Fut<R> = futures::future::Ready<Option<anyhow::Result<R>>>;
-
 impl<S> ScanNoneErr<S> {
-    fn scan_none_or_err<R>(
-        self,
-    ) -> Scan<S, bool, Fut<R>, impl FnMut(&mut bool, <S as Stream>::Item) -> Fut<R>>
+    fn scan_none_or_err<R>(self) -> impl Stream<Item = anyhow::Result<R>>
     where
-        S: Stream<Item = anyhow::Result<Option<R>>>,
+        S: Stream<Item = anyhow::Result<Option<R>>> + Send + 'static,
     {
-        self.0.scan(false, |err, result| {
-            if *err {
-                futures::future::ready(None)
+        let stream = self.0.boxed();
+        futures::stream::unfold((false, stream), |(mut err, mut stream)| async move {
+            if err {
+                None
             } else {
-                *err = result.is_err();
-                futures::future::ready(result.transpose())
+                let result = stream.next().await?;
+                err = result.is_err();
+                result.transpose().map(|result| (result, (err, stream)))
             }
         })
     }
@@ -249,17 +246,3 @@ impl<S> ScanErr<S> {
         })
     }
 }
-
-// impl<S, R> Stream for ScanErr<S>
-// where
-//     S: Stream<Item = anyhow::Result<R>>,
-// {
-//     type Item = anyhow::Result<R>;
-
-//     fn poll_next(
-//         self: std::pin::Pin<&mut Self>,
-//         cx: &mut std::task::Context<'_>,
-//     ) -> std::task::Poll<Option<Self::Item>> {
-//         std::pin::Pin::new(&mut self.0).poll_next(cx)
-//     }
-// }

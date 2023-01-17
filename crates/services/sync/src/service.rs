@@ -14,6 +14,7 @@ use fuel_core_services::{
     KillSwitch,
     RunnableService,
     RunnableTask,
+    ServiceRunner,
     SharedMutex,
     StateWatcher,
 };
@@ -41,10 +42,33 @@ where
     params: Params,
     ports: ports::Ports<P, E, C>,
 }
+
 pub struct Task {
     sync_task: Option<JoinHandle<()>>,
     import_task: Option<JoinHandle<anyhow::Result<bool>>>,
     kill_switch: KillSwitch,
+}
+
+impl<P, E, C> TaskSetup<P, E, C>
+where
+    P: ports::PeerToPeerPort + Send + Sync + 'static,
+    E: ports::ExecutorPort + Send + Sync + 'static,
+    C: ports::ConsensusPort + Send + Sync + 'static,
+{
+    pub fn new(
+        height_stream: BoxStream<'static, BlockHeight>,
+        state: State,
+        params: Params,
+        ports: ports::Ports<P, E, C>,
+    ) -> Self {
+        let state = SharedMutex::new(state);
+        Self {
+            height_stream,
+            state,
+            params,
+            ports,
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -64,12 +88,28 @@ impl RunnableTask for Task {
                 select(watcher.changed().boxed(), select(sync_task, import_task)).await
             {
                 match join_handles {
-                    Either::Left((_, import_task)) => {
-                        self.kill_switch.kill_all();
-                        let _ = import_task.await;
-                        return Ok(false)
-                    }
-                    Either::Right((import_result, _)) => return import_result?,
+                    Either::Left((sync_result, import_task)) => match sync_result {
+                        Err(e) if e.is_panic() => {
+                            self.kill_switch.kill_all();
+                            let _ = import_task.await;
+                            std::panic::resume_unwind(e.into_panic());
+                        }
+                        _ => unreachable!(
+                            "The sync task has no errors so this can't happen"
+                        ),
+                    },
+                    Either::Right((import_result, sync_task)) => match import_result {
+                        Ok(task_result) => return task_result,
+                        Err(e) => {
+                            if e.is_panic() {
+                                self.kill_switch.kill_all();
+                                let _ = sync_task.await;
+                                std::panic::resume_unwind(e.into_panic());
+                            } else {
+                                return Err(e.into())
+                            }
+                        }
+                    },
                 }
             }
         }
@@ -133,4 +173,33 @@ where
             kill_switch,
         })
     }
+}
+
+/// Creates an instance of runnable sync service.
+pub fn new_service<P, E, C>(
+    current_fuel_block_height: BlockHeight,
+    p2p: P,
+    executor: E,
+    consensus: C,
+    params: Params,
+) -> anyhow::Result<ServiceRunner<TaskSetup<P, E, C>>>
+where
+    P: ports::PeerToPeerPort + Send + Sync + 'static,
+    E: ports::ExecutorPort + Send + Sync + 'static,
+    C: ports::ConsensusPort + Send + Sync + 'static,
+{
+    let height_stream = p2p.height_stream();
+    let state = State::new(*current_fuel_block_height, None);
+    let ports = ports::Ports {
+        p2p: Arc::new(p2p),
+        executor: Arc::new(executor),
+        consensus: Arc::new(consensus),
+    };
+
+    Ok(ServiceRunner::new(TaskSetup::new(
+        height_stream,
+        state,
+        params,
+        ports,
+    )))
 }
