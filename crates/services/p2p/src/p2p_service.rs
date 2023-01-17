@@ -547,6 +547,7 @@ mod tests {
                 ConsensusVote,
             },
             header::PartialBlockHeader,
+            primitives::BlockHeight,
             SealedBlock,
         },
         fuel_tx::Transaction,
@@ -1095,6 +1096,8 @@ mod tests {
     }
 
     // Simulates 2 p2p nodes that connect to each other and consequently exchange Peer Info
+    // On sucessful connection, node B updates its latest BlockHeight
+    // and shares it with Peer A via Heartbeat protocol
     #[tokio::test]
     #[instrument]
     async fn peer_info_updates_work() {
@@ -1108,6 +1111,8 @@ mod tests {
         p2p_config.bootstrap_nodes = vec![node_a_data.multiaddr];
         let mut node_b = build_service_from_config(p2p_config);
 
+        let latest_block_height = (40 as u32).into();
+
         loop {
             tokio::select! {
                 node_a_event = node_a.next_event() => {
@@ -1118,7 +1123,9 @@ mod tests {
                             // 2. Client Version is known
                             // 3. Node has responded with their latest BlockHeight
                             if !peer_addresses.is_empty() && client_version.is_some() && last_known_block_height.is_some() {
-                                break;
+                                if last_known_block_height.unwrap() == latest_block_height {
+                                    break;
+                                }
                             }
                         }
                     }
@@ -1126,6 +1133,11 @@ mod tests {
                     tracing::info!("Node A Event: {:?}", node_a_event);
                 },
                 node_b_event = node_b.next_event() => {
+                    if let Some(FuelP2PEvent::PeerConnected(_)) = node_b_event {
+                        // we've connected to Peer A
+                        // let's update our BlockHeight
+                        node_b.update_block_height(latest_block_height);
+                    }
                     tracing::info!("Node B Event: {:?}", node_b_event);
                 }
             };
