@@ -6,14 +6,16 @@ use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
+        primitives::BlockId,
     },
     entities::{
-        coin::Coin,
+        coin::CompressedCoin,
         message::Message,
     },
     fuel_tx::{
         Receipt,
         Transaction,
+        TxId,
         UtxoId,
     },
     fuel_types::{
@@ -35,7 +37,7 @@ pub struct FuelBlocks;
 
 impl Mappable for FuelBlocks {
     /// Unique identifier of the fuel block.
-    type Key = Bytes32;
+    type Key = BlockId;
     type SetValue = CompressedBlock;
     type GetValue = Self::SetValue;
 }
@@ -66,17 +68,19 @@ impl Mappable for Receipts {
 pub struct SealedBlockConsensus;
 
 impl Mappable for SealedBlockConsensus {
-    type Key = Bytes32;
+    type Key = BlockId;
     type SetValue = Consensus;
     type GetValue = Self::SetValue;
 }
 
-/// The storage table of coins. Each [`Coin`](crate::model::Coin) is represented by unique `UtxoId`.
+/// The storage table of coins. Each
+/// [`CompressedCoin`](fuel_core_types::entities::coin::CompressedCoin)
+/// is represented by unique `UtxoId`.
 pub struct Coins;
 
 impl Mappable for Coins {
     type Key = UtxoId;
-    type SetValue = Coin;
+    type SetValue = CompressedCoin;
     type GetValue = Self::SetValue;
 }
 
@@ -93,7 +97,7 @@ impl Mappable for Messages {
 pub struct Transactions;
 
 impl Mappable for Transactions {
-    type Key = Bytes32;
+    type Key = TxId;
     type SetValue = Transaction;
     type GetValue = Self::SetValue;
 }

@@ -77,11 +77,7 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
                 sync.await_synced().await?;
             }
 
-            Ok(self
-                .database
-                .get_finalized_da_height()
-                .await
-                .unwrap_or_default())
+            Ok(self.database.get_finalized_da_height().unwrap_or_default())
         }
         #[cfg(not(feature = "relayer"))]
         {

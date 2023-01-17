@@ -19,6 +19,10 @@ use crate::{
 };
 #[cfg(feature = "metrics")]
 use fuel_core_metrics::core_metrics::DATABASE_METRICS;
+use fuel_core_storage::iter::{
+    BoxedIter,
+    IntoBoxedIter,
+};
 use rocksdb::{
     BoundColumnFamily,
     ColumnFamilyDescriptor,
@@ -192,7 +196,7 @@ impl KeyValueStore for RocksDb {
         prefix: Option<Vec<u8>>,
         start: Option<Vec<u8>>,
         direction: IterDirection,
-    ) -> Box<dyn Iterator<Item = KVItem> + '_> {
+    ) -> BoxedIter<KVItem> {
         let iter_mode = start.as_ref().map_or_else(
             || {
                 prefix.as_ref().map_or_else(
@@ -242,15 +246,16 @@ impl KeyValueStore for RocksDb {
         if let Some(prefix) = prefix {
             let prefix = prefix.to_vec();
             // end iterating when we've gone outside the prefix
-            Box::new(iter.take_while(move |item| {
+            iter.take_while(move |item| {
                 if let Ok((key, _)) = item {
                     key.starts_with(prefix.as_slice())
                 } else {
                     true
                 }
-            }))
+            })
+            .into_boxed()
         } else {
-            Box::new(iter)
+            iter.into_boxed()
         }
     }
 }

@@ -1,16 +1,10 @@
 use crate::{
-    database::resource::{
-        AssetQuery,
-        AssetSpendTarget,
-        AssetsQuery,
-    },
-    fuel_core_graphql_api::service::Database,
+    query::BalanceQueryContext,
     schema::scalars::{
         Address,
         AssetId,
         U64,
     },
-    state::IterDirection,
 };
 use async_graphql::{
     connection::{
@@ -21,32 +15,22 @@ use async_graphql::{
     InputObject,
     Object,
 };
-use fuel_core_storage::Result as StorageResult;
-use fuel_core_types::fuel_types;
-use itertools::Itertools;
-use std::{
-    cmp::Ordering,
-    collections::HashMap,
-};
+use fuel_core_types::services::graphql_api;
 
-pub struct Balance {
-    owner: fuel_types::Address,
-    amount: u64,
-    asset_id: fuel_types::AssetId,
-}
+pub struct Balance(graphql_api::AddressBalance);
 
 #[Object]
 impl Balance {
     async fn owner(&self) -> Address {
-        self.owner.into()
+        self.0.owner.into()
     }
 
     async fn amount(&self) -> U64 {
-        self.amount.into()
+        self.0.amount.into()
     }
 
     async fn asset_id(&self) -> AssetId {
-        self.asset_id.into()
+        self.0.asset_id.into()
     }
 }
 
@@ -67,34 +51,8 @@ impl BalanceQuery {
         #[graphql(desc = "address of the owner")] owner: Address,
         #[graphql(desc = "asset_id of the coin")] asset_id: AssetId,
     ) -> async_graphql::Result<Balance> {
-        let db = ctx.data_unchecked::<Database>();
-        let owner = owner.into();
-        let asset_id = asset_id.into();
-
-        let balance = AssetQuery::new(
-            &owner,
-            &AssetSpendTarget::new(asset_id, u64::MAX, u64::MAX),
-            None,
-            db,
-        )
-        .unspent_resources()
-        .map(|res| res.map(|resource| *resource.amount()))
-        .try_fold(
-            Balance {
-                owner,
-                amount: 0u64,
-                asset_id,
-            },
-            |mut balance, res| -> StorageResult<_> {
-                let amount = res?;
-
-                // Increase the balance
-                balance.amount += amount;
-
-                Ok(balance)
-            },
-        )?;
-
+        let data = BalanceQueryContext(ctx.data_unchecked());
+        let balance = data.balance(owner.0, asset_id.0)?.into();
         Ok(balance)
     }
 
@@ -110,43 +68,19 @@ impl BalanceQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<AssetId, Balance, EmptyFields, EmptyFields>>
     {
-        let db = ctx.data_unchecked::<Database>();
+        let query = BalanceQueryContext(ctx.data_unchecked());
         crate::schema::query_pagination(after, before, first, last, |_, direction| {
             let owner = filter.owner.into();
-
-            let mut amounts_per_asset = HashMap::new();
-
-            for resource in AssetsQuery::new(&owner, None, None, db).unspent_resources() {
-                let resource = resource?;
-                *amounts_per_asset.entry(*resource.asset_id()).or_default() +=
-                    resource.amount();
-            }
-
-            let mut balances = amounts_per_asset
-                .into_iter()
-                .map(|(asset_id, amount)| Balance {
-                    owner,
-                    amount,
-                    asset_id,
-                })
-                .collect_vec();
-            balances.sort_by(|l, r| {
-                if l.asset_id < r.asset_id {
-                    Ordering::Less
-                } else {
-                    Ordering::Greater
-                }
-            });
-            if direction == IterDirection::Reverse {
-                balances.reverse();
-            }
-
-            let balances = balances
-                .into_iter()
-                .map(|balance| Ok((balance.asset_id.into(), balance)));
-
-            Ok(balances)
+            Ok(query.balances(owner, direction).map(|result| {
+                result.map(|balance| (balance.asset_id.into(), balance.into()))
+            }))
         })
         .await
+    }
+}
+
+impl From<graphql_api::AddressBalance> for Balance {
+    fn from(balance: graphql_api::AddressBalance) -> Self {
+        Balance(balance)
     }
 }

@@ -4,11 +4,13 @@ use super::scalars::{
 };
 use crate::{
     fuel_core_graphql_api::{
-        service::{
-            Database,
-            Executor,
-        },
+        service::Executor,
         Config as GraphQLConfig,
+        IntoApiResult,
+    },
+    query::{
+        BlockQueryContext,
+        TransactionQueryContext,
     },
     schema::{
         scalars::{
@@ -35,14 +37,8 @@ use async_graphql::{
 use fuel_core_poa::service::seal_block;
 use fuel_core_producer::ports::Executor as ExecutorTrait;
 use fuel_core_storage::{
-    not_found,
-    tables::{
-        FuelBlocks,
-        SealedBlockConsensus,
-        Transactions,
-    },
+    iter::IntoBoxedIter,
     Result as StorageResult,
-    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{
@@ -64,13 +60,8 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use itertools::Itertools;
-use std::convert::TryInto;
 
-pub struct Block {
-    pub(crate) header: Header,
-    pub(crate) transactions: Vec<fuel_types::Bytes32>,
-}
+pub struct Block(pub(crate) CompressedBlock);
 
 pub struct Header(pub(crate) BlockHeader);
 
@@ -103,40 +94,33 @@ pub struct PoAConsensus {
 #[Object]
 impl Block {
     async fn id(&self) -> BlockId {
-        let bytes: fuel_core_types::fuel_types::Bytes32 = self.header.0.id().into();
+        let bytes: fuel_types::Bytes32 = self.0.header().id().into();
         bytes.into()
     }
 
-    async fn header(&self) -> &Header {
-        &self.header
+    async fn header(&self) -> Header {
+        self.0.header().clone().into()
     }
 
     async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
-        let db = ctx.data_unchecked::<Database>().clone();
-        let id = self.header.0.id().into();
-        let consensus = db
-            .storage::<SealedBlockConsensus>()
-            .get(&id)
-            .map(|c| c.map(|c| c.into_owned().into()))?
-            .ok_or(not_found!(SealedBlockConsensus))?;
+        let query = BlockQueryContext(ctx.data_unchecked());
+        let id = self.0.header().id();
+        let consensus = query.consensus(&id)?;
 
-        Ok(consensus)
+        Ok(consensus.into())
     }
 
     async fn transactions(
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Vec<Transaction>> {
-        let db = ctx.data_unchecked::<Database>().clone();
-        self.transactions
+        let query = TransactionQueryContext(ctx.data_unchecked());
+        self.0
+            .transactions()
             .iter()
             .map(|tx_id| {
-                Ok(Transaction(
-                    db.storage::<Transactions>()
-                        .get(tx_id)
-                        .and_then(|v| v.ok_or(not_found!(Transactions)))?
-                        .into_owned(),
-                ))
+                let tx = query.transaction(tx_id)?;
+                Ok(tx.into())
             })
             .collect()
     }
@@ -215,29 +199,25 @@ impl BlockQuery {
         #[graphql(desc = "ID of the block")] id: Option<BlockId>,
         #[graphql(desc = "Height of the block")] height: Option<U64>,
     ) -> async_graphql::Result<Option<Block>> {
-        let db = ctx.data_unchecked::<Database>();
+        let data = BlockQueryContext(ctx.data_unchecked());
         let id = match (id, height) {
             (Some(_), Some(_)) => {
                 return Err(async_graphql::Error::new(
                     "Can't provide both an id and a height",
                 ))
             }
-            (Some(id), None) => id.into(),
+            (Some(id), None) => Ok(id.0.into()),
             (None, Some(height)) => {
                 let height: u64 = height.into();
-                db.get_block_id(height.try_into()?)?
-                    .ok_or("Block height non-existent")?
+                let height: u32 = height.try_into()?;
+                data.block_id(height.into())
             }
             (None, None) => {
                 return Err(async_graphql::Error::new("Missing either id or height"))
             }
         };
 
-        let block = db
-            .storage::<FuelBlocks>()
-            .get(&id)?
-            .map(|b| Block::from(b.into_owned()));
-        Ok(block)
+        id.and_then(|id| data.block(&id)).into_api_result()
     }
 
     async fn blocks(
@@ -248,9 +228,9 @@ impl BlockQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<usize, Block, EmptyFields, EmptyFields>> {
-        let db = ctx.data_unchecked::<Database>();
+        let db = BlockQueryContext(ctx.data_unchecked());
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            blocks_query(db, *start, direction)
+            Ok(blocks_query(&db, *start, direction))
         })
         .await
     }
@@ -270,7 +250,7 @@ impl HeaderQuery {
         Ok(BlockQuery {}
             .block(ctx, id, height)
             .await?
-            .map(|b| b.header))
+            .map(|b| b.0.header().clone().into()))
     }
 
     async fn headers(
@@ -281,39 +261,31 @@ impl HeaderQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<usize, Header, EmptyFields, EmptyFields>> {
-        let db = ctx.data_unchecked::<Database>();
+        let db = BlockQueryContext(ctx.data_unchecked());
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            blocks_query(db, *start, direction)
+            Ok(blocks_query(&db, *start, direction))
         })
         .await
     }
 }
 
-fn blocks_query<T>(
-    db: &Database,
+fn blocks_query<'a, T>(
+    query: &'a BlockQueryContext<'a>,
     start: Option<usize>,
     direction: IterDirection,
-) -> StorageResult<impl Iterator<Item = StorageResult<(usize, T)>> + '_>
+) -> impl Iterator<Item = StorageResult<(usize, T)>> + 'a
 where
     T: async_graphql::OutputType,
     T: From<CompressedBlock>,
+    T: 'a,
 {
-    // TODO: Remove `try_collect`
-    let blocks: Vec<_> = db
-        .all_block_ids(start.map(Into::into), Some(direction))
-        .try_collect()?;
-    let blocks = blocks.into_iter().map(move |(height, id)| {
-        let value = db
-            .storage::<FuelBlocks>()
-            .get(&id)
-            .transpose()
-            .ok_or(not_found!(FuelBlocks))??
-            .into_owned();
+    let blocks = query
+        .compressed_blocks(start.map(Into::into), direction)
+        .map(|result| {
+            result.map(|block| (block.header().height().as_usize(), block.into()))
+        });
 
-        Ok((height.to_usize(), value.into()))
-    });
-
-    Ok(blocks)
+    blocks.into_boxed()
 }
 
 #[derive(Default)]
@@ -335,7 +307,7 @@ impl BlockMutation {
         blocks_to_produce: U64,
         time: Option<TimeParameters>,
     ) -> async_graphql::Result<U64> {
-        let db = ctx.data_unchecked::<Database>();
+        let query = BlockQueryContext(ctx.data_unchecked());
         let executor = ctx.data_unchecked::<Executor>().clone();
         let config = ctx.data_unchecked::<GraphQLConfig>().clone();
 
@@ -346,10 +318,11 @@ impl BlockMutation {
         }
         // todo!("trigger block production manually");
 
-        let block_time = get_time_closure(db, time, blocks_to_produce.0)?;
+        let latest_block = query.latest_block()?;
+        let block_time = get_time_closure(&latest_block, time, blocks_to_produce.0)?;
 
         for idx in 0..blocks_to_produce.0 {
-            let current_height = db.get_block_height()?.unwrap_or_default();
+            let current_height = query.latest_block_height().unwrap_or_default();
             let new_block_height = current_height + 1u32.into();
 
             let block = PartialFuelBlock::new(
@@ -381,19 +354,20 @@ impl BlockMutation {
             db_transaction.commit()?;
         }
 
-        db.get_block_height()?
-            .map(|new_height| Ok(new_height.into()))
-            .ok_or("Block height not found")?
+        query
+            .latest_block_height()
+            .map(Into::into)
+            .map_err(Into::into)
     }
 }
 
 fn get_time_closure(
-    db: &Database,
+    latest_block: &CompressedBlock,
     time_parameters: Option<TimeParameters>,
     blocks_to_produce: u64,
 ) -> anyhow::Result<Box<dyn Fn(u64) -> Tai64 + Send>> {
     if let Some(params) = time_parameters {
-        check_start_after_latest_block(db, params.start_time.0)?;
+        check_start_after_latest_block(latest_block, params.start_time.0)?;
         check_block_time_overflow(&params, blocks_to_produce)?;
 
         return Ok(Box::new(move |idx: u64| {
@@ -408,17 +382,20 @@ fn get_time_closure(
     Ok(Box::new(|_| Tai64::now()))
 }
 
-fn check_start_after_latest_block(db: &Database, start_time: u64) -> anyhow::Result<()> {
-    let current_height = db.get_block_height()?.unwrap_or_default();
+fn check_start_after_latest_block(
+    latest_block: &CompressedBlock,
+    start_time: u64,
+) -> anyhow::Result<()> {
+    let current_height = *latest_block.header().height();
 
     if current_height.as_usize() == 0 {
         return Ok(())
     }
 
-    let latest_time = db.block_time(current_height.into())?.0;
-    if latest_time > start_time {
+    let latest_time = latest_block.header().time();
+    if latest_time.0 > start_time {
         return Err(anyhow!(
-            "The start time must be set after the latest block time: {}",
+            "The start time must be set after the latest block time: {:?}",
             latest_time
         ))
     }
@@ -445,11 +422,13 @@ fn check_block_time_overflow(
 
 impl From<CompressedBlock> for Block {
     fn from(block: CompressedBlock) -> Self {
-        let (header, transactions) = block.into_inner();
-        Block {
-            header: Header(header),
-            transactions,
-        }
+        Block(block)
+    }
+}
+
+impl From<BlockHeader> for Header {
+    fn from(header: BlockHeader) -> Self {
+        Header(header)
     }
 }
 

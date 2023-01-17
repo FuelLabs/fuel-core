@@ -1,5 +1,6 @@
 use crate::{
-    fuel_core_graphql_api::service::Database,
+    fuel_core_graphql_api::IntoApiResult,
+    query::ContractQueryContext,
     schema::scalars::{
         AssetId,
         ContractId,
@@ -8,7 +9,6 @@ use crate::{
         U64,
     },
 };
-use anyhow::anyhow;
 use async_graphql::{
     connection::{
         Connection,
@@ -18,16 +18,10 @@ use async_graphql::{
     InputObject,
     Object,
 };
-use fuel_core_storage::{
-    not_found,
-    tables::{
-        ContractsAssets,
-        ContractsInfo,
-        ContractsRawCode,
-    },
-    StorageAsRef,
+use fuel_core_types::{
+    fuel_types,
+    services::graphql_api,
 };
-use fuel_core_types::fuel_types;
 
 pub struct Contract(pub(crate) fuel_types::ContractId);
 
@@ -44,27 +38,19 @@ impl Contract {
     }
 
     async fn bytecode(&self, ctx: &Context<'_>) -> async_graphql::Result<HexString> {
-        let db = ctx.data_unchecked::<Database>().clone();
-        let contract = db
-            .storage::<ContractsRawCode>()
-            .get(&self.0)?
-            .ok_or(not_found!(ContractsRawCode))?
-            .into_owned();
-        Ok(HexString(contract.into()))
+        let context = ContractQueryContext(ctx.data_unchecked());
+        context
+            .contract_bytecode(self.0)
+            .map(HexString)
+            .map_err(Into::into)
     }
+
     async fn salt(&self, ctx: &Context<'_>) -> async_graphql::Result<Salt> {
-        let contract_id = self.0;
-
-        let db = ctx.data_unchecked::<Database>().clone();
-        let (salt, _) = db
-            .storage::<ContractsInfo>()
-            .get(&contract_id)?
-            .ok_or_else(|| anyhow!("Contract does not exist"))?
-            .into_owned();
-
-        let cleaned_salt: Salt = salt.into();
-
-        Ok(cleaned_salt)
+        let context = ContractQueryContext(ctx.data_unchecked());
+        context
+            .contract_salt(self.0)
+            .map(Into::into)
+            .map_err(Into::into)
     }
 }
 
@@ -78,35 +64,25 @@ impl ContractQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "ID of the Contract")] id: ContractId,
     ) -> async_graphql::Result<Option<Contract>> {
-        let id: fuel_types::ContractId = id.0;
-        let db = ctx.data_unchecked::<Database>().clone();
-        let contract_exists = db.storage::<ContractsRawCode>().contains_key(&id)?;
-        if !contract_exists {
-            return Ok(None)
-        }
-        let contract = Contract(id);
-        Ok(Some(contract))
+        let data = ContractQueryContext(ctx.data_unchecked());
+        data.contract_id(id.0).into_api_result()
     }
 }
 
-pub struct ContractBalance {
-    contract: fuel_types::ContractId,
-    amount: u64,
-    asset_id: fuel_types::AssetId,
-}
+pub struct ContractBalance(graphql_api::ContractBalance);
 
 #[Object]
 impl ContractBalance {
     async fn contract(&self) -> ContractId {
-        self.contract.into()
+        self.0.owner.into()
     }
 
     async fn amount(&self) -> U64 {
-        self.amount.into()
+        self.0.amount.into()
     }
 
     async fn asset_id(&self) -> AssetId {
-        self.asset_id.into()
+        self.0.asset_id.into()
     }
 }
 
@@ -127,22 +103,22 @@ impl ContractBalanceQuery {
         contract: ContractId,
         asset: AssetId,
     ) -> async_graphql::Result<ContractBalance> {
-        let contract_id: fuel_types::ContractId = contract.0;
-
-        let db = ctx.data_unchecked::<Database>().clone();
-
-        let asset_id: fuel_types::AssetId = asset.into();
-
-        let result = db
-            .storage::<ContractsAssets>()
-            .get(&(&contract_id, &asset_id))?;
-        let balance = result.unwrap_or_default().into_owned();
-
-        Ok(ContractBalance {
-            contract: contract.into(),
-            amount: balance,
-            asset_id,
-        })
+        let contract_id = contract.into();
+        let asset_id = asset.into();
+        let context = ContractQueryContext(ctx.data_unchecked());
+        context
+            .contract_balance(contract_id, asset_id)
+            .into_api_result()
+            .map(|result| {
+                result.unwrap_or_else(|| {
+                    graphql_api::ContractBalance {
+                        owner: contract_id,
+                        amount: 0,
+                        asset_id,
+                    }
+                    .into()
+                })
+            })
     }
 
     async fn contract_balances(
@@ -156,30 +132,29 @@ impl ContractBalanceQuery {
     ) -> async_graphql::Result<
         Connection<AssetId, ContractBalance, EmptyFields, EmptyFields>,
     > {
-        let db = ctx.data_unchecked::<Database>().clone();
+        let query = ContractQueryContext(ctx.data_unchecked());
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            let balances = db
+            let balances = query
                 .contract_balances(
                     filter.contract.into(),
                     (*start).map(Into::into),
-                    Some(direction),
+                    direction,
                 )
                 .map(move |balance| {
                     let balance = balance?;
-                    let asset_id: AssetId = balance.0.into();
+                    let asset_id = balance.asset_id;
 
-                    Ok((
-                        asset_id,
-                        ContractBalance {
-                            contract: filter.contract.into(),
-                            amount: balance.1,
-                            asset_id: balance.0,
-                        },
-                    ))
+                    Ok((asset_id.into(), balance.into()))
                 });
 
             Ok(balances)
         })
         .await
+    }
+}
+
+impl From<graphql_api::ContractBalance> for ContractBalance {
+    fn from(balance: graphql_api::ContractBalance) -> Self {
+        ContractBalance(balance)
     }
 }

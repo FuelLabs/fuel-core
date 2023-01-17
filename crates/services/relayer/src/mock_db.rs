@@ -1,7 +1,6 @@
 #![allow(missing_docs)]
 
 use crate::ports::RelayerDb;
-use async_trait::async_trait;
 use fuel_core_storage::{
     not_found,
     Result as StorageResult,
@@ -43,9 +42,8 @@ impl MockDb {
     }
 }
 
-#[async_trait]
 impl RelayerDb for MockDb {
-    async fn insert_message(
+    fn insert_message(
         &mut self,
         message: &CheckedMessage,
     ) -> StorageResult<Option<Message>> {
@@ -58,15 +56,12 @@ impl RelayerDb for MockDb {
             .insert(message_id, message))
     }
 
-    async fn set_finalized_da_height(
-        &mut self,
-        height: DaBlockHeight,
-    ) -> StorageResult<()> {
+    fn set_finalized_da_height(&mut self, height: DaBlockHeight) -> StorageResult<()> {
         self.data.lock().unwrap().finalized_da_height = Some(height);
         Ok(())
     }
 
-    async fn get_finalized_da_height(&self) -> StorageResult<DaBlockHeight> {
+    fn get_finalized_da_height(&self) -> StorageResult<DaBlockHeight> {
         self.data
             .lock()
             .unwrap()

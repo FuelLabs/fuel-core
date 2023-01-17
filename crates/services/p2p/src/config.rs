@@ -1,32 +1,20 @@
-use crate::gossipsub::{
-    config::default_gossipsub_config,
-    topics::{
-        CON_VOTE_GOSSIP_TOPIC,
-        NEW_BLOCK_GOSSIP_TOPIC,
-        NEW_TX_GOSSIP_TOPIC,
+use crate::{
+    gossipsub::{
+        config::default_gossipsub_config,
+        topics::{
+            CON_VOTE_GOSSIP_TOPIC,
+            NEW_BLOCK_GOSSIP_TOPIC,
+            NEW_TX_GOSSIP_TOPIC,
+        },
     },
+    peer_manager::ConnectionState,
 };
-use fuel_core_types::{
-    blockchain::consensus::Genesis,
-    secrecy::Zeroize,
-};
-use futures::{
-    future,
-    AsyncRead,
-    AsyncWrite,
-    Future,
-    FutureExt,
-    TryFutureExt,
-};
+use fuel_core_types::blockchain::consensus::Genesis;
+
 use libp2p::{
     core::{
         muxing::StreamMuxerBox,
         transport::Boxed,
-        upgrade::{
-            read_length_prefixed,
-            write_length_prefixed,
-        },
-        UpgradeInfo,
     },
     gossipsub::GossipsubConfig,
     identity::{
@@ -34,36 +22,42 @@ use libp2p::{
         Keypair,
     },
     mplex,
-    noise::{
-        self,
-        NoiseAuthenticated,
-        NoiseError,
-        NoiseOutput,
-        Protocol,
-    },
+    noise::{self,},
     tcp::{
         tokio::Transport as TokioTcpTransport,
         Config as TcpConfig,
     },
     yamux,
-    InboundUpgrade,
     Multiaddr,
-    OutboundUpgrade,
     PeerId,
     Transport,
 };
 use std::{
     collections::HashSet,
-    error::Error,
-    fmt,
-    io,
     net::{
         IpAddr,
         Ipv4Addr,
     },
-    pin::Pin,
+    sync::{
+        Arc,
+        RwLock,
+    },
     time::Duration,
 };
+
+use self::{
+    connection_tracker::ConnectionTracker,
+    fuel_authenticated::FuelAuthenticated,
+    fuel_upgrade::{
+        Checksum,
+        FuelUpgrade,
+    },
+    guarded_node::GuardedNode,
+};
+mod connection_tracker;
+mod fuel_authenticated;
+mod fuel_upgrade;
+mod guarded_node;
 
 const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -73,16 +67,6 @@ const MAX_NUM_OF_FRAMES_BUFFERED: usize = 256;
 /// Adds a timeout to the setup and protocol upgrade process for all
 /// inbound and outbound connections established through the transport.
 const TRANSPORT_TIMEOUT: Duration = Duration::from_secs(20);
-
-/// Sha256 hash of ChainConfig
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Checksum([u8; 32]);
-
-impl From<[u8; 32]> for Checksum {
-    fn from(value: [u8; 32]) -> Self {
-        Self(value)
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct Config<State = Initialized> {
@@ -110,7 +94,6 @@ pub struct Config<State = Initialized> {
     // `DiscoveryBehaviour` related fields
     pub bootstrap_nodes: Vec<Multiaddr>,
     pub enable_mdns: bool,
-    pub max_peers_connected: u32,
     pub allow_private_addresses: bool,
     pub random_walk: Option<Duration>,
     pub connection_idle_timeout: Option<Duration>,
@@ -121,7 +104,14 @@ pub struct Config<State = Initialized> {
     /// Should the node only accept connection requests from the Reserved Nodes
     pub reserved_nodes_only_mode: bool,
 
-    // `PeerInfo` fields
+    // `PeerManager` fields
+    /// Max number of unique peers connected
+    /// This number should be at least number of `mesh_n` from `Gossipsub` configuration.
+    /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
+    pub max_peers_connected: u32,
+    /// Max number of connections per single peer
+    /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
+    pub max_connections_per_peer: u32,
     /// The interval at which identification requests are sent to
     /// the remote on established connections after the first request
     pub identify_interval: Option<Duration>,
@@ -171,6 +161,7 @@ impl Config<NotInitialized> {
             bootstrap_nodes: self.bootstrap_nodes,
             enable_mdns: self.enable_mdns,
             max_peers_connected: self.max_peers_connected,
+            max_connections_per_peer: self.max_connections_per_peer,
             allow_private_addresses: self.allow_private_addresses,
             random_walk: self.random_walk,
             connection_idle_timeout: self.connection_idle_timeout,
@@ -213,6 +204,7 @@ impl Config<NotInitialized> {
             bootstrap_nodes: vec![],
             enable_mdns: false,
             max_peers_connected: 50,
+            max_connections_per_peer: 3,
             allow_private_addresses: true,
             random_walk: Some(Duration::from_secs(5)),
             connection_idle_timeout: Some(Duration::from_secs(120)),
@@ -247,7 +239,12 @@ impl Config<Initialized> {
 /// TCP/IP, Websocket
 /// Noise as encryption layer
 /// mplex or yamux for multiplexing
-pub(crate) fn build_transport(p2p_config: &Config) -> Boxed<(PeerId, StreamMuxerBox)> {
+pub(crate) fn build_transport(
+    p2p_config: &Config,
+) -> (
+    Boxed<(PeerId, StreamMuxerBox)>,
+    Arc<RwLock<ConnectionState>>,
+) {
     let transport = {
         let generate_tcp_transport =
             || TokioTcpTransport::new(TcpConfig::new().port_reuse(true).nodelay(true));
@@ -278,225 +275,43 @@ pub(crate) fn build_transport(p2p_config: &Config) -> Boxed<(PeerId, StreamMuxer
     };
 
     let fuel_upgrade = FuelUpgrade::new(p2p_config.checksum);
+    let connection_state = ConnectionState::new();
 
-    if p2p_config.reserved_nodes_only_mode {
+    let transport = if p2p_config.reserved_nodes_only_mode {
+        let guarded_node = GuardedNode::new(&p2p_config.reserved_nodes);
+
+        let fuel_authenticated =
+            FuelAuthenticated::new(noise_authenticated, guarded_node);
+
         transport
-            .authenticate(NoiseWithReservedNodes::new(
-                noise_authenticated,
-                &p2p_config.reserved_nodes,
-            ))
+            .authenticate(fuel_authenticated)
             .apply(fuel_upgrade)
             .multiplex(multiplex_config)
             .timeout(TRANSPORT_TIMEOUT)
             .boxed()
     } else {
+        let connection_tracker =
+            ConnectionTracker::new(&p2p_config.reserved_nodes, connection_state.clone());
+
+        let fuel_authenticated =
+            FuelAuthenticated::new(noise_authenticated, connection_tracker);
+
         transport
-            .authenticate(noise_authenticated)
+            .authenticate(fuel_authenticated)
             .apply(fuel_upgrade)
             .multiplex(multiplex_config)
             .timeout(TRANSPORT_TIMEOUT)
             .boxed()
-    }
+    };
+
+    (transport, connection_state)
 }
 
-/// Wrapper over Noise protocol authentication.
-/// Used in case where the local node wants to limit
-/// who establishes the connection with it.
-/// During the Identity (PeerId) exchange, the node can check if the inbound connection
-/// comes from a whitelisted peer, in case it's not the connection is rejected.
-/// Same check is added to any outbound connections, just in case.
-#[derive(Clone)]
-struct NoiseWithReservedNodes<P, C: Zeroize, R> {
-    noise_authenticated: NoiseAuthenticated<P, C, R>,
-    reserved_nodes: HashSet<PeerId>,
-}
-
-impl<P, C: Zeroize, R> NoiseWithReservedNodes<P, C, R> {
-    fn new(
-        noise_authenticated: NoiseAuthenticated<P, C, R>,
-        reserved_nodes: &[Multiaddr],
-    ) -> Self {
-        Self {
-            noise_authenticated,
-            reserved_nodes: reserved_nodes
-                .iter()
-                // Safety: as is the case with `bootstrap_nodes` it is assumed that `reserved_nodes` [`Multiadr`]
-                // come with PeerId included, in case they are not the `unwrap()` will only panic when the node is started.
-                .map(|address| PeerId::try_from_multiaddr(address).unwrap())
-                .collect(),
-        }
-    }
-}
-
-/// Checks if PeerId of the remote node is contained within the reserved nodes.
-/// It rejects the connection otherwise.
-fn accept_reserved_node<T>(
-    reserved_nodes: &HashSet<PeerId>,
-    remote_peer_id: PeerId,
-    io: NoiseOutput<T>,
-) -> future::Ready<Result<(PeerId, NoiseOutput<T>), NoiseError>> {
-    if reserved_nodes.contains(&remote_peer_id) {
-        future::ok((remote_peer_id, io))
-    } else {
-        future::err(NoiseError::AuthenticationFailed)
-    }
-}
-
-impl<P, C: Zeroize, R> UpgradeInfo for NoiseWithReservedNodes<P, C, R>
-where
-    NoiseAuthenticated<P, C, R>: UpgradeInfo,
-{
-    type Info = <NoiseAuthenticated<P, C, R> as UpgradeInfo>::Info;
-    type InfoIter = <NoiseAuthenticated<P, C, R> as UpgradeInfo>::InfoIter;
-
-    fn protocol_info(&self) -> Self::InfoIter {
-        self.noise_authenticated.protocol_info()
-    }
-}
-
-impl<T, P, C, R> InboundUpgrade<T> for NoiseWithReservedNodes<P, C, R>
-where
-    NoiseAuthenticated<P, C, R>: UpgradeInfo
-        + InboundUpgrade<T, Output = (PeerId, NoiseOutput<T>), Error = NoiseError>
-        + 'static,
-    <NoiseAuthenticated<P, C, R> as InboundUpgrade<T>>::Future: Send,
-    T: AsyncRead + AsyncWrite + Send + 'static,
-    C: Protocol<C> + AsRef<[u8]> + Zeroize + Send + 'static,
-{
-    type Output = (PeerId, NoiseOutput<T>);
-    type Error = NoiseError;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
-
-    fn upgrade_inbound(self, socket: T, info: Self::Info) -> Self::Future {
-        Box::pin(
-            self.noise_authenticated
-                .upgrade_inbound(socket, info)
-                .and_then(move |(remote_peer_id, io)| {
-                    accept_reserved_node(&self.reserved_nodes, remote_peer_id, io)
-                }),
-        )
-    }
-}
-
-impl<T, P, C, R> OutboundUpgrade<T> for NoiseWithReservedNodes<P, C, R>
-where
-    NoiseAuthenticated<P, C, R>: UpgradeInfo
-        + OutboundUpgrade<T, Output = (PeerId, NoiseOutput<T>), Error = NoiseError>
-        + 'static,
-    <NoiseAuthenticated<P, C, R> as OutboundUpgrade<T>>::Future: Send,
-    T: AsyncRead + AsyncWrite + Send + 'static,
-    C: Protocol<C> + AsRef<[u8]> + Zeroize + Send + 'static,
-{
-    type Output = (PeerId, NoiseOutput<T>);
-    type Error = NoiseError;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
-
-    fn upgrade_outbound(self, socket: T, info: Self::Info) -> Self::Future {
-        Box::pin(
-            self.noise_authenticated
-                .upgrade_outbound(socket, info)
-                .and_then(move |(remote_peer_id, io)| {
-                    accept_reserved_node(&self.reserved_nodes, remote_peer_id, io)
-                }),
-        )
-    }
-}
-
-/// When two nodes want to establish a connection they need to
-/// exchange the Hash of their respective Chain Id and Chain Config.
-/// The connection is only accepted if their hashes match.
-/// This is used to aviod peers having same network name but different configurations connecting to each other.
-#[derive(Debug, Clone)]
-struct FuelUpgrade {
-    checksum: Checksum,
-}
-
-impl FuelUpgrade {
-    fn new(checksum: Checksum) -> Self {
-        Self { checksum }
-    }
-}
-
-#[derive(Debug)]
-enum FuelUpgradeError {
-    IncorrectChecksum,
-    Io(io::Error),
-}
-
-impl fmt::Display for FuelUpgradeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            FuelUpgradeError::Io(e) => write!(f, "{}", e),            
-            FuelUpgradeError::IncorrectChecksum => f.write_str("Fuel node checksum does not match, either ChainId or ChainConfig are not the same, or both."),            
-        }
-    }
-}
-
-impl From<io::Error> for FuelUpgradeError {
-    fn from(e: io::Error) -> Self {
-        FuelUpgradeError::Io(e)
-    }
-}
-
-impl Error for FuelUpgradeError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            FuelUpgradeError::Io(e) => Some(e),
-            FuelUpgradeError::IncorrectChecksum => None,
-        }
-    }
-}
-
-impl UpgradeInfo for FuelUpgrade {
-    type Info = &'static [u8];
-    type InfoIter = std::iter::Once<Self::Info>;
-
-    fn protocol_info(&self) -> Self::InfoIter {
-        std::iter::once(b"/fuel/upgrade/0")
-    }
-}
-
-impl<C> InboundUpgrade<C> for FuelUpgrade
-where
-    C: AsyncRead + AsyncWrite + Unpin + Send + 'static,
-{
-    type Output = C;
-    type Error = FuelUpgradeError;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
-
-    fn upgrade_inbound(self, mut socket: C, _: Self::Info) -> Self::Future {
-        async move {
-            // Inbound node receives the checksum and compares it to its own checksum.
-            // If they do not match the connection is rejected.
-            let res = read_length_prefixed(&mut socket, self.checksum.0.len()).await?;
-            if res != self.checksum.0 {
-                return Err(FuelUpgradeError::IncorrectChecksum)
-            }
-
-            Ok(socket)
-        }
-        .boxed()
-    }
-}
-
-impl<C> OutboundUpgrade<C> for FuelUpgrade
-where
-    C: AsyncRead + AsyncWrite + Unpin + Send + 'static,
-{
-    type Output = C;
-    type Error = FuelUpgradeError;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
-
-    fn upgrade_outbound(self, mut socket: C, _: Self::Info) -> Self::Future {
-        async move {
-            // Outbound node sends their own checksum for comparison with the inbound node.
-            write_length_prefixed(&mut socket, &self.checksum.0).await?;
-
-            // Note: outbound node does not need to receive the checksum from the inbound node,
-            // since inbound node will reject the connection if the two don't match on its side.
-
-            Ok(socket)
-        }
-        .boxed()
-    }
+fn peer_ids_set_from(multiaddr: &[Multiaddr]) -> HashSet<PeerId> {
+    multiaddr
+        .iter()
+        // Safety: as is the case with `bootstrap_nodes` it is assumed that `reserved_nodes` [`Multiadr`]
+        // come with PeerId included, in case they are not the `unwrap()` will only panic when the node is started.
+        .map(|address| PeerId::try_from_multiaddr(address).unwrap())
+        .collect()
 }
