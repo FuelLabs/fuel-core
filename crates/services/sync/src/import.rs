@@ -36,6 +36,9 @@ use crate::{
 };
 
 #[cfg(test)]
+pub(crate) use tests::empty_header;
+
+#[cfg(test)]
 mod tests;
 
 #[cfg(test)]

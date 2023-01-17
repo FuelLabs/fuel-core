@@ -645,7 +645,7 @@ fn count(t: usize) -> (oneshot::Receiver<()>, impl FnMut()) {
     })
 }
 
-pub(super) fn empty_header(h: BlockHeight) -> SourcePeer<SealedBlockHeader> {
+pub(crate) fn empty_header(h: BlockHeight) -> SourcePeer<SealedBlockHeader> {
     let mut header = BlockHeader::default();
     header.consensus.height = h;
 
