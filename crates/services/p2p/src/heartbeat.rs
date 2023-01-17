@@ -1,9 +1,10 @@
-use std::{
-    collections::VecDeque,
-    task::Poll,
-};
-
 use fuel_core_types::blockchain::primitives::BlockHeight;
+pub use handler::HeartbeatConfig;
+use handler::{
+    HeartbeatHandler,
+    HeartbeatInEvent,
+    HeartbeatOutEvent,
+};
 use libp2p::PeerId;
 use libp2p_swarm::{
     derive_prelude::ConnectionId,
@@ -14,17 +15,13 @@ use libp2p_swarm::{
     NotifyHandler,
     PollParameters,
 };
-
-use self::handler::{
-    HeartbeatConfig,
-    HeartbeatHandler,
-    HeartbeatInEvent,
-    HeartbeatOutEvent,
+use std::{
+    collections::VecDeque,
+    task::Poll,
 };
-
 mod handler;
 
-pub(crate) const HEARTBEAT_PROTOCOL: &[u8] = b"/fuel/heartbeat/0.0.1";
+pub const HEARTBEAT_PROTOCOL: &[u8] = b"/fuel/heartbeat/0.0.1";
 
 #[derive(Debug, Clone)]
 enum HeartbeatAction {
@@ -54,22 +51,22 @@ impl HeartbeatAction {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct HeartbeatEvent {
-    peer_id: PeerId,
-    latest_block_height: BlockHeight,
+pub struct HeartbeatEvent {
+    pub peer_id: PeerId,
+    pub latest_block_height: BlockHeight,
 }
 
 #[derive(Debug, Clone)]
-struct HeartbeatBehaviour {
+pub struct Heartbeat {
     config: HeartbeatConfig,
     pending_events: VecDeque<HeartbeatAction>,
     current_block_height: BlockHeight,
 }
 
-impl HeartbeatBehaviour {
-    pub fn default(block_height: BlockHeight) -> Self {
+impl Heartbeat {
+    pub fn new(config: HeartbeatConfig, block_height: BlockHeight) -> Self {
         Self {
-            config: HeartbeatConfig::new(),
+            config,
             pending_events: VecDeque::default(),
             current_block_height: block_height,
         }
@@ -80,7 +77,7 @@ impl HeartbeatBehaviour {
     }
 }
 
-impl NetworkBehaviour for HeartbeatBehaviour {
+impl NetworkBehaviour for Heartbeat {
     type ConnectionHandler = HeartbeatHandler;
     type OutEvent = HeartbeatEvent;
 

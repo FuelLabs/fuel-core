@@ -28,6 +28,7 @@ use crate::{
     },
 };
 use fuel_core_metrics::p2p_metrics::P2P_METRICS;
+use fuel_core_types::blockchain::primitives::BlockHeight;
 use futures::prelude::*;
 use libp2p::{
     gossipsub::{
@@ -120,7 +121,10 @@ pub enum FuelP2PEvent {
     },
     PeerConnected(PeerId),
     PeerDisconnected(PeerId),
-    PeerInfoUpdated(PeerId),
+    PeerInfoUpdated {
+        peer_id: PeerId,
+        block_height: BlockHeight,
+    },
 }
 
 impl<Codec: NetworkCodec> FuelP2PService<Codec> {
@@ -316,6 +320,10 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         )
     }
 
+    pub fn update_block_height(&mut self, block_height: BlockHeight) {
+        self.swarm.behaviour_mut().update_block_height(block_height)
+    }
+
     /// Handles P2P Events.
     /// Returns only events that are of interest to the Network Orchestrator.
     pub async fn next_event(&mut self) -> Option<FuelP2PEvent> {
@@ -399,8 +407,14 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                         .behaviour_mut()
                         .add_addresses_to_discovery(&peer_id, addresses);
                 }
-                PeerInfoEvent::PeerInfoUpdated { peer_id } => {
-                    return Some(FuelP2PEvent::PeerInfoUpdated(peer_id))
+                PeerInfoEvent::PeerInfoUpdated {
+                    peer_id,
+                    block_height,
+                } => {
+                    return Some(FuelP2PEvent::PeerInfoUpdated {
+                        peer_id,
+                        block_height,
+                    })
                 }
                 PeerInfoEvent::PeerConnected(peer_id) => {
                     return Some(FuelP2PEvent::PeerConnected(peer_id))
@@ -1097,13 +1111,13 @@ mod tests {
         loop {
             tokio::select! {
                 node_a_event = node_a.next_event() => {
-                    if let Some(FuelP2PEvent::PeerInfoUpdated(peer_id)) = node_a_event {
-                        if let Some(PeerInfo { peer_addresses, latest_ping, client_version, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
+                    if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
+                        if let Some(PeerInfo { peer_addresses, last_known_block_height, client_version, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
                             // Exits after it verifies that:
                             // 1. Peer Addresses are known
                             // 2. Client Version is known
-                            // 3. Node has been pinged and responded with success
-                            if !peer_addresses.is_empty() && client_version.is_some() && latest_ping.is_some() {
+                            // 3. Node has responded with their latest BlockHeight
+                            if !peer_addresses.is_empty() && client_version.is_some() && last_known_block_height.is_some() {
                                 break;
                             }
                         }
@@ -1172,7 +1186,7 @@ mod tests {
         loop {
             tokio::select! {
                 node_a_event = node_a.next_event() => {
-                    if let Some(FuelP2PEvent::PeerInfoUpdated(peer_id)) = node_a_event {
+                    if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
                         if let Some(PeerInfo { peer_addresses, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
                             // verifies that we've got at least a single peer address to send message to
                             if !peer_addresses.is_empty() && !message_sent  {
@@ -1256,7 +1270,7 @@ mod tests {
                     break;
                 }
                 node_a_event = node_a.next_event() => {
-                    if let Some(FuelP2PEvent::PeerInfoUpdated(peer_id)) = node_a_event {
+                    if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
                         if let Some(PeerInfo { peer_addresses, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
                             // 0. verifies that we've got at least a single peer address to request message from
                             if !peer_addresses.is_empty() && !request_sent {
@@ -1331,7 +1345,7 @@ mod tests {
         loop {
             tokio::select! {
                 node_a_event = node_a.next_event() => {
-                    if let Some(FuelP2PEvent::PeerInfoUpdated(peer_id)) = node_a_event {
+                    if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
                         if let Some(PeerInfo { peer_addresses, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
                             // 0. verifies that we've got at least a single peer address to request message from
                             if !peer_addresses.is_empty() && !request_sent {

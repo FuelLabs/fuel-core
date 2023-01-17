@@ -30,18 +30,18 @@ use std::{
 };
 
 #[derive(Debug, Clone)]
-pub(crate) enum HeartbeatInEvent {
+pub enum HeartbeatInEvent {
     LatestBlock(BlockHeight),
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum HeartbeatOutEvent {
+pub enum HeartbeatOutEvent {
     BlockHeight(BlockHeight),
     RequestBlockHeight,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct HeartbeatConfig {
+pub struct HeartbeatConfig {
     /// Sending of `BlockHeight` should not take longer than this
     send_timeout: Duration,
     /// Idle time before sending next `BlockHeight`
@@ -62,7 +62,7 @@ impl HeartbeatConfig {
 }
 
 #[derive(Debug)]
-pub(crate) enum HeartbeatFailure {
+pub enum HeartbeatFailure {
     Timeout,
 }
 impl Display for HeartbeatFailure {
@@ -84,7 +84,7 @@ type InboundData =
     BoxFuture<'static, Result<(NegotiatedSubstream, BlockHeight), std::io::Error>>;
 type OutboundData = BoxFuture<'static, Result<NegotiatedSubstream, std::io::Error>>;
 
-pub(crate) struct HeartbeatHandler {
+pub struct HeartbeatHandler {
     config: HeartbeatConfig,
     inbound: Option<InboundData>,
     outbound: Option<OutboundState>,
@@ -282,12 +282,6 @@ impl ConnectionHandler for HeartbeatHandler {
             _ => {}
         }
     }
-}
-
-#[derive(Debug)]
-struct BlockHeightRequest {
-    requested: bool,
-    stream: NegotiatedSubstream,
 }
 
 enum OutboundState {

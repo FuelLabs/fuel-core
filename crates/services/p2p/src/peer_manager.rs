@@ -1,4 +1,12 @@
-use crate::config::Config;
+use crate::{
+    config::Config,
+    heartbeat::{
+        Heartbeat,
+        HeartbeatConfig,
+        HeartbeatEvent,
+    },
+};
+use fuel_core_types::blockchain::primitives::BlockHeight;
 use libp2p::{
     core::{
         connection::ConnectionId,
@@ -9,12 +17,6 @@ use libp2p::{
         Config as IdentifyConfig,
         Event as IdentifyEvent,
         Info as IdentifyInfo,
-    },
-    ping::{
-        Behaviour as Ping,
-        Config as PingConfig,
-        Event as PingEvent,
-        Success as PingSuccess,
     },
     swarm::{
         derive_prelude::{
@@ -77,12 +79,13 @@ pub enum PeerInfoEvent {
     },
     PeerInfoUpdated {
         peer_id: PeerId,
+        block_height: BlockHeight,
     },
 }
 
 // `Behaviour` that holds info about peers
 pub struct PeerManagerBehaviour {
-    ping: Ping,
+    heartbeat: Heartbeat,
     identify: Identify,
     peer_manager: PeerManager,
     // regulary checks if reserved nodes are connected
@@ -104,14 +107,7 @@ impl PeerManagerBehaviour {
             }
         };
 
-        let ping = {
-            let ping_config = PingConfig::new();
-            if let Some(interval) = config.info_interval {
-                Ping::new(ping_config.with_interval(interval))
-            } else {
-                Ping::new(ping_config)
-            }
-        };
+        let heartbeat = Heartbeat::new(HeartbeatConfig::new(), BlockHeight::default());
 
         let reserved_peers: HashSet<PeerId> = config
             .reserved_nodes
@@ -126,7 +122,7 @@ impl PeerManagerBehaviour {
         );
 
         Self {
-            ping,
+            heartbeat,
             identify,
             peer_manager,
             health_check: tokio::time::interval(Duration::from_secs(
@@ -152,26 +148,28 @@ impl PeerManagerBehaviour {
         self.peer_manager
             .insert_peer_info(peer_id, PeerInfoInsert::Addresses(addresses));
     }
+
+    pub fn update_block_height(&mut self, block_height: BlockHeight) {
+        self.heartbeat.update_block_height(block_height);
+    }
 }
 
 impl NetworkBehaviour for PeerManagerBehaviour {
     type ConnectionHandler = IntoConnectionHandlerSelect<
-        <Ping as NetworkBehaviour>::ConnectionHandler,
+        <Heartbeat as NetworkBehaviour>::ConnectionHandler,
         <Identify as NetworkBehaviour>::ConnectionHandler,
     >;
     type OutEvent = PeerInfoEvent;
 
     fn new_handler(&mut self) -> Self::ConnectionHandler {
         IntoConnectionHandler::select(
-            self.ping.new_handler(),
+            self.heartbeat.new_handler(),
             self.identify.new_handler(),
         )
     }
 
     fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-        let mut list = self.ping.addresses_of_peer(peer_id);
-        list.extend_from_slice(&self.identify.addresses_of_peer(peer_id));
-        list
+        self.identify.addresses_of_peer(peer_id)
     }
 
     fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
@@ -183,9 +181,10 @@ impl NetworkBehaviour for PeerManagerBehaviour {
                     ..
                 } = connection_established;
 
-                self.ping.on_swarm_event(FromSwarm::ConnectionEstablished(
-                    connection_established,
-                ));
+                self.heartbeat
+                    .on_swarm_event(FromSwarm::ConnectionEstablished(
+                        connection_established,
+                    ));
                 self.identify
                     .on_swarm_event(FromSwarm::ConnectionEstablished(
                         connection_established,
@@ -218,7 +217,7 @@ impl NetworkBehaviour for PeerManagerBehaviour {
                     endpoint,
                     remaining_established,
                 };
-                self.ping
+                self.heartbeat
                     .on_swarm_event(FromSwarm::ConnectionClosed(ping_event));
 
                 let identify_event = ConnectionClosed {
@@ -238,7 +237,7 @@ impl NetworkBehaviour for PeerManagerBehaviour {
                 }
             }
             FromSwarm::AddressChange(e) => {
-                self.ping.on_swarm_event(FromSwarm::AddressChange(e));
+                self.heartbeat.on_swarm_event(FromSwarm::AddressChange(e));
                 self.identify.on_swarm_event(FromSwarm::AddressChange(e));
             }
             FromSwarm::DialFailure(e) => {
@@ -253,7 +252,8 @@ impl NetworkBehaviour for PeerManagerBehaviour {
                     handler: identity_handler,
                     error: e.error,
                 };
-                self.ping.on_swarm_event(FromSwarm::DialFailure(ping_event));
+                self.heartbeat
+                    .on_swarm_event(FromSwarm::DialFailure(ping_event));
                 self.identify
                     .on_swarm_event(FromSwarm::DialFailure(identity_event));
             }
@@ -269,39 +269,41 @@ impl NetworkBehaviour for PeerManagerBehaviour {
                     local_addr: e.local_addr,
                     send_back_addr: e.send_back_addr,
                 };
-                self.ping
+                self.heartbeat
                     .on_swarm_event(FromSwarm::ListenFailure(ping_event));
                 self.identify
                     .on_swarm_event(FromSwarm::ListenFailure(identity_event));
             }
             FromSwarm::NewListener(e) => {
-                self.ping.on_swarm_event(FromSwarm::NewListener(e));
+                self.heartbeat.on_swarm_event(FromSwarm::NewListener(e));
                 self.identify.on_swarm_event(FromSwarm::NewListener(e));
             }
             FromSwarm::ExpiredListenAddr(e) => {
-                self.ping.on_swarm_event(FromSwarm::ExpiredListenAddr(e));
+                self.heartbeat
+                    .on_swarm_event(FromSwarm::ExpiredListenAddr(e));
                 self.identify
                     .on_swarm_event(FromSwarm::ExpiredListenAddr(e));
             }
             FromSwarm::ListenerError(e) => {
-                self.ping.on_swarm_event(FromSwarm::ListenerError(e));
+                self.heartbeat.on_swarm_event(FromSwarm::ListenerError(e));
                 self.identify.on_swarm_event(FromSwarm::ListenerError(e));
             }
             FromSwarm::ListenerClosed(e) => {
-                self.ping.on_swarm_event(FromSwarm::ListenerClosed(e));
+                self.heartbeat.on_swarm_event(FromSwarm::ListenerClosed(e));
                 self.identify.on_swarm_event(FromSwarm::ListenerClosed(e));
             }
             FromSwarm::NewExternalAddr(e) => {
-                self.ping.on_swarm_event(FromSwarm::NewExternalAddr(e));
+                self.heartbeat.on_swarm_event(FromSwarm::NewExternalAddr(e));
                 self.identify.on_swarm_event(FromSwarm::NewExternalAddr(e));
             }
             FromSwarm::ExpiredExternalAddr(e) => {
-                self.ping.on_swarm_event(FromSwarm::ExpiredExternalAddr(e));
+                self.heartbeat
+                    .on_swarm_event(FromSwarm::ExpiredExternalAddr(e));
                 self.identify
                     .on_swarm_event(FromSwarm::ExpiredExternalAddr(e));
             }
             FromSwarm::NewListenAddr(e) => {
-                self.ping.on_swarm_event(FromSwarm::NewListenAddr(e));
+                self.heartbeat.on_swarm_event(FromSwarm::NewListenAddr(e));
                 self.identify.on_swarm_event(FromSwarm::NewListenAddr(e));
             }
         }
@@ -333,7 +335,7 @@ impl NetworkBehaviour for PeerManagerBehaviour {
         }
 
         loop {
-            match self.ping.poll(cx, params) {
+            match self.heartbeat.poll(cx, params) {
                 Poll::Pending => break,
                 Poll::Ready(NetworkBehaviourAction::NotifyHandler {
                     peer_id,
@@ -372,17 +374,21 @@ impl NetworkBehaviour for PeerManagerBehaviour {
 
                     return Poll::Ready(NetworkBehaviourAction::Dial { handler, opts })
                 }
-                Poll::Ready(NetworkBehaviourAction::GenerateEvent(PingEvent {
-                    peer,
-                    result: Ok(PingSuccess::Ping { rtt }),
+                Poll::Ready(NetworkBehaviourAction::GenerateEvent(HeartbeatEvent {
+                    peer_id,
+                    latest_block_height,
                 })) => {
-                    self.peer_manager
-                        .insert_peer_info(&peer, PeerInfoInsert::LatestPing(rtt));
+                    self.peer_manager.insert_peer_info(
+                        &peer_id,
+                        PeerInfoInsert::BlockHeight(latest_block_height),
+                    );
 
-                    let event = PeerInfoEvent::PeerInfoUpdated { peer_id: peer };
+                    let event = PeerInfoEvent::PeerInfoUpdated {
+                        peer_id,
+                        block_height: latest_block_height,
+                    };
                     return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
                 }
-                _ => {}
             }
         }
 
@@ -419,8 +425,10 @@ impl NetworkBehaviour for PeerManagerBehaviour {
                     })
                 }
                 Poll::Ready(NetworkBehaviourAction::Dial { handler, opts }) => {
-                    let handler =
-                        IntoConnectionHandler::select(self.ping.new_handler(), handler);
+                    let handler = IntoConnectionHandler::select(
+                        self.heartbeat.new_handler(),
+                        handler,
+                    );
                     return Poll::Ready(NetworkBehaviourAction::Dial { handler, opts })
                 }
                 Poll::Ready(NetworkBehaviourAction::GenerateEvent(event)) => {
@@ -481,10 +489,9 @@ impl NetworkBehaviour for PeerManagerBehaviour {
             ConnectionHandler>::OutEvent,
     ) {
         match event {
-            EitherOutput::First(ping_event) => {
-                self.ping
-                    .on_connection_handler_event(peer_id, connection_id, ping_event)
-            }
+            EitherOutput::First(ping_event) => self
+                .heartbeat
+                .on_connection_handler_event(peer_id, connection_id, ping_event),
             EitherOutput::Second(identify_event) => self
                 .identify
                 .on_connection_handler_event(peer_id, connection_id, identify_event),
@@ -497,13 +504,13 @@ impl NetworkBehaviour for PeerManagerBehaviour {
 pub struct PeerInfo {
     pub peer_addresses: HashSet<Multiaddr>,
     pub client_version: Option<String>,
-    pub latest_ping: Option<Duration>,
+    pub last_known_block_height: Option<BlockHeight>,
 }
 
 enum PeerInfoInsert {
     Addresses(Vec<Multiaddr>),
     ClientVersion(String),
-    LatestPing(Duration),
+    BlockHeight(BlockHeight),
 }
 
 /// Manages Peers and their events
@@ -563,8 +570,8 @@ impl PeerManager {
             PeerInfoInsert::ClientVersion(client_version) => {
                 insert_client_version(peers, peer_id, client_version)
             }
-            PeerInfoInsert::LatestPing(duration) => {
-                insert_latest_ping(peers, peer_id, duration)
+            PeerInfoInsert::BlockHeight(block_height) => {
+                insert_latest_block_height(peers, peer_id, block_height)
             }
         }
     }
@@ -688,13 +695,13 @@ fn insert_peer_addresses(
     }
 }
 
-fn insert_latest_ping(
+fn insert_latest_block_height(
     peers: &mut HashMap<PeerId, PeerInfo>,
     peer_id: &PeerId,
-    duration: Duration,
+    block_height: BlockHeight,
 ) {
     if let Some(peer) = peers.get_mut(peer_id) {
-        peer.latest_ping = Some(duration);
+        peer.last_known_block_height = Some(block_height);
     } else {
         log_missing_peer(peer_id);
     }

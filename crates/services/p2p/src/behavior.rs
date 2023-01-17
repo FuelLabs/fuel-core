@@ -26,6 +26,7 @@ use crate::{
         RequestMessage,
     },
 };
+use fuel_core_types::blockchain::primitives::BlockHeight;
 use libp2p::{
     gossipsub::{
         error::{
@@ -66,7 +67,7 @@ pub struct FuelBehaviour<Codec: NetworkCodec> {
     discovery: DiscoveryBehaviour,
 
     /// Handles Peer Connections
-    /// Identifies and periodically pings nodes
+    /// Identifies and periodically requests `BlockHeight` from connected nodes
     peer_manager: PeerManagerBehaviour,
 
     /// Message propagation for p2p
@@ -196,6 +197,10 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
             propagation_source,
             acceptance,
         )
+    }
+
+    pub fn update_block_height(&mut self, block_height: BlockHeight) {
+        self.peer_manager.update_block_height(block_height);
     }
 
     // Currently only used in testing, but should be useful for the P2P Service API
