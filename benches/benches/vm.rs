@@ -27,12 +27,15 @@ where
                 diff,
             } = &mut i;
             let code = OpcodeRepr::from_u8(instruction.op());
+            let original_db = vm.as_mut().database_mut().clone();
             let mut db_txn = {
                 let db = vm.as_mut().database_mut();
                 let db_txn = db.transaction();
+                // update vm database in-place to use transaction
                 *db = db_txn.as_ref().clone();
                 db_txn
             };
+
             let start = std::time::Instant::now();
             for _ in 0..iters {
                 match code {
@@ -47,6 +50,8 @@ where
                 vm.reset_vm_state(diff);
             }
             db_txn.commit().unwrap();
+            // restore original db
+            *vm.as_mut().database_mut() = original_db;
             start.elapsed()
         })
     });
