@@ -35,6 +35,7 @@ use fuel_core_types::{
     },
     fuel_tx::Transaction,
     services::p2p::{
+        BlockHeightHeartbeatData,
         GossipData,
         GossipsubMessageAcceptance,
         TransactionGossipData,
@@ -95,6 +96,7 @@ impl<D> Task<D> {
     pub fn new(config: Config, db: Arc<D>) -> Self {
         let (request_sender, request_receiver) = mpsc::channel(100);
         let (tx_broadcast, _) = broadcast::channel(100);
+        let (block_height_broadcast, _) = broadcast::channel(100);
         let max_block_size = config.max_block_size;
         let p2p_service = FuelP2PService::new(config, BincodeCodec::new(max_block_size));
 
@@ -105,6 +107,7 @@ impl<D> Task<D> {
             shared: SharedState {
                 request_sender,
                 tx_broadcast,
+                block_height_broadcast,
             },
         }
     }
@@ -186,6 +189,14 @@ where
             }
             p2p_event = self.p2p_service.next_event() => {
                 match p2p_event {
+                    Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height }) => {
+                        let block_height_data = BlockHeightHeartbeatData {
+                            peer_id: peer_id.into(),
+                            block_height,
+                        };
+
+                        let _ = self.shared.block_height_broadcast.send(block_height_data);
+                    }
                     Some(FuelP2PEvent::GossipsubMessage { message, message_id, peer_id,.. }) => {
                         let message_id = message_id.0;
 
@@ -240,6 +251,8 @@ pub struct SharedState {
     tx_broadcast: broadcast::Sender<TransactionGossipData>,
     /// Used for communicating with the `Task`.
     request_sender: mpsc::Sender<TaskRequest>,
+    /// Sender of p2p blopck height data
+    block_height_broadcast: broadcast::Sender<BlockHeightHeartbeatData>,
 }
 
 impl SharedState {
@@ -305,6 +318,12 @@ impl SharedState {
 
     pub fn subscribe_tx(&self) -> broadcast::Receiver<TransactionGossipData> {
         self.tx_broadcast.subscribe()
+    }
+
+    pub fn subscribe_block_height(
+        &self,
+    ) -> broadcast::Receiver<BlockHeightHeartbeatData> {
+        self.block_height_broadcast.subscribe()
     }
 }
 

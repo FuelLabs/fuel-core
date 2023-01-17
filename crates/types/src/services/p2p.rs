@@ -4,6 +4,7 @@ use crate::{
     blockchain::{
         block::Block,
         consensus::Consensus,
+        primitives::BlockHeight,
     },
     fuel_tx::Transaction,
 };
@@ -68,4 +69,12 @@ impl<T: Debug + Send + 'static> NetworkData<T> for GossipData<T> {
     fn take_data(&mut self) -> Option<T> {
         self.data.take()
     }
+}
+/// Used for relying latest `BlockHeight` info from connected peers
+#[derive(Debug, Clone)]
+pub struct BlockHeightHeartbeatData {
+    /// PeerId as bytes
+    pub peer_id: Vec<u8>,
+    /// Latest BlockHeight received
+    pub block_height: BlockHeight,
 }
