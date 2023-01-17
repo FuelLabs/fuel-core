@@ -547,7 +547,6 @@ mod tests {
                 ConsensusVote,
             },
             header::PartialBlockHeader,
-            primitives::BlockHeight,
             SealedBlock,
         },
         fuel_tx::Transaction,
@@ -1111,7 +1110,7 @@ mod tests {
         p2p_config.bootstrap_nodes = vec![node_a_data.multiaddr];
         let mut node_b = build_service_from_config(p2p_config);
 
-        let latest_block_height = (40 as u32).into();
+        let latest_block_height = 40_u32.into();
 
         loop {
             tokio::select! {
@@ -1122,10 +1121,8 @@ mod tests {
                             // 1. Peer Addresses are known
                             // 2. Client Version is known
                             // 3. Node has responded with their latest BlockHeight
-                            if !peer_addresses.is_empty() && client_version.is_some() && last_known_block_height.is_some() {
-                                if last_known_block_height.unwrap() == latest_block_height {
-                                    break;
-                                }
+                            if !peer_addresses.is_empty() && client_version.is_some() && last_known_block_height == &Some(latest_block_height) {
+                                break;
                             }
                         }
                     }
