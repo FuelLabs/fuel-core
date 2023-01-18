@@ -2203,8 +2203,10 @@ dependencies = [
  "derive_more",
  "enum-iterator",
  "fuel-core-chain-config",
+ "fuel-core-consensus-module",
  "fuel-core-database",
  "fuel-core-executor",
+ "fuel-core-importer",
  "fuel-core-metrics",
  "fuel-core-p2p",
  "fuel-core-poa",
@@ -2279,10 +2281,10 @@ version = "0.15.1"
 dependencies = [
  "anyhow",
  "bincode",
- "fuel-core-poa",
  "fuel-core-storage",
  "fuel-core-types",
  "hex",
+ "humantime-serde",
  "insta",
  "itertools",
  "rand 0.8.5",
@@ -2323,6 +2325,16 @@ dependencies = [
  "fuel-core-types",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "fuel-core-consensus-module"
+version = "0.15.1"
+dependencies = [
+ "anyhow",
+ "fuel-core-chain-config",
+ "fuel-core-poa",
+ "fuel-core-types",
 ]
 
 [[package]]
@@ -2427,13 +2439,12 @@ version = "0.15.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "fuel-core-chain-config",
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-types",
- "humantime-serde",
  "mockall",
  "rand 0.8.5",
- "serde",
  "tokio",
  "tokio-stream",
  "tracing",

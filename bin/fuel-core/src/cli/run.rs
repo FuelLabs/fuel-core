@@ -51,6 +51,13 @@ mod p2p;
 #[cfg(feature = "relayer")]
 mod relayer;
 
+#[derive(clap::ArgEnum, Default, Debug, Clone)]
+pub enum NodeRole {
+    #[default]
+    Producer,
+    Validator,
+}
+
 #[derive(Debug, Clone, Parser)]
 pub struct Command {
     #[clap(long = "ip", default_value = "127.0.0.1", parse(try_from_str))]
@@ -96,6 +103,10 @@ pub struct Command {
     #[clap(long = "consensus-key")]
     pub consensus_key: Option<String>,
 
+    /// The role of the node.
+    #[clap(arg_enum, long = "node-role", default_value = "producer")]
+    pub node_role: NodeRole,
+
     /// Use a default insecure consensus key for testing purposes.
     /// This will not be enabled by default in the future.
     #[clap(long = "dev-keys", default_value = "true")]
@@ -132,6 +143,7 @@ impl Command {
             utxo_validation,
             min_gas_price,
             consensus_key,
+            node_role,
             consensus_dev_key,
             coinbase_recipient,
             #[cfg(feature = "relayer")]
@@ -177,6 +189,7 @@ impl Command {
 
         Ok(Config {
             addr,
+            node_role: node_role.into(),
             database_path,
             database_type,
             chain_conf: chain_conf.clone(),
@@ -192,6 +205,7 @@ impl Command {
                 metrics,
             },
             block_executor: Default::default(),
+            block_importer: Default::default(),
             #[cfg(feature = "relayer")]
             relayer: relayer_args.into(),
             #[cfg(feature = "p2p")]
@@ -231,5 +245,14 @@ fn load_consensus_key(
         Ok(Some(Secret::new(key.into())))
     } else {
         Ok(None)
+    }
+}
+
+impl From<NodeRole> for fuel_core::service::config::NodeRole {
+    fn from(node_role: NodeRole) -> Self {
+        match node_role {
+            NodeRole::Producer => fuel_core::service::config::NodeRole::Producer,
+            NodeRole::Validator => fuel_core::service::config::NodeRole::Validator,
+        }
     }
 }

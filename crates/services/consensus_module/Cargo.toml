@@ -1,0 +1,17 @@
+[package]
+name = "fuel-core-consensus-module"
+version = "0.15.1"
+authors = ["Fuel Labs <contact@fuel.sh>"]
+edition = "2021"
+homepage = "https://fuel.network/"
+keywords = ["blockchain", "fuel", "consensus"]
+license = "BUSL-1.1"
+repository = "https://github.com/FuelLabs/fuel-core"
+description = "The common code for fuel core consensuses."
+
+[dependencies]
+anyhow = "1.0"
+fuel-core-chain-config = { version = "0.15.1", path = "../../chain-config" }
+fuel-core-poa = { version = "0.15.1", path = "poa" }
+fuel-core-types = { version = "0.15.1", path = "../../types" }
+
