@@ -144,9 +144,9 @@ pub enum Column {
     /// The column that stores the consensus metadata associated with a finalized fuel block
     FuelBlockConsensus = 16,
     /// Merklized Fuel Block data
-    MerkleFuelBlockData = 17,
+    FuelBlockMerkleData = 17,
     /// Merklized Fuel Block metadata
-    MerkleFuelBlockMetadata = 18,
+    FuelBlockMerkleMetadata = 18,
 }
 
 #[derive(Clone, Debug)]

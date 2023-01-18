@@ -20,6 +20,7 @@ pub use tai64;
 
 pub mod blockchain;
 pub mod entities;
+pub mod merkle;
 pub mod services;
 
 /// Re-export of some fuel-vm types

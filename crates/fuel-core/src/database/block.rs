@@ -11,6 +11,8 @@ use fuel_core_storage::{
     not_found,
     tables::{
         FuelBlockIds,
+        FuelBlockMerkleData,
+        FuelBlockMerkleMetadata,
         FuelBlocks,
         Transactions,
     },
@@ -32,11 +34,19 @@ use fuel_core_types::{
             BlockId,
         },
     },
+    fuel_merkle::binary::{
+        MerkleTree,
+        Primitive,
+    },
+    merkle::metadata::DenseMerkleMetadata,
     tai64::Tai64,
 };
 use itertools::Itertools;
 use std::{
-    borrow::Cow,
+    borrow::{
+        BorrowMut,
+        Cow,
+    },
     convert::{
         TryFrom,
         TryInto,
@@ -95,9 +105,70 @@ impl StorageMutate<FuelBlocks> for Database {
     }
 
     fn remove(&mut self, key: &BlockId) -> Result<Option<CompressedBlock>, Self::Error> {
-        let block: Option<CompressedBlock> =
-            Database::remove(self, key.as_slice(), Column::FuelBlocks)?;
-        Ok(block)
+        Database::remove(self, key.as_slice(), Column::FuelBlocks).map_err(Into::into)
+    }
+}
+
+impl StorageInspect<FuelBlockMerkleData> for Database {
+    type Error = StorageError;
+
+    fn get(&self, key: &u64) -> Result<Option<Cow<Primitive>>, Self::Error> {
+        Database::get(self, &key.to_be_bytes(), Column::FuelBlockMerkleData)
+            .map_err(Into::into)
+    }
+
+    fn contains_key(&self, key: &u64) -> Result<bool, Self::Error> {
+        Database::exists(self, &key.to_be_bytes(), Column::FuelBlockMerkleData)
+            .map_err(Into::into)
+    }
+}
+
+impl StorageMutate<FuelBlockMerkleData> for Database {
+    fn insert(
+        &mut self,
+        key: &u64,
+        value: &Primitive,
+    ) -> Result<Option<Primitive>, Self::Error> {
+        Database::insert(self, key.to_be_bytes(), Column::FuelBlockMerkleData, value)
+            .map_err(Into::into)
+    }
+
+    fn remove(&mut self, key: &u64) -> Result<Option<Primitive>, Self::Error> {
+        Database::remove(self, &key.to_be_bytes(), Column::FuelBlockMerkleData)
+            .map_err(Into::into)
+    }
+}
+
+impl StorageInspect<FuelBlockMerkleMetadata> for Database {
+    type Error = StorageError;
+
+    fn get(&self, key: &String) -> Result<Option<Cow<DenseMerkleMetadata>>, Self::Error> {
+        Database::get(self, key.as_bytes(), Column::FuelBlockMerkleMetadata)
+            .map_err(Into::into)
+    }
+
+    fn contains_key(&self, key: &String) -> Result<bool, Self::Error> {
+        Database::exists(self, key.as_bytes(), Column::FuelBlockMerkleMetadata)
+            .map_err(Into::into)
+    }
+}
+
+impl StorageMutate<FuelBlockMerkleMetadata> for Database {
+    fn insert(
+        &mut self,
+        key: &String,
+        value: &DenseMerkleMetadata,
+    ) -> Result<Option<DenseMerkleMetadata>, Self::Error> {
+        Database::insert(self, key.as_bytes(), Column::FuelBlockMerkleMetadata, value)
+            .map_err(Into::into)
+    }
+
+    fn remove(
+        &mut self,
+        key: &String,
+    ) -> Result<Option<DenseMerkleMetadata>, Self::Error> {
+        Database::remove(self, key.as_bytes(), Column::FuelBlockMerkleMetadata)
+            .map_err(Into::into)
     }
 }
 
@@ -237,6 +308,26 @@ impl BlockExecutor for Database {
         self.storage::<FuelBlockIds>()
             .insert(block.header().height(), block_id)?;
         self.storage::<FuelBlocks>().insert(block_id, block)?;
+
+        let metadata = self
+            .storage::<FuelBlockMerkleMetadata>()
+            .get(&"FuelBlocks".to_string())?
+            .unwrap_or_default();
+        let mut leaves_count = metadata.leaves_count;
+
+        type StorageType = dyn StorageMutate<FuelBlockMerkleData, Error = StorageError>;
+        let storage: &mut StorageType = self.borrow_mut();
+        let mut tree = MerkleTree::load(storage, leaves_count).unwrap();
+        tree.push(block_id.as_slice()).unwrap();
+
+        leaves_count += 1;
+        let root = tree.root().unwrap().into();
+
+        self.storage::<FuelBlockMerkleMetadata>().insert(
+            &"FuelBlocks".to_string(),
+            &DenseMerkleMetadata { leaves_count, root },
+        )?;
+
         Ok(())
     }
 }

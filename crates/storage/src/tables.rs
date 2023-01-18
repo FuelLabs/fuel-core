@@ -15,6 +15,7 @@ use fuel_core_types::{
         coin::CompressedCoin,
         message::Message,
     },
+    fuel_merkle::binary,
     fuel_tx::{
         Receipt,
         Transaction,
@@ -26,6 +27,7 @@ use fuel_core_types::{
         ContractId,
         MessageId,
     },
+    merkle::metadata::DenseMerkleMetadata,
 };
 pub use fuel_vm_private::storage::{
     ContractsAssets,
@@ -51,6 +53,24 @@ impl Mappable for FuelBlocks {
     /// Unique identifier of the fuel block.
     type Key = BlockId;
     type SetValue = CompressedBlock;
+    type GetValue = Self::SetValue;
+}
+
+/// The table of Merklized blocks.
+pub struct FuelBlockMerkleData;
+
+impl Mappable for FuelBlockMerkleData {
+    type Key = u64;
+    type SetValue = binary::Primitive;
+    type GetValue = Self::SetValue;
+}
+
+/// The table of metadata for Merklized blocks.
+pub struct FuelBlockMerkleMetadata;
+
+impl Mappable for FuelBlockMerkleMetadata {
+    type Key = String;
+    type SetValue = DenseMerkleMetadata;
     type GetValue = Self::SetValue;
 }
 
