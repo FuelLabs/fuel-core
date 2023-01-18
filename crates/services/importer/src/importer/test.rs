@@ -245,7 +245,7 @@ fn commit_result_genesis(
     underlying_db: impl Fn() -> MockDatabase,
     executor_db: impl Fn() -> MockDatabase,
 ) -> Result<(), Error> {
-    commit_result_assert(sealed_block.clone(), underlying_db(), executor_db())
+    commit_result_assert(sealed_block, underlying_db(), executor_db())
 }
 
 //////////////////////////// PoA Block ////////////////////////////
@@ -327,7 +327,7 @@ fn commit_result_poa(
     let execute_and_commit_result = execute_and_commit_assert(
         sealed_block.clone(),
         underlying_db(),
-        executor(ok(sealed_block.entity.clone()), executor_db()),
+        executor(ok(sealed_block.entity), executor_db()),
         verifier(ok(())),
     );
     assert_eq!(commit_result, execute_and_commit_result);
