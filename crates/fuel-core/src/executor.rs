@@ -270,10 +270,9 @@ impl Executor {
 
         // ------------ GraphQL API Functionality   END ------------
 
-        // insert block into database
         block_db_transaction
             .deref_mut()
-            .insert_block(&finalized_block_id, &result.block)?;
+            .insert_block(&finalized_block_id, &result.block.compress())?;
 
         // Get the complete fuel block.
         Ok(UncommittedResult::new(

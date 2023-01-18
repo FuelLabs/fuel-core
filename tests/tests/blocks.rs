@@ -1,5 +1,8 @@
 use fuel_core::{
-    database::Database,
+    database::{
+        block::BlockExecutor,
+        Database,
+    },
     schema::scalars::BlockId,
     service::{
         Config,
@@ -316,7 +319,7 @@ async fn block_connection_5(
     let mut db = Database::default();
     for block in blocks {
         let id = block.id();
-        db.storage::<FuelBlocks>().insert(&id, &block).unwrap();
+        db.insert_block(&id, &block).unwrap();
         db.storage::<SealedBlockConsensus>()
             .insert(&id, &Consensus::PoA(Default::default()))
             .unwrap();

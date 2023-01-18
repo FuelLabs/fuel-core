@@ -1,5 +1,8 @@
 use crate::{
-    database::Database,
+    database::{
+        block::BlockExecutor,
+        Database,
+    },
     service::config::Config,
 };
 use anyhow::anyhow;
@@ -18,7 +21,6 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
-        FuelBlocks,
         Messages,
     },
     transactional::Transaction,
@@ -128,9 +130,7 @@ fn add_genesis_block(config: &Config, database: &mut Database) -> anyhow::Result
 
     let seal = Consensus::Genesis(genesis);
     let block_id = block.id();
-    database
-        .storage::<FuelBlocks>()
-        .insert(&block_id, &block.compress())?;
+    database.insert_block(&block_id, &block.compress())?;
     database.seal_block(block_id, seal)
 }
 

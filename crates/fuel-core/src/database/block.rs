@@ -62,7 +62,7 @@ impl StorageMutate<FuelBlockIds> for Database {
         key: &BlockHeight,
         value: &BlockId,
     ) -> Result<Option<BlockId>, Self::Error> {
-        Database::insert(self, &key.to_be_bytes(), Column::FuelBlockIds, value)
+        Database::insert(self, key.to_be_bytes(), Column::FuelBlockIds, *value)
             .map_err(Into::into)
     }
 
@@ -220,11 +220,11 @@ impl Database {
     }
 }
 
-pub(crate) trait BlockExecutor {
+pub trait BlockExecutor {
     fn insert_block(
         &mut self,
         block_id: &BlockId,
-        block: &Block,
+        block: &CompressedBlock,
     ) -> Result<(), StorageError>;
 }
 
@@ -232,12 +232,11 @@ impl BlockExecutor for Database {
     fn insert_block(
         &mut self,
         block_id: &BlockId,
-        block: &Block,
+        block: &CompressedBlock,
     ) -> Result<(), StorageError> {
         self.storage::<FuelBlockIds>()
-            .insert(block.header().height(), &block_id)?;
-        self.storage::<FuelBlocks>()
-            .insert(block_id, &block.compress())?;
+            .insert(block.header().height(), block_id)?;
+        self.storage::<FuelBlocks>().insert(block_id, block)?;
         Ok(())
     }
 }
