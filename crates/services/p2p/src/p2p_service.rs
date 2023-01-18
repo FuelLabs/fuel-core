@@ -422,6 +422,11 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 PeerInfoEvent::ReconnectToPeer(peer_id) => {
                     let _ = self.swarm.dial(peer_id);
                 }
+                PeerInfoEvent::BanPeer { peer_id, reason } => {
+                    debug!("Banning PeerId: {}, Reason: {}", peer_id, reason);
+                    panic!("Bans should not happen");
+                    self.swarm.ban_peer_id(peer_id);
+                }
                 PeerInfoEvent::PeerDisconnected {
                     peer_id,
                     should_reconnect,
@@ -1116,12 +1121,12 @@ mod tests {
             tokio::select! {
                 node_a_event = node_a.next_event() => {
                     if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                        if let Some(PeerInfo { peer_addresses, last_known_block_height, client_version, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
+                        if let Some(PeerInfo { peer_addresses, heartbeat_data, client_version, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
                             // Exits after it verifies that:
                             // 1. Peer Addresses are known
                             // 2. Client Version is known
                             // 3. Node has responded with their latest BlockHeight
-                            if !peer_addresses.is_empty() && client_version.is_some() && last_known_block_height == &Some(latest_block_height) {
+                            if !peer_addresses.is_empty() && client_version.is_some() && heartbeat_data.block_height == Some(latest_block_height) {
                                 break;
                             }
                         }

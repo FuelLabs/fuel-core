@@ -117,7 +117,7 @@ impl NetworkBehaviour for Heartbeat {
         _: &mut std::task::Context<'_>,
         _: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
-        if let Some(action) = self.pending_events.pop_back() {
+        if let Some(action) = self.pending_events.pop_front() {
             return Poll::Ready(action.build())
         }
 

@@ -51,7 +51,10 @@ use std::{
         Context,
         Poll,
     },
-    time::Duration,
+    time::{
+        Duration,
+        Instant,
+    },
 };
 use tokio::time::Interval;
 use tracing::debug;
@@ -81,6 +84,25 @@ pub enum PeerInfoEvent {
         peer_id: PeerId,
         block_height: BlockHeight,
     },
+    BanPeer {
+        peer_id: PeerId,
+        reason: BanReason,
+    },
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum BanReason {
+    HeartbeatThreshold,
+}
+
+impl std::fmt::Display for BanReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BanReason::HeartbeatThreshold => f.write_str(
+                "The Peer sent way too many Heartbeats in a short span of time",
+            ),
+        }
+    }
 }
 
 // `Behaviour` that holds info about peers
@@ -375,9 +397,25 @@ impl NetworkBehaviour for PeerManagerBehaviour {
                 peer_id,
                 latest_block_height,
             })) => {
+                let heartbeat_data = HeartbeatData::new(latest_block_height);
+
+                if let Some(previous_heartbeat) = self
+                    .get_peer_info(&peer_id)
+                    .and_then(|info| info.heartbeat_data.seconds_since_last_heartbeat())
+                {
+                    if previous_heartbeat <= Duration::from_millis(500) {
+                        let event = PeerInfoEvent::BanPeer {
+                            peer_id,
+                            reason: BanReason::HeartbeatThreshold,
+                        };
+
+                        return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
+                    }
+                }
+
                 self.peer_manager.insert_peer_info(
                     &peer_id,
-                    PeerInfoInsert::BlockHeight(latest_block_height),
+                    PeerInfoInsert::HeartbeatData(heartbeat_data),
                 );
 
                 let event = PeerInfoEvent::PeerInfoUpdated {
@@ -485,9 +523,9 @@ impl NetworkBehaviour for PeerManagerBehaviour {
             ConnectionHandler>::OutEvent,
     ) {
         match event {
-            EitherOutput::First(ping_event) => self
+            EitherOutput::First(heartbeat_event) => self
                 .heartbeat
-                .on_connection_handler_event(peer_id, connection_id, ping_event),
+                .on_connection_handler_event(peer_id, connection_id, heartbeat_event),
             EitherOutput::Second(identify_event) => self
                 .identify
                 .on_connection_handler_event(peer_id, connection_id, identify_event),
@@ -500,13 +538,13 @@ impl NetworkBehaviour for PeerManagerBehaviour {
 pub struct PeerInfo {
     pub peer_addresses: HashSet<Multiaddr>,
     pub client_version: Option<String>,
-    pub last_known_block_height: Option<BlockHeight>,
+    pub heartbeat_data: HeartbeatData,
 }
 
 enum PeerInfoInsert {
     Addresses(Vec<Multiaddr>),
     ClientVersion(String),
-    BlockHeight(BlockHeight),
+    HeartbeatData(HeartbeatData),
 }
 
 /// Manages Peers and their events
@@ -566,8 +604,8 @@ impl PeerManager {
             PeerInfoInsert::ClientVersion(client_version) => {
                 insert_client_version(peers, peer_id, client_version)
             }
-            PeerInfoInsert::BlockHeight(block_height) => {
-                insert_latest_block_height(peers, peer_id, block_height)
+            PeerInfoInsert::HeartbeatData(block_height) => {
+                insert_heartbeat_data(peers, peer_id, block_height)
             }
         }
     }
@@ -657,6 +695,25 @@ pub(crate) struct ConnectionState {
     peers_allowed: bool,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct HeartbeatData {
+    pub block_height: Option<BlockHeight>,
+    pub last_heartbeat: Option<Instant>,
+}
+
+impl HeartbeatData {
+    fn new(block_height: BlockHeight) -> Self {
+        Self {
+            block_height: Some(block_height),
+            last_heartbeat: Some(Instant::now()),
+        }
+    }
+
+    pub fn seconds_since_last_heartbeat(&self) -> Option<Duration> {
+        self.last_heartbeat.map(|time| time.elapsed())
+    }
+}
+
 impl ConnectionState {
     pub fn new() -> Arc<RwLock<Self>> {
         Arc::new(RwLock::new(Self {
@@ -691,13 +748,13 @@ fn insert_peer_addresses(
     }
 }
 
-fn insert_latest_block_height(
+fn insert_heartbeat_data(
     peers: &mut HashMap<PeerId, PeerInfo>,
     peer_id: &PeerId,
-    block_height: BlockHeight,
+    heartbeat_data: HeartbeatData,
 ) {
     if let Some(peer) = peers.get_mut(peer_id) {
-        peer.last_known_block_height = Some(block_height);
+        peer.heartbeat_data = heartbeat_data;
     } else {
         log_missing_peer(peer_id);
     }
