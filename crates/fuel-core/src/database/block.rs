@@ -51,6 +51,7 @@ use std::{
         TryFrom,
         TryInto,
     },
+    string::ToString,
 };
 
 impl StorageInspect<FuelBlockIds> for Database {
@@ -291,6 +292,8 @@ impl Database {
     }
 }
 
+const FUEL_BLOCK_MERKLE_METADATA_KEY: &str = "FuelBlocks";
+
 pub trait BlockExecutor {
     fn insert_block(
         &mut self,
@@ -311,7 +314,7 @@ impl BlockExecutor for Database {
 
         let metadata = self
             .storage::<FuelBlockMerkleMetadata>()
-            .get(&"FuelBlocks".to_string())?
+            .get(&FUEL_BLOCK_MERKLE_METADATA_KEY.to_string())?
             .unwrap_or_default();
         let mut leaves_count = metadata.leaves_count;
 
@@ -324,7 +327,7 @@ impl BlockExecutor for Database {
         let root = tree.root().unwrap().into();
 
         self.storage::<FuelBlockMerkleMetadata>().insert(
-            &"FuelBlocks".to_string(),
+            &FUEL_BLOCK_MERKLE_METADATA_KEY.to_string(),
             &DenseMerkleMetadata { leaves_count, root },
         )?;
 
