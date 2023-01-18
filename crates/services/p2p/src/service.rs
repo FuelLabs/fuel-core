@@ -74,8 +74,6 @@ enum TaskRequest {
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
     RespondWithRequestedBlock((Option<Arc<SealedBlock>>, RequestId)),
-    // Update p2p service state
-    UpdateWithBlockHeight(BlockHeight),
 }
 
 impl Debug for TaskRequest {
@@ -148,9 +146,6 @@ where
 
             next_service_request = self.request_receiver.recv() => {
                 match next_service_request {
-                    Some(TaskRequest::UpdateWithBlockHeight(block_height)) => {
-                        let _ = self.p2p_service.update_block_height(block_height);
-                    }
                     Some(TaskRequest::BroadcastTransaction(transaction)) => {
                         let broadcast = GossipsubBroadcastRequest::NewTx(transaction);
                         let result = self.p2p_service.publish_message(broadcast);
@@ -275,13 +270,6 @@ impl SharedState {
             .try_send(TaskRequest::RespondWithGossipsubMessageReport((
                 msg_info, acceptance,
             )))?;
-        Ok(())
-    }
-
-    pub fn update_block_height(&self, block_height: BlockHeight) -> anyhow::Result<()> {
-        self.request_sender
-            .try_send(TaskRequest::UpdateWithBlockHeight(block_height))?;
-
         Ok(())
     }
 
