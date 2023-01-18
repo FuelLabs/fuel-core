@@ -1,16 +1,19 @@
 use std::time::Duration;
 
-use fuel_core_services::KillSwitch;
+use fuel_core_services::{
+    stream::BoxStream,
+    KillSwitch,
+};
 use fuel_core_types::{
     blockchain::primitives::BlockId,
     fuel_tx::Transaction,
     services::executor::ExecutionResult,
 };
-use futures::stream::BoxStream;
 
 use crate::ports::{
+    BlockImporterPort,
+    MockBlockImporterPort,
     MockConsensusPort,
-    MockExecutorPort,
     MockPeerToPeerPort,
 };
 
@@ -30,7 +33,7 @@ struct Input {
 
 #[test_case(
     Input::default(), State::new(None, None),
-    Params{
+    Config{
         max_get_header_requests: 1,
         max_get_txns_requests: 1,
     }
@@ -42,7 +45,7 @@ struct Input {
         ..Default::default()
     },
     State::new(None, 1),
-    Params{
+    Config{
         max_get_header_requests: 1,
         max_get_txns_requests: 1,
     }
@@ -55,7 +58,7 @@ struct Input {
         ..Default::default()
     },
     State::new(None, 100),
-    Params{
+    Config{
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
     }
@@ -68,7 +71,7 @@ struct Input {
         ..Default::default()
     },
     State::new(None, 100),
-    Params{
+    Config{
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
     }
@@ -81,7 +84,7 @@ struct Input {
         ..Default::default()
     },
     State::new(None, 100),
-    Params{
+    Config{
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
     }
@@ -94,7 +97,7 @@ struct Input {
         ..Default::default()
     },
     State::new(None, 50),
-    Params{
+    Config{
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
     }
@@ -102,7 +105,7 @@ struct Input {
     ; "50 headers with max 10 with slow executes"
 )]
 #[tokio::test(flavor = "multi_thread")]
-async fn test_back_pressure(input: Input, state: State, params: Params) -> Count {
+async fn test_back_pressure(input: Input, state: State, params: Config) -> Count {
     let counts = SharedCounts::new(Default::default());
     let state = SharedMutex::new(state);
 
@@ -111,7 +114,10 @@ async fn test_back_pressure(input: Input, state: State, params: Params) -> Count
         [input.headers, input.transactions],
     ));
     let consensus = Arc::new(PressureConsensusPort::new(counts.clone(), input.consensus));
-    let executor = Arc::new(PressureExecutorPort::new(counts.clone(), input.executes));
+    let executor = Arc::new(PressureBlockImporterPort::new(
+        counts.clone(),
+        input.executes,
+    ));
     let ports = Ports {
         p2p,
         executor,
@@ -158,11 +164,11 @@ type SharedCounts = SharedMutex<Counts>;
 
 struct PressurePeerToPeerPort(MockPeerToPeerPort, [Duration; 2], SharedCounts);
 struct PressureConsensusPort(MockConsensusPort, Duration, SharedCounts);
-struct PressureExecutorPort(MockExecutorPort, Duration, SharedCounts);
+struct PressureBlockImporterPort(MockBlockImporterPort, Duration, SharedCounts);
 
 #[async_trait::async_trait]
 impl PeerToPeerPort for PressurePeerToPeerPort {
-    fn height_stream(&self) -> BoxStream<'static, BlockHeight> {
+    fn height_stream(&self) -> BoxStream<BlockHeight> {
         self.0.height_stream()
     }
     async fn get_sealed_block_header(
@@ -202,7 +208,7 @@ impl ConsensusPort for PressureConsensusPort {
 }
 
 #[async_trait::async_trait]
-impl ExecutorPort for PressureExecutorPort {
+impl BlockImporterPort for PressureBlockImporterPort {
     async fn execute_and_commit(
         &self,
         block: SealedBlock,
@@ -236,9 +242,9 @@ impl PressureConsensusPort {
     }
 }
 
-impl PressureExecutorPort {
+impl PressureBlockImporterPort {
     fn new(counts: SharedCounts, delays: Duration) -> Self {
-        let mut mock = MockExecutorPort::default();
+        let mut mock = MockBlockImporterPort::default();
         mock.expect_execute_and_commit().returning(move |_| {
             Ok(ExecutionResult {
                 block: Block::default(),

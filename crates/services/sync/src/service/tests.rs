@@ -1,4 +1,7 @@
-use fuel_core_services::Service;
+use fuel_core_services::{
+    stream::IntoBoxStream,
+    Service,
+};
 use fuel_core_types::{
     blockchain::block::Block,
     services::executor::ExecutionResult,
@@ -11,8 +14,8 @@ use futures::{
 use crate::{
     import::empty_header,
     ports::{
+        MockBlockImporterPort,
         MockConsensusPort,
-        MockExecutorPort,
         MockPeerToPeerPort,
     },
 };
@@ -32,13 +35,13 @@ async fn test_new_service() {
             }
             h
         })
-        .boxed()
+        .into_boxed()
     });
     p2p.expect_get_sealed_block_header()
         .returning(|h| Ok(Some(empty_header(h))));
     p2p.expect_get_transactions()
         .returning(|_| Ok(Some(vec![])));
-    let mut executor = MockExecutorPort::default();
+    let mut executor = MockBlockImporterPort::default();
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
     executor.expect_execute_and_commit().returning(move |h| {
         tx.try_send(**h.entity.header().height()).unwrap();
@@ -52,7 +55,7 @@ async fn test_new_service() {
     consensus
         .expect_check_sealed_header()
         .returning(|_| Ok(true));
-    let params = Params {
+    let params = Config {
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
     };

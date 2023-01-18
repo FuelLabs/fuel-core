@@ -2,7 +2,7 @@
 use std::sync::Arc;
 
 use crate::{
-    import::Params,
+    import::Config,
     ports,
     state::State,
 };
@@ -36,12 +36,12 @@ mod tests;
 pub struct TaskSetup<P, E, C>
 where
     P: ports::PeerToPeerPort + Send + Sync + 'static,
-    E: ports::ExecutorPort + Send + Sync + 'static,
+    E: ports::BlockImporterPort + Send + Sync + 'static,
     C: ports::ConsensusPort + Send + Sync + 'static,
 {
     height_stream: BoxStream<'static, BlockHeight>,
     state: SharedMutex<State>,
-    params: Params,
+    params: Config,
     ports: ports::Ports<P, E, C>,
 }
 
@@ -55,14 +55,14 @@ pub struct Task {
 impl<P, E, C> TaskSetup<P, E, C>
 where
     P: ports::PeerToPeerPort + Send + Sync + 'static,
-    E: ports::ExecutorPort + Send + Sync + 'static,
+    E: ports::BlockImporterPort + Send + Sync + 'static,
     C: ports::ConsensusPort + Send + Sync + 'static,
 {
     /// Create a new task setup.
     pub fn new(
         height_stream: BoxStream<'static, BlockHeight>,
         state: State,
-        params: Params,
+        params: Config,
         ports: ports::Ports<P, E, C>,
     ) -> Self {
         let state = SharedMutex::new(state);
@@ -154,7 +154,7 @@ impl RunnableTask for Task {
 impl<P, E, C> RunnableService for TaskSetup<P, E, C>
 where
     P: ports::PeerToPeerPort + Send + Sync + 'static,
-    E: ports::ExecutorPort + Send + Sync + 'static,
+    E: ports::BlockImporterPort + Send + Sync + 'static,
     C: ports::ConsensusPort + Send + Sync + 'static,
 {
     const NAME: &'static str = "fuel-core-sync";
@@ -208,11 +208,11 @@ pub fn new_service<P, E, C>(
     p2p: P,
     executor: E,
     consensus: C,
-    params: Params,
+    params: Config,
 ) -> anyhow::Result<ServiceRunner<TaskSetup<P, E, C>>>
 where
     P: ports::PeerToPeerPort + Send + Sync + 'static,
-    E: ports::ExecutorPort + Send + Sync + 'static,
+    E: ports::BlockImporterPort + Send + Sync + 'static,
     C: ports::ConsensusPort + Send + Sync + 'static,
 {
     let height_stream = p2p.height_stream();

@@ -17,18 +17,20 @@ pub mod stream {
     /// A Send + Sync BoxStream
     pub type BoxStream<T> =
         core::pin::Pin<Box<dyn Stream<Item = T> + Send + Sync + 'static>>;
-}
 
-/// The source of some network data.
-pub struct SourcePeer<T> {
-    /// The source of the data.
-    pub peer_id: PeerId,
-    /// The data.
-    pub data: T,
-}
+    /// Helper trait to create a BoxStream from a Stream
+    pub trait IntoBoxStream: Stream {
+        /// Convert this stream into a BoxStream.
+        fn into_boxed(self) -> BoxStream<Self::Item>
+        where
+            Self: Sized + Send + Sync + 'static,
+        {
+            Box::pin(self)
+        }
+    }
 
-/// Placeholder for a peer id
-pub struct PeerId;
+    impl<S> IntoBoxStream for S where S: Stream + Send + Sync + 'static {}
+}
 
 pub use service::{
     EmptyShared,

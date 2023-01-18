@@ -1,6 +1,9 @@
 //! State of the sync service.
 
-use std::ops::RangeInclusive;
+use std::{
+    cmp::Ordering,
+    ops::RangeInclusive,
+};
 
 #[cfg(test)]
 mod test;
@@ -73,14 +76,12 @@ impl State {
             Status::Processing(range) => match height.cmp(range.end()) {
                 // The commit is less than the end of the range, so the range
                 // is still being processed.
-                std::cmp::Ordering::Less => {
+                Ordering::Less => {
                     Some(Status::Processing(height.saturating_add(1)..=*range.end()))
                 }
                 // The commit is equal or greater than the end of the range,
                 // so the range is fully committed.
-                std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => {
-                    Some(Status::Committed(height))
-                }
+                Ordering::Equal | Ordering::Greater => Some(Status::Committed(height)),
             },
             // Currently uninitialized so now are committed.
             Status::Uninitialized => Some(Status::Committed(height)),
@@ -106,12 +107,10 @@ impl State {
             Status::Processing(range) => match range.end().cmp(&height) {
                 // The range end is less than the observed height, so
                 // extend the range to the observed height.
-                std::cmp::Ordering::Less => {
-                    Some(Status::Processing(*range.start()..=height))
-                }
+                Ordering::Less => Some(Status::Processing(*range.start()..=height)),
                 // The range end is equal or greater than the observed height,
                 // so ignore it.
-                std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => None,
+                Ordering::Equal | Ordering::Greater => None,
             },
             // Currently committed and recording an observation.
             // If there is a gap between the committed and observed heights,

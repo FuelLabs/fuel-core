@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use fuel_core_services::SourcePeer;
+use fuel_core_services::stream::BoxStream;
 use fuel_core_types::{
     blockchain::{
         primitives::{
@@ -13,19 +13,17 @@ use fuel_core_types::{
         SealedBlockHeader,
     },
     fuel_tx::Transaction,
-    services::executor::ExecutionResult,
+    services::{
+        executor::ExecutionResult,
+        p2p::SourcePeer,
+    },
 };
-
-use futures::stream::BoxStream;
-
-#[cfg(test)]
-use mockall::automock;
 
 /// All ports this service requires to function.
 pub struct Ports<P, E, C>
 where
     P: PeerToPeerPort + 'static,
-    E: ExecutorPort + 'static,
+    E: BlockImporterPort + 'static,
     C: ConsensusPort + 'static,
 {
     /// Network port.
@@ -36,12 +34,12 @@ where
     pub consensus: Arc<C>,
 }
 
-#[cfg_attr(test, automock)]
+#[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 /// Port for communication with the network.
 pub trait PeerToPeerPort {
     /// Stream of newly observed block heights.
-    fn height_stream(&self) -> BoxStream<'static, BlockHeight>;
+    fn height_stream(&self) -> BoxStream<BlockHeight>;
 
     /// Request sealed block header from the network
     /// at the given height.
@@ -60,7 +58,7 @@ pub trait PeerToPeerPort {
     ) -> anyhow::Result<Option<Vec<Transaction>>>;
 }
 
-#[cfg_attr(test, automock)]
+#[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 /// Port for communication with the consensus service.
 pub trait ConsensusPort {
@@ -71,10 +69,10 @@ pub trait ConsensusPort {
     ) -> anyhow::Result<bool>;
 }
 
-#[cfg_attr(test, automock)]
+#[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
-/// Port for communication with the executor service.
-pub trait ExecutorPort {
+/// Port for communication with the block importer.
+pub trait BlockImporterPort {
     /// Execute the given sealed block
     /// and commit it to the database.
     async fn execute_and_commit(

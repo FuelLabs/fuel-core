@@ -1,10 +1,9 @@
-use std::sync::Arc;
-
 use crate::state::{
     State,
     StateWatcher,
 };
 use anyhow::anyhow;
+use std::sync::Arc;
 use tokio::{
     sync::{
         watch,
@@ -359,7 +358,7 @@ impl Default for KillSwitch {
 
 impl Drop for KillSwitch {
     fn drop(&mut self) {
-        self.0.close();
+        self.kill_all();
     }
 }
 

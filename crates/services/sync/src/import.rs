@@ -10,14 +10,16 @@ use std::{
 use fuel_core_services::{
     SharedMutex,
     Shutdown,
-    SourcePeer,
 };
-use fuel_core_types::blockchain::{
-    block::Block,
-    consensus::Sealed,
-    primitives::BlockHeight,
-    SealedBlock,
-    SealedBlockHeader,
+use fuel_core_types::{
+    blockchain::{
+        block::Block,
+        consensus::Sealed,
+        primitives::BlockHeight,
+        SealedBlock,
+        SealedBlockHeader,
+    },
+    services::p2p::SourcePeer,
 };
 use futures::{
     stream::{
@@ -31,8 +33,8 @@ use tokio::sync::Notify;
 
 use crate::{
     ports::{
+        BlockImporterPort,
         ConsensusPort,
-        ExecutorPort,
         PeerToPeerPort,
         Ports,
     },
@@ -50,7 +52,7 @@ mod back_pressure_tests;
 
 #[derive(Clone, Copy, Debug)]
 /// Parameters for the import task.
-pub struct Params {
+pub struct Config {
     /// The maximum number of get header requests to make in a single batch.
     pub max_get_header_requests: usize,
     /// The maximum number of get transaction requests to make in a single batch.
@@ -61,7 +63,7 @@ pub struct Params {
 pub(super) async fn import<P, E, C>(
     state: SharedMutex<State>,
     notify: Arc<Notify>,
-    params: Params,
+    params: Config,
     ports: Ports<P, E, C>,
     shutdown: Shutdown,
     // Needed for testing. Would be nice to find a better way to do this.
@@ -69,7 +71,7 @@ pub(super) async fn import<P, E, C>(
 ) -> anyhow::Result<bool>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
-    E: ExecutorPort + Send + Sync + 'static,
+    E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 {
     while {
@@ -108,13 +110,13 @@ where
 async fn launch_stream<P, E, C>(
     range: RangeInclusive<u32>,
     state: &SharedMutex<State>,
-    params: Params,
+    params: Config,
     ports: &Ports<P, E, C>,
     shutdown: &Shutdown,
 ) -> (usize, anyhow::Result<()>)
 where
     P: PeerToPeerPort + Send + Sync + 'static,
-    E: ExecutorPort + Send + Sync + 'static,
+    E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 {
     // Request up to `max_get_header_requests` headers from the network.
@@ -230,7 +232,7 @@ async fn wait_for_notify_or_shutdown(notify: &Notify, shutdown: &Shutdown) -> bo
 /// The headers are returned in order.
 fn get_header_range_buffered(
     range: RangeInclusive<u32>,
-    params: Params,
+    params: Config,
     p2p: Arc<impl PeerToPeerPort + Send + Sync + 'static>,
 ) -> impl Stream<Item = anyhow::Result<SourcePeer<SealedBlockHeader>>> {
     get_header_range(range, p2p)

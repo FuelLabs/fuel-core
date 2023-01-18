@@ -1,7 +1,4 @@
-use fuel_core_services::{
-    KillSwitch,
-    PeerId,
-};
+use fuel_core_services::KillSwitch;
 use fuel_core_types::{
     blockchain::{
         consensus::Consensus,
@@ -12,8 +9,8 @@ use fuel_core_types::{
 use tokio::sync::oneshot;
 
 use crate::ports::{
+    MockBlockImporterPort,
     MockConsensusPort,
-    MockExecutorPort,
     MockPeerToPeerPort,
 };
 use test_case::test_case;
@@ -385,7 +382,7 @@ use super::*;
 #[test_case(
     State::new(3, 5),
     {
-        let mut executor = MockExecutorPort::default();
+        let mut executor = MockBlockImporterPort::default();
         executor
             .expect_execute_and_commit()
             .times(1)
@@ -402,7 +399,7 @@ use super::*;
 #[test_case(
     State::new(3, 5),
     {
-        let mut executor = MockExecutorPort::default();
+        let mut executor = MockBlockImporterPort::default();
         executor
             .expect_execute_and_commit()
             .times(1)
@@ -429,7 +426,7 @@ use super::*;
 #[test_case(
     State::new(3, 5),
     {
-        let mut executor = MockExecutorPort::default();
+        let mut executor = MockBlockImporterPort::default();
         executor
             .expect_execute_and_commit()
             .times(2)
@@ -504,7 +501,7 @@ async fn test_import_inner(
         executor,
         count: Count(rx, loop_callback),
     } = mocks;
-    let params = Params {
+    let params = Config {
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
     };
@@ -538,7 +535,7 @@ async fn test_import_inner(
 struct Mocks {
     consensus_port: MockConsensusPort,
     p2p: MockPeerToPeerPort,
-    executor: MockExecutorPort,
+    executor: MockBlockImporterPort,
     count: Count,
 }
 
@@ -614,9 +611,9 @@ impl DefaultMocks for MockPeerToPeerPort {
     }
 }
 
-impl DefaultMocks for MockExecutorPort {
+impl DefaultMocks for MockBlockImporterPort {
     fn times<T: IntoIterator<Item = usize> + Clone>(t: T) -> Self {
-        let mut executor = MockExecutorPort::default();
+        let mut executor = MockBlockImporterPort::default();
         let t = t.into_iter().next().unwrap();
 
         executor
@@ -654,9 +651,8 @@ pub(crate) fn empty_header(h: BlockHeight) -> SourcePeer<SealedBlockHeader> {
         entity: header,
         consensus,
     };
-    let peer_id = PeerId {};
     SourcePeer {
-        peer_id,
+        peer_id: vec![].into(),
         data: sealed,
     }
 }
