@@ -26,7 +26,7 @@ use crate::{
 };
 
 /// Fuel block with all transaction data included
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 pub struct Block<TransactionRepresentation = Transaction> {

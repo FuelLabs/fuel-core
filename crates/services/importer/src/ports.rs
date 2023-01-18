@@ -19,6 +19,7 @@ use fuel_core_types::{
     },
 };
 
+#[cfg_attr(test, mockall::automock(type Database = crate::importer::test::MockDatabase;))]
 /// The executors port.
 pub trait Executor: Send + Sync {
     /// The database used by the executor.
@@ -57,6 +58,7 @@ pub trait ExecutorDatabase: ImporterDatabase {
     ) -> StorageResult<Option<Bytes32>>;
 }
 
+#[cfg_attr(test, mockall::automock)]
 /// The verifier of the block.
 pub trait BlockVerifier {
     /// Verifies the consistency of the block fields for the block's height.

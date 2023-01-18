@@ -20,7 +20,7 @@ use tai64::Tai64;
 
 /// A fuel block header that has all the fields generated because it
 /// has been executed.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BlockHeader {
     /// The application header.
@@ -43,7 +43,7 @@ pub struct PartialBlockHeader {
     pub consensus: ConsensusHeader<Empty>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 /// The fuel block application header.
@@ -60,7 +60,7 @@ pub struct ApplicationHeader<Generated> {
     pub generated: Generated,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 /// Concrete generated application header fields.
@@ -76,7 +76,7 @@ pub struct GeneratedApplicationFields {
     pub output_messages_root: Bytes32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The fuel block consensus header.
 /// This contains fields related to consensus plus
@@ -92,7 +92,7 @@ pub struct ConsensusHeader<Generated> {
     pub generated: Generated,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 /// Concrete generated consensus header fields.
@@ -102,7 +102,7 @@ pub struct GeneratedConsensusFields {
     pub application_hash: Bytes32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Extra data that is not actually part of the header.
 pub struct BlockHeaderMetadata {

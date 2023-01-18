@@ -2352,6 +2352,9 @@ dependencies = [
  "anyhow",
  "fuel-core-storage",
  "fuel-core-types",
+ "mockall",
+ "test-case",
+ "thiserror",
  "tokio",
  "tracing",
 ]
