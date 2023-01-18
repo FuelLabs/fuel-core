@@ -2,10 +2,6 @@ use fuel_core_services::{
     stream::IntoBoxStream,
     Service,
 };
-use fuel_core_types::{
-    blockchain::block::Block,
-    services::executor::ExecutionResult,
-};
 use futures::{
     stream,
     StreamExt,
@@ -45,11 +41,7 @@ async fn test_new_service() {
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
     executor.expect_execute_and_commit().returning(move |h| {
         tx.try_send(**h.entity.header().height()).unwrap();
-        Ok(ExecutionResult {
-            block: Block::default(),
-            skipped_transactions: vec![],
-            tx_status: vec![],
-        })
+        Ok(())
     });
     let mut consensus = MockConsensusPort::default();
     consensus

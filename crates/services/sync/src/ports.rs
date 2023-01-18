@@ -11,10 +11,7 @@ use fuel_core_types::{
         SealedBlockHeader,
     },
     fuel_tx::Transaction,
-    services::{
-        executor::ExecutionResult,
-        p2p::SourcePeer,
-    },
+    services::p2p::SourcePeer,
 };
 
 #[cfg_attr(test, mockall::automock)]
@@ -58,8 +55,5 @@ pub trait ConsensusPort {
 pub trait BlockImporterPort {
     /// Execute the given sealed block
     /// and commit it to the database.
-    async fn execute_and_commit(
-        &self,
-        block: SealedBlock,
-    ) -> anyhow::Result<ExecutionResult>;
+    async fn execute_and_commit(&self, block: SealedBlock) -> anyhow::Result<()>;
 }

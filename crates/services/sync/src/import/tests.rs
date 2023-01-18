@@ -1,9 +1,6 @@
-use fuel_core_types::{
-    blockchain::{
-        consensus::Consensus,
-        header::BlockHeader,
-    },
-    services::executor::ExecutionResult,
+use fuel_core_types::blockchain::{
+    consensus::Consensus,
+    header::BlockHeader,
 };
 
 use crate::ports::{
@@ -386,11 +383,7 @@ use super::*;
                 if **h.entity.header().height() == 4 {
                     Err(anyhow::anyhow!("Some execution error"))
                 } else {
-                    Ok(ExecutionResult {
-                        block: Block::default(),
-                        skipped_transactions: vec![],
-                        tx_status: vec![],
-                    })
+                    Ok(())
                 }
             });
         Mocks{
@@ -412,11 +405,7 @@ use super::*;
                 if **h.entity.header().height() == 5 {
                     Err(anyhow::anyhow!("Some execution error"))
                 } else {
-                    Ok(ExecutionResult {
-                        block: Block::default(),
-                        skipped_transactions: vec![],
-                        tx_status: vec![],
-                    })
+                    Ok(())
                 }
             });
         Mocks{
@@ -595,13 +584,7 @@ impl DefaultMocks for MockBlockImporterPort {
         executor
             .expect_execute_and_commit()
             .times(t)
-            .returning(move |_| {
-                Ok(ExecutionResult {
-                    block: Block::default(),
-                    skipped_transactions: vec![],
-                    tx_status: vec![],
-                })
-            });
+            .returning(move |_| Ok(()));
         executor
     }
 }

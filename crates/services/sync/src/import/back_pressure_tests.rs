@@ -4,7 +4,6 @@ use fuel_core_services::stream::BoxStream;
 use fuel_core_types::{
     blockchain::primitives::BlockId,
     fuel_tx::Transaction,
-    services::executor::ExecutionResult,
 };
 
 use crate::ports::{
@@ -197,10 +196,7 @@ impl ConsensusPort for PressureConsensusPort {
 
 #[async_trait::async_trait]
 impl BlockImporterPort for PressureBlockImporterPort {
-    async fn execute_and_commit(
-        &self,
-        block: SealedBlock,
-    ) -> anyhow::Result<ExecutionResult> {
+    async fn execute_and_commit(&self, block: SealedBlock) -> anyhow::Result<()> {
         self.2.apply(|c| c.inc_executes());
         tokio::time::sleep(self.1).await;
         self.2.apply(|c| {
@@ -233,13 +229,7 @@ impl PressureConsensusPort {
 impl PressureBlockImporterPort {
     fn new(counts: SharedCounts, delays: Duration) -> Self {
         let mut mock = MockBlockImporterPort::default();
-        mock.expect_execute_and_commit().returning(move |_| {
-            Ok(ExecutionResult {
-                block: Block::default(),
-                skipped_transactions: vec![],
-                tx_status: vec![],
-            })
-        });
+        mock.expect_execute_and_commit().returning(move |_| Ok(()));
         Self(mock, delays, counts)
     }
 }
