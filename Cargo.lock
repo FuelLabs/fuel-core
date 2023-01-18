@@ -2409,6 +2409,7 @@ dependencies = [
  "serde",
  "sha2 0.10.6",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-appender",
  "tracing-attributes",

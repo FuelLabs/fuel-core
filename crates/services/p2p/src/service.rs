@@ -12,7 +12,10 @@ use crate::{
         FuelP2PEvent,
         FuelP2PService,
     },
-    ports::P2pDb,
+    ports::{
+        BlockImport,
+        P2pDb,
+    },
     request_response::messages::{
         OutboundResponse,
         RequestMessage,
@@ -21,6 +24,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use fuel_core_services::{
+    stream::BoxStream,
     RunnableService,
     RunnableTask,
     ServiceRunner,
@@ -55,6 +59,7 @@ use tokio::sync::{
     mpsc,
     oneshot,
 };
+use tokio_stream::StreamExt;
 use tracing::{
     debug,
     error,
@@ -87,16 +92,22 @@ impl Debug for TaskRequest {
 pub struct Task<D> {
     p2p_service: FuelP2PService<BincodeCodec>,
     db: Arc<D>,
+    next_block: BoxStream<BlockHeight>,
     /// Receive internal Task Requests
     request_receiver: mpsc::Receiver<TaskRequest>,
     shared: SharedState,
 }
 
 impl<D> Task<D> {
-    pub fn new(config: Config, db: Arc<D>) -> Self {
+    pub fn new<B: BlockImport>(
+        config: Config,
+        db: Arc<D>,
+        block_importer: Arc<B>,
+    ) -> Self {
         let (request_sender, request_receiver) = mpsc::channel(100);
         let (tx_broadcast, _) = broadcast::channel(100);
         let (block_height_broadcast, _) = broadcast::channel(100);
+        let next_block = block_importer.next_block();
         let max_block_size = config.max_block_size;
         let p2p_service = FuelP2PService::new(config, BincodeCodec::new(max_block_size));
 
@@ -104,6 +115,7 @@ impl<D> Task<D> {
             p2p_service,
             db,
             request_receiver,
+            next_block,
             shared: SharedState {
                 request_sender,
                 tx_broadcast,
@@ -239,6 +251,11 @@ where
                     _ => {}
                 }
             },
+            latest_block_height = self.next_block.next() => {
+                if let Some(latest_block_height) = latest_block_height {
+                    let _ = self.p2p_service.update_block_height(latest_block_height);
+                }
+            }
         }
 
         Ok(true /* should_continue */)
@@ -327,11 +344,16 @@ impl SharedState {
     }
 }
 
-pub fn new_service<D>(p2p_config: Config, db: D) -> Service<D>
+pub fn new_service<D, B>(p2p_config: Config, db: D, block_importer: B) -> Service<D>
 where
     D: P2pDb + 'static,
+    B: BlockImport,
 {
-    Service::new(Task::new(p2p_config, Arc::new(db)))
+    Service::new(Task::new(
+        p2p_config,
+        Arc::new(db),
+        Arc::new(block_importer),
+    ))
 }
 
 fn report_message<T: NetworkCodec>(
@@ -425,10 +447,19 @@ pub mod tests {
         }
     }
 
+    #[derive(Clone, Debug)]
+    struct FakeBlockImporter;
+
+    impl BlockImport for FakeBlockImporter {
+        fn next_block(&self) -> BoxStream<BlockHeight> {
+            Box::pin(fuel_core_services::stream::pending())
+        }
+    }
+
     #[tokio::test]
     async fn start_and_stop_awaits_works() {
         let p2p_config = Config::default_initialized("start_stop_works");
-        let service = new_service(p2p_config, FakeDb);
+        let service = new_service(p2p_config, FakeDb, FakeBlockImporter);
 
         // Node with p2p service started
         assert!(service.start_and_await().await.unwrap().started());
