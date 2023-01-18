@@ -2,25 +2,22 @@ use crate::{
     database::Database,
     service::Config,
 };
+use fuel_core_consensus_module::block_verifier::Verifier;
 use fuel_core_txpool::service::SharedState as TxPoolSharedState;
-use fuel_core_types::blockchain::SealedBlock;
 use std::sync::Arc;
-use tokio::sync::broadcast::Sender;
 
+pub mod block_importer;
+pub mod consensus_module;
 pub mod graphql_api;
-pub mod poa;
 pub mod producer;
 pub mod txpool;
 
-/// This is used to get block import events from coordinator source
-/// and pass them to the txpool.
 #[derive(Clone)]
-pub struct BlockImportAdapter {
-    // TODO: We should use `fuel_core_poa::Service here but for that we need to fix
-    //  the `start` of the process and store the task inside of the `Service`.
-    pub tx: Sender<SealedBlock>,
+pub struct PoAAdapter {
+    shared_state: fuel_core_poa::service::SharedState,
 }
 
+#[derive(Clone)]
 pub struct TxPoolAdapter {
     service: TxPoolSharedState<P2PAdapter, Database>,
 }
@@ -37,14 +34,27 @@ pub struct ExecutorAdapter {
     pub config: Config,
 }
 
+#[derive(Clone)]
+pub struct VerifierAdapter {
+    pub block_verifier: Arc<Verifier<Database, MaybeRelayerAdapter>>,
+}
+
+#[derive(Clone)]
 pub struct MaybeRelayerAdapter {
     pub database: Database,
     #[cfg(feature = "relayer")]
     pub relayer_synced: Option<fuel_core_relayer::SharedState>,
 }
 
+#[derive(Clone)]
 pub struct BlockProducerAdapter {
     pub block_producer: Arc<fuel_core_producer::Producer<Database>>,
+}
+
+#[derive(Clone)]
+pub struct BlockImporterAdapter {
+    pub block_importer:
+        Arc<fuel_core_importer::Importer<Database, ExecutorAdapter, VerifierAdapter>>,
 }
 
 #[cfg(feature = "p2p")]

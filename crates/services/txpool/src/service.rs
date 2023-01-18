@@ -1,6 +1,6 @@
 use crate::{
     ports::{
-        BlockImport,
+        BlockImporter,
         PeerToPeer,
         TxPoolDb,
     },
@@ -17,13 +17,13 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_types::{
-    blockchain::SealedBlock,
     fuel_tx::{
         Transaction,
         TxId,
     },
     fuel_types::Bytes32,
     services::{
+        block_importer::ImportResult,
         p2p::{
             GossipData,
             TransactionGossipData,
@@ -99,7 +99,7 @@ impl<P2P, DB> Clone for SharedState<P2P, DB> {
 
 pub struct Task<P2P, DB> {
     gossiped_tx_stream: BoxStream<TransactionGossipData>,
-    committed_block_stream: BoxStream<SealedBlock>,
+    committed_block_stream: BoxStream<Arc<ImportResult>>,
     shared: SharedState<P2P, DB>,
 }
 
@@ -148,9 +148,9 @@ where
                 }
             }
 
-            block = self.committed_block_stream.next() => {
-                if let Some(block) = block {
-                    self.shared.txpool.lock().block_update(&self.shared.tx_status_sender, block);
+            result = self.committed_block_stream.next() => {
+                if let Some(result) = result {
+                    self.shared.txpool.lock().block_update(&self.shared.tx_status_sender, &result.sealed_block);
                     should_continue = true;
                 } else {
                     should_continue = false;
@@ -284,12 +284,11 @@ impl TxUpdate {
 pub fn new_service<P2P, Importer, DB>(
     config: Config,
     db: DB,
-    tx_status_sender: TxStatusChange,
     importer: Importer,
     p2p: P2P,
 ) -> Service<P2P, DB>
 where
-    Importer: BlockImport,
+    Importer: BlockImporter,
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + 'static,
     DB: TxPoolDb + 'static,
 {
@@ -301,7 +300,7 @@ where
         gossiped_tx_stream,
         committed_block_stream,
         shared: SharedState {
-            tx_status_sender,
+            tx_status_sender: TxStatusChange::new(100),
             txpool,
             p2p,
         },
