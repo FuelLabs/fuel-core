@@ -1,5 +1,8 @@
 use fuel_core::{
-    chain_config::BlockProduction,
+    chain_config::{
+        BlockProduction,
+        PoABlockProduction,
+    },
     database::Database,
     service::{
         Config,
@@ -35,7 +38,7 @@ async fn poa_interval_produces_empty_blocks_at_correct_rate() {
     let mut config = Config::local_node();
     config.consensus_key = Some(Secret::new(SecretKey::random(&mut rng).into()));
     config.chain_conf.block_production = BlockProduction::ProofOfAuthority {
-        trigger: fuel_core_poa::Trigger::Interval {
+        trigger: PoABlockProduction::Interval {
             block_time: Duration::new(round_time_seconds, 0),
         },
     };
@@ -99,7 +102,7 @@ async fn poa_interval_produces_nonempty_blocks_at_correct_rate() {
     let mut config = Config::local_node();
     config.consensus_key = Some(Secret::new(SecretKey::random(&mut rng).into()));
     config.chain_conf.block_production = BlockProduction::ProofOfAuthority {
-        trigger: fuel_core_poa::Trigger::Interval {
+        trigger: PoABlockProduction::Interval {
             block_time: Duration::new(round_time_seconds, 0),
         },
     };

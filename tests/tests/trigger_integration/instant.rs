@@ -1,5 +1,8 @@
 use fuel_core::{
-    chain_config::BlockProduction,
+    chain_config::{
+        BlockProduction,
+        PoABlockProduction,
+    },
     database::Database,
     service::{
         Config,
@@ -30,7 +33,7 @@ async fn poa_instant_trigger_is_produces_instantly() {
     let mut config = Config::local_node();
     config.consensus_key = Some(Secret::new(SecretKey::random(&mut rng).into()));
     config.chain_conf.block_production = BlockProduction::ProofOfAuthority {
-        trigger: fuel_core_poa::Trigger::Instant,
+        trigger: PoABlockProduction::Instant,
     };
 
     let srv = FuelService::from_database(db.clone(), config)
