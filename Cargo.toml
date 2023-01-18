@@ -37,4 +37,4 @@ lto = "fat"
 panic = "abort"
 
 [patch.crates-io]
-fuel-merkle = { path = "../fuel-merkle" }
+fuel-merkle = { git = "https://github.com/FuelLabs/fuel-merkle", branch = "bvrooman/chore/clean-up-for-core-integration" }
