@@ -3,18 +3,17 @@ use std::sync::Arc;
 
 use crate::{
     import::{
-        import,
         Config,
+        Import,
     },
     ports::{
         self,
         BlockImporterPort,
         ConsensusPort,
         PeerToPeerPort,
-        Ports,
     },
     state::State,
-    sync::sync,
+    sync::SyncHeights,
 };
 
 use fuel_core_services::{
@@ -51,23 +50,14 @@ where
 {
     let height_stream = p2p.height_stream();
     let state = State::new(*current_fuel_block_height, None);
-    let ports = ports::Ports {
-        p2p: Arc::new(p2p),
-        executor: Arc::new(executor),
-        consensus: Arc::new(consensus),
-    };
-    let import_task = ImportTask::new(state, params, ports);
-
     Ok(ServiceRunner::new(SyncTask::new(
         height_stream,
-        import_task,
+        state,
+        params,
+        p2p,
+        executor,
+        consensus,
     )?))
-}
-
-#[derive(Debug, Clone)]
-struct SharedTaskData {
-    state: SharedMutex<State>,
-    notify: Arc<Notify>,
 }
 
 /// Task for syncing heights.
@@ -78,21 +68,11 @@ where
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 {
-    height_stream: BoxStream<BlockHeight>,
-    shared: SharedTaskData,
+    sync_heights: SyncHeights,
     import_task_handle: ServiceRunner<ImportTask<P, E, C>>,
 }
 
-struct ImportTask<P, E, C>
-where
-    P: PeerToPeerPort + Send + Sync + 'static,
-    E: BlockImporterPort + Send + Sync + 'static,
-    C: ConsensusPort + Send + Sync + 'static,
-{
-    shared: SharedTaskData,
-    params: Config,
-    ports: Ports<P, E, C>,
-}
+struct ImportTask<P, E, C>(Import<P, E, C>);
 
 impl<P, E, C> SyncTask<P, E, C>
 where
@@ -102,35 +82,24 @@ where
 {
     fn new(
         height_stream: BoxStream<BlockHeight>,
-        import_task: ImportTask<P, E, C>,
+        state: State,
+        params: Config,
+        p2p: P,
+        executor: E,
+        consensus: C,
     ) -> anyhow::Result<Self> {
-        let shared = import_task.shared_data();
-        let import_task_handle = ServiceRunner::new(import_task);
-        import_task_handle.start()?;
+        let notify = Arc::new(Notify::new());
+        let state = SharedMutex::new(state);
+        let p2p = Arc::new(p2p);
+        let executor = Arc::new(executor);
+        let consensus = Arc::new(consensus);
+        let sync_heights = SyncHeights::new(height_stream, state.clone(), notify.clone());
+        let import = Import::new(state, notify, params, p2p, executor, consensus);
+        let import_task_handle = ServiceRunner::new(ImportTask(import));
         Ok(Self {
-            height_stream,
-            shared,
+            sync_heights,
             import_task_handle,
         })
-    }
-}
-
-impl<P, E, C> ImportTask<P, E, C>
-where
-    P: PeerToPeerPort + Send + Sync + 'static,
-    E: BlockImporterPort + Send + Sync + 'static,
-    C: ConsensusPort + Send + Sync + 'static,
-{
-    fn new(state: State, params: Config, ports: Ports<P, E, C>) -> Self {
-        let shared = SharedTaskData {
-            state: SharedMutex::new(state),
-            notify: Arc::new(Notify::new()),
-        };
-        Self {
-            shared,
-            params,
-            ports,
-        }
     }
 }
 
@@ -148,13 +117,7 @@ where
         if self.import_task_handle.state().stopped() {
             return Ok(false)
         }
-        Ok(sync(
-            &mut self.height_stream,
-            &self.shared.state,
-            &self.shared.notify,
-        )
-        .await
-        .is_some())
+        Ok(self.sync_heights.sync().await.is_some())
     }
 }
 
@@ -175,16 +138,14 @@ where
 
     async fn into_task(mut self, watcher: &StateWatcher) -> anyhow::Result<Self::Task> {
         let mut watcher = watcher.clone();
-        let height_stream = core::mem::replace(
-            &mut self.height_stream,
-            futures::stream::pending().into_boxed(),
-        );
-        let height_stream = height_stream
-            .take_until(async move {
-                let _ = watcher.while_started().await;
-            })
-            .into_boxed();
-        self.height_stream = height_stream;
+        self.sync_heights.map_stream(|height_stream| {
+            height_stream
+                .take_until(async move {
+                    let _ = watcher.while_started().await;
+                })
+                .into_boxed()
+        });
+        self.import_task_handle.start_and_await().await?;
 
         Ok(self)
     }
@@ -201,14 +162,7 @@ where
         &mut self,
         watcher: &mut fuel_core_services::StateWatcher,
     ) -> anyhow::Result<bool> {
-        import(
-            &self.shared.state,
-            &self.shared.notify,
-            self.params,
-            &self.ports,
-            watcher,
-        )
-        .await
+        self.0.import(watcher).await
     }
 }
 
@@ -221,13 +175,11 @@ where
 {
     const NAME: &'static str = "fuel-core-sync/import-task";
 
-    type SharedData = SharedTaskData;
+    type SharedData = ();
 
     type Task = ImportTask<P, E, C>;
 
-    fn shared_data(&self) -> Self::SharedData {
-        self.shared.clone()
-    }
+    fn shared_data(&self) -> Self::SharedData {}
 
     async fn into_task(self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
         Ok(self)

@@ -36,7 +36,6 @@ use crate::{
         BlockImporterPort,
         ConsensusPort,
         PeerToPeerPort,
-        Ports,
     },
     state::State,
 };
@@ -59,76 +58,104 @@ pub struct Config {
     pub max_get_txns_requests: usize,
 }
 
-pub(crate) async fn import<P, E, C>(
-    state: &SharedMutex<State>,
-    notify: &Notify,
+pub(crate) struct Import<P, E, C> {
+    /// Shared state between import and sync tasks.
+    state: SharedMutex<State>,
+    /// Notify import when sync has new work.
+    notify: Arc<Notify>,
+    /// Configuration parameters.
     params: Config,
-    ports: &Ports<P, E, C>,
-    shutdown: &mut StateWatcher,
-) -> anyhow::Result<bool>
-where
-    P: PeerToPeerPort + Send + Sync + 'static,
-    E: BlockImporterPort + Send + Sync + 'static,
-    C: ConsensusPort + Send + Sync + 'static,
-{
-    import_inner(state, params, ports, shutdown).await?;
-
-    Ok(wait_for_notify_or_shutdown(notify, shutdown).await)
+    /// Network port.
+    p2p: Arc<P>,
+    /// Executor port.
+    executor: Arc<E>,
+    /// Consensus port.
+    consensus: Arc<C>,
 }
 
-async fn import_inner<P, E, C>(
-    state: &SharedMutex<State>,
-    params: Config,
-    ports: &Ports<P, E, C>,
-    shutdown: &StateWatcher,
-) -> anyhow::Result<()>
-where
-    P: PeerToPeerPort + Send + Sync + 'static,
-    E: BlockImporterPort + Send + Sync + 'static,
-    C: ConsensusPort + Send + Sync + 'static,
-{
-    // If there is a range to process, launch the stream.
-    if let Some(range) = state.apply(|s| s.process_range()) {
-        // Launch the stream to import the range.
-        let (count, result) =
-            launch_stream(range.clone(), state, params, ports, shutdown).await;
-
-        // Get the size of the range.
-        let range_len = range.size_hint().0 as u32;
-
-        // If we did not process the entire range, mark the failed heights as failed.
-        if (count as u32) < range_len {
-            let range = (*range.start() + count as u32)..=*range.end();
-            state.apply(|s| s.failed_to_process(range));
+impl<P, E, C> Import<P, E, C> {
+    pub(crate) fn new(
+        state: SharedMutex<State>,
+        notify: Arc<Notify>,
+        params: Config,
+        p2p: Arc<P>,
+        executor: Arc<E>,
+        consensus: Arc<C>,
+    ) -> Self {
+        Self {
+            state,
+            notify,
+            params,
+            p2p,
+            executor,
+            consensus,
         }
-        result?;
     }
-    Ok(())
-}
 
-/// Launches a stream to import and execute a range of blocks.
-///
-/// This stream will process all blocks up to the given range or
-/// an error occurs.
-/// If an error occurs, the preceding blocks still be processed
-/// and the error will be returned.
-async fn launch_stream<P, E, C>(
-    range: RangeInclusive<u32>,
-    state: &SharedMutex<State>,
-    params: Config,
-    ports: &Ports<P, E, C>,
-    shutdown: &StateWatcher,
-) -> (usize, anyhow::Result<()>)
-where
-    P: PeerToPeerPort + Send + Sync + 'static,
-    E: BlockImporterPort + Send + Sync + 'static,
-    C: ConsensusPort + Send + Sync + 'static,
-{
-    // Request up to `max_get_header_requests` headers from the network.
-    get_header_range_buffered(range.clone(), params, ports.p2p.clone())
+    pub(crate) async fn import(&self, shutdown: &mut StateWatcher) -> anyhow::Result<bool>
+    where
+        P: PeerToPeerPort + Send + Sync + 'static,
+        E: BlockImporterPort + Send + Sync + 'static,
+        C: ConsensusPort + Send + Sync + 'static,
+    {
+        self.import_inner(shutdown).await?;
+
+        Ok(wait_for_notify_or_shutdown(&self.notify, shutdown).await)
+    }
+
+    async fn import_inner(&self, shutdown: &StateWatcher) -> anyhow::Result<()>
+    where
+        P: PeerToPeerPort + Send + Sync + 'static,
+        E: BlockImporterPort + Send + Sync + 'static,
+        C: ConsensusPort + Send + Sync + 'static,
+    {
+        // If there is a range to process, launch the stream.
+        if let Some(range) = self.state.apply(|s| s.process_range()) {
+            // Launch the stream to import the range.
+            let (count, result) = self.launch_stream(range.clone(), shutdown).await;
+
+            // Get the size of the range.
+            let range_len = range.size_hint().0 as u32;
+
+            // If we did not process the entire range, mark the failed heights as failed.
+            if (count as u32) < range_len {
+                let range = (*range.start() + count as u32)..=*range.end();
+                self.state.apply(|s| s.failed_to_process(range));
+            }
+            result?;
+        }
+        Ok(())
+    }
+
+    /// Launches a stream to import and execute a range of blocks.
+    ///
+    /// This stream will process all blocks up to the given range or
+    /// an error occurs.
+    /// If an error occurs, the preceding blocks still be processed
+    /// and the error will be returned.
+    async fn launch_stream(
+        &self,
+        range: RangeInclusive<u32>,
+        shutdown: &StateWatcher,
+    ) -> (usize, anyhow::Result<()>)
+    where
+        P: PeerToPeerPort + Send + Sync + 'static,
+        E: BlockImporterPort + Send + Sync + 'static,
+        C: ConsensusPort + Send + Sync + 'static,
+    {
+        let Self {
+            state,
+            params,
+            p2p,
+            executor,
+            consensus,
+            ..
+        } = &self;
+        // Request up to `max_get_header_requests` headers from the network.
+        get_header_range_buffered(range.clone(), params, p2p.clone())
         .map({
-            let p2p = ports.p2p.clone();
-            let consensus_port = ports.consensus.clone();
+            let p2p = p2p.clone();
+            let consensus_port = consensus.clone();
             move |result| {
                 let p2p = p2p.clone();
                 let consensus_port = consensus_port.clone();
@@ -180,7 +207,7 @@ where
         })
         .then({
             let state = state.clone();
-            let executor = ports.executor.clone();
+            let executor = executor.clone();
             move |block| {
                 let state = state.clone();
                 let executor = executor.clone();
@@ -216,6 +243,7 @@ where
             }
         })
         .await
+    }
 }
 
 /// Waits for a notify or shutdown signal.
@@ -240,7 +268,7 @@ async fn wait_for_notify_or_shutdown(
 /// The headers are returned in order.
 fn get_header_range_buffered(
     range: RangeInclusive<u32>,
-    params: Config,
+    params: &Config,
     p2p: Arc<impl PeerToPeerPort + Send + Sync + 'static>,
 ) -> impl Stream<Item = anyhow::Result<SourcePeer<SealedBlockHeader>>> {
     get_header_range(range, p2p)

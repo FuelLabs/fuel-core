@@ -1,7 +1,5 @@
 //! Ports this services requires to function.
 
-use std::sync::Arc;
-
 use fuel_core_services::stream::BoxStream;
 use fuel_core_types::{
     blockchain::{
@@ -18,21 +16,6 @@ use fuel_core_types::{
         p2p::SourcePeer,
     },
 };
-
-/// All ports this service requires to function.
-pub struct Ports<P, E, C>
-where
-    P: PeerToPeerPort + 'static,
-    E: BlockImporterPort + 'static,
-    C: ConsensusPort + 'static,
-{
-    /// Network port.
-    pub p2p: Arc<P>,
-    /// Executor port.
-    pub executor: Arc<E>,
-    /// Consensus port.
-    pub consensus: Arc<C>,
-}
 
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]

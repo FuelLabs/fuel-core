@@ -482,7 +482,11 @@ async fn test_import_inner(
 
     let executor = Arc::new(executor);
     let consensus = Arc::new(consensus_port);
-    let ports = Ports {
+
+    let import = Import {
+        state,
+        notify,
+        params,
         p2p,
         executor,
         consensus,
@@ -493,10 +497,8 @@ async fn test_import_inner(
         Some(Count(count)) => {
             let mut r = false;
             for _ in 0..count {
-                notify.notify_one();
-                r = import(&state, &notify, params, &ports, &mut watcher)
-                    .await
-                    .is_ok();
+                import.notify.notify_one();
+                r = import.import(&mut watcher).await.is_ok();
                 if !r {
                     break
                 }
@@ -504,13 +506,11 @@ async fn test_import_inner(
             r
         }
         None => {
-            notify.notify_one();
-            import(&state, &notify, params, &ports, &mut watcher)
-                .await
-                .is_ok()
+            import.notify.notify_one();
+            import.import(&mut watcher).await.is_ok()
         }
     };
-    let s = state.apply(|s| s.clone());
+    let s = import.state.apply(|s| s.clone());
     (s, r)
 }
 

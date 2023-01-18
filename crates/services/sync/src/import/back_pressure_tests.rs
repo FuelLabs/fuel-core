@@ -115,19 +115,21 @@ async fn test_back_pressure(input: Input, state: State, params: Config) -> Count
         counts.clone(),
         input.executes,
     ));
-    let ports = Ports {
+    let notify = Arc::new(Notify::new());
+
+    let import = Import {
+        state,
+        notify,
+        params,
         p2p,
         executor,
         consensus,
     };
 
-    let notify = Arc::new(Notify::new());
-    notify.notify_one();
+    import.notify.notify_one();
     let (_tx, shutdown) = tokio::sync::watch::channel(fuel_core_services::State::Started);
     let mut watcher = shutdown.into();
-    import(&state, &notify, params, &ports, &mut watcher)
-        .await
-        .unwrap();
+    import.import(&mut watcher).await.unwrap();
     counts.apply(|c| c.max.clone())
 }
 
