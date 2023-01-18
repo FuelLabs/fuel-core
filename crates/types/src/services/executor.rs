@@ -24,11 +24,15 @@ use crate::{
         InterpreterError,
         ProgramState,
     },
+    services::Uncommitted,
 };
 use std::error::Error as StdError;
 
 /// The alias for executor result.
 pub type Result<T> = core::result::Result<T, Error>;
+/// The uncommitted result of teh transaction execution.
+pub type UncommittedResult<DatabaseTransaction> =
+    Uncommitted<ExecutionResult, DatabaseTransaction>;
 
 /// The result of transactions execution.
 #[derive(Debug)]
@@ -42,8 +46,8 @@ pub struct ExecutionResult {
     pub tx_status: Vec<TransactionExecutionStatus>,
 }
 
-#[derive(Debug, Clone)]
 /// The status of a transaction after it is executed.
+#[derive(Debug, Clone)]
 pub struct TransactionExecutionStatus {
     /// The id of the transaction.
     pub id: Bytes32,
@@ -51,8 +55,8 @@ pub struct TransactionExecutionStatus {
     pub result: TransactionExecutionResult,
 }
 
-#[derive(Debug, Clone)]
 /// The result of transaction execution.
+#[derive(Debug, Clone)]
 pub enum TransactionExecutionResult {
     /// Transaction was successfully executed.
     Success {
@@ -68,53 +72,9 @@ pub enum TransactionExecutionResult {
     },
 }
 
-/// The uncommitted result of transactions execution with database transaction.
-/// The caller should commit the result by itself.
-#[derive(Debug)]
-pub struct UncommittedResult<DbTransaction> {
-    /// The execution result.
-    result: ExecutionResult,
-    /// The database transaction with not committed state.
-    database_transaction: DbTransaction,
-}
-
-impl<DbTransaction> UncommittedResult<DbTransaction> {
-    /// Create a new instance of `UncommittedResult`.
-    pub fn new(result: ExecutionResult, database_transaction: DbTransaction) -> Self {
-        Self {
-            result,
-            database_transaction,
-        }
-    }
-
-    /// Returns a reference to the `ExecutionResult`.
-    pub fn result(&self) -> &ExecutionResult {
-        &self.result
-    }
-
-    /// Return the result and database transaction.
-    ///
-    /// The service can unpack the `UncommittedResult`, apply some changes and pack it again into
-    /// `UncommittedResult`. Because `commit` of the database transaction consumes `self`,
-    /// after committing it is not possible create `UncommittedResult`.
-    pub fn into(self) -> (ExecutionResult, DbTransaction) {
-        (self.result, self.database_transaction)
-    }
-
-    /// Discards the database transaction and returns only the result of execution.
-    pub fn into_result(self) -> ExecutionResult {
-        self.result
-    }
-
-    /// Discards the result and return database transaction.
-    pub fn into_transaction(self) -> DbTransaction {
-        self.database_transaction
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
 /// Execution wrapper where the types
 /// depend on the type of execution.
+#[derive(Debug, Clone, Copy)]
 pub enum ExecutionTypes<P, V> {
     /// Production mode where P is being produced.
     Production(P),
@@ -132,14 +92,6 @@ impl ExecutionBlock {
         match self {
             ExecutionTypes::Production(_) => None,
             ExecutionTypes::Validation(v) => Some(v.id()),
-        }
-    }
-
-    /// Get the transaction root from the full [`FuelBlock`] if validating.
-    pub fn txs_root(&self) -> Option<Bytes32> {
-        match self {
-            ExecutionTypes::Production(_) => None,
-            ExecutionTypes::Validation(v) => Some(v.header().transactions_root),
         }
     }
 }
@@ -310,8 +262,6 @@ pub enum Error {
     Backtrace(Box<Backtrace>),
     #[error("Transaction doesn't match expected result: {transaction_id:#x}")]
     InvalidTransactionOutcome { transaction_id: Bytes32 },
-    #[error("Transaction root is invalid")]
-    InvalidTransactionRoot,
     #[error("The amount of charged fees is invalid")]
     InvalidFeeAmount,
     #[error("Block id is invalid")]

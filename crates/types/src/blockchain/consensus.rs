@@ -57,13 +57,14 @@ pub enum ConsensusType {
     PoA,
 }
 
+/// A sealed entity with consensus info.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
-/// A sealed entity with consensus info.
 pub struct Sealed<Entity> {
     /// The actual value
     pub entity: Entity,
+    // TODO: Rename to `seal`
     /// Consensus info
     pub consensus: Consensus,
 }

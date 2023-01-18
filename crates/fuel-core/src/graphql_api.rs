@@ -1,4 +1,7 @@
-use fuel_core_storage::Error as StorageError;
+use fuel_core_storage::{
+    Error as StorageError,
+    IsNotFound,
+};
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
     fuel_tx::ConsensusParameters,
@@ -35,10 +38,10 @@ impl<T> IntoApiResult<T> for Result<T, StorageError> {
         NewT: From<T>,
         E: From<StorageError>,
     {
-        match self {
-            Ok(t) => Ok(Some(t.into())),
-            Err(StorageError::NotFound(_, _)) => Ok(None),
-            Err(err) => Err(err.into()),
+        if self.is_not_found() {
+            Ok(None)
+        } else {
+            Ok(Some(self?.into()))
         }
     }
 }

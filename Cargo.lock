@@ -2350,8 +2350,10 @@ name = "fuel-core-importer"
 version = "0.15.1"
 dependencies = [
  "anyhow",
- "parking_lot 0.12.1",
+ "fuel-core-storage",
+ "fuel-core-types",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
