@@ -1,4 +1,3 @@
-use fuel_core_services::KillSwitch;
 use fuel_core_types::{
     blockchain::{
         consensus::Consensus,
@@ -6,7 +5,6 @@ use fuel_core_types::{
     },
     services::executor::ExecutionResult,
 };
-use tokio::sync::oneshot;
 
 use crate::ports::{
     MockBlockImporterPort,
@@ -29,7 +27,6 @@ use super::*;
         Mocks{
             consensus_port,
             p2p: DefaultMocks::times([2, 0]),
-            count: DefaultMocks::times([1]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -45,7 +42,6 @@ use super::*;
         Mocks{
             consensus_port,
             p2p: DefaultMocks::times([2, 1]),
-            count: DefaultMocks::times([1]),
             executor: DefaultMocks::times([1])
         }
     }
@@ -61,7 +57,6 @@ use super::*;
         Mocks{
             consensus_port,
             p2p: DefaultMocks::times([2, 0]),
-            count: DefaultMocks::times([1]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -77,7 +72,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([0]),
-            count: DefaultMocks::times([1]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -96,7 +90,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([1]),
-            count: DefaultMocks::times([1]),
             executor: DefaultMocks::times([1])
         }
     }
@@ -112,7 +105,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([0]),
-            count: DefaultMocks::times([1]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -131,7 +123,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([1]),
-            count: DefaultMocks::times([1]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -158,7 +149,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([1]),
-            count: DefaultMocks::times([1]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -185,7 +175,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([2]),
-            count: DefaultMocks::times([1]),
             executor: DefaultMocks::times([1])
         }
     }
@@ -201,7 +190,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([0]),
-            count: DefaultMocks::times([1]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -221,7 +209,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([0]),
-            count: DefaultMocks::times([1]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -244,7 +231,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([1]),
-            count: DefaultMocks::times([0]),
             executor: DefaultMocks::times([1])
         }
     }
@@ -263,7 +249,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([1]),
-            count: DefaultMocks::times([0]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -290,7 +275,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([1]),
-            count: DefaultMocks::times([0]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -317,7 +301,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([2]),
-            count: DefaultMocks::times([1]),
             executor: DefaultMocks::times([1])
         }
     }
@@ -333,7 +316,6 @@ use super::*;
         Mocks{
             consensus_port,
             p2p: DefaultMocks::times([2, 0]),
-            count: DefaultMocks::times([0]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -353,7 +335,6 @@ use super::*;
         Mocks{
             consensus_port,
             p2p: DefaultMocks::times([2, 0]),
-            count: DefaultMocks::times([0]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -373,7 +354,6 @@ use super::*;
         Mocks{
             consensus_port,
             p2p: DefaultMocks::times([2, 1]),
-            count: DefaultMocks::times([1]),
             executor: DefaultMocks::times([1])
         }
     }
@@ -390,7 +370,6 @@ use super::*;
         Mocks{
             consensus_port: DefaultMocks::times([1]),
             p2p: DefaultMocks::times([2, 1]),
-            count: DefaultMocks::times([1]),
             executor,
         }
     }
@@ -417,7 +396,6 @@ use super::*;
         Mocks{
             consensus_port: DefaultMocks::times([1]),
             p2p: DefaultMocks::times([2, 1]),
-            count: DefaultMocks::times([0]),
             executor,
         }
     }
@@ -444,7 +422,6 @@ use super::*;
         Mocks{
             consensus_port: DefaultMocks::times([2]),
             p2p: DefaultMocks::times([2, 2]),
-            count: DefaultMocks::times([1]),
             executor,
         }
     }
@@ -453,31 +430,27 @@ use super::*;
 #[tokio::test]
 async fn test_import(state: State, mocks: Mocks) -> (State, bool) {
     let state = SharedMutex::new(state);
-    let notify = Arc::new(Notify::new());
-    test_import_inner(state, notify, mocks).await
+    test_import_inner(state, mocks, None).await
 }
 
 #[test_case(
     {
         let s = SharedMutex::new(State::new(3, 5));
         let state = s.clone();
-        let n = Arc::new(Notify::new());
-        let notify = n.clone();
         let mut p2p = MockPeerToPeerPort::default();
         p2p.expect_get_sealed_block_header()
             .times(3)
             .returning(move |h| {
                 state.apply(|s| s.observe(6));
-                notify.notify_one();
                 Ok(Some(empty_header(h)))
             });
         p2p.expect_get_transactions()
             .times(3)
             .returning(move|_| Ok(Some(vec![])));
-        (s, n, Mocks{
+        let c = DefaultMocks::times([2]);
+        (s, c, Mocks{
             consensus_port: DefaultMocks::times([3]),
             p2p,
-            count: DefaultMocks::times([2]),
             executor: DefaultMocks::times([3]),
         })
     }
@@ -485,21 +458,21 @@ async fn test_import(state: State, mocks: Mocks) -> (State, bool) {
 )]
 #[tokio::test]
 async fn test_import_loop(
-    (state, notify, mocks): (SharedMutex<State>, Arc<Notify>, Mocks),
+    (state, count, mocks): (SharedMutex<State>, Count, Mocks),
 ) -> (State, bool) {
-    test_import_inner(state, notify, mocks).await
+    test_import_inner(state, mocks, Some(count)).await
 }
 
 async fn test_import_inner(
     state: SharedMutex<State>,
-    notify: Arc<Notify>,
     mocks: Mocks,
+    count: Option<Count>,
 ) -> (State, bool) {
+    let notify = Arc::new(Notify::new());
     let Mocks {
         consensus_port,
         p2p,
         executor,
-        count: Count(rx, loop_callback),
     } = mocks;
     let params = Config {
         max_get_header_requests: 10,
@@ -514,20 +487,29 @@ async fn test_import_inner(
         executor,
         consensus,
     };
-    let mut ks = KillSwitch::new();
-    let jh = tokio::spawn(import(
-        state.clone(),
-        notify,
-        params,
-        ports,
-        ks.handle(),
-        loop_callback,
-    ));
-    if let Ok(r) = tokio::time::timeout(std::time::Duration::from_secs(10), rx).await {
-        r.ok();
-    }
-    ks.kill_all();
-    let r = jh.await.unwrap().is_ok();
+    let (_tx, shutdown) = tokio::sync::watch::channel(fuel_core_services::State::Started);
+    let mut watcher = shutdown.into();
+    let r = match count {
+        Some(Count(count)) => {
+            let mut r = false;
+            for _ in 0..count {
+                notify.notify_one();
+                r = import(&state, &notify, params, &ports, &mut watcher)
+                    .await
+                    .is_ok();
+                if !r {
+                    break
+                }
+            }
+            r
+        }
+        None => {
+            notify.notify_one();
+            import(&state, &notify, params, &ports, &mut watcher)
+                .await
+                .is_ok()
+        }
+    };
     let s = state.apply(|s| s.clone());
     (s, r)
 }
@@ -536,13 +518,9 @@ struct Mocks {
     consensus_port: MockConsensusPort,
     p2p: MockPeerToPeerPort,
     executor: MockBlockImporterPort,
-    count: Count,
 }
 
-struct Count(
-    oneshot::Receiver<()>,
-    Box<dyn FnMut() + Send + Sync + 'static>,
-);
+struct Count(usize);
 
 trait DefaultMocks {
     fn times<T>(t: T) -> Self
@@ -561,7 +539,6 @@ impl DefaultMocks for Mocks {
             consensus_port: DefaultMocks::times(t.clone()),
             p2p: DefaultMocks::times(t.clone()),
             executor: DefaultMocks::times(t),
-            count: Count::times([1]),
         }
     }
 }
@@ -572,8 +549,7 @@ impl DefaultMocks for Count {
         T: IntoIterator<Item = usize> + Clone,
         <T as IntoIterator>::IntoIter: Clone,
     {
-        let (rx, f) = count(t.into_iter().next().unwrap());
-        Self(rx, Box::new(f))
+        Self(t.into_iter().next().unwrap())
     }
 }
 
@@ -628,18 +604,6 @@ impl DefaultMocks for MockBlockImporterPort {
             });
         executor
     }
-}
-
-fn count(t: usize) -> (oneshot::Receiver<()>, impl FnMut()) {
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    let mut tx = Some(tx);
-    let mut count = 0;
-    (rx, move || {
-        count += 1;
-        if count == t {
-            tx.take().unwrap().send(()).unwrap();
-        }
-    })
 }
 
 pub(crate) fn empty_header(h: BlockHeight) -> SourcePeer<SealedBlockHeader> {

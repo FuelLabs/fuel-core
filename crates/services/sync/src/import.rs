@@ -9,7 +9,7 @@ use std::{
 
 use fuel_core_services::{
     SharedMutex,
-    Shutdown,
+    StateWatcher,
 };
 use fuel_core_types::{
     blockchain::{
@@ -59,46 +59,51 @@ pub struct Config {
     pub max_get_txns_requests: usize,
 }
 
-/// Long running task that imports blocks from the network and executes them.
-pub(super) async fn import<P, E, C>(
-    state: SharedMutex<State>,
-    notify: Arc<Notify>,
+pub(crate) async fn import<P, E, C>(
+    state: &SharedMutex<State>,
+    notify: &Notify,
     params: Config,
-    ports: Ports<P, E, C>,
-    shutdown: Shutdown,
-    // Needed for testing. Would be nice to find a better way to do this.
-    #[cfg(test)] mut loop_callback: impl FnMut(),
+    ports: &Ports<P, E, C>,
+    shutdown: &mut StateWatcher,
 ) -> anyhow::Result<bool>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 {
-    while {
-        // If there is a range to process, launch the stream.
-        if let Some(range) = state.apply(|s| s.process_range()) {
-            // Launch the stream to import the range.
-            let (count, result) =
-                launch_stream(range.clone(), &state, params, &ports, &shutdown).await;
+    import_inner(state, params, ports, shutdown).await?;
 
-            // Get the size of the range.
-            let range_len = range.size_hint().0 as u32;
+    Ok(wait_for_notify_or_shutdown(notify, shutdown).await)
+}
 
-            // If we did not process the entire range, mark the failed heights as failed.
-            if (count as u32) < range_len {
-                let range = (*range.start() + count as u32)..=*range.end();
-                state.apply(|s| s.failed_to_process(range));
-            }
-            result?;
+async fn import_inner<P, E, C>(
+    state: &SharedMutex<State>,
+    params: Config,
+    ports: &Ports<P, E, C>,
+    shutdown: &StateWatcher,
+) -> anyhow::Result<()>
+where
+    P: PeerToPeerPort + Send + Sync + 'static,
+    E: BlockImporterPort + Send + Sync + 'static,
+    C: ConsensusPort + Send + Sync + 'static,
+{
+    // If there is a range to process, launch the stream.
+    if let Some(range) = state.apply(|s| s.process_range()) {
+        // Launch the stream to import the range.
+        let (count, result) =
+            launch_stream(range.clone(), state, params, ports, shutdown).await;
+
+        // Get the size of the range.
+        let range_len = range.size_hint().0 as u32;
+
+        // If we did not process the entire range, mark the failed heights as failed.
+        if (count as u32) < range_len {
+            let range = (*range.start() + count as u32)..=*range.end();
+            state.apply(|s| s.failed_to_process(range));
         }
-
-        #[cfg(test)]
-        // Needed for testing. Would be nice to find a better way to do this.
-        loop_callback();
-
-        wait_for_notify_or_shutdown(&notify, &shutdown).await
-    } {}
-    Ok(false)
+        result?;
+    }
+    Ok(())
 }
 
 /// Launches a stream to import and execute a range of blocks.
@@ -112,7 +117,7 @@ async fn launch_stream<P, E, C>(
     state: &SharedMutex<State>,
     params: Config,
     ports: &Ports<P, E, C>,
-    shutdown: &Shutdown,
+    shutdown: &StateWatcher,
 ) -> (usize, anyhow::Result<()>)
 where
     P: PeerToPeerPort + Send + Sync + 'static,
@@ -170,8 +175,8 @@ where
         .scan_none_or_err()
         // Continue the stream until the shutdown signal is received.
         .take_until({
-            let s = shutdown.clone();
-            async move { s.wait().await }
+            let mut s = shutdown.clone();
+            async move { s.while_started().await }
         })
         .then({
             let state = state.clone();
@@ -215,9 +220,12 @@ where
 
 /// Waits for a notify or shutdown signal.
 /// Returns true if the notify signal was received.
-async fn wait_for_notify_or_shutdown(notify: &Notify, shutdown: &Shutdown) -> bool {
+async fn wait_for_notify_or_shutdown(
+    notify: &Notify,
+    shutdown: &mut StateWatcher,
+) -> bool {
     let n = notify.notified();
-    let s = shutdown.wait();
+    let s = shutdown.while_started();
     futures::pin_mut!(n);
     futures::pin_mut!(s);
 

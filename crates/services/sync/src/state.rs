@@ -177,17 +177,18 @@ impl State {
         self.apply_status(status);
     }
 
+    fn apply_status(&mut self, status: Option<Status>) {
+        if let Some(s) = status {
+            self.status = s;
+        }
+    }
+
+    #[cfg(test)]
     /// Get the current observed height.
     pub fn proposed_height(&self) -> Option<&u32> {
         match &self.status {
             Status::Processing(range) => Some(range.end()),
             _ => None,
-        }
-    }
-
-    fn apply_status(&mut self, status: Option<Status>) {
-        if let Some(s) = status {
-            self.status = s;
         }
     }
 }

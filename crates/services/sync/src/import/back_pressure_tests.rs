@@ -1,9 +1,6 @@
 use std::time::Duration;
 
-use fuel_core_services::{
-    stream::BoxStream,
-    KillSwitch,
-};
+use fuel_core_services::stream::BoxStream;
 use fuel_core_types::{
     blockchain::primitives::BlockId,
     fuel_tx::Transaction,
@@ -123,25 +120,14 @@ async fn test_back_pressure(input: Input, state: State, params: Config) -> Count
         executor,
         consensus,
     };
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    let mut tx = Some(tx);
-    let loop_callback = move || {
-        tx.take().unwrap().send(()).unwrap();
-    };
 
     let notify = Arc::new(Notify::new());
-    let mut ks = KillSwitch::new();
-    let jh = tokio::spawn(import(
-        state.clone(),
-        notify,
-        params,
-        ports,
-        ks.handle(),
-        loop_callback,
-    ));
-    rx.await.unwrap();
-    ks.kill_all();
-    jh.await.unwrap().unwrap();
+    notify.notify_one();
+    let (_tx, shutdown) = tokio::sync::watch::channel(fuel_core_services::State::Started);
+    let mut watcher = shutdown.into();
+    import(&state, &notify, params, &ports, &mut watcher)
+        .await
+        .unwrap();
     counts.apply(|c| c.max.clone())
 }
 

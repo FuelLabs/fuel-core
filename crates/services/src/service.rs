@@ -3,12 +3,8 @@ use crate::state::{
     StateWatcher,
 };
 use anyhow::anyhow;
-use std::sync::Arc;
 use tokio::{
-    sync::{
-        watch,
-        Semaphore,
-    },
+    sync::watch,
     task::JoinHandle,
 };
 
@@ -28,15 +24,6 @@ impl<T> Clone for SharedMutex<T> {
 /// Used if services have no asynchronously shared data
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EmptyShared;
-
-#[derive(Debug, Clone)]
-/// A handle that can wait for shutdown.
-pub struct Shutdown(Arc<Semaphore>);
-
-#[derive(Debug)]
-/// A switch that can be used to shutdown all
-/// shutdown handles that are waiting.
-pub struct KillSwitch(Arc<Semaphore>);
 
 /// Trait for service runners, providing a minimal interface for managing
 /// the lifecycle of services such as start/stop and health status.
@@ -323,42 +310,6 @@ impl<T> SharedMutex<T> {
     pub fn apply<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
         let mut t = self.0.lock();
         f(&mut t)
-    }
-}
-
-impl Shutdown {
-    /// Wait for shutdown.
-    pub async fn wait(&self) {
-        let _ = self.0.acquire().await;
-    }
-}
-
-impl KillSwitch {
-    /// Create a new kill switch.
-    pub fn new() -> Self {
-        Self(Arc::new(Semaphore::new(0)))
-    }
-
-    /// Get a handle to await shutdown.
-    pub fn handle(&self) -> Shutdown {
-        Shutdown(self.0.clone())
-    }
-
-    /// Shutdown all handles.
-    pub fn kill_all(&mut self) {
-        self.0.close();
-    }
-}
-
-impl Default for KillSwitch {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Drop for KillSwitch {
-    fn drop(&mut self) {
-        self.kill_all();
     }
 }
 
