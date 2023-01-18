@@ -13,6 +13,7 @@ use crate::{
 use fuel_core_services::{
     stream::pending,
     Service as StorageTrait,
+    State,
 };
 use fuel_core_storage::{
     test_helpers::EmptyStorage,
@@ -140,8 +141,8 @@ struct TestContext {
 }
 
 impl TestContext {
-    async fn stop(&self) {
-        self.service.stop_and_await().await.unwrap();
+    async fn stop(&self) -> State {
+        self.service.stop_and_await().await.unwrap()
     }
 }
 

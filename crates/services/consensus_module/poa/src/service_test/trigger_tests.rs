@@ -23,7 +23,7 @@ async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
         });
         let ctx = ctx_builder.build();
 
-        ctx.stop().await;
+        assert_eq!(ctx.stop().await, State::Stopped);
     }
 
     Ok(())
@@ -65,7 +65,7 @@ async fn never_trigger_never_produces_blocks() {
     time::sleep(Duration::new(10, 0)).await;
 
     // Stop
-    ctx.stop().await;
+    assert_eq!(ctx.stop().await, State::Stopped);
 }
 
 struct DefaultContext {
@@ -126,7 +126,7 @@ async fn instant_trigger_produces_block_instantly() {
     assert!(ctx.block_import.recv().await.is_ok());
 
     // Stop
-    ctx.test_ctx.stop().await;
+    assert_eq!(ctx.test_ctx.stop().await, State::Stopped);
 }
 
 #[tokio::test(start_paused = true)]
