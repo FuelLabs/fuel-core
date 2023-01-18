@@ -27,7 +27,7 @@ async fn poa_never_trigger_doesnt_produce_blocks() {
     let mut rng = StdRng::seed_from_u64(10);
     let db = Database::default();
     let mut config = Config::local_node();
-    config.node_role = NodeRole::Producer;
+    config.node_role = NodeRole::Validator;
     config.consensus_key = Some(Secret::new(SecretKey::random(&mut rng).into()));
     let srv = FuelService::from_database(db.clone(), config)
         .await
