@@ -10,11 +10,13 @@ use crate::{
 use fuel_core_storage::{
     not_found,
     tables::{
+        FuelBlockIds,
         FuelBlocks,
         Transactions,
     },
     Error as StorageError,
     Result as StorageResult,
+    StorageAsMut,
     StorageAsRef,
     StorageInspect,
     StorageMutate,
@@ -30,7 +32,6 @@ use fuel_core_types::{
             BlockId,
         },
     },
-    fuel_tx::Bytes32,
     tai64::Tai64,
 };
 use itertools::Itertools;
@@ -41,6 +42,35 @@ use std::{
         TryInto,
     },
 };
+
+impl StorageInspect<FuelBlockIds> for Database {
+    type Error = StorageError;
+
+    fn get(&self, key: &BlockHeight) -> Result<Option<Cow<BlockId>>, Self::Error> {
+        Database::get(self, &key.to_be_bytes(), Column::FuelBlockIds).map_err(Into::into)
+    }
+
+    fn contains_key(&self, key: &BlockHeight) -> Result<bool, Self::Error> {
+        Database::exists(self, &key.to_be_bytes(), Column::FuelBlockIds)
+            .map_err(Into::into)
+    }
+}
+
+impl StorageMutate<FuelBlockIds> for Database {
+    fn insert(
+        &mut self,
+        key: &BlockHeight,
+        value: &BlockId,
+    ) -> Result<Option<BlockId>, Self::Error> {
+        Database::insert(self, &key.to_be_bytes(), Column::FuelBlockIds, value)
+            .map_err(Into::into)
+    }
+
+    fn remove(&mut self, key: &BlockHeight) -> Result<Option<BlockId>, Self::Error> {
+        Database::remove(self, &key.to_be_bytes(), Column::FuelBlockIds)
+            .map_err(Into::into)
+    }
+}
 
 impl StorageInspect<FuelBlocks> for Database {
     type Error = StorageError;
@@ -60,12 +90,6 @@ impl StorageMutate<FuelBlocks> for Database {
         key: &BlockId,
         value: &CompressedBlock,
     ) -> Result<Option<CompressedBlock>, Self::Error> {
-        let _: Option<BlockHeight> = Database::insert(
-            self,
-            value.header().height().to_be_bytes(),
-            Column::FuelBlockIds,
-            *key,
-        )?;
         Database::insert(self, key.as_slice(), Column::FuelBlocks, value)
             .map_err(Into::into)
     }
@@ -73,13 +97,6 @@ impl StorageMutate<FuelBlocks> for Database {
     fn remove(&mut self, key: &BlockId) -> Result<Option<CompressedBlock>, Self::Error> {
         let block: Option<CompressedBlock> =
             Database::remove(self, key.as_slice(), Column::FuelBlocks)?;
-        if let Some(block) = &block {
-            let _: Option<Bytes32> = Database::remove(
-                self,
-                &block.header().height().to_be_bytes(),
-                Column::FuelBlockIds,
-            )?;
-        }
         Ok(block)
     }
 }
@@ -200,5 +217,27 @@ impl Database {
         } else {
             Ok(None)
         }
+    }
+}
+
+pub(crate) trait BlockExecutor {
+    fn insert_block(
+        &mut self,
+        block_id: &BlockId,
+        block: &Block,
+    ) -> Result<(), StorageError>;
+}
+
+impl BlockExecutor for Database {
+    fn insert_block(
+        &mut self,
+        block_id: &BlockId,
+        block: &Block,
+    ) -> Result<(), StorageError> {
+        self.storage::<FuelBlockIds>()
+            .insert(block.header().height(), &block_id)?;
+        self.storage::<FuelBlocks>()
+            .insert(block_id, &block.compress())?;
+        Ok(())
     }
 }

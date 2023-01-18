@@ -83,7 +83,6 @@ use tempfile::TempDir;
 
 // Storages implementation
 // TODO: Move to separate `database/storage` folder, because it is only implementation of storages traits.
-mod block;
 mod code_root;
 mod coin;
 mod contracts;
@@ -97,6 +96,7 @@ mod sealed_block;
 mod state;
 
 pub mod balances;
+pub mod block;
 pub mod metadata;
 // TODO: Rename in a separate PR into `transaction`
 pub mod transactional;
@@ -143,6 +143,10 @@ pub enum Column {
     OwnedMessageIds = 15,
     /// The column that stores the consensus metadata associated with a finalized fuel block
     FuelBlockConsensus = 16,
+    /// Merklized Fuel Block data
+    MerkleFuelBlockData = 17,
+    /// Merklized Fuel Block metadata
+    MerkleFuelBlockMetadata = 18,
 }
 
 #[derive(Clone, Debug)]

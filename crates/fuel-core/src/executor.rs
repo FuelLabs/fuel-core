@@ -1,5 +1,6 @@
 use crate::{
     database::{
+        block::BlockExecutor,
         transactional::DatabaseTransaction,
         transactions::TransactionIndex,
         vm_database::VmDatabase,
@@ -13,7 +14,6 @@ use fuel_core_storage::{
     tables::{
         Coins,
         ContractsLatestUtxo,
-        FuelBlocks,
         Messages,
         Receipts,
         Transactions,
@@ -273,8 +273,7 @@ impl Executor {
         // insert block into database
         block_db_transaction
             .deref_mut()
-            .storage::<FuelBlocks>()
-            .insert(&finalized_block_id, &result.block.compress())?;
+            .insert_block(&finalized_block_id, &result.block)?;
 
         // Get the complete fuel block.
         Ok(UncommittedResult::new(
