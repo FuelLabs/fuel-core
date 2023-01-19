@@ -18,7 +18,7 @@ use crate::{
     },
     peer_manager::PeerInfoEvent,
     request_response::messages::{
-        IntermediateResponse,
+        NetworkResponse,
         OutboundResponse,
         RequestError,
         RequestMessage,
@@ -88,7 +88,7 @@ pub struct FuelP2PService<Codec: NetworkCodec> {
     /// Holds the ResponseChannel(s) for the inbound requests from the p2p Network
     /// Once the Response is prepared by the NetworkOrchestrator
     /// It will send it to the specified Peer via its unique ResponseChannel    
-    inbound_requests_table: HashMap<RequestId, ResponseChannel<IntermediateResponse>>,
+    inbound_requests_table: HashMap<RequestId, ResponseChannel<NetworkResponse>>,
 
     /// NetworkCodec used as <GossipsubCodec> for encoding and decoding of Gossipsub messages    
     network_codec: Codec,
@@ -280,7 +280,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 
         match (
             self.network_codec
-                .convert_to_intermediate(&message.unwrap()),
+                .convert_to_network_response(&message.unwrap()),
             self.inbound_requests_table.remove(&request_id),
         ) {
             (Ok(message), Some(channel)) => {
@@ -466,10 +466,21 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                             self.network_codec.convert_to_response(&response),
                         ) {
                             (
-                                Some(ResponseChannelItem::ResponseBlock(channel)),
-                                Ok(ResponseMessage::ResponseBlock(block)),
+                                Some(ResponseChannelItem::SendBlock(channel)),
+                                Ok(ResponseMessage::SealedBlock(block)),
                             ) => {
                                 if channel.send(block).is_err() {
+                                    debug!(
+                                        "Failed to send through the channel for {:?}",
+                                        request_id
+                                    );
+                                }
+                            }
+                            (
+                                Some(ResponseChannelItem::SendTransactions(channel)),
+                                Ok(ResponseMessage::Transactions(transactions)),
+                            ) => {
+                                if channel.send(transactions).is_err() {
                                     debug!(
                                         "Failed to send through the channel for {:?}",
                                         request_id
@@ -1288,8 +1299,8 @@ mod tests {
                                 // 1. Simulating Oneshot channel from the NetworkOrchestrator
                                 let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
 
-                                let requested_block_height = RequestMessage::RequestBlock(0_u64.into());
-                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::ResponseBlock(tx_orchestrator)).is_ok());
+                                let requested_block_height = RequestMessage::Block(0_u64.into());
+                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::SendBlock(tx_orchestrator)).is_ok());
 
                                 let tx_test_end = tx_test_end.clone();
                                 tokio::spawn(async move {
@@ -1320,7 +1331,7 @@ mod tests {
                             consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
                         };
 
-                        let _ = node_b.send_response_msg(request_id, Some(OutboundResponse::ResponseBlock(Arc::new(sealed_block))));
+                        let _ = node_b.send_response_msg(request_id, Some(OutboundResponse::RespondWithBlock(Arc::new(sealed_block))));
                     }
 
                     tracing::info!("Node B Event: {:?}", node_b_event);
@@ -1367,8 +1378,8 @@ mod tests {
                                 assert_eq!(node_a.outbound_requests_table.len(), 0);
 
                                 // Request successfully sent
-                                let requested_block_height = RequestMessage::RequestBlock(0_u64.into());
-                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::ResponseBlock(tx_orchestrator)).is_ok());
+                                let requested_block_height = RequestMessage::Block(0_u64.into());
+                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::SendBlock(tx_orchestrator)).is_ok());
 
                                 // 2b. there should be ONE pending outbound requests in the table
                                 assert_eq!(node_a.outbound_requests_table.len(), 1);

@@ -1,8 +1,14 @@
 use std::sync::Arc;
 
-use fuel_core_types::blockchain::{
-    primitives::BlockHeight,
-    SealedBlock,
+use fuel_core_types::{
+    blockchain::{
+        primitives::{
+            BlockHeight,
+            BlockId,
+        },
+        SealedBlock,
+    },
+    fuel_tx::Transaction,
 };
 use serde::{
     Deserialize,
@@ -18,33 +24,38 @@ pub(crate) const MAX_REQUEST_SIZE: usize = 8;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, Copy)]
 pub enum RequestMessage {
-    RequestBlock(BlockHeight),
+    Block(BlockHeight),
+    Transactions(BlockId),
 }
 
 /// Final Response Message that p2p service sends to the Orchestrator
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ResponseMessage {
-    ResponseBlock(SealedBlock),
+    SealedBlock(SealedBlock),
+    Transactions(Vec<Transaction>),
 }
 
 /// Holds oneshot channels for specific responses
 #[derive(Debug)]
 pub enum ResponseChannelItem {
-    ResponseBlock(oneshot::Sender<SealedBlock>),
+    SendBlock(oneshot::Sender<SealedBlock>),
+    SendTransactions(oneshot::Sender<Vec<Transaction>>),
 }
 
 /// Response that is sent over the wire
 /// and then additionaly deserialized into `ResponseMessage`
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum IntermediateResponse {
-    ResponseBlock(Vec<u8>),
+pub enum NetworkResponse {
+    SerializedBlock(Vec<u8>),
+    SerializedTransactions(Vec<u8>),
 }
 
 /// Initial state of the `ResponseMessage` prior to having its inner value serialized
 /// and wrapped into `IntermediateResponse`
 #[derive(Debug, Clone)]
 pub enum OutboundResponse {
-    ResponseBlock(Arc<SealedBlock>),
+    RespondWithBlock(Arc<SealedBlock>),
+    RespondWithTransactions(Arc<Vec<Transaction>>),
 }
 
 #[derive(Debug)]

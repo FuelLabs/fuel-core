@@ -34,7 +34,10 @@ use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::ConsensusVote,
-        primitives::BlockHeight,
+        primitives::{
+            BlockHeight,
+            BlockId,
+        },
         SealedBlock,
     },
     fuel_tx::Transaction,
@@ -76,9 +79,15 @@ enum TaskRequest {
     // Request to get one-off data from p2p network
     GetPeerIds(oneshot::Sender<Vec<PeerId>>),
     GetBlock((BlockHeight, oneshot::Sender<SealedBlock>)),
+    GetTransactions {
+        block_id: BlockId,
+        from_peer: PeerId,
+        channel: oneshot::Sender<Vec<Transaction>>,
+    },
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
     RespondWithRequestedBlock((Option<Arc<SealedBlock>>, RequestId)),
+    RespondWithTransactions((Option<Arc<Vec<Transaction>>>, RequestId)),
 }
 
 impl Debug for TaskRequest {
@@ -184,15 +193,23 @@ where
                         let _ = channel.send(peer_ids);
                     }
                     Some(TaskRequest::GetBlock((height, response))) => {
-                        let request_msg = RequestMessage::RequestBlock(height);
-                        let channel_item = ResponseChannelItem::ResponseBlock(response);
+                        let request_msg = RequestMessage::Block(height);
+                        let channel_item = ResponseChannelItem::SendBlock(response);
                         let _ = self.p2p_service.send_request_msg(None, request_msg, channel_item);
+                    }
+                    Some(TaskRequest::GetTransactions { block_id, from_peer, channel }) => {
+                        let request_msg = RequestMessage::Transactions(block_id);
+                        let channel_item = ResponseChannelItem::SendTransactions(channel);
+                        let _ = self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item);
                     }
                     Some(TaskRequest::RespondWithGossipsubMessageReport((message, acceptance))) => {
                         report_message(&mut self.p2p_service, message, acceptance);
                     }
                     Some(TaskRequest::RespondWithRequestedBlock((response, request_id))) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, response.map(OutboundResponse::ResponseBlock));
+                        let _ = self.p2p_service.send_response_msg(request_id, response.map(OutboundResponse::RespondWithBlock));
+                    }
+                    Some(TaskRequest::RespondWithTransactions((response, request_id))) => {
+                        let _ = self.p2p_service.send_response_msg(request_id, response.map(OutboundResponse::RespondWithTransactions));
                     }
                     None => {
                         unreachable!("The `Task` is holder of the `Sender`, so it should not be possible");
@@ -229,7 +246,7 @@ where
                     },
                     Some(FuelP2PEvent::RequestMessage { request_message, request_id }) => {
                         match request_message {
-                            RequestMessage::RequestBlock(block_height) => {
+                            RequestMessage::Block(block_height) => {
                                 let db = self.db.clone();
                                 let request_sender = self.shared.request_sender.clone();
 
@@ -242,6 +259,23 @@ where
                                     let _ = request_sender.send(
                                         TaskRequest::RespondWithRequestedBlock(
                                             (block_response, request_id)
+                                        )
+                                    );
+                                });
+                            }
+                            RequestMessage::Transactions(block_id) => {
+                                let db = self.db.clone();
+                                let request_sender = self.shared.request_sender.clone();
+
+                                tokio::spawn(async move {
+                                    let transactions_response = db.get_transactions(block_id)
+                                        .await
+                                        .expect("Didn't expect error from database")
+                                        .map(Arc::new);
+
+                                    let _ = request_sender.send(
+                                        TaskRequest::RespondWithTransactions(
+                                            (transactions_response, request_id)
                                         )
                                     );
                                 });
@@ -295,6 +329,25 @@ impl SharedState {
 
         self.request_sender
             .send(TaskRequest::GetBlock((height, sender)))
+            .await?;
+
+        receiver.await.map_err(|e| anyhow!("{}", e))
+    }
+
+    pub async fn get_transactions_from_peer(
+        &self,
+        peer_id: Vec<u8>,
+        block_id: BlockId,
+    ) -> anyhow::Result<Vec<Transaction>> {
+        let (sender, receiver) = oneshot::channel();
+        let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeeeId");
+
+        self.request_sender
+            .send(TaskRequest::GetTransactions {
+                block_id,
+                from_peer,
+                channel: sender,
+            })
             .await?;
 
         receiver.await.map_err(|e| anyhow!("{}", e))
@@ -444,6 +497,13 @@ pub mod tests {
                 entity: block,
                 consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
             }))
+        }
+
+        async fn get_transactions(
+            &self,
+            _block_id: fuel_core_types::blockchain::primitives::BlockId,
+        ) -> StorageResult<Option<Vec<Transaction>>> {
+            Ok(Some(vec![]))
         }
     }
 

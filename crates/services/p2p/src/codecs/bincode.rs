@@ -10,7 +10,7 @@ use crate::{
         GossipsubMessage,
     },
     request_response::messages::{
-        IntermediateResponse,
+        NetworkResponse,
         OutboundResponse,
         RequestMessage,
         ResponseMessage,
@@ -81,7 +81,7 @@ impl BincodeCodec {
 impl RequestResponseCodec for BincodeCodec {
     type Protocol = MessageExchangeBincodeProtocol;
     type Request = RequestMessage;
-    type Response = IntermediateResponse;
+    type Response = NetworkResponse;
 
     async fn read_request<T>(
         &mut self,
@@ -186,28 +186,34 @@ impl GossipsubCodec for BincodeCodec {
 }
 
 impl RequestResponseConverter for BincodeCodec {
-    type IntermediateResponse = IntermediateResponse;
+    type NetworkResponse = NetworkResponse;
     type OutboundResponse = OutboundResponse;
     type ResponseMessage = ResponseMessage;
 
     fn convert_to_response(
         &self,
-        inter_msg: &Self::IntermediateResponse,
+        inter_msg: &Self::NetworkResponse,
     ) -> Result<Self::ResponseMessage, io::Error> {
         match inter_msg {
-            IntermediateResponse::ResponseBlock(block_bytes) => Ok(
-                ResponseMessage::ResponseBlock(self.deserialize(block_bytes)?),
-            ),
+            NetworkResponse::SerializedBlock(block_bytes) => {
+                Ok(ResponseMessage::SealedBlock(self.deserialize(block_bytes)?))
+            }
+            NetworkResponse::SerializedTransactions(tx_bytes) => {
+                Ok(ResponseMessage::Transactions(self.deserialize(tx_bytes)?))
+            }
         }
     }
 
-    fn convert_to_intermediate(
+    fn convert_to_network_response(
         &self,
         res_msg: &Self::OutboundResponse,
-    ) -> Result<Self::IntermediateResponse, io::Error> {
+    ) -> Result<Self::NetworkResponse, io::Error> {
         match res_msg {
-            OutboundResponse::ResponseBlock(sealed_block) => Ok(
-                IntermediateResponse::ResponseBlock(self.serialize(&**sealed_block)?),
+            OutboundResponse::RespondWithBlock(sealed_block) => Ok(
+                NetworkResponse::SerializedBlock(self.serialize(&**sealed_block)?),
+            ),
+            OutboundResponse::RespondWithTransactions(transactions) => Ok(
+                NetworkResponse::SerializedTransactions(self.serialize(&**transactions)?),
             ),
         }
     }
