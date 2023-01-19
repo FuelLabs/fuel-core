@@ -45,6 +45,7 @@ use fuel_core_types::{
         TransactionGossipData,
     },
 };
+use futures::StreamExt;
 use libp2p::{
     gossipsub::MessageAcceptance,
     request_response::RequestId,
@@ -59,7 +60,6 @@ use tokio::sync::{
     mpsc,
     oneshot,
 };
-use tokio_stream::StreamExt;
 use tracing::{
     debug,
     error,
