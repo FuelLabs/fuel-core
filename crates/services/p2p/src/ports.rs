@@ -14,7 +14,7 @@ pub trait P2pDb: Send + Sync {
     ) -> StorageResult<Option<SealedBlock>>;
 }
 
-pub trait BlockImport: Send + Sync {
+pub trait BlockHeightImporter: Send + Sync {
     /// Creates a stream of next block heights
-    fn next_block(&self) -> BoxStream<BlockHeight>;
+    fn next_block_height(&self) -> BoxStream<BlockHeight>;
 }

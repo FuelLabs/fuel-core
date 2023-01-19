@@ -88,8 +88,6 @@ mod code_root;
 mod coin;
 mod contracts;
 mod message;
-#[cfg(feature = "p2p")]
-mod p2p;
 mod receipts;
 #[cfg(feature = "relayer")]
 mod relayer;

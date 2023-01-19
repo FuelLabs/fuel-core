@@ -13,7 +13,7 @@ use crate::{
         FuelP2PService,
     },
     ports::{
-        BlockImport,
+        BlockHeightImporter,
         P2pDb,
     },
     request_response::messages::{
@@ -92,14 +92,14 @@ impl Debug for TaskRequest {
 pub struct Task<D> {
     p2p_service: FuelP2PService<BincodeCodec>,
     db: Arc<D>,
-    next_block: BoxStream<BlockHeight>,
+    next_block_height: BoxStream<BlockHeight>,
     /// Receive internal Task Requests
     request_receiver: mpsc::Receiver<TaskRequest>,
     shared: SharedState,
 }
 
 impl<D> Task<D> {
-    pub fn new<B: BlockImport>(
+    pub fn new<B: BlockHeightImporter>(
         config: Config,
         db: Arc<D>,
         block_importer: Arc<B>,
@@ -107,7 +107,7 @@ impl<D> Task<D> {
         let (request_sender, request_receiver) = mpsc::channel(100);
         let (tx_broadcast, _) = broadcast::channel(100);
         let (block_height_broadcast, _) = broadcast::channel(100);
-        let next_block = block_importer.next_block();
+        let next_block_height = block_importer.next_block_height();
         let max_block_size = config.max_block_size;
         let p2p_service = FuelP2PService::new(config, BincodeCodec::new(max_block_size));
 
@@ -115,7 +115,7 @@ impl<D> Task<D> {
             p2p_service,
             db,
             request_receiver,
-            next_block,
+            next_block_height,
             shared: SharedState {
                 request_sender,
                 tx_broadcast,
@@ -251,7 +251,7 @@ where
                     _ => {}
                 }
             },
-            latest_block_height = self.next_block.next() => {
+            latest_block_height = self.next_block_height.next() => {
                 if let Some(latest_block_height) = latest_block_height {
                     let _ = self.p2p_service.update_block_height(latest_block_height);
                 }
@@ -347,7 +347,7 @@ impl SharedState {
 pub fn new_service<D, B>(p2p_config: Config, db: D, block_importer: B) -> Service<D>
 where
     D: P2pDb + 'static,
-    B: BlockImport,
+    B: BlockHeightImporter,
 {
     Service::new(Task::new(
         p2p_config,
@@ -450,8 +450,8 @@ pub mod tests {
     #[derive(Clone, Debug)]
     struct FakeBlockImporter;
 
-    impl BlockImport for FakeBlockImporter {
-        fn next_block(&self) -> BoxStream<BlockHeight> {
+    impl BlockHeightImporter for FakeBlockImporter {
+        fn next_block_height(&self) -> BoxStream<BlockHeight> {
             Box::pin(fuel_core_services::stream::pending())
         }
     }
