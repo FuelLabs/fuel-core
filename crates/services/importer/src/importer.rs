@@ -236,7 +236,6 @@ where
 
 impl<IDatabase, E, V> Importer<IDatabase, E, V>
 where
-    IDatabase: ImporterDatabase,
     E: Executor,
     V: BlockVerifier,
 {
@@ -265,6 +264,9 @@ where
             return Err(Error::FailedVerification(err))
         }
 
+        // The current code has a separate function X to process `StateConfig`.
+        // It is not possible to execute it via `Executor`.
+        // Maybe we need consider to move the function X here, if that possible.
         if let Consensus::Genesis(_) = consensus {
             return Err(Error::ExecuteGenesis)
         }
@@ -305,7 +307,14 @@ where
 
         Ok(Uncommitted::new(import_result, db_tx))
     }
+}
 
+impl<IDatabase, E, V> Importer<IDatabase, E, V>
+where
+    IDatabase: ImporterDatabase,
+    E: Executor,
+    V: BlockVerifier,
+{
     /// The method validates the `Block` fields and commits the `SealedBlock`.
     /// It is a combination of the [`Importer::verify_and_execute_block`] and [`Importer::commit_result`].
     pub fn execute_and_commit(&self, sealed_block: SealedBlock) -> Result<(), Error> {
