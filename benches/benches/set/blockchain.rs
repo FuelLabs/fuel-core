@@ -480,7 +480,8 @@ pub fn run(c: &mut Criterion) {
             .expect("failed to prepare contract")
             .with_post_call(post_call)
             .with_prepare_db(move |mut db| {
-                db.merkle_contract_state_insert(&contract, &key, &key)?;
+                let values = vec![key; i as usize];
+                db.merkle_contract_state_insert_range(&contract, &key, &values)?;
 
                 Ok(db)
             });
