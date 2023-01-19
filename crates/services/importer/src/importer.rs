@@ -141,9 +141,10 @@ where
     ///
     /// After the commit into the database notifies about a new imported block.
     ///
-    /// Only one commit may be in progress at the time. All other calls will be fail.
     /// # Concurrency
-    /// Returns an error if called while another call is in progress. 
+    ///
+    /// Only one commit may be in progress at the time. All other calls will be fail.
+    /// Returns an error if called while another call is in progress.
     pub fn commit_result<EDatabase>(
         &self,
         result: UncommittedResult<StorageTransaction<EDatabase>>,
