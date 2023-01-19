@@ -77,6 +77,7 @@ pub struct Task<D, T, B> {
     pub(crate) trigger: Trigger,
     // TODO: Consider that the creation of the block takes some time, and maybe we need to
     //  patch the timer to generate the block earlier.
+    //  https://github.com/FuelLabs/fuel-core/issues/918
     /// Deadline clock, used by the triggers
     pub(crate) timer: DeadlineClock,
 }

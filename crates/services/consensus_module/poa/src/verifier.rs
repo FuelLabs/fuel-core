@@ -23,6 +23,8 @@ pub struct Config {
     /// during the generation of the block. That means if the node(block producer) was
     /// offline for a while, it would not use the expected block time after
     /// restarting(it should generate blocks with old timestamps).
+    ///
+    /// https://github.com/FuelLabs/fuel-core/issues/918
     pub perform_strict_time_rules: bool,
     /// The configuration of the network.
     pub production: PoABlockProduction,
@@ -66,6 +68,7 @@ pub fn verify_poa_block_fields<D: Database>(
 
     // Skip the verification of the time if it is possible to produce blocks manually.
     if !config.enabled_manual_blocks {
+        // See comment of the `Config.perform_strict_time_rules`
         if config.perform_strict_time_rules {
             match config.production {
                 PoABlockProduction::Instant => {
@@ -81,6 +84,7 @@ pub fn verify_poa_block_fields<D: Database>(
 
                     // If the `average_block_time` is 15 seconds, the block should be in the range
                     // [15..15 + 15/2] -> [15..23]
+                    // https://github.com/FuelLabs/fuel-core/issues/918
                     let average_block_time = average_block_time;
                     let half_average_block_time = average_block_time / 2;
                     let lower_bound = previous_block_time.add(average_block_time);
@@ -102,10 +106,10 @@ pub fn verify_poa_block_fields<D: Database>(
                 } => {
                     let previous_block_time = Tai64N::from(prev_header.time());
                     // The block should be in the range
-                    // [min..max + (max - min)/2]
-                    let half = (max_block_time + min_block_time) / 2;
+                    // [min..max]
+                    // https://github.com/FuelLabs/fuel-core/issues/918
                     let lower_bound = previous_block_time.add(min_block_time);
-                    let upper_bound = previous_block_time.add(max_block_time + half);
+                    let upper_bound = previous_block_time.add(max_block_time);
                     let block_time = Tai64N::from(header.time());
                     ensure!(
                         lower_bound <= block_time && block_time <= upper_bound,
