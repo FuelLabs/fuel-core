@@ -380,9 +380,9 @@ dependencies = [
 
 [[package]]
 name = "async-trait"
-version = "0.1.59"
+version = "0.1.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31e6e93155431f3931513b243d371981bb2770112b370c82745a1d19d2f99364"
+checksum = "677d1d8ab452a3936018a687b20e6f7cf5363d713b732b8884001317b0e48aa3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2484,6 +2484,7 @@ dependencies = [
  "async-trait",
  "futures",
  "mockall",
+ "parking_lot 0.12.1",
  "tokio",
  "tracing",
 ]
@@ -2503,8 +2504,12 @@ name = "fuel-core-sync"
 version = "0.15.1"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "fuel-core-services",
  "fuel-core-types",
- "parking_lot 0.12.1",
+ "futures",
+ "mockall",
+ "test-case",
  "tokio",
 ]
 
