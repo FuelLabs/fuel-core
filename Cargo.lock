@@ -2445,6 +2445,7 @@ dependencies = [
  "fuel-core-types",
  "mockall",
  "rand 0.8.5",
+ "test-case",
  "tokio",
  "tokio-stream",
  "tracing",

@@ -12,6 +12,9 @@ use fuel_core_types::{
 };
 use std::ops::Add;
 
+#[cfg(test)]
+mod tests;
+
 /// The config of the block verifier.
 pub struct Config {
     /// If the manual block is enabled, skip verification of some fields.
@@ -25,6 +28,7 @@ pub struct Config {
     pub production: PoABlockProduction,
 }
 
+#[cfg_attr(test, mockall::automock)]
 /// The port for the database.
 pub trait Database {
     /// Gets the block header at `height`.
@@ -79,16 +83,16 @@ pub fn verify_poa_block_fields<D: Database>(
                     // [15..15 + 15/2] -> [15..23]
                     let average_block_time = average_block_time;
                     let half_average_block_time = average_block_time / 2;
-                    let lower_bound = previous_block_time.add(average_block_time).0;
+                    let lower_bound = previous_block_time.add(average_block_time);
                     let upper_bound = previous_block_time
-                        .add(average_block_time + half_average_block_time)
-                        .0;
-                    let block_time = Tai64N::from(header.time()).0;
+                        .add(average_block_time + half_average_block_time);
+                    let block_time = Tai64N::from(header.time());
                     ensure!(
                         lower_bound <= block_time && block_time <= upper_bound,
-                        "The `time` of the next should be more than {:?} but less than {:?}",
+                        "The `time` of the next should be more than {:?} but less than {:?} but got {:?}",
                         lower_bound,
                         upper_bound,
+                        block_time,
                     );
                 }
                 PoABlockProduction::Hybrid {
@@ -100,14 +104,15 @@ pub fn verify_poa_block_fields<D: Database>(
                     // The block should be in the range
                     // [min..max + (max - min)/2]
                     let half = (max_block_time + min_block_time) / 2;
-                    let lower_bound = previous_block_time.add(min_block_time).0;
-                    let upper_bound = previous_block_time.add(max_block_time + half).0;
-                    let block_time = Tai64N::from(header.time()).0;
+                    let lower_bound = previous_block_time.add(min_block_time);
+                    let upper_bound = previous_block_time.add(max_block_time + half);
+                    let block_time = Tai64N::from(header.time());
                     ensure!(
                         lower_bound <= block_time && block_time <= upper_bound,
-                        "The `time` of the next should be more than {:?} but less than {:?}",
+                        "The `time` of the next should be more than {:?} but less than {:?} but got {:?}",
                         lower_bound,
                         upper_bound,
+                        block_time,
                     );
                 }
             };
