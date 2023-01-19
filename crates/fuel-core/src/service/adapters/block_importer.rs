@@ -58,7 +58,9 @@ impl fuel_core_poa::ports::BlockImporter for BlockImporterAdapter {
         &self,
         result: UncommittedResult<StorageTransaction<Self::Database>>,
     ) -> anyhow::Result<()> {
-        self.block_importer.commit_result(result)
+        self.block_importer
+            .commit_result(result)
+            .map_err(Into::into)
     }
 }
 
