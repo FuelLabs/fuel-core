@@ -91,24 +91,23 @@ impl<P, E, C> Import<P, E, C> {
             consensus,
         }
     }
-
-    pub(crate) async fn import(&self, shutdown: &mut StateWatcher) -> anyhow::Result<bool>
-    where
-        P: PeerToPeerPort + Send + Sync + 'static,
-        E: BlockImporterPort + Send + Sync + 'static,
-        C: ConsensusPort + Send + Sync + 'static,
-    {
+}
+impl<P, E, C> Import<P, E, C>
+where
+    P: PeerToPeerPort + Send + Sync + 'static,
+    E: BlockImporterPort + Send + Sync + 'static,
+    C: ConsensusPort + Send + Sync + 'static,
+{
+    pub(crate) async fn import(
+        &self,
+        shutdown: &mut StateWatcher,
+    ) -> anyhow::Result<bool> {
         self.import_inner(shutdown).await?;
 
         Ok(wait_for_notify_or_shutdown(&self.notify, shutdown).await)
     }
 
-    async fn import_inner(&self, shutdown: &StateWatcher) -> anyhow::Result<()>
-    where
-        P: PeerToPeerPort + Send + Sync + 'static,
-        E: BlockImporterPort + Send + Sync + 'static,
-        C: ConsensusPort + Send + Sync + 'static,
-    {
+    async fn import_inner(&self, shutdown: &StateWatcher) -> anyhow::Result<()> {
         // If there is a range to process, launch the stream.
         if let Some(range) = self.state.apply(|s| s.process_range()) {
             // Launch the stream to import the range.
@@ -137,12 +136,7 @@ impl<P, E, C> Import<P, E, C> {
         &self,
         range: RangeInclusive<u32>,
         shutdown: &StateWatcher,
-    ) -> (usize, anyhow::Result<()>)
-    where
-        P: PeerToPeerPort + Send + Sync + 'static,
-        E: BlockImporterPort + Send + Sync + 'static,
-        C: ConsensusPort + Send + Sync + 'static,
-    {
+    ) -> (usize, anyhow::Result<()>) {
         let Self {
             state,
             params,
