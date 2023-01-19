@@ -2334,6 +2334,7 @@ dependencies = [
  "fuel-core-chain-config",
  "fuel-core-poa",
  "fuel-core-types",
+ "test-case",
 ]
 
 [[package]]
