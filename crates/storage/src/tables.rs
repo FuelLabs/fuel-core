@@ -65,10 +65,10 @@ impl Mappable for FuelBlockMerkleData {
     type GetValue = Self::SetValue;
 }
 
-/// The table of metadata for Merklized blocks.
-pub struct FuelBlockMerkleMetadata;
+/// The table of metadata for dense Merklized data.
+pub struct FuelDenseMerkleMetadata;
 
-impl Mappable for FuelBlockMerkleMetadata {
+impl Mappable for FuelDenseMerkleMetadata {
     type Key = String;
     type SetValue = DenseMerkleMetadata;
     type GetValue = Self::SetValue;

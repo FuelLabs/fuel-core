@@ -1,6 +1,10 @@
 use crate::{
     ports,
-    ports::BlockProducerDatabase,
+    ports::{
+        BinaryMerkleMetadataStorage,
+        BinaryMerkleTreeStorage,
+        BlockProducerDatabase,
+    },
     Config,
 };
 use anyhow::{
@@ -8,7 +12,12 @@ use anyhow::{
     Context,
     Result,
 };
-use fuel_core_storage::transactional::StorageTransaction;
+use fuel_core_storage::{
+    tables::FuelBlockMerkleData,
+    transactional::StorageTransaction,
+    Error as StorageError,
+    StorageMutate,
+};
 use fuel_core_types::{
     blockchain::{
         block::PartialFuelBlock,
@@ -78,7 +87,10 @@ pub struct Producer<Database> {
 
 impl<Database> Producer<Database>
 where
-    Database: BlockProducerDatabase + 'static,
+    Database: BlockProducerDatabase
+        + BinaryMerkleTreeStorage
+        + StorageMutate<FuelBlockMerkleData, Error = StorageError>
+        + 'static,
 {
     /// Produces and execute block for the specified height
     pub async fn produce_and_execute_block(
@@ -161,12 +173,7 @@ where
         }
         Ok(res)
     }
-}
 
-impl<Database> Producer<Database>
-where
-    Database: BlockProducerDatabase,
-{
     /// Create the header for a new block at the provided height
     async fn new_header(&self, height: BlockHeight) -> Result<PartialBlockHeader> {
         let previous_block_info = self.previous_block_info(height)?;
@@ -221,11 +228,12 @@ where
                 .db
                 .get_block(prev_height)?
                 .ok_or(Error::MissingBlock(prev_height))?;
-            // TODO: this should use a proper BMT MMR
-            let hash = previous_block.id();
-            let prev_root = ephemeral_merkle_root(
-                vec![*previous_block.header().prev_root(), hash.into()].iter(),
-            );
+            let prev_tree_version = prev_height.to_usize() as u64;
+            let mut prev_tree = self
+                .db
+                .load_binary_merkle_tree::<FuelBlockMerkleData>(prev_tree_version)
+                .unwrap();
+            let prev_root = prev_tree.root()?.into();
 
             Ok(PreviousBlockInfo {
                 prev_root,

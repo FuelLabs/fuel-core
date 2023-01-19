@@ -1,8 +1,5 @@
 use crate::{
-    database::{
-        block::BlockExecutor,
-        Database,
-    },
+    database::Database,
     service::config::Config,
 };
 use anyhow::anyhow;

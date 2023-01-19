@@ -10,8 +10,10 @@ use crate::{
 pub struct DenseMerkleMetadata {
     /// The root hash of the dense Merkle tree structure
     pub root: Bytes32,
-    /// The number of leaves in the dense Merkle tree structure
-    pub leaves_count: u64,
+    /// The version of the dense Merkle tree structure is equal to the number of
+    /// leaves. Every time we append a new leaf to the Merkle tree data set, we
+    /// increment the version number.
+    pub version: u64,
 }
 
 impl Default for DenseMerkleMetadata {
@@ -19,7 +21,7 @@ impl Default for DenseMerkleMetadata {
         let mut empty_merkle_tree = in_memory::MerkleTree::new();
         Self {
             root: empty_merkle_tree.root().into(),
-            leaves_count: 0,
+            version: 0,
         }
     }
 }

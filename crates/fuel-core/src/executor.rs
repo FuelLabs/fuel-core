@@ -1,6 +1,5 @@
 use crate::{
     database::{
-        block::BlockExecutor,
         transactional::DatabaseTransaction,
         transactions::TransactionIndex,
         vm_database::VmDatabase,

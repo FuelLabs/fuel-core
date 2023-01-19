@@ -1,7 +1,11 @@
 use async_trait::async_trait;
 use fuel_core_storage::{
     transactional::StorageTransaction,
+    Error as StorageError,
+    Mappable,
     Result as StorageResult,
+    StorageInspect,
+    StorageMutate,
 };
 use fuel_core_types::{
     blockchain::{
@@ -11,7 +15,12 @@ use fuel_core_types::{
             DaBlockHeight,
         },
     },
+    fuel_merkle::binary::{
+        MerkleTree,
+        Primitive,
+    },
     fuel_tx::Receipt,
+    merkle::metadata::DenseMerkleMetadata,
     services::{
         executor::{
             ExecutionBlock,
@@ -32,6 +41,36 @@ pub trait BlockProducerDatabase: Send + Sync {
 
     /// Fetch the current block height.
     fn current_block_height(&self) -> StorageResult<BlockHeight>;
+}
+
+pub trait BinaryMerkleMetadataStorage {
+    fn load_binary_merkle_metadata(
+        &self,
+        key: &str,
+    ) -> Result<DenseMerkleMetadata, StorageError>;
+    fn save_binary_merkle_metadata(
+        &mut self,
+        key: &str,
+        metadata: &DenseMerkleMetadata,
+    ) -> Result<(), StorageError>;
+}
+
+pub trait BinaryMerkleTreeStorage {
+    fn load_binary_merkle_tree<Table>(
+        &self,
+        version: u64,
+    ) -> Result<MerkleTree<Table, &Self>, StorageError>
+    where
+        Table: Mappable<Key = u64, SetValue = Primitive, GetValue = Primitive>,
+        Self: StorageInspect<Table, Error = StorageError>;
+
+    fn load_mut_binary_merkle_tree<Table>(
+        &mut self,
+        version: u64,
+    ) -> Result<MerkleTree<Table, &mut Self>, StorageError>
+    where
+        Table: Mappable<Key = u64, SetValue = Primitive, GetValue = Primitive>,
+        Self: StorageMutate<Table, Error = StorageError>;
 }
 
 #[async_trait]
