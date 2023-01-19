@@ -34,3 +34,6 @@ exclude = ["version-compatibility"]
 codegen-units = 1
 lto = "fat"
 panic = "abort"
+
+[patch.crates-io]
+fuel-vm = { path = "../fuel-vm/fuel-vm" }
