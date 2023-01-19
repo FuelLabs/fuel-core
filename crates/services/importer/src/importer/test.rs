@@ -560,3 +560,16 @@ where
 
     importer.verify_and_execute_block(sealed_block).map(|_| ())
 }
+
+#[test]
+fn verify_and_execute_allowed_when_locked() {
+    let importer = Importer::new(
+        Default::default(),
+        MockDatabase::default(),
+        executor(ok(ex_result(13, 0)), MockDatabase::default()),
+        verifier(ok(())),
+    );
+
+    let _guard = importer.lock();
+    assert!(importer.verify_and_execute_block(poa_block(13)).is_ok());
+}
