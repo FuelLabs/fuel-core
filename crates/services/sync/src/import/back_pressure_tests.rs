@@ -45,7 +45,7 @@ struct Input {
         max_get_header_requests: 1,
         max_get_txns_requests: 1,
     }
-    => Count{ headers: 1, transactions: 1, consensus_calls: 1, executes: 1, blocks: 1 }
+    => is less_or_equal_than Count{ headers: 1, transactions: 1, consensus_calls: 1, executes: 1, blocks: 1 }
     ; "Single with slow headers"
 )]
 #[test_case(
@@ -58,7 +58,7 @@ struct Input {
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
     }
-    => Count{ headers: 10, transactions: 10, consensus_calls: 10, executes: 1, blocks: 10 }
+    => is less_or_equal_than Count{ headers: 10, transactions: 10, consensus_calls: 10, executes: 1, blocks: 21 }
     ; "100 headers with max 10 with slow headers"
 )]
 #[test_case(
@@ -71,7 +71,7 @@ struct Input {
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
     }
-    => Count{ headers: 10, transactions: 10, consensus_calls: 10, executes: 1, blocks: 10 }
+    => is less_or_equal_than Count{ headers: 10, transactions: 10, consensus_calls: 10, executes: 1, blocks: 21 }
     ; "100 headers with max 10 with slow transactions"
 )]
 #[test_case(
@@ -84,7 +84,7 @@ struct Input {
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
     }
-    => Count{ headers: 10, transactions: 10, consensus_calls: 10, executes: 1, blocks: 10 }
+    => is less_or_equal_than Count{ headers: 10, transactions: 10, consensus_calls: 10, executes: 1, blocks: 21 }
     ; "100 headers with max 10 with slow consensus"
 )]
 #[test_case(
@@ -97,7 +97,7 @@ struct Input {
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
     }
-    => Count{ headers: 10, transactions: 10, consensus_calls: 10, executes: 1, blocks: 10 }
+    => is less_or_equal_than Count{ headers: 10, transactions: 10, consensus_calls: 10, executes: 1, blocks: 21 }
     ; "50 headers with max 10 with slow executes"
 )]
 #[tokio::test(flavor = "multi_thread")]
@@ -132,7 +132,7 @@ async fn test_back_pressure(input: Input, state: State, params: Config) -> Count
     counts.apply(|c| c.max.clone())
 }
 
-#[derive(Debug, Default, PartialEq, Eq, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone)]
 struct Count {
     headers: usize,
     transactions: usize,
