@@ -9,7 +9,17 @@ use test_case::test_case;
         h.consensus.height = 0u32.into();
         h
     },
-    0 => matches Ok(_) ; "Correct header"
+    0 => matches Ok(_) ; "Correct header at `0`"
+)]
+#[test_case(
+    {
+        let mut h = BlockHeader::default();
+        h.consensus.prev_root = Bytes32::zeroed();
+        h.consensus.time = Tai64::UNIX_EPOCH;
+        h.consensus.height = 113u32.into();
+        h
+    },
+    113 => matches Ok(_) ; "Correct header at `113`"
 )]
 #[test_case(
     {
