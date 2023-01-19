@@ -28,6 +28,7 @@ use std::{
     task::Poll,
     time::Duration,
 };
+use tracing::debug;
 
 #[derive(Debug, Clone)]
 pub enum HeartbeatInEvent {
@@ -156,6 +157,7 @@ impl ConnectionHandler for HeartbeatHandler {
         if let Some(inbound_block_height) = self.inbound.as_mut() {
             match inbound_block_height.poll_unpin(cx) {
                 Poll::Ready(Err(_)) => {
+                    debug!(target: "fuel-libp2p", "Incoming heartbeat errored");
                     self.inbound = None;
                 }
                 Poll::Ready(Ok((stream, block_height))) => {
@@ -200,6 +202,7 @@ impl ConnectionHandler for HeartbeatHandler {
                             if self.timer.poll_unpin(cx).is_ready() {
                                 // Time for successfull send expired!
                                 self.failure_count += 1;
+                                debug!(target: "fuel-libp2p", "Sending Heartbeat timed out, this is {} time it failed with this connection", self.failure_count);
                             } else {
                                 self.outbound = Some(OutboundState::SendingBlockHeight(
                                     outbound_block_height,
@@ -216,6 +219,7 @@ impl ConnectionHandler for HeartbeatHandler {
                         }
                         Poll::Ready(Err(_)) => {
                             self.failure_count += 1;
+                            debug!(target: "fuel-libp2p", "Sending Heartbeat failed, this is {} time it failed with this connection", self.failure_count);
                         }
                     }
                 }
