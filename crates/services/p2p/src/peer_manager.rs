@@ -84,25 +84,6 @@ pub enum PeerInfoEvent {
         peer_id: PeerId,
         block_height: BlockHeight,
     },
-    BanPeer {
-        peer_id: PeerId,
-        reason: BanReason,
-    },
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum BanReason {
-    HeartbeatThreshold,
-}
-
-impl std::fmt::Display for BanReason {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            BanReason::HeartbeatThreshold => f.write_str(
-                "The Peer sent way too many Heartbeats in a short span of time",
-            ),
-        }
-    }
 }
 
 // `Behaviour` that holds info about peers
@@ -403,14 +384,7 @@ impl NetworkBehaviour for PeerManagerBehaviour {
                     .get_peer_info(&peer_id)
                     .and_then(|info| info.heartbeat_data.seconds_since_last_heartbeat())
                 {
-                    if previous_heartbeat <= Duration::from_millis(500) {
-                        let event = PeerInfoEvent::BanPeer {
-                            peer_id,
-                            reason: BanReason::HeartbeatThreshold,
-                        };
-
-                        return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
-                    }
+                    debug!(target: "fuel-libp2p", "Previous hearbeat happened {:?} seconds ago", previous_heartbeat);
                 }
 
                 self.peer_manager.insert_peer_info(

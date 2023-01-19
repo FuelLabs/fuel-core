@@ -422,11 +422,6 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 PeerInfoEvent::ReconnectToPeer(peer_id) => {
                     let _ = self.swarm.dial(peer_id);
                 }
-                PeerInfoEvent::BanPeer { peer_id, reason } => {
-                    debug!("Banning PeerId: {}, Reason: {}", peer_id, reason);
-                    panic!("Bans should not happen");
-                    self.swarm.ban_peer_id(peer_id);
-                }
                 PeerInfoEvent::PeerDisconnected {
                     peer_id,
                     should_reconnect,
