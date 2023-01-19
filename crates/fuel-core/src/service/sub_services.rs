@@ -1,8 +1,8 @@
 #![allow(clippy::let_unit_value)]
-use super::adapters::{
-    BlockHeightImportAdapter,
-    P2PAdapter,
-};
+use super::adapters::P2PAdapter;
+
+#[cfg(feature = "p2p")]
+use super::adapters::BlockHeightImportAdapter;
 use crate::{
     chain_config::BlockProduction,
     database::Database,

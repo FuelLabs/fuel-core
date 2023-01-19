@@ -3,10 +3,9 @@ use crate::{
     service::Config,
 };
 use fuel_core_txpool::service::SharedState as TxPoolSharedState;
-use fuel_core_types::blockchain::{
-    primitives::BlockHeight,
-    SealedBlock,
-};
+#[cfg(feature = "p2p")]
+use fuel_core_types::blockchain::BlockHeight;
+use fuel_core_types::blockchain::SealedBlock;
 use std::sync::Arc;
 use tokio::sync::broadcast::Sender;
 

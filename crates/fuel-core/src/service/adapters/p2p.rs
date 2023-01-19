@@ -1,16 +1,22 @@
 #[cfg(feature = "p2p")]
 use super::BlockHeightImportAdapter;
+#[cfg(feature = "p2p")]
 use crate::database::Database;
+#[cfg(feature = "p2p")]
 use fuel_core_p2p::ports::{
     BlockHeightImporter,
     P2pDb,
 };
+#[cfg(feature = "p2p")]
 use fuel_core_services::stream::BoxStream;
+#[cfg(feature = "p2p")]
 use fuel_core_storage::Result as StorageResult;
+#[cfg(feature = "p2p")]
 use fuel_core_types::blockchain::{
     primitives::BlockHeight,
     SealedBlock,
 };
+#[cfg(feature = "p2p")]
 use tokio::sync::broadcast::Sender;
 
 #[cfg(feature = "p2p")]
