@@ -104,7 +104,7 @@ pub fn run(c: &mut Criterion) {
 
     run_group_ref(
         &mut c.benchmark_group("rvrt_contract"),
-        "rvrt_script",
+        "rvrt_contract",
         VmBench::contract(rng, Opcode::RET(REG_ONE)).unwrap(),
     );
 
