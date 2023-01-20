@@ -8,6 +8,7 @@ RUN apt-get update && \
     lld \
     clang \
     libclang-dev \
+    protobuf-compiler \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -31,6 +32,7 @@ FROM ubuntu:22.04 as run
 
 ARG IP=0.0.0.0
 ARG PORT=4000
+ARG P2P_PORT=30333
 ARG DB_PATH=./mnt/db/
 
 ENV IP="${IP}"
@@ -50,6 +52,7 @@ COPY --from=builder /build/target/release/fuel-core .
 COPY --from=builder /build/target/release/fuel-core.d .
 
 EXPOSE ${PORT}
+EXPOSE ${P2P_PORT}
 
 # https://stackoverflow.com/a/44671685
 # https://stackoverflow.com/a/40454758
