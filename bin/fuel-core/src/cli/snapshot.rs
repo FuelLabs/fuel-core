@@ -30,7 +30,10 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
 pub async fn exec(command: Command) -> anyhow::Result<()> {
     use anyhow::Context;
     use fuel_core::{
-        chain_config::{ChainConfig, StateConfig},
+        chain_config::{
+            ChainConfig,
+            StateConfig,
+        },
         database::Database,
     };
 

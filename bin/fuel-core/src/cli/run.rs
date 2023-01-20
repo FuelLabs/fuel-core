@@ -1,24 +1,47 @@
 #![allow(unused_variables)]
-use crate::{cli::DEFAULT_DB_PATH, FuelService};
-use anyhow::{anyhow, Context};
+use crate::{
+    cli::DEFAULT_DB_PATH,
+    FuelService,
+};
+use anyhow::{
+    anyhow,
+    Context,
+};
 use clap::Parser;
 use fuel_core::{
     chain_config::ChainConfig,
     producer::Config as ProducerConfig,
     service::{
-        config::default_consensus_dev_key, Config, DbType, ServiceTrait, VMConfig,
+        config::default_consensus_dev_key,
+        Config,
+        DbType,
+        ServiceTrait,
+        VMConfig,
     },
     txpool::Config as TxPoolConfig,
     types::{
         blockchain::primitives::SecretKeyWrapper,
         fuel_tx::Address,
         fuel_vm::SecretKey,
-        secrecy::{ExposeSecret, Secret},
+        secrecy::{
+            ExposeSecret,
+            Secret,
+        },
     },
 };
-use std::{env, net, ops::Deref, path::PathBuf, str::FromStr};
+use std::{
+    env,
+    net,
+    ops::Deref,
+    path::PathBuf,
+    str::FromStr,
+};
 use strum::VariantNames;
-use tracing::{info, log::warn, trace};
+use tracing::{
+    info,
+    log::warn,
+    trace,
+};
 
 pub const CONSENSUS_KEY_ENV: &str = "CONSENSUS_KEY_SECRET";
 
