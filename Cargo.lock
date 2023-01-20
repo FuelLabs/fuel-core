@@ -2557,6 +2557,7 @@ dependencies = [
  "async-trait",
  "futures",
  "mockall",
+ "parking_lot 0.12.1",
  "tokio",
  "tracing",
 ]
@@ -2576,8 +2577,12 @@ name = "fuel-core-sync"
 version = "0.15.1"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "fuel-core-services",
  "fuel-core-types",
- "parking_lot 0.12.1",
+ "futures",
+ "mockall",
+ "test-case",
  "tokio",
 ]
 
