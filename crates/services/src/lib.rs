@@ -17,6 +17,19 @@ pub mod stream {
     /// A Send + Sync BoxStream
     pub type BoxStream<T> =
         core::pin::Pin<Box<dyn Stream<Item = T> + Send + Sync + 'static>>;
+
+    /// Helper trait to create a BoxStream from a Stream
+    pub trait IntoBoxStream: Stream {
+        /// Convert this stream into a BoxStream.
+        fn into_boxed(self) -> BoxStream<Self::Item>
+        where
+            Self: Sized + Send + Sync + 'static,
+        {
+            Box::pin(self)
+        }
+    }
+
+    impl<S> IntoBoxStream for S where S: Stream + Send + Sync + 'static {}
 }
 
 pub use service::{
@@ -26,6 +39,7 @@ pub use service::{
     Service,
     ServiceRunner,
     Shared,
+    SharedMutex,
 };
 pub use state::{
     State,

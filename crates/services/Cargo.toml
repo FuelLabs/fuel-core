@@ -1,18 +1,19 @@
 [package]
-name = "fuel-core-services"
-version = "0.15.1"
 authors = ["Fuel Labs <contact@fuel.sh>"]
+description = "The common code for fuel core services."
 edition = "2021"
 homepage = "https://fuel.network/"
-keywords = ["blockchain", "fuel", "consensus", "bft"]
+keywords = ["bft", "blockchain", "consensus", "fuel"]
 license = "BUSL-1.1"
+name = "fuel-core-services"
 repository = "https://github.com/FuelLabs/fuel-core"
-description = "The common code for fuel core services."
+version = "0.15.1"
 
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
 futures = "0.3"
+parking_lot = "0.12"
 tokio = { version = "1.21", features = ["full"] }
 tracing = "0.1"
 

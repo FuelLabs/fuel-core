@@ -44,6 +44,19 @@ pub type TransactionGossipData = GossipData<Transaction>;
 /// Newly produced block notification
 pub type BlockGossipData = GossipData<Block>;
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// The source of some network data.
+pub struct SourcePeer<T> {
+    /// The source of the data.
+    pub peer_id: PeerId,
+    /// The data.
+    pub data: T,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// Opaque peer identifier.
+pub struct PeerId(Vec<u8>);
+
 impl<T> GossipData<T> {
     /// Construct a new gossip message
     pub fn new(
@@ -77,4 +90,16 @@ pub struct BlockHeightHeartbeatData {
     pub peer_id: Vec<u8>,
     /// Latest BlockHeight received
     pub block_height: BlockHeight,
+}
+
+impl From<Vec<u8>> for PeerId {
+    fn from(bytes: Vec<u8>) -> Self {
+        Self(bytes)
+    }
+}
+
+impl From<PeerId> for Vec<u8> {
+    fn from(peer_id: PeerId) -> Self {
+        peer_id.0
+    }
 }

@@ -80,6 +80,23 @@ impl Block<Transaction> {
         }
     }
 
+    /// Try creating a new full fuel block from a [`BlockHeader`] and
+    /// **previously executed** transactions.
+    /// This will fail if the transactions don't match the header.
+    pub fn try_from_executed(
+        header: BlockHeader,
+        mut transactions: Vec<Transaction>,
+    ) -> Option<Self> {
+        let transaction_ids: Vec<_> =
+            transactions.iter_mut().map(|tx| tx.to_bytes()).collect();
+        header
+            .validate_transactions(&transaction_ids[..])
+            .then_some(Self {
+                header,
+                transactions,
+            })
+    }
+
     /// Compresses the fuel block and replaces transactions with hashes.
     pub fn compress(&self) -> CompressedBlock {
         Block {
