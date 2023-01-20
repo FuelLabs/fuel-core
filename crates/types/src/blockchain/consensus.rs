@@ -18,7 +18,7 @@ pub mod poa;
 
 use poa::PoAConsensus;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The consensus related data that doesn't live on the
 /// header.
@@ -43,7 +43,6 @@ impl Consensus {
     }
 }
 
-#[cfg(any(test, feature = "test-helpers"))]
 impl Default for Consensus {
     fn default() -> Self {
         Consensus::PoA(Default::default())
@@ -57,13 +56,13 @@ pub enum ConsensusType {
     PoA,
 }
 
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 /// A sealed entity with consensus info.
+#[derive(Default, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Sealed<Entity> {
     /// The actual value
     pub entity: Entity,
+    // TODO: Rename to `seal`
     /// Consensus info
     pub consensus: Consensus,
 }
@@ -86,7 +85,7 @@ pub struct ConsensusVote {
 /// network - contracts states, contracts balances, unspent coins, and messages. It also contains
 /// the hash on the initial config of the network that defines the consensus rules for following
 /// blocks.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Genesis {
     /// The chain config define what consensus type to use, what settlement layer to use,
