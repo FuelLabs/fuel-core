@@ -71,9 +71,6 @@ use tokio::{
 mod manually_produce_tests;
 mod trigger_tests;
 
-// TODO: Add test for manual block produce
-// TODO: Add testing of `block_time` passing.
-
 struct TestContextBuilder {
     config: Option<Config>,
     txpool: Option<MockTransactionPool>,
