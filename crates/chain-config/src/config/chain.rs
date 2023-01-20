@@ -1,3 +1,7 @@
+use bech32::{
+    ToBase32,
+    Variant::Bech32m,
+};
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     fuel_crypto::Hasher,
@@ -5,6 +9,7 @@ use fuel_core_types::{
     fuel_types::{
         Address,
         AssetId,
+        Bytes32,
     },
 };
 use itertools::Itertools;
@@ -17,20 +22,22 @@ use serde::{
     Serialize,
 };
 use serde_with::skip_serializing_none;
-
 use std::{
     io::ErrorKind,
     path::PathBuf,
     str::FromStr,
 };
 
-use crate::GenesisCommitment;
-
-use super::{
-    coin::CoinConfig,
-    state::StateConfig,
+use crate::{
+    config::{
+        coin::CoinConfig,
+        state::StateConfig,
+    },
+    genesis::GenesisCommitment,
 };
 
+// Fuel Network human-readable part for bech32 encoding
+pub const FUEL_BECH32_HRP: &str = "fuel";
 pub const LOCAL_TESTNET: &str = "local_testnet";
 pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 
@@ -72,10 +79,15 @@ impl ChainConfig {
             .map(|_| {
                 let secret = fuel_core_types::fuel_crypto::SecretKey::random(&mut rng);
                 let address = Address::from(*secret.public_key().hash());
+                let bech32_data = Bytes32::new(*address).to_base32();
+                let bech32_encoding =
+                    bech32::encode(FUEL_BECH32_HRP, bech32_data, Bech32m).unwrap();
+
                 tracing::info!(
-                    "PrivateKey({:#x}), Address({:#x}), Balance({})",
+                    "PrivateKey({:#x}), Address({:#x} [bech32: {}]), Balance({})",
                     secret,
                     address,
+                    bech32_encoding,
                     TESTNET_INITIAL_BALANCE
                 );
                 CoinConfig {
