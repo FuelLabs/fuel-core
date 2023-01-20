@@ -39,6 +39,7 @@ use fuel_core_types::{
             BlockId,
         },
         SealedBlock,
+        SealedBlockHeader,
     },
     fuel_tx::Transaction,
     services::p2p::{
@@ -83,6 +84,10 @@ enum TaskRequest {
     // Request to get one-off data from p2p network
     GetPeerIds(oneshot::Sender<Vec<PeerId>>),
     GetBlock((BlockHeight, oneshot::Sender<SealedBlock>)),
+    GetSealedHeader {
+        height: BlockHeight,
+        channel: oneshot::Sender<Option<(PeerId, SealedBlockHeader)>>,
+    },
     GetTransactions {
         block_id: BlockId,
         from_peer: PeerId,
@@ -91,6 +96,7 @@ enum TaskRequest {
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
     RespondWithRequestedBlock((Option<Arc<SealedBlock>>, RequestId)),
+    RespondWithRequestedHeader((Option<Arc<SealedBlockHeader>>, RequestId)),
     RespondWithTransactions((Option<Arc<Vec<Transaction>>>, RequestId)),
 }
 
@@ -201,6 +207,11 @@ where
                         let channel_item = ResponseChannelItem::SendBlock(response);
                         let _ = self.p2p_service.send_request_msg(None, request_msg, channel_item);
                     }
+                    Some(TaskRequest::GetSealedHeader{ height, channel: response }) => {
+                        let request_msg = RequestMessage::SealedHeader(height);
+                        let channel_item = ResponseChannelItem::SendSealedHeader(response);
+                        let _ = self.p2p_service.send_request_msg(None, request_msg, channel_item);
+                    }
                     Some(TaskRequest::GetTransactions { block_id, from_peer, channel }) => {
                         let request_msg = RequestMessage::Transactions(block_id);
                         let channel_item = ResponseChannelItem::SendTransactions(channel);
@@ -211,6 +222,9 @@ where
                     }
                     Some(TaskRequest::RespondWithRequestedBlock((response, request_id))) => {
                         let _ = self.p2p_service.send_response_msg(request_id, response.map(OutboundResponse::RespondWithBlock));
+                    }
+                    Some(TaskRequest::RespondWithRequestedHeader((response, request_id))) => {
+                        let _ = self.p2p_service.send_response_msg(request_id, response.map(OutboundResponse::RespondWithHeader));
                     }
                     Some(TaskRequest::RespondWithTransactions((response, request_id))) => {
                         let _ = self.p2p_service.send_response_msg(request_id, response.map(OutboundResponse::RespondWithTransactions));
@@ -283,6 +297,21 @@ where
                                 }.boxed();
                                 Some(f)
                             }
+                            RequestMessage::SealedHeader(block_height) => {
+                                let db = self.db.clone();
+
+                                let f = async move {
+                                    let response = db.get_sealed_header(block_height)
+                                        .await
+                                        .expect("Didn't expect error from database")
+                                        .map(Arc::new);
+
+                                    TaskRequest::RespondWithRequestedHeader(
+                                        (response, request_id)
+                                    )
+                                }.boxed();
+                                Some(f)
+                            }
                         }
                     },
                     _ => None
@@ -341,6 +370,25 @@ impl SharedState {
             .await?;
 
         receiver.await.map_err(|e| anyhow!("{}", e))
+    }
+
+    pub async fn get_sealed_block_header(
+        &self,
+        height: BlockHeight,
+    ) -> anyhow::Result<Option<(Vec<u8>, SealedBlockHeader)>> {
+        let (sender, receiver) = oneshot::channel();
+
+        self.request_sender
+            .send(TaskRequest::GetSealedHeader {
+                height,
+                channel: sender,
+            })
+            .await?;
+
+        receiver
+            .await
+            .map(|o| o.map(|(peer_id, header)| (peer_id.to_bytes(), header)))
+            .map_err(|e| anyhow!("{}", e))
     }
 
     pub async fn get_transactions_from_peer(
@@ -504,6 +552,18 @@ pub mod tests {
 
             Ok(Some(SealedBlock {
                 entity: block,
+                consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
+            }))
+        }
+
+        async fn get_sealed_header(
+            &self,
+            _height: BlockHeight,
+        ) -> StorageResult<Option<SealedBlockHeader>> {
+            let header = Default::default();
+
+            Ok(Some(SealedBlockHeader {
+                entity: header,
                 consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
             }))
         }

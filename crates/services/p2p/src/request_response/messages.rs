@@ -7,9 +7,11 @@ use fuel_core_types::{
             BlockId,
         },
         SealedBlock,
+        SealedBlockHeader,
     },
     fuel_tx::Transaction,
 };
+use libp2p::PeerId;
 use serde::{
     Deserialize,
     Serialize,
@@ -25,6 +27,7 @@ pub(crate) const MAX_REQUEST_SIZE: usize = 8;
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, Copy)]
 pub enum RequestMessage {
     Block(BlockHeight),
+    SealedHeader(BlockHeight),
     Transactions(BlockId),
 }
 
@@ -32,6 +35,7 @@ pub enum RequestMessage {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ResponseMessage {
     SealedBlock(SealedBlock),
+    SealedHeader(Option<SealedBlockHeader>),
     Transactions(Vec<Transaction>),
 }
 
@@ -39,6 +43,7 @@ pub enum ResponseMessage {
 #[derive(Debug)]
 pub enum ResponseChannelItem {
     SendBlock(oneshot::Sender<SealedBlock>),
+    SendSealedHeader(oneshot::Sender<Option<(PeerId, SealedBlockHeader)>>),
     SendTransactions(oneshot::Sender<Vec<Transaction>>),
 }
 
@@ -47,6 +52,7 @@ pub enum ResponseChannelItem {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum NetworkResponse {
     SerializedBlock(Vec<u8>),
+    SerializedHeader(Vec<u8>),
     SerializedTransactions(Vec<u8>),
 }
 
@@ -55,6 +61,7 @@ pub enum NetworkResponse {
 #[derive(Debug, Clone)]
 pub enum OutboundResponse {
     RespondWithBlock(Arc<SealedBlock>),
+    RespondWithHeader(Arc<SealedBlockHeader>),
     RespondWithTransactions(Arc<Vec<Transaction>>),
 }
 

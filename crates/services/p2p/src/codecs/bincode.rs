@@ -198,6 +198,9 @@ impl RequestResponseConverter for BincodeCodec {
             NetworkResponse::SerializedBlock(block_bytes) => {
                 Ok(ResponseMessage::SealedBlock(self.deserialize(block_bytes)?))
             }
+            NetworkResponse::SerializedHeader(header_bytes) => Ok(
+                ResponseMessage::SealedHeader(self.deserialize(header_bytes)?),
+            ),
             NetworkResponse::SerializedTransactions(tx_bytes) => {
                 Ok(ResponseMessage::Transactions(self.deserialize(tx_bytes)?))
             }
@@ -211,6 +214,9 @@ impl RequestResponseConverter for BincodeCodec {
         match res_msg {
             OutboundResponse::RespondWithBlock(sealed_block) => Ok(
                 NetworkResponse::SerializedBlock(self.serialize(&**sealed_block)?),
+            ),
+            OutboundResponse::RespondWithHeader(sealed_header) => Ok(
+                NetworkResponse::SerializedHeader(self.serialize(&**sealed_header)?),
             ),
             OutboundResponse::RespondWithTransactions(transactions) => Ok(
                 NetworkResponse::SerializedTransactions(self.serialize(&**transactions)?),
