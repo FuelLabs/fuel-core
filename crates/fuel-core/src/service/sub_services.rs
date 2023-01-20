@@ -1,8 +1,6 @@
 #![allow(clippy::let_unit_value)]
 use super::adapters::P2PAdapter;
 
-#[cfg(feature = "p2p")]
-use super::adapters::BlockHeightImportAdapter;
 use crate::{
     chain_config::BlockProduction,
     database::Database,
@@ -56,18 +54,15 @@ pub fn init_sub_services(
     };
 
     let (block_import_tx, _) = broadcast::channel(16);
+    let importer_adapter = BlockImportAdapter::new(block_import_tx);
 
     #[cfg(feature = "p2p")]
     let network = {
         let p2p_db = database.clone();
-        let (block_height_import, _) = broadcast::channel(16);
-
         let genesis = p2p_db.get_genesis()?;
         let p2p_config = config.p2p.clone().init(genesis)?;
 
-        let block_height_importer = BlockHeightImportAdapter::new(block_height_import);
-
-        fuel_core_p2p::service::new_service(p2p_config, p2p_db, block_height_importer)
+        fuel_core_p2p::service::new_service(p2p_config, p2p_db, importer_adapter.clone())
     };
 
     #[cfg(feature = "p2p")]
@@ -76,8 +71,6 @@ pub fn init_sub_services(
     let p2p_adapter = P2PAdapter::new();
 
     let p2p_adapter = p2p_adapter;
-
-    let importer_adapter = BlockImportAdapter::new(block_import_tx);
 
     let txpool = fuel_core_txpool::new_service(
         config.txpool.clone(),

@@ -3,13 +3,12 @@ use crate::{
     service::Config,
 };
 use fuel_core_txpool::service::SharedState as TxPoolSharedState;
-#[cfg(feature = "p2p")]
-use fuel_core_types::blockchain::primitives::BlockHeight;
 use fuel_core_types::blockchain::SealedBlock;
 use std::sync::Arc;
 use tokio::sync::broadcast::Sender;
 
 pub mod graphql_api;
+#[cfg(feature = "p2p")]
 pub mod p2p;
 pub mod poa;
 pub mod producer;
@@ -72,9 +71,4 @@ impl P2PAdapter {
     pub fn new() -> Self {
         Default::default()
     }
-}
-
-#[cfg(feature = "p2p")]
-pub struct BlockHeightImportAdapter {
-    blocks: Sender<BlockHeight>,
 }
