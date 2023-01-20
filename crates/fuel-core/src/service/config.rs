@@ -112,6 +112,13 @@ impl Config {
             NodeRole::Validator => Trigger::Never,
         };
 
+        // If manual block production then require trigger never or instant.
+        anyhow::ensure!(
+            !self.manual_blocks_enabled
+                || !matches!(trigger, Trigger::Never | Trigger::Instant),
+            "Cannot use manual block production unless trigger mode is never or instant."
+        );
+
         Ok(fuel_core_poa::Config {
             trigger,
             block_gas_limit: self.chain_conf.block_gas_limit,

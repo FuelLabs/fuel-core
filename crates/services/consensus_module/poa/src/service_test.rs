@@ -68,6 +68,7 @@ use tokio::{
     time,
 };
 
+mod manually_produce_tests;
 mod trigger_tests;
 
 // TODO: Add test for manual block produce
@@ -77,6 +78,7 @@ struct TestContextBuilder {
     config: Option<Config>,
     txpool: Option<MockTransactionPool>,
     importer: Option<MockBlockImporter>,
+    producer: Option<MockBlockProducer>,
 }
 
 impl TestContextBuilder {
@@ -85,6 +87,7 @@ impl TestContextBuilder {
             config: None,
             txpool: None,
             importer: None,
+            producer: None,
         }
     }
 
@@ -103,21 +106,29 @@ impl TestContextBuilder {
         self
     }
 
+    fn with_producer(&mut self, producer: MockBlockProducer) -> &mut Self {
+        self.producer = Some(producer);
+        self
+    }
+
     fn build(self) -> TestContext {
         let config = self.config.unwrap_or_default();
-        let mut producer = MockBlockProducer::default();
-        producer
-            .expect_produce_and_execute_block()
-            .returning(|_, _, _| {
-                Ok(UncommittedResult::new(
-                    ExecutionResult {
-                        block: Default::default(),
-                        skipped_transactions: Default::default(),
-                        tx_status: Default::default(),
-                    },
-                    StorageTransaction::new(EmptyStorage),
-                ))
-            });
+        let producer = self.producer.unwrap_or_else(|| {
+            let mut producer = MockBlockProducer::default();
+            producer
+                .expect_produce_and_execute_block()
+                .returning(|_, _, _| {
+                    Ok(UncommittedResult::new(
+                        ExecutionResult {
+                            block: Default::default(),
+                            skipped_transactions: Default::default(),
+                            tx_status: Default::default(),
+                        },
+                        StorageTransaction::new(EmptyStorage),
+                    ))
+                });
+            producer
+        });
 
         let importer = self.importer.unwrap_or_else(|| {
             let mut importer = MockBlockImporter::default();

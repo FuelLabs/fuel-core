@@ -10,7 +10,7 @@ use crate::{
 };
 
 /// The empty transactional storage.
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, Debug)]
 pub struct EmptyStorage;
 
 impl AsRef<EmptyStorage> for EmptyStorage {

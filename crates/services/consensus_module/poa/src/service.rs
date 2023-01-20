@@ -99,6 +99,11 @@ impl core::fmt::Debug for Request {
     }
 }
 
+pub(crate) enum RequestType {
+    Manual,
+    Trigger,
+}
+
 pub struct Task<T, B, I> {
     block_gas_limit: Word,
     signing_key: Option<Secret<SecretKeyWrapper>>,
@@ -173,7 +178,8 @@ where
     }
 
     pub(crate) async fn produce_next_block(&mut self) -> anyhow::Result<()> {
-        self.produce_block(self.next_height(), None).await
+        self.produce_block(self.next_height(), None, RequestType::Trigger)
+            .await
     }
 
     pub(crate) async fn produce_manual_blocks(
@@ -181,7 +187,8 @@ where
         block_times: Vec<Option<Tai64>>,
     ) -> anyhow::Result<()> {
         for block_time in block_times {
-            self.produce_block(self.next_height(), block_time).await?;
+            self.produce_block(self.next_height(), block_time, RequestType::Manual)
+                .await?;
         }
         Ok(())
     }
@@ -190,6 +197,7 @@ where
         &mut self,
         height: BlockHeight,
         block_time: Option<Tai64>,
+        request_type: RequestType,
     ) -> anyhow::Result<()> {
         // verify signing key is set
         if self.signing_key.is_none() {
@@ -236,20 +244,24 @@ where
         self.last_block_created = Instant::now();
 
         // Set timer for the next block
-        match self.trigger {
-            Trigger::Never => {
-                unreachable!("This mode will never produce blocks");
+        match (self.trigger, request_type) {
+            (Trigger::Never, RequestType::Manual) => (),
+            (Trigger::Never, RequestType::Trigger) => {
+                unreachable!("Trigger production will never produce blocks in never mode")
             }
-            Trigger::Instant => {}
-            Trigger::Interval { block_time } => {
+            (Trigger::Instant, _) => {}
+            (Trigger::Interval { block_time }, RequestType::Trigger) => {
                 // TODO: instead of sleeping for `block_time`, subtract the time we used for processing
                 self.timer.set_timeout(block_time, OnConflict::Min).await;
             }
-            Trigger::Hybrid {
-                max_block_time,
-                min_block_time,
-                max_tx_idle_time,
-            } => {
+            (
+                Trigger::Hybrid {
+                    max_block_time,
+                    min_block_time,
+                    max_tx_idle_time,
+                },
+                RequestType::Trigger,
+            ) => {
                 let consumable_gas = self.txpool.total_consumable_gas();
 
                 // If txpool still has more than a full block of transactions available,
@@ -268,6 +280,10 @@ where
                         .set_timeout(max_block_time, OnConflict::Max)
                         .await;
                 }
+            }
+            (Trigger::Interval { .. }, RequestType::Manual)
+            | (Trigger::Hybrid { .. }, RequestType::Manual) => {
+                unreachable!("Trigger types interval and hybrid cannot be used with manual. This is enforced during config validation")
             }
         }
 
