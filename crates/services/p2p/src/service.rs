@@ -48,7 +48,11 @@ use fuel_core_types::{
         TransactionGossipData,
     },
 };
-use futures::StreamExt;
+use futures::{
+    future::BoxFuture,
+    FutureExt,
+    StreamExt,
+};
 use libp2p::{
     gossipsub::MessageAcceptance,
     request_response::RequestId,
@@ -160,10 +164,10 @@ where
     D: P2pDb + 'static,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
-        tokio::select! {
+        let to_send: Option<BoxFuture<'static, TaskRequest>> = tokio::select! {
             biased;
 
-            _ = watcher.while_started() => {}
+            _ = watcher.while_started() => None,
 
             next_service_request = self.request_receiver.recv() => {
                 match next_service_request {
@@ -215,6 +219,7 @@ where
                         unreachable!("The `Task` is holder of the `Sender`, so it should not be possible");
                     }
                 }
+                None
             }
             p2p_event = self.p2p_service.next_event() => {
                 match p2p_event {
@@ -225,6 +230,7 @@ where
                         };
 
                         let _ = self.shared.block_height_broadcast.send(block_height_data);
+                        None
                     }
                     Some(FuelP2PEvent::GossipsubMessage { message, message_id, peer_id,.. }) => {
                         let message_id = message_id.0;
@@ -243,53 +249,56 @@ where
                                 let _new_vote = GossipData::new(vote, peer_id, message_id);
                             },
                         }
+                        None
                     },
                     Some(FuelP2PEvent::RequestMessage { request_message, request_id }) => {
                         match request_message {
                             RequestMessage::Block(block_height) => {
                                 let db = self.db.clone();
-                                let request_sender = self.shared.request_sender.clone();
 
-                                tokio::spawn(async move {
+                                let f = async move {
                                     // TODO: Process `StorageError` somehow.
                                     let block_response = db.get_sealed_block(block_height)
                                         .await
                                         .expect("Didn't expect error from database")
                                         .map(Arc::new);
-                                    let _ = request_sender.send(
-                                        TaskRequest::RespondWithRequestedBlock(
-                                            (block_response, request_id)
-                                        )
-                                    );
-                                });
+                                    TaskRequest::RespondWithRequestedBlock(
+                                        (block_response, request_id)
+                                    )
+                                }.boxed();
+                                Some(f)
                             }
                             RequestMessage::Transactions(block_id) => {
                                 let db = self.db.clone();
-                                let request_sender = self.shared.request_sender.clone();
 
-                                tokio::spawn(async move {
+                                let f = async move {
                                     let transactions_response = db.get_transactions(block_id)
                                         .await
                                         .expect("Didn't expect error from database")
                                         .map(Arc::new);
 
-                                    let _ = request_sender.send(
-                                        TaskRequest::RespondWithTransactions(
-                                            (transactions_response, request_id)
-                                        )
-                                    );
-                                });
+                                    TaskRequest::RespondWithTransactions(
+                                        (transactions_response, request_id)
+                                    )
+                                }.boxed();
+                                Some(f)
                             }
                         }
                     },
-                    _ => {}
+                    _ => None
                 }
             },
             latest_block_height = self.next_block_height.next() => {
                 if let Some(latest_block_height) = latest_block_height {
                     let _ = self.p2p_service.update_block_height(latest_block_height);
                 }
+                None
             }
+        };
+
+        if let Some(f) = to_send {
+            let msg = f.await;
+            self.shared.request_sender.send(msg).await?;
         }
 
         Ok(true /* should_continue */)
