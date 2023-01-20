@@ -1,8 +1,8 @@
 use crate::{
+    ports,
     ports::{
         BlockVerifier,
         Executor,
-        ExecutorDatabase,
         ImporterDatabase,
     },
     Config,
@@ -128,9 +128,9 @@ impl<D, E, V> Importer<D, E, V> {
     }
 }
 
-impl<IDatabase, E, V> Importer<IDatabase, E, V>
+impl<D, E, V> Importer<D, E, V>
 where
-    IDatabase: ImporterDatabase,
+    D: ImporterDatabase,
 {
     /// The method commits the result of the block execution attaching the consensus data.
     /// It expects that the `UncommittedResult` contains the result of the block
@@ -145,23 +145,23 @@ where
     ///
     /// Only one commit may be in progress at the time. All other calls will be fail.
     /// Returns an error if called while another call is in progress.
-    pub fn commit_result<EDatabase>(
+    pub fn commit_result<ExecutorDatabase>(
         &self,
-        result: UncommittedResult<StorageTransaction<EDatabase>>,
+        result: UncommittedResult<StorageTransaction<ExecutorDatabase>>,
     ) -> Result<(), Error>
     where
-        EDatabase: ExecutorDatabase,
+        ExecutorDatabase: ports::ExecutorDatabase,
     {
         let _guard = self.lock()?;
         self._commit_result(result)
     }
 
-    fn _commit_result<EDatabase>(
+    fn _commit_result<ExecutorDatabase>(
         &self,
-        result: UncommittedResult<StorageTransaction<EDatabase>>,
+        result: UncommittedResult<StorageTransaction<ExecutorDatabase>>,
     ) -> Result<(), Error>
     where
-        EDatabase: ExecutorDatabase,
+        ExecutorDatabase: ports::ExecutorDatabase,
     {
         let (result, mut db_tx) = result.into();
         let block = &result.sealed_block.entity;

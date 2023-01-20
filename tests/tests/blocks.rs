@@ -16,7 +16,18 @@ use fuel_core_client::client::{
     PageDirection,
     PaginationRequest,
 };
+use fuel_core_storage::{
+    tables::{
+        FuelBlocks,
+        SealedBlockConsensus,
+    },
+    StorageAsMut,
+};
 use fuel_core_types::{
+    blockchain::{
+        block::CompressedBlock,
+        consensus::Consensus,
+    },
     fuel_tx::*,
     secrecy::ExposeSecret,
 };
@@ -29,15 +40,23 @@ use std::ops::Deref;
 
 #[tokio::test]
 async fn block() {
+    // setup test data in the node
+    let block = CompressedBlock::default();
+    let id = block.id();
+    let mut db = Database::default();
     // setup server & client
-    let srv = FuelService::from_database(Database::default(), Config::local_node())
+    let srv = FuelService::from_database(db.clone(), Config::local_node())
         .await
         .unwrap();
     let client = FuelClient::from(srv.bound_address);
 
+    db.storage::<FuelBlocks>().insert(&id, &block).unwrap();
+    db.storage::<SealedBlockConsensus>()
+        .insert(&id, &Consensus::PoA(Default::default()))
+        .unwrap();
+
     // run test
-    let block = client.block_by_height(0).await.unwrap().unwrap();
-    let id_bytes: Bytes32 = block.id.into();
+    let id_bytes: Bytes32 = id.into();
     let block = client
         .block(BlockId::from(id_bytes).to_string().as_str())
         .await
@@ -47,7 +66,9 @@ async fn block() {
 
 #[tokio::test]
 async fn get_genesis_block() {
-    let srv = FuelService::from_database(Database::default(), Config::local_node())
+    let mut config = Config::local_node();
+    config.chain_conf.initial_state.as_mut().unwrap().height = Some(13u32.into());
+    let srv = FuelService::from_database(Database::default(), config)
         .await
         .unwrap();
 
@@ -55,8 +76,8 @@ async fn get_genesis_block() {
     let tx = Transaction::default();
     client.submit_and_await_commit(&tx).await.unwrap();
 
-    let block = client.block_by_height(0).await.unwrap().unwrap();
-    assert_eq!(block.header.height.0, 0);
+    let block = client.block_by_height(13).await.unwrap().unwrap();
+    assert_eq!(block.header.height.0, 13);
     assert!(matches!(
         block.consensus,
         fuel_core_client::client::schema::block::Consensus::Genesis(_)
