@@ -138,7 +138,6 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
                 height: prev_height,
                 ..Default::default()
             },
-            ..Default::default()
         },
         transactions: vec![],
     }

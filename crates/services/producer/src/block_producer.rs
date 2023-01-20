@@ -186,7 +186,6 @@ where
                 time: Tai64::now(),
                 generated: Default::default(),
             },
-            metadata: None,
         })
     }
 

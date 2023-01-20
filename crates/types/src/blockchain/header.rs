@@ -18,19 +18,19 @@ use crate::{
 };
 use tai64::Tai64;
 
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 /// A fuel block header that has all the fields generated because it
 /// has been executed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BlockHeader {
     /// The application header.
     pub application: ApplicationHeader<GeneratedApplicationFields>,
     /// The consensus header.
     pub consensus: ConsensusHeader<GeneratedConsensusFields>,
-    /// Header Metadata
+    /// The header metadata calculated during creation.
+    /// The field is private to enforce the use of the [`PartialBlockHeader::generate`] method.
     #[cfg_attr(feature = "serde", serde(skip))]
-    pub metadata: Option<BlockHeaderMetadata>,
+    metadata: Option<BlockHeaderMetadata>,
 }
 
 #[derive(Clone, Debug)]
@@ -42,11 +42,9 @@ pub struct PartialBlockHeader {
     pub application: ApplicationHeader<Empty>,
     /// The consensus header.
     pub consensus: ConsensusHeader<Empty>,
-    /// Header Metadata
-    pub metadata: Option<BlockHeaderMetadata>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 /// The fuel block application header.
@@ -63,7 +61,7 @@ pub struct ApplicationHeader<Generated> {
     pub generated: Generated,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 /// Concrete generated application header fields.
@@ -79,7 +77,7 @@ pub struct GeneratedApplicationFields {
     pub output_messages_root: Bytes32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The fuel block consensus header.
 /// This contains fields related to consensus plus
@@ -95,7 +93,7 @@ pub struct ConsensusHeader<Generated> {
     pub generated: Generated,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 /// Concrete generated consensus header fields.
@@ -105,12 +103,25 @@ pub struct GeneratedConsensusFields {
     pub application_hash: Bytes32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Extra data that is not actually part of the header.
 pub struct BlockHeaderMetadata {
     /// Hash of the header.
     id: BlockId,
+}
+
+#[cfg(any(test, feature = "test-helpers"))]
+impl Default for BlockHeader {
+    fn default() -> Self {
+        let mut default = Self {
+            application: Default::default(),
+            consensus: Default::default(),
+            metadata: None,
+        };
+        default.recalculate_metadata();
+        default
+    }
 }
 
 // Accessors for the consensus header.
@@ -161,11 +172,19 @@ impl PartialBlockHeader {
 impl BlockHeader {
     /// Re-generate the header metadata.
     pub fn recalculate_metadata(&mut self) {
+        let application_hash = self.application.hash();
+        self.consensus.generated.application_hash = application_hash;
         self.metadata = Some(BlockHeaderMetadata { id: self.hash() });
     }
 
     /// Get the hash of the fuel header.
     pub fn hash(&self) -> BlockId {
+        // The `BlockHeader` can be created only via the [`PartialBlockHeader::generate`] method,
+        // which calculates the hash of the `ApplicationHeader`. So the block header is immutable
+        // and can't change its final hash on the fly.
+        //
+        // This assertion is a double-checks that this behavior is not changed.
+        debug_assert_eq!(self.consensus.application_hash, self.application.hash());
         // This internally hashes the hash of the application header.
         self.consensus.hash()
     }
@@ -226,20 +245,21 @@ impl PartialBlockHeader {
             },
         };
 
-        // Generate the hash of the complete application header.
-        let application_hash = application.hash();
         let mut header = BlockHeader {
             application,
             consensus: ConsensusHeader {
                 prev_root: self.consensus.prev_root,
                 height: self.consensus.height,
                 time: self.consensus.time,
-                generated: GeneratedConsensusFields { application_hash },
+                generated: GeneratedConsensusFields {
+                    // Calculates it inside of `BlockHeader::recalculate_metadata`.
+                    application_hash: Default::default(),
+                },
             },
             metadata: None,
         };
 
-        // cache the hash.
+        // Cache the hash.
         header.recalculate_metadata();
         header
     }
@@ -256,7 +276,7 @@ fn generate_txns_root(transactions: &[Vec<u8>]) -> Bytes32 {
 
 impl ApplicationHeader<GeneratedApplicationFields> {
     /// Hash the application header.
-    fn hash(&self) -> Bytes32 {
+    pub fn hash(&self) -> Bytes32 {
         // Order matters and is the same as the spec.
         let mut hasher = crate::fuel_crypto::Hasher::default();
         hasher.input(&self.da_height.to_bytes()[..]);
@@ -270,7 +290,7 @@ impl ApplicationHeader<GeneratedApplicationFields> {
 
 impl ConsensusHeader<GeneratedConsensusFields> {
     /// Hash the consensus header.
-    fn hash(&self) -> BlockId {
+    pub fn hash(&self) -> BlockId {
         // Order matters and is the same as the spec.
         let mut hasher = crate::fuel_crypto::Hasher::default();
         hasher.input(self.prev_root.as_ref());
