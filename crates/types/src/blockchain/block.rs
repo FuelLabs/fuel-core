@@ -26,7 +26,7 @@ use crate::{
 };
 
 /// Fuel block with all transaction data included
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 pub struct Block<TransactionRepresentation = Transaction> {
@@ -128,6 +128,12 @@ impl CompressedBlock {
 impl<TransactionRepresentation> Block<TransactionRepresentation> {
     /// Get the hash of the header.
     pub fn id(&self) -> BlockId {
+        // The `Block` can be created only via the `Block::new` method, which calculates the
+        // identifier based on the header. So the block is immutable and can't change its
+        // identifier on the fly.
+        //
+        // This assertion is a double-checks that this behavior is not changed.
+        debug_assert_eq!(self.header.id(), self.header.hash());
         self.header.id()
     }
 
@@ -209,7 +215,6 @@ impl From<Block> for PartialFuelBlock {
                     time,
                     generated: Empty {},
                 },
-                metadata: None,
             },
             transactions,
         }

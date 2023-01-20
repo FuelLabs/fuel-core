@@ -119,7 +119,6 @@ fn add_genesis_block(config: &Config, database: &mut Database) -> anyhow::Result
                 time: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
                 generated: Empty,
             },
-            metadata: None,
         },
         // Genesis block doesn't have any transaction.
         vec![],

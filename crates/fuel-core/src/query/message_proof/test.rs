@@ -154,7 +154,6 @@ async fn can_build_message_proof() {
             time: Tai64::UNIX_EPOCH,
             generated: Default::default(),
         },
-        metadata: None,
     };
     data.expect_block()
         .once()
