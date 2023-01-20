@@ -202,6 +202,7 @@ where
             p2p_event = self.p2p_service.next_event() => {
                 match p2p_event {
                     Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height }) => {
+                        let peer_id: Vec<u8> = peer_id.into();
                         let block_height_data = BlockHeightHeartbeatData {
                             peer_id: peer_id.into(),
                             block_height,

@@ -53,10 +53,6 @@ pub struct SourcePeer<T> {
     pub data: T,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-/// Opaque peer identifier.
-pub struct PeerId(Vec<u8>);
-
 impl<T> GossipData<T> {
     /// Construct a new gossip message
     pub fn new(
@@ -87,9 +83,19 @@ impl<T: Debug + Send + 'static> NetworkData<T> for GossipData<T> {
 #[derive(Debug, Clone)]
 pub struct BlockHeightHeartbeatData {
     /// PeerId as bytes
-    pub peer_id: Vec<u8>,
+    pub peer_id: PeerId,
     /// Latest BlockHeight received
     pub block_height: BlockHeight,
+}
+
+/// Opaque peer identifier.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PeerId(Vec<u8>);
+
+impl AsRef<[u8]> for PeerId {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
 }
 
 impl From<Vec<u8>> for PeerId {
