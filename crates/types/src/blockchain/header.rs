@@ -29,6 +29,7 @@ pub struct BlockHeader {
     pub consensus: ConsensusHeader<GeneratedConsensusFields>,
     /// The header metadata calculated during creation.
     /// The field is private to enforce the use of the [`PartialBlockHeader::generate`] method.
+    #[cfg_attr(feature = "serde", serde(skip))]
     metadata: Option<BlockHeaderMetadata>,
 }
 
