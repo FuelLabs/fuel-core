@@ -6,7 +6,7 @@ publish = false
 version = "0.0.0"
 
 [dependencies]
-clap = { version = "4.0.17", features = ["derive"] }
+clap = { version = "4", features = ["derive"] }
 criterion = { version = "0.4", features = ["html_reports"] }
 ctrlc = "3.2.3"
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
