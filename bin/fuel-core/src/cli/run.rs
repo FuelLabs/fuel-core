@@ -51,6 +51,7 @@ mod p2p;
 #[cfg(feature = "relayer")]
 mod relayer;
 
+/// Run the Fuel client node locally.
 #[derive(Debug, Clone, Parser)]
 pub struct Command {
     #[clap(long = "ip", default_value = "127.0.0.1", parse(try_from_str))]
