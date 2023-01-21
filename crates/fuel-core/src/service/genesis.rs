@@ -10,6 +10,7 @@ use fuel_core_chain_config::{
 };
 use fuel_core_executor::refs::ContractRef;
 use fuel_core_poa::ports::BlockDb;
+use fuel_core_producer::ports::BlockExecutor;
 use fuel_core_storage::{
     tables::{
         Coins,

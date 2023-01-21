@@ -5,7 +5,6 @@ use fuel_core_storage::{
     Mappable,
     Result as StorageResult,
     StorageInspect,
-    StorageMutate,
 };
 use fuel_core_types::{
     blockchain::{
@@ -72,14 +71,6 @@ pub trait BinaryMerkleTreeStorage {
     where
         Table: Mappable<Key = u64, SetValue = Primitive, GetValue = Primitive>,
         Self: StorageInspect<Table, Error = StorageError>;
-
-    fn load_mut_binary_merkle_tree<Table>(
-        &mut self,
-        version: u64,
-    ) -> Result<MerkleTree<Table, &mut Self>, StorageError>
-    where
-        Table: Mappable<Key = u64, SetValue = Primitive, GetValue = Primitive>,
-        Self: StorageMutate<Table, Error = StorageError>;
 }
 
 #[async_trait]

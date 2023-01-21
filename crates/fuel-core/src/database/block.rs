@@ -51,7 +51,6 @@ use itertools::Itertools;
 use std::{
     borrow::{
         Borrow,
-        BorrowMut,
         Cow,
     },
     convert::{
@@ -375,19 +374,6 @@ impl BinaryMerkleTreeStorage for Database {
         Self: StorageInspect<Table, Error = StorageError>,
     {
         let storage = self.borrow();
-        let tree = MerkleTree::load(storage, version).unwrap();
-        Ok(tree)
-    }
-
-    fn load_mut_binary_merkle_tree<Table>(
-        &mut self,
-        version: u64,
-    ) -> Result<MerkleTree<Table, &mut Self>, StorageError>
-    where
-        Table: Mappable<Key = u64, SetValue = Primitive, GetValue = Primitive>,
-        Self: StorageMutate<Table, Error = StorageError>,
-    {
-        let storage = self.borrow_mut();
         let tree = MerkleTree::load(storage, version).unwrap();
         Ok(tree)
     }

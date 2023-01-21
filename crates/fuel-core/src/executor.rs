@@ -8,7 +8,10 @@ use crate::{
     service::Config,
 };
 use fuel_core_executor::refs::ContractRef;
-use fuel_core_producer::ports::Executor as ExecutorTrait;
+use fuel_core_producer::ports::{
+    BlockExecutor,
+    Executor as ExecutorTrait,
+};
 use fuel_core_storage::{
     tables::{
         Coins,

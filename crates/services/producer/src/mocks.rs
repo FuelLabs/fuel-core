@@ -335,18 +335,6 @@ impl BinaryMerkleTreeStorage for MockDb {
         let tree = MerkleTree::load(self, version).unwrap();
         Ok(tree)
     }
-
-    fn load_mut_binary_merkle_tree<Table>(
-        &mut self,
-        version: u64,
-    ) -> Result<MerkleTree<Table, &mut Self>, StorageError>
-    where
-        Table: Mappable<Key = u64, SetValue = Primitive, GetValue = Primitive>,
-        Self: StorageMutate<Table, Error = StorageError>,
-    {
-        let tree = MerkleTree::load(self, version).unwrap();
-        Ok(tree)
-    }
 }
 
 impl BlockExecutor for MockDb {
