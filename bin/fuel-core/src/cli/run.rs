@@ -112,8 +112,8 @@ pub struct Command {
     #[clap(flatten)]
     pub relayer_args: relayer::RelayerArgs,
 
+    #[cfg_attr(feature = "p2p", clap(flatten))]
     #[cfg(feature = "p2p")]
-    #[clap(flatten)]
     pub p2p_args: p2p::P2PArgs,
 
     #[clap(long = "metrics")]

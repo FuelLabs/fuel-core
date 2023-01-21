@@ -5,6 +5,7 @@ use fuel_core_types::{
     fuel_tx::*,
     fuel_vm::{
         consts::*,
+        interpreter::diff,
         *,
     },
 };
@@ -13,6 +14,8 @@ use std::{
     io,
     iter,
 };
+
+const LARGE_GAS_LIMIT: u64 = u64::MAX - 1001;
 
 fn new_db() -> VmDatabase {
     // when rocksdb is enabled, this creates a new db instance with a temporary path
@@ -62,6 +65,7 @@ pub struct VmBench {
     pub maturity: Word,
     pub height: Word,
     pub prepare_script: Vec<Opcode>,
+    pub post_call: Vec<Opcode>,
     pub data: Vec<u8>,
     pub inputs: Vec<Input>,
     pub outputs: Vec<Output>,
@@ -78,6 +82,7 @@ pub struct VmBench {
 pub struct VmBenchPrepared {
     pub vm: Interpreter<VmDatabase, Script>,
     pub instruction: Instruction,
+    pub diff: diff::Diff<diff::InitialVmState>,
 }
 
 impl VmBench {
@@ -86,12 +91,16 @@ impl VmBench {
 
     pub fn new(instruction: Opcode) -> Self {
         Self {
-            params: ConsensusParameters::default(),
+            params: ConsensusParameters {
+                max_gas_per_tx: LARGE_GAS_LIMIT + 1,
+                ..Default::default()
+            },
             gas_price: 0,
-            gas_limit: 1_000_000,
+            gas_limit: LARGE_GAS_LIMIT,
             maturity: 0,
             height: 0,
             prepare_script: vec![],
+            post_call: vec![],
             data: vec![],
             inputs: vec![],
             outputs: vec![],
@@ -201,6 +210,11 @@ impl VmBench {
         self
     }
 
+    pub fn with_post_call(mut self, post_call: Vec<Opcode>) -> Self {
+        self.post_call = post_call;
+        self
+    }
+
     pub fn with_data(mut self, data: Vec<u8>) -> Self {
         self.data = data;
         self
@@ -249,25 +263,6 @@ impl VmBench {
     }
 }
 
-impl VmBenchPrepared {
-    pub fn run(self) -> io::Result<Interpreter<VmDatabase, Script>> {
-        let Self {
-            mut vm,
-            instruction,
-        } = self;
-
-        let (op, ra, rb, rc, rd, _imm) = instruction.into_inner();
-
-        match op {
-            OpcodeRepr::CALL => vm
-                .prepare_call(ra, rb, rc, rd)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?,
-            _ => vm.instruction(instruction).map(|_| ())?,
-        }
-        Ok(vm)
-    }
-}
-
 impl TryFrom<VmBench> for VmBenchPrepared {
     type Error = io::Error;
 
@@ -279,6 +274,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             maturity,
             height,
             prepare_script,
+            post_call,
             data,
             inputs,
             outputs,
@@ -374,15 +370,17 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             tx.add_witness(w);
         });
 
+        let mut p = params;
+        p.gas_per_byte = 0;
         let tx = tx
             .gas_price(gas_price)
             .gas_limit(gas_limit)
             .maturity(maturity)
-            .finalize_checked(height, &params);
+            .finalize_checked(height, &p);
 
         let instruction = Instruction::from(instruction);
 
-        let mut txtor = Transactor::new(db, params);
+        let mut txtor = Transactor::new(db, params, GasCosts::free());
 
         txtor.transact(tx);
 
@@ -393,8 +391,35 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
             vm.prepare_call(ra, rb, rc, rd)
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            for op in post_call {
+                let instruction = Instruction::from(op);
+                vm.instruction(instruction).unwrap();
+            }
         }
 
-        Ok(Self { vm, instruction })
+        let code = OpcodeRepr::from_u8(instruction.op());
+        let start_vm = vm.clone();
+        let mut vm = vm.add_recording();
+        match code {
+            OpcodeRepr::CALL => {
+                let (_, ra, rb, rc, rd, _imm) = instruction.into_inner();
+                vm.prepare_call(ra, rb, rc, rd).unwrap();
+            }
+            _ => {
+                vm.instruction(instruction).unwrap();
+            }
+        }
+        let storage_diff = vm.storage_diff();
+        let mut vm = vm.remove_recording();
+        let mut diff = start_vm.diff(&vm);
+        diff += storage_diff;
+        let diff: diff::Diff<diff::InitialVmState> = diff.into();
+        vm.reset_vm_state(&diff);
+
+        Ok(Self {
+            vm,
+            instruction,
+            diff,
+        })
     }
 }

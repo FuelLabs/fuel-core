@@ -11,6 +11,10 @@ use fuel_core_types::{
         AssetId,
         Bytes32,
     },
+    fuel_vm::{
+        GasCosts,
+        GasCostsValues,
+    },
 };
 use itertools::Itertools;
 use rand::{
@@ -21,7 +25,11 @@ use serde::{
     Deserialize,
     Serialize,
 };
-use serde_with::skip_serializing_none;
+use serde_with::{
+    serde_as,
+    skip_serializing_none,
+    FromInto,
+};
 use std::{
     io::ErrorKind,
     path::PathBuf,
@@ -41,6 +49,7 @@ pub const FUEL_BECH32_HRP: &str = "fuel";
 pub const LOCAL_TESTNET: &str = "local_testnet";
 pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 
+#[serde_as]
 // TODO: Remove not consensus/network fields from `ChainConfig` or create a new config only
 //  for consensus/network fields.
 #[skip_serializing_none]
@@ -52,6 +61,9 @@ pub struct ChainConfig {
     #[serde(default)]
     pub initial_state: Option<StateConfig>,
     pub transaction_parameters: ConsensusParameters,
+    #[serde(default)]
+    #[serde_as(as = "FromInto<GasCostsValues>")]
+    pub gas_costs: GasCosts,
 }
 
 impl Default for ChainConfig {
@@ -64,6 +76,7 @@ impl Default for ChainConfig {
             block_gas_limit: ConsensusParameters::DEFAULT.max_gas_per_tx * 10, /* TODO: Pick a sensible default */
             transaction_parameters: ConsensusParameters::DEFAULT,
             initial_state: None,
+            gas_costs: GasCosts::default(),
         }
     }
 }

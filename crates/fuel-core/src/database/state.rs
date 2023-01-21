@@ -26,7 +26,7 @@ use fuel_core_types::{
 use itertools::Itertools;
 use std::borrow::Cow;
 
-impl StorageInspect<ContractsState<'_>> for Database {
+impl StorageInspect<ContractsState> for Database {
     type Error = StorageError;
 
     fn get(
@@ -45,7 +45,7 @@ impl StorageInspect<ContractsState<'_>> for Database {
     }
 }
 
-impl StorageMutate<ContractsState<'_>> for Database {
+impl StorageMutate<ContractsState> for Database {
     fn insert(
         &mut self,
         key: &(&ContractId, &Bytes32),
@@ -65,7 +65,7 @@ impl StorageMutate<ContractsState<'_>> for Database {
     }
 }
 
-impl MerkleRootStorage<ContractId, ContractsState<'_>> for Database {
+impl MerkleRootStorage<ContractId, ContractsState> for Database {
     fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Self::Error> {
         let items: Vec<_> = Database::iter_all::<Vec<u8>, Bytes32>(
             self,
