@@ -4,6 +4,8 @@
 *.tfstate*
 *.terraform.lock.hcl*
 .vscode
+.envrc
+.direnv
 .cov
 lcov.info
 version-compatibility/Cargo.lock

@@ -114,7 +114,7 @@ pub trait DatabaseCoins: StorageInspect<Coins, Error = StorageError> {
 pub trait DatabaseContracts:
     StorageInspect<ContractsRawCode, Error = StorageError>
     + StorageInspect<ContractsInfo, Error = StorageError>
-    + for<'a> StorageInspect<ContractsAssets<'a>, Error = StorageError>
+    + StorageInspect<ContractsAssets, Error = StorageError>
 {
     fn contract_balances(
         &self,
