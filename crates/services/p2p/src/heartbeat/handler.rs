@@ -219,7 +219,7 @@ impl ConnectionHandler for HeartbeatHandler {
                         }
                         Poll::Ready(Err(_)) => {
                             self.failure_count += 1;
-                            debug!(target: "fuel-libp2p", "Sending Heartbeat failed, this is {} time it failed with this connection", self.failure_count);
+                            debug!(target: "fuel-libp2p", "Sending Heartbeat failed, {}/{} failures for this connection", self.failure_count,  self.config.max_failures);
                         }
                     }
                 }
