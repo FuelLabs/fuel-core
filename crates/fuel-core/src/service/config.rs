@@ -76,14 +76,16 @@ impl Config {
             consensus_key: Some(Secret::new(default_consensus_dev_key().into())),
         }
     }
+}
 
-    pub fn poa_config(&self) -> anyhow::Result<fuel_core_poa::Config> {
-        Ok(fuel_core_poa::Config {
-            trigger: self.block_production,
-            block_gas_limit: self.chain_conf.block_gas_limit,
-            signing_key: self.consensus_key.clone(),
+impl From<&Config> for fuel_core_poa::Config {
+    fn from(config: &Config) -> Self {
+        fuel_core_poa::Config {
+            trigger: config.block_production,
+            block_gas_limit: config.chain_conf.block_gas_limit,
+            signing_key: config.consensus_key.clone(),
             metrics: false,
-        })
+        }
     }
 }
 

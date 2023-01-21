@@ -103,7 +103,7 @@ pub fn init_sub_services(
     });
 
     let poa = fuel_core_poa::new_service(
-        config.poa_config()?,
+        config.into(),
         TxPoolAdapter::new(txpool.shared.clone()),
         // TODO: Pass Importer
         importer_adapter.tx,
