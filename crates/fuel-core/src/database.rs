@@ -293,7 +293,7 @@ impl AsRef<Database> for Database {
 }
 
 /// Implemented to satisfy: `GenesisCommitment for ContractRef<&'a mut Database>`
-impl ContractStorageTrait<'_> for Database {
+impl ContractStorageTrait for Database {
     type InnerError = StorageError;
 }
 
