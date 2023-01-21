@@ -2446,7 +2446,6 @@ version = "0.15.1"
 dependencies = [
  "anyhow",
  "async-trait",
- "fuel-core-chain-config",
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-types",

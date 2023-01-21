@@ -12,7 +12,10 @@ use fuel_core::{
     chain_config::ChainConfig,
     producer::Config as ProducerConfig,
     service::{
-        config::default_consensus_dev_key,
+        config::{
+            default_consensus_dev_key,
+            Trigger,
+        },
         Config,
         DbType,
         ServiceTrait,
@@ -35,6 +38,7 @@ use std::{
     ops::Deref,
     path::PathBuf,
     str::FromStr,
+    time::Duration,
 };
 use strum::VariantNames;
 use tracing::{
@@ -50,13 +54,6 @@ mod p2p;
 
 #[cfg(feature = "relayer")]
 mod relayer;
-
-#[derive(clap::ArgEnum, Default, Debug, Clone)]
-pub enum NodeRole {
-    #[default]
-    Producer,
-    Validator,
-}
 
 #[derive(Debug, Clone, Parser)]
 pub struct Command {
@@ -103,9 +100,23 @@ pub struct Command {
     #[clap(long = "consensus-key")]
     pub consensus_key: Option<String>,
 
-    /// The role of the node.
-    #[clap(arg_enum, long = "node-role", default_value = "producer")]
-    pub node_role: NodeRole,
+    /// A new block is produced instantly when transactions are available.
+    #[clap(long = "instant", default_value = "false")]
+    pub instant: bool,
+
+    /// A new block is produced periodically. Used to simulate consensus block delay in millisecond.
+    #[clap(long = "interval")]
+    pub interval: Option<u64>,
+
+    /// A new block will be produced when on of timers runs out.
+    /// It accepts three durations in milliseconds:
+    ///
+    /// `min_block_time` - Minimum time between two blocks, even if there are more txs available.
+    /// `max_tx_idle_time` - If there are txs available, but not enough for a full block,
+    /// this is how long the block is waiting for more txs.
+    /// `max_block_time` - Time after which a new block is produced, even if it's empty.
+    #[clap(long = "hybrid")]
+    pub hybrid: Option<Vec<u64>>,
 
     /// Use a default insecure consensus key for testing purposes.
     /// This will not be enabled by default in the future.
@@ -143,7 +154,9 @@ impl Command {
             utxo_validation,
             min_gas_price,
             consensus_key,
-            node_role,
+            instant,
+            interval,
+            hybrid,
             consensus_dev_key,
             coinbase_recipient,
             #[cfg(feature = "relayer")]
@@ -187,14 +200,31 @@ impl Command {
             Address::from(*sk.public_key().hash())
         };
 
+        let trigger = match (instant, interval, hybrid) {
+            (false, None, None) => Trigger::Never,
+            (true, None, None) => Trigger::Instant,
+            (false, Some(block_time), None) => Trigger::Interval { block_time: Duration::from_millis(block_time) },
+            (_, _, Some(hybrid)) if hybrid.len() != 3 => {
+                return Err(anyhow!("The `hybrid` accepts only three arguments: `min_block_time`, `max_tx_idle_time`, `max_block_time`"))
+            },
+            (false, None, Some(hybrid)) => Trigger::Hybrid {
+                min_block_time: Duration::from_millis(hybrid[0]),
+                max_tx_idle_time: Duration::from_millis(hybrid[1]),
+                max_block_time: Duration::from_millis(hybrid[2]),
+            },
+            _ => {
+                return Err(anyhow!("Only one production mode is allowed, either `instant`, or `interval`, or `hybrid`"))
+            }
+        };
+
         Ok(Config {
             addr,
-            node_role: node_role.into(),
             database_path,
             database_type,
             chain_conf: chain_conf.clone(),
             utxo_validation,
             manual_blocks_enabled,
+            block_production: trigger,
             vm: VMConfig {
                 backtrace: vm_backtrace,
             },
@@ -245,14 +275,5 @@ fn load_consensus_key(
         Ok(Some(Secret::new(key.into())))
     } else {
         Ok(None)
-    }
-}
-
-impl From<NodeRole> for fuel_core::service::config::NodeRole {
-    fn from(node_role: NodeRole) -> Self {
-        match node_role {
-            NodeRole::Producer => fuel_core::service::config::NodeRole::Producer,
-            NodeRole::Validator => fuel_core::service::config::NodeRole::Validator,
-        }
     }
 }

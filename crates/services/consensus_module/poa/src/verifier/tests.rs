@@ -8,7 +8,6 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::time::Duration;
 use test_case::test_case;
 
 struct Input {
@@ -32,8 +31,6 @@ fn correct() -> Input {
     Input {
         c: Config {
             enabled_manual_blocks: false,
-            perform_strict_time_rules: false,
-            production: PoABlockProduction::Instant,
         },
         block_header_merkle_root: [2u8; 32],
         prev_header_time: Tai64(2),
@@ -88,87 +85,6 @@ fn correct() -> Input {
         i.ch.time = Tai64(1);
         i
     } => matches Err(_) ; "time before prev header"
-)]
-#[test_case(
-    {
-        let mut i = correct();
-        i.c.perform_strict_time_rules = true;
-        i
-    } => matches Ok(_) ; "Strict rules with correct block"
-)]
-#[test_case(
-    {
-        let mut i = correct();
-        i.c.perform_strict_time_rules = true;
-        i.ch.time = Tai64(1);
-        i
-    } => matches Err(_) ; "time before prev header with strict rules"
-)]
-#[test_case(
-    {
-        let mut i = correct();
-        i.c.perform_strict_time_rules = true;
-        i.c.production = PoABlockProduction::Interval { block_time: Duration::from_secs(4) };
-        i.ch.time = Tai64(7);
-        i
-    } => matches Ok(_) ; "interval time ok"
-)]
-#[test_case(
-    {
-        let mut i = correct();
-        i.c.perform_strict_time_rules = true;
-        i.c.production = PoABlockProduction::Interval { block_time: Duration::from_secs(4) };
-        i.ch.time = Tai64(5);
-        i
-    } => matches Err(_) ; "interval time too early"
-)]
-#[test_case(
-    {
-        let mut i = correct();
-        i.c.perform_strict_time_rules = true;
-        i.c.production = PoABlockProduction::Interval { block_time: Duration::from_secs(4) };
-        i.ch.time = Tai64(9);
-        i
-    } => matches Err(_) ; "interval time too late"
-)]
-#[test_case(
-    {
-        let mut i = correct();
-        i.c.perform_strict_time_rules = true;
-        i.c.production = PoABlockProduction::Hybrid {
-            min_block_time: Duration::from_secs(4),
-            max_tx_idle_time: Duration::from_secs(5),
-            max_block_time: Duration::from_secs(6),
-        };
-        i.ch.time = Tai64(7);
-        i
-    } => matches Ok(_) ; "hybrid time ok"
-)]
-#[test_case(
-    {
-        let mut i = correct();
-        i.c.perform_strict_time_rules = true;
-        i.c.production = PoABlockProduction::Hybrid {
-            min_block_time: Duration::from_secs(4),
-            max_tx_idle_time: Duration::from_secs(5),
-            max_block_time: Duration::from_secs(6),
-        };
-        i.ch.time = Tai64(5);
-        i
-    } => matches Err(_) ; "hybrid time too early"
-)]
-#[test_case(
-    {
-        let mut i = correct();
-        i.c.perform_strict_time_rules = true;
-        i.c.production = PoABlockProduction::Hybrid {
-            min_block_time: Duration::from_secs(4),
-            max_tx_idle_time: Duration::from_secs(5),
-            max_block_time: Duration::from_secs(6),
-        };
-        i.ch.time = Tai64(14);
-        i
-    } => matches Err(_) ; "hybrid time too late"
 )]
 fn test_verify_genesis_block_fields(input: Input) -> anyhow::Result<()> {
     let Input {

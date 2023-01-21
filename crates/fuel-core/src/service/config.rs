@@ -1,8 +1,4 @@
-use fuel_core_chain_config::{
-    BlockProduction,
-    ChainConfig,
-    PoABlockProduction,
-};
+use fuel_core_chain_config::ChainConfig;
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
     fuel_vm::SecretKey,
@@ -26,24 +22,19 @@ use fuel_core_p2p::config::{
     Config as P2PConfig,
     NotInitialized,
 };
-use fuel_core_poa::Trigger;
 
-#[derive(Clone, Debug)]
-pub enum NodeRole {
-    Producer,
-    Validator,
-}
+pub use fuel_core_poa::Trigger;
 
 #[derive(Clone, Debug)]
 pub struct Config {
     pub addr: SocketAddr,
-    pub node_role: NodeRole,
     pub database_path: PathBuf,
     pub database_type: DbType,
     pub chain_conf: ChainConfig,
     // default to false until downstream consumers stabilize
     pub utxo_validation: bool,
     pub manual_blocks_enabled: bool,
+    pub block_production: Trigger,
     pub vm: VMConfig,
     pub txpool: fuel_core_txpool::Config,
     pub block_producer: fuel_core_producer::Config,
@@ -63,11 +54,11 @@ impl Config {
         let min_gas_price = 0;
         Self {
             addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
-            node_role: NodeRole::Producer,
             database_path: Default::default(),
             database_type: DbType::InMemory,
             chain_conf: chain_conf.clone(),
             manual_blocks_enabled: false,
+            block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,
             txpool: fuel_core_txpool::Config::new(
@@ -87,33 +78,8 @@ impl Config {
     }
 
     pub fn poa_config(&self) -> anyhow::Result<fuel_core_poa::Config> {
-        let BlockProduction::ProofOfAuthority { trigger } =
-            self.chain_conf.block_production.clone();
-
-        let trigger = match self.node_role {
-            NodeRole::Producer => match trigger {
-                PoABlockProduction::Instant => Trigger::Instant,
-                PoABlockProduction::Interval {
-                    block_time: average_block_time,
-                    ..
-                } => Trigger::Interval {
-                    block_time: average_block_time,
-                },
-                PoABlockProduction::Hybrid {
-                    min_block_time,
-                    max_block_time,
-                    max_tx_idle_time,
-                } => Trigger::Hybrid {
-                    min_block_time,
-                    max_block_time,
-                    max_tx_idle_time,
-                },
-            },
-            NodeRole::Validator => Trigger::Never,
-        };
-
         Ok(fuel_core_poa::Config {
-            trigger,
+            trigger: self.block_production,
             block_gas_limit: self.chain_conf.block_gas_limit,
             signing_key: self.consensus_key.clone(),
             metrics: false,
