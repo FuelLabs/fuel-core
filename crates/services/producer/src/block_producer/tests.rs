@@ -7,7 +7,10 @@ use crate::{
         MockRelayer,
         MockTxPool,
     },
-    ports::Executor,
+    ports::{
+        BlockExecutor,
+        Executor,
+    },
     Config,
     Producer,
 };
@@ -24,6 +27,7 @@ use fuel_core_types::{
             PartialBlockHeader,
         },
     },
+    fuel_merkle::storage::StorageMutateInfallible,
     services::executor::Error as ExecutorError,
 };
 use rand::{
@@ -86,12 +90,17 @@ async fn can_produce_next_block() {
     .generate(&[])
     .compress();
 
-    let db = MockDb {
-        blocks: Arc::new(Mutex::new(
-            vec![(prev_height, previous_block)].into_iter().collect(),
-        )),
-        ..Default::default()
-    };
+    // let db = MockDb {
+    //     blocks: Arc::new(Mutex::new(
+    //         vec![(prev_height, previous_block)].into_iter().collect(),
+    //     )),
+    //     ..Default::default()
+    // };
+
+    let mut db = MockDb::default();
+
+    db.insert_block(&previous_block.id(), &previous_block)
+        .unwrap();
 
     let ctx = TestContext::default_from_db(db);
     let producer = ctx.producer();

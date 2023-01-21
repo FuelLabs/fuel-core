@@ -1,8 +1,6 @@
 use fuel_core::{
-    database::{
-        block::BlockExecutor,
-        Database,
-    },
+    database::Database,
+    producer::ports::BlockExecutor,
     schema::scalars::BlockId,
     service::{
         Config,

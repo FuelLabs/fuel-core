@@ -6,7 +6,8 @@ use crate::{
 };
 
 /// Metadata for dense Merkle trees
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DenseMerkleMetadata {
     /// The root hash of the dense Merkle tree structure
     pub root: Bytes32,

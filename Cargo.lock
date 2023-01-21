@@ -2599,7 +2599,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.4.1"
-source = "git+https://github.com/FuelLabs/fuel-merkle?branch=bvrooman/chore/clean-up-for-core-integration#b37811724542f8f07ac2855dde522f071d0880ae"
+source = "git+https://github.com/FuelLabs/fuel-merkle?branch=bvrooman/chore/clean-up-for-core-integration#65e5fca368ec1468e77b63f960d8917bc2c376ab"
 dependencies = [
  "digest 0.10.6",
  "fuel-storage",

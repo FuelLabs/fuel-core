@@ -1,15 +1,20 @@
 use crate::ports::{
+    BinaryMerkleTreeStorage,
+    BlockExecutor,
     BlockProducerDatabase,
     Executor,
     Relayer,
     TxPool,
 };
 use fuel_core_storage::{
+    tables::FuelBlockMerkleData,
     transactional::{
         StorageTransaction,
         Transaction,
     },
+    Mappable,
     Result as StorageResult,
+    StorageAsMut,
 };
 use fuel_core_types::{
     blockchain::{
@@ -192,6 +197,8 @@ impl Executor<MockDb> for FailingMockExecutor {
 #[derive(Clone, Default, Debug)]
 pub struct MockDb {
     pub blocks: Arc<Mutex<HashMap<BlockHeight, CompressedBlock>>>,
+    pub blocks_by_id: Arc<Mutex<HashMap<BlockId, CompressedBlock>>>,
+    pub merklized_blocks: Arc<Mutex<HashMap<u64, Primitive>>>,
     pub messages: Arc<Mutex<HashMap<MessageId, Message>>>,
 }
 
@@ -209,5 +216,159 @@ impl BlockProducerDatabase for MockDb {
         let blocks = self.blocks.lock().unwrap();
 
         Ok(blocks.keys().max().cloned().unwrap_or_default())
+    }
+}
+
+use fuel_core_storage::{
+    tables::FuelBlocks,
+    Error as StorageError,
+};
+use fuel_core_types::{
+    blockchain::primitives::BlockId,
+    fuel_merkle::{
+        binary::{
+            MerkleTree,
+            Primitive,
+        },
+        storage::{
+            StorageInspect,
+            StorageMutate,
+        },
+    },
+};
+
+impl StorageInspect<FuelBlocks> for MockDb {
+    type Error = StorageError;
+
+    fn get(&self, key: &BlockId) -> Result<Option<Cow<CompressedBlock>>, Self::Error> {
+        let blocks = self.blocks_by_id.lock().unwrap();
+
+        Ok(blocks.get(&key).cloned().map(Cow::Owned))
+    }
+
+    fn contains_key(&self, key: &BlockId) -> Result<bool, Self::Error> {
+        let blocks = self.blocks_by_id.lock().unwrap();
+
+        Ok(blocks.contains_key(&key))
+    }
+}
+
+impl StorageMutate<FuelBlocks> for MockDb {
+    fn insert(
+        &mut self,
+        key: &BlockId,
+        value: &CompressedBlock,
+    ) -> Result<Option<CompressedBlock>, Self::Error> {
+        let mut blocks = self.blocks_by_id.lock().unwrap();
+
+        Ok(blocks.insert(*key, value.clone()))
+    }
+
+    fn remove(&mut self, key: &BlockId) -> Result<Option<CompressedBlock>, Self::Error> {
+        let mut blocks = self.blocks_by_id.lock().unwrap();
+
+        Ok(blocks.remove(&key))
+    }
+}
+
+impl StorageInspect<FuelBlockMerkleData> for MockDb {
+    type Error = StorageError;
+
+    fn get(&self, key: &u64) -> Result<Option<Cow<Primitive>>, Self::Error> {
+        let merklized_blocks = self.merklized_blocks.lock().unwrap();
+
+        Ok(merklized_blocks.get(&key).cloned().map(Cow::Owned))
+    }
+
+    fn contains_key(&self, key: &u64) -> Result<bool, Self::Error> {
+        let merklized_blocks = self.merklized_blocks.lock().unwrap();
+
+        Ok(merklized_blocks.contains_key(key))
+    }
+}
+
+impl StorageMutate<FuelBlockMerkleData> for MockDb {
+    fn insert(
+        &mut self,
+        key: &u64,
+        value: &Primitive,
+    ) -> Result<Option<Primitive>, Self::Error> {
+        let mut merklized_blocks = self.merklized_blocks.lock().unwrap();
+
+        Ok(merklized_blocks.insert(*key, *value))
+    }
+
+    fn remove(&mut self, key: &u64) -> Result<Option<Primitive>, Self::Error> {
+        let mut merklized_blocks = self.merklized_blocks.lock().unwrap();
+
+        Ok(merklized_blocks.remove(&key))
+    }
+}
+
+impl StorageMutate<FuelBlockMerkleData> for &MockDb {
+    fn insert(
+        &mut self,
+        key: &u64,
+        value: &Primitive,
+    ) -> Result<Option<Primitive>, Self::Error> {
+        let mut merklized_blocks = self.merklized_blocks.lock().unwrap();
+
+        Ok(merklized_blocks.insert(*key, *value))
+    }
+
+    fn remove(&mut self, key: &u64) -> Result<Option<Primitive>, Self::Error> {
+        let mut merklized_blocks = self.merklized_blocks.lock().unwrap();
+
+        Ok(merklized_blocks.remove(&key))
+    }
+}
+
+impl BinaryMerkleTreeStorage for MockDb {
+    fn load_binary_merkle_tree<Table>(
+        &self,
+        version: u64,
+    ) -> Result<MerkleTree<Table, &Self>, StorageError>
+    where
+        Table: Mappable<Key = u64, SetValue = Primitive, GetValue = Primitive>,
+        Self: StorageInspect<Table, Error = StorageError>,
+    {
+        let tree = MerkleTree::load(self, version).unwrap();
+        Ok(tree)
+    }
+
+    fn load_mut_binary_merkle_tree<Table>(
+        &mut self,
+        version: u64,
+    ) -> Result<MerkleTree<Table, &mut Self>, StorageError>
+    where
+        Table: Mappable<Key = u64, SetValue = Primitive, GetValue = Primitive>,
+        Self: StorageMutate<Table, Error = StorageError>,
+    {
+        let tree = MerkleTree::load(self, version).unwrap();
+        Ok(tree)
+    }
+}
+
+impl BlockExecutor for MockDb {
+    fn insert_block(
+        &mut self,
+        block_id: &BlockId,
+        block: &CompressedBlock,
+    ) -> Result<(), StorageError> {
+        self.storage::<FuelBlocks>()
+            .insert(block_id, block)
+            .unwrap();
+
+        let mut blocks = self.blocks.lock().unwrap();
+        blocks.insert(*block.header().height(), block.clone());
+
+        // Get the number of Merklized blocks
+        let version = self.merklized_blocks.lock().unwrap().len();
+        let mut tree = self
+            .load_binary_merkle_tree::<FuelBlockMerkleData>(version as u64)
+            .unwrap();
+        tree.push(block_id.as_slice()).unwrap();
+
+        Ok(())
     }
 }

@@ -1,7 +1,6 @@
 use crate::{
     ports,
     ports::{
-        BinaryMerkleMetadataStorage,
         BinaryMerkleTreeStorage,
         BlockProducerDatabase,
     },
@@ -37,7 +36,6 @@ use fuel_core_types::{
         Transaction,
     },
     fuel_types::Bytes32,
-    fuel_vm::crypto::ephemeral_merkle_root,
     services::executor::{
         ExecutionBlock,
         UncommittedResult,
@@ -223,20 +221,22 @@ where
             Err(Error::GenesisBlock.into())
         } else {
             // get info from previous block height
-            let prev_height = height - 1u32.into();
+            let previous_height = height - 1u32.into();
             let previous_block = self
                 .db
-                .get_block(prev_height)?
-                .ok_or(Error::MissingBlock(prev_height))?;
-            let prev_tree_version = prev_height.to_usize() as u64;
-            let mut prev_tree = self
+                .get_block(previous_height)?
+                .ok_or(Error::MissingBlock(previous_height))?;
+            // Get the Merkle root for the tree of blocks at the given tree
+            // version.
+            let previous_tree_version = previous_height.to_usize() as u64;
+            let previous_tree = self
                 .db
-                .load_binary_merkle_tree::<FuelBlockMerkleData>(prev_tree_version)
-                .unwrap();
-            let prev_root = prev_tree.root()?.into();
+                .load_binary_merkle_tree::<FuelBlockMerkleData>(previous_tree_version)
+                .unwrap(); // TODO: use result
+            let previous_root = previous_tree.root().into();
 
             Ok(PreviousBlockInfo {
-                prev_root,
+                prev_root: previous_root,
                 da_height: previous_block.header().da_height,
             })
         }

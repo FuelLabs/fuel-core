@@ -10,6 +10,7 @@ use crate::{
 use fuel_core_producer::ports::{
     BinaryMerkleMetadataStorage,
     BinaryMerkleTreeStorage,
+    BlockExecutor,
 };
 use fuel_core_storage::{
     not_found,
@@ -130,6 +131,22 @@ impl StorageInspect<FuelBlockMerkleData> for Database {
 }
 
 impl StorageMutate<FuelBlockMerkleData> for Database {
+    fn insert(
+        &mut self,
+        key: &u64,
+        value: &Primitive,
+    ) -> Result<Option<Primitive>, Self::Error> {
+        Database::insert(self, key.to_be_bytes(), Column::FuelBlockMerkleData, value)
+            .map_err(Into::into)
+    }
+
+    fn remove(&mut self, key: &u64) -> Result<Option<Primitive>, Self::Error> {
+        Database::remove(self, &key.to_be_bytes(), Column::FuelBlockMerkleData)
+            .map_err(Into::into)
+    }
+}
+
+impl StorageMutate<FuelBlockMerkleData> for &Database {
     fn insert(
         &mut self,
         key: &u64,
@@ -295,8 +312,10 @@ impl Database {
             Ok(None)
         }
     }
+}
 
-    pub fn insert_block(
+impl BlockExecutor for Database {
+    fn insert_block(
         &mut self,
         block_id: &BlockId,
         block: &CompressedBlock,
@@ -314,7 +333,7 @@ impl Database {
 
         // Generate new metadata for the updated tree
         let version = tree.leaves_count();
-        let root = tree.root().unwrap().into();
+        let root = tree.root().into();
         let metadata = DenseMerkleMetadata { version, root };
         self.save_binary_merkle_metadata(FUEL_BLOCK_MERKLE_METADATA_KEY, &metadata)?;
 

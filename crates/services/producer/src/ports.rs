@@ -12,6 +12,7 @@ use fuel_core_types::{
         block::CompressedBlock,
         primitives::{
             BlockHeight,
+            BlockId,
             DaBlockHeight,
         },
     },
@@ -41,6 +42,14 @@ pub trait BlockProducerDatabase: Send + Sync {
 
     /// Fetch the current block height.
     fn current_block_height(&self) -> StorageResult<BlockHeight>;
+}
+
+pub trait BlockExecutor {
+    fn insert_block(
+        &mut self,
+        block_id: &BlockId,
+        block: &CompressedBlock,
+    ) -> Result<(), StorageError>;
 }
 
 pub trait BinaryMerkleMetadataStorage {
