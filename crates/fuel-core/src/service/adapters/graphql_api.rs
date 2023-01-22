@@ -247,10 +247,13 @@ impl DryRunExecution for Arc<Producer<Database>> {
 
 impl BlockProducerPort for Arc<Producer<Database>> {}
 
-use crate::service::adapters::ExecutorAdapter;
+use crate::{
+    graphql_api::service::Database as GraphqlDatabase,
+    service::adapters::ExecutorAdapter,
+};
 use fuel_core_producer::ports::Executor as ProducerExecutorPort;
 
-impl ExecuteWithoutCommit for ExecutorAdapter {
+impl ExecuteWithoutCommit<GraphqlDatabase> for ExecutorAdapter {
     fn execute_with_no_commit(
         &self,
         block: ExecutionBlock,
@@ -259,4 +262,4 @@ impl ExecuteWithoutCommit for ExecutorAdapter {
     }
 }
 
-impl ExecutorPort for ExecutorAdapter {}
+impl ExecutorPort<GraphqlDatabase> for ExecutorAdapter {}

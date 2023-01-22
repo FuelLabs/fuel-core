@@ -1,7 +1,4 @@
-use crate::{
-    database::Database,
-    state::IterDirection,
-};
+use crate::state::IterDirection;
 use anyhow::Result;
 use async_trait::async_trait;
 use fuel_core_storage::{
@@ -180,11 +177,11 @@ pub trait DryRunExecution {
 
 pub trait BlockProducerPort: Send + Sync + DryRunExecution {}
 
-pub trait ExecuteWithoutCommit {
+pub trait ExecuteWithoutCommit<Database> {
     fn execute_with_no_commit(
         &self,
         block: ExecutionBlock,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>>;
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<crate::database::Database>>>;
 }
 
-pub trait ExecutorPort: Send + Sync + ExecuteWithoutCommit {}
+pub trait ExecutorPort<Database>: Send + Sync + ExecuteWithoutCommit<Database> {}
