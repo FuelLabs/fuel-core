@@ -307,7 +307,7 @@ impl BlockMutation {
         time: Option<TimeParameters>,
     ) -> async_graphql::Result<U64> {
         let query = BlockQueryContext(ctx.data_unchecked());
-        let executor = ctx.data_unchecked::<Executor>().clone();
+        let executor = ctx.data_unchecked::<Executor>();
         let config = ctx.data_unchecked::<GraphQLConfig>().clone();
 
         if !config.manual_blocks_enabled {
