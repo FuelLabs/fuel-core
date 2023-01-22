@@ -41,4 +41,4 @@ relayer = ["fuel-core/relayer", "dep:url", "dep:serde_json"]
 rocksdb = ["fuel-core/rocksdb"]
 rocksdb-production = ["fuel-core/rocksdb-production"]
 # features to enable in production, but increase build times
-production = ["metrics", "relayer", "rocksdb-production"]
+production = ["metrics", "relayer", "rocksdb-production", "p2p"]

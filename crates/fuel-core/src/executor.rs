@@ -204,8 +204,6 @@ impl Executor {
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
         // Compute the block id before execution if there is one.
         let pre_exec_block_id = block.id();
-        // Get the transaction root before execution if there is one.
-        let pre_exec_txs_root = block.txs_root();
 
         // If there is full fuel block for validation then map it into
         // a partial header.
@@ -230,13 +228,6 @@ impl Executor {
             .map(|b: PartialFuelBlock| b.generate(&message_ids[..]))
             .into_inner();
 
-        // check transaction commitment
-        if let Some(pre_exec_txs_root) = pre_exec_txs_root {
-            if block.header().transactions_root != pre_exec_txs_root {
-                return Err(ExecutorError::InvalidTransactionRoot)
-            }
-        }
-
         let finalized_block_id = block.id();
 
         debug!(
@@ -247,6 +238,7 @@ impl Executor {
 
         // check if block id doesn't match proposed block id
         if let Some(pre_exec_block_id) = pre_exec_block_id {
+            // The block id comparison compares the whole blocks including all fields.
             if pre_exec_block_id != finalized_block_id {
                 // In theory this shouldn't happen since any deviance in the block should've already
                 // been checked by now.
@@ -586,6 +578,7 @@ impl Executor {
         let mut vm = Interpreter::with_storage(
             vm_db,
             self.config.chain_conf.transaction_parameters,
+            self.config.chain_conf.gas_costs.clone(),
         );
         let vm_result: StateTransition<_> = vm
             .transact(checked_tx.clone())
@@ -776,6 +769,7 @@ impl Executor {
         if !Interpreter::<PredicateStorage>::check_predicates(
             tx,
             self.config.chain_conf.transaction_parameters,
+            self.config.chain_conf.gas_costs.clone(),
         ) {
             return Err(ExecutorError::TransactionValidity(
                 TransactionValidityError::InvalidPredicate(id),
@@ -1855,6 +1849,7 @@ mod tests {
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
+            block.header_mut().recalculate_metadata();
 
             let validator = Executor {
                 database: Default::default(),
@@ -1875,6 +1870,7 @@ mod tests {
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
+            block.header_mut().recalculate_metadata();
 
             let validator = Executor {
                 database: Default::default(),
@@ -1897,6 +1893,7 @@ mod tests {
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
+            block.header_mut().recalculate_metadata();
 
             let validator = Executor {
                 database: Default::default(),
@@ -1923,6 +1920,7 @@ mod tests {
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
+            block.header_mut().recalculate_metadata();
 
             let validator = Executor {
                 database: Default::default(),
@@ -1950,6 +1948,7 @@ mod tests {
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
+            block.header_mut().recalculate_metadata();
 
             let validator = Executor {
                 database: Default::default(),
@@ -1973,6 +1972,7 @@ mod tests {
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
+            block.header_mut().recalculate_metadata();
 
             let validator = Executor {
                 database: Default::default(),
@@ -2002,6 +2002,7 @@ mod tests {
                 )
                 .into(),
             ];
+            block.header_mut().recalculate_metadata();
 
             let validator = Executor {
                 database: Default::default(),
@@ -2423,14 +2424,12 @@ mod tests {
 
         // randomize transaction commitment
         block.header_mut().application.generated.transactions_root = rng.gen();
+        block.header_mut().recalculate_metadata();
 
         let verify_result =
             verifier.execute_and_commit(ExecutionBlock::Validation(block));
 
-        assert!(matches!(
-            verify_result,
-            Err(ExecutorError::InvalidTransactionRoot)
-        ))
+        assert!(matches!(verify_result, Err(ExecutorError::InvalidBlockId)))
     }
 
     // invalidate a block if a tx is missing at least one coin input
@@ -2745,9 +2744,9 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(2322u64);
 
         let (create, contract_id) = create_contract(vec![], &mut rng);
-        // Transaction doesn't have input to pay for gas, so it will fail.
+        // The transaction with invalid script.
         let non_modify_state_tx: Transaction = TxBuilder::new(2322)
-            .start_script(vec![Opcode::RET(1)], vec![])
+            .start_script(vec![Opcode::ADD(REG_PC, REG_PC, REG_PC)], vec![])
             .contract_input(contract_id)
             .contract_output(&contract_id)
             .build()

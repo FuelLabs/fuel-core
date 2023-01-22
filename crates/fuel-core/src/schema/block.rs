@@ -336,7 +336,6 @@ impl BlockMutation {
                         da_height: Default::default(),
                         generated: Default::default(),
                     },
-                    metadata: Default::default(),
                 },
                 vec![],
             );

@@ -92,7 +92,7 @@ where
 
 impl<Database> ContractRef<Database>
 where
-    for<'b> Database: MerkleRootStorage<ContractId, ContractsAssets<'b>>,
+    Database: MerkleRootStorage<ContractId, ContractsAssets>,
 {
     pub fn balance_root(
         &mut self,
@@ -103,7 +103,7 @@ where
 
 impl<Database> ContractRef<Database>
 where
-    for<'b> Database: MerkleRootStorage<ContractId, ContractsState<'b>>,
+    Database: MerkleRootStorage<ContractId, ContractsState>,
 {
     pub fn state_root(
         &mut self,
@@ -112,17 +112,17 @@ where
     }
 }
 
-pub trait ContractStorageTrait<'a>:
+pub trait ContractStorageTrait:
     StorageInspect<ContractsLatestUtxo, Error = Self::InnerError>
-    + MerkleRootStorage<ContractId, ContractsState<'a>, Error = Self::InnerError>
-    + MerkleRootStorage<ContractId, ContractsAssets<'a>, Error = Self::InnerError>
+    + MerkleRootStorage<ContractId, ContractsState, Error = Self::InnerError>
+    + MerkleRootStorage<ContractId, ContractsAssets, Error = Self::InnerError>
 {
     type InnerError: StdError + Send + Sync + 'static;
 }
 
 impl<'a, Database> GenesisCommitment for ContractRef<&'a mut Database>
 where
-    for<'b> Database: ContractStorageTrait<'a>,
+    Database: ContractStorageTrait,
 {
     fn root(&mut self) -> anyhow::Result<MerkleRoot> {
         let contract_id = *self.contract_id();

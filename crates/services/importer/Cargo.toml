@@ -11,5 +11,13 @@ description = "Fuel Block Importer"
 
 [dependencies]
 anyhow = "1.0"
-parking_lot = "0.12"
+fuel-core-storage = { path = "../../storage", version = "0.15.1" }
+fuel-core-types = { path = "../../types", version = "0.15.1" }
+thiserror = "1.0"
 tokio = { version = "1.21", features = ["full"] }
+tracing = "0.1"
+
+[dev-dependencies]
+fuel-core-types = { path = "../../types", features = ["test-helpers"] }
+mockall = "0.11"
+test-case = "2.2"
