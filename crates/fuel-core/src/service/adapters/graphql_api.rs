@@ -75,6 +75,10 @@ use fuel_core_types::{
     },
 };
 use std::sync::Arc;
+use tokio_stream::wrappers::{
+    errors::BroadcastStreamRecvError,
+    BroadcastStream,
+};
 
 impl DatabaseBlocks for Database {
     fn block_id(&self, height: BlockHeight) -> StorageResult<BlockId> {
@@ -214,8 +218,10 @@ impl InsertTx for TxPoolService {
 impl TxSubscription for TxPoolService {
     fn tx_update_subscribe(
         &self,
-    ) -> tokio::sync::broadcast::Receiver<fuel_core_txpool::service::TxUpdate> {
-        self.shared.tx_update_subscribe()
+    ) -> fuel_core_services::stream::BoxStream<
+        Result<fuel_core_txpool::service::TxUpdate, BroadcastStreamRecvError>,
+    > {
+        Box::pin(BroadcastStream::new(self.shared.tx_update_subscribe()))
     }
 }
 

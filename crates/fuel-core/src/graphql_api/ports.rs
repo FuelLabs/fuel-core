@@ -1,7 +1,6 @@
 use crate::{
     database::Database,
     state::IterDirection,
-    txpool::service::TxUpdate,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -58,6 +57,7 @@ use fuel_core_types::{
     },
 };
 use std::sync::Arc;
+use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
 /// The database port expected by GraphQL API service.
 pub trait DatabasePort:
@@ -159,7 +159,11 @@ pub trait InsertTx {
 }
 
 pub trait TxSubscription {
-    fn tx_update_subscribe(&self) -> tokio::sync::broadcast::Receiver<TxUpdate>;
+    fn tx_update_subscribe(
+        &self,
+    ) -> fuel_core_services::stream::BoxStream<
+        Result<fuel_core_txpool::service::TxUpdate, BroadcastStreamRecvError>,
+    >;
 }
 
 pub trait TxPoolPort: Send + Sync + FindTx + InsertTx + TxSubscription {}

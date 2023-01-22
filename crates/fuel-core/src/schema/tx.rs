@@ -42,7 +42,6 @@ use fuel_core_types::{
 };
 use futures::{
     Stream,
-    StreamExt,
     TryStreamExt,
 };
 use itertools::Itertools;
@@ -51,7 +50,6 @@ use std::{
     ops::Deref,
     sync::Arc,
 };
-use tokio_stream::wrappers::BroadcastStream;
 use types::Transaction;
 
 use self::types::TransactionStatus;
@@ -247,10 +245,10 @@ impl TxStatusSubscription {
     ) -> impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a {
         let txpool = ctx.data_unchecked::<TxPool>();
         let db = ctx.data_unchecked::<Database>();
-        let rx = BroadcastStream::new(txpool.tx_update_subscribe());
+        let rx = txpool.tx_update_subscribe();
         let state = StreamState { txpool, db };
 
-        transaction_status_change(state, rx.boxed(), id.into())
+        transaction_status_change(state, rx, id.into())
             .await
             .map_err(async_graphql::Error::from)
     }
