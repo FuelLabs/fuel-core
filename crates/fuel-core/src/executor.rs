@@ -578,6 +578,7 @@ impl Executor {
         let mut vm = Interpreter::with_storage(
             vm_db,
             self.config.chain_conf.transaction_parameters,
+            self.config.chain_conf.gas_costs.clone(),
         );
         let vm_result: StateTransition<_> = vm
             .transact(checked_tx.clone())
@@ -768,6 +769,7 @@ impl Executor {
         if !Interpreter::<PredicateStorage>::check_predicates(
             tx,
             self.config.chain_conf.transaction_parameters,
+            self.config.chain_conf.gas_costs.clone(),
         ) {
             return Err(ExecutorError::TransactionValidity(
                 TransactionValidityError::InvalidPredicate(id),
@@ -2742,9 +2744,9 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(2322u64);
 
         let (create, contract_id) = create_contract(vec![], &mut rng);
-        // Transaction doesn't have input to pay for gas, so it will fail.
+        // The transaction with invalid script.
         let non_modify_state_tx: Transaction = TxBuilder::new(2322)
-            .start_script(vec![Opcode::RET(1)], vec![])
+            .start_script(vec![Opcode::ADD(REG_PC, REG_PC, REG_PC)], vec![])
             .contract_input(contract_id)
             .contract_output(&contract_id)
             .build()

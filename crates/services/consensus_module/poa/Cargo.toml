@@ -12,7 +12,6 @@ version = "0.15.1"
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
-fuel-core-chain-config = { path = "../../../chain-config", version = "0.15.1" }
 fuel-core-services = { path = "../..", version = "0.15.1" }
 fuel-core-storage = { path = "../../../storage", version = "0.15.1" }
 fuel-core-types = { path = "../../../types", version = "0.15.1" }

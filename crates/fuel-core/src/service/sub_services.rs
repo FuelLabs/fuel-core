@@ -114,7 +114,7 @@ pub fn init_sub_services(
 
     let poa = fuel_core_poa::new_service(
         last_height,
-        config.poa_config()?,
+        config.try_into()?,
         tx_pool_adapter,
         producer_adapter.clone(),
         importer_adapter,
@@ -122,8 +122,12 @@ pub fn init_sub_services(
     let poa_adapter = PoAAdapter::new(poa.shared.clone());
 
     // TODO: Figure out on how to move it into `fuel-core-graphql-api`.
-    let schema = dap::init(build_schema(), config.chain_conf.transaction_parameters)
-        .data(database.clone());
+    let schema = dap::init(
+        build_schema(),
+        config.chain_conf.transaction_parameters,
+        config.chain_conf.gas_costs.clone(),
+    )
+    .data(database.clone());
     let graph_ql = crate::fuel_core_graphql_api::service::new_service(
         GraphQLConfig {
             addr: config.addr,

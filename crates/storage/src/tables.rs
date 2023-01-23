@@ -40,7 +40,7 @@ pub struct FuelBlocks;
 
 impl Mappable for FuelBlocks {
     /// Unique identifier of the fuel block.
-    type Key = BlockId;
+    type Key<'a> = BlockId;
     type SetValue = CompressedBlock;
     type GetValue = Self::SetValue;
 }
@@ -61,7 +61,7 @@ impl Mappable for FuelBlockRoots {
 pub struct ContractsLatestUtxo;
 
 impl Mappable for ContractsLatestUtxo {
-    type Key = ContractId;
+    type Key<'a> = ContractId;
     /// The latest UTXO id.
     type SetValue = UtxoId;
     type GetValue = Self::SetValue;
@@ -72,7 +72,7 @@ pub struct Receipts;
 
 impl Mappable for Receipts {
     /// Unique identifier of the transaction.
-    type Key = Bytes32;
+    type Key<'a> = Bytes32;
     type SetValue = [Receipt];
     type GetValue = Vec<Receipt>;
 }
@@ -81,7 +81,7 @@ impl Mappable for Receipts {
 pub struct SealedBlockConsensus;
 
 impl Mappable for SealedBlockConsensus {
-    type Key = BlockId;
+    type Key<'a> = BlockId;
     type SetValue = Consensus;
     type GetValue = Self::SetValue;
 }
@@ -92,7 +92,7 @@ impl Mappable for SealedBlockConsensus {
 pub struct Coins;
 
 impl Mappable for Coins {
-    type Key = UtxoId;
+    type Key<'a> = UtxoId;
     type SetValue = CompressedCoin;
     type GetValue = Self::SetValue;
 }
@@ -101,7 +101,7 @@ impl Mappable for Coins {
 pub struct Messages;
 
 impl Mappable for Messages {
-    type Key = MessageId;
+    type Key<'a> = MessageId;
     type SetValue = Message;
     type GetValue = Self::SetValue;
 }
@@ -110,7 +110,7 @@ impl Mappable for Messages {
 pub struct Transactions;
 
 impl Mappable for Transactions {
-    type Key = TxId;
+    type Key<'a> = TxId;
     type SetValue = Transaction;
     type GetValue = Self::SetValue;
 }

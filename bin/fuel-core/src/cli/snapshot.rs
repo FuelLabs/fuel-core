@@ -2,6 +2,7 @@ use crate::cli::DEFAULT_DB_PATH;
 use clap::Parser;
 use std::path::PathBuf;
 
+/// Print a snapshot of blockchain state to stdout.
 #[derive(Debug, Clone, Parser)]
 pub struct Command {
     #[clap(

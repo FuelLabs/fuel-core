@@ -11,6 +11,10 @@ use fuel_core_types::{
         AssetId,
         Bytes32,
     },
+    fuel_vm::{
+        GasCosts,
+        GasCostsValues,
+    },
 };
 use itertools::Itertools;
 use rand::{
@@ -21,12 +25,15 @@ use serde::{
     Deserialize,
     Serialize,
 };
-use serde_with::skip_serializing_none;
+use serde_with::{
+    serde_as,
+    skip_serializing_none,
+    FromInto,
+};
 use std::{
     io::ErrorKind,
     path::PathBuf,
     str::FromStr,
-    time::Duration,
 };
 
 use crate::{
@@ -42,29 +49,30 @@ pub const FUEL_BECH32_HRP: &str = "fuel";
 pub const LOCAL_TESTNET: &str = "local_testnet";
 pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 
+#[serde_as]
 // TODO: Remove not consensus/network fields from `ChainConfig` or create a new config only
 //  for consensus/network fields.
 #[skip_serializing_none]
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct ChainConfig {
     pub chain_name: String,
-    pub block_production: BlockProduction,
     pub block_gas_limit: u64,
     #[serde(default)]
     pub initial_state: Option<StateConfig>,
     pub transaction_parameters: ConsensusParameters,
+    #[serde(default)]
+    #[serde_as(as = "FromInto<GasCostsValues>")]
+    pub gas_costs: GasCosts,
 }
 
 impl Default for ChainConfig {
     fn default() -> Self {
         Self {
             chain_name: "local".into(),
-            block_production: BlockProduction::ProofOfAuthority {
-                trigger: PoABlockProduction::Instant,
-            },
             block_gas_limit: ConsensusParameters::DEFAULT.max_gas_per_tx * 10, /* TODO: Pick a sensible default */
             transaction_parameters: ConsensusParameters::DEFAULT,
             initial_state: None,
+            gas_costs: GasCosts::default(),
         }
     }
 }
@@ -160,48 +168,4 @@ impl GenesisCommitment for ConsensusParameters {
 
         Ok(params_hash.into())
     }
-}
-
-/// Block production mode and settings
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum BlockProduction {
-    /// Proof-of-authority modes
-    ProofOfAuthority {
-        #[serde(flatten)]
-        trigger: PoABlockProduction,
-    },
-}
-
-/// Block production of the PoA consensus.
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-#[serde(tag = "trigger")]
-pub enum PoABlockProduction {
-    /// A new block is produced instantly when transactions are available.
-    #[default]
-    Instant,
-    /// A new block is produced periodically. Used to simulate consensus block delay.
-    Interval {
-        #[serde(with = "humantime_serde")]
-        block_time: Duration,
-    },
-    /// A new block will be produced when the timer runs out.
-    /// Set to `max_block_time` when the txpool is empty, otherwise
-    /// `min(max_block_time, max_tx_idle_time)`. If it expires,
-    /// but minimum block time hasn't expired yet, then the deadline
-    /// is set to `last_block_created + min_block_time`.
-    /// See https://github.com/FuelLabs/fuel-core/issues/50#issuecomment-1241895887
-    /// Requires `min_block_time` <= `max_tx_idle_time` <= `max_block_time`.
-    Hybrid {
-        /// Minimum time between two blocks, even if there are more txs available
-        #[serde(with = "humantime_serde")]
-        min_block_time: Duration,
-        /// If there are txs available, but not enough for a full block,
-        /// this is how long the block is waiting for more txs
-        #[serde(with = "humantime_serde")]
-        max_tx_idle_time: Duration,
-        /// Time after which a new block is produced, even if it's empty
-        #[serde(with = "humantime_serde")]
-        max_block_time: Duration,
-    },
 }

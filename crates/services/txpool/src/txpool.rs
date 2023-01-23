@@ -119,7 +119,10 @@ where
         }
 
         // verify predicates
-        if !tx.check_predicates(self.config.chain_config.transaction_parameters) {
+        if !tx.check_predicates(
+            self.config.chain_config.transaction_parameters,
+            self.config.chain_config.gas_costs.clone(),
+        ) {
             return Err(anyhow!("transaction predicate verification failed"))
         }
 

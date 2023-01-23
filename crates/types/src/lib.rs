@@ -32,6 +32,8 @@ pub mod fuel_vm {
     pub use fuel_vm_private::{
         consts,
         crypto,
+        gas::GasCosts,
+        gas::GasCostsValues,
         interpreter,
         prelude::{
             Backtrace,

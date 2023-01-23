@@ -1,0 +1,11 @@
+[package]
+name = "fuel-benches-outputs"
+version = "0.0.0"
+edition = "2021"
+license = "BUSL-1.1"
+publish = false
+
+[dependencies]
+fuel-vm = { version = "0.24", default-features = false, features = ["random", "test-helpers"] }
+
+[workspace]
