@@ -934,12 +934,12 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.0.32"
+version = "4.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7db700bc935f9e43e88d00b0850dae18a63773cfbec6d8e070fccf7fef89a39"
+checksum = "4ec7a4128863c188deefe750ac1d1dfe66c236909f845af04beed823638dc1b2"
 dependencies = [
  "bitflags",
- "clap_derive 4.0.21",
+ "clap_derive 4.1.0",
  "clap_lex 0.3.0",
  "is-terminal",
  "once_cell",
@@ -962,9 +962,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.0.21"
+version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0177313f9f02afc995627906bbd8967e2be069f5261954222dac78290c2b9014"
+checksum = "684a277d672e91966334af371f1a7b5833f9aa00b07c84e92fbce95e00208ce8"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -2273,11 +2273,13 @@ dependencies = [
  "async-trait",
  "axum",
  "bincode",
+ "clap 4.1.1",
  "derive_more",
  "enum-iterator",
  "fuel-core-chain-config",
  "fuel-core-database",
  "fuel-core-executor",
+ "fuel-core-importer",
  "fuel-core-metrics",
  "fuel-core-p2p",
  "fuel-core-poa",
@@ -2314,7 +2316,7 @@ dependencies = [
 name = "fuel-core-benches"
 version = "0.0.0"
 dependencies = [
- "clap 4.0.32",
+ "clap 4.1.1",
  "criterion",
  "ctrlc",
  "fuel-core",
@@ -2340,12 +2342,13 @@ name = "fuel-core-bin"
 version = "0.15.1"
 dependencies = [
  "anyhow",
- "clap 3.2.23",
+ "clap 4.1.1",
  "dirs",
  "fuel-core",
+ "humantime",
  "lazy_static",
  "serde_json",
- "strum",
+ "test-case",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -2359,7 +2362,6 @@ dependencies = [
  "anyhow",
  "bech32 0.9.1",
  "bincode",
- "fuel-core-poa",
  "fuel-core-storage",
  "fuel-core-types",
  "hex",
@@ -2403,6 +2405,17 @@ dependencies = [
  "fuel-core-types",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "fuel-core-consensus-module"
+version = "0.15.1"
+dependencies = [
+ "anyhow",
+ "fuel-core-chain-config",
+ "fuel-core-poa",
+ "fuel-core-types",
+ "test-case",
 ]
 
 [[package]]
@@ -2510,10 +2523,9 @@ dependencies = [
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-types",
- "humantime-serde",
  "mockall",
  "rand 0.8.5",
- "serde",
+ "test-case",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -3188,16 +3200,6 @@ name = "humantime"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
-
-[[package]]
-name = "humantime-serde"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57a3db5ea5923d99402c94e9feb261dc5ee9b4efa158b0315f788cf549cc200c"
-dependencies = [
- "humantime",
- "serde",
-]
 
 [[package]]
 name = "hyper"

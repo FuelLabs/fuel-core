@@ -9,6 +9,7 @@ mod service_test;
 pub mod config;
 pub mod ports;
 pub mod service;
+pub mod verifier;
 
 pub use config::{
     Config,

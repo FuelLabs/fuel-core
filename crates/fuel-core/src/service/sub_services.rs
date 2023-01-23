@@ -1,7 +1,6 @@
 #![allow(clippy::let_unit_value)]
 use super::adapters::P2PAdapter;
 use crate::{
-    chain_config::BlockProduction,
     database::Database,
     fuel_core_graphql_api::Config as GraphQLConfig,
     schema::{
@@ -103,23 +102,16 @@ pub fn init_sub_services(
         dry_run_semaphore: Semaphore::new(max_dry_run_concurrency),
     });
 
-    let poa = match &config.chain_conf.block_production {
-        BlockProduction::ProofOfAuthority { trigger } => fuel_core_poa::new_service(
-            fuel_core_poa::Config {
-                trigger: *trigger,
-                block_gas_limit: config.chain_conf.block_gas_limit,
-                signing_key: config.consensus_key.clone(),
-                metrics: false,
-            },
-            TxPoolAdapter::new(txpool.shared.clone()),
-            // TODO: Pass Importer
-            importer_adapter.tx,
-            BlockProducerAdapter {
-                block_producer: block_producer.clone(),
-            },
-            database.clone(),
-        ),
-    };
+    let poa = fuel_core_poa::new_service(
+        config.into(),
+        TxPoolAdapter::new(txpool.shared.clone()),
+        // TODO: Pass Importer
+        importer_adapter.tx,
+        BlockProducerAdapter {
+            block_producer: block_producer.clone(),
+        },
+        database.clone(),
+    );
 
     // TODO: Figure out on how to move it into `fuel-core-graphql-api`.
     let schema = dap::init(
