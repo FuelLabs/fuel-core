@@ -30,7 +30,6 @@ use fuel_core_types::{
     },
     fuel_tx::*,
     secrecy::ExposeSecret,
-    tai64::Tai64,
 };
 use itertools::{
     rev,
@@ -45,16 +44,16 @@ async fn block() {
     let block = CompressedBlock::default();
     let id = block.id();
     let mut db = Database::default();
+    // setup server & client
+    let srv = FuelService::from_database(db.clone(), Config::local_node())
+        .await
+        .unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
     db.storage::<FuelBlocks>().insert(&id, &block).unwrap();
     db.storage::<SealedBlockConsensus>()
         .insert(&id, &Consensus::PoA(Default::default()))
         .unwrap();
-
-    // setup server & client
-    let srv = FuelService::from_database(db, Config::local_node())
-        .await
-        .unwrap();
-    let client = FuelClient::from(srv.bound_address);
 
     // run test
     let id_bytes: Bytes32 = id.into();
@@ -67,7 +66,9 @@ async fn block() {
 
 #[tokio::test]
 async fn get_genesis_block() {
-    let srv = FuelService::from_database(Database::default(), Config::local_node())
+    let mut config = Config::local_node();
+    config.chain_conf.initial_state.as_mut().unwrap().height = Some(13u32.into());
+    let srv = FuelService::from_database(Database::default(), config)
         .await
         .unwrap();
 
@@ -75,8 +76,8 @@ async fn get_genesis_block() {
     let tx = Transaction::default();
     client.submit_and_await_commit(&tx).await.unwrap();
 
-    let block = client.block_by_height(0).await.unwrap().unwrap();
-    assert_eq!(block.header.height.0, 0);
+    let block = client.block_by_height(13).await.unwrap().unwrap();
+    assert_eq!(block.header.height.0, 13);
     assert!(matches!(
         block.consensus,
         fuel_core_client::client::schema::block::Consensus::Genesis(_)
@@ -295,38 +296,16 @@ async fn block_connection_5(
     #[values(PageDirection::Forward, PageDirection::Backward)]
     pagination_direction: PageDirection,
 ) {
-    // blocks
-    let blocks = (0..10u32)
-        .map(|i| {
-            CompressedBlock::test(
-                fuel_core_types::blockchain::header::BlockHeader {
-                    consensus: fuel_core_types::blockchain::header::ConsensusHeader {
-                        height: i.into(),
-                        time: Tai64(i.into()),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-                vec![],
-            )
-        })
-        .collect_vec();
-
-    // setup test data in the node
-    let mut db = Database::default();
-    for block in blocks {
-        let id = block.id();
-        db.storage::<FuelBlocks>().insert(&id, &block).unwrap();
-        db.storage::<SealedBlockConsensus>()
-            .insert(&id, &Consensus::PoA(Default::default()))
-            .unwrap();
-    }
+    let mut config = Config::local_node();
+    config.manual_blocks_enabled = true;
 
     // setup server & client
-    let srv = FuelService::from_database(db, Config::local_node())
+    let srv = FuelService::from_database(Default::default(), config)
         .await
         .unwrap();
     let client = FuelClient::from(srv.bound_address);
+    // setup test data in the node
+    client.produce_blocks(9, None).await.unwrap();
 
     // run test
     let blocks = client

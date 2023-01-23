@@ -17,6 +17,8 @@ pub use fuel_vm_private::{
 
 pub mod iter;
 pub mod tables;
+#[cfg(feature = "test-helpers")]
+pub mod test_helpers;
 pub mod transactional;
 
 /// The storage result alias.
@@ -50,6 +52,27 @@ impl From<Error> for std::io::Error {
 impl From<Error> for ExecutorError {
     fn from(e: Error) -> Self {
         ExecutorError::StorageError(Box::new(e))
+    }
+}
+
+/// The helper trait to work with storage errors.
+pub trait IsNotFound {
+    /// Return `true` if the error is [`Error::NotFound`].
+    fn is_not_found(&self) -> bool;
+}
+
+impl IsNotFound for Error {
+    fn is_not_found(&self) -> bool {
+        matches!(self, Error::NotFound(_, _))
+    }
+}
+
+impl<T> IsNotFound for Result<T> {
+    fn is_not_found(&self) -> bool {
+        match self {
+            Err(err) => err.is_not_found(),
+            _ => false,
+        }
     }
 }
 

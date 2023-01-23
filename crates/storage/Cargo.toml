@@ -19,7 +19,7 @@ version = "0.15.1"
 [dependencies]
 anyhow = "1.0"
 fuel-core-types = { path = "../types", version = "0.15.1" }
-fuel-vm-private = { version = "0.22", package = "fuel-vm" }
+fuel-vm-private = { version = "0.24", package = "fuel-vm" }
 thiserror = "1.0"
 
 [features]

@@ -1,61 +1,198 @@
-use crate::Config;
-use fuel_core_types::services::p2p::BlockGossipData;
-use parking_lot::Mutex;
-use tokio::{
-    sync::{
-        mpsc,
-        oneshot,
+//! Service utilities for running fuel sync.
+use std::sync::Arc;
+
+use crate::{
+    import::{
+        Config,
+        Import,
     },
-    task::JoinHandle,
+    ports::{
+        self,
+        BlockImporterPort,
+        ConsensusPort,
+        PeerToPeerPort,
+    },
+    state::State,
+    sync::SyncHeights,
 };
 
-pub enum SyncStatus {
-    Stopped,
-    InitialSync,
+use fuel_core_services::{
+    stream::{
+        BoxStream,
+        IntoBoxStream,
+    },
+    RunnableService,
+    RunnableTask,
+    Service,
+    ServiceRunner,
+    SharedMutex,
+    StateWatcher,
+};
+use fuel_core_types::blockchain::primitives::BlockHeight;
+use futures::StreamExt;
+use tokio::sync::Notify;
+
+#[cfg(test)]
+mod tests;
+
+/// Creates an instance of runnable sync service.
+pub fn new_service<P, E, C>(
+    current_fuel_block_height: BlockHeight,
+    p2p: P,
+    executor: E,
+    consensus: C,
+    params: Config,
+) -> anyhow::Result<ServiceRunner<SyncTask<P, E, C>>>
+where
+    P: ports::PeerToPeerPort + Send + Sync + 'static,
+    E: ports::BlockImporterPort + Send + Sync + 'static,
+    C: ports::ConsensusPort + Send + Sync + 'static,
+{
+    let height_stream = p2p.height_stream();
+    let state = State::new(*current_fuel_block_height, None);
+    Ok(ServiceRunner::new(SyncTask::new(
+        height_stream,
+        state,
+        params,
+        p2p,
+        executor,
+        consensus,
+    )?))
 }
 
-pub enum SyncMpsc {
-    Status { ret: oneshot::Sender<SyncStatus> },
-    Start,
-    Stop,
+/// Task for syncing heights.
+/// Contains import task as a child task.
+pub struct SyncTask<P, E, C>
+where
+    P: PeerToPeerPort + Send + Sync + 'static,
+    E: BlockImporterPort + Send + Sync + 'static,
+    C: ConsensusPort + Send + Sync + 'static,
+{
+    sync_heights: SyncHeights,
+    import_task_handle: ServiceRunner<ImportTask<P, E, C>>,
 }
 
-pub struct Service {
-    join: Mutex<Option<JoinHandle<()>>>,
-    sender: mpsc::Sender<SyncMpsc>,
-}
+struct ImportTask<P, E, C>(Import<P, E, C>);
 
-impl Service {
-    pub async fn new(_config: &Config) -> anyhow::Result<Self> {
-        let (sender, _receiver) = mpsc::channel(100);
+impl<P, E, C> SyncTask<P, E, C>
+where
+    P: PeerToPeerPort + Send + Sync + 'static,
+    E: BlockImporterPort + Send + Sync + 'static,
+    C: ConsensusPort + Send + Sync + 'static,
+{
+    fn new(
+        height_stream: BoxStream<BlockHeight>,
+        state: State,
+        params: Config,
+        p2p: P,
+        executor: E,
+        consensus: C,
+    ) -> anyhow::Result<Self> {
+        let notify = Arc::new(Notify::new());
+        let state = SharedMutex::new(state);
+        let p2p = Arc::new(p2p);
+        let executor = Arc::new(executor);
+        let consensus = Arc::new(consensus);
+        let sync_heights = SyncHeights::new(height_stream, state.clone(), notify.clone());
+        let import = Import::new(state, notify, params, p2p, executor, consensus);
+        let import_task_handle = ServiceRunner::new(ImportTask(import));
         Ok(Self {
-            sender,
-            join: Mutex::new(None),
+            sync_heights,
+            import_task_handle,
         })
     }
+}
 
-    pub async fn start(
-        &self,
-        _p2p_block: mpsc::Receiver<BlockGossipData>,
-        // TODO: re-introduce this when sync actually depends on the coordinator
-        // _bft: mpsc::Sender<BftMpsc>,
-        _block_importer: mpsc::Sender<()>,
-    ) {
-        let mut join = self.join.lock();
-        if join.is_none() {
-            *join = Some(tokio::spawn(async {}));
+#[async_trait::async_trait]
+impl<P, E, C> RunnableTask for SyncTask<P, E, C>
+where
+    P: PeerToPeerPort + Send + Sync + 'static,
+    E: BlockImporterPort + Send + Sync + 'static,
+    C: ConsensusPort + Send + Sync + 'static,
+{
+    async fn run(
+        &mut self,
+        _: &mut fuel_core_services::StateWatcher,
+    ) -> anyhow::Result<bool> {
+        if self.import_task_handle.state().stopped() {
+            return Ok(false)
         }
+        Ok(self.sync_heights.sync().await.is_some())
     }
+}
 
-    pub async fn stop(&self) -> Option<JoinHandle<()>> {
-        let join = self.join.lock().take();
-        if join.is_some() {
-            let _ = self.sender.send(SyncMpsc::Stop);
-        }
-        join
+#[async_trait::async_trait]
+impl<P, E, C> RunnableService for SyncTask<P, E, C>
+where
+    P: PeerToPeerPort + Send + Sync + 'static,
+    E: BlockImporterPort + Send + Sync + 'static,
+    C: ConsensusPort + Send + Sync + 'static,
+{
+    const NAME: &'static str = "fuel-core-sync";
+
+    type SharedData = ();
+
+    type Task = SyncTask<P, E, C>;
+
+    fn shared_data(&self) -> Self::SharedData {}
+
+    async fn into_task(mut self, watcher: &StateWatcher) -> anyhow::Result<Self::Task> {
+        let mut watcher = watcher.clone();
+        self.sync_heights.map_stream(|height_stream| {
+            height_stream
+                .take_until(async move {
+                    let _ = watcher.while_started().await;
+                })
+                .into_boxed()
+        });
+        self.import_task_handle.start_and_await().await?;
+
+        Ok(self)
     }
+}
 
-    pub fn sender(&self) -> &mpsc::Sender<SyncMpsc> {
-        &self.sender
+#[async_trait::async_trait]
+impl<P, E, C> RunnableTask for ImportTask<P, E, C>
+where
+    P: PeerToPeerPort + Send + Sync + 'static,
+    E: BlockImporterPort + Send + Sync + 'static,
+    C: ConsensusPort + Send + Sync + 'static,
+{
+    async fn run(
+        &mut self,
+        watcher: &mut fuel_core_services::StateWatcher,
+    ) -> anyhow::Result<bool> {
+        self.0.import(watcher).await
+    }
+}
+
+#[async_trait::async_trait]
+impl<P, E, C> RunnableService for ImportTask<P, E, C>
+where
+    P: PeerToPeerPort + Send + Sync + 'static,
+    E: BlockImporterPort + Send + Sync + 'static,
+    C: ConsensusPort + Send + Sync + 'static,
+{
+    const NAME: &'static str = "fuel-core-sync/import-task";
+
+    type SharedData = ();
+
+    type Task = ImportTask<P, E, C>;
+
+    fn shared_data(&self) -> Self::SharedData {}
+
+    async fn into_task(self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
+        Ok(self)
+    }
+}
+
+impl<P, E, C> Drop for SyncTask<P, E, C>
+where
+    P: PeerToPeerPort + Send + Sync + 'static,
+    E: BlockImporterPort + Send + Sync + 'static,
+    C: ConsensusPort + Send + Sync + 'static,
+{
+    fn drop(&mut self) {
+        self.import_task_handle.stop();
     }
 }

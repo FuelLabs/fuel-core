@@ -11,6 +11,16 @@ use tokio::{
 /// Alias for Arc<T>
 pub type Shared<T> = std::sync::Arc<T>;
 
+/// A mutex that can safely be in async contexts and avoids deadlocks.
+#[derive(Debug)]
+pub struct SharedMutex<T>(Shared<parking_lot::Mutex<T>>);
+
+impl<T> Clone for SharedMutex<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
 /// Used if services have no asynchronously shared data
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EmptyShared;
@@ -288,6 +298,19 @@ where
             }
         }
     })
+}
+
+impl<T> SharedMutex<T> {
+    /// Creates a new `SharedMutex` with the given value.
+    pub fn new(t: T) -> Self {
+        Self(Shared::new(parking_lot::Mutex::new(t)))
+    }
+
+    /// Apply a function to the inner value and return a value.
+    pub fn apply<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
+        let mut t = self.0.lock();
+        f(&mut t)
+    }
 }
 
 // TODO: Add tests
