@@ -195,7 +195,7 @@ impl RequestResponseConverter for BincodeCodec {
         inter_msg: &Self::NetworkResponse,
     ) -> Result<Self::ResponseMessage, io::Error> {
         match inter_msg {
-            NetworkResponse::SerializedBlock(block_bytes) => {
+            NetworkResponse::Block(block_bytes) => {
                 let response = if let Some(block_bytes) = block_bytes {
                     Some(self.deserialize(block_bytes)?)
                 } else {
@@ -204,7 +204,7 @@ impl RequestResponseConverter for BincodeCodec {
 
                 Ok(ResponseMessage::SealedBlock(response))
             }
-            NetworkResponse::SerializedHeader(header_bytes) => {
+            NetworkResponse::Header(header_bytes) => {
                 let response = if let Some(header_bytes) = header_bytes {
                     Some(self.deserialize(header_bytes)?)
                 } else {
@@ -213,7 +213,7 @@ impl RequestResponseConverter for BincodeCodec {
 
                 Ok(ResponseMessage::SealedHeader(response))
             }
-            NetworkResponse::SerializedTransactions(tx_bytes) => {
+            NetworkResponse::Transactions(tx_bytes) => {
                 let response = if let Some(tx_bytes) = tx_bytes {
                     Some(self.deserialize(tx_bytes)?)
                 } else {
@@ -230,32 +230,32 @@ impl RequestResponseConverter for BincodeCodec {
         res_msg: &Self::OutboundResponse,
     ) -> Result<Self::NetworkResponse, io::Error> {
         match res_msg {
-            OutboundResponse::RespondWithBlock(sealed_block) => {
+            OutboundResponse::Block(sealed_block) => {
                 let response = if let Some(sealed_block) = sealed_block {
                     Some(self.serialize(&**sealed_block)?)
                 } else {
                     None
                 };
 
-                Ok(NetworkResponse::SerializedBlock(response))
+                Ok(NetworkResponse::Block(response))
             }
-            OutboundResponse::RespondWithHeader(sealed_header) => {
+            OutboundResponse::Header(sealed_header) => {
                 let response = if let Some(sealed_header) = sealed_header {
                     Some(self.serialize(&**sealed_header)?)
                 } else {
                     None
                 };
 
-                Ok(NetworkResponse::SerializedHeader(response))
+                Ok(NetworkResponse::Header(response))
             }
-            OutboundResponse::RespondWithTransactions(transactions) => {
+            OutboundResponse::Transactions(transactions) => {
                 let response = if let Some(transactions) = transactions {
                     Some(self.serialize(&**transactions)?)
                 } else {
                     None
                 };
 
-                Ok(NetworkResponse::SerializedTransactions(response))
+                Ok(NetworkResponse::Transactions(response))
             }
         }
     }

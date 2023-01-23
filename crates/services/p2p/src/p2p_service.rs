@@ -458,7 +458,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                             self.network_codec.convert_to_response(&response),
                         ) {
                             (
-                                Some(ResponseChannelItem::SendBlock(channel)),
+                                Some(ResponseChannelItem::Block(channel)),
                                 Ok(ResponseMessage::SealedBlock(block)),
                             ) => {
                                 if channel.send(block).is_err() {
@@ -469,7 +469,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                                 }
                             }
                             (
-                                Some(ResponseChannelItem::SendTransactions(channel)),
+                                Some(ResponseChannelItem::Transactions(channel)),
                                 Ok(ResponseMessage::Transactions(transactions)),
                             ) => {
                                 if channel.send(transactions).is_err() {
@@ -480,7 +480,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                                 }
                             }
                             (
-                                Some(ResponseChannelItem::SendSealedHeader(channel)),
+                                Some(ResponseChannelItem::SealedHeader(channel)),
                                 Ok(ResponseMessage::SealedHeader(header)),
                             ) => {
                                 if channel.send(header.map(|h| (peer, h))).is_err() {
@@ -1303,7 +1303,7 @@ mod tests {
                                 let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
 
                                 let requested_block_height = RequestMessage::Block(0_u64.into());
-                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::SendBlock(tx_orchestrator)).is_ok());
+                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::Block(tx_orchestrator)).is_ok());
 
                                 let tx_test_end = tx_test_end.clone();
                                 tokio::spawn(async move {
@@ -1334,7 +1334,7 @@ mod tests {
                             consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
                         };
 
-                        let _ = node_b.send_response_msg(request_id, OutboundResponse::RespondWithBlock(Some(Arc::new(sealed_block))));
+                        let _ = node_b.send_response_msg(request_id, OutboundResponse::Block(Some(Arc::new(sealed_block))));
                     }
 
                     tracing::info!("Node B Event: {:?}", node_b_event);
@@ -1382,7 +1382,7 @@ mod tests {
 
                                 // Request successfully sent
                                 let requested_block_height = RequestMessage::Block(0_u64.into());
-                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::SendBlock(tx_orchestrator)).is_ok());
+                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::Block(tx_orchestrator)).is_ok());
 
                                 // 2b. there should be ONE pending outbound requests in the table
                                 assert_eq!(node_a.outbound_requests_table.len(), 1);

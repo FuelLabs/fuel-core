@@ -212,30 +212,30 @@ where
                     }
                     Some(TaskRequest::GetBlock { height, channel }) => {
                         let request_msg = RequestMessage::Block(height);
-                        let channel_item = ResponseChannelItem::SendBlock(channel);
+                        let channel_item = ResponseChannelItem::Block(channel);
                         let _ = self.p2p_service.send_request_msg(None, request_msg, channel_item);
                     }
                     Some(TaskRequest::GetSealedHeader{ height, channel: response }) => {
                         let request_msg = RequestMessage::SealedHeader(height);
-                        let channel_item = ResponseChannelItem::SendSealedHeader(response);
+                        let channel_item = ResponseChannelItem::SealedHeader(response);
                         let _ = self.p2p_service.send_request_msg(None, request_msg, channel_item);
                     }
                     Some(TaskRequest::GetTransactions { block_id, from_peer, channel }) => {
                         let request_msg = RequestMessage::Transactions(block_id);
-                        let channel_item = ResponseChannelItem::SendTransactions(channel);
+                        let channel_item = ResponseChannelItem::Transactions(channel);
                         let _ = self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item);
                     }
                     Some(TaskRequest::RespondWithGossipsubMessageReport((message, acceptance))) => {
                         report_message(&mut self.p2p_service, message, acceptance);
                     }
                     Some(TaskRequest::RespondWithRequestedBlock((response, request_id))) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::RespondWithBlock(response));
+                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Block(response));
                     }
                     Some(TaskRequest::RespondWithRequestedHeader((response, request_id))) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::RespondWithHeader(response));
+                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Header(response));
                     }
                     Some(TaskRequest::RespondWithTransactions((response, request_id))) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::RespondWithTransactions(response));
+                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(response));
                     }
                     None => {
                         unreachable!("The `Task` is holder of the `Sender`, so it should not be possible");

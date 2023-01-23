@@ -26,6 +26,16 @@ pub(crate) const MAX_REQUEST_SIZE: usize = 8;
 
 pub type ChannelItem<T> = oneshot::Sender<Option<T>>;
 
+// Peer receives a `RequestMessage`.
+// It prepares a response in form of `OutboundResponse`
+// This `OutboundResponse` gets prepared to be sent over the wire in `NetworkResponse` format.
+// The Peer that requested the message receives the respone over the wire in `NetworkResponse` format.
+// It then unpacks it into `ResponseMessage`.
+// `ResponseChannelItem` is used to forward the data within `ResponseMessage` to the receving channel.
+// Client Peer: `RequestMessage` (send request)
+// Server Peer: `RequestMessage` (receive request) -> `OutboundResponse` -> `NetworkResponse` (send response)
+// Client Peer: `NetworkResponse` (receive response) -> `ResponseMessage(data)` -> `ResponseChannelItem(channel, data)` (handle response)
+
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, Copy)]
 pub enum RequestMessage {
     Block(BlockHeight),
@@ -44,27 +54,27 @@ pub enum ResponseMessage {
 /// Holds oneshot channels for specific responses
 #[derive(Debug)]
 pub enum ResponseChannelItem {
-    SendBlock(ChannelItem<SealedBlock>),
-    SendSealedHeader(ChannelItem<(PeerId, SealedBlockHeader)>),
-    SendTransactions(ChannelItem<Vec<Transaction>>),
+    Block(ChannelItem<SealedBlock>),
+    SealedHeader(ChannelItem<(PeerId, SealedBlockHeader)>),
+    Transactions(ChannelItem<Vec<Transaction>>),
 }
 
 /// Response that is sent over the wire
 /// and then additionaly deserialized into `ResponseMessage`
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum NetworkResponse {
-    SerializedBlock(Option<Vec<u8>>),
-    SerializedHeader(Option<Vec<u8>>),
-    SerializedTransactions(Option<Vec<u8>>),
+    Block(Option<Vec<u8>>),
+    Header(Option<Vec<u8>>),
+    Transactions(Option<Vec<u8>>),
 }
 
 /// Initial state of the `ResponseMessage` prior to having its inner value serialized
-/// and wrapped into `IntermediateResponse`
+/// and wrapped into `NetworkResponse`
 #[derive(Debug, Clone)]
 pub enum OutboundResponse {
-    RespondWithBlock(Option<Arc<SealedBlock>>),
-    RespondWithHeader(Option<Arc<SealedBlockHeader>>),
-    RespondWithTransactions(Option<Arc<Vec<Transaction>>>),
+    Block(Option<Arc<SealedBlock>>),
+    Header(Option<Arc<SealedBlockHeader>>),
+    Transactions(Option<Arc<Vec<Transaction>>>),
 }
 
 #[derive(Debug)]
