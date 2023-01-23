@@ -239,7 +239,7 @@ impl RequestResponseConverter for BincodeCodec {
 
                 Ok(NetworkResponse::Block(response))
             }
-            OutboundResponse::Header(sealed_header) => {
+            OutboundResponse::SealedHeader(sealed_header) => {
                 let response = if let Some(sealed_header) = sealed_header {
                     Some(self.serialize(&**sealed_header)?)
                 } else {

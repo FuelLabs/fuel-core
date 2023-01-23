@@ -232,7 +232,7 @@ where
                         let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Block(response));
                     }
                     Some(TaskRequest::RespondWithRequestedHeader((response, request_id))) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Header(response));
+                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeader(response));
                     }
                     Some(TaskRequest::RespondWithTransactions((response, request_id))) => {
                         let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(response));

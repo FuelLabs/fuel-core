@@ -73,7 +73,7 @@ pub enum NetworkResponse {
 #[derive(Debug, Clone)]
 pub enum OutboundResponse {
     Block(Option<Arc<SealedBlock>>),
-    Header(Option<Arc<SealedBlockHeader>>),
+    SealedHeader(Option<Arc<SealedBlockHeader>>),
     Transactions(Option<Arc<Vec<Transaction>>>),
 }
 
