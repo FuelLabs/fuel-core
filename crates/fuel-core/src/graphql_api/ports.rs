@@ -38,6 +38,7 @@ use fuel_core_types::{
         graphql_api::ContractBalance,
         txpool::TransactionStatus,
     },
+    tai64::Tai64,
 };
 
 /// The database port expected by GraphQL API service.
@@ -58,7 +59,7 @@ pub trait DatabaseBlocks:
     StorageInspect<FuelBlocks, Error = StorageError>
     + StorageInspect<SealedBlockConsensus, Error = StorageError>
 {
-    fn block_id(&self, height: BlockHeight) -> StorageResult<BlockId>;
+    fn block_id(&self, height: &BlockHeight) -> StorageResult<BlockId>;
 
     fn blocks_ids(
         &self,
@@ -129,4 +130,12 @@ pub trait DatabaseChain {
     fn chain_name(&self) -> StorageResult<String>;
 
     fn base_chain_height(&self) -> StorageResult<DaBlockHeight>;
+}
+
+#[async_trait::async_trait]
+pub trait ConsensusModulePort: Send + Sync {
+    async fn manual_produce_block(
+        &self,
+        block_times: Vec<Option<Tai64>>,
+    ) -> anyhow::Result<()>;
 }

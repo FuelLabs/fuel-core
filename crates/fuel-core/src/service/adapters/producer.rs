@@ -2,6 +2,7 @@ use crate::{
     database::Database,
     executor::Executor,
     service::adapters::{
+        BlockProducerAdapter,
         ExecutorAdapter,
         MaybeRelayerAdapter,
         TxPoolAdapter,
@@ -9,15 +10,23 @@ use crate::{
 };
 use fuel_core_producer::ports::TxPool;
 use fuel_core_storage::{
+    not_found,
+    tables::{
+        FuelBlockRoots,
+        FuelBlocks,
+    },
     transactional::StorageTransaction,
     Result as StorageResult,
+    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{
+        block::CompressedBlock,
         primitives,
         primitives::BlockHeight,
     },
     fuel_tx::Receipt,
+    fuel_types::Bytes32,
     services::{
         executor::{
             ExecutionBlock,
@@ -27,6 +36,18 @@ use fuel_core_types::{
         txpool::ArcPoolTx,
     },
 };
+use std::{
+    borrow::Cow,
+    sync::Arc,
+};
+
+impl BlockProducerAdapter {
+    pub fn new(block_producer: fuel_core_producer::Producer<Database>) -> Self {
+        Self {
+            block_producer: Arc::new(block_producer),
+        }
+    }
+}
 
 #[async_trait::async_trait]
 impl TxPool for TxPoolAdapter {
@@ -83,5 +104,25 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
         {
             Ok(Default::default())
         }
+    }
+}
+
+impl fuel_core_producer::ports::BlockProducerDatabase for Database {
+    fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>> {
+        let id = self.get_block_id(height)?.ok_or(not_found!("BlockId"))?;
+        self.storage::<FuelBlocks>()
+            .get(&id)?
+            .ok_or(not_found!(FuelBlocks))
+    }
+
+    fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32> {
+        self.storage::<FuelBlockRoots>()
+            .get(height)?
+            .ok_or(not_found!(FuelBlocks))
+            .map(Cow::into_owned)
+    }
+
+    fn current_block_height(&self) -> StorageResult<BlockHeight> {
+        self.latest_height()
     }
 }

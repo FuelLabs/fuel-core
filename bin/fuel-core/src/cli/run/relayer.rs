@@ -13,11 +13,11 @@ use std::str::FromStr;
 pub struct RelayerArgs {
     /// Uri address to ethereum client. It can be in format of `http://localhost:8545/` or `ws://localhost:8545/`.
     /// If not set relayer will not start.
-    #[clap(long = "relayer")]
+    #[arg(long = "relayer")]
     pub eth_client: Option<url::Url>,
 
     /// Ethereum contract address. Create EthAddress into fuel_types
-    #[clap(long = "relayer-v2-listening-contracts", parse(try_from_str = parse_h160))]
+    #[arg(long = "relayer-v2-listening-contracts", value_parser = parse_h160)]
     pub eth_v2_listening_contracts: Vec<H160>,
 
     /// Number of da block after which messages/stakes/validators become finalized.

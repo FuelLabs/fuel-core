@@ -12,17 +12,17 @@ version = "0.15.1"
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
-fuel-core-services = { path = "../.." }
+fuel-core-services = { path = "../..", version = "0.15.1" }
 fuel-core-storage = { path = "../../../storage", version = "0.15.1" }
 fuel-core-types = { path = "../../../types", version = "0.15.1" }
-humantime-serde = "1.1.1"
-serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.21", features = ["full"] }
 tokio-stream = "0.1"
 tracing = "0.1"
 
 [dev-dependencies]
+fuel-core-storage = { path = "../../../storage", features = ["test-helpers"] }
 fuel-core-types = { path = "../../../types", features = ["test-helpers"] }
 mockall = "0.11"
 rand = "0.8"
+test-case = "2.2"
 tokio = { version = "1.21", features = ["full", "test-util"] }

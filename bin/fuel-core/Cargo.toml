@@ -17,12 +17,12 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0"
-clap = { version = "3.2", features = ["derive", "env"] }
+clap = { version = "4.1", features = ["derive", "env"] }
 dirs = "4.0"
 fuel-core = { path = "../../crates/fuel-core", version = "0.15.1" }
+humantime = "2.1"
 lazy_static = "1.4"
 serde_json = { version = "1.0", features = ["raw_value"], optional = true }
-strum = "0.24"
 tokio = { version = "1.21", features = ["macros", "rt-multi-thread"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = [
@@ -31,6 +31,9 @@ tracing-subscriber = { version = "0.3", features = [
     "json",
 ] }
 url = { version = "2.2", optional = true }
+
+[dev-dependencies]
+test-case = "2.2"
 
 [features]
 debug = ["fuel-core/debug"]

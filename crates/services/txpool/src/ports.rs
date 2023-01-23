@@ -1,10 +1,7 @@
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
-    blockchain::{
-        primitives::BlockHeight,
-        SealedBlock,
-    },
+    blockchain::primitives::BlockHeight,
     entities::{
         coin::CompressedCoin,
         message::Message,
@@ -17,9 +14,12 @@ use fuel_core_types::{
         ContractId,
         MessageId,
     },
-    services::p2p::{
-        GossipsubMessageAcceptance,
-        NetworkData,
+    services::{
+        block_importer::ImportResult,
+        p2p::{
+            GossipsubMessageAcceptance,
+            NetworkData,
+        },
     },
 };
 use std::sync::Arc;
@@ -41,9 +41,9 @@ pub trait PeerToPeer: Send + Sync {
     ) -> anyhow::Result<()>;
 }
 
-pub trait BlockImport: Send + Sync {
+pub trait BlockImporter: Send + Sync {
     /// Wait until the next block is available
-    fn block_events(&self) -> BoxStream<SealedBlock>;
+    fn block_events(&self) -> BoxStream<Arc<ImportResult>>;
 }
 
 pub trait TxPoolDb: Send + Sync {

@@ -56,7 +56,6 @@ pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct ChainConfig {
     pub chain_name: String,
-    pub block_production: BlockProduction,
     pub block_gas_limit: u64,
     #[serde(default)]
     pub initial_state: Option<StateConfig>,
@@ -70,9 +69,6 @@ impl Default for ChainConfig {
     fn default() -> Self {
         Self {
             chain_name: "local".into(),
-            block_production: BlockProduction::ProofOfAuthority {
-                trigger: fuel_core_poa::Trigger::Instant,
-            },
             block_gas_limit: ConsensusParameters::DEFAULT.max_gas_per_tx * 10, /* TODO: Pick a sensible default */
             transaction_parameters: ConsensusParameters::DEFAULT,
             initial_state: None,
@@ -172,14 +168,4 @@ impl GenesisCommitment for ConsensusParameters {
 
         Ok(params_hash.into())
     }
-}
-
-/// Block production mode and settings
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum BlockProduction {
-    /// Proof-of-authority modes
-    ProofOfAuthority {
-        #[serde(flatten)]
-        trigger: fuel_core_poa::Trigger,
-    },
 }

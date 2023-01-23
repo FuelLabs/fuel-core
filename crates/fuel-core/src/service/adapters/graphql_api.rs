@@ -48,9 +48,9 @@ use fuel_core_types::{
 };
 
 impl DatabaseBlocks for Database {
-    fn block_id(&self, height: BlockHeight) -> StorageResult<BlockId> {
+    fn block_id(&self, height: &BlockHeight) -> StorageResult<BlockId> {
         self.get_block_id(height)
-            .and_then(|heigh| heigh.ok_or(not_found!("BlockId")))
+            .and_then(|height| height.ok_or(not_found!("BlockId")))
     }
 
     fn blocks_ids(
