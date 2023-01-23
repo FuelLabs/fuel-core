@@ -76,6 +76,15 @@ $ ./target/debug/fuel-core run --db-type in-memory
 Jul 12 23:28:47.238  INFO fuel_core: Binding GraphQL provider to 127.0.0.1:4000
 ```
 
+To disable block production on your local node, set `--poa-instant=false`
+
+#### Example
+
+```console
+$ ./target/debug/fuel-core run --poa-instant=false
+2023-01-23T02:25:18.787401Z  INFO fuel_core::cli::run: 173: Block production disabled.
+```
+
 #### Troubleshooting
 
 ##### Outdated database
