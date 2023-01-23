@@ -7,6 +7,7 @@ use crate::ports::{
     TxPool,
 };
 use fuel_core_storage::{
+    not_found,
     tables::FuelBlockMerkleData,
     transactional::{
         StorageTransaction,
@@ -24,11 +25,10 @@ use fuel_core_types::{
             DaBlockHeight,
         },
     },
-    entities::message::Message,
     fuel_tx::Receipt,
     fuel_types::{
         Address,
-        MessageId,
+        Bytes32,
     },
     services::{
         executor::{
@@ -49,6 +49,8 @@ use std::{
         Mutex,
     },
 };
+
+// TODO: Replace mocks with `mockall`.
 
 #[derive(Default, Clone)]
 pub struct MockRelayer {
@@ -203,13 +205,17 @@ pub struct MockDb {
 }
 
 impl BlockProducerDatabase for MockDb {
-    fn get_block(
-        &self,
-        fuel_height: BlockHeight,
-    ) -> StorageResult<Option<Cow<CompressedBlock>>> {
+    fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>> {
         let blocks = self.blocks.lock().unwrap();
+        blocks
+            .get(height)
+            .cloned()
+            .map(Cow::Owned)
+            .ok_or(not_found!("Didn't find block for test"))
+    }
 
-        Ok(blocks.get(&fuel_height).cloned().map(Cow::Owned))
+    fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32> {
+        Ok(Bytes32::new([height.as_usize() as u8; 32]))
     }
 
     fn current_block_height(&self) -> StorageResult<BlockHeight> {

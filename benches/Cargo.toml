@@ -1,18 +1,24 @@
 [package]
-name = "fuel-core-benches"
-version = "0.0.0"
 edition = "2021"
 license = "BUSL-1.1"
+name = "fuel-core-benches"
 publish = false
+version = "0.0.0"
 
 [dependencies]
-fuel-core = { path = "../crates/fuel-core" }
+clap = { version = "4", features = ["derive"] }
+criterion = { version = "0.4", features = ["html_reports"] }
+ctrlc = "3.2.3"
+fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
+    "rocksdb",
+] }
+fuel-core-storage = { path = "../crates/storage" }
 fuel-core-types = { path = "../crates/types", features = ["test-helpers"] }
 rand = "0.8"
-
-[dev-dependencies]
-criterion = { version = "0.4", features = ["html_reports"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.86"
+serde_yaml = "0.9.13"
 
 [[bench]]
-name = "vm"
 harness = false
+name = "vm"

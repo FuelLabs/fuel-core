@@ -51,7 +51,7 @@ pub struct FuelBlocks;
 
 impl Mappable for FuelBlocks {
     /// Unique identifier of the fuel block.
-    type Key = BlockId;
+    type Key<'a> = BlockId;
     type SetValue = CompressedBlock;
     type GetValue = Self::SetValue;
 }
@@ -74,13 +74,23 @@ impl Mappable for FuelDenseMerkleMetadata {
     type GetValue = Self::SetValue;
 }
 
+/// The table of BMT MMR roots of the fuel blocks.
+pub struct FuelBlockRoots;
+
+impl Mappable for FuelBlockRoots {
+    /// The height of the fuel block.
+    type Key<'a> = BlockHeight;
+    type SetValue = Bytes32;
+    type GetValue = Self::SetValue;
+}
+
 /// The latest UTXO id of the contract. The contract's UTXO represents the unique id of the state.
 /// After each transaction, old UTXO is consumed, and new UTXO is produced. UTXO is used as an
 /// input to the next transaction related to the `ContractId` smart contract.
 pub struct ContractsLatestUtxo;
 
 impl Mappable for ContractsLatestUtxo {
-    type Key = ContractId;
+    type Key<'a> = ContractId;
     /// The latest UTXO id.
     type SetValue = UtxoId;
     type GetValue = Self::SetValue;
@@ -91,7 +101,7 @@ pub struct Receipts;
 
 impl Mappable for Receipts {
     /// Unique identifier of the transaction.
-    type Key = Bytes32;
+    type Key<'a> = Bytes32;
     type SetValue = [Receipt];
     type GetValue = Vec<Receipt>;
 }
@@ -100,7 +110,7 @@ impl Mappable for Receipts {
 pub struct SealedBlockConsensus;
 
 impl Mappable for SealedBlockConsensus {
-    type Key = BlockId;
+    type Key<'a> = BlockId;
     type SetValue = Consensus;
     type GetValue = Self::SetValue;
 }
@@ -111,7 +121,7 @@ impl Mappable for SealedBlockConsensus {
 pub struct Coins;
 
 impl Mappable for Coins {
-    type Key = UtxoId;
+    type Key<'a> = UtxoId;
     type SetValue = CompressedCoin;
     type GetValue = Self::SetValue;
 }
@@ -120,7 +130,7 @@ impl Mappable for Coins {
 pub struct Messages;
 
 impl Mappable for Messages {
-    type Key = MessageId;
+    type Key<'a> = MessageId;
     type SetValue = Message;
     type GetValue = Self::SetValue;
 }
@@ -129,7 +139,7 @@ impl Mappable for Messages {
 pub struct Transactions;
 
 impl Mappable for Transactions {
-    type Key = TxId;
+    type Key<'a> = TxId;
     type SetValue = Transaction;
     type GetValue = Self::SetValue;
 }

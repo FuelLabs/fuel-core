@@ -119,7 +119,10 @@ where
         }
 
         // verify predicates
-        if !tx.check_predicates(self.config.chain_config.transaction_parameters) {
+        if !tx.check_predicates(
+            self.config.chain_config.transaction_parameters,
+            self.config.chain_config.gas_costs.clone(),
+        ) {
             return Err(anyhow!("transaction predicate verification failed"))
         }
 
@@ -322,7 +325,7 @@ where
     pub fn block_update(
         &mut self,
         tx_status_sender: &TxStatusChange,
-        block: SealedBlock,
+        block: &SealedBlock,
         // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
         for tx in block.entity.transactions() {

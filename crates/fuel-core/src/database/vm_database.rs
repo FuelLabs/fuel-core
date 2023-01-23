@@ -79,6 +79,10 @@ impl VmDatabase {
             database,
         }
     }
+
+    pub fn database_mut(&mut self) -> &mut Database {
+        &mut self.database
+    }
 }
 
 impl<M: Mappable> StorageInspect<M> for VmDatabase
@@ -87,11 +91,11 @@ where
 {
     type Error = StorageError;
 
-    fn get(&self, key: &M::Key) -> Result<Option<Cow<M::GetValue>>, Self::Error> {
+    fn get(&self, key: &M::Key<'_>) -> Result<Option<Cow<M::GetValue>>, Self::Error> {
         StorageInspect::<M>::get(&self.database, key)
     }
 
-    fn contains_key(&self, key: &M::Key) -> Result<bool, Self::Error> {
+    fn contains_key(&self, key: &M::Key<'_>) -> Result<bool, Self::Error> {
         StorageInspect::<M>::contains_key(&self.database, key)
     }
 }
@@ -102,13 +106,13 @@ where
 {
     fn insert(
         &mut self,
-        key: &M::Key,
+        key: &M::Key<'_>,
         value: &M::SetValue,
     ) -> Result<Option<M::GetValue>, Self::Error> {
         StorageMutate::<M>::insert(&mut self.database, key, value)
     }
 
-    fn remove(&mut self, key: &M::Key) -> Result<Option<M::GetValue>, Self::Error> {
+    fn remove(&mut self, key: &M::Key<'_>) -> Result<Option<M::GetValue>, Self::Error> {
         StorageMutate::<M>::remove(&mut self.database, key)
     }
 }
@@ -136,7 +140,7 @@ impl InterpreterStorage for VmDatabase {
                 return Err(anyhow!("block height too high for timestamp").into())
             }
             height if height == self.current_block_height => self.current_timestamp,
-            height => self.database.block_time(height.into())?,
+            height => self.database.block_time(&height.into())?,
         };
         Ok(timestamp.0)
     }
@@ -149,7 +153,7 @@ impl InterpreterStorage for VmDatabase {
         } else {
             // this will return 0x00**32 for block height 0 as well
             self.database
-                .get_block_id(block_height.into())?
+                .get_block_id(&block_height.into())?
                 .ok_or(not_found!("BlockId"))
                 .map(Into::into)
         }
