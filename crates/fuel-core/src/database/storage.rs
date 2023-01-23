@@ -32,41 +32,41 @@ trait DatabaseColumn {
 impl<T> StorageInspect<T> for Database
 where
     T: Mappable + DatabaseColumn,
-    T::Key: ToDatabaseKey,
+    for<'a> T::Key<'a>: ToDatabaseKey,
     T::GetValue: DeserializeOwned,
 {
     type Error = StorageError;
 
-    fn get(&self, key: &T::Key) -> StorageResult<Option<Cow<T::GetValue>>> {
-        let key = key.database_key();
-        self.get(key.as_ref(), T::column()).map_err(Into::into)
+    fn get(&self, key: &T::Key<'_>) -> StorageResult<Option<Cow<T::GetValue>>> {
+        self.get(key.database_key().as_ref(), T::column())
+            .map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &T::Key) -> StorageResult<bool> {
-        let key = key.database_key();
-        self.exists(key.as_ref(), T::column()).map_err(Into::into)
+    fn contains_key(&self, key: &T::Key<'_>) -> StorageResult<bool> {
+        self.exists(key.database_key().as_ref(), T::column())
+            .map_err(Into::into)
     }
 }
 
 impl<T> StorageMutate<T> for Database
 where
     T: Mappable + DatabaseColumn,
-    T::Key: ToDatabaseKey,
+    for<'a> T::Key<'a>: ToDatabaseKey,
     T::SetValue: Serialize,
     T::GetValue: DeserializeOwned,
 {
     fn insert(
         &mut self,
-        key: &T::Key,
+        key: &T::Key<'_>,
         value: &T::SetValue,
     ) -> StorageResult<Option<T::GetValue>> {
-        let key = key.database_key();
-        Database::insert(self, key.as_ref(), T::column(), value).map_err(Into::into)
+        Database::insert(self, key.database_key().as_ref(), T::column(), value)
+            .map_err(Into::into)
     }
 
-    fn remove(&mut self, key: &T::Key) -> StorageResult<Option<T::GetValue>> {
-        let key = key.database_key();
-        Database::remove(self, key.as_ref(), T::column()).map_err(Into::into)
+    fn remove(&mut self, key: &T::Key<'_>) -> StorageResult<Option<T::GetValue>> {
+        Database::remove(self, key.database_key().as_ref(), T::column())
+            .map_err(Into::into)
     }
 }
 

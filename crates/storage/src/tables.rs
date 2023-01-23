@@ -50,7 +50,7 @@ pub struct FuelBlockRoots;
 
 impl Mappable for FuelBlockRoots {
     /// The height of the fuel block.
-    type Key = BlockHeight;
+    type Key<'a> = BlockHeight;
     type SetValue = Bytes32;
     type GetValue = Self::SetValue;
 }
