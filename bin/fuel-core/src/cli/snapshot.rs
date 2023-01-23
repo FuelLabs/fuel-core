@@ -8,7 +8,7 @@ pub struct Command {
     #[clap(
         name = "DB_PATH",
         long = "db-path",
-        parse(from_os_str),
+        value_parser,
         default_value = (*DEFAULT_DB_PATH).to_str().unwrap()
     )]
     pub database_path: PathBuf,

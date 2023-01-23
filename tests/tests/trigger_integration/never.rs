@@ -1,5 +1,4 @@
 use fuel_core::{
-    chain_config::BlockProduction,
     database::Database,
     service::{
         Config,
@@ -11,6 +10,7 @@ use fuel_core_client::client::{
     PageDirection,
     PaginationRequest,
 };
+use fuel_core_poa::Trigger;
 use fuel_core_types::{
     fuel_asm::Opcode,
     fuel_crypto::SecretKey,
@@ -27,9 +27,7 @@ async fn poa_never_trigger_doesnt_produce_blocks() {
     let mut rng = StdRng::seed_from_u64(10);
     let db = Database::default();
     let mut config = Config::local_node();
-    config.chain_conf.block_production = BlockProduction::ProofOfAuthority {
-        trigger: fuel_core_poa::Trigger::Never,
-    };
+    config.block_production = Trigger::Never;
     config.consensus_key = Some(Secret::new(SecretKey::random(&mut rng).into()));
     let srv = FuelService::from_database(db.clone(), config)
         .await

@@ -1,11 +1,16 @@
 use crate::{
     database::Database,
+    fuel_core_graphql_api::ports::ConsensusModulePort,
     service::adapters::{
         BlockProducerAdapter,
+        PoAAdapter,
         TxPoolAdapter,
     },
 };
-use fuel_core_poa::ports::TransactionPool;
+use fuel_core_poa::{
+    ports::TransactionPool,
+    service::SharedState,
+};
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
@@ -23,7 +28,24 @@ use fuel_core_types::{
             TxStatus,
         },
     },
+    tai64::Tai64,
 };
+
+impl PoAAdapter {
+    pub fn new(shared_state: SharedState) -> Self {
+        Self { shared_state }
+    }
+}
+
+#[async_trait::async_trait]
+impl ConsensusModulePort for PoAAdapter {
+    async fn manual_produce_block(
+        &self,
+        block_times: Vec<Option<Tai64>>,
+    ) -> anyhow::Result<()> {
+        self.shared_state.manually_produce_block(block_times).await
+    }
+}
 
 impl TransactionPool for TxPoolAdapter {
     fn pending_number(&self) -> usize {
@@ -51,14 +73,17 @@ impl TransactionPool for TxPoolAdapter {
 }
 
 #[async_trait::async_trait]
-impl fuel_core_poa::ports::BlockProducer<Database> for BlockProducerAdapter {
+impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
+    type Database = Database;
+
     async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
+        block_time: Option<Tai64>,
         max_gas: Word,
     ) -> anyhow::Result<UncommittedResult<StorageTransaction<Database>>> {
         self.block_producer
-            .produce_and_execute_block(height, max_gas)
+            .produce_and_execute_block(height, block_time, max_gas)
             .await
     }
 

@@ -175,7 +175,7 @@ impl Task {
     /// Private inner method for initializing the fuel service task
     pub fn new(database: Database, config: Config) -> anyhow::Result<Task> {
         // initialize state
-        genesis::initialize_state(&config, &database)?;
+        genesis::maybe_initialize_state(&config, &database)?;
 
         // initialize sub services
         let (services, shared) = sub_services::init_sub_services(&config, &database)?;

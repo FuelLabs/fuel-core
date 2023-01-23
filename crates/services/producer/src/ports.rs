@@ -11,7 +11,10 @@ use fuel_core_types::{
             DaBlockHeight,
         },
     },
-    fuel_tx::Receipt,
+    fuel_tx::{
+        Bytes32,
+        Receipt,
+    },
     services::{
         executor::{
             ExecutionBlock,
@@ -24,11 +27,11 @@ use fuel_core_types::{
 use std::borrow::Cow;
 
 pub trait BlockProducerDatabase: Send + Sync {
-    /// Fetch previously committed block at given height.
-    fn get_block(
-        &self,
-        fuel_height: BlockHeight,
-    ) -> StorageResult<Option<Cow<CompressedBlock>>>;
+    /// Gets the committed block at the `height`.
+    fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>>;
+
+    /// Gets the block header BMT MMR root at `height`.
+    fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32>;
 
     /// Fetch the current block height.
     fn current_block_height(&self) -> StorageResult<BlockHeight>;
