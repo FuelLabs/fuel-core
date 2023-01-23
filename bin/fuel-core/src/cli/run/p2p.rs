@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use clap::Args;
 use fuel_core::{
     p2p::{
@@ -9,7 +10,10 @@ use fuel_core::{
         gossipsub_config::default_gossipsub_builder,
         Multiaddr,
     },
-    types::fuel_crypto,
+    types::{
+        fuel_crypto,
+        fuel_crypto::SecretKey,
+    },
 };
 use std::{
     net::{
@@ -17,14 +21,15 @@ use std::{
         Ipv4Addr,
     },
     path::PathBuf,
+    str::FromStr,
     time::Duration,
 };
 
 #[derive(Debug, Clone, Args)]
 pub struct P2PArgs {
-    /// Path to the location of DER-encoded Secp256k1 Keypair
-    #[clap(long = "keypair", env)]
-    pub keypair: Option<PathBuf>,
+    /// Peering secret key. Supports either a hex encoded secret key inline or a path to bip32 mnemonic encoded secret file.
+    #[clap(long = "keypair", env, value_parser = KeypairArg::try_from_string)]
+    pub keypair: Option<KeypairArg>,
 
     /// The name of the p2p Network
     /// If this value is not provided the p2p network won't start
@@ -142,11 +147,36 @@ pub struct P2PArgs {
     pub connection_keep_alive: u64,
 }
 
+#[derive(Clone, Debug)]
+pub enum KeypairArg {
+    Path(PathBuf),
+    InlineSecret(SecretKey),
+}
+
+impl KeypairArg {
+    pub fn try_from_string(s: &str) -> anyhow::Result<KeypairArg> {
+        // first try to parse as inline secret
+        // then try to parse as a pathbuf
+
+        let secret = SecretKey::from_str(s);
+        if let Ok(secret) = secret {
+            return Ok(KeypairArg::InlineSecret(secret))
+        }
+        let path = PathBuf::from_str(s);
+        if let Ok(pathbuf) = path {
+            return Ok(KeypairArg::Path(pathbuf))
+        }
+        Err(anyhow!(
+            "invalid keypair argument, neither a valid key or path"
+        ))
+    }
+}
+
 impl P2PArgs {
     pub fn into_config(self, metrics: bool) -> anyhow::Result<Config<NotInitialized>> {
         let local_keypair = {
             match self.keypair {
-                Some(path) => {
+                Some(KeypairArg::Path(path)) => {
                     let phrase = std::fs::read_to_string(path)?;
 
                     let secret_key =
@@ -155,6 +185,9 @@ impl P2PArgs {
                             "m/44'/60'/0'/0/0",
                         )?;
 
+                    convert_to_libp2p_keypair(&mut secret_key.to_vec())?
+                }
+                Some(KeypairArg::InlineSecret(secret_key)) => {
                     convert_to_libp2p_keypair(&mut secret_key.to_vec())?
                 }
                 _ => {
