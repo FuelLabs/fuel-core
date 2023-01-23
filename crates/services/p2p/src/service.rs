@@ -229,13 +229,13 @@ where
                         report_message(&mut self.p2p_service, message, acceptance);
                     }
                     Some(TaskRequest::RespondWithRequestedBlock((response, request_id))) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, response.map(OutboundResponse::RespondWithBlock));
+                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::RespondWithBlock(response));
                     }
                     Some(TaskRequest::RespondWithRequestedHeader((response, request_id))) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, response.map(OutboundResponse::RespondWithHeader));
+                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::RespondWithHeader(response));
                     }
                     Some(TaskRequest::RespondWithTransactions((response, request_id))) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, response.map(OutboundResponse::RespondWithTransactions));
+                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::RespondWithTransactions(response));
                     }
                     None => {
                         unreachable!("The `Task` is holder of the `Sender`, so it should not be possible");

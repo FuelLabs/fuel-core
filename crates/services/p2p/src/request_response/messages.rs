@@ -36,9 +36,9 @@ pub enum RequestMessage {
 /// Final Response Message that p2p service sends to the Orchestrator
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ResponseMessage {
-    SealedBlock(SealedBlock),
-    SealedHeader(SealedBlockHeader),
-    Transactions(Vec<Transaction>),
+    SealedBlock(Option<SealedBlock>),
+    SealedHeader(Option<SealedBlockHeader>),
+    Transactions(Option<Vec<Transaction>>),
 }
 
 /// Holds oneshot channels for specific responses
@@ -53,18 +53,18 @@ pub enum ResponseChannelItem {
 /// and then additionaly deserialized into `ResponseMessage`
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum NetworkResponse {
-    SerializedBlock(Vec<u8>),
-    SerializedHeader(Vec<u8>),
-    SerializedTransactions(Vec<u8>),
+    SerializedBlock(Option<Vec<u8>>),
+    SerializedHeader(Option<Vec<u8>>),
+    SerializedTransactions(Option<Vec<u8>>),
 }
 
 /// Initial state of the `ResponseMessage` prior to having its inner value serialized
 /// and wrapped into `IntermediateResponse`
 #[derive(Debug, Clone)]
 pub enum OutboundResponse {
-    RespondWithBlock(Arc<SealedBlock>),
-    RespondWithHeader(Arc<SealedBlockHeader>),
-    RespondWithTransactions(Arc<Vec<Transaction>>),
+    RespondWithBlock(Option<Arc<SealedBlock>>),
+    RespondWithHeader(Option<Arc<SealedBlockHeader>>),
+    RespondWithTransactions(Option<Arc<Vec<Transaction>>>),
 }
 
 #[derive(Debug)]

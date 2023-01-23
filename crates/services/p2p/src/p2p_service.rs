@@ -269,18 +269,10 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     pub fn send_response_msg(
         &mut self,
         request_id: RequestId,
-        message: Option<OutboundResponse>,
+        message: OutboundResponse,
     ) -> Result<(), ResponseError> {
-        // if the response message wasn't successfully prepared
-        // we still need to remove the `request_id` from `inbound_requests_table`
-        if message.is_none() {
-            self.inbound_requests_table.remove(&request_id);
-            return Ok(())
-        }
-
         match (
-            self.network_codec
-                .convert_to_network_response(&message.unwrap()),
+            self.network_codec.convert_to_network_response(&message),
             self.inbound_requests_table.remove(&request_id),
         ) {
             (Ok(message), Some(channel)) => {
@@ -1318,7 +1310,7 @@ mod tests {
                                     // 4. Simulating NetworkOrchestrator receiving a message from Node B
                                     let response_message = rx_orchestrator.await;
 
-                                    if let Ok(sealed_block) = response_message {
+                                    if let Ok(Some(sealed_block)) = response_message {
                                         let _ = tx_test_end.send(*sealed_block.entity.header().height() == 0_u64.into()).await;
                                     } else {
                                         tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
@@ -1342,7 +1334,7 @@ mod tests {
                             consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
                         };
 
-                        let _ = node_b.send_response_msg(request_id, Some(OutboundResponse::RespondWithBlock(Arc::new(sealed_block))));
+                        let _ = node_b.send_response_msg(request_id, OutboundResponse::RespondWithBlock(Some(Arc::new(sealed_block))));
                     }
 
                     tracing::info!("Node B Event: {:?}", node_b_event);
