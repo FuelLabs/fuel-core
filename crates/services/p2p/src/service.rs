@@ -176,6 +176,7 @@ where
 
             _ = watcher.while_started() => {
                 should_continue = false;
+                None
             }
 
             next_service_request = self.request_receiver.recv() => {

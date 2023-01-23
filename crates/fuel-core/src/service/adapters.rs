@@ -12,8 +12,10 @@ pub mod graphql_api;
 pub mod p2p;
 pub mod poa;
 pub mod producer;
-pub mod sync;
 pub mod txpool;
+
+#[cfg(feature = "p2p")]
+pub mod sync;
 
 /// This is used to get block import events from coordinator source
 /// and pass them to the txpool.

@@ -13,28 +13,6 @@ use fuel_core_types::{
     services::p2p::SourcePeer,
 };
 
-#[cfg(not(feature = "p2p"))]
-#[async_trait::async_trait]
-impl PeerToPeerPort for P2PAdapter {
-    fn height_stream(&self) -> BoxStream<BlockHeight> {
-        fuel_core_services::stream::IntoBoxStream::into_boxed(futures::stream::pending())
-    }
-
-    async fn get_sealed_block_header(
-        &self,
-        _: BlockHeight,
-    ) -> anyhow::Result<Option<SourcePeer<SealedBlockHeader>>> {
-        Ok(None)
-    }
-
-    async fn get_transactions(
-        &self,
-        _: SourcePeer<BlockId>,
-    ) -> anyhow::Result<Option<Vec<Transaction>>> {
-        Ok(None)
-    }
-}
-
 #[cfg(feature = "p2p")]
 #[async_trait::async_trait]
 impl PeerToPeerPort for P2PAdapter {
@@ -52,7 +30,12 @@ impl PeerToPeerPort for P2PAdapter {
         &self,
         height: BlockHeight,
     ) -> anyhow::Result<Option<SourcePeer<SealedBlockHeader>>> {
-        self.service.get_sealed_block_header(height).await
+        Ok(self.service.get_sealed_block_header(height).await?.map(
+            |(peer_id, header)| SourcePeer {
+                peer_id: peer_id.into(),
+                data: header,
+            },
+        ))
     }
 
     async fn get_transactions(

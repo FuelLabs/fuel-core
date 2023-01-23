@@ -85,6 +85,20 @@ pub fn init_sub_services(
         config: config.clone(),
     };
 
+    #[cfg(feature = "p2p")]
+    let sync = {
+        let executor = todo!();
+        let consensus = todo!();
+        let current_fuel_block_height = database.latest_height()?;
+        fuel_core_sync::service::new_service(
+            current_fuel_block_height,
+            p2p_adapter.clone(),
+            executor,
+            consensus,
+            config.sync,
+        )?
+    };
+
     // restrict the max number of concurrent dry runs to the number of CPUs
     // as execution in the worst case will be CPU bound rather than I/O bound.
     let max_dry_run_concurrency = num_cpus::get();
@@ -172,6 +186,7 @@ pub fn init_sub_services(
     #[cfg(feature = "p2p")]
     {
         services.push(Box::new(network));
+        services.push(Box::new(sync));
     }
 
     Ok((services, shared))

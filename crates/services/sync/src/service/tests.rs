@@ -51,7 +51,7 @@ async fn test_new_service() {
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
     };
-    let s = new_service(4u32.into(), p2p, executor, consensus, params).unwrap();
+    let s = new_service(Some(4u32.into()), p2p, executor, consensus, params).unwrap();
 
     assert_eq!(
         s.start_and_await().await.unwrap(),
