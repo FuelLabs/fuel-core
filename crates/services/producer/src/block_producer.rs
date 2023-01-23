@@ -6,7 +6,6 @@ use crate::{
 use anyhow::{
     anyhow,
     Context,
-    Result,
 };
 use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
@@ -28,7 +27,6 @@ use fuel_core_types::{
         Transaction,
     },
     fuel_types::Bytes32,
-    fuel_vm::crypto::ephemeral_merkle_root,
     services::executor::{
         ExecutionBlock,
         UncommittedResult,
@@ -84,8 +82,9 @@ where
     pub async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
+        block_time: Option<Tai64>,
         max_gas: Word,
-    ) -> Result<UncommittedResult<StorageTransaction<Database>>> {
+    ) -> anyhow::Result<UncommittedResult<StorageTransaction<Database>>> {
         //  - get previous block info (hash, root, etc)
         //  - select best da_height from relayer
         //  - get available txs from txpool
@@ -99,7 +98,7 @@ where
 
         let best_transactions = self.txpool.get_includable_txs(height, max_gas);
 
-        let header = self.new_header(height).await?;
+        let header = self.new_header(height, block_time).await?;
         let block = PartialFuelBlock::new(
             header,
             best_transactions
@@ -122,6 +121,7 @@ where
         Ok(result)
     }
 
+    // TODO: Support custom `block_time` for `dry_run`.
     /// Simulate a transaction without altering any state. Does not aquire the production lock
     /// since it is basically a "read only" operation and shouldn't get in the way of normal
     /// production.
@@ -130,7 +130,7 @@ where
         transaction: Transaction,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
-    ) -> Result<Vec<Receipt>> {
+    ) -> anyhow::Result<Vec<Receipt>> {
         // setup the block with the provided tx and optional height
         // dry_run execute tx on the executor
         // return the receipts
@@ -142,13 +142,13 @@ where
         } + 1u64.into();
 
         let is_script = transaction.is_script();
-        let header = self.new_header(height).await?;
+        let header = self.new_header(height, None).await?;
         let block =
             PartialFuelBlock::new(header, vec![transaction].into_iter().collect());
 
         let executor = self.executor.clone();
         // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
-        let res: Vec<_> = spawn_blocking(move || -> Result<Vec<Receipt>> {
+        let res: Vec<_> = spawn_blocking(move || -> anyhow::Result<Vec<Receipt>> {
             Ok(executor
                 .dry_run(ExecutionBlock::Production(block), utxo_validation)?
                 .into_iter()
@@ -168,7 +168,11 @@ where
     Database: BlockProducerDatabase,
 {
     /// Create the header for a new block at the provided height
-    async fn new_header(&self, height: BlockHeight) -> Result<PartialBlockHeader> {
+    async fn new_header(
+        &self,
+        height: BlockHeight,
+        block_time: Option<Tai64>,
+    ) -> anyhow::Result<PartialBlockHeader> {
         let previous_block_info = self.previous_block_info(height)?;
         let new_da_height = self
             .select_new_da_height(previous_block_info.da_height)
@@ -180,10 +184,9 @@ where
                 generated: Default::default(),
             },
             consensus: ConsensusHeader {
-                // TODO: this needs to be updated using a proper BMT MMR
                 prev_root: previous_block_info.prev_root,
                 height,
-                time: Tai64::now(),
+                time: block_time.unwrap_or_else(Tai64::now),
                 generated: Default::default(),
             },
         })
@@ -192,7 +195,7 @@ where
     async fn select_new_da_height(
         &self,
         previous_da_height: DaBlockHeight,
-    ) -> Result<DaBlockHeight> {
+    ) -> anyhow::Result<DaBlockHeight> {
         let best_height = self.relayer.get_best_finalized_da_height().await?;
         if best_height < previous_da_height {
             // If this happens, it could mean a block was erroneously imported
@@ -206,7 +209,10 @@ where
         Ok(best_height)
     }
 
-    fn previous_block_info(&self, height: BlockHeight) -> Result<PreviousBlockInfo> {
+    fn previous_block_info(
+        &self,
+        height: BlockHeight,
+    ) -> anyhow::Result<PreviousBlockInfo> {
         // TODO: It is not guaranteed that the genesis height is `0` height. Update the code to
         //  use a genesis height from the database. If the `height` less than genesis height ->
         //  return a new error.
@@ -216,15 +222,8 @@ where
         } else {
             // get info from previous block height
             let prev_height = height - 1u32.into();
-            let previous_block = self
-                .db
-                .get_block(prev_height)?
-                .ok_or(Error::MissingBlock(prev_height))?;
-            // TODO: this should use a proper BMT MMR
-            let hash = previous_block.id();
-            let prev_root = ephemeral_merkle_root(
-                vec![*previous_block.header().prev_root(), hash.into()].iter(),
-            );
+            let previous_block = self.db.get_block(&prev_height)?;
+            let prev_root = self.db.block_header_merkle_root(&prev_height)?;
 
             Ok(PreviousBlockInfo {
                 prev_root,

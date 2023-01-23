@@ -2277,6 +2277,7 @@ dependencies = [
  "derive_more",
  "enum-iterator",
  "fuel-core-chain-config",
+ "fuel-core-consensus-module",
  "fuel-core-database",
  "fuel-core-executor",
  "fuel-core-importer",

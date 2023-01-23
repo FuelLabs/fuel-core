@@ -13,33 +13,20 @@ use fuel_core_chain_config::{
     MessageConfig,
 };
 use fuel_core_executor::refs::ContractStorageTrait;
-use fuel_core_poa::ports::BlockDb;
-use fuel_core_producer::ports::BlockProducerDatabase;
 use fuel_core_storage::{
-    not_found,
-    tables::{
-        FuelBlocks,
-        SealedBlockConsensus,
+    transactional::{
+        StorageTransaction,
+        Transactional,
     },
     Error as StorageError,
     Result as StorageResult,
-    StorageAsMut,
-    StorageAsRef,
 };
-use fuel_core_types::blockchain::{
-    block::CompressedBlock,
-    consensus::Consensus,
-    primitives::{
-        BlockHeight,
-        BlockId,
-    },
-};
+use fuel_core_types::blockchain::primitives::BlockHeight;
 use serde::{
     de::DeserializeOwned,
     Serialize,
 };
 use std::{
-    borrow::Cow,
     fmt::{
         self,
         Debug,
@@ -59,23 +46,6 @@ type DatabaseResult<T> = Result<T>;
 
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
-use fuel_core_storage::tables::{
-    Coins,
-    ContractsRawCode,
-    Messages,
-};
-use fuel_core_txpool::ports::TxPoolDb;
-use fuel_core_types::{
-    entities::{
-        coin::CompressedCoin,
-        message::Message,
-    },
-    fuel_tx::UtxoId,
-    fuel_types::{
-        ContractId,
-        MessageId,
-    },
-};
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 #[cfg(feature = "rocksdb")]
@@ -98,6 +68,7 @@ mod state;
 
 pub mod balances;
 pub mod metadata;
+pub mod storage;
 // TODO: Rename in a separate PR into `transaction`
 pub mod transactional;
 pub mod transactions;
@@ -143,6 +114,8 @@ pub enum Column {
     OwnedMessageIds = 15,
     /// The column that stores the consensus metadata associated with a finalized fuel block
     FuelBlockConsensus = 16,
+    /// The column that stores the BMT MMR roots of the block headers
+    BlockHeaderMerkle = 17,
 }
 
 #[derive(Clone, Debug)]
@@ -286,6 +259,12 @@ impl Database {
     }
 }
 
+impl Transactional<Database> for Database {
+    fn transaction(&self) -> StorageTransaction<Database> {
+        StorageTransaction::new(self.transaction())
+    }
+}
+
 impl AsRef<Database> for Database {
     fn as_ref(&self) -> &Database {
         self
@@ -328,65 +307,6 @@ impl Default for Database {
     }
 }
 
-impl BlockDb for Database {
-    fn block_height(&self) -> anyhow::Result<BlockHeight> {
-        Ok(self.latest_height()?.unwrap_or_default())
-    }
-
-    fn seal_block(
-        &mut self,
-        block_id: BlockId,
-        consensus: Consensus,
-    ) -> anyhow::Result<()> {
-        self.storage::<SealedBlockConsensus>()
-            .insert(&block_id, &consensus)
-            .map(|_| ())
-            .map_err(Into::into)
-    }
-}
-
-impl TxPoolDb for Database {
-    fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>> {
-        self.storage::<Coins>()
-            .get(utxo_id)
-            .map(|t| t.map(|t| t.as_ref().clone()))
-    }
-
-    fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool> {
-        self.storage::<ContractsRawCode>().contains_key(contract_id)
-    }
-
-    fn message(&self, message_id: &MessageId) -> StorageResult<Option<Message>> {
-        self.storage::<Messages>()
-            .get(message_id)
-            .map(|t| t.map(|t| t.as_ref().clone()))
-    }
-
-    fn current_block_height(&self) -> StorageResult<BlockHeight> {
-        self.latest_height()
-            .map(|h| h.unwrap_or_default())
-            .map_err(Into::into)
-    }
-}
-
-impl BlockProducerDatabase for Database {
-    fn get_block(
-        &self,
-        fuel_height: BlockHeight,
-    ) -> StorageResult<Option<Cow<CompressedBlock>>> {
-        let id = self
-            .get_block_id(fuel_height)?
-            .ok_or(not_found!("BlockId"))?;
-        self.storage::<FuelBlocks>().get(&id).map_err(Into::into)
-    }
-
-    fn current_block_height(&self) -> StorageResult<BlockHeight> {
-        self.latest_height()
-            .map(|h| h.unwrap_or_default())
-            .map_err(Into::into)
-    }
-}
-
 /// Implement `ChainConfigDb` so that `Database` can be passed to
 /// `StateConfig's` `generate_state_config()` method
 impl ChainConfigDb for Database {
@@ -402,7 +322,7 @@ impl ChainConfigDb for Database {
         Self::get_message_config(self).map_err(Into::into)
     }
 
-    fn get_block_height(&self) -> StorageResult<Option<BlockHeight>> {
-        Self::latest_height(self).map_err(Into::into)
+    fn get_block_height(&self) -> StorageResult<BlockHeight> {
+        Self::latest_height(self)
     }
 }

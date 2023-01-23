@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    ports::BlockImport,
+    ports::BlockImporter,
     MockDb,
 };
 use fuel_core_services::{
@@ -96,8 +96,8 @@ impl MockP2P {
 mockall::mock! {
     pub Importer {}
 
-    impl BlockImport for Importer {
-        fn block_events(&self) -> BoxStream<SealedBlock>;
+    impl BlockImporter for Importer {
+        fn block_events(&self) -> BoxStream<Arc<ImportResult>>;
     }
 }
 
@@ -108,8 +108,13 @@ impl MockImporter {
             let blocks = blocks.clone();
             let stream = fuel_core_services::stream::unfold(blocks, |mut blocks| async {
                 let block = blocks.pop();
-                if let Some(block) = block {
-                    Some((block, blocks))
+                if let Some(sealed_block) = block {
+                    let result = ImportResult {
+                        sealed_block,
+                        tx_status: vec![],
+                    };
+                    let result = Arc::new(result);
+                    Some((result, blocks))
                 } else {
                     core::future::pending().await
                 }
@@ -166,14 +171,13 @@ impl TestContextBuilder {
         let rng = RefCell::new(self.rng);
         let config = Config::default();
         let mock_db = self.mock_db;
-        let status_tx = TxStatusChange::new(100);
 
         let p2p = self.p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![]));
         let importer = self
             .importer
             .unwrap_or_else(|| MockImporter::with_blocks(vec![]));
 
-        let service = new_service(config, mock_db.clone(), status_tx, importer, p2p);
+        let service = new_service(config, mock_db.clone(), importer, p2p);
 
         TestContext {
             service,

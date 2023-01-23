@@ -9,27 +9,27 @@ use crate::{
     },
     service::{
         adapters::{
-            BlockImportAdapter,
+            BlockImporterAdapter,
             BlockProducerAdapter,
             ExecutorAdapter,
             MaybeRelayerAdapter,
+            PoAAdapter,
             TxPoolAdapter,
+            VerifierAdapter,
         },
         Config,
         SharedState,
         SubServices,
     },
 };
-use fuel_core_txpool::service::TxStatusChange;
 use std::sync::Arc;
 use tokio::sync::{
-    broadcast,
     Mutex,
     Semaphore,
 };
 
 pub type PoAService =
-    fuel_core_poa::Service<Database, TxPoolAdapter, BlockProducerAdapter>;
+    fuel_core_poa::Service<TxPoolAdapter, BlockProducerAdapter, BlockImporterAdapter>;
 #[cfg(feature = "relayer")]
 pub type RelayerService = fuel_core_relayer::Service<Database>;
 #[cfg(feature = "p2p")]
@@ -41,8 +41,9 @@ pub fn init_sub_services(
     config: &Config,
     database: &Database,
 ) -> anyhow::Result<(SubServices, SharedState)> {
+    let last_height = database.latest_height()?;
     #[cfg(feature = "relayer")]
-    let relayer = if config.relayer.eth_client.is_some() {
+    let relayer_service = if config.relayer.eth_client.is_some() {
         Some(fuel_core_relayer::new_service(
             database.clone(),
             config.relayer.clone(),
@@ -51,7 +52,11 @@ pub fn init_sub_services(
         None
     };
 
-    let (block_import_tx, _) = broadcast::channel(16);
+    let relayer_adapter = MaybeRelayerAdapter {
+        database: database.clone(),
+        #[cfg(feature = "relayer")]
+        relayer_synced: relayer_service.as_ref().map(|r| r.shared.clone()),
+    };
 
     #[cfg(feature = "p2p")]
     let network = {
@@ -70,48 +75,51 @@ pub fn init_sub_services(
 
     let p2p_adapter = p2p_adapter;
 
-    let importer_adapter = BlockImportAdapter::new(block_import_tx);
-
-    let txpool = fuel_core_txpool::new_service(
-        config.txpool.clone(),
-        database.clone(),
-        TxStatusChange::new(100),
-        importer_adapter.clone(),
-        p2p_adapter,
-    );
-
     let executor = ExecutorAdapter {
         database: database.clone(),
         config: config.clone(),
     };
 
+    let verifier =
+        VerifierAdapter::new(config, database.clone(), relayer_adapter.clone());
+
+    let importer_adapter = BlockImporterAdapter::new(
+        config.block_importer.clone(),
+        database.clone(),
+        executor.clone(),
+        verifier,
+    );
+
+    let txpool = fuel_core_txpool::new_service(
+        config.txpool.clone(),
+        database.clone(),
+        importer_adapter.clone(),
+        p2p_adapter,
+    );
+    let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
+
     // restrict the max number of concurrent dry runs to the number of CPUs
     // as execution in the worst case will be CPU bound rather than I/O bound.
     let max_dry_run_concurrency = num_cpus::get();
-    let block_producer = Arc::new(fuel_core_producer::Producer {
+    let block_producer = fuel_core_producer::Producer {
         config: config.block_producer.clone(),
         db: database.clone(),
-        txpool: Box::new(TxPoolAdapter::new(txpool.shared.clone())),
-        executor: Arc::new(executor.clone()),
-        relayer: Box::new(MaybeRelayerAdapter {
-            database: database.clone(),
-            #[cfg(feature = "relayer")]
-            relayer_synced: relayer.as_ref().map(|r| r.shared.clone()),
-        }),
+        txpool: Box::new(tx_pool_adapter.clone()),
+        executor: Arc::new(executor),
+        relayer: Box::new(relayer_adapter),
         lock: Mutex::new(()),
         dry_run_semaphore: Semaphore::new(max_dry_run_concurrency),
-    });
+    };
+    let producer_adapter = BlockProducerAdapter::new(block_producer);
 
     let poa = fuel_core_poa::new_service(
-        config.into(),
-        TxPoolAdapter::new(txpool.shared.clone()),
-        // TODO: Pass Importer
-        importer_adapter.tx,
-        BlockProducerAdapter {
-            block_producer: block_producer.clone(),
-        },
-        database.clone(),
+        last_height,
+        config.try_into()?,
+        tx_pool_adapter,
+        producer_adapter.clone(),
+        importer_adapter,
     );
+    let poa_adapter = PoAAdapter::new(poa.shared.clone());
 
     // TODO: Figure out on how to move it into `fuel-core-graphql-api`.
     let schema = dap::init(
@@ -134,9 +142,9 @@ pub fn init_sub_services(
         },
         Box::new(database.clone()),
         schema,
-        block_producer,
+        producer_adapter,
         txpool.clone(),
-        executor,
+        Box::new(poa_adapter),
     )?;
 
     let shared = SharedState {
@@ -144,7 +152,7 @@ pub fn init_sub_services(
         #[cfg(feature = "p2p")]
         network: network.shared.clone(),
         #[cfg(feature = "relayer")]
-        relayer: relayer.as_ref().map(|r| r.shared.clone()),
+        relayer: relayer_service.as_ref().map(|r| r.shared.clone()),
         graph_ql: graph_ql.shared.clone(),
     };
 
@@ -158,7 +166,7 @@ pub fn init_sub_services(
     ];
 
     #[cfg(feature = "relayer")]
-    if let Some(relayer) = relayer {
+    if let Some(relayer) = relayer_service {
         services.push(Box::new(relayer));
     }
 

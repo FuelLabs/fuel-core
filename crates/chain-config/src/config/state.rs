@@ -44,7 +44,7 @@ impl StateConfig {
             coins: db.get_coin_config()?,
             contracts: db.get_contract_config()?,
             messages: db.get_message_config()?,
-            height: db.get_block_height()?,
+            height: Some(db.get_block_height()?),
         })
     }
 }
@@ -57,5 +57,5 @@ pub trait ChainConfigDb {
     /// Returns *all* unspent message configs available in the database.
     fn get_message_config(&self) -> StorageResult<Option<Vec<MessageConfig>>>;
     /// Returns the last available block height.
-    fn get_block_height(&self) -> StorageResult<Option<BlockHeight>>;
+    fn get_block_height(&self) -> StorageResult<BlockHeight>;
 }

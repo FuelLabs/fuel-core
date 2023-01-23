@@ -4,7 +4,7 @@ use crate::{
         OnConflict,
     },
     ports::{
-        BlockDb,
+        BlockImporter,
         BlockProducer,
         TransactionPool,
     },
@@ -17,7 +17,6 @@ use anyhow::{
 };
 use fuel_core_services::{
     stream::BoxStream,
-    EmptyShared,
     RunnableService,
     RunnableTask,
     ServiceRunner,
@@ -45,92 +44,161 @@ use fuel_core_types::{
         Secret,
     },
     services::{
+        block_importer::ImportResult,
         executor::{
             ExecutionResult,
-            UncommittedResult,
+            UncommittedResult as UncommittedExecutionResult,
         },
         txpool::TxStatus,
+        Uncommitted,
     },
+    tai64::Tai64,
 };
 use std::ops::Deref;
 use tokio::{
-    sync::broadcast,
+    sync::{
+        mpsc,
+        oneshot,
+    },
     time::Instant,
 };
 use tokio_stream::StreamExt;
 use tracing::error;
 
-pub type Service<D, T, B> = ServiceRunner<Task<D, T, B>>;
+pub type Service<T, B, I> = ServiceRunner<Task<T, B, I>>;
 
-pub struct Task<D, T, B> {
-    pub(crate) block_gas_limit: Word,
-    pub(crate) signing_key: Option<Secret<SecretKeyWrapper>>,
-    pub(crate) db: D,
-    pub(crate) block_producer: B,
-    pub(crate) txpool: T,
-    pub(crate) tx_status_update_stream: BoxStream<TxStatus>,
-    pub(crate) import_block_events_tx: broadcast::Sender<SealedBlock>,
+#[derive(Clone)]
+pub struct SharedState {
+    request_sender: mpsc::Sender<Request>,
+}
+
+impl SharedState {
+    pub async fn manually_produce_block(
+        &self,
+        block_times: Vec<Option<Tai64>>,
+    ) -> anyhow::Result<()> {
+        let (sender, receiver) = oneshot::channel();
+
+        self.request_sender
+            .send(Request::ManualBlocks((block_times, sender)))
+            .await?;
+        receiver.await?
+    }
+}
+
+/// Requests accepted by the task.
+enum Request {
+    /// Manually produces the next blocks with `Tai64` block timestamp.
+    /// The block timestamp should be higher than previous one.
+    ManualBlocks((Vec<Option<Tai64>>, oneshot::Sender<anyhow::Result<()>>)),
+}
+
+impl core::fmt::Debug for Request {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "Request")
+    }
+}
+
+pub(crate) enum RequestType {
+    Manual,
+    Trigger,
+}
+
+pub struct Task<T, B, I> {
+    block_gas_limit: Word,
+    signing_key: Option<Secret<SecretKeyWrapper>>,
+    block_producer: B,
+    block_importer: I,
+    txpool: T,
+    tx_status_update_stream: BoxStream<TxStatus>,
+    request_receiver: mpsc::Receiver<Request>,
+    shared_state: SharedState,
+    last_height: BlockHeight,
     /// Last block creation time. When starting up, this is initialized
     /// to `Instant::now()`, which delays the first block on startup for
     /// a bit, but doesn't cause any other issues.
-    pub(crate) last_block_created: Instant,
-    pub(crate) trigger: Trigger,
+    last_block_created: Instant,
+    trigger: Trigger,
     // TODO: Consider that the creation of the block takes some time, and maybe we need to
     //  patch the timer to generate the block earlier.
     //  https://github.com/FuelLabs/fuel-core/issues/918
     /// Deadline clock, used by the triggers
-    pub(crate) timer: DeadlineClock,
+    timer: DeadlineClock,
 }
 
-impl<D, T, B> Task<D, T, B>
+impl<T, B, I> Task<T, B, I>
 where
     T: TransactionPool,
 {
     pub fn new(
+        last_height: BlockHeight,
         config: Config,
         txpool: T,
-        import_block_events_tx: broadcast::Sender<SealedBlock>,
         block_producer: B,
-        db: D,
+        block_importer: I,
     ) -> Self {
         let tx_status_update_stream = txpool.transaction_status_events();
+        let (request_sender, request_receiver) = mpsc::channel(100);
         Self {
             block_gas_limit: config.block_gas_limit,
             signing_key: config.signing_key,
-            db,
-            block_producer,
             txpool,
+            block_producer,
+            block_importer,
             tx_status_update_stream,
+            request_receiver,
+            shared_state: SharedState { request_sender },
+            last_height,
             last_block_created: Instant::now(),
-            import_block_events_tx,
             trigger: config.trigger,
             timer: DeadlineClock::new(),
         }
     }
+
+    fn next_height(&self) -> BlockHeight {
+        self.last_height + 1u32.into()
+    }
 }
 
-impl<D, T, B> Task<D, T, B>
+impl<D, T, B, I> Task<T, B, I>
 where
-    D: BlockDb,
     T: TransactionPool,
-    B: BlockProducer<D>,
+    B: BlockProducer<Database = D>,
+    I: BlockImporter<Database = D>,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(
         &self,
-    ) -> anyhow::Result<UncommittedResult<StorageTransaction<D>>> {
-        let current_height = self
-            .db
-            .block_height()
-            .map_err(|err| anyhow::format_err!("db error {err:?}"))?;
-        let height = BlockHeight::from(current_height.as_usize() + 1);
-
+        height: BlockHeight,
+        block_time: Option<Tai64>,
+    ) -> anyhow::Result<UncommittedExecutionResult<StorageTransaction<D>>> {
         self.block_producer
-            .produce_and_execute_block(height, self.block_gas_limit)
+            .produce_and_execute_block(height, block_time, self.block_gas_limit)
             .await
     }
 
-    pub(crate) async fn produce_block(&mut self) -> anyhow::Result<()> {
+    pub(crate) async fn produce_next_block(&mut self) -> anyhow::Result<()> {
+        self.produce_block(self.next_height(), None, RequestType::Trigger)
+            .await
+    }
+
+    pub(crate) async fn produce_manual_blocks(
+        &mut self,
+        block_times: Vec<Option<Tai64>>,
+    ) -> anyhow::Result<()> {
+        for block_time in block_times {
+            self.produce_block(self.next_height(), block_time, RequestType::Manual)
+                .await?;
+        }
+        Ok(())
+    }
+
+    pub(crate) async fn produce_block(
+        &mut self,
+        height: BlockHeight,
+        block_time: Option<Tai64>,
+        request_type: RequestType,
+    ) -> anyhow::Result<()> {
         // verify signing key is set
         if self.signing_key.is_none() {
             return Err(anyhow!("unable to produce blocks without a consensus key"))
@@ -141,14 +209,10 @@ where
             ExecutionResult {
                 block,
                 skipped_transactions,
-                ..
+                tx_status,
             },
-            mut db_transaction,
-        ) = self.signal_produce_block().await?.into();
-
-        // sign the block and seal it
-        let seal = seal_block(&self.signing_key, &block, db_transaction.as_mut())?;
-        db_transaction.commit()?;
+            db_transaction,
+        ) = self.signal_produce_block(height, block_time).await?.into();
 
         let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
         for (tx, err) in skipped_transactions {
@@ -160,34 +224,44 @@ where
         }
         self.txpool.remove_txs(tx_ids_to_remove);
 
-        // Send the block back to the txpool
-        // TODO: this probably must be done differently with multi-node configuration
-        let sealed_block = SealedBlock {
+        // Sign the block and seal it
+        let seal = seal_block(&self.signing_key, &block)?;
+        let block = SealedBlock {
             entity: block,
             consensus: seal,
         };
-        self.import_block_events_tx
-            .send(sealed_block)
-            .expect("Failed to import the generated block");
+        // Import the sealed block
+        self.block_importer.commit_result(Uncommitted::new(
+            ImportResult {
+                sealed_block: block,
+                tx_status,
+            },
+            db_transaction,
+        ))?;
 
         // Update last block time
+        self.last_height = height;
         self.last_block_created = Instant::now();
 
         // Set timer for the next block
-        match self.trigger {
-            Trigger::Never => {
-                unreachable!("This mode will never produce blocks");
+        match (self.trigger, request_type) {
+            (Trigger::Never, RequestType::Manual) => (),
+            (Trigger::Never, RequestType::Trigger) => {
+                unreachable!("Trigger production will never produce blocks in never mode")
             }
-            Trigger::Instant => {}
-            Trigger::Interval { block_time } => {
+            (Trigger::Instant, _) => {}
+            (Trigger::Interval { block_time }, RequestType::Trigger) => {
                 // TODO: instead of sleeping for `block_time`, subtract the time we used for processing
                 self.timer.set_timeout(block_time, OnConflict::Min).await;
             }
-            Trigger::Hybrid {
-                max_block_time,
-                min_block_time,
-                max_tx_idle_time,
-            } => {
+            (
+                Trigger::Hybrid {
+                    max_block_time,
+                    min_block_time,
+                    max_tx_idle_time,
+                },
+                RequestType::Trigger,
+            ) => {
                 let consumable_gas = self.txpool.total_consumable_gas();
 
                 // If txpool still has more than a full block of transactions available,
@@ -207,6 +281,10 @@ where
                         .await;
                 }
             }
+            (Trigger::Interval { .. }, RequestType::Manual)
+            | (Trigger::Hybrid { .. }, RequestType::Manual) => {
+                unreachable!("Trigger types interval and hybrid cannot be used with manual. This is enforced during config validation")
+            }
         }
 
         Ok(())
@@ -222,7 +300,7 @@ where
                     let pending_number = self.txpool.pending_number();
                     // skip production if there are no pending transactions
                     if pending_number > 0 {
-                        self.produce_block().await?;
+                        self.produce_next_block().await?;
                     }
                     Ok(())
                 }
@@ -239,7 +317,7 @@ where
                     if consumable_gas > self.block_gas_limit
                         && self.last_block_created + min_block_time < Instant::now()
                     {
-                        self.produce_block().await?;
+                        self.produce_next_block().await?;
                     } else if self.txpool.pending_number() > 0 {
                         // We have at least one transaction, so tx_max_idle_time is the limit
                         self.timer
@@ -271,7 +349,7 @@ where
             // 3. max_block_time expired
             // => we produce a new block in any case
             Trigger::Interval { .. } | Trigger::Hybrid { .. } => {
-                self.produce_block().await?;
+                self.produce_next_block().await?;
                 Ok(())
             }
         }
@@ -279,17 +357,17 @@ where
 }
 
 #[async_trait::async_trait]
-impl<D, T, B> RunnableService for Task<D, T, B>
+impl<T, B, I> RunnableService for Task<T, B, I>
 where
     Self: RunnableTask,
 {
     const NAME: &'static str = "PoA";
 
-    type SharedData = EmptyShared;
-    type Task = Task<D, T, B>;
+    type SharedData = SharedState;
+    type Task = Task<T, B, I>;
 
     fn shared_data(&self) -> Self::SharedData {
-        EmptyShared
+        self.shared_state.clone()
     }
 
     async fn into_task(self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
@@ -311,17 +389,30 @@ where
 }
 
 #[async_trait::async_trait]
-impl<D, T, B> RunnableTask for Task<D, T, B>
+impl<D, T, B, I> RunnableTask for Task<T, B, I>
 where
-    D: BlockDb,
     T: TransactionPool,
-    B: BlockProducer<D>,
+    B: BlockProducer<Database = D>,
+    I: BlockImporter<Database = D>,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
         tokio::select! {
             _ = watcher.while_started() => {
                 should_continue = false;
+            }
+            request = self.request_receiver.recv() => {
+                if let Some(request) = request {
+                    match request {
+                        Request::ManualBlocks((block_times, response)) => {
+                            let result = self.produce_manual_blocks(block_times).await;
+                            let _ = response.send(result);
+                        }
+                    }
+                    should_continue = true;
+                } else {
+                    unreachable!("The task is the holder of the `Sender` too")
+                }
             }
             // TODO: This should likely be refactored to use something like tokio::sync::Notify.
             //       Otherwise, if a bunch of txs are submitted at once and all the txs are included
@@ -346,31 +437,30 @@ where
     }
 }
 
-pub fn new_service<D, T, B>(
+pub fn new_service<D, T, B, I>(
+    last_height: BlockHeight,
     config: Config,
     txpool: T,
-    import_block_events_tx: broadcast::Sender<SealedBlock>,
     block_producer: B,
-    db: D,
-) -> Service<D, T, B>
+    block_importer: I,
+) -> Service<T, B, I>
 where
     T: TransactionPool + 'static,
-    D: BlockDb + 'static,
-    B: BlockProducer<D> + 'static,
+    B: BlockProducer<Database = D> + 'static,
+    I: BlockImporter<Database = D> + 'static,
 {
     Service::new(Task::new(
+        last_height,
         config,
         txpool,
-        import_block_events_tx,
         block_producer,
-        db,
+        block_importer,
     ))
 }
 
-pub fn seal_block(
+fn seal_block(
     signing_key: &Option<Secret<SecretKeyWrapper>>,
     block: &Block,
-    database: &mut dyn BlockDb,
 ) -> anyhow::Result<Consensus> {
     if let Some(key) = signing_key {
         let block_hash = block.id();
@@ -381,7 +471,6 @@ pub fn seal_block(
 
         let poa_signature = Signature::sign(signing_key, &message);
         let seal = Consensus::PoA(PoAConsensus::new(poa_signature));
-        database.seal_block(block_hash, seal.clone())?;
         Ok(seal)
     } else {
         Err(anyhow!("no PoA signing key configured"))

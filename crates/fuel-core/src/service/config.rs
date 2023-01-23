@@ -79,14 +79,23 @@ impl Config {
     }
 }
 
-impl From<&Config> for fuel_core_poa::Config {
-    fn from(config: &Config) -> Self {
-        fuel_core_poa::Config {
+impl TryFrom<&Config> for fuel_core_poa::Config {
+    type Error = anyhow::Error;
+
+    fn try_from(config: &Config) -> Result<Self, Self::Error> {
+        // If manual block production then require trigger never or instant.
+        anyhow::ensure!(
+            !config.manual_blocks_enabled
+                || matches!(config.block_production, Trigger::Never | Trigger::Instant),
+            "Cannot use manual block production unless trigger mode is never or instant."
+        );
+
+        Ok(fuel_core_poa::Config {
             trigger: config.block_production,
             block_gas_limit: config.chain_conf.block_gas_limit,
             signing_key: config.consensus_key.clone(),
             metrics: false,
-        }
+        })
     }
 }
 

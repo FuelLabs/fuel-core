@@ -11,7 +11,7 @@ use fuel_core_types::blockchain::{
 impl P2pDb for Database {
     async fn get_sealed_block(
         &self,
-        height: BlockHeight,
+        height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlock>> {
         self.get_sealed_block_by_height(height)
     }

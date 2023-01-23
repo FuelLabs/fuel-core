@@ -361,10 +361,7 @@ impl DapMutation {
         let db = locked.db.get(&id).ok_or("Invalid debugging session ID")?;
 
         let checked_tx = tx
-            .into_checked_basic(
-                db.latest_height()?.unwrap_or_default().into(),
-                &locked.params,
-            )?
+            .into_checked_basic(db.latest_height()?.into(), &locked.params)?
             .into();
 
         let vm = locked
