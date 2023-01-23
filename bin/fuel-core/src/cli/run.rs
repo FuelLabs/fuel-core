@@ -1,6 +1,9 @@
 #![allow(unused_variables)]
 use crate::{
-    cli::DEFAULT_DB_PATH,
+    cli::{
+        run::consensus::PoATriggerArgs,
+        DEFAULT_DB_PATH,
+    },
     FuelService,
 };
 use anyhow::{
@@ -38,9 +41,7 @@ use std::{
     ops::Deref,
     path::PathBuf,
     str::FromStr,
-    time::Duration,
 };
-use strum::VariantNames;
 use tracing::{
     info,
     log::warn,
@@ -52,13 +53,14 @@ pub const CONSENSUS_KEY_ENV: &str = "CONSENSUS_KEY_SECRET";
 #[cfg(feature = "p2p")]
 mod p2p;
 
+mod consensus;
 #[cfg(feature = "relayer")]
 mod relayer;
 
 /// Run the Fuel client node locally.
 #[derive(Debug, Clone, Parser)]
 pub struct Command {
-    #[clap(long = "ip", default_value = "127.0.0.1", parse(try_from_str))]
+    #[clap(long = "ip", default_value = "127.0.0.1", value_parser)]
     pub ip: net::IpAddr,
 
     #[clap(long = "port", default_value = "4000")]
@@ -67,67 +69,58 @@ pub struct Command {
     #[clap(
         name = "DB_PATH",
         long = "db-path",
-        parse(from_os_str),
+        value_parser,
         default_value = (*DEFAULT_DB_PATH).to_str().unwrap()
     )]
     pub database_path: PathBuf,
 
-    #[clap(long = "db-type", default_value = "rocks-db", possible_values = &*DbType::VARIANTS, ignore_case = true)]
+    #[clap(
+        long = "db-type",
+        default_value = "rocks-db",
+        value_enum,
+        ignore_case = true
+    )]
     pub database_type: DbType,
 
     /// Specify either an alias to a built-in configuration or filepath to a JSON file.
-    #[clap(name = "CHAIN_CONFIG", long = "chain", default_value = "local_testnet")]
+    #[arg(name = "CHAIN_CONFIG", long = "chain", default_value = "local_testnet")]
     pub chain_config: String,
 
     /// Allows GraphQL Endpoints to arbitrarily advanced blocks. Should be used for local development only
-    #[clap(long = "manual_blocks_enabled")]
+    #[arg(long = "manual_blocks_enabled")]
     pub manual_blocks_enabled: bool,
 
     /// Enable logging of backtraces from vm errors
-    #[clap(long = "vm-backtrace")]
+    #[arg(long = "vm-backtrace")]
     pub vm_backtrace: bool,
 
     /// Enable full utxo stateful validation
     /// disabled by default until downstream consumers stabilize
-    #[clap(long = "utxo-validation")]
+    #[arg(long = "utxo-validation")]
     pub utxo_validation: bool,
 
     /// The minimum allowed gas price
-    #[clap(long = "min-gas-price", default_value = "0")]
+    #[arg(long = "min-gas-price", default_value = "0")]
     pub min_gas_price: u64,
 
     /// The signing key used when producing blocks.
     /// Setting via the `CONSENSUS_KEY_SECRET` ENV var is preferred.
-    #[clap(long = "consensus-key")]
+    #[arg(long = "consensus-key")]
     pub consensus_key: Option<String>,
 
     /// A new block is produced instantly when transactions are available.
-    #[clap(long = "instant", default_value = "false")]
-    pub instant: bool,
-
-    /// A new block is produced periodically. Used to simulate consensus block delay in millisecond.
-    #[clap(long = "interval")]
-    pub interval: Option<u64>,
-
-    /// A new block will be produced when on of timers runs out.
-    /// It accepts three durations in milliseconds:
-    ///
-    /// `min_block_time` - Minimum time between two blocks, even if there are more txs available.
-    /// `max_tx_idle_time` - If there are txs available, but not enough for a full block,
-    /// this is how long the block is waiting for more txs.
-    /// `max_block_time` - Time after which a new block is produced, even if it's empty.
-    #[clap(long = "hybrid")]
-    pub hybrid: Option<Vec<u64>>,
+    #[clap(flatten)]
+    pub poa_trigger: PoATriggerArgs,
 
     /// Use a default insecure consensus key for testing purposes.
     /// This will not be enabled by default in the future.
-    #[clap(long = "dev-keys", default_value = "true")]
+    #[arg(long = "dev-keys", default_value = "true")]
     pub consensus_dev_key: bool,
 
     /// The block's fee recipient public key.
     ///
     /// If not set, `consensus_key` is used as the provider of the `Address`.
-    #[clap(long = "coinbase-recipient")]
+    #[arg(long = "coinbase-recipient")]
     pub coinbase_recipient: Option<String>,
 
     #[cfg(feature = "relayer")]
@@ -138,7 +131,7 @@ pub struct Command {
     #[cfg(feature = "p2p")]
     pub p2p_args: p2p::P2PArgs,
 
-    #[clap(long = "metrics")]
+    #[arg(long = "metrics")]
     pub metrics: bool,
 }
 
@@ -155,9 +148,7 @@ impl Command {
             utxo_validation,
             min_gas_price,
             consensus_key,
-            instant,
-            interval,
-            hybrid,
+            poa_trigger,
             consensus_dev_key,
             coinbase_recipient,
             #[cfg(feature = "relayer")]
@@ -174,9 +165,17 @@ impl Command {
         #[cfg(feature = "p2p")]
         let p2p_cfg = p2p_args.into_config(metrics)?;
 
+        let trigger: Trigger = poa_trigger.into();
+
+        if trigger != Trigger::Never {
+            info!("Block production mode: {:?}", &trigger);
+        } else {
+            info!("Block production disabled");
+        }
+
         // if consensus key is not configured, fallback to dev consensus key
         let consensus_key = load_consensus_key(consensus_key)?.or_else(|| {
-            if consensus_dev_key {
+            if consensus_dev_key && trigger != Trigger::Never {
                 let key = default_consensus_dev_key();
                 warn!(
                     "Fuel Core is using an insecure test key for consensus. Public key: {}",
@@ -189,33 +188,21 @@ impl Command {
             }
         });
 
+        if consensus_key.is_some() && trigger == Trigger::Never {
+            warn!("Consensus key configured but block production is disabled!")
+        }
+
         let coinbase_recipient = if let Some(coinbase_recipient) = coinbase_recipient {
             Address::from_str(coinbase_recipient.as_str()).map_err(|err| anyhow!(err))?
         } else {
-            let consensus_key = consensus_key
+            consensus_key
                 .as_ref()
                 .cloned()
-                .unwrap_or_else(|| Secret::new(SecretKeyWrapper::default()));
-
-            let sk = consensus_key.expose_secret().deref();
-            Address::from(*sk.public_key().hash())
-        };
-
-        let trigger = match (instant, interval, hybrid) {
-            (false, None, None) => Trigger::Never,
-            (true, None, None) => Trigger::Instant,
-            (false, Some(block_time), None) => Trigger::Interval { block_time: Duration::from_millis(block_time) },
-            (_, _, Some(hybrid)) if hybrid.len() != 3 => {
-                return Err(anyhow!("The `hybrid` accepts only three arguments: `min_block_time`, `max_tx_idle_time`, `max_block_time`"))
-            },
-            (false, None, Some(hybrid)) => Trigger::Hybrid {
-                min_block_time: Duration::from_millis(hybrid[0]),
-                max_tx_idle_time: Duration::from_millis(hybrid[1]),
-                max_block_time: Duration::from_millis(hybrid[2]),
-            },
-            _ => {
-                return Err(anyhow!("Only one production mode is allowed, either `instant`, or `interval`, or `hybrid`"))
-            }
+                .map(|key| {
+                    let sk = key.expose_secret().deref();
+                    Address::from(*sk.public_key().hash())
+                })
+                .unwrap_or_default()
         };
 
         Ok(Config {

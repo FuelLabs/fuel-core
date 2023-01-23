@@ -1,3 +1,4 @@
+use clap::ValueEnum;
 use fuel_core_chain_config::ChainConfig;
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
@@ -94,7 +95,9 @@ pub struct VMConfig {
     pub backtrace: bool,
 }
 
-#[derive(Clone, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames)]
+#[derive(
+    Clone, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames, ValueEnum,
+)]
 #[strum(serialize_all = "kebab_case")]
 pub enum DbType {
     InMemory,
