@@ -561,7 +561,9 @@ mod tests {
                 ConsensusVote,
             },
             header::PartialBlockHeader,
+            primitives::BlockId,
             SealedBlock,
+            SealedBlockHeader,
         },
         fuel_tx::Transaction,
     };
@@ -1266,12 +1268,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    #[instrument]
-    async fn request_response_works() {
-        use fuel_core_types::fuel_tx::Transaction;
-
-        let mut p2p_config = Config::default_initialized("request_response_works");
+    async fn request_response_works_with(request_msg: RequestMessage) {
+        let mut p2p_config = Config::default_initialized("request_response_works_with");
 
         // Node A
         let node_a_data = NodeData::random();
@@ -1289,7 +1287,7 @@ mod tests {
             tokio::select! {
                 message_sent = rx_test_end.recv() => {
                     // we received a signal to end the test
-                    assert_eq!(message_sent, Some(true), "Received wrong block height!");
+                    assert_eq!(message_sent, Some(true), "Receuved incorrect or missing missing messsage");
                     break;
                 }
                 node_a_event = node_a.next_event() => {
@@ -1299,25 +1297,57 @@ mod tests {
                             if !peer_addresses.is_empty() && !request_sent {
                                 request_sent = true;
 
-                                // 1. Simulating Oneshot channel from the NetworkOrchestrator
-                                let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                match request_msg {
+                                    RequestMessage::Block(_) => {
+                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                        assert!(node_a.send_request_msg(None, request_msg, ResponseChannelItem::Block(tx_orchestrator)).is_ok());
+                                        let tx_test_end = tx_test_end.clone();
 
-                                let requested_block_height = RequestMessage::Block(0_u64.into());
-                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::Block(tx_orchestrator)).is_ok());
+                                        tokio::spawn(async move {
+                                            let response_message = rx_orchestrator.await;
 
-                                let tx_test_end = tx_test_end.clone();
-                                tokio::spawn(async move {
-                                    // 4. Simulating NetworkOrchestrator receiving a message from Node B
-                                    let response_message = rx_orchestrator.await;
+                                            if let Ok(Some(sealed_block)) = response_message {
+                                                let _ = tx_test_end.send(*sealed_block.entity.header().height() == 0_u64.into()).await;
+                                            } else {
+                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                                let _ = tx_test_end.send(false).await;
+                                            }
+                                        });
 
-                                    if let Ok(Some(sealed_block)) = response_message {
-                                        let _ = tx_test_end.send(*sealed_block.entity.header().height() == 0_u64.into()).await;
-                                    } else {
-                                        tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
-                                        panic!("Message not received successfully!")
                                     }
+                                    RequestMessage::SealedHeader(_) => {
+                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                        assert!(node_a.send_request_msg(None, request_msg, ResponseChannelItem::SealedHeader(tx_orchestrator)).is_ok());
+                                        let tx_test_end = tx_test_end.clone();
 
-                                });
+                                        tokio::spawn(async move {
+                                            let response_message = rx_orchestrator.await;
+
+                                            if let Ok(Some(_)) = response_message {
+                                                let _ = tx_test_end.send(true).await;
+                                            } else {
+                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                                let _ = tx_test_end.send(false).await;
+                                            }
+                                        });
+                                    }
+                                    RequestMessage::Transactions(_) => {
+                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                        assert!(node_a.send_request_msg(None, request_msg, ResponseChannelItem::Transactions(tx_orchestrator)).is_ok());
+                                        let tx_test_end = tx_test_end.clone();
+
+                                        tokio::spawn(async move {
+                                            let response_message = rx_orchestrator.await;
+
+                                            if let Ok(Some(transactions)) = response_message {
+                                                let _ = tx_test_end.send(transactions.len() == 5).await;
+                                            } else {
+                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                                let _ = tx_test_end.send(false).await;
+                                            }
+                                        });
+                                    }
+                                }
                             }
                         }
                     }
@@ -1326,21 +1356,59 @@ mod tests {
                 },
                 node_b_event = node_b.next_event() => {
                     // 2. Node B receives the RequestMessage from Node A initiated by the NetworkOrchestrator
-                    if let Some(FuelP2PEvent::RequestMessage{ request_id, .. }) = node_b_event {
-                        let block = Block::new(PartialBlockHeader::default(), vec![Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default()], &[]);
+                    if let Some(FuelP2PEvent::RequestMessage{ request_id, request_message: received_request_message }) = node_b_event {
+                        match received_request_message {
+                            RequestMessage::Block(_) => {
+                                let block = Block::new(PartialBlockHeader::default(), vec![Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default()], &[]);
 
-                        let sealed_block = SealedBlock {
-                            entity: block,
-                            consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
-                        };
+                                let sealed_block = SealedBlock {
+                                    entity: block,
+                                    consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
+                                };
 
-                        let _ = node_b.send_response_msg(request_id, OutboundResponse::Block(Some(Arc::new(sealed_block))));
+                                let _ = node_b.send_response_msg(request_id, OutboundResponse::Block(Some(Arc::new(sealed_block))));
+                            }
+                            RequestMessage::SealedHeader(_) => {
+                                let header = Default::default();
+
+                                let sealed_header = SealedBlockHeader {
+                                    entity: header,
+                                    consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
+                                };
+
+                                let _ = node_b.send_response_msg(request_id, OutboundResponse::SealedHeader(Some(Arc::new(sealed_header))));
+                            }
+                            RequestMessage::Transactions(_) => {
+                                let transactions = vec![Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default()];
+                                let _ = node_b.send_response_msg(request_id, OutboundResponse::Transactions(Some(Arc::new(transactions))));
+                            }
+                        }
+
                     }
 
                     tracing::info!("Node B Event: {:?}", node_b_event);
                 }
             };
         }
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn request_response_works_with_transactions() {
+        request_response_works_with(RequestMessage::Transactions(BlockId::default()))
+            .await
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn request_response_works_with_block() {
+        request_response_works_with(RequestMessage::Block(0_u64.into())).await
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn request_response_works_with_sealed_header() {
+        request_response_works_with(RequestMessage::SealedHeader(0_u64.into())).await
     }
 
     #[tokio::test]
