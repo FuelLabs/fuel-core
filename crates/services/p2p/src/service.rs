@@ -12,7 +12,10 @@ use crate::{
         FuelP2PEvent,
         FuelP2PService,
     },
-    ports::P2pDb,
+    ports::{
+        BlockHeightImporter,
+        P2pDb,
+    },
     request_response::messages::{
         OutboundResponse,
         RequestMessage,
@@ -21,6 +24,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use fuel_core_services::{
+    stream::BoxStream,
     RunnableService,
     RunnableTask,
     ServiceRunner,
@@ -35,11 +39,13 @@ use fuel_core_types::{
     },
     fuel_tx::Transaction,
     services::p2p::{
+        BlockHeightHeartbeatData,
         GossipData,
         GossipsubMessageAcceptance,
         TransactionGossipData,
     },
 };
+use futures::StreamExt;
 use libp2p::{
     gossipsub::MessageAcceptance,
     request_response::RequestId,
@@ -86,15 +92,22 @@ impl Debug for TaskRequest {
 pub struct Task<D> {
     p2p_service: FuelP2PService<BincodeCodec>,
     db: Arc<D>,
+    next_block_height: BoxStream<BlockHeight>,
     /// Receive internal Task Requests
     request_receiver: mpsc::Receiver<TaskRequest>,
     shared: SharedState,
 }
 
 impl<D> Task<D> {
-    pub fn new(config: Config, db: Arc<D>) -> Self {
+    pub fn new<B: BlockHeightImporter>(
+        config: Config,
+        db: Arc<D>,
+        block_importer: Arc<B>,
+    ) -> Self {
         let (request_sender, request_receiver) = mpsc::channel(100);
         let (tx_broadcast, _) = broadcast::channel(100);
+        let (block_height_broadcast, _) = broadcast::channel(100);
+        let next_block_height = block_importer.next_block_height();
         let max_block_size = config.max_block_size;
         let p2p_service = FuelP2PService::new(config, BincodeCodec::new(max_block_size));
 
@@ -102,9 +115,11 @@ impl<D> Task<D> {
             p2p_service,
             db,
             request_receiver,
+            next_block_height,
             shared: SharedState {
                 request_sender,
                 tx_broadcast,
+                block_height_broadcast,
             },
         }
     }
@@ -136,12 +151,16 @@ where
     D: P2pDb + 'static,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+        let should_continue;
         tokio::select! {
             biased;
 
-            _ = watcher.while_started() => {}
+            _ = watcher.while_started() => {
+                should_continue = false;
+            }
 
             next_service_request = self.request_receiver.recv() => {
+                should_continue = true;
                 match next_service_request {
                     Some(TaskRequest::BroadcastTransaction(transaction)) => {
                         let broadcast = GossipsubBroadcastRequest::NewTx(transaction);
@@ -185,7 +204,17 @@ where
                 }
             }
             p2p_event = self.p2p_service.next_event() => {
+                should_continue = true;
                 match p2p_event {
+                    Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height }) => {
+                        let peer_id: Vec<u8> = peer_id.into();
+                        let block_height_data = BlockHeightHeartbeatData {
+                            peer_id: peer_id.into(),
+                            block_height,
+                        };
+
+                        let _ = self.shared.block_height_broadcast.send(block_height_data);
+                    }
                     Some(FuelP2PEvent::GossipsubMessage { message, message_id, peer_id,.. }) => {
                         let message_id = message_id.0;
 
@@ -228,9 +257,17 @@ where
                     _ => {}
                 }
             },
+            latest_block_height = self.next_block_height.next() => {
+                if let Some(latest_block_height) = latest_block_height {
+                    let _ = self.p2p_service.update_block_height(latest_block_height);
+                    should_continue = true;
+                } else {
+                    should_continue = false;
+                }
+            }
         }
 
-        Ok(true /* should_continue */)
+        Ok(should_continue)
     }
 }
 
@@ -240,6 +277,8 @@ pub struct SharedState {
     tx_broadcast: broadcast::Sender<TransactionGossipData>,
     /// Used for communicating with the `Task`.
     request_sender: mpsc::Sender<TaskRequest>,
+    /// Sender of p2p blopck height data
+    block_height_broadcast: broadcast::Sender<BlockHeightHeartbeatData>,
 }
 
 impl SharedState {
@@ -306,13 +345,24 @@ impl SharedState {
     pub fn subscribe_tx(&self) -> broadcast::Receiver<TransactionGossipData> {
         self.tx_broadcast.subscribe()
     }
+
+    pub fn subscribe_block_height(
+        &self,
+    ) -> broadcast::Receiver<BlockHeightHeartbeatData> {
+        self.block_height_broadcast.subscribe()
+    }
 }
 
-pub fn new_service<D>(p2p_config: Config, db: D) -> Service<D>
+pub fn new_service<D, B>(p2p_config: Config, db: D, block_importer: B) -> Service<D>
 where
     D: P2pDb + 'static,
+    B: BlockHeightImporter,
 {
-    Service::new(Task::new(p2p_config, Arc::new(db)))
+    Service::new(Task::new(
+        p2p_config,
+        Arc::new(db),
+        Arc::new(block_importer),
+    ))
 }
 
 fn report_message<T: NetworkCodec>(
@@ -406,10 +456,19 @@ pub mod tests {
         }
     }
 
+    #[derive(Clone, Debug)]
+    struct FakeBlockImporter;
+
+    impl BlockHeightImporter for FakeBlockImporter {
+        fn next_block_height(&self) -> BoxStream<BlockHeight> {
+            Box::pin(fuel_core_services::stream::pending())
+        }
+    }
+
     #[tokio::test]
     async fn start_and_stop_awaits_works() {
         let p2p_config = Config::default_initialized("start_stop_works");
-        let service = new_service(p2p_config, FakeDb);
+        let service = new_service(p2p_config, FakeDb, FakeBlockImporter);
 
         // Node with p2p service started
         assert!(service.start_and_await().await.unwrap().started());

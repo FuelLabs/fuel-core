@@ -9,6 +9,8 @@ use std::sync::Arc;
 pub mod block_importer;
 pub mod consensus_module;
 pub mod graphql_api;
+#[cfg(feature = "p2p")]
+pub mod p2p;
 pub mod producer;
 pub mod txpool;
 

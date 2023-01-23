@@ -1,5 +1,6 @@
 #![allow(clippy::let_unit_value)]
 use super::adapters::P2PAdapter;
+
 use crate::{
     database::Database,
     fuel_core_graphql_api::Config as GraphQLConfig,
@@ -58,23 +59,6 @@ pub fn init_sub_services(
         relayer_synced: relayer_service.as_ref().map(|r| r.shared.clone()),
     };
 
-    #[cfg(feature = "p2p")]
-    let network = {
-        let p2p_db = database.clone();
-
-        let genesis = p2p_db.get_genesis()?;
-        let p2p_config = config.p2p.clone().init(genesis)?;
-
-        fuel_core_p2p::service::new_service(p2p_config, p2p_db)
-    };
-
-    #[cfg(feature = "p2p")]
-    let p2p_adapter = P2PAdapter::new(network.shared.clone());
-    #[cfg(not(feature = "p2p"))]
-    let p2p_adapter = P2PAdapter::new();
-
-    let p2p_adapter = p2p_adapter;
-
     let executor = ExecutorAdapter {
         database: database.clone(),
         config: config.clone(),
@@ -89,6 +73,22 @@ pub fn init_sub_services(
         executor.clone(),
         verifier,
     );
+
+    #[cfg(feature = "p2p")]
+    let network = {
+        let p2p_db = database.clone();
+        let genesis = p2p_db.get_genesis()?;
+        let p2p_config = config.p2p.clone().init(genesis)?;
+
+        fuel_core_p2p::service::new_service(p2p_config, p2p_db, importer_adapter.clone())
+    };
+
+    #[cfg(feature = "p2p")]
+    let p2p_adapter = P2PAdapter::new(network.shared.clone());
+    #[cfg(not(feature = "p2p"))]
+    let p2p_adapter = P2PAdapter::new();
+
+    let p2p_adapter = p2p_adapter;
 
     let txpool = fuel_core_txpool::new_service(
         config.txpool.clone(),

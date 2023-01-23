@@ -32,8 +32,7 @@ libp2p = { version = "=0.50.0", default-features = false, features = [
     "macros",
     "mdns",
     "mplex",
-    "noise",
-    "ping",
+    "noise",    
     "request-response",
     "secp256k1",
     "tcp",
@@ -49,7 +48,6 @@ libp2p-kad = "=0.42.0"
 libp2p-mdns = "=0.42.0"
 libp2p-mplex = "=0.38.0"
 libp2p-noise = "=0.41.0"
-libp2p-ping = "=0.41.0"
 libp2p-request-response = "=0.23.0"
 libp2p-swarm = "=0.41.1"
 libp2p-tcp = "=0.38.0"
