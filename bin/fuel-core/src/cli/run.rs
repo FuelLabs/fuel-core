@@ -228,6 +228,8 @@ impl Command {
             relayer: relayer_args.into(),
             #[cfg(feature = "p2p")]
             p2p: p2p_cfg,
+            #[cfg(feature = "p2p")]
+            sync: todo!(),
             consensus_key,
         })
     }

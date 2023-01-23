@@ -1,19 +1,27 @@
-use super::P2PAdapter;
+use super::{
+    BlockImporterAdapter,
+    P2PAdapter,
+    VerifierAdapter,
+};
 use fuel_core_services::stream::BoxStream;
-use fuel_core_sync::ports::PeerToPeerPort;
+use fuel_core_sync::ports::{
+    BlockImporterPort,
+    ConsensusPort,
+    PeerToPeerPort,
+};
 use fuel_core_types::{
     blockchain::{
         primitives::{
             BlockHeight,
             BlockId,
         },
+        SealedBlock,
         SealedBlockHeader,
     },
     fuel_tx::Transaction,
     services::p2p::SourcePeer,
 };
 
-#[cfg(feature = "p2p")]
 #[async_trait::async_trait]
 impl PeerToPeerPort for P2PAdapter {
     fn height_stream(&self) -> BoxStream<BlockHeight> {
@@ -49,5 +57,22 @@ impl PeerToPeerPort for P2PAdapter {
         self.service.get_transactions_from_peer(peer_id.into(), block).await
             // TODO: The underlying api should return an option
             .map(Option::Some)
+    }
+}
+
+#[async_trait::async_trait]
+impl BlockImporterPort for BlockImporterAdapter {
+    async fn execute_and_commit(&self, block: SealedBlock) -> anyhow::Result<()> {
+        self.execute_and_commit(block).await
+    }
+}
+
+#[async_trait::async_trait]
+impl ConsensusPort for VerifierAdapter {
+    async fn check_sealed_header(
+        &self,
+        header: &SealedBlockHeader,
+    ) -> anyhow::Result<bool> {
+        todo!()
     }
 }

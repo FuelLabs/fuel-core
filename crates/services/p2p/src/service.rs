@@ -293,7 +293,7 @@ where
                                 let db = self.db.clone();
 
                                 let f = async move {
-                                    let transactions_response = db.get_transactions(block_id)
+                                    let transactions_response = db.get_transactions(&block_id)
                                         .await
                                         .expect("Didn't expect error from database")
                                         .map(Arc::new);
@@ -308,7 +308,7 @@ where
                                 let db = self.db.clone();
 
                                 let f = async move {
-                                    let response = db.get_sealed_header(block_height)
+                                    let response = db.get_sealed_header(&block_height)
                                         .await
                                         .expect("Didn't expect error from database")
                                         .map(Arc::new);
@@ -568,7 +568,7 @@ pub mod tests {
 
         async fn get_sealed_header(
             &self,
-            _height: BlockHeight,
+            _height: &BlockHeight,
         ) -> StorageResult<Option<SealedBlockHeader>> {
             let header = Default::default();
 
@@ -580,7 +580,7 @@ pub mod tests {
 
         async fn get_transactions(
             &self,
-            _block_id: fuel_core_types::blockchain::primitives::BlockId,
+            _block_id: &fuel_core_types::blockchain::primitives::BlockId,
         ) -> StorageResult<Option<Vec<Transaction>>> {
             Ok(Some(vec![]))
         }

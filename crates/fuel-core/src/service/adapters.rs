@@ -4,6 +4,7 @@ use crate::{
 };
 use fuel_core_consensus_module::block_verifier::Verifier;
 use fuel_core_txpool::service::SharedState as TxPoolSharedState;
+use fuel_core_types::blockchain::SealedBlock;
 use std::sync::Arc;
 
 pub mod block_importer;
@@ -60,6 +61,7 @@ pub struct BlockProducerAdapter {
 pub struct BlockImporterAdapter {
     pub block_importer:
         Arc<fuel_core_importer::Importer<Database, ExecutorAdapter, VerifierAdapter>>,
+    execution_semaphore: Arc<tokio::sync::Semaphore>,
 }
 
 #[cfg(feature = "p2p")]
