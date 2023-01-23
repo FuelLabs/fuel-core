@@ -189,11 +189,11 @@ impl Database {
         let result = self.data.put(
             key.as_ref(),
             column,
-            bincode::serialize(&value).map_err(|_| DatabaseError::Codec)?,
+            postcard::to_stdvec(&value).map_err(|_| DatabaseError::Codec)?,
         )?;
         if let Some(previous) = result {
             Ok(Some(
-                bincode::deserialize(&previous).map_err(|_| DatabaseError::Codec)?,
+                postcard::from_bytes(&previous).map_err(|_| DatabaseError::Codec)?,
             ))
         } else {
             Ok(None)
@@ -207,7 +207,7 @@ impl Database {
     ) -> DatabaseResult<Option<V>> {
         self.data
             .delete(key, column)?
-            .map(|val| bincode::deserialize(&val).map_err(|_| DatabaseError::Codec))
+            .map(|val| postcard::from_bytes(&val).map_err(|_| DatabaseError::Codec))
             .transpose()
     }
 
@@ -218,7 +218,7 @@ impl Database {
     ) -> DatabaseResult<Option<V>> {
         self.data
             .get(key, column)?
-            .map(|val| bincode::deserialize(&val).map_err(|_| DatabaseError::Codec))
+            .map(|val| postcard::from_bytes(&val).map_err(|_| DatabaseError::Codec))
             .transpose()
     }
 
@@ -245,7 +245,7 @@ impl Database {
                 val.and_then(|(key, value)| {
                     let key = K::from(key);
                     let value: V =
-                        bincode::deserialize(&value).map_err(|_| DatabaseError::Codec)?;
+                        postcard::from_bytes(&value).map_err(|_| DatabaseError::Codec)?;
                     Ok((key, value))
                 })
             })

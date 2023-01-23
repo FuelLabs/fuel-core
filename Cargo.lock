@@ -425,6 +425,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomic-polyfill"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3ff7eb3f316534d83a8a2c3d1674ace8a5a71198eba31e2e2b597833f699b28"
+dependencies = [
+ "critical-section",
+]
+
+[[package]]
 name = "atomic-waker"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -985,6 +994,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cobs"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67ba02a97a2bd10f4b59b25c7973101c79642302776489e030cd13cdab09ed15"
+
+[[package]]
 name = "coins-bip32"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1204,6 +1219,12 @@ dependencies = [
  "cast",
  "itertools",
 ]
+
+[[package]]
+name = "critical-section"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6548a0ad5d2549e111e1f6a11a6c2e2d00ce6a3dafe22948d67c2b443f775e52"
 
 [[package]]
 name = "crossbeam-channel"
@@ -2265,7 +2286,6 @@ dependencies = [
  "async-graphql",
  "async-trait",
  "axum",
- "bincode",
  "clap 4.1.1",
  "derive_more",
  "enum-iterator",
@@ -2291,6 +2311,7 @@ dependencies = [
  "itertools",
  "mockall",
  "num_cpus",
+ "postcard",
  "primitive-types",
  "rand 0.8.5",
  "rocksdb",
@@ -2357,12 +2378,12 @@ version = "0.15.1"
 dependencies = [
  "anyhow",
  "bech32 0.9.1",
- "bincode",
  "fuel-core-storage",
  "fuel-core-types",
  "hex",
  "insta",
  "itertools",
+ "postcard",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -2477,7 +2498,6 @@ version = "0.15.1"
 dependencies = [
  "anyhow",
  "async-trait",
- "bincode",
  "ctor",
  "fuel-core-chain-config",
  "fuel-core-metrics",
@@ -2502,6 +2522,7 @@ dependencies = [
  "libp2p-tcp",
  "libp2p-websocket",
  "libp2p-yamux",
+ "postcard",
  "prometheus-client",
  "rand 0.8.5",
  "serde",
@@ -3037,6 +3058,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 
 [[package]]
+name = "hash32"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0c35f58762feb77d74ebe43bdbc3210f09be9fe6742234d573bacc26ed92b67"
+dependencies = [
+ "byteorder",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3061,6 +3091,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2bca93b15ea5a746f220e56587f71e73c6165eab783df9e26590069953e3c30"
 dependencies = [
  "fxhash",
+]
+
+[[package]]
+name = "heapless"
+version = "0.7.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db04bc24a18b9ea980628ecf00e6c0264f3c1426dac36c00cb49b6fbad8b0743"
+dependencies = [
+ "atomic-polyfill",
+ "hash32",
+ "rustc_version",
+ "serde",
+ "spin 0.9.4",
+ "stable_deref_trait",
 ]
 
 [[package]]
@@ -4912,6 +4956,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "postcard"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c2b180dc0bade59f03fd005cb967d3f1e5f69b13922dad0cd6e047cb8af2363"
+dependencies = [
+ "cobs",
+ "heapless",
+ "serde",
+]
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6102,6 +6157,9 @@ name = "spin"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f6002a767bff9e83f8eeecf883ecb8011875a21ae8da43bffb817a57e78cc09"
+dependencies = [
+ "lock_api",
+]
 
 [[package]]
 name = "spki"
@@ -6112,6 +6170,12 @@ dependencies = [
  "base64ct",
  "der",
 ]
+
+[[package]]
+name = "stable_deref_trait"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "static_assertions"

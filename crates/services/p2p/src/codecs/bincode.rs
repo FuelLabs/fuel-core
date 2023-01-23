@@ -60,12 +60,12 @@ impl BincodeCodec {
         &self,
         encoded_data: &'a [u8],
     ) -> Result<R, io::Error> {
-        bincode::deserialize(encoded_data)
+        postcard::from_bytes(encoded_data)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
 
     fn serialize<D: Serialize>(&self, data: &D) -> Result<Vec<u8>, io::Error> {
-        bincode::serialize(&data)
+        postcard::to_stdvec(&data)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
 }
@@ -118,7 +118,7 @@ impl RequestResponseCodec for BincodeCodec {
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        match bincode::serialize(&req) {
+        match postcard::to_stdvec(&req) {
             Ok(encoded_data) => {
                 write_length_prefixed(socket, encoded_data).await?;
                 socket.close().await?;
@@ -138,7 +138,7 @@ impl RequestResponseCodec for BincodeCodec {
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        match bincode::serialize(&res) {
+        match postcard::to_stdvec(&res) {
             Ok(encoded_data) => {
                 write_length_prefixed(socket, encoded_data).await?;
                 socket.close().await?;
@@ -156,9 +156,9 @@ impl GossipsubCodec for BincodeCodec {
 
     fn encode(&self, data: Self::RequestMessage) -> Result<Vec<u8>, io::Error> {
         let encoded_data = match data {
-            GossipsubBroadcastRequest::ConsensusVote(vote) => bincode::serialize(&*vote),
-            GossipsubBroadcastRequest::NewBlock(block) => bincode::serialize(&*block),
-            GossipsubBroadcastRequest::NewTx(tx) => bincode::serialize(&*tx),
+            GossipsubBroadcastRequest::ConsensusVote(vote) => postcard::to_stdvec(&*vote),
+            GossipsubBroadcastRequest::NewBlock(block) => postcard::to_stdvec(&*block),
+            GossipsubBroadcastRequest::NewTx(tx) => postcard::to_stdvec(&*tx),
         };
 
         encoded_data.map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
