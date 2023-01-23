@@ -525,6 +525,15 @@ pub mod tests {
         }
     }
 
+    #[derive(Clone, Debug)]
+    struct FakeBlockImporter;
+
+    impl BlockHeightImporter for FakeBlockImporter {
+        fn next_block_height(&self) -> BoxStream<BlockHeight> {
+            Box::pin(fuel_core_services::stream::pending())
+        }
+    }
+
     #[tokio::test]
     async fn start_and_stop_awaits_works() {
         let p2p_config = Config::default_initialized("start_stop_works");
