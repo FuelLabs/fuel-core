@@ -56,7 +56,7 @@ struct Instant {
     /// Use instant block production mode.
     /// Newly submitted txs will immediately trigger the production of the next block.
     /// Cannot be combined with other poa flags.
-    #[arg(long = "poa-instant", default_value = "true", value_parser)]
+    #[arg(long = "poa-instant", default_value = "true", value_parser, env)]
     instant: Boolean,
 }
 
@@ -78,7 +78,7 @@ struct Hybrid {
     /// Sets a minimum lower bound between blocks. This should be set high enough to ensure
     /// peers can sync the blockchain.
     /// Cannot be combined with other poa mode options (instant or interval).
-    #[arg(long = "poa-hybrid-min-time", requires_all = ["idle_time", "max_time"])]
+    #[arg(long = "poa-hybrid-min-time", requires_all = ["idle_time", "max_time"], env)]
     min_time: Option<Duration>,
     /// Hybrid trigger option.
     /// Sets the max time block production will wait after a period of inactivity before producing
@@ -88,13 +88,13 @@ struct Hybrid {
     /// they will all be included into the next block instead of making a new block immediately and
     /// then waiting for the minimum block time to process the rest.
     /// Cannot be combined with other poa mode options (instant or interval).
-    #[arg(long = "poa-hybrid-idle-time", requires_all = ["min_time", "max_time"])]
+    #[arg(long = "poa-hybrid-idle-time", requires_all = ["min_time", "max_time"], env)]
     idle_time: Option<Duration>,
     /// Hybrid trigger option.
     /// Sets the maximum time block production will wait to produce a block (even if empty). This
     /// ensures that there is a regular cadence even under sustained load.
     /// Cannot be combined with other poa mode options (instant or interval).
-    #[arg(long = "poa-hybrid-max-time", requires_all = ["min_time", "idle_time"])]
+    #[arg(long = "poa-hybrid-max-time", requires_all = ["min_time", "idle_time"], env)]
     max_time: Option<Duration>,
 }
 
@@ -106,7 +106,7 @@ struct Interval {
     /// Interval trigger option.
     /// Produces blocks on a fixed interval regardless of txpool activity.
     /// Cannot be combined with other poa flags.
-    #[clap(long = "poa-interval-period")]
+    #[clap(long = "poa-interval-period", env)]
     pub period: Option<Duration>,
 }
 

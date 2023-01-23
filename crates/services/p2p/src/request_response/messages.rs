@@ -24,6 +24,18 @@ pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &[u8] = b"/fuel/req_res/0.0.1";
 /// Currently the only and the biggest message is RequestBlock(BlockHeight)
 pub(crate) const MAX_REQUEST_SIZE: usize = 8;
 
+pub type ChannelItem<T> = oneshot::Sender<Option<T>>;
+
+// Peer receives a `RequestMessage`.
+// It prepares a response in form of `OutboundResponse`
+// This `OutboundResponse` gets prepared to be sent over the wire in `NetworkResponse` format.
+// The Peer that requested the message receives the response over the wire in `NetworkResponse` format.
+// It then unpacks it into `ResponseMessage`.
+// `ResponseChannelItem` is used to forward the data within `ResponseMessage` to the receving channel.
+// Client Peer: `RequestMessage` (send request)
+// Server Peer: `RequestMessage` (receive request) -> `OutboundResponse` -> `NetworkResponse` (send response)
+// Client Peer: `NetworkResponse` (receive response) -> `ResponseMessage(data)` -> `ResponseChannelItem(channel, data)` (handle response)
+
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, Copy)]
 pub enum RequestMessage {
     Block(BlockHeight),
@@ -34,35 +46,35 @@ pub enum RequestMessage {
 /// Final Response Message that p2p service sends to the Orchestrator
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ResponseMessage {
-    SealedBlock(SealedBlock),
+    SealedBlock(Option<SealedBlock>),
     SealedHeader(Option<SealedBlockHeader>),
-    Transactions(Vec<Transaction>),
+    Transactions(Option<Vec<Transaction>>),
 }
 
 /// Holds oneshot channels for specific responses
 #[derive(Debug)]
 pub enum ResponseChannelItem {
-    SendBlock(oneshot::Sender<SealedBlock>),
-    SendSealedHeader(oneshot::Sender<Option<(PeerId, SealedBlockHeader)>>),
-    SendTransactions(oneshot::Sender<Vec<Transaction>>),
+    Block(ChannelItem<SealedBlock>),
+    SealedHeader(ChannelItem<(PeerId, SealedBlockHeader)>),
+    Transactions(ChannelItem<Vec<Transaction>>),
 }
 
 /// Response that is sent over the wire
 /// and then additionaly deserialized into `ResponseMessage`
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum NetworkResponse {
-    SerializedBlock(Vec<u8>),
-    SerializedHeader(Vec<u8>),
-    SerializedTransactions(Vec<u8>),
+    Block(Option<Vec<u8>>),
+    Header(Option<Vec<u8>>),
+    Transactions(Option<Vec<u8>>),
 }
 
 /// Initial state of the `ResponseMessage` prior to having its inner value serialized
-/// and wrapped into `IntermediateResponse`
+/// and wrapped into `NetworkResponse`
 #[derive(Debug, Clone)]
 pub enum OutboundResponse {
-    RespondWithBlock(Arc<SealedBlock>),
-    RespondWithHeader(Arc<SealedBlockHeader>),
-    RespondWithTransactions(Arc<Vec<Transaction>>),
+    Block(Option<Arc<SealedBlock>>),
+    SealedHeader(Option<Arc<SealedBlockHeader>>),
+    Transactions(Option<Arc<Vec<Transaction>>>),
 }
 
 #[derive(Debug)]

@@ -83,7 +83,10 @@ enum TaskRequest {
     BroadcastVote(Arc<ConsensusVote>),
     // Request to get one-off data from p2p network
     GetPeerIds(oneshot::Sender<Vec<PeerId>>),
-    GetBlock((BlockHeight, oneshot::Sender<SealedBlock>)),
+    GetBlock {
+        height: BlockHeight,
+        channel: oneshot::Sender<Option<SealedBlock>>,
+    },
     GetSealedHeader {
         height: BlockHeight,
         channel: oneshot::Sender<Option<(PeerId, SealedBlockHeader)>>,
@@ -91,7 +94,7 @@ enum TaskRequest {
     GetTransactions {
         block_id: BlockId,
         from_peer: PeerId,
-        channel: oneshot::Sender<Vec<Transaction>>,
+        channel: oneshot::Sender<Option<Vec<Transaction>>>,
     },
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
@@ -207,9 +210,14 @@ where
                         let peer_ids = self.p2p_service.get_peers_ids().into_iter().copied().collect();
                         let _ = channel.send(peer_ids);
                     }
-                    Some(TaskRequest::GetBlock((height, response))) => {
+                    Some(TaskRequest::GetBlock { height, channel }) => {
                         let request_msg = RequestMessage::Block(height);
-                        let channel_item = ResponseChannelItem::SendBlock(response);
+                        let channel_item = ResponseChannelItem::Block(channel);
+                        let _ = self.p2p_service.send_request_msg(None, request_msg, channel_item);
+                    }
+                    Some(TaskRequest::GetSealedHeader{ height, channel: response }) => {
+                        let request_msg = RequestMessage::SealedHeader(height);
+                        let channel_item = ResponseChannelItem::SealedHeader(response);
                         let _ = self.p2p_service.send_request_msg(None, request_msg, channel_item);
                     }
                     Some(TaskRequest::GetSealedHeader{ height, channel: response }) => {
@@ -219,20 +227,23 @@ where
                     }
                     Some(TaskRequest::GetTransactions { block_id, from_peer, channel }) => {
                         let request_msg = RequestMessage::Transactions(block_id);
-                        let channel_item = ResponseChannelItem::SendTransactions(channel);
+                        let channel_item = ResponseChannelItem::Transactions(channel);
                         let _ = self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item);
                     }
                     Some(TaskRequest::RespondWithGossipsubMessageReport((message, acceptance))) => {
                         report_message(&mut self.p2p_service, message, acceptance);
                     }
                     Some(TaskRequest::RespondWithRequestedBlock((response, request_id))) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, response.map(OutboundResponse::RespondWithBlock));
+                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Block(response));
+                    }
+                    Some(TaskRequest::RespondWithRequestedHeader((response, request_id))) => {
+                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeader(response));
                     }
                     Some(TaskRequest::RespondWithRequestedHeader((response, request_id))) => {
                         let _ = self.p2p_service.send_response_msg(request_id, response.map(OutboundResponse::RespondWithHeader));
                     }
                     Some(TaskRequest::RespondWithTransactions((response, request_id))) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, response.map(OutboundResponse::RespondWithTransactions));
+                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(response));
                     }
                     None => {
                         unreachable!("The `Task` is holder of the `Sender`, so it should not be possible");
@@ -308,7 +319,7 @@ where
                                 let db = self.db.clone();
 
                                 let f = async move {
-                                    let response = db.get_sealed_header(&block_height)
+                                    let response = db.get_sealed_header(block_height)
                                         .await
                                         .expect("Didn't expect error from database")
                                         .map(Arc::new);
@@ -372,11 +383,17 @@ impl SharedState {
         Ok(())
     }
 
-    pub async fn get_block(&self, height: BlockHeight) -> anyhow::Result<SealedBlock> {
+    pub async fn get_block(
+        &self,
+        height: BlockHeight,
+    ) -> anyhow::Result<Option<SealedBlock>> {
         let (sender, receiver) = oneshot::channel();
 
         self.request_sender
-            .send(TaskRequest::GetBlock((height, sender)))
+            .send(TaskRequest::GetBlock {
+                height,
+                channel: sender,
+            })
             .await?;
 
         receiver.await.map_err(|e| anyhow!("{}", e))
@@ -405,9 +422,9 @@ impl SharedState {
         &self,
         peer_id: Vec<u8>,
         block_id: BlockId,
-    ) -> anyhow::Result<Vec<Transaction>> {
+    ) -> anyhow::Result<Option<Vec<Transaction>>> {
         let (sender, receiver) = oneshot::channel();
-        let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeeeId");
+        let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
 
         self.request_sender
             .send(TaskRequest::GetTransactions {
@@ -568,7 +585,7 @@ pub mod tests {
 
         async fn get_sealed_header(
             &self,
-            _height: &BlockHeight,
+            _height: BlockHeight,
         ) -> StorageResult<Option<SealedBlockHeader>> {
             let header = Default::default();
 

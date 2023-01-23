@@ -22,7 +22,7 @@ pub trait P2pDb: Send + Sync {
 
     async fn get_sealed_header(
         &self,
-        height: &BlockHeight,
+        height: BlockHeight,
     ) -> StorageResult<Option<SealedBlockHeader>>;
 
     async fn get_transactions(

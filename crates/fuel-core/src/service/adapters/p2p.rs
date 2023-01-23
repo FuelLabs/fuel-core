@@ -8,7 +8,6 @@ use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::{
-        consensus::Sealed,
         primitives::{
             BlockHeight,
             BlockId,
@@ -30,22 +29,16 @@ impl P2pDb for Database {
 
     async fn get_sealed_header(
         &self,
-        height: &BlockHeight,
+        height: BlockHeight,
     ) -> StorageResult<Option<SealedBlockHeader>> {
-        let block_id = match self.get_block_id(height)? {
-            Some(i) => i,
-            None => return Ok(None),
-        };
-        self.get_sealed_block_header(&block_id)
+        self.get_sealed_header(height).await
     }
 
     async fn get_transactions(
         &self,
-        block_id: &BlockId,
+        block_id: BlockId,
     ) -> StorageResult<Option<Vec<Transaction>>> {
-        Ok(self
-            .get_sealed_block_by_id(block_id)?
-            .map(|Sealed { entity: block, .. }| block.into_inner().1))
+        self.get_transactions(&block_id).await
     }
 }
 
