@@ -60,17 +60,18 @@ mod relayer;
 /// Run the Fuel client node locally.
 #[derive(Debug, Clone, Parser)]
 pub struct Command {
-    #[clap(long = "ip", default_value = "127.0.0.1", value_parser)]
+    #[clap(long = "ip", default_value = "127.0.0.1", value_parser, env)]
     pub ip: net::IpAddr,
 
-    #[clap(long = "port", default_value = "4000")]
+    #[clap(long = "port", default_value = "4000", env)]
     pub port: u16,
 
     #[clap(
         name = "DB_PATH",
         long = "db-path",
         value_parser,
-        default_value = (*DEFAULT_DB_PATH).to_str().unwrap()
+        default_value = (*DEFAULT_DB_PATH).to_str().unwrap(),
+        env
     )]
     pub database_path: PathBuf,
 
@@ -78,34 +79,40 @@ pub struct Command {
         long = "db-type",
         default_value = "rocks-db",
         value_enum,
-        ignore_case = true
+        ignore_case = true,
+        env
     )]
     pub database_type: DbType,
 
     /// Specify either an alias to a built-in configuration or filepath to a JSON file.
-    #[arg(name = "CHAIN_CONFIG", long = "chain", default_value = "local_testnet")]
+    #[arg(
+        name = "CHAIN_CONFIG",
+        long = "chain",
+        default_value = "local_testnet",
+        env
+    )]
     pub chain_config: String,
 
     /// Allows GraphQL Endpoints to arbitrarily advanced blocks. Should be used for local development only
-    #[arg(long = "manual_blocks_enabled")]
+    #[arg(long = "manual_blocks_enabled", env)]
     pub manual_blocks_enabled: bool,
 
     /// Enable logging of backtraces from vm errors
-    #[arg(long = "vm-backtrace")]
+    #[arg(long = "vm-backtrace", env)]
     pub vm_backtrace: bool,
 
     /// Enable full utxo stateful validation
     /// disabled by default until downstream consumers stabilize
-    #[arg(long = "utxo-validation")]
+    #[arg(long = "utxo-validation", env)]
     pub utxo_validation: bool,
 
     /// The minimum allowed gas price
-    #[arg(long = "min-gas-price", default_value = "0")]
+    #[arg(long = "min-gas-price", default_value = "0", env)]
     pub min_gas_price: u64,
 
     /// The signing key used when producing blocks.
     /// Setting via the `CONSENSUS_KEY_SECRET` ENV var is preferred.
-    #[arg(long = "consensus-key")]
+    #[arg(long = "consensus-key", env)]
     pub consensus_key: Option<String>,
 
     /// A new block is produced instantly when transactions are available.
@@ -114,13 +121,13 @@ pub struct Command {
 
     /// Use a default insecure consensus key for testing purposes.
     /// This will not be enabled by default in the future.
-    #[arg(long = "dev-keys", default_value = "true")]
+    #[arg(long = "dev-keys", default_value = "true", env)]
     pub consensus_dev_key: bool,
 
     /// The block's fee recipient public key.
     ///
     /// If not set, `consensus_key` is used as the provider of the `Address`.
-    #[arg(long = "coinbase-recipient")]
+    #[arg(long = "coinbase-recipient", env)]
     pub coinbase_recipient: Option<String>,
 
     #[cfg(feature = "relayer")]
@@ -131,7 +138,7 @@ pub struct Command {
     #[cfg(feature = "p2p")]
     pub p2p_args: p2p::P2PArgs,
 
-    #[arg(long = "metrics")]
+    #[arg(long = "metrics", env)]
     pub metrics: bool,
 }
 
