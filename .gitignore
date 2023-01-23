@@ -10,3 +10,4 @@
 lcov.info
 version-compatibility/Cargo.lock
 benches/benches-outputs/Cargo.lock
+benches/benches-outputs/src/test_gas_costs_output.rs
