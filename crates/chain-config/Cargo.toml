@@ -20,7 +20,6 @@ fuel-core-types = { path = "../types", version = "0.15.1", features = [
     "random",
 ] }
 hex = { version = "0.4", features = ["serde"] }
-humantime-serde = "1.1.1"
 itertools = "0.10"
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
