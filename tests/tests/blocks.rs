@@ -221,11 +221,11 @@ async fn produce_block_custom_time() {
 
     assert_eq!(5, new_height);
 
-    assert_eq!(db.block_time(1u32.into()).unwrap().0, 100);
-    assert_eq!(db.block_time(2u32.into()).unwrap().0, 110);
-    assert_eq!(db.block_time(3u32.into()).unwrap().0, 120);
-    assert_eq!(db.block_time(4u32.into()).unwrap().0, 130);
-    assert_eq!(db.block_time(5u32.into()).unwrap().0, 140);
+    assert_eq!(db.block_time(&1u32.into()).unwrap().0, 100);
+    assert_eq!(db.block_time(&2u32.into()).unwrap().0, 110);
+    assert_eq!(db.block_time(&3u32.into()).unwrap().0, 120);
+    assert_eq!(db.block_time(&4u32.into()).unwrap().0, 130);
+    assert_eq!(db.block_time(&5u32.into()).unwrap().0, 140);
 }
 
 #[tokio::test]

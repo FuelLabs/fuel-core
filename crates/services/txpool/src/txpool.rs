@@ -325,7 +325,7 @@ where
     pub fn block_update(
         &mut self,
         tx_status_sender: &TxStatusChange,
-        block: SealedBlock,
+        block: &SealedBlock,
         // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
         for tx in block.entity.transactions() {

@@ -14,14 +14,9 @@ use futures::StreamExt;
 
 #[tokio::test]
 async fn subscribe_txn_status() {
-    use fuel_core_poa::Trigger;
     let mut config = Config::local_node();
-    match &mut config.chain_conf.block_production {
-        fuel_core::chain_config::BlockProduction::ProofOfAuthority { trigger } => {
-            *trigger = Trigger::Interval {
-                block_time: Duration::from_secs(2),
-            }
-        }
+    config.block_production = fuel_core::service::config::Trigger::Interval {
+        block_time: Duration::from_secs(2),
     };
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);

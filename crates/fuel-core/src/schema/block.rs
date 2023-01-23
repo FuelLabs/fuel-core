@@ -4,7 +4,7 @@ use super::scalars::{
 };
 use crate::{
     fuel_core_graphql_api::{
-        service::Executor,
+        service::ConsensusModule,
         Config as GraphQLConfig,
         IntoApiResult,
     },
@@ -34,30 +34,16 @@ use async_graphql::{
     SimpleObject,
     Union,
 };
-use fuel_core_poa::service::seal_block;
-use fuel_core_producer::ports::Executor as ExecutorTrait;
 use fuel_core_storage::{
     iter::IntoBoxedIter,
     Result as StorageResult,
 };
 use fuel_core_types::{
     blockchain::{
-        block::{
-            CompressedBlock,
-            PartialFuelBlock,
-        },
-        header::{
-            ApplicationHeader,
-            BlockHeader,
-            ConsensusHeader,
-            PartialBlockHeader,
-        },
+        block::CompressedBlock,
+        header::BlockHeader,
     },
     fuel_types,
-    services::executor::{
-        ExecutionBlock,
-        ExecutionResult,
-    },
     tai64::Tai64,
 };
 
@@ -210,7 +196,7 @@ impl BlockQuery {
             (None, Some(height)) => {
                 let height: u64 = height.into();
                 let height: u32 = height.try_into()?;
-                data.block_id(height.into())
+                data.block_id(&height.into())
             }
             (None, None) => {
                 return Err(async_graphql::Error::new("Missing either id or height"))
@@ -308,7 +294,7 @@ impl BlockMutation {
         time: Option<TimeParameters>,
     ) -> async_graphql::Result<U64> {
         let query = BlockQueryContext(ctx.data_unchecked());
-        let executor = ctx.data_unchecked::<Executor>().clone();
+        let consensus_module = ctx.data_unchecked::<ConsensusModule>();
         let config = ctx.data_unchecked::<GraphQLConfig>().clone();
 
         if !config.manual_blocks_enabled {
@@ -316,42 +302,10 @@ impl BlockMutation {
                 anyhow!("Manual Blocks must be enabled to use this endpoint").into(),
             )
         }
-        // todo!("trigger block production manually");
 
         let latest_block = query.latest_block()?;
-        let block_time = get_time_closure(&latest_block, time, blocks_to_produce.0)?;
-
-        for idx in 0..blocks_to_produce.0 {
-            let current_height = query.latest_block_height().unwrap_or_default();
-            let new_block_height = current_height + 1u32.into();
-
-            let block = PartialFuelBlock::new(
-                PartialBlockHeader {
-                    consensus: ConsensusHeader {
-                        height: new_block_height,
-                        time: block_time(idx),
-                        prev_root: Default::default(),
-                        generated: Default::default(),
-                    },
-                    application: ApplicationHeader {
-                        da_height: Default::default(),
-                        generated: Default::default(),
-                    },
-                },
-                vec![],
-            );
-
-            // TODO: Instead of using raw `Executor` here, we need to use `CM` - Consensus Module.
-            //  It will guarantee that the block is entirely valid and all information is stored.
-            //  For that, we need to manually trigger block production and reset/ignore timers
-            //  inside CM for `blocks_to_produce` blocks. Also in this case `CM` will notify
-            //  `TxPool` about a new block.
-            let (ExecutionResult { block, .. }, mut db_transaction) = executor
-                .execute_without_commit(ExecutionBlock::Production(block))?
-                .into();
-            seal_block(&config.consensus_key, &block, db_transaction.as_mut())?;
-            db_transaction.commit()?;
-        }
+        let block_times = get_time_closure(&latest_block, time, blocks_to_produce.0)?;
+        consensus_module.manual_produce_block(block_times).await?;
 
         query
             .latest_block_height()
@@ -364,21 +318,27 @@ fn get_time_closure(
     latest_block: &CompressedBlock,
     time_parameters: Option<TimeParameters>,
     blocks_to_produce: u64,
-) -> anyhow::Result<Box<dyn Fn(u64) -> Tai64 + Send>> {
+) -> anyhow::Result<Vec<Option<Tai64>>> {
     if let Some(params) = time_parameters {
-        check_start_after_latest_block(latest_block, params.start_time.0)?;
+        let start_time = params.start_time.into();
+        check_start_after_latest_block(latest_block, start_time)?;
         check_block_time_overflow(&params, blocks_to_produce)?;
+        let interval: u64 = params.block_time_interval.into();
 
-        return Ok(Box::new(move |idx: u64| {
-            let (timestamp, _) = params
-                .start_time
-                .0
-                .overflowing_add(params.block_time_interval.0.overflowing_mul(idx).0);
-            Tai64(timestamp)
-        }))
+        let vec = (0..blocks_to_produce)
+            .into_iter()
+            .map(|idx| {
+                let (timestamp, _) = params
+                    .start_time
+                    .0
+                    .overflowing_add(interval.overflowing_mul(idx).0);
+                Some(Tai64(timestamp))
+            })
+            .collect();
+        return Ok(vec)
     };
 
-    Ok(Box::new(|_| Tai64::now()))
+    Ok(vec![None; blocks_to_produce as usize])
 }
 
 fn check_start_after_latest_block(

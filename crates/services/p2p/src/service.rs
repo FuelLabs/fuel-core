@@ -241,7 +241,7 @@ where
 
                                 tokio::spawn(async move {
                                     // TODO: Process `StorageError` somehow.
-                                    let block_response = db.get_sealed_block(block_height)
+                                    let block_response = db.get_sealed_block(&block_height)
                                         .await
                                         .expect("Didn't expect error from database")
                                         .map(Arc::new);
@@ -445,7 +445,7 @@ pub mod tests {
     impl P2pDb for FakeDb {
         async fn get_sealed_block(
             &self,
-            _height: BlockHeight,
+            _height: &BlockHeight,
         ) -> StorageResult<Option<SealedBlock>> {
             let block = Block::new(Default::default(), vec![], &[]);
 

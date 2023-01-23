@@ -10,7 +10,7 @@ use fuel_core_types::blockchain::{
 pub trait P2pDb: Send + Sync {
     async fn get_sealed_block(
         &self,
-        height: BlockHeight,
+        height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlock>>;
 }
 
