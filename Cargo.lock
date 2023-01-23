@@ -2285,6 +2285,7 @@ dependencies = [
  "fuel-core-relayer",
  "fuel-core-services",
  "fuel-core-storage",
+ "fuel-core-sync",
  "fuel-core-txpool",
  "fuel-core-types",
  "futures",
