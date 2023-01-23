@@ -2400,7 +2400,7 @@ dependencies = [
 name = "fuel-core-client-bin"
 version = "0.15.1"
 dependencies = [
- "clap 3.2.23",
+ "clap 4.1.1",
  "fuel-core-client",
  "fuel-core-types",
  "serde_json",
@@ -2457,7 +2457,7 @@ name = "fuel-core-keygen"
 version = "0.15.1"
 dependencies = [
  "anyhow",
- "clap 3.2.23",
+ "clap 4.1.1",
  "fuel-core-types",
  "serde_json",
 ]
