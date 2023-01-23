@@ -32,7 +32,7 @@ use fuel_core_types::{
     fuel_types::Address,
     fuel_vm::{
         consts,
-        state::DebugEval,
+        GasCosts,
         Interpreter,
         InterpreterError,
     },
@@ -49,18 +49,23 @@ use tracing::{
 };
 use uuid::Uuid;
 
+#[cfg(feature = "debug")]
+use fuel_core_types::fuel_vm::state::DebugEval;
+
 #[derive(Debug, Clone, Default)]
 pub struct ConcreteStorage {
     vm: HashMap<ID, Interpreter<VmDatabase, Script>>,
     tx: HashMap<ID, Vec<Script>>,
     db: HashMap<ID, DatabaseTransaction>,
     params: ConsensusParameters,
+    gas_costs: GasCosts,
 }
 
 impl ConcreteStorage {
-    pub fn new(params: ConsensusParameters) -> Self {
+    pub fn new(params: ConsensusParameters, gas_costs: GasCosts) -> Self {
         Self {
             params,
+            gas_costs,
             ..Default::default()
         }
     }
@@ -99,7 +104,8 @@ impl ConcreteStorage {
                 self.tx.insert(id.clone(), txs.to_owned());
             });
 
-        let mut vm = Interpreter::with_storage(vm_database, self.params);
+        let mut vm =
+            Interpreter::with_storage(vm_database, self.params, self.gas_costs.clone());
         vm.transact(checked_tx)?;
         self.vm.insert(id.clone(), vm);
         self.db.insert(id.clone(), storage);
@@ -125,7 +131,8 @@ impl ConcreteStorage {
         let checked_tx =
             tx.into_checked_basic(vm_database.block_height()? as Word, &self.params)?;
 
-        let mut vm = Interpreter::with_storage(vm_database, self.params);
+        let mut vm =
+            Interpreter::with_storage(vm_database, self.params, self.gas_costs.clone());
         vm.transact(checked_tx)?;
         self.vm.insert(id.clone(), vm).ok_or_else(|| {
             InterpreterError::Io(io::Error::new(
@@ -178,8 +185,11 @@ pub struct DapMutation;
 pub fn init<Q, M, S>(
     schema: SchemaBuilder<Q, M, S>,
     params: ConsensusParameters,
+    gas_costs: GasCosts,
 ) -> SchemaBuilder<Q, M, S> {
-    schema.data(GraphStorage::new(Mutex::new(ConcreteStorage::new(params))))
+    schema.data(GraphStorage::new(Mutex::new(ConcreteStorage::new(
+        params, gas_costs,
+    ))))
 }
 
 #[Object]

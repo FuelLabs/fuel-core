@@ -160,12 +160,16 @@ where
     D: P2pDb + 'static,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+        let should_continue;
         tokio::select! {
             biased;
 
-            _ = watcher.while_started() => {}
+            _ = watcher.while_started() => {
+                should_continue = false;
+            }
 
             next_service_request = self.request_receiver.recv() => {
+                should_continue = true;
                 match next_service_request {
                     Some(TaskRequest::BroadcastTransaction(transaction)) => {
                         let broadcast = GossipsubBroadcastRequest::NewTx(transaction);
@@ -217,8 +221,10 @@ where
                 }
             }
             p2p_event = self.p2p_service.next_event() => {
+                should_continue = true;
                 match p2p_event {
                     Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height }) => {
+                        let peer_id: Vec<u8> = peer_id.into();
                         let block_height_data = BlockHeightHeartbeatData {
                             peer_id: peer_id.into(),
                             block_height,
@@ -288,11 +294,14 @@ where
             latest_block_height = self.next_block_height.next() => {
                 if let Some(latest_block_height) = latest_block_height {
                     let _ = self.p2p_service.update_block_height(latest_block_height);
+                    should_continue = true;
+                } else {
+                    should_continue = false;
                 }
             }
         }
 
-        Ok(true /* should_continue */)
+        Ok(should_continue)
     }
 }
 

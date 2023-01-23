@@ -1,4 +1,4 @@
-use super::run_group;
+use super::run_group_ref;
 
 use criterion::Criterion;
 use fuel_core_benches::*;
@@ -20,10 +20,8 @@ pub fn run(c: &mut Criterion) {
     let message = Message::new(b"foo");
     let signature = Signature::sign(&secret, &message);
 
-    let mut group = c.benchmark_group("crypto");
-
-    run_group(
-        &mut group,
+    run_group_ref(
+        &mut c.benchmark_group("ecr"),
         "ecr",
         VmBench::new(Opcode::ECR(0x11, 0x20, 0x21))
             .with_prepare_script(vec![
@@ -37,8 +35,8 @@ pub fn run(c: &mut Criterion) {
             .with_data(signature.iter().chain(message.iter()).copied().collect()),
     );
 
-    run_group(
-        &mut group,
+    run_group_ref(
+        &mut c.benchmark_group("s256"),
         "s256",
         VmBench::new(Opcode::S256(0x10, 0x00, 0x11))
             .with_prepare_script(vec![
@@ -50,8 +48,8 @@ pub fn run(c: &mut Criterion) {
             .with_data(signature.iter().chain(message.iter()).copied().collect()),
     );
 
-    run_group(
-        &mut group,
+    run_group_ref(
+        &mut c.benchmark_group("k256"),
         "k256",
         VmBench::new(Opcode::K256(0x10, 0x00, 0x11))
             .with_prepare_script(vec![
@@ -62,6 +60,4 @@ pub fn run(c: &mut Criterion) {
             ])
             .with_data(signature.iter().chain(message.iter()).copied().collect()),
     );
-
-    group.finish();
 }

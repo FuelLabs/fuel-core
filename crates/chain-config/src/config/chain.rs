@@ -1,3 +1,7 @@
+use bech32::{
+    ToBase32,
+    Variant::Bech32m,
+};
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     fuel_crypto::Hasher,
@@ -5,6 +9,11 @@ use fuel_core_types::{
     fuel_types::{
         Address,
         AssetId,
+        Bytes32,
+    },
+    fuel_vm::{
+        GasCosts,
+        GasCostsValues,
     },
 };
 use itertools::Itertools;
@@ -16,24 +25,31 @@ use serde::{
     Deserialize,
     Serialize,
 };
-use serde_with::skip_serializing_none;
-
+use serde_with::{
+    serde_as,
+    skip_serializing_none,
+    FromInto,
+};
 use std::{
     io::ErrorKind,
     path::PathBuf,
     str::FromStr,
 };
 
-use crate::GenesisCommitment;
-
-use super::{
-    coin::CoinConfig,
-    state::StateConfig,
+use crate::{
+    config::{
+        coin::CoinConfig,
+        state::StateConfig,
+    },
+    genesis::GenesisCommitment,
 };
 
+// Fuel Network human-readable part for bech32 encoding
+pub const FUEL_BECH32_HRP: &str = "fuel";
 pub const LOCAL_TESTNET: &str = "local_testnet";
 pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 
+#[serde_as]
 // TODO: Remove not consensus/network fields from `ChainConfig` or create a new config only
 //  for consensus/network fields.
 #[skip_serializing_none]
@@ -45,6 +61,9 @@ pub struct ChainConfig {
     #[serde(default)]
     pub initial_state: Option<StateConfig>,
     pub transaction_parameters: ConsensusParameters,
+    #[serde(default)]
+    #[serde_as(as = "FromInto<GasCostsValues>")]
+    pub gas_costs: GasCosts,
 }
 
 impl Default for ChainConfig {
@@ -57,6 +76,7 @@ impl Default for ChainConfig {
             block_gas_limit: ConsensusParameters::DEFAULT.max_gas_per_tx * 10, /* TODO: Pick a sensible default */
             transaction_parameters: ConsensusParameters::DEFAULT,
             initial_state: None,
+            gas_costs: GasCosts::default(),
         }
     }
 }
@@ -72,10 +92,15 @@ impl ChainConfig {
             .map(|_| {
                 let secret = fuel_core_types::fuel_crypto::SecretKey::random(&mut rng);
                 let address = Address::from(*secret.public_key().hash());
+                let bech32_data = Bytes32::new(*address).to_base32();
+                let bech32_encoding =
+                    bech32::encode(FUEL_BECH32_HRP, bech32_data, Bech32m).unwrap();
+
                 tracing::info!(
-                    "PrivateKey({:#x}), Address({:#x}), Balance({})",
+                    "PrivateKey({:#x}), Address({:#x} [bech32: {}]), Balance({})",
                     secret,
                     address,
+                    bech32_encoding,
                     TESTNET_INITIAL_BALANCE
                 );
                 CoinConfig {

@@ -4,4 +4,4 @@ pub mod crypto;
 pub mod flow;
 pub mod mem;
 
-pub use super::run_group;
+pub use super::run_group_ref;
