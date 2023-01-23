@@ -416,7 +416,7 @@ impl SharedState {
         block_id: BlockId,
     ) -> anyhow::Result<Option<Vec<Transaction>>> {
         let (sender, receiver) = oneshot::channel();
-        let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeeeId");
+        let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
 
         self.request_sender
             .send(TaskRequest::GetTransactions {
