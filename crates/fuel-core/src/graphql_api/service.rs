@@ -1,5 +1,8 @@
 use crate::{
-    fuel_core_graphql_api::ports::DatabasePort,
+    fuel_core_graphql_api::ports::{
+        ConsensusModulePort,
+        DatabasePort,
+    },
     graphql_api::Config,
     schema::{
         CoreSchema,
@@ -56,7 +59,6 @@ use std::{
         TcpListener,
     },
     pin::Pin,
-    sync::Arc,
 };
 use tokio_stream::StreamExt;
 use tower_http::{
@@ -67,11 +69,10 @@ use tower_http::{
 pub type Service = fuel_core_services::ServiceRunner<NotInitializedTask>;
 
 pub type Database = Box<dyn DatabasePort>;
-// TODO: When the port for `Executor` will exist we need to replace it with `Box<dyn ExecutorPort>
-pub type Executor = crate::service::adapters::ExecutorAdapter;
+pub type ConsensusModule = Box<dyn ConsensusModulePort>;
 // TODO: When the port of BlockProducer will exist we need to replace it with
 //  `Box<dyn BlockProducerPort>
-pub type BlockProducer = Arc<fuel_core_producer::Producer<crate::database::Database>>;
+pub type BlockProducer = crate::service::adapters::BlockProducerAdapter;
 // TODO: When the port of TxPool will exist we need to replace it with
 //  `Box<dyn TxPoolPort>. In the future GraphQL should not be aware of `TxPool`. It should
 //  use only `Database` to receive all information about
@@ -140,7 +141,7 @@ pub fn new_service(
     schema: CoreSchemaBuilder,
     producer: BlockProducer,
     txpool: TxPool,
-    executor: Executor,
+    consensus_module: ConsensusModule,
 ) -> anyhow::Result<Service> {
     let network_addr = config.addr;
     let schema = schema
@@ -148,7 +149,7 @@ pub fn new_service(
         .data(database)
         .data(producer)
         .data(txpool)
-        .data(executor)
+        .data(consensus_module)
         .extension(Tracing)
         .finish();
 

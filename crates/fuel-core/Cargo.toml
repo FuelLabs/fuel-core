@@ -22,6 +22,7 @@ clap = { version = "4.1", features = ["derive"] }
 derive_more = { version = "0.99" }
 enum-iterator = "1.2"
 fuel-core-chain-config = { path = "../chain-config", version = "0.15.1" }
+fuel-core-consensus-module = { path = "../../crates/services/consensus_module", version = "0.15.1" }
 fuel-core-database = { path = "../database", version = "0.15.1" }
 fuel-core-executor = { path = "../services/executor", version = "0.15.1" }
 fuel-core-importer = { path = "../services/importer", version = "0.15.1" }

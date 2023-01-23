@@ -1,5 +1,6 @@
 use crate::{
     database::{
+        storage::ToDatabaseKey,
         Column,
         Database,
         Error as DatabaseError,
@@ -85,15 +86,10 @@ impl StorageMutate<FuelBlocks> for Database {
 }
 
 impl Database {
-    pub fn latest_height(&self) -> DatabaseResult<Option<BlockHeight>> {
-        let id = self.ids_of_latest_block()?;
-        // if no blocks, check if chain was configured with a base height
-        let id = match id {
-            Some((id, _)) => Some(id),
-            None => self.get_starting_chain_height()?,
-        };
-
-        Ok(id)
+    pub fn latest_height(&self) -> StorageResult<BlockHeight> {
+        self.ids_of_latest_block()?
+            .map(|(height, _)| height)
+            .ok_or(not_found!("BlockHeight"))
     }
 
     /// Get the current block at the head of the chain.
@@ -105,7 +101,7 @@ impl Database {
         }
     }
 
-    pub fn block_time(&self, height: BlockHeight) -> StorageResult<Tai64> {
+    pub fn block_time(&self, height: &BlockHeight) -> StorageResult<Tai64> {
         let id = self.get_block_id(height)?.unwrap_or_default();
         let block = self
             .storage::<FuelBlocks>()
@@ -114,8 +110,8 @@ impl Database {
         Ok(block.header().time().to_owned())
     }
 
-    pub fn get_block_id(&self, height: BlockHeight) -> StorageResult<Option<BlockId>> {
-        Database::get(self, &height.to_bytes()[..], Column::FuelBlockIds)
+    pub fn get_block_id(&self, height: &BlockHeight) -> StorageResult<Option<BlockId>> {
+        Database::get(self, height.database_key().as_ref(), Column::FuelBlockIds)
             .map_err(Into::into)
     }
 

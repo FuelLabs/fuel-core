@@ -4,6 +4,7 @@ use crate::{
     blockchain::{
         block::Block,
         consensus::Consensus,
+        primitives::BlockHeight,
     },
     fuel_tx::Transaction,
 };
@@ -52,10 +53,6 @@ pub struct SourcePeer<T> {
     pub data: T,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-/// Opaque peer identifier.
-pub struct PeerId(Vec<u8>);
-
 impl<T> GossipData<T> {
     /// Construct a new gossip message
     pub fn new(
@@ -80,6 +77,24 @@ pub trait NetworkData<T>: Debug + Send {
 impl<T: Debug + Send + 'static> NetworkData<T> for GossipData<T> {
     fn take_data(&mut self) -> Option<T> {
         self.data.take()
+    }
+}
+/// Used for relying latest `BlockHeight` info from connected peers
+#[derive(Debug, Clone)]
+pub struct BlockHeightHeartbeatData {
+    /// PeerId as bytes
+    pub peer_id: PeerId,
+    /// Latest BlockHeight received
+    pub block_height: BlockHeight,
+}
+
+/// Opaque peer identifier.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PeerId(Vec<u8>);
+
+impl AsRef<[u8]> for PeerId {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
     }
 }
 

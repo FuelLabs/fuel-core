@@ -23,32 +23,40 @@ async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
         });
         let ctx = ctx_builder.build();
 
-        ctx.stop().await;
+        assert_eq!(ctx.stop().await, State::Stopped);
     }
 
     Ok(())
 }
+
 #[tokio::test(start_paused = true)]
 async fn never_trigger_never_produces_blocks() {
     const TX_COUNT: usize = 10;
     let mut rng = StdRng::seed_from_u64(1234u64);
     let mut ctx_builder = TestContextBuilder::new();
-    // initialize txpool with some txs
-
-    let TxPoolContext {
-        txpool,
-        status_sender,
-        ..
-    } = MockTxPool::new_with_txs((0..TX_COUNT).map(|_| make_tx(&mut rng)).collect());
-    ctx_builder.with_txpool(txpool);
     ctx_builder.with_config(Config {
         trigger: Trigger::Never,
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
         metrics: false,
     });
+
+    // initialize txpool with some txs
+    let TxPoolContext {
+        txpool,
+        status_sender,
+        ..
+    } = MockTransactionPool::new_with_txs(
+        (0..TX_COUNT).map(|_| make_tx(&mut rng)).collect(),
+    );
+    ctx_builder.with_txpool(txpool);
+
+    let mut importer = MockBlockImporter::default();
+    importer
+        .expect_commit_result()
+        .returning(|_| panic!("Should not commit result"));
+    ctx_builder.with_importer(importer);
     let ctx = ctx_builder.build();
-    let mut block_import_rx = ctx.subscribe_import();
     for _ in 0..TX_COUNT {
         status_sender.send_replace(Some(TxStatus::Submitted));
     }
@@ -56,13 +64,8 @@ async fn never_trigger_never_produces_blocks() {
     // Make sure enough time passes for the block to be produced
     time::sleep(Duration::new(10, 0)).await;
 
-    // Make sure no blocks are produced
-    assert!(
-        matches!(block_import_rx.try_recv(), Err(e) if e == broadcast::error::TryRecvError::Empty),
-    );
-
     // Stop
-    ctx.stop().await;
+    assert_eq!(ctx.stop().await, State::Stopped);
 }
 
 struct DefaultContext {
@@ -77,23 +80,32 @@ impl DefaultContext {
     fn new(config: Config) -> Self {
         let mut rng = StdRng::seed_from_u64(1234u64);
         let mut ctx_builder = TestContextBuilder::new();
+        ctx_builder.with_config(config);
         // initialize txpool with some txs
         let tx1 = make_tx(&mut rng);
         let TxPoolContext {
             txpool,
             status_sender,
             txs,
-        } = MockTxPool::new_with_txs(vec![tx1]);
+        } = MockTransactionPool::new_with_txs(vec![tx1]);
         ctx_builder.with_txpool(txpool);
-        ctx_builder.with_config(config);
+
+        let (block_import_sender, block_import_receiver) = broadcast::channel(100);
+        let mut importer = MockBlockImporter::default();
+        importer.expect_commit_result().returning(move |result| {
+            let (result, _) = result.into();
+            let sealed_block = result.sealed_block;
+            block_import_sender.send(sealed_block)?;
+            Ok(())
+        });
+        ctx_builder.with_importer(importer);
 
         let test_ctx = ctx_builder.build();
-        let block_import = test_ctx.block_import_tx.subscribe();
 
         Self {
             rng,
             test_ctx,
-            block_import,
+            block_import: block_import_receiver,
             status_sender,
             txs,
         }
@@ -114,7 +126,7 @@ async fn instant_trigger_produces_block_instantly() {
     assert!(ctx.block_import.recv().await.is_ok());
 
     // Stop
-    ctx.test_ctx.stop().await;
+    assert_eq!(ctx.test_ctx.stop().await, State::Stopped);
 }
 
 #[tokio::test(start_paused = true)]
