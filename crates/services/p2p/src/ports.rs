@@ -35,8 +35,3 @@ pub trait BlockHeightImporter: Send + Sync {
     /// Creates a stream of next block heights
     fn next_block_height(&self) -> BoxStream<BlockHeight>;
 }
-
-pub trait BlockHeightImporter: Send + Sync {
-    /// Creates a stream of next block heights
-    fn next_block_height(&self) -> BoxStream<BlockHeight>;
-}

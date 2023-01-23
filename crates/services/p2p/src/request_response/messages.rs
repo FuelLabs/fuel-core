@@ -24,6 +24,8 @@ pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &[u8] = b"/fuel/req_res/0.0.1";
 /// Currently the only and the biggest message is RequestBlock(BlockHeight)
 pub(crate) const MAX_REQUEST_SIZE: usize = 8;
 
+pub type ChannelItem<T> = oneshot::Sender<Option<T>>;
+
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, Copy)]
 pub enum RequestMessage {
     Block(BlockHeight),
@@ -35,16 +37,16 @@ pub enum RequestMessage {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ResponseMessage {
     SealedBlock(SealedBlock),
-    SealedHeader(Option<SealedBlockHeader>),
+    SealedHeader(SealedBlockHeader),
     Transactions(Vec<Transaction>),
 }
 
 /// Holds oneshot channels for specific responses
 #[derive(Debug)]
 pub enum ResponseChannelItem {
-    SendBlock(oneshot::Sender<SealedBlock>),
-    SendSealedHeader(oneshot::Sender<Option<(PeerId, SealedBlockHeader)>>),
-    SendTransactions(oneshot::Sender<Vec<Transaction>>),
+    SendBlock(ChannelItem<SealedBlock>),
+    SendSealedHeader(ChannelItem<(PeerId, SealedBlockHeader)>),
+    SendTransactions(ChannelItem<Vec<Transaction>>),
 }
 
 /// Response that is sent over the wire

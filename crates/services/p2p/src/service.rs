@@ -83,7 +83,10 @@ enum TaskRequest {
     BroadcastVote(Arc<ConsensusVote>),
     // Request to get one-off data from p2p network
     GetPeerIds(oneshot::Sender<Vec<PeerId>>),
-    GetBlock((BlockHeight, oneshot::Sender<SealedBlock>)),
+    GetBlock {
+        height: BlockHeight,
+        channel: oneshot::Sender<Option<SealedBlock>>,
+    },
     GetSealedHeader {
         height: BlockHeight,
         channel: oneshot::Sender<Option<(PeerId, SealedBlockHeader)>>,
@@ -91,7 +94,7 @@ enum TaskRequest {
     GetTransactions {
         block_id: BlockId,
         from_peer: PeerId,
-        channel: oneshot::Sender<Vec<Transaction>>,
+        channel: oneshot::Sender<Option<Vec<Transaction>>>,
     },
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
@@ -176,6 +179,7 @@ where
 
             _ = watcher.while_started() => {
                 should_continue = false;
+                None
             }
 
             next_service_request = self.request_receiver.recv() => {
@@ -206,9 +210,9 @@ where
                         let peer_ids = self.p2p_service.get_peers_ids().into_iter().copied().collect();
                         let _ = channel.send(peer_ids);
                     }
-                    Some(TaskRequest::GetBlock((height, response))) => {
+                    Some(TaskRequest::GetBlock { height, channel }) => {
                         let request_msg = RequestMessage::Block(height);
-                        let channel_item = ResponseChannelItem::SendBlock(response);
+                        let channel_item = ResponseChannelItem::SendBlock(channel);
                         let _ = self.p2p_service.send_request_msg(None, request_msg, channel_item);
                     }
                     Some(TaskRequest::GetSealedHeader{ height, channel: response }) => {
@@ -371,11 +375,17 @@ impl SharedState {
         Ok(())
     }
 
-    pub async fn get_block(&self, height: BlockHeight) -> anyhow::Result<SealedBlock> {
+    pub async fn get_block(
+        &self,
+        height: BlockHeight,
+    ) -> anyhow::Result<Option<SealedBlock>> {
         let (sender, receiver) = oneshot::channel();
 
         self.request_sender
-            .send(TaskRequest::GetBlock((height, sender)))
+            .send(TaskRequest::GetBlock {
+                height,
+                channel: sender,
+            })
             .await?;
 
         receiver.await.map_err(|e| anyhow!("{}", e))
@@ -404,7 +414,7 @@ impl SharedState {
         &self,
         peer_id: Vec<u8>,
         block_id: BlockId,
-    ) -> anyhow::Result<Vec<Transaction>> {
+    ) -> anyhow::Result<Option<Vec<Transaction>>> {
         let (sender, receiver) = oneshot::channel();
         let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeeeId");
 
@@ -582,15 +592,6 @@ pub mod tests {
             _block_id: fuel_core_types::blockchain::primitives::BlockId,
         ) -> StorageResult<Option<Vec<Transaction>>> {
             Ok(Some(vec![]))
-        }
-    }
-
-    #[derive(Clone, Debug)]
-    struct FakeBlockImporter;
-
-    impl BlockHeightImporter for FakeBlockImporter {
-        fn next_block_height(&self) -> BoxStream<BlockHeight> {
-            Box::pin(fuel_core_services::stream::pending())
         }
     }
 
