@@ -141,9 +141,8 @@ mod tests {
     #[test_case(&["", "--poa-instant=true", "--poa-interval-period=1s"] => Err(()); "can't set interval and instant at the same time")]
     #[test_case(&["", "--poa-hybrid-min-time=1s"] => Err(()); "can't set hybrid min time without idle and max")]
     fn parse(args: &[&str]) -> Result<Trigger, ()> {
-        let c = Command::try_parse_from(args)
+        Command::try_parse_from(args)
             .map_err(|_| ())
-            .map(|c| c.trigger.into());
-        c
+            .map(|c| c.trigger.into())
     }
 }
