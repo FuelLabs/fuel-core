@@ -44,7 +44,7 @@ pub fn verify_poa_block_fields<D: Database>(
     let header = block.header();
     ensure!(
         header.prev_root() == &prev_root,
-        "The genesis time should be unix epoch time"
+        "Previous root of the next block should match the previous block root"
     );
 
     let prev_header = database.block_header(&prev_height)?;
