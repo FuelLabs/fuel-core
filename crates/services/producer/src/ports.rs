@@ -27,7 +27,7 @@ use fuel_core_types::{
 use std::borrow::Cow;
 
 pub trait BlockProducerDatabase: Send + Sync {
-    /// Gets committed block at the `height`.
+    /// Gets the committed block at the `height`.
     fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>>;
 
     /// Gets the block header BMT MMR root at `height`.

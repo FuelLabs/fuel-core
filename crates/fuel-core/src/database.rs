@@ -68,8 +68,8 @@ mod state;
 
 pub mod balances;
 pub mod metadata;
-// TODO: Rename in a separate PR into `transaction`
 pub mod storage;
+// TODO: Rename in a separate PR into `transaction`
 pub mod transactional;
 pub mod transactions;
 pub mod vm_database;

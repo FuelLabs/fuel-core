@@ -1,6 +1,6 @@
 use crate::{
     database::{
-        storage::IntoDatabaseKey,
+        storage::ToDatabaseKey,
         Column,
         Database,
         Error as DatabaseError,
@@ -111,8 +111,8 @@ impl Database {
     }
 
     pub fn get_block_id(&self, height: &BlockHeight) -> StorageResult<Option<BlockId>> {
-        let key = height.database_key();
-        Database::get(self, key.as_ref(), Column::FuelBlockIds).map_err(Into::into)
+        Database::get(self, height.database_key().as_ref(), Column::FuelBlockIds)
+            .map_err(Into::into)
     }
 
     pub fn all_block_ids(

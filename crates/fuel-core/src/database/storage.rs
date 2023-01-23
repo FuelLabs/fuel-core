@@ -32,7 +32,7 @@ trait DatabaseColumn {
 impl<T> StorageInspect<T> for Database
 where
     T: Mappable + DatabaseColumn,
-    T::Key: IntoDatabaseKey,
+    T::Key: ToDatabaseKey,
     T::GetValue: DeserializeOwned,
 {
     type Error = StorageError;
@@ -51,7 +51,7 @@ where
 impl<T> StorageMutate<T> for Database
 where
     T: Mappable + DatabaseColumn,
-    T::Key: IntoDatabaseKey,
+    T::Key: ToDatabaseKey,
     T::SetValue: Serialize,
     T::GetValue: DeserializeOwned,
 {
@@ -73,7 +73,7 @@ where
 // TODO: Implement this trait for all keys and use `type Type = MultiKey` for tuples.
 //  -> After replace all common implementation with blanket, if possible.
 /// Some keys requires pre-processing that could change their type.
-pub trait IntoDatabaseKey {
+pub trait ToDatabaseKey {
     /// A new type of prepared database key that can be converted into bytes.
     type Type: AsRef<[u8]>;
 
@@ -81,7 +81,7 @@ pub trait IntoDatabaseKey {
     fn database_key(&self) -> Self::Type;
 }
 
-impl IntoDatabaseKey for BlockHeight {
+impl ToDatabaseKey for BlockHeight {
     type Type = [u8; 4];
 
     fn database_key(&self) -> Self::Type {
