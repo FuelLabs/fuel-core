@@ -1,4 +1,4 @@
-use super::BlockImportAdapter;
+use super::BlockImporterAdapter;
 use crate::database::Database;
 use fuel_core_p2p::ports::{
     BlockHeightImporter,
@@ -24,7 +24,7 @@ use fuel_core_types::{
 impl P2pDb for Database {
     async fn get_sealed_block(
         &self,
-        height: BlockHeight,
+        height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlock>> {
         self.get_sealed_block_by_height(height)
     }
@@ -53,16 +53,16 @@ impl P2pDb for Database {
     }
 }
 
-impl BlockHeightImporter for BlockImportAdapter {
+impl BlockHeightImporter for BlockImporterAdapter {
     fn next_block_height(&self) -> BoxStream<BlockHeight> {
         use tokio_stream::{
             wrappers::BroadcastStream,
             StreamExt,
         };
         Box::pin(
-            BroadcastStream::new(self.tx.subscribe())
+            BroadcastStream::new(self.block_importer.subscribe())
                 .filter_map(|result| result.ok())
-                .map(|sealed_block| sealed_block.entity.header().consensus.height),
+                .map(|result| result.sealed_block.entity.header().consensus.height),
         )
     }
 }

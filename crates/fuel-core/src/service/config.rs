@@ -1,3 +1,4 @@
+use clap::ValueEnum;
 use fuel_core_chain_config::ChainConfig;
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
@@ -23,6 +24,8 @@ use fuel_core_p2p::config::{
     NotInitialized,
 };
 
+pub use fuel_core_poa::Trigger;
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub addr: SocketAddr,
@@ -32,10 +35,12 @@ pub struct Config {
     // default to false until downstream consumers stabilize
     pub utxo_validation: bool,
     pub manual_blocks_enabled: bool,
+    pub block_production: Trigger,
     pub vm: VMConfig,
     pub txpool: fuel_core_txpool::Config,
     pub block_producer: fuel_core_producer::Config,
     pub block_executor: fuel_core_executor::Config,
+    pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
     pub relayer: fuel_core_relayer::Config,
     #[cfg(feature = "p2p")]
@@ -56,6 +61,7 @@ impl Config {
             database_type: DbType::InMemory,
             chain_conf: chain_conf.clone(),
             manual_blocks_enabled: false,
+            block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,
             txpool: fuel_core_txpool::Config::new(
@@ -65,6 +71,7 @@ impl Config {
             ),
             block_producer: Default::default(),
             block_executor: Default::default(),
+            block_importer: Default::default(),
             #[cfg(feature = "relayer")]
             relayer: Default::default(),
             #[cfg(feature = "p2p")]
@@ -79,12 +86,34 @@ impl Config {
     }
 }
 
+impl TryFrom<&Config> for fuel_core_poa::Config {
+    type Error = anyhow::Error;
+
+    fn try_from(config: &Config) -> Result<Self, Self::Error> {
+        // If manual block production then require trigger never or instant.
+        anyhow::ensure!(
+            !config.manual_blocks_enabled
+                || matches!(config.block_production, Trigger::Never | Trigger::Instant),
+            "Cannot use manual block production unless trigger mode is never or instant."
+        );
+
+        Ok(fuel_core_poa::Config {
+            trigger: config.block_production,
+            block_gas_limit: config.chain_conf.block_gas_limit,
+            signing_key: config.consensus_key.clone(),
+            metrics: false,
+        })
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct VMConfig {
     pub backtrace: bool,
 }
 
-#[derive(Clone, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames)]
+#[derive(
+    Clone, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames, ValueEnum,
+)]
 #[strum(serialize_all = "kebab_case")]
 pub enum DbType {
     InMemory,

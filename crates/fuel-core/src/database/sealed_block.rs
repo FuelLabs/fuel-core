@@ -84,7 +84,7 @@ impl Database {
     /// Reusable across different trait implementations
     pub fn get_sealed_block_by_height(
         &self,
-        height: BlockHeight,
+        height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlock>> {
         let block_id = match self.get_block_id(height)? {
             Some(i) => i,

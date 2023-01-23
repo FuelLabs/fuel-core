@@ -6,7 +6,10 @@ use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
-        primitives::BlockId,
+        primitives::{
+            BlockHeight,
+            BlockId,
+        },
     },
     entities::{
         coin::CompressedCoin,
@@ -39,6 +42,16 @@ impl Mappable for FuelBlocks {
     /// Unique identifier of the fuel block.
     type Key<'a> = BlockId;
     type SetValue = CompressedBlock;
+    type GetValue = Self::SetValue;
+}
+
+/// The table of BMT MMR roots of the fuel blocks.
+pub struct FuelBlockRoots;
+
+impl Mappable for FuelBlockRoots {
+    /// The height of the fuel block.
+    type Key<'a> = BlockHeight;
+    type SetValue = Bytes32;
     type GetValue = Self::SetValue;
 }
 

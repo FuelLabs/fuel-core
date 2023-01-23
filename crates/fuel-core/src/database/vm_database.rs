@@ -140,7 +140,7 @@ impl InterpreterStorage for VmDatabase {
                 return Err(anyhow!("block height too high for timestamp").into())
             }
             height if height == self.current_block_height => self.current_timestamp,
-            height => self.database.block_time(height.into())?,
+            height => self.database.block_time(&height.into())?,
         };
         Ok(timestamp.0)
     }
@@ -153,7 +153,7 @@ impl InterpreterStorage for VmDatabase {
         } else {
             // this will return 0x00**32 for block height 0 as well
             self.database
-                .get_block_id(block_height.into())?
+                .get_block_id(&block_height.into())?
                 .ok_or(not_found!("BlockId"))
                 .map(Into::into)
         }
