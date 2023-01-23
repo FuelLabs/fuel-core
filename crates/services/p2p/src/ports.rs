@@ -8,6 +8,7 @@ use fuel_core_types::{
             BlockId,
         },
         SealedBlock,
+        SealedBlockHeader,
     },
     fuel_tx::Transaction,
 };
@@ -18,6 +19,11 @@ pub trait P2pDb: Send + Sync {
         &self,
         height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlock>>;
+
+    async fn get_sealed_header(
+        &self,
+        height: BlockHeight,
+    ) -> StorageResult<Option<SealedBlockHeader>>;
 
     async fn get_transactions(
         &self,
