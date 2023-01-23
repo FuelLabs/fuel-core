@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use clap::Args;
 use fuel_core::{
     p2p::{
@@ -9,7 +10,10 @@ use fuel_core::{
         gossipsub_config::default_gossipsub_builder,
         Multiaddr,
     },
-    types::fuel_crypto,
+    types::{
+        fuel_crypto,
+        fuel_crypto::SecretKey,
+    },
 };
 use std::{
     net::{
@@ -17,136 +21,162 @@ use std::{
         Ipv4Addr,
     },
     path::PathBuf,
+    str::FromStr,
     time::Duration,
 };
 
 #[derive(Debug, Clone, Args)]
 pub struct P2PArgs {
-    /// Path to the location of DER-encoded Secp256k1 Keypair
-    #[clap(long = "keypair")]
-    pub keypair: Option<PathBuf>,
+    /// Peering secret key. Supports either a hex encoded secret key inline or a path to bip32 mnemonic encoded secret file.
+    #[clap(long = "keypair", env, value_parser = KeypairArg::try_from_string)]
+    pub keypair: Option<KeypairArg>,
 
     /// The name of the p2p Network
     /// If this value is not provided the p2p network won't start
-    #[clap(long = "network", default_value = "")]
+    #[clap(long = "network", default_value = "", env)]
     pub network: String,
 
     /// p2p network's IP Address
-    #[clap(long = "address")]
+    #[clap(long = "address", env)]
     pub address: Option<IpAddr>,
 
     /// Optional address of your local node made reachable for other nodes in the network.
-    #[clap(long = "public_address")]
+    #[clap(long = "public_address", env)]
     pub public_address: Option<Multiaddr>,
 
     /// p2p network's TCP Port
-    #[clap(long = "peering_port", default_value = "4001")]
+    #[clap(long = "peering_port", default_value = "4001", env)]
     pub peering_port: u16,
 
     /// Max Block size
-    #[clap(long = "max_block_size", default_value = "100000")]
+    #[clap(long = "max_block_size", default_value = "100000", env)]
     pub max_block_size: usize,
 
     /// Addresses of the bootstrap nodes
     /// They should contain PeerId within their `Multiaddr`
-    #[clap(long = "bootstrap_nodes")]
+    #[clap(long = "bootstrap_nodes", env)]
     pub bootstrap_nodes: Vec<Multiaddr>,
 
     /// Addresses of the reserved nodes
     /// They should contain PeerId within their `Multiaddr`
-    #[clap(long = "reserved_nodes")]
+    #[clap(long = "reserved_nodes", env)]
     pub reserved_nodes: Vec<Multiaddr>,
 
     /// With this set to `true` you create a guarded node that is only ever connected to trusted, reserved nodes.    
-    #[clap(long = "reserved_nodes_only_mode")]
+    #[clap(long = "reserved_nodes_only_mode", env)]
     pub reserved_nodes_only_mode: bool,
 
     /// Allow nodes to be discoverable on the local network
-    #[clap(long = "enable_mdns")]
+    #[clap(long = "enable_mdns", env)]
     pub enable_mdns: bool,
 
     /// Max number of unique peers connected
     /// This number should be at least number of `mesh_n` from `Gossipsub` configuration.
     /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
-    #[clap(long = "max_peers_connected", default_value = "50")]
+    #[clap(long = "max_peers_connected", default_value = "50", env)]
     pub max_peers_connected: u32,
 
     /// Max number of connections per single peer
     /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
-    #[clap(long = "max_connections_per_peer", default_value = "3")]
+    #[clap(long = "max_connections_per_peer", default_value = "3", env)]
     pub max_connections_per_peer: u32,
 
     /// Set the delay between random walks for p2p node discovery in seconds.
     /// If it's not set the random walk will be disabled.
     /// Also if `reserved_nodes_only_mode` is set to `true`,
     /// the random walk will be disabled.
-    #[clap(long = "random_walk", default_value = "0")]
+    #[clap(long = "random_walk", default_value = "0", env)]
     pub random_walk: u64,
 
     /// Choose to include private IPv4/IPv6 addresses as discoverable
     /// except for the ones stored in `bootstrap_nodes`
-    #[clap(long = "allow_private_addresses")]
+    #[clap(long = "allow_private_addresses", env)]
     pub allow_private_addresses: bool,
 
     /// Choose how long will connection keep alive if idle
-    #[clap(long = "connection_idle_timeout", default_value = "120")]
+    #[clap(long = "connection_idle_timeout", default_value = "120", env)]
     pub connection_idle_timeout: u64,
 
     /// Choose how often to recieve PeerInfo from other nodes
-    #[clap(long = "info_interval", default_value = "3")]
+    #[clap(long = "info_interval", default_value = "3", env)]
     pub info_interval: u64,
 
     /// Choose the interval at which identification requests are sent to
     /// the remote on established connections after the first request
-    #[clap(long = "identify_interval", default_value = "5")]
+    #[clap(long = "identify_interval", default_value = "5", env)]
     pub identify_interval: u64,
 
     /// Choose which topics to subscribe to via gossipsub protocol
-    #[clap(long = "topics", default_values = &["new_tx", "new_block", "consensus_vote"])]
+    #[clap(long = "topics", default_values = &["new_tx", "new_block", "consensus_vote"], env)]
     pub topics: Vec<String>,
 
     /// Choose max mesh size for gossipsub protocol
-    #[clap(long = "max_mesh_size", default_value = "12")]
+    #[clap(long = "max_mesh_size", default_value = "12", env)]
     pub max_mesh_size: usize,
 
     /// Choose min mesh size for gossipsub protocol
-    #[clap(long = "min_mesh_size", default_value = "4")]
+    #[clap(long = "min_mesh_size", default_value = "4", env)]
     pub min_mesh_size: usize,
 
     /// Choose ideal mesh size for gossipsub protocol
-    #[clap(long = "ideal_mesh_size", default_value = "6")]
+    #[clap(long = "ideal_mesh_size", default_value = "6", env)]
     pub ideal_mesh_size: usize,
 
     /// Number of heartbeats to keep in the gossipsub `memcache`
-    #[clap(long = "history_length", default_value = "5")]
+    #[clap(long = "history_length", default_value = "5", env)]
     pub history_length: usize,
 
     /// Number of past heartbeats to gossip about
-    #[clap(long = "history_gossip", default_value = "3")]
+    #[clap(long = "history_gossip", default_value = "3", env)]
     pub history_gossip: usize,
 
     /// Time between each heartbeat
-    #[clap(long = "heartbeat_interval", default_value = "1")]
+    #[clap(long = "heartbeat_interval", default_value = "1", env)]
     pub heartbeat_interval: u64,
 
     /// The maximum byte size for each gossip
-    #[clap(long = "max_transmit_size", default_value = "2048")]
+    #[clap(long = "max_transmit_size", default_value = "2048", env)]
     pub max_transmit_size: usize,
 
     /// Choose timeout for sent requests in RequestResponse protocol
-    #[clap(long = "request_timeout", default_value = "20")]
+    #[clap(long = "request_timeout", default_value = "20", env)]
     pub request_timeout: u64,
 
     /// Choose how long RequestResponse protocol connections will live if idle
-    #[clap(long = "connection_keep_alive", default_value = "20")]
+    #[clap(long = "connection_keep_alive", default_value = "20", env)]
     pub connection_keep_alive: u64,
+}
+
+#[derive(Clone, Debug)]
+pub enum KeypairArg {
+    Path(PathBuf),
+    InlineSecret(SecretKey),
+}
+
+impl KeypairArg {
+    pub fn try_from_string(s: &str) -> anyhow::Result<KeypairArg> {
+        // first try to parse as inline secret
+        // then try to parse as a pathbuf
+
+        let secret = SecretKey::from_str(s);
+        if let Ok(secret) = secret {
+            return Ok(KeypairArg::InlineSecret(secret))
+        }
+        let path = PathBuf::from_str(s);
+        if let Ok(pathbuf) = path {
+            return Ok(KeypairArg::Path(pathbuf))
+        }
+        Err(anyhow!(
+            "invalid keypair argument, neither a valid key or path"
+        ))
+    }
 }
 
 impl P2PArgs {
     pub fn into_config(self, metrics: bool) -> anyhow::Result<Config<NotInitialized>> {
         let local_keypair = {
             match self.keypair {
-                Some(path) => {
+                Some(KeypairArg::Path(path)) => {
                     let phrase = std::fs::read_to_string(path)?;
 
                     let secret_key =
@@ -155,6 +185,9 @@ impl P2PArgs {
                             "m/44'/60'/0'/0/0",
                         )?;
 
+                    convert_to_libp2p_keypair(&mut secret_key.to_vec())?
+                }
+                Some(KeypairArg::InlineSecret(secret_key)) => {
                     convert_to_libp2p_keypair(&mut secret_key.to_vec())?
                 }
                 _ => {
