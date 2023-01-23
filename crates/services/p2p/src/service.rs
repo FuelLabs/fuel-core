@@ -296,7 +296,7 @@ where
                                 let db = self.db.clone();
 
                                 let f = async move {
-                                    let transactions_response = db.get_transactions(block_id)
+                                    let transactions_response = db.get_transactions(&block_id)
                                         .await
                                         .expect("Didn't expect error from database")
                                         .map(Arc::new);
@@ -311,7 +311,7 @@ where
                                 let db = self.db.clone();
 
                                 let f = async move {
-                                    let response = db.get_sealed_header(block_height)
+                                    let response = db.get_sealed_header(&block_height)
                                         .await
                                         .expect("Didn't expect error from database")
                                         .map(Arc::new);
