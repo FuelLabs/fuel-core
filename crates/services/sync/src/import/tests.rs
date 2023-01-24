@@ -592,6 +592,9 @@ impl DefaultMocks for MockBlockImporterPort {
 pub(crate) fn empty_header(h: BlockHeight) -> SourcePeer<SealedBlockHeader> {
     let mut header = BlockHeader::default();
     header.consensus.height = h;
+    let mut transaction_tree =
+        fuel_core_types::fuel_merkle::binary::in_memory::MerkleTree::new();
+    header.application.generated.transactions_root = transaction_tree.root().into();
 
     let consensus = Consensus::default();
     let sealed = Sealed {
