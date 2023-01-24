@@ -10,6 +10,15 @@ if [ "${k8s_provider}" == "eks" ]; then
     aws eks update-kubeconfig --name ${TF_VAR_eks_cluster_name}
     echo "Copying chainspec into deployment context..."
     cp chainspec/${chain_spec_file} ../charts/chainspec.json
+    export fuel_core_consensus_key_secret_base64_encoded=$(echo -n $fuel_core_consensus_key_secret | base64 -w 0) 
+    cd ../secrets/
+    mv fuel-core-secret.yaml fuel-core-secret.template
+    envsubst < fuel-core-secret.template > fuel-core-secret.yaml
+    rm fuel-core-secret.template
+    kubectl create ns ${k8s_namespace} || true
+    kubectl delete -f fuel-core-secret.yaml || true
+    kubectl apply -f fuel-core-secret.yaml
+    kubectl get secrets -n ${k8s_namespace} | grep fuel-core-secret
     cd ../charts
     mv values.yaml values.template
     envsubst < values.template > values.yaml
