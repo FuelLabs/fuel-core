@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
@@ -13,19 +12,18 @@ use fuel_core_types::{
     fuel_tx::Transaction,
 };
 
-#[async_trait]
 pub trait P2pDb: Send + Sync {
-    async fn get_sealed_block(
+    fn get_sealed_block(
         &self,
         height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlock>>;
 
-    async fn get_sealed_header(
+    fn get_sealed_header(
         &self,
         height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlockHeader>>;
 
-    async fn get_transactions(
+    fn get_transactions(
         &self,
         block_id: &BlockId,
     ) -> StorageResult<Option<Vec<Transaction>>>;

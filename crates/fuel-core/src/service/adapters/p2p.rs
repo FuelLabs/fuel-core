@@ -18,23 +18,22 @@ use fuel_core_types::{
     fuel_tx::Transaction,
 };
 
-#[async_trait::async_trait]
 impl P2pDb for Database {
-    async fn get_sealed_block(
+    fn get_sealed_block(
         &self,
         height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlock>> {
         self.get_sealed_block_by_height(height)
     }
 
-    async fn get_sealed_header(
+    fn get_sealed_header(
         &self,
         height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlockHeader>> {
         self.get_sealed_block_header_by_height(height)
     }
 
-    async fn get_transactions(
+    fn get_transactions(
         &self,
         block_id: &BlockId,
     ) -> StorageResult<Option<Vec<Transaction>>> {

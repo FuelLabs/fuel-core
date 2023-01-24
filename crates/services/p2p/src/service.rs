@@ -260,16 +260,14 @@ where
                                 let db = self.db.clone();
 
                                 // TODO: Process `StorageError` somehow.
-                                let block_response = db.get_sealed_block(&block_height)
-                                    .await?
+                                let block_response = db.get_sealed_block(&block_height)?
                                     .map(Arc::new);
                                 let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Block(block_response));
                             }
                             RequestMessage::Transactions(block_id) => {
                                 let db = self.db.clone();
 
-                                let transactions_response = db.get_transactions(&block_id)
-                                    .await?
+                                let transactions_response = db.get_transactions(&block_id)?
                                     .map(Arc::new);
 
                                 let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(transactions_response));
@@ -277,8 +275,7 @@ where
                             RequestMessage::SealedHeader(block_height) => {
                                 let db = self.db.clone();
 
-                                let response = db.get_sealed_header(&block_height)
-                                    .await?
+                                let response = db.get_sealed_header(&block_height)?
                                     .map(Arc::new);
 
                                 let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeader(response));
@@ -500,7 +497,6 @@ pub mod tests {
     use crate::ports::P2pDb;
 
     use super::*;
-    use async_trait::async_trait;
 
     use fuel_core_services::Service;
     use fuel_core_storage::Result as StorageResult;
@@ -516,9 +512,8 @@ pub mod tests {
     #[derive(Clone, Debug)]
     struct FakeDb;
 
-    #[async_trait]
     impl P2pDb for FakeDb {
-        async fn get_sealed_block(
+        fn get_sealed_block(
             &self,
             _height: &BlockHeight,
         ) -> StorageResult<Option<SealedBlock>> {
@@ -530,7 +525,7 @@ pub mod tests {
             }))
         }
 
-        async fn get_sealed_header(
+        fn get_sealed_header(
             &self,
             _height: &BlockHeight,
         ) -> StorageResult<Option<SealedBlockHeader>> {
@@ -542,7 +537,7 @@ pub mod tests {
             }))
         }
 
-        async fn get_transactions(
+        fn get_transactions(
             &self,
             _block_id: &fuel_core_types::blockchain::primitives::BlockId,
         ) -> StorageResult<Option<Vec<Transaction>>> {
