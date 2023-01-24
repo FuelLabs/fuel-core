@@ -147,6 +147,16 @@ pub struct P2PArgs {
     pub connection_keep_alive: u64,
 }
 
+#[derive(Debug, Clone, Args)]
+pub struct SyncArgs {
+    /// The maximum number of get header requests to make in a single batch.
+    #[clap(long = "sync_max_get_header", default_value = "10", env)]
+    pub max_get_header_requests: usize,
+    /// The maximum number of get transaction requests to make in a single batch.
+    #[clap(long = "sync_max_get_txns", default_value = "10", env)]
+    pub max_get_txns_requests: usize,
+}
+
 #[derive(Clone, Debug)]
 pub enum KeypairArg {
     Path(PathBuf),
@@ -169,6 +179,15 @@ impl KeypairArg {
         Err(anyhow!(
             "invalid keypair argument, neither a valid key or path"
         ))
+    }
+}
+
+impl From<SyncArgs> for fuel_core::sync::Config {
+    fn from(value: SyncArgs) -> Self {
+        Self {
+            max_get_header_requests: value.max_get_header_requests,
+            max_get_txns_requests: value.max_get_txns_requests,
+        }
     }
 }
 

@@ -71,7 +71,7 @@ pub fn init_sub_services(
         config.block_importer.clone(),
         database.clone(),
         executor.clone(),
-        verifier,
+        verifier.clone(),
     );
 
     #[cfg(feature = "p2p")]
@@ -94,7 +94,7 @@ pub fn init_sub_services(
         config.txpool.clone(),
         database.clone(),
         importer_adapter.clone(),
-        p2p_adapter,
+        p2p_adapter.clone(),
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 
@@ -117,9 +117,21 @@ pub fn init_sub_services(
         config.try_into()?,
         tx_pool_adapter,
         producer_adapter.clone(),
-        importer_adapter,
+        importer_adapter.clone(),
     );
     let poa_adapter = PoAAdapter::new(poa.shared.clone());
+
+    #[cfg(feature = "p2p")]
+    let sync = {
+        let current_fuel_block_height = Some(database.latest_height()?);
+        fuel_core_sync::service::new_service(
+            current_fuel_block_height,
+            p2p_adapter,
+            importer_adapter.clone(),
+            verifier,
+            config.sync,
+        )?
+    };
 
     // TODO: Figure out on how to move it into `fuel-core-graphql-api`.
     let schema = dap::init(
@@ -154,6 +166,7 @@ pub fn init_sub_services(
         #[cfg(feature = "relayer")]
         relayer: relayer_service.as_ref().map(|r| r.shared.clone()),
         graph_ql: graph_ql.shared.clone(),
+        block_importer: importer_adapter,
     };
 
     #[allow(unused_mut)]
@@ -173,6 +186,7 @@ pub fn init_sub_services(
     #[cfg(feature = "p2p")]
     {
         services.push(Box::new(network));
+        services.push(Box::new(sync));
     }
 
     Ok((services, shared))

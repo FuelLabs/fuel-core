@@ -1,11 +1,14 @@
 use anyhow::ensure;
+use fuel_core_chain_config::ConsensusConfig;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::{
         block::Block,
         header::BlockHeader,
         primitives::BlockHeight,
+        SealedBlockHeader,
     },
+    fuel_tx::Input,
     fuel_types::Bytes32,
 };
 
@@ -26,6 +29,31 @@ pub trait Database {
 
     /// Gets the block header BMT MMR root at `height`.
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32>;
+}
+
+pub fn verify_consensus(
+    consensus_config: &ConsensusConfig,
+    header: &SealedBlockHeader,
+) -> bool {
+    let SealedBlockHeader {
+        entity: header,
+        consensus,
+    } = header;
+    match consensus {
+        fuel_core_types::blockchain::consensus::Consensus::PoA(consensus) => {
+            match consensus_config {
+                ConsensusConfig::PoA { signing_key } => {
+                    let id = header.id();
+                    let m = id.as_message();
+                    consensus
+                        .signature
+                        .recover(m)
+                        .map_or(false, |k| Input::owner(&k) == *signing_key)
+                }
+            }
+        }
+        _ => true,
+    }
 }
 
 pub fn verify_poa_block_fields<D: Database>(

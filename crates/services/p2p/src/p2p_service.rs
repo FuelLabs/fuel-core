@@ -16,7 +16,10 @@ use crate::{
         },
         topics::GossipsubTopics,
     },
-    peer_manager::PeerInfoEvent,
+    peer_manager::{
+        PeerInfoEvent,
+        PeerManagerBehaviour,
+    },
     request_response::messages::{
         NetworkResponse,
         OutboundResponse,
@@ -327,6 +330,10 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         } else {
             None
         }
+    }
+
+    pub fn peer_manager(&self) -> &PeerManagerBehaviour {
+        self.swarm.behaviour().peer_manager()
     }
 
     fn handle_behaviour_event(

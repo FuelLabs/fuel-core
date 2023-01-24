@@ -33,6 +33,7 @@ fuel-core-producer = { path = "../services/producer", version = "0.15.1" }
 fuel-core-relayer = { path = "../services/relayer", version = "0.15.1", optional = true }
 fuel-core-services = { path = "../services", version = "0.15.1" }
 fuel-core-storage = { path = "../storage", version = "0.15.1" }
+fuel-core-sync = { path = "../services/sync", version = "0.15.1", optional = true }
 fuel-core-txpool = { path = "../services/txpool", version = "0.15.1" }
 fuel-core-types = { path = "../types", version = "0.15.1", features = [
     "serde",
@@ -71,7 +72,7 @@ test-case = "2.2"
 debug = ["fuel-core-types/debug"]
 default = ["debug", "metrics", "rocksdb"]
 metrics = ["dep:fuel-core-metrics"]
-p2p = ["dep:fuel-core-p2p"]
+p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
 rocksdb = ["dep:rocksdb"]
 # features to enable in production, but increase build times

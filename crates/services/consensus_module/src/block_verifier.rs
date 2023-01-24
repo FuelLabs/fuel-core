@@ -9,6 +9,7 @@ mod tests;
 use crate::block_verifier::config::Config;
 use anyhow::ensure;
 use fuel_core_poa::verifier::{
+    verify_consensus,
     verify_poa_block_fields,
     Database as PoAVerifierDatabase,
 };
@@ -18,6 +19,7 @@ use fuel_core_types::{
         consensus::Consensus,
         header::BlockHeader,
         primitives::BlockHeight,
+        SealedBlockHeader,
     },
     fuel_types::Bytes32,
     tai64::Tai64,
@@ -68,6 +70,11 @@ where
                 verify_poa_block_fields(&self.config.poa, &self.database, block)
             }
         }
+    }
+
+    /// Verifies the consensus of the block header.
+    pub fn verify_consensus(&self, header: &SealedBlockHeader) -> bool {
+        verify_consensus(&self.config.chain_config.consensus, header)
     }
 }
 

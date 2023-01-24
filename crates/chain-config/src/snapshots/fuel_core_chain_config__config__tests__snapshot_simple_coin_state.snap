@@ -149,5 +149,10 @@ expression: json
       "base": 424,
       "dep_per_unit": 6
     }
+  },
+  "consensus": {
+    "PoA": {
+      "signing_key": "22ec92c3105c942a6640bdc4e4907286ec4728e8cfc0d8ac59aad4d8e1ccaefb"
+    }
   }
 }

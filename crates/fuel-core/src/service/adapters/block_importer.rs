@@ -9,6 +9,7 @@ use crate::{
 use fuel_core_importer::{
     ports::{
         BlockVerifier,
+        Executor,
         ExecutorDatabase,
         ImporterDatabase,
     },
@@ -32,9 +33,13 @@ use fuel_core_types::{
             BlockHeight,
             BlockId,
         },
+        SealedBlock,
     },
     fuel_tx::Bytes32,
-    services::block_importer::UncommittedResult,
+    services::{
+        block_importer::UncommittedResult,
+        executor::ExecutionBlock,
+    },
 };
 use std::sync::Arc;
 
@@ -47,7 +52,22 @@ impl BlockImporterAdapter {
     ) -> Self {
         Self {
             block_importer: Arc::new(Importer::new(config, database, executor, verifier)),
+            execution_semaphore: Arc::new(tokio::sync::Semaphore::new(1)),
         }
+    }
+
+    pub async fn execute_and_commit(
+        &self,
+        sealed_block: SealedBlock,
+    ) -> anyhow::Result<()> {
+        let permit = self.execution_semaphore.acquire().await?;
+        tokio::task::spawn_blocking({
+            let importer = self.block_importer.clone();
+            move || importer.execute_and_commit(sealed_block)
+        })
+        .await??;
+        core::mem::drop(permit);
+        Ok(())
     }
 }
 
@@ -97,5 +117,23 @@ impl ExecutorDatabase for Database {
         root: &Bytes32,
     ) -> StorageResult<Option<Bytes32>> {
         self.storage::<FuelBlockRoots>().insert(height, root)
+    }
+}
+
+impl Executor for ExecutorAdapter {
+    type Database = Database;
+
+    fn execute_without_commit(
+        &self,
+        block: ExecutionBlock,
+    ) -> Result<
+        fuel_core_types::services::executor::UncommittedResult<
+            StorageTransaction<Self::Database>,
+        >,
+        fuel_core_types::services::executor::Error,
+    > {
+        fuel_core_producer::ports::Executor::<Database>::execute_without_commit(
+            self, block,
+        )
     }
 }

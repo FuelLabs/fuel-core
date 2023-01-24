@@ -14,6 +14,9 @@ pub mod p2p;
 pub mod producer;
 pub mod txpool;
 
+#[cfg(feature = "p2p")]
+pub mod sync;
+
 #[derive(Clone)]
 pub struct PoAAdapter {
     shared_state: fuel_core_poa::service::SharedState,
@@ -57,6 +60,7 @@ pub struct BlockProducerAdapter {
 pub struct BlockImporterAdapter {
     pub block_importer:
         Arc<fuel_core_importer::Importer<Database, ExecutorAdapter, VerifierAdapter>>,
+    execution_semaphore: Arc<tokio::sync::Semaphore>,
 }
 
 #[cfg(feature = "p2p")]
