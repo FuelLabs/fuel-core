@@ -29,16 +29,16 @@ impl P2pDb for Database {
 
     async fn get_sealed_header(
         &self,
-        height: BlockHeight,
+        height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlockHeader>> {
-        self.get_sealed_header(height).await
+        self.get_sealed_block_header_by_height(height)
     }
 
     async fn get_transactions(
         &self,
-        block_id: BlockId,
+        block_id: &BlockId,
     ) -> StorageResult<Option<Vec<Transaction>>> {
-        self.get_transactions(&block_id).await
+        self.get_transactions_on_block(block_id)
     }
 }
 

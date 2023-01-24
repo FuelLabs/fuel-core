@@ -49,14 +49,9 @@ use fuel_core_types::{
         TransactionGossipData,
     },
 };
-use futures::{
-    future::BoxFuture,
-    FutureExt,
-    StreamExt,
-};
+use futures::StreamExt;
 use libp2p::{
     gossipsub::MessageAcceptance,
-    request_response::RequestId,
     PeerId,
 };
 use std::{
@@ -98,9 +93,6 @@ enum TaskRequest {
     },
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
-    RespondWithRequestedBlock((Option<Arc<SealedBlock>>, RequestId)),
-    RespondWithRequestedHeader((Option<Arc<SealedBlockHeader>>, RequestId)),
-    RespondWithTransactions((Option<Arc<Vec<Transaction>>>, RequestId)),
 }
 
 impl Debug for TaskRequest {
@@ -174,12 +166,11 @@ where
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
-        let to_send: Option<BoxFuture<'static, TaskRequest>> = tokio::select! {
+        tokio::select! {
             biased;
 
             _ = watcher.while_started() => {
                 should_continue = false;
-                None
             }
 
             next_service_request = self.request_receiver.recv() => {
@@ -220,11 +211,6 @@ where
                         let channel_item = ResponseChannelItem::SealedHeader(response);
                         let _ = self.p2p_service.send_request_msg(None, request_msg, channel_item);
                     }
-                    Some(TaskRequest::GetSealedHeader{ height, channel: response }) => {
-                        let request_msg = RequestMessage::SealedHeader(height);
-                        let channel_item = ResponseChannelItem::SendSealedHeader(response);
-                        let _ = self.p2p_service.send_request_msg(None, request_msg, channel_item);
-                    }
                     Some(TaskRequest::GetTransactions { block_id, from_peer, channel }) => {
                         let request_msg = RequestMessage::Transactions(block_id);
                         let channel_item = ResponseChannelItem::Transactions(channel);
@@ -233,23 +219,10 @@ where
                     Some(TaskRequest::RespondWithGossipsubMessageReport((message, acceptance))) => {
                         report_message(&mut self.p2p_service, message, acceptance);
                     }
-                    Some(TaskRequest::RespondWithRequestedBlock((response, request_id))) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Block(response));
-                    }
-                    Some(TaskRequest::RespondWithRequestedHeader((response, request_id))) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeader(response));
-                    }
-                    Some(TaskRequest::RespondWithRequestedHeader((response, request_id))) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, response.map(OutboundResponse::RespondWithHeader));
-                    }
-                    Some(TaskRequest::RespondWithTransactions((response, request_id))) => {
-                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(response));
-                    }
                     None => {
                         unreachable!("The `Task` is holder of the `Sender`, so it should not be possible");
                     }
                 }
-                None
             }
             p2p_event = self.p2p_service.next_event() => {
                 should_continue = true;
@@ -262,7 +235,6 @@ where
                         };
 
                         let _ = self.shared.block_height_broadcast.send(block_height_data);
-                        None
                     }
                     Some(FuelP2PEvent::GossipsubMessage { message, message_id, peer_id,.. }) => {
                         let message_id = message_id.0;
@@ -281,58 +253,39 @@ where
                                 let _new_vote = GossipData::new(vote, peer_id, message_id);
                             },
                         }
-                        None
                     },
                     Some(FuelP2PEvent::RequestMessage { request_message, request_id }) => {
                         match request_message {
                             RequestMessage::Block(block_height) => {
                                 let db = self.db.clone();
 
-                                let f = async move {
-                                    // TODO: Process `StorageError` somehow.
-                                    let block_response = db.get_sealed_block(&block_height)
-                                        .await
-                                        .expect("Didn't expect error from database")
-                                        .map(Arc::new);
-                                    TaskRequest::RespondWithRequestedBlock(
-                                        (block_response, request_id)
-                                    )
-                                }.boxed();
-                                Some(f)
+                                // TODO: Process `StorageError` somehow.
+                                let block_response = db.get_sealed_block(&block_height)
+                                    .await?
+                                    .map(Arc::new);
+                                let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Block(block_response));
                             }
                             RequestMessage::Transactions(block_id) => {
                                 let db = self.db.clone();
 
-                                let f = async move {
-                                    let transactions_response = db.get_transactions(&block_id)
-                                        .await
-                                        .expect("Didn't expect error from database")
-                                        .map(Arc::new);
+                                let transactions_response = db.get_transactions(&block_id)
+                                    .await?
+                                    .map(Arc::new);
 
-                                    TaskRequest::RespondWithTransactions(
-                                        (transactions_response, request_id)
-                                    )
-                                }.boxed();
-                                Some(f)
+                                let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(transactions_response));
                             }
                             RequestMessage::SealedHeader(block_height) => {
                                 let db = self.db.clone();
 
-                                let f = async move {
-                                    let response = db.get_sealed_header(block_height)
-                                        .await
-                                        .expect("Didn't expect error from database")
-                                        .map(Arc::new);
+                                let response = db.get_sealed_header(&block_height)
+                                    .await?
+                                    .map(Arc::new);
 
-                                    TaskRequest::RespondWithRequestedHeader(
-                                        (response, request_id)
-                                    )
-                                }.boxed();
-                                Some(f)
+                                let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeader(response));
                             }
                         }
                     },
-                    _ => None
+                    _ => (),
                 }
             },
             latest_block_height = self.next_block_height.next() => {
@@ -342,13 +295,7 @@ where
                 } else {
                     should_continue = false;
                 }
-                None
             }
-        };
-
-        if let Some(f) = to_send {
-            let msg = f.await;
-            self.shared.request_sender.send(msg).await?;
         }
 
         Ok(should_continue)
@@ -585,7 +532,7 @@ pub mod tests {
 
         async fn get_sealed_header(
             &self,
-            _height: BlockHeight,
+            _height: &BlockHeight,
         ) -> StorageResult<Option<SealedBlockHeader>> {
             let header = Default::default();
 

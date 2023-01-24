@@ -856,6 +856,17 @@ mod tests {
         // it serves as our exit from the loop
         let mut bootstrapped_node = node_services.pop().unwrap();
 
+        let (tx, mut rx) = tokio::sync::oneshot::channel::<()>();
+        let jh = tokio::spawn(async move {
+            while rx.try_recv().is_err() {
+                futures::stream::iter(node_services.iter_mut())
+                    .for_each_concurrent(10, |node| async move {
+                        node.next_event().await;
+                    })
+                    .await;
+            }
+        });
+
         loop {
             tokio::select! {
                 event_from_node_5 = node_5.next_event() => {
@@ -884,13 +895,11 @@ mod tests {
                     }
                     tracing::info!("Event from the bootstrapped_node: {:?}", event_from_bootstrapped_node);
                 },
-                _ = async {
-                    for node in &mut node_services {
-                        node.next_event().await;
-                    }
-                } => {}
             }
         }
+
+        tx.send(()).unwrap();
+        jh.await.unwrap()
     }
 
     // Simulate 2 Sets of Sentry nodes.

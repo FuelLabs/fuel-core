@@ -16,13 +16,16 @@ use serde::{
     Deserialize,
     Serialize,
 };
+use serde_with::{
+    serde_as,
+    FromInto,
+};
 use tokio::sync::oneshot;
 
 pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &[u8] = b"/fuel/req_res/0.0.1";
 
 /// Max Size in Bytes of the Request Message
-/// Currently the only and the biggest message is RequestBlock(BlockHeight)
-pub(crate) const MAX_REQUEST_SIZE: usize = 8;
+pub(crate) const MAX_REQUEST_SIZE: usize = core::mem::size_of::<RequestMessage>();
 
 pub type ChannelItem<T> = oneshot::Sender<Option<T>>;
 
@@ -36,11 +39,12 @@ pub type ChannelItem<T> = oneshot::Sender<Option<T>>;
 // Server Peer: `RequestMessage` (receive request) -> `OutboundResponse` -> `NetworkResponse` (send response)
 // Client Peer: `NetworkResponse` (receive response) -> `ResponseMessage(data)` -> `ResponseChannelItem(channel, data)` (handle response)
 
+#[serde_as]
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, Copy)]
 pub enum RequestMessage {
     Block(BlockHeight),
     SealedHeader(BlockHeight),
-    Transactions(BlockId),
+    Transactions(#[serde_as(as = "FromInto<[u8; 32]>")] BlockId),
 }
 
 /// Final Response Message that p2p service sends to the Orchestrator
