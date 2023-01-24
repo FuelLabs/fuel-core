@@ -26,6 +26,8 @@ use fuel_core_types::{
         block_importer::ImportResult,
         p2p::{
             GossipData,
+            GossipsubMessageAcceptance,
+            NetworkData,
             TransactionGossipData,
         },
         txpool::{
@@ -106,7 +108,7 @@ pub struct Task<P2P, DB> {
 #[async_trait::async_trait]
 impl<P2P, DB> RunnableService for Task<P2P, DB>
 where
-    P2P: Send + Sync,
+    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
     DB: TxPoolDb,
 {
     const NAME: &'static str = "TxPool";
@@ -126,7 +128,7 @@ where
 #[async_trait::async_trait]
 impl<P2P, DB> RunnableTask for Task<P2P, DB>
 where
-    P2P: Send + Sync,
+    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
     DB: TxPoolDb,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
@@ -136,12 +138,29 @@ where
                 should_continue = false;
             }
             new_transaction = self.gossiped_tx_stream.next() => {
-                if let Some(GossipData { data: Some(tx), .. }) = new_transaction {
+                if let Some(GossipData { data: Some(_), .. }) = &new_transaction {
+                    // safety: both Options have been checked with above `if let` statement
+                    let mut new_transaction = new_transaction.unwrap();
+                    let tx = new_transaction.take_data().unwrap();
                     let txs = vec!(Arc::new(tx));
-                    self.shared.txpool.lock().insert(
+
+                    let mut result = self.shared.txpool.lock().insert(
                         &self.shared.tx_status_sender,
                         &txs
                     );
+
+                    if let Some(acceptance) = match result.pop() {
+                        Some(Ok(_)) => {
+                            Some(GossipsubMessageAcceptance::Accept)
+                        },
+                        Some(Err(_)) => {
+                            Some(GossipsubMessageAcceptance::Reject)
+                        }
+                        _ => None
+                    } {
+                        let _ = self.shared.p2p.notify_gossip_transaction_validity(&new_transaction, acceptance);
+                    }
+
                     should_continue = true;
                 } else {
                     should_continue = false;
