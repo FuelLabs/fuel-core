@@ -54,6 +54,7 @@ async fn transaction_with_predicate_is_executed_when_feature_enabled() {
 
     // setup tx with a predicate input
     let amount = 500;
+    let limit = 1000;
     let asset_id = rng.gen();
     // make predicate return 1 which mean valid
     let predicate = Opcode::RET(REG_ONE).to_bytes().to_vec();
@@ -70,6 +71,7 @@ async fn transaction_with_predicate_is_executed_when_feature_enabled() {
             vec![],
         ))
         .add_output(Output::change(rng.gen(), 0, asset_id))
+        .gas_limit(limit)
         .finalize();
 
     // create test context with predicates disabled

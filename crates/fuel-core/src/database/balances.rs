@@ -3,14 +3,12 @@ use crate::{
         Column,
         Database,
     },
-    state::{
-        IterDirection,
-        MultiKey,
-    },
+    state::IterDirection,
 };
 use fuel_core_storage::{
     tables::ContractsAssets,
     Error as StorageError,
+    Mappable,
     MerkleRoot,
     MerkleRootStorage,
     StorageInspect,
@@ -18,10 +16,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     fuel_asm::Word,
-    fuel_types::{
-        AssetId,
-        ContractId,
-    },
+    fuel_types::ContractId,
     fuel_vm::crypto,
 };
 use itertools::Itertools;
@@ -32,15 +27,16 @@ impl StorageInspect<ContractsAssets> for Database {
 
     fn get(
         &self,
-        key: &(&ContractId, &AssetId),
-    ) -> Result<Option<Cow<Word>>, Self::Error> {
-        let key = MultiKey::new(key);
+        key: &<ContractsAssets as Mappable>::Key,
+    ) -> Result<Option<Cow<<ContractsAssets as Mappable>::OwnedValue>>, Self::Error> {
         self.get(key.as_ref(), Column::ContractsAssets)
             .map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &(&ContractId, &AssetId)) -> Result<bool, Self::Error> {
-        let key = MultiKey::new(key);
+    fn contains_key(
+        &self,
+        key: &<ContractsAssets as Mappable>::Key,
+    ) -> Result<bool, Self::Error> {
         self.exists(key.as_ref(), Column::ContractsAssets)
             .map_err(Into::into)
     }
@@ -49,19 +45,17 @@ impl StorageInspect<ContractsAssets> for Database {
 impl StorageMutate<ContractsAssets> for Database {
     fn insert(
         &mut self,
-        key: &(&ContractId, &AssetId),
-        value: &Word,
-    ) -> Result<Option<Word>, Self::Error> {
-        let key = MultiKey::new(key);
+        key: &<ContractsAssets as Mappable>::Key,
+        value: &<ContractsAssets as Mappable>::Value,
+    ) -> Result<Option<<ContractsAssets as Mappable>::OwnedValue>, Self::Error> {
         Database::insert(self, key.as_ref(), Column::ContractsAssets, *value)
             .map_err(Into::into)
     }
 
     fn remove(
         &mut self,
-        key: &(&ContractId, &AssetId),
-    ) -> Result<Option<Word>, Self::Error> {
-        let key = MultiKey::new(key);
+        key: &<ContractsAssets as Mappable>::Key,
+    ) -> Result<Option<<ContractsAssets as Mappable>::OwnedValue>, Self::Error> {
         Database::remove(self, key.as_ref(), Column::ContractsAssets).map_err(Into::into)
     }
 }
@@ -93,24 +87,23 @@ impl MerkleRootStorage<ContractId, ContractsAssets> for Database {
 mod tests {
     use super::*;
     use fuel_core_storage::StorageAsMut;
+    use fuel_core_types::fuel_types::AssetId;
 
     #[test]
     fn get() {
-        let balance_id: (ContractId, AssetId) =
-            (ContractId::from([1u8; 32]), AssetId::new([1u8; 32]));
+        let key = (&ContractId::from([1u8; 32]), &AssetId::new([1u8; 32])).into();
         let balance: Word = 100;
-        let key = &(&balance_id.0, &balance_id.1);
 
         let database = &mut Database::default();
         database
             .storage::<ContractsAssets>()
-            .insert(key, &balance)
+            .insert(&key, &balance)
             .unwrap();
 
         assert_eq!(
             database
                 .storage::<ContractsAssets>()
-                .get(key)
+                .get(&key)
                 .unwrap()
                 .unwrap()
                 .into_owned(),
@@ -120,20 +113,18 @@ mod tests {
 
     #[test]
     fn put() {
-        let balance_id: (ContractId, AssetId) =
-            (ContractId::from([1u8; 32]), AssetId::new([1u8; 32]));
+        let key = (&ContractId::from([1u8; 32]), &AssetId::new([1u8; 32])).into();
         let balance: Word = 100;
-        let key = &(&balance_id.0, &balance_id.1);
 
         let database = &mut Database::default();
         database
             .storage::<ContractsAssets>()
-            .insert(key, &balance)
+            .insert(&key, &balance)
             .unwrap();
 
         let returned = database
             .storage::<ContractsAssets>()
-            .get(key)
+            .get(&key)
             .unwrap()
             .unwrap();
         assert_eq!(*returned, balance);
@@ -141,59 +132,55 @@ mod tests {
 
     #[test]
     fn remove() {
-        let balance_id: (ContractId, AssetId) =
-            (ContractId::from([1u8; 32]), AssetId::new([1u8; 32]));
+        let key = (&ContractId::from([1u8; 32]), &AssetId::new([1u8; 32])).into();
         let balance: Word = 100;
-        let key = &(&balance_id.0, &balance_id.1);
 
         let database = &mut Database::default();
         database
             .storage::<ContractsAssets>()
-            .insert(key, &balance)
+            .insert(&key, &balance)
             .unwrap();
 
-        database.storage::<ContractsAssets>().remove(key).unwrap();
+        database.storage::<ContractsAssets>().remove(&key).unwrap();
 
         assert!(!database
             .storage::<ContractsAssets>()
-            .contains_key(key)
+            .contains_key(&key)
             .unwrap());
     }
 
     #[test]
     fn exists() {
-        let balance_id: (ContractId, AssetId) =
-            (ContractId::from([1u8; 32]), AssetId::new([1u8; 32]));
+        let key = (&ContractId::from([1u8; 32]), &AssetId::new([1u8; 32])).into();
         let balance: Word = 100;
-        let key = &(&balance_id.0, &balance_id.1);
 
         let database = &mut Database::default();
         database
             .storage::<ContractsAssets>()
-            .insert(key, &balance)
+            .insert(&key, &balance)
             .unwrap();
 
         assert!(database
             .storage::<ContractsAssets>()
-            .contains_key(key)
+            .contains_key(&key)
             .unwrap());
     }
 
     #[test]
     fn root() {
-        let balance_id: (ContractId, AssetId) =
-            (ContractId::from([1u8; 32]), AssetId::new([1u8; 32]));
+        let key = (&ContractId::from([1u8; 32]), &AssetId::new([1u8; 32])).into();
         let balance: Word = 100;
-        let key = &(&balance_id.0, &balance_id.1);
 
         let database = &mut Database::default();
 
         database
             .storage::<ContractsAssets>()
-            .insert(key, &balance)
+            .insert(&key, &balance)
             .unwrap();
 
-        let root = database.storage::<ContractsAssets>().root(&balance_id.0);
+        let root = database
+            .storage::<ContractsAssets>()
+            .root(key.contract_id());
         assert!(root.is_ok())
     }
 }

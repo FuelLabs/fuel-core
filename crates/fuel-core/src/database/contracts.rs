@@ -5,10 +5,7 @@ use crate::{
         Error as DatabaseError,
         Result as DatabaseResult,
     },
-    state::{
-        IterDirection,
-        MultiKey,
-    },
+    state::IterDirection,
 };
 use fuel_core_chain_config::ContractConfig;
 use fuel_core_storage::{
@@ -17,6 +14,7 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         ContractsRawCode,
     },
+    ContractsAssetKey,
     Error as StorageError,
     Result as StorageResult,
     StorageAsRef,
@@ -107,8 +105,11 @@ impl Database {
         self.iter_all::<Vec<u8>, Word>(
             Column::ContractsAssets,
             Some(contract.as_ref().to_vec()),
-            start_asset
-                .map(|asset_id| MultiKey::new(&(&contract, &asset_id)).as_ref().to_vec()),
+            start_asset.map(|asset_id| {
+                ContractsAssetKey::new(&contract, &asset_id)
+                    .as_ref()
+                    .to_vec()
+            }),
             direction,
         )
         .map(|res| {

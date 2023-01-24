@@ -53,7 +53,10 @@ mod tests {
             Output,
             TransactionBuilder,
         },
-        fuel_vm::consts::REG_ONE,
+        fuel_vm::{
+            checked_transaction::builder::TransactionBuilderExt,
+            consts::REG_ONE,
+        },
     };
     use itertools::Itertools;
     use std::sync::Arc;

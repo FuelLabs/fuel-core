@@ -4,18 +4,18 @@ use crate::{
         Database,
         Error as DatabaseError,
     },
-    state::{
-        IterDirection,
-        MultiKey,
-    },
+    state::IterDirection,
 };
 use anyhow::anyhow;
 use fuel_core_storage::{
     not_found,
+    tables::ContractsState,
+    ContractsStateKey,
     Error as StorageError,
     Mappable,
     MerkleRoot,
     MerkleRootStorage,
+    StorageAsMut,
     StorageInspect,
     StorageMutate,
 };
@@ -91,11 +91,11 @@ where
 {
     type Error = StorageError;
 
-    fn get(&self, key: &M::Key<'_>) -> Result<Option<Cow<M::GetValue>>, Self::Error> {
+    fn get(&self, key: &M::Key) -> Result<Option<Cow<M::OwnedValue>>, Self::Error> {
         StorageInspect::<M>::get(&self.database, key)
     }
 
-    fn contains_key(&self, key: &M::Key<'_>) -> Result<bool, Self::Error> {
+    fn contains_key(&self, key: &M::Key) -> Result<bool, Self::Error> {
         StorageInspect::<M>::contains_key(&self.database, key)
     }
 }
@@ -106,13 +106,13 @@ where
 {
     fn insert(
         &mut self,
-        key: &M::Key<'_>,
-        value: &M::SetValue,
-    ) -> Result<Option<M::GetValue>, Self::Error> {
+        key: &M::Key,
+        value: &M::Value,
+    ) -> Result<Option<M::OwnedValue>, Self::Error> {
         StorageMutate::<M>::insert(&mut self.database, key, value)
     }
 
-    fn remove(&mut self, key: &M::Key<'_>) -> Result<Option<M::GetValue>, Self::Error> {
+    fn remove(&mut self, key: &M::Key) -> Result<Option<M::OwnedValue>, Self::Error> {
         StorageMutate::<M>::remove(&mut self.database, key)
     }
 }
@@ -173,7 +173,11 @@ impl InterpreterStorage for VmDatabase {
         let mut iterator = self.database.iter_all::<Vec<u8>, Bytes32>(
             Column::ContractsState,
             Some(contract_id.as_ref().to_vec()),
-            Some(MultiKey::new(&(contract_id, start_key)).into()),
+            Some(
+                ContractsStateKey::new(contract_id, start_key)
+                    .as_ref()
+                    .to_vec(),
+            ),
             Some(IterDirection::Forward),
         );
         let range = range as usize;
@@ -228,16 +232,15 @@ impl InterpreterStorage for VmDatabase {
                 DatabaseError::Other(anyhow!("range op exceeded available keyspace"))
             })?;
 
-        let mut key_bytes = [0u8; 32];
+        let mut key_bytes = Bytes32::zeroed();
         let mut found_unset = false;
         for value in values {
-            current_key.to_big_endian(&mut key_bytes);
+            current_key.to_big_endian(key_bytes.as_mut());
 
-            let option = self.database.insert::<_, _, Bytes32>(
-                MultiKey::new(&(contract_id, key_bytes)).as_ref(),
-                Column::ContractsState,
-                value,
-            )?;
+            let option = self
+                .database
+                .storage::<ContractsState>()
+                .insert(&(contract_id, &key_bytes).into(), value)?;
 
             found_unset |= option.is_none();
 
@@ -261,14 +264,14 @@ impl InterpreterStorage for VmDatabase {
 
         let mut current_key = U256::from_big_endian(start_key.as_ref());
 
+        let mut key_bytes = Bytes32::zeroed();
         for _ in 0..range {
-            let mut key_bytes = [0u8; 32];
-            current_key.to_big_endian(&mut key_bytes);
+            current_key.to_big_endian(key_bytes.as_mut());
 
-            let option = self.database.remove::<Bytes32>(
-                MultiKey::new(&(contract_id, key_bytes)).as_ref(),
-                Column::ContractsState,
-            )?;
+            let option = self
+                .database
+                .storage::<ContractsState>()
+                .remove(&(contract_id, &key_bytes).into())?;
 
             found_unset |= option.is_none();
 
@@ -361,19 +364,17 @@ mod tests {
         start_key: [u8; 32],
         range: u64,
     ) -> Result<Vec<Option<[u8; 32]>>, ()> {
-        let db = VmDatabase::default();
+        let mut db = VmDatabase::default();
 
         let contract_id = ContractId::new([0u8; 32]);
 
         // prefill db
         for (key, value) in prefilled_slots {
-            let multi_key = MultiKey::new(&(contract_id.as_ref(), key));
+            let key = Bytes32::from(*key);
+            let value = Bytes32::new(*value);
             db.database
-                .insert::<_, _, Bytes32>(
-                    multi_key,
-                    Column::ContractsState,
-                    Bytes32::new(*value),
-                )
+                .storage::<ContractsState>()
+                .insert(&(&contract_id, &key).into(), &value)
                 .unwrap();
         }
 
@@ -442,13 +443,11 @@ mod tests {
 
         // prefill db
         for (key, value) in prefilled_slots {
-            let multi_key = MultiKey::new(&(contract_id.as_ref(), key));
+            let key = Bytes32::from(*key);
+            let value = Bytes32::new(*value);
             db.database
-                .insert::<_, _, Bytes32>(
-                    multi_key,
-                    Column::ContractsState,
-                    Bytes32::new(*value),
-                )
+                .storage::<ContractsState>()
+                .insert(&(&contract_id, &key).into(), &value)
                 .unwrap();
         }
 
@@ -537,13 +536,11 @@ mod tests {
 
         // prefill db
         for (key, value) in prefilled_slots {
-            let multi_key = MultiKey::new(&(contract_id.as_ref(), key));
+            let key = Bytes32::from(*key);
+            let value = Bytes32::new(*value);
             db.database
-                .insert::<_, _, Bytes32>(
-                    multi_key,
-                    Column::ContractsState,
-                    Bytes32::new(*value),
-                )
+                .storage::<ContractsState>()
+                .insert(&(&contract_id, &key).into(), &value)
                 .unwrap();
         }
 
