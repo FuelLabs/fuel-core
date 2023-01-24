@@ -184,7 +184,10 @@ impl KeypairArg {
 
 impl From<SyncArgs> for fuel_core::sync::Config {
     fn from(value: SyncArgs) -> Self {
-        todo!()
+        Self {
+            max_get_header_requests: value.max_get_header_requests,
+            max_get_txns_requests: value.max_get_txns_requests,
+        }
     }
 }
 
