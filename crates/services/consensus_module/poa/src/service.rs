@@ -216,7 +216,6 @@ where
 
         let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
         for (tx, err) in skipped_transactions {
-            dbg!(&err);
             error!(
                 "During block production got invalid transaction {:?} with error {:?}",
                 tx, err
