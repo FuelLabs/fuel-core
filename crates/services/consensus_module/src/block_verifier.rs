@@ -8,11 +8,7 @@ mod tests;
 
 use crate::block_verifier::config::Config;
 use anyhow::ensure;
-use fuel_core_poa::verifier::{
-    verify_consensus,
-    verify_poa_block_fields,
-    Database as PoAVerifierDatabase,
-};
+use fuel_core_poa::verifier::Database as PoAVerifierDatabase;
 use fuel_core_types::{
     blockchain::{
         block::Block,
@@ -66,15 +62,28 @@ where
                     .unwrap_or_else(|| 0u32.into());
                 verify_genesis_block_fields(expected_genesis_height, block.header())
             }
-            Consensus::PoA(_) => {
-                verify_poa_block_fields(&self.config.poa, &self.database, block)
-            }
+            Consensus::PoA(_) => fuel_core_poa::verifier::verify_block_fields(
+                &self.config.poa,
+                &self.database,
+                block,
+            ),
         }
     }
 
     /// Verifies the consensus of the block header.
     pub fn verify_consensus(&self, header: &SealedBlockHeader) -> bool {
-        verify_consensus(&self.config.chain_config.consensus, header)
+        let SealedBlockHeader {
+            entity: header,
+            consensus,
+        } = header;
+        match consensus {
+            Consensus::Genesis(_) => true,
+            Consensus::PoA(consensus) => fuel_core_poa::verifier::verify_consensus(
+                &self.config.chain_config.consensus,
+                header,
+                consensus,
+            ),
+        }
     }
 }
 

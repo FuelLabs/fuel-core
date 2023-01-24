@@ -8,7 +8,6 @@ use crate::{
     service::Config,
 };
 use fuel_core_executor::refs::ContractRef;
-use fuel_core_producer::ports::Executor as ExecutorTrait;
 use fuel_core_storage::{
     tables::{
         Coins,
@@ -138,15 +137,15 @@ impl Executor {
     }
 }
 
-impl ExecutorTrait<Database> for Executor {
-    fn execute_without_commit(
+impl Executor {
+    pub fn execute_without_commit(
         &self,
         block: ExecutionBlock,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
         self.execute_inner(block, &self.database)
     }
 
-    fn dry_run(
+    pub fn dry_run(
         &self,
         block: ExecutionBlock,
         utxo_validation: Option<bool>,

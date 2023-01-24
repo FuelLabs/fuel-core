@@ -107,5 +107,5 @@ fn test_verify_genesis_block_fields(input: Input) -> anyhow::Result<()> {
     let mut b = Block::default();
     b.header_mut().consensus = ch;
     b.header_mut().application = ah;
-    verify_poa_block_fields(&c, &d, &b)
+    verify_block_fields(&c, &d, &b)
 }

@@ -11,7 +11,9 @@ use super::{
 };
 use crate::{
     fuel_merkle,
+    fuel_tx::Transaction,
     fuel_types::{
+        bytes::SerializableVec,
         Bytes32,
         MessageId,
     },
@@ -199,7 +201,7 @@ impl BlockHeader {
     }
 
     /// Validate the transactions match the header.
-    pub fn validate_transactions(&self, transactions: &[Vec<u8>]) -> bool {
+    pub fn validate_transactions(&self, transactions: &[Transaction]) -> bool {
         // Generate the transaction merkle root.
         let transactions_root = generate_txns_root(transactions);
 
@@ -222,7 +224,7 @@ impl PartialBlockHeader {
     /// The transactions are the bytes of the executed [`Transaction`]s.
     pub fn generate(
         self,
-        transactions: &[Vec<u8>],
+        transactions: &[Transaction],
         message_ids: &[MessageId],
     ) -> BlockHeader {
         // Generate the transaction merkle root.
@@ -265,10 +267,13 @@ impl PartialBlockHeader {
     }
 }
 
-fn generate_txns_root(transactions: &[Vec<u8>]) -> Bytes32 {
+fn generate_txns_root(transactions: &[Transaction]) -> Bytes32 {
+    // TODO: The `to_bytes` requires mutability(but it is problem of the API).
+    //  Remove `clone` when we can use `to_bytes` without mutability.
+    let transaction_ids = transactions.iter().map(|tx| tx.clone().to_bytes());
     // Generate the transaction merkle root.
     let mut transaction_tree = fuel_merkle::binary::in_memory::MerkleTree::new();
-    for id in transactions {
+    for id in transaction_ids {
         transaction_tree.push(id.as_ref());
     }
     transaction_tree.root().into()

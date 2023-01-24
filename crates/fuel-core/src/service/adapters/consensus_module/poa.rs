@@ -2,13 +2,17 @@ use crate::{
     database::Database,
     fuel_core_graphql_api::ports::ConsensusModulePort,
     service::adapters::{
+        BlockImporterAdapter,
         BlockProducerAdapter,
         PoAAdapter,
         TxPoolAdapter,
     },
 };
 use fuel_core_poa::{
-    ports::TransactionPool,
+    ports::{
+        BlockImporter,
+        TransactionPool,
+    },
     service::SharedState,
 };
 use fuel_core_services::stream::BoxStream;
@@ -22,6 +26,7 @@ use fuel_core_types::{
         TxId,
     },
     services::{
+        block_importer::UncommittedResult as UncommittedImporterResult,
         executor::UncommittedResult,
         txpool::{
             ArcPoolTx,
@@ -96,5 +101,18 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
         self.block_producer
             .dry_run(transaction, height, utxo_validation)
             .await
+    }
+}
+
+impl BlockImporter for BlockImporterAdapter {
+    type Database = Database;
+
+    fn commit_result(
+        &self,
+        result: UncommittedImporterResult<StorageTransaction<Self::Database>>,
+    ) -> anyhow::Result<()> {
+        self.block_importer
+            .commit_result(result)
+            .map_err(Into::into)
     }
 }
