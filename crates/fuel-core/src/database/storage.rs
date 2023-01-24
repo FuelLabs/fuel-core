@@ -32,17 +32,17 @@ trait DatabaseColumn {
 impl<T> StorageInspect<T> for Database
 where
     T: Mappable + DatabaseColumn,
-    for<'a> T::Key<'a>: ToDatabaseKey,
-    T::GetValue: DeserializeOwned,
+    T::Key: ToDatabaseKey,
+    T::OwnedValue: DeserializeOwned,
 {
     type Error = StorageError;
 
-    fn get(&self, key: &T::Key<'_>) -> StorageResult<Option<Cow<T::GetValue>>> {
+    fn get(&self, key: &T::Key) -> StorageResult<Option<Cow<T::OwnedValue>>> {
         self.get(key.database_key().as_ref(), T::column())
             .map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &T::Key<'_>) -> StorageResult<bool> {
+    fn contains_key(&self, key: &T::Key) -> StorageResult<bool> {
         self.exists(key.database_key().as_ref(), T::column())
             .map_err(Into::into)
     }
@@ -51,26 +51,26 @@ where
 impl<T> StorageMutate<T> for Database
 where
     T: Mappable + DatabaseColumn,
-    for<'a> T::Key<'a>: ToDatabaseKey,
-    T::SetValue: Serialize,
-    T::GetValue: DeserializeOwned,
+    T::Key: ToDatabaseKey,
+    T::Value: Serialize,
+    T::OwnedValue: DeserializeOwned,
 {
     fn insert(
         &mut self,
-        key: &T::Key<'_>,
-        value: &T::SetValue,
-    ) -> StorageResult<Option<T::GetValue>> {
+        key: &T::Key,
+        value: &T::Value,
+    ) -> StorageResult<Option<T::OwnedValue>> {
         Database::insert(self, key.database_key().as_ref(), T::column(), value)
             .map_err(Into::into)
     }
 
-    fn remove(&mut self, key: &T::Key<'_>) -> StorageResult<Option<T::GetValue>> {
+    fn remove(&mut self, key: &T::Key) -> StorageResult<Option<T::OwnedValue>> {
         Database::remove(self, key.database_key().as_ref(), T::column())
             .map_err(Into::into)
     }
 }
 
-// TODO: Implement this trait for all keys and use `type Type = MultiKey` for tuples.
+// TODO: Implement this trait for all keys.
 //  -> After replace all common implementation with blanket, if possible.
 /// Some keys requires pre-processing that could change their type.
 pub trait ToDatabaseKey {

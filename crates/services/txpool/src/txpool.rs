@@ -89,7 +89,7 @@ where
                 .into_checked(
                     current_height.into(),
                     &self.config.chain_config.transaction_parameters,
-                    self.config.chain_config.gas_costs.clone(),
+                    &self.config.chain_config.gas_costs,
                 )?
                 .into()
         } else {
