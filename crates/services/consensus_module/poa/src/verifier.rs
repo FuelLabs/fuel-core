@@ -5,7 +5,9 @@ use fuel_core_types::{
         block::Block,
         header::BlockHeader,
         primitives::BlockHeight,
+        SealedBlockHeader,
     },
+    fuel_crypto::PublicKey,
     fuel_types::Bytes32,
 };
 
@@ -16,6 +18,7 @@ mod tests;
 pub struct Config {
     /// If the manual block is enabled, skip verification of some fields.
     pub enabled_manual_blocks: bool,
+    pub signing_key: PublicKey,
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -26,6 +29,21 @@ pub trait Database {
 
     /// Gets the block header BMT MMR root at `height`.
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32>;
+}
+
+pub fn verify_consensus(config: &Config, header: &SealedBlockHeader) -> bool {
+    let SealedBlockHeader {
+        entity: header,
+        consensus,
+    } = header;
+    match consensus {
+        fuel_core_types::blockchain::consensus::Consensus::PoA(consensus) => {
+            let id = header.id();
+            let m = id.as_message();
+            consensus.signature.verify(&config.signing_key, m).is_ok()
+        }
+        _ => true,
+    }
 }
 
 pub fn verify_poa_block_fields<D: Database>(

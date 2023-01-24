@@ -133,7 +133,7 @@ impl Executor for ExecutorAdapter {
         fuel_core_types::services::executor::Error,
     > {
         fuel_core_producer::ports::Executor::<Database>::execute_without_commit(
-            &self, block,
+            self, block,
         )
     }
 }

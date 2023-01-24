@@ -4,7 +4,6 @@ use crate::{
 };
 use fuel_core_consensus_module::block_verifier::Verifier;
 use fuel_core_txpool::service::SharedState as TxPoolSharedState;
-use fuel_core_types::blockchain::SealedBlock;
 use std::sync::Arc;
 
 pub mod block_importer;

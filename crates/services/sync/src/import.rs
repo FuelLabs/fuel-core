@@ -167,7 +167,7 @@ where
                     let block_id = SourcePeer { peer_id, data: id };
 
                     // Check the consensus is valid on this header.
-                    if !consensus_port.check_sealed_header(&header).await? {
+                    if !consensus_port.check_sealed_header(&header)? {
                         return Ok(None)
                     }
                     let Sealed {

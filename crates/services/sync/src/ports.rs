@@ -39,14 +39,10 @@ pub trait PeerToPeerPort {
 }
 
 #[cfg_attr(test, mockall::automock)]
-#[async_trait::async_trait]
 /// Port for communication with the consensus service.
 pub trait ConsensusPort {
     /// Check if the given sealed block header is valid.
-    async fn check_sealed_header(
-        &self,
-        header: &SealedBlockHeader,
-    ) -> anyhow::Result<bool>;
+    fn check_sealed_header(&self, header: &SealedBlockHeader) -> anyhow::Result<bool>;
 }
 
 #[cfg_attr(test, mockall::automock)]

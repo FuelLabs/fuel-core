@@ -54,9 +54,9 @@ impl PeerToPeerPort for P2PAdapter {
             peer_id,
             data: block,
         } = block;
-        self.service.get_transactions_from_peer(peer_id.into(), block).await
-            // TODO: The underlying api should return an option
-            .map(Option::Some)
+        self.service
+            .get_transactions_from_peer(peer_id.into(), block)
+            .await
     }
 }
 
@@ -67,12 +67,8 @@ impl BlockImporterPort for BlockImporterAdapter {
     }
 }
 
-#[async_trait::async_trait]
 impl ConsensusPort for VerifierAdapter {
-    async fn check_sealed_header(
-        &self,
-        header: &SealedBlockHeader,
-    ) -> anyhow::Result<bool> {
-        todo!()
+    fn check_sealed_header(&self, header: &SealedBlockHeader) -> anyhow::Result<bool> {
+        Ok(self.block_verifier.verify_consensus(header))
     }
 }
