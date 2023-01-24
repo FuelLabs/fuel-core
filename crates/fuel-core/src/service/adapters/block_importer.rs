@@ -36,9 +36,10 @@ use fuel_core_types::{
         SealedBlock,
     },
     fuel_tx::Bytes32,
-    services::{
-        block_importer::UncommittedResult,
-        executor::ExecutionBlock,
+    services::executor::{
+        ExecutionBlock,
+        Result as ExecutorResult,
+        UncommittedResult as UncommittedExecutionResult,
     },
 };
 use std::sync::Arc;
@@ -52,7 +53,6 @@ impl BlockImporterAdapter {
     ) -> Self {
         Self {
             block_importer: Arc::new(Importer::new(config, database, executor, verifier)),
-            execution_semaphore: Arc::new(tokio::sync::Semaphore::new(1)),
         }
     }
 
@@ -60,27 +60,12 @@ impl BlockImporterAdapter {
         &self,
         sealed_block: SealedBlock,
     ) -> anyhow::Result<()> {
-        let permit = self.execution_semaphore.acquire().await?;
         tokio::task::spawn_blocking({
             let importer = self.block_importer.clone();
             move || importer.execute_and_commit(sealed_block)
         })
         .await??;
-        core::mem::drop(permit);
         Ok(())
-    }
-}
-
-impl fuel_core_poa::ports::BlockImporter for BlockImporterAdapter {
-    type Database = Database;
-
-    fn commit_result(
-        &self,
-        result: UncommittedResult<StorageTransaction<Self::Database>>,
-    ) -> anyhow::Result<()> {
-        self.block_importer
-            .commit_result(result)
-            .map_err(Into::into)
     }
 }
 
@@ -126,14 +111,8 @@ impl Executor for ExecutorAdapter {
     fn execute_without_commit(
         &self,
         block: ExecutionBlock,
-    ) -> Result<
-        fuel_core_types::services::executor::UncommittedResult<
-            StorageTransaction<Self::Database>,
-        >,
-        fuel_core_types::services::executor::Error,
-    > {
-        fuel_core_producer::ports::Executor::<Database>::execute_without_commit(
-            self, block,
-        )
+    ) -> ExecutorResult<UncommittedExecutionResult<StorageTransaction<Self::Database>>>
+    {
+        self._execute_without_commit(block)
     }
 }

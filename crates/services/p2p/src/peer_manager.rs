@@ -672,11 +672,14 @@ impl PeerManager {
     /// Find a peer that is holding the given block height.
     pub fn get_peer_id_with_height(&self, height: &BlockHeight) -> Option<PeerId> {
         let mut range = rand::thread_rng();
+        // TODO: Optimize the selection of the peer.
+        //  We can store pair `(peer id, height)` for all nodes(reserved and not) in the
+        //  https://docs.rs/sorted-vec/latest/sorted_vec/struct.SortedVec.html
         self.non_reserved_connected_peers
             .iter()
             .chain(self.reserved_connected_peers.iter())
             .filter(|(_, peer_info)| {
-                peer_info.heartbeat_data.block_height == Some(*height)
+                peer_info.heartbeat_data.block_height >= Some(*height)
             })
             .map(|(peer_id, _)| *peer_id)
             .choose(&mut range)

@@ -123,9 +123,8 @@ pub fn init_sub_services(
 
     #[cfg(feature = "p2p")]
     let sync = {
-        let current_fuel_block_height = Some(database.latest_height()?);
         fuel_core_sync::service::new_service(
-            current_fuel_block_height,
+            last_height,
             p2p_adapter,
             importer_adapter.clone(),
             verifier,

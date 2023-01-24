@@ -8,14 +8,14 @@ use std::sync::Arc;
 
 pub mod block_importer;
 pub mod consensus_module;
+pub mod executor;
 pub mod graphql_api;
 #[cfg(feature = "p2p")]
 pub mod p2p;
 pub mod producer;
-pub mod txpool;
-
 #[cfg(feature = "p2p")]
 pub mod sync;
+pub mod txpool;
 
 #[derive(Clone)]
 pub struct PoAAdapter {
@@ -60,7 +60,6 @@ pub struct BlockProducerAdapter {
 pub struct BlockImporterAdapter {
     pub block_importer:
         Arc<fuel_core_importer::Importer<Database, ExecutorAdapter, VerifierAdapter>>,
-    execution_semaphore: Arc<tokio::sync::Semaphore>,
 }
 
 #[cfg(feature = "p2p")]

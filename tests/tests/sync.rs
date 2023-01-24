@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use fuel_core::{
     chain_config::ChainConfig,
     database::Database,
@@ -24,6 +22,7 @@ use rand::{
     Rng,
     SeedableRng,
 };
+use std::sync::Arc;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_nodes_syncing() {

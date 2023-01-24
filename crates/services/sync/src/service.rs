@@ -37,7 +37,7 @@ mod tests;
 
 /// Creates an instance of runnable sync service.
 pub fn new_service<P, E, C>(
-    current_fuel_block_height: Option<BlockHeight>,
+    current_fuel_block_height: BlockHeight,
     p2p: P,
     executor: E,
     consensus: C,
@@ -49,7 +49,7 @@ where
     C: ports::ConsensusPort + Send + Sync + 'static,
 {
     let height_stream = p2p.height_stream();
-    let state = State::new(current_fuel_block_height.map(Into::into), None);
+    let state = State::new(Some(current_fuel_block_height.into()), None);
     Ok(ServiceRunner::new(SyncTask::new(
         height_stream,
         state,

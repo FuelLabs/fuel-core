@@ -232,7 +232,7 @@ impl RequestResponseConverter for BincodeCodec {
         match res_msg {
             OutboundResponse::Block(sealed_block) => {
                 let response = if let Some(sealed_block) = sealed_block {
-                    Some(self.serialize(&**sealed_block)?)
+                    Some(self.serialize(sealed_block.as_ref())?)
                 } else {
                     None
                 };
@@ -241,7 +241,7 @@ impl RequestResponseConverter for BincodeCodec {
             }
             OutboundResponse::SealedHeader(sealed_header) => {
                 let response = if let Some(sealed_header) = sealed_header {
-                    Some(self.serialize(&**sealed_header)?)
+                    Some(self.serialize(sealed_header.as_ref())?)
                 } else {
                     None
                 };
@@ -250,7 +250,7 @@ impl RequestResponseConverter for BincodeCodec {
             }
             OutboundResponse::Transactions(transactions) => {
                 let response = if let Some(transactions) = transactions {
-                    Some(self.serialize(&**transactions)?)
+                    Some(self.serialize(transactions.as_ref())?)
                 } else {
                     None
                 };
