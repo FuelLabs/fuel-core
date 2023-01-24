@@ -2488,6 +2488,7 @@ dependencies = [
  "prometheus-client",
  "rand 0.8.5",
  "serde",
+ "serde_with",
  "sha2 0.10.6",
  "tokio",
  "tracing",

@@ -22,7 +22,7 @@ use crate::{
         PeerManagerBehaviour,
     },
     request_response::messages::{
-        IntermediateResponse,
+        NetworkResponse,
         RequestMessage,
     },
 };
@@ -56,7 +56,7 @@ pub enum FuelBehaviourEvent {
     Discovery(DiscoveryEvent),
     PeerInfo(PeerInfoEvent),
     Gossipsub(GossipsubEvent),
-    RequestResponse(RequestResponseEvent<RequestMessage, IntermediateResponse>),
+    RequestResponse(RequestResponseEvent<RequestMessage, NetworkResponse>),
 }
 
 /// Handles all p2p protocols needed for Fuel.
@@ -180,9 +180,9 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
 
     pub fn send_response_msg(
         &mut self,
-        channel: ResponseChannel<IntermediateResponse>,
-        message: IntermediateResponse,
-    ) -> Result<(), IntermediateResponse> {
+        channel: ResponseChannel<NetworkResponse>,
+        message: NetworkResponse,
+    ) -> Result<(), NetworkResponse> {
         self.request_response.send_response(channel, message)
     }
 
@@ -228,10 +228,8 @@ impl From<GossipsubEvent> for FuelBehaviourEvent {
     }
 }
 
-impl From<RequestResponseEvent<RequestMessage, IntermediateResponse>>
-    for FuelBehaviourEvent
-{
-    fn from(event: RequestResponseEvent<RequestMessage, IntermediateResponse>) -> Self {
+impl From<RequestResponseEvent<RequestMessage, NetworkResponse>> for FuelBehaviourEvent {
+    fn from(event: RequestResponseEvent<RequestMessage, NetworkResponse>) -> Self {
         FuelBehaviourEvent::RequestResponse(event)
     }
 }

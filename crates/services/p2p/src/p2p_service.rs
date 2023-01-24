@@ -18,7 +18,7 @@ use crate::{
     },
     peer_manager::PeerInfoEvent,
     request_response::messages::{
-        IntermediateResponse,
+        NetworkResponse,
         OutboundResponse,
         RequestError,
         RequestMessage,
@@ -88,7 +88,7 @@ pub struct FuelP2PService<Codec: NetworkCodec> {
     /// Holds the ResponseChannel(s) for the inbound requests from the p2p Network
     /// Once the Response is prepared by the NetworkOrchestrator
     /// It will send it to the specified Peer via its unique ResponseChannel    
-    inbound_requests_table: HashMap<RequestId, ResponseChannel<IntermediateResponse>>,
+    inbound_requests_table: HashMap<RequestId, ResponseChannel<NetworkResponse>>,
 
     /// NetworkCodec used as <GossipsubCodec> for encoding and decoding of Gossipsub messages    
     network_codec: Codec,
@@ -269,18 +269,10 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     pub fn send_response_msg(
         &mut self,
         request_id: RequestId,
-        message: Option<OutboundResponse>,
+        message: OutboundResponse,
     ) -> Result<(), ResponseError> {
-        // if the response message wasn't successfully prepared
-        // we still need to remove the `request_id` from `inbound_requests_table`
-        if message.is_none() {
-            self.inbound_requests_table.remove(&request_id);
-            return Ok(())
-        }
-
         match (
-            self.network_codec
-                .convert_to_intermediate(&message.unwrap()),
+            self.network_codec.convert_to_network_response(&message),
             self.inbound_requests_table.remove(&request_id),
         ) {
             (Ok(message), Some(channel)) => {
@@ -444,7 +436,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 }
             },
             FuelBehaviourEvent::RequestResponse(req_res_event) => match req_res_event {
-                RequestResponseEvent::Message { message, .. } => match message {
+                RequestResponseEvent::Message { peer, message } => match message {
                     RequestResponseMessage::Request {
                         request,
                         channel,
@@ -466,10 +458,32 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                             self.network_codec.convert_to_response(&response),
                         ) {
                             (
-                                Some(ResponseChannelItem::ResponseBlock(channel)),
-                                Ok(ResponseMessage::ResponseBlock(block)),
+                                Some(ResponseChannelItem::Block(channel)),
+                                Ok(ResponseMessage::SealedBlock(block)),
                             ) => {
                                 if channel.send(block).is_err() {
+                                    debug!(
+                                        "Failed to send through the channel for {:?}",
+                                        request_id
+                                    );
+                                }
+                            }
+                            (
+                                Some(ResponseChannelItem::Transactions(channel)),
+                                Ok(ResponseMessage::Transactions(transactions)),
+                            ) => {
+                                if channel.send(transactions).is_err() {
+                                    debug!(
+                                        "Failed to send through the channel for {:?}",
+                                        request_id
+                                    );
+                                }
+                            }
+                            (
+                                Some(ResponseChannelItem::SealedHeader(channel)),
+                                Ok(ResponseMessage::SealedHeader(header)),
+                            ) => {
+                                if channel.send(header.map(|h| (peer, h))).is_err() {
                                     debug!(
                                         "Failed to send through the channel for {:?}",
                                         request_id
@@ -547,7 +561,9 @@ mod tests {
                 ConsensusVote,
             },
             header::PartialBlockHeader,
+            primitives::BlockId,
             SealedBlock,
+            SealedBlockHeader,
         },
         fuel_tx::Transaction,
     };
@@ -840,6 +856,17 @@ mod tests {
         // it serves as our exit from the loop
         let mut bootstrapped_node = node_services.pop().unwrap();
 
+        let (tx, mut rx) = tokio::sync::oneshot::channel::<()>();
+        let jh = tokio::spawn(async move {
+            while rx.try_recv().is_err() {
+                futures::stream::iter(node_services.iter_mut())
+                    .for_each_concurrent(10, |node| async move {
+                        node.next_event().await;
+                    })
+                    .await;
+            }
+        });
+
         loop {
             tokio::select! {
                 event_from_node_5 = node_5.next_event() => {
@@ -868,13 +895,11 @@ mod tests {
                     }
                     tracing::info!("Event from the bootstrapped_node: {:?}", event_from_bootstrapped_node);
                 },
-                _ = async {
-                    for node in &mut node_services {
-                        node.next_event().await;
-                    }
-                } => {}
             }
         }
+
+        tx.send(()).unwrap();
+        jh.await.unwrap()
     }
 
     // Simulate 2 Sets of Sentry nodes.
@@ -1252,12 +1277,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    #[instrument]
-    async fn request_response_works() {
-        use fuel_core_types::fuel_tx::Transaction;
-
-        let mut p2p_config = Config::default_initialized("request_response_works");
+    async fn request_response_works_with(request_msg: RequestMessage) {
+        let mut p2p_config = Config::default_initialized("request_response_works_with");
 
         // Node A
         let node_a_data = NodeData::random();
@@ -1275,7 +1296,7 @@ mod tests {
             tokio::select! {
                 message_sent = rx_test_end.recv() => {
                     // we received a signal to end the test
-                    assert_eq!(message_sent, Some(true), "Received wrong block height!");
+                    assert_eq!(message_sent, Some(true), "Receuved incorrect or missing missing messsage");
                     break;
                 }
                 node_a_event = node_a.next_event() => {
@@ -1285,25 +1306,57 @@ mod tests {
                             if !peer_addresses.is_empty() && !request_sent {
                                 request_sent = true;
 
-                                // 1. Simulating Oneshot channel from the NetworkOrchestrator
-                                let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                match request_msg {
+                                    RequestMessage::Block(_) => {
+                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                        assert!(node_a.send_request_msg(None, request_msg, ResponseChannelItem::Block(tx_orchestrator)).is_ok());
+                                        let tx_test_end = tx_test_end.clone();
 
-                                let requested_block_height = RequestMessage::RequestBlock(0_u64.into());
-                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::ResponseBlock(tx_orchestrator)).is_ok());
+                                        tokio::spawn(async move {
+                                            let response_message = rx_orchestrator.await;
 
-                                let tx_test_end = tx_test_end.clone();
-                                tokio::spawn(async move {
-                                    // 4. Simulating NetworkOrchestrator receiving a message from Node B
-                                    let response_message = rx_orchestrator.await;
+                                            if let Ok(Some(sealed_block)) = response_message {
+                                                let _ = tx_test_end.send(*sealed_block.entity.header().height() == 0_u64.into()).await;
+                                            } else {
+                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                                let _ = tx_test_end.send(false).await;
+                                            }
+                                        });
 
-                                    if let Ok(sealed_block) = response_message {
-                                        let _ = tx_test_end.send(*sealed_block.entity.header().height() == 0_u64.into()).await;
-                                    } else {
-                                        tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
-                                        panic!("Message not received successfully!")
                                     }
+                                    RequestMessage::SealedHeader(_) => {
+                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                        assert!(node_a.send_request_msg(None, request_msg, ResponseChannelItem::SealedHeader(tx_orchestrator)).is_ok());
+                                        let tx_test_end = tx_test_end.clone();
 
-                                });
+                                        tokio::spawn(async move {
+                                            let response_message = rx_orchestrator.await;
+
+                                            if let Ok(Some(_)) = response_message {
+                                                let _ = tx_test_end.send(true).await;
+                                            } else {
+                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                                let _ = tx_test_end.send(false).await;
+                                            }
+                                        });
+                                    }
+                                    RequestMessage::Transactions(_) => {
+                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                        assert!(node_a.send_request_msg(None, request_msg, ResponseChannelItem::Transactions(tx_orchestrator)).is_ok());
+                                        let tx_test_end = tx_test_end.clone();
+
+                                        tokio::spawn(async move {
+                                            let response_message = rx_orchestrator.await;
+
+                                            if let Ok(Some(transactions)) = response_message {
+                                                let _ = tx_test_end.send(transactions.len() == 5).await;
+                                            } else {
+                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                                let _ = tx_test_end.send(false).await;
+                                            }
+                                        });
+                                    }
+                                }
                             }
                         }
                     }
@@ -1312,21 +1365,59 @@ mod tests {
                 },
                 node_b_event = node_b.next_event() => {
                     // 2. Node B receives the RequestMessage from Node A initiated by the NetworkOrchestrator
-                    if let Some(FuelP2PEvent::RequestMessage{ request_id, .. }) = node_b_event {
-                        let block = Block::new(PartialBlockHeader::default(), vec![Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default()], &[]);
+                    if let Some(FuelP2PEvent::RequestMessage{ request_id, request_message: received_request_message }) = node_b_event {
+                        match received_request_message {
+                            RequestMessage::Block(_) => {
+                                let block = Block::new(PartialBlockHeader::default(), vec![Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default()], &[]);
 
-                        let sealed_block = SealedBlock {
-                            entity: block,
-                            consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
-                        };
+                                let sealed_block = SealedBlock {
+                                    entity: block,
+                                    consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
+                                };
 
-                        let _ = node_b.send_response_msg(request_id, Some(OutboundResponse::ResponseBlock(Arc::new(sealed_block))));
+                                let _ = node_b.send_response_msg(request_id, OutboundResponse::Block(Some(Arc::new(sealed_block))));
+                            }
+                            RequestMessage::SealedHeader(_) => {
+                                let header = Default::default();
+
+                                let sealed_header = SealedBlockHeader {
+                                    entity: header,
+                                    consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
+                                };
+
+                                let _ = node_b.send_response_msg(request_id, OutboundResponse::SealedHeader(Some(Arc::new(sealed_header))));
+                            }
+                            RequestMessage::Transactions(_) => {
+                                let transactions = vec![Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default()];
+                                let _ = node_b.send_response_msg(request_id, OutboundResponse::Transactions(Some(Arc::new(transactions))));
+                            }
+                        }
+
                     }
 
                     tracing::info!("Node B Event: {:?}", node_b_event);
                 }
             };
         }
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn request_response_works_with_transactions() {
+        request_response_works_with(RequestMessage::Transactions(BlockId::default()))
+            .await
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn request_response_works_with_block() {
+        request_response_works_with(RequestMessage::Block(0_u64.into())).await
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn request_response_works_with_sealed_header() {
+        request_response_works_with(RequestMessage::SealedHeader(0_u64.into())).await
     }
 
     #[tokio::test]
@@ -1367,8 +1458,8 @@ mod tests {
                                 assert_eq!(node_a.outbound_requests_table.len(), 0);
 
                                 // Request successfully sent
-                                let requested_block_height = RequestMessage::RequestBlock(0_u64.into());
-                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::ResponseBlock(tx_orchestrator)).is_ok());
+                                let requested_block_height = RequestMessage::Block(0_u64.into());
+                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::Block(tx_orchestrator)).is_ok());
 
                                 // 2b. there should be ONE pending outbound requests in the table
                                 assert_eq!(node_a.outbound_requests_table.len(), 1);

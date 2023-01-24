@@ -10,7 +10,7 @@ use crate::{
         GossipsubMessage,
     },
     request_response::messages::{
-        IntermediateResponse,
+        NetworkResponse,
         OutboundResponse,
         RequestMessage,
         ResponseMessage,
@@ -81,7 +81,7 @@ impl BincodeCodec {
 impl RequestResponseCodec for BincodeCodec {
     type Protocol = MessageExchangeBincodeProtocol;
     type Request = RequestMessage;
-    type Response = IntermediateResponse;
+    type Response = NetworkResponse;
 
     async fn read_request<T>(
         &mut self,
@@ -186,29 +186,77 @@ impl GossipsubCodec for BincodeCodec {
 }
 
 impl RequestResponseConverter for BincodeCodec {
-    type IntermediateResponse = IntermediateResponse;
+    type NetworkResponse = NetworkResponse;
     type OutboundResponse = OutboundResponse;
     type ResponseMessage = ResponseMessage;
 
     fn convert_to_response(
         &self,
-        inter_msg: &Self::IntermediateResponse,
+        inter_msg: &Self::NetworkResponse,
     ) -> Result<Self::ResponseMessage, io::Error> {
         match inter_msg {
-            IntermediateResponse::ResponseBlock(block_bytes) => Ok(
-                ResponseMessage::ResponseBlock(self.deserialize(block_bytes)?),
-            ),
+            NetworkResponse::Block(block_bytes) => {
+                let response = if let Some(block_bytes) = block_bytes {
+                    Some(self.deserialize(block_bytes)?)
+                } else {
+                    None
+                };
+
+                Ok(ResponseMessage::SealedBlock(response))
+            }
+            NetworkResponse::Header(header_bytes) => {
+                let response = if let Some(header_bytes) = header_bytes {
+                    Some(self.deserialize(header_bytes)?)
+                } else {
+                    None
+                };
+
+                Ok(ResponseMessage::SealedHeader(response))
+            }
+            NetworkResponse::Transactions(tx_bytes) => {
+                let response = if let Some(tx_bytes) = tx_bytes {
+                    Some(self.deserialize(tx_bytes)?)
+                } else {
+                    None
+                };
+
+                Ok(ResponseMessage::Transactions(response))
+            }
         }
     }
 
-    fn convert_to_intermediate(
+    fn convert_to_network_response(
         &self,
         res_msg: &Self::OutboundResponse,
-    ) -> Result<Self::IntermediateResponse, io::Error> {
+    ) -> Result<Self::NetworkResponse, io::Error> {
         match res_msg {
-            OutboundResponse::ResponseBlock(sealed_block) => Ok(
-                IntermediateResponse::ResponseBlock(self.serialize(&**sealed_block)?),
-            ),
+            OutboundResponse::Block(sealed_block) => {
+                let response = if let Some(sealed_block) = sealed_block {
+                    Some(self.serialize(&**sealed_block)?)
+                } else {
+                    None
+                };
+
+                Ok(NetworkResponse::Block(response))
+            }
+            OutboundResponse::SealedHeader(sealed_header) => {
+                let response = if let Some(sealed_header) = sealed_header {
+                    Some(self.serialize(&**sealed_header)?)
+                } else {
+                    None
+                };
+
+                Ok(NetworkResponse::Header(response))
+            }
+            OutboundResponse::Transactions(transactions) => {
+                let response = if let Some(transactions) = transactions {
+                    Some(self.serialize(&**transactions)?)
+                } else {
+                    None
+                };
+
+                Ok(NetworkResponse::Transactions(response))
+            }
         }
     }
 }
@@ -225,5 +273,21 @@ pub struct MessageExchangeBincodeProtocol;
 impl ProtocolName for MessageExchangeBincodeProtocol {
     fn protocol_name(&self) -> &[u8] {
         REQUEST_RESPONSE_PROTOCOL_ID
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use fuel_core_types::blockchain::primitives::BlockId;
+
+    use super::*;
+
+    #[test]
+    fn test_request_size_matches() {
+        let m = RequestMessage::Transactions(BlockId::default());
+        assert_eq!(
+            bincode::serialized_size(&m).unwrap() as usize,
+            MAX_REQUEST_SIZE
+        );
     }
 }

@@ -14,17 +14,21 @@ use fuel_core_storage::{
     StorageInspect,
     StorageMutate,
 };
-use fuel_core_types::blockchain::{
-    consensus::{
-        Consensus,
-        Genesis,
+use fuel_core_types::{
+    blockchain::{
+        consensus::{
+            Consensus,
+            Genesis,
+            Sealed,
+        },
+        primitives::{
+            BlockHeight,
+            BlockId,
+        },
+        SealedBlock,
+        SealedBlockHeader,
     },
-    primitives::{
-        BlockHeight,
-        BlockId,
-    },
-    SealedBlock,
-    SealedBlockHeader,
+    fuel_tx::Transaction,
 };
 use std::borrow::Cow;
 
@@ -86,7 +90,10 @@ impl Database {
         &self,
         height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlock>> {
-        let block_id = self.get_block_id(height)?.ok_or(not_found!("BlockId"))?;
+        let block_id = match self.get_block_id(height)? {
+            Some(i) => i,
+            None => return Ok(None),
+        };
         self.get_sealed_block_by_id(&block_id)
     }
 
@@ -102,6 +109,17 @@ impl Database {
         } else {
             Err(not_found!(SealedBlockConsensus))
         }
+    }
+
+    pub fn get_sealed_block_header_by_height(
+        &self,
+        height: &BlockHeight,
+    ) -> StorageResult<Option<SealedBlockHeader>> {
+        let block_id = match self.get_block_id(height)? {
+            Some(i) => i,
+            None => return Ok(None),
+        };
+        self.get_sealed_block_header(&block_id)
     }
 
     pub fn get_sealed_block_header(
@@ -121,5 +139,14 @@ impl Database {
         } else {
             Ok(None)
         }
+    }
+
+    pub fn get_transactions_on_block(
+        &self,
+        block_id: &BlockId,
+    ) -> StorageResult<Option<Vec<Transaction>>> {
+        Ok(self
+            .get_sealed_block_by_id(block_id)?
+            .map(|Sealed { entity: block, .. }| block.into_inner().1))
     }
 }
