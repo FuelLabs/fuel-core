@@ -49,7 +49,7 @@ pub fn verify_consensus(
     }
 }
 
-pub fn verify_poa_block_fields<D: Database>(
+pub fn verify_block_fields<D: Database>(
     config: &Config,
     database: &D,
     block: &Block,
