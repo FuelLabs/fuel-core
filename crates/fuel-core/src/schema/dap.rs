@@ -23,14 +23,16 @@ use fuel_core_types::{
         Word,
     },
     fuel_tx::{
-        CheckedTransaction,
         ConsensusParameters,
-        IntoChecked,
         Script,
         Transaction,
     },
     fuel_types::Address,
     fuel_vm::{
+        checked_transaction::{
+            CheckedTransaction,
+            IntoChecked,
+        },
         consts,
         GasCosts,
         Interpreter,

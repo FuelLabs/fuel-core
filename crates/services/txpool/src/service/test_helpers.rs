@@ -45,6 +45,7 @@ impl TestContext {
         let (_, gas_coin) = self.setup_coin();
         TransactionBuilder::script(vec![], vec![])
             .gas_price(gas_price)
+            .gas_limit(1000)
             .add_input(gas_coin)
             .finalize_as_transaction()
     }
@@ -160,6 +161,7 @@ impl TestContextBuilder {
         let (_, gas_coin) = self.setup_coin();
         TransactionBuilder::script(vec![], vec![])
             .gas_price(gas_price)
+            .gas_limit(1000)
             .add_input(gas_coin)
             .finalize_as_transaction()
     }

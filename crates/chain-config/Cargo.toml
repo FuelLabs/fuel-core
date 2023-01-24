@@ -22,7 +22,7 @@ fuel-core-types = { path = "../types", version = "0.15.1", features = [
 hex = { version = "0.4", features = ["serde"] }
 itertools = "0.10"
 rand = "0.8"
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive", "rc"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 serde_with = "1.11"
 tracing = "0.1"

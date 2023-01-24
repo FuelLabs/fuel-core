@@ -15,10 +15,12 @@ use fuel_core_types::{
     blockchain::SealedBlock,
     fuel_tx::{
         Chargeable,
-        CheckedTransaction,
-        IntoChecked,
         Transaction,
         UniqueIdentifier,
+    },
+    fuel_vm::checked_transaction::{
+        CheckedTransaction,
+        IntoChecked,
     },
     services::txpool::{
         ArcPoolTx,
@@ -87,6 +89,7 @@ where
                 .into_checked(
                     current_height.into(),
                     &self.config.chain_config.transaction_parameters,
+                    &self.config.chain_config.gas_costs,
                 )?
                 .into()
         } else {

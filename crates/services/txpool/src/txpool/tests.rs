@@ -19,6 +19,7 @@ use crate::{
 };
 use fuel_core_types::{
     entities::coin::CoinStatus,
+    fuel_asm::Word,
     fuel_crypto::rand::{
         rngs::StdRng,
         SeedableRng,
@@ -39,6 +40,8 @@ use std::{
     vec,
 };
 
+const GAS_LIMIT: Word = 1000;
+
 #[tokio::test]
 async fn insert_simple_tx_succeeds() {
     let mut rng = StdRng::seed_from_u64(0);
@@ -48,6 +51,7 @@ async fn insert_simple_tx_succeeds() {
     let (_, gas_coin) = setup_coin(&mut rng, Some(&txpool.database));
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
+            .gas_limit(GAS_LIMIT)
             .add_input(gas_coin)
             .finalize_as_transaction(),
     );
@@ -68,6 +72,7 @@ async fn insert_simple_tx_dependency_chain_succeeds() {
     let tx1 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(1)
+            .gas_limit(GAS_LIMIT)
             .add_input(gas_coin)
             .add_output(output)
             .finalize_as_transaction(),
@@ -78,6 +83,7 @@ async fn insert_simple_tx_dependency_chain_succeeds() {
     let tx2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(1)
+            .gas_limit(GAS_LIMIT)
             .add_input(input)
             .add_input(gas_coin)
             .finalize_as_transaction(),
@@ -110,6 +116,7 @@ async fn faulty_t2_collided_on_contract_id_from_tx1() {
             Default::default(),
         )
         .gas_price(10)
+        .gas_limit(GAS_LIMIT)
         .add_input(gas_coin)
         .add_output(create_contract_output(contract_id))
         .add_output(output)
@@ -128,6 +135,7 @@ async fn faulty_t2_collided_on_contract_id_from_tx1() {
             Default::default(),
         )
         .gas_price(9)
+        .gas_limit(GAS_LIMIT)
         .add_input(gas_coin)
         .add_input(input)
         .add_output(create_contract_output(contract_id))
@@ -165,6 +173,7 @@ async fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
         )
         .add_input(gas_coin)
         .add_output(create_contract_output(contract_id))
+        .gas_limit(GAS_LIMIT)
         .finalize_as_transaction(),
     );
 
@@ -172,7 +181,8 @@ async fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
     // the wrong type of utxo (contract instead of coin)
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
-            .gas_price(0)
+            .gas_price(1)
+            .gas_limit(GAS_LIMIT)
             .add_input(random_predicate(
                 &mut rng,
                 AssetId::BASE,
@@ -224,6 +234,7 @@ async fn try_to_insert_tx2_missing_utxo() {
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(10)
+            .gas_limit(GAS_LIMIT)
             .add_input(input)
             .finalize_as_transaction(),
     );
@@ -251,6 +262,7 @@ async fn tx_try_to_use_spent_coin() {
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(10)
+            .gas_limit(GAS_LIMIT)
             .add_input(input)
             .finalize_as_transaction(),
     );
@@ -276,12 +288,14 @@ async fn higher_priced_tx_removes_lower_priced_tx() {
     let tx1 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(10)
+            .gas_limit(GAS_LIMIT)
             .add_input(coin_input.clone())
             .finalize_as_transaction(),
     );
     let tx2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(20)
+            .gas_limit(GAS_LIMIT)
             .add_input(coin_input)
             .finalize_as_transaction(),
     );
@@ -305,6 +319,7 @@ async fn underpriced_tx1_not_included_coin_collision() {
     let tx1 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(20)
+            .gas_limit(GAS_LIMIT)
             .add_input(gas_coin)
             .add_output(output)
             .finalize_as_transaction(),
@@ -314,12 +329,14 @@ async fn underpriced_tx1_not_included_coin_collision() {
     let tx2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(20)
+            .gas_limit(GAS_LIMIT)
             .add_input(input.clone())
             .finalize_as_transaction(),
     );
     let tx3 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(10)
+            .gas_limit(GAS_LIMIT)
             .add_input(input)
             .finalize_as_transaction(),
     );
@@ -355,6 +372,7 @@ async fn overpriced_tx_contract_input_not_inserted() {
             Default::default(),
         )
         .gas_price(10)
+        .gas_limit(GAS_LIMIT)
         .add_input(gas_funds)
         .add_output(create_contract_output(contract_id))
         .finalize_as_transaction(),
@@ -364,6 +382,7 @@ async fn overpriced_tx_contract_input_not_inserted() {
     let tx2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(11)
+            .gas_limit(GAS_LIMIT)
             .add_input(gas_funds)
             .add_input(create_contract_input(
                 Default::default(),
@@ -403,6 +422,7 @@ async fn dependent_contract_input_inserted() {
             Default::default(),
         )
         .gas_price(10)
+        .gas_limit(GAS_LIMIT)
         .add_input(gas_funds)
         .add_output(create_contract_output(contract_id))
         .finalize_as_transaction(),
@@ -412,6 +432,7 @@ async fn dependent_contract_input_inserted() {
     let tx2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(10)
+            .gas_limit(GAS_LIMIT)
             .add_input(gas_funds)
             .add_input(create_contract_input(
                 Default::default(),
@@ -437,6 +458,7 @@ async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
     let tx1 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(10)
+            .gas_limit(GAS_LIMIT)
             .add_input(gas_coin.clone())
             .add_output(output)
             .finalize_as_transaction(),
@@ -446,12 +468,14 @@ async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
     let tx2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(9)
+            .gas_limit(GAS_LIMIT)
             .add_input(input)
             .finalize_as_transaction(),
     );
     let tx3 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(20)
+            .gas_limit(GAS_LIMIT)
             .add_input(gas_coin)
             .finalize_as_transaction(),
     );
@@ -484,18 +508,21 @@ async fn more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
     let tx1 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(10)
+            .gas_limit(GAS_LIMIT)
             .add_input(gas_coin.clone())
             .finalize_as_transaction(),
     );
     let tx2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(11)
+            .gas_limit(GAS_LIMIT)
             .add_input(gas_coin.clone())
             .finalize_as_transaction(),
     );
     let tx3 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(12)
+            .gas_limit(GAS_LIMIT)
             .add_input(gas_coin)
             .finalize_as_transaction(),
     );
@@ -527,6 +554,7 @@ async fn tx_limit_hit() {
     let (_, gas_coin) = setup_coin(&mut rng, Some(&txpool.database));
     let tx1 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
+            .gas_limit(GAS_LIMIT)
             .add_input(gas_coin)
             .add_output(create_coin_output())
             .finalize_as_transaction(),
@@ -534,6 +562,7 @@ async fn tx_limit_hit() {
     let (_, gas_coin) = setup_coin(&mut rng, Some(&txpool.database));
     let tx2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
+            .gas_limit(GAS_LIMIT)
             .add_input(gas_coin)
             .finalize_as_transaction(),
     );
@@ -565,6 +594,7 @@ async fn tx_depth_hit() {
     let (output, unset_input) = create_output_and_input(&mut rng, 10_000);
     let tx1 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
+            .gas_limit(GAS_LIMIT)
             .add_input(gas_coin)
             .add_output(output)
             .finalize_as_transaction(),
@@ -574,6 +604,7 @@ async fn tx_depth_hit() {
     let (output, unset_input) = create_output_and_input(&mut rng, 5_000);
     let tx2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
+            .gas_limit(GAS_LIMIT)
             .add_input(input)
             .add_output(output)
             .finalize_as_transaction(),
@@ -582,6 +613,7 @@ async fn tx_depth_hit() {
     let input = unset_input.into_input(UtxoId::new(tx2.id(), 0));
     let tx3 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
+            .gas_limit(GAS_LIMIT)
             .add_input(input)
             .finalize_as_transaction(),
     );
@@ -608,6 +640,7 @@ async fn sorted_out_tx1_2_4() {
     let tx1 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(10)
+            .gas_limit(GAS_LIMIT)
             .add_input(gas_coin)
             .finalize_as_transaction(),
     );
@@ -616,6 +649,7 @@ async fn sorted_out_tx1_2_4() {
     let tx2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(9)
+            .gas_limit(GAS_LIMIT)
             .add_input(gas_coin)
             .finalize_as_transaction(),
     );
@@ -624,6 +658,7 @@ async fn sorted_out_tx1_2_4() {
     let tx3 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(20)
+            .gas_limit(GAS_LIMIT)
             .add_input(gas_coin)
             .finalize_as_transaction(),
     );
@@ -657,6 +692,7 @@ async fn find_dependent_tx1_tx2() {
     let tx1 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(11)
+            .gas_limit(GAS_LIMIT)
             .add_input(gas_coin)
             .add_output(output)
             .finalize_as_transaction(),
@@ -667,6 +703,7 @@ async fn find_dependent_tx1_tx2() {
     let tx2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(10)
+            .gas_limit(GAS_LIMIT)
             .add_input(input)
             .add_output(output)
             .finalize_as_transaction(),
@@ -676,6 +713,7 @@ async fn find_dependent_tx1_tx2() {
     let tx3 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(9)
+            .gas_limit(GAS_LIMIT)
             .add_input(input)
             .finalize_as_transaction(),
     );
@@ -720,6 +758,7 @@ async fn tx_at_least_min_gas_price_is_insertable() {
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(10)
+            .gas_limit(GAS_LIMIT)
             .add_input(gas_coin)
             .finalize_as_transaction(),
     );
@@ -743,6 +782,7 @@ async fn tx_below_min_gas_price_is_not_insertable() {
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(10)
+            .gas_limit(GAS_LIMIT)
             .add_input(gas_coin)
             .finalize_as_transaction(),
     );
@@ -762,6 +802,7 @@ async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
 
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
+            .gas_limit(GAS_LIMIT)
             .add_input(input)
             .finalize_as_transaction(),
     );
@@ -783,6 +824,7 @@ async fn tx_rejected_when_input_message_id_is_spent() {
 
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
+            .gas_limit(GAS_LIMIT)
             .add_input(input)
             .finalize_as_transaction(),
     );
@@ -805,6 +847,7 @@ async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
     let (message, input) = create_message_predicate_from_message(5000, None);
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
+            .gas_limit(GAS_LIMIT)
             .add_input(input)
             .finalize_as_transaction(),
     );
@@ -835,6 +878,7 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
     let tx_high = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(gas_price_high)
+            .gas_limit(GAS_LIMIT)
             .add_input(conflicting_message_input.clone())
             .finalize_as_transaction(),
     );
@@ -842,6 +886,7 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
     let tx_low = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(gas_price_low)
+            .gas_limit(GAS_LIMIT)
             .add_input(conflicting_message_input)
             .finalize_as_transaction(),
     );
@@ -881,6 +926,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
     let tx_low = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(gas_price_low)
+            .gas_limit(GAS_LIMIT)
             .add_input(conflicting_message_input.clone())
             .finalize_as_transaction(),
     );
@@ -899,6 +945,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
     let tx_high = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(gas_price_high)
+            .gas_limit(GAS_LIMIT)
             .add_input(conflicting_message_input)
             .finalize_as_transaction(),
     );
@@ -926,6 +973,7 @@ async fn message_of_squeezed_out_tx_can_be_resubmitted_at_lower_gas_price() {
     let tx_1 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(2)
+            .gas_limit(GAS_LIMIT)
             .add_input(message_input_1.clone())
             .add_input(message_input_2.clone())
             .finalize_as_transaction(),
@@ -934,6 +982,7 @@ async fn message_of_squeezed_out_tx_can_be_resubmitted_at_lower_gas_price() {
     let tx_2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(3)
+            .gas_limit(GAS_LIMIT)
             .add_input(message_input_1)
             .finalize_as_transaction(),
     );
@@ -941,6 +990,7 @@ async fn message_of_squeezed_out_tx_can_be_resubmitted_at_lower_gas_price() {
     let tx_3 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(1)
+            .gas_limit(GAS_LIMIT)
             .add_input(message_input_2)
             .finalize_as_transaction(),
     );

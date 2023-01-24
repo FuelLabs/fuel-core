@@ -14,7 +14,10 @@ use fuel_core_poa::Trigger;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_crypto::SecretKey,
-    fuel_tx::TransactionBuilder,
+    fuel_tx::{
+        Finalizable,
+        TransactionBuilder,
+    },
     secrecy::Secret,
 };
 use rand::{

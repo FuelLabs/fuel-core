@@ -1,4 +1,4 @@
-use fuel_vm::gas::{
+use fuel_core_types::fuel_vm::{
     DependentCost,
     GasCostsValues,
 };
