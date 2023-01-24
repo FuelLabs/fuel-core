@@ -222,3 +222,15 @@ pub struct SecretKeyWrapper(SecretKey);
 
 impl CloneableSecret for SecretKeyWrapper {}
 impl DebugSecret for SecretKeyWrapper {}
+
+impl From<BlockId> for [u8; 32] {
+    fn from(id: BlockId) -> Self {
+        id.0.into()
+    }
+}
+
+impl From<[u8; 32]> for BlockId {
+    fn from(bytes: [u8; 32]) -> Self {
+        Self(bytes.into())
+    }
+}

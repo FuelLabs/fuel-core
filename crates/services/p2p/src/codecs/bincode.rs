@@ -275,3 +275,19 @@ impl ProtocolName for MessageExchangeBincodeProtocol {
         REQUEST_RESPONSE_PROTOCOL_ID
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use fuel_core_types::blockchain::primitives::BlockId;
+
+    use super::*;
+
+    #[test]
+    fn test_request_size_matches() {
+        let m = RequestMessage::Transactions(BlockId::default());
+        assert_eq!(
+            bincode::serialized_size(&m).unwrap() as usize,
+            MAX_REQUEST_SIZE
+        );
+    }
+}
