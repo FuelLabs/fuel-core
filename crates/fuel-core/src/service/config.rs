@@ -1,8 +1,10 @@
 use clap::ValueEnum;
-use fuel_core_chain_config::ChainConfig;
+use fuel_core_chain_config::{
+    default_consensus_dev_key,
+    ChainConfig,
+};
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
-    fuel_vm::SecretKey,
     secrecy::Secret,
 };
 use std::{
@@ -118,12 +120,4 @@ pub struct VMConfig {
 pub enum DbType {
     InMemory,
     RocksDb,
-}
-
-/// A default secret key to use for testing purposes only
-pub fn default_consensus_dev_key() -> SecretKey {
-    const DEV_KEY_PHRASE: &str =
-        "winner alley monkey elephant sun off boil hope toward boss bronze dish";
-    SecretKey::new_from_mnemonic_phrase_with_path(DEV_KEY_PHRASE, "m/44'/60'/0'/0/0")
-        .expect("valid key")
 }

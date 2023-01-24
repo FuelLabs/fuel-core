@@ -127,7 +127,7 @@ pub fn init_sub_services(
         fuel_core_sync::service::new_service(
             current_fuel_block_height,
             p2p_adapter,
-            importer_adapter,
+            importer_adapter.clone(),
             verifier,
             config.sync,
         )?
@@ -166,6 +166,7 @@ pub fn init_sub_services(
         #[cfg(feature = "relayer")]
         relayer: relayer_service.as_ref().map(|r| r.shared.clone()),
         graph_ql: graph_ql.shared.clone(),
+        block_importer: importer_adapter,
     };
 
     #[allow(unused_mut)]

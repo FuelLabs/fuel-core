@@ -1,4 +1,5 @@
 use anyhow::ensure;
+use fuel_core_chain_config::ConsensusConfig;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::{
@@ -7,7 +8,7 @@ use fuel_core_types::{
         primitives::BlockHeight,
         SealedBlockHeader,
     },
-    fuel_crypto::PublicKey,
+    fuel_tx::Input,
     fuel_types::Bytes32,
 };
 
@@ -18,7 +19,6 @@ mod tests;
 pub struct Config {
     /// If the manual block is enabled, skip verification of some fields.
     pub enabled_manual_blocks: bool,
-    pub signing_key: PublicKey,
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -31,16 +31,26 @@ pub trait Database {
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32>;
 }
 
-pub fn verify_consensus(config: &Config, header: &SealedBlockHeader) -> bool {
+pub fn verify_consensus(
+    consensus_config: &ConsensusConfig,
+    header: &SealedBlockHeader,
+) -> bool {
     let SealedBlockHeader {
         entity: header,
         consensus,
     } = header;
     match consensus {
         fuel_core_types::blockchain::consensus::Consensus::PoA(consensus) => {
-            let id = header.id();
-            let m = id.as_message();
-            consensus.signature.verify(&config.signing_key, m).is_ok()
+            match consensus_config {
+                ConsensusConfig::PoA { signing_key } => {
+                    let id = header.id();
+                    let m = id.as_message();
+                    consensus
+                        .signature
+                        .recover(m)
+                        .map_or(false, |k| Input::owner(&k) == *signing_key)
+                }
+            }
         }
         _ => true,
     }

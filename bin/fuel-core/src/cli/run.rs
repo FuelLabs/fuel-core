@@ -12,13 +12,13 @@ use anyhow::{
 };
 use clap::Parser;
 use fuel_core::{
-    chain_config::ChainConfig,
+    chain_config::{
+        default_consensus_dev_key,
+        ChainConfig,
+    },
     producer::Config as ProducerConfig,
     service::{
-        config::{
-            default_consensus_dev_key,
-            Trigger,
-        },
+        config::Trigger,
         Config,
         DbType,
         ServiceTrait,

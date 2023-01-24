@@ -74,7 +74,7 @@ where
 
     /// Verifies the consensus of the block header.
     pub fn verify_consensus(&self, header: &SealedBlockHeader) -> bool {
-        verify_consensus(&self.config.poa, header)
+        verify_consensus(&self.config.chain_config.consensus, header)
     }
 }
 

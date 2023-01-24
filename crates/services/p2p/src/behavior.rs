@@ -208,6 +208,10 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
     pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<&PeerInfo> {
         self.peer_manager.get_peer_info(peer_id)
     }
+
+    pub fn peer_manager(&self) -> &PeerManagerBehaviour {
+        &self.peer_manager
+    }
 }
 
 impl From<DiscoveryEvent> for FuelBehaviourEvent {

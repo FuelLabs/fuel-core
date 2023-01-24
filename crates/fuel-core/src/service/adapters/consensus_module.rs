@@ -25,7 +25,6 @@ use fuel_core_types::{
         primitives::BlockHeight,
     },
     fuel_tx::Bytes32,
-    secrecy::ExposeSecret,
 };
 use std::{
     borrow::Cow,
@@ -40,16 +39,8 @@ impl VerifierAdapter {
         database: Database,
         relayer: MaybeRelayerAdapter,
     ) -> Self {
-        let config = VerifierConfig::new(
-            config.chain_conf.clone(),
-            config.manual_blocks_enabled,
-            config
-                .consensus_key
-                .as_ref()
-                .expect("Must have a signing key to verify blocks")
-                .expose_secret()
-                .public_key(),
-        );
+        let config =
+            VerifierConfig::new(config.chain_conf.clone(), config.manual_blocks_enabled);
         Self {
             block_verifier: Arc::new(Verifier::new(config, database, relayer)),
         }

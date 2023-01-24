@@ -31,7 +31,6 @@ fn correct() -> Input {
     Input {
         c: Config {
             enabled_manual_blocks: false,
-            signing_key: Default::default(),
         },
         block_header_merkle_root: [2u8; 32],
         prev_header_time: Tai64(2),

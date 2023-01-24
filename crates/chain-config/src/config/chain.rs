@@ -5,7 +5,11 @@ use bech32::{
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     fuel_crypto::Hasher,
-    fuel_tx::ConsensusParameters,
+    fuel_tx::{
+        ConsensusParameters,
+        Input,
+        UtxoId,
+    },
     fuel_types::{
         Address,
         AssetId,
@@ -14,6 +18,7 @@ use fuel_core_types::{
     fuel_vm::{
         GasCosts,
         GasCostsValues,
+        SecretKey,
     },
 };
 use itertools::Itertools;
@@ -41,7 +46,9 @@ use crate::{
         coin::CoinConfig,
         state::StateConfig,
     },
+    default_consensus_dev_key,
     genesis::GenesisCommitment,
+    ConsensusConfig,
 };
 
 // Fuel Network human-readable part for bech32 encoding
@@ -63,6 +70,7 @@ pub struct ChainConfig {
     #[serde(default)]
     #[serde_as(as = "FromInto<GasCostsValues>")]
     pub gas_costs: GasCosts,
+    pub consensus: ConsensusConfig,
 }
 
 impl Default for ChainConfig {
@@ -73,6 +81,9 @@ impl Default for ChainConfig {
             transaction_parameters: ConsensusParameters::DEFAULT,
             initial_state: None,
             gas_costs: GasCosts::default(),
+            consensus: ConsensusConfig::PoA {
+                signing_key: Input::owner(&default_consensus_dev_key().public_key()),
+            },
         }
     }
 }
@@ -91,7 +102,6 @@ impl ChainConfig {
                 let bech32_data = Bytes32::new(*address).to_base32();
                 let bech32_encoding =
                     bech32::encode(FUEL_BECH32_HRP, bech32_data, Bech32m).unwrap();
-
                 tracing::info!(
                     "PrivateKey({:#x}), Address({:#x} [bech32: {}]), Balance({})",
                     secret,
@@ -99,15 +109,7 @@ impl ChainConfig {
                     bech32_encoding,
                     TESTNET_INITIAL_BALANCE
                 );
-                CoinConfig {
-                    tx_id: None,
-                    output_index: None,
-                    block_created: None,
-                    maturity: None,
-                    owner: address,
-                    amount: TESTNET_INITIAL_BALANCE,
-                    asset_id: Default::default(),
-                }
+                Self::initial_coin(secret, TESTNET_INITIAL_BALANCE, None)
             })
             .collect_vec();
 
@@ -118,6 +120,24 @@ impl ChainConfig {
                 ..StateConfig::default()
             }),
             ..Default::default()
+        }
+    }
+
+    pub fn initial_coin(
+        secret: SecretKey,
+        amount: u64,
+        utxo_id: Option<UtxoId>,
+    ) -> CoinConfig {
+        let address = Address::from(*secret.public_key().hash());
+
+        CoinConfig {
+            tx_id: utxo_id.as_ref().map(|u| *u.tx_id()),
+            output_index: utxo_id.as_ref().map(|u| u.output_index() as u64),
+            block_created: None,
+            maturity: None,
+            owner: address,
+            amount,
+            asset_id: Default::default(),
         }
     }
 }

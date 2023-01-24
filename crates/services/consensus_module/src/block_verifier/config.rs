@@ -2,7 +2,6 @@
 
 use fuel_core_chain_config::ChainConfig;
 use fuel_core_poa::verifier::Config as PoAVerifierConfig;
-use fuel_core_types::fuel_crypto::PublicKey;
 
 /// The config of the block verifier.
 pub struct Config {
@@ -14,15 +13,10 @@ pub struct Config {
 
 impl Config {
     /// Creates the verifier config for all possible consensuses.
-    pub fn new(
-        chain_config: ChainConfig,
-        enabled_manual_blocks: bool,
-        signing_key: PublicKey,
-    ) -> Self {
+    pub fn new(chain_config: ChainConfig, enabled_manual_blocks: bool) -> Self {
         Self {
             chain_config,
             poa: PoAVerifierConfig {
-                signing_key,
                 enabled_manual_blocks,
             },
         }

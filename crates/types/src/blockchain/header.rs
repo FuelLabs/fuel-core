@@ -203,7 +203,7 @@ impl BlockHeader {
         // Generate the transaction merkle root.
         let transactions_root = generate_txns_root(transactions);
 
-        transactions_root != self.application.transactions_root
+        transactions_root == self.application.transactions_root
     }
 }
 

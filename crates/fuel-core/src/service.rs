@@ -22,6 +22,8 @@ pub use config::{
 };
 pub use fuel_core_services::Service as ServiceTrait;
 
+use self::adapters::BlockImporterAdapter;
+
 pub mod adapters;
 pub mod config;
 pub(crate) mod genesis;
@@ -40,6 +42,8 @@ pub struct SharedState {
     pub relayer: Option<fuel_core_relayer::SharedState>,
     /// The GraphQL shared state.
     pub graph_ql: crate::fuel_core_graphql_api::service::SharedState,
+    /// Subscribe to new block production.
+    pub block_importer: BlockImporterAdapter,
 }
 
 pub struct FuelService {

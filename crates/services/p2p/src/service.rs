@@ -204,12 +204,14 @@ where
                     Some(TaskRequest::GetBlock { height, channel }) => {
                         let request_msg = RequestMessage::Block(height);
                         let channel_item = ResponseChannelItem::Block(channel);
-                        let _ = self.p2p_service.send_request_msg(None, request_msg, channel_item);
+                        let peer = self.p2p_service.peer_manager().get_peer_id_with_height(&height);
+                        let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
                     }
                     Some(TaskRequest::GetSealedHeader{ height, channel: response }) => {
                         let request_msg = RequestMessage::SealedHeader(height);
                         let channel_item = ResponseChannelItem::SealedHeader(response);
-                        let _ = self.p2p_service.send_request_msg(None, request_msg, channel_item);
+                        let peer = self.p2p_service.peer_manager().get_peer_id_with_height(&height);
+                        let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
                     }
                     Some(TaskRequest::GetTransactions { block_id, from_peer, channel }) => {
                         let request_msg = RequestMessage::Transactions(block_id);
