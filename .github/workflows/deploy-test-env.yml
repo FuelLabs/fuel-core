@@ -1,4 +1,4 @@
-name: Deploy Ephemeral Test Environment
+name: Deployer the Ephemeral Test Environment
 
 on:
   pull_request:
