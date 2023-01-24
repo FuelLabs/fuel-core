@@ -74,7 +74,16 @@ where
 
     /// Verifies the consensus of the block header.
     pub fn verify_consensus(&self, header: &SealedBlockHeader) -> bool {
-        verify_consensus(&self.config.chain_config.consensus, header)
+        let SealedBlockHeader {
+            entity: header,
+            consensus,
+        } = header;
+        match consensus {
+            Consensus::Genesis(_) => true,
+            Consensus::PoA(consensus) => {
+                verify_consensus(&self.config.chain_config.consensus, header, consensus)
+            }
+        }
     }
 }
 

@@ -1,6 +1,5 @@
 use crate::{
     database::Database,
-    executor::Executor,
     service::adapters::{
         BlockProducerAdapter,
         ExecutorAdapter,
@@ -66,11 +65,7 @@ impl fuel_core_producer::ports::Executor<Database> for ExecutorAdapter {
         &self,
         block: ExecutionBlock,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
-        let executor = Executor {
-            database: self.database.clone(),
-            config: self.config.clone(),
-        };
-        executor.execute_without_commit(block)
+        self._execute_without_commit(block)
     }
 
     fn dry_run(
@@ -78,11 +73,7 @@ impl fuel_core_producer::ports::Executor<Database> for ExecutorAdapter {
         block: ExecutionBlock,
         utxo_validation: Option<bool>,
     ) -> ExecutorResult<Vec<Vec<Receipt>>> {
-        let executor = Executor {
-            database: self.database.clone(),
-            config: self.config.clone(),
-        };
-        executor.dry_run(block, utxo_validation)
+        self._dry_run(block, utxo_validation)
     }
 }
 
