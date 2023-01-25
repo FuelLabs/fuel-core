@@ -1,4 +1,4 @@
-// #![deny(unused_crate_dependencies)]
+#![deny(unused_crate_dependencies)]
 
 #[doc(no_inline)]
 pub use fuel_core_chain_config as chain_config;
