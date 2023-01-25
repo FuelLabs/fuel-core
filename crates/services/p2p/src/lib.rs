@@ -16,3 +16,6 @@ pub use libp2p::{
     Multiaddr,
     PeerId,
 };
+
+#[cfg(test)]
+fuel_core_trace::enable_tracing!();
