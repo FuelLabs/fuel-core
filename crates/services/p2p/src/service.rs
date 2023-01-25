@@ -439,6 +439,16 @@ where
     ))
 }
 
+pub(crate) fn to_message_acceptance(
+    acceptance: &GossipsubMessageAcceptance,
+) -> MessageAcceptance {
+    match acceptance {
+        GossipsubMessageAcceptance::Accept => MessageAcceptance::Accept,
+        GossipsubMessageAcceptance::Reject => MessageAcceptance::Reject,
+        GossipsubMessageAcceptance::Ignore => MessageAcceptance::Ignore,
+    }
+}
+
 fn report_message<T: NetworkCodec>(
     p2p_service: &mut FuelP2PService<T>,
     message: GossipsubMessageInfo,
@@ -452,11 +462,7 @@ fn report_message<T: NetworkCodec>(
     let msg_id = message_id.into();
 
     if let Ok(peer_id) = peer_id.try_into() {
-        let acceptance = match acceptance {
-            GossipsubMessageAcceptance::Accept => MessageAcceptance::Accept,
-            GossipsubMessageAcceptance::Reject => MessageAcceptance::Reject,
-            GossipsubMessageAcceptance::Ignore => MessageAcceptance::Ignore,
-        };
+        let acceptance = to_message_acceptance(&acceptance);
 
         match p2p_service.report_message_validation_result(&msg_id, &peer_id, acceptance)
         {
