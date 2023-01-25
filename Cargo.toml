@@ -22,8 +22,8 @@ members = [
   "crates/services/sync",
   "crates/services/txpool",
   "crates/storage",
-  "crates/types",
   "crates/trace",
+  "crates/types",
   "tests",
   "xtask",
 ]
