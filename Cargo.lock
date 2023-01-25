@@ -2624,6 +2624,7 @@ dependencies = [
  "fuel-core-poa",
  "fuel-core-relayer",
  "fuel-core-storage",
+ "fuel-core-trace",
  "fuel-core-txpool",
  "fuel-core-types",
  "futures",
