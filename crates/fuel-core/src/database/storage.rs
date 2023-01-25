@@ -3,6 +3,11 @@ use crate::database::{
     Database,
 };
 use fuel_core_storage::{
+    tables::{
+        FuelBlockMerkleData,
+        FuelBlockMerkleMetadata,
+        FuelBlockSecondaryKeyBlockHeights,
+    },
     Error as StorageError,
     Mappable,
     Result as StorageResult,
@@ -16,11 +21,23 @@ use serde::{
 };
 use std::borrow::Cow;
 
-// impl DatabaseColumn for FuelBlockRoots {
-//     fn column() -> Column {
-//         Column:
-//     }
-// }
+impl DatabaseColumn for FuelBlockSecondaryKeyBlockHeights {
+    fn column() -> Column {
+        Column::FuelBlockSecondaryKeyBlockHeights
+    }
+}
+
+impl DatabaseColumn for FuelBlockMerkleData {
+    fn column() -> Column {
+        Column::FuelBlockMerkleData
+    }
+}
+
+impl DatabaseColumn for FuelBlockMerkleMetadata {
+    fn column() -> Column {
+        Column::FuelBlockMerkleMetadata
+    }
+}
 
 /// The table has a corresponding column in the database.
 trait DatabaseColumn {
@@ -85,5 +102,13 @@ impl ToDatabaseKey for BlockHeight {
 
     fn database_key(&self) -> Self::Type {
         self.to_bytes()
+    }
+}
+
+impl ToDatabaseKey for u64 {
+    type Type = [u8; 8];
+
+    fn database_key(&self) -> Self::Type {
+        self.to_be_bytes()
     }
 }

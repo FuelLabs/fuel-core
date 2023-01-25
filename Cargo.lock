@@ -2248,8 +2248,8 @@ checksum = "2022715d62ab30faffd124d40b76f4134a550a87792276512b18d63272333394"
 
 [[package]]
 name = "fuel-asm"
-version = "0.25.0"
-source = "git+https://github.com/FuelLabs/fuel-vm#0951f603debd6708673fb3bfc4ff5b76d2bb67af"
+version = "0.25.1"
+source = "git+https://github.com/FuelLabs/fuel-vm#2d2c3b51bf679469d1e421b649e831cf9be45fb7"
 dependencies = [
  "fuel-types",
  "serde",
@@ -2666,8 +2666,8 @@ dependencies = [
 
 [[package]]
 name = "fuel-crypto"
-version = "0.25.0"
-source = "git+https://github.com/FuelLabs/fuel-vm#0951f603debd6708673fb3bfc4ff5b76d2bb67af"
+version = "0.25.1"
+source = "git+https://github.com/FuelLabs/fuel-vm#2d2c3b51bf679469d1e421b649e831cf9be45fb7"
 dependencies = [
  "borrown",
  "coins-bip32",
@@ -2684,8 +2684,8 @@ dependencies = [
 
 [[package]]
 name = "fuel-merkle"
-version = "0.25.0"
-source = "git+https://github.com/FuelLabs/fuel-vm#88992d1d0d563c02e7ae9b090da357283921f477"
+version = "0.25.1"
+source = "git+https://github.com/FuelLabs/fuel-vm#2d2c3b51bf679469d1e421b649e831cf9be45fb7"
 dependencies = [
  "digest 0.10.6",
  "fuel-storage",
@@ -2697,13 +2697,13 @@ dependencies = [
 
 [[package]]
 name = "fuel-storage"
-version = "0.25.0"
-source = "git+https://github.com/FuelLabs/fuel-vm#88992d1d0d563c02e7ae9b090da357283921f477"
+version = "0.25.1"
+source = "git+https://github.com/FuelLabs/fuel-vm#2d2c3b51bf679469d1e421b649e831cf9be45fb7"
 
 [[package]]
 name = "fuel-tx"
-version = "0.25.0"
-source = "git+https://github.com/FuelLabs/fuel-vm#0951f603debd6708673fb3bfc4ff5b76d2bb67af"
+version = "0.25.1"
+source = "git+https://github.com/FuelLabs/fuel-vm#2d2c3b51bf679469d1e421b649e831cf9be45fb7"
 dependencies = [
  "derivative",
  "fuel-asm",
@@ -2719,8 +2719,8 @@ dependencies = [
 
 [[package]]
 name = "fuel-types"
-version = "0.25.0"
-source = "git+https://github.com/FuelLabs/fuel-vm#0951f603debd6708673fb3bfc4ff5b76d2bb67af"
+version = "0.25.1"
+source = "git+https://github.com/FuelLabs/fuel-vm#2d2c3b51bf679469d1e421b649e831cf9be45fb7"
 dependencies = [
  "rand 0.8.5",
  "serde",
@@ -2728,8 +2728,8 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.25.0"
-source = "git+https://github.com/FuelLabs/fuel-vm#0951f603debd6708673fb3bfc4ff5b76d2bb67af"
+version = "0.25.1"
+source = "git+https://github.com/FuelLabs/fuel-vm#2d2c3b51bf679469d1e421b649e831cf9be45fb7"
 dependencies = [
  "anyhow",
  "bitflags",

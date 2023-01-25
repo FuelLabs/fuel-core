@@ -1,29 +1,20 @@
 use async_trait::async_trait;
 use fuel_core_storage::{
     transactional::StorageTransaction,
-    Error as StorageError,
-    Mappable,
     Result as StorageResult,
-    StorageInspect,
 };
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         primitives::{
             BlockHeight,
-            BlockId,
             DaBlockHeight,
         },
-    },
-    fuel_merkle::binary::{
-        MerkleTree,
-        Primitive,
     },
     fuel_tx::{
         Bytes32,
         Receipt,
     },
-    merkle::metadata::DenseMerkleMetadata,
     services::{
         executor::{
             ExecutionBlock,
@@ -44,31 +35,6 @@ pub trait BlockProducerDatabase: Send + Sync {
 
     /// Fetch the current block height.
     fn current_block_height(&self) -> StorageResult<BlockHeight>;
-}
-
-pub trait BlockExecutor {
-    fn insert_block(
-        &mut self,
-        block_id: &BlockId,
-        block: &CompressedBlock,
-    ) -> Result<Option<CompressedBlock>, StorageError>;
-}
-
-pub trait BlockMerkleRootStorage {
-    fn load_binary_merkle_metadata(
-        &self,
-        key: &BlockHeight,
-    ) -> Result<DenseMerkleMetadata, StorageError>;
-}
-
-pub trait BinaryMerkleTreeStorage {
-    fn load_binary_merkle_tree<Table>(
-        &self,
-        version: u64,
-    ) -> Result<MerkleTree<Table, &Self>, StorageError>
-    where
-        Table: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
-        Self: StorageInspect<Table, Error = StorageError>;
 }
 
 #[async_trait]

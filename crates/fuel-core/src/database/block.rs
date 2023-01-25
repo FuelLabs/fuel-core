@@ -8,22 +8,16 @@ use crate::{
     },
     state::IterDirection,
 };
-use fuel_core_producer::ports::{
-    BinaryMerkleTreeStorage,
-    BlockExecutor,
-    BlockMerkleRootStorage,
-};
 use fuel_core_storage::{
     not_found,
     tables::{
-        FuelBlockIds,
         FuelBlockMerkleData,
         FuelBlockMerkleMetadata,
+        FuelBlockSecondaryKeyBlockHeights,
         FuelBlocks,
         Transactions,
     },
     Error as StorageError,
-    Mappable,
     Result as StorageResult,
     StorageAsMut,
     StorageAsRef,
@@ -41,18 +35,14 @@ use fuel_core_types::{
             BlockId,
         },
     },
-    fuel_merkle::binary::{
-        MerkleTree,
-        Primitive,
-    },
+    entities::merkle::DenseMerkleMetadata,
+    fuel_merkle::binary::MerkleTree,
     fuel_types::Bytes32,
-    merkle::metadata::DenseMerkleMetadata,
     tai64::Tai64,
 };
 use itertools::Itertools;
 use std::{
     borrow::{
-        Borrow,
         BorrowMut,
         Cow,
     },
@@ -61,35 +51,6 @@ use std::{
         TryInto,
     },
 };
-
-impl StorageInspect<FuelBlockIds> for Database {
-    type Error = StorageError;
-
-    fn get(&self, key: &BlockHeight) -> Result<Option<Cow<BlockId>>, Self::Error> {
-        Database::get(self, &key.to_be_bytes(), Column::FuelBlockIds).map_err(Into::into)
-    }
-
-    fn contains_key(&self, key: &BlockHeight) -> Result<bool, Self::Error> {
-        Database::exists(self, &key.to_be_bytes(), Column::FuelBlockIds)
-            .map_err(Into::into)
-    }
-}
-
-impl StorageMutate<FuelBlockIds> for Database {
-    fn insert(
-        &mut self,
-        key: &BlockHeight,
-        value: &BlockId,
-    ) -> Result<Option<BlockId>, Self::Error> {
-        Database::insert(self, key.to_be_bytes(), Column::FuelBlockIds, *value)
-            .map_err(Into::into)
-    }
-
-    fn remove(&mut self, key: &BlockHeight) -> Result<Option<BlockId>, Self::Error> {
-        Database::remove(self, &key.to_be_bytes(), Column::FuelBlockIds)
-            .map_err(Into::into)
-    }
-}
 
 impl StorageInspect<FuelBlocks> for Database {
     type Error = StorageError;
@@ -112,8 +73,8 @@ impl StorageMutate<FuelBlocks> for Database {
         let prev = Database::insert(self, key.as_slice(), Column::FuelBlocks, value)?;
 
         let height = value.header().height();
-        self.storage::<FuelBlockIds>().insert(height, key)?;
-        let data = key.as_slice();
+        self.storage::<FuelBlockSecondaryKeyBlockHeights>()
+            .insert(height, key)?;
 
         // get latest metadata entry
         let prev_metadata = self
@@ -130,8 +91,11 @@ impl StorageMutate<FuelBlocks> for Database {
 
         let storage = self.borrow_mut();
         let mut tree: MerkleTree<FuelBlockMerkleData, _> =
-            MerkleTree::load(storage, prev_metadata.version)?;
-        tree.push(data)?;
+            MerkleTree::load(storage, prev_metadata.version)
+                .map_err(|err| StorageError::Other(err.into()))?;
+        let data = key.as_slice();
+        tree.push(data)
+            .map_err(|err| StorageError::Other(err.into()))?;
 
         // Generate new metadata for the updated tree
         let version = tree.leaves_count();
@@ -145,93 +109,6 @@ impl StorageMutate<FuelBlocks> for Database {
 
     fn remove(&mut self, key: &BlockId) -> Result<Option<CompressedBlock>, Self::Error> {
         Database::remove(self, key.as_slice(), Column::FuelBlocks).map_err(Into::into)
-    }
-}
-
-impl StorageInspect<FuelBlockMerkleData> for Database {
-    type Error = StorageError;
-
-    fn get(&self, key: &u64) -> Result<Option<Cow<Primitive>>, Self::Error> {
-        Database::get(self, &key.to_be_bytes(), Column::FuelBlockMerkleData)
-            .map_err(Into::into)
-    }
-
-    fn contains_key(&self, key: &u64) -> Result<bool, Self::Error> {
-        Database::exists(self, &key.to_be_bytes(), Column::FuelBlockMerkleData)
-            .map_err(Into::into)
-    }
-}
-
-impl StorageMutate<FuelBlockMerkleData> for Database {
-    fn insert(
-        &mut self,
-        key: &u64,
-        value: &Primitive,
-    ) -> Result<Option<Primitive>, Self::Error> {
-        Database::insert(self, key.to_be_bytes(), Column::FuelBlockMerkleData, value)
-            .map_err(Into::into)
-    }
-
-    fn remove(&mut self, key: &u64) -> Result<Option<Primitive>, Self::Error> {
-        Database::remove(self, &key.to_be_bytes(), Column::FuelBlockMerkleData)
-            .map_err(Into::into)
-    }
-}
-
-impl StorageMutate<FuelBlockMerkleData> for &Database {
-    fn insert(
-        &mut self,
-        key: &u64,
-        value: &Primitive,
-    ) -> Result<Option<Primitive>, Self::Error> {
-        Database::insert(self, key.to_be_bytes(), Column::FuelBlockMerkleData, value)
-            .map_err(Into::into)
-    }
-
-    fn remove(&mut self, key: &u64) -> Result<Option<Primitive>, Self::Error> {
-        Database::remove(self, &key.to_be_bytes(), Column::FuelBlockMerkleData)
-            .map_err(Into::into)
-    }
-}
-
-impl StorageInspect<FuelBlockMerkleMetadata> for Database {
-    type Error = StorageError;
-
-    fn get(
-        &self,
-        key: &BlockHeight,
-    ) -> Result<Option<Cow<DenseMerkleMetadata>>, Self::Error> {
-        Database::get(self, &key.to_be_bytes(), Column::FuelBlockMerkleMetadata)
-            .map_err(Into::into)
-    }
-
-    fn contains_key(&self, key: &BlockHeight) -> Result<bool, Self::Error> {
-        Database::exists(self, &key.to_be_bytes(), Column::FuelBlockMerkleMetadata)
-            .map_err(Into::into)
-    }
-}
-
-impl StorageMutate<FuelBlockMerkleMetadata> for Database {
-    fn insert(
-        &mut self,
-        key: &BlockHeight,
-        value: &DenseMerkleMetadata,
-    ) -> Result<Option<DenseMerkleMetadata>, Self::Error> {
-        Database::insert(
-            self,
-            &key.to_be_bytes(),
-            Column::FuelBlockMerkleMetadata,
-            value,
-        )
-        .map_err(Into::into)
-    }
-
-    fn remove(
-        &mut self,
-        key: &BlockHeight,
-    ) -> Result<Option<DenseMerkleMetadata>, Self::Error> {
-        Database::remove(self, &key.to_be_bytes(), Column::FuelBlockMerkleMetadata)
-            .map_err(Into::into)
     }
 }
 
@@ -261,8 +138,12 @@ impl Database {
     }
 
     pub fn get_block_id(&self, height: &BlockHeight) -> StorageResult<Option<BlockId>> {
-        Database::get(self, height.database_key().as_ref(), Column::FuelBlockIds)
-            .map_err(Into::into)
+        Database::get(
+            self,
+            height.database_key().as_ref(),
+            Column::FuelBlockSecondaryKeyBlockHeights,
+        )
+        .map_err(Into::into)
     }
 
     pub fn all_block_ids(
@@ -272,7 +153,7 @@ impl Database {
     ) -> impl Iterator<Item = DatabaseResult<(BlockHeight, BlockId)>> + '_ {
         let start = start.map(|b| b.to_bytes().to_vec());
         self.iter_all::<Vec<u8>, BlockId>(
-            Column::FuelBlockIds,
+            Column::FuelBlockSecondaryKeyBlockHeights,
             None,
             start,
             Some(direction),
@@ -290,7 +171,7 @@ impl Database {
 
     pub fn ids_of_genesis_block(&self) -> DatabaseResult<(BlockHeight, BlockId)> {
         self.iter_all(
-            Column::FuelBlockIds,
+            Column::FuelBlockSecondaryKeyBlockHeights,
             None,
             None,
             Some(IterDirection::Forward),
@@ -307,7 +188,7 @@ impl Database {
     pub fn ids_of_latest_block(&self) -> DatabaseResult<Option<(BlockHeight, BlockId)>> {
         let ids = self
             .iter_all::<Vec<u8>, BlockId>(
-                Column::FuelBlockIds,
+                Column::FuelBlockSecondaryKeyBlockHeights,
                 None,
                 None,
                 Some(IterDirection::Reverse),
@@ -358,45 +239,6 @@ impl Database {
             .ok_or(not_found!(FuelBlocks))
             .map(Cow::into_owned)?;
         Ok(metadata.root.into())
-    }
-}
-
-impl BlockExecutor for Database {
-    fn insert_block(
-        &mut self,
-        block_id: &BlockId,
-        block: &CompressedBlock,
-    ) -> Result<Option<CompressedBlock>, StorageError> {
-        self.storage::<FuelBlocks>().insert(block_id, block)
-    }
-}
-
-impl BlockMerkleRootStorage for Database {
-    fn load_binary_merkle_metadata(
-        &self,
-        key: &BlockHeight,
-    ) -> Result<DenseMerkleMetadata, StorageError> {
-        let metadata = self
-            .storage::<FuelBlockMerkleMetadata>()
-            .get(&key)?
-            .unwrap_or_default()
-            .into_owned();
-        Ok(metadata)
-    }
-}
-
-impl BinaryMerkleTreeStorage for Database {
-    fn load_binary_merkle_tree<Table>(
-        &self,
-        version: u64,
-    ) -> Result<MerkleTree<Table, &Self>, StorageError>
-    where
-        Table: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
-        Self: StorageInspect<Table, Error = StorageError>,
-    {
-        let storage = self.borrow();
-        let tree = MerkleTree::load(storage, version).unwrap();
-        Ok(tree)
     }
 }
 

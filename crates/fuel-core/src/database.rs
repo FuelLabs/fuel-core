@@ -72,7 +72,7 @@ pub mod transactional;
 pub mod transactions;
 pub mod vm_database;
 
-/// Database tables column ids.
+/// Database tables column ids to teh corresponding [`fuel_core_storage::Mappable`] table.
 #[repr(u32)]
 #[derive(
     Copy, Clone, Debug, strum_macros::EnumCount, PartialEq, Eq, enum_iterator::Sequence,
@@ -104,17 +104,17 @@ pub enum Column {
     Receipts = 11,
     /// See [`FuelBlocks`](fuel_core_storage::tables::FuelBlocks)
     FuelBlocks = 12,
-    /// Maps fuel block height to fuel block id
-    FuelBlockIds = 13,
+    /// See [`FuelBlockSecondaryKeyBlockHeights`](fuel_core_storage::tables::FuelBlockSecondaryKeyBlockHeights)
+    FuelBlockSecondaryKeyBlockHeights = 13,
     /// See [`Messages`](fuel_core_storage::tables::Messages)
     Messages = 14,
     /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
     OwnedMessageIds = 15,
-    /// The column that stores the consensus metadata associated with a finalized fuel block
+    /// See [`SealedBlockConsensus`](fuel_core_storage::tables::SealedBlockConsensus)
     FuelBlockConsensus = 16,
-    /// Merklized Fuel Block data
+    /// See [`FuelBlockMerkleData`](fuel_core_storage::tables::FuelBlockMerkleData)
     FuelBlockMerkleData = 17,
-    /// Merklized Fuel Block metadata
+    /// See [`FuelBlockMerkleMetadata`](fuel_core_storage::tables::FuelBlockMerkleMetadata)
     FuelBlockMerkleMetadata = 18,
 }
 

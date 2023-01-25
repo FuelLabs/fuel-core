@@ -1,6 +1,4 @@
 use crate::ports::{
-    BinaryMerkleTreeStorage,
-    BlockExecutor,
     BlockProducerDatabase,
     Executor,
     Relayer,
@@ -13,9 +11,7 @@ use fuel_core_storage::{
         StorageTransaction,
         Transaction,
     },
-    Mappable,
     Result as StorageResult,
-    StorageAsMut,
 };
 use fuel_core_types::{
     blockchain::{
@@ -233,10 +229,7 @@ use fuel_core_types::{
     blockchain::primitives::BlockId,
     fuel_crypto::Message,
     fuel_merkle::{
-        binary::{
-            MerkleTree,
-            Primitive,
-        },
+        binary::Primitive,
         storage::{
             StorageInspect,
             StorageMutate,
@@ -328,44 +321,5 @@ impl StorageMutate<FuelBlockMerkleData> for &MockDb {
         let mut merklized_blocks = self.merklized_blocks.lock().unwrap();
 
         Ok(merklized_blocks.remove(&key))
-    }
-}
-
-impl BinaryMerkleTreeStorage for MockDb {
-    fn load_binary_merkle_tree<Table>(
-        &self,
-        version: u64,
-    ) -> Result<MerkleTree<Table, &Self>, StorageError>
-    where
-        Table: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
-        Self: StorageInspect<Table, Error = StorageError>,
-    {
-        let tree = MerkleTree::load(self, version).unwrap();
-        Ok(tree)
-    }
-}
-
-impl BlockExecutor for MockDb {
-    fn insert_block(
-        &mut self,
-        block_id: &BlockId,
-        block: &CompressedBlock,
-    ) -> Result<Option<CompressedBlock>, StorageError> {
-        let prev = self
-            .storage::<FuelBlocks>()
-            .insert(block_id, block)
-            .unwrap();
-
-        let mut blocks = self.blocks.lock().unwrap();
-        blocks.insert(*block.header().height(), block.clone());
-
-        // Get the number of Merklized blocks
-        let version = self.merklized_blocks.lock().unwrap().len();
-        let mut tree = self
-            .load_binary_merkle_tree::<FuelBlockMerkleData>(version as u64)
-            .unwrap();
-        tree.push(block_id.as_slice()).unwrap();
-
-        Ok(prev)
     }
 }

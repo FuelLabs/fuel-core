@@ -1,4 +1,4 @@
-//! Types for Merkle metadata
+//! Types for Merkle trees
 
 use crate::{
     fuel_merkle::binary::in_memory,

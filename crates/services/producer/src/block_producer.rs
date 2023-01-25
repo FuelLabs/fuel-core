@@ -1,21 +1,13 @@
 use crate::{
     ports,
-    ports::{
-        BinaryMerkleTreeStorage,
-        BlockProducerDatabase,
-    },
+    ports::BlockProducerDatabase,
     Config,
 };
 use anyhow::{
     anyhow,
     Context,
 };
-use fuel_core_storage::{
-    tables::FuelBlockMerkleData,
-    transactional::StorageTransaction,
-    Error as StorageError,
-    StorageMutate,
-};
+use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
     blockchain::{
         block::PartialFuelBlock,
@@ -84,10 +76,7 @@ pub struct Producer<Database> {
 
 impl<Database> Producer<Database>
 where
-    Database: BlockProducerDatabase
-        + BinaryMerkleTreeStorage
-        + StorageMutate<FuelBlockMerkleData, Error = StorageError>
-        + 'static,
+    Database: BlockProducerDatabase + 'static,
 {
     /// Produces and execute block for the specified height
     pub async fn produce_and_execute_block(

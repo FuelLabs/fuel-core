@@ -253,12 +253,6 @@ where
     executor_db(ok(0), ok(Some(Default::default())), 0)
     => Err(Error::NotUnique(0u32.into()))
 )]
-#[test_case(
-    genesis(0),
-    underlying_db(not_found),
-    executor_db(ok(0), ok(None), 0)
-    => Err(Error::NotUnique(0u32.into()))
-)]
 fn commit_result_genesis(
     sealed_block: SealedBlock,
     underlying_db: impl Fn() -> MockDatabase,
@@ -319,19 +313,7 @@ fn commit_result_genesis(
 #[test_case(
     poa_block(113),
     underlying_db(ok(112)),
-    executor_db(ok(113), ok(None), 0)
-    => Err(Error::NotUnique(113u32.into()))
-)]
-#[test_case(
-    poa_block(113),
-    underlying_db(ok(112)),
     executor_db(ok(113), storage_failure, 0)
-    => Err(storage_failure_error())
-)]
-#[test_case(
-    poa_block(113),
-    underlying_db(ok(112)),
-    executor_db(ok(113), ok(None), 0)
     => Err(storage_failure_error())
 )]
 fn commit_result_and_execute_and_commit_poa(

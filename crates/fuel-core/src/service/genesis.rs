@@ -10,7 +10,6 @@ use fuel_core_chain_config::{
 };
 use fuel_core_executor::refs::ContractRef;
 use fuel_core_importer::Importer;
-use fuel_core_producer::ports::BlockExecutor;
 use fuel_core_storage::{
     tables::{
         Coins,
@@ -19,6 +18,7 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
+        FuelBlocks,
         Messages,
     },
     transactional::Transactional,
@@ -132,7 +132,9 @@ fn import_genesis_block(
     );
 
     let block_id = block.id();
-    database.insert_block(&block_id, &block.compress())?;
+    database
+        .storage::<FuelBlocks>()
+        .insert(&block_id, &block.compress())?;
 
     let consensus = Consensus::Genesis(genesis);
     let block = SealedBlock {

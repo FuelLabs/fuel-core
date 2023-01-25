@@ -8,11 +8,11 @@ use crate::{
     service::Config,
 };
 use fuel_core_executor::refs::ContractRef;
-use fuel_core_producer::ports::BlockExecutor;
 use fuel_core_storage::{
     tables::{
         Coins,
         ContractsLatestUtxo,
+        FuelBlocks,
         Messages,
         Receipts,
         Transactions,
@@ -265,7 +265,8 @@ impl Executor {
 
         block_db_transaction
             .deref_mut()
-            .insert_block(&finalized_block_id, &result.block.compress())?;
+            .storage::<FuelBlocks>()
+            .insert(&finalized_block_id, &result.block.compress())?;
 
         // Get the complete fuel block.
         Ok(UncommittedResult::new(
