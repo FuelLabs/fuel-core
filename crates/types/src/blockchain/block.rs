@@ -19,10 +19,7 @@ use crate::{
         TxId,
         UniqueIdentifier,
     },
-    fuel_types::{
-        bytes::SerializableVec,
-        MessageId,
-    },
+    fuel_types::MessageId,
 };
 
 /// Fuel block with all transaction data included
@@ -67,15 +64,11 @@ impl Block<Transaction> {
     /// the ids from the receipts of messages outputs.
     pub fn new(
         header: PartialBlockHeader,
-        mut transactions: Vec<Transaction>,
+        transactions: Vec<Transaction>,
         message_ids: &[MessageId],
     ) -> Self {
-        // I think this is safe as it doesn't appear that any of the reads actually mutate the data.
-        // Alternatively we can clone to be safe.
-        let transaction_ids: Vec<_> =
-            transactions.iter_mut().map(|tx| tx.to_bytes()).collect();
         Self {
-            header: header.generate(&transaction_ids[..], message_ids),
+            header: header.generate(&transactions, message_ids),
             transactions,
         }
     }
@@ -85,16 +78,12 @@ impl Block<Transaction> {
     /// This will fail if the transactions don't match the header.
     pub fn try_from_executed(
         header: BlockHeader,
-        mut transactions: Vec<Transaction>,
+        transactions: Vec<Transaction>,
     ) -> Option<Self> {
-        let transaction_ids: Vec<_> =
-            transactions.iter_mut().map(|tx| tx.to_bytes()).collect();
-        header
-            .validate_transactions(&transaction_ids[..])
-            .then_some(Self {
-                header,
-                transactions,
-            })
+        header.validate_transactions(&transactions).then_some(Self {
+            header,
+            transactions,
+        })
     }
 
     /// Compresses the fuel block and replaces transactions with hashes.

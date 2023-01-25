@@ -10,7 +10,6 @@ use crate::{
         },
         Cacheable,
         Chargeable,
-        Checked,
         ConsensusParameters,
         Create,
         Input,
@@ -27,6 +26,7 @@ use crate::{
         MessageId,
     },
     fuel_vm::{
+        checked_transaction::Checked,
         Interpreter,
         PredicateStorage,
         ProgramState,
@@ -132,6 +132,7 @@ impl PoolTransaction {
                     params,
                     gas_costs,
                 )
+                .is_ok()
             }
             PoolTransaction::Create(create) => {
                 Interpreter::<PredicateStorage>::check_predicates(
@@ -139,6 +140,7 @@ impl PoolTransaction {
                     params,
                     gas_costs,
                 )
+                .is_ok()
             }
         }
     }
