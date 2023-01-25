@@ -90,7 +90,6 @@ async fn can_produce_next_block() {
         blocks: Arc::new(Mutex::new(
             vec![(prev_height, previous_block)].into_iter().collect(),
         )),
-        ..Default::default()
     };
 
     let ctx = TestContext::default_from_db(db);
@@ -141,7 +140,6 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
         blocks: Arc::new(Mutex::new(
             vec![(prev_height, previous_block)].into_iter().collect(),
         )),
-        ..Default::default()
     };
     let ctx = TestContext {
         relayer: MockRelayer {
@@ -214,7 +212,6 @@ impl TestContext {
             blocks: Arc::new(Mutex::new(
                 vec![(genesis_height, genesis_block)].into_iter().collect(),
             )),
-            ..Default::default()
         };
         Self::default_from_db(db)
     }

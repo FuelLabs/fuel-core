@@ -1,6 +1,12 @@
 use crate::{
     database::{
-        storage::ToDatabaseKey,
+        storage::{
+            DenseMerkleMetadata,
+            FuelBlockMerkleData,
+            FuelBlockMerkleMetadata,
+            FuelBlockSecondaryKeyBlockHeights,
+            ToDatabaseKey,
+        },
         Column,
         Database,
         Error as DatabaseError,
@@ -11,9 +17,6 @@ use crate::{
 use fuel_core_storage::{
     not_found,
     tables::{
-        FuelBlockMerkleData,
-        FuelBlockMerkleMetadata,
-        FuelBlockSecondaryKeyBlockHeights,
         FuelBlocks,
         Transactions,
     },
@@ -35,7 +38,6 @@ use fuel_core_types::{
             BlockId,
         },
     },
-    entities::merkle::DenseMerkleMetadata,
     fuel_merkle::binary::MerkleTree,
     fuel_types::Bytes32,
     tai64::Tai64,
@@ -102,13 +104,27 @@ impl StorageMutate<FuelBlocks> for Database {
         let root = tree.root().into();
         let metadata = DenseMerkleMetadata { version, root };
         self.storage::<FuelBlockMerkleMetadata>()
-            .insert(&height, &metadata)?;
+            .insert(height, &metadata)?;
 
         Ok(prev)
     }
 
     fn remove(&mut self, key: &BlockId) -> Result<Option<CompressedBlock>, Self::Error> {
-        Database::remove(self, key.as_slice(), Column::FuelBlocks).map_err(Into::into)
+        let prev: Option<CompressedBlock> =
+            Database::remove(self, key.as_slice(), Column::FuelBlocks)?;
+
+        if let Some(block) = &prev {
+            let height = block.header().height();
+            let _ = self
+                .storage::<FuelBlockSecondaryKeyBlockHeights>()
+                .remove(height);
+            // We can't clean up `MerkleTree<FuelBlockMerkleData>`.
+            // But if we plan to insert a new block, it will override old values in the
+            // `FuelBlockMerkleData` table.
+            let _ = self.storage::<FuelBlockMerkleMetadata>().remove(height);
+        }
+
+        Ok(prev)
     }
 }
 
@@ -229,6 +245,8 @@ impl Database {
         }
     }
 
+    // TODO: Move this implementation into `fuel_core_storage::MerkleRootStorage` trait
+    //  impl section. But first we need to make `root(&self)` instead of `root(&mut self)`.
     pub fn block_header_merkle_root(
         &self,
         height: &BlockHeight,
@@ -238,7 +256,7 @@ impl Database {
             .get(height)?
             .ok_or(not_found!(FuelBlocks))
             .map(Cow::into_owned)?;
-        Ok(metadata.root.into())
+        Ok(metadata.root)
     }
 }
 

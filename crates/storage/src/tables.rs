@@ -6,17 +6,12 @@ use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
-        primitives::{
-            BlockHeight,
-            BlockId,
-        },
+        primitives::BlockId,
     },
     entities::{
         coin::CompressedCoin,
-        merkle::DenseMerkleMetadata,
         message::Message,
     },
-    fuel_merkle::binary,
     fuel_tx::{
         Receipt,
         Transaction,
@@ -47,39 +42,6 @@ impl Mappable for FuelBlocks {
     type OwnedKey = BlockId;
     type Value = Self::OwnedValue;
     type OwnedValue = CompressedBlock;
-}
-
-/// The table of fuel block's secondary key - `BlockHeight`.
-/// It links the `BlockHeight` to corresponding `BlockId`.
-pub struct FuelBlockSecondaryKeyBlockHeights;
-
-impl Mappable for FuelBlockSecondaryKeyBlockHeights {
-    /// Secondary key - `BlockHeight`.
-    type Key = BlockHeight;
-    type OwnedKey = Self::Key;
-    /// Primary key - `BlockId`.
-    type Value = BlockId;
-    type OwnedValue = Self::Value;
-}
-
-/// The table of BMT MMR data for the fuel blocks.
-pub struct FuelBlockMerkleData;
-
-impl Mappable for FuelBlockMerkleData {
-    type Key = u64;
-    type OwnedKey = Self::Key;
-    type Value = binary::Primitive;
-    type OwnedValue = Self::Value;
-}
-
-/// The metadata table for [`FuelBlockMerkleData`] table.
-pub struct FuelBlockMerkleMetadata;
-
-impl Mappable for FuelBlockMerkleMetadata {
-    type Key = BlockHeight;
-    type OwnedKey = Self::Key;
-    type Value = DenseMerkleMetadata;
-    type OwnedValue = Self::Value;
 }
 
 /// The latest UTXO id of the contract. The contract's UTXO represents the unique id of the state.

@@ -12,7 +12,6 @@ use fuel_core_chain_config::{
     ContractConfig,
     MessageConfig,
 };
-use fuel_core_executor::refs::ContractStorageTrait;
 use fuel_core_storage::{
     transactional::{
         StorageTransaction,
@@ -72,7 +71,7 @@ pub mod transactional;
 pub mod transactions;
 pub mod vm_database;
 
-/// Database tables column ids to teh corresponding [`fuel_core_storage::Mappable`] table.
+/// Database tables column ids to the corresponding [`fuel_core_storage::Mappable`] table.
 #[repr(u32)]
 #[derive(
     Copy, Clone, Debug, strum_macros::EnumCount, PartialEq, Eq, enum_iterator::Sequence,
@@ -104,7 +103,7 @@ pub enum Column {
     Receipts = 11,
     /// See [`FuelBlocks`](fuel_core_storage::tables::FuelBlocks)
     FuelBlocks = 12,
-    /// See [`FuelBlockSecondaryKeyBlockHeights`](fuel_core_storage::tables::FuelBlockSecondaryKeyBlockHeights)
+    /// See [`FuelBlockSecondaryKeyBlockHeights`](storage::FuelBlockSecondaryKeyBlockHeights)
     FuelBlockSecondaryKeyBlockHeights = 13,
     /// See [`Messages`](fuel_core_storage::tables::Messages)
     Messages = 14,
@@ -112,9 +111,9 @@ pub enum Column {
     OwnedMessageIds = 15,
     /// See [`SealedBlockConsensus`](fuel_core_storage::tables::SealedBlockConsensus)
     FuelBlockConsensus = 16,
-    /// See [`FuelBlockMerkleData`](fuel_core_storage::tables::FuelBlockMerkleData)
+    /// See [`FuelBlockMerkleData`](storage::FuelBlockMerkleData)
     FuelBlockMerkleData = 17,
-    /// See [`FuelBlockMerkleMetadata`](fuel_core_storage::tables::FuelBlockMerkleMetadata)
+    /// See [`FuelBlockMerkleMetadata`](storage::FuelBlockMerkleMetadata)
     FuelBlockMerkleMetadata = 18,
 }
 
@@ -269,11 +268,6 @@ impl AsRef<Database> for Database {
     fn as_ref(&self) -> &Database {
         self
     }
-}
-
-/// Implemented to satisfy: `GenesisCommitment for ContractRef<&'a mut Database>`
-impl ContractStorageTrait for Database {
-    type InnerError = StorageError;
 }
 
 /// Construct an ephemeral database

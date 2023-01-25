@@ -161,7 +161,12 @@ where
         }
         Ok(res)
     }
+}
 
+impl<Database> Producer<Database>
+where
+    Database: BlockProducerDatabase,
+{
     /// Create the header for a new block at the provided height
     async fn new_header(
         &self,

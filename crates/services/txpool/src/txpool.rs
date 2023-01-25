@@ -216,7 +216,7 @@ where
         Vec::new()
     }
 
-    /// Removes transaction from `TxPool` with assumption that it is committed into teh blockchain.
+    /// Removes transaction from `TxPool` with assumption that it is committed into the blockchain.
     // TODO: Don't remove recursively dependent transactions on block commit.
     //  The same logic should be fixed in the `select_transactions`.
     //  This method is used during `select_transactions`, so we need to handle the case

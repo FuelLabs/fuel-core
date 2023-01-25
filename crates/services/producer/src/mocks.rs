@@ -6,7 +6,6 @@ use crate::ports::{
 };
 use fuel_core_storage::{
     not_found,
-    tables::FuelBlockMerkleData,
     transactional::{
         StorageTransaction,
         Transaction,
@@ -195,9 +194,6 @@ impl Executor<MockDb> for FailingMockExecutor {
 #[derive(Clone, Default, Debug)]
 pub struct MockDb {
     pub blocks: Arc<Mutex<HashMap<BlockHeight, CompressedBlock>>>,
-    pub blocks_by_id: Arc<Mutex<HashMap<BlockId, CompressedBlock>>>,
-    pub merklized_blocks: Arc<Mutex<HashMap<u64, Primitive>>>,
-    pub messages: Arc<Mutex<HashMap<MessageId, Message>>>,
 }
 
 impl BlockProducerDatabase for MockDb {
@@ -218,108 +214,5 @@ impl BlockProducerDatabase for MockDb {
         let blocks = self.blocks.lock().unwrap();
 
         Ok(blocks.keys().max().cloned().unwrap_or_default())
-    }
-}
-
-use fuel_core_storage::{
-    tables::FuelBlocks,
-    Error as StorageError,
-};
-use fuel_core_types::{
-    blockchain::primitives::BlockId,
-    fuel_crypto::Message,
-    fuel_merkle::{
-        binary::Primitive,
-        storage::{
-            StorageInspect,
-            StorageMutate,
-        },
-    },
-    fuel_types::MessageId,
-};
-
-impl StorageInspect<FuelBlocks> for MockDb {
-    type Error = StorageError;
-
-    fn get(&self, key: &BlockId) -> Result<Option<Cow<CompressedBlock>>, Self::Error> {
-        let blocks = self.blocks_by_id.lock().unwrap();
-
-        Ok(blocks.get(&key).cloned().map(Cow::Owned))
-    }
-
-    fn contains_key(&self, key: &BlockId) -> Result<bool, Self::Error> {
-        let blocks = self.blocks_by_id.lock().unwrap();
-
-        Ok(blocks.contains_key(&key))
-    }
-}
-
-impl StorageMutate<FuelBlocks> for MockDb {
-    fn insert(
-        &mut self,
-        key: &BlockId,
-        value: &CompressedBlock,
-    ) -> Result<Option<CompressedBlock>, Self::Error> {
-        let mut blocks = self.blocks_by_id.lock().unwrap();
-
-        Ok(blocks.insert(*key, value.clone()))
-    }
-
-    fn remove(&mut self, key: &BlockId) -> Result<Option<CompressedBlock>, Self::Error> {
-        let mut blocks = self.blocks_by_id.lock().unwrap();
-
-        Ok(blocks.remove(&key))
-    }
-}
-
-impl StorageInspect<FuelBlockMerkleData> for MockDb {
-    type Error = StorageError;
-
-    fn get(&self, key: &u64) -> Result<Option<Cow<Primitive>>, Self::Error> {
-        let merklized_blocks = self.merklized_blocks.lock().unwrap();
-
-        Ok(merklized_blocks.get(&key).cloned().map(Cow::Owned))
-    }
-
-    fn contains_key(&self, key: &u64) -> Result<bool, Self::Error> {
-        let merklized_blocks = self.merklized_blocks.lock().unwrap();
-
-        Ok(merklized_blocks.contains_key(key))
-    }
-}
-
-impl StorageMutate<FuelBlockMerkleData> for MockDb {
-    fn insert(
-        &mut self,
-        key: &u64,
-        value: &Primitive,
-    ) -> Result<Option<Primitive>, Self::Error> {
-        let mut merklized_blocks = self.merklized_blocks.lock().unwrap();
-
-        Ok(merklized_blocks.insert(*key, *value))
-    }
-
-    fn remove(&mut self, key: &u64) -> Result<Option<Primitive>, Self::Error> {
-        let mut merklized_blocks = self.merklized_blocks.lock().unwrap();
-
-        Ok(merklized_blocks.remove(&key))
-    }
-}
-
-impl StorageMutate<FuelBlockMerkleData> for &MockDb {
-    fn insert(
-        &mut self,
-        key: &u64,
-        value: &Primitive,
-    ) -> Result<Option<Primitive>, Self::Error> {
-        let mut merklized_blocks = self.merklized_blocks.lock().unwrap();
-
-        Ok(merklized_blocks.insert(*key, *value))
-    }
-
-    fn remove(&mut self, key: &u64) -> Result<Option<Primitive>, Self::Error> {
-        let mut merklized_blocks = self.merklized_blocks.lock().unwrap();
-
-        Ok(merklized_blocks.remove(&key))
     }
 }

@@ -135,7 +135,6 @@ fn import_genesis_block(
     database
         .storage::<FuelBlocks>()
         .insert(&block_id, &block.compress())?;
-
     let consensus = Consensus::Genesis(genesis);
     let block = SealedBlock {
         entity: block,

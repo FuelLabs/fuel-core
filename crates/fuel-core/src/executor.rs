@@ -263,6 +263,7 @@ impl Executor {
 
         // ------------ GraphQL API Functionality   END ------------
 
+        // insert block into database
         block_db_transaction
             .deref_mut()
             .storage::<FuelBlocks>()
