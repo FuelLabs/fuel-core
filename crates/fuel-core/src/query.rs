@@ -3,8 +3,7 @@ mod block;
 mod chain;
 mod coin;
 mod contract;
-// TODO: Rename into `message` in a separate PR later.
-mod message_proof;
+mod message;
 mod subscriptions;
 mod tx;
 
@@ -14,6 +13,6 @@ pub use block::*;
 pub use chain::*;
 pub use coin::*;
 pub use contract::*;
-pub use message_proof::*;
+pub use message::*;
 pub(crate) use subscriptions::*;
 pub use tx::*;
