@@ -9,17 +9,17 @@ use crate::{
     state::IterDirection,
 };
 use fuel_core_producer::ports::{
-    BinaryMerkleMetadataStorage,
     BinaryMerkleTreeStorage,
     BlockExecutor,
+    BlockMerkleRootStorage,
 };
 use fuel_core_storage::{
     not_found,
     tables::{
         FuelBlockIds,
         FuelBlockMerkleData,
+        FuelBlockMerkleMetadata,
         FuelBlocks,
-        FuelDenseMerkleMetadata,
         Transactions,
     },
     Error as StorageError,
@@ -45,6 +45,7 @@ use fuel_core_types::{
         MerkleTree,
         Primitive,
     },
+    fuel_types::Bytes32,
     merkle::metadata::DenseMerkleMetadata,
     tai64::Tai64,
 };
@@ -52,6 +53,7 @@ use itertools::Itertools;
 use std::{
     borrow::{
         Borrow,
+        BorrowMut,
         Cow,
     },
     convert::{
@@ -107,8 +109,24 @@ impl StorageMutate<FuelBlocks> for Database {
         key: &BlockId,
         value: &CompressedBlock,
     ) -> Result<Option<CompressedBlock>, Self::Error> {
-        Database::insert(self, key.as_slice(), Column::FuelBlocks, value)
-            .map_err(Into::into)
+        let prev = Database::insert(self, key.as_slice(), Column::FuelBlocks, value)?;
+
+        let height = value.header().height();
+        self.storage::<FuelBlockIds>().insert(height, key)?;
+        let data = key.as_slice();
+        let storage = self.borrow_mut();
+        let mut tree: MerkleTree<FuelBlockMerkleData, _> =
+            MerkleTree::load(storage, (*height).into())?;
+        tree.push(data)?;
+
+        // Generate new metadata for the updated tree
+        let version = tree.leaves_count();
+        let root = tree.root().into();
+        let metadata = DenseMerkleMetadata { version, root };
+        self.storage::<FuelBlockMerkleMetadata>()
+            .insert(&version.into(), &metadata)?;
+
+        Ok(prev)
     }
 
     fn remove(&mut self, key: &BlockId) -> Result<Option<CompressedBlock>, Self::Error> {
@@ -162,35 +180,43 @@ impl StorageMutate<FuelBlockMerkleData> for &Database {
     }
 }
 
-impl StorageInspect<FuelDenseMerkleMetadata> for Database {
+impl StorageInspect<FuelBlockMerkleMetadata> for Database {
     type Error = StorageError;
 
-    fn get(&self, key: &String) -> Result<Option<Cow<DenseMerkleMetadata>>, Self::Error> {
-        Database::get(self, key.as_bytes(), Column::FuelBlockMerkleMetadata)
+    fn get(
+        &self,
+        key: &BlockHeight,
+    ) -> Result<Option<Cow<DenseMerkleMetadata>>, Self::Error> {
+        Database::get(self, &key.to_be_bytes(), Column::FuelBlockMerkleMetadata)
             .map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &String) -> Result<bool, Self::Error> {
-        Database::exists(self, key.as_bytes(), Column::FuelBlockMerkleMetadata)
+    fn contains_key(&self, key: &BlockHeight) -> Result<bool, Self::Error> {
+        Database::exists(self, &key.to_be_bytes(), Column::FuelBlockMerkleMetadata)
             .map_err(Into::into)
     }
 }
 
-impl StorageMutate<FuelDenseMerkleMetadata> for Database {
+impl StorageMutate<FuelBlockMerkleMetadata> for Database {
     fn insert(
         &mut self,
-        key: &String,
+        key: &BlockHeight,
         value: &DenseMerkleMetadata,
     ) -> Result<Option<DenseMerkleMetadata>, Self::Error> {
-        Database::insert(self, key.as_bytes(), Column::FuelBlockMerkleMetadata, value)
-            .map_err(Into::into)
+        Database::insert(
+            self,
+            &key.to_be_bytes(),
+            Column::FuelBlockMerkleMetadata,
+            value,
+        )
+        .map_err(Into::into)
     }
 
     fn remove(
         &mut self,
-        key: &String,
+        key: &BlockHeight,
     ) -> Result<Option<DenseMerkleMetadata>, Self::Error> {
-        Database::remove(self, key.as_bytes(), Column::FuelBlockMerkleMetadata)
+        Database::remove(self, &key.to_be_bytes(), Column::FuelBlockMerkleMetadata)
             .map_err(Into::into)
     }
 }
@@ -307,6 +333,18 @@ impl Database {
             Ok(None)
         }
     }
+
+    pub fn block_header_merkle_root(
+        &self,
+        height: &BlockHeight,
+    ) -> StorageResult<Bytes32> {
+        let metadata = self
+            .storage::<FuelBlockMerkleMetadata>()
+            .get(height)?
+            .ok_or(not_found!(FuelBlocks))
+            .map(Cow::into_owned)?;
+        Ok(metadata.root.into())
+    }
 }
 
 impl BlockExecutor for Database {
@@ -314,49 +352,22 @@ impl BlockExecutor for Database {
         &mut self,
         block_id: &BlockId,
         block: &CompressedBlock,
-    ) -> Result<(), StorageError> {
-        self.storage::<FuelBlockIds>()
-            .insert(block.header().height(), block_id)?;
-        self.storage::<FuelBlocks>().insert(block_id, block)?;
-
-        let data = block_id.as_slice();
-        let metadata =
-            self.load_binary_merkle_metadata(FUEL_BLOCK_MERKLE_METADATA_KEY)?;
-        let mut tree =
-            self.load_binary_merkle_tree::<FuelBlockMerkleData>(metadata.version)?;
-        tree.push(data).unwrap();
-
-        // Generate new metadata for the updated tree
-        let version = tree.leaves_count();
-        let root = tree.root().into();
-        let metadata = DenseMerkleMetadata { version, root };
-        self.save_binary_merkle_metadata(FUEL_BLOCK_MERKLE_METADATA_KEY, &metadata)?;
-
-        Ok(())
+    ) -> Result<Option<CompressedBlock>, StorageError> {
+        self.storage::<FuelBlocks>().insert(block_id, block)
     }
 }
 
-impl BinaryMerkleMetadataStorage for Database {
+impl BlockMerkleRootStorage for Database {
     fn load_binary_merkle_metadata(
         &self,
-        key: &str,
+        key: &BlockHeight,
     ) -> Result<DenseMerkleMetadata, StorageError> {
         let metadata = self
-            .storage::<FuelDenseMerkleMetadata>()
-            .get(&key.into())?
+            .storage::<FuelBlockMerkleMetadata>()
+            .get(&key)?
             .unwrap_or_default()
             .into_owned();
         Ok(metadata)
-    }
-
-    fn save_binary_merkle_metadata(
-        &mut self,
-        key: &str,
-        metadata: &DenseMerkleMetadata,
-    ) -> Result<(), StorageError> {
-        self.storage::<FuelDenseMerkleMetadata>()
-            .insert(&key.into(), &metadata)?;
-        Ok(())
     }
 }
 
@@ -374,5 +385,3 @@ impl BinaryMerkleTreeStorage for Database {
         Ok(tree)
     }
 }
-
-const FUEL_BLOCK_MERKLE_METADATA_KEY: &str = "FuelBlocks";

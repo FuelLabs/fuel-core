@@ -3,7 +3,6 @@ use crate::database::{
     Database,
 };
 use fuel_core_storage::{
-    tables::FuelBlockRoots,
     Error as StorageError,
     Mappable,
     Result as StorageResult,
@@ -17,11 +16,11 @@ use serde::{
 };
 use std::borrow::Cow;
 
-impl DatabaseColumn for FuelBlockRoots {
-    fn column() -> Column {
-        Column::BlockHeaderMerkle
-    }
-}
+// impl DatabaseColumn for FuelBlockRoots {
+//     fn column() -> Column {
+//         Column:
+//     }
+// }
 
 /// The table has a corresponding column in the database.
 trait DatabaseColumn {

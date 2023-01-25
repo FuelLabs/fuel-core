@@ -62,12 +62,6 @@ mockall::mock! {
             block_id: &BlockId,
             consensus: &Consensus,
         ) -> StorageResult<Option<Consensus>>;
-
-        fn insert_block_header_merkle_root(
-            &mut self,
-            height: &BlockHeight,
-            root: &Bytes32,
-        ) -> StorageResult<Option<Bytes32>>;
     }
 
     impl TransactionTrait<MockDatabase> for Database {
@@ -147,8 +141,6 @@ where
         db.expect_latest_block_height()
             .returning(move || height().map(Into::into));
         db.expect_seal_block().returning(move |_, _| seal());
-        db.expect_insert_block_header_merkle_root()
-            .returning(move |_, _| root());
         db.expect_commit().times(commits).returning(|| Ok(()));
 
         db

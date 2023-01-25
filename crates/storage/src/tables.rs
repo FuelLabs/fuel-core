@@ -69,25 +69,25 @@ impl Mappable for FuelBlockMerkleData {
 }
 
 /// The table of metadata for dense Merklized data.
-pub struct FuelDenseMerkleMetadata;
+pub struct FuelBlockMerkleMetadata;
 
-impl Mappable for FuelDenseMerkleMetadata {
-    type Key = String;
+impl Mappable for FuelBlockMerkleMetadata {
+    type Key = BlockHeight;
     type OwnedKey = Self::Key;
     type Value = DenseMerkleMetadata;
     type OwnedValue = Self::Value;
 }
 
-/// The table of BMT MMR roots of the fuel blocks.
-pub struct FuelBlockRoots;
-
-impl Mappable for FuelBlockRoots {
-    /// The height of the fuel block.
-    type Key = Self::OwnedKey;
-    type OwnedKey = BlockHeight;
-    type Value = Self::OwnedValue;
-    type OwnedValue = Bytes32;
-}
+// /// The table of BMT MMR roots of the fuel blocks.
+// pub struct FuelBlockRoots;
+//
+// impl Mappable for FuelBlockRoots {
+//     /// The height of the fuel block.
+//     type Key = Self::OwnedKey;
+//     type OwnedKey = BlockHeight;
+//     type Value = Self::OwnedValue;
+//     type OwnedValue = Bytes32;
+// }
 
 /// The latest UTXO id of the contract. The contract's UTXO represents the unique id of the state.
 /// After each transaction, old UTXO is consumed, and new UTXO is produced. UTXO is used as an

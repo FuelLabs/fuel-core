@@ -11,7 +11,6 @@ use fuel_core_types::{
             BlockId,
         },
     },
-    fuel_types::Bytes32,
     services::executor::{
         ExecutionBlock,
         Result as ExecutorResult,
@@ -48,14 +47,6 @@ pub trait ExecutorDatabase: ImporterDatabase {
         block_id: &BlockId,
         consensus: &Consensus,
     ) -> StorageResult<Option<Consensus>>;
-
-    /// Assigns the block header BMT MMR root to the block at the height `height`.
-    /// Return the previous value at the `height`, if any.
-    fn insert_block_header_merkle_root(
-        &mut self,
-        height: &BlockHeight,
-        root: &Bytes32,
-    ) -> StorageResult<Option<Bytes32>>;
 }
 
 #[cfg_attr(test, mockall::automock)]

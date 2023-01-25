@@ -21,6 +21,7 @@ pub mod tables;
 pub mod test_helpers;
 pub mod transactional;
 
+use fuel_core_types::fuel_merkle::binary::MerkleTreeError;
 pub use fuel_vm_private::storage::{
     ContractsAssetKey,
     ContractsStateKey,
@@ -42,10 +43,22 @@ pub enum Error {
     /// This error should be created with `not_found` macro.
     #[error("resource of type `{0}` was not found at the: {1}")]
     NotFound(&'static str, &'static str),
+    /// Error occurred during Merkle tree operation.
+    #[error("error occurred during Merkle tree operation")]
+    BinaryMerkleTreeError,
     // TODO: Do we need this type at all?
     /// Unknown or not expected(by architecture) error.
     #[error(transparent)]
     Other(#[from] anyhow::Error),
+}
+
+impl<E: Into<Error>> From<MerkleTreeError<E>> for Error {
+    fn from(error: MerkleTreeError<E>) -> Self {
+        match error {
+            MerkleTreeError::StorageError(e) => e.into(),
+            _ => Error::BinaryMerkleTreeError,
+        }
+    }
 }
 
 impl From<Error> for std::io::Error {

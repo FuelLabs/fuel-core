@@ -231,6 +231,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::primitives::BlockId,
+    fuel_crypto::Message,
     fuel_merkle::{
         binary::{
             MerkleTree,
@@ -241,6 +242,7 @@ use fuel_core_types::{
             StorageMutate,
         },
     },
+    fuel_types::MessageId,
 };
 
 impl StorageInspect<FuelBlocks> for MockDb {
@@ -335,7 +337,7 @@ impl BinaryMerkleTreeStorage for MockDb {
         version: u64,
     ) -> Result<MerkleTree<Table, &Self>, StorageError>
     where
-        Table: Mappable<Key = u64, SetValue = Primitive, GetValue = Primitive>,
+        Table: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
         Self: StorageInspect<Table, Error = StorageError>,
     {
         let tree = MerkleTree::load(self, version).unwrap();
@@ -348,8 +350,9 @@ impl BlockExecutor for MockDb {
         &mut self,
         block_id: &BlockId,
         block: &CompressedBlock,
-    ) -> Result<(), StorageError> {
-        self.storage::<FuelBlocks>()
+    ) -> Result<Option<CompressedBlock>, StorageError> {
+        let prev = self
+            .storage::<FuelBlocks>()
             .insert(block_id, block)
             .unwrap();
 
@@ -363,6 +366,6 @@ impl BlockExecutor for MockDb {
             .unwrap();
         tree.push(block_id.as_slice()).unwrap();
 
-        Ok(())
+        Ok(prev)
     }
 }

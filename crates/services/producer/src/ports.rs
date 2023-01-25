@@ -51,19 +51,14 @@ pub trait BlockExecutor {
         &mut self,
         block_id: &BlockId,
         block: &CompressedBlock,
-    ) -> Result<(), StorageError>;
+    ) -> Result<Option<CompressedBlock>, StorageError>;
 }
 
-pub trait BinaryMerkleMetadataStorage {
+pub trait BlockMerkleRootStorage {
     fn load_binary_merkle_metadata(
         &self,
-        key: &str,
+        key: &BlockHeight,
     ) -> Result<DenseMerkleMetadata, StorageError>;
-    fn save_binary_merkle_metadata(
-        &mut self,
-        key: &str,
-        metadata: &DenseMerkleMetadata,
-    ) -> Result<(), StorageError>;
 }
 
 pub trait BinaryMerkleTreeStorage {
