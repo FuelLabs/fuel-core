@@ -36,6 +36,7 @@ use libp2p::{
     Multiaddr,
     PeerId,
 };
+use rand::seq::IteratorRandom;
 
 use std::{
     collections::{
@@ -154,6 +155,11 @@ impl PeerManagerBehaviour {
 
     pub fn update_block_height(&mut self, block_height: BlockHeight) {
         self.heartbeat.update_block_height(block_height);
+    }
+
+    /// Find a peer that is holding the given block height.
+    pub fn get_peer_id_with_height(&self, height: &BlockHeight) -> Option<PeerId> {
+        self.peer_manager.get_peer_id_with_height(height)
     }
 }
 
@@ -661,6 +667,22 @@ impl PeerManager {
                 peer_id,
                 should_reconnect: is_reserved,
             })
+    }
+
+    /// Find a peer that is holding the given block height.
+    pub fn get_peer_id_with_height(&self, height: &BlockHeight) -> Option<PeerId> {
+        let mut range = rand::thread_rng();
+        // TODO: Optimize the selection of the peer.
+        //  We can store pair `(peer id, height)` for all nodes(reserved and not) in the
+        //  https://docs.rs/sorted-vec/latest/sorted_vec/struct.SortedVec.html
+        self.non_reserved_connected_peers
+            .iter()
+            .chain(self.reserved_connected_peers.iter())
+            .filter(|(_, peer_info)| {
+                peer_info.heartbeat_data.block_height >= Some(*height)
+            })
+            .map(|(peer_id, _)| *peer_id)
+            .choose(&mut range)
     }
 }
 

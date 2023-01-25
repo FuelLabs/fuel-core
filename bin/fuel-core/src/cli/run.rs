@@ -12,13 +12,13 @@ use anyhow::{
 };
 use clap::Parser;
 use fuel_core::{
-    chain_config::ChainConfig,
+    chain_config::{
+        default_consensus_dev_key,
+        ChainConfig,
+    },
     producer::Config as ProducerConfig,
     service::{
-        config::{
-            default_consensus_dev_key,
-            Trigger,
-        },
+        config::Trigger,
         Config,
         DbType,
         ServiceTrait,
@@ -138,6 +138,10 @@ pub struct Command {
     #[cfg(feature = "p2p")]
     pub p2p_args: p2p::P2PArgs,
 
+    #[cfg_attr(feature = "p2p", clap(flatten))]
+    #[cfg(feature = "p2p")]
+    pub sync_args: p2p::SyncArgs,
+
     #[arg(long = "metrics", env)]
     pub metrics: bool,
 }
@@ -162,6 +166,8 @@ impl Command {
             relayer_args,
             #[cfg(feature = "p2p")]
             p2p_args,
+            #[cfg(feature = "p2p")]
+            sync_args,
             metrics,
         } = self;
 
@@ -235,6 +241,8 @@ impl Command {
             relayer: relayer_args.into(),
             #[cfg(feature = "p2p")]
             p2p: p2p_cfg,
+            #[cfg(feature = "p2p")]
+            sync: sync_args.into(),
             consensus_key,
         })
     }

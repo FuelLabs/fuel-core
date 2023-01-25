@@ -1,17 +1,32 @@
-use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
-use fuel_core_types::blockchain::{
-    primitives::BlockHeight,
-    SealedBlock,
+use fuel_core_types::{
+    blockchain::{
+        primitives::{
+            BlockHeight,
+            BlockId,
+        },
+        SealedBlock,
+        SealedBlockHeader,
+    },
+    fuel_tx::Transaction,
 };
 
-#[async_trait]
 pub trait P2pDb: Send + Sync {
-    async fn get_sealed_block(
+    fn get_sealed_block(
         &self,
         height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlock>>;
+
+    fn get_sealed_header(
+        &self,
+        height: &BlockHeight,
+    ) -> StorageResult<Option<SealedBlockHeader>>;
+
+    fn get_transactions(
+        &self,
+        block_id: &BlockId,
+    ) -> StorageResult<Option<Vec<Transaction>>>;
 }
 
 pub trait BlockHeightImporter: Send + Sync {

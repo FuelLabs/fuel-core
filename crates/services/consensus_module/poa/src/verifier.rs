@@ -1,11 +1,14 @@
 use anyhow::ensure;
+use fuel_core_chain_config::ConsensusConfig;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::{
         block::Block,
+        consensus::poa::PoAConsensus,
         header::BlockHeader,
         primitives::BlockHeight,
     },
+    fuel_tx::Input,
     fuel_types::Bytes32,
 };
 
@@ -28,7 +31,25 @@ pub trait Database {
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32>;
 }
 
-pub fn verify_poa_block_fields<D: Database>(
+// TODO: Make this function `async` and await the synchronization with the relayer.
+pub fn verify_consensus(
+    consensus_config: &ConsensusConfig,
+    header: &BlockHeader,
+    consensus: &PoAConsensus,
+) -> bool {
+    match consensus_config {
+        ConsensusConfig::PoA { signing_key } => {
+            let id = header.id();
+            let m = id.as_message();
+            consensus
+                .signature
+                .recover(m)
+                .map_or(false, |k| Input::owner(&k) == *signing_key)
+        }
+    }
+}
+
+pub fn verify_block_fields<D: Database>(
     config: &Config,
     database: &D,
     block: &Block,

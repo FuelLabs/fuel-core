@@ -64,7 +64,7 @@ where
     pub fn utxo(
         &self,
     ) -> Result<
-        Option<Cow<'_, <ContractsLatestUtxo as Mappable>::GetValue>>,
+        Option<Cow<'_, <ContractsLatestUtxo as Mappable>::OwnedValue>>,
         Database::Error,
     > {
         self.database.storage().get(&self.contract_id)
@@ -79,7 +79,7 @@ where
     pub fn validated_utxo(
         &self,
         utxo_validation: bool,
-    ) -> ExecutorResult<<ContractsLatestUtxo as Mappable>::GetValue> {
+    ) -> ExecutorResult<<ContractsLatestUtxo as Mappable>::OwnedValue> {
         let maybe_utxo_id = self.utxo()?.map(|utxo| utxo.into_owned());
         let expected_utxo_id = if utxo_validation {
             maybe_utxo_id.ok_or(ExecutorError::ContractUtxoMissing(self.contract_id))?

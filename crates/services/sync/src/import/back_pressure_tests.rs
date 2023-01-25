@@ -23,7 +23,6 @@ use test_case::test_case;
 struct Input {
     headers: Duration,
     transactions: Duration,
-    consensus: Duration,
     executes: Duration,
 }
 
@@ -45,7 +44,7 @@ struct Input {
         max_get_header_requests: 1,
         max_get_txns_requests: 1,
     }
-    => is less_or_equal_than Count{ headers: 1, transactions: 1, consensus_calls: 1, executes: 1, blocks: 1 }
+    => is less_or_equal_than Count{ headers: 1, transactions: 1, executes: 1, blocks: 1 }
     ; "Single with slow headers"
 )]
 #[test_case(
@@ -58,7 +57,7 @@ struct Input {
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
     }
-    => is less_or_equal_than Count{ headers: 10, transactions: 10, consensus_calls: 10, executes: 1, blocks: 21 }
+    => is less_or_equal_than Count{ headers: 10, transactions: 10, executes: 1, blocks: 21 }
     ; "100 headers with max 10 with slow headers"
 )]
 #[test_case(
@@ -71,21 +70,8 @@ struct Input {
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
     }
-    => is less_or_equal_than Count{ headers: 10, transactions: 10, consensus_calls: 10, executes: 1, blocks: 21 }
+    => is less_or_equal_than Count{ headers: 10, transactions: 10, executes: 1, blocks: 21 }
     ; "100 headers with max 10 with slow transactions"
-)]
-#[test_case(
-    Input {
-        consensus: Duration::from_millis(10),
-        ..Default::default()
-    },
-    State::new(None, 100),
-    Config{
-        max_get_header_requests: 10,
-        max_get_txns_requests: 10,
-    }
-    => is less_or_equal_than Count{ headers: 10, transactions: 10, consensus_calls: 10, executes: 1, blocks: 21 }
-    ; "100 headers with max 10 with slow consensus"
 )]
 #[test_case(
     Input {
@@ -97,7 +83,7 @@ struct Input {
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
     }
-    => is less_or_equal_than Count{ headers: 10, transactions: 10, consensus_calls: 10, executes: 1, blocks: 21 }
+    => is less_or_equal_than Count{ headers: 10, transactions: 10, executes: 1, blocks: 21 }
     ; "50 headers with max 10 with slow executes"
 )]
 #[tokio::test(flavor = "multi_thread")]
@@ -109,11 +95,13 @@ async fn test_back_pressure(input: Input, state: State, params: Config) -> Count
         counts.clone(),
         [input.headers, input.transactions],
     ));
-    let consensus = Arc::new(PressureConsensusPort::new(counts.clone(), input.consensus));
     let executor = Arc::new(PressureBlockImporterPort::new(
         counts.clone(),
         input.executes,
     ));
+    let mut mock = MockConsensusPort::default();
+    mock.expect_check_sealed_header().returning(|_| Ok(true));
+    let consensus = Arc::new(mock);
     let notify = Arc::new(Notify::new());
 
     let import = Import {
@@ -136,7 +124,6 @@ async fn test_back_pressure(input: Input, state: State, params: Config) -> Count
 struct Count {
     headers: usize,
     transactions: usize,
-    consensus_calls: usize,
     executes: usize,
     blocks: usize,
 }
@@ -150,7 +137,6 @@ struct Counts {
 type SharedCounts = SharedMutex<Counts>;
 
 struct PressurePeerToPeerPort(MockPeerToPeerPort, [Duration; 2], SharedCounts);
-struct PressureConsensusPort(MockConsensusPort, Duration, SharedCounts);
 struct PressureBlockImporterPort(MockBlockImporterPort, Duration, SharedCounts);
 
 #[async_trait::async_trait]
@@ -182,19 +168,6 @@ impl PeerToPeerPort for PressurePeerToPeerPort {
 }
 
 #[async_trait::async_trait]
-impl ConsensusPort for PressureConsensusPort {
-    async fn check_sealed_header(
-        &self,
-        header: &SealedBlockHeader,
-    ) -> anyhow::Result<bool> {
-        self.2.apply(|c| c.inc_consensus_calls());
-        tokio::time::sleep(self.1).await;
-        self.2.apply(|c| c.dec_consensus_calls());
-        self.0.check_sealed_header(header).await
-    }
-}
-
-#[async_trait::async_trait]
 impl BlockImporterPort for PressureBlockImporterPort {
     async fn execute_and_commit(&self, block: SealedBlock) -> anyhow::Result<()> {
         self.2.apply(|c| c.inc_executes());
@@ -214,14 +187,6 @@ impl PressurePeerToPeerPort {
             .returning(|h| Ok(Some(empty_header(h))));
         mock.expect_get_transactions()
             .returning(|_| Ok(Some(vec![])));
-        Self(mock, delays, counts)
-    }
-}
-
-impl PressureConsensusPort {
-    fn new(counts: SharedCounts, delays: Duration) -> Self {
-        let mut mock = MockConsensusPort::default();
-        mock.expect_check_sealed_header().returning(|_| Ok(true));
         Self(mock, delays, counts)
     }
 }
@@ -248,13 +213,6 @@ impl Counts {
     }
     fn dec_transactions(&mut self) {
         self.now.transactions -= 1;
-    }
-    fn inc_consensus_calls(&mut self) {
-        self.now.consensus_calls += 1;
-        self.max.consensus_calls = self.max.consensus_calls.max(self.now.consensus_calls);
-    }
-    fn dec_consensus_calls(&mut self) {
-        self.now.consensus_calls -= 1;
     }
     fn inc_executes(&mut self) {
         self.now.executes += 1;

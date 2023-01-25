@@ -8,10 +8,13 @@ use std::sync::Arc;
 
 pub mod block_importer;
 pub mod consensus_module;
+pub mod executor;
 pub mod graphql_api;
 #[cfg(feature = "p2p")]
 pub mod p2p;
 pub mod producer;
+#[cfg(feature = "p2p")]
+pub mod sync;
 pub mod txpool;
 
 #[derive(Clone)]

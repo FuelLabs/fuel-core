@@ -285,7 +285,7 @@ fn init_contract_state(
         for (key, value) in contract_state {
             if db
                 .storage::<ContractsState>()
-                .insert(&(contract_id, key), value)?
+                .insert(&(contract_id, key).into(), value)?
                 .is_some()
             {
                 return Err(anyhow!("Contract state should not exist"))
@@ -341,7 +341,7 @@ fn init_contract_balance(
         for (key, value) in balances {
             if db
                 .storage::<ContractsAssets>()
-                .insert(&(contract_id, key), value)?
+                .insert(&(contract_id, key).into(), value)?
                 .is_some()
             {
                 return Err(anyhow!("Contract balance should not exist"))
@@ -566,7 +566,7 @@ mod tests {
 
         let ret = db
             .storage::<ContractsState>()
-            .get(&(&id, &test_key))
+            .get(&(&id, &test_key).into())
             .unwrap()
             .expect("Expect a state entry to exist with test_key")
             .into_owned();
@@ -644,7 +644,7 @@ mod tests {
 
         let ret = db
             .storage::<ContractsAssets>()
-            .get(&(&id, &test_asset_id))
+            .get(&(&id, &test_asset_id).into())
             .unwrap()
             .expect("Expected a balance to be present")
             .into_owned();

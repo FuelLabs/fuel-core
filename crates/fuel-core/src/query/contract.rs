@@ -70,7 +70,7 @@ impl ContractQueryContext<'_> {
             .0
             .as_ref()
             .storage::<ContractsAssets>()
-            .get(&(&contract_id, &asset_id))?
+            .get(&(&contract_id, &asset_id).into())?
             .ok_or(not_found!(ContractsAssets))?
             .into_owned();
 

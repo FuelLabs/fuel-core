@@ -8,48 +8,11 @@ use crate::{
 use fuel_core_storage::iter::BoxedIter;
 use std::{
     fmt::Debug,
-    marker::PhantomData,
     sync::Arc,
 };
 
 pub type DataSource = Arc<dyn TransactableStorage>;
 pub type ColumnId = u32;
-
-#[derive(Clone, Debug, Default)]
-pub struct MultiKey<K1: AsRef<[u8]>, K2: AsRef<[u8]>> {
-    _marker_1: PhantomData<K1>,
-    _marker_2: PhantomData<K2>,
-    inner: Vec<u8>,
-}
-
-impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> MultiKey<K1, K2> {
-    pub fn new(key: &(K1, K2)) -> Self {
-        Self {
-            _marker_1: Default::default(),
-            _marker_2: Default::default(),
-            inner: key
-                .0
-                .as_ref()
-                .iter()
-                .chain(key.1.as_ref().iter())
-                .copied()
-                .collect(),
-        }
-    }
-}
-
-impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> AsRef<[u8]> for MultiKey<K1, K2> {
-    fn as_ref(&self) -> &[u8] {
-        self.inner.as_slice()
-    }
-}
-
-impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> From<MultiKey<K1, K2>> for Vec<u8> {
-    fn from(key: MultiKey<K1, K2>) -> Vec<u8> {
-        key.inner
-    }
-}
-
 pub type KVItem = DatabaseResult<(Vec<u8>, Vec<u8>)>;
 
 pub trait KeyValueStore {

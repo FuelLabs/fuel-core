@@ -21,6 +21,11 @@ pub mod tables;
 pub mod test_helpers;
 pub mod transactional;
 
+pub use fuel_vm_private::storage::{
+    ContractsAssetKey,
+    ContractsStateKey,
+};
+
 /// The storage result alias.
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -95,7 +100,7 @@ macro_rules! not_found {
     };
     ($ty: path) => {
         $crate::Error::NotFound(
-            ::core::any::type_name::<<$ty as $crate::Mappable>::GetValue>(),
+            ::core::any::type_name::<<$ty as $crate::Mappable>::OwnedValue>(),
             concat!(file!(), ":", line!()),
         )
     };

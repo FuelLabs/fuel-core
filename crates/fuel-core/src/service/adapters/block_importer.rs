@@ -9,6 +9,7 @@ use crate::{
 use fuel_core_importer::{
     ports::{
         BlockVerifier,
+        Executor,
         ExecutorDatabase,
         ImporterDatabase,
     },
@@ -32,9 +33,14 @@ use fuel_core_types::{
             BlockHeight,
             BlockId,
         },
+        SealedBlock,
     },
     fuel_tx::Bytes32,
-    services::block_importer::UncommittedResult,
+    services::executor::{
+        ExecutionBlock,
+        Result as ExecutorResult,
+        UncommittedResult as UncommittedExecutionResult,
+    },
 };
 use std::sync::Arc;
 
@@ -49,18 +55,17 @@ impl BlockImporterAdapter {
             block_importer: Arc::new(Importer::new(config, database, executor, verifier)),
         }
     }
-}
 
-impl fuel_core_poa::ports::BlockImporter for BlockImporterAdapter {
-    type Database = Database;
-
-    fn commit_result(
+    pub async fn execute_and_commit(
         &self,
-        result: UncommittedResult<StorageTransaction<Self::Database>>,
+        sealed_block: SealedBlock,
     ) -> anyhow::Result<()> {
-        self.block_importer
-            .commit_result(result)
-            .map_err(Into::into)
+        tokio::task::spawn_blocking({
+            let importer = self.block_importer.clone();
+            move || importer.execute_and_commit(sealed_block)
+        })
+        .await??;
+        Ok(())
     }
 }
 
@@ -97,5 +102,17 @@ impl ExecutorDatabase for Database {
         root: &Bytes32,
     ) -> StorageResult<Option<Bytes32>> {
         self.storage::<FuelBlockRoots>().insert(height, root)
+    }
+}
+
+impl Executor for ExecutorAdapter {
+    type Database = Database;
+
+    fn execute_without_commit(
+        &self,
+        block: ExecutionBlock,
+    ) -> ExecutorResult<UncommittedExecutionResult<StorageTransaction<Self::Database>>>
+    {
+        self._execute_without_commit(block)
     }
 }

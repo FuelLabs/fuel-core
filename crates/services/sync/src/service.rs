@@ -49,7 +49,7 @@ where
     C: ports::ConsensusPort + Send + Sync + 'static,
 {
     let height_stream = p2p.height_stream();
-    let state = State::new(*current_fuel_block_height, None);
+    let state = State::new(Some(current_fuel_block_height.into()), None);
     Ok(ServiceRunner::new(SyncTask::new(
         height_stream,
         state,
