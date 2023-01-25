@@ -12,7 +12,7 @@ if [ "${k8s_provider}" == "eks" ]; then
     cp chainspec/${chain_spec_file} ../charts/chainspec.json
     export fuel_core_consensus_key_secret_base64_encoded=$(echo -n $fuel_core_consensus_key_secret | base64 -w 0) 
     cd ../secrets/
-    echo "Creating fuel-core k8s secret ...."
+    echo "Creating the fuel-core k8s secret ...."
     mv fuel-core-secret.yaml fuel-core-secret.template
     envsubst < fuel-core-secret.template > fuel-core-secret.yaml
     rm fuel-core-secret.template
