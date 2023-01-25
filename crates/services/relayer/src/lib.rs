@@ -31,3 +31,6 @@ pub use service::{
     Service,
     SharedState,
 };
+
+#[cfg(test)]
+fuel_core_trace::enable_tracing!();

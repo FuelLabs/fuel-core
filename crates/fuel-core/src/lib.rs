@@ -33,3 +33,6 @@ mod graphql_api;
 pub mod fuel_core_graphql_api {
     pub use crate::graphql_api::*;
 }
+
+#[cfg(test)]
+fuel_core_trace::enable_tracing!();

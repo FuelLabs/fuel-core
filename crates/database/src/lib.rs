@@ -58,3 +58,6 @@ impl From<Error> for ExecutorError {
         ExecutorError::StorageError(Box::new(StorageError::from(e)))
     }
 }
+
+#[cfg(test)]
+fuel_core_trace::enable_tracing!();
