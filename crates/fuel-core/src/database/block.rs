@@ -366,7 +366,7 @@ impl BinaryMerkleTreeStorage for Database {
         version: u64,
     ) -> Result<MerkleTree<Table, &Self>, StorageError>
     where
-        Table: Mappable<Key = u64, SetValue = Primitive, GetValue = Primitive>,
+        Table: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
         Self: StorageInspect<Table, Error = StorageError>,
     {
         let storage = self.borrow();
