@@ -110,6 +110,7 @@ where
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 {
+    #[tracing::instrument(level = "debug", skip_all, err, ret)]
     async fn run(
         &mut self,
         _: &mut fuel_core_services::StateWatcher,
@@ -158,6 +159,7 @@ where
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 {
+    #[tracing::instrument(level = "debug", skip_all, err, ret)]
     async fn run(
         &mut self,
         watcher: &mut fuel_core_services::StateWatcher,
@@ -193,6 +195,7 @@ where
     C: ConsensusPort + Send + Sync + 'static,
 {
     fn drop(&mut self) {
+        tracing::info!("Sync task shutting down");
         self.import_task_handle.stop();
     }
 }

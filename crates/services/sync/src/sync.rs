@@ -38,6 +38,7 @@ impl SyncHeights {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     /// Sync the state from the height stream.
     /// This stream never blocks or errors.
     pub(crate) async fn sync(&mut self) -> Option<()> {
