@@ -136,7 +136,6 @@ where
     move || {
         let height = height.clone();
         let seal = seal.clone();
-        let root = root.clone();
         let mut db = MockDatabase::default();
         db.expect_latest_block_height()
             .returning(move || height().map(Into::into));

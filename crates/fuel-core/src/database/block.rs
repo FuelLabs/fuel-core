@@ -114,9 +114,23 @@ impl StorageMutate<FuelBlocks> for Database {
         let height = value.header().height();
         self.storage::<FuelBlockIds>().insert(height, key)?;
         let data = key.as_slice();
+
+        // get latest metadata entry
+        let prev_metadata = self
+            .iter_all::<Vec<u8>, DenseMerkleMetadata>(
+                Column::FuelBlockMerkleMetadata,
+                None,
+                None,
+                Some(IterDirection::Reverse),
+            )
+            .next()
+            .transpose()?
+            .map(|(_, metadata)| metadata)
+            .unwrap_or_default();
+
         let storage = self.borrow_mut();
         let mut tree: MerkleTree<FuelBlockMerkleData, _> =
-            MerkleTree::load(storage, (*height).into())?;
+            MerkleTree::load(storage, prev_metadata.version)?;
         tree.push(data)?;
 
         // Generate new metadata for the updated tree
@@ -124,7 +138,7 @@ impl StorageMutate<FuelBlocks> for Database {
         let root = tree.root().into();
         let metadata = DenseMerkleMetadata { version, root };
         self.storage::<FuelBlockMerkleMetadata>()
-            .insert(&version.into(), &metadata)?;
+            .insert(&height, &metadata)?;
 
         Ok(prev)
     }
@@ -383,5 +397,47 @@ impl BinaryMerkleTreeStorage for Database {
         let storage = self.borrow();
         let tree = MerkleTree::load(storage, version).unwrap();
         Ok(tree)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fuel_core_types::{
+        blockchain::{
+            block::PartialFuelBlock,
+            header::PartialBlockHeader,
+        },
+        fuel_vm::crypto::ephemeral_merkle_root,
+    };
+
+    #[test]
+    fn can_get_merkle_root_of_inserted_block() {
+        let mut database = Database::default();
+
+        let header = PartialBlockHeader {
+            application: Default::default(),
+            consensus: Default::default(),
+        };
+        let block = PartialFuelBlock::new(header, vec![]);
+        let block = block.generate(&[]);
+
+        // expected root
+        let expected_root = ephemeral_merkle_root(vec![block.id().as_slice()].iter());
+
+        // insert the block
+        StorageMutate::<FuelBlocks>::insert(
+            &mut database,
+            &block.id(),
+            &block.compress(),
+        )
+        .unwrap();
+
+        // check that root is present
+        let actual_root = database
+            .block_header_merkle_root(block.header().height())
+            .expect("root to exist");
+
+        assert_eq!(expected_root, actual_root);
     }
 }
