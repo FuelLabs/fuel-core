@@ -10,3 +10,6 @@ pub use config::Config;
 
 #[cfg(any(test, feature = "test-helpers"))]
 pub mod mocks;
+
+#[cfg(test)]
+fuel_core_trace::enable_tracing!();

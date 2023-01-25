@@ -23,6 +23,7 @@ members = [
   "crates/services/txpool",
   "crates/storage",
   "crates/types",
+  "crates/trace",
   "tests",
   "xtask",
 ]

@@ -15,3 +15,6 @@ anyhow = "1.0"
 fuel-core-storage = { path = "../storage", version = "0.15.1" }
 fuel-core-types = { path = "../types", version = "0.15.1" }
 thiserror = "1.0"
+
+[dev-dependencies]
+fuel-core-trace = { path = "../trace" }

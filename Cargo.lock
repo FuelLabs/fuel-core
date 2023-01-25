@@ -2282,6 +2282,7 @@ dependencies = [
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-sync",
+ "fuel-core-trace",
  "fuel-core-txpool",
  "fuel-core-types",
  "futures",
@@ -2419,6 +2420,7 @@ version = "0.15.1"
 dependencies = [
  "anyhow",
  "fuel-core-storage",
+ "fuel-core-trace",
  "fuel-core-types",
  "thiserror",
 ]
@@ -2430,6 +2432,7 @@ dependencies = [
  "anyhow",
  "fuel-core-chain-config",
  "fuel-core-storage",
+ "fuel-core-trace",
  "fuel-core-types",
 ]
 
@@ -2439,6 +2442,7 @@ version = "0.15.1"
 dependencies = [
  "anyhow",
  "fuel-core-storage",
+ "fuel-core-trace",
  "fuel-core-types",
  "mockall",
  "test-case",
@@ -2479,6 +2483,7 @@ dependencies = [
  "fuel-core-metrics",
  "fuel-core-services",
  "fuel-core-storage",
+ "fuel-core-trace",
  "fuel-core-types",
  "futures",
  "futures-timer",
@@ -2504,7 +2509,6 @@ dependencies = [
  "sha2 0.10.6",
  "tokio",
  "tracing",
- "tracing-appender",
  "tracing-attributes",
  "tracing-subscriber",
 ]
@@ -2535,6 +2539,7 @@ dependencies = [
  "async-trait",
  "fuel-core-producer",
  "fuel-core-storage",
+ "fuel-core-trace",
  "fuel-core-types",
  "rand 0.8.5",
  "thiserror",
@@ -2555,6 +2560,7 @@ dependencies = [
  "fuel-core-relayer",
  "fuel-core-services",
  "fuel-core-storage",
+ "fuel-core-trace",
  "fuel-core-types",
  "futures",
  "mockall",
@@ -2599,6 +2605,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "fuel-core-services",
+ "fuel-core-trace",
  "fuel-core-types",
  "futures",
  "mockall",
@@ -2631,6 +2638,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-trace"
+version = "0.0.1"
+dependencies = [
+ "ctor",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "fuel-core-txpool"
 version = "0.15.1"
 dependencies = [
@@ -2640,6 +2657,7 @@ dependencies = [
  "fuel-core-metrics",
  "fuel-core-services",
  "fuel-core-storage",
+ "fuel-core-trace",
  "fuel-core-txpool",
  "fuel-core-types",
  "itertools",
