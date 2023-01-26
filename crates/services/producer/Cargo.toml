@@ -20,6 +20,7 @@ tracing = { version = "0.1" }
 
 [dev-dependencies]
 fuel-core-producer = { path = "", features = ["test-helpers"] }
+fuel-core-trace = { path = "../../trace" }
 fuel-core-types = { path = "../../types", features = ["test-helpers"] }
 rand = "0.8"
 

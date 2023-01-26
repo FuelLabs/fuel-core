@@ -10,10 +10,7 @@ use crate::{
 use fuel_core_producer::ports::TxPool;
 use fuel_core_storage::{
     not_found,
-    tables::{
-        FuelBlockRoots,
-        FuelBlocks,
-    },
+    tables::FuelBlocks,
     transactional::StorageTransaction,
     Result as StorageResult,
     StorageAsRef,
@@ -107,10 +104,7 @@ impl fuel_core_producer::ports::BlockProducerDatabase for Database {
     }
 
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32> {
-        self.storage::<FuelBlockRoots>()
-            .get(height)?
-            .ok_or(not_found!(FuelBlocks))
-            .map(Cow::into_owned)
+        Database::block_header_merkle_root(self, height)
     }
 
     fn current_block_height(&self) -> StorageResult<BlockHeight> {
