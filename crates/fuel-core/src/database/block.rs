@@ -274,45 +274,20 @@ mod tests {
         },
         fuel_vm::crypto::ephemeral_merkle_root,
     };
+    use test_case::test_case;
 
-    #[test]
-    fn can_get_merkle_root_of_inserted_block() {
+    #[test_case(&[0]; "initial block with height 0")]
+    #[test_case(&[1337]; "initial block with arbitrary height")]
+    #[test_case(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]; "ten sequential blocks starting from height 0")]
+    #[test_case(&[100, 101, 102, 103, 104, 105]; "five sequential blocks starting from height 100")]
+    #[test_case(&[0, 2, 5, 7, 11]; "five non-sequential blocks starting from height 0")]
+    #[test_case(&[100, 102, 105, 107, 111]; "five non-sequential blocks starting from height 100")]
+    fn can_get_merkle_root_of_inserted_blocks(heights: &[u64]) {
         let mut database = Database::default();
-
-        let header = PartialBlockHeader {
-            application: Default::default(),
-            consensus: Default::default(),
-        };
-        let block = PartialFuelBlock::new(header, vec![]);
-        let block = block.generate(&[]);
-
-        // expected root
-        let expected_root = ephemeral_merkle_root(vec![block.id().as_slice()].iter());
-
-        // insert the block
-        StorageMutate::<FuelBlocks>::insert(
-            &mut database,
-            &block.id(),
-            &block.compress(),
-        )
-        .unwrap();
-
-        // check that root is present
-        let actual_root = database
-            .block_header_merkle_root(block.header().height())
-            .expect("root to exist");
-
-        println!("{}", hex::encode(actual_root));
-
-        assert_eq!(expected_root, actual_root);
-    }
-
-    #[test]
-    fn can_get_merkle_root_of_multiple_inserted_blocks() {
-        let mut database = Database::default();
-
         // Generate 10 blocks with ascending heights
-        let blocks = (0u64..10)
+        let blocks = heights
+            .into_iter()
+            .copied()
             .map(|height| {
                 let header = PartialBlockHeader {
                     application: Default::default(),
