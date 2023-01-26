@@ -1,4 +1,5 @@
 use super::*;
+use crate::ports::MockDatabase;
 use fuel_core_types::{
     blockchain::header::{
         ApplicationHeader,
@@ -6,6 +7,7 @@ use fuel_core_types::{
         GeneratedApplicationFields,
         GeneratedConsensusFields,
     },
+    fuel_types::Bytes32,
     tai64::Tai64,
 };
 use test_case::test_case;

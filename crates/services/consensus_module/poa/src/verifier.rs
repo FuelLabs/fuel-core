@@ -1,16 +1,15 @@
 use anyhow::ensure;
 use fuel_core_chain_config::ConsensusConfig;
-use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::poa::PoAConsensus,
         header::BlockHeader,
-        primitives::BlockHeight,
     },
     fuel_tx::Input,
-    fuel_types::Bytes32,
 };
+
+use crate::ports::Database;
 
 #[cfg(test)]
 mod tests;
@@ -19,16 +18,6 @@ mod tests;
 pub struct Config {
     /// If the manual block is enabled, skip verification of some fields.
     pub enabled_manual_blocks: bool,
-}
-
-#[cfg_attr(test, mockall::automock)]
-/// The port for the database.
-pub trait Database {
-    /// Gets the block header at `height`.
-    fn block_header(&self, height: &BlockHeight) -> StorageResult<BlockHeader>;
-
-    /// Gets the block header BMT MMR root at `height`.
-    fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32>;
 }
 
 // TODO: Make this function `async` and await the synchronization with the relayer.
