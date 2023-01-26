@@ -68,6 +68,7 @@ where
         &self.by_dependency
     }
 
+    #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id()), ret, err)]
     // this is atomic operation. Return removed(pushed out/replaced) transactions
     fn insert_inner(
         &mut self,
@@ -216,7 +217,7 @@ where
         Vec::new()
     }
 
-    /// Removes transaction from `TxPool` with assumption that it is committed into teh blockchain.
+    /// Removes transaction from `TxPool` with assumption that it is committed into the blockchain.
     // TODO: Don't remove recursively dependent transactions on block commit.
     //  The same logic should be fixed in the `select_transactions`.
     //  This method is used during `select_transactions`, so we need to handle the case
@@ -243,6 +244,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(level = "info", skip_all)]
     /// Import a set of transactions from network gossip or GraphQL endpoints.
     pub fn insert(
         &mut self,

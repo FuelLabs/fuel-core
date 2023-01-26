@@ -42,8 +42,10 @@ use crate::{
         PeerToPeerPort,
     },
     state::State,
-    TraceErr,
-    TraceNone,
+    tracing_helpers::{
+        TraceErr,
+        TraceNone,
+    },
 };
 
 #[cfg(test)]
