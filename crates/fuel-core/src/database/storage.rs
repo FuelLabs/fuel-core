@@ -78,6 +78,12 @@ impl Mappable for FuelBlockMerkleMetadata {
 }
 
 /// The table has a corresponding column in the database.
+///
+/// Using this trait allows the configured mappable type to have its'
+/// database integration auto-implemented for single column interactions.
+///
+/// If the mappable type requires access to multiple columns then its'
+/// storage interfaces should be manually implemented.
 trait DatabaseColumn {
     /// The column of the table.
     fn column() -> Column;
