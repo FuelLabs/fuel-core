@@ -3,6 +3,7 @@ use fuel_core_types::{
     fuel_tx::Input,
 };
 use helpers::*;
+use itertools::Itertools;
 use rand::{
     rngs::StdRng,
     SeedableRng,
@@ -224,7 +225,7 @@ async fn test_multiple_producers_different_keys() {
             Some(
                 ProducerSetup::new(secret)
                     .with_txs(num_txs)
-                    .with_name(format!("{}", pub_keys[i])),
+                    .with_name(format!("{}:producer", pub_keys[i])),
             )
         }),
         pub_keys.iter().flat_map(|pub_key| {
@@ -238,7 +239,7 @@ async fn test_multiple_producers_different_keys() {
     .await;
 
     // Get the number of validators per key pair.
-    let group_size = num_validators / num_partitions;
+    let group_size = num_validators;
 
     // Insert the transactions into the tx pool
     // and gather the expect transactions for each group.
@@ -247,17 +248,25 @@ async fn test_multiple_producers_different_keys() {
         expected.push(p.insert_txs());
     }
 
+    // Wait producers to produce all blocks.
+    for (expected, mut producer) in expected.iter().zip(producers) {
+        producer.consistency_10s(expected).await;
+    }
+
     // Partition the validators into groups.
-    let validators = &mut validators.into_iter();
-    let groups = (0..num_partitions)
-        .map(|_| validators.take(group_size).collect::<Vec<_>>())
+    let groups = validators
+        .into_iter()
+        .chunks(group_size)
+        .into_iter()
+        .map(|chunk| chunk.collect::<Vec<_>>())
         .collect::<Vec<_>>();
 
     // For each group, start the group and wait for it to sync with the
     // producer with the same key pair.
-    for (expected, mut validators) in expected.into_iter().zip(groups) {
+    for (expected, mut validators) in expected.iter().zip(groups) {
+        assert_eq!(group_size, validators.len());
         for v in &mut validators {
-            v.consistency_20s(&expected).await;
+            v.consistency_20s(expected).await;
         }
     }
 }

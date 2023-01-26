@@ -34,6 +34,7 @@ use fuel_core_types::{
     services::block_importer::ImportResult,
 };
 use futures::StreamExt;
+use itertools::Itertools;
 use rand::{
     rngs::StdRng,
     Rng,
@@ -256,6 +257,12 @@ impl Node {
         while !not_found_txs(db, txs).is_empty() {
             block_subscription.recv().await.unwrap();
         }
+
+        let count = db
+            .all_transactions(None, None)
+            .filter_ok(|tx| tx.is_script())
+            .count();
+        assert_eq!(count, txs.len());
     }
 
     /// Wait for the node to reach consistency with the given transactions within 10 seconds.
