@@ -558,7 +558,6 @@ mod tests {
             ResponseChannelItem,
         },
     };
-    use ctor::ctor;
     use fuel_core_types::{
         blockchain::{
             block::Block,
@@ -603,34 +602,6 @@ mod tests {
         watch,
     };
     use tracing_attributes::instrument;
-    use tracing_subscriber::{
-        fmt,
-        layer::SubscriberExt,
-        EnvFilter,
-    };
-
-    /// Conditionally initializes tracing, depending if RUST_LOG env variable is set
-    /// Logs to stderr & to a file
-    #[ctor]
-    fn initialize_tracing() {
-        if std::env::var_os("RUST_LOG").is_some() {
-            let log_file = tracing_appender::rolling::daily("./logs", "p2p_logfile");
-
-            let subscriber = tracing_subscriber::registry()
-                .with(EnvFilter::from_default_env())
-                .with(fmt::Layer::new().with_writer(std::io::stderr))
-                .with(
-                    fmt::Layer::new()
-                        .compact()
-                        .pretty()
-                        .with_ansi(false) // disabling terminal color fixes this issue: https://github.com/tokio-rs/tracing/issues/1817
-                        .with_writer(log_file),
-                );
-
-            tracing::subscriber::set_global_default(subscriber)
-                .expect("Unable to set a global subscriber");
-        }
-    }
 
     /// helper function for building FuelP2PService
     fn build_service_from_config(mut p2p_config: Config) -> FuelP2PService<BincodeCodec> {

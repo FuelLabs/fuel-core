@@ -10,3 +10,6 @@ mod state;
 pub mod sync;
 
 pub use import::Config;
+
+#[cfg(test)]
+fuel_core_trace::enable_tracing!();

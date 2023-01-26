@@ -266,38 +266,115 @@ mod tests {
     use fuel_core_types::{
         blockchain::{
             block::PartialFuelBlock,
-            header::PartialBlockHeader,
+            header::{
+                ConsensusHeader,
+                PartialBlockHeader,
+            },
+            primitives::Empty,
         },
         fuel_vm::crypto::ephemeral_merkle_root,
     };
+    use test_case::test_case;
+
+    #[test_case(&[0]; "initial block with height 0")]
+    #[test_case(&[1337]; "initial block with arbitrary height")]
+    #[test_case(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]; "ten sequential blocks starting from height 0")]
+    #[test_case(&[100, 101, 102, 103, 104, 105]; "five sequential blocks starting from height 100")]
+    #[test_case(&[0, 2, 5, 7, 11]; "five non-sequential blocks starting from height 0")]
+    #[test_case(&[100, 102, 105, 107, 111]; "five non-sequential blocks starting from height 100")]
+    fn can_get_merkle_root_of_inserted_blocks(heights: &[u64]) {
+        let mut database = Database::default();
+        // Generate 10 blocks with ascending heights
+        let blocks = heights
+            .into_iter()
+            .copied()
+            .map(|height| {
+                let header = PartialBlockHeader {
+                    application: Default::default(),
+                    consensus: ConsensusHeader::<Empty> {
+                        height: height.into(),
+                        ..Default::default()
+                    },
+                };
+                let block = PartialFuelBlock::new(header, vec![]);
+                block.generate(&[])
+            })
+            .collect::<Vec<_>>();
+
+        // Insert the blocks. Each insertion creates a new version of Block
+        // metadata, including a new root.
+        for block in &blocks {
+            StorageMutate::<FuelBlocks>::insert(
+                &mut database,
+                &block.id(),
+                &block.compress(),
+            )
+            .unwrap();
+        }
+
+        // Check each version
+        for version in 1..=blocks.len() {
+            // Generate the expected root for the version
+            let blocks = blocks.iter().take(version).collect::<Vec<_>>();
+            let block_ids = blocks.iter().map(|block| block.id());
+            let expected_root = ephemeral_merkle_root(block_ids);
+
+            // Check that root for the version is present
+            let last_block = blocks.last().unwrap();
+            let actual_root = database
+                .block_header_merkle_root(last_block.header().height())
+                .expect("root to exist");
+
+            assert_eq!(expected_root, actual_root);
+        }
+    }
 
     #[test]
-    fn can_get_merkle_root_of_inserted_block() {
+    fn get_merkle_root_with_no_blocks_returns_not_found_error() {
+        let database = Database::default();
+
+        // check that root is not present
+        let err = database
+            .block_header_merkle_root(&0u32.into())
+            .expect_err("expected error getting invalid Block Merkle root");
+
+        assert!(matches!(err, fuel_core_storage::Error::NotFound(_, _)));
+    }
+
+    #[test]
+    fn get_merkle_root_for_invalid_block_height_returns_not_found_error() {
         let mut database = Database::default();
 
-        let header = PartialBlockHeader {
-            application: Default::default(),
-            consensus: Default::default(),
-        };
-        let block = PartialFuelBlock::new(header, vec![]);
-        let block = block.generate(&[]);
+        // Generate 10 blocks with ascending heights
+        let blocks = (0u64..10)
+            .map(|height| {
+                let header = PartialBlockHeader {
+                    application: Default::default(),
+                    consensus: ConsensusHeader::<Empty> {
+                        height: height.into(),
+                        ..Default::default()
+                    },
+                };
+                let block = PartialFuelBlock::new(header, vec![]);
+                block.generate(&[])
+            })
+            .collect::<Vec<_>>();
 
-        // expected root
-        let expected_root = ephemeral_merkle_root(vec![block.id().as_slice()].iter());
+        // Insert the blocks
+        for block in &blocks {
+            StorageMutate::<FuelBlocks>::insert(
+                &mut database,
+                &block.id(),
+                &block.compress(),
+            )
+            .unwrap();
+        }
 
-        // insert the block
-        StorageMutate::<FuelBlocks>::insert(
-            &mut database,
-            &block.id(),
-            &block.compress(),
-        )
-        .unwrap();
+        // check that root is not present
+        let err = database
+            .block_header_merkle_root(&100u32.into())
+            .expect_err("expected error getting invalid Block Merkle root");
 
-        // check that root is present
-        let actual_root = database
-            .block_header_merkle_root(block.header().height())
-            .expect("root to exist");
-
-        assert_eq!(expected_root, actual_root);
+        assert!(matches!(err, fuel_core_storage::Error::NotFound(_, _)));
     }
 }

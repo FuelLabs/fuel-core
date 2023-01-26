@@ -76,6 +76,12 @@ impl BlockId {
     }
 }
 
+impl AsRef<[u8]> for BlockId {
+    fn as_ref(&self) -> &[u8] {
+        self.as_slice()
+    }
+}
+
 /// Block height
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(
