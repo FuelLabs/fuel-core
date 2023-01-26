@@ -34,6 +34,7 @@ use fuel_core_types::{
         block_importer::ImportResult,
         p2p::{
             GossipsubMessageAcceptance,
+            GossipsubMessageInfo,
             TransactionGossipData,
         },
     },
@@ -74,7 +75,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
 
     fn notify_gossip_transaction_validity(
         &self,
-        message: &Self::GossipedTransaction,
+        message: GossipsubMessageInfo,
         validity: GossipsubMessageAcceptance,
     ) -> anyhow::Result<()> {
         self.service
@@ -99,7 +100,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
 
     fn notify_gossip_transaction_validity(
         &self,
-        _message: &Self::GossipedTransaction,
+        _message: GossipsubMessageInfo,
         _validity: GossipsubMessageAcceptance,
     ) -> anyhow::Result<()> {
         Ok(())

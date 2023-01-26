@@ -27,7 +27,7 @@ use fuel_core_types::{
         p2p::{
             GossipData,
             GossipsubMessageAcceptance,
-            NetworkData,
+            GossipsubMessageInfo,
             TransactionGossipData,
         },
         txpool::{
@@ -138,10 +138,7 @@ where
                 should_continue = false;
             }
             new_transaction = self.gossiped_tx_stream.next() => {
-                if let Some(GossipData { data: Some(_), .. }) = &new_transaction {
-                    // safety: both Options have been checked with above `if let` statement
-                    let mut new_transaction = new_transaction.unwrap();
-                    let tx = new_transaction.take_data().unwrap();
+                if let Some(GossipData { data: Some(tx), message_id, peer_id }) = new_transaction {
                     let txs = vec!(Arc::new(tx));
 
                     let mut result = self.shared.txpool.lock().insert(
@@ -158,7 +155,11 @@ where
                         }
                         _ => None
                     } {
-                        let _ = self.shared.p2p.notify_gossip_transaction_validity(&new_transaction, acceptance);
+                        let message = GossipsubMessageInfo {
+                            message_id,
+                            peer_id,
+                        };
+                        let _ = self.shared.p2p.notify_gossip_transaction_validity(message, acceptance);
                     }
 
                     should_continue = true;
