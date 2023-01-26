@@ -1,5 +1,5 @@
 use crate::{
-    database::transactional::DatabaseTransaction,
+    database::transaction::DatabaseTransaction,
     state::{
         in_memory::memory_store::MemoryStore,
         DataSource,
@@ -65,8 +65,7 @@ mod state;
 pub mod balances;
 pub mod metadata;
 pub mod storage;
-// TODO: Rename in a separate PR into `transaction`
-pub mod transactional;
+pub mod transaction;
 pub mod transactions;
 pub mod vm_database;
 
