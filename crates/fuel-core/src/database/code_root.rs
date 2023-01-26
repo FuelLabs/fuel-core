@@ -1,55 +1,28 @@
 use crate::database::{
+    storage::DatabaseColumn,
     Column,
-    Database,
 };
-use fuel_core_storage::{
-    tables::ContractsInfo,
-    Error as StorageError,
-    StorageInspect,
-    StorageMutate,
-};
-use fuel_core_types::fuel_types::{
-    Bytes32,
-    ContractId,
-    Salt,
-};
-use std::borrow::Cow;
+use fuel_core_storage::tables::ContractsInfo;
 
-impl StorageInspect<ContractsInfo> for Database {
-    type Error = StorageError;
-
-    fn get(&self, key: &ContractId) -> Result<Option<Cow<(Salt, Bytes32)>>, Self::Error> {
-        Database::get(self, key.as_ref(), Column::ContractsInfo).map_err(Into::into)
-    }
-
-    fn contains_key(&self, key: &ContractId) -> Result<bool, Self::Error> {
-        Database::exists(self, key.as_ref(), Column::ContractsInfo).map_err(Into::into)
-    }
-}
-
-impl StorageMutate<ContractsInfo> for Database {
-    fn insert(
-        &mut self,
-        key: &ContractId,
-        value: &(Salt, Bytes32),
-    ) -> Result<Option<(Salt, Bytes32)>, Self::Error> {
-        Database::insert(self, key.as_ref(), Column::ContractsInfo, *value)
-            .map_err(Into::into)
-    }
-
-    fn remove(
-        &mut self,
-        key: &ContractId,
-    ) -> Result<Option<(Salt, Bytes32)>, Self::Error> {
-        Database::remove(self, key.as_ref(), Column::ContractsInfo).map_err(Into::into)
+impl DatabaseColumn for ContractsInfo {
+    fn column() -> Column {
+        Column::ContractsInfo
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::database::Database;
     use fuel_core_storage::StorageAsMut;
-    use fuel_core_types::fuel_vm::Contract;
+    use fuel_core_types::{
+        fuel_types::{
+            Bytes32,
+            ContractId,
+            Salt,
+        },
+        fuel_vm::Contract,
+    };
     use rand::{
         rngs::StdRng,
         Rng,

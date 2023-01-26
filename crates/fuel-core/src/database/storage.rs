@@ -15,7 +15,11 @@ use fuel_core_types::{
         BlockId,
     },
     fuel_merkle::binary,
-    fuel_types::Bytes32,
+    fuel_tx::TxId,
+    fuel_types::{
+        Bytes32,
+        ContractId,
+    },
 };
 use serde::{
     de::DeserializeOwned,
@@ -84,7 +88,7 @@ impl Mappable for FuelBlockMerkleMetadata {
 ///
 /// If the mappable type requires access to multiple columns or custom logic during setting/getting
 /// then its' storage interfaces should be manually implemented and this trait should be avoided.
-trait DatabaseColumn {
+pub trait DatabaseColumn {
     /// The column of the table.
     fn column() -> Column;
 }
@@ -148,29 +152,53 @@ where
     }
 }
 
-// TODO: Implement this trait for all keys.
-//  -> After replace all common implementation with blanket, if possible.
 /// Some keys requires pre-processing that could change their type.
 pub trait ToDatabaseKey {
     /// A new type of prepared database key that can be converted into bytes.
-    type Type: AsRef<[u8]>;
+    type Type<'a>: AsRef<[u8]>
+    where
+        Self: 'a;
 
     /// Coverts the key into database key that supports byte presentation.
-    fn database_key(&self) -> Self::Type;
+    fn database_key(&self) -> Self::Type<'_>;
 }
 
 impl ToDatabaseKey for BlockHeight {
-    type Type = [u8; 4];
+    type Type<'a> = [u8; 4];
 
-    fn database_key(&self) -> Self::Type {
+    fn database_key(&self) -> Self::Type<'_> {
         self.to_bytes()
     }
 }
 
 impl ToDatabaseKey for u64 {
-    type Type = [u8; 8];
+    type Type<'a> = [u8; 8];
 
-    fn database_key(&self) -> Self::Type {
+    fn database_key(&self) -> Self::Type<'_> {
         self.to_be_bytes()
+    }
+}
+
+impl ToDatabaseKey for ContractId {
+    type Type<'a> = &'a [u8];
+
+    fn database_key(&self) -> Self::Type<'_> {
+        self.as_ref()
+    }
+}
+
+impl ToDatabaseKey for BlockId {
+    type Type<'a> = &'a [u8];
+
+    fn database_key(&self) -> Self::Type<'_> {
+        self.as_slice()
+    }
+}
+
+impl ToDatabaseKey for TxId {
+    type Type<'a> = &'a [u8];
+
+    fn database_key(&self) -> Self::Type<'_> {
+        self.as_ref()
     }
 }

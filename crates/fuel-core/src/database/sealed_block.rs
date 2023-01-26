@@ -1,4 +1,5 @@
 use crate::database::{
+    storage::DatabaseColumn,
     Column,
     Database,
 };
@@ -8,11 +9,8 @@ use fuel_core_storage::{
         FuelBlocks,
         SealedBlockConsensus,
     },
-    Error as StorageError,
     Result as StorageResult,
     StorageAsRef,
-    StorageInspect,
-    StorageMutate,
 };
 use fuel_core_types::{
     blockchain::{
@@ -30,35 +28,10 @@ use fuel_core_types::{
     },
     fuel_tx::Transaction,
 };
-use std::borrow::Cow;
 
-impl StorageInspect<SealedBlockConsensus> for Database {
-    type Error = StorageError;
-
-    fn get(&self, key: &BlockId) -> Result<Option<Cow<Consensus>>, Self::Error> {
-        Database::get(self, key.as_slice(), Column::FuelBlockConsensus)
-            .map_err(Into::into)
-    }
-
-    fn contains_key(&self, key: &BlockId) -> Result<bool, Self::Error> {
-        Database::exists(self, key.as_slice(), Column::FuelBlockConsensus)
-            .map_err(Into::into)
-    }
-}
-
-impl StorageMutate<SealedBlockConsensus> for Database {
-    fn insert(
-        &mut self,
-        key: &BlockId,
-        value: &Consensus,
-    ) -> Result<Option<Consensus>, Self::Error> {
-        Database::insert(self, key.as_slice(), Column::FuelBlockConsensus, value)
-            .map_err(Into::into)
-    }
-
-    fn remove(&mut self, key: &BlockId) -> Result<Option<Consensus>, Self::Error> {
-        Database::remove(self, key.as_slice(), Column::FuelBlockConsensus)
-            .map_err(Into::into)
+impl DatabaseColumn for SealedBlockConsensus {
+    fn column() -> Column {
+        Column::FuelBlockConsensus
     }
 }
 
