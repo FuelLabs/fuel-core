@@ -46,6 +46,7 @@ use fuel_core_types::{
         BlockHeightHeartbeatData,
         GossipData,
         GossipsubMessageAcceptance,
+        GossipsubMessageInfo,
         TransactionGossipData,
     },
 };
@@ -312,19 +313,15 @@ pub struct SharedState {
 }
 
 impl SharedState {
-    pub fn notify_gossip_transaction_validity<'a, T>(
+    pub fn notify_gossip_transaction_validity(
         &self,
-        message: &'a T,
+        message_info: GossipsubMessageInfo,
         acceptance: GossipsubMessageAcceptance,
-    ) -> anyhow::Result<()>
-    where
-        GossipsubMessageInfo: From<&'a T>,
-    {
-        let msg_info = message.into();
-
+    ) -> anyhow::Result<()> {
         self.request_sender
             .try_send(TaskRequest::RespondWithGossipsubMessageReport((
-                msg_info, acceptance,
+                message_info,
+                acceptance,
             )))?;
         Ok(())
     }
@@ -439,6 +436,16 @@ where
     ))
 }
 
+pub(crate) fn to_message_acceptance(
+    acceptance: &GossipsubMessageAcceptance,
+) -> MessageAcceptance {
+    match acceptance {
+        GossipsubMessageAcceptance::Accept => MessageAcceptance::Accept,
+        GossipsubMessageAcceptance::Reject => MessageAcceptance::Reject,
+        GossipsubMessageAcceptance::Ignore => MessageAcceptance::Ignore,
+    }
+}
+
 fn report_message<T: NetworkCodec>(
     p2p_service: &mut FuelP2PService<T>,
     message: GossipsubMessageInfo,
@@ -450,13 +457,10 @@ fn report_message<T: NetworkCodec>(
     } = message;
 
     let msg_id = message_id.into();
+    let peer_id: Vec<u8> = peer_id.into();
 
     if let Ok(peer_id) = peer_id.try_into() {
-        let acceptance = match acceptance {
-            GossipsubMessageAcceptance::Accept => MessageAcceptance::Accept,
-            GossipsubMessageAcceptance::Reject => MessageAcceptance::Reject,
-            GossipsubMessageAcceptance::Ignore => MessageAcceptance::Ignore,
-        };
+        let acceptance = to_message_acceptance(&acceptance);
 
         match p2p_service.report_message_validation_result(&msg_id, &peer_id, acceptance)
         {
@@ -472,25 +476,6 @@ fn report_message<T: NetworkCodec>(
         }
     } else {
         warn!(target: "fuel-libp2p", "Failed to read PeerId from received GossipsubMessageId: {}", msg_id);
-    }
-}
-
-/// Lightweight representation of gossipped data that only includes IDs
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct GossipsubMessageInfo {
-    /// The message id that corresponds to a message payload (typically a unique hash)
-    pub message_id: Vec<u8>,
-    /// The ID of the network peer that sent this message
-    pub peer_id: Vec<u8>,
-}
-
-impl<T> From<&GossipData<T>> for GossipsubMessageInfo {
-    fn from(gossip_data: &GossipData<T>) -> Self {
-        Self {
-            message_id: gossip_data.message_id.clone(),
-            peer_id: gossip_data.peer_id.clone(),
-        }
     }
 }
 

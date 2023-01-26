@@ -18,6 +18,7 @@ use fuel_core_types::{
         block_importer::ImportResult,
         p2p::{
             GossipsubMessageAcceptance,
+            GossipsubMessageInfo,
             NetworkData,
         },
     },
@@ -36,7 +37,7 @@ pub trait PeerToPeer: Send + Sync {
     // Report the validity of a transaction received from the network.
     fn notify_gossip_transaction_validity(
         &self,
-        message: &Self::GossipedTransaction,
+        message_info: GossipsubMessageInfo,
         validity: GossipsubMessageAcceptance,
     ) -> anyhow::Result<()>;
 }

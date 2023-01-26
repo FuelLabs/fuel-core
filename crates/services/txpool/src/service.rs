@@ -27,6 +27,8 @@ use fuel_core_types::{
         block_importer::ImportResult,
         p2p::{
             GossipData,
+            GossipsubMessageAcceptance,
+            GossipsubMessageInfo,
             TransactionGossipData,
         },
         txpool::{
@@ -110,7 +112,7 @@ pub struct Task<P2P, DB> {
 #[async_trait::async_trait]
 impl<P2P, DB> RunnableService for Task<P2P, DB>
 where
-    P2P: Send + Sync,
+    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
     DB: TxPoolDb,
 {
     const NAME: &'static str = "TxPool";
@@ -130,7 +132,7 @@ where
 #[async_trait::async_trait]
 impl<P2P, DB> RunnableTask for Task<P2P, DB>
 where
-    P2P: Send + Sync,
+    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
     DB: TxPoolDb,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
@@ -140,16 +142,33 @@ where
                 should_continue = false;
             }
             new_transaction = self.gossiped_tx_stream.next() => {
-                if let Some(GossipData { data: Some(tx), .. }) = new_transaction {
+                if let Some(GossipData { data: Some(tx), message_id, peer_id }) = new_transaction {
                     let id = tx.id();
                     let txs = vec!(Arc::new(tx));
-                    tracing::info_span!("Received tx via gossip", %id)
+                    let mut result = tracing::info_span!("Received tx via gossip", %id)
                         .in_scope(|| {
                             self.shared.txpool.lock().insert(
                                 &self.shared.tx_status_sender,
                                 &txs
                             )
                         });
+
+                    if let Some(acceptance) = match result.pop() {
+                        Some(Ok(_)) => {
+                            Some(GossipsubMessageAcceptance::Accept)
+                        },
+                        Some(Err(_)) => {
+                            Some(GossipsubMessageAcceptance::Reject)
+                        }
+                        _ => None
+                    } {
+                        let message_info = GossipsubMessageInfo {
+                            message_id,
+                            peer_id,
+                        };
+                        let _ = self.shared.p2p.notify_gossip_transaction_validity(message_info, acceptance);
+                    }
+
                     should_continue = true;
                 } else {
                     should_continue = false;
