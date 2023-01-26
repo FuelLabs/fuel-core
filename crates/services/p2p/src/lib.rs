@@ -13,6 +13,7 @@ pub mod service;
 pub use gossipsub::config as gossipsub_config;
 
 pub use libp2p::{
+    multiaddr::Protocol,
     Multiaddr,
     PeerId,
 };

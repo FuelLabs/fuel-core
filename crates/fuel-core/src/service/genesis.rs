@@ -89,6 +89,7 @@ fn import_genesis_block(
     // Initialize the chain id and height.
     database.init(&config.chain_conf)?;
 
+    // TODO: Remove clone when `root` will be immutable.
     let chain_config_hash = config.chain_conf.clone().root()?.into();
     let coins_root = init_coin_state(database, &config.chain_conf.initial_state)?.into();
     let contracts_root =

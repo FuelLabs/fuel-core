@@ -76,5 +76,6 @@ metrics = ["dep:fuel-core-metrics"]
 p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
 rocksdb = ["dep:rocksdb", "dep:tempfile"]
+test-helpers = []
 # features to enable in production, but increase build times
 rocksdb-production = ["rocksdb?/jemalloc"]

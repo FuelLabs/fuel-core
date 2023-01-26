@@ -24,7 +24,7 @@ mod helpers;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_producer_getting_own_blocks_back() {
-    let mut rng = StdRng::seed_from_u64(12);
+    let mut rng = StdRng::seed_from_u64(line!() as u64);
 
     // Create a producer and a validator that share the same key pair.
     let secret = SecretKey::random(&mut rng);
@@ -64,7 +64,7 @@ async fn test_producer_getting_own_blocks_back() {
 #[test_case(100)]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_partition_single(num_txs: usize) {
-    let mut rng = StdRng::seed_from_u64(num_txs as u64 * 100);
+    let mut rng = StdRng::seed_from_u64(line!() as u64 * num_txs as u64);
 
     // Create a producer and two validators that share the same key pair.
     let secret = SecretKey::random(&mut rng);
@@ -126,7 +126,7 @@ async fn test_partitions_larger_groups(
 ) {
     // Create a random seed based on the test parameters.
     let mut hasher = DefaultHasher::new();
-    (num_txs, num_validators, num_partitions).hash(&mut hasher);
+    (num_txs, num_validators, num_partitions, line!()).hash(&mut hasher);
     let mut rng = StdRng::seed_from_u64(hasher.finish());
 
     // Create a producer and a set of validators that share the same key pair.
@@ -201,17 +201,18 @@ async fn test_multiple_producers_different_keys() {
     let num_txs = 10;
     let num_validators = 6;
     let num_partitions = 3;
-    (num_txs, num_validators, num_partitions).hash(&mut hasher);
+    (num_txs, num_validators, num_partitions, line!()).hash(&mut hasher);
     let mut rng = StdRng::seed_from_u64(hasher.finish());
 
     // Create a set of key pairs.
     let secrets: Vec<_> = (0..num_partitions)
         .map(|_| SecretKey::random(&mut rng))
         .collect();
-    let pub_keys = secrets
+    let pub_keys: Vec<_> = secrets
         .clone()
         .into_iter()
-        .map(|secret| Input::owner(&secret.public_key()));
+        .map(|secret| Input::owner(&secret.public_key()))
+        .collect();
 
     // Create a producer for each key pair and a set of validators that share
     // the same key pair.
@@ -219,11 +220,19 @@ async fn test_multiple_producers_different_keys() {
         mut producers,
         validators,
     } = make_nodes(
-        secrets
-            .into_iter()
-            .map(|secret| Some(ProducerSetup::new(secret).with_txs(num_txs))),
-        pub_keys.into_iter().flat_map(|pub_key| {
-            (0..num_validators).map(move |_| Some(ValidatorSetup::new(pub_key)))
+        secrets.into_iter().enumerate().map(|(i, secret)| {
+            Some(
+                ProducerSetup::new(secret)
+                    .with_txs(num_txs)
+                    .with_name(format!("{}", pub_keys[i])),
+            )
+        }),
+        pub_keys.iter().flat_map(|pub_key| {
+            (0..num_validators).map(move |i| {
+                Some(
+                    ValidatorSetup::new(*pub_key).with_name(format!("{}:{}", pub_key, i)),
+                )
+            })
         }),
     )
     .await;
@@ -239,9 +248,9 @@ async fn test_multiple_producers_different_keys() {
     }
 
     // Partition the validators into groups.
-    let mut validators = validators.into_iter();
+    let validators = &mut validators.into_iter();
     let groups = (0..num_partitions)
-        .map(|_| validators.by_ref().take(group_size).collect::<Vec<_>>())
+        .map(|_| validators.take(group_size).collect::<Vec<_>>())
         .collect::<Vec<_>>();
 
     // For each group, start the group and wait for it to sync with the
@@ -260,7 +269,7 @@ async fn test_multiple_producers_same_key() {
     let num_txs = 10;
     let num_validators = 6;
     let num_producers = 3;
-    (num_txs, num_validators, num_producers).hash(&mut hasher);
+    (num_txs, num_validators, num_producers, line!()).hash(&mut hasher);
     let mut rng = StdRng::seed_from_u64(hasher.finish());
 
     let secret = SecretKey::random(&mut rng);

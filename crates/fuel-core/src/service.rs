@@ -44,6 +44,9 @@ pub struct SharedState {
     pub graph_ql: crate::fuel_core_graphql_api::service::SharedState,
     /// Subscribe to new block production.
     pub block_importer: BlockImporterAdapter,
+    #[cfg(feature = "test-helpers")]
+    /// The config of the service.
+    pub config: Config,
 }
 
 pub struct FuelService {
@@ -119,7 +122,7 @@ impl FuelService {
     }
 
     // TODO: Rework our configs system to avoid nesting of the same configs.
-    pub fn make_config_consistent(config: &mut Config) {
+    fn make_config_consistent(config: &mut Config) {
         if config.txpool.chain_config != config.chain_conf {
             warn!("The `ChainConfig` of `TxPool` was inconsistent");
             config.txpool.chain_config = config.chain_conf.clone();

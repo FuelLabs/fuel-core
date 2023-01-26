@@ -10,6 +10,10 @@ use fuel_core::{
     },
 };
 use fuel_core_poa::Trigger;
+use fuel_core_storage::{
+    tables::Transactions,
+    StorageAsRef,
+};
 use fuel_core_types::{
     fuel_asm::Opcode,
     fuel_crypto::SecretKey,
@@ -17,6 +21,7 @@ use fuel_core_types::{
         Input,
         Transaction,
         TransactionBuilder,
+        TxId,
         UniqueIdentifier,
         UtxoId,
     },
@@ -223,18 +228,18 @@ fn make_config(name: String, chain_config: ChainConfig) -> Config {
     node_config
 }
 
-async fn make_node(mut node_config: Config, test_txs: Vec<Transaction>) -> Node {
+async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node {
     let db = Database::in_memory();
-    FuelService::make_config_consistent(&mut node_config);
-    let node = FuelService::from_database(db.clone(), node_config.clone())
+    let node = FuelService::from_database(db.clone(), node_config)
         .await
         .unwrap();
 
     let block_subscription = node.shared.block_importer.block_importer.subscribe();
+    let config = node.shared.config.clone();
     Node {
         node,
         db,
-        config: node_config,
+        config,
         test_txs,
         block_subscription,
     }
@@ -248,8 +253,8 @@ impl Node {
             block_subscription,
             ..
         } = self;
-        while !has_txs(db, txs) {
-            let _ = block_subscription.recv().await;
+        while !not_found_txs(db, txs).is_empty() {
+            block_subscription.recv().await.unwrap();
         }
     }
 
@@ -257,14 +262,18 @@ impl Node {
     pub async fn consistency_10s(&mut self, txs: &HashMap<Bytes32, Transaction>) {
         tokio::time::timeout(Duration::from_secs(10), self.consistency(txs))
             .await
-            .expect("Failed to reach consistency");
+            .unwrap_or_else(|_| {
+                panic!("Failed to reach consistency for {:?}", self.config.name)
+            });
     }
 
     /// Wait for the node to reach consistency with the given transactions within 20 seconds.
     pub async fn consistency_20s(&mut self, txs: &HashMap<Bytes32, Transaction>) {
         tokio::time::timeout(Duration::from_secs(20), self.consistency(txs))
             .await
-            .expect("Failed to reach consistency");
+            .unwrap_or_else(|_| {
+                panic!("Failed to reach consistency for {:?}", self.config.name)
+            });
     }
 
     /// Insert the test transactions into the node's transaction pool.
@@ -295,6 +304,8 @@ impl Node {
             .await
             .unwrap();
         self.node = node;
+        self.block_subscription =
+            self.node.shared.block_importer.block_importer.subscribe();
     }
 
     /// Stop a node.
@@ -303,20 +314,18 @@ impl Node {
     }
 }
 
-fn has_txs<'iter>(
+fn not_found_txs<'iter>(
     db: &'iter Database,
     txs: &'iter HashMap<Bytes32, Transaction>,
-) -> bool {
-    let mut empty = true;
-    let r = db
-        .all_transactions(None, None)
-        .map(Result::unwrap)
-        .filter(|tx| tx.is_script())
-        .all(|tx| {
-            empty = false;
-            txs.contains_key(&tx.id())
-        });
-    r && !empty
+) -> Vec<TxId> {
+    let mut not_found = vec![];
+    txs.iter().for_each(|(id, tx)| {
+        assert_eq!(id, &tx.id());
+        if !db.storage::<Transactions>().contains_key(id).unwrap() {
+            not_found.push(*id);
+        }
+    });
+    not_found
 }
 
 impl ProducerSetup {

@@ -25,7 +25,7 @@ path = "tests/metrics.rs"
 
 [dependencies]
 ethers = "1.0.2"
-fuel-core = { path = "../crates/fuel-core", default-features = false }
+fuel-core = { path = "../crates/fuel-core", default-features = false, features = ["test-helpers"] }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
 fuel-core-poa = { path = "../crates/services/consensus_module/poa" }
 fuel-core-relayer = { path = "../crates/services/relayer", features = [
