@@ -140,16 +140,19 @@ async fn test_partitions_larger_groups(
         [Some(
             ProducerSetup::new(secret)
                 .with_txs(num_txs)
-                .with_name("Alice"),
+                .with_name(format!("{}:producer", pub_key)),
         )],
-        std::iter::repeat(Some(ValidatorSetup::new(pub_key))).take(num_validators),
+        (0..num_validators).into_iter().map(|i| {
+            Some(ValidatorSetup::new(pub_key).with_name(format!("{}:{}", pub_key, i)))
+        }),
     )
     .await;
 
-    let producer = producers.pop().unwrap();
+    let mut producer = producers.pop().unwrap();
 
     // Get the number of validators per partition.
     let group_size = num_validators / num_partitions;
+    assert_eq!(num_validators % num_partitions, 0);
 
     // Shutdown the validators.
     for v in &mut validators {
@@ -158,14 +161,17 @@ async fn test_partitions_larger_groups(
 
     // Insert the transactions into the tx pool.
     let expected = producer.insert_txs();
+    producer.consistency_20s(&expected).await;
 
     // The overlap between two groups.
     let mut overlap: VecDeque<Vec<Node>> = VecDeque::with_capacity(2);
 
     // Partition the validators into groups.
-    let mut validators = validators.into_iter();
-    let groups = (0..num_partitions)
-        .map(|_| validators.by_ref().take(group_size).collect::<Vec<_>>())
+    let groups = validators
+        .into_iter()
+        .chunks(group_size)
+        .into_iter()
+        .map(|chunk| chunk.collect::<Vec<_>>())
         .collect::<Vec<_>>();
 
     // The producer is the first overlap.
@@ -174,6 +180,8 @@ async fn test_partitions_larger_groups(
     // For each group, start the group, wait for it to sync with the overlapping
     // group, and shutdown the overlapping group.
     for mut validators in groups {
+        assert_eq!(overlap.len(), 1);
+
         // Start this group.
         for v in &mut validators {
             v.start().await;
@@ -181,7 +189,7 @@ async fn test_partitions_larger_groups(
 
         // Wait up to 10 seconds validators to sync with the overlapping group.
         for v in &mut validators {
-            v.consistency_10s(&expected).await;
+            v.consistency_20s(&expected).await;
         }
 
         // Shutdown the overlapping group.
