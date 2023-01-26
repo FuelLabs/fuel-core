@@ -182,9 +182,8 @@ impl GenesisCommitment for ChainConfig {
 impl GenesisCommitment for ConsensusParameters {
     fn root(&mut self) -> anyhow::Result<MerkleRoot> {
         // TODO: Define hash algorithm for `ConsensusParameters`
-        let params_hash = Hasher::default()
-            .chain(bincode::serialize(&self)?)
-            .finalize();
+        let bytes = postcard::to_stdvec(&self)?;
+        let params_hash = Hasher::default().chain(bytes).finalize();
 
         Ok(params_hash.into())
     }

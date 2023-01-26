@@ -17,7 +17,6 @@ async-graphql = { version = "4.0", features = [
 ], default-features = false }
 async-trait = "0.1"
 axum = { version = "0.5" }
-bincode = "1.3"
 clap = { version = "4.1", features = ["derive"] }
 derive_more = { version = "0.99" }
 enum-iterator = "1.2"
@@ -43,6 +42,7 @@ hex = { version = "0.4", features = ["serde"] }
 hyper = { version = "0.14" }
 itertools = "0.10"
 num_cpus = "1.13"
+postcard = { version = "1.0", features = ["use-std"] }
 primitive-types = "0.12"
 rand = "0.8"
 rocksdb = { version = "0.19", default-features = false, features = [
