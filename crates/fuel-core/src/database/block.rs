@@ -285,7 +285,7 @@ mod tests {
     fn can_get_merkle_root_of_inserted_blocks(heights: &[u64]) {
         let mut database = Database::default();
         let blocks = heights
-            .into_iter()
+            .iter()
             .copied()
             .map(|height| {
                 let header = PartialBlockHeader {
