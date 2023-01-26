@@ -25,7 +25,6 @@ use fuel_core_types::{
         Address,
         Bytes32,
     },
-    fuel_vm::crypto::ephemeral_merkle_root,
     services::{
         executor::{
             Error as ExecutorError,
@@ -195,27 +194,6 @@ impl Executor<MockDb> for FailingMockExecutor {
 #[derive(Clone, Default, Debug)]
 pub struct MockDb {
     pub blocks: Arc<Mutex<HashMap<BlockHeight, CompressedBlock>>>,
-    pub merklized_blocks: Arc<Mutex<HashMap<BlockHeight, Bytes32>>>,
-}
-
-impl MockDb {
-    pub fn insert_block(&mut self, block: CompressedBlock) {
-        let height = block.header().height();
-
-        let mut blocks = self.blocks.lock().unwrap();
-        blocks.insert(*height, block.clone());
-
-        let root = {
-            let mut keys_values = blocks.iter().collect::<Vec<_>>();
-            keys_values.sort_by(|a, b| a.0.partial_cmp(b.0).unwrap());
-            let (_, blocks): (Vec<&BlockHeight>, Vec<&CompressedBlock>) =
-                keys_values.into_iter().unzip();
-            ephemeral_merkle_root(blocks.iter().map(|block| block.id()))
-        };
-
-        let mut merklized_blocks = self.merklized_blocks.lock().unwrap();
-        merklized_blocks.insert(*height, root);
-    }
 }
 
 impl BlockProducerDatabase for MockDb {
@@ -229,11 +207,7 @@ impl BlockProducerDatabase for MockDb {
     }
 
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32> {
-        let merklized_blocks = self.merklized_blocks.lock().unwrap();
-        merklized_blocks
-            .get(height)
-            .cloned()
-            .ok_or(not_found!("Didn't find block for test"))
+        Ok(Bytes32::new([height.as_usize() as u8; 32]))
     }
 
     fn current_block_height(&self) -> StorageResult<BlockHeight> {
