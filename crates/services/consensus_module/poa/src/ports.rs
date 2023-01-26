@@ -1,13 +1,20 @@
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::transactional::StorageTransaction;
+use fuel_core_storage::{
+    transactional::StorageTransaction,
+    Result as StorageResult,
+};
 use fuel_core_types::{
-    blockchain::primitives::BlockHeight,
+    blockchain::{
+        header::BlockHeader,
+        primitives::BlockHeight,
+    },
     fuel_asm::Word,
     fuel_tx::{
         Receipt,
         Transaction,
         TxId,
     },
+    fuel_types::Bytes32,
     services::{
         block_importer::UncommittedResult as UncommittedImportResult,
         executor::UncommittedResult as UncommittedExecutionResult,
@@ -62,4 +69,14 @@ pub trait BlockImporter: Send + Sync {
         &self,
         result: UncommittedImportResult<StorageTransaction<Self::Database>>,
     ) -> anyhow::Result<()>;
+}
+
+#[cfg_attr(test, mockall::automock)]
+/// The port for the database.
+pub trait Database {
+    /// Gets the block header at `height`.
+    fn block_header(&self, height: &BlockHeight) -> StorageResult<BlockHeader>;
+
+    /// Gets the block header BMT MMR root at `height`.
+    fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32>;
 }
