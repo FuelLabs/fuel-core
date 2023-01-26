@@ -63,7 +63,7 @@ async fn test_producer_getting_own_blocks_back() {
 #[test_case(10)]
 #[test_case(100)]
 #[tokio::test(flavor = "multi_thread")]
-async fn test_partitions(num_txs: usize) {
+async fn test_partition_single(num_txs: usize) {
     let mut rng = StdRng::seed_from_u64(num_txs as u64 * 100);
 
     // Create a producer and two validators that share the same key pair.
