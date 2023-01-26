@@ -67,7 +67,7 @@ mockall::mock! {
 
         fn notify_gossip_transaction_validity(
             &self,
-            message: GossipsubMessageInfo,
+            message_info: GossipsubMessageInfo,
             validity: GossipsubMessageAcceptance,
         ) -> anyhow::Result<()>;
     }

@@ -75,11 +75,11 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
 
     fn notify_gossip_transaction_validity(
         &self,
-        message: GossipsubMessageInfo,
+        message_info: GossipsubMessageInfo,
         validity: GossipsubMessageAcceptance,
     ) -> anyhow::Result<()> {
         self.service
-            .notify_gossip_transaction_validity(message, validity)
+            .notify_gossip_transaction_validity(message_info, validity)
     }
 }
 
@@ -100,7 +100,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
 
     fn notify_gossip_transaction_validity(
         &self,
-        _message: GossipsubMessageInfo,
+        _message_info: GossipsubMessageInfo,
         _validity: GossipsubMessageAcceptance,
     ) -> anyhow::Result<()> {
         Ok(())

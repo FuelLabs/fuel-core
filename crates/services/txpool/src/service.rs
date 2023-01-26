@@ -155,11 +155,11 @@ where
                         }
                         _ => None
                     } {
-                        let message = GossipsubMessageInfo {
+                        let message_info = GossipsubMessageInfo {
                             message_id,
                             peer_id,
                         };
-                        let _ = self.shared.p2p.notify_gossip_transaction_validity(message, acceptance);
+                        let _ = self.shared.p2p.notify_gossip_transaction_validity(message_info, acceptance);
                     }
 
                     should_continue = true;

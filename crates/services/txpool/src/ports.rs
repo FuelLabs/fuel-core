@@ -37,7 +37,7 @@ pub trait PeerToPeer: Send + Sync {
     // Report the validity of a transaction received from the network.
     fn notify_gossip_transaction_validity(
         &self,
-        message: GossipsubMessageInfo,
+        message_info: GossipsubMessageInfo,
         validity: GossipsubMessageAcceptance,
     ) -> anyhow::Result<()>;
 }

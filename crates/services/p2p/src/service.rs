@@ -315,12 +315,13 @@ pub struct SharedState {
 impl SharedState {
     pub fn notify_gossip_transaction_validity(
         &self,
-        message: GossipsubMessageInfo,
+        message_info: GossipsubMessageInfo,
         acceptance: GossipsubMessageAcceptance,
     ) -> anyhow::Result<()> {
         self.request_sender
             .try_send(TaskRequest::RespondWithGossipsubMessageReport((
-                message, acceptance,
+                message_info,
+                acceptance,
             )))?;
         Ok(())
     }
