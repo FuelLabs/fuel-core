@@ -18,11 +18,14 @@ async-graphql = { version = "4.0", features = [
 async-trait = "0.1"
 axum = { version = "0.5" }
 bincode = "1.3"
+clap = { version = "4.1", features = ["derive"] }
 derive_more = { version = "0.99" }
 enum-iterator = "1.2"
 fuel-core-chain-config = { path = "../chain-config", version = "0.15.1" }
+fuel-core-consensus-module = { path = "../../crates/services/consensus_module", version = "0.15.1" }
 fuel-core-database = { path = "../database", version = "0.15.1" }
 fuel-core-executor = { path = "../services/executor", version = "0.15.1" }
+fuel-core-importer = { path = "../services/importer", version = "0.15.1" }
 fuel-core-metrics = { path = "../metrics", version = "0.15.1", optional = true }
 fuel-core-p2p = { path = "../services/p2p", version = "0.15.1", optional = true }
 fuel-core-poa = { path = "../services/consensus_module/poa", version = "0.15.1" }
@@ -30,6 +33,7 @@ fuel-core-producer = { path = "../services/producer", version = "0.15.1" }
 fuel-core-relayer = { path = "../services/relayer", version = "0.15.1", optional = true }
 fuel-core-services = { path = "../services", version = "0.15.1" }
 fuel-core-storage = { path = "../storage", version = "0.15.1" }
+fuel-core-sync = { path = "../services/sync", version = "0.15.1", optional = true }
 fuel-core-txpool = { path = "../services/txpool", version = "0.15.1" }
 fuel-core-types = { path = "../types", version = "0.15.1", features = [
     "serde",
@@ -49,7 +53,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 strum = "0.24"
 strum_macros = "0.24"
-tempfile = "3.3"
+tempfile = { version = "3.3", optional = true }
 thiserror = "1.0"
 tokio = { version = "1.21", features = ["macros", "rt-multi-thread"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
@@ -60,6 +64,7 @@ uuid = { version = "1.1", features = ["v4"] }
 [dev-dependencies]
 assert_matches = "1.5"
 fuel-core-storage = { path = "../storage", features = ["test-helpers"] }
+fuel-core-trace = { path = "../trace" }
 fuel-core-types = { path = "../types", features = ["test-helpers"] }
 mockall = "0.11"
 test-case = "2.2"
@@ -68,8 +73,8 @@ test-case = "2.2"
 debug = ["fuel-core-types/debug"]
 default = ["debug", "metrics", "rocksdb"]
 metrics = ["dep:fuel-core-metrics"]
-p2p = ["dep:fuel-core-p2p"]
+p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
-rocksdb = ["dep:rocksdb"]
+rocksdb = ["dep:rocksdb", "dep:tempfile"]
 # features to enable in production, but increase build times
 rocksdb-production = ["rocksdb?/jemalloc"]

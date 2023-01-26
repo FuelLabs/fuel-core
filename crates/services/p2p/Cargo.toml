@@ -32,8 +32,7 @@ libp2p = { version = "=0.50.0", default-features = false, features = [
     "macros",
     "mdns",
     "mplex",
-    "noise",
-    "ping",
+    "noise",    
     "request-response",
     "secp256k1",
     "tcp",
@@ -49,7 +48,6 @@ libp2p-kad = "=0.42.0"
 libp2p-mdns = "=0.42.0"
 libp2p-mplex = "=0.38.0"
 libp2p-noise = "=0.41.0"
-libp2p-ping = "=0.41.0"
 libp2p-request-response = "=0.23.0"
 libp2p-swarm = "=0.41.1"
 libp2p-tcp = "=0.38.0"
@@ -58,19 +56,20 @@ libp2p-yamux = "=0.42.0"
 prometheus-client = "0.18"
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
+serde_with = "1.11"
 sha2 = "0.10"
 tokio = { version = "1.21", features = ["sync"] }
 tracing = "0.1"
 
 [dev-dependencies]
 ctor = "0.1"
+fuel-core-trace = { path = "../../trace" }
 fuel-core-types = { path = "../../types", features = [
     "serde",
     "test-helpers"
 ], version = "0.15.1" }
 rand = "0.8"
 tokio = { version = "1.21", features = ["full"] }
-tracing-appender = "0.2"
 tracing-attributes = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

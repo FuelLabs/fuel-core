@@ -1,14 +1,12 @@
 use crate::{
     database::{
+        storage::DatabaseColumn,
         Column,
         Database,
         Error as DatabaseError,
         Result as DatabaseResult,
     },
-    state::{
-        IterDirection,
-        MultiKey,
-    },
+    state::IterDirection,
 };
 use fuel_core_chain_config::ContractConfig;
 use fuel_core_storage::{
@@ -17,83 +15,26 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         ContractsRawCode,
     },
-    Error as StorageError,
+    ContractsAssetKey,
     Result as StorageResult,
     StorageAsRef,
-    StorageInspect,
-    StorageMutate,
 };
-use fuel_core_types::{
-    fuel_tx::{
-        Contract,
-        UtxoId,
-    },
-    fuel_types::{
-        AssetId,
-        Bytes32,
-        ContractId,
-        Word,
-    },
+use fuel_core_types::fuel_types::{
+    AssetId,
+    Bytes32,
+    ContractId,
+    Word,
 };
 
-use std::borrow::Cow;
-
-impl StorageInspect<ContractsRawCode> for Database {
-    type Error = StorageError;
-
-    fn get(&self, key: &ContractId) -> Result<Option<Cow<Contract>>, Self::Error> {
-        self.get(key.as_ref(), Column::ContractsRawCode)
-            .map_err(Into::into)
-    }
-
-    fn contains_key(&self, key: &ContractId) -> Result<bool, Self::Error> {
-        self.exists(key.as_ref(), Column::ContractsRawCode)
-            .map_err(Into::into)
+impl DatabaseColumn for ContractsRawCode {
+    fn column() -> Column {
+        Column::ContractsRawCode
     }
 }
 
-impl StorageMutate<ContractsRawCode> for Database {
-    fn insert(
-        &mut self,
-        key: &ContractId,
-        value: &[u8],
-    ) -> Result<Option<Contract>, Self::Error> {
-        Database::insert(self, key.as_ref(), Column::ContractsRawCode, value)
-            .map_err(Into::into)
-    }
-
-    fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, Self::Error> {
-        Database::remove(self, key.as_ref(), Column::ContractsRawCode).map_err(Into::into)
-    }
-}
-
-impl StorageInspect<ContractsLatestUtxo> for Database {
-    type Error = StorageError;
-
-    fn get(&self, key: &ContractId) -> Result<Option<Cow<UtxoId>>, Self::Error> {
-        self.get(key.as_ref(), Column::ContractsLatestUtxo)
-            .map_err(Into::into)
-    }
-
-    fn contains_key(&self, key: &ContractId) -> Result<bool, Self::Error> {
-        self.exists(key.as_ref(), Column::ContractsLatestUtxo)
-            .map_err(Into::into)
-    }
-}
-
-impl StorageMutate<ContractsLatestUtxo> for Database {
-    fn insert(
-        &mut self,
-        key: &ContractId,
-        value: &UtxoId,
-    ) -> Result<Option<UtxoId>, Self::Error> {
-        Database::insert(self, key.as_ref(), Column::ContractsLatestUtxo, *value)
-            .map_err(Into::into)
-    }
-
-    fn remove(&mut self, key: &ContractId) -> Result<Option<UtxoId>, Self::Error> {
-        Database::remove(self, key.as_ref(), Column::ContractsLatestUtxo)
-            .map_err(Into::into)
+impl DatabaseColumn for ContractsLatestUtxo {
+    fn column() -> Column {
+        Column::ContractsLatestUtxo
     }
 }
 
@@ -107,8 +48,11 @@ impl Database {
         self.iter_all::<Vec<u8>, Word>(
             Column::ContractsAssets,
             Some(contract.as_ref().to_vec()),
-            start_asset
-                .map(|asset_id| MultiKey::new(&(&contract, &asset_id)).as_ref().to_vec()),
+            start_asset.map(|asset_id| {
+                ContractsAssetKey::new(&contract, &asset_id)
+                    .as_ref()
+                    .to_vec()
+            }),
             direction,
         )
         .map(|res| {
@@ -199,7 +143,11 @@ impl Database {
 mod tests {
     use super::*;
     use fuel_core_storage::StorageAsMut;
-    use fuel_core_types::fuel_tx::TxId;
+    use fuel_core_types::fuel_tx::{
+        Contract,
+        TxId,
+        UtxoId,
+    };
 
     #[test]
     fn raw_code_get() {

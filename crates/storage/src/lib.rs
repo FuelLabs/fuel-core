@@ -17,7 +17,14 @@ pub use fuel_vm_private::{
 
 pub mod iter;
 pub mod tables;
+#[cfg(feature = "test-helpers")]
+pub mod test_helpers;
 pub mod transactional;
+
+pub use fuel_vm_private::storage::{
+    ContractsAssetKey,
+    ContractsStateKey,
+};
 
 /// The storage result alias.
 pub type Result<T> = core::result::Result<T, Error>;
@@ -53,6 +60,27 @@ impl From<Error> for ExecutorError {
     }
 }
 
+/// The helper trait to work with storage errors.
+pub trait IsNotFound {
+    /// Return `true` if the error is [`Error::NotFound`].
+    fn is_not_found(&self) -> bool;
+}
+
+impl IsNotFound for Error {
+    fn is_not_found(&self) -> bool {
+        matches!(self, Error::NotFound(_, _))
+    }
+}
+
+impl<T> IsNotFound for Result<T> {
+    fn is_not_found(&self) -> bool {
+        match self {
+            Err(err) => err.is_not_found(),
+            _ => false,
+        }
+    }
+}
+
 /// Creates `StorageError::NotFound` error with file and line information inside.
 ///
 /// # Examples
@@ -72,7 +100,7 @@ macro_rules! not_found {
     };
     ($ty: path) => {
         $crate::Error::NotFound(
-            ::core::any::type_name::<<$ty as $crate::Mappable>::GetValue>(),
+            ::core::any::type_name::<<$ty as $crate::Mappable>::OwnedValue>(),
             concat!(file!(), ":", line!()),
         )
     };

@@ -1,12 +1,12 @@
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::transactional::StorageTransaction;
+use fuel_core_storage::{
+    transactional::StorageTransaction,
+    Result as StorageResult,
+};
 use fuel_core_types::{
     blockchain::{
-        consensus::Consensus,
-        primitives::{
-            BlockHeight,
-            BlockId,
-        },
+        header::BlockHeader,
+        primitives::BlockHeight,
     },
     fuel_asm::Word,
     fuel_tx::{
@@ -14,15 +14,19 @@ use fuel_core_types::{
         Transaction,
         TxId,
     },
+    fuel_types::Bytes32,
     services::{
-        executor::UncommittedResult,
+        block_importer::UncommittedResult as UncommittedImportResult,
+        executor::UncommittedResult as UncommittedExecutionResult,
         txpool::{
             ArcPoolTx,
             TxStatus,
         },
     },
+    tai64::Tai64,
 };
 
+#[cfg_attr(test, mockall::automock)]
 pub trait TransactionPool: Send + Sync {
     /// Returns the number of pending transactions in the `TxPool`.
     fn pending_number(&self) -> usize;
@@ -34,26 +38,20 @@ pub trait TransactionPool: Send + Sync {
     fn transaction_status_events(&self) -> BoxStream<TxStatus>;
 }
 
-pub trait BlockDb: Send + Sync {
-    fn block_height(&self) -> anyhow::Result<BlockHeight>;
+#[cfg(test)]
+use fuel_core_storage::test_helpers::EmptyStorage;
 
-    // Returns error if already sealed
-    fn seal_block(
-        &mut self,
-        block_id: BlockId,
-        consensus: Consensus,
-    ) -> anyhow::Result<()>;
-}
-
+#[cfg_attr(test, mockall::automock(type Database=EmptyStorage;))]
 #[async_trait::async_trait]
-pub trait BlockProducer<Database>: Send + Sync {
-    // TODO: Right now production and execution of the block is one step, but in the future,
-    //  `produce_block` should only produce a block without affecting the blockchain state.
+pub trait BlockProducer: Send + Sync {
+    type Database;
+
     async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
+        block_time: Option<Tai64>,
         max_gas: Word,
-    ) -> anyhow::Result<UncommittedResult<StorageTransaction<Database>>>;
+    ) -> anyhow::Result<UncommittedExecutionResult<StorageTransaction<Self::Database>>>;
 
     async fn dry_run(
         &self,
@@ -61,4 +59,24 @@ pub trait BlockProducer<Database>: Send + Sync {
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
     ) -> anyhow::Result<Vec<Receipt>>;
+}
+
+#[cfg_attr(test, mockall::automock(type Database=EmptyStorage;))]
+pub trait BlockImporter: Send + Sync {
+    type Database;
+
+    fn commit_result(
+        &self,
+        result: UncommittedImportResult<StorageTransaction<Self::Database>>,
+    ) -> anyhow::Result<()>;
+}
+
+#[cfg_attr(test, mockall::automock)]
+/// The port for the database.
+pub trait Database {
+    /// Gets the block header at `height`.
+    fn block_header(&self, height: &BlockHeight) -> StorageResult<BlockHeader>;
+
+    /// Gets the block header BMT MMR root at `height`.
+    fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32>;
 }

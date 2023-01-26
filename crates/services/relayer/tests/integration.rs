@@ -14,6 +14,8 @@ use fuel_core_relayer::{
 };
 use fuel_core_services::Service;
 
+fuel_core_trace::enable_tracing!();
+
 #[tokio::test(start_paused = true)]
 async fn can_set_da_height() {
     let mock_db = MockDb::default();

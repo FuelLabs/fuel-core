@@ -95,6 +95,8 @@ jobs:
         include:
           - command: clippy
             args: --all-targets --all-features
+          - command: check
+            args: --all-targets
           - command: make
             args: check --locked
           - command: test

@@ -7,7 +7,7 @@ use crate::{
         GossipsubMessage,
     },
     request_response::messages::{
-        IntermediateResponse,
+        NetworkResponse,
         OutboundResponse,
         RequestMessage,
         ResponseMessage,
@@ -31,22 +31,22 @@ pub trait GossipsubCodec {
 }
 
 pub trait RequestResponseConverter {
-    /// Response that is ready to be converted into IntermediateResponse
+    /// Response that is ready to be converted into NetworkResponse
     type OutboundResponse;
     /// Response that is sent over the network
-    type IntermediateResponse;
+    type NetworkResponse;
     /// Final Response Message deserialized from IntermediateResponse
     type ResponseMessage;
 
-    fn convert_to_response(
-        &self,
-        inter_msg: &Self::IntermediateResponse,
-    ) -> Result<Self::ResponseMessage, io::Error>;
-
-    fn convert_to_intermediate(
+    fn convert_to_network_response(
         &self,
         res_msg: &Self::OutboundResponse,
-    ) -> Result<Self::IntermediateResponse, io::Error>;
+    ) -> Result<Self::NetworkResponse, io::Error>;
+
+    fn convert_to_response(
+        &self,
+        inter_msg: &Self::NetworkResponse,
+    ) -> Result<Self::ResponseMessage, io::Error>;
 }
 
 /// Main Codec trait
@@ -55,9 +55,9 @@ pub trait NetworkCodec:
     GossipsubCodec<
         RequestMessage = GossipsubBroadcastRequest,
         ResponseMessage = GossipsubMessage,
-    > + RequestResponseCodec<Request = RequestMessage, Response = IntermediateResponse>
+    > + RequestResponseCodec<Request = RequestMessage, Response = NetworkResponse>
     + RequestResponseConverter<
-        IntermediateResponse = IntermediateResponse,
+        NetworkResponse = NetworkResponse,
         OutboundResponse = OutboundResponse,
         ResponseMessage = ResponseMessage,
     > + Clone

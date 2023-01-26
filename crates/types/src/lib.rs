@@ -30,8 +30,12 @@ pub mod fuel_vm {
 
     #[doc(no_inline)]
     pub use fuel_vm_private::{
+        checked_transaction,
         consts,
         crypto,
+        gas::DependentCost,
+        gas::GasCosts,
+        gas::GasCostsValues,
         interpreter,
         prelude::{
             Backtrace,

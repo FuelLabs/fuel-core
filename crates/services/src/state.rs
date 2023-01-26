@@ -1,4 +1,4 @@
-//! The module related to state of teh service.
+//! The module related to state of the service.
 
 use tokio::sync::watch;
 
@@ -77,12 +77,12 @@ impl StateWatcher {
     /// Infinity loop while the state is `State::Started`. Returns the next received state.
     pub async fn while_started(&mut self) -> anyhow::Result<State> {
         loop {
-            self.changed().await?;
-
             let state = self.borrow().clone();
             if !state.started() {
                 return Ok(state)
             }
+
+            self.changed().await?;
         }
     }
 }

@@ -154,7 +154,6 @@ async fn can_build_message_proof() {
             time: Tai64::UNIX_EPOCH,
             generated: Default::default(),
         },
-        metadata: None,
     };
     data.expect_block()
         .once()
@@ -163,7 +162,7 @@ async fn can_build_message_proof() {
             let header = header.clone();
             let message_ids = message_ids.clone();
             move |_| {
-                let header = header.clone().generate(&[vec![]], &message_ids);
+                let header = header.clone().generate(&[], &message_ids);
                 let transactions = TXNS.to_vec();
                 Ok(CompressedBlock::test(header, transactions))
             }
@@ -174,6 +173,6 @@ async fn can_build_message_proof() {
         .unwrap();
     assert_eq!(p.message_id(), message_id);
     assert_eq!(p.signature, Signature::default());
-    let header = header.generate(&[vec![]], &message_ids);
+    let header = header.generate(&[], &message_ids);
     assert_eq!(p.header.output_messages_root, header.output_messages_root);
 }

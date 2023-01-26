@@ -2,7 +2,7 @@
 
 use crate::fuel_crypto::Signature;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Default, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The consensus related data that doesn't live on the
 /// header.

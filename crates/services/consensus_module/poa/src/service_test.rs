@@ -1,10 +1,9 @@
 use crate::{
-    deadline_clock::DeadlineClock,
     new_service,
     ports::{
-        BlockDb,
-        BlockProducer,
-        TransactionPool,
+        MockBlockImporter,
+        MockBlockProducer,
+        MockTransactionPool,
     },
     service::Task,
     Config,
@@ -12,25 +11,18 @@ use crate::{
     Trigger,
 };
 use fuel_core_services::{
-    stream::{
-        pending,
-        BoxStream,
-    },
+    stream::pending,
     Service as StorageTrait,
+    State,
 };
 use fuel_core_storage::{
-    transactional::{
-        StorageTransaction,
-        Transaction as StorageTransactionTrait,
-    },
-    Result as StorageResult,
+    test_helpers::EmptyStorage,
+    transactional::StorageTransaction,
 };
 use fuel_core_types::{
     blockchain::{
-        consensus::Consensus,
         primitives::{
             BlockHeight,
-            BlockId,
             SecretKeyWrapper,
         },
         SealedBlock,
@@ -49,7 +41,6 @@ use fuel_core_types::{
             UncommittedResult,
         },
         txpool::{
-            ArcPoolTx,
             Error as TxPoolError,
             TxStatus,
         },
@@ -75,31 +66,26 @@ use tokio::{
         watch,
     },
     time,
-    time::Instant,
 };
 
+mod manually_produce_tests;
 mod trigger_tests;
 
 struct TestContextBuilder {
-    mock_db: Option<MockDatabase>,
-    producer: Option<MockBlockProducer>,
-    txpool: Option<MockTxPool>,
     config: Option<Config>,
+    txpool: Option<MockTransactionPool>,
+    importer: Option<MockBlockImporter>,
+    producer: Option<MockBlockProducer>,
 }
 
 impl TestContextBuilder {
     fn new() -> Self {
         Self {
-            mock_db: None,
-            producer: None,
-            txpool: None,
             config: None,
+            txpool: None,
+            importer: None,
+            producer: None,
         }
-    }
-
-    fn with_txpool(&mut self, txpool: MockTxPool) -> &mut Self {
-        self.txpool = Some(txpool);
-        self
     }
 
     fn with_config(&mut self, config: Config) -> &mut Self {
@@ -107,89 +93,76 @@ impl TestContextBuilder {
         self
     }
 
+    fn with_txpool(&mut self, txpool: MockTransactionPool) -> &mut Self {
+        self.txpool = Some(txpool);
+        self
+    }
+
+    fn with_importer(&mut self, importer: MockBlockImporter) -> &mut Self {
+        self.importer = Some(importer);
+        self
+    }
+
+    fn with_producer(&mut self, producer: MockBlockProducer) -> &mut Self {
+        self.producer = Some(producer);
+        self
+    }
+
     fn build(self) -> TestContext {
-        let (block_import_tx, _) = broadcast::channel(100);
         let config = self.config.unwrap_or_default();
         let producer = self.producer.unwrap_or_else(|| {
             let mut producer = MockBlockProducer::default();
             producer
                 .expect_produce_and_execute_block()
-                .returning(|_, _| {
-                    let mut db = MockDatabase::default();
-                    db.expect_as_mut().returning(move || {
-                        let mut tx_db = MockDatabase::default();
-                        tx_db.expect_seal_block().returning(|_, _| Ok(()));
-                        tx_db
-                    });
-                    db.expect_commit().returning(|| Ok(()));
-
+                .returning(|_, _, _| {
                     Ok(UncommittedResult::new(
                         ExecutionResult {
                             block: Default::default(),
                             skipped_transactions: Default::default(),
                             tx_status: Default::default(),
                         },
-                        StorageTransaction::new(db),
+                        StorageTransaction::new(EmptyStorage),
                     ))
                 });
             producer
         });
-        let txpool = self.txpool.unwrap_or_else(MockTxPool::no_tx_updates);
-        let mock_db = self.mock_db.unwrap_or_else(|| {
-            // default db
-            let mut mock_db = MockDatabase::default();
-            mock_db.expect_block_height().returning(|| Ok(1u64.into()));
-            mock_db
+
+        let importer = self.importer.unwrap_or_else(|| {
+            let mut importer = MockBlockImporter::default();
+            importer.expect_commit_result().returning(|_| Ok(()));
+            importer
         });
 
+        let txpool = self
+            .txpool
+            .unwrap_or_else(MockTransactionPool::no_tx_updates);
+
         let service =
-            new_service(config, txpool, block_import_tx.clone(), producer, mock_db);
+            new_service(BlockHeight::from(1u64), config, txpool, producer, importer);
         service.start().unwrap();
-        TestContext {
-            block_import_tx,
-            service,
-        }
+        TestContext { service }
     }
 }
 
 struct TestContext {
-    block_import_tx: broadcast::Sender<SealedBlock>,
-    service: Service<MockDatabase, MockTxPool, MockBlockProducer>,
+    service: Service<MockTransactionPool, MockBlockProducer, MockBlockImporter>,
 }
 
 impl TestContext {
-    fn subscribe_import(&self) -> broadcast::Receiver<SealedBlock> {
-        self.block_import_tx.subscribe()
-    }
-
-    async fn stop(&self) {
-        let _ = self.service.stop_and_await().await.unwrap();
+    async fn stop(&self) -> State {
+        self.service.stop_and_await().await.unwrap()
     }
 }
 
-mockall::mock! {
-    TxPool {}
-
-    impl TransactionPool for TxPool {
-        fn pending_number(&self) -> usize;
-
-        fn total_consumable_gas(&self) -> u64;
-
-        fn remove_txs(&self, tx_ids: Vec<TxId>) -> Vec<ArcPoolTx>;
-
-        fn transaction_status_events(&self) -> BoxStream<TxStatus>;
-    }
-}
-
-struct TxPoolContext {
-    pub txpool: MockTxPool,
+pub struct TxPoolContext {
+    pub txpool: MockTransactionPool,
     pub txs: Arc<Mutex<Vec<Script>>>,
     pub status_sender: Arc<watch::Sender<Option<TxStatus>>>,
 }
 
-impl MockTxPool {
-    pub fn no_tx_updates() -> Self {
-        let mut txpool = MockTxPool::default();
+impl MockTransactionPool {
+    fn no_tx_updates() -> Self {
+        let mut txpool = MockTransactionPool::default();
         txpool
             .expect_transaction_status_events()
             .returning(|| Box::pin(pending()));
@@ -197,7 +170,7 @@ impl MockTxPool {
     }
 
     pub fn new_with_txs(txs: Vec<Script>) -> TxPoolContext {
-        let mut txpool = MockTxPool::default();
+        let mut txpool = MockTransactionPool::default();
         let txs = Arc::new(StdMutex::new(txs));
         let (status_sender, status_receiver) = watch::channel(None);
         let status_sender = Arc::new(status_sender);
@@ -256,55 +229,6 @@ impl MockTxPool {
     }
 }
 
-mockall::mock! {
-    Database {}
-
-    unsafe impl Sync for Database {}
-    unsafe impl Send for Database {}
-
-    impl BlockDb for Database {
-        fn block_height(&self) -> anyhow::Result<BlockHeight>;
-
-        fn seal_block(
-            &mut self,
-            block_id: BlockId,
-            consensus: Consensus,
-        ) -> anyhow::Result<()>;
-    }
-
-    impl StorageTransactionTrait<MockDatabase> for Database {
-        fn commit(&mut self) -> StorageResult<()>;
-    }
-
-    impl AsRef<MockDatabase> for Database {
-        fn as_ref(&self) -> &Self;
-    }
-
-    impl AsMut<MockDatabase> for Database {
-        fn as_mut(&mut self) -> &mut Self;
-    }
-}
-
-mockall::mock! {
-    BlockProducer {}
-
-    #[async_trait::async_trait]
-    impl BlockProducer<MockDatabase> for BlockProducer {
-        async fn produce_and_execute_block(
-            &self,
-            _height: BlockHeight,
-            _max_gas: Word,
-        ) -> anyhow::Result<UncommittedResult<StorageTransaction<MockDatabase>>>;
-
-        async fn dry_run(
-            &self,
-            _transaction: Transaction,
-            _height: Option<BlockHeight>,
-            _utxo_validation: Option<bool>,
-        ) -> anyhow::Result<Vec<Receipt>>;
-    }
-}
-
 fn make_tx(rng: &mut StdRng) -> Script {
     TransactionBuilder::script(vec![], vec![])
         .gas_price(0)
@@ -319,42 +243,16 @@ async fn remove_skipped_transactions() {
     let mut rng = StdRng::seed_from_u64(2322);
     let secret_key = SecretKey::random(&mut rng);
 
-    let (import_block_events_tx, mut import_block_receiver_tx) = broadcast::channel(1);
-    tokio::spawn(async move {
-        import_block_receiver_tx.recv().await.unwrap();
-    });
-
     const TX_NUM: usize = 100;
     let skipped_transactions: Vec<_> = (0..TX_NUM).map(|_| make_tx(&mut rng)).collect();
 
     let mock_skipped_txs = skipped_transactions.clone();
 
-    let mut seq = mockall::Sequence::new();
-
     let mut block_producer = MockBlockProducer::default();
     block_producer
         .expect_produce_and_execute_block()
         .times(1)
-        .in_sequence(&mut seq)
-        .returning(move |_, _| {
-            let mut db = MockDatabase::default();
-
-            let mut db_inner = MockDatabase::default();
-            // We expect that `seal_block` should be called 1 time after `produce_and_execute_block`.
-            db_inner
-                .expect_seal_block()
-                .times(1)
-                .in_sequence(&mut seq)
-                .returning(|_, _| Ok(()));
-            db
-                .expect_commit()
-                // Verifies that `commit` have been called.
-                .times(1)
-                .in_sequence(&mut seq)
-                .returning(|| Ok(()));
-            // Check that `commit` is called after `seal_block`.
-            db.expect_as_mut().times(1).return_var(db_inner);
-
+        .returning(move |_, _, _| {
             Ok(UncommittedResult::new(
                 ExecutionResult {
                     block: Default::default(),
@@ -365,15 +263,18 @@ async fn remove_skipped_transactions() {
                         .collect(),
                     tx_status: Default::default(),
                 },
-                StorageTransaction::new(db),
+                StorageTransaction::new(EmptyStorage),
             ))
         });
 
-    let mut db = MockDatabase::default();
-    db.expect_block_height()
-        .returning(|| Ok(BlockHeight::from(1u32)));
+    let mut block_importer = MockBlockImporter::default();
 
-    let mut txpool = MockTxPool::no_tx_updates();
+    block_importer
+        .expect_commit_result()
+        .times(1)
+        .returning(|_| Ok(()));
+
+    let mut txpool = MockTransactionPool::no_tx_updates();
     // Test created for only for this check.
     txpool.expect_remove_txs().returning(move |skipped_ids| {
         // Transform transactions into ids.
@@ -392,21 +293,21 @@ async fn remove_skipped_transactions() {
         vec![]
     });
 
-    let tx_status_update_stream = txpool.transaction_status_events();
-    let mut task = Task {
+    let config = Config {
+        trigger: Trigger::Instant,
         block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
-        db,
-        block_producer,
-        txpool,
-        import_block_events_tx,
-        tx_status_update_stream,
-        last_block_created: Instant::now(),
-        trigger: Trigger::Instant,
-        timer: DeadlineClock::new(),
+        metrics: false,
     };
+    let mut task = Task::new(
+        BlockHeight::from(1u32),
+        config,
+        txpool,
+        block_producer,
+        block_importer,
+    );
 
-    assert!(task.produce_block().await.is_ok());
+    assert!(task.produce_next_block().await.is_ok());
 }
 
 #[tokio::test]
@@ -416,38 +317,35 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
     let mut rng = StdRng::seed_from_u64(2322);
     let secret_key = SecretKey::random(&mut rng);
 
-    let (import_block_events_tx, mut import_block_receiver_tx) = broadcast::channel(1);
-    tokio::spawn(async move {
-        import_block_receiver_tx.recv().await.unwrap();
-    });
-
     let mut block_producer = MockBlockProducer::default();
 
     block_producer
         .expect_produce_and_execute_block()
-        .returning(|_, _| panic!("Block production should not be called"));
+        .returning(|_, _, _| panic!("Block production should not be called"));
 
-    let mut db = MockDatabase::default();
-    db.expect_block_height()
-        .returning(|| Ok(BlockHeight::from(1u32)));
+    let mut block_importer = MockBlockImporter::default();
 
-    let mut txpool = MockTxPool::no_tx_updates();
+    block_importer
+        .expect_commit_result()
+        .returning(|_| panic!("Block importer should not be called"));
+
+    let mut txpool = MockTransactionPool::no_tx_updates();
     txpool.expect_total_consumable_gas().returning(|| 0);
     txpool.expect_pending_number().returning(|| 0);
 
-    let tx_status_update_stream = txpool.transaction_status_events();
-    let mut task = Task {
+    let config = Config {
+        trigger: Trigger::Instant,
         block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
-        db,
-        block_producer,
-        txpool,
-        import_block_events_tx,
-        tx_status_update_stream,
-        last_block_created: Instant::now(),
-        trigger: Trigger::Instant,
-        timer: DeadlineClock::new(),
+        metrics: false,
     };
+    let mut task = Task::new(
+        BlockHeight::from(1u32),
+        config,
+        txpool,
+        block_producer,
+        block_importer,
+    );
 
     // simulate some txpool events to see if any block production is erroneously triggered
     task.on_txpool_event(TxStatus::Submitted).await.unwrap();
@@ -469,42 +367,40 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
     const TX_IDLE_TIME_MS: u64 = 50u64;
 
     let (txpool_tx, _txpool_broadcast) = broadcast::channel(10);
-    let (import_block_events_tx, mut import_block_receiver_tx) = broadcast::channel(1);
-    tokio::spawn(async move {
-        let _ = import_block_receiver_tx.recv().await;
-    });
 
     let mut block_producer = MockBlockProducer::default();
 
     block_producer
         .expect_produce_and_execute_block()
-        .returning(|_, _| panic!("Block production should not be called"));
+        .returning(|_, _, _| panic!("Block production should not be called"));
 
-    let mut db = MockDatabase::default();
-    db.expect_block_height()
-        .returning(|| Ok(BlockHeight::from(1u32)));
+    let mut block_importer = MockBlockImporter::default();
 
-    let mut txpool = MockTxPool::no_tx_updates();
+    block_importer
+        .expect_commit_result()
+        .returning(|_| panic!("Block importer should not be called"));
+
+    let mut txpool = MockTransactionPool::no_tx_updates();
     txpool.expect_total_consumable_gas().returning(|| 0);
     txpool.expect_pending_number().returning(|| 0);
 
-    let tx_status_update_stream = txpool.transaction_status_events();
-    let task = Task {
-        block_gas_limit: 1000000,
-        signing_key: Some(Secret::new(secret_key.into())),
-        db,
-        block_producer,
-        txpool,
-        import_block_events_tx,
-        tx_status_update_stream,
-        last_block_created: Instant::now(),
+    let config = Config {
         trigger: Trigger::Hybrid {
             min_block_time: Duration::from_millis(100),
             max_tx_idle_time: Duration::from_millis(TX_IDLE_TIME_MS),
             max_block_time: Duration::from_millis(1000),
         },
-        timer: DeadlineClock::new(),
+        block_gas_limit: 1000000,
+        signing_key: Some(Secret::new(secret_key.into())),
+        metrics: false,
     };
+    let task = Task::new(
+        BlockHeight::from(1u32),
+        config,
+        txpool,
+        block_producer,
+        block_importer,
+    );
 
     let service = Service::new(task);
     service.start_and_await().await.unwrap();

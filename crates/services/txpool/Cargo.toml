@@ -24,6 +24,7 @@ tokio-stream = "0.1"
 tracing = "0.1"
 
 [dev-dependencies]
+fuel-core-trace = { path = "../../trace" }
 fuel-core-txpool = { path = "", features = ["test-helpers"] }
 itertools = "0.10"
 mockall = "0.11"

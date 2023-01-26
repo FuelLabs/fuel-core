@@ -2,12 +2,13 @@ use crate::cli::DEFAULT_DB_PATH;
 use clap::Parser;
 use std::path::PathBuf;
 
+/// Print a snapshot of blockchain state to stdout.
 #[derive(Debug, Clone, Parser)]
 pub struct Command {
     #[clap(
         name = "DB_PATH",
         long = "db-path",
-        parse(from_os_str),
+        value_parser,
         default_value = (*DEFAULT_DB_PATH).to_str().unwrap()
     )]
     pub database_path: PathBuf,

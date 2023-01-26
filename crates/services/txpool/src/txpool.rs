@@ -15,10 +15,12 @@ use fuel_core_types::{
     blockchain::SealedBlock,
     fuel_tx::{
         Chargeable,
-        CheckedTransaction,
-        IntoChecked,
         Transaction,
         UniqueIdentifier,
+    },
+    fuel_vm::checked_transaction::{
+        CheckedTransaction,
+        IntoChecked,
     },
     services::txpool::{
         ArcPoolTx,
@@ -87,6 +89,7 @@ where
                 .into_checked(
                     current_height.into(),
                     &self.config.chain_config.transaction_parameters,
+                    &self.config.chain_config.gas_costs,
                 )?
                 .into()
         } else {
@@ -119,7 +122,10 @@ where
         }
 
         // verify predicates
-        if !tx.check_predicates(self.config.chain_config.transaction_parameters) {
+        if !tx.check_predicates(
+            self.config.chain_config.transaction_parameters,
+            self.config.chain_config.gas_costs.clone(),
+        ) {
             return Err(anyhow!("transaction predicate verification failed"))
         }
 
@@ -210,7 +216,7 @@ where
         Vec::new()
     }
 
-    /// Removes transaction from `TxPool` with assumption that it is committed into teh blockchain.
+    /// Removes transaction from `TxPool` with assumption that it is committed into the blockchain.
     // TODO: Don't remove recursively dependent transactions on block commit.
     //  The same logic should be fixed in the `select_transactions`.
     //  This method is used during `select_transactions`, so we need to handle the case
@@ -322,7 +328,7 @@ where
     pub fn block_update(
         &mut self,
         tx_status_sender: &TxStatusChange,
-        block: SealedBlock,
+        block: &SealedBlock,
         // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
         for tx in block.entity.transactions() {

@@ -1,6 +1,6 @@
 use crate::{
     database::{
-        transactional::DatabaseTransaction,
+        transaction::DatabaseTransaction,
         transactions::TransactionIndex,
         vm_database::VmDatabase,
         Database,
@@ -8,7 +8,6 @@ use crate::{
     service::Config,
 };
 use fuel_core_executor::refs::ContractRef;
-use fuel_core_producer::ports::Executor as ExecutorTrait;
 use fuel_core_storage::{
     tables::{
         Coins,
@@ -55,14 +54,10 @@ use fuel_core_types::{
         Address,
         AssetId,
         Bytes32,
-        Checked,
-        CreateCheckedMetadata,
         Input,
-        IntoChecked,
         Mint,
         Output,
         Receipt,
-        ScriptCheckedMetadata,
         Transaction,
         TransactionFee,
         TxPointer,
@@ -71,6 +66,12 @@ use fuel_core_types::{
     },
     fuel_types::MessageId,
     fuel_vm::{
+        checked_transaction::{
+            Checked,
+            CreateCheckedMetadata,
+            IntoChecked,
+            ScriptCheckedMetadata,
+        },
         consts::REG_SP,
         interpreter::{
             CheckedMetadata,
@@ -138,15 +139,15 @@ impl Executor {
     }
 }
 
-impl ExecutorTrait<Database> for Executor {
-    fn execute_without_commit(
+impl Executor {
+    pub fn execute_without_commit(
         &self,
         block: ExecutionBlock,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
         self.execute_inner(block, &self.database)
     }
 
-    fn dry_run(
+    pub fn dry_run(
         &self,
         block: ExecutionBlock,
         utxo_validation: Option<bool>,
@@ -204,8 +205,6 @@ impl Executor {
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
         // Compute the block id before execution if there is one.
         let pre_exec_block_id = block.id();
-        // Get the transaction root before execution if there is one.
-        let pre_exec_txs_root = block.txs_root();
 
         // If there is full fuel block for validation then map it into
         // a partial header.
@@ -230,13 +229,6 @@ impl Executor {
             .map(|b: PartialFuelBlock| b.generate(&message_ids[..]))
             .into_inner();
 
-        // check transaction commitment
-        if let Some(pre_exec_txs_root) = pre_exec_txs_root {
-            if block.header().transactions_root != pre_exec_txs_root {
-                return Err(ExecutorError::InvalidTransactionRoot)
-            }
-        }
-
         let finalized_block_id = block.id();
 
         debug!(
@@ -247,6 +239,7 @@ impl Executor {
 
         // check if block id doesn't match proposed block id
         if let Some(pre_exec_block_id) = pre_exec_block_id {
+            // The block id comparison compares the whole blocks including all fields.
             if pre_exec_block_id != finalized_block_id {
                 // In theory this shouldn't happen since any deviance in the block should've already
                 // been checked by now.
@@ -489,8 +482,11 @@ impl Executor {
         mint: Mint,
         expected_amount: Option<Word>,
     ) -> ExecutorResult<Mint> {
-        let checked_mint = mint
-            .into_checked(block_height, &self.config.chain_conf.transaction_parameters)?;
+        let checked_mint = mint.into_checked(
+            block_height,
+            &self.config.chain_conf.transaction_parameters,
+            &self.config.chain_conf.gas_costs,
+        )?;
 
         if checked_mint.transaction().tx_pointer().tx_index() != 0 {
             return Err(ExecutorError::CoinbaseIsNotFirstTransaction)
@@ -586,6 +582,7 @@ impl Executor {
         let mut vm = Interpreter::with_storage(
             vm_db,
             self.config.chain_conf.transaction_parameters,
+            self.config.chain_conf.gas_costs.clone(),
         );
         let vm_result: StateTransition<_> = vm
             .transact(checked_tx.clone())
@@ -773,10 +770,13 @@ impl Executor {
         <Tx as IntoChecked>::Metadata: CheckedMetadata,
     {
         let id = tx.transaction().id();
-        if !Interpreter::<PredicateStorage>::check_predicates(
+        if Interpreter::<PredicateStorage>::check_predicates(
             tx,
             self.config.chain_conf.transaction_parameters,
-        ) {
+            self.config.chain_conf.gas_costs.clone(),
+        )
+        .is_err()
+        {
             return Err(ExecutorError::TransactionValidity(
                 TransactionValidityError::InvalidPredicate(id),
             ))
@@ -1365,7 +1365,7 @@ impl Fee for ScriptCheckedMetadata {
     }
 
     fn min_fee(&self) -> Word {
-        TransactionFee::min(&self.fee)
+        self.fee.bytes()
     }
 }
 
@@ -1375,7 +1375,7 @@ impl Fee for CreateCheckedMetadata {
     }
 
     fn min_fee(&self) -> Word {
-        TransactionFee::min(&self.fee)
+        self.fee.bytes()
     }
 }
 
@@ -1387,7 +1387,7 @@ mod tests {
         entities::message::CheckedMessage,
         fuel_asm::Opcode,
         fuel_crypto::SecretKey,
-        fuel_merkle::binary::empty_sum,
+        fuel_merkle::common::empty_sum_sha256,
         fuel_tx,
         fuel_tx::{
             field::{
@@ -1399,6 +1399,7 @@ mod tests {
             CheckError,
             ConsensusParameters,
             Create,
+            Finalizable,
             Script,
             Transaction,
             TransactionBuilder,
@@ -1855,6 +1856,7 @@ mod tests {
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
+            block.header_mut().recalculate_metadata();
 
             let validator = Executor {
                 database: Default::default(),
@@ -1875,6 +1877,7 @@ mod tests {
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
+            block.header_mut().recalculate_metadata();
 
             let validator = Executor {
                 database: Default::default(),
@@ -1897,6 +1900,7 @@ mod tests {
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
+            block.header_mut().recalculate_metadata();
 
             let validator = Executor {
                 database: Default::default(),
@@ -1923,6 +1927,7 @@ mod tests {
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
+            block.header_mut().recalculate_metadata();
 
             let validator = Executor {
                 database: Default::default(),
@@ -1950,6 +1955,7 @@ mod tests {
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
+            block.header_mut().recalculate_metadata();
 
             let validator = Executor {
                 database: Default::default(),
@@ -1973,6 +1979,7 @@ mod tests {
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
+            block.header_mut().recalculate_metadata();
 
             let validator = Executor {
                 database: Default::default(),
@@ -2002,6 +2009,7 @@ mod tests {
                 )
                 .into(),
             ];
+            block.header_mut().recalculate_metadata();
 
             let validator = Executor {
                 database: Default::default(),
@@ -2423,14 +2431,12 @@ mod tests {
 
         // randomize transaction commitment
         block.header_mut().application.generated.transactions_root = rng.gen();
+        block.header_mut().recalculate_metadata();
 
         let verify_result =
             verifier.execute_and_commit(ExecutionBlock::Validation(block));
 
-        assert!(matches!(
-            verify_result,
-            Err(ExecutorError::InvalidTransactionRoot)
-        ))
+        assert!(matches!(verify_result, Err(ExecutorError::InvalidBlockId)))
     }
 
     // invalidate a block if a tx is missing at least one coin input
@@ -2674,7 +2680,7 @@ mod tests {
     fn contracts_balance_and_state_roots_no_modifications_updated() {
         // Values in inputs and outputs are random. If the execution of the transaction successful,
         // it should actualize them to use a valid the balance and state roots. Because it is not
-        // changes, the balance the root should be default - `fuel_merkle::binary::empty_sum()`.
+        // changes, the balance the root should be default - `fuel_merkle::common::empty_sum_sha256()`.
         let mut rng = StdRng::seed_from_u64(2322u64);
 
         let (create, contract_id) = create_contract(vec![], &mut rng);
@@ -2716,7 +2722,7 @@ mod tests {
             .unwrap();
 
         // Assert the balance and state roots should be the same before and after execution.
-        let empty_state = Bytes32::from(*empty_sum());
+        let empty_state = Bytes32::from(*empty_sum_sha256());
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
             tx_status[2].result,
@@ -2745,9 +2751,9 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(2322u64);
 
         let (create, contract_id) = create_contract(vec![], &mut rng);
-        // Transaction doesn't have input to pay for gas, so it will fail.
+        // The transaction with invalid script.
         let non_modify_state_tx: Transaction = TxBuilder::new(2322)
-            .start_script(vec![Opcode::RET(1)], vec![])
+            .start_script(vec![Opcode::ADD(REG_PC, REG_PC, REG_PC)], vec![])
             .contract_input(contract_id)
             .contract_output(&contract_id)
             .build()
@@ -2782,7 +2788,7 @@ mod tests {
             .unwrap();
 
         // Assert the balance and state roots should be the same before and after execution.
-        let empty_state = Bytes32::from(*empty_sum());
+        let empty_state = Bytes32::from(*empty_sum_sha256());
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
             tx_status[2].result,
@@ -2893,7 +2899,7 @@ mod tests {
             .execute_and_commit(ExecutionBlock::Production(block))
             .unwrap();
 
-        let empty_state = Bytes32::from(*empty_sum());
+        let empty_state = Bytes32::from(*empty_sum_sha256());
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
             tx_status[2].result,
@@ -2976,7 +2982,7 @@ mod tests {
             .unwrap();
 
         // Assert the balance root should not be affected.
-        let empty_state = Bytes32::from(*empty_sum());
+        let empty_state = Bytes32::from(*empty_sum_sha256());
         assert_eq!(
             ContractRef::new(db, contract_id).balance_root().unwrap(),
             empty_state

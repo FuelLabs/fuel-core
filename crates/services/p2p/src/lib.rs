@@ -3,6 +3,7 @@ mod codecs;
 pub mod config;
 mod discovery;
 mod gossipsub;
+mod heartbeat;
 mod p2p_service;
 mod peer_manager;
 pub mod ports;
@@ -15,3 +16,6 @@ pub use libp2p::{
     Multiaddr,
     PeerId,
 };
+
+#[cfg(test)]
+fuel_core_trace::enable_tracing!();

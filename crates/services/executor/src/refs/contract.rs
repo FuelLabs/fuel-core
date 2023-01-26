@@ -64,7 +64,7 @@ where
     pub fn utxo(
         &self,
     ) -> Result<
-        Option<Cow<'_, <ContractsLatestUtxo as Mappable>::GetValue>>,
+        Option<Cow<'_, <ContractsLatestUtxo as Mappable>::OwnedValue>>,
         Database::Error,
     > {
         self.database.storage().get(&self.contract_id)
@@ -79,7 +79,7 @@ where
     pub fn validated_utxo(
         &self,
         utxo_validation: bool,
-    ) -> ExecutorResult<<ContractsLatestUtxo as Mappable>::GetValue> {
+    ) -> ExecutorResult<<ContractsLatestUtxo as Mappable>::OwnedValue> {
         let maybe_utxo_id = self.utxo()?.map(|utxo| utxo.into_owned());
         let expected_utxo_id = if utxo_validation {
             maybe_utxo_id.ok_or(ExecutorError::ContractUtxoMissing(self.contract_id))?
@@ -92,7 +92,7 @@ where
 
 impl<Database> ContractRef<Database>
 where
-    for<'b> Database: MerkleRootStorage<ContractId, ContractsAssets<'b>>,
+    Database: MerkleRootStorage<ContractId, ContractsAssets>,
 {
     pub fn balance_root(
         &mut self,
@@ -103,7 +103,7 @@ where
 
 impl<Database> ContractRef<Database>
 where
-    for<'b> Database: MerkleRootStorage<ContractId, ContractsState<'b>>,
+    Database: MerkleRootStorage<ContractId, ContractsState>,
 {
     pub fn state_root(
         &mut self,
@@ -112,17 +112,17 @@ where
     }
 }
 
-pub trait ContractStorageTrait<'a>:
+pub trait ContractStorageTrait:
     StorageInspect<ContractsLatestUtxo, Error = Self::InnerError>
-    + MerkleRootStorage<ContractId, ContractsState<'a>, Error = Self::InnerError>
-    + MerkleRootStorage<ContractId, ContractsAssets<'a>, Error = Self::InnerError>
+    + MerkleRootStorage<ContractId, ContractsState, Error = Self::InnerError>
+    + MerkleRootStorage<ContractId, ContractsAssets, Error = Self::InnerError>
 {
     type InnerError: StdError + Send + Sync + 'static;
 }
 
 impl<'a, Database> GenesisCommitment for ContractRef<&'a mut Database>
 where
-    for<'b> Database: ContractStorageTrait<'a>,
+    Database: ContractStorageTrait,
 {
     fn root(&mut self) -> anyhow::Result<MerkleRoot> {
         let contract_id = *self.contract_id();

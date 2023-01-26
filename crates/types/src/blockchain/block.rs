@@ -19,14 +19,11 @@ use crate::{
         TxId,
         UniqueIdentifier,
     },
-    fuel_types::{
-        bytes::SerializableVec,
-        MessageId,
-    },
+    fuel_types::MessageId,
 };
 
 /// Fuel block with all transaction data included
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 pub struct Block<TransactionRepresentation = Transaction> {
@@ -67,17 +64,26 @@ impl Block<Transaction> {
     /// the ids from the receipts of messages outputs.
     pub fn new(
         header: PartialBlockHeader,
-        mut transactions: Vec<Transaction>,
+        transactions: Vec<Transaction>,
         message_ids: &[MessageId],
     ) -> Self {
-        // I think this is safe as it doesn't appear that any of the reads actually mutate the data.
-        // Alternatively we can clone to be safe.
-        let transaction_ids: Vec<_> =
-            transactions.iter_mut().map(|tx| tx.to_bytes()).collect();
         Self {
-            header: header.generate(&transaction_ids[..], message_ids),
+            header: header.generate(&transactions, message_ids),
             transactions,
         }
+    }
+
+    /// Try creating a new full fuel block from a [`BlockHeader`] and
+    /// **previously executed** transactions.
+    /// This will fail if the transactions don't match the header.
+    pub fn try_from_executed(
+        header: BlockHeader,
+        transactions: Vec<Transaction>,
+    ) -> Option<Self> {
+        header.validate_transactions(&transactions).then_some(Self {
+            header,
+            transactions,
+        })
     }
 
     /// Compresses the fuel block and replaces transactions with hashes.
@@ -111,6 +117,12 @@ impl CompressedBlock {
 impl<TransactionRepresentation> Block<TransactionRepresentation> {
     /// Get the hash of the header.
     pub fn id(&self) -> BlockId {
+        // The `Block` can be created only via the `Block::new` method, which calculates the
+        // identifier based on the header. So the block is immutable and can't change its
+        // identifier on the fly.
+        //
+        // This assertion is a double-checks that this behavior is not changed.
+        debug_assert_eq!(self.header.id(), self.header.hash());
         self.header.id()
     }
 
@@ -192,7 +204,6 @@ impl From<Block> for PartialFuelBlock {
                     time,
                     generated: Empty {},
                 },
-                metadata: None,
             },
             transactions,
         }

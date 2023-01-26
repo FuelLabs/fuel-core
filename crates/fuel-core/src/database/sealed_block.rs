@@ -1,4 +1,5 @@
 use crate::database::{
+    storage::DatabaseColumn,
     Column,
     Database,
 };
@@ -8,53 +9,29 @@ use fuel_core_storage::{
         FuelBlocks,
         SealedBlockConsensus,
     },
-    Error as StorageError,
     Result as StorageResult,
     StorageAsRef,
-    StorageInspect,
-    StorageMutate,
 };
-use fuel_core_types::blockchain::{
-    consensus::{
-        Consensus,
-        Genesis,
+use fuel_core_types::{
+    blockchain::{
+        consensus::{
+            Consensus,
+            Genesis,
+            Sealed,
+        },
+        primitives::{
+            BlockHeight,
+            BlockId,
+        },
+        SealedBlock,
+        SealedBlockHeader,
     },
-    primitives::{
-        BlockHeight,
-        BlockId,
-    },
-    SealedBlock,
-    SealedBlockHeader,
+    fuel_tx::Transaction,
 };
-use std::borrow::Cow;
 
-impl StorageInspect<SealedBlockConsensus> for Database {
-    type Error = StorageError;
-
-    fn get(&self, key: &BlockId) -> Result<Option<Cow<Consensus>>, Self::Error> {
-        Database::get(self, key.as_slice(), Column::FuelBlockConsensus)
-            .map_err(Into::into)
-    }
-
-    fn contains_key(&self, key: &BlockId) -> Result<bool, Self::Error> {
-        Database::exists(self, key.as_slice(), Column::FuelBlockConsensus)
-            .map_err(Into::into)
-    }
-}
-
-impl StorageMutate<SealedBlockConsensus> for Database {
-    fn insert(
-        &mut self,
-        key: &BlockId,
-        value: &Consensus,
-    ) -> Result<Option<Consensus>, Self::Error> {
-        Database::insert(self, key.as_slice(), Column::FuelBlockConsensus, value)
-            .map_err(Into::into)
-    }
-
-    fn remove(&mut self, key: &BlockId) -> Result<Option<Consensus>, Self::Error> {
-        Database::remove(self, key.as_slice(), Column::FuelBlockConsensus)
-            .map_err(Into::into)
+impl DatabaseColumn for SealedBlockConsensus {
+    fn column() -> Column {
+        Column::FuelBlockConsensus
     }
 }
 
@@ -84,9 +61,12 @@ impl Database {
     /// Reusable across different trait implementations
     pub fn get_sealed_block_by_height(
         &self,
-        height: BlockHeight,
+        height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlock>> {
-        let block_id = self.get_block_id(height)?.ok_or(not_found!("BlockId"))?;
+        let block_id = match self.get_block_id(height)? {
+            Some(i) => i,
+            None => return Ok(None),
+        };
         self.get_sealed_block_by_id(&block_id)
     }
 
@@ -102,6 +82,17 @@ impl Database {
         } else {
             Err(not_found!(SealedBlockConsensus))
         }
+    }
+
+    pub fn get_sealed_block_header_by_height(
+        &self,
+        height: &BlockHeight,
+    ) -> StorageResult<Option<SealedBlockHeader>> {
+        let block_id = match self.get_block_id(height)? {
+            Some(i) => i,
+            None => return Ok(None),
+        };
+        self.get_sealed_block_header(&block_id)
     }
 
     pub fn get_sealed_block_header(
@@ -121,5 +112,14 @@ impl Database {
         } else {
             Ok(None)
         }
+    }
+
+    pub fn get_transactions_on_block(
+        &self,
+        block_id: &BlockId,
+    ) -> StorageResult<Option<Vec<Transaction>>> {
+        Ok(self
+            .get_sealed_block_by_id(block_id)?
+            .map(|Sealed { entity: block, .. }| block.into_inner().1))
     }
 }

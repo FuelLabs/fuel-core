@@ -23,3 +23,6 @@ pub use txpool::TxPool;
 
 #[cfg(any(test, feature = "test-helpers"))]
 pub(crate) mod test_helpers;
+
+#[cfg(test)]
+fuel_core_trace::enable_tracing!();

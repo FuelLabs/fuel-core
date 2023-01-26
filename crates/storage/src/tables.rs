@@ -37,9 +37,11 @@ pub struct FuelBlocks;
 
 impl Mappable for FuelBlocks {
     /// Unique identifier of the fuel block.
-    type Key = BlockId;
-    type SetValue = CompressedBlock;
-    type GetValue = Self::SetValue;
+    type Key = Self::OwnedKey;
+    // TODO: Seems it would be faster to use `BlockHeight` as primary key.
+    type OwnedKey = BlockId;
+    type Value = Self::OwnedValue;
+    type OwnedValue = CompressedBlock;
 }
 
 /// The latest UTXO id of the contract. The contract's UTXO represents the unique id of the state.
@@ -48,10 +50,11 @@ impl Mappable for FuelBlocks {
 pub struct ContractsLatestUtxo;
 
 impl Mappable for ContractsLatestUtxo {
-    type Key = ContractId;
+    type Key = Self::OwnedKey;
+    type OwnedKey = ContractId;
     /// The latest UTXO id.
-    type SetValue = UtxoId;
-    type GetValue = Self::SetValue;
+    type Value = Self::OwnedValue;
+    type OwnedValue = UtxoId;
 }
 
 /// Receipts of different hidden internal operations.
@@ -59,18 +62,20 @@ pub struct Receipts;
 
 impl Mappable for Receipts {
     /// Unique identifier of the transaction.
-    type Key = Bytes32;
-    type SetValue = [Receipt];
-    type GetValue = Vec<Receipt>;
+    type Key = Self::OwnedKey;
+    type OwnedKey = Bytes32;
+    type Value = [Receipt];
+    type OwnedValue = Vec<Receipt>;
 }
 
 /// The table of consensus metadata associated with sealed (finalized) blocks
 pub struct SealedBlockConsensus;
 
 impl Mappable for SealedBlockConsensus {
-    type Key = BlockId;
-    type SetValue = Consensus;
-    type GetValue = Self::SetValue;
+    type Key = Self::OwnedKey;
+    type OwnedKey = BlockId;
+    type Value = Self::OwnedValue;
+    type OwnedValue = Consensus;
 }
 
 /// The storage table of coins. Each
@@ -79,27 +84,30 @@ impl Mappable for SealedBlockConsensus {
 pub struct Coins;
 
 impl Mappable for Coins {
-    type Key = UtxoId;
-    type SetValue = CompressedCoin;
-    type GetValue = Self::SetValue;
+    type Key = Self::OwnedKey;
+    type OwnedKey = UtxoId;
+    type Value = Self::OwnedValue;
+    type OwnedValue = CompressedCoin;
 }
 
 /// The storage table of bridged Ethereum [`Message`](crate::model::Message)s.
 pub struct Messages;
 
 impl Mappable for Messages {
-    type Key = MessageId;
-    type SetValue = Message;
-    type GetValue = Self::SetValue;
+    type Key = Self::OwnedKey;
+    type OwnedKey = MessageId;
+    type Value = Self::OwnedValue;
+    type OwnedValue = Message;
 }
 
 /// The storage table of confirmed transactions.
 pub struct Transactions;
 
 impl Mappable for Transactions {
-    type Key = TxId;
-    type SetValue = Transaction;
-    type GetValue = Self::SetValue;
+    type Key = Self::OwnedKey;
+    type OwnedKey = TxId;
+    type Value = Self::OwnedValue;
+    type OwnedValue = Transaction;
 }
 
 // TODO: Add macro to define all common tables to avoid copy/paste of the code.

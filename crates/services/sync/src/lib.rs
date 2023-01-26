@@ -1,7 +1,15 @@
 #![deny(unused_crate_dependencies)]
+#![deny(missing_docs)]
+//! # Sync Service
+//! Responsible for syncing the blockchain from the network.
 
-pub mod config;
+pub mod import;
+pub mod ports;
 pub mod service;
+mod state;
+pub mod sync;
 
-pub use config::Config;
-pub use service::Service;
+pub use import::Config;
+
+#[cfg(test)]
+fuel_core_trace::enable_tracing!();
