@@ -15,7 +15,10 @@ use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::Sealed,
-        primitives::BlockHeight,
+        primitives::{
+            BlockHeight,
+            BlockId,
+        },
         SealedBlock,
         SealedBlockHeader,
     },
@@ -30,6 +33,7 @@ use futures::{
 };
 use std::future::Future;
 use tokio::sync::Notify;
+use tracing::Instrument;
 
 use crate::{
     ports::{
@@ -38,6 +42,10 @@ use crate::{
         PeerToPeerPort,
     },
     state::State,
+    tracing_helpers::{
+        TraceErr,
+        TraceNone,
+    },
 };
 
 #[cfg(test)]
@@ -98,6 +106,7 @@ where
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 {
+    #[tracing::instrument(skip_all)]
     pub(crate) async fn import(
         &self,
         shutdown: &mut StateWatcher,
@@ -119,6 +128,7 @@ where
             // If we did not process the entire range, mark the failed heights as failed.
             if (count as u32) < range_len {
                 let range = (*range.start() + count as u32)..=*range.end();
+                tracing::error!("Failed to import range of blocks: {:?}", range);
                 self.state.apply(|s| s.failed_to_process(range));
             }
             result?;
@@ -126,6 +136,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, shutdown))]
     /// Launches a stream to import and execute a range of blocks.
     ///
     /// This stream will process all blocks up to the given range or
@@ -167,26 +178,19 @@ where
                     let block_id = SourcePeer { peer_id, data: id };
 
                     // Check the consensus is valid on this header.
-                    if !consensus_port.check_sealed_header(&header)? {
+                    if !consensus_port
+                        .check_sealed_header(&header)
+                        .trace_err("Failed to check consensus on header")? 
+                    {
+                        tracing::warn!("Header {:?} failed consensus check", header);
                         return Ok(None)
                     }
-                    let Sealed {
-                        entity: header,
-                        consensus,
-                    } = header;
 
-                    // Request the transactions for this block.
-                    Ok(p2p
-                        .get_transactions(block_id)
-                        .await?
-                        .and_then(|transactions| {
-                            Some(SealedBlock {
-                                entity: Block::try_from_executed(header, transactions)?,
-                                consensus,
-                            })
-                        }))
+                    get_transactions_on_block(p2p.as_ref(), block_id, header).await
                 }
             }
+            .instrument(tracing::debug_span!("consensus_and_transactions"))
+            .in_current_span()
         })
         // Request up to `max_get_txns_requests` transactions from the network.
         .buffered(params.max_get_txns_requests)
@@ -197,7 +201,10 @@ where
         // Continue the stream until the shutdown signal is received.
         .take_until({
             let mut s = shutdown.clone();
-            async move { s.while_started().await }
+            async move {
+                let _ =s.while_started().await;
+                tracing::info!("In progress import stream shutting down");
+            }
         })
         .then({
             let state = state.clone();
@@ -212,17 +219,11 @@ where
                         Err(e) => return Err(e),
                     };
 
-                    // Execute and commit the block.
-                    let height = *block.entity.header().height();
-                    let r = executor.execute_and_commit(block).await;
-
-                    // If the block executed successfully, mark it as committed.
-                    if r.is_ok() {
-                        state.apply(|s| s.commit(*height))
-                    }
-                    r
+                    execute_and_commit(executor.as_ref(), &state, block).await
                 }
             }
+            .instrument(tracing::debug_span!("execute_and_commit"))
+            .in_current_span()
         })
         // Continue the stream unless an error occurs.
         .into_scan_err()
@@ -236,6 +237,7 @@ where
                 Err(e) => (count, Err(e)),
             }
         })
+        .in_current_span()
         .await
     }
 }
@@ -272,6 +274,7 @@ fn get_header_range_buffered(
         .scan_none_or_err()
 }
 
+#[tracing::instrument(skip(p2p))]
 /// Returns a stream of network requests for headers.
 fn get_header_range(
     range: RangeInclusive<u32>,
@@ -283,14 +286,24 @@ fn get_header_range(
         let p2p = p2p.clone();
         let height: BlockHeight = height.into();
         async move {
+            tracing::debug!("getting header height: {}", *height);
             Ok(p2p
                 .get_sealed_block_header(height)
-                .await?
+                .await
+                .trace_err("Failed to get header")?
                 .and_then(|header| {
                     // Check the header is the expected height.
-                    validate_header_height(height, &header.data).then_some(header)
-                }))
+                    validate_header_height(height, &header.data)
+                        .then_some(header)
+                        .trace_none_error("Failed to validate header height")
+                })
+                .trace_none_warn("Failed to find header"))
         }
+        .instrument(tracing::debug_span!(
+            "get_sealed_block_header",
+            height = *height
+        ))
+        .in_current_span()
     })
 }
 
@@ -300,6 +313,72 @@ fn validate_header_height(
     header: &SealedBlockHeader,
 ) -> bool {
     header.entity.consensus.height == expected_height
+}
+
+#[tracing::instrument(
+    skip(p2p, header),
+    fields(
+        height = **header.entity.height(),
+        id = %header.entity.consensus.generated.application_hash
+    ),
+    err
+)]
+async fn get_transactions_on_block<P>(
+    p2p: &P,
+    block_id: SourcePeer<BlockId>,
+    header: SealedBlockHeader,
+) -> anyhow::Result<Option<SealedBlock>>
+where
+    P: PeerToPeerPort + Send + Sync + 'static,
+{
+    let Sealed {
+        entity: header,
+        consensus,
+    } = header;
+
+    // Request the transactions for this block.
+    Ok(p2p
+        .get_transactions(block_id)
+        .await
+        .trace_err("Failed to get transactions")?
+        .trace_none_warn("Could not find transactions for header")
+        .and_then(|transactions| {
+            let block = Block::try_from_executed(header, transactions)
+                .trace_none_warn("Failed to created header from executed transactions")?;
+            Some(SealedBlock {
+                entity: block,
+                consensus,
+            })
+        }))
+}
+
+#[tracing::instrument(
+    skip_all,
+    fields(
+        height = **block.entity.header().height(),
+        id = %block.entity.header().consensus.generated.application_hash
+    ),
+    err
+)]
+async fn execute_and_commit<E>(
+    executor: &E,
+    state: &SharedMutex<State>,
+    block: SealedBlock,
+) -> anyhow::Result<()>
+where
+    E: BlockImporterPort + Send + Sync + 'static,
+{
+    // Execute and commit the block.
+    let height = *block.entity.header().height();
+    let r = executor.execute_and_commit(block).await;
+
+    // If the block executed successfully, mark it as committed.
+    if r.is_ok() {
+        state.apply(|s| s.commit(*height))
+    } else {
+        tracing::error!("Execution of height {} failed: {:?}", *height, r);
+    }
+    r
 }
 
 /// Extra stream utilities.

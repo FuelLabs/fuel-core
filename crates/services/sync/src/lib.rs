@@ -8,6 +8,7 @@ pub mod ports;
 pub mod service;
 mod state;
 pub mod sync;
+mod tracing_helpers;
 
 pub use import::Config;
 

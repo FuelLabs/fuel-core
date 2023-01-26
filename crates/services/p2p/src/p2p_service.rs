@@ -319,13 +319,22 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         self.swarm.behaviour_mut().update_block_height(block_height)
     }
 
+    #[tracing::instrument(skip_all,
+        level = "debug",
+        fields(
+            local_peer_id = %self.local_peer_id,
+            local_address = %self.local_address
+        ),
+        ret
+    )]
     /// Handles P2P Events.
     /// Returns only events that are of interest to the Network Orchestrator.
     pub async fn next_event(&mut self) -> Option<FuelP2PEvent> {
         // TODO: add handling for when the stream closes and return None only when there are no
         //       more events to consume
-        if let SwarmEvent::Behaviour(fuel_behaviour) = self.swarm.select_next_some().await
-        {
+        let event = self.swarm.select_next_some().await;
+        tracing::debug!(?event);
+        if let SwarmEvent::Behaviour(fuel_behaviour) = event {
             self.handle_behaviour_event(fuel_behaviour)
         } else {
             None
