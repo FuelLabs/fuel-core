@@ -88,7 +88,7 @@ impl Mappable for FuelBlockMerkleMetadata {
 ///
 /// If the mappable type requires access to multiple columns or custom logic during setting/getting
 /// then its' storage interfaces should be manually implemented and this trait should be avoided.
-trait DatabaseColumn {
+pub trait DatabaseColumn {
     /// The column of the table.
     fn column() -> Column;
 }
@@ -202,4 +202,3 @@ impl ToDatabaseKey for TxId {
         self.as_ref()
     }
 }
-
