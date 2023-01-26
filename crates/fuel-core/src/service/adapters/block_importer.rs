@@ -17,10 +17,7 @@ use fuel_core_importer::{
     Importer,
 };
 use fuel_core_storage::{
-    tables::{
-        FuelBlockRoots,
-        SealedBlockConsensus,
-    },
+    tables::SealedBlockConsensus,
     transactional::StorageTransaction,
     Result as StorageResult,
     StorageAsMut,
@@ -35,7 +32,6 @@ use fuel_core_types::{
         },
         SealedBlock,
     },
-    fuel_tx::Bytes32,
     services::executor::{
         ExecutionBlock,
         Result as ExecutorResult,
@@ -94,14 +90,6 @@ impl ExecutorDatabase for Database {
         self.storage::<SealedBlockConsensus>()
             .insert(block_id, consensus)
             .map_err(Into::into)
-    }
-
-    fn insert_block_header_merkle_root(
-        &mut self,
-        height: &BlockHeight,
-        root: &Bytes32,
-    ) -> StorageResult<Option<Bytes32>> {
-        self.storage::<FuelBlockRoots>().insert(height, root)
     }
 }
 

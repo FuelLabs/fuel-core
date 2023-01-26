@@ -8,13 +8,13 @@ use crate::{
 use fuel_core_storage::{
     tables::ContractsState,
     Error as StorageError,
+    Mappable,
     MerkleRoot,
     MerkleRootStorage,
     StorageInspect,
     StorageMutate,
 };
 use fuel_core_types::{
-    fuel_merkle::storage::Mappable,
     fuel_types::{
         Bytes32,
         ContractId,

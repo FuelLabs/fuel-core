@@ -1,4 +1,4 @@
-//! The module related to state of teh service.
+//! The module related to state of the service.
 
 use tokio::sync::watch;
 

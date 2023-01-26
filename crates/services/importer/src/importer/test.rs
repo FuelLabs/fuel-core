@@ -29,7 +29,6 @@ use fuel_core_types::{
         SealedBlock,
     },
     fuel_tx::Transaction,
-    fuel_types::Bytes32,
     services::{
         block_importer::{
             ImportResult,
@@ -62,12 +61,6 @@ mockall::mock! {
             block_id: &BlockId,
             consensus: &Consensus,
         ) -> StorageResult<Option<Consensus>>;
-
-        fn insert_block_header_merkle_root(
-            &mut self,
-            height: &BlockHeight,
-            root: &Bytes32,
-        ) -> StorageResult<Option<Bytes32>>;
     }
 
     impl TransactionTrait<MockDatabase> for Database {
@@ -128,27 +121,18 @@ where
     }
 }
 
-fn executor_db<H, S, R>(
-    height: H,
-    seal: S,
-    root: R,
-    commits: usize,
-) -> impl Fn() -> MockDatabase
+fn executor_db<H, S>(height: H, seal: S, commits: usize) -> impl Fn() -> MockDatabase
 where
     H: Fn() -> StorageResult<u32> + Send + Clone + 'static,
     S: Fn() -> StorageResult<Option<Consensus>> + Send + Clone + 'static,
-    R: Fn() -> StorageResult<Option<Bytes32>> + Send + Clone + 'static,
 {
     move || {
         let height = height.clone();
         let seal = seal.clone();
-        let root = root.clone();
         let mut db = MockDatabase::default();
         db.expect_latest_block_height()
             .returning(move || height().map(Into::into));
         db.expect_seal_block().returning(move |_, _| seal());
-        db.expect_insert_block_header_merkle_root()
-            .returning(move |_, _| root());
         db.expect_commit().times(commits).returning(|| Ok(()));
 
         db
@@ -236,43 +220,37 @@ where
 #[test_case(
     genesis(0),
     underlying_db(not_found),
-    executor_db(ok(0), ok(None), ok(None), 1)
+    executor_db(ok(0), ok(None), 1)
     => Ok(())
 )]
 #[test_case(
     genesis(113),
     underlying_db(not_found),
-    executor_db(ok(113), ok(None), ok(None), 1)
+    executor_db(ok(113), ok(None), 1)
     => Ok(())
 )]
 #[test_case(
     genesis(0),
     underlying_db(storage_failure),
-    executor_db(ok(0), ok(None), ok(None), 0)
+    executor_db(ok(0), ok(None), 0)
     => Err(Error::InvalidUnderlyingDatabaseGenesisState)
 )]
 #[test_case(
     genesis(0),
     underlying_db(ok(0)),
-    executor_db(ok(0), ok(None), ok(None), 0)
+    executor_db(ok(0), ok(None), 0)
     => Err(Error::InvalidUnderlyingDatabaseGenesisState)
 )]
 #[test_case(
     genesis(1),
     underlying_db(not_found),
-    executor_db(ok(0), ok(None), ok(None), 0)
+    executor_db(ok(0), ok(None), 0)
     => Err(Error::InvalidDatabaseStateAfterExecution(1u32.into(), 0u32.into()))
 )]
 #[test_case(
     genesis(0),
     underlying_db(not_found),
-    executor_db(ok(0), ok(Some(Default::default())), ok(None), 0)
-    => Err(Error::NotUnique(0u32.into()))
-)]
-#[test_case(
-    genesis(0),
-    underlying_db(not_found),
-    executor_db(ok(0), ok(None), ok(Some(Default::default())), 0)
+    executor_db(ok(0), ok(Some(Default::default())), 0)
     => Err(Error::NotUnique(0u32.into()))
 )]
 fn commit_result_genesis(
@@ -287,67 +265,55 @@ fn commit_result_genesis(
 #[test_case(
     poa_block(1),
     underlying_db(ok(0)),
-    executor_db(ok(1), ok(None), ok(None), 1)
+    executor_db(ok(1), ok(None), 1)
     => Ok(())
 )]
 #[test_case(
     poa_block(113),
     underlying_db(ok(112)),
-    executor_db(ok(113), ok(None), ok(None), 1)
+    executor_db(ok(113), ok(None), 1)
     => Ok(())
 )]
 #[test_case(
     poa_block(0),
     underlying_db(ok(0)),
-    executor_db(ok(1), ok(None), ok(None), 0)
+    executor_db(ok(1), ok(None), 0)
     => Err(Error::ZeroNonGenericHeight)
 )]
 #[test_case(
     poa_block(113),
     underlying_db(ok(111)),
-    executor_db(ok(113), ok(None), ok(None), 0)
+    executor_db(ok(113), ok(None), 0)
     => Err(Error::IncorrectBlockHeight(112u32.into(), 113u32.into()))
 )]
 #[test_case(
     poa_block(113),
     underlying_db(ok(114)),
-    executor_db(ok(113), ok(None), ok(None), 0)
+    executor_db(ok(113), ok(None), 0)
     => Err(Error::IncorrectBlockHeight(115u32.into(), 113u32.into()))
 )]
 #[test_case(
     poa_block(113),
     underlying_db(ok(112)),
-    executor_db(ok(114), ok(None), ok(None), 0)
+    executor_db(ok(114), ok(None), 0)
     => Err(Error::InvalidDatabaseStateAfterExecution(113u32.into(), 114u32.into()))
 )]
 #[test_case(
     poa_block(113),
     underlying_db(ok(112)),
-    executor_db(storage_failure, ok(None), ok(None), 0)
+    executor_db(storage_failure, ok(None), 0)
     => Err(storage_failure_error())
 )]
 #[test_case(
     poa_block(113),
     underlying_db(ok(112)),
-    executor_db(ok(113), ok(Some(Default::default())), ok(None), 0)
+    executor_db(ok(113), ok(Some(Default::default())), 0)
     => Err(Error::NotUnique(113u32.into()))
 )]
 #[test_case(
     poa_block(113),
     underlying_db(ok(112)),
-    executor_db(ok(113), ok(None), ok(Some(Default::default())), 0)
-    => Err(Error::NotUnique(113u32.into()))
-)]
-#[test_case(
-    poa_block(113),
-    underlying_db(ok(112)),
-    executor_db(ok(113), storage_failure, ok(None), 0)
-    => Err(storage_failure_error())
-)]
-#[test_case(
-    poa_block(113),
-    underlying_db(ok(112)),
-    executor_db(ok(113), ok(None), storage_failure, 0)
+    executor_db(ok(113), storage_failure, 0)
     => Err(storage_failure_error())
 )]
 fn commit_result_and_execute_and_commit_poa(
@@ -534,7 +500,7 @@ where
         underlying_db(ok(previous_height))(),
         executor(
             block_after_execution,
-            executor_db(ok(expected_height), ok(None), ok(None), commits)(),
+            executor_db(ok(expected_height), ok(None), commits)(),
         ),
         verifier(verifier_result),
     );
