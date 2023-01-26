@@ -1,17 +1,13 @@
 use crate::{
     database::{
+        storage::DatabaseColumn,
         Column,
         Database,
         Result as DatabaseResult,
     },
     state::IterDirection,
 };
-use fuel_core_storage::{
-    tables::Transactions,
-    Error as StorageError,
-    StorageInspect,
-    StorageMutate,
-};
+use fuel_core_storage::tables::Transactions;
 use fuel_core_types::{
     self,
     blockchain::primitives::BlockHeight,
@@ -23,35 +19,11 @@ use fuel_core_types::{
     fuel_types::Address,
     services::txpool::TransactionStatus,
 };
-use std::{
-    borrow::Cow,
-    ops::Deref,
-};
+use std::ops::Deref;
 
-impl StorageInspect<Transactions> for Database {
-    type Error = StorageError;
-
-    fn get(&self, key: &Bytes32) -> Result<Option<Cow<Transaction>>, Self::Error> {
-        Database::get(self, key.as_ref(), Column::Transactions).map_err(Into::into)
-    }
-
-    fn contains_key(&self, key: &Bytes32) -> Result<bool, Self::Error> {
-        Database::exists(self, key.as_ref(), Column::Transactions).map_err(Into::into)
-    }
-}
-
-impl StorageMutate<Transactions> for Database {
-    fn insert(
-        &mut self,
-        key: &Bytes32,
-        value: &Transaction,
-    ) -> Result<Option<Transaction>, Self::Error> {
-        Database::insert(self, key.as_ref(), Column::Transactions, value.clone())
-            .map_err(Into::into)
-    }
-
-    fn remove(&mut self, key: &Bytes32) -> Result<Option<Transaction>, Self::Error> {
-        Database::remove(self, key.as_ref(), Column::Transactions).map_err(Into::into)
+impl DatabaseColumn for Transactions {
+    fn column() -> Column {
+        Column::Transactions
     }
 }
 

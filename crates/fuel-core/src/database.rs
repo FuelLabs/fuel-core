@@ -17,7 +17,6 @@ use fuel_core_storage::{
         StorageTransaction,
         Transactional,
     },
-    Error as StorageError,
     Result as StorageResult,
 };
 use fuel_core_types::blockchain::primitives::BlockHeight;
