@@ -9,7 +9,6 @@ use fuel_core_storage::{
     Mappable,
     MerkleRoot,
     MerkleRootStorage,
-    StorageAsMut,
     StorageAsRef,
     StorageInspect,
 };
@@ -124,7 +123,7 @@ impl<'a, Database> GenesisCommitment for ContractRef<&'a mut Database>
 where
     Database: ContractStorageTrait,
 {
-    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
+    fn root(&self) -> anyhow::Result<MerkleRoot> {
         let contract_id = *self.contract_id();
         let utxo = self
             .database()
@@ -134,12 +133,12 @@ where
             .into_owned();
 
         let state_root = self
-            .database_mut()
+            .database()
             .storage::<ContractsState>()
             .root(&contract_id)?;
 
         let balance_root = self
-            .database_mut()
+            .database()
             .storage::<ContractsAssets>()
             .root(&contract_id)?;
 

@@ -53,7 +53,7 @@ pub struct CoinConfig {
 }
 
 impl GenesisCommitment for CompressedCoin {
-    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
+    fn root(&self) -> anyhow::Result<MerkleRoot> {
         let coin_hash = *Hasher::default()
             .chain(self.owner)
             .chain(self.amount.to_be_bytes())

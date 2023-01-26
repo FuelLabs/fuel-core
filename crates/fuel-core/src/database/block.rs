@@ -21,6 +21,7 @@ use fuel_core_storage::{
         Transactions,
     },
     Error as StorageError,
+    MerkleRootStorage,
     Result as StorageResult,
     StorageAsMut,
     StorageAsRef,
@@ -39,7 +40,6 @@ use fuel_core_types::{
         },
     },
     fuel_merkle::binary::MerkleTree,
-    fuel_types::Bytes32,
     tai64::Tai64,
 };
 use itertools::Itertools;
@@ -244,19 +244,19 @@ impl Database {
             Ok(None)
         }
     }
+}
 
-    // TODO: Move this implementation into `fuel_core_storage::MerkleRootStorage` trait
-    //  impl section. But first we need to make `root(&self)` instead of `root(&mut self)`.
-    pub fn block_header_merkle_root(
+impl MerkleRootStorage<BlockHeight, FuelBlocks> for Database {
+    fn root(
         &self,
-        height: &BlockHeight,
-    ) -> StorageResult<Bytes32> {
+        key: &BlockHeight,
+    ) -> Result<fuel_core_storage::MerkleRoot, Self::Error> {
         let metadata = self
             .storage::<FuelBlockMerkleMetadata>()
-            .get(height)?
+            .get(key)?
             .ok_or(not_found!(FuelBlocks))
             .map(Cow::into_owned)?;
-        Ok(metadata.root)
+        Ok(metadata.root.into())
     }
 }
 
@@ -321,8 +321,10 @@ mod tests {
             // Check that root for the version is present
             let last_block = blocks.last().unwrap();
             let actual_root = database
-                .block_header_merkle_root(last_block.header().height())
-                .expect("root to exist");
+                .storage::<FuelBlocks>()
+                .root(last_block.header().height())
+                .expect("root to exist")
+                .into();
 
             assert_eq!(expected_root, actual_root);
         }
@@ -334,7 +336,8 @@ mod tests {
 
         // check that root is not present
         let err = database
-            .block_header_merkle_root(&0u32.into())
+            .storage::<FuelBlocks>()
+            .root(&0u32.into())
             .expect_err("expected error getting invalid Block Merkle root");
 
         assert!(matches!(err, fuel_core_storage::Error::NotFound(_, _)));
@@ -371,7 +374,8 @@ mod tests {
 
         // check that root is not present
         let err = database
-            .block_header_merkle_root(&100u32.into())
+            .storage::<FuelBlocks>()
+            .root(&100u32.into())
             .expect_err("expected error getting invalid Block Merkle root");
 
         assert!(matches!(err, fuel_core_storage::Error::NotFound(_, _)));
