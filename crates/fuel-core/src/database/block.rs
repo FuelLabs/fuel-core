@@ -284,7 +284,6 @@ mod tests {
     #[test_case(&[100, 102, 105, 107, 111]; "five non-sequential blocks starting from height 100")]
     fn can_get_merkle_root_of_inserted_blocks(heights: &[u64]) {
         let mut database = Database::default();
-        // Generate 10 blocks with ascending heights
         let blocks = heights
             .into_iter()
             .copied()
