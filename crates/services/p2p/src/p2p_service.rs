@@ -545,7 +545,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 mod tests {
     use super::FuelP2PService;
     use crate::{
-        codecs::bincode::BincodeCodec,
+        codecs::postcard::PostcardCodec,
         config::Config,
         gossipsub::{
             messages::{
@@ -613,12 +613,14 @@ mod tests {
     use tracing_attributes::instrument;
 
     /// helper function for building FuelP2PService
-    fn build_service_from_config(mut p2p_config: Config) -> FuelP2PService<BincodeCodec> {
+    fn build_service_from_config(
+        mut p2p_config: Config,
+    ) -> FuelP2PService<PostcardCodec> {
         p2p_config.keypair = Keypair::generate_secp256k1(); // change keypair for each Node
         let max_block_size = p2p_config.max_block_size;
 
         let mut service =
-            FuelP2PService::new(p2p_config, BincodeCodec::new(max_block_size));
+            FuelP2PService::new(p2p_config, PostcardCodec::new(max_block_size));
         service.start().unwrap();
         service
     }
@@ -665,19 +667,22 @@ mod tests {
         }
 
         /// Combines `NodeData` with `P2pConfig` to create a `FuelP2PService`
-        fn create_service(&self, mut p2p_config: Config) -> FuelP2PService<BincodeCodec> {
+        fn create_service(
+            &self,
+            mut p2p_config: Config,
+        ) -> FuelP2PService<PostcardCodec> {
             let max_block_size = p2p_config.max_block_size;
             p2p_config.tcp_port = self.tcp_port;
             p2p_config.keypair = self.keypair.clone();
 
             let mut service =
-                FuelP2PService::new(p2p_config, BincodeCodec::new(max_block_size));
+                FuelP2PService::new(p2p_config, PostcardCodec::new(max_block_size));
             service.start().unwrap();
             service
         }
     }
 
-    fn spawn(stop: &watch::Sender<()>, mut node: FuelP2PService<BincodeCodec>) {
+    fn spawn(stop: &watch::Sender<()>, mut node: FuelP2PService<PostcardCodec>) {
         let mut stop = stop.subscribe();
         tokio::spawn(async move {
             loop {

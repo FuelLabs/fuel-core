@@ -40,14 +40,14 @@ use serde::{
 use std::io;
 
 #[derive(Debug, Clone)]
-pub struct BincodeCodec {
+pub struct PostcardCodec {
     /// Used for `max_size` parameter when reading Response Message
     /// Necessary in order to avoid DoS attacks
     /// Currently the size mostly depends on the max size of the Block
     max_response_size: usize,
 }
 
-impl BincodeCodec {
+impl PostcardCodec {
     pub fn new(max_block_size: usize) -> Self {
         Self {
             max_response_size: max_block_size,
@@ -70,7 +70,7 @@ impl BincodeCodec {
     }
 }
 
-/// Since Bincode does not support async reads or writes out of the box
+/// Since Postcard does not support async reads or writes out of the box
 /// We prefix Request & Response Messages with the length of the data in bytes
 /// We expect the substream to be properly closed when response channel is dropped.
 /// Since the request protocol used here expects a response, the sender considers this
@@ -78,8 +78,8 @@ impl BincodeCodec {
 /// If the substream was not properly closed when dropped, the sender would instead
 /// run into a timeout waiting for the response.
 #[async_trait]
-impl RequestResponseCodec for BincodeCodec {
-    type Protocol = MessageExchangeBincodeProtocol;
+impl RequestResponseCodec for PostcardCodec {
+    type Protocol = MessageExchangePostcardProtocol;
     type Request = RequestMessage;
     type Response = NetworkResponse;
 
@@ -150,7 +150,7 @@ impl RequestResponseCodec for BincodeCodec {
     }
 }
 
-impl GossipsubCodec for BincodeCodec {
+impl GossipsubCodec for PostcardCodec {
     type RequestMessage = GossipsubBroadcastRequest;
     type ResponseMessage = GossipsubMessage;
 
@@ -185,7 +185,7 @@ impl GossipsubCodec for BincodeCodec {
     }
 }
 
-impl RequestResponseConverter for BincodeCodec {
+impl RequestResponseConverter for PostcardCodec {
     type NetworkResponse = NetworkResponse;
     type OutboundResponse = OutboundResponse;
     type ResponseMessage = ResponseMessage;
@@ -261,16 +261,16 @@ impl RequestResponseConverter for BincodeCodec {
     }
 }
 
-impl NetworkCodec for BincodeCodec {
+impl NetworkCodec for PostcardCodec {
     fn get_req_res_protocol(&self) -> <Self as RequestResponseCodec>::Protocol {
-        MessageExchangeBincodeProtocol {}
+        MessageExchangePostcardProtocol {}
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct MessageExchangeBincodeProtocol;
+pub struct MessageExchangePostcardProtocol;
 
-impl ProtocolName for MessageExchangeBincodeProtocol {
+impl ProtocolName for MessageExchangePostcardProtocol {
     fn protocol_name(&self) -> &[u8] {
         REQUEST_RESPONSE_PROTOCOL_ID
     }
