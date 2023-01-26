@@ -24,6 +24,7 @@ use fuel_core_types::{
             PartialBlockHeader,
         },
     },
+    fuel_vm::crypto::ephemeral_merkle_root,
     services::executor::Error as ExecutorError,
 };
 use rand::{
@@ -86,11 +87,8 @@ async fn can_produce_next_block() {
     .generate(&[])
     .compress();
 
-    let db = MockDb {
-        blocks: Arc::new(Mutex::new(
-            vec![(prev_height, previous_block)].into_iter().collect(),
-        )),
-    };
+    let mut db = MockDb::default();
+    db.insert_block(previous_block);
 
     let ctx = TestContext::default_from_db(db);
     let producer = ctx.producer();
@@ -99,6 +97,41 @@ async fn can_produce_next_block() {
         .await;
 
     assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn can_generate_blocks_with_the_expected_previous_root() {
+    let mut db = MockDb::default();
+
+    // Insert genesis block and record root
+    let genesis_block = CompressedBlock::default();
+    db.insert_block(genesis_block.clone());
+    let root_1 = ephemeral_merkle_root([genesis_block.id()].iter());
+
+    let ctx = TestContext::default_from_db(db);
+    let mut producer = ctx.producer();
+
+    // Produce next block and record root
+    let block = producer
+        .produce_and_execute_block(1u64.into(), None, 1_000_000_000)
+        .await
+        .unwrap()
+        .result()
+        .block
+        .compress();
+    assert_eq!(root_1, *block.header().prev_root());
+    let root_2 = ephemeral_merkle_root([genesis_block.id(), block.id()].iter());
+    producer.db.insert_block(block);
+
+    // Produce next block
+    let block = producer
+        .produce_and_execute_block(2u64.into(), None, 1_000_000_000)
+        .await
+        .unwrap()
+        .result()
+        .block
+        .compress();
+    assert_eq!(root_2, *block.header().prev_root());
 }
 
 #[tokio::test]
@@ -136,11 +169,9 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
     .generate(&[])
     .compress();
 
-    let db = MockDb {
-        blocks: Arc::new(Mutex::new(
-            vec![(prev_height, previous_block)].into_iter().collect(),
-        )),
-    };
+    let mut db = MockDb::default();
+    db.insert_block(previous_block);
+
     let ctx = TestContext {
         relayer: MockRelayer {
             // set our relayer best finalized height to less than previous
@@ -205,14 +236,11 @@ struct TestContext {
 
 impl TestContext {
     pub fn default() -> Self {
-        let genesis_height = 0u32.into();
         let genesis_block = CompressedBlock::default();
 
-        let db = MockDb {
-            blocks: Arc::new(Mutex::new(
-                vec![(genesis_height, genesis_block)].into_iter().collect(),
-            )),
-        };
+        let mut db = MockDb::default();
+        db.insert_block(genesis_block);
+
         Self::default_from_db(db)
     }
 
