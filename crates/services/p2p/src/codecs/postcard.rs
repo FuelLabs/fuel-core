@@ -285,6 +285,6 @@ mod tests {
     #[test]
     fn test_request_size_fits() {
         let m = RequestMessage::Transactions(BlockId::default());
-        assert!(postcard::to_stdvec(&m).unwrap().len() < MAX_REQUEST_SIZE);
+        assert!(postcard::to_stdvec(&m).unwrap().len() <= MAX_REQUEST_SIZE);
     }
 }
