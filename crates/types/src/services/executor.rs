@@ -30,7 +30,7 @@ use std::error::Error as StdError;
 
 /// The alias for executor result.
 pub type Result<T> = core::result::Result<T, Error>;
-/// The uncommitted result of teh transaction execution.
+/// The uncommitted result of the transaction execution.
 pub type UncommittedResult<DatabaseTransaction> =
     Uncommitted<ExecutionResult, DatabaseTransaction>;
 

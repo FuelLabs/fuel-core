@@ -3,7 +3,11 @@ use crate::{
     executor::Executor,
     service::adapters::ExecutorAdapter,
 };
-use fuel_core_storage::transactional::StorageTransaction;
+use fuel_core_executor::refs::ContractStorageTrait;
+use fuel_core_storage::{
+    transactional::StorageTransaction,
+    Error as StorageError,
+};
 use fuel_core_types::{
     fuel_tx::Receipt,
     services::executor::{
@@ -36,4 +40,9 @@ impl ExecutorAdapter {
         };
         executor.dry_run(block, utxo_validation)
     }
+}
+
+/// Implemented to satisfy: `GenesisCommitment for ContractRef<&'a mut Database>`
+impl ContractStorageTrait for Database {
+    type InnerError = StorageError;
 }
