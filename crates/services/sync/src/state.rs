@@ -28,6 +28,7 @@ pub enum Status {
 }
 
 impl State {
+    #[tracing::instrument(skip_all)]
     /// Create a new state from the current committed and observed heights.
     pub fn new(
         committed: impl Into<Option<u32>>,
@@ -58,17 +59,26 @@ impl State {
             // No heights are known, so the service is uninitialized.
             (None, None) => Status::Uninitialized,
         };
+        tracing::debug!("Initial status: {:?}", status);
         Self { status }
     }
 
+    #[tracing::instrument]
     /// Get the current range to process.
     pub fn process_range(&self) -> Option<RangeInclusive<u32>> {
         match &self.status {
-            Status::Processing(range) => Some(range.clone()),
-            _ => None,
+            Status::Processing(range) => {
+                tracing::debug!("Processing range: {:?}", range);
+                Some(range.clone())
+            }
+            _ => {
+                tracing::debug!("Nothing to process");
+                None
+            }
         }
     }
 
+    #[tracing::instrument]
     /// Record that a block has been committed.
     pub fn commit(&mut self, height: u32) {
         let new_status = match &self.status {
@@ -98,6 +108,7 @@ impl State {
         self.apply_status(new_status);
     }
 
+    #[tracing::instrument]
     /// Record that a block has been observed.
     pub fn observe(&mut self, height: u32) -> bool {
         let new_status = match &self.status {
@@ -125,6 +136,7 @@ impl State {
         status_change
     }
 
+    #[tracing::instrument]
     /// Record that a range of blocks have failed to process.
     pub fn failed_to_process(&mut self, range: RangeInclusive<u32>) {
         // Ignore empty ranges.
@@ -178,8 +190,14 @@ impl State {
     }
 
     fn apply_status(&mut self, status: Option<Status>) {
-        if let Some(s) = status {
-            self.status = s;
+        match status {
+            Some(s) => {
+                tracing::info!("Status change from: {:?}, to: {:?}", self.status, s);
+                self.status = s;
+            }
+            _ => {
+                tracing::debug!("No status change: {:?}", self.status);
+            }
         }
     }
 

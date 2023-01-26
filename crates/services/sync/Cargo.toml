@@ -16,6 +16,7 @@ fuel-core-services = { path = "../" }
 fuel-core-types = { path = "../../types", version = "0.15.1" }
 futures = "0.3.25"
 tokio = { version = "1.21", features = ["full"] }
+tracing = "0.1"
 
 [dev-dependencies]
 fuel-core-trace = { path = "../../trace" }
