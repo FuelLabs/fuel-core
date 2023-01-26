@@ -1,398 +1,285 @@
-use fuel_core::{
-    chain_config::ChainConfig,
-    database::Database,
-    service::{
-        Config,
-        FuelService,
-    },
-};
-use fuel_core_poa::Trigger;
 use fuel_core_types::{
-    fuel_asm::Opcode,
     fuel_crypto::SecretKey,
-    fuel_tx::{
-        Input,
-        Transaction,
-        TransactionBuilder,
-        UtxoId,
-    },
-    fuel_types::Address,
-    fuel_vm::consts::REG_ONE,
-    secrecy::Secret,
-    services::block_importer::ImportResult,
+    fuel_tx::Input,
 };
-use futures::StreamExt;
+use helpers::*;
 use rand::{
     rngs::StdRng,
-    Rng,
     SeedableRng,
 };
 use std::{
-    collections::HashSet,
-    sync::Arc,
+    collections::{
+        hash_map::DefaultHasher,
+        HashMap,
+        VecDeque,
+    },
+    hash::{
+        Hash,
+        Hasher,
+    },
 };
+use test_case::test_case;
 
-#[derive(Clone)]
-struct ProducerSetup {
-    secret: SecretKey,
-    num_test_txs: usize,
+mod helpers;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_producer_getting_own_blocks_back() {
+    let mut rng = StdRng::seed_from_u64(12);
+
+    // Create a producer and a validator that share the same key pair.
+    let secret = SecretKey::random(&mut rng);
+    let pub_key = Input::owner(&secret.public_key());
+    let Nodes {
+        mut producers,
+        mut validators,
+    } = make_nodes(
+        [Some(
+            ProducerSetup::new(secret).with_txs(1).with_name("Alice"),
+        )],
+        [Some(ValidatorSetup::new(pub_key).with_name("Bob"))],
+    )
+    .await;
+
+    let mut producer = producers.pop().unwrap();
+    let mut validator = validators.pop().unwrap();
+
+    // Shut down the validator.
+    validator.shutdown().await;
+
+    // Insert the transactions into the tx pool.
+    let expected = producer.insert_txs();
+
+    // Wait up to 10 seconds for the producer to commit their own blocks.
+    producer.consistency_10s(&expected).await;
+
+    // Start the validator.
+    validator.start().await;
+
+    // Wait up to 10 seconds for the validator to sync with the producer.
+    validator.consistency_10s(&expected).await;
 }
 
-#[derive(Clone)]
-struct ValidatorSetup {
-    pub_key: Address,
-}
+#[test_case(1)]
+#[test_case(10)]
+#[test_case(100)]
+#[tokio::test(flavor = "multi_thread")]
+async fn test_partitions(num_txs: usize) {
+    let mut rng = StdRng::seed_from_u64(num_txs as u64 * 100);
 
-struct Node {
-    node: FuelService,
-    db: Database,
-    test_txs: Vec<Transaction>,
-    block_subscription: tokio::sync::broadcast::Receiver<Arc<ImportResult>>,
-}
-
-struct Nodes {
-    producers: Vec<Node>,
-    validators: Vec<Node>,
-}
-
-async fn make_nodes(
-    producers: impl IntoIterator<Item = Option<ProducerSetup>>,
-    validators: impl IntoIterator<Item = Option<ValidatorSetup>>,
-) -> Nodes {
-    let producers: Vec<_> = producers.into_iter().collect();
-
-    let mut rng = StdRng::seed_from_u64(11);
-
-    let txs_coins: Vec<_> = producers
-        .iter()
-        .map(|p| {
-            let num_test_txs = p.as_ref()?.num_test_txs;
-            let all: Vec<_> = (0..num_test_txs)
-                .map(|_| {
-                    let secret = SecretKey::random(&mut rng);
-                    let utxo_id: UtxoId = rng.gen();
-                    let initial_coin =
-                        ChainConfig::initial_coin(secret, 10000, Some(utxo_id));
-                    let tx = TransactionBuilder::script(
-                        vec![Opcode::RET(REG_ONE)].into_iter().collect(),
-                        vec![],
-                    )
-                    .gas_limit(100000)
-                    .add_unsigned_coin_input(
-                        secret,
-                        utxo_id,
-                        initial_coin.amount,
-                        initial_coin.asset_id,
-                        Default::default(),
-                        0,
-                    )
-                    .finalize_as_transaction();
-
-                    (tx, initial_coin)
-                })
-                .collect();
-            Some(all)
-        })
-        .collect();
-
-    let mut producers_with_txs = Vec::with_capacity(producers.len());
-    let mut chain_config = ChainConfig::local_testnet();
-
-    for (all, producer) in txs_coins.into_iter().zip(producers.into_iter()) {
-        match all {
-            Some(all) => {
-                let mut txs = Vec::with_capacity(all.len());
-                for (tx, initial_coin) in all {
-                    txs.push(tx);
-                    chain_config
-                        .initial_state
-                        .as_mut()
-                        .unwrap()
-                        .coins
-                        .as_mut()
-                        .unwrap()
-                        .push(initial_coin);
-                }
-                producers_with_txs.push(Some((producer.unwrap(), txs)));
-            }
-            None => {
-                producers_with_txs.push(None);
-            }
-        }
-    }
-
-    let producers: Vec<_> = futures::stream::iter(producers_with_txs.into_iter())
-        .then(|s| {
-            let chain_config = chain_config.clone();
-            async move {
-                let mut node_config = Config::local_node();
-                node_config.chain_conf = chain_config.clone();
-                node_config.utxo_validation = true;
-                node_config.p2p.enable_mdns = true;
-                node_config.block_production = Trigger::Instant;
-                let mut test_txs = Vec::with_capacity(0);
-                if let Some((ProducerSetup { secret, .. }, txs)) = s {
-                    match &mut node_config.chain_conf.consensus {
-                        fuel_core::chain_config::ConsensusConfig::PoA { signing_key } => {
-                            *signing_key = Input::owner(&secret.public_key());
-                        }
-                    }
-
-                    node_config.consensus_key = Some(Secret::new(secret.into()));
-
-                    test_txs = txs;
-                }
-                let db = Database::in_memory();
-                let node = FuelService::from_database(db.clone(), node_config)
-                    .await
-                    .unwrap();
-
-                let block_subscription =
-                    node.shared.block_importer.block_importer.subscribe();
-                Node {
-                    node,
-                    db,
-                    test_txs,
-                    block_subscription,
-                }
-            }
-        })
-        .collect()
-        .await;
-
-    let validators: Vec<_> = futures::stream::iter(validators)
-        .then(|s| {
-            let chain_config = chain_config.clone();
-            async move {
-                let mut node_config = Config::local_node();
-                node_config.chain_conf = chain_config.clone();
-                node_config.utxo_validation = true;
-                node_config.p2p.enable_mdns = true;
-                node_config.block_production = Trigger::Never;
-                let db = Database::in_memory();
-
-                if let Some(ValidatorSetup { pub_key }) = s {
-                    match &mut node_config.chain_conf.consensus {
-                        fuel_core::chain_config::ConsensusConfig::PoA { signing_key } => {
-                            *signing_key = pub_key;
-                        }
-                    }
-                }
-                let node = FuelService::from_database(db.clone(), node_config)
-                    .await
-                    .unwrap();
-
-                let block_subscription =
-                    node.shared.block_importer.block_importer.subscribe();
-                Node {
-                    node,
-                    db,
-                    test_txs: vec![],
-                    block_subscription,
-                }
-            }
-        })
-        .collect()
-        .await;
-
-    Nodes {
-        producers,
+    // Create a producer and two validators that share the same key pair.
+    let secret = SecretKey::random(&mut rng);
+    let pub_key = Input::owner(&secret.public_key());
+    let Nodes {
+        mut producers,
         validators,
-    }
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_nodes_syncing() {
-    let mut rng = StdRng::seed_from_u64(12);
-
-    let secret = SecretKey::random(&mut rng);
-    let pub_key = Input::owner(&secret.public_key());
-    let Nodes {
-        producers,
-        mut validators,
     } = make_nodes(
-        [Some(ProducerSetup {
-            secret,
-            num_test_txs: 1,
-        })],
-        std::iter::repeat(Some(ValidatorSetup { pub_key })).take(10),
+        [Some(
+            ProducerSetup::new(secret)
+                .with_txs(num_txs)
+                .with_name("Alice"),
+        )],
+        [
+            Some(ValidatorSetup::new(pub_key).with_name("Bob")),
+            Some(ValidatorSetup::new(pub_key).with_name("Carol")),
+        ],
     )
     .await;
 
-    let mut total_txs = 0;
-    let mut expected = HashSet::new();
-    for Node { node, test_txs, .. } in &producers {
-        for tx in test_txs {
-            let tx_result = node
-                .shared
-                .txpool
-                .insert(vec![Arc::new(tx.clone())])
-                .pop()
-                .unwrap()
-                .unwrap();
+    // Convert to named nodes.
+    let mut validators: NamedNodes = validators.into();
 
-            total_txs += 1;
-            expected.insert(Transaction::from(tx_result.inserted.as_ref()));
+    let mut producer = producers.pop().unwrap();
 
-            assert!(tx_result.removed.is_empty());
-        }
-    }
+    // Shutdown Carol.
+    validators["Carol"].shutdown().await;
 
-    for (
-        i,
-        Node {
-            db,
-            block_subscription,
-            ..
-        },
-    ) in validators.iter_mut().enumerate()
-    {
-        for _ in 0..total_txs {
-            block_subscription.recv().await.unwrap();
-        }
-        let all_txs: Vec<_> = db
-            .all_transactions(None, None)
-            .map(Result::unwrap)
-            .filter(|tx| tx.is_script())
-            .collect();
-        let count_missing: Vec<_> = db
-            .all_transactions(None, None)
-            .map(Result::unwrap)
-            .filter(|tx| tx.is_script())
-            .filter(|tx| expected.contains(tx))
-            .collect();
-        assert_eq!(
-            count_missing.len(),
-            0,
-            "Node {} is Missing {:?}\nHAVE:\n{:?}\nNEED\n{:?}",
-            i,
-            count_missing,
-            all_txs,
-            expected,
-        );
-    }
+    // Insert the transactions into the tx pool.
+    let expected = producer.insert_txs();
+
+    // Wait up to 10 seconds for the producer to commit their own blocks.
+    producer.consistency_10s(&expected).await;
+
+    // Wait up to 10 seconds for Bob to sync with the producer.
+    validators["Bob"].consistency_10s(&expected).await;
+
+    // Shutdown the producer.
+    producer.shutdown().await;
+
+    // Start Carol.
+    validators["Carol"].start().await;
+
+    // Wait up to 10 seconds for Carol to sync with Bob.
+    validators["Carol"].consistency_10s(&expected).await;
 }
 
+#[test_case(1, 3, 3)]
+#[test_case(10, 3, 3)]
+#[test_case(100, 3, 3)]
+#[test_case(1, 40, 4)]
+#[test_case(10, 40, 4)]
+#[test_case(100, 40, 4)]
 #[tokio::test(flavor = "multi_thread")]
-async fn test_multiple_same_key() {
-    let mut rng = StdRng::seed_from_u64(12);
+async fn test_partitions_larger_groups(
+    num_txs: usize,
+    num_validators: usize,
+    num_partitions: usize,
+) {
+    // Create a random seed based on the test parameters.
+    let mut hasher = DefaultHasher::new();
+    (num_txs, num_validators, num_partitions).hash(&mut hasher);
+    let mut rng = StdRng::seed_from_u64(hasher.finish());
 
+    // Create a producer and a set of validators that share the same key pair.
     let secret = SecretKey::random(&mut rng);
     let pub_key = Input::owner(&secret.public_key());
     let Nodes {
-        producers,
+        mut producers,
         mut validators,
     } = make_nodes(
-        std::iter::repeat(Some(ProducerSetup {
-            secret,
-            num_test_txs: 1,
-        }))
-        .take(3),
-        std::iter::repeat(Some(ValidatorSetup { pub_key })).take(10),
+        [Some(
+            ProducerSetup::new(secret)
+                .with_txs(num_txs)
+                .with_name("Alice"),
+        )],
+        std::iter::repeat(Some(ValidatorSetup::new(pub_key))).take(num_validators),
     )
     .await;
 
-    let mut total_txs = 0;
-    let mut expected = HashSet::new();
-    for Node { node, test_txs, .. } in &producers {
-        for tx in test_txs {
-            let tx_result = node
-                .shared
-                .txpool
-                .insert(vec![Arc::new(tx.clone())])
-                .pop()
-                .unwrap()
-                .unwrap();
+    let producer = producers.pop().unwrap();
 
-            total_txs += 1;
-            expected.insert(Transaction::from(tx_result.inserted.as_ref()));
+    // Get the number of validators per partition.
+    let group_size = num_validators / num_partitions;
 
-            assert!(tx_result.removed.is_empty());
-        }
+    // Shutdown the validators.
+    for v in &mut validators {
+        v.shutdown().await;
     }
 
-    for Node {
-        db,
-        block_subscription,
-        ..
-    } in &mut validators
-    {
-        for _ in 0..total_txs {
-            block_subscription.recv().await.unwrap();
+    // Insert the transactions into the tx pool.
+    let expected = producer.insert_txs();
+
+    // The overlap between two groups.
+    let mut overlap: VecDeque<Vec<Node>> = VecDeque::with_capacity(2);
+
+    // Partition the validators into groups.
+    let mut validators = validators.into_iter();
+    let groups = (0..num_partitions)
+        .map(|_| validators.by_ref().take(group_size).collect::<Vec<_>>())
+        .collect::<Vec<_>>();
+
+    // The producer is the first overlap.
+    overlap.push_back(vec![producer]);
+
+    // For each group, start the group, wait for it to sync with the overlapping
+    // group, and shutdown the overlapping group.
+    for mut validators in groups {
+        // Start this group.
+        for v in &mut validators {
+            v.start().await;
         }
-        let count_missing: Vec<_> = db
-            .all_transactions(None, None)
-            .map(Result::unwrap)
-            .filter(|tx| tx.is_script())
-            .filter(|tx| expected.contains(tx))
-            .collect();
-        assert_eq!(count_missing.len(), 0, "Missing {:?}", count_missing);
+
+        // Wait up to 10 seconds validators to sync with the overlapping group.
+        for v in &mut validators {
+            v.consistency_10s(&expected).await;
+        }
+
+        // Shutdown the overlapping group.
+        let last_group = overlap.pop_front().unwrap();
+        for mut v in last_group {
+            v.shutdown().await;
+        }
+
+        // The current group is the next overlap.
+        overlap.push_back(validators);
     }
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_multiple_producers() {
-    let mut rng = StdRng::seed_from_u64(12);
+async fn test_multiple_producers_different_keys() {
+    // Create a random seed based on the test parameters.
+    let mut hasher = DefaultHasher::new();
+    let num_txs = 10;
+    let num_validators = 6;
+    let num_partitions = 3;
+    (num_txs, num_validators, num_partitions).hash(&mut hasher);
+    let mut rng = StdRng::seed_from_u64(hasher.finish());
 
-    let secrets: Vec<_> = (0..3).map(|_| SecretKey::random(&mut rng)).collect();
+    // Create a set of key pairs.
+    let secrets: Vec<_> = (0..num_partitions)
+        .map(|_| SecretKey::random(&mut rng))
+        .collect();
     let pub_keys = secrets
         .clone()
         .into_iter()
         .map(|secret| Input::owner(&secret.public_key()));
+
+    // Create a producer for each key pair and a set of validators that share
+    // the same key pair.
     let Nodes {
-        producers,
-        mut validators,
+        mut producers,
+        validators,
     } = make_nodes(
-        secrets.into_iter().map(|secret| {
-            Some(ProducerSetup {
-                secret,
-                num_test_txs: 1,
-            })
-        }),
-        pub_keys
+        secrets
             .into_iter()
-            .flat_map(|pub_key| (0..10).map(move |_| Some(ValidatorSetup { pub_key }))),
+            .map(|secret| Some(ProducerSetup::new(secret).with_txs(num_txs))),
+        pub_keys.into_iter().flat_map(|pub_key| {
+            (0..num_validators).map(move |_| Some(ValidatorSetup::new(pub_key)))
+        }),
     )
     .await;
 
-    let mut groups = Vec::new();
-    for Node { node, test_txs, .. } in &producers {
-        let mut total_txs = 0;
-        let mut expected = HashSet::new();
-        for tx in test_txs {
-            let tx_result = node
-                .shared
-                .txpool
-                .insert(vec![Arc::new(tx.clone())])
-                .pop()
-                .unwrap()
-                .unwrap();
+    // Get the number of validators per key pair.
+    let group_size = num_validators / num_partitions;
 
-            total_txs += 1;
-            expected.insert(Transaction::from(tx_result.inserted.as_ref()));
-
-            assert!(tx_result.removed.is_empty());
-        }
-        groups.push((total_txs, expected));
+    // Insert the transactions into the tx pool
+    // and gather the expect transactions for each group.
+    let mut expected = Vec::with_capacity(num_partitions);
+    for p in &mut producers {
+        expected.push(p.insert_txs());
     }
 
-    for (chunk, (total_txs, expected)) in validators.chunks_exact_mut(10).zip(groups) {
-        for Node {
-            db,
-            block_subscription,
-            ..
-        } in chunk
-        {
-            for _ in 0..total_txs {
-                block_subscription.recv().await.unwrap();
-            }
-            let count_missing: Vec<_> = db
-                .all_transactions(None, None)
-                .map(Result::unwrap)
-                .filter(|tx| tx.is_script())
-                .filter(|tx| expected.contains(tx))
-                .collect();
-            assert_eq!(count_missing.len(), 0, "Missing {:?}", count_missing);
+    // Partition the validators into groups.
+    let mut validators = validators.into_iter();
+    let groups = (0..num_partitions)
+        .map(|_| validators.by_ref().take(group_size).collect::<Vec<_>>())
+        .collect::<Vec<_>>();
+
+    // For each group, start the group and wait for it to sync with the
+    // producer with the same key pair.
+    for (expected, mut validators) in expected.into_iter().zip(groups) {
+        for v in &mut validators {
+            v.consistency_20s(&expected).await;
         }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "This test might not make any sense, since we probably don't want to support PoA producers sharing their private key"]
+async fn test_multiple_producers_same_key() {
+    let mut hasher = DefaultHasher::new();
+    let num_txs = 10;
+    let num_validators = 6;
+    let num_producers = 3;
+    (num_txs, num_validators, num_producers).hash(&mut hasher);
+    let mut rng = StdRng::seed_from_u64(hasher.finish());
+
+    let secret = SecretKey::random(&mut rng);
+    let pub_key = Input::owner(&secret.public_key());
+    let Nodes {
+        mut producers,
+        mut validators,
+    } = make_nodes(
+        std::iter::repeat(Some(ProducerSetup::new(secret))).take(num_producers),
+        std::iter::repeat(Some(ValidatorSetup::new(pub_key))).take(num_validators),
+    )
+    .await;
+
+    let mut expected = HashMap::new();
+    for p in &mut producers {
+        expected.extend(p.insert_txs());
+    }
+
+    for v in &mut validators {
+        v.consistency_10s(&expected).await;
     }
 }

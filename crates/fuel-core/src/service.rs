@@ -61,7 +61,7 @@ pub struct FuelService {
 
 impl FuelService {
     /// Creates a `FuelService` instance from service config
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip_all, fields(name = %config.name))]
     pub fn new(database: Database, mut config: Config) -> anyhow::Result<Self> {
         Self::make_config_consistent(&mut config);
         let task = Task::new(database, config)?;
@@ -119,7 +119,7 @@ impl FuelService {
     }
 
     // TODO: Rework our configs system to avoid nesting of the same configs.
-    fn make_config_consistent(config: &mut Config) {
+    pub fn make_config_consistent(config: &mut Config) {
         if config.txpool.chain_config != config.chain_conf {
             warn!("The `ChainConfig` of `TxPool` was inconsistent");
             config.txpool.chain_config = config.chain_conf.clone();
@@ -212,6 +212,7 @@ impl RunnableService for Task {
 
 #[async_trait::async_trait]
 impl RunnableTask for Task {
+    #[tracing::instrument(skip_all)]
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let mut stop_signals = vec![];
         for service in &self.services {

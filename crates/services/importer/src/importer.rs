@@ -155,6 +155,15 @@ where
         self._commit_result(result)
     }
 
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            block_id = %result.result().sealed_block.entity.id(),
+            height = **result.result().sealed_block.entity.header().height(),
+            tx_status = ?result.result().tx_status,
+        ),
+        err
+    )]
     fn _commit_result<ExecutorDatabase>(
         &self,
         result: UncommittedResult<StorageTransaction<ExecutorDatabase>>,
@@ -221,6 +230,7 @@ where
 
         db_tx.commit()?;
 
+        tracing::info!("Committed block");
         let _ = self.broadcast.send(Arc::new(result));
         Ok(())
     }
