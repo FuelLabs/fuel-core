@@ -1,3 +1,4 @@
+use crate::ports::Database;
 use anyhow::ensure;
 use fuel_core_chain_config::ConsensusConfig;
 use fuel_core_types::{
@@ -8,8 +9,6 @@ use fuel_core_types::{
     },
     fuel_tx::Input,
 };
-
-use crate::ports::Database;
 
 #[cfg(test)]
 mod tests;
