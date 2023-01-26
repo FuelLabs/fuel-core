@@ -39,7 +39,7 @@ impl VerifierAdapter {
     }
 }
 
-impl fuel_core_poa::verifier::Database for Database {
+impl fuel_core_poa::ports::Database for Database {
     fn block_header(&self, height: &BlockHeight) -> StorageResult<BlockHeader> {
         Ok(self.get_block(height)?.header().clone())
     }
