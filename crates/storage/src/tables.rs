@@ -6,10 +6,7 @@ use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
-        primitives::{
-            BlockHeight,
-            BlockId,
-        },
+        primitives::BlockId,
     },
     entities::{
         coin::CompressedCoin,
@@ -41,20 +38,10 @@ pub struct FuelBlocks;
 impl Mappable for FuelBlocks {
     /// Unique identifier of the fuel block.
     type Key = Self::OwnedKey;
+    // TODO: Seems it would be faster to use `BlockHeight` as primary key.
     type OwnedKey = BlockId;
     type Value = Self::OwnedValue;
     type OwnedValue = CompressedBlock;
-}
-
-/// The table of BMT MMR roots of the fuel blocks.
-pub struct FuelBlockRoots;
-
-impl Mappable for FuelBlockRoots {
-    /// The height of the fuel block.
-    type Key = Self::OwnedKey;
-    type OwnedKey = BlockHeight;
-    type Value = Self::OwnedValue;
-    type OwnedValue = Bytes32;
 }
 
 /// The latest UTXO id of the contract. The contract's UTXO represents the unique id of the state.

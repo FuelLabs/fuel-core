@@ -13,12 +13,7 @@ use fuel_core_consensus_module::block_verifier::{
     Verifier,
 };
 use fuel_core_producer::ports::BlockProducerDatabase;
-use fuel_core_storage::{
-    not_found,
-    tables::FuelBlockRoots,
-    Result as StorageResult,
-    StorageAsRef,
-};
+use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::{
         header::BlockHeader,
@@ -26,10 +21,7 @@ use fuel_core_types::{
     },
     fuel_tx::Bytes32,
 };
-use std::{
-    borrow::Cow,
-    sync::Arc,
-};
+use std::sync::Arc;
 
 pub mod poa;
 
@@ -53,9 +45,6 @@ impl fuel_core_poa::verifier::Database for Database {
     }
 
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32> {
-        self.storage::<FuelBlockRoots>()
-            .get(height)?
-            .ok_or(not_found!(FuelBlockRoots))
-            .map(Cow::into_owned)
+        Database::block_header_merkle_root(self, height)
     }
 }

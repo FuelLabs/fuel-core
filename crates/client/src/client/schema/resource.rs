@@ -17,7 +17,7 @@ use std::str::FromStr;
 pub struct ExcludeInput {
     /// Utxos to exclude from the result.
     utxos: Vec<UtxoId>,
-    /// Messages to exclude from teh result.
+    /// Messages to exclude from the result.
     messages: Vec<MessageId>,
 }
 

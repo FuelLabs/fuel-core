@@ -24,7 +24,6 @@ use fuel_core_types::{
         },
         SealedBlock,
     },
-    fuel_vm::crypto::ephemeral_merkle_root,
     services::{
         block_importer::{
             ImportResult,
@@ -218,16 +217,6 @@ where
 
         db_after_execution
             .seal_block(&block_id, &result.sealed_block.consensus)?
-            .should_be_unique(&expected_next_height)?;
-
-        // TODO: This should use a proper BMT MMR. Based on peaks stored in the database,
-        //  we need to calculate a new root. The data type that will do that should live
-        //  in the `fuel-core-storage` or `fuel-merkle` crate.
-        let root = ephemeral_merkle_root(
-            vec![*block.header().prev_root(), block_id.into()].iter(),
-        );
-        db_after_execution
-            .insert_block_header_merkle_root(&expected_next_height, &root)?
             .should_be_unique(&expected_next_height)?;
 
         db_tx.commit()?;
