@@ -283,11 +283,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_request_size_matches() {
+    fn test_request_size_fits() {
         let m = RequestMessage::Transactions(BlockId::default());
-        assert_eq!(
-            bincode::serialized_size(&m).unwrap() as usize,
-            MAX_REQUEST_SIZE
-        );
+        assert!(postcard::to_stdvec(&m).unwrap().len() < MAX_REQUEST_SIZE);
     }
 }
