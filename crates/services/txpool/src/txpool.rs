@@ -68,6 +68,7 @@ where
         &self.by_dependency
     }
 
+    #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id()), ret, err)]
     // this is atomic operation. Return removed(pushed out/replaced) transactions
     fn insert_inner(
         &mut self,
@@ -243,6 +244,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(level = "info", skip_all)]
     /// Import a set of transactions from network gossip or GraphQL endpoints.
     pub fn insert(
         &mut self,

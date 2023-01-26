@@ -20,6 +20,7 @@ use fuel_core_types::{
     fuel_tx::{
         Transaction,
         TxId,
+        UniqueIdentifier,
     },
     fuel_types::Bytes32,
     services::{
@@ -60,16 +61,19 @@ impl TxStatusChange {
     }
 
     pub fn send_complete(&self, id: Bytes32) {
+        tracing::info!("Transaction {id} successfully included in a block");
         let _ = self.status_sender.send(TxStatus::Completed);
         self.updated(id);
     }
 
     pub fn send_submitted(&self, id: Bytes32) {
+        tracing::info!("Transaction {id} successfully submitted to the tx pool");
         let _ = self.status_sender.send(TxStatus::Submitted);
         self.updated(id);
     }
 
     pub fn send_squeezed_out(&self, id: Bytes32, reason: TxPoolError) {
+        tracing::info!("Transaction {id} squeezed out because {reason}");
         let _ = self.status_sender.send(TxStatus::SqueezedOut {
             reason: reason.clone(),
         });
@@ -137,11 +141,15 @@ where
             }
             new_transaction = self.gossiped_tx_stream.next() => {
                 if let Some(GossipData { data: Some(tx), .. }) = new_transaction {
+                    let id = tx.id();
                     let txs = vec!(Arc::new(tx));
-                    self.shared.txpool.lock().insert(
-                        &self.shared.tx_status_sender,
-                        &txs
-                    );
+                    tracing::info_span!("Received tx via gossip", %id)
+                        .in_scope(|| {
+                            self.shared.txpool.lock().insert(
+                                &self.shared.tx_status_sender,
+                                &txs
+                            )
+                        });
                     should_continue = true;
                 } else {
                     should_continue = false;
@@ -222,6 +230,7 @@ where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
     DB: TxPoolDb,
 {
+    #[tracing::instrument(name = "insert_submitted_txn", skip_all)]
     pub fn insert(
         &self,
         txs: Vec<Arc<Transaction>>,
