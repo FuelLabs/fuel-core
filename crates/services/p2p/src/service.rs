@@ -1,6 +1,6 @@
 use crate::{
     codecs::{
-        bincode::BincodeCodec,
+        postcard::PostcardCodec,
         NetworkCodec,
     },
     config::Config,
@@ -104,7 +104,7 @@ impl Debug for TaskRequest {
 /// Orchestrates various p2p-related events between the inner `P2pService`
 /// and the top level `NetworkService`.
 pub struct Task<D> {
-    p2p_service: FuelP2PService<BincodeCodec>,
+    p2p_service: FuelP2PService<PostcardCodec>,
     db: Arc<D>,
     next_block_height: BoxStream<BlockHeight>,
     /// Receive internal Task Requests
@@ -123,7 +123,7 @@ impl<D> Task<D> {
         let (block_height_broadcast, _) = broadcast::channel(100);
         let next_block_height = block_importer.next_block_height();
         let max_block_size = config.max_block_size;
-        let p2p_service = FuelP2PService::new(config, BincodeCodec::new(max_block_size));
+        let p2p_service = FuelP2PService::new(config, PostcardCodec::new(max_block_size));
 
         Self {
             p2p_service,
