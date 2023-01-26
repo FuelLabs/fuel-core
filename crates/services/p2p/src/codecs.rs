@@ -1,4 +1,4 @@
-pub mod bincode;
+pub mod postcard;
 
 use crate::{
     gossipsub::messages::{

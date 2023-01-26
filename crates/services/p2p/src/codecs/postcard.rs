@@ -40,14 +40,14 @@ use serde::{
 use std::io;
 
 #[derive(Debug, Clone)]
-pub struct BincodeCodec {
+pub struct PostcardCodec {
     /// Used for `max_size` parameter when reading Response Message
     /// Necessary in order to avoid DoS attacks
     /// Currently the size mostly depends on the max size of the Block
     max_response_size: usize,
 }
 
-impl BincodeCodec {
+impl PostcardCodec {
     pub fn new(max_block_size: usize) -> Self {
         Self {
             max_response_size: max_block_size,
@@ -60,17 +60,17 @@ impl BincodeCodec {
         &self,
         encoded_data: &'a [u8],
     ) -> Result<R, io::Error> {
-        bincode::deserialize(encoded_data)
+        postcard::from_bytes(encoded_data)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
 
     fn serialize<D: Serialize>(&self, data: &D) -> Result<Vec<u8>, io::Error> {
-        bincode::serialize(&data)
+        postcard::to_stdvec(&data)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
 }
 
-/// Since Bincode does not support async reads or writes out of the box
+/// Since Postcard does not support async reads or writes out of the box
 /// We prefix Request & Response Messages with the length of the data in bytes
 /// We expect the substream to be properly closed when response channel is dropped.
 /// Since the request protocol used here expects a response, the sender considers this
@@ -78,8 +78,8 @@ impl BincodeCodec {
 /// If the substream was not properly closed when dropped, the sender would instead
 /// run into a timeout waiting for the response.
 #[async_trait]
-impl RequestResponseCodec for BincodeCodec {
-    type Protocol = MessageExchangeBincodeProtocol;
+impl RequestResponseCodec for PostcardCodec {
+    type Protocol = MessageExchangePostcardProtocol;
     type Request = RequestMessage;
     type Response = NetworkResponse;
 
@@ -118,7 +118,7 @@ impl RequestResponseCodec for BincodeCodec {
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        match bincode::serialize(&req) {
+        match postcard::to_stdvec(&req) {
             Ok(encoded_data) => {
                 write_length_prefixed(socket, encoded_data).await?;
                 socket.close().await?;
@@ -138,7 +138,7 @@ impl RequestResponseCodec for BincodeCodec {
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        match bincode::serialize(&res) {
+        match postcard::to_stdvec(&res) {
             Ok(encoded_data) => {
                 write_length_prefixed(socket, encoded_data).await?;
                 socket.close().await?;
@@ -150,15 +150,15 @@ impl RequestResponseCodec for BincodeCodec {
     }
 }
 
-impl GossipsubCodec for BincodeCodec {
+impl GossipsubCodec for PostcardCodec {
     type RequestMessage = GossipsubBroadcastRequest;
     type ResponseMessage = GossipsubMessage;
 
     fn encode(&self, data: Self::RequestMessage) -> Result<Vec<u8>, io::Error> {
         let encoded_data = match data {
-            GossipsubBroadcastRequest::ConsensusVote(vote) => bincode::serialize(&*vote),
-            GossipsubBroadcastRequest::NewBlock(block) => bincode::serialize(&*block),
-            GossipsubBroadcastRequest::NewTx(tx) => bincode::serialize(&*tx),
+            GossipsubBroadcastRequest::ConsensusVote(vote) => postcard::to_stdvec(&*vote),
+            GossipsubBroadcastRequest::NewBlock(block) => postcard::to_stdvec(&*block),
+            GossipsubBroadcastRequest::NewTx(tx) => postcard::to_stdvec(&*tx),
         };
 
         encoded_data.map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
@@ -185,7 +185,7 @@ impl GossipsubCodec for BincodeCodec {
     }
 }
 
-impl RequestResponseConverter for BincodeCodec {
+impl RequestResponseConverter for PostcardCodec {
     type NetworkResponse = NetworkResponse;
     type OutboundResponse = OutboundResponse;
     type ResponseMessage = ResponseMessage;
@@ -261,16 +261,16 @@ impl RequestResponseConverter for BincodeCodec {
     }
 }
 
-impl NetworkCodec for BincodeCodec {
+impl NetworkCodec for PostcardCodec {
     fn get_req_res_protocol(&self) -> <Self as RequestResponseCodec>::Protocol {
-        MessageExchangeBincodeProtocol {}
+        MessageExchangePostcardProtocol {}
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct MessageExchangeBincodeProtocol;
+pub struct MessageExchangePostcardProtocol;
 
-impl ProtocolName for MessageExchangeBincodeProtocol {
+impl ProtocolName for MessageExchangePostcardProtocol {
     fn protocol_name(&self) -> &[u8] {
         REQUEST_RESPONSE_PROTOCOL_ID
     }
@@ -283,11 +283,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_request_size_matches() {
+    fn test_request_size_fits() {
         let m = RequestMessage::Transactions(BlockId::default());
-        assert_eq!(
-            bincode::serialized_size(&m).unwrap() as usize,
-            MAX_REQUEST_SIZE
-        );
+        assert!(postcard::to_stdvec(&m).unwrap().len() <= MAX_REQUEST_SIZE);
     }
 }
