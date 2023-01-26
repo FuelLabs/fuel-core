@@ -8,7 +8,7 @@ mod tests;
 
 use crate::block_verifier::config::Config;
 use anyhow::ensure;
-use fuel_core_poa::verifier::Database as PoAVerifierDatabase;
+use fuel_core_poa::ports::Database as PoAVerifierDatabase;
 use fuel_core_types::{
     blockchain::{
         block::Block,
