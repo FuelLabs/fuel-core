@@ -19,8 +19,13 @@ use crate::state::State;
 #[cfg(test)]
 mod tests;
 
+pub(crate) enum IncomingHeight {
+    Observed(BlockHeight),
+    Committed(BlockHeight),
+}
+
 pub(crate) struct SyncHeights {
-    height_stream: BoxStream<BlockHeight>,
+    height_stream: BoxStream<IncomingHeight>,
     state: SharedMutex<State>,
     notify: Arc<Notify>,
 }
@@ -28,9 +33,15 @@ pub(crate) struct SyncHeights {
 impl SyncHeights {
     pub(crate) fn new(
         height_stream: BoxStream<BlockHeight>,
+        committed_height_stream: BoxStream<BlockHeight>,
         state: SharedMutex<State>,
         notify: Arc<Notify>,
     ) -> Self {
+        let height_stream = futures::stream::select(
+            height_stream.map(IncomingHeight::Observed),
+            committed_height_stream.map(IncomingHeight::Committed),
+        )
+        .into_boxed();
         Self {
             height_stream,
             state,
@@ -43,7 +54,14 @@ impl SyncHeights {
     /// This stream never blocks or errors.
     pub(crate) async fn sync(&mut self) -> Option<()> {
         let height = self.height_stream.next().await?;
-        let state_change = self.state.apply(|s| s.observe(*height));
+        let state_change = match height {
+            IncomingHeight::Committed(height) => {
+                self.state.apply(|s| s.commit(*height));
+                // A new committed height doesn't represent new work for the import stream.
+                false
+            }
+            IncomingHeight::Observed(height) => self.state.apply(|s| s.observe(*height)),
+        };
         if state_change {
             self.notify.notify_one();
         }
@@ -52,7 +70,7 @@ impl SyncHeights {
 
     pub(crate) fn map_stream(
         &mut self,
-        f: impl FnOnce(BoxStream<BlockHeight>) -> BoxStream<BlockHeight>,
+        f: impl FnOnce(BoxStream<IncomingHeight>) -> BoxStream<IncomingHeight>,
     ) {
         let height_stream = core::mem::replace(
             &mut self.height_stream,

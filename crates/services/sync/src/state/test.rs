@@ -15,8 +15,8 @@ fn test_new(state: State) -> Status {
 #[test_case(State::new(None, None), 0 => Status::Committed(0))]
 #[test_case(State::new(0, None), 0 => Status::Committed(0))]
 #[test_case(State::new(1, None), 0 => Status::Committed(1))]
-#[test_case(State::new(2, None), 0 => Status::Processing(1..=1))]
-#[test_case(State::new(20, None), 10 => Status::Processing(11..=19))]
+#[test_case(State::new(2, None), 0 => Status::Committed(2))]
+#[test_case(State::new(20, None), 10 => Status::Committed(20))]
 #[test_case(State::new(0, None), 1 => Status::Committed(1))]
 #[test_case(State::new(0, None), 2 => Status::Committed(2))]
 #[test_case(State::new(None, 0), 0 => Status::Committed(0))]
@@ -31,21 +31,11 @@ fn test_new(state: State) -> Status {
 #[test_case(State::new(0, 2), 0 => Status::Processing(1..=2))]
 #[test_case(State::new(0, 4), 2 => Status::Processing(3..=4))]
 #[test_case(State::new(1, 0), 0 => Status::Committed(1))]
-#[test_case(State::new(2, 0), 0 => Status::Processing(1..=1))]
+#[test_case(State::new(2, 0), 0 => Status::Committed(2))]
 #[test_case(State::new(2, 2), 2 => Status::Committed(2))]
 fn test_commit(mut state: State, height: u32) -> Status {
     state.commit(height);
     state.status
-}
-
-#[test_case(0, 0 => None)]
-#[test_case(0, 1 => None)]
-#[test_case(0, 2 => None)]
-#[test_case(1, 0 => None)]
-#[test_case(2, 0 => Some(1..=1))]
-#[test_case(30, 0 => Some(1..=29))]
-fn test_creates_new_existing(existing: u32, commit: u32) -> Option<RangeInclusive<u32>> {
-    commit_creates_processing(&existing, &commit)
 }
 
 #[test_case(State::new(None, None), 0 => Status::Processing(0..=0))]

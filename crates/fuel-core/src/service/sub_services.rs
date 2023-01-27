@@ -23,6 +23,7 @@ use crate::{
         SubServices,
     },
 };
+use fuel_core_poa::Trigger;
 use std::sync::Arc;
 use tokio::sync::{
     Mutex,
@@ -112,9 +113,12 @@ pub fn init_sub_services(
     };
     let producer_adapter = BlockProducerAdapter::new(block_producer);
 
+    let poa_config: fuel_core_poa::Config = config.try_into()?;
+    let production_enabled =
+        !matches!(poa_config.trigger, Trigger::Never) || config.manual_blocks_enabled;
     let poa = fuel_core_poa::new_service(
         last_height,
-        config.try_into()?,
+        poa_config,
         tx_pool_adapter,
         producer_adapter.clone(),
         importer_adapter.clone(),
@@ -166,6 +170,8 @@ pub fn init_sub_services(
         relayer: relayer_service.as_ref().map(|r| r.shared.clone()),
         graph_ql: graph_ql.shared.clone(),
         block_importer: importer_adapter,
+        #[cfg(feature = "test-helpers")]
+        config: config.clone(),
     };
 
     #[allow(unused_mut)]
@@ -173,9 +179,12 @@ pub fn init_sub_services(
     let mut services: SubServices = vec![
         // GraphQL should be shutdown first, so let's start it first.
         Box::new(graph_ql),
-        Box::new(poa),
         Box::new(txpool),
     ];
+
+    if production_enabled {
+        services.push(Box::new(poa));
+    }
 
     #[cfg(feature = "relayer")]
     if let Some(relayer) = relayer_service {
@@ -185,7 +194,9 @@ pub fn init_sub_services(
     #[cfg(feature = "p2p")]
     {
         services.push(Box::new(network));
-        services.push(Box::new(sync));
+        if !production_enabled {
+            services.push(Box::new(sync));
+        }
     }
 
     Ok((services, shared))

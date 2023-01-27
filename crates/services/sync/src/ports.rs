@@ -49,6 +49,9 @@ pub trait ConsensusPort {
 #[async_trait::async_trait]
 /// Port for communication with the block importer.
 pub trait BlockImporterPort {
+    /// Stream of newly committed block heights.
+    fn committed_height_stream(&self) -> BoxStream<BlockHeight>;
+
     /// Execute the given sealed block
     /// and commit it to the database.
     async fn execute_and_commit(&self, block: SealedBlock) -> anyhow::Result<()>;

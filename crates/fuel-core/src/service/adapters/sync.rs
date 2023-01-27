@@ -62,6 +62,17 @@ impl PeerToPeerPort for P2PAdapter {
 
 #[async_trait::async_trait]
 impl BlockImporterPort for BlockImporterAdapter {
+    fn committed_height_stream(&self) -> BoxStream<BlockHeight> {
+        use futures::StreamExt;
+        fuel_core_services::stream::IntoBoxStream::into_boxed(
+            tokio_stream::wrappers::BroadcastStream::new(self.block_importer.subscribe())
+                .filter_map(|r| {
+                    futures::future::ready(
+                        r.ok().map(|r| *r.sealed_block.entity.header().height()),
+                    )
+                }),
+        )
+    }
     async fn execute_and_commit(&self, block: SealedBlock) -> anyhow::Result<()> {
         self.execute_and_commit(block).await
     }

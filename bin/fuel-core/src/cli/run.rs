@@ -244,6 +244,7 @@ impl Command {
             #[cfg(feature = "p2p")]
             sync: sync_args.into(),
             consensus_key,
+            name: String::default(),
         })
     }
 }

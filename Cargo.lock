@@ -2648,9 +2648,11 @@ dependencies = [
  "ethers",
  "fuel-core",
  "fuel-core-client",
+ "fuel-core-p2p",
  "fuel-core-poa",
  "fuel-core-relayer",
  "fuel-core-storage",
+ "fuel-core-trace",
  "fuel-core-txpool",
  "fuel-core-types",
  "futures",
@@ -2662,6 +2664,7 @@ dependencies = [
  "rstest",
  "serde_json",
  "tempfile",
+ "test-case",
  "tokio",
 ]
 

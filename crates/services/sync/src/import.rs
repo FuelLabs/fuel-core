@@ -374,7 +374,7 @@ where
 
     // If the block executed successfully, mark it as committed.
     if r.is_ok() {
-        state.apply(|s| s.commit(*height))
+        state.apply(|s| s.commit(*height));
     } else {
         tracing::error!("Execution of height {} failed: {:?}", *height, r);
     }

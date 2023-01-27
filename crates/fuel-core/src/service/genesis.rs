@@ -66,7 +66,7 @@ use fuel_core_types::{
 use itertools::Itertools;
 
 /// Loads state from the chain config into database
-pub(crate) fn maybe_initialize_state(
+pub fn maybe_initialize_state(
     config: &Config,
     database: &Database,
 ) -> anyhow::Result<()> {
