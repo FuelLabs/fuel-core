@@ -172,6 +172,8 @@ jobs:
           # TODO: Automate running `verify_tag` only for "publish = true" crates
           curl -sSLf "https://github.com/TomWright/dasel/releases/download/v1.24.3/dasel_linux_amd64" -L -o dasel && chmod +x dasel
           mv ./dasel /usr/local/bin/dasel
+          ./.github/workflows/scripts/verify_tag.sh 0.16.0 bin/fuel-core/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh 0.16.0 bin/fuel-core-client/Cargo.toml
           ./.github/workflows/scripts/verify_tag.sh 0.16.0 bin/fuel-core-keygen/Cargo.toml
           ./.github/workflows/scripts/verify_tag.sh 0.16.0 crates/client/Cargo.toml
           ./.github/workflows/scripts/verify_tag.sh 0.16.0 crates/chain-config/Cargo.toml
