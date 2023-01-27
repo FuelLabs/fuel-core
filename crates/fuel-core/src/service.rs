@@ -26,7 +26,7 @@ use self::adapters::BlockImporterAdapter;
 
 pub mod adapters;
 pub mod config;
-pub(crate) mod genesis;
+pub mod genesis;
 pub mod metrics;
 pub mod sub_services;
 
@@ -44,6 +44,9 @@ pub struct SharedState {
     pub graph_ql: crate::fuel_core_graphql_api::service::SharedState,
     /// Subscribe to new block production.
     pub block_importer: BlockImporterAdapter,
+    #[cfg(feature = "test-helpers")]
+    /// The config of the service.
+    pub config: Config,
 }
 
 pub struct FuelService {
@@ -61,7 +64,7 @@ pub struct FuelService {
 
 impl FuelService {
     /// Creates a `FuelService` instance from service config
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip_all, fields(name = %config.name))]
     pub fn new(database: Database, mut config: Config) -> anyhow::Result<Self> {
         Self::make_config_consistent(&mut config);
         let task = Task::new(database, config)?;
@@ -212,6 +215,7 @@ impl RunnableService for Task {
 
 #[async_trait::async_trait]
 impl RunnableTask for Task {
+    #[tracing::instrument(skip_all)]
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let mut stop_signals = vec![];
         for service in &self.services {
@@ -326,8 +330,8 @@ mod tests {
         // }
         #[cfg(feature = "p2p")]
         {
-            // p2p + sync
-            expected_services += 2;
+            // p2p
+            expected_services += 1;
         }
 
         // # Dev-note: Update the `expected_services` when we add/remove a new/old service.

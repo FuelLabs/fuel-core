@@ -50,6 +50,7 @@ pub struct Config {
     #[cfg(feature = "p2p")]
     pub sync: fuel_core_sync::Config,
     pub consensus_key: Option<Secret<SecretKeyWrapper>>,
+    pub name: String,
 }
 
 impl Config {
@@ -84,6 +85,7 @@ impl Config {
                 max_get_txns_requests: 10,
             },
             consensus_key: Some(Secret::new(default_consensus_dev_key().into())),
+            name: String::default(),
         }
     }
 }

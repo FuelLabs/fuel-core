@@ -168,11 +168,26 @@ impl FromStr for ChainConfig {
 
 impl GenesisCommitment for ChainConfig {
     fn root(&self) -> anyhow::Result<MerkleRoot> {
-        // TODO: Hash settlement configuration, consensus block production
+        // # Dev-note: If `ChainConfig` got a new field, maybe we need to hash it too.
+        // Avoid using the `..` in the code below. Use `_` instead if you don't need to hash
+        // the field. Explicit fields help to prevent a bug of missing fields in the hash.
+        let ChainConfig {
+            chain_name,
+            block_gas_limit,
+            // Skip the `initial_state` bec
+            initial_state: _,
+            transaction_parameters,
+            gas_costs,
+            consensus,
+        } = self;
+
+        // TODO: Hash settlement configuration when it will be available.
         let config_hash = *Hasher::default()
-            .chain(self.block_gas_limit.to_be_bytes())
-            .chain(self.transaction_parameters.root()?)
-            .chain(self.chain_name.as_bytes())
+            .chain(chain_name.as_bytes())
+            .chain(block_gas_limit.to_be_bytes())
+            .chain(transaction_parameters.root()?)
+            .chain(gas_costs.root()?)
+            .chain(consensus.root()?)
             .finalize();
 
         Ok(config_hash)
@@ -186,5 +201,25 @@ impl GenesisCommitment for ConsensusParameters {
         let params_hash = Hasher::default().chain(bytes).finalize();
 
         Ok(params_hash.into())
+    }
+}
+
+impl GenesisCommitment for GasCosts {
+    fn root(&self) -> anyhow::Result<MerkleRoot> {
+        // TODO: Define hash algorithm for `GasCosts`
+        let bytes = postcard::to_stdvec(&self)?;
+        let hash = Hasher::default().chain(bytes).finalize();
+
+        Ok(hash.into())
+    }
+}
+
+impl GenesisCommitment for ConsensusConfig {
+    fn root(&self) -> anyhow::Result<MerkleRoot> {
+        // TODO: Define hash algorithm for `ConsensusConfig`
+        let bytes = postcard::to_stdvec(&self)?;
+        let hash = Hasher::default().chain(bytes).finalize();
+
+        Ok(hash.into())
     }
 }
