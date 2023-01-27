@@ -15,7 +15,7 @@ chmod +x dasel
 mv ./dasel /usr/local/bin/dasel
 # check appVersion with fuel-core
 HELM_APP_VERSION=$(cat deployment/charts/Chart.yaml | dasel -r yaml 'appVersion')
-FUEL_CORE_VERSION=$(cat fuel-core/Cargo.toml | dasel -r toml 'package.version')
+FUEL_CORE_VERSION=$(cat crates/fuel-core/Cargo.toml | dasel -r toml 'package.version')
 if [ "$HELM_APP_VERSION" != "$FUEL_CORE_VERSION" ]; then
     err "fuel-core version $FUEL_CORE_VERSION, doesn't match helm app version $HELM_APP_VERSION"
     exit 1
