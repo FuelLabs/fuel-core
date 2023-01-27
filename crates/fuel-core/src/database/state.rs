@@ -63,7 +63,7 @@ impl StorageMutate<ContractsState> for Database {
 }
 
 impl MerkleRootStorage<ContractId, ContractsState> for Database {
-    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Self::Error> {
+    fn root(&self, parent: &ContractId) -> Result<MerkleRoot, Self::Error> {
         let items: Vec<_> = Database::iter_all::<Vec<u8>, Bytes32>(
             self,
             Column::ContractsState,
@@ -88,7 +88,10 @@ impl MerkleRootStorage<ContractId, ContractsState> for Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_storage::StorageAsMut;
+    use fuel_core_storage::{
+        StorageAsMut,
+        StorageAsRef,
+    };
 
     #[test]
     fn get() {
@@ -171,11 +174,9 @@ mod tests {
         let key = (&ContractId::from([1u8; 32]), &Bytes32::from([1u8; 32])).into();
         let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
 
-        let database = &mut Database::default();
+        let mut database = Database::default();
 
-        database
-            .storage::<ContractsState>()
-            .insert(&key, &stored_value)
+        StorageMutate::<ContractsState>::insert(&mut database, &key, &stored_value)
             .unwrap();
 
         let root = database.storage::<ContractsState>().root(key.contract_id());

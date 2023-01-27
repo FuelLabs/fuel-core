@@ -167,7 +167,7 @@ impl FromStr for ChainConfig {
 }
 
 impl GenesisCommitment for ChainConfig {
-    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
+    fn root(&self) -> anyhow::Result<MerkleRoot> {
         // # Dev-note: If `ChainConfig` got a new field, maybe we need to hash it too.
         // Avoid using the `..` in the code below. Use `_` instead if you don't need to hash
         // the field. Explicit fields help to prevent a bug of missing fields in the hash.
@@ -195,7 +195,7 @@ impl GenesisCommitment for ChainConfig {
 }
 
 impl GenesisCommitment for ConsensusParameters {
-    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
+    fn root(&self) -> anyhow::Result<MerkleRoot> {
         // TODO: Define hash algorithm for `ConsensusParameters`
         let bytes = postcard::to_stdvec(&self)?;
         let params_hash = Hasher::default().chain(bytes).finalize();
