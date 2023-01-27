@@ -566,6 +566,7 @@ mod tests {
             RequestMessage,
             ResponseChannelItem,
         },
+        service::to_message_acceptance,
     };
     use fuel_core_types::{
         blockchain::{
@@ -581,6 +582,7 @@ mod tests {
             SealedBlockHeader,
         },
         fuel_tx::Transaction,
+        services::p2p::GossipsubMessageAcceptance,
     };
     use futures::StreamExt;
     use libp2p::{
@@ -1160,33 +1162,69 @@ mod tests {
 
     #[tokio::test]
     #[instrument]
-    async fn gossipsub_broadcast_tx() {
-        gossipsub_broadcast(GossipsubBroadcastRequest::NewTx(Arc::new(
-            Transaction::default(),
-        )))
+    async fn gossipsub_broadcast_tx_with_accept() {
+        gossipsub_broadcast(
+            GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default())),
+            GossipsubMessageAcceptance::Accept,
+        )
         .await;
     }
 
     #[tokio::test]
     #[instrument]
-    async fn gossipsub_broadcast_vote() {
-        gossipsub_broadcast(GossipsubBroadcastRequest::ConsensusVote(Arc::new(
-            ConsensusVote::default(),
-        )))
+    async fn gossipsub_broadcast_tx_with_reject() {
+        gossipsub_broadcast(
+            GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default())),
+            GossipsubMessageAcceptance::Reject,
+        )
         .await;
     }
 
     #[tokio::test]
     #[instrument]
-    async fn gossipsub_broadcast_block() {
-        gossipsub_broadcast(GossipsubBroadcastRequest::NewBlock(Arc::new(
-            Block::default(),
-        )))
+    async fn gossipsub_broadcast_vote_with_accept() {
+        gossipsub_broadcast(
+            GossipsubBroadcastRequest::ConsensusVote(Arc::new(ConsensusVote::default())),
+            GossipsubMessageAcceptance::Accept,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn gossipsub_broadcast_vote_with_reject() {
+        gossipsub_broadcast(
+            GossipsubBroadcastRequest::ConsensusVote(Arc::new(ConsensusVote::default())),
+            GossipsubMessageAcceptance::Reject,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn gossipsub_broadcast_block_with_accept() {
+        gossipsub_broadcast(
+            GossipsubBroadcastRequest::NewBlock(Arc::new(Block::default())),
+            GossipsubMessageAcceptance::Accept,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn gossipsub_broadcast_block_with_ignore() {
+        gossipsub_broadcast(
+            GossipsubBroadcastRequest::NewBlock(Arc::new(Block::default())),
+            GossipsubMessageAcceptance::Ignore,
+        )
         .await;
     }
 
     /// Reusable helper function for Broadcasting Gossipsub requests
-    async fn gossipsub_broadcast(broadcast_request: GossipsubBroadcastRequest) {
+    async fn gossipsub_broadcast(
+        broadcast_request: GossipsubBroadcastRequest,
+        acceptance: GossipsubMessageAcceptance,
+    ) {
         let mut p2p_config = Config::default_initialized("gossipsub_exchanges_messages");
 
         let selected_topic: GossipTopic = {
@@ -1206,8 +1244,17 @@ mod tests {
         let mut node_a = node_a_data.create_service(p2p_config.clone());
 
         // Node B
+        let node_b_data = NodeData::random();
         p2p_config.bootstrap_nodes = vec![node_a_data.multiaddr];
-        let mut node_b = build_service_from_config(p2p_config.clone());
+        let mut node_b = node_b_data.create_service(p2p_config.clone());
+
+        // Node C
+        p2p_config.bootstrap_nodes = vec![node_b_data.multiaddr];
+        let mut node_c = build_service_from_config(p2p_config.clone());
+
+        // Node C does not connecto to Node A
+        // it should receive the propagated message from Node B if `GossipsubMessageAcceptance` is `Accept`
+        node_c.swarm.ban_peer_id(node_a.local_peer_id);
 
         loop {
             tokio::select! {
@@ -1226,7 +1273,12 @@ mod tests {
                     tracing::info!("Node A Event: {:?}", node_a_event);
                 },
                 node_b_event = node_b.next_event() => {
-                    if let Some(FuelP2PEvent::GossipsubMessage { topic_hash, message, .. }) = node_b_event.clone() {
+                    if let Some(FuelP2PEvent::GossipsubMessage { topic_hash, message, message_id, peer_id }) = node_b_event.clone() {
+                        // Message Validation must be reported
+                        // If it's `Accept`, Node B will propagate the message to Node C
+                        // If it's `Ignore` or `Reject`, Node C should not receive anything
+                        let msg_acceptance = to_message_acceptance(&acceptance);
+                        let _ = node_b.report_message_validation_result(&message_id, &peer_id, msg_acceptance);
                         if topic_hash != selected_topic.hash() {
                             tracing::error!("Wrong topic hash, expected: {} - actual: {}", selected_topic.hash(), topic_hash);
                             panic!("Wrong Topic");
@@ -1260,10 +1312,32 @@ mod tests {
                         let broadcast_request = broadcast_request.clone();
                         matches!(node_b.publish_message(broadcast_request), Err(PublishError::Duplicate));
 
-                        break
+                        match acceptance {
+                            GossipsubMessageAcceptance::Reject | GossipsubMessageAcceptance::Ignore => {
+                                break
+                            },
+                            _ => {
+                                // the `exit` should happen in Node C
+                            }
+                        }
                     }
 
                     tracing::info!("Node B Event: {:?}", node_b_event);
+                }
+
+                node_c_event = node_c.next_event() => {
+                    if let Some(FuelP2PEvent::GossipsubMessage { peer_id, .. }) = node_c_event.clone() {
+                        // Node B should be the source propagator
+                        assert!(peer_id == node_b.local_peer_id);
+                        match acceptance {
+                            GossipsubMessageAcceptance::Reject | GossipsubMessageAcceptance::Ignore => {
+                                panic!("Node C should not receive Rejected or Ignored messages")
+                            },
+                            GossipsubMessageAcceptance::Accept => {
+                                break
+                            }
+                        }
+                    }
                 }
             };
         }
