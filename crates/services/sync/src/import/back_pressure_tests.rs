@@ -169,6 +169,10 @@ impl PeerToPeerPort for PressurePeerToPeerPort {
 
 #[async_trait::async_trait]
 impl BlockImporterPort for PressureBlockImporterPort {
+    fn committed_height_stream(&self) -> BoxStream<BlockHeight> {
+        self.0.committed_height_stream()
+    }
+
     async fn execute_and_commit(&self, block: SealedBlock) -> anyhow::Result<()> {
         self.2.apply(|c| c.inc_executes());
         tokio::time::sleep(self.1).await;

@@ -212,6 +212,11 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         Ok(())
     }
 
+    #[cfg(feature = "test-helpers")]
+    pub fn listeners(&self) -> impl Iterator<Item = &Multiaddr> {
+        self.swarm.listeners()
+    }
+
     pub fn get_peers_ids(&self) -> impl Iterator<Item = &PeerId> {
         self.swarm.behaviour().get_peers_ids()
     }

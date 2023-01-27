@@ -7,6 +7,7 @@ use tokio::{
     sync::watch,
     task::JoinHandle,
 };
+use tracing::Instrument;
 
 /// Alias for Arc<T>
 pub type Shared<T> = std::sync::Arc<T>;
@@ -217,6 +218,7 @@ where
     }
 }
 
+#[tracing::instrument(skip_all)]
 /// Initialize the background loop as a spawned task.
 fn initialize_loop<S>(service: S) -> Shared<watch::Sender<State>>
 where
@@ -226,25 +228,28 @@ where
     let state = Shared::new(sender);
     let stop_sender = state.clone();
     // Spawned as a task to check if the service is already running and to capture any panics.
-    tokio::task::spawn(async move {
-        let join_handler = run(service, stop_sender.clone());
-        let result = join_handler.await;
+    tokio::task::spawn(
+        async move {
+            let join_handler = run(service, stop_sender.clone());
+            let result = join_handler.await;
 
-        let stopped_state = if let Err(e) = result {
-            State::StoppedWithError(e.to_string())
-        } else {
-            State::Stopped
-        };
-
-        let _ = stop_sender.send_if_modified(|state| {
-            if !state.stopped() {
-                *state = stopped_state;
-                true
+            let stopped_state = if let Err(e) = result {
+                State::StoppedWithError(e.to_string())
             } else {
-                false
-            }
-        });
-    });
+                State::Stopped
+            };
+
+            let _ = stop_sender.send_if_modified(|state| {
+                if !state.stopped() {
+                    *state = stopped_state;
+                    true
+                } else {
+                    false
+                }
+            });
+        }
+        .in_current_span(),
+    );
     state
 }
 
@@ -254,50 +259,53 @@ where
     S: RunnableService + 'static,
 {
     let mut state: StateWatcher = sender.subscribe().into();
-    tokio::task::spawn(async move {
-        if state.borrow_and_update().not_started() {
-            // We can panic here, because it is inside of the task.
-            state.changed().await.expect("The service is destroyed");
-        }
-
-        // If the state after update is not `Starting` then return to stop the service.
-        if !state.borrow().starting() {
-            return
-        }
-
-        // We can panic here, because it is inside of the task.
-        let mut task = service
-            .into_task(&state)
-            .await
-            .expect("The initialization of the service failed.");
-
-        let started = sender.send_if_modified(|s| {
-            if s.starting() {
-                *s = State::Started;
-                true
-            } else {
-                false
+    tokio::task::spawn(
+        async move {
+            if state.borrow_and_update().not_started() {
+                // We can panic here, because it is inside of the task.
+                state.changed().await.expect("The service is destroyed");
             }
-        });
 
-        if !started {
-            return
-        }
+            // If the state after update is not `Starting` then return to stop the service.
+            if !state.borrow().starting() {
+                return
+            }
 
-        while state.borrow_and_update().started() {
-            match task.run(&mut state).await {
-                Ok(should_continue) => {
-                    if !should_continue {
-                        return
+            // We can panic here, because it is inside of the task.
+            let mut task = service
+                .into_task(&state)
+                .await
+                .expect("The initialization of the service failed.");
+
+            let started = sender.send_if_modified(|s| {
+                if s.starting() {
+                    *s = State::Started;
+                    true
+                } else {
+                    false
+                }
+            });
+
+            if !started {
+                return
+            }
+
+            while state.borrow_and_update().started() {
+                match task.run(&mut state).await {
+                    Ok(should_continue) => {
+                        if !should_continue {
+                            return
+                        }
+                    }
+                    Err(e) => {
+                        let e: &dyn std::error::Error = &*e;
+                        tracing::error!(e);
                     }
                 }
-                Err(e) => {
-                    let e: &dyn std::error::Error = &*e;
-                    tracing::error!(e);
-                }
             }
         }
-    })
+        .in_current_span(),
+    )
 }
 
 impl<T> SharedMutex<T> {

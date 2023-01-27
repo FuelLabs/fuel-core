@@ -97,11 +97,10 @@ impl State {
             Status::Uninitialized => Some(Status::Committed(height)),
             // Currently committed and recording a commit.
             Status::Committed(existing) => {
-                // Check if the new commit creates a gap. If not then
-                // take the max of the existing and new commits.
-                match commit_creates_processing(existing, &height) {
-                    Some(range) => Some(Status::Processing(range)),
-                    None => Some(Status::Committed(*existing.max(&height))),
+                // Take the max of the existing and new commits.
+                match height.cmp(existing) {
+                    Ordering::Less | Ordering::Equal => None,
+                    Ordering::Greater => Some(Status::Committed(height)),
                 }
             }
         };
@@ -209,22 +208,4 @@ impl State {
             _ => None,
         }
     }
-}
-
-/// If a commit is made to a height that is
-/// below the existing committed height this is
-/// new evidence and we check if there is a gap between
-/// the existing committed height and the new commit.
-///
-/// This case should not occur but because we must handle
-/// it then the most resilient way is to assume that we
-/// should re-process the gap.
-fn commit_creates_processing(
-    existing: &u32,
-    commit: &u32,
-) -> Option<RangeInclusive<u32>> {
-    let next = commit.checked_add(1)?;
-    let prev_existing = existing.checked_sub(1)?;
-    let r = next..=prev_existing;
-    (!r.is_empty()).then_some(r)
 }
