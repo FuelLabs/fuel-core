@@ -83,8 +83,18 @@ spec:
           {{- if .Values.app.vm_backtrace }}
             - "--vm-backtrace"
           {{- end}}
+          {{- if .Values.app.reserved_nodes_only_mode }}
+            - "--reserved_nodes_only_mode"
+          {{- end}}
             - "--min-gas-price"
             - "{{ .Values.app.min_gas_price }}"
+            - "--min-byte-price"
+            - "{{ .Values.app.min_byte_price }}"
+            - "--keypair"
+            - "{{ .Values.app.p2p_key }}"
+            - "--network"
+            - "—allow_private_addresses"
+            - "{{ .Values.app.allow_private_addresses }}"
           {{- if .Values.app.relayer }}
             - "--relayer"
             - "{{ .Values.app.relayer }}"
@@ -138,6 +148,8 @@ spec:
           env:
             - name: HUMAN_LOGGING
               value: {{ .Values.app.human_logging | quote }}
+            - name: RESERVED_NODES
+              value: {{ .Values.app.reserved_nodes | quote }}
             - name: CONSENSUS_KEY_SECRET
               valueFrom:
                 secretKeyRef:
