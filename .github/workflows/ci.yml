@@ -145,7 +145,7 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
           RUSTFLAGS: -D warnings
 
-  publish-crates:
+  pre-publish-verifications:
     # Only do this job if publishing a release
     needs:
       - cargo-verifications
@@ -155,17 +155,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-          override: true
-
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v1.1.2
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify tag version
         run: |
@@ -195,6 +184,29 @@ jobs:
       - name: Verify helm chart version
         run: |
           ./.github/workflows/scripts/verify_chart_version.sh
+
+
+  publish-crates:
+    # Only do this job if publishing a release
+    needs:
+      - pre-publish-verifications
+    if: github.event_name == 'release' && github.event.action == 'published'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          override: true
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1.1.2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish crate
         uses: katyo/publish-crates@v1
@@ -279,8 +291,7 @@ jobs:
     runs-on: ${{ matrix.job.os }}
     # Only do this job if publishing a release
     needs:
-      - lint-toml-files
-      - cargo-verifications
+      - pre-publish-verifications
     if: github.event_name == 'release' && github.event.action == 'published'
     continue-on-error: true
     strategy:
