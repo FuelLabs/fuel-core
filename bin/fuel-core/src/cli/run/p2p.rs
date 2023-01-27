@@ -54,12 +54,12 @@ pub struct P2PArgs {
 
     /// Addresses of the bootstrap nodes
     /// They should contain PeerId within their `Multiaddr`
-    #[clap(long = "bootstrap_nodes", env)]
+    #[clap(long = "bootstrap_nodes", value_delimiter = ',', env)]
     pub bootstrap_nodes: Vec<Multiaddr>,
 
     /// Addresses of the reserved nodes
     /// They should contain PeerId within their `Multiaddr`
-    #[clap(long = "reserved_nodes", env)]
+    #[clap(long = "reserved_nodes", value_delimiter = ',', env)]
     pub reserved_nodes: Vec<Multiaddr>,
 
     /// With this set to `true` you create a guarded node that is only ever connected to trusted, reserved nodes.    
@@ -107,7 +107,7 @@ pub struct P2PArgs {
     pub identify_interval: u64,
 
     /// Choose which topics to subscribe to via gossipsub protocol
-    #[clap(long = "topics", default_values = &["new_tx", "new_block", "consensus_vote"], env)]
+    #[clap(long = "topics", value_delimiter = ',', default_values = &["new_tx", "new_block", "consensus_vote"], env)]
     pub topics: Vec<String>,
 
     /// Choose max mesh size for gossipsub protocol

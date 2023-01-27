@@ -21,7 +21,7 @@ pub struct RelayerArgs {
     pub eth_v2_listening_contracts: Vec<H160>,
 
     /// Number of da block after which messages/stakes/validators become finalized.
-    #[clap(long = "relayer-da-finalization", default_value_t = Config::DEFAULT_DA_FINALIZATION, env)]
+    #[clap(long = "relayer-da-finalization", value_delimiter = ',', default_value_t = Config::DEFAULT_DA_FINALIZATION, env)]
     pub da_finalization: u64,
 
     /// Number of da block that the contract is deployed at.
