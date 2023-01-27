@@ -14,7 +14,7 @@ keywords = [
 license = "BUSL-1.1"
 name = "fuel-core-types"
 repository = "https://github.com/FuelLabs/fuel-core"
-version = "0.16.0"
+version = "0.16.1"
 
 [dependencies]
 anyhow = "1.0"

@@ -7,7 +7,7 @@ homepage = "https://fuel.network/"
 keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
 license = "BUSL-1.1"
 repository = "https://github.com/FuelLabs/fuel-core"
-version = "0.16.0"
+version = "0.16.1"
 name = "fuel-core-bin"
 publish = false
 
@@ -19,7 +19,7 @@ path = "src/main.rs"
 anyhow = "1.0"
 clap = { version = "4.1", features = ["derive", "env"] }
 dirs = "4.0"
-fuel-core = { path = "../../crates/fuel-core", version = "0.16.0" }
+fuel-core = { path = "../../crates/fuel-core", version = "0.16.1" }
 humantime = "2.1"
 lazy_static = "1.4"
 serde_json = { version = "1.0", features = ["raw_value"], optional = true }
