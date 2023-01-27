@@ -229,7 +229,7 @@ jobs:
 
   publish-docker-image:
     needs:
-      - pre-publish-verifications
+      - cargo-verifications
     runs-on: ubuntu-latest
     permissions:
       contents: read
