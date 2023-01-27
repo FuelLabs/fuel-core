@@ -15,7 +15,6 @@ app:
   utxo_validation: ${fuel_core_utxo_validation}
   vm_backtrace: ${fuel_core_vm_backtrace}
   min_gas_price: ${fuel_core_min_gas_price}
-  min_byte_price: ${fuel_core_min_byte_price}
   reserved_nodes_only_mode: ${fuel_core_reserved_only}
   reserved_nodes: ${fuel_core_reserved_nodes}
   relayer: ${fuel_core_relayer}

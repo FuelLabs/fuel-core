@@ -88,11 +88,10 @@ spec:
           {{- end}}
             - "--min-gas-price"
             - "{{ .Values.app.min_gas_price }}"
-            - "--min-byte-price"
-            - "{{ .Values.app.min_byte_price }}"
             - "--keypair"
             - "{{ .Values.app.p2p_key }}"
             - "--network"
+            - "{{ .Values.app.network_name }}"
             - "—allow_private_addresses"
             - "{{ .Values.app.allow_private_addresses }}"
           {{- if .Values.app.relayer }}
