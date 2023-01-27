@@ -8,7 +8,7 @@ keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
 license = "BUSL-1.1"
 name = "fuel-core"
 repository = "https://github.com/FuelLabs/fuel-core"
-version = "0.15.1"
+version = "0.16.0"
 
 [dependencies]
 anyhow = "1.0"
@@ -20,21 +20,21 @@ axum = { version = "0.5" }
 clap = { version = "4.1", features = ["derive"] }
 derive_more = { version = "0.99" }
 enum-iterator = "1.2"
-fuel-core-chain-config = { path = "../chain-config", version = "0.15.1" }
-fuel-core-consensus-module = { path = "../../crates/services/consensus_module", version = "0.15.1" }
-fuel-core-database = { path = "../database", version = "0.15.1" }
-fuel-core-executor = { path = "../services/executor", version = "0.15.1" }
-fuel-core-importer = { path = "../services/importer", version = "0.15.1" }
-fuel-core-metrics = { path = "../metrics", version = "0.15.1", optional = true }
-fuel-core-p2p = { path = "../services/p2p", version = "0.15.1", optional = true }
-fuel-core-poa = { path = "../services/consensus_module/poa", version = "0.15.1" }
-fuel-core-producer = { path = "../services/producer", version = "0.15.1" }
-fuel-core-relayer = { path = "../services/relayer", version = "0.15.1", optional = true }
-fuel-core-services = { path = "../services", version = "0.15.1" }
-fuel-core-storage = { path = "../storage", version = "0.15.1" }
-fuel-core-sync = { path = "../services/sync", version = "0.15.1", optional = true }
-fuel-core-txpool = { path = "../services/txpool", version = "0.15.1" }
-fuel-core-types = { path = "../types", version = "0.15.1", features = [
+fuel-core-chain-config = { path = "../chain-config", version = "0.16.0" }
+fuel-core-consensus-module = { path = "../../crates/services/consensus_module", version = "0.16.0" }
+fuel-core-database = { path = "../database", version = "0.16.0" }
+fuel-core-executor = { path = "../services/executor", version = "0.16.0" }
+fuel-core-importer = { path = "../services/importer", version = "0.16.0" }
+fuel-core-metrics = { path = "../metrics", version = "0.16.0", optional = true }
+fuel-core-p2p = { path = "../services/p2p", version = "0.16.0", optional = true }
+fuel-core-poa = { path = "../services/consensus_module/poa", version = "0.16.0" }
+fuel-core-producer = { path = "../services/producer", version = "0.16.0" }
+fuel-core-relayer = { path = "../services/relayer", version = "0.16.0", optional = true }
+fuel-core-services = { path = "../services", version = "0.16.0" }
+fuel-core-storage = { path = "../storage", version = "0.16.0" }
+fuel-core-sync = { path = "../services/sync", version = "0.16.0", optional = true }
+fuel-core-txpool = { path = "../services/txpool", version = "0.16.0" }
+fuel-core-types = { path = "../types", version = "0.16.0", features = [
     "serde",
 ] }
 futures = "0.3"

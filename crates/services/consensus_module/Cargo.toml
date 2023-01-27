@@ -7,13 +7,13 @@ keywords = ["blockchain", "consensus", "fuel"]
 license = "BUSL-1.1"
 name = "fuel-core-consensus-module"
 repository = "https://github.com/FuelLabs/fuel-core"
-version = "0.15.1"
+version = "0.16.0"
 
 [dependencies]
 anyhow = "1.0"
-fuel-core-chain-config = { version = "0.15.1", path = "../../chain-config" }
-fuel-core-poa = { version = "0.15.1", path = "poa" }
-fuel-core-types = { version = "0.15.1", path = "../../types" }
+fuel-core-chain-config = { version = "0.16.0", path = "../../chain-config" }
+fuel-core-poa = { version = "0.16.0", path = "poa" }
+fuel-core-types = { version = "0.16.0", path = "../../types" }
 
 [dev-dependencies]
 fuel-core-types = { path = "../../types", features = ["test-helpers"] }
