@@ -205,7 +205,7 @@ impl GenesisCommitment for ConsensusParameters {
 }
 
 impl GenesisCommitment for GasCosts {
-    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
+    fn root(&self) -> anyhow::Result<MerkleRoot> {
         // TODO: Define hash algorithm for `GasCosts`
         let bytes = postcard::to_stdvec(&self)?;
         let hash = Hasher::default().chain(bytes).finalize();
@@ -215,7 +215,7 @@ impl GenesisCommitment for GasCosts {
 }
 
 impl GenesisCommitment for ConsensusConfig {
-    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
+    fn root(&self) -> anyhow::Result<MerkleRoot> {
         // TODO: Define hash algorithm for `ConsensusConfig`
         let bytes = postcard::to_stdvec(&self)?;
         let hash = Hasher::default().chain(bytes).finalize();
