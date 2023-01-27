@@ -94,7 +94,7 @@ We use [`publish-crates`](https://github.com/katyo/publish-crates) action for au
 If you have problems with publishing, you can troubleshoot it locally with [`act`](https://github.com/nektos/act).
 
 ```shell
-act -s GITHUB_TOKEN=<YOUR_GITHUB_TOKEN> -j publish-crates-check --container-architecture linux/amd64 --reuse
+act release -s GITHUB_TOKEN=<YOUR_GITHUB_TOKEN> -j publish-crates-check --container-architecture linux/amd64 --reuse
 ```
 
 It requires GitHubToken to do request to the GitHub. You can create it 
