@@ -86,6 +86,26 @@ spec:
           {{- if .Values.app.reserved_nodes_only_mode }}
             - "--reserved_nodes_only_mode"
           {{- end}}
+          {{- if .Values.app.poa_instant }}
+            - "--poa-instant"
+            - "{{ .Values.app.poa_instant }}"
+          {{- end}}
+          {{- if .Values.app.poa_interval_period }}
+            - "--poa-interval-period"
+            - "{{ .Values.app.poa_interval_period }}"
+          {{- end}}
+          {{- if .Values.app.poa_hybrid_min_time }}
+            - "--poa-hybrid-min-time"
+            - "{{ .Values.app.poa_hybrid_min_time }}"
+          {{- end}}
+          {{- if .Values.app.poa_hybrid_idle_time }}
+            - "--poa-hybrid-idle-time"
+            - "{{ .Values.app.poa_hybrid_idle_time }}"
+          {{- end}}
+          {{- if .Values.app.poa_hybrid_max_time }}
+          - "--poa-hybrid-max-time"
+          - "{{ .Values.app.poa_hybrid_max_time }}"
+          {{- end}}
             - "--min-gas-price"
             - "{{ .Values.app.min_gas_price }}"
             - "--keypair"
