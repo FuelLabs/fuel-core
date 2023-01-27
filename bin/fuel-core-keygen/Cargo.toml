@@ -1,6 +1,6 @@
 [package]
 name = "fuel-core-keygen"
-version = "0.16.0"
+version = "0.16.1"
 edition = "2021"
 homepage = "https://fuel.network/"
 keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
@@ -12,5 +12,5 @@ description = "Command line utilities for fuel-core key management"
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.1", features = ["derive", "env"] }
-fuel-core-types = { version = "0.16.0", path = "../../crates/types", features = ["serde", "random"] }
+fuel-core-types = { version = "0.16.1", path = "../../crates/types", features = ["serde", "random"] }
 serde_json = { version = "1.0", features = ["raw_value"] }

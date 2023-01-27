@@ -7,13 +7,13 @@ keywords = ["blockchain", "fuel", "fuel-vm"]
 license = "BUSL-1.1"
 name = "fuel-core-producer"
 repository = "https://github.com/FuelLabs/fuel-core"
-version = "0.16.0"
+version = "0.16.1"
 
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
-fuel-core-storage = { path = "../../storage", version = "0.16.0" }
-fuel-core-types = { path = "../../types", version = "0.16.0" }
+fuel-core-storage = { path = "../../storage", version = "0.16.1" }
+fuel-core-types = { path = "../../types", version = "0.16.1" }
 thiserror = "1.0"
 tokio = { version = "1.21", features = ["full"] }
 tracing = { version = "0.1" }

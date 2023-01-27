@@ -7,15 +7,15 @@ keywords = ["blockchain", "consensus", "fuel"]
 license = "BUSL-1.1"
 name = "fuel-core-poa"
 repository = "https://github.com/FuelLabs/fuel-core"
-version = "0.16.0"
+version = "0.16.1"
 
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
-fuel-core-chain-config = { version = "0.16.0", path = "../../../chain-config" }
-fuel-core-services = { path = "../..", version = "0.16.0" }
-fuel-core-storage = { path = "../../../storage", version = "0.16.0" }
-fuel-core-types = { path = "../../../types", version = "0.16.0" }
+fuel-core-chain-config = { version = "0.16.1", path = "../../../chain-config" }
+fuel-core-services = { path = "../..", version = "0.16.1" }
+fuel-core-storage = { path = "../../../storage", version = "0.16.1" }
+fuel-core-types = { path = "../../../types", version = "0.16.1" }
 tokio = { version = "1.21", features = ["full"] }
 tokio-stream = "0.1"
 tracing = "0.1"
