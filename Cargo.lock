@@ -2648,6 +2648,7 @@ dependencies = [
  "ethers",
  "fuel-core",
  "fuel-core-client",
+ "fuel-core-p2p",
  "fuel-core-poa",
  "fuel-core-relayer",
  "fuel-core-storage",

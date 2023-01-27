@@ -206,7 +206,7 @@ impl Config<NotInitialized> {
             max_peers_connected: 50,
             max_connections_per_peer: 3,
             allow_private_addresses: true,
-            random_walk: Some(Duration::from_secs(5)),
+            random_walk: Some(Duration::from_millis(500)),
             connection_idle_timeout: Some(Duration::from_secs(120)),
             reserved_nodes: vec![],
             reserved_nodes_only_mode: false,

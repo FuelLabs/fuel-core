@@ -26,7 +26,7 @@ use self::adapters::BlockImporterAdapter;
 
 pub mod adapters;
 pub mod config;
-pub(crate) mod genesis;
+pub mod genesis;
 pub mod metrics;
 pub mod sub_services;
 

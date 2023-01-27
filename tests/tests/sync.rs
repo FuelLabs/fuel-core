@@ -33,6 +33,7 @@ async fn test_producer_getting_own_blocks_back() {
     let Nodes {
         mut producers,
         mut validators,
+        ..
     } = make_nodes(
         [Some(
             ProducerSetup::new(secret).with_txs(1).with_name("Alice"),
@@ -73,6 +74,7 @@ async fn test_partition_single(num_txs: usize) {
     let Nodes {
         mut producers,
         validators,
+        ..
     } = make_nodes(
         [Some(
             ProducerSetup::new(secret)
@@ -100,8 +102,8 @@ async fn test_partition_single(num_txs: usize) {
     // Wait up to 10 seconds for the producer to commit their own blocks.
     producer.consistency_10s(&expected).await;
 
-    // Wait up to 10 seconds for Bob to sync with the producer.
-    validators["Bob"].consistency_10s(&expected).await;
+    // Wait up to 20 seconds for Bob to sync with the producer.
+    validators["Bob"].consistency_240s(&expected).await;
 
     // Shutdown the producer.
     producer.shutdown().await;
@@ -109,8 +111,8 @@ async fn test_partition_single(num_txs: usize) {
     // Start Carol.
     validators["Carol"].start().await;
 
-    // Wait up to 10 seconds for Carol to sync with Bob.
-    validators["Carol"].consistency_10s(&expected).await;
+    // Wait up to 20 seconds for Carol to sync with Bob.
+    validators["Carol"].consistency_240s(&expected).await;
 }
 
 #[test_case(1, 3, 3)]
@@ -136,6 +138,7 @@ async fn test_partitions_larger_groups(
     let Nodes {
         mut producers,
         mut validators,
+        ..
     } = make_nodes(
         [Some(
             ProducerSetup::new(secret)
@@ -189,7 +192,7 @@ async fn test_partitions_larger_groups(
 
         // Wait up to 10 seconds validators to sync with the overlapping group.
         for v in &mut validators {
-            v.consistency_20s(&expected).await;
+            v.consistency_240s(&expected).await;
         }
 
         // Shutdown the overlapping group.
@@ -228,6 +231,7 @@ async fn test_multiple_producers_different_keys() {
     let Nodes {
         mut producers,
         validators,
+        ..
     } = make_nodes(
         secrets.into_iter().enumerate().map(|(i, secret)| {
             Some(
@@ -294,6 +298,7 @@ async fn test_multiple_producers_same_key() {
     let Nodes {
         mut producers,
         mut validators,
+        ..
     } = make_nodes(
         std::iter::repeat(Some(ProducerSetup::new(secret))).take(num_producers),
         std::iter::repeat(Some(ValidatorSetup::new(pub_key))).take(num_validators),

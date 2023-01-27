@@ -1,5 +1,5 @@
 mod behavior;
-mod codecs;
+pub mod codecs;
 pub mod config;
 mod discovery;
 mod gossipsub;
@@ -17,6 +17,11 @@ pub use libp2p::{
     Multiaddr,
     PeerId,
 };
+
+#[cfg(feature = "test-helpers")]
+pub mod network_service {
+    pub use crate::p2p_service::*;
+}
 
 #[cfg(test)]
 fuel_core_trace::enable_tracing!();

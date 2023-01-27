@@ -170,6 +170,9 @@ pub fn init_sub_services(
         config: config.clone(),
     };
 
+    // TODO: Disable `fuel-core-poa` task, if `manual_block == false && trigger == Never` is enabled.
+    // TODO: Disable `fuel-core-sync` task, if `fuel-core-poa` is enabled.
+
     #[allow(unused_mut)]
     // `FuelService` starts and shutdowns all sub-services in the `services` order
     let mut services: SubServices = vec![
