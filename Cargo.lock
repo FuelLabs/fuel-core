@@ -2670,7 +2670,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-trace"
-version = "0.0.1"
+version = "0.16.1"
 dependencies = [
  "ctor",
  "tracing",

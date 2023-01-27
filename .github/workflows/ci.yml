@@ -185,11 +185,27 @@ jobs:
         run: |
           ./.github/workflows/scripts/verify_chart_version.sh
 
+  publish-crates-check:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Publish crate check
+        uses: katyo/publish-crates@v2
+        with:
+          dry-run: true
 
   publish-crates:
     # Only do this job if publishing a release
     needs:
       - pre-publish-verifications
+      - publish-crates-check
     if: github.event_name == 'release' && github.event.action == 'published'
     runs-on: ubuntu-latest
 
@@ -209,7 +225,7 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish crate
-        uses: katyo/publish-crates@v1
+        uses: katyo/publish-crates@v2
         with:
           publish-delay: 60000
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
@@ -358,6 +374,7 @@ jobs:
       - name: Build fuel-core
         run: |
           cross build --profile=release --target ${{ matrix.job.target }} --features "production" -p fuel-core-bin
+          cross build --profile=release --target ${{ matrix.job.target }} -p fuel-core-keygen
 
       - name: Strip release binary linux x86_64
         if: matrix.job.platform == 'linux'

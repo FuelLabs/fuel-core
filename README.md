@@ -87,6 +87,19 @@ $ ./target/debug/fuel-core run --poa-instant=false
 
 #### Troubleshooting
 
+##### Publishing
+
+We use [`publish-crates`](https://github.com/katyo/publish-crates) action for automatic publishing of all crates.
+
+If you have problems with publishing, you can troubleshoot it locally with [`act`](https://github.com/nektos/act).
+
+```shell
+act release -s GITHUB_TOKEN=<YOUR_GITHUB_TOKEN> -j publish-crates-check --container-architecture linux/amd64 --reuse
+```
+
+It requires GitHubToken to do request to the GitHub. You can create it 
+with [this](https://docs.github.com/en/enterprise-server@3.4/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) instruction.
+
 ##### Outdated database
 
 If you encounter an error such as
