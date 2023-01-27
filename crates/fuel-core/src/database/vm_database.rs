@@ -121,8 +121,8 @@ impl<K, M: Mappable> MerkleRootStorage<K, M> for VmDatabase
 where
     Database: MerkleRootStorage<K, M, Error = StorageError>,
 {
-    fn root(&mut self, key: &K) -> Result<MerkleRoot, Self::Error> {
-        MerkleRootStorage::<K, M>::root(&mut self.database, key)
+    fn root(&self, key: &K) -> Result<MerkleRoot, Self::Error> {
+        MerkleRootStorage::<K, M>::root(&self.database, key)
     }
 }
 

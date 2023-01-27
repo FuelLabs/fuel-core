@@ -89,7 +89,7 @@ fn import_genesis_block(
     // Initialize the chain id and height.
     database.init(&config.chain_conf)?;
 
-    let chain_config_hash = config.chain_conf.clone().root()?.into();
+    let chain_config_hash = config.chain_conf.root()?.into();
     let coins_root = init_coin_state(database, &config.chain_conf.initial_state)?.into();
     let contracts_root =
         init_contracts(database, &config.chain_conf.initial_state)?.into();
@@ -189,7 +189,7 @@ fn init_coin_state(
                     }),
                 );
 
-                let mut coin = CompressedCoin {
+                let coin = CompressedCoin {
                     owner: coin.owner,
                     amount: coin.amount,
                     asset_id: coin.asset_id,
@@ -304,7 +304,7 @@ fn init_da_messages(
     if let Some(state) = &state {
         if let Some(message_state) = &state.messages {
             for msg in message_state {
-                let mut message = Message {
+                let message = Message {
                     sender: msg.sender,
                     recipient: msg.recipient,
                     nonce: msg.nonce,

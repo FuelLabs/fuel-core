@@ -147,7 +147,7 @@ pub struct NotInitialized;
 
 impl Config<NotInitialized> {
     /// Inits the `P2PConfig` with some lazily loaded data.
-    pub fn init(self, mut genesis: Genesis) -> anyhow::Result<Config<Initialized>> {
+    pub fn init(self, genesis: Genesis) -> anyhow::Result<Config<Initialized>> {
         use fuel_core_chain_config::GenesisCommitment;
 
         Ok(Config {

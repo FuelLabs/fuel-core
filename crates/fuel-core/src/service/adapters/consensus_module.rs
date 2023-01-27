@@ -13,7 +13,11 @@ use fuel_core_consensus_module::block_verifier::{
     Verifier,
 };
 use fuel_core_producer::ports::BlockProducerDatabase;
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    tables::FuelBlocks,
+    Result as StorageResult,
+    StorageAsRef,
+};
 use fuel_core_types::{
     blockchain::{
         header::BlockHeader,
@@ -45,6 +49,6 @@ impl fuel_core_poa::ports::Database for Database {
     }
 
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32> {
-        Database::block_header_merkle_root(self, height)
+        self.storage::<FuelBlocks>().root(height).map(Into::into)
     }
 }

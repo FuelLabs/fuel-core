@@ -55,7 +55,7 @@ impl From<MessageConfig> for Message {
 }
 
 impl GenesisCommitment for Message {
-    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
+    fn root(&self) -> anyhow::Result<MerkleRoot> {
         Ok(self.id().into())
     }
 }

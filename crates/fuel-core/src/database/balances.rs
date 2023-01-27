@@ -61,7 +61,7 @@ impl StorageMutate<ContractsAssets> for Database {
 }
 
 impl MerkleRootStorage<ContractId, ContractsAssets> for Database {
-    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Self::Error> {
+    fn root(&self, parent: &ContractId) -> Result<MerkleRoot, Self::Error> {
         let items: Vec<_> = Database::iter_all::<Vec<u8>, Word>(
             self,
             Column::ContractsAssets,
@@ -86,7 +86,10 @@ impl MerkleRootStorage<ContractId, ContractsAssets> for Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_storage::StorageAsMut;
+    use fuel_core_storage::{
+        StorageAsMut,
+        StorageAsRef,
+    };
     use fuel_core_types::fuel_types::AssetId;
 
     #[test]
@@ -171,12 +174,9 @@ mod tests {
         let key = (&ContractId::from([1u8; 32]), &AssetId::new([1u8; 32])).into();
         let balance: Word = 100;
 
-        let database = &mut Database::default();
+        let mut database = Database::default();
 
-        database
-            .storage::<ContractsAssets>()
-            .insert(&key, &balance)
-            .unwrap();
+        StorageMutate::<ContractsAssets>::insert(&mut database, &key, &balance).unwrap();
 
         let root = database
             .storage::<ContractsAssets>()

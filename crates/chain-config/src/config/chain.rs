@@ -167,7 +167,7 @@ impl FromStr for ChainConfig {
 }
 
 impl GenesisCommitment for ChainConfig {
-    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
+    fn root(&self) -> anyhow::Result<MerkleRoot> {
         // TODO: Hash settlement configuration, consensus block production
         let config_hash = *Hasher::default()
             .chain(self.block_gas_limit.to_be_bytes())
@@ -180,7 +180,7 @@ impl GenesisCommitment for ChainConfig {
 }
 
 impl GenesisCommitment for ConsensusParameters {
-    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
+    fn root(&self) -> anyhow::Result<MerkleRoot> {
         // TODO: Define hash algorithm for `ConsensusParameters`
         let bytes = postcard::to_stdvec(&self)?;
         let params_hash = Hasher::default().chain(bytes).finalize();
