@@ -14,11 +14,11 @@ keywords = [
 license = "BUSL-1.1"
 name = "fuel-core-storage"
 repository = "https://github.com/FuelLabs/fuel-core"
-version = "0.16.0"
+version = "0.16.1"
 
 [dependencies]
 anyhow = "1.0"
-fuel-core-types = { path = "../types", version = "0.16.0" }
+fuel-core-types = { path = "../types", version = "0.16.1" }
 fuel-vm-private = { version = "0.25", package = "fuel-vm" }
 thiserror = "1.0"
 

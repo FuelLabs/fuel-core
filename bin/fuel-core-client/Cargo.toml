@@ -1,6 +1,6 @@
 [package]
 name = "fuel-core-client-bin"
-version = "0.16.0"
+version = "0.16.1"
 authors = ["Fuel Labs <contact@fuel.sh>"]
 categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
 edition = "2021"
@@ -16,8 +16,8 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4.1", features = ["derive"] }
-fuel-core-client = { version = "0.16.0", path = "../../crates/client" }
-fuel-core-types = { version = "0.16.0", path = "../../crates/types", features = ["serde"] }
+fuel-core-client = { version = "0.16.1", path = "../../crates/client" }
+fuel-core-types = { version = "0.16.1", path = "../../crates/types", features = ["serde"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 tokio = { version = "1.21", features = ["macros"] }
 
