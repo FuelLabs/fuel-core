@@ -40,11 +40,7 @@ use fuel_core_types::{
     secrecy::Secret,
     services::block_importer::ImportResult,
 };
-use futures::{
-    future::Either,
-    FutureExt,
-    StreamExt,
-};
+use futures::StreamExt;
 use itertools::Itertools;
 use rand::{
     rngs::StdRng,
@@ -60,7 +56,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use tokio::sync::oneshot;
+use tokio::sync::broadcast;
 
 #[derive(Clone)]
 /// Setup for a producer node
@@ -93,12 +89,12 @@ pub struct Node {
     pub db: Database,
     pub config: Config,
     pub test_txs: Vec<Transaction>,
-    pub block_subscription: tokio::sync::broadcast::Receiver<Arc<ImportResult>>,
+    pub block_subscription: broadcast::Receiver<Arc<ImportResult>>,
 }
 
 pub struct Bootstrap {
-    listeners: tokio::sync::mpsc::Sender<oneshot::Sender<Vec<Multiaddr>>>,
-    kill: Option<oneshot::Sender<()>>,
+    listeners: Vec<Multiaddr>,
+    kill: broadcast::Sender<()>,
 }
 
 pub struct Nodes {
@@ -116,8 +112,8 @@ fn map_listener_address(bootstrap_id: &PeerId, addr: &Multiaddr) -> Multiaddr {
 
 impl Bootstrap {
     /// Spawn a bootstrap node.
-    pub async fn new(node_config: &Config, pub_key: Address) -> Self {
-        let bootstrap_config = extract_p2p_config(node_config, pub_key);
+    pub async fn new(node_config: &Config) -> Self {
+        let bootstrap_config = extract_p2p_config(node_config);
         let codec = PostcardCodec::new(bootstrap_config.max_block_size);
         let mut bootstrap = FuelP2PService::new(bootstrap_config, codec);
         bootstrap.start().unwrap();
@@ -127,61 +123,32 @@ impl Bootstrap {
             bootstrap.next_event().await;
         }
 
-        // let multiaddrs: Vec<Multiaddr> = multiaddrs.into_iter().map(|addr| {}).collect();
-
-        let (listeners, mut rx) = tokio::sync::mpsc::channel(10);
-        let (kill, shutdown) = oneshot::channel();
+        let listeners: Vec<_> = bootstrap
+            .listeners()
+            .map(|addr| map_listener_address(&bootstrap.local_peer_id, addr))
+            .collect();
+        let (kill, mut shutdown) = broadcast::channel(1);
         tokio::spawn(async move {
-            enum Event {
-                Shutdown,
-                Listeners(oneshot::Sender<Vec<Multiaddr>>),
-                Ignore,
-            }
-            use Event::*;
-            let mut shutdown = shutdown.map(|_| Shutdown);
-
-            while {
-                use futures::future::select;
-                let event = {
-                    let rf = rx.recv().map(|r| r.map_or(Shutdown, Listeners));
-                    let bf = bootstrap.next_event().map(|_| Ignore);
-                    futures::pin_mut!(rf);
-                    futures::pin_mut!(bf);
-                    let f = select(bf, rf).map(|f| Either::factor_first(f).0);
-                    select(f, &mut shutdown).await.factor_first().0
-                };
-                match event {
-                    Shutdown => false,
-                    Listeners(resp) => {
-                        let _ = resp.send(
-                            bootstrap
-                                .listeners()
-                                .map(|addr| {
-                                    map_listener_address(&bootstrap.local_peer_id, addr)
-                                })
-                                .collect(),
-                        );
-                        true
+            loop {
+                tokio::select! {
+                    result = shutdown.recv() => {
+                        assert!(matches!(result, Ok(_)));
+                        break;
                     }
-                    Ignore => true,
+                    _ = bootstrap.next_event() => {}
                 }
-            } {}
+            }
         });
 
-        Bootstrap {
-            listeners,
-            kill: Some(kill),
-        }
+        Bootstrap { listeners, kill }
     }
 
-    pub async fn listeners(&self) -> Vec<Multiaddr> {
-        let (tx, rx) = oneshot::channel();
-        self.listeners.send(tx).await.unwrap();
-        rx.await.unwrap()
+    pub fn listeners(&self) -> Vec<Multiaddr> {
+        self.listeners.clone()
     }
 
     pub fn shutdown(&mut self) {
-        let _ = self.kill.take().unwrap().send(());
+        self.kill.send(()).unwrap();
     }
 }
 
@@ -266,30 +233,22 @@ pub async fn make_nodes(
                             .unwrap_or_else(|| format!("b:{}", i)),
                         chain_config.clone(),
                     );
-                    let pub_key = match boot {
-                        Some(BootstrapSetup { pub_key, .. }) => {
-                            match &mut node_config.chain_conf.consensus {
-                                fuel_core::chain_config::ConsensusConfig::PoA {
-                                    signing_key,
-                                } => {
-                                    *signing_key = pub_key;
-                                }
-                            }
-                            pub_key
-                        }
-                        None => match &node_config.chain_conf.consensus {
+                    if let Some(BootstrapSetup { pub_key, .. }) = boot {
+                        match &mut node_config.chain_conf.consensus {
                             fuel_core::chain_config::ConsensusConfig::PoA {
                                 signing_key,
-                            } => *signing_key,
-                        },
-                    };
-                    Bootstrap::new(&node_config, pub_key).await
+                            } => {
+                                *signing_key = pub_key;
+                            }
+                        }
+                    }
+                    Bootstrap::new(&node_config).await
                 }
             })
             .collect()
             .await;
 
-    let mut boots = (0..bootstrap_nodes.len()).cycle();
+    let boots: Vec<_> = bootstrap_nodes.iter().flat_map(|b| b.listeners()).collect();
 
     let mut producers = Vec::with_capacity(producers_with_txs.len());
     for (i, s) in producers_with_txs.into_iter().enumerate() {
@@ -304,6 +263,7 @@ pub async fn make_nodes(
 
         let mut test_txs = Vec::with_capacity(0);
         node_config.block_production = Trigger::Instant;
+        node_config.p2p.bootstrap_nodes = boots.clone();
 
         if let Some((ProducerSetup { secret, .. }, txs)) = s {
             let pub_key = secret.public_key();
@@ -318,13 +278,9 @@ pub async fn make_nodes(
             test_txs = txs;
         }
 
-        node_config.p2p.bootstrap_nodes =
-            bootstrap_nodes[boots.next().unwrap()].listeners().await;
         let producer = make_node(node_config, test_txs).await;
         producers.push(producer);
     }
-
-    let mut boots = (0..bootstrap_nodes.len()).cycle();
 
     let mut validators = vec![];
     for (i, s) in validators_setup.into_iter().enumerate() {
@@ -336,8 +292,7 @@ pub async fn make_nodes(
                 .unwrap_or_else(|| format!("v:{}", i)),
             chain_config.clone(),
         );
-        node_config.p2p.bootstrap_nodes =
-            bootstrap_nodes[boots.next().unwrap()].listeners().await;
+        node_config.p2p.bootstrap_nodes = boots.clone();
 
         if let Some(ValidatorSetup { pub_key, .. }) = s {
             match &mut node_config.chain_conf.consensus {
@@ -381,15 +336,8 @@ async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node {
     }
 }
 
-fn extract_p2p_config(
-    node_config: &Config,
-    pub_key: Address,
-) -> fuel_core_p2p::config::Config {
-    let bootstrap_config = make_config(
-        format!("{}:bootstrap", pub_key),
-        node_config.chain_conf.clone(),
-    )
-    .p2p;
+fn extract_p2p_config(node_config: &Config) -> fuel_core_p2p::config::Config {
+    let bootstrap_config = node_config.p2p.clone();
     let db = Database::in_memory();
     maybe_initialize_state(node_config, &db).unwrap();
     bootstrap_config.init(db.get_genesis().unwrap()).unwrap()

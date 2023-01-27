@@ -257,10 +257,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             }
         }
 
-        if let Some(next_event) = self.pending_events.pop_front() {
-            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(next_event))
-        }
-
         Poll::Pending
     }
 

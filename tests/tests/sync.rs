@@ -33,7 +33,7 @@ async fn test_producer_getting_own_blocks_back() {
     let Nodes {
         mut producers,
         mut validators,
-        ..
+        bootstrap_nodes: _dont_drop,
     } = make_nodes(
         [Some(BootstrapSetup::new(pub_key))],
         [Some(
@@ -67,7 +67,10 @@ async fn test_producer_getting_own_blocks_back() {
 #[test_case(100)]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_partition_single(num_txs: usize) {
-    let mut rng = StdRng::seed_from_u64(line!() as u64 * num_txs as u64);
+    // Create a random seed based on the test parameters.
+    let mut hasher = DefaultHasher::new();
+    (num_txs, line!()).hash(&mut hasher);
+    let mut rng = StdRng::seed_from_u64(hasher.finish());
 
     // Create a producer and two validators that share the same key pair.
     let secret = SecretKey::random(&mut rng);
@@ -75,7 +78,7 @@ async fn test_partition_single(num_txs: usize) {
     let Nodes {
         mut producers,
         validators,
-        ..
+        bootstrap_nodes: _dont_drop,
     } = make_nodes(
         [Some(BootstrapSetup::new(pub_key))],
         [Some(
@@ -140,7 +143,7 @@ async fn test_partitions_larger_groups(
     let Nodes {
         mut producers,
         mut validators,
-        ..
+        bootstrap_nodes: _dont_drop,
     } = make_nodes(
         [Some(BootstrapSetup::new(pub_key))],
         [Some(
@@ -234,7 +237,7 @@ async fn test_multiple_producers_different_keys() {
     let Nodes {
         mut producers,
         validators,
-        ..
+        bootstrap_nodes: _dont_drop,
     } = make_nodes(
         pub_keys
             .iter()
@@ -304,7 +307,7 @@ async fn test_multiple_producers_same_key() {
     let Nodes {
         mut producers,
         mut validators,
-        ..
+        bootstrap_nodes: _dont_drop,
     } = make_nodes(
         std::iter::repeat(Some(BootstrapSetup::new(pub_key))).take(num_producers),
         std::iter::repeat(Some(ProducerSetup::new(secret))).take(num_producers),

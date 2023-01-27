@@ -212,6 +212,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         Ok(())
     }
 
+    #[cfg(feature = "test-helpers")]
     pub fn listeners(&self) -> impl Iterator<Item = &Multiaddr> {
         self.swarm.listeners()
     }

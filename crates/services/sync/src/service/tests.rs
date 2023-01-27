@@ -37,9 +37,12 @@ async fn test_new_service() {
         .returning(|h| Ok(Some(empty_header(h))));
     p2p.expect_get_transactions()
         .returning(|_| Ok(Some(vec![])));
-    let mut executor = MockBlockImporterPort::default();
+    let mut importer = MockBlockImporterPort::default();
+    importer
+        .expect_committed_height_stream()
+        .returning(|| futures::stream::pending::<BlockHeight>().into_boxed());
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
-    executor.expect_execute_and_commit().returning(move |h| {
+    importer.expect_execute_and_commit().returning(move |h| {
         tx.try_send(**h.entity.header().height()).unwrap();
         Ok(())
     });
@@ -51,7 +54,7 @@ async fn test_new_service() {
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
     };
-    let s = new_service(4u32.into(), p2p, executor, consensus, params).unwrap();
+    let s = new_service(4u32.into(), p2p, importer, consensus, params).unwrap();
 
     assert_eq!(
         s.start_and_await().await.unwrap(),
