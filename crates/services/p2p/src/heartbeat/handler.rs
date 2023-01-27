@@ -62,6 +62,12 @@ impl HeartbeatConfig {
     }
 }
 
+impl Default for HeartbeatConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug)]
 pub enum HeartbeatFailure {
     Timeout,

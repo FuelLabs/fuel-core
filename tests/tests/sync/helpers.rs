@@ -14,6 +14,7 @@ use fuel_core::{
 use fuel_core_p2p::{
     codecs::postcard::PostcardCodec,
     network_service::FuelP2PService,
+    PeerId,
 };
 use fuel_core_poa::Trigger;
 use fuel_core_storage::{
@@ -22,10 +23,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     fuel_asm::Opcode,
-    fuel_crypto::{
-        PublicKey,
-        SecretKey,
-    },
+    fuel_crypto::SecretKey,
     fuel_tx::{
         Input,
         Transaction,
@@ -42,6 +40,11 @@ use fuel_core_types::{
     secrecy::Secret,
     services::block_importer::ImportResult,
 };
+use futures::{
+    future::Either,
+    FutureExt,
+    StreamExt,
+};
 use itertools::Itertools;
 use rand::{
     rngs::StdRng,
@@ -57,6 +60,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use tokio::sync::oneshot;
 
 #[derive(Clone)]
 /// Setup for a producer node
@@ -78,6 +82,12 @@ pub struct ValidatorSetup {
     pub pub_key: Address,
 }
 
+#[derive(Clone)]
+pub struct BootstrapSetup {
+    pub name: String,
+    pub pub_key: Address,
+}
+
 pub struct Node {
     pub node: FuelService,
     pub db: Database,
@@ -86,8 +96,13 @@ pub struct Node {
     pub block_subscription: tokio::sync::broadcast::Receiver<Arc<ImportResult>>,
 }
 
+pub struct Bootstrap {
+    listeners: tokio::sync::mpsc::Sender<oneshot::Sender<Vec<Multiaddr>>>,
+    kill: Option<oneshot::Sender<()>>,
+}
+
 pub struct Nodes {
-    pub bootstrap_nodes: Vec<Vec<Multiaddr>>,
+    pub bootstrap_nodes: Vec<Bootstrap>,
     pub producers: Vec<Node>,
     pub validators: Vec<Node>,
 }
@@ -95,51 +110,84 @@ pub struct Nodes {
 /// Nodes accessible by their name.
 pub struct NamedNodes(pub HashMap<String, Node>);
 
-/// Spawn a bootstrap node.
-async fn bootstrap_node(node_config: &Config, pub_key: PublicKey) -> Vec<Multiaddr> {
-    let bootstrap_config = make_config(
-        format!("{}:bootstrap", pub_key),
-        node_config.chain_conf.clone(),
-    )
-    .p2p;
-    let mut db = Database::in_memory();
-    maybe_initialize_state(&node_config, &mut db).unwrap();
-    let bootstrap_config = bootstrap_config.init(db.get_genesis().unwrap()).unwrap();
-    let max_block_size = bootstrap_config.max_block_size;
-    let mut bootstrap =
-        FuelP2PService::new(bootstrap_config, PostcardCodec::new(max_block_size));
-    bootstrap.start().unwrap();
-
-    let multiaddrs;
-    loop {
-        let listeners = bootstrap.listeners().map(Clone::clone).collect::<Vec<_>>();
-        if listeners.len() > 1 {
-            multiaddrs = listeners;
-            break
-        }
-        bootstrap.next_event().await;
-    }
-    let multiaddrs: Vec<Multiaddr> = multiaddrs
-        .into_iter()
-        .map(|addr| {
-            format!("{}/p2p/{}", addr, &bootstrap.local_peer_id)
-                .parse()
-                .unwrap()
-        })
-        .collect();
-
-    // TODO: Add shutdown
-    tokio::spawn(async move {
-        loop {
-            bootstrap.next_event().await;
-        }
-    });
-
-    multiaddrs
+fn map_listener_address(bootstrap_id: &PeerId, addr: &Multiaddr) -> Multiaddr {
+    format!("{}/p2p/{}", addr, bootstrap_id).parse().unwrap()
 }
 
-/// Create a set of nodes with the given setups.
+impl Bootstrap {
+    /// Spawn a bootstrap node.
+    pub async fn new(node_config: &Config, pub_key: Address) -> Self {
+        let bootstrap_config = extract_p2p_config(node_config, pub_key);
+        let codec = PostcardCodec::new(bootstrap_config.max_block_size);
+        let mut bootstrap = FuelP2PService::new(bootstrap_config, codec);
+        bootstrap.start().unwrap();
+
+        // Wait for listener addresses.
+        while bootstrap.listeners().next().is_none() {
+            bootstrap.next_event().await;
+        }
+
+        // let multiaddrs: Vec<Multiaddr> = multiaddrs.into_iter().map(|addr| {}).collect();
+
+        let (listeners, mut rx) = tokio::sync::mpsc::channel(10);
+        let (kill, shutdown) = oneshot::channel();
+        tokio::spawn(async move {
+            enum Event {
+                Shutdown,
+                Listeners(oneshot::Sender<Vec<Multiaddr>>),
+                Ignore,
+            }
+            use Event::*;
+            let mut shutdown = shutdown.map(|_| Shutdown);
+
+            while {
+                use futures::future::select;
+                let event = {
+                    let rf = rx.recv().map(|r| r.map_or(Shutdown, Listeners));
+                    let bf = bootstrap.next_event().map(|_| Ignore);
+                    futures::pin_mut!(rf);
+                    futures::pin_mut!(bf);
+                    let f = select(bf, rf).map(|f| Either::factor_first(f).0);
+                    select(f, &mut shutdown).await.factor_first().0
+                };
+                match event {
+                    Shutdown => false,
+                    Listeners(resp) => {
+                        let _ = resp.send(
+                            bootstrap
+                                .listeners()
+                                .map(|addr| {
+                                    map_listener_address(&bootstrap.local_peer_id, addr)
+                                })
+                                .collect(),
+                        );
+                        true
+                    }
+                    Ignore => true,
+                }
+            } {}
+        });
+
+        Bootstrap {
+            listeners,
+            kill: Some(kill),
+        }
+    }
+
+    pub async fn listeners(&self) -> Vec<Multiaddr> {
+        let (tx, rx) = oneshot::channel();
+        self.listeners.send(tx).await.unwrap();
+        rx.await.unwrap()
+    }
+
+    pub fn shutdown(&mut self) {
+        let _ = self.kill.take().unwrap().send(());
+    }
+}
+
+// set of nodes with the given setups.
 pub async fn make_nodes(
+    bootstrap_setup: impl IntoIterator<Item = Option<BootstrapSetup>>,
     producers_setup: impl IntoIterator<Item = Option<ProducerSetup>>,
     validators_setup: impl IntoIterator<Item = Option<ValidatorSetup>>,
 ) -> Nodes {
@@ -205,8 +253,45 @@ pub async fn make_nodes(
         }
     }
 
-    let mut producers = vec![];
-    let mut bootstrap_nodes = vec![];
+    let bootstrap_nodes: Vec<Bootstrap> =
+        futures::stream::iter(bootstrap_setup.into_iter().enumerate())
+            .then(|(i, boot)| {
+                let chain_config = chain_config.clone();
+                async move {
+                    let chain_config = chain_config.clone();
+                    let name = boot.as_ref().map_or(String::new(), |s| s.name.clone());
+                    let mut node_config = make_config(
+                        (!name.is_empty())
+                            .then_some(name)
+                            .unwrap_or_else(|| format!("b:{}", i)),
+                        chain_config.clone(),
+                    );
+                    let pub_key = match boot {
+                        Some(BootstrapSetup { pub_key, .. }) => {
+                            match &mut node_config.chain_conf.consensus {
+                                fuel_core::chain_config::ConsensusConfig::PoA {
+                                    signing_key,
+                                } => {
+                                    *signing_key = pub_key;
+                                }
+                            }
+                            pub_key
+                        }
+                        None => match &node_config.chain_conf.consensus {
+                            fuel_core::chain_config::ConsensusConfig::PoA {
+                                signing_key,
+                            } => *signing_key,
+                        },
+                    };
+                    Bootstrap::new(&node_config, pub_key).await
+                }
+            })
+            .collect()
+            .await;
+
+    let mut boots = (0..bootstrap_nodes.len()).cycle();
+
+    let mut producers = Vec::with_capacity(producers_with_txs.len());
     for (i, s) in producers_with_txs.into_iter().enumerate() {
         let chain_config = chain_config.clone();
         let name = s.as_ref().map_or(String::new(), |s| s.0.name.clone());
@@ -220,9 +305,8 @@ pub async fn make_nodes(
         let mut test_txs = Vec::with_capacity(0);
         node_config.block_production = Trigger::Instant;
 
-        let mut pub_key = Default::default();
         if let Some((ProducerSetup { secret, .. }, txs)) = s {
-            pub_key = secret.public_key();
+            let pub_key = secret.public_key();
             match &mut node_config.chain_conf.consensus {
                 fuel_core::chain_config::ConsensusConfig::PoA { signing_key } => {
                     *signing_key = Input::owner(&pub_key);
@@ -234,18 +318,13 @@ pub async fn make_nodes(
             test_txs = txs;
         }
 
-        let multiaddrs = bootstrap_node(&node_config, pub_key).await;
-        bootstrap_nodes.push(multiaddrs.clone());
-
-        node_config.p2p.bootstrap_nodes = multiaddrs;
+        node_config.p2p.bootstrap_nodes =
+            bootstrap_nodes[boots.next().unwrap()].listeners().await;
         let producer = make_node(node_config, test_txs).await;
         producers.push(producer);
     }
 
-    let bootstrap_peers: Vec<_> = bootstrap_nodes
-        .iter()
-        .flat_map(|multiaddrs| multiaddrs.clone().into_iter())
-        .collect();
+    let mut boots = (0..bootstrap_nodes.len()).cycle();
 
     let mut validators = vec![];
     for (i, s) in validators_setup.into_iter().enumerate() {
@@ -257,7 +336,8 @@ pub async fn make_nodes(
                 .unwrap_or_else(|| format!("v:{}", i)),
             chain_config.clone(),
         );
-        node_config.p2p.bootstrap_nodes = bootstrap_peers.clone();
+        node_config.p2p.bootstrap_nodes =
+            bootstrap_nodes[boots.next().unwrap()].listeners().await;
 
         if let Some(ValidatorSetup { pub_key, .. }) = s {
             match &mut node_config.chain_conf.consensus {
@@ -299,6 +379,20 @@ async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node {
         test_txs,
         block_subscription,
     }
+}
+
+fn extract_p2p_config(
+    node_config: &Config,
+    pub_key: Address,
+) -> fuel_core_p2p::config::Config {
+    let bootstrap_config = make_config(
+        format!("{}:bootstrap", pub_key),
+        node_config.chain_conf.clone(),
+    )
+    .p2p;
+    let db = Database::in_memory();
+    maybe_initialize_state(node_config, &db).unwrap();
+    bootstrap_config.init(db.get_genesis().unwrap()).unwrap()
 }
 
 impl Node {
@@ -442,6 +536,14 @@ impl ValidatorSetup {
         }
     }
 }
+impl BootstrapSetup {
+    pub fn new(pub_key: Address) -> Self {
+        Self {
+            pub_key,
+            name: Default::default(),
+        }
+    }
+}
 
 impl From<Vec<Node>> for NamedNodes {
     fn from(nodes: Vec<Node>) -> Self {
@@ -464,5 +566,11 @@ impl Index<&str> for NamedNodes {
 impl IndexMut<&str> for NamedNodes {
     fn index_mut(&mut self, index: &str) -> &mut Self::Output {
         self.0.get_mut(index).unwrap()
+    }
+}
+
+impl Drop for Bootstrap {
+    fn drop(&mut self) {
+        self.shutdown();
     }
 }

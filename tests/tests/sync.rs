@@ -35,6 +35,7 @@ async fn test_producer_getting_own_blocks_back() {
         mut validators,
         ..
     } = make_nodes(
+        [Some(BootstrapSetup::new(pub_key))],
         [Some(
             ProducerSetup::new(secret).with_txs(1).with_name("Alice"),
         )],
@@ -76,6 +77,7 @@ async fn test_partition_single(num_txs: usize) {
         validators,
         ..
     } = make_nodes(
+        [Some(BootstrapSetup::new(pub_key))],
         [Some(
             ProducerSetup::new(secret)
                 .with_txs(num_txs)
@@ -118,9 +120,9 @@ async fn test_partition_single(num_txs: usize) {
 #[test_case(1, 3, 3)]
 #[test_case(10, 3, 3)]
 #[test_case(100, 3, 3)]
-#[test_case(1, 40, 4)]
-#[test_case(10, 40, 4)]
-#[test_case(100, 40, 4)]
+#[test_case(1, 8, 4)]
+#[test_case(10, 8, 4)]
+#[test_case(100, 8, 4)]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_partitions_larger_groups(
     num_txs: usize,
@@ -140,6 +142,7 @@ async fn test_partitions_larger_groups(
         mut validators,
         ..
     } = make_nodes(
+        [Some(BootstrapSetup::new(pub_key))],
         [Some(
             ProducerSetup::new(secret)
                 .with_txs(num_txs)
@@ -233,7 +236,10 @@ async fn test_multiple_producers_different_keys() {
         validators,
         ..
     } = make_nodes(
-        secrets.into_iter().enumerate().map(|(i, secret)| {
+        pub_keys
+            .iter()
+            .map(|pub_key| Some(BootstrapSetup::new(*pub_key))),
+        secrets.clone().into_iter().enumerate().map(|(i, secret)| {
             Some(
                 ProducerSetup::new(secret)
                     .with_txs(num_txs)
@@ -300,6 +306,7 @@ async fn test_multiple_producers_same_key() {
         mut validators,
         ..
     } = make_nodes(
+        std::iter::repeat(Some(BootstrapSetup::new(pub_key))).take(num_producers),
         std::iter::repeat(Some(ProducerSetup::new(secret))).take(num_producers),
         std::iter::repeat(Some(ValidatorSetup::new(pub_key))).take(num_validators),
     )
