@@ -16,7 +16,7 @@ license = "BUSL-1.1"
 name = "fuel-core-trace"
 publish = false
 repository = "https://github.com/FuelLabs/fuel-core"
-version = "0.0.1"
+version = "0.16.1"
 
 [dependencies]
 ctor = "0.1"
