@@ -1,6 +1,6 @@
 [package]
 name = "fuel-core-p2p"
-version = "0.15.1"
+version = "0.16.0"
 authors = ["Fuel Labs <contact@fuel.sh>"]
 categories = ["cryptography::cryptocurrencies", "network-programming"]
 edition = "2021"
@@ -13,13 +13,13 @@ description = "Fuel client networking"
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
-fuel-core-chain-config = { path = "../../chain-config", version = "0.15.1" }
-fuel-core-metrics = { path = "../../metrics", version = "0.15.1" } # TODO make this a feature
-fuel-core-services = { path = "../../services", version = "0.15.1" }
-fuel-core-storage = { path = "../../storage", version = "0.15.1" }
+fuel-core-chain-config = { path = "../../chain-config", version = "0.16.0" }
+fuel-core-metrics = { path = "../../metrics", version = "0.16.0" } # TODO make this a feature
+fuel-core-services = { path = "../../services", version = "0.16.0" }
+fuel-core-storage = { path = "../../storage", version = "0.16.0" }
 fuel-core-types = { path = "../../types", features = [
     "serde",
-], version = "0.15.1" }
+], version = "0.16.0" }
 futures = "0.3"
 futures-timer = "3.0"
 ip_network = "0.4"
@@ -67,7 +67,7 @@ fuel-core-trace = { path = "../../trace" }
 fuel-core-types = { path = "../../types", features = [
     "serde",
     "test-helpers"
-], version = "0.15.1" }
+], version = "0.16.0" }
 rand = "0.8"
 tokio = { version = "1.21", features = ["full"] }
 tracing-attributes = "0.1"

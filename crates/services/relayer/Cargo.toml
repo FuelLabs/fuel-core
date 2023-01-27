@@ -1,6 +1,6 @@
 [package]
 name = "fuel-core-relayer"
-version = "0.15.1"
+version = "0.16.0"
 authors = ["Fuel Labs <contact@fuel.sh>"]
 edition = "2021"
 homepage = "https://fuel.network/"
@@ -21,9 +21,9 @@ ethers-providers = { version = "1.0.2", default-features = false, features = [
     "ws",
     "rustls",
 ] }
-fuel-core-services = { path = "..", version = "0.15.1" }
-fuel-core-storage = { path = "../../storage", version = "0.15.1" }
-fuel-core-types = { path = "../../types", version = "0.15.1" }
+fuel-core-services = { path = "..", version = "0.16.0" }
+fuel-core-storage = { path = "../../storage", version = "0.16.0" }
+fuel-core-types = { path = "../../types", version = "0.16.0" }
 futures = "0.3"
 once_cell = "1.4"
 parking_lot = { version = "0.12", optional = true }
