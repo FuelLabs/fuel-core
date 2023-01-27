@@ -330,8 +330,8 @@ mod tests {
         // }
         #[cfg(feature = "p2p")]
         {
-            // p2p + sync
-            expected_services += 2;
+            // p2p
+            expected_services += 1;
         }
 
         // # Dev-note: Update the `expected_services` when we add/remove a new/old service.

@@ -108,7 +108,7 @@ async fn test_partition_single(num_txs: usize) {
     producer.consistency_10s(&expected).await;
 
     // Wait up to 20 seconds for Bob to sync with the producer.
-    validators["Bob"].consistency_240s(&expected).await;
+    validators["Bob"].consistency_20s(&expected).await;
 
     // Shutdown the producer.
     producer.shutdown().await;
@@ -117,7 +117,7 @@ async fn test_partition_single(num_txs: usize) {
     validators["Carol"].start().await;
 
     // Wait up to 20 seconds for Carol to sync with Bob.
-    validators["Carol"].consistency_240s(&expected).await;
+    validators["Carol"].consistency_20s(&expected).await;
 }
 
 #[test_case(1, 3, 3)]
@@ -198,7 +198,7 @@ async fn test_partitions_larger_groups(
 
         // Wait up to 10 seconds validators to sync with the overlapping group.
         for v in &mut validators {
-            v.consistency_240s(&expected).await;
+            v.consistency_20s(&expected).await;
         }
 
         // Shutdown the overlapping group.

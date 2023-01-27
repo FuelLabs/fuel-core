@@ -292,6 +292,7 @@ pub async fn make_nodes(
                 .unwrap_or_else(|| format!("v:{}", i)),
             chain_config.clone(),
         );
+        node_config.block_production = Trigger::Never;
         node_config.p2p.bootstrap_nodes = boots.clone();
 
         if let Some(ValidatorSetup { pub_key, .. }) = s {
@@ -352,7 +353,14 @@ impl Node {
             ..
         } = self;
         while !not_found_txs(db, txs).is_empty() {
-            block_subscription.recv().await.unwrap();
+            tokio::select! {
+                result = block_subscription.recv() => {
+                    result.unwrap();
+                }
+                _ = self.node.await_stop() => {
+                    panic!("Got a stop signal")
+                }
+            }
         }
 
         let count = db
@@ -374,15 +382,6 @@ impl Node {
     /// Wait for the node to reach consistency with the given transactions within 20 seconds.
     pub async fn consistency_20s(&mut self, txs: &HashMap<Bytes32, Transaction>) {
         tokio::time::timeout(Duration::from_secs(20), self.consistency(txs))
-            .await
-            .unwrap_or_else(|_| {
-                panic!("Failed to reach consistency for {:?}", self.config.name)
-            });
-    }
-
-    /// Wait for the node to reach consistency with the given transactions within 240 seconds.
-    pub async fn consistency_240s(&mut self, txs: &HashMap<Bytes32, Transaction>) {
-        tokio::time::timeout(Duration::from_secs(240), self.consistency(txs))
             .await
             .unwrap_or_else(|_| {
                 panic!("Failed to reach consistency for {:?}", self.config.name)
@@ -413,14 +412,10 @@ impl Node {
     /// Start a node that has been shutdown.
     /// Note that nodes always start running.
     pub async fn start(&mut self) {
-        let mut config =
-            make_config(self.config.name.clone(), self.config.chain_conf.clone());
-        config.p2p.bootstrap_nodes = self.config.p2p.bootstrap_nodes.clone();
-        let node = FuelService::from_database(self.db.clone(), config.clone())
+        let node = FuelService::from_database(self.db.clone(), self.config.clone())
             .await
             .unwrap();
         self.node = node;
-        self.config = config;
         self.block_subscription =
             self.node.shared.block_importer.block_importer.subscribe();
     }
