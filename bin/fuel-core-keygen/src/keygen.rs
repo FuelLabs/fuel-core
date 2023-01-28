@@ -103,16 +103,40 @@ pub(crate) struct ParseSecret {
     secret: String,
     #[clap(long = "pretty", short = 'p')]
     pretty: bool,
+    #[clap(
+        long = "key-type",
+        short = 'k',
+        value_enum,
+        default_value = "block-production"
+    )]
+    key_type: KeyType,
 }
 
 impl ParseSecret {
     fn exec(&self) -> anyhow::Result<()> {
         let secret = SecretKey::from_str(&self.secret)?;
-        let address = Input::owner(&secret.public_key());
-        let output = json!({
-            "address": address.to_string(),
-        });
-        print_value(output, self.pretty)
+        match self.key_type {
+            KeyType::BlockProduction => {
+                let address = Input::owner(&secret.public_key());
+                let output = json!({
+                    "address": address.to_string(),
+                    "type": "block-production",
+                });
+                print_value(output, self.pretty)
+            }
+            KeyType::Peering => {
+                let mut bytes = secret.deref().clone();
+                let p2p_secret = secp256k1::SecretKey::from_bytes(&mut bytes)
+                    .expect("Should be a valid private key");
+                let libp2p_keypair = Keypair::Secp256k1(p2p_secret.into());
+                let peer_id = PeerId::from_public_key(&libp2p_keypair.public());
+                let output = json!({
+                    "peer_id": peer_id.to_string(),
+                    "type": "p2p"
+                });
+                print_value(output, self.pretty)
+            }
+        }
     }
 }
 
