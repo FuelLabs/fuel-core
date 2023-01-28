@@ -104,7 +104,7 @@ jobs:
           - command: test
             args: --no-default-features --workspace
           - command: test
-            args: --manifest-path version-compatibility/Cargo.toml --workspace  
+            args: --manifest-path version-compatibility/Cargo.toml --workspace
     # disallow any job that takes longer than 45 minutes
     timeout-minutes: 45
     continue-on-error: ${{ matrix.skip-error || false }}
@@ -118,10 +118,10 @@ jobs:
       - name: Install Cargo Make
         uses: davidB/rust-cargo-make@v1
         with:
-          version: "0.36.0"      
+          version: "0.36.0"
       - name: Install Protoc
         uses: arduino/setup-protoc@v1.1.2
-        with:          
+        with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: Swatinem/rust-cache@v2
         with:
@@ -435,7 +435,7 @@ jobs:
           notify_when: 'failure'
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
-    
+
   # Deploy Fuel Core Ephemeral Developer Environment
   deploy-eph-env:
     if:  startsWith(github.head_ref, 'preview/')
@@ -463,7 +463,7 @@ jobs:
           CONFIG: 'fuel-dev1'
           ENV: 'fueldevsway.env'
           DELETE_INFRA: true
-  
+
   # Deploy Latest Fuel-Core Release
   deploy:
     if: github.ref == 'refs/heads/master'
