@@ -80,7 +80,7 @@ impl NewKey {
                 })
             }
             KeyType::Peering => {
-                let mut bytes = secret.deref().clone();
+                let mut bytes = *secret.deref();
                 let p2p_secret = secp256k1::SecretKey::from_bytes(&mut bytes)
                     .expect("Should be a valid private key");
                 let libp2p_keypair = Keypair::Secp256k1(p2p_secret.into());
@@ -125,7 +125,7 @@ impl ParseSecret {
                 print_value(output, self.pretty)
             }
             KeyType::Peering => {
-                let mut bytes = secret.deref().clone();
+                let mut bytes = *secret.deref();
                 let p2p_secret = secp256k1::SecretKey::from_bytes(&mut bytes)
                     .expect("Should be a valid private key");
                 let libp2p_keypair = Keypair::Secp256k1(p2p_secret.into());
