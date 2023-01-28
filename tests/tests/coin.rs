@@ -36,10 +36,7 @@ async fn coin() {
     let client = FuelClient::from(srv.bound_address);
 
     // run test
-    let coin = client
-        .coin(format!("{utxo_id:#x}").as_str())
-        .await
-        .unwrap();
+    let coin = client.coin(format!("{utxo_id:#x}").as_str()).await.unwrap();
     assert!(coin.is_some());
 }
 
