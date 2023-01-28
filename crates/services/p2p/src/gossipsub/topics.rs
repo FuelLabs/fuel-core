@@ -26,8 +26,7 @@ pub struct GossipsubTopics {
 
 impl GossipsubTopics {
     pub fn new(network_name: &str) -> Self {
-        let new_tx_topic =
-            Topic::new(format!("{NEW_TX_GOSSIP_TOPIC}/{network_name}"));
+        let new_tx_topic = Topic::new(format!("{NEW_TX_GOSSIP_TOPIC}/{network_name}"));
         let new_block_topic =
             Topic::new(format!("{NEW_BLOCK_GOSSIP_TOPIC}/{network_name}"));
         let consensus_vote_topic =
