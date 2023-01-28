@@ -2485,6 +2485,7 @@ dependencies = [
  "anyhow",
  "clap 4.1.4",
  "fuel-core-types",
+ "libp2p-core",
  "serde_json",
 ]
 
