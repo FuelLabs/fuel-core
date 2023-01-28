@@ -5,13 +5,6 @@ use crate::{
     },
     fuel_core_graphql_api::ports::{
         BlockProducerPort,
-        DryRunExecution,
-        ExecuteWithoutCommit,
-        ExecutorPort,
-        TxPoolPort,
-        TxSubscription,
-    },
-    fuel_core_graphql_api::ports::{
         DatabaseBlocks,
         DatabaseChain,
         DatabaseCoins,
@@ -19,13 +12,16 @@ use crate::{
         DatabaseMessages,
         DatabasePort,
         DatabaseTransactions,
+        DryRunExecution,
+        ExecuteWithoutCommit,
+        ExecutorPort,
+        TxPoolPort,
+        TxSubscription,
     },
     graphql_api::ports::{
         FindTx,
         InsertTx,
     },
-    // executor::Executor,
-    producer::Producer,
     service::sub_services::TxPoolService,
     state::IterDirection,
 };
@@ -234,24 +230,28 @@ impl FindTx for TxPoolService {
 impl TxPoolPort for TxPoolService {}
 
 #[async_trait]
-impl DryRunExecution for Arc<Producer<Database>> {
+impl DryRunExecution for BlockProducerAdapter {
     async fn dry_run_tx(
         &self,
         transaction: Transaction,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
     ) -> Result<Vec<TxReceipt>> {
-        self.dry_run(transaction, height, utxo_validation).await
+        self.block_producer
+            .dry_run(transaction, height, utxo_validation)
+            .await
     }
 }
 
-impl BlockProducerPort for Arc<Producer<Database>> {}
+impl BlockProducerPort for BlockProducerAdapter {}
 
 use crate::{
     graphql_api::service::Database as GraphqlDatabase,
     service::adapters::ExecutorAdapter,
 };
 use fuel_core_producer::ports::Executor as ProducerExecutorPort;
+
+use super::BlockProducerAdapter;
 
 impl ExecuteWithoutCommit<GraphqlDatabase> for ExecutorAdapter {
     fn execute_with_no_commit(

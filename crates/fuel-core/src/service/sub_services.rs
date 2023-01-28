@@ -159,8 +159,8 @@ pub fn init_sub_services(
         },
         gql_database,
         schema,
-        producer_adapter,
-        txpool.clone(),
+        Box::new(producer_adapter),
+        Box::new(txpool.clone()),
         Box::new(poa_adapter),
     )?;
 

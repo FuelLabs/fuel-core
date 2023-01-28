@@ -294,7 +294,6 @@ impl BlockMutation {
         time: Option<TimeParameters>,
     ) -> async_graphql::Result<U64> {
         let query = BlockQueryContext(ctx.data_unchecked());
-        let executor = ctx.data_unchecked::<Executor>();
         let consensus_module = ctx.data_unchecked::<ConsensusModule>();
         let config = ctx.data_unchecked::<GraphQLConfig>().clone();
 
@@ -305,39 +304,6 @@ impl BlockMutation {
         }
 
         let latest_block = query.latest_block()?;
-        let block_time = get_time_closure(&latest_block, time, blocks_to_produce.0)?;
-
-        for idx in 0..blocks_to_produce.0 {
-            let current_height = query.latest_block_height().unwrap_or_default();
-            let new_block_height = current_height + 1u32.into();
-
-            let block = PartialFuelBlock::new(
-                PartialBlockHeader {
-                    consensus: ConsensusHeader {
-                        height: new_block_height,
-                        time: block_time(idx),
-                        prev_root: Default::default(),
-                        generated: Default::default(),
-                    },
-                    application: ApplicationHeader {
-                        da_height: Default::default(),
-                        generated: Default::default(),
-                    },
-                },
-                vec![],
-            );
-
-            // TODO: Instead of using raw `Executor` here, we need to use `CM` - Consensus Module.
-            //  It will guarantee that the block is entirely valid and all information is stored.
-            //  For that, we need to manually trigger block production and reset/ignore timers
-            //  inside CM for `blocks_to_produce` blocks. Also in this case `CM` will notify
-            //  `TxPool` about a new block.
-            let (ExecutionResult { block, .. }, mut db_transaction) = executor
-                .execute_with_no_commit(ExecutionBlock::Production(block))?
-                .into();
-            seal_block(&config.consensus_key, &block, db_transaction.as_mut())?;
-            db_transaction.commit()?;
-        }
         let block_times = get_time_closure(&latest_block, time, blocks_to_produce.0)?;
         consensus_module.manual_produce_block(block_times).await?;
 

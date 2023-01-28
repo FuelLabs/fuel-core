@@ -2,10 +2,9 @@ use super::ports::ExecutorPort;
 use crate::{
     fuel_core_graphql_api::ports::{
         BlockProducerPort,
-        DatabasePort,
-        TxPoolPort,
         ConsensusModulePort,
         DatabasePort,
+        TxPoolPort,
     },
     graphql_api::Config,
     schema::{
@@ -80,13 +79,6 @@ pub type BlockProducer = Box<dyn BlockProducerPort>;
 //  use only `Database` to receive all information about transactions.
 pub type TxPool = Box<dyn TxPoolPort>;
 pub type ConsensusModule = Box<dyn ConsensusModulePort>;
-// TODO: When the port of BlockProducer will exist we need to replace it with
-//  `Box<dyn BlockProducerPort>
-pub type BlockProducer = crate::service::adapters::BlockProducerAdapter;
-// TODO: When the port of TxPool will exist we need to replace it with
-//  `Box<dyn TxPoolPort>. In the future GraphQL should not be aware of `TxPool`. It should
-//  use only `Database` to receive all information about
-pub type TxPool = crate::service::sub_services::TxPoolService;
 
 #[derive(Clone)]
 pub struct SharedState {
