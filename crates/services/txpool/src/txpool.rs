@@ -15,10 +15,12 @@ use fuel_core_types::{
     blockchain::SealedBlock,
     fuel_tx::{
         Chargeable,
-        CheckedTransaction,
-        IntoChecked,
         Transaction,
         UniqueIdentifier,
+    },
+    fuel_vm::checked_transaction::{
+        CheckedTransaction,
+        IntoChecked,
     },
     services::txpool::{
         ArcPoolTx,
@@ -66,6 +68,7 @@ where
         &self.by_dependency
     }
 
+    #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id()), ret, err)]
     // this is atomic operation. Return removed(pushed out/replaced) transactions
     fn insert_inner(
         &mut self,
@@ -87,6 +90,7 @@ where
                 .into_checked(
                     current_height.into(),
                     &self.config.chain_config.transaction_parameters,
+                    &self.config.chain_config.gas_costs,
                 )?
                 .into()
         } else {
@@ -213,7 +217,7 @@ where
         Vec::new()
     }
 
-    /// Removes transaction from `TxPool` with assumption that it is committed into teh blockchain.
+    /// Removes transaction from `TxPool` with assumption that it is committed into the blockchain.
     // TODO: Don't remove recursively dependent transactions on block commit.
     //  The same logic should be fixed in the `select_transactions`.
     //  This method is used during `select_transactions`, so we need to handle the case
@@ -240,6 +244,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(level = "info", skip_all)]
     /// Import a set of transactions from network gossip or GraphQL endpoints.
     pub fn insert(
         &mut self,
@@ -325,7 +330,7 @@ where
     pub fn block_update(
         &mut self,
         tx_status_sender: &TxStatusChange,
-        block: SealedBlock,
+        block: &SealedBlock,
         // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
         for tx in block.entity.transactions() {

@@ -14,12 +14,12 @@ keywords = [
 license = "BUSL-1.1"
 name = "fuel-core-types"
 repository = "https://github.com/FuelLabs/fuel-core"
-version = "0.15.1"
+version = "0.16.1"
 
 [dependencies]
 anyhow = "1.0"
 derive_more = { version = "0.99" }
-fuel-vm-private = { version = "0.24", package = "fuel-vm" }
+fuel-vm-private = { version = "0.25", package = "fuel-vm" }
 secrecy = "0.8"
 serde = { version = "1.0", features = ["derive"], optional = true }
 tai64 = { version = "4.0", features = ["serde"] }

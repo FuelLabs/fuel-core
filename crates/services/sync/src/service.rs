@@ -49,9 +49,11 @@ where
     C: ports::ConsensusPort + Send + Sync + 'static,
 {
     let height_stream = p2p.height_stream();
-    let state = State::new(*current_fuel_block_height, None);
+    let committed_height_stream = executor.committed_height_stream();
+    let state = State::new(Some(current_fuel_block_height.into()), None);
     Ok(ServiceRunner::new(SyncTask::new(
         height_stream,
+        committed_height_stream,
         state,
         params,
         p2p,
@@ -82,6 +84,7 @@ where
 {
     fn new(
         height_stream: BoxStream<BlockHeight>,
+        committed_height_stream: BoxStream<BlockHeight>,
         state: State,
         params: Config,
         p2p: P,
@@ -93,7 +96,12 @@ where
         let p2p = Arc::new(p2p);
         let executor = Arc::new(executor);
         let consensus = Arc::new(consensus);
-        let sync_heights = SyncHeights::new(height_stream, state.clone(), notify.clone());
+        let sync_heights = SyncHeights::new(
+            height_stream,
+            committed_height_stream,
+            state.clone(),
+            notify.clone(),
+        );
         let import = Import::new(state, notify, params, p2p, executor, consensus);
         let import_task_handle = ServiceRunner::new(ImportTask(import));
         Ok(Self {
@@ -110,6 +118,7 @@ where
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 {
+    #[tracing::instrument(level = "debug", skip_all, err, ret)]
     async fn run(
         &mut self,
         _: &mut fuel_core_services::StateWatcher,
@@ -158,6 +167,7 @@ where
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 {
+    #[tracing::instrument(level = "debug", skip_all, err, ret)]
     async fn run(
         &mut self,
         watcher: &mut fuel_core_services::StateWatcher,
@@ -193,6 +203,7 @@ where
     C: ConsensusPort + Send + Sync + 'static,
 {
     fn drop(&mut self) {
+        tracing::info!("Sync task shutting down");
         self.import_task_handle.stop();
     }
 }

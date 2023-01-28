@@ -147,7 +147,7 @@ pub struct NotInitialized;
 
 impl Config<NotInitialized> {
     /// Inits the `P2PConfig` with some lazily loaded data.
-    pub fn init(self, mut genesis: Genesis) -> anyhow::Result<Config<Initialized>> {
+    pub fn init(self, genesis: Genesis) -> anyhow::Result<Config<Initialized>> {
         use fuel_core_chain_config::GenesisCommitment;
 
         Ok(Config {
@@ -206,7 +206,7 @@ impl Config<NotInitialized> {
             max_peers_connected: 50,
             max_connections_per_peer: 3,
             allow_private_addresses: true,
-            random_walk: Some(Duration::from_secs(5)),
+            random_walk: Some(Duration::from_millis(500)),
             connection_idle_timeout: Some(Duration::from_secs(120)),
             reserved_nodes: vec![],
             reserved_nodes_only_mode: false,

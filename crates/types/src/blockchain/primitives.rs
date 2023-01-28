@@ -76,6 +76,12 @@ impl BlockId {
     }
 }
 
+impl AsRef<[u8]> for BlockId {
+    fn as_ref(&self) -> &[u8] {
+        self.as_slice()
+    }
+}
+
 /// Block height
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(
@@ -222,3 +228,15 @@ pub struct SecretKeyWrapper(SecretKey);
 
 impl CloneableSecret for SecretKeyWrapper {}
 impl DebugSecret for SecretKeyWrapper {}
+
+impl From<BlockId> for [u8; 32] {
+    fn from(id: BlockId) -> Self {
+        id.0.into()
+    }
+}
+
+impl From<[u8; 32]> for BlockId {
+    fn from(bytes: [u8; 32]) -> Self {
+        Self(bytes.into())
+    }
+}

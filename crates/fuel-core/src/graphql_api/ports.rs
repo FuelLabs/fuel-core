@@ -52,6 +52,7 @@ use fuel_core_types::{
             TxInfo,
         },
     },
+    tai64::Tai64,
 };
 use std::sync::Arc;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
@@ -74,7 +75,7 @@ pub trait DatabaseBlocks:
     StorageInspect<FuelBlocks, Error = StorageError>
     + StorageInspect<SealedBlockConsensus, Error = StorageError>
 {
-    fn block_id(&self, height: BlockHeight) -> StorageResult<BlockId>;
+    fn block_id(&self, height: &BlockHeight) -> StorageResult<BlockId>;
 
     fn blocks_ids(
         &self,
@@ -185,3 +186,11 @@ pub trait ExecuteWithoutCommit<Database> {
 }
 
 pub trait ExecutorPort<Database>: Send + Sync + ExecuteWithoutCommit<Database> {}
+
+#[async_trait::async_trait]
+pub trait ConsensusModulePort: Send + Sync {
+    async fn manual_produce_block(
+        &self,
+        block_times: Vec<Option<Tai64>>,
+    ) -> anyhow::Result<()>;
+}

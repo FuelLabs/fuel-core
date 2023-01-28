@@ -1,34 +1,55 @@
-use crate::service::adapters::{
-    BlockImportAdapter,
-    P2PAdapter,
+use crate::{
+    database::Database,
+    service::adapters::{
+        BlockImporterAdapter,
+        P2PAdapter,
+    },
 };
 use fuel_core_services::stream::BoxStream;
-use fuel_core_txpool::ports::BlockImport;
+use fuel_core_storage::{
+    tables::{
+        Coins,
+        ContractsRawCode,
+        Messages,
+    },
+    Result as StorageResult,
+    StorageAsRef,
+};
+use fuel_core_txpool::ports::BlockImporter;
 use fuel_core_types::{
-    blockchain::SealedBlock,
-    fuel_tx::Transaction,
-    services::p2p::{
-        GossipsubMessageAcceptance,
-        TransactionGossipData,
+    blockchain::primitives::BlockHeight,
+    entities::{
+        coin::CompressedCoin,
+        message::Message,
+    },
+    fuel_tx::{
+        Transaction,
+        UtxoId,
+    },
+    fuel_types::{
+        ContractId,
+        MessageId,
+    },
+    services::{
+        block_importer::ImportResult,
+        p2p::{
+            GossipsubMessageAcceptance,
+            GossipsubMessageInfo,
+            TransactionGossipData,
+        },
     },
 };
 use std::sync::Arc;
-use tokio::sync::broadcast::Sender;
 
-impl BlockImportAdapter {
-    pub fn new(tx: Sender<SealedBlock>) -> Self {
-        Self { tx }
-    }
-}
-
-impl BlockImport for BlockImportAdapter {
-    fn block_events(&self) -> BoxStream<SealedBlock> {
+impl BlockImporter for BlockImporterAdapter {
+    fn block_events(&self) -> BoxStream<Arc<ImportResult>> {
         use tokio_stream::{
             wrappers::BroadcastStream,
             StreamExt,
         };
         Box::pin(
-            BroadcastStream::new(self.tx.subscribe()).filter_map(|result| result.ok()),
+            BroadcastStream::new(self.block_importer.subscribe())
+                .filter_map(|result| result.ok()),
         )
     }
 }
@@ -54,11 +75,11 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
 
     fn notify_gossip_transaction_validity(
         &self,
-        message: &Self::GossipedTransaction,
+        message_info: GossipsubMessageInfo,
         validity: GossipsubMessageAcceptance,
     ) -> anyhow::Result<()> {
         self.service
-            .notify_gossip_transaction_validity(message, validity)
+            .notify_gossip_transaction_validity(message_info, validity)
     }
 }
 
@@ -79,9 +100,31 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
 
     fn notify_gossip_transaction_validity(
         &self,
-        _message: &Self::GossipedTransaction,
+        _message_info: GossipsubMessageInfo,
         _validity: GossipsubMessageAcceptance,
     ) -> anyhow::Result<()> {
         Ok(())
+    }
+}
+
+impl fuel_core_txpool::ports::TxPoolDb for Database {
+    fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>> {
+        self.storage::<Coins>()
+            .get(utxo_id)
+            .map(|t| t.map(|t| t.as_ref().clone()))
+    }
+
+    fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool> {
+        self.storage::<ContractsRawCode>().contains_key(contract_id)
+    }
+
+    fn message(&self, message_id: &MessageId) -> StorageResult<Option<Message>> {
+        self.storage::<Messages>()
+            .get(message_id)
+            .map(|t| t.map(|t| t.as_ref().clone()))
+    }
+
+    fn current_block_height(&self) -> StorageResult<BlockHeight> {
+        self.latest_height()
     }
 }

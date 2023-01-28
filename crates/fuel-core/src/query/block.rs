@@ -36,7 +36,7 @@ impl BlockQueryContext<'_> {
         Ok(block)
     }
 
-    pub fn block_id(&self, height: BlockHeight) -> StorageResult<BlockId> {
+    pub fn block_id(&self, height: &BlockHeight) -> StorageResult<BlockId> {
         self.0.block_id(height)
     }
 

@@ -4,6 +4,7 @@ use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::*,
     fuel_vm::{
+        checked_transaction::builder::TransactionBuilderExt,
         consts::*,
         interpreter::diff,
         *,
@@ -376,7 +377,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             .gas_price(gas_price)
             .gas_limit(gas_limit)
             .maturity(maturity)
-            .finalize_checked(height, &p);
+            .finalize_checked(height, &p, &Default::default());
 
         let instruction = Instruction::from(instruction);
 

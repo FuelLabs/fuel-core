@@ -95,6 +95,8 @@ jobs:
         include:
           - command: clippy
             args: --all-targets --all-features
+          - command: check
+            args: --all-targets
           - command: make
             args: check --locked
           - command: test
@@ -102,7 +104,7 @@ jobs:
           - command: test
             args: --no-default-features --workspace
           - command: test
-            args: --manifest-path version-compatibility/Cargo.toml --workspace  
+            args: --manifest-path version-compatibility/Cargo.toml --workspace
     # disallow any job that takes longer than 45 minutes
     timeout-minutes: 45
     continue-on-error: ${{ matrix.skip-error || false }}
@@ -116,10 +118,10 @@ jobs:
       - name: Install Cargo Make
         uses: davidB/rust-cargo-make@v1
         with:
-          version: "0.36.0"      
+          version: "0.36.0"
       - name: Install Protoc
         uses: arduino/setup-protoc@v1.1.2
-        with:          
+        with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: Swatinem/rust-cache@v2
         with:
@@ -143,10 +145,67 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
           RUSTFLAGS: -D warnings
 
-  publish-crates:
+  pre-publish-verifications:
     # Only do this job if publishing a release
     needs:
       - cargo-verifications
+    if: github.event_name == 'release' && github.event.action == 'published'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Verify tag version
+        run: |
+          # TODO: Automate running `verify_tag` only for "publish = true" crates
+          curl -sSLf "https://github.com/TomWright/dasel/releases/download/v1.24.3/dasel_linux_amd64" -L -o dasel && chmod +x dasel
+          mv ./dasel /usr/local/bin/dasel
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} bin/fuel-core/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} bin/fuel-core-client/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} bin/fuel-core-keygen/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/client/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/chain-config/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/database/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/fuel-core/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/types/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/storage/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/metrics/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/executor/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/importer/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/producer/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/p2p/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/sync/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/txpool/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/relayer/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/consensus_module/bft/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/consensus_module/poa/Cargo.toml
+
+      - name: Verify helm chart version
+        run: |
+          ./.github/workflows/scripts/verify_chart_version.sh
+
+  publish-crates-check:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Publish crate check
+        uses: katyo/publish-crates@v2
+        with:
+          dry-run: true
+
+  publish-crates:
+    # Only do this job if publishing a release
+    needs:
+      - pre-publish-verifications
+      - publish-crates-check
     if: github.event_name == 'release' && github.event.action == 'published'
     runs-on: ubuntu-latest
 
@@ -165,35 +224,8 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify tag version
-        run: |
-          # TODO: Automate running `verify_tag` only for "publish = true" crates
-          curl -sSLf "https://github.com/TomWright/dasel/releases/download/v1.24.3/dasel_linux_amd64" -L -o dasel && chmod +x dasel
-          mv ./dasel /usr/local/bin/dasel
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} bin/fuel-core-keygen/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/fuel-client/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/fuel-core/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/types/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/storage/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/metrics/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/executor/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/importer/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/producer/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/chain-config/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/p2p/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/sync/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/txpool/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/relayer/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/consensus_module/bft/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/consensus_module/poa/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/fuel-core-interfaces/Cargo.toml
-
-      - name: Verify helm chart version
-        run: |
-          ./.github/workflows/scripts/verify_chart_version.sh
-
       - name: Publish crate
-        uses: katyo/publish-crates@v1
+        uses: katyo/publish-crates@v2
         with:
           publish-delay: 60000
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
@@ -275,8 +307,7 @@ jobs:
     runs-on: ${{ matrix.job.os }}
     # Only do this job if publishing a release
     needs:
-      - lint-toml-files
-      - cargo-verifications
+      - pre-publish-verifications
     if: github.event_name == 'release' && github.event.action == 'published'
     continue-on-error: true
     strategy:
@@ -343,6 +374,7 @@ jobs:
       - name: Build fuel-core
         run: |
           cross build --profile=release --target ${{ matrix.job.target }} --features "production" -p fuel-core-bin
+          cross build --profile=release --target ${{ matrix.job.target }} -p fuel-core-keygen
 
       - name: Strip release binary linux x86_64
         if: matrix.job.platform == 'linux'
@@ -403,7 +435,7 @@ jobs:
           notify_when: 'failure'
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
-    
+
   # Deploy Fuel Core Ephemeral Developer Environment
   deploy-eph-env:
     if:  startsWith(github.head_ref, 'preview/')
@@ -431,7 +463,7 @@ jobs:
           CONFIG: 'fuel-dev1'
           ENV: 'fueldevsway.env'
           DELETE_INFRA: true
-  
+
   # Deploy Latest Fuel-Core Release
   deploy:
     if: github.ref == 'refs/heads/master'

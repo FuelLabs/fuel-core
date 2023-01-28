@@ -1,5 +1,5 @@
 use crate::{
-    database::transactional::DatabaseTransaction,
+    database::transaction::DatabaseTransaction,
     state::{
         in_memory::memory_store::MemoryStore,
         DataSource,
@@ -12,34 +12,19 @@ use fuel_core_chain_config::{
     ContractConfig,
     MessageConfig,
 };
-use fuel_core_executor::refs::ContractStorageTrait;
-use fuel_core_poa::ports::BlockDb;
-use fuel_core_producer::ports::BlockProducerDatabase;
 use fuel_core_storage::{
-    not_found,
-    tables::{
-        FuelBlocks,
-        SealedBlockConsensus,
+    transactional::{
+        StorageTransaction,
+        Transactional,
     },
-    Error as StorageError,
     Result as StorageResult,
-    StorageAsMut,
-    StorageAsRef,
 };
-use fuel_core_types::blockchain::{
-    block::CompressedBlock,
-    consensus::Consensus,
-    primitives::{
-        BlockHeight,
-        BlockId,
-    },
-};
+use fuel_core_types::blockchain::primitives::BlockHeight;
 use serde::{
     de::DeserializeOwned,
     Serialize,
 };
 use std::{
-    borrow::Cow,
     fmt::{
         self,
         Debug,
@@ -59,23 +44,6 @@ type DatabaseResult<T> = Result<T>;
 
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
-use fuel_core_storage::tables::{
-    Coins,
-    ContractsRawCode,
-    Messages,
-};
-use fuel_core_txpool::ports::TxPoolDb;
-use fuel_core_types::{
-    entities::{
-        coin::CompressedCoin,
-        message::Message,
-    },
-    fuel_tx::UtxoId,
-    fuel_types::{
-        ContractId,
-        MessageId,
-    },
-};
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 #[cfg(feature = "rocksdb")]
@@ -88,8 +56,6 @@ mod code_root;
 mod coin;
 mod contracts;
 mod message;
-#[cfg(feature = "p2p")]
-mod p2p;
 mod receipts;
 #[cfg(feature = "relayer")]
 mod relayer;
@@ -98,12 +64,12 @@ mod state;
 
 pub mod balances;
 pub mod metadata;
-// TODO: Rename in a separate PR into `transaction`
-pub mod transactional;
+pub mod storage;
+pub mod transaction;
 pub mod transactions;
 pub mod vm_database;
 
-/// Database tables column ids.
+/// Database tables column ids to the corresponding [`fuel_core_storage::Mappable`] table.
 #[repr(u32)]
 #[derive(
     Copy, Clone, Debug, strum_macros::EnumCount, PartialEq, Eq, enum_iterator::Sequence,
@@ -135,14 +101,18 @@ pub enum Column {
     Receipts = 11,
     /// See [`FuelBlocks`](fuel_core_storage::tables::FuelBlocks)
     FuelBlocks = 12,
-    /// Maps fuel block height to fuel block id
-    FuelBlockIds = 13,
+    /// See [`FuelBlockSecondaryKeyBlockHeights`](storage::FuelBlockSecondaryKeyBlockHeights)
+    FuelBlockSecondaryKeyBlockHeights = 13,
     /// See [`Messages`](fuel_core_storage::tables::Messages)
     Messages = 14,
     /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
     OwnedMessageIds = 15,
-    /// The column that stores the consensus metadata associated with a finalized fuel block
+    /// See [`SealedBlockConsensus`](fuel_core_storage::tables::SealedBlockConsensus)
     FuelBlockConsensus = 16,
+    /// See [`FuelBlockMerkleData`](storage::FuelBlockMerkleData)
+    FuelBlockMerkleData = 17,
+    /// See [`FuelBlockMerkleMetadata`](storage::FuelBlockMerkleMetadata)
+    FuelBlockMerkleMetadata = 18,
 }
 
 #[derive(Clone, Debug)]
@@ -219,11 +189,11 @@ impl Database {
         let result = self.data.put(
             key.as_ref(),
             column,
-            bincode::serialize(&value).map_err(|_| DatabaseError::Codec)?,
+            postcard::to_stdvec(&value).map_err(|_| DatabaseError::Codec)?,
         )?;
         if let Some(previous) = result {
             Ok(Some(
-                bincode::deserialize(&previous).map_err(|_| DatabaseError::Codec)?,
+                postcard::from_bytes(&previous).map_err(|_| DatabaseError::Codec)?,
             ))
         } else {
             Ok(None)
@@ -237,7 +207,7 @@ impl Database {
     ) -> DatabaseResult<Option<V>> {
         self.data
             .delete(key, column)?
-            .map(|val| bincode::deserialize(&val).map_err(|_| DatabaseError::Codec))
+            .map(|val| postcard::from_bytes(&val).map_err(|_| DatabaseError::Codec))
             .transpose()
     }
 
@@ -248,7 +218,7 @@ impl Database {
     ) -> DatabaseResult<Option<V>> {
         self.data
             .get(key, column)?
-            .map(|val| bincode::deserialize(&val).map_err(|_| DatabaseError::Codec))
+            .map(|val| postcard::from_bytes(&val).map_err(|_| DatabaseError::Codec))
             .transpose()
     }
 
@@ -275,7 +245,7 @@ impl Database {
                 val.and_then(|(key, value)| {
                     let key = K::from(key);
                     let value: V =
-                        bincode::deserialize(&value).map_err(|_| DatabaseError::Codec)?;
+                        postcard::from_bytes(&value).map_err(|_| DatabaseError::Codec)?;
                     Ok((key, value))
                 })
             })
@@ -286,15 +256,16 @@ impl Database {
     }
 }
 
+impl Transactional<Database> for Database {
+    fn transaction(&self) -> StorageTransaction<Database> {
+        StorageTransaction::new(self.transaction())
+    }
+}
+
 impl AsRef<Database> for Database {
     fn as_ref(&self) -> &Database {
         self
     }
-}
-
-/// Implemented to satisfy: `GenesisCommitment for ContractRef<&'a mut Database>`
-impl ContractStorageTrait for Database {
-    type InnerError = StorageError;
 }
 
 /// Construct an ephemeral database
@@ -328,65 +299,6 @@ impl Default for Database {
     }
 }
 
-impl BlockDb for Database {
-    fn block_height(&self) -> anyhow::Result<BlockHeight> {
-        Ok(self.latest_height()?.unwrap_or_default())
-    }
-
-    fn seal_block(
-        &mut self,
-        block_id: BlockId,
-        consensus: Consensus,
-    ) -> anyhow::Result<()> {
-        self.storage::<SealedBlockConsensus>()
-            .insert(&block_id, &consensus)
-            .map(|_| ())
-            .map_err(Into::into)
-    }
-}
-
-impl TxPoolDb for Database {
-    fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>> {
-        self.storage::<Coins>()
-            .get(utxo_id)
-            .map(|t| t.map(|t| t.as_ref().clone()))
-    }
-
-    fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool> {
-        self.storage::<ContractsRawCode>().contains_key(contract_id)
-    }
-
-    fn message(&self, message_id: &MessageId) -> StorageResult<Option<Message>> {
-        self.storage::<Messages>()
-            .get(message_id)
-            .map(|t| t.map(|t| t.as_ref().clone()))
-    }
-
-    fn current_block_height(&self) -> StorageResult<BlockHeight> {
-        self.latest_height()
-            .map(|h| h.unwrap_or_default())
-            .map_err(Into::into)
-    }
-}
-
-impl BlockProducerDatabase for Database {
-    fn get_block(
-        &self,
-        fuel_height: BlockHeight,
-    ) -> StorageResult<Option<Cow<CompressedBlock>>> {
-        let id = self
-            .get_block_id(fuel_height)?
-            .ok_or(not_found!("BlockId"))?;
-        self.storage::<FuelBlocks>().get(&id).map_err(Into::into)
-    }
-
-    fn current_block_height(&self) -> StorageResult<BlockHeight> {
-        self.latest_height()
-            .map(|h| h.unwrap_or_default())
-            .map_err(Into::into)
-    }
-}
-
 /// Implement `ChainConfigDb` so that `Database` can be passed to
 /// `StateConfig's` `generate_state_config()` method
 impl ChainConfigDb for Database {
@@ -402,7 +314,7 @@ impl ChainConfigDb for Database {
         Self::get_message_config(self).map_err(Into::into)
     }
 
-    fn get_block_height(&self) -> StorageResult<Option<BlockHeight>> {
-        Self::latest_height(self).map_err(Into::into)
+    fn get_block_height(&self) -> StorageResult<BlockHeight> {
+        Self::latest_height(self)
     }
 }

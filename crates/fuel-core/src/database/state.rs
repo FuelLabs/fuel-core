@@ -3,14 +3,12 @@ use crate::{
         Column,
         Database,
     },
-    state::{
-        IterDirection,
-        MultiKey,
-    },
+    state::IterDirection,
 };
 use fuel_core_storage::{
     tables::ContractsState,
     Error as StorageError,
+    Mappable,
     MerkleRoot,
     MerkleRootStorage,
     StorageInspect,
@@ -31,15 +29,16 @@ impl StorageInspect<ContractsState> for Database {
 
     fn get(
         &self,
-        key: &(&ContractId, &Bytes32),
-    ) -> Result<Option<Cow<Bytes32>>, Self::Error> {
-        let key = MultiKey::new(key);
+        key: &<ContractsState as Mappable>::Key,
+    ) -> Result<Option<Cow<<ContractsState as Mappable>::OwnedValue>>, Self::Error> {
         self.get(key.as_ref(), Column::ContractsState)
             .map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &(&ContractId, &Bytes32)) -> Result<bool, Self::Error> {
-        let key = MultiKey::new(key);
+    fn contains_key(
+        &self,
+        key: &<ContractsState as Mappable>::Key,
+    ) -> Result<bool, Self::Error> {
         self.exists(key.as_ref(), Column::ContractsState)
             .map_err(Into::into)
     }
@@ -48,25 +47,23 @@ impl StorageInspect<ContractsState> for Database {
 impl StorageMutate<ContractsState> for Database {
     fn insert(
         &mut self,
-        key: &(&ContractId, &Bytes32),
-        value: &Bytes32,
-    ) -> Result<Option<Bytes32>, Self::Error> {
-        let key = MultiKey::new(key);
+        key: &<ContractsState as Mappable>::Key,
+        value: &<ContractsState as Mappable>::Value,
+    ) -> Result<Option<<ContractsState as Mappable>::OwnedValue>, Self::Error> {
         Database::insert(self, key.as_ref(), Column::ContractsState, *value)
             .map_err(Into::into)
     }
 
     fn remove(
         &mut self,
-        key: &(&ContractId, &Bytes32),
-    ) -> Result<Option<Bytes32>, Self::Error> {
-        let key = MultiKey::new(key);
+        key: &<ContractsState as Mappable>::Key,
+    ) -> Result<Option<<ContractsState as Mappable>::OwnedValue>, Self::Error> {
         Database::remove(self, key.as_ref(), Column::ContractsState).map_err(Into::into)
     }
 }
 
 impl MerkleRootStorage<ContractId, ContractsState> for Database {
-    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Self::Error> {
+    fn root(&self, parent: &ContractId) -> Result<MerkleRoot, Self::Error> {
         let items: Vec<_> = Database::iter_all::<Vec<u8>, Bytes32>(
             self,
             Column::ContractsState,
@@ -91,25 +88,26 @@ impl MerkleRootStorage<ContractId, ContractsState> for Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_storage::StorageAsMut;
+    use fuel_core_storage::{
+        StorageAsMut,
+        StorageAsRef,
+    };
 
     #[test]
     fn get() {
-        let storage_id: (ContractId, Bytes32) =
-            (ContractId::from([1u8; 32]), Bytes32::from([1u8; 32]));
+        let key = (&ContractId::from([1u8; 32]), &Bytes32::from([1u8; 32])).into();
         let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
-        let key = &(&storage_id.0, &storage_id.1);
 
         let database = &mut Database::default();
         database
             .storage::<ContractsState>()
-            .insert(key, &stored_value)
+            .insert(&key, &stored_value)
             .unwrap();
 
         assert_eq!(
             *database
                 .storage::<ContractsState>()
-                .get(key)
+                .get(&key)
                 .unwrap()
                 .unwrap(),
             stored_value
@@ -118,20 +116,18 @@ mod tests {
 
     #[test]
     fn put() {
-        let storage_id: (ContractId, Bytes32) =
-            (ContractId::from([1u8; 32]), Bytes32::from([1u8; 32]));
+        let key = (&ContractId::from([1u8; 32]), &Bytes32::from([1u8; 32])).into();
         let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
-        let key = &(&storage_id.0, &storage_id.1);
 
         let database = &mut Database::default();
         database
             .storage::<ContractsState>()
-            .insert(key, &stored_value)
+            .insert(&key, &stored_value)
             .unwrap();
 
         let returned: Bytes32 = *database
             .storage::<ContractsState>()
-            .get(key)
+            .get(&key)
             .unwrap()
             .unwrap();
         assert_eq!(returned, stored_value);
@@ -139,59 +135,51 @@ mod tests {
 
     #[test]
     fn remove() {
-        let storage_id: (ContractId, Bytes32) =
-            (ContractId::from([1u8; 32]), Bytes32::from([1u8; 32]));
+        let key = (&ContractId::from([1u8; 32]), &Bytes32::from([1u8; 32])).into();
         let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
-        let key = &(&storage_id.0, &storage_id.1);
 
         let database = &mut Database::default();
         database
             .storage::<ContractsState>()
-            .insert(key, &stored_value)
+            .insert(&key, &stored_value)
             .unwrap();
 
-        database.storage::<ContractsState>().remove(key).unwrap();
+        database.storage::<ContractsState>().remove(&key).unwrap();
 
         assert!(!database
             .storage::<ContractsState>()
-            .contains_key(key)
+            .contains_key(&key)
             .unwrap());
     }
 
     #[test]
     fn exists() {
-        let storage_id: (ContractId, Bytes32) =
-            (ContractId::from([1u8; 32]), Bytes32::from([1u8; 32]));
+        let key = (&ContractId::from([1u8; 32]), &Bytes32::from([1u8; 32])).into();
         let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
-        let key = &(&storage_id.0, &storage_id.1);
 
         let database = &mut Database::default();
         database
             .storage::<ContractsState>()
-            .insert(key, &stored_value)
+            .insert(&key, &stored_value)
             .unwrap();
 
         assert!(database
             .storage::<ContractsState>()
-            .contains_key(key)
+            .contains_key(&key)
             .unwrap());
     }
 
     #[test]
     fn root() {
-        let storage_id: (ContractId, Bytes32) =
-            (ContractId::from([1u8; 32]), Bytes32::from([1u8; 32]));
+        let key = (&ContractId::from([1u8; 32]), &Bytes32::from([1u8; 32])).into();
         let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
-        let key = &(&storage_id.0, &storage_id.1);
 
-        let database = &mut Database::default();
+        let mut database = Database::default();
 
-        database
-            .storage::<ContractsState>()
-            .insert(key, &stored_value)
+        StorageMutate::<ContractsState>::insert(&mut database, &key, &stored_value)
             .unwrap();
 
-        let root = database.storage::<ContractsState>().root(&storage_id.0);
+        let root = database.storage::<ContractsState>().root(key.contract_id());
         assert!(root.is_ok())
     }
 }

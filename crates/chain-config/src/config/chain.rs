@@ -5,7 +5,11 @@ use bech32::{
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     fuel_crypto::Hasher,
-    fuel_tx::ConsensusParameters,
+    fuel_tx::{
+        ConsensusParameters,
+        Input,
+        UtxoId,
+    },
     fuel_types::{
         Address,
         AssetId,
@@ -14,6 +18,7 @@ use fuel_core_types::{
     fuel_vm::{
         GasCosts,
         GasCostsValues,
+        SecretKey,
     },
 };
 use itertools::Itertools;
@@ -41,7 +46,9 @@ use crate::{
         coin::CoinConfig,
         state::StateConfig,
     },
+    default_consensus_dev_key,
     genesis::GenesisCommitment,
+    ConsensusConfig,
 };
 
 // Fuel Network human-readable part for bech32 encoding
@@ -56,7 +63,6 @@ pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct ChainConfig {
     pub chain_name: String,
-    pub block_production: BlockProduction,
     pub block_gas_limit: u64,
     #[serde(default)]
     pub initial_state: Option<StateConfig>,
@@ -64,19 +70,20 @@ pub struct ChainConfig {
     #[serde(default)]
     #[serde_as(as = "FromInto<GasCostsValues>")]
     pub gas_costs: GasCosts,
+    pub consensus: ConsensusConfig,
 }
 
 impl Default for ChainConfig {
     fn default() -> Self {
         Self {
             chain_name: "local".into(),
-            block_production: BlockProduction::ProofOfAuthority {
-                trigger: fuel_core_poa::Trigger::Instant,
-            },
             block_gas_limit: ConsensusParameters::DEFAULT.max_gas_per_tx * 10, /* TODO: Pick a sensible default */
             transaction_parameters: ConsensusParameters::DEFAULT,
             initial_state: None,
             gas_costs: GasCosts::default(),
+            consensus: ConsensusConfig::PoA {
+                signing_key: Input::owner(&default_consensus_dev_key().public_key()),
+            },
         }
     }
 }
@@ -95,7 +102,6 @@ impl ChainConfig {
                 let bech32_data = Bytes32::new(*address).to_base32();
                 let bech32_encoding =
                     bech32::encode(FUEL_BECH32_HRP, bech32_data, Bech32m).unwrap();
-
                 tracing::info!(
                     "PrivateKey({:#x}), Address({:#x} [bech32: {}]), Balance({})",
                     secret,
@@ -103,15 +109,7 @@ impl ChainConfig {
                     bech32_encoding,
                     TESTNET_INITIAL_BALANCE
                 );
-                CoinConfig {
-                    tx_id: None,
-                    output_index: None,
-                    block_created: None,
-                    maturity: None,
-                    owner: address,
-                    amount: TESTNET_INITIAL_BALANCE,
-                    asset_id: Default::default(),
-                }
+                Self::initial_coin(secret, TESTNET_INITIAL_BALANCE, None)
             })
             .collect_vec();
 
@@ -122,6 +120,24 @@ impl ChainConfig {
                 ..StateConfig::default()
             }),
             ..Default::default()
+        }
+    }
+
+    pub fn initial_coin(
+        secret: SecretKey,
+        amount: u64,
+        utxo_id: Option<UtxoId>,
+    ) -> CoinConfig {
+        let address = Address::from(*secret.public_key().hash());
+
+        CoinConfig {
+            tx_id: utxo_id.as_ref().map(|u| *u.tx_id()),
+            output_index: utxo_id.as_ref().map(|u| u.output_index() as u64),
+            block_created: None,
+            maturity: None,
+            owner: address,
+            amount,
+            asset_id: Default::default(),
         }
     }
 }
@@ -151,12 +167,27 @@ impl FromStr for ChainConfig {
 }
 
 impl GenesisCommitment for ChainConfig {
-    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
-        // TODO: Hash settlement configuration, consensus block production
+    fn root(&self) -> anyhow::Result<MerkleRoot> {
+        // # Dev-note: If `ChainConfig` got a new field, maybe we need to hash it too.
+        // Avoid using the `..` in the code below. Use `_` instead if you don't need to hash
+        // the field. Explicit fields help to prevent a bug of missing fields in the hash.
+        let ChainConfig {
+            chain_name,
+            block_gas_limit,
+            // Skip the `initial_state` bec
+            initial_state: _,
+            transaction_parameters,
+            gas_costs,
+            consensus,
+        } = self;
+
+        // TODO: Hash settlement configuration when it will be available.
         let config_hash = *Hasher::default()
-            .chain(self.block_gas_limit.to_be_bytes())
-            .chain(self.transaction_parameters.root()?)
-            .chain(self.chain_name.as_bytes())
+            .chain(chain_name.as_bytes())
+            .chain(block_gas_limit.to_be_bytes())
+            .chain(transaction_parameters.root()?)
+            .chain(gas_costs.root()?)
+            .chain(consensus.root()?)
             .finalize();
 
         Ok(config_hash)
@@ -164,22 +195,31 @@ impl GenesisCommitment for ChainConfig {
 }
 
 impl GenesisCommitment for ConsensusParameters {
-    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
+    fn root(&self) -> anyhow::Result<MerkleRoot> {
         // TODO: Define hash algorithm for `ConsensusParameters`
-        let params_hash = Hasher::default()
-            .chain(bincode::serialize(&self)?)
-            .finalize();
+        let bytes = postcard::to_stdvec(&self)?;
+        let params_hash = Hasher::default().chain(bytes).finalize();
 
         Ok(params_hash.into())
     }
 }
 
-/// Block production mode and settings
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum BlockProduction {
-    /// Proof-of-authority modes
-    ProofOfAuthority {
-        #[serde(flatten)]
-        trigger: fuel_core_poa::Trigger,
-    },
+impl GenesisCommitment for GasCosts {
+    fn root(&self) -> anyhow::Result<MerkleRoot> {
+        // TODO: Define hash algorithm for `GasCosts`
+        let bytes = postcard::to_stdvec(&self)?;
+        let hash = Hasher::default().chain(bytes).finalize();
+
+        Ok(hash.into())
+    }
+}
+
+impl GenesisCommitment for ConsensusConfig {
+    fn root(&self) -> anyhow::Result<MerkleRoot> {
+        // TODO: Define hash algorithm for `ConsensusConfig`
+        let bytes = postcard::to_stdvec(&self)?;
+        let hash = Hasher::default().chain(bytes).finalize();
+
+        Ok(hash.into())
+    }
 }

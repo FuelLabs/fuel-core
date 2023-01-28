@@ -76,7 +76,29 @@ $ ./target/debug/fuel-core run --db-type in-memory
 Jul 12 23:28:47.238  INFO fuel_core: Binding GraphQL provider to 127.0.0.1:4000
 ```
 
+To disable block production on your local node, set `--poa-instant=false`
+
+#### Example
+
+```console
+$ ./target/debug/fuel-core run --poa-instant=false
+2023-01-23T02:25:18.787401Z  INFO fuel_core::cli::run: 173: Block production disabled.
+```
+
 #### Troubleshooting
+
+##### Publishing
+
+We use [`publish-crates`](https://github.com/katyo/publish-crates) action for automatic publishing of all crates.
+
+If you have problems with publishing, you can troubleshoot it locally with [`act`](https://github.com/nektos/act).
+
+```shell
+act release -s GITHUB_TOKEN=<YOUR_GITHUB_TOKEN> -j publish-crates-check --container-architecture linux/amd64 --reuse
+```
+
+It requires GitHubToken to do request to the GitHub. You can create it 
+with [this](https://docs.github.com/en/enterprise-server@3.4/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) instruction.
 
 ##### Outdated database
 

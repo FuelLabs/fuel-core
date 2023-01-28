@@ -9,7 +9,7 @@ use fuel_core_chain_config::{
     StateConfig,
 };
 use fuel_core_executor::refs::ContractRef;
-use fuel_core_poa::ports::BlockDb;
+use fuel_core_importer::Importer;
 use fuel_core_storage::{
     tables::{
         Coins,
@@ -21,7 +21,7 @@ use fuel_core_storage::{
         FuelBlocks,
         Messages,
     },
-    transactional::Transaction,
+    transactional::Transactional,
     MerkleRoot,
     StorageAsMut,
 };
@@ -38,6 +38,7 @@ use fuel_core_types::{
             PartialBlockHeader,
         },
         primitives::Empty,
+        SealedBlock,
     },
     entities::{
         coin::{
@@ -57,34 +58,38 @@ use fuel_core_types::{
         Bytes32,
         ContractId,
     },
+    services::block_importer::{
+        ImportResult,
+        UncommittedResult as UncommittedImportResult,
+    },
 };
 use itertools::Itertools;
 
 /// Loads state from the chain config into database
-pub(crate) fn initialize_state(
+pub fn maybe_initialize_state(
     config: &Config,
     database: &Database,
 ) -> anyhow::Result<()> {
     // check if chain is initialized
     if database.get_chain_name()?.is_none() {
-        // start a db transaction for bulk-writing
-        let mut import_tx = database.transaction();
-        let database = import_tx.as_mut();
-
-        add_genesis_block(config, database)?;
-
-        // Write transaction to db
-        import_tx.commit()?;
+        import_genesis_block(config, database)?;
     }
 
     Ok(())
 }
 
-fn add_genesis_block(config: &Config, database: &mut Database) -> anyhow::Result<()> {
+fn import_genesis_block(
+    config: &Config,
+    original_database: &Database,
+) -> anyhow::Result<()> {
+    // start a db transaction for bulk-writing
+    let mut database_transaction = Transactional::transaction(original_database);
+
+    let database = database_transaction.as_mut();
     // Initialize the chain id and height.
     database.init(&config.chain_conf)?;
 
-    let chain_config_hash = config.chain_conf.clone().root()?.into();
+    let chain_config_hash = config.chain_conf.root()?.into();
     let coins_root = init_coin_state(database, &config.chain_conf.initial_state)?.into();
     let contracts_root =
         init_contracts(database, &config.chain_conf.initial_state)?.into();
@@ -102,6 +107,7 @@ fn add_genesis_block(config: &Config, database: &mut Database) -> anyhow::Result
     let block = Block::new(
         PartialBlockHeader {
             application: ApplicationHeader::<Empty> {
+                // TODO: Set `da_height` based on the chain config.
                 da_height: Default::default(),
                 generated: Empty,
             },
@@ -125,12 +131,30 @@ fn add_genesis_block(config: &Config, database: &mut Database) -> anyhow::Result
         &message_ids,
     );
 
-    let seal = Consensus::Genesis(genesis);
     let block_id = block.id();
     database
         .storage::<FuelBlocks>()
         .insert(&block_id, &block.compress())?;
-    database.seal_block(block_id, seal)
+    let consensus = Consensus::Genesis(genesis);
+    let block = SealedBlock {
+        entity: block,
+        consensus,
+    };
+
+    let importer = Importer::new(
+        config.block_importer.clone(),
+        original_database.clone(),
+        (),
+        (),
+    );
+    importer.commit_result(UncommittedImportResult::new(
+        ImportResult {
+            sealed_block: block,
+            tx_status: vec![],
+        },
+        database_transaction,
+    ))?;
+    Ok(())
 }
 
 fn init_coin_state(
@@ -165,7 +189,7 @@ fn init_coin_state(
                     }),
                 );
 
-                let mut coin = CompressedCoin {
+                let coin = CompressedCoin {
                     owner: coin.owner,
                     amount: coin.amount,
                     asset_id: coin.asset_id,
@@ -261,7 +285,7 @@ fn init_contract_state(
         for (key, value) in contract_state {
             if db
                 .storage::<ContractsState>()
-                .insert(&(contract_id, key), value)?
+                .insert(&(contract_id, key).into(), value)?
                 .is_some()
             {
                 return Err(anyhow!("Contract state should not exist"))
@@ -280,7 +304,7 @@ fn init_da_messages(
     if let Some(state) = &state {
         if let Some(message_state) = &state.messages {
             for msg in message_state {
-                let mut message = Message {
+                let message = Message {
                     sender: msg.sender,
                     recipient: msg.recipient,
                     nonce: msg.nonce,
@@ -317,7 +341,7 @@ fn init_contract_balance(
         for (key, value) in balances {
             if db
                 .storage::<ContractsAssets>()
-                .insert(&(contract_id, key), value)?
+                .insert(&(contract_id, key).into(), value)?
                 .is_some()
             {
                 return Err(anyhow!("Contract balance should not exist"))
@@ -408,7 +432,6 @@ mod tests {
         assert_eq!(
             test_height,
             db.latest_height()
-                .unwrap()
                 .expect("Expected a block height to be set")
         )
     }
@@ -543,7 +566,7 @@ mod tests {
 
         let ret = db
             .storage::<ContractsState>()
-            .get(&(&id, &test_key))
+            .get(&(&id, &test_key).into())
             .unwrap()
             .expect("Expect a state entry to exist with test_key")
             .into_owned();
@@ -572,7 +595,7 @@ mod tests {
 
         let db = &Database::default();
 
-        initialize_state(&config, db).unwrap();
+        maybe_initialize_state(&config, db).unwrap();
 
         let expected_msg: Message = msg.into();
 
@@ -621,7 +644,7 @@ mod tests {
 
         let ret = db
             .storage::<ContractsAssets>()
-            .get(&(&id, &test_asset_id))
+            .get(&(&id, &test_asset_id).into())
             .unwrap()
             .expect("Expected a balance to be present")
             .into_owned();

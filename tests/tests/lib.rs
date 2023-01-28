@@ -16,7 +16,11 @@ mod poa;
 mod relayer;
 mod resource;
 mod snapshot;
+#[cfg(feature = "p2p")]
+mod sync;
 mod trigger_integration;
 mod tx;
 #[cfg(feature = "p2p")]
 mod tx_gossip;
+
+fuel_core_trace::enable_tracing!();

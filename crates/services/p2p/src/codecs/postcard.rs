@@ -10,7 +10,7 @@ use crate::{
         GossipsubMessage,
     },
     request_response::messages::{
-        IntermediateResponse,
+        NetworkResponse,
         OutboundResponse,
         RequestMessage,
         ResponseMessage,
@@ -40,14 +40,14 @@ use serde::{
 use std::io;
 
 #[derive(Debug, Clone)]
-pub struct BincodeCodec {
+pub struct PostcardCodec {
     /// Used for `max_size` parameter when reading Response Message
     /// Necessary in order to avoid DoS attacks
     /// Currently the size mostly depends on the max size of the Block
     max_response_size: usize,
 }
 
-impl BincodeCodec {
+impl PostcardCodec {
     pub fn new(max_block_size: usize) -> Self {
         Self {
             max_response_size: max_block_size,
@@ -60,17 +60,17 @@ impl BincodeCodec {
         &self,
         encoded_data: &'a [u8],
     ) -> Result<R, io::Error> {
-        bincode::deserialize(encoded_data)
+        postcard::from_bytes(encoded_data)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
 
     fn serialize<D: Serialize>(&self, data: &D) -> Result<Vec<u8>, io::Error> {
-        bincode::serialize(&data)
+        postcard::to_stdvec(&data)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
 }
 
-/// Since Bincode does not support async reads or writes out of the box
+/// Since Postcard does not support async reads or writes out of the box
 /// We prefix Request & Response Messages with the length of the data in bytes
 /// We expect the substream to be properly closed when response channel is dropped.
 /// Since the request protocol used here expects a response, the sender considers this
@@ -78,10 +78,10 @@ impl BincodeCodec {
 /// If the substream was not properly closed when dropped, the sender would instead
 /// run into a timeout waiting for the response.
 #[async_trait]
-impl RequestResponseCodec for BincodeCodec {
-    type Protocol = MessageExchangeBincodeProtocol;
+impl RequestResponseCodec for PostcardCodec {
+    type Protocol = MessageExchangePostcardProtocol;
     type Request = RequestMessage;
-    type Response = IntermediateResponse;
+    type Response = NetworkResponse;
 
     async fn read_request<T>(
         &mut self,
@@ -118,7 +118,7 @@ impl RequestResponseCodec for BincodeCodec {
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        match bincode::serialize(&req) {
+        match postcard::to_stdvec(&req) {
             Ok(encoded_data) => {
                 write_length_prefixed(socket, encoded_data).await?;
                 socket.close().await?;
@@ -138,7 +138,7 @@ impl RequestResponseCodec for BincodeCodec {
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        match bincode::serialize(&res) {
+        match postcard::to_stdvec(&res) {
             Ok(encoded_data) => {
                 write_length_prefixed(socket, encoded_data).await?;
                 socket.close().await?;
@@ -150,15 +150,15 @@ impl RequestResponseCodec for BincodeCodec {
     }
 }
 
-impl GossipsubCodec for BincodeCodec {
+impl GossipsubCodec for PostcardCodec {
     type RequestMessage = GossipsubBroadcastRequest;
     type ResponseMessage = GossipsubMessage;
 
     fn encode(&self, data: Self::RequestMessage) -> Result<Vec<u8>, io::Error> {
         let encoded_data = match data {
-            GossipsubBroadcastRequest::ConsensusVote(vote) => bincode::serialize(&*vote),
-            GossipsubBroadcastRequest::NewBlock(block) => bincode::serialize(&*block),
-            GossipsubBroadcastRequest::NewTx(tx) => bincode::serialize(&*tx),
+            GossipsubBroadcastRequest::ConsensusVote(vote) => postcard::to_stdvec(&*vote),
+            GossipsubBroadcastRequest::NewBlock(block) => postcard::to_stdvec(&*block),
+            GossipsubBroadcastRequest::NewTx(tx) => postcard::to_stdvec(&*tx),
         };
 
         encoded_data.map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
@@ -185,45 +185,106 @@ impl GossipsubCodec for BincodeCodec {
     }
 }
 
-impl RequestResponseConverter for BincodeCodec {
-    type IntermediateResponse = IntermediateResponse;
+impl RequestResponseConverter for PostcardCodec {
+    type NetworkResponse = NetworkResponse;
     type OutboundResponse = OutboundResponse;
     type ResponseMessage = ResponseMessage;
 
     fn convert_to_response(
         &self,
-        inter_msg: &Self::IntermediateResponse,
+        inter_msg: &Self::NetworkResponse,
     ) -> Result<Self::ResponseMessage, io::Error> {
         match inter_msg {
-            IntermediateResponse::ResponseBlock(block_bytes) => Ok(
-                ResponseMessage::ResponseBlock(self.deserialize(block_bytes)?),
-            ),
+            NetworkResponse::Block(block_bytes) => {
+                let response = if let Some(block_bytes) = block_bytes {
+                    Some(self.deserialize(block_bytes)?)
+                } else {
+                    None
+                };
+
+                Ok(ResponseMessage::SealedBlock(response))
+            }
+            NetworkResponse::Header(header_bytes) => {
+                let response = if let Some(header_bytes) = header_bytes {
+                    Some(self.deserialize(header_bytes)?)
+                } else {
+                    None
+                };
+
+                Ok(ResponseMessage::SealedHeader(response))
+            }
+            NetworkResponse::Transactions(tx_bytes) => {
+                let response = if let Some(tx_bytes) = tx_bytes {
+                    Some(self.deserialize(tx_bytes)?)
+                } else {
+                    None
+                };
+
+                Ok(ResponseMessage::Transactions(response))
+            }
         }
     }
 
-    fn convert_to_intermediate(
+    fn convert_to_network_response(
         &self,
         res_msg: &Self::OutboundResponse,
-    ) -> Result<Self::IntermediateResponse, io::Error> {
+    ) -> Result<Self::NetworkResponse, io::Error> {
         match res_msg {
-            OutboundResponse::ResponseBlock(sealed_block) => Ok(
-                IntermediateResponse::ResponseBlock(self.serialize(&**sealed_block)?),
-            ),
+            OutboundResponse::Block(sealed_block) => {
+                let response = if let Some(sealed_block) = sealed_block {
+                    Some(self.serialize(sealed_block.as_ref())?)
+                } else {
+                    None
+                };
+
+                Ok(NetworkResponse::Block(response))
+            }
+            OutboundResponse::SealedHeader(sealed_header) => {
+                let response = if let Some(sealed_header) = sealed_header {
+                    Some(self.serialize(sealed_header.as_ref())?)
+                } else {
+                    None
+                };
+
+                Ok(NetworkResponse::Header(response))
+            }
+            OutboundResponse::Transactions(transactions) => {
+                let response = if let Some(transactions) = transactions {
+                    Some(self.serialize(transactions.as_ref())?)
+                } else {
+                    None
+                };
+
+                Ok(NetworkResponse::Transactions(response))
+            }
         }
     }
 }
 
-impl NetworkCodec for BincodeCodec {
+impl NetworkCodec for PostcardCodec {
     fn get_req_res_protocol(&self) -> <Self as RequestResponseCodec>::Protocol {
-        MessageExchangeBincodeProtocol {}
+        MessageExchangePostcardProtocol {}
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct MessageExchangeBincodeProtocol;
+pub struct MessageExchangePostcardProtocol;
 
-impl ProtocolName for MessageExchangeBincodeProtocol {
+impl ProtocolName for MessageExchangePostcardProtocol {
     fn protocol_name(&self) -> &[u8] {
         REQUEST_RESPONSE_PROTOCOL_ID
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use fuel_core_types::blockchain::primitives::BlockId;
+
+    use super::*;
+
+    #[test]
+    fn test_request_size_fits() {
+        let m = RequestMessage::Transactions(BlockId::default());
+        assert!(postcard::to_stdvec(&m).unwrap().len() <= MAX_REQUEST_SIZE);
     }
 }

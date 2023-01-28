@@ -39,20 +39,19 @@ pub trait PeerToPeerPort {
 }
 
 #[cfg_attr(test, mockall::automock)]
-#[async_trait::async_trait]
 /// Port for communication with the consensus service.
 pub trait ConsensusPort {
     /// Check if the given sealed block header is valid.
-    async fn check_sealed_header(
-        &self,
-        header: &SealedBlockHeader,
-    ) -> anyhow::Result<bool>;
+    fn check_sealed_header(&self, header: &SealedBlockHeader) -> anyhow::Result<bool>;
 }
 
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 /// Port for communication with the block importer.
 pub trait BlockImporterPort {
+    /// Stream of newly committed block heights.
+    fn committed_height_stream(&self) -> BoxStream<BlockHeight>;
+
     /// Execute the given sealed block
     /// and commit it to the database.
     async fn execute_and_commit(&self, block: SealedBlock) -> anyhow::Result<()>;

@@ -1,6 +1,6 @@
 use crate::{
     ports::{
-        BlockImport,
+        BlockImporter,
         PeerToPeer,
         TxPoolDb,
     },
@@ -17,15 +17,18 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_types::{
-    blockchain::SealedBlock,
     fuel_tx::{
         Transaction,
         TxId,
+        UniqueIdentifier,
     },
     fuel_types::Bytes32,
     services::{
+        block_importer::ImportResult,
         p2p::{
             GossipData,
+            GossipsubMessageAcceptance,
+            GossipsubMessageInfo,
             TransactionGossipData,
         },
         txpool::{
@@ -60,16 +63,19 @@ impl TxStatusChange {
     }
 
     pub fn send_complete(&self, id: Bytes32) {
+        tracing::info!("Transaction {id} successfully included in a block");
         let _ = self.status_sender.send(TxStatus::Completed);
         self.updated(id);
     }
 
     pub fn send_submitted(&self, id: Bytes32) {
+        tracing::info!("Transaction {id} successfully submitted to the tx pool");
         let _ = self.status_sender.send(TxStatus::Submitted);
         self.updated(id);
     }
 
     pub fn send_squeezed_out(&self, id: Bytes32, reason: TxPoolError) {
+        tracing::info!("Transaction {id} squeezed out because {reason}");
         let _ = self.status_sender.send(TxStatus::SqueezedOut {
             reason: reason.clone(),
         });
@@ -99,14 +105,14 @@ impl<P2P, DB> Clone for SharedState<P2P, DB> {
 
 pub struct Task<P2P, DB> {
     gossiped_tx_stream: BoxStream<TransactionGossipData>,
-    committed_block_stream: BoxStream<SealedBlock>,
+    committed_block_stream: BoxStream<Arc<ImportResult>>,
     shared: SharedState<P2P, DB>,
 }
 
 #[async_trait::async_trait]
 impl<P2P, DB> RunnableService for Task<P2P, DB>
 where
-    P2P: Send + Sync,
+    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
     DB: TxPoolDb,
 {
     const NAME: &'static str = "TxPool";
@@ -126,7 +132,7 @@ where
 #[async_trait::async_trait]
 impl<P2P, DB> RunnableTask for Task<P2P, DB>
 where
-    P2P: Send + Sync,
+    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
     DB: TxPoolDb,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
@@ -136,21 +142,42 @@ where
                 should_continue = false;
             }
             new_transaction = self.gossiped_tx_stream.next() => {
-                if let Some(GossipData { data: Some(tx), .. }) = new_transaction {
+                if let Some(GossipData { data: Some(tx), message_id, peer_id }) = new_transaction {
+                    let id = tx.id();
                     let txs = vec!(Arc::new(tx));
-                    self.shared.txpool.lock().insert(
-                        &self.shared.tx_status_sender,
-                        &txs
-                    );
+                    let mut result = tracing::info_span!("Received tx via gossip", %id)
+                        .in_scope(|| {
+                            self.shared.txpool.lock().insert(
+                                &self.shared.tx_status_sender,
+                                &txs
+                            )
+                        });
+
+                    if let Some(acceptance) = match result.pop() {
+                        Some(Ok(_)) => {
+                            Some(GossipsubMessageAcceptance::Accept)
+                        },
+                        Some(Err(_)) => {
+                            Some(GossipsubMessageAcceptance::Reject)
+                        }
+                        _ => None
+                    } {
+                        let message_info = GossipsubMessageInfo {
+                            message_id,
+                            peer_id,
+                        };
+                        let _ = self.shared.p2p.notify_gossip_transaction_validity(message_info, acceptance);
+                    }
+
                     should_continue = true;
                 } else {
                     should_continue = false;
                 }
             }
 
-            block = self.committed_block_stream.next() => {
-                if let Some(block) = block {
-                    self.shared.txpool.lock().block_update(&self.shared.tx_status_sender, block);
+            result = self.committed_block_stream.next() => {
+                if let Some(result) = result {
+                    self.shared.txpool.lock().block_update(&self.shared.tx_status_sender, &result.sealed_block);
                     should_continue = true;
                 } else {
                     should_continue = false;
@@ -222,6 +249,7 @@ where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
     DB: TxPoolDb,
 {
+    #[tracing::instrument(name = "insert_submitted_txn", skip_all)]
     pub fn insert(
         &self,
         txs: Vec<Arc<Transaction>>,
@@ -284,12 +312,11 @@ impl TxUpdate {
 pub fn new_service<P2P, Importer, DB>(
     config: Config,
     db: DB,
-    tx_status_sender: TxStatusChange,
     importer: Importer,
     p2p: P2P,
 ) -> Service<P2P, DB>
 where
-    Importer: BlockImport,
+    Importer: BlockImporter,
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + 'static,
     DB: TxPoolDb + 'static,
 {
@@ -301,7 +328,7 @@ where
         gossiped_tx_stream,
         committed_block_stream,
         shared: SharedState {
-            tx_status_sender,
+            tx_status_sender: TxStatusChange::new(100),
             txpool,
             p2p,
         },

@@ -4,6 +4,8 @@ use crate::{
         BlockProducerPort,
         DatabasePort,
         TxPoolPort,
+        ConsensusModulePort,
+        DatabasePort,
     },
     graphql_api::Config,
     schema::{
@@ -77,6 +79,14 @@ pub type BlockProducer = Box<dyn BlockProducerPort>;
 // In the future GraphQL should not be aware of `TxPool`. It should
 //  use only `Database` to receive all information about transactions.
 pub type TxPool = Box<dyn TxPoolPort>;
+pub type ConsensusModule = Box<dyn ConsensusModulePort>;
+// TODO: When the port of BlockProducer will exist we need to replace it with
+//  `Box<dyn BlockProducerPort>
+pub type BlockProducer = crate::service::adapters::BlockProducerAdapter;
+// TODO: When the port of TxPool will exist we need to replace it with
+//  `Box<dyn TxPoolPort>. In the future GraphQL should not be aware of `TxPool`. It should
+//  use only `Database` to receive all information about
+pub type TxPool = crate::service::sub_services::TxPoolService;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -141,7 +151,7 @@ pub fn new_service(
     schema: CoreSchemaBuilder,
     producer: BlockProducer,
     txpool: TxPool,
-    executor: Executor,
+    consensus_module: ConsensusModule,
 ) -> anyhow::Result<Service> {
     let network_addr = config.addr;
     let schema = schema
@@ -149,7 +159,7 @@ pub fn new_service(
         .data(database)
         .data(producer)
         .data(txpool)
-        .data(executor)
+        .data(consensus_module)
         .extension(Tracing)
         .finish();
 

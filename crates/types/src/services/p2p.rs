@@ -1,13 +1,20 @@
 //! Contains types related to P2P data
 
 use crate::{
-    blockchain::{
-        block::Block,
-        consensus::Consensus,
-    },
+    blockchain::primitives::BlockHeight,
     fuel_tx::Transaction,
 };
 use std::fmt::Debug;
+
+/// Lightweight representation of gossipped data that only includes IDs
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct GossipsubMessageInfo {
+    /// The message id that corresponds to a message payload (typically a unique hash)
+    pub message_id: Vec<u8>,
+    /// The ID of the network peer that sent this message
+    pub peer_id: PeerId,
+}
 
 // TODO: Maybe we can remove most of types from here directly into P2P
 
@@ -31,17 +38,13 @@ pub struct GossipData<T> {
     /// the message should return None.
     pub data: Option<T>,
     /// The ID of the network peer that sent this message
-    pub peer_id: Vec<u8>,
+    pub peer_id: PeerId,
     /// The message id that corresponds to a message payload (typically a unique hash)
     pub message_id: Vec<u8>,
 }
 
-/// Consensus header info from the network
-pub type ConsensusGossipData = GossipData<Consensus>;
 /// Transactions gossiped by peers for inclusion into a block
 pub type TransactionGossipData = GossipData<Transaction>;
-/// Newly produced block notification
-pub type BlockGossipData = GossipData<Block>;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// The source of some network data.
@@ -52,10 +55,6 @@ pub struct SourcePeer<T> {
     pub data: T,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-/// Opaque peer identifier.
-pub struct PeerId(Vec<u8>);
-
 impl<T> GossipData<T> {
     /// Construct a new gossip message
     pub fn new(
@@ -65,7 +64,7 @@ impl<T> GossipData<T> {
     ) -> Self {
         Self {
             data: Some(data),
-            peer_id: peer_id.into(),
+            peer_id: PeerId::from(peer_id.into()),
             message_id: message_id.into(),
         }
     }
@@ -80,6 +79,25 @@ pub trait NetworkData<T>: Debug + Send {
 impl<T: Debug + Send + 'static> NetworkData<T> for GossipData<T> {
     fn take_data(&mut self) -> Option<T> {
         self.data.take()
+    }
+}
+/// Used for relying latest `BlockHeight` info from connected peers
+#[derive(Debug, Clone)]
+pub struct BlockHeightHeartbeatData {
+    /// PeerId as bytes
+    pub peer_id: PeerId,
+    /// Latest BlockHeight received
+    pub block_height: BlockHeight,
+}
+
+/// Opaque peer identifier.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PeerId(Vec<u8>);
+
+impl AsRef<[u8]> for PeerId {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
     }
 }
 
