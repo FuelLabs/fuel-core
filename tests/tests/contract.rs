@@ -31,7 +31,7 @@ async fn test_contract_salt() {
     let TestContext { client, .. } = test_builder.finalize().await;
 
     let contract = client
-        .contract(format!("{:#x}", contract_id).as_str())
+        .contract(format!("{contract_id:#x}").as_str())
         .await
         .unwrap();
 
@@ -56,8 +56,8 @@ async fn test_contract_balance(
 
     let balance = client
         .contract_balance(
-            format!("{:#x}", contract_id).as_str(),
-            Some(format!("{:#x}", asset).as_str()),
+            format!("{contract_id:#x}").as_str(),
+            Some(format!("{asset:#x}").as_str()),
         )
         .await
         .unwrap();
@@ -84,7 +84,7 @@ async fn test_5_contract_balances(
 
     let contract_balances = client
         .contract_balances(
-            format!("{:#x}", contract_id).as_str(),
+            format!("{contract_id:#x}").as_str(),
             PaginationRequest {
                 cursor: None,
                 results: 3,

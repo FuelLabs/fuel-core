@@ -107,7 +107,7 @@ pub struct Nodes {
 pub struct NamedNodes(pub HashMap<String, Node>);
 
 fn map_listener_address(bootstrap_id: &PeerId, addr: &Multiaddr) -> Multiaddr {
-    format!("{}/p2p/{}", addr, bootstrap_id).parse().unwrap()
+    format!("{addr}/p2p/{bootstrap_id}").parse().unwrap()
 }
 
 impl Bootstrap {
@@ -230,7 +230,7 @@ pub async fn make_nodes(
                     let mut node_config = make_config(
                         (!name.is_empty())
                             .then_some(name)
-                            .unwrap_or_else(|| format!("b:{}", i)),
+                            .unwrap_or_else(|| format!("b:{i}")),
                         chain_config.clone(),
                     );
                     if let Some(BootstrapSetup { pub_key, .. }) = boot {
@@ -257,7 +257,7 @@ pub async fn make_nodes(
         let mut node_config = make_config(
             (!name.is_empty())
                 .then_some(name)
-                .unwrap_or_else(|| format!("p:{}", i)),
+                .unwrap_or_else(|| format!("p:{i}")),
             chain_config.clone(),
         );
 
@@ -289,7 +289,7 @@ pub async fn make_nodes(
         let mut node_config = make_config(
             (!name.is_empty())
                 .then_some(name)
-                .unwrap_or_else(|| format!("v:{}", i)),
+                .unwrap_or_else(|| format!("v:{i}")),
             chain_config.clone(),
         );
         node_config.block_production = Trigger::Never;

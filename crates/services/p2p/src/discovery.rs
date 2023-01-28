@@ -469,7 +469,7 @@ mod tests {
                                     .add_address(&peer_id, unroutable_peer_addr.clone());
                             }
                             SwarmEvent::ConnectionClosed { peer_id, .. } => {
-                                panic!("PeerId {:?} disconnected", peer_id);
+                                panic!("PeerId {peer_id:?} disconnected");
                             }
                             _ => {}
                         }

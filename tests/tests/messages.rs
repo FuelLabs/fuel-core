@@ -69,8 +69,7 @@ async fn can_submit_genesis_message() {
     let status = client.submit_and_await_commit(&tx1).await.unwrap();
     assert!(
         matches!(status, TransactionStatus::Success { .. }),
-        "expected success, received {:?}",
-        status
+        "expected success, received {status:?}",
     )
 }
 
@@ -397,7 +396,7 @@ async fn can_get_message_proof() {
             .collect();
 
         // Check we actually go the correct amount of ids back.
-        assert_eq!(message_ids.len(), args.len(), "{:?}", receipts);
+        assert_eq!(message_ids.len(), args.len(), "{receipts:?}");
 
         for message_id in message_ids.clone() {
             // Request the proof.

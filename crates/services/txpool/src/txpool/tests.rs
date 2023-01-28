@@ -402,8 +402,7 @@ async fn overpriced_tx_contract_input_not_inserted() {
             err.downcast_ref::<Error>(),
             Some(Error::NotInsertedContractPricedLower(id)) if id == &contract_id
         ),
-        "wrong err {:?}",
-        err
+        "wrong err {err:?}"
     );
 }
 
@@ -490,8 +489,7 @@ async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
     assert_eq!(
         vec.removed.len(),
         2,
-        "Tx1 and Tx2 should be removed:{:?}",
-        vec
+        "Tx1 and Tx2 should be removed:{vec:?}",
     );
     assert_eq!(vec.removed[0].id(), tx1.id(), "Tx1 id should be removed");
     assert_eq!(vec.removed[1].id(), tx2.id(), "Tx2 id should be removed");
@@ -534,8 +532,7 @@ async fn more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
     assert_eq!(
         squeezed.removed.len(),
         1,
-        "Tx2 should be removed:{:?}",
-        squeezed
+        "Tx2 should be removed:{squeezed:?}"
     );
 }
 

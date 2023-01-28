@@ -168,7 +168,7 @@ pub fn run(c: &mut Criterion) {
 
         run_group_ref(
             &mut call,
-            format!("{}", i),
+            format!("{i}"),
             VmBench::new(Opcode::CALL(0x10, REG_ZERO, 0x11, 0x12))
                 .with_contract_code(code)
                 .with_data(data)
@@ -209,7 +209,7 @@ pub fn run(c: &mut Criterion) {
 
         run_group_ref(
             &mut ldc,
-            format!("{}", i),
+            format!("{i}"),
             VmBench::new(Opcode::LDC(0x10, REG_ZERO, 0x13))
                 .with_contract_code(code)
                 .with_data(data)

@@ -45,7 +45,7 @@ pub enum ResourceQueryError {
 #[cfg(test)]
 impl PartialEq for ResourceQueryError {
     fn eq(&self, other: &Self) -> bool {
-        format!("{:?}", self) == format!("{:?}", other)
+        format!("{self:?}") == format!("{other:?}")
     }
 }
 
