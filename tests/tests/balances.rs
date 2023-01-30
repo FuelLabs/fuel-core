@@ -72,8 +72,8 @@ async fn balance() {
     // run test
     let balance = client
         .balance(
-            format!("{:#x}", owner).as_str(),
-            Some(format!("{:#x}", asset_id).as_str()),
+            format!("{owner:#x}").as_str(),
+            Some(format!("{asset_id:#x}").as_str()),
         )
         .await
         .unwrap();
@@ -82,8 +82,8 @@ async fn balance() {
     // spend some resources and check again
     let resources_per_asset = client
         .resources_to_spend(
-            format!("{:#x}", owner).as_str(),
-            vec![(format!("{:#x}", asset_id).as_str(), 1, None)],
+            format!("{owner:#x}").as_str(),
+            vec![(format!("{asset_id:#x}").as_str(), 1, None)],
             None,
         )
         .await
@@ -135,8 +135,8 @@ async fn balance() {
 
     let balance = client
         .balance(
-            format!("{:#x}", owner).as_str(),
-            Some(format!("{:#x}", asset_id).as_str()),
+            format!("{owner:#x}").as_str(),
+            Some(format!("{asset_id:#x}").as_str()),
         )
         .await
         .unwrap();
@@ -200,7 +200,7 @@ async fn first_5_balances() {
     // run test
     let balances = client
         .balances(
-            format!("{:#x}", owner).as_str(),
+            format!("{owner:#x}").as_str(),
             PaginationRequest {
                 cursor: None,
                 results: 5,

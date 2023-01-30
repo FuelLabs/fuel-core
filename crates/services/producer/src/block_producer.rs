@@ -108,10 +108,8 @@ where
         );
 
         // Store the context string incase we error.
-        let context_string = format!(
-            "Failed to produce block {:?} due to execution failure",
-            block
-        );
+        let context_string =
+            format!("Failed to produce block {block:?} due to execution failure");
         let result = self
             .executor
             .execute_without_commit(ExecutionBlock::Production(block))

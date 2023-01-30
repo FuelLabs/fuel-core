@@ -149,10 +149,10 @@ async fn test_partitions_larger_groups(
         [Some(
             ProducerSetup::new(secret)
                 .with_txs(num_txs)
-                .with_name(format!("{}:producer", pub_key)),
+                .with_name(format!("{pub_key}:producer")),
         )],
         (0..num_validators).into_iter().map(|i| {
-            Some(ValidatorSetup::new(pub_key).with_name(format!("{}:{}", pub_key, i)))
+            Some(ValidatorSetup::new(pub_key).with_name(format!("{pub_key}:{i}")))
         }),
     )
     .await;
@@ -251,9 +251,7 @@ async fn test_multiple_producers_different_keys() {
         }),
         pub_keys.iter().flat_map(|pub_key| {
             (0..num_validators).map(move |i| {
-                Some(
-                    ValidatorSetup::new(*pub_key).with_name(format!("{}:{}", pub_key, i)),
-                )
+                Some(ValidatorSetup::new(*pub_key).with_name(format!("{pub_key}:{i}")))
             })
         }),
     )

@@ -56,7 +56,7 @@ fn basic_script_snapshot() {
         .iter()
         .flat_map(|op| u32::from(*op).to_be_bytes())
         .collect();
-    insta::assert_snapshot!(format!("{:?}", script));
+    insta::assert_snapshot!(format!("{script:?}"));
 }
 
 #[tokio::test]
@@ -216,7 +216,7 @@ async fn receipts() {
         .await
         .expect("transaction should insert");
     // run test
-    let receipts = client.receipts(&format!("{:#x}", id)).await.unwrap();
+    let receipts = client.receipts(&format!("{id:#x}")).await.unwrap();
     assert!(!receipts.is_empty());
 }
 
@@ -233,7 +233,7 @@ async fn get_transaction_by_id() {
     client.submit_and_await_commit(&transaction).await.unwrap();
 
     // run test
-    let transaction_response = client.transaction(&format!("{:#x}", id)).await.unwrap();
+    let transaction_response = client.transaction(&format!("{id:#x}")).await.unwrap();
     assert!(transaction_response.is_some());
     if let Some(transaction_response) = transaction_response {
         assert!(matches!(
@@ -257,7 +257,7 @@ async fn get_transparent_transaction_by_id() {
     assert!(result.is_ok());
 
     let opaque_tx = client
-        .transaction(&format!("{:#x}", id))
+        .transaction(&format!("{id:#x}"))
         .await
         .unwrap()
         .expect("expected some result")
@@ -265,7 +265,7 @@ async fn get_transparent_transaction_by_id() {
 
     // run test
     let transparent_transaction = client
-        .transparent_transaction(&format!("{:#x}", id))
+        .transparent_transaction(&format!("{id:#x}"))
         .await
         .unwrap()
         .expect("expected some value");
@@ -511,7 +511,7 @@ async fn get_owned_transactions() {
         direction: PageDirection::Forward,
     };
     let alice_txs = client
-        .transactions_by_owner(&format!("{:#x}", alice), page_request.clone())
+        .transactions_by_owner(&format!("{alice:#x}"), page_request.clone())
         .await
         .unwrap()
         .results
@@ -520,7 +520,7 @@ async fn get_owned_transactions() {
         .collect_vec();
 
     let bob_txs = client
-        .transactions_by_owner(&format!("{:#x}", bob), page_request.clone())
+        .transactions_by_owner(&format!("{bob:#x}"), page_request.clone())
         .await
         .unwrap()
         .results
@@ -529,7 +529,7 @@ async fn get_owned_transactions() {
         .collect_vec();
 
     let charlie_txs = client
-        .transactions_by_owner(&format!("{:#x}", charlie), page_request.clone())
+        .transactions_by_owner(&format!("{charlie:#x}"), page_request.clone())
         .await
         .unwrap()
         .results

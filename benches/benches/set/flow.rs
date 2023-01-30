@@ -75,7 +75,7 @@ pub fn run(c: &mut Criterion) {
         retd_contract.throughput(Throughput::Bytes(*i as u64));
         run_group_ref(
             &mut retd_contract,
-            format!("{}", i),
+            format!("{i}"),
             VmBench::contract(rng, Opcode::RETD(REG_ONE, 0x10))
                 .unwrap()
                 .with_post_call(vec![Opcode::MOVI(0x10, *i)]),
@@ -88,7 +88,7 @@ pub fn run(c: &mut Criterion) {
         retd_script.throughput(Throughput::Bytes(*i as u64));
         run_group_ref(
             &mut retd_script,
-            format!("{}", i),
+            format!("{i}"),
             VmBench::contract(rng, Opcode::RETD(REG_ONE, 0x10))
                 .unwrap()
                 .with_post_call(vec![Opcode::MOVI(0x10, *i)]),
@@ -119,7 +119,7 @@ pub fn run(c: &mut Criterion) {
         logd.throughput(Throughput::Bytes(*i as u64));
         run_group_ref(
             &mut logd,
-            format!("{}", i),
+            format!("{i}"),
             VmBench::new(Opcode::LOGD(0x10, 0x11, REG_ZERO, 0x13))
                 .with_prepare_script(vec![Opcode::MOVI(0x13, *i)]),
         );
