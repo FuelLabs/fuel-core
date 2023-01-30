@@ -169,6 +169,8 @@ spec:
               value: {{ .Values.app.human_logging | quote }}
             - name: RESERVED_NODES
               value: {{ .Values.app.reserved_nodes | quote }}
+            - name: BOOTSTRAP_NODES
+              value: {{ .Values.app.bootstrap_nodes | quote }}
             - name: CONSENSUS_KEY_SECRET
               valueFrom:
                 secretKeyRef:
