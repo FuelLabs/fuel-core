@@ -117,6 +117,25 @@ spec:
             - "--relayer-eth-sync-log-freq-s"
             - "{{ .Values.app.relayer_eth_sync_log_freq_s }}"
           {{- end }}
+          {{- if .Values.app.poa_instant }}
+            - "--poa-instant"
+          {{- end }}
+          {{- if .Values.app.poa_interval_period }}
+            - "--poa-interval"
+            - "{{ .Values.app.poa_interval_period }}"
+          {{- end }}
+          {{- if .Values.app.poa_hybrid_min_time }}
+            - "--poa-hybrid-min-time"
+            - "{{ .Values.app.poa_hybrid_min_time }}"
+          {{- end }}
+          {{- if .Values.app.poa_hybrid_idle_time }}
+            - "--poa-hybrid-idle-time"
+            - "{{ .Values.app.poa_hybrid_idle_time }}"
+          {{- end }}
+          {{- if .Values.app.poa_hybrid_max_time }}
+            - "--poa-hybrid-max-time"
+            - "{{ .Values.app.poa_hybrid_max_time }}"
+          {{- end }}
           resources: {}
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           ports:
