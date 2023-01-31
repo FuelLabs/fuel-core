@@ -88,7 +88,7 @@ spec:
           {{- if .Values.app.reserved_nodes_only_mode }}
             - "--reserved_nodes_only_mode"
           {{- end}}
-          {{- if (.Values.app.poa_instant | quote) }}
+          {{- if .Values.app.poa_instant }}
             - "--poa-instant"
             - "{{ .Values.app.poa_instant }}"
           {{- end}}
