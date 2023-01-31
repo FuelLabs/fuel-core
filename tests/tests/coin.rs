@@ -36,10 +36,7 @@ async fn coin() {
     let client = FuelClient::from(srv.bound_address);
 
     // run test
-    let coin = client
-        .coin(format!("{:#x}", utxo_id).as_str())
-        .await
-        .unwrap();
+    let coin = client.coin(format!("{utxo_id:#x}").as_str()).await.unwrap();
     assert!(coin.is_some());
 }
 
@@ -80,7 +77,7 @@ async fn first_5_coins(
     // run test
     let coins = client
         .coins(
-            format!("{:#x}", owner).as_str(),
+            format!("{owner:#x}").as_str(),
             None,
             PaginationRequest {
                 cursor: None,
@@ -128,8 +125,8 @@ async fn only_asset_id_filtered_coins() {
     // run test
     let coins = client
         .coins(
-            format!("{:#x}", owner).as_str(),
-            Some(format!("{:#x}", asset_id).as_str()),
+            format!("{owner:#x}").as_str(),
+            Some(format!("{asset_id:#x}").as_str()),
             PaginationRequest {
                 cursor: None,
                 results: 10,
@@ -185,8 +182,8 @@ async fn get_unspent_and_spent_coins(
     // run test
     let coins = client
         .coins(
-            format!("{:#x}", owner).as_str(),
-            Some(format!("{:#x}", asset_id).as_str()),
+            format!("{owner:#x}").as_str(),
+            Some(format!("{asset_id:#x}").as_str()),
             PaginationRequest {
                 cursor: None,
                 results: 10,

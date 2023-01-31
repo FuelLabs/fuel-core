@@ -56,7 +56,7 @@ impl<T: FromStr<Err = E> + Debug + Clone + Default, E: Display> FromStr
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         T::from_str(s)
-            .map_err(|e| ConversionError::HexError(format!("{}", e)))
+            .map_err(|e| ConversionError::HexError(format!("{e}")))
             .map(Self)
     }
 }

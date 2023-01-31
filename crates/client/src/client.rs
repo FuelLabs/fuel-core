@@ -110,11 +110,11 @@ impl FromStr for FuelClient {
     fn from_str(str: &str) -> Result<Self, Self::Err> {
         let mut raw_url = str.to_string();
         if !raw_url.starts_with("http") {
-            raw_url = format!("http://{}", raw_url);
+            raw_url = format!("http://{raw_url}");
         }
 
         let mut url = reqwest::Url::parse(&raw_url)
-            .with_context(|| format!("Invalid fuel-core URL: {}", str))?;
+            .with_context(|| format!("Invalid fuel-core URL: {str}"))?;
         url.set_path("/graphql");
         Ok(Self { url })
     }
@@ -195,7 +195,7 @@ impl FuelClient {
             .map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::Other,
-                    format!("Failed to start client {:?}", e),
+                    format!("Failed to start client {e:?}"),
                 )
             })?
             .body(json_query)
@@ -204,7 +204,7 @@ impl FuelClient {
             .map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::Other,
-                    format!("Failed to add header to client {:?}", e),
+                    format!("Failed to add header to client {e:?}"),
                 )
             })?
             .build_with_conn(HttpsConnector::with_webpki_roots());
@@ -237,20 +237,20 @@ impl FuelClient {
                                     }
                                     Err(e) => Some(Err(io::Error::new(
                                         io::ErrorKind::Other,
-                                        format!("Decode error: {:?}", e),
+                                        format!("Decode error: {e:?}"),
                                     ))),
                                 }
                             }
                             Err(e) => Some(Err(io::Error::new(
                                 io::ErrorKind::Other,
-                                format!("Json error: {:?}", e),
+                                format!("Json error: {e:?}"),
                             ))),
                         }
                     }
                     Ok(_) => None,
                     Err(e) => Some(Err(io::Error::new(
                         io::ErrorKind::Other,
-                        format!("Graphql error: {:?}", e),
+                        format!("Graphql error: {e:?}"),
                     ))),
                 };
                 futures::future::ready(r)
@@ -444,7 +444,7 @@ impl FuelClient {
         let tx = self.query(query).await?.transaction.ok_or_else(|| {
             io::Error::new(
                 ErrorKind::NotFound,
-                format!("status not found for transaction {} ", id),
+                format!("status not found for transaction {id} "),
             )
         })?;
 
@@ -453,7 +453,7 @@ impl FuelClient {
             .ok_or_else(|| {
                 io::Error::new(
                     ErrorKind::NotFound,
-                    format!("status not found for transaction {}", id),
+                    format!("status not found for transaction {id}"),
                 )
             })?
             .try_into()?;
@@ -533,7 +533,7 @@ impl FuelClient {
         let query = schema::tx::TransactionQuery::build(TxIdArgs { id: id.parse()? });
 
         let tx = self.query(query).await?.transaction.ok_or_else(|| {
-            io::Error::new(ErrorKind::NotFound, format!("transaction {} not found", id))
+            io::Error::new(ErrorKind::NotFound, format!("transaction {id} not found"))
         })?;
 
         let receipts: Result<Vec<Receipt>, ConversionError> = tx

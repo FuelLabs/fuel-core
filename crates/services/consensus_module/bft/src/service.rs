@@ -29,7 +29,7 @@ impl Service {
     pub async fn stop(&self) -> Option<JoinHandle<()>> {
         let join = self.join.lock().take();
         if join.is_some() {
-            let _ = self.sender.send(());
+            let _ = self.sender.send(()).await;
         }
         join
     }

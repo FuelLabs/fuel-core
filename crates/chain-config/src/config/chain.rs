@@ -156,8 +156,7 @@ impl FromStr for ChainConfig {
                     std::io::Error::new(
                         ErrorKind::InvalidData,
                         anyhow::Error::new(e).context(format!(
-                            "an error occurred while loading the chain config file {}",
-                            s
+                            "an error occurred while loading the chain config file {s}"
                         )),
                     )
                 })
