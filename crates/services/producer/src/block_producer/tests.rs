@@ -49,8 +49,7 @@ async fn cant_produce_at_genesis_height() {
 
     assert!(
         matches!(err.downcast_ref::<Error>(), Some(Error::GenesisBlock)),
-        "unexpected err {:?}",
-        err
+        "unexpected err {err:?}"
     );
 }
 
@@ -164,8 +163,7 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
                 best
             }) if *previous_block == prev_da_height && *best == prev_da_height - 1u64.into()
         ),
-        "unexpected err {:?}",
-        err
+        "unexpected err {err:?}"
     );
 }
 
@@ -190,8 +188,7 @@ async fn production_fails_on_execution_error() {
             err.downcast_ref::<ExecutorError>(),
             Some(ExecutorError::TransactionIdCollision { .. })
         ),
-        "unexpected err {:?}",
-        err
+        "unexpected err {err:?}"
     );
 }
 

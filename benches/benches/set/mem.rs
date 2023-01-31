@@ -65,7 +65,7 @@ pub fn run(c: &mut Criterion) {
         mem_mcl.throughput(Throughput::Bytes(*i as u64));
         run_group_ref(
             &mut mem_mcl,
-            format!("{}", i),
+            format!("{i}"),
             VmBench::new(Opcode::MCL(0x10, 0x11)).with_prepare_script(vec![
                 Opcode::MOVI(0x11, *i),
                 Opcode::ALOC(0x11),
@@ -80,7 +80,7 @@ pub fn run(c: &mut Criterion) {
         mem_mcli.throughput(Throughput::Bytes(*i as u64));
         run_group_ref(
             &mut mem_mcli,
-            format!("{}", i),
+            format!("{i}"),
             VmBench::new(Opcode::MCLI(0x10, *i)).with_prepare_script(vec![
                 Opcode::MOVI(0x11, *i),
                 Opcode::ALOC(0x11),
@@ -95,7 +95,7 @@ pub fn run(c: &mut Criterion) {
         mem_mcp.throughput(Throughput::Bytes(*i as u64));
         run_group_ref(
             &mut mem_mcp,
-            format!("{}", i),
+            format!("{i}"),
             VmBench::new(Opcode::MCP(0x10, REG_ZERO, 0x11)).with_prepare_script(vec![
                 Opcode::MOVI(0x11, *i),
                 Opcode::ALOC(0x11),
@@ -121,7 +121,7 @@ pub fn run(c: &mut Criterion) {
         mem_meq.throughput(Throughput::Bytes(*i as u64));
         run_group_ref(
             &mut mem_meq,
-            format!("{}", i),
+            format!("{i}"),
             VmBench::new(Opcode::MEQ(0x10, 0x11, 0x12, 0x13)).with_prepare_script(vec![
                 Opcode::MOVI(0x11, 0),
                 Opcode::MOVI(0x12, i * 3),

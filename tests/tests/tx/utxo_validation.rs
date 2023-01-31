@@ -269,8 +269,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
     for status in tx_status {
         assert!(
             matches!(status, TransactionStatus::Success { .. }),
-            "expected successful tx status, got: {:?}",
-            status
+            "expected successful tx status, got: {status:?}"
         );
     }
 
@@ -303,7 +302,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
         })
         .dedup_with_count()
         .map(|(count, id)| {
-            assert_eq!(count, 1, "duplicate tx detected {}", id);
+            assert_eq!(count, 1, "duplicate tx detected {id}");
             id
         })
         .collect();

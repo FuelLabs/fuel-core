@@ -271,7 +271,7 @@ async fn spawn_eth_node(eth_node: Arc<MockMiddleware>) -> EthNodeHandle {
         });
         // And run forever...
         if let Err(e) = graceful.await {
-            eprintln!("server error: {}", e);
+            eprintln!("server error: {e}");
         }
     });
     EthNodeHandle {

@@ -56,7 +56,7 @@ pub(crate) enum FuelUpgradeError {
 impl fmt::Display for FuelUpgradeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FuelUpgradeError::Io(e) => write!(f, "{}", e),            
+            FuelUpgradeError::Io(e) => write!(f, "{e}"),            
             FuelUpgradeError::IncorrectChecksum => f.write_str("Fuel node checksum does not match, either ChainId or ChainConfig are not the same, or both."),            
         }
     }
