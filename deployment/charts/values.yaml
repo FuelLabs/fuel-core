@@ -5,12 +5,11 @@
 app:
   name: ${fuel_core_service_name}
   replicas: ${fuel_core_pod_replicas}
-  httpport: 80
-  httpsport: 443
-  targetport: 4000
+  http_port: 80
+  target_port: 4000
+  peering_port: 30333
   network_name: ${fuel_core_network_name}
   p2p_key: ${fuel_core_p2p_key}
-  peering_port: ${fuel_core_peering_port}
   allow_private_addresses: ${fuel_core_allow_private_addresses}
   human_logging: ${fuel_core_human_logging}
   utxo_validation: ${fuel_core_utxo_validation}

@@ -36,9 +36,13 @@ spec:
     app: {{ template "fuel-core.name" . }}
   ports:
     - name: http
-      port: {{ .Values.app.httpport }}
+      port: {{ .Values.app.http_port }}
       protocol: TCP
-      targetPort: {{ .Values.app.targetport }}
+      targetPort: {{ .Values.app.target_port }}
+    - name: p2p
+      port: {{ .Values.app.peering_port }}
+      protocol: TCP
+      targetPort: {{ .Values.app.peering_port }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -72,7 +76,7 @@ spec:
             - "--ip"
             - "0.0.0.0"
             - "--port"
-            - "4000"
+            - "{{ .Values.app.target_port }}"
             - "--db-path"
             - "{{ .Values.app.volume.mountPath }}"
             - "--chain"
@@ -159,12 +163,15 @@ spec:
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           ports:
             - name: http
-              containerPort: {{ .Values.app.targetport }}
+              containerPort: {{ .Values.app.target_port }}
+              protocol: TCP
+            - name: p2p
+              containerPort: {{ .Values.app.peering_port }}
               protocol: TCP
           livenessProbe:
             httpGet:
               path: /health
-              port: {{ .Values.app.targetport }}
+              port: {{ .Values.app.target_port }}
             initialDelaySeconds: 10
             periodSeconds: 5
             timeoutSeconds: 10
