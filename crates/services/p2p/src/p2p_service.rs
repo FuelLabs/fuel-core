@@ -663,7 +663,7 @@ mod tests {
                     Multiaddr::from(IpAddr::V4(Ipv4Addr::from([127, 0, 0, 1])));
                 addr.push(Protocol::Tcp(tcp_port));
                 let peer_id = PeerId::from_public_key(&keypair.public());
-                format!("{}/p2p/{}", addr, peer_id).parse().unwrap()
+                format!("{addr}/p2p/{peer_id}").parse().unwrap()
             };
 
             Self {

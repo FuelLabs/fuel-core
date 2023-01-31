@@ -175,8 +175,7 @@ mod tests {
         let selected = make_txs_and_select(&original, selection_limit);
         assert_eq!(
             expected_txs, selected,
-            "Wrong txs selected for max_gas: {}",
-            selection_limit
+            "Wrong txs selected for max_gas: {selection_limit}"
         );
     }
 

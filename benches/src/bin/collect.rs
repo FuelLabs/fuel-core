@@ -139,7 +139,7 @@ fn main() {
         all,
     } = Args::parse();
     if all && matches!(format, OutputFormat::Rust) {
-        panic!("The flag `all` cannot be used with {:?}", format);
+        panic!("The flag `all` cannot be used with {format:?}");
     }
     let mut output = output.unwrap_or_else(|| std::env::current_dir().unwrap());
 
@@ -198,14 +198,14 @@ fn main() {
         }
 
         if debug {
-            eprintln!("{}", line);
+            eprintln!("{line}");
         }
         extract_state(&line, &mut state, debug);
 
         line.clear();
     }
     if debug {
-        eprintln!("{}", state);
+        eprintln!("{state}");
     }
     if output.is_dir() {
         match format {
@@ -238,19 +238,19 @@ fn extract_state(line: &str, state: &mut State, debug: bool) {
             throughput,
         })) => {
             if debug {
-                eprintln!("id: {}, mean: {:?}", id, mean);
+                eprintln!("id: {id}, mean: {mean:?}");
             }
             state.ids.insert(id.clone(), mean);
             if let Some(throughput) = throughput {
                 if debug {
-                    eprintln!("throughput: {}", throughput);
+                    eprintln!("throughput: {throughput}");
                 }
                 state.throughput.insert(id, throughput);
             }
         }
         Some(Output::Group(Group { id, benches })) => {
             state.groups.entry(id.clone()).or_default().extend(benches);
-            eprintln!("{} complete", id);
+            eprintln!("{id} complete");
         }
         _ => (),
     }
@@ -328,7 +328,7 @@ impl Display for State {
             }
             None => {
                 for (id, mean) in iter {
-                    writeln!(f, "ID: {}, Mean: {:?}", id, mean)?;
+                    writeln!(f, "ID: {id}, Mean: {mean:?}")?;
                 }
             }
         }
@@ -399,7 +399,7 @@ impl State {
         diff.sort_unstable();
 
         if !diff.is_empty() {
-            eprintln!("Warning the following keys were not set by this bench:\n{:?}\nWas this intentional?", diff);
+            eprintln!("Warning the following keys were not set by this bench:\n{diff:?}\nWas this intentional?");
         }
 
         let map = value.as_mapping().unwrap();
@@ -684,7 +684,7 @@ mod tests {
         let costs = state.to_gas_costs();
 
         let ser = serde_yaml::to_string(&costs).unwrap();
-        eprintln!("{}", ser);
+        eprintln!("{ser}");
         eprintln!("{}", state.to_rust_code());
         let path = PathBuf::from(concat!(
             env!("CARGO_MANIFEST_DIR"),

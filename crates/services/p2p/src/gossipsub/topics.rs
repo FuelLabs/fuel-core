@@ -26,12 +26,11 @@ pub struct GossipsubTopics {
 
 impl GossipsubTopics {
     pub fn new(network_name: &str) -> Self {
-        let new_tx_topic =
-            Topic::new(format!("{}/{}", NEW_TX_GOSSIP_TOPIC, network_name));
+        let new_tx_topic = Topic::new(format!("{NEW_TX_GOSSIP_TOPIC}/{network_name}"));
         let new_block_topic =
-            Topic::new(format!("{}/{}", NEW_BLOCK_GOSSIP_TOPIC, network_name));
+            Topic::new(format!("{NEW_BLOCK_GOSSIP_TOPIC}/{network_name}"));
         let consensus_vote_topic =
-            Topic::new(format!("{}/{}", CON_VOTE_GOSSIP_TOPIC, network_name));
+            Topic::new(format!("{CON_VOTE_GOSSIP_TOPIC}/{network_name}"));
 
         Self {
             new_tx_topic: (new_tx_topic.hash(), new_tx_topic),
@@ -94,11 +93,11 @@ mod tests {
     fn test_gossipsub_topics() {
         let network_name = "fuel_test_network";
         let new_tx_topic: GossipTopic =
-            Topic::new(format!("{}/{}", NEW_TX_GOSSIP_TOPIC, network_name));
+            Topic::new(format!("{NEW_TX_GOSSIP_TOPIC}/{network_name}"));
         let new_block_topic: GossipTopic =
-            Topic::new(format!("{}/{}", NEW_BLOCK_GOSSIP_TOPIC, network_name));
+            Topic::new(format!("{NEW_BLOCK_GOSSIP_TOPIC}/{network_name}"));
         let consensus_vote_topic: GossipTopic =
-            Topic::new(format!("{}/{}", CON_VOTE_GOSSIP_TOPIC, network_name));
+            Topic::new(format!("{CON_VOTE_GOSSIP_TOPIC}/{network_name}"));
 
         let gossipsub_topics = GossipsubTopics::new(network_name);
 
