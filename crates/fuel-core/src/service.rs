@@ -39,7 +39,7 @@ pub struct SharedState {
     pub network: fuel_core_p2p::service::SharedState,
     #[cfg(feature = "relayer")]
     /// The Relayer shared state.
-    pub relayer: Option<fuel_core_relayer::SharedState>,
+    pub relayer: Option<fuel_core_relayer::SharedState<Database>>,
     /// The GraphQL shared state.
     pub graph_ql: crate::fuel_core_graphql_api::service::SharedState,
     /// Subscribe to new block production.

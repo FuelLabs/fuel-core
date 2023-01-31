@@ -148,18 +148,18 @@ async fn can_paginate_logs(input: Input) -> Expected {
 #[test_case(vec![
     Ok(messages_n(3, 0)),
     Ok(messages_n(1, 4))
-    ] => 2 ; "Can add two"
+    ] => 3 ; "Can add two"
 )]
 #[test_case(vec![
     Ok(messages_n(3, 0)),
     Ok(vec![])
-    ] => 2 ; "Can add empty"
+    ] => 3 ; "Can add empty"
 )]
 #[test_case(vec![
     Ok(messages_n(3, 0)),
     Ok(messages_n(1, 4)),
     Err(ProviderError::CustomError("".to_string()))
-    ] => 19 ; "Still adds height when error"
+    ] => 3 ; "Still adds height when error"
 )]
 #[tokio::test]
 async fn test_da_height_updates(stream: Vec<Result<Vec<Log>, ProviderError>>) -> u64 {

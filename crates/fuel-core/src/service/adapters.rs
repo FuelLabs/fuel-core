@@ -48,7 +48,7 @@ pub struct VerifierAdapter {
 pub struct MaybeRelayerAdapter {
     pub database: Database,
     #[cfg(feature = "relayer")]
-    pub relayer_synced: Option<fuel_core_relayer::SharedState>,
+    pub relayer_synced: Option<fuel_core_relayer::SharedState<Database>>,
 }
 
 #[derive(Clone)]

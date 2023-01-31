@@ -18,8 +18,11 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        primitives,
-        primitives::BlockHeight,
+        primitives::{
+            self,
+            BlockHeight,
+            DaBlockHeight,
+        },
     },
     fuel_tx::Receipt,
     fuel_types::Bytes32,
@@ -34,6 +37,7 @@ use fuel_core_types::{
 };
 use std::{
     borrow::Cow,
+    ops::RangeInclusive,
     sync::Arc,
 };
 
@@ -76,14 +80,15 @@ impl fuel_core_producer::ports::Executor<Database> for ExecutorAdapter {
 
 #[async_trait::async_trait]
 impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
-    async fn get_best_finalized_da_height(
+    async fn wait_for_at_least(
         &self,
-    ) -> StorageResult<primitives::DaBlockHeight> {
+        height: &primitives::DaBlockHeight,
+    ) -> anyhow::Result<primitives::DaBlockHeight> {
         #[cfg(feature = "relayer")]
         {
             use fuel_core_relayer::ports::RelayerDb;
             if let Some(sync) = self.relayer_synced.as_ref() {
-                sync.await_synced().await?;
+                sync.await_at_least_synced(height).await?;
             }
 
             Ok(self.database.get_finalized_da_height().unwrap_or_default())
@@ -91,6 +96,23 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
         #[cfg(not(feature = "relayer"))]
         {
             Ok(Default::default())
+        }
+    }
+
+    async fn get_messages<'iter>(
+        &'iter self,
+        range: RangeInclusive<DaBlockHeight>,
+    ) -> Box<dyn Iterator<Item = &'iter [u8]> + 'iter> {
+        #[cfg(feature = "relayer")]
+        {
+            match self.relayer_synced.as_ref() {
+                Some(sync) => sync.get_opaque_messages(range),
+                _ => Box::new(core::iter::empty()),
+            }
+        }
+        #[cfg(not(feature = "relayer"))]
+        {
+            Box::new(core::iter::empty())
         }
     }
 }

@@ -24,7 +24,10 @@ use fuel_core_types::{
         txpool::ArcPoolTx,
     },
 };
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    ops::RangeInclusive,
+};
 
 pub trait BlockProducerDatabase: Send + Sync {
     /// Gets the committed block at the `height`.
@@ -50,8 +53,17 @@ pub trait TxPool: Send + Sync {
 
 #[async_trait::async_trait]
 pub trait Relayer: Send + Sync {
-    /// Get the best finalized height from the DA layer
-    async fn get_best_finalized_da_height(&self) -> StorageResult<DaBlockHeight>;
+    /// Wait for the relayer to reach at least this height and return the
+    /// latest height (which is guaranteed to be >= height).
+    async fn wait_for_at_least(
+        &self,
+        height: &DaBlockHeight,
+    ) -> anyhow::Result<DaBlockHeight>;
+
+    async fn get_messages<'iter>(
+        &'iter self,
+        range: RangeInclusive<DaBlockHeight>,
+    ) -> Box<dyn Iterator<Item = &'iter [u8]> + 'iter>;
 }
 
 pub trait Executor<Database>: Send + Sync {

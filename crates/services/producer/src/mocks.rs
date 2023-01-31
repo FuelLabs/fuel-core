@@ -39,6 +39,7 @@ use fuel_core_types::{
 use std::{
     borrow::Cow,
     collections::HashMap,
+    ops::RangeInclusive,
     sync::{
         Arc,
         Mutex,
@@ -56,8 +57,18 @@ pub struct MockRelayer {
 #[async_trait::async_trait]
 impl Relayer for MockRelayer {
     /// Get the best finalized height from the DA layer
-    async fn get_best_finalized_da_height(&self) -> StorageResult<DaBlockHeight> {
+    async fn wait_for_at_least(
+        &self,
+        _: &DaBlockHeight,
+    ) -> anyhow::Result<DaBlockHeight> {
         Ok(self.best_finalized_height)
+    }
+
+    async fn get_messages<'iter>(
+        &'iter self,
+        range: RangeInclusive<DaBlockHeight>,
+    ) -> Box<dyn Iterator<Item = &'iter [u8]> + 'iter> {
+        todo!()
     }
 }
 

@@ -50,7 +50,7 @@ async fn deploy_height_does_not_override() {
         ..Default::default()
     };
     let eth_node = MockMiddleware::default();
-    let (tx, _) = watch::channel(false);
+    let (tx, _) = watch::channel(None);
     let mut relayer = Task::new(tx, eth_node, mock_db.clone(), config);
     relayer.set_deploy_height();
 
@@ -67,7 +67,7 @@ async fn deploy_height_does_override() {
         ..Default::default()
     };
     let eth_node = MockMiddleware::default();
-    let (tx, _) = watch::channel(false);
+    let (tx, _) = watch::channel(None);
     let mut relayer = Task::new(tx, eth_node, mock_db.clone(), config);
     relayer.set_deploy_height();
 

@@ -18,6 +18,7 @@ use std::{
         BTreeMap,
         HashMap,
     },
+    ops::RangeInclusive,
     sync::{
         Arc,
         Mutex,
@@ -62,6 +63,8 @@ impl RelayerDb for MockDb {
                 .entry(*height)
                 .or_default()
                 .insert(message_id, message);
+            let max = m.finalized_da_height.get_or_insert(0u64.into());
+            *max = (*max).max(*height);
         }
         Ok(())
     }
@@ -77,5 +80,12 @@ impl RelayerDb for MockDb {
             .unwrap()
             .finalized_da_height
             .ok_or(not_found!("FinalizedDaHeight for test"))
+    }
+
+    fn get_opaque_messages(
+        &self,
+        range: RangeInclusive<DaBlockHeight>,
+    ) -> Box<dyn Iterator<Item = &[u8]>> {
+        todo!()
     }
 }

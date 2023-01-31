@@ -34,7 +34,10 @@ use fuel_core_types::{
 };
 use std::{
     convert::TryInto,
-    ops::Deref,
+    ops::{
+        Deref,
+        RangeInclusive,
+    },
     sync::Arc,
 };
 use synced::update_synced;
@@ -54,8 +57,8 @@ mod syncing;
 #[cfg(test)]
 mod test;
 
-type Synced = watch::Receiver<bool>;
-type NotifySynced = watch::Sender<bool>;
+type Synced = watch::Receiver<Option<DaBlockHeight>>;
+type NotifySynced = watch::Sender<Option<DaBlockHeight>>;
 
 /// The alias of runnable relayer service.
 pub type Service<D> = CustomizableService<Provider<Http>, D>;
@@ -63,9 +66,10 @@ type CustomizableService<P, D> = ServiceRunner<Task<P, D>>;
 
 /// The shared state of the relayer task.
 #[derive(Clone)]
-pub struct SharedState {
+pub struct SharedState<D> {
     /// Receives signals when the relayer reaches consistency with the DA layer.
     synced: Synced,
+    database: D,
 }
 
 /// The actual relayer that runs on a background task
@@ -148,17 +152,20 @@ where
 impl<P, D> RunnableService for Task<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
-    D: RelayerDb + 'static,
+    D: RelayerDb + Clone + 'static,
 {
     const NAME: &'static str = "Relayer";
 
-    type SharedData = SharedState;
+    type SharedData = SharedState<D>;
     type Task = Task<P, D>;
 
     fn shared_data(&self) -> Self::SharedData {
         let synced = self.synced.subscribe();
 
-        SharedState { synced }
+        SharedState {
+            synced,
+            database: self.database.clone(),
+        }
     }
 
     async fn into_task(mut self, _watcher: &StateWatcher) -> anyhow::Result<Self::Task> {
@@ -193,7 +200,7 @@ where
     }
 }
 
-impl SharedState {
+impl<D> SharedState<D> {
     /// Wait for the [`Task`] to be in sync with
     /// the data availability layer.
     ///
@@ -207,10 +214,37 @@ impl SharedState {
     /// some period of time.
     pub async fn await_synced(&self) -> anyhow::Result<()> {
         let mut rx = self.synced.clone();
-        if !rx.borrow_and_update().deref() {
+        if rx.borrow_and_update().deref().is_none() {
             rx.changed().await?;
         }
         Ok(())
+    }
+
+    /// Wait until at least the given height is synced.
+    pub async fn await_at_least_synced(
+        &self,
+        height: &DaBlockHeight,
+    ) -> anyhow::Result<()> {
+        let mut rx = self.synced.clone();
+        while rx
+            .borrow_and_update()
+            .deref()
+            .map_or(false, |h| h >= *height)
+        {
+            rx.changed().await?;
+        }
+        Ok(())
+    }
+
+    /// TODO
+    pub fn get_opaque_messages(
+        &self,
+        range: RangeInclusive<DaBlockHeight>,
+    ) -> Box<dyn Iterator<Item = &[u8]>>
+    where
+        D: RelayerDb,
+    {
+        self.database.get_opaque_messages(range)
     }
 }
 
@@ -243,7 +277,7 @@ where
 /// Creates an instance of runnable relayer service.
 pub fn new_service<D>(database: D, config: Config) -> anyhow::Result<Service<D>>
 where
-    D: RelayerDb + 'static,
+    D: RelayerDb + Clone + 'static,
 {
     let url = config.eth_client.clone().ok_or_else(|| {
         anyhow::anyhow!(
@@ -265,7 +299,7 @@ pub fn new_service_test<P, D>(
 ) -> CustomizableService<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
-    D: RelayerDb + 'static,
+    D: RelayerDb + Clone + 'static,
 {
     new_service_internal(eth_node, database, config)
 }
@@ -277,9 +311,9 @@ fn new_service_internal<P, D>(
 ) -> CustomizableService<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
-    D: RelayerDb + 'static,
+    D: RelayerDb + Clone + 'static,
 {
-    let (tx, _) = watch::channel(false);
+    let (tx, _) = watch::channel(None);
     let task = Task::new(tx, eth_node, database, config);
 
     CustomizableService::new(task)
