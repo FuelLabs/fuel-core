@@ -108,16 +108,20 @@ spec:
             - "--poa-hybrid-max-time"
             - "{{ .Values.app.poa_hybrid_max_time }}"
           {{- end}}
-          {{- if .Values.app.p2p_key}}
+          {{- if .Values.app.p2p_key }}
             - "--keypair"
             - "{{ .Values.app.p2p_key }}"
           {{- end }}
-          {{- if .Values.app.network_name}}
+          {{- if .Values.app.peering_port }}
+            - "--peering_port"
+            - "{{ .Values.app.peering_port }}"
+          {{- end }}
+          {{- if .Values.app.allow_private_addresses }}
+          - "--allow_private_addresses"
+          {{- end }}
+          {{- if .Values.app.network_name }}
             - "--network"
             - "{{ .Values.app.network_name }}"
-          {{- end }}
-          {{- if .Values.app.allow_private_addresses}}
-            - "--allow_private_addresses"
           {{- end }}
           {{- if .Values.app.relayer }}
             - "--relayer"

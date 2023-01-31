@@ -10,6 +10,7 @@ app:
   targetport: 4000
   network_name: ${fuel_core_network_name}
   p2p_key: ${fuel_core_p2p_key}
+  peering_port: ${fuel_core_peering_port}
   allow_private_addresses: ${fuel_core_allow_private_addresses}
   human_logging: ${fuel_core_human_logging}
   utxo_validation: ${fuel_core_utxo_validation}
