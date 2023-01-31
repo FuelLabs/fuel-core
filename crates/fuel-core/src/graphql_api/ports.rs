@@ -147,24 +147,15 @@ pub trait DatabaseChain {
 
     fn base_chain_height(&self) -> StorageResult<DaBlockHeight>;
 }
-
-pub trait FindTx {
+pub trait TxPoolPort: Send + Sync {
     fn find_one(&self, id: TxId) -> Option<TxInfo>;
-}
-
-pub trait InsertTx {
     fn insert(&self, txs: Vec<Arc<Transaction>>) -> Vec<anyhow::Result<InsertionResult>>;
-}
-
-pub trait TxSubscription {
     fn tx_update_subscribe(
         &self,
     ) -> fuel_core_services::stream::BoxStream<
         Result<fuel_core_txpool::service::TxUpdate, BroadcastStreamRecvError>,
     >;
 }
-
-pub trait TxPoolPort: Send + Sync + FindTx + InsertTx + TxSubscription {}
 
 #[async_trait]
 pub trait DryRunExecution {

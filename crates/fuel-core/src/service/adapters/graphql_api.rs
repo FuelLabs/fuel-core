@@ -16,11 +16,6 @@ use crate::{
         ExecuteWithoutCommit,
         ExecutorPort,
         TxPoolPort,
-        TxSubscription,
-    },
-    graphql_api::ports::{
-        FindTx,
-        InsertTx,
     },
     service::sub_services::TxPoolService,
     state::IterDirection,
@@ -205,13 +200,11 @@ impl DatabaseChain for Database {
 
 impl DatabasePort for Database {}
 
-impl InsertTx for TxPoolService {
+impl TxPoolPort for TxPoolService {
     fn insert(&self, txs: Vec<Arc<Transaction>>) -> Vec<anyhow::Result<InsertionResult>> {
         self.shared.insert(txs)
     }
-}
 
-impl TxSubscription for TxPoolService {
     fn tx_update_subscribe(
         &self,
     ) -> fuel_core_services::stream::BoxStream<
@@ -219,15 +212,11 @@ impl TxSubscription for TxPoolService {
     > {
         Box::pin(BroadcastStream::new(self.shared.tx_update_subscribe()))
     }
-}
 
-impl FindTx for TxPoolService {
     fn find_one(&self, id: TxId) -> Option<fuel_core_types::services::txpool::TxInfo> {
         self.shared.find_one(id)
     }
 }
-
-impl TxPoolPort for TxPoolService {}
 
 #[async_trait]
 impl DryRunExecution for BlockProducerAdapter {
