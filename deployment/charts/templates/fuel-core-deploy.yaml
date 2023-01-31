@@ -118,6 +118,7 @@ spec:
           {{- end }}
           {{- if .Values.app.allow_private_addresses}}
             - "--allow_private_addresses"
+            - "{{ .Values.app.allow_private_addresses }}"
           {{- end }}
           {{- if .Values.app.relayer }}
             - "--relayer"
