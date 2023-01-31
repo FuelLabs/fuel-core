@@ -27,7 +27,6 @@ if [ "${k8s_provider}" == "eks" ]; then
     mv values.yaml values.template
     envsubst < values.template > values.yaml
     rm values.template
-    cat values.yaml
     echo "Deploying ${fuel_core_service_name} helm chart to ${TF_VAR_eks_cluster_name} ...."
     helm upgrade ${fuel_core_service_name} . \
               --values values.yaml \
