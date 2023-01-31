@@ -13,8 +13,6 @@ use crate::{
         DatabasePort,
         DatabaseTransactions,
         DryRunExecution,
-        ExecuteWithoutCommit,
-        ExecutorPort,
         TxPoolPort,
     },
     service::sub_services::TxPoolService,
@@ -28,7 +26,6 @@ use fuel_core_storage::{
         IntoBoxedIter,
     },
     not_found,
-    transactional::StorageTransaction,
     Error as StorageError,
     Result as StorageResult,
 };
@@ -53,11 +50,6 @@ use fuel_core_types::{
         UtxoId,
     },
     services::{
-        executor::{
-            ExecutionBlock,
-            Result as ExecutorResult,
-            UncommittedResult,
-        },
         graphql_api::ContractBalance,
         txpool::{
             InsertionResult,
@@ -234,21 +226,4 @@ impl DryRunExecution for BlockProducerAdapter {
 
 impl BlockProducerPort for BlockProducerAdapter {}
 
-use crate::{
-    graphql_api::service::Database as GraphqlDatabase,
-    service::adapters::ExecutorAdapter,
-};
-use fuel_core_producer::ports::Executor as ProducerExecutorPort;
-
 use super::BlockProducerAdapter;
-
-impl ExecuteWithoutCommit<GraphqlDatabase> for ExecutorAdapter {
-    fn execute_with_no_commit(
-        &self,
-        block: ExecutionBlock,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
-        self.execute_without_commit(block)
-    }
-}
-
-impl ExecutorPort<GraphqlDatabase> for ExecutorAdapter {}

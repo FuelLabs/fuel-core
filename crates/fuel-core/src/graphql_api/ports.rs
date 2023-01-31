@@ -14,7 +14,6 @@ use fuel_core_storage::{
         SealedBlockConsensus,
         Transactions,
     },
-    transactional::StorageTransaction,
     Error as StorageError,
     Result as StorageResult,
     StorageInspect,
@@ -40,11 +39,6 @@ use fuel_core_types::{
         MessageId,
     },
     services::{
-        executor::{
-            ExecutionBlock,
-            Result as ExecutorResult,
-            UncommittedResult,
-        },
         graphql_api::ContractBalance,
         txpool::{
             InsertionResult,
@@ -168,15 +162,6 @@ pub trait DryRunExecution {
 }
 
 pub trait BlockProducerPort: Send + Sync + DryRunExecution {}
-
-pub trait ExecuteWithoutCommit<Database> {
-    fn execute_with_no_commit(
-        &self,
-        block: ExecutionBlock,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<crate::database::Database>>>;
-}
-
-pub trait ExecutorPort<Database>: Send + Sync + ExecuteWithoutCommit<Database> {}
 
 #[async_trait::async_trait]
 pub trait ConsensusModulePort: Send + Sync {
