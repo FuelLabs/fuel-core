@@ -36,9 +36,9 @@ app:
     tag: ${fuel_core_image_tag}
     pullPolicy: Always
   volume: 
-    pvname: db-volume
+    pvname: ${fuel_core_pv_name}
     mountPath: /mnt/db/
-    claimname: db-volume-pv-claim
+    claimname: ${fuel_core_pvc_name}
     storageclass: ${pvc_storage_class}
     storagerequests: ${pvc_storage_requests}
     accessmodes: ReadWriteOnce
