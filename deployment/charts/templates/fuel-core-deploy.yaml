@@ -77,6 +77,8 @@ spec:
             - "{{ .Values.app.volume.mountPath }}"
             - "--chain"
             - "/mnt/config/chainspec.json"
+            - "--min-gas-price"
+            - "{{ .Values.app.min_gas_price }}"
           {{- if .Values.app.utxo_validation }}
             - "--utxo-validation"
           {{- end}}
@@ -103,17 +105,20 @@ spec:
             - "{{ .Values.app.poa_hybrid_idle_time }}"
           {{- end}}
           {{- if .Values.app.poa_hybrid_max_time }}
-          - "--poa-hybrid-max-time"
-          - "{{ .Values.app.poa_hybrid_max_time }}"
+            - "--poa-hybrid-max-time"
+            - "{{ .Values.app.poa_hybrid_max_time }}"
           {{- end}}
-            - "--min-gas-price"
-            - "{{ .Values.app.min_gas_price }}"
+          {{- if .Values.app.p2p_key}}
             - "--keypair"
             - "{{ .Values.app.p2p_key }}"
+          {{- end }}
+          {{- if .Values.app.network_name}}
             - "--network"
             - "{{ .Values.app.network_name }}"
+          {{- end }}
+          {{- if .Values.app.allow_private_addresses}}
             - "—allow_private_addresses"
-            - "{{ .Values.app.allow_private_addresses }}"
+          {{- end }}
           {{- if .Values.app.relayer }}
             - "--relayer"
             - "{{ .Values.app.relayer }}"
@@ -171,6 +176,7 @@ spec:
               value: {{ .Values.app.reserved_nodes | quote }}
             - name: BOOTSTRAP_NODES
               value: {{ .Values.app.bootstrap_nodes | quote }}
+            # TODO: do we need to do anything to make this more optional for non-consensus nodes?
             - name: CONSENSUS_KEY_SECRET
               valueFrom:
                 secretKeyRef:
