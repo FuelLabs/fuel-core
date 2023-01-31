@@ -117,7 +117,7 @@ spec:
             - "{{ .Values.app.peering_port }}"
           {{- end }}
           {{- if .Values.app.allow_private_addresses }}
-          - "--allow_private_addresses"
+            - "--allow_private_addresses"
           {{- end }}
           {{- if .Values.app.network_name }}
             - "--network"
