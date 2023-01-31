@@ -11,7 +11,7 @@ pub(crate) fn download_logs<P>(
     contracts: Vec<H160>,
     eth_node: Arc<P>,
     page_size: u64,
-) -> impl futures::Stream<Item = Result<(u64, Vec<Log>), ProviderError>>
+) -> impl futures::Stream<Item = Result<Vec<Log>, ProviderError>>
 where
     P: Middleware<Error = ProviderError> + 'static,
 {
@@ -37,8 +37,6 @@ where
                             page.latest()
                         );
 
-                        let latest_block = page.latest();
-
                         // Reduce the page.
                         let page = page.reduce();
 
@@ -46,7 +44,7 @@ where
                         eth_node
                             .get_logs(&filter)
                             .await
-                            .map(|logs| Some(((latest_block, logs), page)))
+                            .map(|logs| Some((logs, page)))
                     }
                 }
             }
@@ -58,28 +56,35 @@ where
 pub(crate) async fn write_logs<D, S>(database: &mut D, logs: S) -> anyhow::Result<()>
 where
     D: RelayerDb,
-    S: futures::Stream<Item = Result<(u64, Vec<Log>), ProviderError>>,
+    S: futures::Stream<Item = Result<Vec<Log>, ProviderError>>,
 {
     tokio::pin!(logs);
-    while let Some((to_block, events)) = logs.try_next().await? {
-        for event in events {
-            let event: EthEventLog = (&event).try_into()?;
-            match event {
-                EthEventLog::Message(m) => {
-                    let m = Message::from(&m).check();
-                    if database.insert_message(&m)?.is_some() {
-                        // TODO: https://github.com/FuelLabs/fuel-core/issues/681
-                        return Err(anyhow!(
-                            "The message for {:?} already existed",
-                            m.id()
-                        ))
+    while let Some(events) = logs.try_next().await? {
+        let messages = events
+            .into_iter()
+            .map(|event| {
+                let height: DaBlockHeight = event
+                    .block_number
+                    .ok_or_else(|| anyhow!("Log is missing block number {:?}", event))?
+                    .as_u64()
+                    .into();
+                let event: EthEventLog = (&event).try_into()?;
+                Ok((height, event))
+            })
+            .filter_map(|result| match result {
+                Ok((height, event)) => {
+                    match event {
+                        EthEventLog::Message(m) => {
+                            Some(Ok((height, Message::from(&m).check())))
+                        }
+                        // TODO: Log out ignored messages.
+                        EthEventLog::Ignored => None,
                     }
                 }
-                // TODO: Log out ignored messages.
-                EthEventLog::Ignored => (),
-            }
-        }
-        database.set_finalized_da_height(to_block.into())?;
+                Err(e) => Some(Err(e)),
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        database.insert_messages(&messages)?;
     }
     Ok(())
 }

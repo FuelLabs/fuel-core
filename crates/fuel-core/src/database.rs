@@ -113,6 +113,8 @@ pub enum Column {
     FuelBlockMerkleData = 17,
     /// See [`FuelBlockMerkleMetadata`](storage::FuelBlockMerkleMetadata)
     FuelBlockMerkleMetadata = 18,
+    /// Messages that have been imported by the relayer.
+    RelayerMessages = 19,
 }
 
 #[derive(Clone, Debug)]

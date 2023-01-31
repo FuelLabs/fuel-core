@@ -34,7 +34,6 @@ async fn can_download_logs() {
         Arc::new(eth_node),
         Config::DEFAULT_LOG_PAGE_SIZE,
     )
-    .map_ok(|(_, l)| l)
     .try_concat()
     .await
     .unwrap();

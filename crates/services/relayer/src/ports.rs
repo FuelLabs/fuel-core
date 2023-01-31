@@ -4,20 +4,17 @@ use async_trait::async_trait;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::{
-        CheckedMessage,
-        Message,
-    },
+    entities::message::CheckedMessage,
 };
 
 /// Manages state related to supported external chains.
 #[async_trait]
 pub trait RelayerDb: Send + Sync {
-    /// Add bridge message to database. Messages are not revertible.
-    fn insert_message(
+    /// Add bridge messages to database. Messages are not revertible.
+    fn insert_messages(
         &mut self,
-        message: &CheckedMessage,
-    ) -> StorageResult<Option<Message>>;
+        messages: &[(DaBlockHeight, CheckedMessage)],
+    ) -> StorageResult<()>;
 
     /// set finalized da height that represent last block from da layer that got finalized.
     fn set_finalized_da_height(&mut self, block: DaBlockHeight) -> StorageResult<()>;

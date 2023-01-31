@@ -14,7 +14,10 @@ use fuel_core_types::{
     fuel_tx::MessageId,
 };
 use std::{
-    collections::HashMap,
+    collections::{
+        BTreeMap,
+        HashMap,
+    },
     sync::{
         Arc,
         Mutex,
@@ -23,7 +26,7 @@ use std::{
 
 #[derive(Default)]
 pub struct Data {
-    pub messages: HashMap<MessageId, Message>,
+    pub messages: BTreeMap<DaBlockHeight, HashMap<MessageId, Message>>,
     pub finalized_da_height: Option<DaBlockHeight>,
 }
 
@@ -38,22 +41,29 @@ pub struct MockDb {
 
 impl MockDb {
     pub fn get_message(&self, id: &MessageId) -> Option<Message> {
-        self.data.lock().unwrap().messages.get(id).map(Clone::clone)
+        self.data
+            .lock()
+            .unwrap()
+            .messages
+            .iter()
+            .find_map(|(_, map)| map.get(id).cloned())
     }
 }
 
 impl RelayerDb for MockDb {
-    fn insert_message(
+    fn insert_messages(
         &mut self,
-        message: &CheckedMessage,
-    ) -> StorageResult<Option<Message>> {
-        let (message_id, message) = message.clone().unpack();
-        Ok(self
-            .data
-            .lock()
-            .unwrap()
-            .messages
-            .insert(message_id, message))
+        messages: &[(DaBlockHeight, CheckedMessage)],
+    ) -> StorageResult<()> {
+        let mut m = self.data.lock().unwrap();
+        for (height, message) in messages {
+            let (message_id, message) = message.clone().unpack();
+            m.messages
+                .entry(*height)
+                .or_default()
+                .insert(message_id, message);
+        }
+        Ok(())
     }
 
     fn set_finalized_da_height(&mut self, height: DaBlockHeight) -> StorageResult<()> {
