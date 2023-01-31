@@ -117,7 +117,7 @@ spec:
             - "{{ .Values.app.network_name }}"
           {{- end }}
           {{- if .Values.app.allow_private_addresses}}
-            - "—allow_private_addresses"
+            - "--allow_private_addresses"
           {{- end }}
           {{- if .Values.app.relayer }}
             - "--relayer"
