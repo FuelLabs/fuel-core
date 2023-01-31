@@ -91,8 +91,7 @@ async fn deploy_height_is_set() {
                         }
                     if f.as_u64() == 51 && t.as_u64() == 53
                 ),
-                "{:?}",
-                evt
+                "{evt:?}"
             );
             if let Some(tx) = tx.take() {
                 tx.send(()).unwrap();

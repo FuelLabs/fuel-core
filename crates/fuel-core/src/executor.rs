@@ -666,7 +666,7 @@ impl Executor {
                 .iter()
                 .find_map(|receipt| match receipt {
                     // Format as `Revert($rA)`
-                    Receipt::Revert { ra, .. } => Some(format!("Revert({})", ra)),
+                    Receipt::Revert { ra, .. } => Some(format!("Revert({ra})")),
                     // Display PanicReason e.g. `OutOfGas`
                     Receipt::Panic { reason, .. } => Some(format!("{}", reason.reason())),
                     _ => None,

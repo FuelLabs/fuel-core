@@ -1,10 +1,5 @@
 {
   "chain_name": "Testnet",
-  "block_production": {
-    "ProofOfAuthority": {
-      "trigger": "instant"
-    }
-  },
   "block_gas_limit": 100000000,
   "initial_state": {
     "coins": [

@@ -27,8 +27,8 @@ async fn test_metrics_endpoint() {
     // Should generate some database reads
     client
         .balance(
-            format!("{:#x}", owner).as_str(),
-            Some(format!("{:#x}", asset_id).as_str()),
+            format!("{owner:#x}").as_str(),
+            Some(format!("{asset_id:#x}").as_str()),
         )
         .await
         .unwrap();
