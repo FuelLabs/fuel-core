@@ -348,14 +348,14 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 self.handle_behaviour_event(fuel_behaviour)
             }
             SwarmEvent::NewListenAddr { address, .. } => {
-                tracing::info!("The p2p service listens on the `{address}`",);
+                tracing::info!("Listening for p2p traffic on `{address}`");
                 None
             }
             SwarmEvent::ListenerClosed {
                 addresses, reason, ..
             } => {
                 tracing::info!(
-                    "The p2p service listener for `{addresses:?}` is closed with `{reason:?}`"
+                    "p2p listener(s) `{addresses:?}` closed with `{reason:?}`"
                 );
                 None
             }
