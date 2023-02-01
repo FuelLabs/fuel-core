@@ -1,5 +1,9 @@
 use crate::{
     database::{
+        storage::{
+            ContractsAssetsMerkleData,
+            SparseMerkleMetadata,
+        },
         Column,
         Database,
     },
@@ -16,11 +20,15 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     fuel_asm::Word,
+    fuel_merkle::sparse::MerkleTree,
     fuel_types::ContractId,
     fuel_vm::crypto,
 };
 use itertools::Itertools;
-use std::borrow::Cow;
+use std::borrow::{
+    BorrowMut,
+    Cow,
+};
 
 impl StorageInspect<ContractsAssets> for Database {
     type Error = StorageError;
@@ -48,8 +56,26 @@ impl StorageMutate<ContractsAssets> for Database {
         key: &<ContractsAssets as Mappable>::Key,
         value: &<ContractsAssets as Mappable>::Value,
     ) -> Result<Option<<ContractsAssets as Mappable>::OwnedValue>, Self::Error> {
-        Database::insert(self, key.as_ref(), Column::ContractsAssets, value)
-            .map_err(Into::into)
+        let prev = Database::insert(self, key.as_ref(), Column::ContractsAssets, value)
+            .map_err(Into::into);
+
+        let prev_metadata = self
+            .iter_all::<Vec<u8>, SparseMerkleMetadata>(
+                Column::ContractsAssetsMerkleMetadata,
+                Some(IterDirection::Reverse),
+            )
+            .next()
+            .transpose()?
+            .map(|(_, metadata)| metadata)
+            .unwrap_or_default();
+
+        let root = prev_metadata.root.into();
+        let storage = self.borrow_mut();
+        let mut tree: MerkleTree<ContractsAssetsMerkleData, _> =
+            MerkleTree::load(storage, &root)
+                .map_err(|err| Self::Error::Other(err.into()))?;
+
+        prev
     }
 
     fn remove(

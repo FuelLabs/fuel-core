@@ -14,7 +14,10 @@ use fuel_core_types::{
         BlockHeight,
         BlockId,
     },
-    fuel_merkle::binary,
+    fuel_merkle::{
+        binary,
+        sparse,
+    },
     fuel_tx::TxId,
     fuel_types::{
         Bytes32,
@@ -48,6 +51,22 @@ impl Default for DenseMerkleMetadata {
     }
 }
 
+/// Metadata for sparse Merkle trees
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct SparseMerkleMetadata {
+    /// The root hash of the sparse Merkle tree structure
+    pub root: Bytes32,
+}
+
+impl Default for SparseMerkleMetadata {
+    fn default() -> Self {
+        let empty_merkle_tree = sparse::in_memory::MerkleTree::new();
+        Self {
+            root: empty_merkle_tree.root().into(),
+        }
+    }
+}
+
 /// The table of fuel block's secondary key - `BlockHeight`.
 /// It links the `BlockHeight` to corresponding `BlockId`.
 pub struct FuelBlockSecondaryKeyBlockHeights;
@@ -61,7 +80,7 @@ impl Mappable for FuelBlockSecondaryKeyBlockHeights {
     type OwnedValue = Self::Value;
 }
 
-/// The table of BMT MMR data for the fuel blocks.
+/// The table of BMT data for Fuel blocks.
 pub struct FuelBlockMerkleData;
 
 impl Mappable for FuelBlockMerkleData {
@@ -71,13 +90,33 @@ impl Mappable for FuelBlockMerkleData {
     type OwnedValue = Self::Value;
 }
 
-/// The metadata table for [`FuelBlockMerkleData`] table.
+/// The metadata table for [`FuelBlockMerkleData`](FuelBlockMerkleData) table.
 pub struct FuelBlockMerkleMetadata;
 
 impl Mappable for FuelBlockMerkleMetadata {
     type Key = BlockHeight;
     type OwnedKey = Self::Key;
     type Value = DenseMerkleMetadata;
+    type OwnedValue = Self::Value;
+}
+
+/// The table of SMT data for Contract assets.
+pub struct ContractsAssetsMerkleData;
+
+impl Mappable for ContractsAssetsMerkleData {
+    type Key = Bytes32;
+    type OwnedKey = Self::Key;
+    type Value = sparse::Primitive;
+    type OwnedValue = Self::Value;
+}
+
+/// The metadata table for [`ContractsAssetsMerkleData`](ContractsAssetsMerkleData) table
+pub struct ContractsAssetsMerkleMetadata;
+
+impl Mappable for ContractsAssetsMerkleMetadata {
+    type Key = u64;
+    type OwnedKey = Self::Key;
+    type Value = SparseMerkleMetadata;
     type OwnedValue = Self::Value;
 }
 
@@ -108,6 +147,12 @@ impl DatabaseColumn for FuelBlockMerkleData {
 impl DatabaseColumn for FuelBlockMerkleMetadata {
     fn column() -> Column {
         Column::FuelBlockMerkleMetadata
+    }
+}
+
+impl DatabaseColumn for ContractsAssetsMerkleData {
+    fn column() -> Column {
+        Column::ContractsAssetsMerkleData
     }
 }
 

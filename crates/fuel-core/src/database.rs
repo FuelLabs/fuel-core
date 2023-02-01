@@ -111,8 +111,12 @@ pub enum Column {
     FuelBlockConsensus = 16,
     /// See [`FuelBlockMerkleData`](storage::FuelBlockMerkleData)
     FuelBlockMerkleData = 17,
-    /// See [`FuelBlockMerkleMetadata`](storage::FuelBlockMerkleMetadata)
+    /// See [`FuelBlockMerkleData`](storage::FuelBlockMerkleData)
     FuelBlockMerkleMetadata = 18,
+    /// See [`ContractsAssetsMerkleData`](storage::ContractsAssetsMerkleData)
+    ContractsAssetsMerkleData = 19,
+    /// See [`ContractsAssetsMerkleMetadata`](storage::ContractsAssetsMerkleMetadata)
+    ContractsAssetsMerkleMetadata = 20,
 }
 
 #[derive(Clone, Debug)]
