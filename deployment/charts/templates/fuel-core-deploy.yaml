@@ -187,12 +187,14 @@ spec:
               value: {{ .Values.app.reserved_nodes | quote }}
             - name: BOOTSTRAP_NODES
               value: {{ .Values.app.bootstrap_nodes | quote }}
-            # TODO: do we need to do anything to make this more optional for non-consensus nodes?
+            # Only mount the consensus key secret if this node has a block production strategy configured.
+          {{- if or .Values.app.poa_instant or .Values.app.poa_interval_period .Values.app.poa_hybrid_min_time }}
             - name: CONSENSUS_KEY_SECRET
               valueFrom:
                 secretKeyRef:
                   name: fuel-core-secret
                   key: CONSENSUS_KEY_SECRET
+          {{- end }}
       volumes:
         - name: {{ .Values.app.volume.pvname }}
           persistentVolumeClaim:
