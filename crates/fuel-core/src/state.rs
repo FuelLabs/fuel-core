@@ -8,7 +8,6 @@ use crate::{
 use fuel_core_storage::iter::BoxedIter;
 use std::{
     fmt::Debug,
-    ops::RangeInclusive,
     sync::Arc,
 };
 
@@ -37,12 +36,6 @@ pub trait KeyValueStore {
         start: Option<Vec<u8>>,
         direction: IterDirection,
     ) -> BoxedIter<KVItem>;
-
-    fn range(
-        &self,
-        column: Column,
-        range: RangeInclusive<&[u8]>,
-    ) -> Box<dyn Iterator<Item = DatabaseResult<(&[u8], &[u8])>>>;
 }
 
 #[derive(Copy, Clone, Debug, PartialOrd, Eq, PartialEq)]

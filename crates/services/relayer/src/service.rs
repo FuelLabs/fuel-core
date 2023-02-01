@@ -34,10 +34,7 @@ use fuel_core_types::{
 };
 use std::{
     convert::TryInto,
-    ops::{
-        Deref,
-        RangeInclusive,
-    },
+    ops::Deref,
     sync::Arc,
 };
 use synced::update_synced;
@@ -234,17 +231,6 @@ impl<D> SharedState<D> {
             rx.changed().await?;
         }
         Ok(())
-    }
-
-    /// TODO
-    pub fn get_opaque_messages(
-        &self,
-        range: RangeInclusive<DaBlockHeight>,
-    ) -> Box<dyn Iterator<Item = &[u8]>>
-    where
-        D: RelayerDb,
-    {
-        self.database.get_opaque_messages(range)
     }
 }
 

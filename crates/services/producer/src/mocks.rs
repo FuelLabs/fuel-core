@@ -39,7 +39,6 @@ use fuel_core_types::{
 use std::{
     borrow::Cow,
     collections::HashMap,
-    ops::RangeInclusive,
     sync::{
         Arc,
         Mutex,
@@ -62,13 +61,6 @@ impl Relayer for MockRelayer {
         _: &DaBlockHeight,
     ) -> anyhow::Result<DaBlockHeight> {
         Ok(self.best_finalized_height)
-    }
-
-    async fn get_messages<'iter>(
-        &'iter self,
-        range: RangeInclusive<DaBlockHeight>,
-    ) -> Box<dyn Iterator<Item = &'iter [u8]> + 'iter> {
-        todo!()
     }
 }
 

@@ -1,5 +1,3 @@
-use std::ops::RangeInclusive;
-
 use crate::database::{
     metadata,
     Column,
@@ -63,12 +61,5 @@ impl RelayerDb for Database {
     fn get_finalized_da_height(&self) -> StorageResult<DaBlockHeight> {
         self.get(metadata::FINALIZED_DA_HEIGHT_KEY, Column::Metadata)?
             .ok_or(not_found!("FinalizedDaHeight"))
-    }
-
-    fn get_opaque_messages(
-        &self,
-        range: RangeInclusive<DaBlockHeight>,
-    ) -> Box<dyn Iterator<Item = &[u8]>> {
-        self.range(range)
     }
 }

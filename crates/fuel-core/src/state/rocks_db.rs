@@ -258,22 +258,6 @@ impl KeyValueStore for RocksDb {
             iter.into_boxed()
         }
     }
-
-    fn range(
-        &self,
-        column: Column,
-        range: std::ops::RangeInclusive<&[u8]>,
-    ) -> Box<dyn Iterator<Item = DatabaseResult<(&[u8], &[u8])>>> {
-        let iter = self
-            .db
-            .iterator_cf_opt(
-                &self.cf(column),
-                Default::default(),
-                IteratorMode::From(range.start(), IterDirection::Forward.into()),
-            )
-            .map(|result| result.map_err(|e| DatabaseError::Other(e.into())));
-        Box::new(iter)
-    }
 }
 
 impl BatchOperations for RocksDb {

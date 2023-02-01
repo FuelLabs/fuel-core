@@ -24,10 +24,7 @@ use fuel_core_types::{
         txpool::ArcPoolTx,
     },
 };
-use std::{
-    borrow::Cow,
-    ops::RangeInclusive,
-};
+use std::borrow::Cow;
 
 pub trait BlockProducerDatabase: Send + Sync {
     /// Gets the committed block at the `height`.
@@ -59,11 +56,6 @@ pub trait Relayer: Send + Sync {
         &self,
         height: &DaBlockHeight,
     ) -> anyhow::Result<DaBlockHeight>;
-
-    async fn get_messages<'iter>(
-        &'iter self,
-        range: RangeInclusive<DaBlockHeight>,
-    ) -> Box<dyn Iterator<Item = &'iter [u8]> + 'iter>;
 }
 
 pub trait Executor<Database>: Send + Sync {

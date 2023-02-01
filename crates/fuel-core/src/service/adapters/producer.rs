@@ -21,7 +21,6 @@ use fuel_core_types::{
         primitives::{
             self,
             BlockHeight,
-            DaBlockHeight,
         },
     },
     fuel_tx::Receipt,
@@ -37,7 +36,6 @@ use fuel_core_types::{
 };
 use std::{
     borrow::Cow,
-    ops::RangeInclusive,
     sync::Arc,
 };
 
@@ -96,23 +94,6 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
         #[cfg(not(feature = "relayer"))]
         {
             Ok(Default::default())
-        }
-    }
-
-    async fn get_messages<'iter>(
-        &'iter self,
-        range: RangeInclusive<DaBlockHeight>,
-    ) -> Box<dyn Iterator<Item = &'iter [u8]> + 'iter> {
-        #[cfg(feature = "relayer")]
-        {
-            match self.relayer_synced.as_ref() {
-                Some(sync) => sync.get_opaque_messages(range),
-                _ => Box::new(core::iter::empty()),
-            }
-        }
-        #[cfg(not(feature = "relayer"))]
-        {
-            Box::new(core::iter::empty())
         }
     }
 }
