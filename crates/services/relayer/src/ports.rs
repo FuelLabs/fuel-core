@@ -5,6 +5,7 @@ use fuel_core_storage::{
     not_found,
     tables::Messages,
     transactional::Transactional,
+    Error as StorageError,
     Mappable,
     Result as StorageResult,
     StorageAsMut,
@@ -34,31 +35,30 @@ pub trait RelayerDb: Send + Sync {
     fn get_finalized_da_height(&self) -> StorageResult<DaBlockHeight>;
 }
 
-impl<T> RelayerDb for T
+impl<T, Storage> RelayerDb for T
 where
-    T: StorageMutate<Messages, Error = fuel_core_storage::Error>
-        + StorageMutate<RelayerMetadata, Error = fuel_core_storage::Error>
-        + Transactional
-        + Send
-        + Sync,
-    <T as Transactional>::Storage: StorageMutate<Messages, Error = fuel_core_storage::Error>
-        + StorageMutate<RelayerMetadata, Error = fuel_core_storage::Error>,
+    T: Send + Sync,
+    T: Transactional<Storage = Storage>,
+    T: StorageMutate<RelayerMetadata, Error = StorageError>,
+    Storage: StorageMutate<Messages, Error = StorageError>
+        + StorageMutate<RelayerMetadata, Error = StorageError>,
 {
     fn insert_messages(&mut self, messages: &[CheckedMessage]) -> StorageResult<()> {
-        let mut db = self.transaction();
+        let mut db_tx = self.transaction();
+        let db = db_tx.as_mut();
 
         let mut max_height = None;
         for message in messages {
-            StorageAsMut::storage::<Messages>(&mut db.as_mut())
+            db.storage::<Messages>()
                 .insert(message.id(), message.message())?;
             let max = max_height.get_or_insert(0u64);
             *max = (*max).max(message.message().da_height.0);
         }
         if let Some(height) = max_height {
-            StorageAsMut::storage::<RelayerMetadata>(&mut db.as_mut())
+            db.storage::<RelayerMetadata>()
                 .insert(DA_HEIGHT_KEY, &DaBlockHeight::from(height))?;
         }
-        db.commit()?;
+        db_tx.commit()?;
         Ok(())
     }
 
