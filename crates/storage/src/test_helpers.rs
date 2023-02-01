@@ -77,7 +77,7 @@ pub trait MockStorageMethods {
 }
 
 mockall::mock! {
-    /// The mocked storage is usefull to test functionality build on top of the `StorageInspect`,
+    /// The mocked storage is useful to test functionality build on top of the `StorageInspect`,
     /// `StorageMutate`, and `MerkleRootStorage` traits.
     pub Storage {}
 
