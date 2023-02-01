@@ -100,6 +100,16 @@ impl Mappable for Messages {
     type OwnedValue = Message;
 }
 
+/// The storage table of spent [`Message`](crate::model::Message)s.
+pub struct SpentMessages;
+
+impl Mappable for SpentMessages {
+    type Key = Self::OwnedKey;
+    type OwnedKey = MessageId;
+    type Value = Self::OwnedValue;
+    type OwnedValue = ();
+}
+
 /// The storage table of confirmed transactions.
 pub struct Transactions;
 

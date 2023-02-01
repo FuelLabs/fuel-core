@@ -54,5 +54,7 @@ pub trait TxPoolDb: Send + Sync {
 
     fn message(&self, message_id: &MessageId) -> StorageResult<Option<Message>>;
 
+    fn message_spent(&self, message_id: &MessageId) -> StorageResult<bool>;
+
     fn current_block_height(&self) -> StorageResult<BlockHeight>;
 }

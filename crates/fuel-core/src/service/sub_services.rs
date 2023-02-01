@@ -61,7 +61,7 @@ pub fn init_sub_services(
     };
 
     let executor = ExecutorAdapter {
-        database: database.clone(),
+        relayer: relayer_adapter.clone(),
         config: config.clone(),
     };
 

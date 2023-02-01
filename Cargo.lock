@@ -2622,6 +2622,7 @@ dependencies = [
  "anyhow",
  "fuel-core-types",
  "fuel-vm",
+ "mockall",
  "thiserror",
 ]
 

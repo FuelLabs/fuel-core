@@ -49,7 +49,6 @@ impl From<MessageConfig> for Message {
             amount: msg.amount,
             data: msg.data,
             da_height: msg.da_height,
-            fuel_block_spend: None,
         }
     }
 }

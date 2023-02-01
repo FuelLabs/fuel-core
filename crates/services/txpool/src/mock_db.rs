@@ -17,7 +17,10 @@ use fuel_core_types::{
     },
 };
 use std::{
-    collections::HashMap,
+    collections::{
+        HashMap,
+        HashSet,
+    },
     sync::{
         Arc,
         Mutex,
@@ -29,6 +32,7 @@ pub struct Data {
     pub coins: HashMap<UtxoId, CompressedCoin>,
     pub contracts: HashMap<ContractId, Contract>,
     pub messages: HashMap<MessageId, Message>,
+    pub spent_messages: HashSet<MessageId>,
 }
 
 #[derive(Clone, Default)]
@@ -51,6 +55,10 @@ impl MockDb {
             .unwrap()
             .messages
             .insert(message.id(), message);
+    }
+
+    pub fn spend_message(&self, message_id: MessageId) {
+        self.data.lock().unwrap().spent_messages.insert(message_id);
     }
 }
 
@@ -82,6 +90,15 @@ impl TxPoolDb for MockDb {
             .messages
             .get(message_id)
             .map(Clone::clone))
+    }
+
+    fn message_spent(&self, message_id: &MessageId) -> StorageResult<bool> {
+        Ok(self
+            .data
+            .lock()
+            .unwrap()
+            .spent_messages
+            .contains(message_id))
     }
 
     fn current_block_height(&self) -> StorageResult<BlockHeight> {

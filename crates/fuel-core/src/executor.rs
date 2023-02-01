@@ -13,8 +13,8 @@ use fuel_core_storage::{
         Coins,
         ContractsLatestUtxo,
         FuelBlocks,
-        Messages,
         Receipts,
+        SpentMessages,
         Transactions,
     },
     transactional::{
@@ -37,12 +37,9 @@ use fuel_core_types::{
             DaBlockHeight,
         },
     },
-    entities::{
-        coin::{
-            CoinStatus,
-            CompressedCoin,
-        },
-        message::Message,
+    entities::coin::{
+        CoinStatus,
+        CompressedCoin,
     },
     fuel_asm::Word,
     fuel_tx::{
@@ -100,6 +97,7 @@ use fuel_core_types::{
     },
 };
 use itertools::Itertools;
+pub use ports::RelayerPort;
 use std::ops::{
     Deref,
     DerefMut,
@@ -109,13 +107,19 @@ use tracing::{
     warn,
 };
 
+mod ports;
+
 /// ! The executor is used for block production and validation. Given a block, it will execute all
 /// the transactions contained in the block and persist changes to the underlying database as needed.
 /// In production mode, block fields like transaction commitments are set based on the executed txs.
 /// In validation mode, the processed block commitments are compared with the proposed block.
 #[derive(Clone, Debug)]
-pub struct Executor {
+pub struct Executor<R>
+where
+    R: RelayerPort + Clone,
+{
     pub database: Database,
+    pub relayer: R,
     pub config: Config,
 }
 
@@ -127,7 +131,10 @@ struct ExecutionData {
     skipped_transactions: Vec<(Transaction, ExecutorError)>,
 }
 
-impl Executor {
+impl<R> Executor<R>
+where
+    R: RelayerPort + Clone,
+{
     /// Executes the block and commits the result of the execution into the inner `Database`.
     pub fn execute_and_commit(
         &self,
@@ -139,7 +146,21 @@ impl Executor {
     }
 }
 
-impl Executor {
+#[cfg(test)]
+impl Executor<Database> {
+    fn test(database: Database, config: Config) -> Self {
+        Self {
+            relayer: database.clone(),
+            database,
+            config,
+        }
+    }
+}
+
+impl<R> Executor<R>
+where
+    R: RelayerPort + Clone,
+{
     pub fn execute_without_commit(
         &self,
         block: ExecutionBlock,
@@ -159,6 +180,7 @@ impl Executor {
 
         // spawn a nested executor instance to override utxo_validation config
         let executor = Self {
+            relayer: self.relayer.clone(),
             config: Config {
                 utxo_validation,
                 ..self.config.clone()
@@ -196,7 +218,10 @@ impl Executor {
     }
 }
 
-impl Executor {
+impl<R> Executor<R>
+where
+    R: RelayerPort + Clone,
+{
     #[tracing::instrument(skip(self))]
     fn execute_inner(
         &self,
@@ -622,7 +647,6 @@ impl Executor {
         self.spend_input_utxos(
             &tx,
             tx_db_transaction.deref_mut(),
-            *header.height(),
             self.config.utxo_validation,
         )?;
 
@@ -737,8 +761,12 @@ impl Executor {
                 Input::Contract { .. } => {}
                 Input::MessageSigned { message_id, .. }
                 | Input::MessagePredicate { message_id, .. } => {
-                    if let Some(message) = db.storage::<Messages>().get(message_id)? {
-                        if message.fuel_block_spend.is_some() {
+                    if let Some(message) = self
+                        .relayer
+                        .get_message(message_id, &block_da_height)
+                        .map_err(|e| ExecutorError::StorageError(e.into()))?
+                    {
+                        if db.message_spent(message_id)? {
                             return Err(TransactionValidityError::MessageAlreadySpent(
                                 *message_id,
                             )
@@ -809,7 +837,6 @@ impl Executor {
         &self,
         tx: &Tx,
         db: &mut Database,
-        block_height: BlockHeight,
         utxo_validation: bool,
     ) -> ExecutorResult<()>
     where
@@ -857,50 +884,9 @@ impl Executor {
                         },
                     )?;
                 }
-                Input::MessageSigned {
-                    message_id,
-                    sender,
-                    recipient,
-                    amount,
-                    nonce,
-                    data,
-                    ..
-                }
-                | Input::MessagePredicate {
-                    message_id,
-                    sender,
-                    recipient,
-                    amount,
-                    nonce,
-                    data,
-                    ..
-                } => {
-                    let da_height = if utxo_validation {
-                        db.storage::<Messages>()
-                            .get(message_id)?
-                            .ok_or(ExecutorError::TransactionValidity(
-                                TransactionValidityError::MessageDoesNotExist(
-                                    *message_id,
-                                ),
-                            ))?
-                            .da_height
-                    } else {
-                        // if utxo validation is disabled, just assignto the original block
-                        Default::default()
-                    };
-
-                    db.storage::<Messages>().insert(
-                        message_id,
-                        &Message {
-                            da_height,
-                            fuel_block_spend: Some(block_height),
-                            sender: *sender,
-                            recipient: *recipient,
-                            nonce: *nonce,
-                            amount: *amount,
-                            data: data.clone(),
-                        },
-                    )?;
+                Input::MessageSigned { message_id, .. }
+                | Input::MessagePredicate { message_id, .. } => {
+                    db.storage::<SpentMessages>().insert(message_id, &())?;
                 }
                 _ => {}
             }
@@ -1134,7 +1120,7 @@ impl Executor {
                     amount,
                     asset_id,
                     to,
-                } => Executor::insert_coin(
+                } => Self::insert_coin(
                     block_height.into(),
                     utxo_id,
                     amount,
@@ -1164,7 +1150,7 @@ impl Executor {
                     to,
                     asset_id,
                     amount,
-                } => Executor::insert_coin(
+                } => Self::insert_coin(
                     block_height.into(),
                     utxo_id,
                     amount,
@@ -1176,7 +1162,7 @@ impl Executor {
                     to,
                     asset_id,
                     amount,
-                } => Executor::insert_coin(
+                } => Self::insert_coin(
                     block_height.into(),
                     utxo_id,
                     amount,
@@ -1382,9 +1368,13 @@ impl Fee for CreateCheckedMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fuel_core_storage::tables::Messages;
     use fuel_core_types::{
         blockchain::header::ConsensusHeader,
-        entities::message::CheckedMessage,
+        entities::message::{
+            CheckedMessage,
+            Message,
+        },
         fuel_asm::Opcode,
         fuel_crypto::SecretKey,
         fuel_merkle::common::empty_sum_sha256,
@@ -1559,14 +1549,8 @@ mod tests {
     // Happy path test case that a produced block will also validate
     #[test]
     fn executor_validates_correctly_produced_block() {
-        let producer = Executor {
-            database: Default::default(),
-            config: Config::local_node(),
-        };
-        let verifier = Executor {
-            database: Default::default(),
-            config: Config::local_node(),
-        };
+        let producer = Executor::test(Default::default(), Config::local_node());
+        let verifier = Executor::test(Default::default(), Config::local_node());
         let block = test_block(10);
 
         let ExecutionResult {
@@ -1586,10 +1570,7 @@ mod tests {
     // Ensure transaction commitment != default after execution
     #[test]
     fn executor_commits_transactions_to_block() {
-        let producer = Executor {
-            database: Default::default(),
-            config: Config::local_node(),
-        };
+        let producer = Executor::test(Default::default(), Config::local_node());
         let block = test_block(10);
         let start_block = block.clone();
 
@@ -1649,10 +1630,7 @@ mod tests {
                 .transaction()
                 .clone();
 
-            let mut producer = Executor {
-                database: Default::default(),
-                config: Config::local_node(),
-            };
+            let mut producer = Executor::test(Default::default(), Config::local_node());
             let recipient = [1u8; 32].into();
             producer.config.block_producer.coinbase_recipient = recipient;
             producer
@@ -1719,10 +1697,7 @@ mod tests {
                 .transaction()
                 .clone();
 
-            let mut producer = Executor {
-                database: Default::default(),
-                config: Config::local_node(),
-            };
+            let mut producer = Executor::test(Default::default(), Config::local_node());
             let recipient = [1u8; 32].into();
             producer.config.block_producer.coinbase_recipient = recipient;
             producer
@@ -1744,11 +1719,11 @@ mod tests {
             assert!(skipped_transactions.is_empty());
             let produced_txs = produced_block.transactions().to_vec();
 
-            let validator = Executor {
-                database: Default::default(),
+            let validator = Executor::test(
+                Default::default(),
                 // Use the same config as block producer
-                config: producer.config,
-            };
+                producer.config,
+            );
             let ExecutionResult {
                 block: validated_block,
                 ..
@@ -1806,10 +1781,8 @@ mod tests {
                     .transaction()
                     .clone();
 
-                let mut producer = Executor {
-                    database: Default::default(),
-                    config: Config::local_node(),
-                };
+                let mut producer =
+                    Executor::test(Default::default(), Config::local_node());
                 producer.config.block_producer.coinbase_recipient = config_coinbase;
 
                 let mut block = Block::default();
@@ -1858,10 +1831,7 @@ mod tests {
             *block.transactions_mut() = vec![mint.into()];
             block.header_mut().recalculate_metadata();
 
-            let validator = Executor {
-                database: Default::default(),
-                config: Config::local_node(),
-            };
+            let validator = Executor::test(Default::default(), Config::local_node());
             let validation_err = validator
                 .execute_and_commit(ExecutionBlock::Validation(block))
                 .expect_err("Expected error because coinbase if invalid");
@@ -1879,10 +1849,7 @@ mod tests {
             *block.transactions_mut() = vec![mint.into()];
             block.header_mut().recalculate_metadata();
 
-            let validator = Executor {
-                database: Default::default(),
-                config: Config::local_node(),
-            };
+            let validator = Executor::test(Default::default(), Config::local_node());
             let validation_err = validator
                 .execute_and_commit(ExecutionBlock::Validation(block))
                 .expect_err("Expected error because coinbase if invalid");
@@ -1902,10 +1869,7 @@ mod tests {
             *block.transactions_mut() = vec![mint.into()];
             block.header_mut().recalculate_metadata();
 
-            let validator = Executor {
-                database: Default::default(),
-                config: Config::local_node(),
-            };
+            let validator = Executor::test(Default::default(), Config::local_node());
             let validation_err = validator
                 .execute_and_commit(ExecutionBlock::Validation(block))
                 .expect_err("Expected error because coinbase if invalid");
@@ -1929,10 +1893,7 @@ mod tests {
             *block.transactions_mut() = vec![mint.into()];
             block.header_mut().recalculate_metadata();
 
-            let validator = Executor {
-                database: Default::default(),
-                config: Config::local_node(),
-            };
+            let validator = Executor::test(Default::default(), Config::local_node());
             let validation_err = validator
                 .execute_and_commit(ExecutionBlock::Validation(block))
                 .expect_err("Expected error because coinbase if invalid");
@@ -1957,10 +1918,7 @@ mod tests {
             *block.transactions_mut() = vec![mint.into()];
             block.header_mut().recalculate_metadata();
 
-            let validator = Executor {
-                database: Default::default(),
-                config: Config::local_node(),
-            };
+            let validator = Executor::test(Default::default(), Config::local_node());
             let validation_err = validator
                 .execute_and_commit(ExecutionBlock::Validation(block))
                 .expect_err("Expected error because coinbase if invalid");
@@ -1981,10 +1939,7 @@ mod tests {
             *block.transactions_mut() = vec![mint.into()];
             block.header_mut().recalculate_metadata();
 
-            let validator = Executor {
-                database: Default::default(),
-                config: Config::local_node(),
-            };
+            let validator = Executor::test(Default::default(), Config::local_node());
             let validation_err = validator
                 .execute_and_commit(ExecutionBlock::Validation(block))
                 .expect_err("Expected error because coinbase if invalid");
@@ -2011,10 +1966,7 @@ mod tests {
             ];
             block.header_mut().recalculate_metadata();
 
-            let validator = Executor {
-                database: Default::default(),
-                config: Config::local_node(),
-            };
+            let validator = Executor::test(Default::default(), Config::local_node());
             let validation_err = validator
                 .execute_and_commit(ExecutionBlock::Validation(block))
                 .expect_err("Expected error because coinbase if invalid");
@@ -2028,20 +1980,14 @@ mod tests {
     // Ensure tx has at least one input to cover gas
     #[test]
     fn executor_invalidates_missing_gas_input() {
-        let producer = Executor {
-            database: Default::default(),
-            config: Config::local_node(),
-        };
+        let producer = Executor::test(Default::default(), Config::local_node());
         let factor = producer
             .config
             .chain_conf
             .transaction_parameters
             .gas_price_factor as f64;
 
-        let verifier = Executor {
-            database: Default::default(),
-            config: Config::local_node(),
-        };
+        let verifier = Executor::test(Default::default(), Config::local_node());
 
         let gas_limit = 100;
         let gas_price = 1;
@@ -2095,15 +2041,9 @@ mod tests {
 
     #[test]
     fn executor_invalidates_duplicate_tx_id() {
-        let producer = Executor {
-            database: Default::default(),
-            config: Config::local_node(),
-        };
+        let producer = Executor::test(Default::default(), Config::local_node());
 
-        let verifier = Executor {
-            database: Default::default(),
-            config: Config::local_node(),
-        };
+        let verifier = Executor::test(Default::default(), Config::local_node());
 
         let mut block = PartialFuelBlock {
             header: Default::default(),
@@ -2204,15 +2144,9 @@ mod tests {
             utxo_validation: true,
             ..Config::local_node()
         };
-        let producer = Executor {
-            database: db.clone(),
-            config: config.clone(),
-        };
+        let producer = Executor::test(db.clone(), config.clone());
 
-        let verifier = Executor {
-            database: db.clone(),
-            config,
-        };
+        let verifier = Executor::test(db.clone(), config);
 
         let mut block = PartialFuelBlock {
             header: Default::default(),
@@ -2291,15 +2225,9 @@ mod tests {
             utxo_validation: true,
             ..Config::local_node()
         };
-        let producer = Executor {
-            database: Database::default(),
-            config: config.clone(),
-        };
+        let producer = Executor::test(Database::default(), config.clone());
 
-        let verifier = Executor {
-            database: Default::default(),
-            config,
-        };
+        let verifier = Executor::test(Default::default(), config);
 
         let mut block = PartialFuelBlock {
             header: Default::default(),
@@ -2366,15 +2294,9 @@ mod tests {
 
         let tx_id = tx.id();
 
-        let producer = Executor {
-            database: Default::default(),
-            config: Config::local_node(),
-        };
+        let producer = Executor::test(Default::default(), Config::local_node());
 
-        let verifier = Executor {
-            database: Default::default(),
-            config: Config::local_node(),
-        };
+        let verifier = Executor::test(Default::default(), Config::local_node());
 
         let mut block = Block::default();
         *block.transactions_mut() = vec![tx];
@@ -2412,15 +2334,9 @@ mod tests {
             .clone()
             .into();
 
-        let producer = Executor {
-            database: Default::default(),
-            config: Config::local_node(),
-        };
+        let producer = Executor::test(Default::default(), Config::local_node());
 
-        let verifier = Executor {
-            database: Default::default(),
-            config: Config::local_node(),
-        };
+        let verifier = Executor::test(Default::default(), Config::local_node());
 
         let mut block = Block::default();
         *block.transactions_mut() = vec![tx];
@@ -2446,13 +2362,13 @@ mod tests {
             TxBuilder::new(2322u64).build().transaction().clone().into();
         let tx_id = tx.id();
 
-        let executor = Executor {
-            database: Database::default(),
-            config: Config {
+        let executor = Executor::test(
+            Database::default(),
+            Config {
                 utxo_validation: true,
                 ..Config::local_node()
             },
-        };
+        );
 
         let block = PartialFuelBlock {
             header: Default::default(),
@@ -2528,13 +2444,13 @@ mod tests {
                 },
             )
             .unwrap();
-        let executor = Executor {
-            database: db.clone(),
-            config: Config {
+        let executor = Executor::test(
+            db.clone(),
+            Config {
                 utxo_validation: true,
                 ..Config::local_node()
             },
-        };
+        );
 
         let block = PartialFuelBlock {
             header: Default::default(),
@@ -2598,10 +2514,7 @@ mod tests {
         tx1.set_gas_price(1000000);
         let (tx2, tx3) = setup_executable_script();
 
-        let executor = Executor {
-            database: Default::default(),
-            config: Config::local_node(),
-        };
+        let executor = Executor::test(Default::default(), Config::local_node());
 
         let block = PartialFuelBlock {
             header: Default::default(),
@@ -2649,10 +2562,7 @@ mod tests {
             .into();
 
         let db = &Database::default();
-        let executor = Executor {
-            database: db.clone(),
-            config: Config::local_node(),
-        };
+        let executor = Executor::test(db.clone(), Config::local_node());
 
         let block = PartialFuelBlock {
             header: Default::default(),
@@ -2696,13 +2606,13 @@ mod tests {
             .into();
         let db = &mut Database::default();
 
-        let executor = Executor {
-            database: db.clone(),
-            config: Config {
+        let executor = Executor::test(
+            db.clone(),
+            Config {
                 utxo_validation: false,
                 ..Config::local_node()
             },
-        };
+        );
 
         let block = PartialFuelBlock {
             header: PartialBlockHeader {
@@ -2762,13 +2672,13 @@ mod tests {
             .into();
         let db = &mut Database::default();
 
-        let executor = Executor {
-            database: db.clone(),
-            config: Config {
+        let executor = Executor::test(
+            db.clone(),
+            Config {
                 utxo_validation: false,
                 ..Config::local_node()
             },
-        };
+        );
 
         let block = PartialFuelBlock {
             header: PartialBlockHeader {
@@ -2874,13 +2784,13 @@ mod tests {
             .clone();
         let db = &mut Database::default();
 
-        let executor = Executor {
-            database: db.clone(),
-            config: Config {
+        let executor = Executor::test(
+            db.clone(),
+            Config {
                 utxo_validation: false,
                 ..Config::local_node()
             },
-        };
+        );
 
         let block = PartialFuelBlock {
             header: PartialBlockHeader {
@@ -2958,13 +2868,13 @@ mod tests {
         }
         let db = &mut Database::default();
 
-        let executor = Executor {
-            database: db.clone(),
-            config: Config {
+        let executor = Executor::test(
+            db.clone(),
+            Config {
                 utxo_validation: false,
                 ..Config::local_node()
             },
-        };
+        );
 
         let block = PartialFuelBlock {
             header: PartialBlockHeader {
@@ -3046,13 +2956,13 @@ mod tests {
                 .unwrap();
         }
 
-        let executor = Executor {
-            database: db.clone(),
-            config: Config {
+        let executor = Executor::test(
+            db.clone(),
+            Config {
                 utxo_validation: true,
                 ..Config::local_node()
             },
-        };
+        );
 
         let block = PartialFuelBlock {
             header: PartialBlockHeader {
@@ -3117,20 +3027,14 @@ mod tests {
 
         let db = Database::default();
 
-        let setup = Executor {
-            database: db.clone(),
-            config: Config::local_node(),
-        };
+        let setup = Executor::test(db.clone(), Config::local_node());
 
         setup
             .execute_and_commit(ExecutionBlock::Production(first_block))
             .unwrap();
 
         let producer_view = db.transaction().deref_mut().clone();
-        let producer = Executor {
-            database: producer_view,
-            config: Config::local_node(),
-        };
+        let producer = Executor::test(producer_view, Config::local_node());
         let ExecutionResult {
             block: second_block,
             ..
@@ -3138,10 +3042,7 @@ mod tests {
             .execute_and_commit(ExecutionBlock::Production(second_block))
             .unwrap();
 
-        let verifier = Executor {
-            database: db,
-            config: Config::local_node(),
-        };
+        let verifier = Executor::test(db, Config::local_node());
         let verify_result =
             verifier.execute_and_commit(ExecutionBlock::Validation(second_block));
         assert!(verify_result.is_ok());
@@ -3198,20 +3099,14 @@ mod tests {
 
         let db = Database::default();
 
-        let setup = Executor {
-            database: db.clone(),
-            config: Config::local_node(),
-        };
+        let setup = Executor::test(db.clone(), Config::local_node());
 
         setup
             .execute_and_commit(ExecutionBlock::Production(first_block))
             .unwrap();
 
         let producer_view = db.transaction().deref_mut().clone();
-        let producer = Executor {
-            database: producer_view,
-            config: Config::local_node(),
-        };
+        let producer = Executor::test(producer_view, Config::local_node());
 
         let ExecutionResult {
             block: mut second_block,
@@ -3227,10 +3122,7 @@ mod tests {
             }
         }
 
-        let verifier = Executor {
-            database: db,
-            config: Config::local_node(),
-        };
+        let verifier = Executor::test(db, Config::local_node());
         let verify_result =
             verifier.execute_and_commit(ExecutionBlock::Validation(second_block));
 
@@ -3248,10 +3140,7 @@ mod tests {
         let script_id = script.id();
 
         let database = &Database::default();
-        let executor = Executor {
-            database: database.clone(),
-            config: Config::local_node(),
-        };
+        let executor = Executor::test(database.clone(), Config::local_node());
 
         let block = PartialFuelBlock {
             header: Default::default(),
@@ -3302,10 +3191,7 @@ mod tests {
         let tx_id = tx.id();
 
         let database = &Database::default();
-        let executor = Executor {
-            database: database.clone(),
-            config: Config::local_node(),
-        };
+        let executor = Executor::test(database.clone(), Config::local_node());
 
         let block = PartialFuelBlock {
             header: Default::default(),
@@ -3335,7 +3221,6 @@ mod tests {
             amount: 1000,
             data: vec![],
             da_height: DaBlockHeight(da_height),
-            fuel_block_spend: None,
         };
 
         let tx = TransactionBuilder::script(vec![], vec![])
@@ -3358,7 +3243,7 @@ mod tests {
     }
 
     /// Helper to build database and executor for some of the message tests
-    fn make_executor(messages: &[&CheckedMessage]) -> Executor {
+    fn make_executor(messages: &[&CheckedMessage]) -> Executor<Database> {
         let mut database = Database::default();
         let database_ref = &mut database;
 
@@ -3369,13 +3254,13 @@ mod tests {
                 .unwrap();
         }
 
-        Executor {
+        Executor::test(
             database,
-            config: Config {
+            Config {
                 utxo_validation: true,
                 ..Config::local_node()
             },
-        }
+        )
     }
 
     #[test]
@@ -3592,13 +3477,13 @@ mod tests {
             .unwrap();
 
         // make executor with db
-        let executor = Executor {
-            database: database.clone(),
-            config: Config {
+        let executor = Executor::test(
+            database.clone(),
+            Config {
                 utxo_validation: true,
                 ..Config::local_node()
             },
-        };
+        );
 
         executor
             .execute_and_commit(ExecutionBlock::Production(block))
@@ -3669,13 +3554,13 @@ mod tests {
             .unwrap();
 
         // make executor with db
-        let executor = Executor {
-            database: database.clone(),
-            config: Config {
+        let executor = Executor::test(
+            database.clone(),
+            Config {
                 utxo_validation: true,
                 ..Config::local_node()
             },
-        };
+        );
 
         executor
             .execute_and_commit(ExecutionBlock::Production(block))

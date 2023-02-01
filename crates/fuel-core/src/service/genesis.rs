@@ -311,7 +311,6 @@ fn init_da_messages(
                     amount: msg.amount,
                     data: msg.data.clone(),
                     da_height: msg.da_height,
-                    fuel_block_spend: None,
                 };
 
                 let message_id = message.id();

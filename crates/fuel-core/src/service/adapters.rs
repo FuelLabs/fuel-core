@@ -35,7 +35,7 @@ impl TxPoolAdapter {
 
 #[derive(Clone)]
 pub struct ExecutorAdapter {
-    pub database: Database,
+    pub relayer: MaybeRelayerAdapter,
     pub config: Config,
 }
 

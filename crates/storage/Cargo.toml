@@ -20,7 +20,8 @@ version = "0.16.1"
 anyhow = "1.0"
 fuel-core-types = { path = "../types", version = "0.16.1" }
 fuel-vm-private = { version = "0.25", package = "fuel-vm" }
+mockall = { version = "0.11", optional = true }
 thiserror = "1.0"
 
 [features]
-test-helpers = []
+test-helpers = ["dep:mockall"]

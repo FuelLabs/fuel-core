@@ -52,10 +52,6 @@ impl Message {
     async fn da_height(&self) -> U64 {
         self.0.da_height.as_u64().into()
     }
-
-    async fn fuel_block_spend(&self) -> Option<U64> {
-        self.0.fuel_block_spend.map(|v| v.into())
-    }
 }
 
 #[derive(Default)]

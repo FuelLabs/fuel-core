@@ -3,10 +3,7 @@
 use crate::{
     blockchain::{
         header::BlockHeader,
-        primitives::{
-            BlockHeight,
-            DaBlockHeight,
-        },
+        primitives::DaBlockHeight,
     },
     fuel_tx::{
         Input,
@@ -37,8 +34,6 @@ pub struct Message {
     pub data: Vec<u8>,
     /// The block height from the parent da layer that originated this message
     pub da_height: DaBlockHeight,
-    /// When the message was spent in the Fuel chain
-    pub fuel_block_spend: Option<BlockHeight>, // TODO: get rid of this
 }
 
 impl Message {

@@ -889,7 +889,6 @@ mod tests {
                 amount,
                 data: vec![],
                 da_height: DaBlockHeight::from(1u64),
-                fuel_block_spend: None,
             };
 
             let db = &mut self.database;

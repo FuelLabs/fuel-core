@@ -3,63 +3,73 @@ use crate::database::{
     Column,
     Database,
 };
-use fuel_core_relayer::ports::RelayerDb;
+use fuel_core_relayer::ports::RelayerMetadata;
 use fuel_core_storage::{
-    not_found,
-    transactional::Transaction,
-    Result as StorageResult,
-};
-use fuel_core_types::{
-    blockchain::primitives::{
-        BlockHeight,
-        DaBlockHeight,
-    },
-    entities::message::{
-        CheckedMessage,
-        Message,
-    },
-    fuel_types::MessageId,
+    StorageInspect,
+    StorageMutate,
 };
 
-#[cfg(test)]
-mod tests;
+impl StorageInspect<RelayerMetadata> for Database {
+    type Error = fuel_core_storage::Error;
 
-impl RelayerDb for Database {
-    fn insert_messages(
+    fn get(
+        &self,
+        _key: &<RelayerMetadata as fuel_core_storage::Mappable>::Key,
+    ) -> Result<
+        Option<
+            std::borrow::Cow<
+                <RelayerMetadata as fuel_core_storage::Mappable>::OwnedValue,
+            >,
+        >,
+        Self::Error,
+    > {
+        Ok(Self::get(
+            self,
+            metadata::FINALIZED_DA_HEIGHT_KEY,
+            Column::Metadata,
+        )?)
+    }
+
+    fn contains_key(
+        &self,
+        _key: &<RelayerMetadata as fuel_core_storage::Mappable>::Key,
+    ) -> Result<bool, Self::Error> {
+        Ok(Self::exists(
+            self,
+            metadata::FINALIZED_DA_HEIGHT_KEY,
+            Column::Metadata,
+        )?)
+    }
+}
+
+impl StorageMutate<RelayerMetadata> for Database {
+    fn insert(
         &mut self,
-        messages: &[(DaBlockHeight, CheckedMessage)],
-    ) -> StorageResult<()> {
-        let mut db = self.transaction();
-        let mut key = [0u8; core::mem::size_of::<u64>() + MessageId::LEN];
-
-        let mut max_height = None;
-        for (height, message) in messages {
-            key[..8].copy_from_slice(&height.0.to_be_bytes());
-            key[8..].copy_from_slice(message.id().as_ref());
-            let _: Option<Message> =
-                db.insert(key, Column::RelayerMessages, message.message())?;
-            let max = max_height.get_or_insert(0u64);
-            *max = (*max).max(height.0);
-        }
-        if let Some(height) = max_height {
-            let _: Option<BlockHeight> = db.insert(
-                metadata::FINALIZED_DA_HEIGHT_KEY,
-                Column::Metadata,
-                BlockHeight::from(height),
-            )?;
-        }
-        db.commit()?;
-        Ok(())
+        _key: &<RelayerMetadata as fuel_core_storage::Mappable>::Key,
+        value: &<RelayerMetadata as fuel_core_storage::Mappable>::Value,
+    ) -> Result<
+        Option<<RelayerMetadata as fuel_core_storage::Mappable>::OwnedValue>,
+        Self::Error,
+    > {
+        Ok(Self::insert(
+            self,
+            metadata::FINALIZED_DA_HEIGHT_KEY,
+            Column::Metadata,
+            value,
+        )?)
     }
 
-    fn set_finalized_da_height(&mut self, block: DaBlockHeight) -> StorageResult<()> {
-        let _: Option<BlockHeight> =
-            self.insert(metadata::FINALIZED_DA_HEIGHT_KEY, Column::Metadata, block)?;
-        Ok(())
-    }
-
-    fn get_finalized_da_height(&self) -> StorageResult<DaBlockHeight> {
-        self.get(metadata::FINALIZED_DA_HEIGHT_KEY, Column::Metadata)?
-            .ok_or(not_found!("FinalizedDaHeight"))
+    fn remove(
+        &mut self,
+        _key: &<RelayerMetadata as fuel_core_storage::Mappable>::Key,
+    ) -> Result<
+        Option<<RelayerMetadata as fuel_core_storage::Mappable>::OwnedValue>,
+        Self::Error,
+    > {
+        Ok(Self::remove(
+            self,
+            metadata::FINALIZED_DA_HEIGHT_KEY,
+            Column::Metadata,
+        )?)
     }
 }

@@ -113,8 +113,8 @@ pub enum Column {
     FuelBlockMerkleData = 17,
     /// See [`FuelBlockMerkleMetadata`](storage::FuelBlockMerkleMetadata)
     FuelBlockMerkleMetadata = 18,
-    /// Messages that have been imported by the relayer.
-    RelayerMessages = 19,
+    /// Messages that have been spent.
+    SpentMessages = 19,
 }
 
 #[derive(Clone, Debug)]
@@ -258,7 +258,8 @@ impl Database {
     }
 }
 
-impl Transactional<Database> for Database {
+impl Transactional for Database {
+    type Storage = Database;
     fn transaction(&self) -> StorageTransaction<Database> {
         StorageTransaction::new(self.transaction())
     }

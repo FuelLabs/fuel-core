@@ -1,5 +1,4 @@
 use fuel_core_types::{
-    blockchain::primitives::BlockHeight,
     entities::message::Message,
     fuel_asm::Opcode,
     fuel_tx::{
@@ -13,10 +12,7 @@ use fuel_core_types::{
     fuel_types::Word,
 };
 
-pub(crate) fn create_message_predicate_from_message(
-    amount: Word,
-    spent_block: Option<BlockHeight>,
-) -> (Message, Input) {
+pub(crate) fn create_message_predicate_from_message(amount: Word) -> (Message, Input) {
     let predicate = vec![Opcode::RET(1)].into_iter().collect::<Vec<u8>>();
     let message = Message {
         sender: Default::default(),
@@ -25,7 +21,6 @@ pub(crate) fn create_message_predicate_from_message(
         amount,
         data: vec![],
         da_height: Default::default(),
-        fuel_block_spend: spent_block,
     };
 
     (

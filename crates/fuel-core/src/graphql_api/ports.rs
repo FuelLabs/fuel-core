@@ -10,6 +10,7 @@ use fuel_core_storage::{
         Messages,
         Receipts,
         SealedBlockConsensus,
+        SpentMessages,
         Transactions,
     },
     Error as StorageError,
@@ -48,6 +49,7 @@ pub trait DatabasePort:
     + DatabaseBlocks
     + DatabaseTransactions
     + DatabaseMessages
+    + DatabaseSpentMessages
     + DatabaseCoins
     + DatabaseContracts
     + DatabaseChain
@@ -99,6 +101,12 @@ pub trait DatabaseMessages: StorageInspect<Messages, Error = StorageError> {
         start_message_id: Option<MessageId>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<Message>>;
+}
+
+pub trait DatabaseSpentMessages:
+    StorageInspect<SpentMessages, Error = StorageError>
+{
+    fn message_spent(&self, message_id: &MessageId) -> StorageResult<bool>;
 }
 
 /// Trait that specifies all the getters required for coins.

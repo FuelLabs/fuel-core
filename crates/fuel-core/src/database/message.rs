@@ -8,7 +8,10 @@ use crate::{
 };
 use fuel_core_chain_config::MessageConfig;
 use fuel_core_storage::{
-    tables::Messages,
+    tables::{
+        Messages,
+        SpentMessages,
+    },
     Error as StorageError,
     StorageInspect,
     StorageMutate,
@@ -75,6 +78,58 @@ impl StorageMutate<Messages> for Database {
     }
 }
 
+impl StorageInspect<SpentMessages> for Database {
+    type Error = StorageError;
+
+    fn get(
+        &self,
+        key: &<SpentMessages as fuel_core_storage::Mappable>::Key,
+    ) -> Result<
+        Option<Cow<<SpentMessages as fuel_core_storage::Mappable>::OwnedValue>>,
+        Self::Error,
+    > {
+        Ok(
+            <Self as StorageInspect<SpentMessages>>::contains_key(self, key)?
+                .then_some(Cow::Owned(())),
+        )
+    }
+
+    fn contains_key(
+        &self,
+        key: &<SpentMessages as fuel_core_storage::Mappable>::Key,
+    ) -> Result<bool, Self::Error> {
+        Self::exists(self, key.as_ref(), Column::SpentMessages).map_err(Into::into)
+    }
+}
+
+impl StorageMutate<SpentMessages> for Database {
+    fn insert(
+        &mut self,
+        key: &<SpentMessages as fuel_core_storage::Mappable>::Key,
+        _value: &<SpentMessages as fuel_core_storage::Mappable>::Value,
+    ) -> Result<
+        Option<<SpentMessages as fuel_core_storage::Mappable>::OwnedValue>,
+        Self::Error,
+    > {
+        Ok(Database::insert(
+            self,
+            key.as_ref(),
+            Column::SpentMessages,
+            1u8,
+        )?)
+    }
+
+    fn remove(
+        &mut self,
+        key: &<SpentMessages as fuel_core_storage::Mappable>::Key,
+    ) -> Result<
+        Option<<SpentMessages as fuel_core_storage::Mappable>::OwnedValue>,
+        Self::Error,
+    > {
+        Ok(Database::remove(self, key.as_ref(), Column::SpentMessages)?.map(|_: u8| ()))
+    }
+}
+
 impl Database {
     pub fn owned_message_ids(
         &self,
@@ -112,10 +167,10 @@ impl Database {
             .filter_map(|msg| {
                 // Return only unspent messages
                 if let Ok(msg) = msg {
-                    if msg.fuel_block_spend.is_none() {
-                        Some(Ok(msg))
-                    } else {
-                        None
+                    match self.message_spent(&msg.id()) {
+                        Ok(false) => Some(Ok(msg)),
+                        Ok(true) => None,
+                        Err(e) => Some(Err(e)),
                     }
                 } else {
                     Some(msg)
@@ -136,6 +191,13 @@ impl Database {
             .collect::<DatabaseResult<Vec<MessageConfig>>>()?;
 
         Ok(Some(configs))
+    }
+
+    pub fn message_spent(&self, message_id: &MessageId) -> DatabaseResult<bool> {
+        Ok(
+            fuel_core_storage::StorageAsRef::storage::<SpentMessages>(&self)
+                .contains_key(message_id)?,
+        )
     }
 }
 

@@ -37,7 +37,6 @@ impl From<&MessageLog> for Message {
             amount: message.amount,
             data: message.data.clone(),
             da_height: message.da_height,
-            fuel_block_spend: None,
         }
     }
 }

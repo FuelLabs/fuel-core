@@ -140,12 +140,19 @@ impl<'a> AssetsQuery<'a> {
                     Ok(Resource::Message(message))
                 })
             })
-            .filter_ok(|message| {
-                if let Resource::Message(message) = message {
-                    message.fuel_block_spend.is_none()
-                } else {
-                    true
+            .filter_map(|message| match message {
+                Ok(message) => {
+                    if let Resource::Message(m) = &message {
+                        match self.database.message_spent(&m.id()) {
+                            Ok(true) => Some(Ok(message)),
+                            Ok(false) => None,
+                            Err(e) => Some(Err(e)),
+                        }
+                    } else {
+                        Some(Ok(message))
+                    }
                 }
+                Err(e) => Some(Err(e)),
             });
 
         coins_iter.chain(messages_iter.take_while(|_| {

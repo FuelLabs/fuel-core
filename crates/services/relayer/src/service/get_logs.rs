@@ -1,5 +1,4 @@
 use super::*;
-use anyhow::anyhow;
 use futures::TryStreamExt;
 
 #[cfg(test)]
@@ -63,20 +62,13 @@ where
         let messages = events
             .into_iter()
             .map(|event| {
-                let height: DaBlockHeight = event
-                    .block_number
-                    .ok_or_else(|| anyhow!("Log is missing block number {:?}", event))?
-                    .as_u64()
-                    .into();
                 let event: EthEventLog = (&event).try_into()?;
-                Ok((height, event))
+                Ok(event)
             })
             .filter_map(|result| match result {
-                Ok((height, event)) => {
+                Ok(event) => {
                     match event {
-                        EthEventLog::Message(m) => {
-                            Some(Ok((height, Message::from(&m).check())))
-                        }
+                        EthEventLog::Message(m) => Some(Ok(Message::from(&m).check())),
                         // TODO: Log out ignored messages.
                         EthEventLog::Ignored => None,
                     }

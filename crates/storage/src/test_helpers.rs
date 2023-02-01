@@ -25,8 +25,9 @@ impl AsMut<EmptyStorage> for EmptyStorage {
     }
 }
 
-impl Transactional<EmptyStorage> for EmptyStorage {
-    fn transaction(&self) -> StorageTransaction<EmptyStorage> {
+impl Transactional for EmptyStorage {
+    type Storage = EmptyStorage;
+    fn transaction(&self) -> StorageTransaction<Self::Storage> {
         StorageTransaction::new(EmptyStorage)
     }
 }

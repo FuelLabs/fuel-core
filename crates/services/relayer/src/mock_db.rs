@@ -51,19 +51,16 @@ impl MockDb {
 }
 
 impl RelayerDb for MockDb {
-    fn insert_messages(
-        &mut self,
-        messages: &[(DaBlockHeight, CheckedMessage)],
-    ) -> StorageResult<()> {
+    fn insert_messages(&mut self, messages: &[CheckedMessage]) -> StorageResult<()> {
         let mut m = self.data.lock().unwrap();
-        for (height, message) in messages {
+        for message in messages {
             let (message_id, message) = message.clone().unpack();
+            let max = m.finalized_da_height.get_or_insert(0u64.into());
+            *max = (*max).max(message.da_height);
             m.messages
-                .entry(*height)
+                .entry(message.da_height)
                 .or_default()
                 .insert(message_id, message);
-            let max = m.finalized_da_height.get_or_insert(0u64.into());
-            *max = (*max).max(*height);
         }
         Ok(())
     }

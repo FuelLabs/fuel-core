@@ -27,12 +27,19 @@ use fuel_core_services::{
     ServiceRunner,
     StateWatcher,
 };
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    tables::Messages,
+    Result as StorageResult,
+    StorageAsRef,
+    StorageInspect,
+};
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::message::Message,
+    fuel_types::MessageId,
 };
 use std::{
+    borrow::Cow,
     convert::TryInto,
     ops::Deref,
     sync::Arc,
@@ -231,6 +238,23 @@ impl<D> SharedState<D> {
             rx.changed().await?;
         }
         Ok(())
+    }
+
+    /// TODO
+    pub fn get_message(
+        &self,
+        id: &MessageId,
+        da_height: &DaBlockHeight,
+    ) -> anyhow::Result<Option<Message>>
+    where
+        D: StorageInspect<Messages, Error = fuel_core_storage::Error>,
+    {
+        Ok(self
+            .database
+            .storage::<Messages>()
+            .get(id)?
+            .map(Cow::into_owned)
+            .filter(|message| message.da_height <= *da_height))
     }
 }
 
