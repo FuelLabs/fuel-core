@@ -35,3 +35,7 @@ exclude = ["version-compatibility"]
 codegen-units = 1
 lto = "fat"
 panic = "abort"
+
+[patch.crates-io.fuel-vm]
+git = "https://github.com/FuelLabs/fuel-vm/"
+branch = "mitchmindtree/monorepo-fuel-asm-refactor"

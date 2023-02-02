@@ -47,7 +47,7 @@ async fn reset() {
     assert_eq!(0x00, register);
 
     let result = client
-        .execute(id, &Opcode::ADDI(0x10, 0x10, 0xfa))
+        .execute(id, &op::addi(0x10, 0x10, 0xfa))
         .await
         .unwrap();
     assert!(result);
@@ -56,22 +56,22 @@ async fn reset() {
     assert_eq!(0xfa, register);
 
     let result = client
-        .execute(id, &Opcode::ADDI(0x11, 0x11, 0x08))
+        .execute(id, &op::addi(0x11, 0x11, 0x08))
         .await
         .unwrap();
     assert!(result);
 
-    let result = client.execute(id, &Opcode::ALOC(0x11)).await.unwrap();
+    let result = client.execute(id, &op::aloc(0x11)).await.unwrap();
     assert!(result);
 
     let result = client
-        .execute(id, &Opcode::ADDI(0x11, REG_HP, 1))
+        .execute(id, &op::addi(0x11, REG_HP, 1))
         .await
         .unwrap();
     assert!(result);
 
     let result = client
-        .execute(id, &Opcode::SW(0x11, 0x10, 0))
+        .execute(id, &op::sw(0x11, 0x10, 0))
         .await
         .unwrap();
     assert!(result);

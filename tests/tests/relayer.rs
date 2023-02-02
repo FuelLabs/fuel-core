@@ -170,7 +170,7 @@ async fn messages_are_spendable_after_relayer_is_synced() {
 
     // attempt to spend the message downloaded from the relayer
     let tx =
-        TransactionBuilder::script(vec![Opcode::RET(0)].into_iter().collect(), vec![])
+        TransactionBuilder::script(vec![op::ret(0)].into_iter().collect(), vec![])
             .gas_limit(10_000)
             .gas_price(0)
             .add_unsigned_message_input(secret_key, sender, nonce, amount, vec![])

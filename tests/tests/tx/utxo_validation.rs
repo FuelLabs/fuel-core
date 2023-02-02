@@ -34,7 +34,7 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
         .into_iter()
         .map(|i| {
             TransactionBuilder::script(
-                Opcode::RET(REG_ONE).to_bytes().into_iter().collect(),
+                op::ret(REG_ONE).to_bytes().into_iter().collect(),
                 vec![],
             )
             .gas_limit(10000)
@@ -110,7 +110,7 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
 async fn submit_utxo_verified_tx_below_min_gas_price_fails() {
     // initialize transaction
     let tx = TransactionBuilder::script(
-        Opcode::RET(REG_ONE).to_bytes().into_iter().collect(),
+        op::ret(REG_ONE).to_bytes().into_iter().collect(),
         vec![],
     )
     .gas_limit(100)
@@ -140,7 +140,7 @@ async fn dry_run_override_utxo_validation() {
 
     let asset_id = rng.gen();
     let tx = TransactionBuilder::script(
-        Opcode::RET(REG_ONE).to_bytes().into_iter().collect(),
+        op::ret(REG_ONE).to_bytes().into_iter().collect(),
         vec![],
     )
     .gas_limit(10000)
@@ -185,7 +185,7 @@ async fn dry_run_no_utxo_validation_override() {
     let asset_id = rng.gen();
     // construct a tx with invalid inputs
     let tx = TransactionBuilder::script(
-        Opcode::RET(REG_ONE).to_bytes().into_iter().collect(),
+        op::ret(REG_ONE).to_bytes().into_iter().collect(),
         vec![],
     )
     .gas_limit(1000)
@@ -231,7 +231,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
         .into_iter()
         .map(|i| {
             TransactionBuilder::script(
-                Opcode::RET(REG_ONE).to_bytes().into_iter().collect(),
+                op::ret(REG_ONE).to_bytes().into_iter().collect(),
                 vec![],
             )
             .gas_limit(10000)

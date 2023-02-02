@@ -43,7 +43,7 @@ pub fn select_transactions(
 mod tests {
     use fuel_core_txpool as _;
     use fuel_core_types::{
-        fuel_asm::Opcode,
+        fuel_asm::{op},
         fuel_crypto::rand::{
             thread_rng,
             Rng,
@@ -78,7 +78,7 @@ mod tests {
             .iter()
             .map(|tx_gas| {
                 TransactionBuilder::script(
-                    vec![Opcode::RET(REG_ONE)].into_iter().collect(),
+                    vec![op::ret(REG_ONE)].into_iter().collect(),
                     vec![],
                 )
                 .gas_price(tx_gas.price)

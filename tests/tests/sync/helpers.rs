@@ -22,7 +22,7 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 use fuel_core_types::{
-    fuel_asm::Opcode,
+    fuel_asm::Instruction,
     fuel_crypto::SecretKey,
     fuel_tx::{
         Input,
@@ -173,7 +173,7 @@ pub async fn make_nodes(
                     let initial_coin =
                         ChainConfig::initial_coin(secret, 10000, Some(utxo_id));
                     let tx = TransactionBuilder::script(
-                        vec![Opcode::RET(REG_ONE)].into_iter().collect(),
+                        vec![op::ret(REG_ONE)].into_iter().collect(),
                         vec![],
                     )
                     .gas_limit(100000)
