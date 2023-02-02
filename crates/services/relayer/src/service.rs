@@ -226,7 +226,7 @@ impl<D> SharedState<D> {
         while rx
             .borrow_and_update()
             .deref()
-            .map_or(false, |h| h >= *height)
+            .map_or(true, |h| h >= *height)
         {
             rx.changed().await?;
         }

@@ -5,6 +5,7 @@
 use std::{
     ops::RangeInclusive,
     sync::Arc,
+    time::Duration,
 };
 
 use fuel_core_services::{
@@ -18,6 +19,7 @@ use fuel_core_types::{
         primitives::{
             BlockHeight,
             BlockId,
+            DaBlockHeight,
         },
         SealedBlock,
         SealedBlockHeader,
@@ -40,6 +42,7 @@ use crate::{
         BlockImporterPort,
         ConsensusPort,
         PeerToPeerPort,
+        RelayerPort,
     },
     state::State,
     tracing_helpers::{
@@ -64,9 +67,25 @@ pub struct Config {
     pub max_get_header_requests: usize,
     /// The maximum number of get transaction requests to make in a single batch.
     pub max_get_txns_requests: usize,
+    /// The maximum number of blocks that need to be synced before we start
+    /// awaiting relayer syncing.
+    pub max_da_lag: DaBlockHeight,
+    /// The maximum time to wait for the relayer to sync.
+    pub max_wait_time: Duration,
 }
 
-pub(crate) struct Import<P, E, C> {
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            max_get_header_requests: 10,
+            max_get_txns_requests: 10,
+            max_da_lag: 100u64.into(),
+            max_wait_time: Duration::from_secs(30),
+        }
+    }
+}
+
+pub(crate) struct Import<P, E, C, R> {
     /// Shared state between import and sync tasks.
     state: SharedMutex<State>,
     /// Notify import when sync has new work.
@@ -79,9 +98,11 @@ pub(crate) struct Import<P, E, C> {
     executor: Arc<E>,
     /// Consensus port.
     consensus: Arc<C>,
+    /// Relayer port.
+    relayer: Arc<R>,
 }
 
-impl<P, E, C> Import<P, E, C> {
+impl<P, E, C, R> Import<P, E, C, R> {
     pub(crate) fn new(
         state: SharedMutex<State>,
         notify: Arc<Notify>,
@@ -89,6 +110,7 @@ impl<P, E, C> Import<P, E, C> {
         p2p: Arc<P>,
         executor: Arc<E>,
         consensus: Arc<C>,
+        relayer: Arc<R>,
     ) -> Self {
         Self {
             state,
@@ -97,14 +119,16 @@ impl<P, E, C> Import<P, E, C> {
             p2p,
             executor,
             consensus,
+            relayer,
         }
     }
 }
-impl<P, E, C> Import<P, E, C>
+impl<P, E, C, R> Import<P, E, C, R>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
+    R: RelayerPort + Send + Sync + 'static,
 {
     #[tracing::instrument(skip_all)]
     pub(crate) async fn import(
@@ -154,6 +178,7 @@ where
             p2p,
             executor,
             consensus,
+            relayer,
             ..
         } = &self;
         // Request up to `max_get_header_requests` headers from the network.
@@ -161,9 +186,13 @@ where
         .map({
             let p2p = p2p.clone();
             let consensus_port = consensus.clone();
+            let relayer = relayer.clone();
+            let params = *params;
             move |result| {
                 let p2p = p2p.clone();
                 let consensus_port = consensus_port.clone();
+                let relayer = relayer.clone();
+                let params = params;
                 async move {
                     // Short circuit on error.
                     let header = match result {
@@ -185,6 +214,8 @@ where
                         tracing::warn!("Header {:?} failed consensus check", header);
                         return Ok(None)
                     }
+
+                    await_at_least_synced(relayer.as_ref(), &header.entity.da_height, &params.max_da_lag, params.max_wait_time).await?;
 
                     get_transactions_on_block(p2p.as_ref(), block_id, header).await
                 }
@@ -379,6 +410,22 @@ where
         tracing::error!("Execution of height {} failed: {:?}", *height, r);
     }
     r
+}
+
+async fn await_at_least_synced<R>(
+    relayer: &R,
+    da_height: &DaBlockHeight,
+    max_da_lag: &DaBlockHeight,
+    max_wait_time: Duration,
+) -> anyhow::Result<()>
+where
+    R: RelayerPort + Send + Sync + 'static,
+{
+    tokio::time::timeout(
+        max_wait_time,
+        relayer.await_until_if_in_range(da_height, max_da_lag),
+    )
+    .await?
 }
 
 /// Extra stream utilities.

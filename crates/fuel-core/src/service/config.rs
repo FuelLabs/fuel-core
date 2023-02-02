@@ -80,10 +80,7 @@ impl Config {
             #[cfg(feature = "p2p")]
             p2p: P2PConfig::<NotInitialized>::default("test_network"),
             #[cfg(feature = "p2p")]
-            sync: fuel_core_sync::Config {
-                max_get_header_requests: 10,
-                max_get_txns_requests: 10,
-            },
+            sync: fuel_core_sync::Config::default(),
             consensus_key: Some(Secret::new(default_consensus_dev_key().into())),
             name: String::default(),
         }

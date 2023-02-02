@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use fuel_core_services::{
     stream::IntoBoxStream,
     Service,
@@ -13,6 +15,7 @@ use crate::{
         MockBlockImporterPort,
         MockConsensusPort,
         MockPeerToPeerPort,
+        MockRelayerPort,
     },
 };
 
@@ -50,11 +53,18 @@ async fn test_new_service() {
     consensus
         .expect_check_sealed_header()
         .returning(|_| Ok(true));
+    let mut relayer = MockRelayerPort::default();
+    relayer
+        .expect_await_until_if_in_range()
+        .returning(|_, _| Ok(()));
+
     let params = Config {
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
+        max_da_lag: 10u64.into(),
+        max_wait_time: Duration::from_secs(20),
     };
-    let s = new_service(4u32.into(), p2p, importer, consensus, params).unwrap();
+    let s = new_service(4u32.into(), p2p, importer, consensus, relayer, params).unwrap();
 
     assert_eq!(
         s.start_and_await().await.unwrap(),

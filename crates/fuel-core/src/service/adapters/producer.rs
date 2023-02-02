@@ -93,7 +93,7 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
         }
         #[cfg(not(feature = "relayer"))]
         {
-            Ok(Default::default())
+            Ok(0u64.into())
         }
     }
 }

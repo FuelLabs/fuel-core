@@ -107,7 +107,7 @@ pub fn init_sub_services(
         db: database.clone(),
         txpool: Box::new(tx_pool_adapter.clone()),
         executor: Arc::new(executor),
-        relayer: Box::new(relayer_adapter),
+        relayer: Box::new(relayer_adapter.clone()),
         lock: Mutex::new(()),
         dry_run_semaphore: Semaphore::new(max_dry_run_concurrency),
     };
@@ -132,6 +132,7 @@ pub fn init_sub_services(
             p2p_adapter,
             importer_adapter.clone(),
             verifier,
+            relayer_adapter,
             config.sync,
         )?
     };

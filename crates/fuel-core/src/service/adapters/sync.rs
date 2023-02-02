@@ -1,5 +1,6 @@
 use super::{
     BlockImporterAdapter,
+    MaybeRelayerAdapter,
     P2PAdapter,
     VerifierAdapter,
 };
@@ -8,12 +9,14 @@ use fuel_core_sync::ports::{
     BlockImporterPort,
     ConsensusPort,
     PeerToPeerPort,
+    RelayerPort,
 };
 use fuel_core_types::{
     blockchain::{
         primitives::{
             BlockHeight,
             BlockId,
+            DaBlockHeight,
         },
         SealedBlock,
         SealedBlockHeader,
@@ -81,5 +84,36 @@ impl BlockImporterPort for BlockImporterAdapter {
 impl ConsensusPort for VerifierAdapter {
     fn check_sealed_header(&self, header: &SealedBlockHeader) -> anyhow::Result<bool> {
         Ok(self.block_verifier.verify_consensus(header))
+    }
+}
+
+#[async_trait::async_trait]
+impl RelayerPort for MaybeRelayerAdapter {
+    async fn await_until_if_in_range(
+        &self,
+        da_height: &DaBlockHeight,
+        max_da_lag: &DaBlockHeight,
+    ) -> anyhow::Result<()> {
+        #[cfg(feature = "relayer")]
+        {
+            use fuel_core_relayer::ports::RelayerDb;
+            let current_height = self.database.get_finalized_da_height()?;
+            anyhow::ensure!(
+                current_height.abs_diff(**da_height) <= **max_da_lag,
+                "Relayer is too far out of sync"
+            );
+            if let Some(sync) = self.relayer_synced.as_ref() {
+                sync.await_at_least_synced(da_height).await?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "relayer"))]
+        {
+            anyhow::ensure!(
+                **da_height == 0,
+                "Cannot have a da height above zero without a relayer"
+            );
+            Ok(())
+        }
     }
 }

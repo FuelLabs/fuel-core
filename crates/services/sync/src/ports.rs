@@ -6,6 +6,7 @@ use fuel_core_types::{
         primitives::{
             BlockHeight,
             BlockId,
+            DaBlockHeight,
         },
         SealedBlock,
         SealedBlockHeader,
@@ -55,4 +56,18 @@ pub trait BlockImporterPort {
     /// Execute the given sealed block
     /// and commit it to the database.
     async fn execute_and_commit(&self, block: SealedBlock) -> anyhow::Result<()>;
+}
+
+#[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
+/// Port for communication with the relayer.
+pub trait RelayerPort {
+    /// Wait for the relayer to be in sync with the given DA height
+    /// if the `da_height` is within the range of the current
+    /// relayer sync'd height +/- `max_da_lag`.
+    async fn await_until_if_in_range(
+        &self,
+        da_height: &DaBlockHeight,
+        max_da_lag: &DaBlockHeight,
+    ) -> anyhow::Result<()>;
 }
