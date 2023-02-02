@@ -50,6 +50,10 @@ where
         + StorageMutate<RelayerMetadata, Error = StorageError>,
 {
     fn insert_messages(&mut self, messages: &[CheckedMessage]) -> StorageResult<()> {
+        // A transaction is required to ensure that the height is
+        // set atomically with the insertion based on the current
+        // height. Also so that the messages are inserted atomically
+        // with the height.
         let mut db_tx = self.transaction();
         let db = db_tx.as_mut();
 
@@ -71,6 +75,9 @@ where
         &mut self,
         height: &DaBlockHeight,
     ) -> StorageResult<()> {
+        // A transaction is required to ensure that the height is
+        // set atomically with the insertion based on the current
+        // height.
         let mut db_tx = self.transaction();
         let db = db_tx.as_mut();
         grow_monotonically(db, height)?;
@@ -111,7 +118,7 @@ where
     Ok(())
 }
 
-/// Todo
+/// Metadata for relayer.
 pub struct RelayerMetadata;
 impl Mappable for RelayerMetadata {
     type Key = [u8];

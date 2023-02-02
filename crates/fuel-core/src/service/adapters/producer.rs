@@ -93,6 +93,7 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
         }
         #[cfg(not(feature = "relayer"))]
         {
+            // If the relayer is not enabled, then all blocks are zero.
             Ok(0u64.into())
         }
     }

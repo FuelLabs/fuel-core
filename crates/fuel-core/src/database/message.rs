@@ -88,6 +88,7 @@ impl StorageInspect<SpentMessages> for Database {
         Option<Cow<<SpentMessages as fuel_core_storage::Mappable>::OwnedValue>>,
         Self::Error,
     > {
+        // Values don't matter, we just need to know if the key exists.
         Ok(
             <Self as StorageInspect<SpentMessages>>::contains_key(self, key)?
                 .then_some(Cow::Owned(())),
@@ -115,6 +116,7 @@ impl StorageMutate<SpentMessages> for Database {
             self,
             key.as_ref(),
             Column::SpentMessages,
+            // This doesn't actually matter what we store here, we just need to store something.
             1u8,
         )?)
     }

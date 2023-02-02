@@ -106,6 +106,7 @@ pub trait DatabaseMessages: StorageInspect<Messages, Error = StorageError> {
 pub trait DatabaseSpentMessages:
     StorageInspect<SpentMessages, Error = StorageError>
 {
+    /// Returns true if the message has been spent.
     fn message_spent(&self, message_id: &MessageId) -> StorageResult<bool>;
 }
 

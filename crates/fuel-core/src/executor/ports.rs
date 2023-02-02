@@ -5,6 +5,8 @@ use fuel_core_types::{
 };
 
 pub trait RelayerPort {
+    /// Get a message from the relayer if it has been
+    /// synced and is <= the given da height.
     fn get_message(
         &self,
         id: &MessageId,
@@ -13,6 +15,9 @@ pub trait RelayerPort {
 }
 
 #[cfg(test)]
+/// For some tests we don't care about the actual
+/// implementation of the RelayerPort
+/// and using a passthrough is fine.
 impl RelayerPort for crate::database::Database {
     fn get_message(
         &self,

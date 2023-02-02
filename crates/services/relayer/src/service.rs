@@ -233,7 +233,8 @@ impl<D> SharedState<D> {
         Ok(())
     }
 
-    /// TODO
+    /// Get a message if it has been synced
+    /// and is <= the given height.
     pub fn get_message(
         &self,
         id: &MessageId,

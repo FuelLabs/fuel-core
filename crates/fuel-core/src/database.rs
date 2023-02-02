@@ -114,6 +114,7 @@ pub enum Column {
     /// See [`FuelBlockMerkleMetadata`](storage::FuelBlockMerkleMetadata)
     FuelBlockMerkleMetadata = 18,
     /// Messages that have been spent.
+    /// Existence of a key in this column means that the message has been spent.
     SpentMessages = 19,
 }
 

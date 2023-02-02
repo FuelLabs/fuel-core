@@ -215,6 +215,7 @@ where
                         return Ok(None)
                     }
 
+                    // Wait for the da to be at least the da height on the header.
                     await_at_least_synced(relayer.as_ref(), &header.entity.da_height, &params.max_da_lag, params.max_wait_time).await?;
 
                     get_transactions_on_block(p2p.as_ref(), block_id, header).await
@@ -412,6 +413,9 @@ where
     r
 }
 
+/// Waits for the relayer to be at least synced to the given height
+/// for the given maximum time, only if the da_height is within
+/// range of the max_da_lag to the current relayer da height.
 async fn await_at_least_synced<R>(
     relayer: &R,
     da_height: &DaBlockHeight,

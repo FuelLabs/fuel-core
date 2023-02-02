@@ -143,9 +143,10 @@ impl<'a> AssetsQuery<'a> {
             .filter_map(|message| match message {
                 Ok(message) => {
                     if let Resource::Message(m) = &message {
+                        // Only return messages that have not been spent.
                         match self.database.message_spent(&m.id()) {
-                            Ok(true) => Some(Ok(message)),
-                            Ok(false) => None,
+                            Ok(false) => Some(Ok(message)),
+                            Ok(true) => None,
                             Err(e) => Some(Err(e)),
                         }
                     } else {
