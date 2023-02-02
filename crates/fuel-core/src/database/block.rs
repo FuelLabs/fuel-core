@@ -96,8 +96,7 @@ impl StorageMutate<FuelBlocks> for Database {
             MerkleTree::load(storage, prev_metadata.version)
                 .map_err(|err| StorageError::Other(err.into()))?;
         let data = key.as_slice();
-        tree.push(data)
-            .map_err(|err| StorageError::Other(err.into()))?;
+        tree.push(data)?;
 
         // Generate new metadata for the updated tree
         let version = tree.leaves_count();

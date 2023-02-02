@@ -59,7 +59,6 @@ use libp2p::{
     PeerId,
     Swarm,
 };
-
 use rand::seq::IteratorRandom;
 use std::collections::HashMap;
 use tracing::{
@@ -206,6 +205,11 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             m.push(Protocol::Tcp(self.tcp_port));
             m
         };
+        let peer_id = self.local_peer_id;
+
+        tracing::info!(
+            "The p2p service starts on the `{listen_multiaddr}` with `{peer_id}`"
+        );
 
         // start listening at the given address
         self.swarm.listen_on(listen_multiaddr)?;
@@ -339,10 +343,23 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         //       more events to consume
         let event = self.swarm.select_next_some().await;
         tracing::debug!(?event);
-        if let SwarmEvent::Behaviour(fuel_behaviour) = event {
-            self.handle_behaviour_event(fuel_behaviour)
-        } else {
-            None
+        match event {
+            SwarmEvent::Behaviour(fuel_behaviour) => {
+                self.handle_behaviour_event(fuel_behaviour)
+            }
+            SwarmEvent::NewListenAddr { address, .. } => {
+                tracing::info!("Listening for p2p traffic on `{address}`");
+                None
+            }
+            SwarmEvent::ListenerClosed {
+                addresses, reason, ..
+            } => {
+                tracing::info!(
+                    "p2p listener(s) `{addresses:?}` closed with `{reason:?}`"
+                );
+                None
+            }
+            _ => None,
         }
     }
 
