@@ -45,7 +45,7 @@ pub struct P2PArgs {
     pub public_address: Option<Multiaddr>,
 
     /// p2p network's TCP Port
-    #[clap(long = "peering_port", default_value = "4001", env)]
+    #[clap(long = "peering_port", default_value = "30333", env)]
     pub peering_port: u16,
 
     /// Max Block size
