@@ -109,6 +109,7 @@ impl RelayerPort for MaybeRelayerAdapter {
         }
         #[cfg(not(feature = "relayer"))]
         {
+            core::mem::drop(max_da_lag);
             anyhow::ensure!(
                 **da_height == 0,
                 "Cannot have a da height above zero without a relayer"
