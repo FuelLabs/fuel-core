@@ -338,6 +338,22 @@ use super::*;
 #[test_case(
     State::new(3, 5),
     {
+        let mut relayer = MockRelayerPort::default();
+        relayer.expect_await_until_if_in_range()
+            .times(1)
+            .returning(|_, _| Err(anyhow::anyhow!("Some relayer error")));
+        Mocks{
+            relayer,
+            consensus_port: DefaultMocks::times([1]),
+            p2p: DefaultMocks::times([2, 0]),
+            executor: DefaultMocks::times([0])
+        }
+    }
+    => (State::new(3, None), false) ; "relayer error"
+)]
+#[test_case(
+    State::new(3, 5),
+    {
         let mut consensus_port = MockConsensusPort::default();
         consensus_port.expect_check_sealed_header()
             .times(1)
