@@ -22,7 +22,7 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 use fuel_core_types::{
-    fuel_asm::Instruction,
+    fuel_asm::op,
     fuel_crypto::SecretKey,
     fuel_tx::{
         Input,
