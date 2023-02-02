@@ -192,7 +192,7 @@ async fn dry_run_no_utxo_validation_override() {
     let asset_id = rng.gen();
     // construct a tx with invalid inputs
     let tx = TransactionBuilder::script(
-        op::ret(RegId::ONE).to_bytes().into_iter().collect(),
+        Opcode::RET(REG_ONE).to_bytes().into_iter().collect(),
         vec![],
     )
     .gas_limit(1000)

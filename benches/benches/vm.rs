@@ -43,7 +43,7 @@ where
                         vm.prepare_call(ra, rb, rc, rd).unwrap();
                     }
                     _ => {
-                        black_box(vm.instruction(*instruction).unwrap());
+                        black_box(vm.instruction((*instruction).into()).unwrap());
                     }
                 }
                 vm.reset_vm_state(diff);

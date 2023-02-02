@@ -18,7 +18,7 @@ use fuel_core_types::{
         Finalizable,
         TransactionBuilder,
     },
-    secrecy::Secret,
+    secrecy::Secret, fuel_asm::op,
 };
 use rand::{
     rngs::StdRng,
