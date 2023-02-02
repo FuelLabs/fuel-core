@@ -1,7 +1,7 @@
 use fuel_core_types::{
     blockchain::primitives::BlockHeight,
     entities::message::Message,
-    fuel_asm::{op},
+    fuel_asm::op,
     fuel_tx::{
         Contract,
         ContractId,

@@ -1385,7 +1385,7 @@ mod tests {
     use fuel_core_types::{
         blockchain::header::ConsensusHeader,
         entities::message::CheckedMessage,
-        fuel_asm::{op},
+        fuel_asm::op,
         fuel_crypto::SecretKey,
         fuel_merkle::common::empty_sum_sha256,
         fuel_tx,
@@ -3154,10 +3154,7 @@ mod tests {
         // verify a block 2 containing contract id from block 1, with wrong input contract utxo_id
         let (tx, contract_id) = create_contract(vec![], &mut rng);
         let tx2: Transaction = TxBuilder::new(2322)
-            .start_script(
-                vec![op::addi(0x10, REG_ZERO, 0), op::ret(1)],
-                vec![],
-            )
+            .start_script(vec![op::addi(0x10, REG_ZERO, 0), op::ret(1)], vec![])
             .contract_input(contract_id)
             .contract_output(&contract_id)
             .build()
@@ -3171,10 +3168,7 @@ mod tests {
         };
 
         let tx3: Transaction = TxBuilder::new(2322)
-            .start_script(
-                vec![op::addi(0x10, REG_ZERO, 1), op::ret(1)],
-                vec![],
-            )
+            .start_script(vec![op::addi(0x10, REG_ZERO, 1), op::ret(1)], vec![])
             .contract_input(contract_id)
             .contract_output(&contract_id)
             .build()
@@ -3615,11 +3609,7 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(1234);
 
         // return current block height
-        let script = vec![
-            op::bhei(0x10),
-            op::time(0x11, 0x10),
-            op::ret(0x11),
-        ];
+        let script = vec![op::bhei(0x10), op::time(0x11, 0x10), op::ret(0x11)];
         let tx = TransactionBuilder::script(script.into_iter().collect(), vec![])
             .gas_limit(10000)
             .add_unsigned_coin_input(

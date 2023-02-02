@@ -16,7 +16,7 @@ pub use state::*;
 mod tests {
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
-        fuel_asm::{op},
+        fuel_asm::op,
         fuel_types::{
             AssetId,
             Bytes32,

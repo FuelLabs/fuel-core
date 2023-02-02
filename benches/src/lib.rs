@@ -290,7 +290,10 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
         let mut db = db.unwrap_or_else(new_db);
 
-        if prepare_script.iter().any(|op| matches!(op, Instruction::RET(_))) {
+        if prepare_script
+            .iter()
+            .any(|op| matches!(op, Instruction::RET(_)))
+        {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
                 "a prepare script should not call/return into different contexts.",

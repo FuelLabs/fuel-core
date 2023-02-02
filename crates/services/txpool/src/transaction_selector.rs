@@ -43,7 +43,7 @@ pub fn select_transactions(
 mod tests {
     use fuel_core_txpool as _;
     use fuel_core_types::{
-        fuel_asm::{op},
+        fuel_asm::op,
         fuel_crypto::rand::{
             thread_rng,
             Rng,

@@ -43,17 +43,16 @@ async fn can_submit_genesis_message() {
         data: vec![rng.gen()],
         da_height: DaBlockHeight(0),
     };
-    let tx1 =
-        TransactionBuilder::script(vec![op::ret(0)].into_iter().collect(), vec![])
-            .gas_limit(100000)
-            .add_unsigned_message_input(
-                secret_key,
-                msg1.sender,
-                msg1.nonce,
-                msg1.amount,
-                msg1.data.clone(),
-            )
-            .finalize_as_transaction();
+    let tx1 = TransactionBuilder::script(vec![op::ret(0)].into_iter().collect(), vec![])
+        .gas_limit(100000)
+        .add_unsigned_message_input(
+            secret_key,
+            msg1.sender,
+            msg1.nonce,
+            msg1.amount,
+            msg1.data.clone(),
+        )
+        .finalize_as_transaction();
 
     let mut node_config = Config::local_node();
     node_config.chain_conf.initial_state = Some(StateConfig {

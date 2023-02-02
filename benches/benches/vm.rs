@@ -11,7 +11,7 @@ use criterion::{
 
 use fuel_core_benches::*;
 use fuel_core_storage::transactional::Transaction;
-use fuel_core_types::fuel_asm::{Instruction};
+use fuel_core_types::fuel_asm::Instruction;
 use set::*;
 
 pub fn run_group_ref<I>(group: &mut BenchmarkGroup<WallTime>, id: I, bench: VmBench)

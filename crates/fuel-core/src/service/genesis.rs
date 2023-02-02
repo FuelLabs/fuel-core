@@ -371,7 +371,7 @@ mod tests {
             DaBlockHeight,
         },
         entities::coin::Coin,
-        fuel_asm::{op},
+        fuel_asm::op,
         fuel_types::{
             Address,
             AssetId,

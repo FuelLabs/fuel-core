@@ -108,12 +108,11 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("mcpi"),
         "mcpi",
-        VmBench::new(op::mcpi(0x10, REG_ZERO, 4000))
-            .with_prepare_script(vec![
-                op::movi(0x11, 4000),
-                op::aloc(0x11),
-                op::addi(0x10, REG_HP, 1),
-            ]),
+        VmBench::new(op::mcpi(0x10, REG_ZERO, 4000)).with_prepare_script(vec![
+            op::movi(0x11, 4000),
+            op::aloc(0x11),
+            op::addi(0x10, REG_HP, 1),
+        ]),
     );
 
     let mut mem_meq = c.benchmark_group("meq");

@@ -11,10 +11,8 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("add"),
         "add",
-        VmBench::new(op::add(0x10, 0x11, 0x12)).with_prepare_script(vec![
-            op::movi(0x11, 100000),
-            op::movi(0x12, 27),
-        ]),
+        VmBench::new(op::add(0x10, 0x11, 0x12))
+            .with_prepare_script(vec![op::movi(0x11, 100000), op::movi(0x12, 27)]),
     );
 
     run_group_ref(
@@ -33,10 +31,8 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("and"),
         "and",
-        VmBench::new(op::and(0x10, 0x11, 0x12)).with_prepare_script(vec![
-            op::movi(0x11, 100000),
-            op::movi(0x12, 27),
-        ]),
+        VmBench::new(op::and(0x10, 0x11, 0x12))
+            .with_prepare_script(vec![op::movi(0x11, 100000), op::movi(0x12, 27)]),
     );
 
     run_group_ref(
@@ -49,10 +45,8 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("div"),
         "div",
-        VmBench::new(op::div(0x10, 0x11, 0x12)).with_prepare_script(vec![
-            op::movi(0x11, 100000),
-            op::movi(0x12, 27),
-        ]),
+        VmBench::new(op::div(0x10, 0x11, 0x12))
+            .with_prepare_script(vec![op::movi(0x11, 100000), op::movi(0x12, 27)]),
     );
 
     run_group_ref(
@@ -65,10 +59,8 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("eq"),
         "eq",
-        VmBench::new(op::eq(0x10, 0x11, 0x12)).with_prepare_script(vec![
-            op::movi(0x11, 100000),
-            op::movi(0x12, 27),
-        ]),
+        VmBench::new(op::eq(0x10, 0x11, 0x12))
+            .with_prepare_script(vec![op::movi(0x11, 100000), op::movi(0x12, 27)]),
     );
 
     run_group_ref(
@@ -88,10 +80,8 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("gt"),
         "gt",
-        VmBench::new(op::gt(0x10, 0x11, 0x12)).with_prepare_script(vec![
-            op::movi(0x11, 100000),
-            op::movi(0x12, 27),
-        ]),
+        VmBench::new(op::gt(0x10, 0x11, 0x12))
+            .with_prepare_script(vec![op::movi(0x11, 100000), op::movi(0x12, 27)]),
     );
 
     {
@@ -107,28 +97,22 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("lt"),
         "lt",
-        VmBench::new(op::lt(0x10, 0x11, 0x12)).with_prepare_script(vec![
-            op::movi(0x11, 100000),
-            op::movi(0x12, 27),
-        ]),
+        VmBench::new(op::lt(0x10, 0x11, 0x12))
+            .with_prepare_script(vec![op::movi(0x11, 100000), op::movi(0x12, 27)]),
     );
 
     run_group_ref(
         &mut c.benchmark_group("mlog"),
         "mlog",
-        VmBench::new(op::mlog(0x10, 0x11, 0x12)).with_prepare_script(vec![
-            op::movi(0x11, 100000),
-            op::movi(0x12, 27),
-        ]),
+        VmBench::new(op::mlog(0x10, 0x11, 0x12))
+            .with_prepare_script(vec![op::movi(0x11, 100000), op::movi(0x12, 27)]),
     );
 
     run_group_ref(
         &mut c.benchmark_group("mod"),
         "mod",
-        VmBench::new(op::mod_(0x10, 0x11, 0x12)).with_prepare_script(vec![
-            op::movi(0x11, 100000),
-            op::movi(0x12, 27),
-        ]),
+        VmBench::new(op::mod_(0x10, 0x11, 0x12))
+            .with_prepare_script(vec![op::movi(0x11, 100000), op::movi(0x12, 27)]),
     );
 
     run_group_ref(
@@ -154,19 +138,15 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("mroo"),
         "mroo",
-        VmBench::new(op::mroo(0x10, 0x11, 0x12)).with_prepare_script(vec![
-            op::movi(0x11, 100000),
-            op::movi(0x12, 27),
-        ]),
+        VmBench::new(op::mroo(0x10, 0x11, 0x12))
+            .with_prepare_script(vec![op::movi(0x11, 100000), op::movi(0x12, 27)]),
     );
 
     run_group_ref(
         &mut c.benchmark_group("mul"),
         "mul",
-        VmBench::new(op::mul(0x10, 0x11, 0x12)).with_prepare_script(vec![
-            op::movi(0x11, 100000),
-            op::movi(0x12, 27),
-        ]),
+        VmBench::new(op::mul(0x10, 0x11, 0x12))
+            .with_prepare_script(vec![op::movi(0x11, 100000), op::movi(0x12, 27)]),
     );
 
     run_group_ref(
@@ -192,10 +172,8 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("or"),
         "or",
-        VmBench::new(op::or(0x10, 0x11, 0x12)).with_prepare_script(vec![
-            op::movi(0x11, 100000),
-            op::movi(0x12, 27),
-        ]),
+        VmBench::new(op::or(0x10, 0x11, 0x12))
+            .with_prepare_script(vec![op::movi(0x11, 100000), op::movi(0x12, 27)]),
     );
 
     run_group_ref(
@@ -208,10 +186,8 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("sll"),
         "sll",
-        VmBench::new(op::sll(0x10, 0x11, 0x12)).with_prepare_script(vec![
-            op::movi(0x11, 100000),
-            op::movi(0x12, 27),
-        ]),
+        VmBench::new(op::sll(0x10, 0x11, 0x12))
+            .with_prepare_script(vec![op::movi(0x11, 100000), op::movi(0x12, 27)]),
     );
 
     run_group_ref(
@@ -224,10 +200,8 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("srl"),
         "srl",
-        VmBench::new(op::srl(0x10, 0x11, 0x12)).with_prepare_script(vec![
-            op::movi(0x11, 100000),
-            op::movi(0x12, 27),
-        ]),
+        VmBench::new(op::srl(0x10, 0x11, 0x12))
+            .with_prepare_script(vec![op::movi(0x11, 100000), op::movi(0x12, 27)]),
     );
 
     run_group_ref(
@@ -240,10 +214,8 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("sub"),
         "sub",
-        VmBench::new(op::sub(0x10, 0x11, 0x12)).with_prepare_script(vec![
-            op::movi(0x11, 100000),
-            op::movi(0x12, 27),
-        ]),
+        VmBench::new(op::sub(0x10, 0x11, 0x12))
+            .with_prepare_script(vec![op::movi(0x11, 100000), op::movi(0x12, 27)]),
     );
 
     run_group_ref(
@@ -256,10 +228,8 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("xor"),
         "xor",
-        VmBench::new(op::xor(0x10, 0x11, 0x12)).with_prepare_script(vec![
-            op::movi(0x11, 100000),
-            op::movi(0x12, 27),
-        ]),
+        VmBench::new(op::xor(0x10, 0x11, 0x12))
+            .with_prepare_script(vec![op::movi(0x11, 100000), op::movi(0x12, 27)]),
     );
 
     run_group_ref(

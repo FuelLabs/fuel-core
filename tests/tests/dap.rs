@@ -70,10 +70,7 @@ async fn reset() {
         .unwrap();
     assert!(result);
 
-    let result = client
-        .execute(id, &op::sw(0x11, 0x10, 0))
-        .await
-        .unwrap();
+    let result = client.execute(id, &op::sw(0x11, 0x10, 0)).await.unwrap();
     assert!(result);
 
     let memory = client.register(id, 0x11).await.unwrap();

@@ -33,11 +33,7 @@ pub fn run(c: &mut Criterion) {
         VmBench::new(op::jmp(0x10)).with_prepare_script(vec![op::movi(0x10, 10)]),
     );
 
-    run_group_ref(
-        &mut c.benchmark_group("ji"),
-        "ji",
-        VmBench::new(op::ji(10)),
-    );
+    run_group_ref(&mut c.benchmark_group("ji"), "ji", VmBench::new(op::ji(10)));
 
     run_group_ref(
         &mut c.benchmark_group("jne"),

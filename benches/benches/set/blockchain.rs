@@ -313,15 +313,13 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("mint"),
         "mint",
-        VmBench::contract(rng, op::mint(REG_ZERO))
-            .expect("failed to prepare contract"),
+        VmBench::contract(rng, op::mint(REG_ZERO)).expect("failed to prepare contract"),
     );
 
     run_group_ref(
         &mut c.benchmark_group("burn"),
         "burn",
-        VmBench::contract(rng, op::mint(REG_ZERO))
-            .expect("failed to prepare contract"),
+        VmBench::contract(rng, op::mint(REG_ZERO)).expect("failed to prepare contract"),
     );
 
     run_group_ref(
@@ -495,7 +493,6 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("time"),
         "time",
-        VmBench::new(op::time(0x11, 0x10))
-            .with_prepare_script(vec![op::movi(0x10, 0)]),
+        VmBench::new(op::time(0x11, 0x10)).with_prepare_script(vec![op::movi(0x10, 0)]),
     );
 }
