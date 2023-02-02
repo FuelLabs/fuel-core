@@ -71,7 +71,8 @@ impl crate::executor::RelayerPort for MaybeRelayerAdapter {
                     .database
                     .storage::<Messages>()
                     .get(id)?
-                    .map(Cow::into_owned)),
+                    .map(Cow::into_owned)
+                    .filter(|m| m.da_height <= *da_height)),
             }
         }
         #[cfg(not(feature = "relayer"))]
@@ -80,7 +81,8 @@ impl crate::executor::RelayerPort for MaybeRelayerAdapter {
                 .database
                 .storage::<Messages>()
                 .get(&id)?
-                .map(Cow::into_owned))
+                .map(Cow::into_owned)
+                .filter(|m| m.da_height <= *da_height))
         }
     }
 }

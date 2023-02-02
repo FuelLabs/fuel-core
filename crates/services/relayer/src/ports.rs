@@ -26,12 +26,18 @@ pub trait RelayerDb: Send + Sync {
     /// Add bridge messages to database. Messages are not revertible.
     /// Must set the maximum da height for these messages in
     /// the same write transaction.
+    /// Must only set a new da height if it is greater than the current.
     fn insert_messages(&mut self, messages: &[CheckedMessage]) -> StorageResult<()>;
 
-    /// set finalized da height that represent last block from da layer that got finalized.
-    fn set_finalized_da_height(&mut self, block: DaBlockHeight) -> StorageResult<()>;
+    /// Set finalized da height that represent last block from da layer that got finalized.
+    /// This will only set the value if it is greater than the current.
+    fn set_finalized_da_height_to_at_least(
+        &mut self,
+        block: &DaBlockHeight,
+    ) -> StorageResult<()>;
 
-    /// Assume it is always set as initialization of database.
+    /// Get finalized da height that represent last block from da layer that got finalized.
+    /// Panics if height is not set as of initialization of database.
     fn get_finalized_da_height(&self) -> StorageResult<DaBlockHeight>;
 }
 
@@ -55,16 +61,20 @@ where
             *max = (*max).max(message.message().da_height.0);
         }
         if let Some(height) = max_height {
-            db.storage::<RelayerMetadata>()
-                .insert(DA_HEIGHT_KEY, &DaBlockHeight::from(height))?;
+            grow_monotonically(db, &height.into())?;
         }
         db_tx.commit()?;
         Ok(())
     }
 
-    fn set_finalized_da_height(&mut self, block: DaBlockHeight) -> StorageResult<()> {
-        self.storage::<RelayerMetadata>()
-            .insert(DA_HEIGHT_KEY, &block)?;
+    fn set_finalized_da_height_to_at_least(
+        &mut self,
+        height: &DaBlockHeight,
+    ) -> StorageResult<()> {
+        let mut db_tx = self.transaction();
+        let db = db_tx.as_mut();
+        grow_monotonically(db, height)?;
+        db_tx.commit()?;
         Ok(())
     }
 
@@ -73,6 +83,32 @@ where
             .get(DA_HEIGHT_KEY)?
             .ok_or(not_found!("DaBlockHeight missing for relayer"))?)
     }
+}
+
+fn grow_monotonically<Storage>(
+    s: &mut Storage,
+    height: &DaBlockHeight,
+) -> StorageResult<()>
+where
+    Storage: StorageMutate<RelayerMetadata, Error = StorageError>,
+{
+    let current = (&s)
+        .storage::<RelayerMetadata>()
+        .get(DA_HEIGHT_KEY)?
+        .map(|cow| cow.as_u64());
+    match current {
+        Some(current) => {
+            if **height > current {
+                s.storage::<RelayerMetadata>()
+                    .insert(DA_HEIGHT_KEY, height)?;
+            }
+        }
+        None => {
+            s.storage::<RelayerMetadata>()
+                .insert(DA_HEIGHT_KEY, height)?;
+        }
+    }
+    Ok(())
 }
 
 /// Todo

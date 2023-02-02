@@ -11,8 +11,6 @@ use super::{
 };
 
 use async_trait::async_trait;
-use fuel_core_storage::Result as StorageResult;
-use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
 #[cfg(test)]
 mod test;
@@ -28,9 +26,6 @@ pub trait RelayerData: EthRemote + EthLocal {
         &mut self,
         eth_sync_gap: &state::EthSyncGap,
     ) -> anyhow::Result<()>;
-
-    /// Set the finalized DA block height.
-    fn set_finalized_da_height(&mut self, height: DaBlockHeight) -> StorageResult<()>;
 
     /// Update the synced state.
     fn update_synced(&self, state: &EthState);
@@ -51,9 +46,6 @@ where
     if let Some(eth_sync_gap) = state.needs_to_sync_eth() {
         // Download events and write them to the database.
         relayer.download_logs(&eth_sync_gap).await?;
-
-        // Update finalized height in database.
-        relayer.set_finalized_da_height(eth_sync_gap.latest().into())?;
     }
 
     // Update the synced state.

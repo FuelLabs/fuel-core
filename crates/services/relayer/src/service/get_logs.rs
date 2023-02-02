@@ -28,7 +28,8 @@ where
                         let filter = Filter::new()
                             .from_block(page.oldest())
                             .to_block(page.latest())
-                            .address(ValueOrArray::Array(contracts));
+                            .address(ValueOrArray::Array(contracts))
+                            .topic0(*crate::config::ETH_LOG_MESSAGE);
 
                         tracing::info!(
                             "Downloading logs for block range: {}..={}",
@@ -61,11 +62,7 @@ where
     while let Some(events) = logs.try_next().await? {
         let messages = events
             .into_iter()
-            .map(|event| {
-                let event: EthEventLog = (&event).try_into()?;
-                Ok(event)
-            })
-            .filter_map(|result| match result {
+            .filter_map(|event| match EthEventLog::try_from(&event) {
                 Ok(event) => {
                     match event {
                         EthEventLog::Message(m) => Some(Ok(Message::from(&m).check())),

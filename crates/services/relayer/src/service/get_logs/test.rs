@@ -164,7 +164,9 @@ async fn can_paginate_logs(input: Input) -> Expected {
 #[tokio::test]
 async fn test_da_height_updates(stream: Vec<Result<Vec<Log>, ProviderError>>) -> u64 {
     let mut mock_db = crate::mock_db::MockDb::default();
-    mock_db.set_finalized_da_height(0u64.into()).unwrap();
+    mock_db
+        .set_finalized_da_height_to_at_least(&0u64.into())
+        .unwrap();
 
     let logs = futures::stream::iter(stream);
 

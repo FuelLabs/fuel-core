@@ -83,7 +83,11 @@ impl TryFrom<&Log> for EthEventLog {
                     // Safety: logs without block numbers are rejected by
                     // FinalizationQueue::append_eth_log before the conversion to EthEventLog happens.
                     // If block_number is none, that means the log is pending.
-                    da_height: DaBlockHeight::from(log.block_number.unwrap().as_u64()),
+                    da_height: DaBlockHeight::from(
+                        log.block_number
+                            .ok_or(anyhow!("Log missing block height"))?
+                            .as_u64(),
+                    ),
                 })
             }
             _ => Self::Ignored,

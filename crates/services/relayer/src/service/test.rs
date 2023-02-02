@@ -43,7 +43,9 @@ async fn can_download_logs() {
 #[tokio::test]
 async fn deploy_height_does_not_override() {
     let mut mock_db = crate::mock_db::MockDb::default();
-    mock_db.set_finalized_da_height(50u64.into()).unwrap();
+    mock_db
+        .set_finalized_da_height_to_at_least(&50u64.into())
+        .unwrap();
     let config = Config {
         da_deploy_height: 20u64.into(),
         da_finalization: 1u64.into(),
@@ -60,7 +62,9 @@ async fn deploy_height_does_not_override() {
 #[tokio::test]
 async fn deploy_height_does_override() {
     let mut mock_db = crate::mock_db::MockDb::default();
-    mock_db.set_finalized_da_height(50u64.into()).unwrap();
+    mock_db
+        .set_finalized_da_height_to_at_least(&50u64.into())
+        .unwrap();
     let config = Config {
         da_deploy_height: 52u64.into(),
         da_finalization: 1u64.into(),

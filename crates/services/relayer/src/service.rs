@@ -29,7 +29,6 @@ use fuel_core_services::{
 };
 use fuel_core_storage::{
     tables::Messages,
-    Result as StorageResult,
     StorageAsRef,
     StorageInspect,
 };
@@ -107,11 +106,9 @@ where
     D: RelayerDb + 'static,
 {
     fn set_deploy_height(&mut self) {
-        if self.finalized().unwrap_or_default() < *self.config.da_deploy_height {
-            self.database
-                .set_finalized_da_height(self.config.da_deploy_height)
-                .expect("Should be able to set the finalized da height");
-        }
+        self.database
+            .set_finalized_da_height_to_at_least(&self.config.da_deploy_height)
+            .expect("Should be able to set the finalized da height");
     }
 }
 
@@ -141,10 +138,6 @@ where
             self.config.log_page_size,
         );
         write_logs(&mut self.database, logs).await
-    }
-
-    fn set_finalized_da_height(&mut self, height: DaBlockHeight) -> StorageResult<()> {
-        self.database.set_finalized_da_height(height)
     }
 
     fn update_synced(&self, state: &state::EthState) {
