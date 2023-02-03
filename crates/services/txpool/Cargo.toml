@@ -24,7 +24,7 @@ tokio-stream = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-fuel-core-trace = { workspace = true }
+fuel-core-trace = { path = "./../../trace" }
 fuel-core-txpool = { path = "", features = ["test-helpers"] }
 itertools = { workspace = true }
 mockall = { workspace = true }
