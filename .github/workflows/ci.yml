@@ -28,7 +28,7 @@ jobs:
       - name: Install latest nightly
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ env.RUST_VERSION }}
+          toolchain: ${{ env.NIGHTLY_RUST_VERSION }}
           components: rustfmt
           
       - name: Rustfmt check
