@@ -86,7 +86,7 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(
             &mut c.benchmark_group("gtf"),
             "gtf",
-            VmBench::new(op::gtf_args(0x10, RegId::ZERO.into(), GTFArgs::ScriptData))
+            VmBench::new(op::gtf_args(0x10, RegId::ZERO, GTFArgs::ScriptData))
                 .with_data(data),
         );
     }

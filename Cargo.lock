@@ -2276,7 +2276,7 @@ checksum = "2022715d62ab30faffd124d40b76f4134a550a87792276512b18d63272333394"
 [[package]]
 name = "fuel-asm"
 version = "0.25.3"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#7939bcbdabcce04b08c8fc49f47dec62eddec928"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#c8b6ad168792051061825faf5af5ca475252b723"
 dependencies = [
  "fuel-types",
  "serde",
@@ -2716,7 +2716,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.25.3"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#7939bcbdabcce04b08c8fc49f47dec62eddec928"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#c8b6ad168792051061825faf5af5ca475252b723"
 dependencies = [
  "borrown",
  "coins-bip32",
@@ -2734,7 +2734,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.25.3"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#7939bcbdabcce04b08c8fc49f47dec62eddec928"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#c8b6ad168792051061825faf5af5ca475252b723"
 dependencies = [
  "digest 0.10.6",
  "fuel-storage",
@@ -2747,12 +2747,12 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.25.3"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#7939bcbdabcce04b08c8fc49f47dec62eddec928"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#c8b6ad168792051061825faf5af5ca475252b723"
 
 [[package]]
 name = "fuel-tx"
 version = "0.25.3"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#7939bcbdabcce04b08c8fc49f47dec62eddec928"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#c8b6ad168792051061825faf5af5ca475252b723"
 dependencies = [
  "derivative",
  "fuel-asm",
@@ -2769,7 +2769,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.25.3"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#7939bcbdabcce04b08c8fc49f47dec62eddec928"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#c8b6ad168792051061825faf5af5ca475252b723"
 dependencies = [
  "rand 0.8.5",
  "serde",
@@ -2778,7 +2778,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.25.3"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#7939bcbdabcce04b08c8fc49f47dec62eddec928"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#c8b6ad168792051061825faf5af5ca475252b723"
 dependencies = [
  "anyhow",
  "bitflags",
