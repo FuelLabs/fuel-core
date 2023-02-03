@@ -123,6 +123,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: '${{ matrix.command }} ${{ matrix.args }}'
+          cache-on-failure: "true"
       - name: ${{ matrix.command }} ${{ matrix.args }}
         run: cargo ${{ matrix.command }} ${{ matrix.args }}
       - name: Notify if Job Fails
