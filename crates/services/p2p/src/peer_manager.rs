@@ -74,7 +74,6 @@ pub enum PeerInfoEvent {
     },
     TooManyPeers {
         peer_to_disconnect: PeerId,
-        peer_to_connect: Option<PeerId>,
     },
     ReconnectToPeer(PeerId),
     PeerIdentified {
@@ -199,13 +198,13 @@ impl NetworkBehaviour for PeerManagerBehaviour {
                         connection_established,
                     ));
 
-                let addresses = self.addresses_of_peer(&peer_id);
-                self.insert_peer_addresses(&peer_id, addresses);
-
                 if other_established == 0 {
                     // this is the first connection to a given Peer
                     self.peer_manager.handle_initial_connection(peer_id);
                 }
+
+                let addresses = self.addresses_of_peer(&peer_id);
+                self.insert_peer_addresses(&peer_id, addresses);
             }
             FromSwarm::ConnectionClosed(connection_closed) => {
                 let ConnectionClosed {
@@ -596,13 +595,6 @@ impl PeerManager {
             .filter(|peer_id| !self.reserved_connected_peers.contains_key(peer_id))
     }
 
-    fn find_disconnected_reserved_peer(&self) -> Option<PeerId> {
-        self.reserved_peers
-            .iter()
-            .find(|peer_id| self.reserved_connected_peers.contains_key(peer_id))
-            .cloned()
-    }
-
     /// Handles the first connnection established with a Peer
     fn handle_initial_connection(&mut self, peer_id: PeerId) {
         let non_reserved_peers_connected = self.non_reserved_connected_peers.len();
@@ -611,10 +603,9 @@ impl PeerManager {
         if !self.reserved_peers.contains(&peer_id) {
             // check if all the slots are already taken
             if non_reserved_peers_connected >= self.max_non_reserved_peers {
-                // Too many peers already connected, disconnect the Peer
-                self.pending_events.push_back(PeerInfoEvent::TooManyPeers {
+                // Too many peers already connected, disconnect the Peer with the first priority.
+                self.pending_events.push_front(PeerInfoEvent::TooManyPeers {
                     peer_to_disconnect: peer_id,
-                    peer_to_connect: self.find_disconnected_reserved_peer(),
                 });
 
                 // early exit, we don't want to report new peer connection
@@ -623,7 +614,7 @@ impl PeerManager {
                 return
             }
 
-            if self.max_non_reserved_peers - non_reserved_peers_connected == 1 {
+            if non_reserved_peers_connected + 1 == self.max_non_reserved_peers {
                 // this is the last non-reserved peer allowed
                 if let Ok(mut connection_state) = self.connection_state.write() {
                     connection_state.deny_new_peers();
@@ -645,10 +636,15 @@ impl PeerManager {
     fn handle_peer_disconnect(&mut self, peer_id: PeerId) {
         // try immediate reconnect if it's a reserved peer
         let is_reserved = self.reserved_peers.contains(&peer_id);
+        let is_removed;
 
         if !is_reserved {
+            is_removed = self.non_reserved_connected_peers.remove(&peer_id).is_some();
+
             // check were all the slots full prior to this disconnect
-            if self.max_non_reserved_peers - self.non_reserved_connected_peers.len() == 0
+            if is_removed
+                && self.max_non_reserved_peers
+                    == self.non_reserved_connected_peers.len() + 1
             {
                 // since all the slots were full prior to this disconnect
                 // let's allow new peer non-reserved peers connections
@@ -656,17 +652,17 @@ impl PeerManager {
                     connection_state.allow_new_peers();
                 }
             }
-
-            self.non_reserved_connected_peers.remove(&peer_id);
         } else {
-            self.reserved_connected_peers.remove(&peer_id);
+            is_removed = self.reserved_connected_peers.remove(&peer_id).is_some();
         }
 
-        self.pending_events
-            .push_back(PeerInfoEvent::PeerDisconnected {
-                peer_id,
-                should_reconnect: is_reserved,
-            })
+        if is_removed {
+            self.pending_events
+                .push_back(PeerInfoEvent::PeerDisconnected {
+                    peer_id,
+                    should_reconnect: is_reserved,
+                })
+        }
     }
 
     /// Find a peer that is holding the given block height.
