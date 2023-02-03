@@ -12,11 +12,11 @@ version = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-fuel-core-chain-config = { workspace = true  }
+fuel-core-chain-config = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true }
-fuel-core-types = { workspace = true  }
-tokio = { workspace = true , features = ["full"] }
+fuel-core-types = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
 
@@ -26,4 +26,4 @@ fuel-core-types = { workspace = true, features = ["test-helpers"] }
 mockall = { workspace = true }
 rand = { workspace = true }
 test-case = { workspace = true }
-tokio = { workspace = true , features = ["full", "test-util"] }
+tokio = { workspace = true, features = ["full", "test-util"] }

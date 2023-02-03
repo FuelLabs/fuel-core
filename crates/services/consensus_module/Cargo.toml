@@ -12,7 +12,7 @@ version = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 fuel-core-chain-config = { workspace = true }
-fuel-core-poa = { workspace = true}
+fuel-core-poa = { workspace = true }
 fuel-core-types = { workspace = true }
 
 [dev-dependencies]
