@@ -127,7 +127,7 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([1]),
-            relayer: DefaultMocks::times([0]),
+            relayer: DefaultMocks::times([1]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -313,7 +313,7 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([2]),
-            relayer: DefaultMocks::times([1]),
+            relayer: DefaultMocks::times([2]),
             executor: DefaultMocks::times([1])
         }
     }
