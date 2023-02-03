@@ -1,8 +1,8 @@
 [package]
 name = "fuel-benches-outputs"
 version = "0.0.0"
-edition = "2021"
-license = "BUSL-1.1"
+edition = { workspace = true }
+license = { workspace = true }
 publish = false
 
 [dependencies]

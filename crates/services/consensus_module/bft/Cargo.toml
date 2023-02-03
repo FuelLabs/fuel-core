@@ -1,15 +1,15 @@
 [package]
 name = "fuel-core-bft"
-version = "0.16.1"
-authors = ["Fuel Labs <contact@fuel.sh>"]
-edition = "2021"
-homepage = "https://fuel.network/"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
 keywords = ["blockchain", "fuel", "consensus", "bft"]
-license = "BUSL-1.1"
-repository = "https://github.com/FuelLabs/fuel-core"
+license = { workspace = true }
+repository = { workspace = true }
 description = "Fuel Core BFT"
 
 [dependencies]
-anyhow = "1.0"
-parking_lot = "0.12"
-tokio = { version = "1.21", features = ["full"] }
+anyhow = { workspace = true }
+parking_lot = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
