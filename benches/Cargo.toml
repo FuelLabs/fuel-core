@@ -9,7 +9,7 @@ version = "0.0.0"
 clap = { workspace = true, features = ["derive"] }
 criterion = { version = "0.4", features = ["html_reports"] }
 ctrlc = "3.2.3"
-fuel-core = { workspace = true, default-features = false, features = [
+fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
     "rocksdb",
 ] }
 fuel-core-storage = { path = "./../crates/storage" }
