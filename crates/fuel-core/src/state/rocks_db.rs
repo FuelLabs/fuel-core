@@ -173,11 +173,8 @@ impl KeyValueStore for RocksDb {
             .map_err(|e| DatabaseError::Other(e.into()));
         #[cfg(feature = "metrics")]
         {
-            if value.is_ok() && value.as_ref().unwrap().is_some() {
-                let value_as_vec = value.as_ref().cloned().unwrap().unwrap();
-                DATABASE_METRICS
-                    .bytes_read
-                    .observe(value_as_vec.len() as f64);
+            if let Ok(Some(value)) = &value {
+                DATABASE_METRICS.bytes_read.observe(value.len() as f64);
             }
         }
         value

@@ -177,7 +177,7 @@ impl Database {
         }
     }
 
-    fn insert<K: AsRef<[u8]>, V: Serialize, R: DeserializeOwned>(
+    fn _insert<K: AsRef<[u8]>, V: Serialize, R: DeserializeOwned>(
         &self,
         key: K,
         column: Column,
@@ -197,7 +197,7 @@ impl Database {
         }
     }
 
-    fn remove<V: DeserializeOwned>(
+    fn _remove<V: DeserializeOwned>(
         &self,
         key: &[u8],
         column: Column,
@@ -208,7 +208,7 @@ impl Database {
             .transpose()
     }
 
-    fn get<V: DeserializeOwned>(
+    fn _get<V: DeserializeOwned>(
         &self,
         key: &[u8],
         column: Column,
@@ -219,9 +219,7 @@ impl Database {
             .transpose()
     }
 
-    // TODO: Rename to `contains_key` to be the same as `StorageInspect`
-    //  https://github.com/FuelLabs/fuel-core/issues/622
-    fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
+    fn _contains_key(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
         self.data.exists(key, column)
     }
 

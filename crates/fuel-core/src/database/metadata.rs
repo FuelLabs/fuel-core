@@ -17,7 +17,7 @@ pub(crate) const DB_VERSION: u32 = 0;
 impl Database {
     pub fn init(&self, config: &ChainConfig) -> DatabaseResult<()> {
         // check only for one field if it initialized or not.
-        self.insert(CHAIN_NAME_KEY, Column::Metadata, &config.chain_name)
+        self._insert(CHAIN_NAME_KEY, Column::Metadata, &config.chain_name)
             .and_then(|v: Option<String>| {
                 if v.is_some() {
                     Err(DatabaseError::ChainAlreadyInitialized)
@@ -27,11 +27,11 @@ impl Database {
             })?;
 
         let _: Option<u32> =
-            self.insert(DB_VERSION_KEY, Column::Metadata, &DB_VERSION)?;
+            self._insert(DB_VERSION_KEY, Column::Metadata, &DB_VERSION)?;
         Ok(())
     }
 
     pub fn get_chain_name(&self) -> DatabaseResult<Option<String>> {
-        self.get(CHAIN_NAME_KEY, Column::Metadata)
+        self._get(CHAIN_NAME_KEY, Column::Metadata)
     }
 }

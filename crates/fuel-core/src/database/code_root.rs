@@ -96,7 +96,7 @@ mod tests {
             .unwrap();
 
         assert!(!database
-            .exists(contract_id.as_ref(), Column::ContractsInfo)
+            ._contains_key(contract_id.as_ref(), Column::ContractsInfo)
             .unwrap());
     }
 

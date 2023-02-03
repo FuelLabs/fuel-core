@@ -120,12 +120,12 @@ where
     type Error = StorageError;
 
     fn get(&self, key: &T::Key) -> StorageResult<Option<Cow<T::OwnedValue>>> {
-        self.get(key.database_key().as_ref(), T::column())
+        self._get(key.database_key().as_ref(), T::column())
             .map_err(Into::into)
     }
 
     fn contains_key(&self, key: &T::Key) -> StorageResult<bool> {
-        self.exists(key.database_key().as_ref(), T::column())
+        self._contains_key(key.database_key().as_ref(), T::column())
             .map_err(Into::into)
     }
 }
@@ -142,12 +142,12 @@ where
         key: &T::Key,
         value: &T::Value,
     ) -> StorageResult<Option<T::OwnedValue>> {
-        Database::insert(self, key.database_key().as_ref(), T::column(), &value)
+        self._insert(key.database_key().as_ref(), T::column(), &value)
             .map_err(Into::into)
     }
 
     fn remove(&mut self, key: &T::Key) -> StorageResult<Option<T::OwnedValue>> {
-        Database::remove(self, key.database_key().as_ref(), T::column())
+        self._remove(key.database_key().as_ref(), T::column())
             .map_err(Into::into)
     }
 }

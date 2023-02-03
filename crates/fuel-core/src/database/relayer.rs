@@ -35,12 +35,12 @@ impl RelayerDb for Database {
 
     fn set_finalized_da_height(&mut self, block: DaBlockHeight) -> StorageResult<()> {
         let _: Option<BlockHeight> =
-            self.insert(metadata::FINALIZED_DA_HEIGHT_KEY, Column::Metadata, &block)?;
+            self._insert(metadata::FINALIZED_DA_HEIGHT_KEY, Column::Metadata, &block)?;
         Ok(())
     }
 
     fn get_finalized_da_height(&self) -> StorageResult<DaBlockHeight> {
-        self.get(metadata::FINALIZED_DA_HEIGHT_KEY, Column::Metadata)?
+        self._get(metadata::FINALIZED_DA_HEIGHT_KEY, Column::Metadata)?
             .ok_or(not_found!("FinalizedDaHeight"))
     }
 }

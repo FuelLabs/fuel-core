@@ -50,11 +50,13 @@ impl StorageInspect<Coins> for Database {
     type Error = StorageError;
 
     fn get(&self, key: &UtxoId) -> Result<Option<Cow<CompressedCoin>>, Self::Error> {
-        Database::get(self, &utxo_id_to_bytes(key), Column::Coins).map_err(Into::into)
+        self._get(&utxo_id_to_bytes(key), Column::Coins)
+            .map_err(Into::into)
     }
 
     fn contains_key(&self, key: &UtxoId) -> Result<bool, Self::Error> {
-        Database::exists(self, &utxo_id_to_bytes(key), Column::Coins).map_err(Into::into)
+        self._contains_key(&utxo_id_to_bytes(key), Column::Coins)
+            .map_err(Into::into)
     }
 }
 
@@ -66,22 +68,20 @@ impl StorageMutate<Coins> for Database {
     ) -> Result<Option<CompressedCoin>, Self::Error> {
         let coin_by_owner = owner_coin_id_key(&value.owner, key);
         // insert primary record
-        let insert = Database::insert(self, utxo_id_to_bytes(key), Column::Coins, value)?;
+        let insert = self._insert(utxo_id_to_bytes(key), Column::Coins, value)?;
         // insert secondary index by owner
-        let _: Option<bool> =
-            Database::insert(self, coin_by_owner, Column::OwnedCoins, &true)?;
+        let _: Option<bool> = self._insert(coin_by_owner, Column::OwnedCoins, &true)?;
         Ok(insert)
     }
 
     fn remove(&mut self, key: &UtxoId) -> Result<Option<CompressedCoin>, Self::Error> {
         let coin: Option<CompressedCoin> =
-            Database::remove(self, &utxo_id_to_bytes(key), Column::Coins)?;
+            self._remove(&utxo_id_to_bytes(key), Column::Coins)?;
 
         // cleanup secondary index
         if let Some(coin) = &coin {
             let key = owner_coin_id_key(&coin.owner, key);
-            let _: Option<bool> =
-                Database::remove(self, key.as_slice(), Column::OwnedCoins)?;
+            let _: Option<bool> = self._remove(key.as_slice(), Column::OwnedCoins)?;
         }
 
         Ok(coin)

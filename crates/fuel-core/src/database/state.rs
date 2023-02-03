@@ -31,7 +31,7 @@ impl StorageInspect<ContractsState> for Database {
         &self,
         key: &<ContractsState as Mappable>::Key,
     ) -> Result<Option<Cow<<ContractsState as Mappable>::OwnedValue>>, Self::Error> {
-        self.get(key.as_ref(), Column::ContractsState)
+        self._get(key.as_ref(), Column::ContractsState)
             .map_err(Into::into)
     }
 
@@ -39,7 +39,7 @@ impl StorageInspect<ContractsState> for Database {
         &self,
         key: &<ContractsState as Mappable>::Key,
     ) -> Result<bool, Self::Error> {
-        self.exists(key.as_ref(), Column::ContractsState)
+        self._contains_key(key.as_ref(), Column::ContractsState)
             .map_err(Into::into)
     }
 }
@@ -50,7 +50,7 @@ impl StorageMutate<ContractsState> for Database {
         key: &<ContractsState as Mappable>::Key,
         value: &<ContractsState as Mappable>::Value,
     ) -> Result<Option<<ContractsState as Mappable>::OwnedValue>, Self::Error> {
-        Database::insert(self, key.as_ref(), Column::ContractsState, value)
+        self._insert(key.as_ref(), Column::ContractsState, value)
             .map_err(Into::into)
     }
 
@@ -58,7 +58,8 @@ impl StorageMutate<ContractsState> for Database {
         &mut self,
         key: &<ContractsState as Mappable>::Key,
     ) -> Result<Option<<ContractsState as Mappable>::OwnedValue>, Self::Error> {
-        Database::remove(self, key.as_ref(), Column::ContractsState).map_err(Into::into)
+        self._remove(key.as_ref(), Column::ContractsState)
+            .map_err(Into::into)
     }
 }
 

@@ -77,7 +77,7 @@ impl Database {
         tx_idx: TransactionIndex,
         tx_id: &Bytes32,
     ) -> DatabaseResult<Option<Bytes32>> {
-        self.insert(
+        self._insert(
             owned_tx_index_key(owner, block_height, tx_idx),
             Column::TransactionsByOwnerBlockIdx,
             tx_id,
@@ -89,14 +89,14 @@ impl Database {
         id: &Bytes32,
         status: TransactionStatus,
     ) -> DatabaseResult<Option<TransactionStatus>> {
-        self.insert(id, Column::TransactionStatus, &status)
+        self._insert(id, Column::TransactionStatus, &status)
     }
 
     pub fn get_tx_status(
         &self,
         id: &Bytes32,
     ) -> DatabaseResult<Option<TransactionStatus>> {
-        self.get(&id.deref()[..], Column::TransactionStatus)
+        self._get(&id.deref()[..], Column::TransactionStatus)
     }
 }
 
