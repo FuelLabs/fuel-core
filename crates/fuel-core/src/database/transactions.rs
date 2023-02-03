@@ -121,13 +121,16 @@ pub struct OwnedTransactionIndexKey {
     tx_idx: TransactionIndex,
 }
 
-impl From<Vec<u8>> for OwnedTransactionIndexKey {
-    fn from(bytes: Vec<u8>) -> Self {
+impl<T> From<T> for OwnedTransactionIndexKey
+where
+    T: AsRef<[u8]>,
+{
+    fn from(bytes: T) -> Self {
         // the first 32 bytes are the owner, which is already known when querying
         let mut block_height_bytes: [u8; 4] = Default::default();
-        block_height_bytes.copy_from_slice(&bytes[32..36]);
+        block_height_bytes.copy_from_slice(&bytes.as_ref()[32..36]);
         let mut tx_idx_bytes: [u8; 2] = Default::default();
-        tx_idx_bytes.copy_from_slice(&bytes[36..38]);
+        tx_idx_bytes.copy_from_slice(&bytes.as_ref()[36..38]);
 
         Self {
             // owner: Address::from(owner_bytes),
