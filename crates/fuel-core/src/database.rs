@@ -177,19 +177,16 @@ impl Database {
         }
     }
 
-    // TODO: Get `K` and `V` by reference to force compilation error for the current
-    //  code(we have many `Copy`).
-    //  https://github.com/FuelLabs/fuel-core/issues/622
     fn insert<K: AsRef<[u8]>, V: Serialize, R: DeserializeOwned>(
         &self,
         key: K,
         column: Column,
-        value: V,
+        value: &V,
     ) -> DatabaseResult<Option<R>> {
         let result = self.data.put(
             key.as_ref(),
             column,
-            postcard::to_stdvec(&value).map_err(|_| DatabaseError::Codec)?,
+            postcard::to_stdvec(value).map_err(|_| DatabaseError::Codec)?,
         )?;
         if let Some(previous) = result {
             Ok(Some(

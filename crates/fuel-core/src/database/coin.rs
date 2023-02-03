@@ -69,7 +69,7 @@ impl StorageMutate<Coins> for Database {
         let insert = Database::insert(self, utxo_id_to_bytes(key), Column::Coins, value)?;
         // insert secondary index by owner
         let _: Option<bool> =
-            Database::insert(self, coin_by_owner, Column::OwnedCoins, true)?;
+            Database::insert(self, coin_by_owner, Column::OwnedCoins, &true)?;
         Ok(insert)
     }
 

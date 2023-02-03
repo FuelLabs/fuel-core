@@ -50,7 +50,7 @@ impl StorageMutate<ContractsState> for Database {
         key: &<ContractsState as Mappable>::Key,
         value: &<ContractsState as Mappable>::Value,
     ) -> Result<Option<<ContractsState as Mappable>::OwnedValue>, Self::Error> {
-        Database::insert(self, key.as_ref(), Column::ContractsState, *value)
+        Database::insert(self, key.as_ref(), Column::ContractsState, value)
             .map_err(Into::into)
     }
 

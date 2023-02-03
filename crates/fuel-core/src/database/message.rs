@@ -45,15 +45,14 @@ impl StorageMutate<Messages> for Database {
         value: &Message,
     ) -> Result<Option<Message>, Self::Error> {
         // insert primary record
-        let result =
-            Database::insert(self, key.as_ref(), Column::Messages, value.clone())?;
+        let result = Database::insert(self, key.as_ref(), Column::Messages, value)?;
 
         // insert secondary record by owner
         let _: Option<bool> = Database::insert(
             self,
             owner_msg_id_key(&value.recipient, key),
             Column::OwnedMessageIds,
-            true,
+            &true,
         )?;
 
         Ok(result)

@@ -142,7 +142,7 @@ where
         key: &T::Key,
         value: &T::Value,
     ) -> StorageResult<Option<T::OwnedValue>> {
-        Database::insert(self, key.database_key().as_ref(), T::column(), value)
+        Database::insert(self, key.database_key().as_ref(), T::column(), &value)
             .map_err(Into::into)
     }
 
