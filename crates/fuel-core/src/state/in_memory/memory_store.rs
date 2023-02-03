@@ -11,6 +11,7 @@ use crate::{
         BatchOperations,
         ColumnId,
         IterDirection,
+        KVItem,
         KeyValueStore,
         TransactableStorage,
     },
@@ -29,7 +30,54 @@ use std::{
 
 #[derive(Default, Debug)]
 pub struct MemoryStore {
+    // TODO: Remove `Mutex` and usage of the `column_key`.
+    // TODO: Use `BTreeMap`.
     inner: Mutex<HashMap<Vec<u8>, Vec<u8>>>,
+}
+
+impl MemoryStore {
+    pub fn iter_all(
+        &self,
+        column: Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> impl Iterator<Item = KVItem> {
+        let lock = self.inner.lock().expect("poisoned");
+
+        // clone entire set so we can drop the lock
+        let iter = lock
+            .iter()
+            .filter(|(key, _)| is_column(key, column))
+            // strip column
+            .map(|(key, value)| (key[size_of::<ColumnId>()..].to_vec(), value.clone()))
+            // filter prefix
+            .filter(|(key, _)| {
+                if let Some(prefix) = prefix {
+                    key.starts_with(prefix)
+                } else {
+                    true
+                }
+            })
+            .sorted();
+
+        let until_start_reached = |(key, _): &(Vec<u8>, Vec<u8>)| {
+            if let Some(start) = start {
+                key.as_slice() != start
+            } else {
+                false
+            }
+        };
+
+        let copy: Vec<_> = match direction {
+            IterDirection::Forward => iter.skip_while(until_start_reached).collect(),
+            IterDirection::Reverse => {
+                iter.rev().skip_while(until_start_reached).collect()
+            }
+        };
+
+        copy.into_iter().map(Ok)
+    }
 }
 
 impl KeyValueStore for MemoryStore {
@@ -74,42 +122,11 @@ impl KeyValueStore for MemoryStore {
     fn iter_all(
         &self,
         column: Column,
-        prefix: Option<Vec<u8>>,
-        start: Option<Vec<u8>>,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<DatabaseResult<(Vec<u8>, Vec<u8>)>> {
-        // clone entire set so we can drop the lock
-        let mut copy: Vec<(Vec<u8>, Vec<u8>)> = self
-            .inner
-            .lock()
-            .expect("poisoned")
-            .iter()
-            .filter(|(key, _)| is_column(key, column))
-            // strip column
-            .map(|(key, value)| (key[size_of::<ColumnId>()..].to_vec(), value.clone()))
-            // filter prefix
-            .filter(|(key, _)| {
-                if let Some(prefix) = &prefix {
-                    key.starts_with(prefix.as_slice())
-                } else {
-                    true
-                }
-            })
-            .sorted()
-            .collect();
-
-        if direction == IterDirection::Reverse {
-            copy.reverse();
-        }
-
-        if let Some(start) = start {
-            copy.into_iter()
-                .skip_while(move |(key, _)| key.as_slice() != start.as_slice())
-                .map(Ok)
-                .into_boxed()
-        } else {
-            copy.into_iter().map(Ok).into_boxed()
-        }
+    ) -> BoxedIter<KVItem> {
+        self.iter_all(column, prefix, start, direction).into_boxed()
     }
 }
 

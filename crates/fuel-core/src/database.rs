@@ -177,19 +177,16 @@ impl Database {
         }
     }
 
-    // TODO: Get `K` and `V` by reference to force compilation error for the current
-    //  code(we have many `Copy`).
-    //  https://github.com/FuelLabs/fuel-core/issues/622
     fn insert<K: AsRef<[u8]>, V: Serialize, R: DeserializeOwned>(
         &self,
         key: K,
         column: Column,
-        value: V,
+        value: &V,
     ) -> DatabaseResult<Option<R>> {
         let result = self.data.put(
             key.as_ref(),
             column,
-            postcard::to_stdvec(&value).map_err(|_| DatabaseError::Codec)?,
+            postcard::to_stdvec(value).map_err(|_| DatabaseError::Codec)?,
         )?;
         if let Some(previous) = result {
             Ok(Some(
@@ -222,25 +219,70 @@ impl Database {
             .transpose()
     }
 
-    // TODO: Rename to `contains_key` to be the same as `StorageInspect`
-    //  https://github.com/FuelLabs/fuel-core/issues/622
-    fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
+    fn contains_key(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
         self.data.exists(key, column)
     }
 
     fn iter_all<K, V>(
         &self,
         column: Column,
-        prefix: Option<Vec<u8>>,
-        start: Option<Vec<u8>>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = DatabaseResult<(K, V)>> + '_
     where
         K: From<Vec<u8>>,
         V: DeserializeOwned,
     {
+        self.iter_all_filtered::<K, V, Vec<u8>, Vec<u8>>(column, None, None, direction)
+    }
+
+    fn iter_all_by_prefix<K, V, P>(
+        &self,
+        column: Column,
+        prefix: Option<P>,
+        direction: Option<IterDirection>,
+    ) -> impl Iterator<Item = DatabaseResult<(K, V)>> + '_
+    where
+        K: From<Vec<u8>>,
+        V: DeserializeOwned,
+        P: AsRef<[u8]>,
+    {
+        self.iter_all_filtered::<K, V, P, [u8; 0]>(column, prefix, None, direction)
+    }
+
+    fn iter_all_by_start<K, V, S>(
+        &self,
+        column: Column,
+        start: Option<S>,
+        direction: Option<IterDirection>,
+    ) -> impl Iterator<Item = DatabaseResult<(K, V)>> + '_
+    where
+        K: From<Vec<u8>>,
+        V: DeserializeOwned,
+        S: AsRef<[u8]>,
+    {
+        self.iter_all_filtered::<K, V, [u8; 0], S>(column, None, start, direction)
+    }
+
+    fn iter_all_filtered<K, V, P, S>(
+        &self,
+        column: Column,
+        prefix: Option<P>,
+        start: Option<S>,
+        direction: Option<IterDirection>,
+    ) -> impl Iterator<Item = DatabaseResult<(K, V)>> + '_
+    where
+        K: From<Vec<u8>>,
+        V: DeserializeOwned,
+        P: AsRef<[u8]>,
+        S: AsRef<[u8]>,
+    {
         self.data
-            .iter_all(column, prefix, start, direction.unwrap_or_default())
+            .iter_all(
+                column,
+                prefix.as_ref().map(|p| p.as_ref()),
+                start.as_ref().map(|s| s.as_ref()),
+                direction.unwrap_or_default(),
+            )
             .map(|val| {
                 val.and_then(|(key, value)| {
                     let key = K::from(key);

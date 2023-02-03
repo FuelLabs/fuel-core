@@ -1758,7 +1758,7 @@ mod tests {
             assert_eq!(validated_block.transactions(), produced_txs);
             let (_, owned_transactions_td_id) = validator
                 .database
-                .owned_transactions(&recipient, None, None)
+                .owned_transactions(recipient, None, None)
                 .next()
                 .unwrap()
                 .unwrap();

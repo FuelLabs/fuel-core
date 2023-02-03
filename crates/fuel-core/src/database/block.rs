@@ -62,7 +62,8 @@ impl StorageInspect<FuelBlocks> for Database {
     }
 
     fn contains_key(&self, key: &BlockId) -> Result<bool, Self::Error> {
-        Database::exists(self, key.as_slice(), Column::FuelBlocks).map_err(Into::into)
+        Database::contains_key(self, key.as_slice(), Column::FuelBlocks)
+            .map_err(Into::into)
     }
 }
 
@@ -82,8 +83,6 @@ impl StorageMutate<FuelBlocks> for Database {
         let prev_metadata = self
             .iter_all::<Vec<u8>, DenseMerkleMetadata>(
                 Column::FuelBlockMerkleMetadata,
-                None,
-                None,
                 Some(IterDirection::Reverse),
             )
             .next()
@@ -166,10 +165,9 @@ impl Database {
         start: Option<BlockHeight>,
         direction: IterDirection,
     ) -> impl Iterator<Item = DatabaseResult<(BlockHeight, BlockId)>> + '_ {
-        let start = start.map(|b| b.to_bytes().to_vec());
-        self.iter_all::<Vec<u8>, BlockId>(
+        let start = start.map(|b| b.to_bytes());
+        self.iter_all_by_start::<Vec<u8>, BlockId, _>(
             Column::FuelBlockSecondaryKeyBlockHeights,
-            None,
             start,
             Some(direction),
         )
@@ -187,8 +185,6 @@ impl Database {
     pub fn ids_of_genesis_block(&self) -> DatabaseResult<(BlockHeight, BlockId)> {
         self.iter_all(
             Column::FuelBlockSecondaryKeyBlockHeights,
-            None,
-            None,
             Some(IterDirection::Forward),
         )
         .next()
@@ -204,8 +200,6 @@ impl Database {
         let ids = self
             .iter_all::<Vec<u8>, BlockId>(
                 Column::FuelBlockSecondaryKeyBlockHeights,
-                None,
-                None,
                 Some(IterDirection::Reverse),
             )
             .next()

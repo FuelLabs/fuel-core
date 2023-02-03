@@ -167,7 +167,7 @@ impl TxQuery {
             |start: &Option<TxPointer>, direction| {
                 let start = (*start).map(Into::into);
                 let txs = query
-                    .owned_transactions(&owner, start, direction)
+                    .owned_transactions(owner, start, direction)
                     .map(|result| result.map(|(cursor, tx)| (cursor.into(), tx.into())));
                 Ok(txs)
             },
