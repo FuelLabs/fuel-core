@@ -177,7 +177,7 @@ impl Database {
         }
     }
 
-    fn _insert<K: AsRef<[u8]>, V: Serialize, R: DeserializeOwned>(
+    fn insert<K: AsRef<[u8]>, V: Serialize, R: DeserializeOwned>(
         &self,
         key: K,
         column: Column,
@@ -197,7 +197,7 @@ impl Database {
         }
     }
 
-    fn _remove<V: DeserializeOwned>(
+    fn remove<V: DeserializeOwned>(
         &self,
         key: &[u8],
         column: Column,
@@ -208,7 +208,7 @@ impl Database {
             .transpose()
     }
 
-    fn _get<V: DeserializeOwned>(
+    fn get<V: DeserializeOwned>(
         &self,
         key: &[u8],
         column: Column,
@@ -219,7 +219,7 @@ impl Database {
             .transpose()
     }
 
-    fn _contains_key(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
+    fn contains_key(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
         self.data.exists(key, column)
     }
 

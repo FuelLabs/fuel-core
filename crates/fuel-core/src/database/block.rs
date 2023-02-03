@@ -58,12 +58,11 @@ impl StorageInspect<FuelBlocks> for Database {
     type Error = StorageError;
 
     fn get(&self, key: &BlockId) -> Result<Option<Cow<CompressedBlock>>, Self::Error> {
-        self._get(key.as_slice(), Column::FuelBlocks)
-            .map_err(Into::into)
+        Database::get(self, key.as_slice(), Column::FuelBlocks).map_err(Into::into)
     }
 
     fn contains_key(&self, key: &BlockId) -> Result<bool, Self::Error> {
-        self._contains_key(key.as_slice(), Column::FuelBlocks)
+        Database::contains_key(self, key.as_slice(), Column::FuelBlocks)
             .map_err(Into::into)
     }
 }
@@ -74,7 +73,7 @@ impl StorageMutate<FuelBlocks> for Database {
         key: &BlockId,
         value: &CompressedBlock,
     ) -> Result<Option<CompressedBlock>, Self::Error> {
-        let prev = self._insert(key.as_slice(), Column::FuelBlocks, value)?;
+        let prev = Database::insert(self, key.as_slice(), Column::FuelBlocks, value)?;
 
         let height = value.header().height();
         self.storage::<FuelBlockSecondaryKeyBlockHeights>()
@@ -110,7 +109,7 @@ impl StorageMutate<FuelBlocks> for Database {
 
     fn remove(&mut self, key: &BlockId) -> Result<Option<CompressedBlock>, Self::Error> {
         let prev: Option<CompressedBlock> =
-            self._remove(key.as_slice(), Column::FuelBlocks)?;
+            Database::remove(self, key.as_slice(), Column::FuelBlocks)?;
 
         if let Some(block) = &prev {
             let height = block.header().height();
@@ -153,7 +152,7 @@ impl Database {
     }
 
     pub fn get_block_id(&self, height: &BlockHeight) -> StorageResult<Option<BlockId>> {
-        Database::_get(
+        Database::get(
             self,
             height.database_key().as_ref(),
             Column::FuelBlockSecondaryKeyBlockHeights,
