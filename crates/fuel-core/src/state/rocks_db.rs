@@ -221,11 +221,11 @@ impl KeyValueStore for RocksDb {
     fn iter_all(
         &self,
         column: Column,
-        prefix: Option<Vec<u8>>,
-        start: Option<Vec<u8>>,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
         direction: IterDirection,
     ) -> BoxedIter<KVItem> {
-        match (&prefix, &start) {
+        match (prefix, start) {
             (None, None) => {
                 let iter_mode =
                     // if no start or prefix just start iterating over entire keyspace

@@ -62,11 +62,10 @@ impl StorageMutate<ContractsAssets> for Database {
 
 impl MerkleRootStorage<ContractId, ContractsAssets> for Database {
     fn root(&self, parent: &ContractId) -> Result<MerkleRoot, Self::Error> {
-        let items: Vec<_> = Database::iter_all::<Vec<u8>, Word>(
+        let items: Vec<(Vec<u8>, Word)> = Database::iter_all_by_prefix(
             self,
             Column::ContractsAssets,
-            Some(parent.as_ref().to_vec()),
-            None,
+            Some(parent),
             Some(IterDirection::Forward),
         )
         .try_collect()?;

@@ -170,14 +170,10 @@ impl InterpreterStorage for VmDatabase {
         range: Word,
     ) -> Result<Vec<Option<Cow<Bytes32>>>, Self::DataError> {
         // TODO: Optimization: Iterate only over `range` elements.
-        let mut iterator = self.database.iter_all::<Vec<u8>, Bytes32>(
+        let mut iterator = self.database.iter_all_filtered::<Vec<u8>, Bytes32, _, _>(
             Column::ContractsState,
-            Some(contract_id.as_ref().to_vec()),
-            Some(
-                ContractsStateKey::new(contract_id, start_key)
-                    .as_ref()
-                    .to_vec(),
-            ),
+            Some(contract_id),
+            Some(ContractsStateKey::new(contract_id, start_key)),
             Some(IterDirection::Forward),
         );
         let range = range as usize;

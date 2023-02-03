@@ -19,7 +19,10 @@ use fuel_core_types::{
     fuel_types::Address,
     services::txpool::TransactionStatus,
 };
-use std::ops::Deref;
+use std::{
+    mem::size_of,
+    ops::Deref,
+};
 
 impl DatabaseColumn for Transactions {
     fn column() -> Column {
@@ -34,9 +37,8 @@ impl Database {
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = DatabaseResult<Transaction>> + '_ {
         let start = start.map(|b| b.as_ref().to_vec());
-        self.iter_all::<Vec<u8>, Transaction>(
+        self.iter_all_by_start::<Vec<u8>, Transaction, _>(
             Column::Transactions,
-            None,
             start,
             direction,
         )
@@ -49,15 +51,15 @@ impl Database {
     /// pagination purposes.
     pub fn owned_transactions(
         &self,
-        owner: &Address,
+        owner: Address,
         start: Option<OwnedTransactionIndexCursor>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = DatabaseResult<(TxPointer, Bytes32)>> + '_ {
         let start = start
-            .map(|cursor| owned_tx_index_key(owner, cursor.block_height, cursor.tx_idx));
-        self.iter_all::<OwnedTransactionIndexKey, Bytes32>(
+            .map(|cursor| owned_tx_index_key(&owner, cursor.block_height, cursor.tx_idx));
+        self.iter_all_filtered::<OwnedTransactionIndexKey, Bytes32, _, _>(
             Column::TransactionsByOwnerBlockIdx,
-            Some(owner.to_vec()),
+            Some(owner),
             start,
             direction,
         )
@@ -98,18 +100,23 @@ impl Database {
     }
 }
 
+const TX_INDEX_SIZE: usize = size_of::<TransactionIndex>();
+const BLOCK_HEIGHT: usize = size_of::<BlockHeight>();
+const INDEX_SIZE: usize = Address::LEN + BLOCK_HEIGHT + TX_INDEX_SIZE;
+
 fn owned_tx_index_key(
     owner: &Address,
     height: BlockHeight,
     tx_idx: TransactionIndex,
-) -> Vec<u8> {
+) -> [u8; INDEX_SIZE] {
+    let mut default = [0u8; INDEX_SIZE];
     // generate prefix to enable sorted indexing of transactions by owner
     // owner + block_height + tx_idx
-    let mut key = Vec::with_capacity(38);
-    key.extend(owner.as_ref());
-    key.extend(height.to_bytes());
-    key.extend(tx_idx.to_be_bytes());
-    key
+    default[0..Address::LEN].copy_from_slice(owner.as_ref());
+    default[Address::LEN..Address::LEN + BLOCK_HEIGHT]
+        .copy_from_slice(height.to_bytes().as_ref());
+    default[Address::LEN + BLOCK_HEIGHT..].copy_from_slice(tx_idx.to_be_bytes().as_ref());
+    default
 }
 
 ////////////////////////////////////// Not storage part //////////////////////////////////////

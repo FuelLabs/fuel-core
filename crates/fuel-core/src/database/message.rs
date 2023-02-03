@@ -82,9 +82,9 @@ impl Database {
         start_message_id: Option<MessageId>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = DatabaseResult<MessageId>> + '_ {
-        self.iter_all::<Vec<u8>, bool>(
+        self.iter_all_filtered::<Vec<u8>, bool, _, _>(
             Column::OwnedMessageIds,
-            Some(owner.to_vec()),
+            Some(*owner),
             start_message_id.map(|msg_id| owner_msg_id_key(owner, &msg_id)),
             direction,
         )
@@ -102,7 +102,7 @@ impl Database {
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = DatabaseResult<Message>> + '_ {
         let start = start.map(|v| v.deref().to_vec());
-        self.iter_all::<Vec<u8>, Message>(Column::Messages, None, start, direction)
+        self.iter_all_by_start::<Vec<u8>, Message, _>(Column::Messages, start, direction)
             .map(|res| res.map(|(_, message)| message))
     }
 
@@ -139,14 +139,16 @@ impl Database {
     }
 }
 
+// TODO: Reuse `fuel_vm::storage::double_key` macro.
 /// Get a Key by chaining Owner + MessageId
-fn owner_msg_id_key(owner: &Address, msg_id: &MessageId) -> Vec<u8> {
-    owner
-        .as_ref()
-        .iter()
-        .chain(msg_id.as_ref().iter())
-        .copied()
-        .collect()
+fn owner_msg_id_key(
+    owner: &Address,
+    msg_id: &MessageId,
+) -> [u8; Address::LEN + MessageId::LEN] {
+    let mut default = [0u8; Address::LEN + MessageId::LEN];
+    default[0..Address::LEN].copy_from_slice(owner.as_ref());
+    default[Address::LEN..].copy_from_slice(msg_id.as_ref());
+    default
 }
 
 #[cfg(test)]

@@ -39,8 +39,8 @@ impl MemoryStore {
     pub fn iter_all(
         &self,
         column: Column,
-        prefix: &Option<Vec<u8>>,
-        start: &Option<Vec<u8>>,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
         direction: IterDirection,
     ) -> impl Iterator<Item = KVItem> {
         let lock = self.inner.lock().expect("poisoned");
@@ -54,7 +54,7 @@ impl MemoryStore {
             // filter prefix
             .filter(|(key, _)| {
                 if let Some(prefix) = prefix {
-                    key.starts_with(prefix.as_slice())
+                    key.starts_with(prefix)
                 } else {
                     true
                 }
@@ -63,7 +63,7 @@ impl MemoryStore {
 
         let until_start_reached = |(key, _): &(Vec<u8>, Vec<u8>)| {
             if let Some(start) = start {
-                key.as_slice() != start.as_slice()
+                key.as_slice() != start
             } else {
                 false
             }
@@ -122,12 +122,11 @@ impl KeyValueStore for MemoryStore {
     fn iter_all(
         &self,
         column: Column,
-        prefix: Option<Vec<u8>>,
-        start: Option<Vec<u8>>,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
         direction: IterDirection,
     ) -> BoxedIter<KVItem> {
-        self.iter_all(column, &prefix, &start, direction)
-            .into_boxed()
+        self.iter_all(column, prefix, start, direction).into_boxed()
     }
 }
 
