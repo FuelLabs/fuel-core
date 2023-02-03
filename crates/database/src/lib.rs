@@ -47,11 +47,6 @@ impl From<Error> for StorageError {
     }
 }
 
-impl From<StorageError> for Error {
-    fn from(value: StorageError) -> Self {
-        anyhow::anyhow!(value).into()
-    }
-}
 impl From<TryFromSliceError> for Error {
     fn from(e: TryFromSliceError) -> Self {
         Self::Other(anyhow::anyhow!(e))

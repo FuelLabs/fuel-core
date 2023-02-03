@@ -410,7 +410,7 @@ impl Dependency {
                     if self.utxo_validation {
                         if db.message(message_id)?.is_some() {
                             // return an error if spent block is set
-                            if db.message_spent(message_id)? {
+                            if db.is_message_spent(message_id)? {
                                 return Err(Error::NotInsertedInputMessageIdSpent(
                                     *message_id,
                                 )

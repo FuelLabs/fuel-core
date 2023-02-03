@@ -94,7 +94,7 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
         #[cfg(not(feature = "relayer"))]
         {
             anyhow::ensure!(
-                **da_height == 0,
+                **height == 0,
                 "Cannot have a da height above zero without a relayer"
             );
             // If the relayer is not enabled, then all blocks are zero.

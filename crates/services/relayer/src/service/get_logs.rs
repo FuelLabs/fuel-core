@@ -10,7 +10,7 @@ pub(crate) fn download_logs<P>(
     contracts: Vec<H160>,
     eth_node: Arc<P>,
     page_size: u64,
-) -> impl futures::Stream<Item = Result<Vec<Log>, ProviderError>>
+) -> impl futures::Stream<Item = Result<(u64, Vec<Log>), ProviderError>>
 where
     P: Middleware<Error = ProviderError> + 'static,
 {
@@ -37,6 +37,8 @@ where
                             page.latest()
                         );
 
+                        let latest_block = page.latest();
+
                         // Reduce the page.
                         let page = page.reduce();
 
@@ -44,7 +46,7 @@ where
                         eth_node
                             .get_logs(&filter)
                             .await
-                            .map(|logs| Some((logs, page)))
+                            .map(|logs| Some(((latest_block, logs), page)))
                     }
                 }
             }
@@ -56,16 +58,18 @@ where
 pub(crate) async fn write_logs<D, S>(database: &mut D, logs: S) -> anyhow::Result<()>
 where
     D: RelayerDb,
-    S: futures::Stream<Item = Result<Vec<Log>, ProviderError>>,
+    S: futures::Stream<Item = Result<(u64, Vec<Log>), ProviderError>>,
 {
     tokio::pin!(logs);
-    while let Some(events) = logs.try_next().await? {
+    while let Some((height, events)) = logs.try_next().await? {
         let messages = events
             .into_iter()
             .filter_map(|event| match EthEventLog::try_from(&event) {
                 Ok(event) => {
                     match event {
-                        EthEventLog::Message(m) => Some(Ok(Message::from(&m).check())),
+                        EthEventLog::Message(m) => {
+                            Some(Ok(CompressedMessage::from(&m).check()))
+                        }
                         // TODO: Log out ignored messages.
                         EthEventLog::Ignored => None,
                     }
@@ -73,7 +77,7 @@ where
                 Err(e) => Some(Err(e)),
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
-        database.insert_messages(&messages)?;
+        database.insert_messages(&height.into(), &messages)?;
     }
     Ok(())
 }

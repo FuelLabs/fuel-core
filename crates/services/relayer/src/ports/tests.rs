@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use fuel_core_storage::test_helpers::MockStorage;
-use fuel_core_types::entities::message::Message;
+use fuel_core_types::entities::message::CompressedMessage;
 use test_case::test_case;
 
 use super::*;
@@ -22,7 +22,7 @@ fn test_insert_messages() {
         .returning(|_| Ok(Some(std::borrow::Cow::Owned(9u64.into()))));
     let mut db = db.into_transactional();
 
-    let m = Message {
+    let m = CompressedMessage {
         amount: 10,
         da_height: 12u64.into(),
         ..Default::default()
@@ -32,14 +32,14 @@ fn test_insert_messages() {
     m2.da_height = 4u64.into();
     assert_ne!(m.id(), m2.id());
     let messages = [m.check(), m2.check()];
-    db.insert_messages(&messages[..]).unwrap();
+    db.insert_messages(&12u64.into(), &messages[..]).unwrap();
 }
 
 #[test]
 fn insert_always_raises_da_height_monotonically() {
     let messages: Vec<_> = (0..10)
         .map(|i| {
-            Message {
+            CompressedMessage {
                 amount: i,
                 da_height: i.into(),
                 ..Default::default()
@@ -60,7 +60,7 @@ fn insert_always_raises_da_height_monotonically() {
         .returning(|_| Ok(None));
 
     let mut db = db.into_transactional();
-    db.insert_messages(&messages[5..]).unwrap();
+    db.insert_messages(&9u64.into(), &messages[5..]).unwrap();
 
     let mut db = MockStorage::default();
     db.expect_insert::<Messages>().returning(|_, _| Ok(None));
@@ -70,7 +70,7 @@ fn insert_always_raises_da_height_monotonically() {
         .returning(|_| Ok(Some(std::borrow::Cow::Owned(9u64.into()))));
 
     let mut db = db.into_transactional();
-    db.insert_messages(&messages[0..5]).unwrap();
+    db.insert_messages(&5u64.into(), &messages[..5]).unwrap();
 }
 
 #[test_case(None, 0, 0)]

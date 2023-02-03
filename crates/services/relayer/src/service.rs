@@ -34,7 +34,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::Message,
+    entities::message::CompressedMessage,
     fuel_types::MessageId,
 };
 use std::{
@@ -239,7 +239,7 @@ impl<D> SharedState<D> {
         &self,
         id: &MessageId,
         da_height: &DaBlockHeight,
-    ) -> anyhow::Result<Option<Message>>
+    ) -> anyhow::Result<Option<CompressedMessage>>
     where
         D: StorageInspect<Messages, Error = fuel_core_storage::Error>,
     {
@@ -249,6 +249,15 @@ impl<D> SharedState<D> {
             .get(id)?
             .map(Cow::into_owned)
             .filter(|message| message.da_height <= *da_height))
+    }
+
+    /// Get finalized da height that represents last block from da layer that got finalized.
+    /// Panics if height is not set as of initialization of the relayer.
+    pub fn get_finalized_da_height(&self) -> anyhow::Result<DaBlockHeight>
+    where
+        D: RelayerDb + 'static,
+    {
+        Ok(self.database.get_finalized_da_height()?)
     }
 }
 

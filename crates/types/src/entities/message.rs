@@ -17,11 +17,12 @@ use crate::{
     },
 };
 use core::ops::Deref;
+use std::ops::DerefMut;
 
 /// Message send from Da layer to fuel by bridge
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct Message {
+pub struct CompressedMessage {
     /// Account that sent the message from the da layer
     pub sender: Address,
     /// Fuel account receiving the message
@@ -36,7 +37,18 @@ pub struct Message {
     pub da_height: DaBlockHeight,
 }
 
-impl Message {
+/// Message send from Da layer to fuel by bridge
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Message {
+    #[cfg_attr(feature = "serde", serde(flatten))]
+    /// The message content relevant to the blockchain.
+    pub message: CompressedMessage,
+    /// Whether a message has been spent or not
+    pub status: MessageStatus,
+}
+
+impl CompressedMessage {
     /// Computed message id
     pub fn id(&self) -> MessageId {
         Input::compute_message_id(
@@ -53,12 +65,27 @@ impl Message {
         let id = self.id();
         CheckedMessage { message: self, id }
     }
+
+    /// Decompress the message
+    pub fn decompress(self, status: MessageStatus) -> Message {
+        Message {
+            message: self,
+            status,
+        }
+    }
+}
+
+impl Message {
+    /// Compress the message
+    pub fn compress(self) -> CompressedMessage {
+        self.message
+    }
 }
 
 /// A message associated with precomputed id
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct CheckedMessage {
-    message: Message,
+    message: CompressedMessage,
     id: MessageId,
 }
 
@@ -84,6 +111,18 @@ pub struct MessageProof {
     pub data: Vec<u8>,
 }
 
+/// Whether the message has been spent or not
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Default)]
+#[repr(u8)]
+pub enum MessageStatus {
+    #[default]
+    /// Message has not been spent
+    Unspent,
+    /// Message has been spent
+    Spent,
+}
+
 impl MessageProof {
     /// Compute message id from the proof
     pub fn message_id(&self) -> MessageId {
@@ -104,32 +143,46 @@ impl CheckedMessage {
     }
 
     /// Returns the message.
-    pub fn message(&self) -> &Message {
+    pub fn message(&self) -> &CompressedMessage {
         &self.message
     }
 
     /// Unpacks inner values of the checked message.
-    pub fn unpack(self) -> (MessageId, Message) {
+    pub fn unpack(self) -> (MessageId, CompressedMessage) {
         (self.id, self.message)
     }
 }
 
-impl From<CheckedMessage> for Message {
+impl From<CheckedMessage> for CompressedMessage {
     fn from(checked_message: CheckedMessage) -> Self {
         checked_message.message
     }
 }
 
-impl AsRef<Message> for CheckedMessage {
-    fn as_ref(&self) -> &Message {
+impl AsRef<CompressedMessage> for CheckedMessage {
+    fn as_ref(&self) -> &CompressedMessage {
         &self.message
     }
 }
 
 impl Deref for CheckedMessage {
-    type Target = Message;
+    type Target = CompressedMessage;
 
     fn deref(&self) -> &Self::Target {
         &self.message
+    }
+}
+
+impl Deref for Message {
+    type Target = CompressedMessage;
+
+    fn deref(&self) -> &Self::Target {
+        &self.message
+    }
+}
+
+impl DerefMut for Message {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.message
     }
 }

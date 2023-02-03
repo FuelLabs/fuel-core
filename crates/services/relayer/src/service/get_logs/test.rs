@@ -132,6 +132,7 @@ async fn can_paginate_logs(input: Input) -> Expected {
         Arc::new(eth_node),
         Config::DEFAULT_LOG_PAGE_SIZE,
     )
+    .map_ok(|(_, l)| l)
     .try_concat()
     .await
     .unwrap();
@@ -142,27 +143,29 @@ async fn can_paginate_logs(input: Input) -> Expected {
 }
 
 #[test_case(vec![
-    Ok(messages_n(1, 0))
+    Ok((1, messages_n(1, 0)))
     ] => 1 ; "Can add single"
 )]
 #[test_case(vec![
-    Ok(messages_n(3, 0)),
-    Ok(messages_n(1, 4))
-    ] => 3 ; "Can add two"
+    Ok((1, messages_n(3, 0))),
+    Ok((2, messages_n(1, 4)))
+    ] => 2 ; "Can add two"
 )]
 #[test_case(vec![
-    Ok(messages_n(3, 0)),
-    Ok(vec![])
-    ] => 3 ; "Can add empty"
+    Ok((1, messages_n(3, 0))),
+    Ok((2, vec![]))
+    ] => 2 ; "Can add empty"
 )]
 #[test_case(vec![
-    Ok(messages_n(3, 0)),
-    Ok(messages_n(1, 4)),
+    Ok((7, messages_n(3, 0))),
+    Ok((19, messages_n(1, 4))),
     Err(ProviderError::CustomError("".to_string()))
-    ] => 3 ; "Still adds height when error"
+    ] => 19 ; "Still adds height when error"
 )]
 #[tokio::test]
-async fn test_da_height_updates(stream: Vec<Result<Vec<Log>, ProviderError>>) -> u64 {
+async fn test_da_height_updates(
+    stream: Vec<Result<(u64, Vec<Log>), ProviderError>>,
+) -> u64 {
     let mut mock_db = crate::mock_db::MockDb::default();
     mock_db
         .set_finalized_da_height_to_at_least(&0u64.into())

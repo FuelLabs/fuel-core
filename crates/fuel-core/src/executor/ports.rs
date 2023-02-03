@@ -1,6 +1,6 @@
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::Message,
+    entities::message::CompressedMessage,
     fuel_types::MessageId,
 };
 
@@ -11,7 +11,7 @@ pub trait RelayerPort {
         &self,
         id: &MessageId,
         da_height: &DaBlockHeight,
-    ) -> anyhow::Result<Option<Message>>;
+    ) -> anyhow::Result<Option<CompressedMessage>>;
 }
 
 #[cfg(test)]
@@ -23,7 +23,7 @@ impl RelayerPort for crate::database::Database {
         &self,
         id: &MessageId,
         _da_height: &DaBlockHeight,
-    ) -> anyhow::Result<Option<Message>> {
+    ) -> anyhow::Result<Option<CompressedMessage>> {
         use fuel_core_storage::{
             tables::Messages,
             StorageAsRef,

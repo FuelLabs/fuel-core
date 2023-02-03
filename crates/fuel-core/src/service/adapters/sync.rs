@@ -96,13 +96,12 @@ impl RelayerPort for MaybeRelayerAdapter {
     ) -> anyhow::Result<()> {
         #[cfg(feature = "relayer")]
         {
-            use fuel_core_relayer::ports::RelayerDb;
-            let current_height = self.database.get_finalized_da_height()?;
-            anyhow::ensure!(
-                current_height.abs_diff(**da_height) <= **max_da_lag,
-                "Relayer is too far out of sync"
-            );
             if let Some(sync) = self.relayer_synced.as_ref() {
+                let current_height = sync.get_finalized_da_height()?;
+                anyhow::ensure!(
+                    current_height.abs_diff(**da_height) <= **max_da_lag,
+                    "Relayer is too far out of sync"
+                );
                 sync.await_at_least_synced(da_height).await?;
             }
             Ok(())

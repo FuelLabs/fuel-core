@@ -12,7 +12,6 @@ use crate::{
         DatabasePort,
         DatabaseTransactions,
     },
-    graphql_api::ports::DatabaseSpentMessages,
     state::IterDirection,
 };
 use fuel_core_storage::{
@@ -114,13 +113,14 @@ impl DatabaseMessages for Database {
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<Message>> {
         self.all_messages(start_message_id, Some(direction))
-            .map(|result| result.map_err(StorageError::from))
+            .map(|result| match result {
+                Ok(message) => {
+                    let id = message.id();
+                    Ok(message.decompress(self.message_status(&id)?))
+                }
+                Err(err) => Err(StorageError::from(err)),
+            })
             .into_boxed()
-    }
-}
-impl DatabaseSpentMessages for Database {
-    fn message_spent(&self, message_id: &MessageId) -> StorageResult<bool> {
-        Ok(self.message_spent(message_id)?)
     }
 }
 

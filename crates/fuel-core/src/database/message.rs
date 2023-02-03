@@ -13,11 +13,15 @@ use fuel_core_storage::{
         SpentMessages,
     },
     Error as StorageError,
+    Result as StorageResult,
     StorageInspect,
     StorageMutate,
 };
 use fuel_core_types::{
-    entities::message::Message,
+    entities::message::{
+        CompressedMessage,
+        MessageStatus,
+    },
     fuel_types::{
         Address,
         Bytes32,
@@ -29,10 +33,15 @@ use std::{
     ops::Deref,
 };
 
+use super::storage::DatabaseColumn;
+
 impl StorageInspect<Messages> for Database {
     type Error = StorageError;
 
-    fn get(&self, key: &MessageId) -> Result<Option<Cow<Message>>, Self::Error> {
+    fn get(
+        &self,
+        key: &MessageId,
+    ) -> Result<Option<Cow<CompressedMessage>>, Self::Error> {
         Database::get(self, key.as_ref(), Column::Messages).map_err(Into::into)
     }
 
@@ -45,8 +54,8 @@ impl StorageMutate<Messages> for Database {
     fn insert(
         &mut self,
         key: &MessageId,
-        value: &Message,
-    ) -> Result<Option<Message>, Self::Error> {
+        value: &CompressedMessage,
+    ) -> Result<Option<CompressedMessage>, Self::Error> {
         // insert primary record
         let result =
             Database::insert(self, key.as_ref(), Column::Messages, value.clone())?;
@@ -62,8 +71,11 @@ impl StorageMutate<Messages> for Database {
         Ok(result)
     }
 
-    fn remove(&mut self, key: &MessageId) -> Result<Option<Message>, Self::Error> {
-        let result: Option<Message> =
+    fn remove(
+        &mut self,
+        key: &MessageId,
+    ) -> Result<Option<CompressedMessage>, Self::Error> {
+        let result: Option<CompressedMessage> =
             Database::remove(self, key.as_ref(), Column::Messages)?;
 
         if let Some(message) = &result {
@@ -78,57 +90,9 @@ impl StorageMutate<Messages> for Database {
     }
 }
 
-impl StorageInspect<SpentMessages> for Database {
-    type Error = StorageError;
-
-    fn get(
-        &self,
-        key: &<SpentMessages as fuel_core_storage::Mappable>::Key,
-    ) -> Result<
-        Option<Cow<<SpentMessages as fuel_core_storage::Mappable>::OwnedValue>>,
-        Self::Error,
-    > {
-        // Values don't matter, we just need to know if the key exists.
-        Ok(
-            <Self as StorageInspect<SpentMessages>>::contains_key(self, key)?
-                .then_some(Cow::Owned(())),
-        )
-    }
-
-    fn contains_key(
-        &self,
-        key: &<SpentMessages as fuel_core_storage::Mappable>::Key,
-    ) -> Result<bool, Self::Error> {
-        Self::exists(self, key.as_ref(), Column::SpentMessages).map_err(Into::into)
-    }
-}
-
-impl StorageMutate<SpentMessages> for Database {
-    fn insert(
-        &mut self,
-        key: &<SpentMessages as fuel_core_storage::Mappable>::Key,
-        _value: &<SpentMessages as fuel_core_storage::Mappable>::Value,
-    ) -> Result<
-        Option<<SpentMessages as fuel_core_storage::Mappable>::OwnedValue>,
-        Self::Error,
-    > {
-        Ok(Database::insert(
-            self,
-            key.as_ref(),
-            Column::SpentMessages,
-            // This doesn't actually matter what we store here, we just need to store something.
-            1u8,
-        )?)
-    }
-
-    fn remove(
-        &mut self,
-        key: &<SpentMessages as fuel_core_storage::Mappable>::Key,
-    ) -> Result<
-        Option<<SpentMessages as fuel_core_storage::Mappable>::OwnedValue>,
-        Self::Error,
-    > {
-        Ok(Database::remove(self, key.as_ref(), Column::SpentMessages)?.map(|_: u8| ()))
+impl DatabaseColumn for SpentMessages {
+    fn column() -> Column {
+        Column::SpentMessages
     }
 }
 
@@ -157,28 +121,33 @@ impl Database {
         &self,
         start: Option<MessageId>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<Message>> + '_ {
+    ) -> impl Iterator<Item = DatabaseResult<CompressedMessage>> + '_ {
         let start = start.map(|v| v.deref().to_vec());
-        self.iter_all::<Vec<u8>, Message>(Column::Messages, None, start, direction)
-            .map(|res| res.map(|(_, message)| message))
+        self.iter_all::<Vec<u8>, CompressedMessage>(
+            Column::Messages,
+            None,
+            start,
+            direction,
+        )
+        .map(|res| res.map(|(_, message)| message))
     }
 
-    pub fn get_message_config(&self) -> DatabaseResult<Option<Vec<MessageConfig>>> {
+    pub fn get_message_config(&self) -> StorageResult<Option<Vec<MessageConfig>>> {
         let configs = self
             .all_messages(None, None)
             .filter_map(|msg| {
                 // Return only unspent messages
                 if let Ok(msg) = msg {
-                    match self.message_spent(&msg.id()) {
+                    match self.is_message_spent(&msg.id()) {
                         Ok(false) => Some(Ok(msg)),
                         Ok(true) => None,
                         Err(e) => Some(Err(e)),
                     }
                 } else {
-                    Some(msg)
+                    Some(msg.map_err(StorageError::from))
                 }
             })
-            .map(|msg| -> DatabaseResult<MessageConfig> {
+            .map(|msg| -> StorageResult<MessageConfig> {
                 let msg = msg?;
 
                 Ok(MessageConfig {
@@ -190,16 +159,22 @@ impl Database {
                     da_height: msg.da_height,
                 })
             })
-            .collect::<DatabaseResult<Vec<MessageConfig>>>()?;
+            .collect::<StorageResult<Vec<MessageConfig>>>()?;
 
         Ok(Some(configs))
     }
 
-    pub fn message_spent(&self, message_id: &MessageId) -> DatabaseResult<bool> {
-        Ok(
-            fuel_core_storage::StorageAsRef::storage::<SpentMessages>(&self)
-                .contains_key(message_id)?,
-        )
+    pub fn is_message_spent(&self, message_id: &MessageId) -> StorageResult<bool> {
+        fuel_core_storage::StorageAsRef::storage::<SpentMessages>(&self)
+            .contains_key(message_id)
+    }
+
+    pub fn message_status(&self, message_id: &MessageId) -> StorageResult<MessageStatus> {
+        if self.is_message_spent(message_id)? {
+            Ok(MessageStatus::Spent)
+        } else {
+            Ok(MessageStatus::Unspent)
+        }
     }
 }
 
@@ -221,7 +196,7 @@ mod tests {
     #[test]
     fn owned_message_ids() {
         let mut db = Database::default();
-        let message = Message::default();
+        let message = CompressedMessage::default();
 
         // insert a message with the first id
         let first_id = MessageId::new([1; 32]);

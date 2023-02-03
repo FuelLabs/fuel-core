@@ -157,8 +157,8 @@ pub struct SyncArgs {
     pub max_get_txns_requests: usize,
     #[clap(long = "sync_max_da_lag", default_value = "10", env)]
     pub max_da_lag: u64,
-    #[clap(long = "sync_max_relayer_wait_s", default_value = "30", env)]
-    pub max_wait_time: u64,
+    #[clap(long = "sync_max_relayer_wait", default_value = "30s", env)]
+    pub max_wait_time: humantime::Duration,
 }
 
 #[derive(Clone, Debug)]
@@ -192,7 +192,7 @@ impl From<SyncArgs> for fuel_core::sync::Config {
             max_get_header_requests: value.max_get_header_requests,
             max_get_txns_requests: value.max_get_txns_requests,
             max_da_lag: value.max_da_lag.into(),
-            max_wait_time: Duration::from_secs(value.max_wait_time),
+            max_wait_time: value.max_wait_time.into(),
         }
     }
 }

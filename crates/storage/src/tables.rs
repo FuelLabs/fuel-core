@@ -10,7 +10,7 @@ use fuel_core_types::{
     },
     entities::{
         coin::CompressedCoin,
-        message::Message,
+        message::CompressedMessage,
     },
     fuel_tx::{
         Receipt,
@@ -97,10 +97,10 @@ impl Mappable for Messages {
     type Key = Self::OwnedKey;
     type OwnedKey = MessageId;
     type Value = Self::OwnedValue;
-    type OwnedValue = Message;
+    type OwnedValue = CompressedMessage;
 }
 
-/// The storage table of spent [`Message`](crate::model::Message)s.
+/// The storage table that indicates if the [`Message`](crate::model::Message) is spent or not.
 pub struct SpentMessages;
 
 impl Mappable for SpentMessages {

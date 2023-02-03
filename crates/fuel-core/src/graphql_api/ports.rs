@@ -49,7 +49,6 @@ pub trait DatabasePort:
     + DatabaseBlocks
     + DatabaseTransactions
     + DatabaseMessages
-    + DatabaseSpentMessages
     + DatabaseCoins
     + DatabaseContracts
     + DatabaseChain
@@ -88,7 +87,10 @@ pub trait DatabaseTransactions:
 }
 
 /// Trait that specifies all the getters required for messages.
-pub trait DatabaseMessages: StorageInspect<Messages, Error = StorageError> {
+pub trait DatabaseMessages:
+    StorageInspect<Messages, Error = StorageError>
+    + StorageInspect<SpentMessages, Error = StorageError>
+{
     fn owned_message_ids(
         &self,
         owner: &Address,
@@ -101,13 +103,6 @@ pub trait DatabaseMessages: StorageInspect<Messages, Error = StorageError> {
         start_message_id: Option<MessageId>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<Message>>;
-}
-
-pub trait DatabaseSpentMessages:
-    StorageInspect<SpentMessages, Error = StorageError>
-{
-    /// Returns true if the message has been spent.
-    fn message_spent(&self, message_id: &MessageId) -> StorageResult<bool>;
 }
 
 /// Trait that specifies all the getters required for coins.

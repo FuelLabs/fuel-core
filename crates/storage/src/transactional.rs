@@ -2,7 +2,7 @@
 
 use crate::Result as StorageResult;
 
-#[cfg_attr(feature = "test-helpers", mockall::automock(type Storage = ();))]
+#[cfg_attr(feature = "test-helpers", mockall::automock(type Storage = crate::test_helpers::EmptyStorage;))]
 /// The types is transactional and may create `StorageTransaction`.
 pub trait Transactional {
     /// The storage used when creating the transaction.

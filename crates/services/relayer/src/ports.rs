@@ -24,10 +24,12 @@ mod tests;
 #[async_trait]
 pub trait RelayerDb: Send + Sync {
     /// Add bridge messages to database. Messages are not revertible.
-    /// Must set the maximum da height for these messages in
-    /// the same write transaction.
     /// Must only set a new da height if it is greater than the current.
-    fn insert_messages(&mut self, messages: &[CheckedMessage]) -> StorageResult<()>;
+    fn insert_messages(
+        &mut self,
+        da_height: &DaBlockHeight,
+        messages: &[CheckedMessage],
+    ) -> StorageResult<()>;
 
     /// Set finalized da height that represent last block from da layer that got finalized.
     /// This will only set the value if it is greater than the current.
@@ -49,7 +51,11 @@ where
     Storage: StorageMutate<Messages, Error = StorageError>
         + StorageMutate<RelayerMetadata, Error = StorageError>,
 {
-    fn insert_messages(&mut self, messages: &[CheckedMessage]) -> StorageResult<()> {
+    fn insert_messages(
+        &mut self,
+        da_height: &DaBlockHeight,
+        messages: &[CheckedMessage],
+    ) -> StorageResult<()> {
         // A transaction is required to ensure that the height is
         // set atomically with the insertion based on the current
         // height. Also so that the messages are inserted atomically
@@ -65,8 +71,11 @@ where
             *max = (*max).max(message.message().da_height.0);
         }
         if let Some(height) = max_height {
-            grow_monotonically(db, &height.into())?;
+            if **da_height < height {
+                return Err(anyhow::anyhow!("Invalid da height").into())
+            }
         }
+        grow_monotonically(db, da_height)?;
         db_tx.commit()?;
         Ok(())
     }
@@ -87,7 +96,7 @@ where
 
     fn get_finalized_da_height(&self) -> StorageResult<DaBlockHeight> {
         Ok(*StorageAsRef::storage::<RelayerMetadata>(&self)
-            .get(DA_HEIGHT_KEY)?
+            .get(&DA_HEIGHT_KEY)?
             .ok_or(not_found!("DaBlockHeight missing for relayer"))?)
     }
 }
@@ -101,18 +110,18 @@ where
 {
     let current = (&s)
         .storage::<RelayerMetadata>()
-        .get(DA_HEIGHT_KEY)?
+        .get(&DA_HEIGHT_KEY)?
         .map(|cow| cow.as_u64());
     match current {
         Some(current) => {
             if **height > current {
                 s.storage::<RelayerMetadata>()
-                    .insert(DA_HEIGHT_KEY, height)?;
+                    .insert(&DA_HEIGHT_KEY, height)?;
             }
         }
         None => {
             s.storage::<RelayerMetadata>()
-                .insert(DA_HEIGHT_KEY, height)?;
+                .insert(&DA_HEIGHT_KEY, height)?;
         }
     }
     Ok(())
@@ -121,13 +130,13 @@ where
 /// Metadata for relayer.
 pub struct RelayerMetadata;
 impl Mappable for RelayerMetadata {
-    type Key = [u8];
-    type OwnedKey = Vec<u8>;
+    type Key = Self::OwnedKey;
+    type OwnedKey = ();
     type Value = Self::OwnedValue;
     type OwnedValue = DaBlockHeight;
 }
 
-/// Key is set by trait implementor.
-/// TODO: Add trait to fuel_storage that allows
-/// the implementor to set the key.
-const DA_HEIGHT_KEY: &[u8] = b"";
+/// Key for da height.
+/// If the relayer metadata ever contains more than one key, this should be
+/// changed from a unit value.
+const DA_HEIGHT_KEY: () = ();

@@ -57,32 +57,20 @@ impl crate::executor::RelayerPort for MaybeRelayerAdapter {
         &self,
         id: &fuel_core_types::fuel_types::MessageId,
         da_height: &DaBlockHeight,
-    ) -> anyhow::Result<Option<fuel_core_types::entities::message::Message>> {
-        use fuel_core_storage::{
-            tables::Messages,
-            StorageAsRef,
-        };
-        use std::borrow::Cow;
+    ) -> anyhow::Result<Option<fuel_core_types::entities::message::CompressedMessage>>
+    {
         #[cfg(feature = "relayer")]
         {
             match self.relayer_synced.as_ref() {
                 Some(sync) => sync.get_message(id, da_height),
-                None => Ok(self
-                    .database
-                    .storage::<Messages>()
-                    .get(id)?
-                    .map(Cow::into_owned)
-                    .filter(|m| m.da_height <= *da_height)),
+                None => Ok(None),
             }
         }
         #[cfg(not(feature = "relayer"))]
         {
-            Ok(self
-                .database
-                .storage::<Messages>()
-                .get(&id)?
-                .map(Cow::into_owned)
-                .filter(|m| m.da_height <= *da_height))
+            core::mem::drop(id);
+            core::mem::drop(da_height);
+            Ok(None)
         }
     }
 }

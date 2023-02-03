@@ -116,6 +116,8 @@ pub enum Column {
     /// Messages that have been spent.
     /// Existence of a key in this column means that the message has been spent.
     SpentMessages = 19,
+    /// Metadata for the relayer
+    RelayerMetadata = 20,
 }
 
 #[derive(Clone, Debug)]
@@ -261,6 +263,7 @@ impl Database {
 
 impl Transactional for Database {
     type Storage = Database;
+
     fn transaction(&self) -> StorageTransaction<Database> {
         StorageTransaction::new(self.transaction())
     }

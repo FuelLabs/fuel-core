@@ -13,6 +13,7 @@ use fuel_core_storage::{
 use fuel_core_types::{
     entities::{
         coin::CoinStatus,
+        message::MessageStatus,
         resource::{
             Resource,
             ResourceId,
@@ -140,20 +141,12 @@ impl<'a> AssetsQuery<'a> {
                     Ok(Resource::Message(message))
                 })
             })
-            .filter_map(|message| match message {
-                Ok(message) => {
-                    if let Resource::Message(m) = &message {
-                        // Only return messages that have not been spent.
-                        match self.database.message_spent(&m.id()) {
-                            Ok(false) => Some(Ok(message)),
-                            Ok(true) => None,
-                            Err(e) => Some(Err(e)),
-                        }
-                    } else {
-                        Some(Ok(message))
-                    }
+            .filter_ok(|message| {
+                if let Resource::Message(message) = message {
+                    matches!(message.status, MessageStatus::Unspent)
+                } else {
+                    true
                 }
-                Err(e) => Some(Err(e)),
             });
 
         coins_iter.chain(messages_iter.take_while(|_| {
