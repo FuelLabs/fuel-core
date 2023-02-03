@@ -119,8 +119,6 @@ fn key(i: u8) -> Bytes32 {
 
 #[tokio::test]
 async fn can_get_message_proof() {
-    use fuel_core_types::fuel_vm::consts::*;
-
     let config = Config::local_node();
     let coin = config
         .chain_conf
@@ -141,7 +139,7 @@ async fn can_get_message_proof() {
         // Set the location in memory to write the bytes to.
         op::movi(0x11, 100),
         op::aloc(0x11),
-        op::addi(0x11, REG_HP, 1),
+        op::addi(0x11, RegId::HP, 1),
         op::movi(0x13, 2),
         // Write read to 0x11.
         // Write status to 0x30.
@@ -160,7 +158,7 @@ async fn can_get_message_proof() {
         op::muli(0x15, 0x13, 32),
         op::logd(0x00, 0x00, 0x11, 0x15),
         // Return from the contract.
-        op::ret(REG_ONE),
+        op::ret(RegId::ONE),
     ];
     // Return.
 
@@ -202,16 +200,16 @@ async fn can_get_message_proof() {
         op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
         op::addi(0x10, 0x10, (Bytes32::LEN * 3).try_into().unwrap()),
         // Call the contract and forward no coins.
-        op::call(0x10, REG_ZERO, REG_ZERO, REG_CGAS),
+        op::call(0x10, RegId::ZERO, RegId::ZERO, RegId::CGAS),
         // Return.
-        op::ret(REG_ONE),
+        op::ret(RegId::ONE),
     ];
     let script: Vec<u8> = script
         .iter()
         .flat_map(|op| u32::from(*op).to_be_bytes())
         .collect();
 
-    let predicate = op::ret(REG_ONE).to_bytes().to_vec();
+    let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
     let owner = Input::predicate_owner(&predicate);
     let coin_input = Input::coin_predicate(
         Default::default(),

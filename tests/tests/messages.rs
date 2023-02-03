@@ -19,7 +19,6 @@ use fuel_core_types::{
     fuel_asm::*,
     fuel_crypto::*,
     fuel_tx::*,
-    fuel_vm::consts::*,
 };
 use rand::{
     rngs::StdRng,
@@ -264,7 +263,7 @@ async fn can_get_message_proof() {
             ]
         }));
         // Return.
-        contract.push(op::ret(REG_ONE));
+        contract.push(op::ret(RegId::ONE));
 
         // Contract code.
         let bytecode: Witness = contract.into_iter().collect::<Vec<u8>>().into();
@@ -304,16 +303,16 @@ async fn can_get_message_proof() {
             // empty params. So 32 + 8 + 8.
             op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
             // Call the contract and forward no coins.
-            op::call(0x10, REG_ZERO, REG_ZERO, REG_CGAS),
+            op::call(0x10, RegId::ZERO, RegId::ZERO, RegId::CGAS),
             // Return.
-            op::ret(REG_ONE),
+            op::ret(RegId::ONE),
         ];
         let script: Vec<u8> = script
             .iter()
             .flat_map(|op| u32::from(*op).to_be_bytes())
             .collect();
 
-        let predicate = op::ret(REG_ONE).to_bytes().to_vec();
+        let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
         let owner = Input::predicate_owner(&predicate);
         let coin_input = Input::coin_predicate(
             Default::default(),

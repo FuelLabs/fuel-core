@@ -122,7 +122,7 @@ impl VmBench {
         let bench = Self::new(instruction);
 
         let program = iter::once(instruction)
-            .chain(iter::once(op::ret(REG_ONE)))
+            .chain(iter::once(op::ret(RegId::ONE)))
             .collect::<Vec<u8>>();
 
         let program = Witness::from(program);
@@ -162,7 +162,7 @@ impl VmBench {
 
         let prepare_call = PrepareCall {
             ra: RegId::new(0x10),
-            rb: REG_ZERO,
+            rb: RegId::ZERO,
             rc: RegId::new(0x11),
             rd: RegId::new(0x12),
         };
@@ -302,14 +302,14 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
         let prepare_script = prepare_script
             .into_iter()
-            .chain(iter::once(op::ret(REG_ONE)))
+            .chain(iter::once(op::ret(RegId::ONE)))
             .chain(iter::once(instruction))
             .collect();
 
         let mut tx = TransactionBuilder::script(prepare_script, data);
 
         if let Some(contract) = dummy_contract {
-            let code = iter::once(op::ret(REG_ONE));
+            let code = iter::once(op::ret(RegId::ONE));
             let code: Vec<u8> = code.collect();
             let code = Contract::from(code);
             let root = code.root();

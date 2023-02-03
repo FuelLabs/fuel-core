@@ -2,10 +2,7 @@ use super::run_group_ref;
 
 use criterion::Criterion;
 use fuel_core_benches::*;
-use fuel_core_types::{
-    fuel_asm::*,
-    fuel_vm::consts::REG_ZERO,
-};
+use fuel_core_types::fuel_asm::*;
 
 pub fn run(c: &mut Criterion) {
     run_group_ref(
@@ -89,7 +86,7 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(
             &mut c.benchmark_group("gtf"),
             "gtf",
-            VmBench::new(op::gtf_args(0x10, REG_ZERO.into(), GTFArgs::ScriptData))
+            VmBench::new(op::gtf_args(0x10, RegId::ZERO.into(), GTFArgs::ScriptData))
                 .with_data(data),
         );
     }

@@ -23,7 +23,6 @@ use fuel_core_types::{
     },
     fuel_asm::*,
     fuel_tx::*,
-    fuel_vm::consts::*,
     services::executor::ExecutionBlock,
     tai64::Tai64,
 };
@@ -47,10 +46,10 @@ fn basic_script_snapshot() {
     // Since this script is referenced in docs, snapshot the byte representation in-case opcodes
     // are reassigned in the future
     let script = vec![
-        op::addi(0x10, REG_ZERO, 0xca),
-        op::addi(0x11, REG_ZERO, 0xba),
-        op::log(0x10, 0x11, REG_ZERO, REG_ZERO),
-        op::ret(REG_ONE),
+        op::addi(0x10, RegId::ZERO, 0xca),
+        op::addi(0x11, RegId::ZERO, 0xba),
+        op::log(0x10, 0x11, RegId::ZERO, RegId::ZERO),
+        op::ret(RegId::ONE),
     ];
     let script: Vec<u8> = script
         .iter()
@@ -69,10 +68,10 @@ async fn dry_run_script() {
     let maturity = 0;
 
     let script = vec![
-        op::addi(0x10, REG_ZERO, 0xca),
-        op::addi(0x11, REG_ZERO, 0xba),
-        op::log(0x10, 0x11, REG_ZERO, REG_ZERO),
-        op::ret(REG_ONE),
+        op::addi(0x10, RegId::ZERO, 0xca),
+        op::addi(0x11, RegId::ZERO, 0xba),
+        op::log(0x10, 0x11, RegId::ZERO, RegId::ZERO),
+        op::ret(RegId::ONE),
     ];
     let script: Vec<u8> = script
         .iter()
@@ -159,10 +158,10 @@ async fn submit() {
     let maturity = 0;
 
     let script = vec![
-        op::addi(0x10, REG_ZERO, 0xca),
-        op::addi(0x11, REG_ZERO, 0xba),
-        op::log(0x10, 0x11, REG_ZERO, REG_ZERO),
-        op::ret(REG_ONE),
+        op::addi(0x10, RegId::ZERO, 0xca),
+        op::addi(0x11, RegId::ZERO, 0xba),
+        op::log(0x10, 0x11, RegId::ZERO, RegId::ZERO),
+        op::ret(RegId::ONE),
     ];
     let script: Vec<u8> = script
         .iter()

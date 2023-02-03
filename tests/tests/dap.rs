@@ -3,10 +3,7 @@ use fuel_core::service::{
     FuelService,
 };
 use fuel_core_client::client::FuelClient;
-use fuel_core_types::{
-    fuel_asm::*,
-    fuel_vm::consts::*,
-};
+use fuel_core_types::fuel_asm::*;
 use std::convert::TryInto;
 
 #[tokio::test]
@@ -65,7 +62,7 @@ async fn reset() {
     assert!(result);
 
     let result = client
-        .execute(id, &op::addi(0x11, REG_HP, 1))
+        .execute(id, &op::addi(0x11, RegId::HP, 1))
         .await
         .unwrap();
     assert!(result);

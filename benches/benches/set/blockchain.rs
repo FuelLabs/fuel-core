@@ -64,7 +64,7 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("sww"),
         "sww",
-        VmBench::contract(rng, op::sww(REG_ZERO, 0x29, REG_ONE))
+        VmBench::contract(rng, op::sww(RegId::ZERO, 0x29, RegId::ONE))
             .expect("failed to prepare contract")
             .with_prepare_db(move |mut db| {
                 let mut key = Bytes32::zeroed();
@@ -102,7 +102,7 @@ pub fn run(c: &mut Criterion) {
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
         ];
-        let mut bench = VmBench::contract(rng, op::scwq(0x11, 0x29, REG_ONE))
+        let mut bench = VmBench::contract(rng, op::scwq(0x11, 0x29, RegId::ONE))
             .expect("failed to prepare contract")
             .with_post_call(post_call)
             .with_prepare_db(move |mut db| {
@@ -126,7 +126,7 @@ pub fn run(c: &mut Criterion) {
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
         ];
-        let mut bench = VmBench::contract(rng, op::swwq(0x10, 0x11, 0x20, REG_ONE))
+        let mut bench = VmBench::contract(rng, op::swwq(0x10, 0x11, 0x20, RegId::ONE))
             .expect("failed to prepare contract")
             .with_post_call(post_call)
             .with_prepare_db(move |mut db| {
@@ -169,7 +169,7 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(
             &mut call,
             format!("{i}"),
-            VmBench::new(op::call(0x10, REG_ZERO, 0x11, 0x12))
+            VmBench::new(op::call(0x10, RegId::ZERO, 0x11, 0x12))
                 .with_contract_code(code)
                 .with_data(data)
                 .with_prepare_script(prepare_script),
@@ -210,7 +210,7 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(
             &mut ldc,
             format!("{i}"),
-            VmBench::new(op::ldc(0x10, REG_ZERO, 0x13))
+            VmBench::new(op::ldc(0x10, RegId::ZERO, 0x13))
                 .with_contract_code(code)
                 .with_data(data)
                 .with_prepare_script(prepare_script),
@@ -249,7 +249,7 @@ pub fn run(c: &mut Criterion) {
             op::add(0x15, 0x15, 0x15),
             op::addi(0x15, 0x15, 32),
             op::aloc(0x15),
-            op::addi(0x15, REG_HP, 1),
+            op::addi(0x15, RegId::HP, 1),
         ];
 
         ccp.throughput(Throughput::Bytes(i));
@@ -257,7 +257,7 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(
             &mut ccp,
             format!("{i}"),
-            VmBench::new(op::ccp(0x15, 0x10, REG_ZERO, 0x13))
+            VmBench::new(op::ccp(0x15, 0x10, RegId::ZERO, 0x13))
                 .with_contract_code(code)
                 .with_data(data)
                 .with_prepare_script(prepare_script),
@@ -303,23 +303,25 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("bhsh"),
         "bhsh",
-        VmBench::new(op::bhsh(0x10, REG_ZERO)).with_prepare_script(vec![
+        VmBench::new(op::bhsh(0x10, RegId::ZERO)).with_prepare_script(vec![
             op::movi(0x10, Bytes32::LEN.try_into().unwrap()),
             op::aloc(0x10),
-            op::addi(0x10, REG_HP, 1),
+            op::addi(0x10, RegId::HP, 1),
         ]),
     );
 
     run_group_ref(
         &mut c.benchmark_group("mint"),
         "mint",
-        VmBench::contract(rng, op::mint(REG_ZERO)).expect("failed to prepare contract"),
+        VmBench::contract(rng, op::mint(RegId::ZERO))
+            .expect("failed to prepare contract"),
     );
 
     run_group_ref(
         &mut c.benchmark_group("burn"),
         "burn",
-        VmBench::contract(rng, op::mint(REG_ZERO)).expect("failed to prepare contract"),
+        VmBench::contract(rng, op::mint(RegId::ZERO))
+            .expect("failed to prepare contract"),
     );
 
     run_group_ref(
@@ -328,7 +330,7 @@ pub fn run(c: &mut Criterion) {
         VmBench::new(op::cb(0x10)).with_prepare_script(vec![
             op::movi(0x10, Bytes32::LEN.try_into().unwrap()),
             op::aloc(0x10),
-            op::addi(0x10, REG_HP, 1),
+            op::addi(0x10, RegId::HP, 1),
         ]),
     );
 
@@ -364,7 +366,7 @@ pub fn run(c: &mut Criterion) {
             });
         let coin_output = Output::variable(Address::zeroed(), 100, AssetId::zeroed());
         input.outputs.push(coin_output);
-        let predicate = op::ret(REG_ONE).to_bytes().to_vec();
+        let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
         let owner = Input::predicate_owner(&predicate);
         let coin_input = Input::coin_predicate(
             Default::default(),
@@ -400,7 +402,7 @@ pub fn run(c: &mut Criterion) {
             op::gtf_args(0x16, 0x00, GTFArgs::ScriptData),
             op::movi(0x15, 2000),
             op::aloc(0x15),
-            op::addi(0x14, REG_HP, 1),
+            op::addi(0x14, RegId::HP, 1),
         ]);
         run_group_ref(&mut c.benchmark_group("croo"), "croo", input);
     }
@@ -438,7 +440,7 @@ pub fn run(c: &mut Criterion) {
                 .copied()
                 .chain(vec![2u8; i as usize]),
         );
-        let predicate = op::ret(REG_ONE).to_bytes().to_vec();
+        let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
         let owner = Input::predicate_owner(&predicate);
         let coin_input = Input::coin_predicate(
             Default::default(),
@@ -472,7 +474,7 @@ pub fn run(c: &mut Criterion) {
             op::muli(0x15, 0x15, 32),
             op::addi(0x15, 0x15, 1),
             op::aloc(0x15),
-            op::addi(0x14, REG_HP, 1),
+            op::addi(0x14, RegId::HP, 1),
         ];
         let mut bench = VmBench::contract(rng, op::srwq(0x14, 0x11, 0x27, 0x16))
             .expect("failed to prepare contract")

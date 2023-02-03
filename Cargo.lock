@@ -2275,8 +2275,8 @@ checksum = "2022715d62ab30faffd124d40b76f4134a550a87792276512b18d63272333394"
 
 [[package]]
 name = "fuel-asm"
-version = "0.25.2"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#8250dfd70d2f8d4875416743716ecb043d2acafe"
+version = "0.25.3"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#7939bcbdabcce04b08c8fc49f47dec62eddec928"
 dependencies = [
  "fuel-types",
  "serde",
@@ -2715,8 +2715,8 @@ dependencies = [
 
 [[package]]
 name = "fuel-crypto"
-version = "0.25.2"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#8250dfd70d2f8d4875416743716ecb043d2acafe"
+version = "0.25.3"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#7939bcbdabcce04b08c8fc49f47dec62eddec928"
 dependencies = [
  "borrown",
  "coins-bip32",
@@ -2733,8 +2733,8 @@ dependencies = [
 
 [[package]]
 name = "fuel-merkle"
-version = "0.25.2"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#8250dfd70d2f8d4875416743716ecb043d2acafe"
+version = "0.25.3"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#7939bcbdabcce04b08c8fc49f47dec62eddec928"
 dependencies = [
  "digest 0.10.6",
  "fuel-storage",
@@ -2746,13 +2746,13 @@ dependencies = [
 
 [[package]]
 name = "fuel-storage"
-version = "0.25.2"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#8250dfd70d2f8d4875416743716ecb043d2acafe"
+version = "0.25.3"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#7939bcbdabcce04b08c8fc49f47dec62eddec928"
 
 [[package]]
 name = "fuel-tx"
-version = "0.25.2"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#8250dfd70d2f8d4875416743716ecb043d2acafe"
+version = "0.25.3"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#7939bcbdabcce04b08c8fc49f47dec62eddec928"
 dependencies = [
  "derivative",
  "fuel-asm",
@@ -2768,8 +2768,8 @@ dependencies = [
 
 [[package]]
 name = "fuel-types"
-version = "0.25.2"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#8250dfd70d2f8d4875416743716ecb043d2acafe"
+version = "0.25.3"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#7939bcbdabcce04b08c8fc49f47dec62eddec928"
 dependencies = [
  "rand 0.8.5",
  "serde",
@@ -2777,8 +2777,8 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.25.2"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#8250dfd70d2f8d4875416743716ecb043d2acafe"
+version = "0.25.3"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=mitchmindtree/monorepo-fuel-asm-refactor#7939bcbdabcce04b08c8fc49f47dec62eddec928"
 dependencies = [
  "anyhow",
  "bitflags",
@@ -3266,9 +3266,9 @@ checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "hyper"
-version = "0.14.23"
+version = "0.14.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "034711faac9d2166cb1baf1a2fb0b60b1f277f8492fd72176c17f3515e1abd3c"
+checksum = "5e011372fa0b68db8350aa7a248930ecc7839bf46d8485577d69f117a75f164c"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -4233,9 +4233,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniz_oxide"
-version = "0.6.4"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2e212582ede878b109755efd0773a4f0f4ec851584cf0aefbeb4d9ecc114822"
+checksum = "b275950c28b37e794e8c55d88aeb5e139d0ce23fdbbeda68f8d7174abdf9e8fa"
 dependencies = [
  "adler",
 ]
@@ -6465,9 +6465,9 @@ dependencies = [
 
 [[package]]
 name = "tinyvec_macros"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
+checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"

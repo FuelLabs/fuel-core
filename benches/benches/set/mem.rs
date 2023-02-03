@@ -7,30 +7,27 @@ use criterion::{
     Throughput,
 };
 use fuel_core_benches::*;
-use fuel_core_types::{
-    fuel_asm::*,
-    fuel_vm::consts::*,
-};
+use fuel_core_types::fuel_asm::*;
 
 pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("lb"),
         "lb",
-        VmBench::new(op::lb(0x10, REG_ONE, 10)),
+        VmBench::new(op::lb(0x10, RegId::ONE, 10)),
     );
 
     run_group_ref(
         &mut c.benchmark_group("lw"),
         "lw",
-        VmBench::new(op::lw(0x10, REG_ONE, 10)),
+        VmBench::new(op::lw(0x10, RegId::ONE, 10)),
     );
 
     run_group_ref(
         &mut c.benchmark_group("sb"),
         "sb",
         VmBench::new(op::sb(0x10, 0x11, 0)).with_prepare_script(vec![
-            op::aloc(REG_ONE),
-            op::addi(0x10, REG_HP, 1),
+            op::aloc(RegId::ONE),
+            op::addi(0x10, RegId::HP, 1),
             op::movi(0x11, 50),
         ]),
     );
@@ -41,7 +38,7 @@ pub fn run(c: &mut Criterion) {
         VmBench::new(op::sw(0x10, 0x11, 0)).with_prepare_script(vec![
             op::movi(0x10, 8),
             op::aloc(0x10),
-            op::addi(0x10, REG_HP, 1),
+            op::addi(0x10, RegId::HP, 1),
             op::movi(0x11, 50),
         ]),
     );
@@ -69,7 +66,7 @@ pub fn run(c: &mut Criterion) {
             VmBench::new(op::mcl(0x10, 0x11)).with_prepare_script(vec![
                 op::movi(0x11, *i),
                 op::aloc(0x11),
-                op::addi(0x10, REG_HP, 1),
+                op::addi(0x10, RegId::HP, 1),
             ]),
         );
     }
@@ -84,7 +81,7 @@ pub fn run(c: &mut Criterion) {
             VmBench::new(op::mcli(0x10, *i)).with_prepare_script(vec![
                 op::movi(0x11, *i),
                 op::aloc(0x11),
-                op::addi(0x10, REG_HP, 1),
+                op::addi(0x10, RegId::HP, 1),
             ]),
         );
     }
@@ -96,10 +93,10 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(
             &mut mem_mcp,
             format!("{i}"),
-            VmBench::new(op::mcp(0x10, REG_ZERO, 0x11)).with_prepare_script(vec![
+            VmBench::new(op::mcp(0x10, RegId::ZERO, 0x11)).with_prepare_script(vec![
                 op::movi(0x11, *i),
                 op::aloc(0x11),
-                op::addi(0x10, REG_HP, 1),
+                op::addi(0x10, RegId::HP, 1),
             ]),
         );
     }
@@ -108,10 +105,10 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("mcpi"),
         "mcpi",
-        VmBench::new(op::mcpi(0x10, REG_ZERO, 4000)).with_prepare_script(vec![
+        VmBench::new(op::mcpi(0x10, RegId::ZERO, 4000)).with_prepare_script(vec![
             op::movi(0x11, 4000),
             op::aloc(0x11),
-            op::addi(0x10, REG_HP, 1),
+            op::addi(0x10, RegId::HP, 1),
         ]),
     );
 
