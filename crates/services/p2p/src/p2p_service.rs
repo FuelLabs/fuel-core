@@ -461,16 +461,9 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                     }
                     return Some(FuelP2PEvent::PeerDisconnected(peer_id))
                 }
-                PeerInfoEvent::TooManyPeers {
-                    peer_to_disconnect,
-                    peer_to_connect,
-                } => {
+                PeerInfoEvent::TooManyPeers { peer_to_disconnect } => {
                     // disconnect the surplus peer
                     let _ = self.swarm.disconnect_peer_id(peer_to_disconnect);
-                    // reconnect the reserved peer
-                    if let Some(peer_id) = peer_to_connect {
-                        let _ = self.swarm.dial(peer_id);
-                    }
                 }
             },
             FuelBehaviourEvent::RequestResponse(req_res_event) => match req_res_event {
@@ -876,7 +869,7 @@ mod tests {
         let jh = tokio::spawn(async move {
             while rx.try_recv().is_err() {
                 futures::stream::iter(node_services.iter_mut())
-                    .for_each_concurrent(10, |node| async move {
+                    .for_each_concurrent(20, |node| async move {
                         node.next_event().await;
                     })
                     .await;
