@@ -15,6 +15,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  DASEL_VERSION: https://github.com/TomWright/dasel/releases/download/v1.24.3/dasel_linux_amd64
   RUST_VERSION: 1.67.0
   NIGHTLY_RUST_VERSION: nightly-2022-12-14
   RUSTFLAGS: -D warnings
