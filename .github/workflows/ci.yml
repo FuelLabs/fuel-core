@@ -124,7 +124,7 @@ jobs:
           cache-directories: "~/.cargo/registry/src/**/librocksdb-sys-*"
           cache-on-failure: "true"
       - name: check ${{ matrix.package }} ${{ matrix.args }}
-        run: cargo check --locked -p ${{ matrix.package }} ${{ matrix.args }}
+        run: cargo check --profile ci --locked -p ${{ matrix.package }} ${{ matrix.args }}
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v2
         if: always() && github.ref == 'refs/heads/master'
@@ -165,7 +165,7 @@ jobs:
           cache-directories: "~/.cargo/registry/src/**/librocksdb-sys-*"
           cache-on-failure: "true"
       - name: test ${{ matrix.package }} ${{ matrix.args }}
-        run: cargo test -p ${{ matrix.package }} ${{ matrix.args }}
+        run: cargo test --profile ci -p ${{ matrix.package }} ${{ matrix.args }}
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v2
         if: always() && github.ref == 'refs/heads/master'
@@ -207,7 +207,7 @@ jobs:
           cache-directories: "~/.cargo/registry/src/**/librocksdb-sys-*"
           cache-on-failure: "true"
       - name: clippy ${{ matrix.package }} ${{ matrix.args }}
-        run: cargo clippy -p ${{ matrix.package }} ${{ matrix.args }}
+        run: cargo clippy --profile ci -p ${{ matrix.package }} ${{ matrix.args }}
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v2
         if: always() && github.ref == 'refs/heads/master'

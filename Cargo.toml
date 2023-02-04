@@ -36,6 +36,12 @@ codegen-units = 1
 lto = "fat"
 panic = "abort"
 
+[profile.ci]
+inherits = "dev"
+# Disabling debug info speeds up builds a bunch
+# and shrinks the target folder for faster caching
+debug = 0
+
 [workspace.package]
 authors = ["Fuel Labs <contact@fuel.sh>"]
 categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
