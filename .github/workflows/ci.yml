@@ -115,7 +115,9 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
       - name: Install Protoc
-        run: apt install -y protobuf-compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
       - uses: Swatinem/rust-cache@v2
         with:
           key: 'check ${{ matrix.package }} ${{ matrix.args }}'
@@ -154,7 +156,9 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
       - name: Install Protoc
-        run: apt install -y protobuf-compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
       - uses: Swatinem/rust-cache@v2
         with:
           key: 'test ${{ matrix.package }} ${{ matrix.args }}'
@@ -194,7 +198,9 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           components: "clippy"
       - name: Install Protoc
-        run: apt install -y protobuf-compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
       - uses: Swatinem/rust-cache@v2
         with:
           key: 'clippy ${{ matrix.package }} ${{ matrix.args }}'
@@ -233,7 +239,9 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           components: "clippy"
       - name: Install Protoc
-        run: apt install -y protobuf-compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
       - uses: Swatinem/rust-cache@v2
         with:
           key: '${{ matrix.command }} ${{ matrix.args }}'
@@ -320,7 +328,9 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
 
       - name: Install Protoc
-        run: apt install -y protobuf-compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
 
       - name: Publish crate
         uses: katyo/publish-crates@v2
