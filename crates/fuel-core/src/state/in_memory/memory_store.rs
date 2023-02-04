@@ -54,8 +54,7 @@ impl MemoryStore {
             // filter prefix
             .filter(|(key, _)| {
                 if let Some(prefix) = prefix {
-                    let starts_with = key.starts_with(prefix);
-                    starts_with
+                    key.starts_with(prefix)
                 } else {
                     true
                 }

@@ -72,6 +72,7 @@ test-case = { workspace = true }
 [features]
 debug = ["fuel-core-types/debug"]
 default = ["debug", "metrics", "rocksdb"]
+default_no_rocks = ["debug", "metrics"]
 metrics = ["dep:fuel-core-metrics"]
 p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
