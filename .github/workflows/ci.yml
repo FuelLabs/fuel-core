@@ -121,6 +121,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: 'check ${{ matrix.package }} ${{ matrix.args }}'
+          cache-directories: "~/.cargo/registry/src/**/librocksdb-sys-*"
           cache-on-failure: "true"
       - name: check ${{ matrix.package }} ${{ matrix.args }}
         run: cargo check --locked -p ${{ matrix.package }} ${{ matrix.args }}
@@ -161,6 +162,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: 'test ${{ matrix.package }} ${{ matrix.args }}'
+          cache-directories: "~/.cargo/registry/src/**/librocksdb-sys-*"
           cache-on-failure: "true"
       - name: test ${{ matrix.package }} ${{ matrix.args }}
         run: cargo test -p ${{ matrix.package }} ${{ matrix.args }}
@@ -202,6 +204,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: 'clippy ${{ matrix.package }} ${{ matrix.args }}'
+          cache-directories: "~/.cargo/registry/src/**/librocksdb-sys-*"
           cache-on-failure: "true"
       - name: clippy ${{ matrix.package }} ${{ matrix.args }}
         run: cargo test -p ${{ matrix.package }} ${{ matrix.args }}
@@ -246,6 +249,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: '${{ matrix.command }} ${{ matrix.args }}'
+          cache-directories: "~/.cargo/registry/src/**/librocksdb-sys-*"
           cache-on-failure: "true"
       - name: ${{ matrix.command }} ${{ matrix.args }}
         run: cargo ${{ matrix.command }} ${{ matrix.args }}
