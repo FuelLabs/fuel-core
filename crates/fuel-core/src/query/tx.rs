@@ -45,12 +45,12 @@ impl TransactionQueryContext<'_> {
         self.0.tx_status(tx_id)
     }
 
-    pub fn owned_transactions<'a>(
-        &'a self,
-        owner: &Address,
+    pub fn owned_transactions(
+        &self,
+        owner: Address,
         start: Option<TxPointer>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = StorageResult<(TxPointer, Transaction)>> + 'a {
+    ) -> impl Iterator<Item = StorageResult<(TxPointer, Transaction)>> + '_ {
         self.0
             .owned_transactions_ids(owner, start, direction)
             .map(|result| {

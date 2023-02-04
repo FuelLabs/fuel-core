@@ -40,6 +40,7 @@ use std::{
 #[derive(Debug)]
 pub struct MemoryTransactionView {
     view_layer: MemoryStore,
+    // TODO: Remove `Mutex` and usage of the `column_key`.
     // use hashmap to collapse changes (e.g. insert then remove the same key)
     changes: Arc<Mutex<HashMap<Vec<u8>, WriteOperation>>>,
     data_source: DataSource,
@@ -129,8 +130,8 @@ impl KeyValueStore for MemoryTransactionView {
     fn iter_all(
         &self,
         column: Column,
-        prefix: Option<Vec<u8>>,
-        start: Option<Vec<u8>>,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
         direction: IterDirection,
     ) -> BoxedIter<DatabaseResult<(Vec<u8>, Vec<u8>)>> {
         // iterate over inmemory + db while also filtering deleted entries
@@ -138,7 +139,7 @@ impl KeyValueStore for MemoryTransactionView {
 
         self.view_layer
                 // iter_all returns items in sorted order
-                .iter_all(column, prefix.clone(), start.clone(), direction)
+                .iter_all(column, prefix, start, direction)
                 // Merge two sorted iterators (our current view overlay + backing data source)
                 .merge_join_by(
                     self.data_source.iter_all(column, prefix, start, direction),

@@ -45,14 +45,10 @@ impl Database {
         start_asset: Option<AssetId>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = DatabaseResult<(AssetId, Word)>> + '_ {
-        self.iter_all::<Vec<u8>, Word>(
+        self.iter_all_filtered::<Vec<u8>, Word, _, _>(
             Column::ContractsAssets,
-            Some(contract.as_ref().to_vec()),
-            start_asset.map(|asset_id| {
-                ContractsAssetKey::new(&contract, &asset_id)
-                    .as_ref()
-                    .to_vec()
-            }),
+            Some(contract),
+            start_asset.map(|asset_id| ContractsAssetKey::new(&contract, &asset_id)),
             direction,
         )
         .map(|res| {
@@ -64,7 +60,7 @@ impl Database {
 
     pub fn get_contract_config(&self) -> StorageResult<Option<Vec<ContractConfig>>> {
         let configs = self
-            .iter_all::<Vec<u8>, Word>(Column::ContractsRawCode, None, None, None)
+            .iter_all::<Vec<u8>, Word>(Column::ContractsRawCode, None)
             .map(|raw_contract_id| -> StorageResult<ContractConfig> {
                 let contract_id = ContractId::new(
                     raw_contract_id.unwrap().0[..32]
@@ -87,10 +83,9 @@ impl Database {
                     .into_owned();
 
                 let state = Some(
-                    self.iter_all::<Vec<u8>, Bytes32>(
+                    self.iter_all_by_prefix::<Vec<u8>, Bytes32, _>(
                         Column::ContractsState,
-                        Some(contract_id.as_ref().to_vec()),
-                        None,
+                        Some(contract_id.as_ref()),
                         None,
                     )
                     .map(|res| -> DatabaseResult<(Bytes32, Bytes32)> {
@@ -107,10 +102,9 @@ impl Database {
                 );
 
                 let balances = Some(
-                    self.iter_all::<Vec<u8>, u64>(
+                    self.iter_all_by_prefix::<Vec<u8>, u64, _>(
                         Column::ContractsAssets,
-                        Some(contract_id.as_ref().to_vec()),
-                        None,
+                        Some(contract_id.as_ref()),
                         None,
                     )
                     .map(|res| {
