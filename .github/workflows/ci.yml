@@ -233,7 +233,7 @@ jobs:
     timeout-minutes: 45
     continue-on-error: ${{ matrix.skip-error || false }}
     steps:
-      - run: "unused"
+      - run: echo "unused"
       # - uses: actions/checkout@v3
       # - uses: dtolnay/rust-toolchain@master
       #   with:
