@@ -82,25 +82,119 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
-  cargo-verifications:
+  get-workspace-members:
+    runs-on: ubuntu-latest
+    outputs:
+      members: ${{ steps.set-members.outputs.members }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - id: set-members
+        run: |
+          # install dasel
+          curl -sSLf "$DASEL_VERSION" -L -o dasel && chmod +x dasel
+          mv ./dasel /usr/local/bin/dasel
+          members=$(cat Cargo.toml | dasel -r toml -w json 'workspace.members' | jq -r ".[]" | xargs -I '{}' dasel -f {}/Cargo.toml 'package.name' | jq -R '[.]' | jq -s -c 'add')
+          echo "members=$members" >> $GITHUB_OUTPUT
+
+
+  cargo-check-members:
     needs:
-      - lint-toml-files
-      - prevent-openssl
-      - rustfmt
+      - get-workspace-members
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        args: [--all-features]
+        package: ${{fromJSON(needs.get-workspace-members.outputs.members)}}
+    # disallow any job that takes longer than 45 minutes
+    timeout-minutes: 45
+    continue-on-error: ${{ matrix.skip-error || false }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: "clippy"
+      - name: Install Cargo Make
+        uses: davidB/rust-cargo-make@v1
+        with:
+          version: "0.36.4"
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1.1.2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: 'check ${{ matrix.package }} ${{ matrix.args }}'
+          cache-on-failure: "true"
+      - name: check ${{ matrix.package }} ${{ matrix.args }}
+        run: cargo check --locked -p ${{ matrix.package }} ${{ matrix.args }}
+      - name: Notify if Job Fails
+        uses: ravsamhq/notify-slack-action@v2
+        if: always() && github.ref == 'refs/heads/master'
+        with:
+          status: ${{ job.status }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          notification_title: '{workflow} has {status_message}'
+          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
+          footer: ''
+          notify_when: 'failure'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+          RUSTFLAGS: -D warnings
+
+  cargo-test-members:
+    needs:
+      - get-workspace-members
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        args: [--all-features]
+        package: ${{fromJSON(needs.get-workspace-members.outputs.members)}}
+    # disallow any job that takes longer than 45 minutes
+    timeout-minutes: 45
+    continue-on-error: ${{ matrix.skip-error || false }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: "clippy"
+      - name: Install Cargo Make
+        uses: davidB/rust-cargo-make@v1
+        with:
+          version: "0.36.4"
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1.1.2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: 'test ${{ matrix.package }} ${{ matrix.args }}'
+          cache-on-failure: "true"
+      - name: test ${{ matrix.package }} ${{ matrix.args }}
+        run: cargo test -p ${{ matrix.package }} ${{ matrix.args }}
+      - name: Notify if Job Fails
+        uses: ravsamhq/notify-slack-action@v2
+        if: always() && github.ref == 'refs/heads/master'
+        with:
+          status: ${{ job.status }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          notification_title: '{workflow} has {status_message}'
+          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
+          footer: ''
+          notify_when: 'failure'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+          RUSTFLAGS: -D warnings
+
+  cargo-workspace-verifications:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
           - command: clippy
             args: --all-targets --all-features
-          - command: check
-            args: --all-targets
-          - command: make
-            args: check --locked
-          - command: test
-            args: --all-features --workspace
-          - command: test
-            args: --no-default-features --workspace
           - command: test
             args: --manifest-path version-compatibility/Cargo.toml --workspace
     # disallow any job that takes longer than 45 minutes
@@ -158,7 +252,9 @@ jobs:
 
   verifications-complete:
     needs:
-      - cargo-verifications
+      - cargo-check-members
+      - cargo-test-members
+      - cargo-workspace-verifications
       - publish-crates-check
     runs-on: ubuntu-latest
     steps:
