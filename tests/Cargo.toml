@@ -22,6 +22,7 @@ path = "tests/lib.rs"
 harness = true
 name = "metrics_tests"
 path = "tests/metrics.rs"
+required-features = ["metrics"]
 
 [dependencies]
 ethers = "1.0.2"
