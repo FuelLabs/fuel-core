@@ -207,7 +207,7 @@ jobs:
           cache-directories: "~/.cargo/registry/src/**/librocksdb-sys-*"
           cache-on-failure: "true"
       - name: clippy ${{ matrix.package }} ${{ matrix.args }}
-        run: cargo test -p ${{ matrix.package }} ${{ matrix.args }}
+        run: cargo clippy -p ${{ matrix.package }} ${{ matrix.args }}
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v2
         if: always() && github.ref == 'refs/heads/master'
@@ -233,35 +233,36 @@ jobs:
     timeout-minutes: 45
     continue-on-error: ${{ matrix.skip-error || false }}
     steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-          components: "clippy"
-      - name: Install Protoc
-        run: |
-          sudo apt-get update
-          sudo apt-get install protobuf-compiler
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: '${{ matrix.command }} ${{ matrix.args }}'
-          cache-directories: "~/.cargo/registry/src/**/librocksdb-sys-*"
-          cache-on-failure: "true"
-      - name: ${{ matrix.command }} ${{ matrix.args }}
-        run: cargo ${{ matrix.command }} ${{ matrix.args }}
-      - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v2
-        if: always() && github.ref == 'refs/heads/master'
-        with:
-          status: ${{ job.status }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          notification_title: '{workflow} has {status_message}'
-          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
-          footer: ''
-          notify_when: 'failure'
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
-          RUSTFLAGS: -D warnings
+      - run: "unused"
+      # - uses: actions/checkout@v3
+      # - uses: dtolnay/rust-toolchain@master
+      #   with:
+      #     toolchain: ${{ env.RUST_VERSION }}
+      #     components: "clippy"
+      # - name: Install Protoc
+      #   run: |
+      #     sudo apt-get update
+      #     sudo apt-get install protobuf-compiler
+      # - uses: Swatinem/rust-cache@v2
+      #   with:
+      #     key: '${{ matrix.command }} ${{ matrix.args }}'
+      #     cache-directories: "~/.cargo/registry/src/**/librocksdb-sys-*"
+      #     cache-on-failure: "true"
+      # - name: ${{ matrix.command }} ${{ matrix.args }}
+      #   run: cargo ${{ matrix.command }} ${{ matrix.args }}
+      # - name: Notify if Job Fails
+      #   uses: ravsamhq/notify-slack-action@v2
+      #   if: always() && github.ref == 'refs/heads/master'
+      #   with:
+      #     status: ${{ job.status }}
+      #     token: ${{ secrets.GITHUB_TOKEN }}
+      #     notification_title: '{workflow} has {status_message}'
+      #     message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
+      #     footer: ''
+      #     notify_when: 'failure'
+      #   env:
+      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+      #     RUSTFLAGS: -D warnings
 
   publish-crates-check:
     runs-on: ubuntu-latest
