@@ -8,7 +8,6 @@ use futures::{
     AsyncWriteExt,
     FutureExt,
 };
-use futures_timer::Delay;
 use libp2p_core::upgrade::ReadyUpgrade;
 use libp2p_swarm::{
     handler::{
@@ -25,8 +24,13 @@ use libp2p_swarm::{
 use std::{
     fmt::Display,
     num::NonZeroU32,
+    pin::Pin,
     task::Poll,
     time::Duration,
+};
+use tokio::time::{
+    sleep,
+    Sleep,
 };
 use tracing::debug;
 
@@ -95,7 +99,7 @@ pub struct HeartbeatHandler {
     config: HeartbeatConfig,
     inbound: Option<InboundData>,
     outbound: Option<OutboundState>,
-    timer: Delay,
+    timer: Pin<Box<Sleep>>,
     failure_count: u32,
 }
 
@@ -105,7 +109,7 @@ impl HeartbeatHandler {
             config,
             inbound: None,
             outbound: None,
-            timer: Delay::new(Duration::new(0, 0)),
+            timer: Box::pin(sleep(Duration::new(0, 0))),
             failure_count: 0,
         }
     }
@@ -139,7 +143,7 @@ impl ConnectionHandler for HeartbeatHandler {
                 stream,
             }) => {
                 // start new send timeout
-                self.timer.reset(self.config.send_timeout);
+                self.timer = Box::pin(sleep(self.config.send_timeout));
                 // send latest `BlockHeight`
                 self.outbound = Some(OutboundState::SendingBlockHeight(
                     send_block_height(stream, block_height).boxed(),
@@ -220,7 +224,7 @@ impl ConnectionHandler for HeartbeatHandler {
                             // reset failure count
                             self.failure_count = 0;
                             // start new idle timeout until next request & send
-                            self.timer.reset(self.config.idle_timeout);
+                            self.timer = Box::pin(sleep(self.config.idle_timeout));
                             self.outbound = Some(OutboundState::Idle(stream));
                         }
                         Poll::Ready(Err(_)) => {

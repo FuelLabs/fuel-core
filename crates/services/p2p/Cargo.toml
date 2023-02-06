@@ -21,7 +21,6 @@ fuel-core-types = { path = "../../types", features = [
     "serde",
 ], version = "0.16.1" }
 futures = "0.3"
-futures-timer = "3.0"
 ip_network = "0.4"
 libp2p = { version = "=0.50.0", default-features = false, features = [
     "dns",

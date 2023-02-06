@@ -37,7 +37,7 @@ impl StorageInspect<ContractsAssets> for Database {
         &self,
         key: &<ContractsAssets as Mappable>::Key,
     ) -> Result<bool, Self::Error> {
-        self.exists(key.as_ref(), Column::ContractsAssets)
+        self.contains_key(key.as_ref(), Column::ContractsAssets)
             .map_err(Into::into)
     }
 }
@@ -48,7 +48,7 @@ impl StorageMutate<ContractsAssets> for Database {
         key: &<ContractsAssets as Mappable>::Key,
         value: &<ContractsAssets as Mappable>::Value,
     ) -> Result<Option<<ContractsAssets as Mappable>::OwnedValue>, Self::Error> {
-        Database::insert(self, key.as_ref(), Column::ContractsAssets, *value)
+        Database::insert(self, key.as_ref(), Column::ContractsAssets, value)
             .map_err(Into::into)
     }
 
@@ -62,11 +62,10 @@ impl StorageMutate<ContractsAssets> for Database {
 
 impl MerkleRootStorage<ContractId, ContractsAssets> for Database {
     fn root(&self, parent: &ContractId) -> Result<MerkleRoot, Self::Error> {
-        let items: Vec<_> = Database::iter_all::<Vec<u8>, Word>(
+        let items: Vec<(Vec<u8>, Word)> = Database::iter_all_by_prefix(
             self,
             Column::ContractsAssets,
-            Some(parent.as_ref().to_vec()),
-            None,
+            Some(parent),
             Some(IterDirection::Forward),
         )
         .try_collect()?;
