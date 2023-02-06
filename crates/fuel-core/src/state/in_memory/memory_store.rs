@@ -63,7 +63,10 @@ impl MemoryStore {
 
         let until_start_reached = |(key, _): &(Vec<u8>, Vec<u8>)| {
             if let Some(start) = start {
-                key.as_slice() != start
+                match direction {
+                    IterDirection::Forward => key.as_slice() < start,
+                    IterDirection::Reverse => key.as_slice() > start,
+                }
             } else {
                 false
             }
