@@ -218,7 +218,7 @@ where
     }
 }
 
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip_all, fields(service = S::NAME))]
 /// Initialize the background loop as a spawned task.
 fn initialize_loop<S>(service: S) -> Shared<watch::Sender<State>>
 where
@@ -230,7 +230,9 @@ where
     // Spawned as a task to check if the service is already running and to capture any panics.
     tokio::task::spawn(
         async move {
+            tracing::debug!("running");
             let join_handler = run(service, stop_sender.clone());
+            tracing::debug!("awaiting run");
             let result = join_handler.await;
 
             let stopped_state = if let Err(e) = result {
@@ -239,11 +241,15 @@ where
                 State::Stopped
             };
 
+            tracing::debug!("shutting down {:?}", stopped_state);
+
             let _ = stop_sender.send_if_modified(|state| {
                 if !state.stopped() {
                     *state = stopped_state;
+                    tracing::debug!("Wasn't stopped, so sent stop.");
                     true
                 } else {
+                    tracing::debug!("Was already stopped.");
                     false
                 }
             });
@@ -294,8 +300,10 @@ where
                 match task.run(&mut state).await {
                     Ok(should_continue) => {
                         if !should_continue {
+                            tracing::debug!("stopping");
                             return
                         }
+                        tracing::debug!("run loop");
                     }
                     Err(e) => {
                         let e: &dyn std::error::Error = &*e;

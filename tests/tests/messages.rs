@@ -70,7 +70,10 @@ async fn can_submit_genesis_message() {
     assert!(
         matches!(status, TransactionStatus::Success { .. }),
         "expected success, received {status:?}",
-    )
+    );
+    loop {
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    }
 }
 
 #[tokio::test]
