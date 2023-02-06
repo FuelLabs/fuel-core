@@ -5,7 +5,7 @@ use crate::client::schema::{
     tx::DryRunArg,
 };
 use anyhow::Context;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "subscriptions")]
 use cynic::StreamingOperation;
 use cynic::{
     http::ReqwestExt,
@@ -28,7 +28,7 @@ use fuel_core_types::{
     fuel_types,
     fuel_types::bytes::SerializableVec,
 };
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "subscriptions")]
 use futures::StreamExt;
 use itertools::Itertools;
 use schema::{
@@ -65,7 +65,7 @@ use schema::{
     TransactionId,
     U64,
 };
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "subscriptions")]
 use std::future;
 use std::{
     convert::TryInto,
@@ -180,7 +180,7 @@ impl FuelClient {
         }
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(feature = "subscriptions")]
     async fn subscribe<ResponseData, Vars>(
         &self,
         q: StreamingOperation<ResponseData, Vars>,
@@ -311,7 +311,7 @@ impl FuelClient {
         Ok(id)
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(feature = "subscriptions")]
     /// Submit the transaction and wait for it to be included into a block.
     ///
     /// This will wait forever if needed, so consider wrapping this call
@@ -464,7 +464,7 @@ impl FuelClient {
         Ok(status)
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(feature = "subscriptions")]
     /// Subscribe to the status of a transaction
     pub async fn subscribe_transaction_status(
         &self,
@@ -482,7 +482,7 @@ impl FuelClient {
         Ok(stream)
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(feature = "subscriptions")]
     /// Awaits for the transaction to be committed into a block
     ///
     /// This will wait forever if needed, so consider wrapping this call
