@@ -1,29 +1,29 @@
 [package]
-authors = ["Fuel Labs <contact@fuel.sh>"]
+authors = { workspace = true }
 description = "Fuel Core PoA Coordinator"
-edition = "2021"
-homepage = "https://fuel.network/"
+edition = { workspace = true }
+homepage = { workspace = true }
 keywords = ["blockchain", "consensus", "fuel"]
-license = "BUSL-1.1"
+license = { workspace = true }
 name = "fuel-core-poa"
-repository = "https://github.com/FuelLabs/fuel-core"
-version = "0.16.1"
+repository = { workspace = true }
+version = { workspace = true }
 
 [dependencies]
-anyhow = "1.0"
-async-trait = "0.1"
-fuel-core-chain-config = { version = "0.16.1", path = "../../../chain-config" }
-fuel-core-services = { path = "../..", version = "0.16.1" }
-fuel-core-storage = { path = "../../../storage", version = "0.16.1" }
-fuel-core-types = { path = "../../../types", version = "0.16.1" }
-tokio = { version = "1.21", features = ["full"] }
-tokio-stream = "0.1"
-tracing = "0.1"
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+fuel-core-chain-config = { workspace = true }
+fuel-core-services = { workspace = true }
+fuel-core-storage = { workspace = true }
+fuel-core-types = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tokio-stream = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
-fuel-core-storage = { path = "../../../storage", features = ["test-helpers"] }
-fuel-core-types = { path = "../../../types", features = ["test-helpers"] }
-mockall = "0.11"
-rand = "0.8"
-test-case = "2.2"
-tokio = { version = "1.21", features = ["full", "test-util"] }
+fuel-core-storage = { path = "./../../../storage", features = ["test-helpers"] }
+fuel-core-types = { path = "./../../../types", features = ["test-helpers"] }
+mockall = { workspace = true }
+rand = { workspace = true }
+test-case = { workspace = true }
+tokio = { workspace = true, features = ["full", "test-util"] }

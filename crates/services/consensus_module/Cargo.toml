@@ -1,20 +1,20 @@
 [package]
-authors = ["Fuel Labs <contact@fuel.sh>"]
+authors = { workspace = true }
 description = "The common code for fuel core consensuses."
-edition = "2021"
-homepage = "https://fuel.network/"
+edition = { workspace = true }
+homepage = { workspace = true }
 keywords = ["blockchain", "consensus", "fuel"]
-license = "BUSL-1.1"
+license = { workspace = true }
 name = "fuel-core-consensus-module"
-repository = "https://github.com/FuelLabs/fuel-core"
-version = "0.16.1"
+repository = { workspace = true }
+version = { workspace = true }
 
 [dependencies]
-anyhow = "1.0"
-fuel-core-chain-config = { version = "0.16.1", path = "../../chain-config" }
-fuel-core-poa = { version = "0.16.1", path = "poa" }
-fuel-core-types = { version = "0.16.1", path = "../../types" }
+anyhow = { workspace = true }
+fuel-core-chain-config = { workspace = true }
+fuel-core-poa = { workspace = true }
+fuel-core-types = { workspace = true }
 
 [dev-dependencies]
 fuel-core-types = { path = "../../types", features = ["test-helpers"] }
-test-case = "2.2"
+test-case = { workspace = true }

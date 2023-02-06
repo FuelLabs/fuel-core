@@ -1,26 +1,26 @@
 [package]
 name = "fuel-core-p2p"
-version = "0.16.1"
-authors = ["Fuel Labs <contact@fuel.sh>"]
+version = { workspace = true }
+authors = { workspace = true }
 categories = ["cryptography::cryptocurrencies", "network-programming"]
-edition = "2021"
-homepage = "https://fuel.network/"
+edition = { workspace = true }
+homepage = { workspace = true }
 keywords = ["blockchain", "cryptocurrencies", "fuel-core-p2p", "networking"]
-license = "BUSL-1.1"
-repository = "https://github.com/FuelLabs/fuel-core"
+license = { workspace = true }
+repository = { workspace = true }
 description = "Fuel client networking"
 
 [dependencies]
-anyhow = "1.0"
-async-trait = "0.1"
-fuel-core-chain-config = { path = "../../chain-config", version = "0.16.1" }
-fuel-core-metrics = { path = "../../metrics", version = "0.16.1" } # TODO make this a feature
-fuel-core-services = { path = "../../services", version = "0.16.1" }
-fuel-core-storage = { path = "../../storage", version = "0.16.1" }
-fuel-core-types = { path = "../../types", features = [
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+fuel-core-chain-config = { workspace = true }
+fuel-core-metrics = { workspace = true } # TODO make this a feature
+fuel-core-services = { workspace = true }
+fuel-core-storage = { workspace = true }
+fuel-core-types = { workspace = true, features = [
     "serde",
-], version = "0.16.1" }
-futures = "0.3"
+] }
+futures = { workspace = true }
 ip_network = "0.4"
 libp2p = { version = "=0.50.0", default-features = false, features = [
     "dns",
@@ -51,14 +51,14 @@ libp2p-swarm = "=0.41.1"
 libp2p-tcp = "=0.38.0"
 libp2p-websocket = "=0.40.0"
 libp2p-yamux = "=0.42.0"
-postcard = { version = "1.0", features = ["use-std"] }
-prometheus-client = "0.18"
-rand = "0.8"
-serde = { version = "1.0", features = ["derive"] }
+postcard = { workspace = true, features = ["use-std"] }
+prometheus-client = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 serde_with = "1.11"
 sha2 = "0.10"
-tokio = { version = "1.21", features = ["sync"] }
-tracing = "0.1"
+tokio = { workspace = true, features = ["sync"] }
+tracing = { workspace = true }
 
 [dev-dependencies]
 ctor = "0.1"
@@ -66,11 +66,11 @@ fuel-core-trace = { path = "../../trace" }
 fuel-core-types = { path = "../../types", features = [
     "serde",
     "test-helpers"
-], version = "0.16.1" }
-rand = "0.8"
-tokio = { version = "1.21", features = ["full"] }
-tracing-attributes = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+] }
+rand = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tracing-attributes = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [features]
 test-helpers = ["fuel-core-types/test-helpers"]

@@ -1,9 +1,9 @@
 [package]
-authors = ["Fuel Labs <contact@fuel.sh>"]
+authors = { workspace = true }
 categories = ["cryptography::cryptocurrencies"]
 description = "Storage types and primitives used by Fuel core protocol."
-edition = "2021"
-homepage = "https://fuel.network/"
+edition = { workspace = true }
+homepage = { workspace = true }
 keywords = [
     "blockchain",
     "cryptocurrencies",
@@ -11,16 +11,16 @@ keywords = [
     "fuel-core",
     "fuel-storage",
 ]
-license = "BUSL-1.1"
+license = { workspace = true }
 name = "fuel-core-storage"
-repository = "https://github.com/FuelLabs/fuel-core"
-version = "0.16.1"
+repository = { workspace = true }
+version = { workspace = true }
 
 [dependencies]
-anyhow = "1.0"
-fuel-core-types = { path = "../types", version = "0.16.1" }
-fuel-vm-private = { version = "0.25", package = "fuel-vm" }
-thiserror = "1.0"
+anyhow = { workspace = true }
+fuel-core-types = { workspace = true }
+fuel-vm-private = { workspace = true }
+thiserror = { workspace = true }
 
 [features]
 test-helpers = []
