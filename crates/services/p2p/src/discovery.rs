@@ -1,6 +1,5 @@
 use self::mdns::MdnsWrapper;
 use futures::FutureExt;
-use futures_timer::Delay;
 use ip_network::IpNetwork;
 use libp2p::{
     core::connection::ConnectionId,
@@ -33,6 +32,7 @@ use std::{
         HashSet,
         VecDeque,
     },
+    pin::Pin,
     task::{
         Context,
         Poll,
@@ -81,7 +81,7 @@ pub struct DiscoveryBehaviour {
 
     /// If enabled, the Stream that will fire after the delay expires,
     /// starting new random walk
-    next_kad_random_walk: Option<Delay>,
+    next_kad_random_walk: Option<Pin<Box<tokio::time::Sleep>>>,
 
     /// The Duration for the next random walk, after the current one ends
     duration_to_next_kad: Duration,
@@ -175,7 +175,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                     self.kademlia.get_closest_peers(random_peer_id);
                 }
 
-                *next_kad_random_query = Delay::new(self.duration_to_next_kad);
+                *next_kad_random_query =
+                    Box::pin(tokio::time::sleep(self.duration_to_next_kad));
                 // duration to next random walk should either be exponentially bigger than the previous
                 // or at max 60 seconds
                 self.duration_to_next_kad =

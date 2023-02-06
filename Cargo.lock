@@ -2512,7 +2512,6 @@ dependencies = [
  "fuel-core-trace",
  "fuel-core-types",
  "futures",
- "futures-timer",
  "ip_network",
  "libp2p",
  "libp2p-core",
