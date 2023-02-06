@@ -1,9 +1,9 @@
 [package]
-authors = ["Fuel Labs <contact@fuel.sh>"]
+authors = { workspace = true }
 categories = ["cryptography::cryptocurrencies"]
 description = "A Tokio tracing initializer for testing"
-edition = "2021"
-homepage = "https://fuel.network/"
+edition = { workspace = true }
+homepage = { workspace = true }
 keywords = [
     "blockchain",
     "cryptocurrencies",
@@ -12,16 +12,16 @@ keywords = [
     "fuel-tracing",
     "tracing",
 ]
-license = "BUSL-1.1"
+license = { workspace = true }
 name = "fuel-core-trace"
 publish = false
-repository = "https://github.com/FuelLabs/fuel-core"
-version = "0.16.1"
+repository = { workspace = true }
+version = { workspace = true }
 
 [dependencies]
 ctor = "0.1"
 tracing-appender = "0.2"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [dev-dependencies]
-tracing = { version = "0.1" }
+tracing = { workspace = true }
