@@ -14,6 +14,7 @@ anyhow = "1.0"
 fuel-core-chain-config = { version = "0.16.1", path = "../../chain-config" }
 fuel-core-poa = { version = "0.16.1", path = "poa" }
 fuel-core-types = { version = "0.16.1", path = "../../types" }
+tokio = "1.25"
 
 [dev-dependencies]
 fuel-core-types = { path = "../../types", features = ["test-helpers"] }

@@ -11,7 +11,6 @@ use crate::{
         BlockImporterPort,
         ConsensusPort,
         PeerToPeerPort,
-        RelayerPort,
     },
     state::State,
     sync::SyncHeights,
@@ -37,19 +36,17 @@ use tokio::sync::Notify;
 mod tests;
 
 /// Creates an instance of runnable sync service.
-pub fn new_service<P, E, C, R>(
+pub fn new_service<P, E, C>(
     current_fuel_block_height: BlockHeight,
     p2p: P,
     executor: E,
     consensus: C,
-    relayer: R,
     params: Config,
-) -> anyhow::Result<ServiceRunner<SyncTask<P, E, C, R>>>
+) -> anyhow::Result<ServiceRunner<SyncTask<P, E, C>>>
 where
     P: ports::PeerToPeerPort + Send + Sync + 'static,
     E: ports::BlockImporterPort + Send + Sync + 'static,
     C: ports::ConsensusPort + Send + Sync + 'static,
-    R: ports::RelayerPort + Send + Sync + 'static,
 {
     let height_stream = p2p.height_stream();
     let committed_height_stream = executor.committed_height_stream();
@@ -62,33 +59,29 @@ where
         p2p,
         executor,
         consensus,
-        relayer,
     )?))
 }
 
 /// Task for syncing heights.
 /// Contains import task as a child task.
-pub struct SyncTask<P, E, C, R>
+pub struct SyncTask<P, E, C>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
-    R: RelayerPort + Send + Sync + 'static,
 {
     sync_heights: SyncHeights,
-    import_task_handle: ServiceRunner<ImportTask<P, E, C, R>>,
+    import_task_handle: ServiceRunner<ImportTask<P, E, C>>,
 }
 
-struct ImportTask<P, E, C, R>(Import<P, E, C, R>);
+struct ImportTask<P, E, C>(Import<P, E, C>);
 
-impl<P, E, C, R> SyncTask<P, E, C, R>
+impl<P, E, C> SyncTask<P, E, C>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
-    R: RelayerPort + Send + Sync + 'static,
 {
-    #[allow(clippy::too_many_arguments)]
     fn new(
         height_stream: BoxStream<BlockHeight>,
         committed_height_stream: BoxStream<BlockHeight>,
@@ -97,22 +90,19 @@ where
         p2p: P,
         executor: E,
         consensus: C,
-        relayer: R,
     ) -> anyhow::Result<Self> {
         let notify = Arc::new(Notify::new());
         let state = SharedMutex::new(state);
         let p2p = Arc::new(p2p);
         let executor = Arc::new(executor);
         let consensus = Arc::new(consensus);
-        let relayer = Arc::new(relayer);
         let sync_heights = SyncHeights::new(
             height_stream,
             committed_height_stream,
             state.clone(),
             notify.clone(),
         );
-        let import =
-            Import::new(state, notify, params, p2p, executor, consensus, relayer);
+        let import = Import::new(state, notify, params, p2p, executor, consensus);
         let import_task_handle = ServiceRunner::new(ImportTask(import));
         Ok(Self {
             sync_heights,
@@ -122,12 +112,11 @@ where
 }
 
 #[async_trait::async_trait]
-impl<P, E, C, R> RunnableTask for SyncTask<P, E, C, R>
+impl<P, E, C> RunnableTask for SyncTask<P, E, C>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
-    R: RelayerPort + Send + Sync + 'static,
 {
     #[tracing::instrument(level = "debug", skip_all, err, ret)]
     async fn run(
@@ -142,18 +131,17 @@ where
 }
 
 #[async_trait::async_trait]
-impl<P, E, C, R> RunnableService for SyncTask<P, E, C, R>
+impl<P, E, C> RunnableService for SyncTask<P, E, C>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
-    R: RelayerPort + Send + Sync + 'static,
 {
     const NAME: &'static str = "fuel-core-sync";
 
     type SharedData = ();
 
-    type Task = SyncTask<P, E, C, R>;
+    type Task = SyncTask<P, E, C>;
 
     fn shared_data(&self) -> Self::SharedData {}
 
@@ -173,12 +161,11 @@ where
 }
 
 #[async_trait::async_trait]
-impl<P, E, C, R> RunnableTask for ImportTask<P, E, C, R>
+impl<P, E, C> RunnableTask for ImportTask<P, E, C>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
-    R: RelayerPort + Send + Sync + 'static,
 {
     #[tracing::instrument(level = "debug", skip_all, err, ret)]
     async fn run(
@@ -190,18 +177,17 @@ where
 }
 
 #[async_trait::async_trait]
-impl<P, E, C, R> RunnableService for ImportTask<P, E, C, R>
+impl<P, E, C> RunnableService for ImportTask<P, E, C>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
-    R: RelayerPort + Send + Sync + 'static,
 {
     const NAME: &'static str = "fuel-core-sync/import-task";
 
     type SharedData = ();
 
-    type Task = ImportTask<P, E, C, R>;
+    type Task = ImportTask<P, E, C>;
 
     fn shared_data(&self) -> Self::SharedData {}
 
@@ -210,12 +196,11 @@ where
     }
 }
 
-impl<P, E, C, R> Drop for SyncTask<P, E, C, R>
+impl<P, E, C> Drop for SyncTask<P, E, C>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
-    R: RelayerPort + Send + Sync + 'static,
 {
     fn drop(&mut self) {
         tracing::info!("Sync task shutting down");

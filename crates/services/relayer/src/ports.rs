@@ -96,7 +96,7 @@ where
 
     fn get_finalized_da_height(&self) -> StorageResult<DaBlockHeight> {
         Ok(*StorageAsRef::storage::<RelayerMetadata>(&self)
-            .get(&DA_HEIGHT_KEY)?
+            .get(&METADATA_KEY)?
             .ok_or(not_found!("DaBlockHeight missing for relayer"))?)
     }
 }
@@ -110,18 +110,18 @@ where
 {
     let current = (&s)
         .storage::<RelayerMetadata>()
-        .get(&DA_HEIGHT_KEY)?
+        .get(&METADATA_KEY)?
         .map(|cow| cow.as_u64());
     match current {
         Some(current) => {
             if **height > current {
                 s.storage::<RelayerMetadata>()
-                    .insert(&DA_HEIGHT_KEY, height)?;
+                    .insert(&METADATA_KEY, height)?;
             }
         }
         None => {
             s.storage::<RelayerMetadata>()
-                .insert(&DA_HEIGHT_KEY, height)?;
+                .insert(&METADATA_KEY, height)?;
         }
     }
     Ok(())
@@ -139,4 +139,4 @@ impl Mappable for RelayerMetadata {
 /// Key for da height.
 /// If the relayer metadata ever contains more than one key, this should be
 /// changed from a unit value.
-const DA_HEIGHT_KEY: () = ();
+const METADATA_KEY: () = ();

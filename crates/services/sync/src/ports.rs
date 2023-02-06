@@ -40,10 +40,13 @@ pub trait PeerToPeerPort {
 }
 
 #[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
 /// Port for communication with the consensus service.
 pub trait ConsensusPort {
     /// Check if the given sealed block header is valid.
     fn check_sealed_header(&self, header: &SealedBlockHeader) -> anyhow::Result<bool>;
+    /// await for this DA height to be sync'd.
+    async fn await_da_height(&self, da_height: &DaBlockHeight) -> anyhow::Result<()>;
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -56,18 +59,4 @@ pub trait BlockImporterPort {
     /// Execute the given sealed block
     /// and commit it to the database.
     async fn execute_and_commit(&self, block: SealedBlock) -> anyhow::Result<()>;
-}
-
-#[cfg_attr(test, mockall::automock)]
-#[async_trait::async_trait]
-/// Port for communication with the relayer.
-pub trait RelayerPort {
-    /// Wait for the relayer to be in sync with the given DA height
-    /// if the `da_height` is within the range of the current
-    /// relayer sync'd height +/- `max_da_lag`.
-    async fn await_until_if_in_range(
-        &self,
-        da_height: &DaBlockHeight,
-        max_da_lag: &DaBlockHeight,
-    ) -> anyhow::Result<()>;
 }

@@ -155,10 +155,6 @@ pub struct SyncArgs {
     /// The maximum number of get transaction requests to make in a single batch.
     #[clap(long = "sync_max_get_txns", default_value = "10", env)]
     pub max_get_txns_requests: usize,
-    #[clap(long = "sync_max_da_lag", default_value = "10", env)]
-    pub max_da_lag: u64,
-    #[clap(long = "sync_max_relayer_wait", default_value = "30s", env)]
-    pub max_wait_time: humantime::Duration,
 }
 
 #[derive(Clone, Debug)]
@@ -191,8 +187,6 @@ impl From<SyncArgs> for fuel_core::sync::Config {
         Self {
             max_get_header_requests: value.max_get_header_requests,
             max_get_txns_requests: value.max_get_txns_requests,
-            max_da_lag: value.max_da_lag.into(),
-            max_wait_time: value.max_wait_time.into(),
         }
     }
 }

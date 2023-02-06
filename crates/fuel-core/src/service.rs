@@ -22,6 +22,8 @@ pub use config::{
 };
 pub use fuel_core_services::Service as ServiceTrait;
 
+pub use fuel_core_consensus_module::RelayerVerifierConfig;
+
 use self::adapters::BlockImporterAdapter;
 
 pub mod adapters;

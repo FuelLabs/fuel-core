@@ -223,11 +223,7 @@ impl<D> SharedState<D> {
         height: &DaBlockHeight,
     ) -> anyhow::Result<()> {
         let mut rx = self.synced.clone();
-        while rx
-            .borrow_and_update()
-            .deref()
-            .map_or(true, |h| h >= *height)
-        {
+        while rx.borrow_and_update().deref().map_or(true, |h| h < *height) {
             rx.changed().await?;
         }
         Ok(())

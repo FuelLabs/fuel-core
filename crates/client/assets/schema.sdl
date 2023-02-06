@@ -372,7 +372,7 @@ type Message {
 	nonce: U64!
 	data: HexString!
 	daHeight: U64!
-	fuelBlockSpend: U64
+	status: MessageStatus!
 }
 
 type MessageConnection {
@@ -421,6 +421,11 @@ type MessageProof {
 	data: HexString!
 	signature: Signature!
 	header: Header!
+}
+
+enum MessageStatus {
+	UNSPENT
+	SPENT
 }
 
 type Mutation {

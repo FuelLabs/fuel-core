@@ -51,6 +51,7 @@ pub struct Config {
     pub sync: fuel_core_sync::Config,
     pub consensus_key: Option<Secret<SecretKeyWrapper>>,
     pub name: String,
+    pub verifier: fuel_core_consensus_module::RelayerVerifierConfig,
 }
 
 impl Config {
@@ -83,6 +84,7 @@ impl Config {
             sync: fuel_core_sync::Config::default(),
             consensus_key: Some(Secret::new(default_consensus_dev_key().into())),
             name: String::default(),
+            verifier: Default::default(),
         }
     }
 }

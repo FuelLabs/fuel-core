@@ -7,7 +7,6 @@ use crate::ports::{
     MockBlockImporterPort,
     MockConsensusPort,
     MockPeerToPeerPort,
-    MockRelayerPort,
 };
 use test_case::test_case;
 
@@ -24,7 +23,6 @@ use super::*;
             .returning(|_| Ok(false));
         Mocks{
             consensus_port,
-            relayer: DefaultMocks::times([0]),
             p2p: DefaultMocks::times([2, 0]),
             executor: DefaultMocks::times([0])
         }
@@ -38,9 +36,11 @@ use super::*;
         consensus_port.expect_check_sealed_header()
             .times(2)
             .returning(|h| Ok(**h.entity.height() != 5));
+        consensus_port.expect_await_da_height()
+            .times(1)
+            .returning(|_| Ok(()));
         Mocks{
             consensus_port,
-            relayer: DefaultMocks::times([1]),
             p2p: DefaultMocks::times([2, 1]),
             executor: DefaultMocks::times([1])
         }
@@ -56,7 +56,6 @@ use super::*;
             .returning(|h| Ok(**h.entity.height() != 4));
         Mocks{
             consensus_port,
-            relayer: DefaultMocks::times([0]),
             p2p: DefaultMocks::times([2, 0]),
             executor: DefaultMocks::times([0])
         }
@@ -73,7 +72,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([0]),
-            relayer: DefaultMocks::times([0]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -92,7 +90,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([1]),
-            relayer: DefaultMocks::times([1]),
             executor: DefaultMocks::times([1])
         }
     }
@@ -108,7 +105,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([0]),
-            relayer: DefaultMocks::times([0]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -127,7 +123,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([1]),
-            relayer: DefaultMocks::times([1]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -154,7 +149,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([1]),
-            relayer: DefaultMocks::times([1]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -181,7 +175,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([2]),
-            relayer: DefaultMocks::times([2]),
             executor: DefaultMocks::times([1])
         }
     }
@@ -197,7 +190,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([0]),
-            relayer: DefaultMocks::times([0]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -217,7 +209,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([0]),
-            relayer: DefaultMocks::times([0]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -240,7 +231,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([1]),
-            relayer: DefaultMocks::times([1]),
             executor: DefaultMocks::times([1])
         }
     }
@@ -259,7 +249,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([1]),
-            relayer: DefaultMocks::times([1]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -286,7 +275,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([1]),
-            relayer: DefaultMocks::times([1]),
             executor: DefaultMocks::times([0])
         }
     }
@@ -313,7 +301,6 @@ use super::*;
         Mocks{
             p2p,
             consensus_port: DefaultMocks::times([2]),
-            relayer: DefaultMocks::times([2]),
             executor: DefaultMocks::times([1])
         }
     }
@@ -328,28 +315,11 @@ use super::*;
             .returning(|_| Err(anyhow::anyhow!("Some consensus error")));
         Mocks{
             consensus_port,
-            relayer: DefaultMocks::times([0]),
             p2p: DefaultMocks::times([2, 0]),
             executor: DefaultMocks::times([0])
         }
     }
     => (State::new(3, None), false) ; "consensus error"
-)]
-#[test_case(
-    State::new(3, 5),
-    {
-        let mut relayer = MockRelayerPort::default();
-        relayer.expect_await_until_if_in_range()
-            .times(1)
-            .returning(|_, _| Err(anyhow::anyhow!("Some relayer error")));
-        Mocks{
-            relayer,
-            consensus_port: DefaultMocks::times([1]),
-            p2p: DefaultMocks::times([2, 0]),
-            executor: DefaultMocks::times([0])
-        }
-    }
-    => (State::new(3, None), false) ; "relayer error"
 )]
 #[test_case(
     State::new(3, 5),
@@ -364,7 +334,6 @@ use super::*;
             });
         Mocks{
             consensus_port,
-            relayer: DefaultMocks::times([0]),
             p2p: DefaultMocks::times([2, 0]),
             executor: DefaultMocks::times([0])
         }
@@ -382,9 +351,11 @@ use super::*;
             } else {
                 Ok(true)
             });
+        consensus_port.expect_await_da_height()
+            .times(1)
+            .returning(|_| Ok(()));
         Mocks{
             consensus_port,
-            relayer: DefaultMocks::times([1]),
             p2p: DefaultMocks::times([2, 1]),
             executor: DefaultMocks::times([1])
         }
@@ -401,7 +372,6 @@ use super::*;
             .returning(|_| Err(anyhow::anyhow!("Some execution error")));
         Mocks{
             consensus_port: DefaultMocks::times([1]),
-            relayer: DefaultMocks::times([1]),
             p2p: DefaultMocks::times([2, 1]),
             executor,
         }
@@ -424,7 +394,6 @@ use super::*;
             });
         Mocks{
             consensus_port: DefaultMocks::times([1]),
-            relayer: DefaultMocks::times([1]),
             p2p: DefaultMocks::times([2, 1]),
             executor,
         }
@@ -447,7 +416,6 @@ use super::*;
             });
         Mocks{
             consensus_port: DefaultMocks::times([2]),
-            relayer: DefaultMocks::times([2]),
             p2p: DefaultMocks::times([2, 2]),
             executor,
         }
@@ -477,7 +445,6 @@ async fn test_import(state: State, mocks: Mocks) -> (State, bool) {
         let c = DefaultMocks::times([2]);
         (s, c, Mocks{
             consensus_port: DefaultMocks::times([3]),
-            relayer: DefaultMocks::times([3]),
             p2p,
             executor: DefaultMocks::times([3]),
         })
@@ -501,19 +468,15 @@ async fn test_import_inner(
         consensus_port,
         p2p,
         executor,
-        relayer,
     } = mocks;
     let params = Config {
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
-        max_da_lag: 10u64.into(),
-        max_wait_time: Duration::from_secs(20),
     };
     let p2p = Arc::new(p2p);
 
     let executor = Arc::new(executor);
     let consensus = Arc::new(consensus_port);
-    let relayer = Arc::new(relayer);
 
     let import = Import {
         state,
@@ -522,7 +485,6 @@ async fn test_import_inner(
         p2p,
         executor,
         consensus,
-        relayer,
     };
     let (_tx, shutdown) = tokio::sync::watch::channel(fuel_core_services::State::Started);
     let mut watcher = shutdown.into();
@@ -551,7 +513,6 @@ struct Mocks {
     consensus_port: MockConsensusPort,
     p2p: MockPeerToPeerPort,
     executor: MockBlockImporterPort,
-    relayer: MockRelayerPort,
 }
 
 struct Count(usize);
@@ -572,8 +533,7 @@ impl DefaultMocks for Mocks {
         Self {
             consensus_port: DefaultMocks::times(t.clone()),
             p2p: DefaultMocks::times(t.clone()),
-            executor: DefaultMocks::times(t.clone()),
-            relayer: DefaultMocks::times(t),
+            executor: DefaultMocks::times(t),
         }
     }
 }
@@ -595,26 +555,16 @@ impl DefaultMocks for MockConsensusPort {
         <T as IntoIterator>::IntoIter: Clone,
     {
         let mut consensus_port = MockConsensusPort::new();
+        let mut t = t.into_iter().cycle();
         consensus_port
             .expect_check_sealed_header()
-            .times(t.into_iter().next().unwrap())
+            .times(t.next().unwrap())
             .returning(|_| Ok(true));
         consensus_port
-    }
-}
-
-impl DefaultMocks for MockRelayerPort {
-    fn times<T>(t: T) -> Self
-    where
-        T: IntoIterator<Item = usize> + Clone,
-        <T as IntoIterator>::IntoIter: Clone,
-    {
-        let mut relayer = MockRelayerPort::new();
-        relayer
-            .expect_await_until_if_in_range()
-            .times(t.into_iter().next().unwrap())
-            .returning(|_, _| Ok(()));
-        relayer
+            .expect_await_da_height()
+            .times(t.next().unwrap())
+            .returning(|_| Ok(()));
+        consensus_port
     }
 }
 
