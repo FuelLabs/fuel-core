@@ -101,16 +101,25 @@ pub trait RunnableTask: Send {
 #[derive(Debug)]
 pub struct ServiceRunner<S>
 where
-    S: RunnableService,
+    S: RunnableService + 'static,
 {
     /// The shared state of the service
     pub shared: S::SharedData,
     state: Shared<watch::Sender<State>>,
 }
 
+impl<S> Drop for ServiceRunner<S>
+where
+    S: RunnableService + 'static,
+{
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
 impl<S> Clone for ServiceRunner<S>
 where
-    S: RunnableService,
+    S: RunnableService + 'static,
 {
     fn clone(&self) -> Self {
         Self {
@@ -453,5 +462,20 @@ mod tests {
         assert!(state.stopped());
         let state = service.stop_and_await().await.unwrap();
         assert!(state.stopped());
+    }
+
+    #[tokio::test]
+    async fn stop_unused_service() {
+        let mut receiver;
+        {
+            let service = ServiceRunner::new(MockService::new_empty());
+            service.start().unwrap();
+            receiver = service.state.subscribe();
+        }
+
+        receiver.changed().await.unwrap();
+        assert!(matches!(receiver.borrow().clone(), State::Stopping));
+        receiver.changed().await.unwrap();
+        assert!(receiver.borrow().stopped());
     }
 }
