@@ -16,7 +16,7 @@ cynic = { version = "2.2.1", features = ["http-reqwest"] }
 derive_more = { version = "0.99" }
 eventsource-client = { version = "0.10.2", optional = true }
 fuel-core-types = { version = "0.16.1", path = "../types", features = ["serde"] }
-futures = { version = "0.3", optional = true }
+futures = { workspace = true, optional = true }
 hex = "0.4"
 # Included to enable webpki in the eventsource client
 hyper-rustls = { version = "0.22", features = ["webpki-tokio"], optional = true }
