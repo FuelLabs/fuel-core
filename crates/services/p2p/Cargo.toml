@@ -21,7 +21,6 @@ fuel-core-types = { workspace = true, features = [
     "serde",
 ] }
 futures = { workspace = true }
-futures-timer = "3.0"
 ip_network = "0.4"
 libp2p = { version = "=0.50.0", default-features = false, features = [
     "dns",
