@@ -1,31 +1,31 @@
 [package]
-authors = ["Fuel Labs <contact@fuel.sh>"]
+authors = { workspace = true }
 categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
 description = "Fuel client binary."
-edition = "2021"
-homepage = "https://fuel.network/"
+edition = { workspace = true }
+homepage = { workspace = true }
 keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
-license = "BUSL-1.1"
-repository = "https://github.com/FuelLabs/fuel-core"
-version = "0.16.1"
+license = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
 name = "fuel-core-bin"
-publish = false
+publish = true
 
 [[bin]]
 name = "fuel-core"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1.0"
-clap = { version = "4.1", features = ["derive", "env"] }
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["derive", "env"] }
 dirs = "4.0"
-fuel-core = { path = "../../crates/fuel-core", version = "0.16.1" }
+fuel-core = { workspace = true }
 humantime = "2.1"
-lazy_static = "1.4"
-serde_json = { version = "1.0", features = ["raw_value"], optional = true }
-tokio = { version = "1.21", features = ["macros", "rt-multi-thread"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = [
+lazy_static = { workspace = true }
+serde_json = { workspace = true, features = ["raw_value"], optional = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = [
     "ansi",
     "env-filter",
     "json",
@@ -33,7 +33,7 @@ tracing-subscriber = { version = "0.3", features = [
 url = { version = "2.2", optional = true }
 
 [dev-dependencies]
-test-case = "2.2"
+test-case = { workspace = true }
 
 [features]
 debug = ["fuel-core/debug"]

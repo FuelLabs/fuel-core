@@ -26,12 +26,11 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install latest nightly
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.NIGHTLY_RUST_VERSION }}
-          override: true
           components: rustfmt
-
+          
       - name: Rustfmt check
         run: cargo +${{ env.NIGHTLY_RUST_VERSION }} fmt --all -- --check
 
@@ -39,10 +38,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
-          override: true
       - name: Install Cargo.toml linter
         uses: baptiste0928/cargo-install@v1
         with:
@@ -110,15 +108,14 @@ jobs:
     continue-on-error: ${{ matrix.skip-error || false }}
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
-          override: true
-          components: clippy
+          components: "clippy"
       - name: Install Cargo Make
         uses: davidB/rust-cargo-make@v1
         with:
-          version: "0.36.0"
+          version: "0.36.4"
       - name: Install Protoc
         uses: arduino/setup-protoc@v1.1.2
         with:
@@ -126,11 +123,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: '${{ matrix.command }} ${{ matrix.args }}'
+          cache-on-failure: "true"
       - name: ${{ matrix.command }} ${{ matrix.args }}
-        uses: actions-rs/cargo@v1
-        with:
-          command: ${{ matrix.command }}
-          args: ${{ matrix.args }}
+        run: cargo ${{ matrix.command }} ${{ matrix.args }}
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v2
         if: always() && github.ref == 'refs/heads/master'
@@ -145,49 +140,8 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
           RUSTFLAGS: -D warnings
 
-  pre-publish-verifications:
-    # Only do this job if publishing a release
-    needs:
-      - cargo-verifications
-    if: github.event_name == 'release' && github.event.action == 'published'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Verify tag version
-        run: |
-          # TODO: Automate running `verify_tag` only for "publish = true" crates
-          curl -sSLf "https://github.com/TomWright/dasel/releases/download/v1.24.3/dasel_linux_amd64" -L -o dasel && chmod +x dasel
-          mv ./dasel /usr/local/bin/dasel
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} bin/fuel-core/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} bin/fuel-core-client/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} bin/fuel-core-keygen/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/client/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/chain-config/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/database/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/fuel-core/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/types/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/storage/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/metrics/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/executor/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/importer/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/producer/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/p2p/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/sync/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/txpool/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/relayer/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/consensus_module/bft/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} crates/services/consensus_module/poa/Cargo.toml
-
-      - name: Verify helm chart version
-        run: |
-          ./.github/workflows/scripts/verify_chart_version.sh
-
   publish-crates-check:
     runs-on: ubuntu-latest
-    if: github.event_name == 'release'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -200,12 +154,41 @@ jobs:
         uses: katyo/publish-crates@v2
         with:
           dry-run: true
+          check-repo: false
+
+  verifications-complete:
+    needs:
+      - cargo-verifications
+      - publish-crates-check
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "pass"
+
+  verify-tag-version:
+    # Only do this job if publishing a release
+    if: github.event_name == 'release' && github.event.action == 'published'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Verify tag version
+        run: |
+          # TODO: Automate running `verify_tag` only for "publish = true" crates
+          curl -sSLf "https://github.com/TomWright/dasel/releases/download/v1.24.3/dasel_linux_amd64" -L -o dasel && chmod +x dasel
+          mv ./dasel /usr/local/bin/dasel
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} Cargo.toml
+
+      - name: Verify helm chart version
+        run: |
+          ./.github/workflows/scripts/verify_chart_version.sh
 
   publish-crates:
     # Only do this job if publishing a release
     needs:
-      - pre-publish-verifications
-      - publish-crates-check
+      - verify-tag-version
+      - verifications-complete
     if: github.event_name == 'release' && github.event.action == 'published'
     runs-on: ubuntu-latest
 
@@ -214,10 +197,9 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
-          override: true
 
       - name: Install Protoc
         uses: arduino/setup-protoc@v1.1.2
@@ -245,7 +227,7 @@ jobs:
 
   publish-docker-image:
     needs:
-      - cargo-verifications
+      - verifications-complete
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -307,7 +289,8 @@ jobs:
     runs-on: ${{ matrix.job.os }}
     # Only do this job if publishing a release
     needs:
-      - pre-publish-verifications
+      - verify-tag-version
+      - verifications-complete
     if: github.event_name == 'release' && github.event.action == 'published'
     continue-on-error: true
     strategy:
@@ -353,12 +336,10 @@ jobs:
           ci/macos-install-packages.sh
 
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ env.RUST_VERSION }}
           target: ${{ matrix.job.target }}
-          override: true
 
       - uses: Swatinem/rust-cache@v1
         with:
