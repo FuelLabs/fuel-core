@@ -14,12 +14,12 @@ description = "Tx client and schema specification."
 anyhow = { workspace = true }
 cynic = { version = "2.2.1", features = ["http-reqwest"] }
 derive_more = { version = "0.99" }
-eventsource-client = "0.10.2"
+eventsource-client = { version = "0.10.2", optional = true }
 fuel-core-types = { version = "0.16.1", path = "../types", features = ["serde"] }
-futures = "0.3"
+futures = { workspace = true, optional = true }
 hex = "0.4"
 # Included to enable webpki in the eventsource client
-hyper-rustls = { version = "0.22", features = ["webpki-tokio"] }
+hyper-rustls = { version = "0.22", features = ["webpki-tokio"], optional = true }
 itertools = { workspace = true }
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"] }
 serde = { workspace = true, features = ["derive"] }
@@ -35,5 +35,7 @@ schemafy_lib = { version = "0.5", optional = true }
 serde_json = { version = "1.0", features = ["raw_value"], optional = true }
 
 [features]
+default = ["subscriptions"]
 test-helpers = []
 dap = ["schemafy_lib", "serde_json"]
+subscriptions = ["eventsource-client", "futures", "hyper-rustls"]
