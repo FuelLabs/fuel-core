@@ -19,7 +19,10 @@ use fuel_core_types::{
     fuel_types::Address,
     services::txpool::TransactionStatus,
 };
-use std::ops::Deref;
+use std::{
+    mem::size_of,
+    ops::Deref,
+};
 
 impl DatabaseColumn for Transactions {
     fn column() -> Column {
@@ -34,9 +37,8 @@ impl Database {
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = DatabaseResult<Transaction>> + '_ {
         let start = start.map(|b| b.as_ref().to_vec());
-        self.iter_all::<Vec<u8>, Transaction>(
+        self.iter_all_by_start::<Vec<u8>, Transaction, _>(
             Column::Transactions,
-            None,
             start,
             direction,
         )
@@ -49,15 +51,15 @@ impl Database {
     /// pagination purposes.
     pub fn owned_transactions(
         &self,
-        owner: &Address,
+        owner: Address,
         start: Option<OwnedTransactionIndexCursor>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = DatabaseResult<(TxPointer, Bytes32)>> + '_ {
         let start = start
-            .map(|cursor| owned_tx_index_key(owner, cursor.block_height, cursor.tx_idx));
-        self.iter_all::<OwnedTransactionIndexKey, Bytes32>(
+            .map(|cursor| owned_tx_index_key(&owner, cursor.block_height, cursor.tx_idx));
+        self.iter_all_filtered::<OwnedTransactionIndexKey, Bytes32, _, _>(
             Column::TransactionsByOwnerBlockIdx,
-            Some(owner.to_vec()),
+            Some(owner),
             start,
             direction,
         )
@@ -78,7 +80,7 @@ impl Database {
         self.insert(
             owned_tx_index_key(owner, block_height, tx_idx),
             Column::TransactionsByOwnerBlockIdx,
-            *tx_id,
+            tx_id,
         )
     }
 
@@ -87,7 +89,7 @@ impl Database {
         id: &Bytes32,
         status: TransactionStatus,
     ) -> DatabaseResult<Option<TransactionStatus>> {
-        self.insert(id, Column::TransactionStatus, status)
+        self.insert(id, Column::TransactionStatus, &status)
     }
 
     pub fn get_tx_status(
@@ -98,18 +100,23 @@ impl Database {
     }
 }
 
+const TX_INDEX_SIZE: usize = size_of::<TransactionIndex>();
+const BLOCK_HEIGHT: usize = size_of::<BlockHeight>();
+const INDEX_SIZE: usize = Address::LEN + BLOCK_HEIGHT + TX_INDEX_SIZE;
+
 fn owned_tx_index_key(
     owner: &Address,
     height: BlockHeight,
     tx_idx: TransactionIndex,
-) -> Vec<u8> {
+) -> [u8; INDEX_SIZE] {
+    let mut default = [0u8; INDEX_SIZE];
     // generate prefix to enable sorted indexing of transactions by owner
     // owner + block_height + tx_idx
-    let mut key = Vec::with_capacity(38);
-    key.extend(owner.as_ref());
-    key.extend(height.to_bytes());
-    key.extend(tx_idx.to_be_bytes());
-    key
+    default[0..Address::LEN].copy_from_slice(owner.as_ref());
+    default[Address::LEN..Address::LEN + BLOCK_HEIGHT]
+        .copy_from_slice(height.to_bytes().as_ref());
+    default[Address::LEN + BLOCK_HEIGHT..].copy_from_slice(tx_idx.to_be_bytes().as_ref());
+    default
 }
 
 ////////////////////////////////////// Not storage part //////////////////////////////////////
@@ -121,13 +128,16 @@ pub struct OwnedTransactionIndexKey {
     tx_idx: TransactionIndex,
 }
 
-impl From<Vec<u8>> for OwnedTransactionIndexKey {
-    fn from(bytes: Vec<u8>) -> Self {
+impl<T> From<T> for OwnedTransactionIndexKey
+where
+    T: AsRef<[u8]>,
+{
+    fn from(bytes: T) -> Self {
         // the first 32 bytes are the owner, which is already known when querying
         let mut block_height_bytes: [u8; 4] = Default::default();
-        block_height_bytes.copy_from_slice(&bytes[32..36]);
+        block_height_bytes.copy_from_slice(&bytes.as_ref()[32..36]);
         let mut tx_idx_bytes: [u8; 2] = Default::default();
-        tx_idx_bytes.copy_from_slice(&bytes[36..38]);
+        tx_idx_bytes.copy_from_slice(&bytes.as_ref()[36..38]);
 
         Self {
             // owner: Address::from(owner_bytes),

@@ -81,7 +81,7 @@ impl DatabaseTransactions for Database {
 
     fn owned_transactions_ids(
         &self,
-        owner: &Address,
+        owner: Address,
         start: Option<TxPointer>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<(TxPointer, TxId)>> {
