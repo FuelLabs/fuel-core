@@ -28,6 +28,7 @@ use rand::{
 };
 use rstest::rstest;
 
+#[cfg(feature = "relayer")]
 #[tokio::test]
 async fn can_submit_genesis_message() {
     let mut rng = StdRng::seed_from_u64(1234);
