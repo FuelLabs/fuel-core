@@ -155,6 +155,7 @@ jobs:
         with:
           dry-run: true
           check-repo: false
+          ignore-unpublished-changes: true
 
   verifications-complete:
     needs:
