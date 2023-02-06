@@ -160,7 +160,7 @@ jobs:
   verifications-complete:
     needs:
       - cargo-verifications
-      # - publish-crates-check
+      - publish-crates-check
     runs-on: ubuntu-latest
     steps:
       - run: echo "pass"
