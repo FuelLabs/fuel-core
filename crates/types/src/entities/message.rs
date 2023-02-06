@@ -17,7 +17,6 @@ use crate::{
     },
 };
 use core::ops::Deref;
-use std::ops::DerefMut;
 
 /// Message send from Da layer to fuel by bridge
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -41,9 +40,18 @@ pub struct CompressedMessage {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Message {
-    #[cfg_attr(feature = "serde", serde(flatten))]
-    /// The message content relevant to the blockchain.
-    pub message: CompressedMessage,
+    /// Account that sent the message from the da layer
+    pub sender: Address,
+    /// Fuel account receiving the message
+    pub recipient: Address,
+    /// Nonce must be unique. It's used to prevent replay attacks
+    pub nonce: Word,
+    /// The amount of the base asset of Fuel chain sent along this message
+    pub amount: Word,
+    /// Arbitrary message data
+    pub data: Vec<u8>,
+    /// The block height from the parent da layer that originated this message
+    pub da_height: DaBlockHeight,
     /// Whether a message has been spent or not
     pub status: MessageStatus,
 }
@@ -69,8 +77,13 @@ impl CompressedMessage {
     /// Decompress the message
     pub fn decompress(self, status: MessageStatus) -> Message {
         Message {
-            message: self,
             status,
+            sender: self.sender,
+            recipient: self.recipient,
+            nonce: self.nonce,
+            amount: self.amount,
+            data: self.data,
+            da_height: self.da_height,
         }
     }
 }
@@ -78,7 +91,25 @@ impl CompressedMessage {
 impl Message {
     /// Compress the message
     pub fn compress(self) -> CompressedMessage {
-        self.message
+        CompressedMessage {
+            sender: self.sender,
+            recipient: self.recipient,
+            nonce: self.nonce,
+            amount: self.amount,
+            data: self.data,
+            da_height: self.da_height,
+        }
+    }
+
+    /// Computed message id
+    pub fn id(&self) -> MessageId {
+        Input::compute_message_id(
+            &self.sender,
+            &self.recipient,
+            self.nonce,
+            self.amount,
+            &self.data,
+        )
     }
 }
 
@@ -170,19 +201,5 @@ impl Deref for CheckedMessage {
 
     fn deref(&self) -> &Self::Target {
         &self.message
-    }
-}
-
-impl Deref for Message {
-    type Target = CompressedMessage;
-
-    fn deref(&self) -> &Self::Target {
-        &self.message
-    }
-}
-
-impl DerefMut for Message {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.message
     }
 }
