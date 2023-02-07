@@ -71,7 +71,11 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
     test_builder.config_coin_inputs_from_transactions(&transactions.iter().collect_vec());
 
     // spin up node
-    let TestContext { client, .. } = test_builder.finalize().await;
+    let TestContext {
+        client,
+        srv: _dont_drop,
+        ..
+    } = test_builder.finalize().await;
 
     // submit transactions and verify their status
     for tx in transactions {
@@ -119,7 +123,11 @@ async fn submit_utxo_verified_tx_below_min_gas_price_fails() {
     // initialize node with higher minimum gas price
     let mut test_builder = TestSetupBuilder::new(2322u64);
     test_builder.min_gas_price = 10;
-    let TestContext { client, .. } = test_builder.finalize().await;
+    let TestContext {
+        client,
+        srv: _dont_drop,
+        ..
+    } = test_builder.finalize().await;
 
     let result = client.submit(&tx).await;
 
@@ -254,7 +262,11 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
     test_builder.config_coin_inputs_from_transactions(&txs.iter().collect_vec());
     let txs: Vec<Transaction> = txs.into_iter().map(Into::into).collect_vec();
 
-    let TestContext { client, .. } = test_builder.finalize().await;
+    let TestContext {
+        client,
+        srv: _dont_drop,
+        ..
+    } = test_builder.finalize().await;
 
     let tasks = txs.iter().map(|tx| client.submit_and_await_commit(tx));
 
