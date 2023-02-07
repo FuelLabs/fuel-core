@@ -11,6 +11,7 @@ mod request_response;
 pub mod service;
 
 pub use gossipsub::config as gossipsub_config;
+pub use heartbeat::HeartbeatConfig;
 
 pub use libp2p::{
     multiaddr::Protocol,
