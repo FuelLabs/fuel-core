@@ -102,4 +102,5 @@ prometheus-client = "0.18"
 itertools = "0.10"
 insta = "1.8"
 
-
+[patch.crates-io]
+fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "freesig/avoid-code-clone-2" }

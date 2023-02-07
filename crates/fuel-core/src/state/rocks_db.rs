@@ -271,6 +271,62 @@ impl KeyValueStore for RocksDb {
             }
         }
     }
+
+    fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
+        #[cfg(feature = "metrics")]
+        DATABASE_METRICS.read_meter.inc();
+
+        Ok(self
+            .db
+            .get_pinned_cf(&self.cf(column), key)
+            .map_err(|e| DatabaseError::Other(e.into()))?
+            .map(|value| value.len()))
+    }
+
+    fn read(
+        &self,
+        key: &[u8],
+        column: Column,
+        mut buf: &mut [u8],
+    ) -> DatabaseResult<Option<usize>> {
+        #[cfg(feature = "metrics")]
+        DATABASE_METRICS.read_meter.inc();
+
+        let r = self
+            .db
+            .get_pinned_cf(&self.cf(column), key)
+            .map_err(|e| DatabaseError::Other(e.into()))?
+            .map(|value| {
+                let read = value.len();
+                std::io::Write::write_all(&mut buf, value.as_ref())
+                    .map_err(|e| DatabaseError::Other(anyhow::anyhow!(e)))?;
+                DatabaseResult::Ok(read)
+            })
+            .transpose()?;
+
+        #[cfg(feature = "metrics")]
+        {
+            if let Some(r) = &r {
+                DATABASE_METRICS.bytes_read.observe(*r as f64);
+            }
+        }
+        Ok(r)
+    }
+
+    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
+        #[cfg(feature = "metrics")]
+        {
+            DATABASE_METRICS.write_meter.inc();
+            DATABASE_METRICS.bytes_written.observe(buf.len() as f64);
+        }
+
+        let r = buf.len();
+        self.db
+            .put_cf(&self.cf(column), key, buf)
+            .map_err(|e| DatabaseError::Other(e.into()))?;
+
+        Ok(r)
+    }
 }
 
 impl BatchOperations for RocksDb {

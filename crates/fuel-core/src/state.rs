@@ -32,6 +32,14 @@ pub trait KeyValueStore {
         start: Option<&[u8]>,
         direction: IterDirection,
     ) -> BoxedIter<KVItem>;
+    fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>>;
+    fn read(
+        &self,
+        key: &[u8],
+        column: Column,
+        buf: &mut [u8],
+    ) -> DatabaseResult<Option<usize>>;
+    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize>;
 }
 
 #[derive(Copy, Clone, Debug, PartialOrd, Eq, PartialEq)]
