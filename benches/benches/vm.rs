@@ -11,7 +11,7 @@ use criterion::{
 
 use fuel_core_benches::*;
 use fuel_core_storage::transactional::Transaction;
-use fuel_core_types::fuel_asm::OpcodeRepr;
+use fuel_core_types::fuel_asm::Instruction;
 use set::*;
 
 pub fn run_group_ref<I>(group: &mut BenchmarkGroup<WallTime>, id: I, bench: VmBench)
@@ -26,7 +26,6 @@ where
                 instruction,
                 diff,
             } = &mut i;
-            let code = OpcodeRepr::from_u8(instruction.op());
             let original_db = vm.as_mut().database_mut().clone();
             let mut db_txn = {
                 let db = vm.as_mut().database_mut();
@@ -38,9 +37,9 @@ where
 
             let start = std::time::Instant::now();
             for _ in 0..iters {
-                match code {
-                    OpcodeRepr::CALL => {
-                        let (_, ra, rb, rc, rd, _imm) = instruction.into_inner();
+                match instruction {
+                    Instruction::CALL(call) => {
+                        let (ra, rb, rc, rd) = call.unpack();
                         vm.prepare_call(ra, rb, rc, rd).unwrap();
                     }
                     _ => {

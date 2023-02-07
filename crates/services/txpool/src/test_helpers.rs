@@ -8,7 +8,7 @@ use fuel_core_types::{
         CoinStatus,
         CompressedCoin,
     },
-    fuel_asm::Opcode,
+    fuel_asm::op,
     fuel_crypto::rand::{
         rngs::StdRng,
         Rng,
@@ -84,7 +84,7 @@ pub(crate) fn random_predicate(
     utxo_id: Option<UtxoId>,
 ) -> Input {
     // use predicate inputs to avoid expensive cryptography for signatures
-    let mut predicate_code: Vec<u8> = vec![Opcode::RET(1)].into_iter().collect();
+    let mut predicate_code: Vec<u8> = vec![op::ret(1)].into_iter().collect();
     // append some randomizing bytes after the predicate has already returned.
     predicate_code.push(rng.gen());
     let owner = Input::predicate_owner(&predicate_code);

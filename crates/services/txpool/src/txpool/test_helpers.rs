@@ -1,7 +1,7 @@
 use fuel_core_types::{
     blockchain::primitives::BlockHeight,
     entities::message::Message,
-    fuel_asm::Opcode,
+    fuel_asm::op,
     fuel_tx::{
         Contract,
         ContractId,
@@ -17,7 +17,7 @@ pub(crate) fn create_message_predicate_from_message(
     amount: Word,
     spent_block: Option<BlockHeight>,
 ) -> (Message, Input) {
-    let predicate = vec![Opcode::RET(1)].into_iter().collect::<Vec<u8>>();
+    let predicate = vec![op::ret(1)].into_iter().collect::<Vec<u8>>();
     let message = Message {
         sender: Default::default(),
         recipient: Input::predicate_owner(&predicate),

@@ -6,7 +6,6 @@ use fuel_core_types::{
     fuel_asm::*,
     fuel_crypto::*,
     fuel_types::*,
-    fuel_vm::consts::*,
 };
 use rand::{
     rngs::StdRng,
@@ -23,14 +22,14 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("ecr"),
         "ecr",
-        VmBench::new(Opcode::ECR(0x11, 0x20, 0x21))
+        VmBench::new(op::ecr(0x11, 0x20, 0x21))
             .with_prepare_script(vec![
-                Opcode::gtf(0x20, 0x00, GTFArgs::ScriptData),
-                Opcode::ADDI(0x21, 0x20, signature.as_ref().len() as Immediate12),
-                Opcode::ADDI(0x22, 0x21, message.as_ref().len() as Immediate12),
-                Opcode::MOVI(0x10, PublicKey::LEN as Immediate18),
-                Opcode::ALOC(0x10),
-                Opcode::ADDI(0x11, REG_HP, 1),
+                op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
+                op::addi(0x21, 0x20, signature.as_ref().len().try_into().unwrap()),
+                op::addi(0x22, 0x21, message.as_ref().len().try_into().unwrap()),
+                op::movi(0x10, PublicKey::LEN.try_into().unwrap()),
+                op::aloc(0x10),
+                op::addi(0x11, RegId::HP, 1),
             ])
             .with_data(signature.iter().chain(message.iter()).copied().collect()),
     );
@@ -38,12 +37,12 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("s256"),
         "s256",
-        VmBench::new(Opcode::S256(0x10, 0x00, 0x11))
+        VmBench::new(op::s256(0x10, 0x00, 0x11))
             .with_prepare_script(vec![
-                Opcode::MOVI(0x10, Bytes32::LEN as Immediate18),
-                Opcode::ALOC(0x10),
-                Opcode::ADDI(0x10, REG_HP, 1),
-                Opcode::MOVI(0x11, 32),
+                op::movi(0x10, Bytes32::LEN.try_into().unwrap()),
+                op::aloc(0x10),
+                op::addi(0x10, RegId::HP, 1),
+                op::movi(0x11, 32),
             ])
             .with_data(signature.iter().chain(message.iter()).copied().collect()),
     );
@@ -51,12 +50,12 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("k256"),
         "k256",
-        VmBench::new(Opcode::K256(0x10, 0x00, 0x11))
+        VmBench::new(op::k256(0x10, 0x00, 0x11))
             .with_prepare_script(vec![
-                Opcode::MOVI(0x10, Bytes32::LEN as Immediate18),
-                Opcode::ALOC(0x10),
-                Opcode::ADDI(0x10, REG_HP, 1),
-                Opcode::MOVI(0x11, 32),
+                op::movi(0x10, Bytes32::LEN.try_into().unwrap()),
+                op::aloc(0x10),
+                op::addi(0x10, RegId::HP, 1),
+                op::movi(0x11, 32),
             ])
             .with_data(signature.iter().chain(message.iter()).copied().collect()),
     );

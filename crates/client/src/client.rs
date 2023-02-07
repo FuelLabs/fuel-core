@@ -17,7 +17,7 @@ use cynic::{
 };
 use fuel_core_types::{
     fuel_asm::{
-        Opcode,
+        Instruction,
         RegisterId,
         Word,
     },
@@ -344,7 +344,7 @@ impl FuelClient {
         self.query(query).await.map(|r| r.reset)
     }
 
-    pub async fn execute(&self, id: &str, op: &Opcode) -> io::Result<bool> {
+    pub async fn execute(&self, id: &str, op: &Instruction) -> io::Result<bool> {
         let op = serde_json::to_string(op)?;
         let query = schema::Execute::build(schema::ExecuteArgs { id: id.into(), op });
 
