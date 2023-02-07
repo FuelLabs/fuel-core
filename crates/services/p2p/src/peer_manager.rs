@@ -2,7 +2,6 @@ use crate::{
     config::Config,
     heartbeat::{
         Heartbeat,
-        HeartbeatConfig,
         HeartbeatEvent,
     },
 };
@@ -111,7 +110,8 @@ impl PeerManagerBehaviour {
             }
         };
 
-        let heartbeat = Heartbeat::new(HeartbeatConfig::new(), BlockHeight::default());
+        let heartbeat =
+            Heartbeat::new(config.heartbeat_config.clone(), BlockHeight::default());
 
         let reserved_peers: HashSet<PeerId> = config
             .reserved_nodes
