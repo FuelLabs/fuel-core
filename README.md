@@ -158,10 +158,10 @@ The service expects a mutation defined as `submit` that receives a [Transaction]
 This example will execute a script that represents the following sequence of [ASM](https://github.com/FuelLabs/fuel-asm):
 
 ```rs
-ADDI(0x10, REG_ZERO, 0xca),
-ADDI(0x11, REG_ZERO, 0xba),
-LOG(0x10, 0x11, REG_ZERO, REG_ZERO),
-RET(REG_ONE),
+ADDI(0x10, RegId::ZERO, 0xca),
+ADDI(0x11, RegId::ZERO, 0xba),
+LOG(0x10, 0x11, RegId::ZERO, RegId::ZERO),
+RET(RegId::ONE),
 ```
 
 ```console

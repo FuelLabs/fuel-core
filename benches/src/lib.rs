@@ -53,10 +53,10 @@ impl From<Vec<u8>> for ContractCode {
 }
 
 pub struct PrepareCall {
-    ra: RegisterId,
-    rb: RegisterId,
-    rc: RegisterId,
-    rd: RegisterId,
+    ra: RegId,
+    rb: RegId,
+    rc: RegId,
+    rd: RegId,
 }
 
 pub struct VmBench {
@@ -65,14 +65,14 @@ pub struct VmBench {
     pub gas_limit: Word,
     pub maturity: Word,
     pub height: Word,
-    pub prepare_script: Vec<Opcode>,
-    pub post_call: Vec<Opcode>,
+    pub prepare_script: Vec<Instruction>,
+    pub post_call: Vec<Instruction>,
     pub data: Vec<u8>,
     pub inputs: Vec<Input>,
     pub outputs: Vec<Output>,
     pub witnesses: Vec<Witness>,
     pub db: Option<VmDatabase>,
-    pub instruction: Opcode,
+    pub instruction: Instruction,
     pub prepare_call: Option<PrepareCall>,
     pub dummy_contract: Option<ContractId>,
     pub contract_code: Option<ContractCode>,
@@ -90,7 +90,7 @@ impl VmBench {
     pub const SALT: Salt = Salt::zeroed();
     pub const CONTRACT: ContractId = ContractId::zeroed();
 
-    pub fn new(instruction: Opcode) -> Self {
+    pub fn new(instruction: Instruction) -> Self {
         Self {
             params: ConsensusParameters {
                 max_gas_per_tx: LARGE_GAS_LIMIT + 1,
@@ -115,14 +115,14 @@ impl VmBench {
         }
     }
 
-    pub fn contract<R>(rng: &mut R, instruction: Opcode) -> io::Result<Self>
+    pub fn contract<R>(rng: &mut R, instruction: Instruction) -> io::Result<Self>
     where
         R: Rng,
     {
         let bench = Self::new(instruction);
 
         let program = iter::once(instruction)
-            .chain(iter::once(Opcode::RET(REG_ONE)))
+            .chain(iter::once(op::ret(RegId::ONE)))
             .collect::<Vec<u8>>();
 
         let program = Witness::from(program);
@@ -153,18 +153,18 @@ impl VmBench {
             .collect();
 
         let prepare_script = vec![
-            Opcode::gtf(0x10, 0x00, GTFArgs::ScriptData),
-            Opcode::ADDI(0x11, 0x10, ContractId::LEN as Immediate12),
-            Opcode::ADDI(0x11, 0x11, WORD_SIZE as Immediate12),
-            Opcode::ADDI(0x11, 0x11, WORD_SIZE as Immediate12),
-            Opcode::MOVI(0x12, 100_000),
+            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+            op::addi(0x11, 0x10, ContractId::LEN as u16),
+            op::addi(0x11, 0x11, WORD_SIZE as u16),
+            op::addi(0x11, 0x11, WORD_SIZE as u16),
+            op::movi(0x12, 100_000),
         ];
 
         let prepare_call = PrepareCall {
-            ra: 0x10,
-            rb: REG_ZERO,
-            rc: 0x11,
-            rd: 0x12,
+            ra: RegId::new(0x10),
+            rb: RegId::ZERO,
+            rc: RegId::new(0x11),
+            rd: RegId::new(0x12),
         };
 
         Ok(bench
@@ -206,12 +206,12 @@ impl VmBench {
         self
     }
 
-    pub fn with_prepare_script(mut self, prepare_script: Vec<Opcode>) -> Self {
+    pub fn with_prepare_script(mut self, prepare_script: Vec<Instruction>) -> Self {
         self.prepare_script = prepare_script;
         self
     }
 
-    pub fn with_post_call(mut self, post_call: Vec<Opcode>) -> Self {
+    pub fn with_post_call(mut self, post_call: Vec<Instruction>) -> Self {
         self.post_call = post_call;
         self
     }
@@ -290,7 +290,10 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
         let mut db = db.unwrap_or_else(new_db);
 
-        if prepare_script.iter().any(|op| matches!(op, Opcode::RET(_))) {
+        if prepare_script
+            .iter()
+            .any(|op| matches!(op, Instruction::RET(_)))
+        {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
                 "a prepare script should not call/return into different contexts.",
@@ -299,14 +302,14 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
         let prepare_script = prepare_script
             .into_iter()
-            .chain(iter::once(Opcode::RET(REG_ONE)))
+            .chain(iter::once(op::ret(RegId::ONE)))
             .chain(iter::once(instruction))
             .collect();
 
         let mut tx = TransactionBuilder::script(prepare_script, data);
 
         if let Some(contract) = dummy_contract {
-            let code = iter::once(Opcode::RET(REG_ONE));
+            let code = iter::once(op::ret(RegId::ONE));
             let code: Vec<u8> = code.collect();
             let code = Contract::from(code);
             let root = code.root();
@@ -379,8 +382,6 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             .maturity(maturity)
             .finalize_checked(height, &p, &Default::default());
 
-        let instruction = Instruction::from(instruction);
-
         let mut txtor = Transactor::new(db, params, GasCosts::free());
 
         txtor.transact(tx);
@@ -392,18 +393,16 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
             vm.prepare_call(ra, rb, rc, rd)
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-            for op in post_call {
-                let instruction = Instruction::from(op);
+            for instruction in post_call {
                 vm.instruction(instruction).unwrap();
             }
         }
 
-        let code = OpcodeRepr::from_u8(instruction.op());
         let start_vm = vm.clone();
         let mut vm = vm.add_recording();
-        match code {
-            OpcodeRepr::CALL => {
-                let (_, ra, rb, rc, rd, _imm) = instruction.into_inner();
+        match instruction {
+            Instruction::CALL(call) => {
+                let (ra, rb, rc, rd) = call.unpack();
                 vm.prepare_call(ra, rb, rc, rd).unwrap();
             }
             _ => {

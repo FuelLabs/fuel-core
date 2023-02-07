@@ -371,7 +371,7 @@ mod tests {
             DaBlockHeight,
         },
         entities::coin::Coin,
-        fuel_asm::Opcode,
+        fuel_asm::op,
         fuel_types::{
             Address,
             AssetId,
@@ -539,7 +539,7 @@ mod tests {
         let test_value: Bytes32 = rng.gen();
         let state = vec![(test_key, test_value)];
         let salt: Salt = rng.gen();
-        let contract = Contract::from(Opcode::RET(0x10).to_bytes().to_vec());
+        let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
         let root = contract.root();
         let id = contract.id(&salt, &root, &Contract::default_state_root());
 
@@ -617,7 +617,7 @@ mod tests {
         let test_balance: u64 = rng.next_u64();
         let balances = vec![(test_asset_id, test_balance)];
         let salt: Salt = rng.gen();
-        let contract = Contract::from(Opcode::RET(0x10).to_bytes().to_vec());
+        let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
         let root = contract.root();
         let id = contract.id(&salt, &root, &Contract::default_state_root());
 
