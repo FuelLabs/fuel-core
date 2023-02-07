@@ -298,11 +298,14 @@ impl ConnectionHandler for HeartbeatHandler {
     }
 }
 
+/// Represents state of the Oubound stream
 enum OutboundState {
     NegotiatingStream,
     Idle(NegotiatedSubstream),
     RequestingBlockHeight {
         stream: NegotiatedSubstream,
+        /// `false` if the BlockHeight has not been requested yet.
+        /// `true` if the BlockHeight has been requested in the current `Heartbeat` cycle.
         requested: bool,
     },
     SendingBlockHeight(OutboundData),

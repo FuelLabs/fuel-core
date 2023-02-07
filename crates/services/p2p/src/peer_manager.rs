@@ -74,6 +74,7 @@ pub enum PeerInfoEvent {
     },
     TooManyPeers {
         peer_to_disconnect: PeerId,
+        peer_to_connect: Option<PeerId>,
     },
     ReconnectToPeer(PeerId),
     PeerIdentified {
@@ -595,6 +596,13 @@ impl PeerManager {
             .filter(|peer_id| !self.reserved_connected_peers.contains_key(peer_id))
     }
 
+    fn find_disconnected_reserved_peer(&self) -> Option<PeerId> {
+        self.reserved_peers
+            .iter()
+            .find(|peer_id| self.reserved_connected_peers.contains_key(peer_id))
+            .cloned()
+    }
+
     /// Handles the first connnection established with a Peer
     fn handle_initial_connection(&mut self, peer_id: PeerId) {
         let non_reserved_peers_connected = self.non_reserved_connected_peers.len();
@@ -606,6 +614,7 @@ impl PeerManager {
                 // Too many peers already connected, disconnect the Peer with the first priority.
                 self.pending_events.push_front(PeerInfoEvent::TooManyPeers {
                     peer_to_disconnect: peer_id,
+                    peer_to_connect: self.find_disconnected_reserved_peer(),
                 });
 
                 // early exit, we don't want to report new peer connection
