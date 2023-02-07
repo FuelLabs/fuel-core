@@ -79,6 +79,7 @@ use std::{
         FromStr,
     },
 };
+use tracing as _;
 use types::{
     TransactionResponse,
     TransactionStatus,
