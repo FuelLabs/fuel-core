@@ -57,18 +57,26 @@ pub struct HeartbeatConfig {
 }
 
 impl HeartbeatConfig {
-    pub fn new() -> Self {
+    pub fn new(
+        send_timeout: Duration,
+        idle_timeout: Duration,
+        max_failures: NonZeroU32,
+    ) -> Self {
         Self {
-            send_timeout: Duration::from_secs(5),
-            idle_timeout: Duration::from_secs(10),
-            max_failures: NonZeroU32::new(5).expect("5 != 0"),
+            send_timeout,
+            idle_timeout,
+            max_failures,
         }
     }
 }
 
 impl Default for HeartbeatConfig {
     fn default() -> Self {
-        Self::new()
+        Self::new(
+            Duration::from_secs(5),
+            Duration::from_secs(10),
+            NonZeroU32::new(5).expect("5 != 0"),
+        )
     }
 }
 
