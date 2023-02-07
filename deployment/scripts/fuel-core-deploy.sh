@@ -19,13 +19,15 @@ if [ "${k8s_provider}" == "eks" ]; then
     kubectl create ns ${k8s_namespace} || true
     kubectl delete -f fuel-core-secret.yaml || true
     kubectl apply -f fuel-core-secret.yaml
-    kubectl get secrets -n ${k8s_namespace} | grep fuel-core-secret
     cd ../charts
+    mv Chart.yaml Chart.template
+    envsubst < Chart.template > Chart.yaml
+    rm Chart.template
     mv values.yaml values.template
     envsubst < values.template > values.yaml
     rm values.template
-    echo "Deploying fuel-core helm chart to ${TF_VAR_eks_cluster_name} ...."
-    helm upgrade fuel-core . \
+    echo "Deploying ${fuel_core_service_name} helm chart to ${TF_VAR_eks_cluster_name} ...."
+    helm upgrade ${fuel_core_service_name} . \
               --values values.yaml \
               --install \
               --create-namespace \
