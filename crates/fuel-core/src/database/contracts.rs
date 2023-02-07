@@ -18,6 +18,9 @@ use fuel_core_storage::{
     ContractsAssetKey,
     Result as StorageResult,
     StorageAsRef,
+    StorageRead,
+    StorageSize,
+    StorageWrite,
 };
 use fuel_core_types::fuel_types::{
     AssetId,
@@ -35,6 +38,28 @@ impl DatabaseColumn for ContractsRawCode {
 impl DatabaseColumn for ContractsLatestUtxo {
     fn column() -> Column {
         Column::ContractsLatestUtxo
+    }
+}
+
+impl StorageSize<ContractsRawCode> for Database {
+    fn size_of_value(&self, key: &ContractId) -> Result<Option<usize>, Self::Error> {
+        Ok(self.size_of_value(key.as_ref(), ContractsRawCode::column())?)
+    }
+}
+
+impl StorageRead<ContractsRawCode> for Database {
+    fn read(
+        &self,
+        key: &ContractId,
+        buf: &mut [u8],
+    ) -> Result<Option<usize>, Self::Error> {
+        Ok(self.read(key.as_ref(), ContractsRawCode::column(), buf)?)
+    }
+}
+
+impl StorageWrite<ContractsRawCode> for Database {
+    fn write(&self, key: &ContractId, buf: &[u8]) -> Result<usize, Self::Error> {
+        Ok(self.write(key.as_ref(), ContractsRawCode::column(), buf)?)
     }
 }
 

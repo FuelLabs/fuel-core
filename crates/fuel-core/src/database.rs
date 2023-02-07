@@ -226,6 +226,23 @@ impl Database {
             .transpose()
     }
 
+    fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
+        self.data.size_of_value(key, column)
+    }
+
+    fn read(
+        &self,
+        key: &[u8],
+        column: Column,
+        buf: &mut [u8],
+    ) -> DatabaseResult<Option<usize>> {
+        self.data.read(key, column, buf)
+    }
+
+    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
+        self.data.write(key, column, buf)
+    }
+
     fn contains_key(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
         self.data.exists(key, column)
     }

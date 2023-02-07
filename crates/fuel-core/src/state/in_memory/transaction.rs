@@ -184,6 +184,50 @@ impl KeyValueStore for MemoryTransactionView {
                     }
                 }).into_boxed()
     }
+
+    fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
+        // try to fetch data from View layer if any changes to the key
+        if self
+            .changes
+            .lock()
+            .expect("poisoned lock")
+            .contains_key(&column_key(key, column))
+        {
+            self.view_layer.size_of_value(key, column)
+        } else {
+            // fall-through to original data source
+            self.data_source.size_of_value(key, column)
+        }
+    }
+
+    fn read(
+        &self,
+        key: &[u8],
+        column: Column,
+        buf: &mut [u8],
+    ) -> DatabaseResult<Option<usize>> {
+        // try to fetch data from View layer if any changes to the key
+        if self
+            .changes
+            .lock()
+            .expect("poisoned lock")
+            .contains_key(&column_key(key, column))
+        {
+            self.view_layer.read(key, column, buf)
+        } else {
+            // fall-through to original data source
+            self.data_source.read(key, column, buf)
+        }
+    }
+
+    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
+        let k = column_key(key, column);
+        self.changes
+            .lock()
+            .expect("poisoned lock")
+            .insert(k, WriteOperation::Insert(key.into(), column, buf.to_vec()));
+        self.view_layer.write(key, column, buf)
+    }
 }
 
 impl BatchOperations for MemoryTransactionView {}
