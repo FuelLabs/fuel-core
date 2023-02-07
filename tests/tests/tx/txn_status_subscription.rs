@@ -8,7 +8,6 @@ use fuel_core_client::client::FuelClient;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::*,
-    fuel_vm::consts::*,
 };
 use futures::StreamExt;
 
@@ -25,15 +24,15 @@ async fn subscribe_txn_status() {
     let gas_limit = 1_000_000;
     let maturity = 0;
 
-    let create_script = |i: usize| {
+    let create_script = |i: u8| {
         // The first two scripts will run and the rest will fail.
-        let script = vec![Opcode::ADDI(0x11 - i, 0x10, 1), Opcode::RET(REG_ONE)];
+        let script = vec![op::addi(0x11 - i, 0x10, 1), op::ret(RegId::ONE)];
         let script: Vec<u8> = script
             .iter()
             .flat_map(|op| u32::from(*op).to_be_bytes())
             .collect();
 
-        let predicate = Opcode::RET(REG_ONE).to_bytes().to_vec();
+        let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
         let owner = Input::predicate_owner(&predicate);
         // The third transaction needs to have a different input.
         let utxo_id = if i == 2 { 2 } else { 1 };

@@ -111,7 +111,9 @@ async fn poa_interval_produces_nonempty_blocks_at_correct_rate() {
 
     for i in 0..tx_count {
         let mut tx = TransactionBuilder::script(
-            [Opcode::MOVI(0x10, i as Immediate18)].into_iter().collect(),
+            [op::movi(0x10, i.try_into().unwrap())]
+                .into_iter()
+                .collect(),
             vec![],
         );
         let _tx_id = client.submit(&tx.finalize().into()).await.unwrap();

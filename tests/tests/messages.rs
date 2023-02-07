@@ -19,7 +19,6 @@ use fuel_core_types::{
     fuel_asm::*,
     fuel_crypto::*,
     fuel_tx::*,
-    fuel_vm::consts::*,
 };
 use rand::{
     rngs::StdRng,
@@ -43,17 +42,16 @@ async fn can_submit_genesis_message() {
         data: vec![rng.gen()],
         da_height: DaBlockHeight(0),
     };
-    let tx1 =
-        TransactionBuilder::script(vec![Opcode::RET(0)].into_iter().collect(), vec![])
-            .gas_limit(100000)
-            .add_unsigned_message_input(
-                secret_key,
-                msg1.sender,
-                msg1.nonce,
-                msg1.amount,
-                msg1.data.clone(),
-            )
-            .finalize_as_transaction();
+    let tx1 = TransactionBuilder::script(vec![op::ret(0)].into_iter().collect(), vec![])
+        .gas_limit(100000)
+        .add_unsigned_message_input(
+            secret_key,
+            msg1.sender,
+            msg1.nonce,
+            msg1.amount,
+            msg1.data.clone(),
+        )
+        .finalize_as_transaction();
 
     let mut node_config = Config::local_node();
     node_config.chain_conf.initial_state = Some(StateConfig {
@@ -244,28 +242,28 @@ async fn can_get_message_proof() {
 
         let mut contract = vec![
             // Save the ptr to the script data to register 16.
-            Opcode::gtf(0x10, 0x00, GTFArgs::ScriptData),
+            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
             // Offset 16 by the length of bytes for the contract id
             // and two empty params. This will now point to the address
             // of the message recipient.
-            Opcode::ADDI(0x10, 0x10, starting_offset),
+            op::addi(0x10, 0x10, starting_offset),
         ];
         contract.extend(args.iter().enumerate().flat_map(|(index, arg)| {
             [
                 // The length of the message data in memory.
-                Opcode::MOVI(0x11, arg.message_data.len() as u32),
+                op::movi(0x11, arg.message_data.len() as u32),
                 // The index of the of the output message in the transactions outputs.
-                Opcode::MOVI(0x12, (index + 1) as u32),
+                op::movi(0x12, (index + 1) as u32),
                 // The amount to send in coins.
-                Opcode::MOVI(0x13, 10),
+                op::movi(0x13, 10),
                 // Send the message output.
-                Opcode::SMO(0x10, 0x11, 0x12, 0x13),
+                op::smo(0x10, 0x11, 0x12, 0x13),
                 // Offset to the next recipient address (this recipient address + message data len)
-                Opcode::ADDI(0x10, 0x10, 32 + arg.message_data.len() as u16),
+                op::addi(0x10, 0x10, 32 + arg.message_data.len() as u16),
             ]
         }));
         // Return.
-        contract.push(Opcode::RET(REG_ONE));
+        contract.push(op::ret(RegId::ONE));
 
         // Contract code.
         let bytecode: Witness = contract.into_iter().collect::<Vec<u8>>().into();
@@ -303,18 +301,18 @@ async fn can_get_message_proof() {
             // Save the ptr to the script data to register 16.
             // This will be used to read the contract id + two
             // empty params. So 32 + 8 + 8.
-            Opcode::gtf(0x10, 0x00, GTFArgs::ScriptData),
+            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
             // Call the contract and forward no coins.
-            Opcode::CALL(0x10, REG_ZERO, REG_ZERO, REG_CGAS),
+            op::call(0x10, RegId::ZERO, RegId::ZERO, RegId::CGAS),
             // Return.
-            Opcode::RET(REG_ONE),
+            op::ret(RegId::ONE),
         ];
         let script: Vec<u8> = script
             .iter()
             .flat_map(|op| u32::from(*op).to_be_bytes())
             .collect();
 
-        let predicate = Opcode::RET(REG_ONE).to_bytes().to_vec();
+        let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
         let owner = Input::predicate_owner(&predicate);
         let coin_input = Input::coin_predicate(
             Default::default(),

@@ -7,10 +7,7 @@ use criterion::{
     Throughput,
 };
 use fuel_core_benches::*;
-use fuel_core_types::{
-    fuel_asm::*,
-    fuel_vm::consts::*,
-};
+use fuel_core_types::fuel_asm::*;
 use rand::{
     rngs::StdRng,
     SeedableRng,
@@ -30,44 +27,40 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("jmp"),
         "jmp",
-        VmBench::new(Opcode::JMP(0x10)).with_prepare_script(vec![Opcode::MOVI(0x10, 10)]),
+        VmBench::new(op::jmp(0x10)).with_prepare_script(vec![op::movi(0x10, 10)]),
     );
 
-    run_group_ref(
-        &mut c.benchmark_group("ji"),
-        "ji",
-        VmBench::new(Opcode::JI(10)),
-    );
+    run_group_ref(&mut c.benchmark_group("ji"), "ji", VmBench::new(op::ji(10)));
 
     run_group_ref(
         &mut c.benchmark_group("jne"),
         "jne",
-        VmBench::new(Opcode::JNE(REG_ZERO, REG_ONE, 0x10))
-            .with_prepare_script(vec![Opcode::MOVI(0x10, 10)]),
+        VmBench::new(op::jne(RegId::ZERO, RegId::ONE, 0x10))
+            .with_prepare_script(vec![op::movi(0x10, 10)]),
     );
 
     run_group_ref(
         &mut c.benchmark_group("jnei"),
         "jnei",
-        VmBench::new(Opcode::JNEI(REG_ZERO, REG_ONE, 10)),
+        VmBench::new(op::jnei(RegId::ZERO, RegId::ONE, 10)),
     );
 
     run_group_ref(
         &mut c.benchmark_group("jnzi"),
         "jnzi",
-        VmBench::new(Opcode::JNZI(REG_ONE, 10)),
+        VmBench::new(op::jnzi(RegId::ONE, 10)),
     );
 
     run_group_ref(
         &mut c.benchmark_group("ret_script"),
         "ret_script",
-        VmBench::new(Opcode::RET(REG_ONE)),
+        VmBench::new(op::ret(RegId::ONE)),
     );
 
     run_group_ref(
         &mut c.benchmark_group("ret_contract"),
         "ret_contract",
-        VmBench::contract(rng, Opcode::RET(REG_ONE)).unwrap(),
+        VmBench::contract(rng, op::ret(RegId::ONE)).unwrap(),
     );
 
     let mut retd_contract = c.benchmark_group("retd_contract");
@@ -76,9 +69,9 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(
             &mut retd_contract,
             format!("{i}"),
-            VmBench::contract(rng, Opcode::RETD(REG_ONE, 0x10))
+            VmBench::contract(rng, op::retd(RegId::ONE, 0x10))
                 .unwrap()
-                .with_post_call(vec![Opcode::MOVI(0x10, *i)]),
+                .with_post_call(vec![op::movi(0x10, *i)]),
         );
     }
     retd_contract.finish();
@@ -89,9 +82,9 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(
             &mut retd_script,
             format!("{i}"),
-            VmBench::contract(rng, Opcode::RETD(REG_ONE, 0x10))
+            VmBench::contract(rng, op::retd(RegId::ONE, 0x10))
                 .unwrap()
-                .with_post_call(vec![Opcode::MOVI(0x10, *i)]),
+                .with_post_call(vec![op::movi(0x10, *i)]),
         );
     }
     retd_script.finish();
@@ -99,19 +92,19 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("rvrt_script"),
         "rvrt_script",
-        VmBench::new(Opcode::RVRT(REG_ONE)),
+        VmBench::new(op::rvrt(RegId::ONE)),
     );
 
     run_group_ref(
         &mut c.benchmark_group("rvrt_contract"),
         "rvrt_contract",
-        VmBench::contract(rng, Opcode::RET(REG_ONE)).unwrap(),
+        VmBench::contract(rng, op::ret(RegId::ONE)).unwrap(),
     );
 
     run_group_ref(
         &mut c.benchmark_group("log"),
         "log",
-        VmBench::new(Opcode::LOG(0x10, 0x11, 0x12, 0x13)),
+        VmBench::new(op::log(0x10, 0x11, 0x12, 0x13)),
     );
 
     let mut logd = c.benchmark_group("logd");
@@ -120,8 +113,8 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(
             &mut logd,
             format!("{i}"),
-            VmBench::new(Opcode::LOGD(0x10, 0x11, REG_ZERO, 0x13))
-                .with_prepare_script(vec![Opcode::MOVI(0x13, *i)]),
+            VmBench::new(op::logd(0x10, 0x11, RegId::ZERO, 0x13))
+                .with_prepare_script(vec![op::movi(0x13, *i)]),
         );
     }
     logd.finish();

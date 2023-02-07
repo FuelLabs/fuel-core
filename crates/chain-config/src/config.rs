@@ -16,7 +16,7 @@ pub use state::*;
 mod tests {
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
-        fuel_asm::Opcode,
+        fuel_asm::op,
         fuel_types::{
             AssetId,
             Bytes32,
@@ -200,8 +200,7 @@ mod tests {
         } else {
             None
         };
-
-        let contract = Contract::from(Opcode::RET(0x10).to_bytes().to_vec());
+        let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
 
         ChainConfig {
             initial_state: Some(StateConfig {
