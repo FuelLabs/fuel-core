@@ -64,7 +64,7 @@ async fn test_metrics_endpoint() {
     srv.stop_and_await().await.unwrap();
 
     // Gt check exists because testing can be weird with multiple instances running
-    assert!(categories.len() == 16);
+    assert_eq!(categories.len(), 16);
 
     for index in [2, 6, 7, 8, 11, 12, 13] {
         let value = categories[index].split(' ').collect::<Vec<&str>>()[1]

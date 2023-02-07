@@ -5,6 +5,8 @@ use crate::client::schema::{
     tx::DryRunArg,
 };
 use anyhow::Context;
+#[cfg(feature = "subscriptions")]
+use cynic::StreamingOperation;
 use cynic::{
     http::ReqwestExt,
     GraphQlResponse,
@@ -12,9 +14,7 @@ use cynic::{
     MutationBuilder,
     Operation,
     QueryBuilder,
-    StreamingOperation,
 };
-use eventsource_client::HttpsConnector;
 use fuel_core_types::{
     fuel_asm::{
         Opcode,
@@ -28,6 +28,7 @@ use fuel_core_types::{
     fuel_types,
     fuel_types::bytes::SerializableVec,
 };
+#[cfg(feature = "subscriptions")]
 use futures::StreamExt;
 use itertools::Itertools;
 use schema::{
@@ -64,9 +65,10 @@ use schema::{
     TransactionId,
     U64,
 };
+#[cfg(feature = "subscriptions")]
+use std::future;
 use std::{
     convert::TryInto,
-    future,
     io::{
         self,
         ErrorKind,
@@ -178,6 +180,7 @@ impl FuelClient {
         }
     }
 
+    #[cfg(feature = "subscriptions")]
     async fn subscribe<ResponseData, Vars>(
         &self,
         q: StreamingOperation<ResponseData, Vars>,
@@ -207,7 +210,7 @@ impl FuelClient {
                     format!("Failed to add header to client {e:?}"),
                 )
             })?
-            .build_with_conn(HttpsConnector::with_webpki_roots());
+            .build_with_conn(es::HttpsConnector::with_webpki_roots());
 
         let mut last = None;
 
@@ -308,6 +311,7 @@ impl FuelClient {
         Ok(id)
     }
 
+    #[cfg(feature = "subscriptions")]
     /// Submit the transaction and wait for it to be included into a block.
     ///
     /// This will wait forever if needed, so consider wrapping this call
@@ -460,6 +464,7 @@ impl FuelClient {
         Ok(status)
     }
 
+    #[cfg(feature = "subscriptions")]
     /// Subscribe to the status of a transaction
     pub async fn subscribe_transaction_status(
         &self,
@@ -477,6 +482,7 @@ impl FuelClient {
         Ok(stream)
     }
 
+    #[cfg(feature = "subscriptions")]
     /// Awaits for the transaction to be committed into a block
     ///
     /// This will wait forever if needed, so consider wrapping this call

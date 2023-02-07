@@ -1,6 +1,6 @@
 [package]
-edition = "2021"
-license = "BUSL-1.1"
+edition = { workspace = true }
+license = { workspace = true }
 name = "fuel-core-tests"
 publish = false
 version = "0.0.0"
@@ -22,6 +22,7 @@ path = "tests/lib.rs"
 harness = true
 name = "metrics_tests"
 path = "tests/metrics.rs"
+required-features = ["metrics"]
 
 [dependencies]
 ethers = "1.0.2"
@@ -38,17 +39,17 @@ fuel-core-txpool = { path = "../crates/services/txpool", features = ["test-helpe
 fuel-core-types = { path = "../crates/types", features = ["test-helpers"] }
 futures = "0.3"
 hyper = { version = "0.14", features = ["server"] }
-insta = "1.8"
-itertools = "0.10"
-rand = "0.8"
+insta = { workspace = true }
+itertools = { workspace = true }
+rand = { workspace = true }
 reqwest = { version = "0.11", default-features = false, features = [
     "rustls-tls",
 ] }
 rstest = "0.15"
-serde_json = "1.0"
+serde_json = { workspace = true }
 tempfile = "3.3"
-test-case = "2.2"
-tokio = { version = "1.21", features = [
+test-case = { workspace = true }
+tokio = { workspace = true, features = [
     "macros",
     "rt-multi-thread",
     "test-util",

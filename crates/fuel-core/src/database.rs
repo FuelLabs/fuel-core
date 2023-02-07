@@ -6,6 +6,7 @@ use crate::{
         IterDirection,
     },
 };
+use anyhow::Context;
 use fuel_core_chain_config::{
     ChainConfigDb,
     CoinConfig,
@@ -162,7 +163,7 @@ unsafe impl Sync for Database {}
 impl Database {
     #[cfg(feature = "rocksdb")]
     pub fn open(path: &Path) -> DatabaseResult<Self> {
-        let db = RocksDb::default_open(path)?;
+        let db = RocksDb::default_open(path).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
 
         Ok(Database {
             data: Arc::new(db),

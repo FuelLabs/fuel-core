@@ -1,21 +1,21 @@
 [package]
-authors = ["Fuel Labs <contact@fuel.sh>"]
+authors = { workspace = true }
 description = "The common code for fuel core services."
-edition = "2021"
-homepage = "https://fuel.network/"
+edition = { workspace = true }
+homepage = { workspace = true }
 keywords = ["bft", "blockchain", "consensus", "fuel"]
-license = "BUSL-1.1"
+license = { workspace = true }
 name = "fuel-core-services"
-repository = "https://github.com/FuelLabs/fuel-core"
-version = "0.16.1"
+repository = { workspace = true }
+version = { workspace = true }
 
 [dependencies]
-anyhow = "1.0"
-async-trait = "0.1"
-futures = "0.3"
-parking_lot = "0.12"
-tokio = { version = "1.21", features = ["full"] }
-tracing = "0.1"
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+parking_lot = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
 
 [dev-dependencies]
-mockall = "0.11"
+mockall = { workspace = true }
