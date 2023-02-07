@@ -6,7 +6,6 @@ use crate::{
         IterDirection,
     },
 };
-use anyhow::Context;
 use fuel_core_chain_config::{
     ChainConfigDb,
     CoinConfig,
@@ -42,7 +41,6 @@ type DatabaseError = Error;
 type DatabaseResult<T> = Result<T>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
-
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
 #[cfg(feature = "rocksdb")]
@@ -163,6 +161,7 @@ unsafe impl Sync for Database {}
 impl Database {
     #[cfg(feature = "rocksdb")]
     pub fn open(path: &Path) -> DatabaseResult<Self> {
+        use anyhow::Context;
         let db = RocksDb::default_open(path).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
 
         Ok(Database {
