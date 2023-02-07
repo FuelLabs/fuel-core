@@ -149,11 +149,11 @@ pub struct P2PArgs {
     pub connection_keep_alive: u64,
 
     /// Sending of `BlockHeight` should not take longer than this duration, in seconds.
-    #[clap(long = "heartbeat_send_duration", default_value = "5", env)]
+    #[clap(long = "heartbeat_send_duration", default_value = "2", env)]
     pub heartbeat_send_duration: u64,
 
     /// Idle time in seconds before sending next `BlockHeight`
-    #[clap(long = "heartbeat_idle_duration", default_value = "10", env)]
+    #[clap(long = "heartbeat_idle_duration", default_value = "1", env)]
     pub heartbeat_idle_duration: u64,
 
     /// Max failures allowed at `Heartbeat` protocol.
