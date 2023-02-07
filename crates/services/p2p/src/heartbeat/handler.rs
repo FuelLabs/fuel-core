@@ -52,7 +52,7 @@ pub struct HeartbeatConfig {
     /// Idle time before sending next `BlockHeight`
     idle_timeout: Duration,
     /// Max failures allowed.
-    /// If reached `HeartbeatHandler` will request closing of the connection.    
+    /// If reached `HeartbeatHandler` will request closing of the connection.
     max_failures: NonZeroU32,
 }
 
