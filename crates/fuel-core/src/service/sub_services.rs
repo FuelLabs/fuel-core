@@ -126,15 +126,17 @@ pub fn init_sub_services(
     let poa_adapter = PoAAdapter::new(poa.shared.clone());
 
     #[cfg(feature = "p2p")]
-    let sync = {
-        fuel_core_sync::service::new_service(
-            last_height,
-            p2p_adapter,
-            importer_adapter.clone(),
-            verifier,
-            config.sync,
-        )?
-    };
+    let sync = (!production_enabled)
+        .then(|| {
+            fuel_core_sync::service::new_service(
+                last_height,
+                p2p_adapter,
+                importer_adapter.clone(),
+                verifier,
+                config.sync,
+            )
+        })
+        .transpose()?;
 
     // TODO: Figure out on how to move it into `fuel-core-graphql-api`.
     let schema = dap::init(
@@ -194,7 +196,7 @@ pub fn init_sub_services(
     #[cfg(feature = "p2p")]
     {
         services.push(Box::new(network));
-        if !production_enabled {
+        if let Some(sync) = sync {
             services.push(Box::new(sync));
         }
     }
