@@ -117,9 +117,9 @@ jobs:
         with:
           version: "0.36.4"
       - name: Install Protoc
-        uses: arduino/setup-protoc@v1.1.2
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install protobuf-compiler
       - uses: Swatinem/rust-cache@v2
         with:
           key: '${{ matrix.command }} ${{ matrix.args }}'
@@ -203,9 +203,9 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v1.1.2
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install protobuf-compiler
 
       - name: Publish crate
         uses: katyo/publish-crates@v2
