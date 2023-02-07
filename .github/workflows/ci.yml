@@ -101,7 +101,7 @@ jobs:
             args: --all-features --workspace
           # use cargo make test to avoid workspace feature unification
           - command: make
-            args: test --no-default-features --workspace
+            args: test --no-default-features
           - command: test
             args: --manifest-path version-compatibility/Cargo.toml --workspace
     # disallow any job that takes longer than 45 minutes
