@@ -99,8 +99,9 @@ jobs:
             args: check --locked
           - command: test
             args: --all-features --workspace
-          - command: test
-            args: --no-default-features --workspace
+          # use cargo make test to avoid workspace feature unification
+          - command: make
+            args: test --no-default-features
           - command: test
             args: --manifest-path version-compatibility/Cargo.toml --workspace
     # disallow any job that takes longer than 45 minutes
