@@ -9,10 +9,7 @@ use fuel_core_services::{
     State,
     StateWatcher,
 };
-use std::{
-    net::SocketAddr,
-    panic,
-};
+use std::net::SocketAddr;
 use tracing::log::warn;
 
 pub use config::{
@@ -221,7 +218,6 @@ impl RunnableTask for Task {
         for service in &self.services {
             stop_signals.push(service.await_stop())
         }
-        stop_signals.push(Box::pin(shutdown_signal()));
         stop_signals.push(Box::pin(watcher.while_started()));
 
         let (result, _, _) = futures::future::select_all(stop_signals).await;
@@ -245,35 +241,6 @@ impl RunnableTask for Task {
 
         Ok(false /* should_continue */)
     }
-}
-
-async fn shutdown_signal() -> anyhow::Result<State> {
-    #[cfg(unix)]
-    {
-        let mut sigterm =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
-
-        let mut sigint =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
-        loop {
-            tokio::select! {
-                _ = sigterm.recv() => {
-                    tracing::info!("sigterm received");
-                    break;
-                }
-                _ = sigint.recv() => {
-                    tracing::log::info!("sigint received");
-                    break;
-                }
-            }
-        }
-    }
-    #[cfg(not(unix))]
-    {
-        tokio::signal::ctrl_c().await?;
-        tracing::log::info!("CTRL+C received");
-    }
-    Ok(State::Stopped)
 }
 
 #[cfg(test)]
