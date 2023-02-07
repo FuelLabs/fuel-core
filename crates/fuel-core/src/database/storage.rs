@@ -125,7 +125,7 @@ where
     }
 
     fn contains_key(&self, key: &T::Key) -> StorageResult<bool> {
-        self.exists(key.database_key().as_ref(), T::column())
+        self.contains_key(key.database_key().as_ref(), T::column())
             .map_err(Into::into)
     }
 }
@@ -142,7 +142,7 @@ where
         key: &T::Key,
         value: &T::Value,
     ) -> StorageResult<Option<T::OwnedValue>> {
-        Database::insert(self, key.database_key().as_ref(), T::column(), value)
+        Database::insert(self, key.database_key().as_ref(), T::column(), &value)
             .map_err(Into::into)
     }
 

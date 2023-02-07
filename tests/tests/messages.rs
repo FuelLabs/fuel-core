@@ -68,7 +68,7 @@ async fn can_submit_genesis_message() {
     assert!(
         matches!(status, TransactionStatus::Success { .. }),
         "expected success, received {status:?}",
-    )
+    );
 }
 
 #[tokio::test]

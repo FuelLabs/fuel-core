@@ -257,7 +257,14 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     // initialize the server
     let server = FuelService::new_node(config).await?;
     // pause the main task while service is running
-    server.await_stop().await?;
+    tokio::select! {
+        result = server.await_stop() => {
+            result?;
+        }
+        _ = shutdown_signal() => {}
+    }
+
+    server.stop_and_await().await?;
 
     Ok(())
 }
@@ -280,4 +287,33 @@ fn load_consensus_key(
     } else {
         Ok(None)
     }
+}
+
+async fn shutdown_signal() -> anyhow::Result<()> {
+    #[cfg(unix)]
+    {
+        let mut sigterm =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+
+        let mut sigint =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
+        loop {
+            tokio::select! {
+                _ = sigterm.recv() => {
+                    tracing::info!("sigterm received");
+                    break;
+                }
+                _ = sigint.recv() => {
+                    tracing::log::info!("sigint received");
+                    break;
+                }
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        tokio::signal::ctrl_c().await?;
+        tracing::log::info!("CTRL+C received");
+    }
+    Ok(())
 }

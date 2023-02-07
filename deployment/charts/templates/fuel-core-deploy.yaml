@@ -36,9 +36,13 @@ spec:
     app: {{ template "fuel-core.name" . }}
   ports:
     - name: http
-      port: {{ .Values.app.httpport }}
+      port: {{ .Values.app.http_port }}
       protocol: TCP
-      targetPort: {{ .Values.app.targetport }}
+      targetPort: {{ .Values.app.target_port }}
+    - name: p2p
+      port: {{ .Values.app.peering_port }}
+      protocol: TCP
+      targetPort: {{ .Values.app.peering_port }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -72,19 +76,57 @@ spec:
             - "--ip"
             - "0.0.0.0"
             - "--port"
-            - "4000"
+            - "{{ .Values.app.target_port }}"
             - "--db-path"
             - "{{ .Values.app.volume.mountPath }}"
             - "--chain"
             - "/mnt/config/chainspec.json"
+            - "--min-gas-price"
+            - "{{ .Values.app.min_gas_price }}"
           {{- if .Values.app.utxo_validation }}
             - "--utxo-validation"
           {{- end}}
           {{- if .Values.app.vm_backtrace }}
             - "--vm-backtrace"
           {{- end}}
-            - "--min-gas-price"
-            - "{{ .Values.app.min_gas_price }}"
+          {{- if .Values.app.reserved_nodes_only_mode }}
+            - "--reserved_nodes_only_mode"
+          {{- end}}
+          {{- if .Values.app.poa_instant }}
+            - "--poa-instant"
+            - "{{ .Values.app.poa_instant }}"
+          {{- end}}
+          {{- if .Values.app.poa_interval_period }}
+            - "--poa-interval-period"
+            - "{{ .Values.app.poa_interval_period }}"
+          {{- end}}
+          {{- if .Values.app.poa_hybrid_min_time }}
+            - "--poa-hybrid-min-time"
+            - "{{ .Values.app.poa_hybrid_min_time }}"
+          {{- end}}
+          {{- if .Values.app.poa_hybrid_idle_time }}
+            - "--poa-hybrid-idle-time"
+            - "{{ .Values.app.poa_hybrid_idle_time }}"
+          {{- end}}
+          {{- if .Values.app.poa_hybrid_max_time }}
+            - "--poa-hybrid-max-time"
+            - "{{ .Values.app.poa_hybrid_max_time }}"
+          {{- end}}
+          {{- if .Values.app.p2p_key }}
+            - "--keypair"
+            - "{{ .Values.app.p2p_key }}"
+          {{- end }}
+          {{- if .Values.app.peering_port }}
+            - "--peering_port"
+            - "{{ .Values.app.peering_port }}"
+          {{- end }}
+          {{- if .Values.app.allow_private_addresses }}
+            - "--allow_private_addresses"
+          {{- end }}
+          {{- if .Values.app.network_name }}
+            - "--network"
+            - "{{ .Values.app.network_name }}"
+          {{- end }}
           {{- if .Values.app.relayer }}
             - "--relayer"
             - "{{ .Values.app.relayer }}"
@@ -121,12 +163,15 @@ spec:
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           ports:
             - name: http
-              containerPort: {{ .Values.app.targetport }}
+              containerPort: {{ .Values.app.target_port }}
+              protocol: TCP
+            - name: p2p
+              containerPort: {{ .Values.app.peering_port }}
               protocol: TCP
           livenessProbe:
             httpGet:
               path: /health
-              port: {{ .Values.app.targetport }}
+              port: {{ .Values.app.target_port }}
             initialDelaySeconds: 10
             periodSeconds: 5
             timeoutSeconds: 10
@@ -138,6 +183,11 @@ spec:
           env:
             - name: HUMAN_LOGGING
               value: {{ .Values.app.human_logging | quote }}
+            - name: RESERVED_NODES
+              value: {{ .Values.app.reserved_nodes | quote }}
+            - name: BOOTSTRAP_NODES
+              value: {{ .Values.app.bootstrap_nodes | quote }}
+            # TODO: do we need to do anything to make this more optional for non-consensus nodes?
             - name: CONSENSUS_KEY_SECRET
               valueFrom:
                 secretKeyRef:

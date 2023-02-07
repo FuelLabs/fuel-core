@@ -74,6 +74,7 @@ impl StateWatcher {
 }
 
 impl StateWatcher {
+    #[tracing::instrument(level = "debug", skip(self), err, ret)]
     /// Infinity loop while the state is `State::Started`. Returns the next received state.
     pub async fn while_started(&mut self) -> anyhow::Result<State> {
         loop {
@@ -81,6 +82,7 @@ impl StateWatcher {
             if !state.started() {
                 return Ok(state)
             }
+            tracing::debug!("Service is started, waiting for the next state...");
 
             self.changed().await?;
         }
