@@ -585,6 +585,8 @@ fn get_executor_and_db() -> (Executor<MaybeRelayerAdapter>, Database) {
         database: db.clone(),
         #[cfg(feature = "relayer")]
         relayer_synced: None,
+        #[cfg(feature = "relayer")]
+        da_deploy_height: 0u64.into(),
     };
     let executor = Executor {
         relayer,

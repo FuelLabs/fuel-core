@@ -65,7 +65,7 @@ impl crate::executor::RelayerPort for MaybeRelayerAdapter {
             match self.relayer_synced.as_ref() {
                 Some(sync) => sync.get_message(id, da_height),
                 None => {
-                    if **da_height == 0 {
+                    if *da_height <= self.da_deploy_height {
                         Ok(fuel_core_storage::StorageAsRef::storage::<
                             fuel_core_storage::tables::Messages,
                         >(&self.database)
