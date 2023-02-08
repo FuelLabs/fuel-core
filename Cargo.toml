@@ -74,8 +74,8 @@ fuel-core-tests = { version = "0.0.0", path = "./tests" }
 fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 
 # Fuel dependencies
-fuel-vm = { version = "0.25" }
-fuel-vm-private = { version = "0.25", package = "fuel-vm" }
+fuel-vm = { version = "0.26" }
+fuel-vm-private = { version = "0.26", package = "fuel-vm" }
 
 # Common dependencies
 anyhow = "1.0"

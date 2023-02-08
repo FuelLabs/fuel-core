@@ -41,7 +41,10 @@ use fuel_core_types::{
         CoinStatus,
         CompressedCoin,
     },
-    fuel_asm::Word,
+    fuel_asm::{
+        RegId,
+        Word,
+    },
     fuel_tx::{
         field::{
             Inputs,
@@ -69,7 +72,6 @@ use fuel_core_types::{
             IntoChecked,
             ScriptCheckedMetadata,
         },
-        consts::REG_SP,
         interpreter::{
             CheckedMetadata,
             ExecutableTransaction,
@@ -1147,7 +1149,7 @@ where
                     backtrace.contract(),
                     backtrace.registers(),
                     backtrace.call_stack(),
-                    hex::encode(&backtrace.memory()[..backtrace.registers()[REG_SP] as usize]), // print stack
+                    hex::encode(&backtrace.memory()[..backtrace.registers()[RegId::SP] as usize]), // print stack
                 );
             }
         }
@@ -1423,7 +1425,7 @@ mod tests {
             CheckedMessage,
             CompressedMessage,
         },
-        fuel_asm::Opcode,
+        fuel_asm::op,
         fuel_crypto::SecretKey,
         fuel_merkle::common::empty_sum_sha256,
         fuel_tx,
@@ -1445,18 +1447,9 @@ mod tests {
         fuel_types::{
             bytes::SerializableVec,
             ContractId,
-            Immediate12,
-            Immediate18,
             Salt,
         },
         fuel_vm::{
-            consts::{
-                REG_CGAS,
-                REG_FP,
-                REG_ONE,
-                REG_PC,
-                REG_ZERO,
-            },
             script_with_data_offset,
             util::test_helpers::TestBuilder as TxBuilder,
             Call,
@@ -1482,17 +1475,17 @@ mod tests {
         let (create, contract_id) = create_contract(
             vec![
                 // load amount of coins to 0x10
-                Opcode::ADDI(0x10, REG_FP, CallFrame::a_offset() as Immediate12),
-                Opcode::LW(0x10, 0x10, 0),
+                op::addi(0x10, RegId::FP, CallFrame::a_offset().try_into().unwrap()),
+                op::lw(0x10, 0x10, 0),
                 // load asset id to 0x11
-                Opcode::ADDI(0x11, REG_FP, CallFrame::b_offset() as Immediate12),
-                Opcode::LW(0x11, 0x11, 0),
+                op::addi(0x11, RegId::FP, CallFrame::b_offset().try_into().unwrap()),
+                op::lw(0x11, 0x11, 0),
                 // load address to 0x12
-                Opcode::ADDI(0x12, 0x11, 32),
+                op::addi(0x12, 0x11, 32),
                 // load output index (0) to 0x13
-                Opcode::ADDI(0x13, REG_ZERO, 0),
-                Opcode::TRO(0x12, 0x13, 0x10, 0x11),
-                Opcode::RET(REG_ONE),
+                op::addi(0x13, RegId::ZERO, 0),
+                op::tro(0x12, 0x13, 0x10, 0x11),
+                op::ret(RegId::ONE),
             ]
             .into_iter()
             .collect::<Vec<u8>>(),
@@ -1502,14 +1495,14 @@ mod tests {
             data_offset,
             vec![
                 // set reg 0x10 to call data
-                Opcode::MOVI(0x10, (data_offset + 64) as Immediate18),
+                op::movi(0x10, data_offset + 64),
                 // set reg 0x11 to asset id
-                Opcode::MOVI(0x11, data_offset),
+                op::movi(0x11, data_offset),
                 // set reg 0x12 to call amount
-                Opcode::MOVI(0x12, variable_transfer_amount),
+                op::movi(0x12, variable_transfer_amount),
                 // call contract without any tokens to transfer in (3rd arg arbitrary when 2nd is zero)
-                Opcode::CALL(0x10, 0x12, 0x11, REG_CGAS),
-                Opcode::RET(REG_ONE),
+                op::call(0x10, 0x12, 0x11, RegId::CGAS),
+                op::ret(RegId::ONE),
             ],
             ConsensusParameters::DEFAULT.tx_offset()
         );
@@ -1658,10 +1651,7 @@ mod tests {
 
     mod coinbase {
         use super::*;
-        use fuel_core_types::{
-            fuel_asm::GTFArgs,
-            fuel_vm::consts::REG_HP,
-        };
+        use fuel_core_types::fuel_asm::GTFArgs;
 
         #[test]
         fn executor_commits_transactions_with_non_zero_coinbase_generation() {
@@ -1801,25 +1791,25 @@ mod tests {
                     .gas_price(0)
                     .start_script(vec![
                         // Store the size of the `Address`(32 bytes) into register `0x11`.
-                        Opcode::MOVI(0x11, Address::LEN as Immediate18),
+                        op::movi(0x11, Address::LEN.try_into().unwrap()),
                         // Allocate 32 bytes on the heap.
-                        Opcode::ALOC(0x11),
+                        op::aloc(0x11),
                         // Store the pointer to the beginning of the free memory into 
-                        // register `0x10`. It requires shifting of `REG_HP` by 1 to point 
+                        // register `0x10`. It requires shifting of `RegId::HP` by 1 to point
                         // on the free memory.
-                        Opcode::ADDI(0x10, REG_HP, 1),
+                        op::addi(0x10, RegId::HP, 1),
                         // Store `config_coinbase` `Address` into MEM[$0x10; 32].
-                        Opcode::CB(0x10),
+                        op::cb(0x10),
                         // Store the pointer on the beginning of script data into register `0x12`.
                         // Script data contains `expected_in_tx_coinbase` - 32 bytes of data.
-                        Opcode::gtf(0x12, 0x00, GTFArgs::ScriptData),
+                        op::gtf_args(0x12, 0x00, GTFArgs::ScriptData),
                         // Compare retrieved `config_coinbase`(register `0x10`) with 
                         // passed `expected_in_tx_coinbase`(register `0x12`) where the length 
                         // of memory comparison is 32 bytes(register `0x11`) and store result into
                         // register `0x13`(1 - true, 0 - false). 
-                        Opcode::MEQ(0x13, 0x10, 0x12, 0x11),
+                        op::meq(0x13, 0x10, 0x12, 0x11),
                         // Return the result of the comparison as a receipt.
-                        Opcode::RET(0x13)
+                        op::ret(0x13)
                     ], expected_in_tx_coinbase.to_vec() /* pass expected address as script data */)
                     .coin_input(AssetId::BASE, 1000)
                     .variable_output(Default::default())
@@ -2250,7 +2240,7 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(2322u64);
 
         let tx = TransactionBuilder::script(
-            vec![Opcode::RET(REG_ONE)].into_iter().collect(),
+            vec![op::ret(RegId::ONE)].into_iter().collect(),
             vec![],
         )
         .add_unsigned_coin_input(
@@ -2645,7 +2635,7 @@ mod tests {
         let non_modify_state_tx: Transaction = TxBuilder::new(2322)
             .gas_limit(10000)
             .coin_input(AssetId::zeroed(), 10000)
-            .start_script(vec![Opcode::RET(1)], vec![])
+            .start_script(vec![op::ret(1)], vec![])
             .contract_input(contract_id)
             .contract_output(&contract_id)
             .build()
@@ -2711,7 +2701,7 @@ mod tests {
         let (create, contract_id) = create_contract(vec![], &mut rng);
         // The transaction with invalid script.
         let non_modify_state_tx: Transaction = TxBuilder::new(2322)
-            .start_script(vec![Opcode::ADD(REG_PC, REG_PC, REG_PC)], vec![])
+            .start_script(vec![op::add(RegId::PC, RegId::PC, RegId::PC)], vec![])
             .contract_input(contract_id)
             .contract_output(&contract_id)
             .build()
@@ -2783,9 +2773,9 @@ mod tests {
         // Create a contract that modifies the state
         let (create, contract_id) = create_contract(
             vec![
-                // Sets the state STATE[0x1; 32] = value of `REG_PC`;
-                Opcode::SWW(0x1, 0x29, REG_PC),
-                Opcode::RET(1),
+                // Sets the state STATE[0x1; 32] = value of `RegId::PC`;
+                op::sww(0x1, 0x29, RegId::PC),
+                op::ret(1),
             ]
             .into_iter()
             .collect::<Vec<u8>>(),
@@ -2798,13 +2788,13 @@ mod tests {
             data_offset,
             vec![
                 // Set register `0x10` to `Call`
-                Opcode::MOVI(0x10, (data_offset + AssetId::LEN as u32) as Immediate18),
+                op::movi(0x10, data_offset + AssetId::LEN as u32),
                 // Set register `0x11` with offset to data that contains `asset_id`
-                Opcode::MOVI(0x11, data_offset),
+                op::movi(0x11, data_offset),
                 // Set register `0x12` with `transfer_amount`
-                Opcode::MOVI(0x12, transfer_amount as u32),
-                Opcode::CALL(0x10, 0x12, 0x11, REG_CGAS),
-                Opcode::RET(REG_ONE),
+                op::movi(0x12, transfer_amount as u32),
+                op::call(0x10, 0x12, 0x11, RegId::CGAS),
+                op::ret(RegId::ONE),
             ],
             ConsensusParameters::DEFAULT.tx_offset()
         );
@@ -2898,7 +2888,7 @@ mod tests {
         let mut foreign_transfer = TxBuilder::new(2322)
             .gas_limit(10000)
             .coin_input(AssetId::zeroed(), 10000)
-            .start_script(vec![Opcode::RET(1)], vec![])
+            .start_script(vec![op::ret(1)], vec![])
             .coin_input(asset_id, transfer_amount)
             .coin_output(asset_id, transfer_amount)
             .build()
@@ -2954,7 +2944,7 @@ mod tests {
         let starting_block = BlockHeight::from(5u64);
 
         let tx = TransactionBuilder::script(
-            vec![Opcode::RET(REG_ONE)].into_iter().collect(),
+            vec![op::ret(RegId::ONE)].into_iter().collect(),
             vec![],
         )
         .add_unsigned_coin_input(
@@ -3054,7 +3044,7 @@ mod tests {
         };
 
         let tx2: Transaction = TxBuilder::new(2322)
-            .start_script(vec![Opcode::RET(1)], vec![])
+            .start_script(vec![op::ret(1)], vec![])
             .contract_input(contract_id)
             .contract_output(&contract_id)
             .build()
@@ -3105,10 +3095,7 @@ mod tests {
         // verify a block 2 containing contract id from block 1, with wrong input contract utxo_id
         let (tx, contract_id) = create_contract(vec![], &mut rng);
         let tx2: Transaction = TxBuilder::new(2322)
-            .start_script(
-                vec![Opcode::ADDI(0x10, REG_ZERO, 0), Opcode::RET(1)],
-                vec![],
-            )
+            .start_script(vec![op::addi(0x10, RegId::ZERO, 0), op::ret(1)], vec![])
             .contract_input(contract_id)
             .contract_output(&contract_id)
             .build()
@@ -3122,10 +3109,7 @@ mod tests {
         };
 
         let tx3: Transaction = TxBuilder::new(2322)
-            .start_script(
-                vec![Opcode::ADDI(0x10, REG_ZERO, 1), Opcode::RET(1)],
-                vec![],
-            )
+            .start_script(vec![op::addi(0x10, RegId::ZERO, 1), op::ret(1)], vec![])
             .contract_input(contract_id)
             .contract_output(&contract_id)
             .build()
@@ -3479,7 +3463,7 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(1234);
 
         // return current block height
-        let script = vec![Opcode::BHEI(0x10), Opcode::RET(0x10)];
+        let script = vec![op::bhei(0x10), op::ret(0x10)];
         let tx = TransactionBuilder::script(script.into_iter().collect(), vec![])
             .gas_limit(10000)
             .add_unsigned_coin_input(
@@ -3550,11 +3534,7 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(1234);
 
         // return current block height
-        let script = vec![
-            Opcode::BHEI(0x10),
-            Opcode::TIME(0x11, 0x10),
-            Opcode::RET(0x11),
-        ];
+        let script = vec![op::bhei(0x10), op::time(0x11, 0x10), op::ret(0x11)];
         let tx = TransactionBuilder::script(script.into_iter().collect(), vec![])
             .gas_limit(10000)
             .add_unsigned_coin_input(

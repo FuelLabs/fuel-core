@@ -7,7 +7,6 @@ use fuel_core_types::{
         field::Outputs,
         *,
     },
-    fuel_vm::consts::*,
 };
 use rand::{
     rngs::StdRng,
@@ -57,7 +56,7 @@ async fn transaction_with_predicate_is_executed_when_feature_enabled() {
     let limit = 1000;
     let asset_id = rng.gen();
     // make predicate return 1 which mean valid
-    let predicate = Opcode::RET(REG_ONE).to_bytes().to_vec();
+    let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
     let owner = Input::predicate_owner(&predicate);
     let predicate_tx = TransactionBuilder::script(Default::default(), Default::default())
         .add_input(Input::coin_predicate(
@@ -112,7 +111,7 @@ async fn transaction_with_invalid_predicate_is_rejected_when_feature_is_enabled(
     let amount = 500;
     let asset_id = rng.gen();
     // make predicate return 0 which means invalid
-    let predicate = Opcode::RET(REG_ZERO).to_bytes().to_vec();
+    let predicate = op::ret(RegId::ZERO).to_bytes().to_vec();
     let owner = Input::predicate_owner(&predicate);
     let predicate_tx = TransactionBuilder::script(Default::default(), Default::default())
         .add_input(Input::coin_predicate(
