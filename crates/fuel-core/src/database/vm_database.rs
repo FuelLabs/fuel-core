@@ -135,6 +135,13 @@ where
     fn read(&self, key: &M::Key, buf: &mut [u8]) -> Result<Option<usize>, Self::Error> {
         StorageRead::<M>::read(&self.database, key, buf)
     }
+
+    fn read_alloc(
+        &self,
+        key: &<M as Mappable>::Key,
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        StorageRead::<M>::read_alloc(&self.database, key)
+    }
 }
 
 impl<K, M: Mappable> MerkleRootStorage<K, M> for VmDatabase

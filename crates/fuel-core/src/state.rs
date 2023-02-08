@@ -39,7 +39,15 @@ pub trait KeyValueStore {
         column: Column,
         buf: &mut [u8],
     ) -> DatabaseResult<Option<usize>>;
-    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize>;
+    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>>;
+    fn write(&self, key: &[u8], column: Column, buf: Vec<u8>) -> DatabaseResult<usize>;
+    fn replace(
+        &self,
+        key: &[u8],
+        column: Column,
+        buf: Vec<u8>,
+    ) -> DatabaseResult<(usize, Option<Vec<u8>>)>;
+    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>>;
 }
 
 #[derive(Copy, Clone, Debug, PartialOrd, Eq, PartialEq)]

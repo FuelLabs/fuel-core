@@ -239,8 +239,25 @@ impl Database {
         self.data.read(key, column, buf)
     }
 
-    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
+    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
+        self.data.read_alloc(key, column)
+    }
+
+    fn write(&self, key: &[u8], column: Column, buf: Vec<u8>) -> DatabaseResult<usize> {
         self.data.write(key, column, buf)
+    }
+
+    fn replace(
+        &self,
+        key: &[u8],
+        column: Column,
+        buf: Vec<u8>,
+    ) -> DatabaseResult<(usize, Option<Vec<u8>>)> {
+        self.data.replace(key, column, buf)
+    }
+
+    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
+        self.data.take(key, column)
     }
 
     fn contains_key(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {

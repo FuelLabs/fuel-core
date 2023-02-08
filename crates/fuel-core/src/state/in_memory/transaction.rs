@@ -90,11 +90,12 @@ impl KeyValueStore for MemoryTransactionView {
         value: Vec<u8>,
     ) -> DatabaseResult<Option<Vec<u8>>> {
         let k = column_key(key, column);
-        let contained_key = self.changes.lock().expect("poisoned lock").contains_key(&k);
-        self.changes
-            .lock()
-            .expect("poisoned lock")
-            .insert(k, WriteOperation::Insert(key.into(), column, value.clone()));
+        let contained_key = {
+            let mut lock = self.changes.lock().expect("poisoned lock");
+            let contained_key = lock.contains_key(&k);
+            lock.insert(k, WriteOperation::Insert(key.into(), column, value.clone()));
+            contained_key
+        };
         let res = self.view_layer.put(key, column, value);
         if contained_key {
             res
@@ -220,13 +221,65 @@ impl KeyValueStore for MemoryTransactionView {
         }
     }
 
-    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
+    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
+        if self
+            .changes
+            .lock()
+            .expect("poisoned lock")
+            .contains_key(&column_key(key, column))
+        {
+            self.view_layer.read_alloc(key, column)
+        } else {
+            // fall-through to original data source
+            self.data_source.read_alloc(key, column)
+        }
+    }
+
+    fn write(&self, key: &[u8], column: Column, buf: Vec<u8>) -> DatabaseResult<usize> {
         let k = column_key(key, column);
         self.changes
             .lock()
             .expect("poisoned lock")
-            .insert(k, WriteOperation::Insert(key.into(), column, buf.to_vec()));
+            .insert(k, WriteOperation::Insert(key.into(), column, buf.clone()));
         self.view_layer.write(key, column, buf)
+    }
+
+    fn replace(
+        &self,
+        key: &[u8],
+        column: Column,
+        buf: Vec<u8>,
+    ) -> DatabaseResult<(usize, Option<Vec<u8>>)> {
+        let k = column_key(key, column);
+        let contained_key = {
+            let mut lock = self.changes.lock().expect("poisoned lock");
+            let contained_key = lock.contains_key(&k);
+            lock.insert(k, WriteOperation::Insert(key.into(), column, buf.clone()));
+            contained_key
+        };
+        let res = self.view_layer.replace(key, column, buf)?;
+        let num_written = res.0;
+        if contained_key {
+            Ok(res)
+        } else {
+            Ok((num_written, self.data_source.read_alloc(key, column)?))
+        }
+    }
+
+    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
+        let k = column_key(key, column);
+        let contained_key = {
+            let mut lock = self.changes.lock().expect("poisoned lock");
+            let contains_key = lock.contains_key(&k);
+            lock.insert(k, WriteOperation::Remove(key.to_vec(), column));
+            contains_key
+        };
+        let res = self.view_layer.take(key, column);
+        if contained_key {
+            res
+        } else {
+            self.data_source.read_alloc(key, column)
+        }
     }
 }
 

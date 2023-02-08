@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::{
     database::{
         storage::DatabaseColumn,
@@ -16,24 +18,24 @@ use fuel_core_storage::{
         ContractsRawCode,
     },
     ContractsAssetKey,
+    Error as StorageError,
     Result as StorageResult,
     StorageAsRef,
+    StorageInspect,
+    StorageMutate,
     StorageRead,
     StorageSize,
     StorageWrite,
 };
-use fuel_core_types::fuel_types::{
-    AssetId,
-    Bytes32,
-    ContractId,
-    Word,
+use fuel_core_types::{
+    fuel_types::{
+        AssetId,
+        Bytes32,
+        ContractId,
+        Word,
+    },
+    fuel_vm::Contract,
 };
-
-impl DatabaseColumn for ContractsRawCode {
-    fn column() -> Column {
-        Column::ContractsRawCode
-    }
-}
 
 impl DatabaseColumn for ContractsLatestUtxo {
     fn column() -> Column {
@@ -41,9 +43,65 @@ impl DatabaseColumn for ContractsLatestUtxo {
     }
 }
 
+impl StorageInspect<ContractsRawCode> for Database {
+    type Error = StorageError;
+
+    fn get(
+        &self,
+        key: &<ContractsRawCode as fuel_core_storage::Mappable>::Key,
+    ) -> Result<
+        Option<
+            std::borrow::Cow<
+                <ContractsRawCode as fuel_core_storage::Mappable>::OwnedValue,
+            >,
+        >,
+        Self::Error,
+    > {
+        Ok(self
+            .read_alloc(key.as_ref(), Column::ContractsRawCode)?
+            .map(|v| Cow::Owned(Contract::from(v))))
+    }
+
+    fn contains_key(
+        &self,
+        key: &<ContractsRawCode as fuel_core_storage::Mappable>::Key,
+    ) -> Result<bool, Self::Error> {
+        self.contains_key(key.as_ref(), Column::ContractsRawCode)
+            .map_err(Into::into)
+    }
+}
+
+impl StorageMutate<ContractsRawCode> for Database {
+    fn insert(
+        &mut self,
+        key: &<ContractsRawCode as fuel_core_storage::Mappable>::Key,
+        value: &<ContractsRawCode as fuel_core_storage::Mappable>::Value,
+    ) -> Result<
+        Option<<ContractsRawCode as fuel_core_storage::Mappable>::OwnedValue>,
+        Self::Error,
+    > {
+        let existing =
+            <Self as StorageWrite<ContractsRawCode>>::replace(self, key, value.to_vec())?;
+        Ok(existing.1.map(Contract::from))
+    }
+
+    fn remove(
+        &mut self,
+        key: &<ContractsRawCode as fuel_core_storage::Mappable>::Key,
+    ) -> Result<
+        Option<<ContractsRawCode as fuel_core_storage::Mappable>::OwnedValue>,
+        Self::Error,
+    > {
+        Ok(
+            <Self as StorageWrite<ContractsRawCode>>::take(self, key)?
+                .map(Contract::from),
+        )
+    }
+}
+
 impl StorageSize<ContractsRawCode> for Database {
     fn size_of_value(&self, key: &ContractId) -> Result<Option<usize>, Self::Error> {
-        Ok(self.size_of_value(key.as_ref(), ContractsRawCode::column())?)
+        Ok(self.size_of_value(key.as_ref(), Column::ContractsRawCode)?)
     }
 }
 
@@ -53,13 +111,35 @@ impl StorageRead<ContractsRawCode> for Database {
         key: &ContractId,
         buf: &mut [u8],
     ) -> Result<Option<usize>, Self::Error> {
-        Ok(self.read(key.as_ref(), ContractsRawCode::column(), buf)?)
+        Ok(self.read(key.as_ref(), Column::ContractsRawCode, buf)?)
+    }
+
+    fn read_alloc(&self, key: &ContractId) -> Result<Option<Vec<u8>>, Self::Error> {
+        Ok(self.read_alloc(key.as_ref(), Column::ContractsRawCode)?)
     }
 }
 
 impl StorageWrite<ContractsRawCode> for Database {
-    fn write(&self, key: &ContractId, buf: &[u8]) -> Result<usize, Self::Error> {
-        Ok(self.write(key.as_ref(), ContractsRawCode::column(), buf)?)
+    fn write(&self, key: &ContractId, buf: Vec<u8>) -> Result<usize, Self::Error> {
+        Ok(self.write(key.as_ref(), Column::ContractsRawCode, buf)?)
+    }
+
+    fn replace(
+        &self,
+        key: &<ContractsRawCode as fuel_core_storage::Mappable>::Key,
+        buf: Vec<u8>,
+    ) -> Result<(usize, Option<Vec<u8>>), <Self as StorageInspect<ContractsRawCode>>::Error>
+    where
+        Self: StorageSize<ContractsRawCode>,
+    {
+        Ok(self.replace(key.as_ref(), Column::ContractsRawCode, buf)?)
+    }
+
+    fn take(
+        &self,
+        key: &<ContractsRawCode as fuel_core_storage::Mappable>::Key,
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        Ok(self.take(key.as_ref(), Column::ContractsRawCode)?)
     }
 }
 
