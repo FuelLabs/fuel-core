@@ -16,6 +16,7 @@ use async_graphql::{
         EmptyFields,
     },
     Context,
+    Enum,
     Object,
 };
 use fuel_core_storage::iter::IntoBoxedIter;
@@ -53,9 +54,16 @@ impl Message {
         self.0.da_height.as_u64().into()
     }
 
-    async fn fuel_block_spend(&self) -> Option<U64> {
-        self.0.fuel_block_spend.map(|v| v.into())
+    async fn status(&self) -> MessageStatus {
+        self.0.status.into()
     }
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+#[graphql(remote = "entities::message::MessageStatus")]
+pub enum MessageStatus {
+    Unspent,
+    Spent,
 }
 
 #[derive(Default)]

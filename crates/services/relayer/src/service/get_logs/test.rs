@@ -167,7 +167,9 @@ async fn test_da_height_updates(
     stream: Vec<Result<(u64, Vec<Log>), ProviderError>>,
 ) -> u64 {
     let mut mock_db = crate::mock_db::MockDb::default();
-    mock_db.set_finalized_da_height(0u64.into()).unwrap();
+    mock_db
+        .set_finalized_da_height_to_at_least(&0u64.into())
+        .unwrap();
 
     let logs = futures::stream::iter(stream);
 

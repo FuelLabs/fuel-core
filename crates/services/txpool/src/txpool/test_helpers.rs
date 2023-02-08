@@ -1,6 +1,5 @@
 use fuel_core_types::{
-    blockchain::primitives::BlockHeight,
-    entities::message::Message,
+    entities::message::CompressedMessage,
     fuel_asm::op,
     fuel_tx::{
         Contract,
@@ -15,17 +14,15 @@ use fuel_core_types::{
 
 pub(crate) fn create_message_predicate_from_message(
     amount: Word,
-    spent_block: Option<BlockHeight>,
-) -> (Message, Input) {
+) -> (CompressedMessage, Input) {
     let predicate = vec![op::ret(1)].into_iter().collect::<Vec<u8>>();
-    let message = Message {
+    let message = CompressedMessage {
         sender: Default::default(),
         recipient: Input::predicate_owner(&predicate),
         nonce: 0,
         amount,
         data: vec![],
         da_height: Default::default(),
-        fuel_block_spend: spent_block,
     };
 
     (

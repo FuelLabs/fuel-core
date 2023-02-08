@@ -18,8 +18,10 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        primitives,
-        primitives::BlockHeight,
+        primitives::{
+            self,
+            BlockHeight,
+        },
     },
     fuel_tx::Receipt,
     fuel_types::Bytes32,
@@ -76,21 +78,27 @@ impl fuel_core_producer::ports::Executor<Database> for ExecutorAdapter {
 
 #[async_trait::async_trait]
 impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
-    async fn get_best_finalized_da_height(
+    async fn wait_for_at_least(
         &self,
-    ) -> StorageResult<primitives::DaBlockHeight> {
+        height: &primitives::DaBlockHeight,
+    ) -> anyhow::Result<primitives::DaBlockHeight> {
         #[cfg(feature = "relayer")]
         {
             use fuel_core_relayer::ports::RelayerDb;
             if let Some(sync) = self.relayer_synced.as_ref() {
-                sync.await_synced().await?;
+                sync.await_at_least_synced(height).await?;
             }
 
             Ok(self.database.get_finalized_da_height().unwrap_or_default())
         }
         #[cfg(not(feature = "relayer"))]
         {
-            Ok(Default::default())
+            anyhow::ensure!(
+                **height == 0,
+                "Cannot have a da height above zero without a relayer"
+            );
+            // If the relayer is not enabled, then all blocks are zero.
+            Ok(0u64.into())
         }
     }
 }

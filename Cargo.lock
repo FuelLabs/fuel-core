@@ -2411,6 +2411,7 @@ dependencies = [
  "serde_json",
  "tai64",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -2433,6 +2434,7 @@ dependencies = [
  "fuel-core-poa",
  "fuel-core-types",
  "test-case",
+ "tokio",
 ]
 
 [[package]]
@@ -2615,6 +2617,7 @@ dependencies = [
  "anyhow",
  "fuel-core-types",
  "fuel-vm",
+ "mockall",
  "thiserror",
 ]
 

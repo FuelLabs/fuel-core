@@ -136,3 +136,95 @@ impl KeyValueStore for MemoryStore {
 impl BatchOperations for MemoryStore {}
 
 impl TransactableStorage for MemoryStore {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn can_use_unit_value() {
+        let key = vec![0x00];
+
+        let db = MemoryStore::default();
+        db.put(&key, Column::Metadata, vec![]).unwrap();
+
+        assert_eq!(
+            db.get(&key, Column::Metadata).unwrap().unwrap(),
+            Vec::<u8>::with_capacity(0)
+        );
+
+        assert!(db.exists(&key, Column::Metadata).unwrap());
+
+        assert_eq!(
+            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap(),
+            vec![(key.clone(), Vec::<u8>::with_capacity(0))]
+        );
+
+        assert_eq!(
+            db.delete(&key, Column::Metadata).unwrap().unwrap(),
+            Vec::<u8>::with_capacity(0)
+        );
+
+        assert!(!db.exists(&key, Column::Metadata).unwrap());
+    }
+
+    #[test]
+    fn can_use_unit_key() {
+        let key: Vec<u8> = Vec::with_capacity(0);
+
+        let db = MemoryStore::default();
+        db.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+
+        assert_eq!(
+            db.get(&key, Column::Metadata).unwrap().unwrap(),
+            vec![1, 2, 3]
+        );
+
+        assert!(db.exists(&key, Column::Metadata).unwrap());
+
+        assert_eq!(
+            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap(),
+            vec![(key.clone(), vec![1, 2, 3])]
+        );
+
+        assert_eq!(
+            db.delete(&key, Column::Metadata).unwrap().unwrap(),
+            vec![1, 2, 3]
+        );
+
+        assert!(!db.exists(&key, Column::Metadata).unwrap());
+    }
+
+    #[test]
+    fn can_use_unit_key_and_value() {
+        let key: Vec<u8> = Vec::with_capacity(0);
+
+        let db = MemoryStore::default();
+        db.put(&key, Column::Metadata, vec![]).unwrap();
+
+        assert_eq!(
+            db.get(&key, Column::Metadata).unwrap().unwrap(),
+            Vec::<u8>::with_capacity(0)
+        );
+
+        assert!(db.exists(&key, Column::Metadata).unwrap());
+
+        assert_eq!(
+            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap(),
+            vec![(key.clone(), Vec::<u8>::with_capacity(0))]
+        );
+
+        assert_eq!(
+            db.delete(&key, Column::Metadata).unwrap().unwrap(),
+            Vec::<u8>::with_capacity(0)
+        );
+
+        assert!(!db.exists(&key, Column::Metadata).unwrap());
+    }
+}

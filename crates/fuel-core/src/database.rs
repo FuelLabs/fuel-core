@@ -112,6 +112,13 @@ pub enum Column {
     FuelBlockMerkleData = 17,
     /// See [`FuelBlockMerkleMetadata`](storage::FuelBlockMerkleMetadata)
     FuelBlockMerkleMetadata = 18,
+    /// Messages that have been spent.
+    /// Existence of a key in this column means that the message has been spent.
+    /// See [`SpentMessages`](fuel_core_storage::tables::SpentMessages)
+    SpentMessages = 19,
+    /// Metadata for the relayer
+    /// See [`RelayerMetadata`](fuel_core_relayer::ports::RelayerMetadata)
+    RelayerMetadata = 20,
 }
 
 #[derive(Clone, Debug)]
@@ -298,7 +305,9 @@ impl Database {
     }
 }
 
-impl Transactional<Database> for Database {
+impl Transactional for Database {
+    type Storage = Database;
+
     fn transaction(&self) -> StorageTransaction<Database> {
         StorageTransaction::new(self.transaction())
     }

@@ -58,10 +58,12 @@ pub fn init_sub_services(
         database: database.clone(),
         #[cfg(feature = "relayer")]
         relayer_synced: relayer_service.as_ref().map(|r| r.shared.clone()),
+        #[cfg(feature = "relayer")]
+        da_deploy_height: config.relayer.da_deploy_height,
     };
 
     let executor = ExecutorAdapter {
-        database: database.clone(),
+        relayer: relayer_adapter.clone(),
         config: config.clone(),
     };
 

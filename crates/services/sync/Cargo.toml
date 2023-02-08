@@ -20,8 +20,6 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 fuel-core-trace = { path = "../../trace" }
-fuel-core-types = { path = "../../types", features = [
-    "test-helpers",
-] }
+fuel-core-types = { path = "../../types", features = ["test-helpers"] }
 mockall = { workspace = true }
 test-case = { workspace = true }

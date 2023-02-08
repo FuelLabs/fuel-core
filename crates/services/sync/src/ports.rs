@@ -6,6 +6,7 @@ use fuel_core_types::{
         primitives::{
             BlockHeight,
             BlockId,
+            DaBlockHeight,
         },
         SealedBlock,
         SealedBlockHeader,
@@ -39,10 +40,13 @@ pub trait PeerToPeerPort {
 }
 
 #[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
 /// Port for communication with the consensus service.
 pub trait ConsensusPort {
     /// Check if the given sealed block header is valid.
     fn check_sealed_header(&self, header: &SealedBlockHeader) -> anyhow::Result<bool>;
+    /// await for this DA height to be sync'd.
+    async fn await_da_height(&self, da_height: &DaBlockHeight) -> anyhow::Result<()>;
 }
 
 #[cfg_attr(test, mockall::automock)]

@@ -2,6 +2,7 @@
 //! Handles the logic for updating the [`RelayerHandle`](crate::RelayerHandle)
 //! if the relayer has reached a consistent state with the DA layer.
 
+use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use tokio::sync::watch;
 
 use super::{
@@ -11,15 +12,19 @@ use super::{
 
 /// Notify the handle if the state is synced with the DA layer.
 pub fn update_synced(synced: &NotifySynced, state: &EthState) {
-    update_synced_inner(synced, state.is_synced())
+    update_synced_inner(synced, state.is_synced_at())
 }
 
 /// Updates the sender state but only notifies if the
 /// state has become synced.
-fn update_synced_inner(synced: &watch::Sender<bool>, is_synced: bool) {
+fn update_synced_inner(
+    synced: &watch::Sender<Option<DaBlockHeight>>,
+    is_synced: Option<u64>,
+) {
     synced.send_if_modified(|last_state| {
-        *last_state = is_synced;
-        is_synced
+        let r = is_synced.is_some();
+        *last_state = is_synced.map(DaBlockHeight::from);
+        r
     });
 }
 
@@ -41,10 +46,10 @@ mod tests {
     #[test_case(true, true => (true, false))]
     #[test_case(true, false => (false, true))]
     fn can_update_sync(was_synced: bool, is_synced: bool) -> (bool, bool) {
-        let (tx, rx) = watch::channel(was_synced);
+        let (tx, rx) = watch::channel(was_synced.then_some(0u64.into()));
         assert!(!rx.has_changed().unwrap());
-        update_synced_inner(&tx, is_synced);
-        let is_in_sync = *rx.borrow();
+        update_synced_inner(&tx, is_synced.then_some(0u64));
+        let is_in_sync = rx.borrow().is_some();
         (is_in_sync, !rx.has_changed().unwrap())
     }
 }

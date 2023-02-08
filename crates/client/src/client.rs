@@ -79,6 +79,7 @@ use std::{
         FromStr,
     },
 };
+use tracing as _;
 use types::{
     TransactionResponse,
     TransactionStatus,
@@ -180,6 +181,7 @@ impl FuelClient {
         }
     }
 
+    #[tracing::instrument(skip_all)]
     #[cfg(feature = "subscriptions")]
     async fn subscribe<ResponseData, Vars>(
         &self,
@@ -219,6 +221,7 @@ impl FuelClient {
                 futures::future::ready(!matches!(result, Err(es::Error::Eof)))
             })
             .filter_map(move |result| {
+                tracing::debug!("Got result: {result:?}");
                 let r = match result {
                     Ok(es::SSE::Event(es::Event { data, .. })) => {
                         match serde_json::from_str::<GraphQlResponse<ResponseData>>(&data)
@@ -464,6 +467,7 @@ impl FuelClient {
         Ok(status)
     }
 
+    #[tracing::instrument(skip(self), level = "debug")]
     #[cfg(feature = "subscriptions")]
     /// Subscribe to the status of a transaction
     pub async fn subscribe_transaction_status(
@@ -473,7 +477,9 @@ impl FuelClient {
         use cynic::SubscriptionBuilder;
         let s = schema::tx::StatusChangeSubscription::build(TxIdArgs { id: id.parse()? });
 
+        tracing::debug!("subscribing");
         let stream = self.subscribe(s).await?.map(|tx| {
+            tracing::debug!("received {tx:?}");
             let tx = tx?;
             let status = tx.status_change.try_into()?;
             Ok(status)

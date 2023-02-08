@@ -36,6 +36,7 @@ url = "2.2"
 
 [dev-dependencies]
 fuel-core-relayer = { path = "", features = ["test-helpers"] }
+fuel-core-storage = { path = "../../storage", features = ["test-helpers"] }
 fuel-core-trace = { path = "../../trace" }
 mockall = { workspace = true }
 test-case = { workspace = true }

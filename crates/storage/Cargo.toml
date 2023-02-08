@@ -20,7 +20,8 @@ version = { workspace = true }
 anyhow = { workspace = true }
 fuel-core-types = { workspace = true }
 fuel-vm-private = { workspace = true }
+mockall = { workspace = true, optional = true }
 thiserror = { workspace = true }
 
 [features]
-test-helpers = []
+test-helpers = ["dep:mockall"]

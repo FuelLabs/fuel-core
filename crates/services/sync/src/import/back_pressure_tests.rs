@@ -2,7 +2,10 @@ use std::time::Duration;
 
 use fuel_core_services::stream::BoxStream;
 use fuel_core_types::{
-    blockchain::primitives::BlockId,
+    blockchain::primitives::{
+        BlockId,
+        DaBlockHeight,
+    },
     fuel_tx::Transaction,
 };
 
@@ -22,6 +25,7 @@ use test_case::test_case;
 #[derive(Default)]
 struct Input {
     headers: Duration,
+    consensus: Duration,
     transactions: Duration,
     executes: Duration,
 }
@@ -44,7 +48,7 @@ struct Input {
         max_get_header_requests: 1,
         max_get_txns_requests: 1,
     }
-    => is less_or_equal_than Count{ headers: 1, transactions: 1, executes: 1, blocks: 1 }
+    => is less_or_equal_than Count{ headers: 1, consensus: 1, transactions: 1, executes: 1, blocks: 1 }
     ; "Single with slow headers"
 )]
 #[test_case(
@@ -57,7 +61,7 @@ struct Input {
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
     }
-    => is less_or_equal_than Count{ headers: 10, transactions: 10, executes: 1, blocks: 21 }
+    => is less_or_equal_than Count{ headers: 10, consensus: 10, transactions: 10, executes: 1, blocks: 21 }
     ; "100 headers with max 10 with slow headers"
 )]
 #[test_case(
@@ -70,7 +74,7 @@ struct Input {
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
     }
-    => is less_or_equal_than Count{ headers: 10, transactions: 10, executes: 1, blocks: 21 }
+    => is less_or_equal_than Count{ headers: 10, consensus: 10, transactions: 10, executes: 1, blocks: 21 }
     ; "100 headers with max 10 with slow transactions"
 )]
 #[test_case(
@@ -83,7 +87,7 @@ struct Input {
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
     }
-    => is less_or_equal_than Count{ headers: 10, transactions: 10, executes: 1, blocks: 21 }
+    => is less_or_equal_than Count{ headers: 10, consensus: 10, transactions: 10, executes: 1, blocks: 21 }
     ; "50 headers with max 10 with slow executes"
 )]
 #[tokio::test(flavor = "multi_thread")]
@@ -99,9 +103,7 @@ async fn test_back_pressure(input: Input, state: State, params: Config) -> Count
         counts.clone(),
         input.executes,
     ));
-    let mut mock = MockConsensusPort::default();
-    mock.expect_check_sealed_header().returning(|_| Ok(true));
-    let consensus = Arc::new(mock);
+    let consensus = Arc::new(PressureConsensusPort::new(counts.clone(), input.consensus));
     let notify = Arc::new(Notify::new());
 
     let import = Import {
@@ -124,6 +126,7 @@ async fn test_back_pressure(input: Input, state: State, params: Config) -> Count
 struct Count {
     headers: usize,
     transactions: usize,
+    consensus: usize,
     executes: usize,
     blocks: usize,
 }
@@ -138,6 +141,8 @@ type SharedCounts = SharedMutex<Counts>;
 
 struct PressurePeerToPeerPort(MockPeerToPeerPort, [Duration; 2], SharedCounts);
 struct PressureBlockImporterPort(MockBlockImporterPort, Duration, SharedCounts);
+
+struct PressureConsensusPort(MockConsensusPort, Duration, SharedCounts);
 
 #[async_trait::async_trait]
 impl PeerToPeerPort for PressurePeerToPeerPort {
@@ -184,6 +189,20 @@ impl BlockImporterPort for PressureBlockImporterPort {
     }
 }
 
+#[async_trait::async_trait]
+impl ConsensusPort for PressureConsensusPort {
+    fn check_sealed_header(&self, header: &SealedBlockHeader) -> anyhow::Result<bool> {
+        self.0.check_sealed_header(header)
+    }
+
+    async fn await_da_height(&self, da_height: &DaBlockHeight) -> anyhow::Result<()> {
+        self.2.apply(|c| c.inc_consensus());
+        tokio::time::sleep(self.1).await;
+        self.2.apply(|c| c.dec_consensus());
+        self.0.await_da_height(da_height).await
+    }
+}
+
 impl PressurePeerToPeerPort {
     fn new(counts: SharedCounts, delays: [Duration; 2]) -> Self {
         let mut mock = MockPeerToPeerPort::default();
@@ -203,6 +222,15 @@ impl PressureBlockImporterPort {
     }
 }
 
+impl PressureConsensusPort {
+    fn new(counts: SharedCounts, delays: Duration) -> Self {
+        let mut mock = MockConsensusPort::default();
+        mock.expect_await_da_height().returning(|_| Ok(()));
+        mock.expect_check_sealed_header().returning(|_| Ok(true));
+        Self(mock, delays, counts)
+    }
+}
+
 impl Counts {
     fn inc_headers(&mut self) {
         self.now.headers += 1;
@@ -217,6 +245,13 @@ impl Counts {
     }
     fn dec_transactions(&mut self) {
         self.now.transactions -= 1;
+    }
+    fn inc_consensus(&mut self) {
+        self.now.consensus += 1;
+        self.max.consensus = self.max.consensus.max(self.now.consensus);
+    }
+    fn dec_consensus(&mut self) {
+        self.now.consensus -= 1;
     }
     fn inc_executes(&mut self) {
         self.now.executes += 1;

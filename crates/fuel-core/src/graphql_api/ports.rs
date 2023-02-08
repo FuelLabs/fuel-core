@@ -12,6 +12,7 @@ use fuel_core_storage::{
         Messages,
         Receipts,
         SealedBlockConsensus,
+        SpentMessages,
         Transactions,
     },
     Error as StorageError,
@@ -96,7 +97,10 @@ pub trait DatabaseTransactions:
 }
 
 /// Trait that specifies all the getters required for messages.
-pub trait DatabaseMessages: StorageInspect<Messages, Error = StorageError> {
+pub trait DatabaseMessages:
+    StorageInspect<Messages, Error = StorageError>
+    + StorageInspect<SpentMessages, Error = StorageError>
+{
     fn owned_message_ids(
         &self,
         owner: &Address,

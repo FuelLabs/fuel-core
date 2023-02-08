@@ -14,6 +14,7 @@ use fuel_core_types::{
         primitives::{
             BlockHeight,
             BlockId,
+            DaBlockHeight,
         },
         SealedBlock,
         SealedBlockHeader,
@@ -78,8 +79,12 @@ impl BlockImporterPort for BlockImporterAdapter {
     }
 }
 
+#[async_trait::async_trait]
 impl ConsensusPort for VerifierAdapter {
     fn check_sealed_header(&self, header: &SealedBlockHeader) -> anyhow::Result<bool> {
         Ok(self.block_verifier.verify_consensus(header))
+    }
+    async fn await_da_height(&self, da_height: &DaBlockHeight) -> anyhow::Result<()> {
+        self.block_verifier.await_da_height(da_height).await
     }
 }

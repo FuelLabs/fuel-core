@@ -3,6 +3,7 @@ use fuel_core::{
     database::Database,
     executor::Executor,
     service::{
+        adapters::MaybeRelayerAdapter,
         Config,
         FuelService,
     },
@@ -577,9 +578,17 @@ impl TestContext {
     }
 }
 
-fn get_executor_and_db() -> (Executor, Database) {
+fn get_executor_and_db() -> (Executor<MaybeRelayerAdapter>, Database) {
     let db = Database::default();
+    let relayer = MaybeRelayerAdapter {
+        database: db.clone(),
+        #[cfg(feature = "relayer")]
+        relayer_synced: None,
+        #[cfg(feature = "relayer")]
+        da_deploy_height: 0u64.into(),
+    };
     let executor = Executor {
+        relayer,
         database: db.clone(),
         config: Config::local_node(),
     };
