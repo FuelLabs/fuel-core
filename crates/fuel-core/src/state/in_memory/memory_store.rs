@@ -161,13 +161,45 @@ impl KeyValueStore for MemoryStore {
             .transpose()
     }
 
-    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
+    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
+        Ok(self
+            .inner
+            .lock()
+            .expect("poisoned")
+            .get(&column_key(key, column))
+            .map(|value| value.to_vec()))
+    }
+
+    fn write(&self, key: &[u8], column: Column, buf: Vec<u8>) -> DatabaseResult<usize> {
         let len = buf.len();
         self.inner
             .lock()
             .expect("poisoned")
-            .insert(column_key(key, column), buf.to_vec());
+            .insert(column_key(key, column), buf);
         Ok(len)
+    }
+
+    fn replace(
+        &self,
+        key: &[u8],
+        column: Column,
+        buf: Vec<u8>,
+    ) -> DatabaseResult<(usize, Option<Vec<u8>>)> {
+        let len = buf.len();
+        let existing = self
+            .inner
+            .lock()
+            .expect("poisoned")
+            .insert(column_key(key, column), buf);
+        Ok((len, existing))
+    }
+
+    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
+        Ok(self
+            .inner
+            .lock()
+            .expect("poisoned")
+            .remove(&column_key(key, column)))
     }
 }
 

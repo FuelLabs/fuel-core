@@ -191,7 +191,9 @@ impl KeyValueStore for RocksDb {
             DATABASE_METRICS.write_meter.inc();
             DATABASE_METRICS.bytes_written.observe(value.len() as f64);
         }
+        // FIXME: This is a race condition. We should use a transaction.
         let prev = self.get(key, column)?;
+        // FIXME: This is a race condition. We should use a transaction.
         self.db
             .put_cf(&self.cf(column), key, value)
             .map_err(|e| DatabaseError::Other(e.into()))
@@ -313,7 +315,7 @@ impl KeyValueStore for RocksDb {
         Ok(r)
     }
 
-    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
+    fn write(&self, key: &[u8], column: Column, buf: Vec<u8>) -> DatabaseResult<usize> {
         #[cfg(feature = "metrics")]
         {
             DATABASE_METRICS.write_meter.inc();
@@ -326,6 +328,49 @@ impl KeyValueStore for RocksDb {
             .map_err(|e| DatabaseError::Other(e.into()))?;
 
         Ok(r)
+    }
+
+    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
+        #[cfg(feature = "metrics")]
+        DATABASE_METRICS.read_meter.inc();
+
+        let r = self
+            .db
+            .get_pinned_cf(&self.cf(column), key)
+            .map_err(|e| DatabaseError::Other(e.into()))?
+            .map(|value| value.to_vec());
+
+        #[cfg(feature = "metrics")]
+        {
+            if let Some(r) = &r {
+                DATABASE_METRICS.bytes_read.observe(r.len() as f64);
+            }
+        }
+        Ok(r)
+    }
+
+    fn replace(
+        &self,
+        key: &[u8],
+        column: Column,
+        buf: Vec<u8>,
+    ) -> DatabaseResult<(usize, Option<Vec<u8>>)> {
+        // FIXME: This is a race condition. We should use a transaction.
+        let existing = self.read_alloc(key, column)?;
+        // FIXME: This is a race condition. We should use a transaction.
+        let r = self.write(key, column, buf)?;
+
+        Ok((r, existing))
+    }
+
+    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
+        // FIXME: This is a race condition. We should use a transaction.
+        let prev = self.read_alloc(key, column)?;
+        // FIXME: This is a race condition. We should use a transaction.
+        self.db
+            .delete_cf(&self.cf(column), key)
+            .map_err(|e| DatabaseError::Other(e.into()))
+            .map(|_| prev)
     }
 }
 
