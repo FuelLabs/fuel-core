@@ -24,8 +24,12 @@ async fn works_in_local_env() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut cmd = Command::cargo_bin("fuel-core-e2e-client")?;
     let cmd = cmd.env(CONFIG_FILE_KEY, config.path).assert().success();
-    std::io::stdout().write(&cmd.get_output().stdout).unwrap();
-    std::io::stderr().write(&cmd.get_output().stderr).unwrap();
+    std::io::stdout()
+        .write_all(&cmd.get_output().stdout)
+        .unwrap();
+    std::io::stderr()
+        .write_all(&cmd.get_output().stderr)
+        .unwrap();
     Ok(())
 }
 
@@ -37,8 +41,10 @@ fn generate_config_file(endpoint: String) -> TestConfig {
     // generate a tmp dir
     let tmp_dir = TempDir::new().unwrap();
     // setup config for test env
-    let mut config = SuiteConfig::default();
-    config.endpoint = endpoint;
+    let config = SuiteConfig {
+        endpoint,
+        ..Default::default()
+    };
     // write config to file
     let config_path = tmp_dir.path().join("config.toml");
     fs::write(&config_path, toml::to_string(&config).unwrap()).unwrap();
