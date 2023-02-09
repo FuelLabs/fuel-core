@@ -10,23 +10,22 @@ repository = { workspace = true }
 version = { workspace = true }
 name = "fuel-core-e2e-client"
 publish = true
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 anyhow = { workspace = true }
-libtest-mimic = "0.6.0"
 fuel-core-client = { workspace = true }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
-serde = { workspace = true }
 humantime-serde = "1.1"
-toml = { version = "0.5" }
+libtest-mimic = "0.6.0"
+serde = { workspace = true }
 tokio = { workspace = true }
+toml = { version = "0.7" }
 
 [dev-dependencies]
-insta = { workspace = true }
 assert_cmd = "2.0"
-fuel-core = { workspace = true, default-features = false}
+fuel-core = { workspace = true, default-features = false }
+insta = { workspace = true }
 tempfile = { workspace = true }
 
 [features]
