@@ -10,6 +10,7 @@ use fuel_core_e2e_client::{
 };
 use std::{
     fs,
+    io::Write,
     process::Command,
 };
 use tempfile::TempDir; // Used for writing assertions // Run programs
@@ -22,8 +23,9 @@ async fn works_in_local_env() -> Result<(), Box<dyn std::error::Error>> {
     let config = generate_config_file(srv.bound_address.to_string());
 
     let mut cmd = Command::cargo_bin("fuel-core-e2e-client")?;
-    cmd.env(CONFIG_FILE_KEY, config.path).assert().success();
-
+    let cmd = cmd.env(CONFIG_FILE_KEY, config.path).assert().success();
+    std::io::stdout().write(&cmd.get_output().stdout).unwrap();
+    std::io::stderr().write(&cmd.get_output().stderr).unwrap();
     Ok(())
 }
 
