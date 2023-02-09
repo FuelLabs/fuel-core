@@ -3,11 +3,15 @@ use serde::{
     Deserialize,
     Serialize,
 };
+use std::time::Duration;
 
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SuiteConfig {
     // the primary endpoint to connect to
     pub endpoint: String,
+    // delay between checking results between wallets
+    #[serde(with = "humantime_serde")]
+    pub wallet_delay: Duration,
     // wallet a must have pre-existing funds
     pub wallet_a: ClientConfig,
     pub wallet_b: ClientConfig,
@@ -31,6 +35,7 @@ impl Default for SuiteConfig {
                         .parse()
                         .unwrap(),
             },
+            wallet_delay: Duration::from_secs(1),
         }
     }
 }
@@ -52,5 +57,13 @@ mod tests {
         let config = SuiteConfig::default();
         let serialized = toml::to_string(&config).unwrap();
         insta::assert_snapshot!(serialized);
+    }
+
+    #[test]
+    fn can_roundtrip_config() {
+        let config = SuiteConfig::default();
+        let serialized = toml::to_string(&config).unwrap();
+        let deserialized: SuiteConfig = toml::from_str(&serialized).unwrap();
+        assert_eq!(config, deserialized);
     }
 }

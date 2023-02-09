@@ -1,5 +1,10 @@
 //! The `e2e-test-client` binary is used to run end-to-end tests for the Fuel client.
 
+pub use fuel_core_e2e_client::*;
+use fuel_core_e2e_client::{
+    config::SuiteConfig,
+    test_context::TestContext,
+};
 use libtest_mimic::{
     Arguments,
     Failed,
@@ -7,37 +12,42 @@ use libtest_mimic::{
 };
 use std::{
     env,
-    thread,
-    time,
+    fs,
+    future::Future,
 };
 
-pub mod transfer;
+pub mod tests;
 
 fn main() {
     let args = Arguments::from_args();
 
-    let tests = vec![
-        Trial::test("check_toph", check_toph),
-        Trial::test("long_computation", long_computation).with_ignored_flag(true),
-        Trial::test("foo", compile_fail_dummy).with_kind("compile-fail"),
-        Trial::test("check_katara", check_katara),
-    ];
+    let config = load_config();
+    let ctx = TestContext::new(config);
+
+    let tests = vec![Trial::test("can transfer from alice to bob", move || {
+        async_execute(tests::transfers::basic_transfer(&ctx))
+    })];
 
     libtest_mimic::run(&args, tests).exit();
 }
 
-// Tests
+fn load_config() -> SuiteConfig {
+    // load from env var
+    env::var_os(CONFIG_FILE_KEY)
+        .map(|path| {
+            let path = path.to_string_lossy().to_string();
+            let file = fs::read(path).unwrap();
+            toml::from_slice(&file).unwrap()
+        })
+        .unwrap_or_default()
+}
 
-fn check_toph() -> Result<(), Failed> {
-    Ok(())
-}
-fn check_katara() -> Result<(), Failed> {
-    Ok(())
-}
-fn long_computation() -> Result<(), Failed> {
-    thread::sleep(time::Duration::from_secs(1));
-    Ok(())
-}
-fn compile_fail_dummy() -> Result<(), Failed> {
-    Ok(())
+fn async_execute<F: Future<Output = anyhow::Result<(), Failed>>>(
+    func: F,
+) -> Result<(), Failed> {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(func)
 }

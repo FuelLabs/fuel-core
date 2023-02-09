@@ -3,20 +3,18 @@ use fuel_core::service::{
     Config,
     FuelService,
 };
-use fuel_core_client::client::FuelClient;
 // Add methods on commands
 use fuel_core_e2e_client::{
     config::SuiteConfig,
     CONFIG_FILE_KEY,
 };
-use predicates::prelude::*;
 use std::{
     fs,
     process::Command,
 };
 use tempfile::TempDir; // Used for writing assertions // Run programs
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn succeeds_in_local_env() -> Result<(), Box<dyn std::error::Error>> {
     // setup a local node
     let srv = setup_local_node().await;
