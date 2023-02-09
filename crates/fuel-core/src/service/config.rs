@@ -62,6 +62,9 @@ impl Config {
         Self {
             addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
             database_path: Default::default(),
+            #[cfg(feature = "rocksdb")]
+            database_type: DbType::RocksDb,
+            #[cfg(not(feature = "rocksdb"))]
             database_type: DbType::InMemory,
             chain_conf: chain_conf.clone(),
             manual_blocks_enabled: false,
