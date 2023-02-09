@@ -20,7 +20,7 @@ humantime-serde = "1.1"
 libtest-mimic = "0.6.0"
 serde = { workspace = true }
 tokio = { workspace = true }
-toml = { version = "0.7" }
+toml = { version = "0.5" }
 
 [dev-dependencies]
 assert_cmd = "2.0"
