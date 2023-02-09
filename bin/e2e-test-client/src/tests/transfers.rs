@@ -11,6 +11,8 @@ pub async fn basic_transfer(ctx: &TestContext) -> Result<(), Failed> {
     tokio::time::sleep(ctx.config.wallet_delay).await;
 
     // bob checks to see if utxo was received
+    // we don't check balance in order to avoid brittleness in the case of
+    // external activity on these wallets
     let received_transfer = ctx.bob.owns_coin(result.transferred_utxo).await?;
     if !received_transfer {
         return Err("Bob failed to receive transfer".into())

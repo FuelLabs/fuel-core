@@ -21,7 +21,7 @@ fuel-core-types = { workspace = true, features = ["test-helpers"] }
 serde = { workspace = true }
 humantime-serde = "1.1"
 toml = { version = "0.5" }
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }

@@ -15,7 +15,7 @@ use std::{
 use tempfile::TempDir; // Used for writing assertions // Run programs
 
 #[tokio::test(flavor = "multi_thread")]
-async fn succeeds_in_local_env() -> Result<(), Box<dyn std::error::Error>> {
+async fn works_in_local_env() -> Result<(), Box<dyn std::error::Error>> {
     // setup a local node
     let srv = setup_local_node().await;
     // generate a config file
