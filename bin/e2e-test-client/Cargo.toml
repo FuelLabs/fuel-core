@@ -1,0 +1,32 @@
+[package]
+authors = { workspace = true }
+categories = ["cryptography::cryptocurrencies"]
+description = "Fuel Core E2E Testing Client"
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = ["blockchain", "cryptocurrencies"]
+license = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+name = "fuel-core-e2e-client"
+publish = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+libtest-mimic = "0.6.0"
+fuel-core-client = { workspace = true }
+fuel-core-types = { workspace = true }
+serde = { workspace = true }
+toml = { version = "0.5" }
+tokio = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+assert_cmd = "2.0"
+predicates = "2.1"
+fuel-core = { workspace = true, default-features = false}
+tempfile = { workspace = true }
+
+[features]
+default = ["fuel-core/default"]
