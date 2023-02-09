@@ -44,8 +44,8 @@ impl TestContext {
         let alice_client = Self::new_client(config.endpoint.clone(), &config.wallet_a);
         let bob_client = Self::new_client(config.endpoint.clone(), &config.wallet_b);
         Self {
-            alice: Wallet::new(config.wallet_a.secret.clone(), alice_client),
-            bob: Wallet::new(config.wallet_b.secret.clone(), bob_client),
+            alice: Wallet::new(config.wallet_a.secret, alice_client),
+            bob: Wallet::new(config.wallet_b.secret, bob_client),
             config,
         }
     }
@@ -88,7 +88,7 @@ impl Wallet {
         let mut first_page = true;
         let mut results = vec![];
 
-        while first_page || results.len() > 0 {
+        while first_page || !results.is_empty() {
             first_page = false;
             results = self
                 .client
@@ -143,7 +143,7 @@ impl Wallet {
         for resource in resources {
             if let Resource::Coin(coin) = resource {
                 tx.add_unsigned_coin_input(
-                    self.secret.clone(),
+                    self.secret,
                     coin.utxo_id.clone().into(),
                     coin.amount.clone().into(),
                     coin.asset_id.clone().into(),
@@ -155,10 +155,10 @@ impl Wallet {
         tx.add_output(Output::Coin {
             to: destination,
             amount: transfer_amount,
-            asset_id: asset_id.clone(),
+            asset_id,
         });
         tx.add_output(Output::Change {
-            to: self.address.clone(),
+            to: self.address,
             amount: 0,
             asset_id,
         });
