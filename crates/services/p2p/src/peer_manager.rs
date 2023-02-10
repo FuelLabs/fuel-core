@@ -608,7 +608,8 @@ impl PeerManager {
     ) -> Option<PeerScore> {
         if let Some(peer) = self.non_reserved_connected_peers.get_mut(peer_id) {
             // score should not go over `MAX_PEER_SCORE`
-            peer.score = MAX_PEER_SCORE.min(peer.score + score);
+            let new_score = peer.score.saturating_add(score);
+            peer.score = MAX_PEER_SCORE.min(new_score);
             Some(peer.score)
         } else {
             log_missing_peer(peer_id);
