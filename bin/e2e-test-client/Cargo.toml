@@ -29,4 +29,5 @@ insta = { workspace = true }
 tempfile = { workspace = true }
 
 [features]
-default = ["fuel-core/default"]
+default = ["fuel-core/default", "fuel-core/test-helpers"]
+p2p = ["fuel-core/p2p"]

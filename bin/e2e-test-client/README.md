@@ -8,7 +8,7 @@ When `FUEL_CORE_E2E_CONFIG` is unset a default configuration is used which is su
 
 ```toml
 endpoint = "http://localhost:4000"
-wallet_delay = "1s"
+wallet_sync_timeout = "10s"
 
 [wallet_a]
 secret = "de97d8624a438121b86a1956544bd72ed68cd69f2c99555b08b1e8c51ffd511c"

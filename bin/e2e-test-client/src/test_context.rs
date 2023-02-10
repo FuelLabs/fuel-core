@@ -15,6 +15,7 @@ use fuel_core_types::{
         Input,
         Output,
         TransactionBuilder,
+        TxId,
         UniqueIdentifier,
         UtxoId,
     },
@@ -176,6 +177,7 @@ impl Wallet {
         // build transaction
         // get status and return the utxo id of transferred coin
         Ok(TransferResult {
+            tx_id: tx.id(),
             transferred_utxo,
             success: matches!(status, TransactionStatus::Success { .. }),
         })
@@ -183,6 +185,7 @@ impl Wallet {
 }
 
 pub struct TransferResult {
+    pub tx_id: TxId,
     pub transferred_utxo: UtxoId,
     pub success: bool,
 }

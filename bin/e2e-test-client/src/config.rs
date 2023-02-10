@@ -1,3 +1,4 @@
+use crate::SYNC_TIMEOUT;
 use fuel_core_types::fuel_vm::SecretKey;
 use serde::{
     Deserialize,
@@ -7,14 +8,21 @@ use std::time::Duration;
 
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SuiteConfig {
-    // the primary endpoint to connect to
+    /// The primary endpoint to connect to
     pub endpoint: String,
-    // delay between checking results between wallets
+    /// Max timeout for syncing between wallets
+    /// Default is [`SYNC_TIMEOUT`](crate::SYNC_TIMEOUT)
     #[serde(with = "humantime_serde")]
-    pub wallet_delay: Duration,
-    // wallet a must have pre-existing funds
+    pub wallet_sync_timeout: Duration,
+    /// Wallet A must contain pre-existing funds
     pub wallet_a: ClientConfig,
     pub wallet_b: ClientConfig,
+}
+
+impl SuiteConfig {
+    pub fn sync_timeout(&self) -> Duration {
+        self.wallet_sync_timeout
+    }
 }
 
 impl Default for SuiteConfig {
@@ -35,7 +43,7 @@ impl Default for SuiteConfig {
                         .parse()
                         .unwrap(),
             },
-            wallet_delay: Duration::from_secs(1),
+            wallet_sync_timeout: SYNC_TIMEOUT,
         }
     }
 }

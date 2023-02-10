@@ -1,5 +1,6 @@
 use fuel_core_e2e_client::test_context::TestContext;
 use libtest_mimic::Failed;
+use tokio::time::timeout;
 
 pub async fn basic_transfer(ctx: &TestContext) -> Result<(), Failed> {
     // alice makes transfer to bob
@@ -7,8 +8,14 @@ pub async fn basic_transfer(ctx: &TestContext) -> Result<(), Failed> {
     if !result.success {
         return Err("transfer failed".into())
     }
-
-    tokio::time::sleep(ctx.config.wallet_delay).await;
+    // wait until bob sees the transaction
+    timeout(
+        ctx.config.sync_timeout(),
+        ctx.bob
+            .client
+            .await_transaction_commit(&result.tx_id.to_string()),
+    )
+    .await??;
 
     // bob checks to see if utxo was received
     // we don't check balance in order to avoid brittleness in the case of
