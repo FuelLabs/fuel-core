@@ -1,6 +1,6 @@
 # Fuel Core E2E Test Client
 
-The test client provides a suite of idempotent tests inteded to validate remote environments.
+The test client provides a suite of idempotent tests intended to validate remote environments.
 
 To customize the suite parameters for an existing node deployment, set the `FUEL_CORE_E2E_CONFIG` environment variable with a path to a valid configuration toml.
 
