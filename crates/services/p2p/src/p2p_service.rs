@@ -488,7 +488,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 }
                 PeerInfoEvent::BanPeer { peer_id } => {
                     info!(target: "fuel-libp2p", "Banning {peer_id}");
-                    let _ = self.swarm.ban_peer_id(peer_id);
+                    self.swarm.ban_peer_id(peer_id);
                 }
             },
             FuelBehaviourEvent::RequestResponse(req_res_event) => match req_res_event {
