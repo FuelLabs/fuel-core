@@ -26,7 +26,10 @@ use crate::{
         RequestMessage,
     },
 };
-use fuel_core_types::blockchain::primitives::BlockHeight;
+use fuel_core_types::{
+    blockchain::primitives::BlockHeight,
+    services::p2p::peer_reputation::PeerReport,
+};
 use libp2p::{
     gossipsub::{
         error::{
@@ -211,6 +214,16 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
 
     pub fn peer_manager(&self) -> &PeerManagerBehaviour {
         &self.peer_manager
+    }
+
+    pub fn report_peer<T: PeerReport>(
+        &mut self,
+        peer_id: PeerId,
+        report: T,
+        reporting_service: &str,
+    ) {
+        self.peer_manager
+            .report_peer(peer_id, report, reporting_service)
     }
 }
 

@@ -31,7 +31,10 @@ use crate::{
     },
 };
 use fuel_core_metrics::p2p_metrics::P2P_METRICS;
-use fuel_core_types::blockchain::primitives::BlockHeight;
+use fuel_core_types::{
+    blockchain::primitives::BlockHeight,
+    services::p2p::peer_reputation::PeerReport,
+};
 use futures::prelude::*;
 use libp2p::{
     gossipsub::{
@@ -328,6 +331,17 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         self.swarm.behaviour_mut().update_block_height(block_height)
     }
 
+    pub fn report_peer<T: PeerReport>(
+        &mut self,
+        peer_id: PeerId,
+        report: T,
+        reporting_service: &str,
+    ) {
+        self.swarm
+            .behaviour_mut()
+            .report_peer(peer_id, report, reporting_service);
+    }
+
     #[tracing::instrument(skip_all,
         level = "debug",
         fields(
@@ -471,6 +485,10 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                     if let Some(peer_id) = peer_to_connect {
                         let _ = self.swarm.dial(peer_id);
                     }
+                }
+                PeerInfoEvent::BanPeer { peer_id } => {
+                    info!(target: "fuel-libp2p", "Banning {peer_id}");
+                    let _ = self.swarm.ban_peer_id(peer_id);
                 }
             },
             FuelBehaviourEvent::RequestResponse(req_res_event) => match req_res_event {

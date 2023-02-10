@@ -5,7 +5,15 @@ use crate::{
         HeartbeatEvent,
     },
 };
-use fuel_core_types::blockchain::primitives::BlockHeight;
+use fuel_core_types::{
+    blockchain::primitives::BlockHeight,
+    services::p2p::peer_reputation::{
+        PeerReport,
+        PeerScore,
+        DEFAULT_PEER_SCORE,
+        MIN_PEER_SCORE,
+    },
+};
 use libp2p::{
     core::{
         connection::ConnectionId,
@@ -57,7 +65,10 @@ use std::{
     },
 };
 use tokio::time::Interval;
-use tracing::debug;
+use tracing::{
+    debug,
+    info,
+};
 
 /// Maximum amount of peer's addresses that we are ready to store per peer
 const MAX_IDENTIFY_ADDRESSES: usize = 10;
@@ -83,6 +94,9 @@ pub enum PeerInfoEvent {
     PeerInfoUpdated {
         peer_id: PeerId,
         block_height: BlockHeight,
+    },
+    BanPeer {
+        peer_id: PeerId,
     },
 }
 
@@ -160,6 +174,26 @@ impl PeerManagerBehaviour {
     /// Find a peer that is holding the given block height.
     pub fn get_peer_id_with_height(&self, height: &BlockHeight) -> Option<PeerId> {
         self.peer_manager.get_peer_id_with_height(height)
+    }
+
+    pub fn report_peer<T: PeerReport>(
+        &mut self,
+        peer_id: PeerId,
+        report: T,
+        reporting_service: &str,
+    ) {
+        let score = report.get_score_from_report();
+        if let Some(latest_peer_score) =
+            self.peer_manager.update_peer_score_with(&peer_id, score)
+        {
+            info!(target: "fuel-libp2p", "{reporting_service} updated {peer_id} with new score {latest_peer_score}");
+
+            if latest_peer_score < MIN_PEER_SCORE {
+                self.peer_manager
+                    .pending_events
+                    .push_back(PeerInfoEvent::BanPeer { peer_id })
+            }
+        }
     }
 }
 
@@ -514,11 +548,23 @@ impl NetworkBehaviour for PeerManagerBehaviour {
 }
 
 // Info about a single Peer that we're connected to
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct PeerInfo {
     pub peer_addresses: HashSet<Multiaddr>,
     pub client_version: Option<String>,
     pub heartbeat_data: HeartbeatData,
+    pub score: PeerScore,
+}
+
+impl Default for PeerInfo {
+    fn default() -> Self {
+        Self {
+            score: DEFAULT_PEER_SCORE,
+            client_version: Default::default(),
+            heartbeat_data: Default::default(),
+            peer_addresses: Default::default(),
+        }
+    }
 }
 
 enum PeerInfoInsert {
@@ -551,6 +597,20 @@ impl PeerManager {
             reserved_peers,
             connection_state,
             max_non_reserved_peers,
+        }
+    }
+
+    fn update_peer_score_with(
+        &mut self,
+        peer_id: &PeerId,
+        score: PeerScore,
+    ) -> Option<PeerScore> {
+        if let Some(peer) = self.non_reserved_connected_peers.get_mut(peer_id) {
+            peer.score += score;
+            Some(peer.score)
+        } else {
+            log_missing_peer(peer_id);
+            None
         }
     }
 
@@ -675,7 +735,7 @@ impl PeerManager {
     }
 
     /// Find a peer that is holding the given block height.
-    pub fn get_peer_id_with_height(&self, height: &BlockHeight) -> Option<PeerId> {
+    fn get_peer_id_with_height(&self, height: &BlockHeight) -> Option<PeerId> {
         let mut range = rand::thread_rng();
         // TODO: Optimize the selection of the peer.
         //  We can store pair `(peer id, height)` for all nodes(reserved and not) in the
