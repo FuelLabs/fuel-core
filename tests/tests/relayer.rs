@@ -14,6 +14,7 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    schema::message::MessageStatus,
     types::TransactionStatus,
     FuelClient,
     PageDirection,
@@ -169,13 +170,12 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     srv.await_relayer_synced().await.unwrap();
 
     // attempt to spend the message downloaded from the relayer
-    let tx =
-        TransactionBuilder::script(vec![Opcode::RET(0)].into_iter().collect(), vec![])
-            .gas_limit(10_000)
-            .gas_price(0)
-            .add_unsigned_message_input(secret_key, sender, nonce, amount, vec![])
-            .add_output(Output::change(rng.gen(), 0, AssetId::BASE))
-            .finalize();
+    let tx = TransactionBuilder::script(vec![op::ret(0)].into_iter().collect(), vec![])
+        .gas_limit(10_000)
+        .gas_price(0)
+        .add_unsigned_message_input(secret_key, sender, nonce, amount, vec![])
+        .add_output(Output::change(rng.gen(), 0, AssetId::BASE))
+        .finalize();
 
     let status = client
         .submit_and_await_commit(&tx.clone().into())
@@ -213,10 +213,7 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     );
 
     // verify the spent status of the message
-    assert_eq!(
-        query.results[0].fuel_block_spend.clone().map(u64::from),
-        Some(1u64)
-    );
+    assert_eq!(query.results[0].status, MessageStatus::Spent,);
 
     srv.stop_and_await().await.unwrap();
     eth_node_handle.shutdown.send(()).unwrap();
@@ -271,7 +268,7 @@ async fn spawn_eth_node(eth_node: Arc<MockMiddleware>) -> EthNodeHandle {
         });
         // And run forever...
         if let Err(e) = graceful.await {
-            eprintln!("server error: {}", e);
+            eprintln!("server error: {e}");
         }
     });
     EthNodeHandle {

@@ -408,9 +408,9 @@ impl Dependency {
                     Self::check_if_message_input_matches_id(input)?;
                     // since message id is derived, we don't need to double check all the fields
                     if self.utxo_validation {
-                        if let Some(msg) = db.message(message_id)? {
+                        if db.message(message_id)?.is_some() {
                             // return an error if spent block is set
-                            if msg.fuel_block_spend.is_some() {
+                            if db.is_message_spent(message_id)? {
                                 return Err(Error::NotInsertedInputMessageIdSpent(
                                     *message_id,
                                 )

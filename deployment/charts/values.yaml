@@ -3,15 +3,26 @@
 # Declare variables to be passed into your templates.
 
 app:
-  name: fuel-core
+  name: ${fuel_core_service_name}
   replicas: ${fuel_core_pod_replicas}
-  httpport: 80
-  httpsport: 443
-  targetport: 4000
+  http_port: 80
+  target_port: 4000
+  peering_port: 30333
+  network_name: ${fuel_core_network_name}
+  p2p_key: ${fuel_core_p2p_key}
+  allow_private_addresses: ${fuel_core_allow_private_addresses}
   human_logging: ${fuel_core_human_logging}
   utxo_validation: ${fuel_core_utxo_validation}
   vm_backtrace: ${fuel_core_vm_backtrace}
   min_gas_price: ${fuel_core_min_gas_price}
+  reserved_nodes_only_mode: ${fuel_core_reserved_only}
+  poa_instant: "${fuel_core_poa_instant}"
+  poa_interval_period: ${fuel_core_poa_interval_period}
+  poa_hybrid_min_time: ${fuel_core_poa_hybrid_min_time}
+  poa_hybrid_idle_time: ${fuel_core_poa_hybrid_idle_time}
+  poa_hybrid_max_time: ${fuel_core_poa_hybrid_max_time}
+  reserved_nodes: ${fuel_core_reserved_nodes}
+  bootstrap_nodes: ${fuel_core_bootstrap_nodes}
   relayer: ${fuel_core_relayer}
   relayer_v2_listening_contracts: ${fuel_core_relayer_v2_listening_contracts}
   relayer_da_finalization: "${fuel_core_relayer_da_finalization}"
@@ -25,9 +36,9 @@ app:
     tag: ${fuel_core_image_tag}
     pullPolicy: Always
   volume: 
-    pvname: db-volume
+    pvname: ${fuel_core_pv_name}
     mountPath: /mnt/db/
-    claimname: db-volume-pv-claim
+    claimname: ${fuel_core_pvc_name}
     storageclass: ${pvc_storage_class}
     storagerequests: ${pvc_storage_requests}
     accessmodes: ReadWriteOnce

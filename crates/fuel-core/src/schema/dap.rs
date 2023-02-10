@@ -18,7 +18,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     fuel_asm::{
-        Opcode,
+        Instruction,
         RegisterId,
         Word,
     },
@@ -146,10 +146,10 @@ impl ConcreteStorage {
         Ok(())
     }
 
-    pub fn exec(&mut self, id: &ID, op: Opcode) -> Result<(), InterpreterError> {
+    pub fn exec(&mut self, id: &ID, op: Instruction) -> Result<(), InterpreterError> {
         self.vm
             .get_mut(id)
-            .map(|vm| vm.instruction(op.into()))
+            .map(|vm| vm.instruction(op))
             .transpose()?
             .map(|_| ())
             .ok_or_else(|| {
@@ -273,7 +273,7 @@ impl DapMutation {
     ) -> async_graphql::Result<bool> {
         trace!("Execute encoded op {}", op);
 
-        let op: Opcode = serde_json::from_str(op.as_str())?;
+        let op: Instruction = serde_json::from_str(op.as_str())?;
 
         trace!("Op decoded to {:?}", op);
 

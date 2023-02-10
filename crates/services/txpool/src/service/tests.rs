@@ -34,15 +34,15 @@ async fn test_find() {
 
     let out = service.shared.insert(vec![tx1.clone(), tx2.clone()]);
 
-    assert_eq!(out.len(), 2, "Should be len 2:{:?}", out);
-    assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
-    assert!(out[1].is_ok(), "Tx2 should be OK, got err:{:?}", out);
+    assert_eq!(out.len(), 2, "Should be len 2:{out:?}");
+    assert!(out[0].is_ok(), "Tx1 should be OK, got err:{out:?}");
+    assert!(out[1].is_ok(), "Tx2 should be OK, got err:{out:?}");
     let out = service.shared.find(vec![tx1.id(), tx3.id()]);
-    assert_eq!(out.len(), 2, "Should be len 2:{:?}", out);
-    assert!(out[0].is_some(), "Tx1 should be some:{:?}", out);
+    assert_eq!(out.len(), 2, "Should be len 2:{out:?}");
+    assert!(out[0].is_some(), "Tx1 should be some:{out:?}");
     let id = out[0].as_ref().unwrap().id();
-    assert_eq!(id, tx1.id(), "Found tx id match{:?}", out);
-    assert!(out[1].is_none(), "Tx3 should not be found:{:?}", out);
+    assert_eq!(id, tx1.id(), "Found tx id match{out:?}");
+    assert!(out[1].is_none(), "Tx3 should not be found:{out:?}");
     service.stop_and_await().await.unwrap();
 }
 

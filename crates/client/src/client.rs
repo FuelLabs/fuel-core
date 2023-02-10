@@ -5,6 +5,8 @@ use crate::client::schema::{
     tx::DryRunArg,
 };
 use anyhow::Context;
+#[cfg(feature = "subscriptions")]
+use cynic::StreamingOperation;
 use cynic::{
     http::ReqwestExt,
     GraphQlResponse,
@@ -12,12 +14,10 @@ use cynic::{
     MutationBuilder,
     Operation,
     QueryBuilder,
-    StreamingOperation,
 };
-use eventsource_client::HttpsConnector;
 use fuel_core_types::{
     fuel_asm::{
-        Opcode,
+        Instruction,
         RegisterId,
         Word,
     },
@@ -28,6 +28,7 @@ use fuel_core_types::{
     fuel_types,
     fuel_types::bytes::SerializableVec,
 };
+#[cfg(feature = "subscriptions")]
 use futures::StreamExt;
 use itertools::Itertools;
 use schema::{
@@ -64,9 +65,10 @@ use schema::{
     TransactionId,
     U64,
 };
+#[cfg(feature = "subscriptions")]
+use std::future;
 use std::{
     convert::TryInto,
-    future,
     io::{
         self,
         ErrorKind,
@@ -77,6 +79,7 @@ use std::{
         FromStr,
     },
 };
+use tracing as _;
 use types::{
     TransactionResponse,
     TransactionStatus,
@@ -110,11 +113,11 @@ impl FromStr for FuelClient {
     fn from_str(str: &str) -> Result<Self, Self::Err> {
         let mut raw_url = str.to_string();
         if !raw_url.starts_with("http") {
-            raw_url = format!("http://{}", raw_url);
+            raw_url = format!("http://{raw_url}");
         }
 
         let mut url = reqwest::Url::parse(&raw_url)
-            .with_context(|| format!("Invalid fuel-core URL: {}", str))?;
+            .with_context(|| format!("Invalid fuel-core URL: {str}"))?;
         url.set_path("/graphql");
         Ok(Self { url })
     }
@@ -178,6 +181,8 @@ impl FuelClient {
         }
     }
 
+    #[tracing::instrument(skip_all)]
+    #[cfg(feature = "subscriptions")]
     async fn subscribe<ResponseData, Vars>(
         &self,
         q: StreamingOperation<ResponseData, Vars>,
@@ -195,7 +200,7 @@ impl FuelClient {
             .map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::Other,
-                    format!("Failed to start client {:?}", e),
+                    format!("Failed to start client {e:?}"),
                 )
             })?
             .body(json_query)
@@ -204,10 +209,10 @@ impl FuelClient {
             .map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::Other,
-                    format!("Failed to add header to client {:?}", e),
+                    format!("Failed to add header to client {e:?}"),
                 )
             })?
-            .build_with_conn(HttpsConnector::with_webpki_roots());
+            .build_with_conn(es::HttpsConnector::with_webpki_roots());
 
         let mut last = None;
 
@@ -216,6 +221,7 @@ impl FuelClient {
                 futures::future::ready(!matches!(result, Err(es::Error::Eof)))
             })
             .filter_map(move |result| {
+                tracing::debug!("Got result: {result:?}");
                 let r = match result {
                     Ok(es::SSE::Event(es::Event { data, .. })) => {
                         match serde_json::from_str::<GraphQlResponse<ResponseData>>(&data)
@@ -237,20 +243,20 @@ impl FuelClient {
                                     }
                                     Err(e) => Some(Err(io::Error::new(
                                         io::ErrorKind::Other,
-                                        format!("Decode error: {:?}", e),
+                                        format!("Decode error: {e:?}"),
                                     ))),
                                 }
                             }
                             Err(e) => Some(Err(io::Error::new(
                                 io::ErrorKind::Other,
-                                format!("Json error: {:?}", e),
+                                format!("Json error: {e:?}"),
                             ))),
                         }
                     }
                     Ok(_) => None,
                     Err(e) => Some(Err(io::Error::new(
                         io::ErrorKind::Other,
-                        format!("Graphql error: {:?}", e),
+                        format!("Graphql error: {e:?}"),
                     ))),
                 };
                 futures::future::ready(r)
@@ -308,6 +314,7 @@ impl FuelClient {
         Ok(id)
     }
 
+    #[cfg(feature = "subscriptions")]
     /// Submit the transaction and wait for it to be included into a block.
     ///
     /// This will wait forever if needed, so consider wrapping this call
@@ -340,7 +347,7 @@ impl FuelClient {
         self.query(query).await.map(|r| r.reset)
     }
 
-    pub async fn execute(&self, id: &str, op: &Opcode) -> io::Result<bool> {
+    pub async fn execute(&self, id: &str, op: &Instruction) -> io::Result<bool> {
         let op = serde_json::to_string(op)?;
         let query = schema::Execute::build(schema::ExecuteArgs { id: id.into(), op });
 
@@ -444,7 +451,7 @@ impl FuelClient {
         let tx = self.query(query).await?.transaction.ok_or_else(|| {
             io::Error::new(
                 ErrorKind::NotFound,
-                format!("status not found for transaction {} ", id),
+                format!("status not found for transaction {id} "),
             )
         })?;
 
@@ -453,13 +460,15 @@ impl FuelClient {
             .ok_or_else(|| {
                 io::Error::new(
                     ErrorKind::NotFound,
-                    format!("status not found for transaction {}", id),
+                    format!("status not found for transaction {id}"),
                 )
             })?
             .try_into()?;
         Ok(status)
     }
 
+    #[tracing::instrument(skip(self), level = "debug")]
+    #[cfg(feature = "subscriptions")]
     /// Subscribe to the status of a transaction
     pub async fn subscribe_transaction_status(
         &self,
@@ -468,7 +477,9 @@ impl FuelClient {
         use cynic::SubscriptionBuilder;
         let s = schema::tx::StatusChangeSubscription::build(TxIdArgs { id: id.parse()? });
 
+        tracing::debug!("subscribing");
         let stream = self.subscribe(s).await?.map(|tx| {
+            tracing::debug!("received {tx:?}");
             let tx = tx?;
             let status = tx.status_change.try_into()?;
             Ok(status)
@@ -477,6 +488,7 @@ impl FuelClient {
         Ok(stream)
     }
 
+    #[cfg(feature = "subscriptions")]
     /// Awaits for the transaction to be committed into a block
     ///
     /// This will wait forever if needed, so consider wrapping this call
@@ -533,7 +545,7 @@ impl FuelClient {
         let query = schema::tx::TransactionQuery::build(TxIdArgs { id: id.parse()? });
 
         let tx = self.query(query).await?.transaction.ok_or_else(|| {
-            io::Error::new(ErrorKind::NotFound, format!("transaction {} not found", id))
+            io::Error::new(ErrorKind::NotFound, format!("transaction {id} not found"))
         })?;
 
         let receipts: Result<Vec<Receipt>, ConversionError> = tx

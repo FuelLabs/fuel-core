@@ -8,13 +8,20 @@ use crate::{
 };
 use fuel_core_chain_config::MessageConfig;
 use fuel_core_storage::{
-    tables::Messages,
+    tables::{
+        Messages,
+        SpentMessages,
+    },
     Error as StorageError,
+    Result as StorageResult,
     StorageInspect,
     StorageMutate,
 };
 use fuel_core_types::{
-    entities::message::Message,
+    entities::message::{
+        CompressedMessage,
+        MessageStatus,
+    },
     fuel_types::{
         Address,
         Bytes32,
@@ -26,15 +33,20 @@ use std::{
     ops::Deref,
 };
 
+use super::storage::DatabaseColumn;
+
 impl StorageInspect<Messages> for Database {
     type Error = StorageError;
 
-    fn get(&self, key: &MessageId) -> Result<Option<Cow<Message>>, Self::Error> {
+    fn get(
+        &self,
+        key: &MessageId,
+    ) -> Result<Option<Cow<CompressedMessage>>, Self::Error> {
         Database::get(self, key.as_ref(), Column::Messages).map_err(Into::into)
     }
 
     fn contains_key(&self, key: &MessageId) -> Result<bool, Self::Error> {
-        Database::exists(self, key.as_ref(), Column::Messages).map_err(Into::into)
+        Database::contains_key(self, key.as_ref(), Column::Messages).map_err(Into::into)
     }
 }
 
@@ -42,25 +54,27 @@ impl StorageMutate<Messages> for Database {
     fn insert(
         &mut self,
         key: &MessageId,
-        value: &Message,
-    ) -> Result<Option<Message>, Self::Error> {
+        value: &CompressedMessage,
+    ) -> Result<Option<CompressedMessage>, Self::Error> {
         // insert primary record
-        let result =
-            Database::insert(self, key.as_ref(), Column::Messages, value.clone())?;
+        let result = Database::insert(self, key.as_ref(), Column::Messages, value)?;
 
         // insert secondary record by owner
         let _: Option<bool> = Database::insert(
             self,
             owner_msg_id_key(&value.recipient, key),
             Column::OwnedMessageIds,
-            true,
+            &true,
         )?;
 
         Ok(result)
     }
 
-    fn remove(&mut self, key: &MessageId) -> Result<Option<Message>, Self::Error> {
-        let result: Option<Message> =
+    fn remove(
+        &mut self,
+        key: &MessageId,
+    ) -> Result<Option<CompressedMessage>, Self::Error> {
+        let result: Option<CompressedMessage> =
             Database::remove(self, key.as_ref(), Column::Messages)?;
 
         if let Some(message) = &result {
@@ -75,6 +89,12 @@ impl StorageMutate<Messages> for Database {
     }
 }
 
+impl DatabaseColumn for SpentMessages {
+    fn column() -> Column {
+        Column::SpentMessages
+    }
+}
+
 impl Database {
     pub fn owned_message_ids(
         &self,
@@ -82,9 +102,9 @@ impl Database {
         start_message_id: Option<MessageId>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = DatabaseResult<MessageId>> + '_ {
-        self.iter_all::<Vec<u8>, bool>(
+        self.iter_all_filtered::<Vec<u8>, bool, _, _>(
             Column::OwnedMessageIds,
-            Some(owner.to_vec()),
+            Some(*owner),
             start_message_id.map(|msg_id| owner_msg_id_key(owner, &msg_id)),
             direction,
         )
@@ -100,28 +120,32 @@ impl Database {
         &self,
         start: Option<MessageId>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<Message>> + '_ {
+    ) -> impl Iterator<Item = DatabaseResult<CompressedMessage>> + '_ {
         let start = start.map(|v| v.deref().to_vec());
-        self.iter_all::<Vec<u8>, Message>(Column::Messages, None, start, direction)
-            .map(|res| res.map(|(_, message)| message))
+        self.iter_all_by_start::<Vec<u8>, CompressedMessage, _>(
+            Column::Messages,
+            start,
+            direction,
+        )
+        .map(|res| res.map(|(_, message)| message))
     }
 
-    pub fn get_message_config(&self) -> DatabaseResult<Option<Vec<MessageConfig>>> {
+    pub fn get_message_config(&self) -> StorageResult<Option<Vec<MessageConfig>>> {
         let configs = self
             .all_messages(None, None)
             .filter_map(|msg| {
                 // Return only unspent messages
                 if let Ok(msg) = msg {
-                    if msg.fuel_block_spend.is_none() {
-                        Some(Ok(msg))
-                    } else {
-                        None
+                    match self.is_message_spent(&msg.id()) {
+                        Ok(false) => Some(Ok(msg)),
+                        Ok(true) => None,
+                        Err(e) => Some(Err(e)),
                     }
                 } else {
-                    Some(msg)
+                    Some(msg.map_err(StorageError::from))
                 }
             })
-            .map(|msg| -> DatabaseResult<MessageConfig> {
+            .map(|msg| -> StorageResult<MessageConfig> {
                 let msg = msg?;
 
                 Ok(MessageConfig {
@@ -133,20 +157,35 @@ impl Database {
                     da_height: msg.da_height,
                 })
             })
-            .collect::<DatabaseResult<Vec<MessageConfig>>>()?;
+            .collect::<StorageResult<Vec<MessageConfig>>>()?;
 
         Ok(Some(configs))
     }
+
+    pub fn is_message_spent(&self, message_id: &MessageId) -> StorageResult<bool> {
+        fuel_core_storage::StorageAsRef::storage::<SpentMessages>(&self)
+            .contains_key(message_id)
+    }
+
+    pub fn message_status(&self, message_id: &MessageId) -> StorageResult<MessageStatus> {
+        if self.is_message_spent(message_id)? {
+            Ok(MessageStatus::Spent)
+        } else {
+            Ok(MessageStatus::Unspent)
+        }
+    }
 }
 
+// TODO: Reuse `fuel_vm::storage::double_key` macro.
 /// Get a Key by chaining Owner + MessageId
-fn owner_msg_id_key(owner: &Address, msg_id: &MessageId) -> Vec<u8> {
-    owner
-        .as_ref()
-        .iter()
-        .chain(msg_id.as_ref().iter())
-        .copied()
-        .collect()
+fn owner_msg_id_key(
+    owner: &Address,
+    msg_id: &MessageId,
+) -> [u8; Address::LEN + MessageId::LEN] {
+    let mut default = [0u8; Address::LEN + MessageId::LEN];
+    default[0..Address::LEN].copy_from_slice(owner.as_ref());
+    default[Address::LEN..].copy_from_slice(msg_id.as_ref());
+    default
 }
 
 #[cfg(test)]
@@ -157,7 +196,7 @@ mod tests {
     #[test]
     fn owned_message_ids() {
         let mut db = Database::default();
-        let message = Message::default();
+        let message = CompressedMessage::default();
 
         // insert a message with the first id
         let first_id = MessageId::new([1; 32]);

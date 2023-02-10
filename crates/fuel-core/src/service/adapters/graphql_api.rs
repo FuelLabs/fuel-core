@@ -4,6 +4,7 @@ use crate::{
         Database,
     },
     fuel_core_graphql_api::ports::{
+        BlockProducerPort,
         DatabaseBlocks,
         DatabaseChain,
         DatabaseCoins,
@@ -11,9 +12,14 @@ use crate::{
         DatabaseMessages,
         DatabasePort,
         DatabaseTransactions,
+        DryRunExecution,
+        TxPoolPort,
     },
+    service::sub_services::TxPoolService,
     state::IterDirection,
 };
+use anyhow::Result;
+use async_trait::async_trait;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -38,13 +44,23 @@ use fuel_core_types::{
         Address,
         AssetId,
         MessageId,
+        Receipt as TxReceipt,
+        Transaction,
         TxPointer,
         UtxoId,
     },
     services::{
         graphql_api::ContractBalance,
-        txpool::TransactionStatus,
+        txpool::{
+            InsertionResult,
+            TransactionStatus,
+        },
     },
+};
+use std::sync::Arc;
+use tokio_stream::wrappers::{
+    errors::BroadcastStreamRecvError,
+    BroadcastStream,
 };
 
 impl DatabaseBlocks for Database {
@@ -81,7 +97,7 @@ impl DatabaseTransactions for Database {
 
     fn owned_transactions_ids(
         &self,
-        owner: &Address,
+        owner: Address,
         start: Option<TxPointer>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<(TxPointer, TxId)>> {
@@ -113,7 +129,13 @@ impl DatabaseMessages for Database {
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<Message>> {
         self.all_messages(start_message_id, Some(direction))
-            .map(|result| result.map_err(StorageError::from))
+            .map(|result| match result {
+                Ok(message) => {
+                    let id = message.id();
+                    Ok(message.decompress(self.message_status(&id)?))
+                }
+                Err(err) => Err(StorageError::from(err)),
+            })
             .into_boxed()
     }
 }
@@ -175,3 +197,39 @@ impl DatabaseChain for Database {
 }
 
 impl DatabasePort for Database {}
+
+impl TxPoolPort for TxPoolService {
+    fn insert(&self, txs: Vec<Arc<Transaction>>) -> Vec<anyhow::Result<InsertionResult>> {
+        self.shared.insert(txs)
+    }
+
+    fn tx_update_subscribe(
+        &self,
+    ) -> fuel_core_services::stream::BoxStream<
+        Result<fuel_core_txpool::service::TxUpdate, BroadcastStreamRecvError>,
+    > {
+        Box::pin(BroadcastStream::new(self.shared.tx_update_subscribe()))
+    }
+
+    fn find_one(&self, id: TxId) -> Option<fuel_core_types::services::txpool::TxInfo> {
+        self.shared.find_one(id)
+    }
+}
+
+#[async_trait]
+impl DryRunExecution for BlockProducerAdapter {
+    async fn dry_run_tx(
+        &self,
+        transaction: Transaction,
+        height: Option<BlockHeight>,
+        utxo_validation: Option<bool>,
+    ) -> Result<Vec<TxReceipt>> {
+        self.block_producer
+            .dry_run(transaction, height, utxo_validation)
+            .await
+    }
+}
+
+impl BlockProducerPort for BlockProducerAdapter {}
+
+use super::BlockProducerAdapter;

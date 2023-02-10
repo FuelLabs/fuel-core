@@ -219,7 +219,7 @@ impl JsonRpcClient for MockMiddleware {
                     serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
                 Ok(res)
             }
-            _ => panic!("Request not mocked: {}", method),
+            _ => panic!("Request not mocked: {method}"),
         }
     }
 }

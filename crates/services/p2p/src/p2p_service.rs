@@ -59,7 +59,6 @@ use libp2p::{
     PeerId,
     Swarm,
 };
-
 use rand::seq::IteratorRandom;
 use std::collections::HashMap;
 use tracing::{
@@ -206,6 +205,11 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             m.push(Protocol::Tcp(self.tcp_port));
             m
         };
+        let peer_id = self.local_peer_id;
+
+        tracing::info!(
+            "The p2p service starts on the `{listen_multiaddr}` with `{peer_id}`"
+        );
 
         // start listening at the given address
         self.swarm.listen_on(listen_multiaddr)?;
@@ -339,10 +343,23 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         //       more events to consume
         let event = self.swarm.select_next_some().await;
         tracing::debug!(?event);
-        if let SwarmEvent::Behaviour(fuel_behaviour) = event {
-            self.handle_behaviour_event(fuel_behaviour)
-        } else {
-            None
+        match event {
+            SwarmEvent::Behaviour(fuel_behaviour) => {
+                self.handle_behaviour_event(fuel_behaviour)
+            }
+            SwarmEvent::NewListenAddr { address, .. } => {
+                tracing::info!("Listening for p2p traffic on `{address}`");
+                None
+            }
+            SwarmEvent::ListenerClosed {
+                addresses, reason, ..
+            } => {
+                tracing::info!(
+                    "p2p listener(s) `{addresses:?}` closed with `{reason:?}`"
+                );
+                None
+            }
+            _ => None,
         }
     }
 
@@ -663,7 +680,7 @@ mod tests {
                     Multiaddr::from(IpAddr::V4(Ipv4Addr::from([127, 0, 0, 1])));
                 addr.push(Protocol::Tcp(tcp_port));
                 let peer_id = PeerId::from_public_key(&keypair.public());
-                format!("{}/p2p/{}", addr, peer_id).parse().unwrap()
+                format!("{addr}/p2p/{peer_id}").parse().unwrap()
             };
 
             Self {
@@ -812,8 +829,8 @@ mod tests {
         stop_sender.send(()).unwrap();
     }
 
-    // We start with two nodes, node_5 and node_10, bootstrapped with 100 other nodes
-    // yet node_5 is only allowed to connect to 5 other nodes, and node_10 to 10
+    // We start with two nodes, node_a and node_b, bootstrapped with `bootstrap_nodes_count` other nodes.
+    // Yet node_a and node_b are only allowed to connect to specified amount of nodes.
     #[tokio::test]
     #[instrument]
     async fn max_peers_connected_works() {
@@ -821,24 +838,30 @@ mod tests {
         // enable mdns for faster discovery of nodes
         p2p_config.enable_mdns = true;
 
-        let nodes: Vec<NodeData> = (0..100).map(|_| NodeData::random()).collect();
+        let bootstrap_nodes_count = 20;
+        let node_a_max_peers_allowed = 3;
+        let node_b_max_peers_allowed = 5;
 
-        // this node is allowed to only connect to 5 other nodes
-        let mut node_5 = {
+        let nodes: Vec<NodeData> = (0..bootstrap_nodes_count)
+            .map(|_| NodeData::random())
+            .collect();
+
+        // this node is allowed to only connect to `node_a_max_peers_allowed` other nodes
+        let mut node_a = {
             let mut p2p_config = p2p_config.clone();
-            p2p_config.max_peers_connected = 5;
-            // it still tries to dial all 100 nodes!
+            p2p_config.max_peers_connected = node_a_max_peers_allowed;
+            // it still tries to dial all nodes!
             p2p_config.bootstrap_nodes =
                 nodes.iter().map(|node| node.multiaddr.clone()).collect();
 
             NodeData::random().create_service(p2p_config)
         };
 
-        // this node is allowed to only connect to 10 other nodes
-        let mut node_10 = {
+        // this node is allowed to only connect to `node_b_max_peers_allowed` other nodes
+        let mut node_b = {
             let mut p2p_config = p2p_config.clone();
-            p2p_config.max_peers_connected = 10;
-            // it still tries to dial all 100 nodes!
+            p2p_config.max_peers_connected = node_b_max_peers_allowed;
+            // it still tries to dial all nodes!
             p2p_config.bootstrap_nodes =
                 nodes.iter().map(|node| node.multiaddr.clone()).collect();
 
@@ -850,7 +873,7 @@ mod tests {
             .map(|node| node.create_service(p2p_config.clone()))
             .collect();
 
-        // this node will only connect to node_5 and node_10 at the beginning
+        // this node will only connect to node_a and node_b at the beginning
         // then it will slowly discover other nodes in the network
         // it serves as our exit from the loop
         let mut bootstrapped_node = node_services.pop().unwrap();
@@ -859,7 +882,7 @@ mod tests {
         let jh = tokio::spawn(async move {
             while rx.try_recv().is_err() {
                 futures::stream::iter(node_services.iter_mut())
-                    .for_each_concurrent(10, |node| async move {
+                    .for_each_concurrent(4, |node| async move {
                         node.next_event().await;
                     })
                     .await;
@@ -868,27 +891,27 @@ mod tests {
 
         loop {
             tokio::select! {
-                event_from_node_5 = node_5.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected(_)) = event_from_node_5 {
-                        if node_5.swarm.connected_peers().count() > 5 {
-                            panic!("The node should only connect to max 5 peers");
+                event_from_node_a = node_a.next_event() => {
+                    if let Some(FuelP2PEvent::PeerConnected(_)) = event_from_node_a {
+                        if node_a.peer_manager().total_peers_connected() > node_a_max_peers_allowed as usize {
+                            panic!("The node should only connect to max {node_a_max_peers_allowed} peers");
                         }
                     }
-                    tracing::info!("Event from the node_5: {:?}", event_from_node_5);
+                    tracing::info!("Event from the node_a: {:?}", event_from_node_a);
                 },
-                event_from_node_10 = node_10.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected(_)) = event_from_node_10 {
-                        if node_10.swarm.connected_peers().count() > 10 {
-                            panic!("The node should only connect to max 10 peers");
+                event_from_node_b = node_b.next_event() => {
+                    if let Some(FuelP2PEvent::PeerConnected(_)) = event_from_node_b {
+                        if node_b.peer_manager().total_peers_connected() > node_b_max_peers_allowed as usize {
+                            panic!("The node should only connect to max {node_b_max_peers_allowed} peers");
                         }
                     }
-                    tracing::info!("Event from the node_10: {:?}", event_from_node_10);
+                    tracing::info!("Event from the node_b: {:?}", event_from_node_b);
                 },
                 event_from_bootstrapped_node = bootstrapped_node.next_event() => {
                     if let Some(FuelP2PEvent::PeerConnected(_)) = event_from_bootstrapped_node {
                         // if the test was broken, it would panic! by the time this node discovers more peers
                         // and connects to them
-                        if bootstrapped_node.swarm.connected_peers().count() > 20 {
+                        if bootstrapped_node.peer_manager().total_peers_connected() > bootstrap_nodes_count / 2 {
                             break
                         }
                     }

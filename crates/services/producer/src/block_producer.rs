@@ -108,10 +108,8 @@ where
         );
 
         // Store the context string incase we error.
-        let context_string = format!(
-            "Failed to produce block {:?} due to execution failure",
-            block
-        );
+        let context_string =
+            format!("Failed to produce block {block:?} due to execution failure");
         let result = self
             .executor
             .execute_without_commit(ExecutionBlock::Production(block))
@@ -196,7 +194,7 @@ where
         &self,
         previous_da_height: DaBlockHeight,
     ) -> anyhow::Result<DaBlockHeight> {
-        let best_height = self.relayer.get_best_finalized_da_height().await?;
+        let best_height = self.relayer.wait_for_at_least(&previous_da_height).await?;
         if best_height < previous_da_height {
             // If this happens, it could mean a block was erroneously imported
             // without waiting for our relayer's da_height to catch up to imported da_height.

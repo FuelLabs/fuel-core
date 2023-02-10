@@ -12,6 +12,7 @@ use futures::{
     TryStreamExt,
 };
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
+use tracing::Instrument;
 
 #[cfg(test)]
 mod test;
@@ -26,6 +27,7 @@ pub(crate) trait TxnStatusChangeState {
     ) -> StorageResult<Option<TransactionStatus>>;
 }
 
+#[tracing::instrument(skip(state, stream), fields(transaction_id = %transaction_id))]
 pub(crate) async fn transaction_status_change<'a, State>(
     state: State,
     stream: BoxStream<'a, Result<TxUpdate, BroadcastStreamRecvError>>,
@@ -48,6 +50,7 @@ where
             Err(tokio::sync::oneshot::error::TryRecvError::Empty)
         );
         async move {
+            tracing::debug!("{is_closed}");
             if is_closed {
                 return None
             }
@@ -57,6 +60,9 @@ where
                     if tx_update.was_squeezed_out() {
                         match tx_update.into_squeezed_out_reason() {
                             Some(reason) => {
+                                tracing::debug!(
+                                    "transaction was squeezed out: {reason:?}"
+                                );
                                 // Squeezed out status is never stored in the database so must be
                                 // outputted inline.
                                 let status =
@@ -71,6 +77,7 @@ where
                         }
                     } else {
                         let status = state.get_tx_status(transaction_id).await;
+                        tracing::debug!("got status update: {status:?}");
                         match status {
                             // Got the status from the db.
                             Ok(Some(s)) => Some((Some(Ok(s)), (state, stream))),
@@ -84,7 +91,12 @@ where
                     }
                 }
                 // Got a status update but it's not this transaction so ignore it.
-                Some(Ok(_)) => Some((None, (state, stream))),
+                Some(Ok(r)) => {
+                    tracing::debug!(
+                        "ignoring status update for another transaction: {r:?}"
+                    );
+                    Some((None, (state, stream)))
+                }
                 // Buffer filled up before this stream was polled.
                 Some(Err(BroadcastStreamRecvError::Lagged(_))) => {
                     // Check the db incase a missed status was our transaction.
@@ -93,15 +105,17 @@ where
                         .await
                         .map_err(Into::into)
                         .transpose();
+                    tracing::debug!("lagged: {status:?}");
                     Some((status, (state, stream)))
                 }
                 // Channel is closed.
                 None => None,
             }
         }
+        .in_current_span()
     });
 
-    // CHeck the database first incase there is already a status.
+    // Check the database first incase there is already a status.
     futures::stream::once(futures::future::ready(check_db_first))
             // Then wait for a status update.
             .chain(stream)

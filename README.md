@@ -158,13 +158,13 @@ The service expects a mutation defined as `submit` that receives a [Transaction]
 This example will execute a script that represents the following sequence of [ASM](https://github.com/FuelLabs/fuel-asm):
 
 ```rs
-ADDI(0x10, REG_ZERO, 0xca),
-ADDI(0x11, REG_ZERO, 0xba),
-LOG(0x10, 0x11, REG_ZERO, REG_ZERO),
-RET(REG_ONE),
+ADDI(0x10, RegId::ZERO, 0xca),
+ADDI(0x11, RegId::ZERO, 0xba),
+LOG(0x10, 0x11, RegId::ZERO, RegId::ZERO),
+RET(RegId::ONE),
 ```
 
 ```console
-$ cargo run --bin fuel-gql-cli -- transaction submit \
+$ cargo run --bin fuel-core-client -- transaction submit \
 "{\"Script\":{\"gas_price\":0,\"gas_limit\":1000000,\"maturity\":0,\"script\":[80,64,0,202,80,68,0,186,51,65,16,0,36,4,0,0],\"script_data\":[],\"inputs\":[],\"outputs\":[],\"witnesses\":[],\"receipts_root\":\"0x6114142d12e0f58cfb8c72c270cd0535944fb1ba763dce83c17e882c482224a2\"}}"
 ```

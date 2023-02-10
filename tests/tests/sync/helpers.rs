@@ -22,7 +22,10 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 use fuel_core_types::{
-    fuel_asm::Opcode,
+    fuel_asm::{
+        op,
+        RegId,
+    },
     fuel_crypto::SecretKey,
     fuel_tx::{
         Input,
@@ -36,7 +39,6 @@ use fuel_core_types::{
         Address,
         Bytes32,
     },
-    fuel_vm::consts::REG_ONE,
     secrecy::Secret,
     services::block_importer::ImportResult,
 };
@@ -107,7 +109,7 @@ pub struct Nodes {
 pub struct NamedNodes(pub HashMap<String, Node>);
 
 fn map_listener_address(bootstrap_id: &PeerId, addr: &Multiaddr) -> Multiaddr {
-    format!("{}/p2p/{}", addr, bootstrap_id).parse().unwrap()
+    format!("{addr}/p2p/{bootstrap_id}").parse().unwrap()
 }
 
 impl Bootstrap {
@@ -173,7 +175,7 @@ pub async fn make_nodes(
                     let initial_coin =
                         ChainConfig::initial_coin(secret, 10000, Some(utxo_id));
                     let tx = TransactionBuilder::script(
-                        vec![Opcode::RET(REG_ONE)].into_iter().collect(),
+                        vec![op::ret(RegId::ONE)].into_iter().collect(),
                         vec![],
                     )
                     .gas_limit(100000)
@@ -230,7 +232,7 @@ pub async fn make_nodes(
                     let mut node_config = make_config(
                         (!name.is_empty())
                             .then_some(name)
-                            .unwrap_or_else(|| format!("b:{}", i)),
+                            .unwrap_or_else(|| format!("b:{i}")),
                         chain_config.clone(),
                     );
                     if let Some(BootstrapSetup { pub_key, .. }) = boot {
@@ -257,7 +259,7 @@ pub async fn make_nodes(
         let mut node_config = make_config(
             (!name.is_empty())
                 .then_some(name)
-                .unwrap_or_else(|| format!("p:{}", i)),
+                .unwrap_or_else(|| format!("p:{i}")),
             chain_config.clone(),
         );
 
@@ -289,7 +291,7 @@ pub async fn make_nodes(
         let mut node_config = make_config(
             (!name.is_empty())
                 .then_some(name)
-                .unwrap_or_else(|| format!("v:{}", i)),
+                .unwrap_or_else(|| format!("v:{i}")),
             chain_config.clone(),
         );
         node_config.block_production = Trigger::Never;

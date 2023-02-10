@@ -489,6 +489,7 @@ impl Transaction {
     }
 }
 
+#[tracing::instrument(level = "debug", skip(query, txpool), ret, err)]
 pub(super) async fn get_tx_status(
     id: fuel_core_types::fuel_types::Bytes32,
     query: &TransactionQueryContext<'_>,
@@ -499,7 +500,7 @@ pub(super) async fn get_tx_status(
         .into_api_result::<txpool::TransactionStatus, StorageError>()?
     {
         Some(status) => Ok(Some(status.into())),
-        None => match txpool.shared.find_one(id) {
+        None => match txpool.find_one(id) {
             Some(transaction_in_pool) => {
                 let time = transaction_in_pool.submitted_time();
                 Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))

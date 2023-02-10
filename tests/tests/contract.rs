@@ -31,7 +31,7 @@ async fn test_contract_salt() {
     let TestContext { client, .. } = test_builder.finalize().await;
 
     let contract = client
-        .contract(format!("{:#x}", contract_id).as_str())
+        .contract(format!("{contract_id:#x}").as_str())
         .await
         .unwrap();
 
@@ -56,8 +56,8 @@ async fn test_contract_balance(
 
     let balance = client
         .contract_balance(
-            format!("{:#x}", contract_id).as_str(),
-            Some(format!("{:#x}", asset).as_str()),
+            format!("{contract_id:#x}").as_str(),
+            Some(format!("{asset:#x}").as_str()),
         )
         .await
         .unwrap();
@@ -68,7 +68,12 @@ async fn test_contract_balance(
 #[rstest]
 #[tokio::test]
 async fn test_5_contract_balances(
-    #[values(PageDirection::Forward, PageDirection::Backward)] direction: PageDirection,
+    #[values(PageDirection::Forward)] direction: PageDirection,
+    // #[values(PageDirection::Forward, PageDirection::Backward)] direction: PageDirection,
+    // Rocksdb doesn't support reverse seeks using a prefix, we'd need to implement a custom
+    // comparator to support this usecase.
+    // > One common bug of using prefix iterating is to use prefix mode to iterate in reverse order. But it is not yet supported.
+    // https://github.com/facebook/rocksdb/wiki/Prefix-Seek#limitation
 ) {
     let mut test_builder = TestSetupBuilder::new(SEED);
     let (_, contract_id) = test_builder.setup_contract(
@@ -84,7 +89,7 @@ async fn test_5_contract_balances(
 
     let contract_balances = client
         .contract_balances(
-            format!("{:#x}", contract_id).as_str(),
+            format!("{contract_id:#x}").as_str(),
             PaginationRequest {
                 cursor: None,
                 results: 3,
@@ -119,8 +124,6 @@ fn key(i: u8) -> Bytes32 {
 
 #[tokio::test]
 async fn can_get_message_proof() {
-    use fuel_core_types::fuel_vm::consts::*;
-
     let config = Config::local_node();
     let coin = config
         .chain_conf
@@ -137,30 +140,30 @@ async fn can_get_message_proof() {
     let contract = vec![
         // Save the ptr to the script data to register 16.
         // Start db key
-        Opcode::gtf(0x10, 0x00, GTFArgs::ScriptData),
+        op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
         // Set the location in memory to write the bytes to.
-        Opcode::MOVI(0x11, 100),
-        Opcode::ALOC(0x11),
-        Opcode::ADDI(0x11, REG_HP, 1),
-        Opcode::MOVI(0x13, 2),
+        op::movi(0x11, 100),
+        op::aloc(0x11),
+        op::addi(0x11, RegId::HP, 1),
+        op::movi(0x13, 2),
         // Write read to 0x11.
         // Write status to 0x30.
         // Get the db key the memory location in 0x10.
         // Read the number of slots in 0x13.
-        Opcode::SRWQ(0x11, 0x30, 0x10, 0x13),
-        Opcode::SCWQ(0x10, 0x31, 0x13),
-        Opcode::ADDI(0x14, 0x10, Bytes32::LEN as Immediate12),
-        Opcode::SWWQ(0x10, 0x32, 0x14, 0x13),
-        Opcode::SRWQ(0x11, 0x33, 0x10, 0x13),
+        op::srwq(0x11, 0x30, 0x10, 0x13),
+        op::scwq(0x10, 0x31, 0x13),
+        op::addi(0x14, 0x10, Bytes32::LEN.try_into().unwrap()),
+        op::swwq(0x10, 0x32, 0x14, 0x13),
+        op::srwq(0x11, 0x33, 0x10, 0x13),
         // Log out the data.
-        Opcode::LOG(0x30, 0x31, 0x32, 0x33),
-        Opcode::SWWQ(0x10, 0x30, 0x14, 0x13),
-        Opcode::SCWQ(0x10, 0x31, 0x13),
-        Opcode::LOG(0x30, 0x31, 0x00, 0x00),
-        Opcode::MULI(0x15, 0x13, 32),
-        Opcode::LOGD(0x00, 0x00, 0x11, 0x15),
+        op::log(0x30, 0x31, 0x32, 0x33),
+        op::swwq(0x10, 0x30, 0x14, 0x13),
+        op::scwq(0x10, 0x31, 0x13),
+        op::log(0x30, 0x31, 0x00, 0x00),
+        op::muli(0x15, 0x13, 32),
+        op::logd(0x00, 0x00, 0x11, 0x15),
         // Return from the contract.
-        Opcode::RET(REG_ONE),
+        op::ret(RegId::ONE),
     ];
     // Return.
 
@@ -199,19 +202,19 @@ async fn can_get_message_proof() {
         // Save the ptr to the script data to register 16.
         // This will be used to read the contract id + two
         // empty params. So 32 + 8 + 8.
-        Opcode::gtf(0x10, 0x00, GTFArgs::ScriptData),
-        Opcode::ADDI(0x10, 0x10, (Bytes32::LEN * 3) as Immediate12),
+        op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+        op::addi(0x10, 0x10, (Bytes32::LEN * 3).try_into().unwrap()),
         // Call the contract and forward no coins.
-        Opcode::CALL(0x10, REG_ZERO, REG_ZERO, REG_CGAS),
+        op::call(0x10, RegId::ZERO, RegId::ZERO, RegId::CGAS),
         // Return.
-        Opcode::RET(REG_ONE),
+        op::ret(RegId::ONE),
     ];
     let script: Vec<u8> = script
         .iter()
         .flat_map(|op| u32::from(*op).to_be_bytes())
         .collect();
 
-    let predicate = Opcode::RET(REG_ONE).to_bytes().to_vec();
+    let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
     let owner = Input::predicate_owner(&predicate);
     let coin_input = Input::coin_predicate(
         Default::default(),

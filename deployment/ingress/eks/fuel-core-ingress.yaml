@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: ${k8s_namespace}-ingress
+  name: ${fuel_core_service_name}-ingress
   namespace: ${k8s_namespace}
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "7m"
@@ -20,7 +20,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: fuel-core-service
+                name: ${fuel_core_service_name}-service
                 port:
                   number: ${fuel_core_ingress_http_port}
   tls:

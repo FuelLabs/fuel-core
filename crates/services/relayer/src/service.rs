@@ -27,12 +27,18 @@ use fuel_core_services::{
     ServiceRunner,
     StateWatcher,
 };
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    tables::Messages,
+    StorageAsRef,
+    StorageInspect,
+};
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::Message,
+    entities::message::CompressedMessage,
+    fuel_types::MessageId,
 };
 use std::{
+    borrow::Cow,
     convert::TryInto,
     ops::Deref,
     sync::Arc,
@@ -54,8 +60,8 @@ mod syncing;
 #[cfg(test)]
 mod test;
 
-type Synced = watch::Receiver<bool>;
-type NotifySynced = watch::Sender<bool>;
+type Synced = watch::Receiver<Option<DaBlockHeight>>;
+type NotifySynced = watch::Sender<Option<DaBlockHeight>>;
 
 /// The alias of runnable relayer service.
 pub type Service<D> = CustomizableService<Provider<Http>, D>;
@@ -63,9 +69,10 @@ type CustomizableService<P, D> = ServiceRunner<Task<P, D>>;
 
 /// The shared state of the relayer task.
 #[derive(Clone)]
-pub struct SharedState {
+pub struct SharedState<D> {
     /// Receives signals when the relayer reaches consistency with the DA layer.
     synced: Synced,
+    database: D,
 }
 
 /// The actual relayer that runs on a background task
@@ -99,11 +106,9 @@ where
     D: RelayerDb + 'static,
 {
     fn set_deploy_height(&mut self) {
-        if self.finalized().unwrap_or_default() < *self.config.da_deploy_height {
-            self.database
-                .set_finalized_da_height(self.config.da_deploy_height)
-                .expect("Should be able to set the finalized da height");
-        }
+        self.database
+            .set_finalized_da_height_to_at_least(&self.config.da_deploy_height)
+            .expect("Should be able to set the finalized da height");
     }
 }
 
@@ -135,10 +140,6 @@ where
         write_logs(&mut self.database, logs).await
     }
 
-    fn set_finalized_da_height(&mut self, height: DaBlockHeight) -> StorageResult<()> {
-        self.database.set_finalized_da_height(height)
-    }
-
     fn update_synced(&self, state: &state::EthState) {
         update_synced(&self.synced, state)
     }
@@ -148,17 +149,20 @@ where
 impl<P, D> RunnableService for Task<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
-    D: RelayerDb + 'static,
+    D: RelayerDb + Clone + 'static,
 {
     const NAME: &'static str = "Relayer";
 
-    type SharedData = SharedState;
+    type SharedData = SharedState<D>;
     type Task = Task<P, D>;
 
     fn shared_data(&self) -> Self::SharedData {
         let synced = self.synced.subscribe();
 
-        SharedState { synced }
+        SharedState {
+            synced,
+            database: self.database.clone(),
+        }
     }
 
     async fn into_task(mut self, _watcher: &StateWatcher) -> anyhow::Result<Self::Task> {
@@ -193,7 +197,7 @@ where
     }
 }
 
-impl SharedState {
+impl<D> SharedState<D> {
     /// Wait for the [`Task`] to be in sync with
     /// the data availability layer.
     ///
@@ -207,10 +211,49 @@ impl SharedState {
     /// some period of time.
     pub async fn await_synced(&self) -> anyhow::Result<()> {
         let mut rx = self.synced.clone();
-        if !rx.borrow_and_update().deref() {
+        if rx.borrow_and_update().deref().is_none() {
             rx.changed().await?;
         }
         Ok(())
+    }
+
+    /// Wait until at least the given height is synced.
+    pub async fn await_at_least_synced(
+        &self,
+        height: &DaBlockHeight,
+    ) -> anyhow::Result<()> {
+        let mut rx = self.synced.clone();
+        while rx.borrow_and_update().deref().map_or(true, |h| h < *height) {
+            rx.changed().await?;
+        }
+        Ok(())
+    }
+
+    /// Get a message if it has been synced
+    /// and is <= the given height.
+    pub fn get_message(
+        &self,
+        id: &MessageId,
+        da_height: &DaBlockHeight,
+    ) -> anyhow::Result<Option<CompressedMessage>>
+    where
+        D: StorageInspect<Messages, Error = fuel_core_storage::Error>,
+    {
+        Ok(self
+            .database
+            .storage::<Messages>()
+            .get(id)?
+            .map(Cow::into_owned)
+            .filter(|message| message.da_height <= *da_height))
+    }
+
+    /// Get finalized da height that represents last block from da layer that got finalized.
+    /// Panics if height is not set as of initialization of the relayer.
+    pub fn get_finalized_da_height(&self) -> anyhow::Result<DaBlockHeight>
+    where
+        D: RelayerDb + 'static,
+    {
+        Ok(self.database.get_finalized_da_height()?)
     }
 }
 
@@ -243,7 +286,7 @@ where
 /// Creates an instance of runnable relayer service.
 pub fn new_service<D>(database: D, config: Config) -> anyhow::Result<Service<D>>
 where
-    D: RelayerDb + 'static,
+    D: RelayerDb + Clone + 'static,
 {
     let url = config.eth_client.clone().ok_or_else(|| {
         anyhow::anyhow!(
@@ -265,7 +308,7 @@ pub fn new_service_test<P, D>(
 ) -> CustomizableService<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
-    D: RelayerDb + 'static,
+    D: RelayerDb + Clone + 'static,
 {
     new_service_internal(eth_node, database, config)
 }
@@ -277,9 +320,9 @@ fn new_service_internal<P, D>(
 ) -> CustomizableService<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
-    D: RelayerDb + 'static,
+    D: RelayerDb + Clone + 'static,
 {
-    let (tx, _) = watch::channel(false);
+    let (tx, _) = watch::channel(None);
     let task = Task::new(tx, eth_node, database, config);
 
     CustomizableService::new(task)

@@ -8,7 +8,6 @@ use fuel_core_client::client::FuelClient;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::*,
-    fuel_vm::consts::*,
 };
 use tempfile::TempDir;
 
@@ -27,17 +26,17 @@ async fn test_metrics_endpoint() {
     // Should generate some database reads
     client
         .balance(
-            format!("{:#x}", owner).as_str(),
-            Some(format!("{:#x}", asset_id).as_str()),
+            format!("{owner:#x}").as_str(),
+            Some(format!("{asset_id:#x}").as_str()),
         )
         .await
         .unwrap();
 
     let script = vec![
-        Opcode::ADDI(0x10, REG_ZERO, 0xca),
-        Opcode::ADDI(0x11, REG_ZERO, 0xba),
-        Opcode::LOG(0x10, 0x11, REG_ZERO, REG_ZERO),
-        Opcode::RET(REG_ONE),
+        op::addi(0x10, RegId::ZERO, 0xca),
+        op::addi(0x11, RegId::ZERO, 0xba),
+        op::log(0x10, 0x11, RegId::ZERO, RegId::ZERO),
+        op::ret(RegId::ONE),
     ];
     let script: Vec<u8> = script
         .iter()
@@ -64,7 +63,7 @@ async fn test_metrics_endpoint() {
     srv.stop_and_await().await.unwrap();
 
     // Gt check exists because testing can be weird with multiple instances running
-    assert!(categories.len() == 16);
+    assert_eq!(categories.len(), 16);
 
     for index in [2, 6, 7, 8, 11, 12, 13] {
         let value = categories[index].split(' ').collect::<Vec<&str>>()[1]

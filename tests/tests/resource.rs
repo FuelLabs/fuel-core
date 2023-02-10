@@ -79,10 +79,10 @@ mod coins {
         // spend_query for 1 a and 1 b
         let resources_per_asset = client
             .resources_to_spend(
-                format!("{:#x}", owner).as_str(),
+                format!("{owner:#x}").as_str(),
                 vec![
-                    (format!("{:#x}", asset_id_a).as_str(), 1, None),
-                    (format!("{:#x}", asset_id_b).as_str(), 1, None),
+                    (format!("{asset_id_a:#x}").as_str(), 1, None),
+                    (format!("{asset_id_b:#x}").as_str(), 1, None),
                 ],
                 None,
             )
@@ -101,10 +101,10 @@ mod coins {
         // spend_query for 300 a and 300 b
         let resources_per_asset = client
             .resources_to_spend(
-                format!("{:#x}", owner).as_str(),
+                format!("{owner:#x}").as_str(),
                 vec![
-                    (format!("{:#x}", asset_id_a).as_str(), 300, None),
-                    (format!("{:#x}", asset_id_b).as_str(), 300, None),
+                    (format!("{asset_id_a:#x}").as_str(), 300, None),
+                    (format!("{asset_id_b:#x}").as_str(), 300, None),
                 ],
                 None,
             )
@@ -123,10 +123,10 @@ mod coins {
         // query all resources
         let resources_per_asset = client
             .resources_to_spend(
-                format!("{:#x}", owner).as_str(),
+                format!("{owner:#x}").as_str(),
                 vec![
-                    (format!("{:#x}", asset_id_a).as_str(), 300, None),
-                    (format!("{:#x}", asset_id_b).as_str(), 300, None),
+                    (format!("{asset_id_a:#x}").as_str(), 300, None),
+                    (format!("{asset_id_b:#x}").as_str(), 300, None),
                 ],
                 None,
             )
@@ -147,10 +147,10 @@ mod coins {
         let all_utxo_ids = all_utxos.iter().map(String::as_str).collect();
         let resources_per_asset = client
             .resources_to_spend(
-                format!("{:#x}", owner).as_str(),
+                format!("{owner:#x}").as_str(),
                 vec![
-                    (format!("{:#x}", asset_id_a).as_str(), 1, None),
-                    (format!("{:#x}", asset_id_b).as_str(), 1, None),
+                    (format!("{asset_id_a:#x}").as_str(), 1, None),
+                    (format!("{asset_id_b:#x}").as_str(), 1, None),
                 ],
                 Some((all_utxo_ids, vec![])),
             )
@@ -176,10 +176,10 @@ mod coins {
         // not enough resources
         let resources_per_asset = client
             .resources_to_spend(
-                format!("{:#x}", owner).as_str(),
+                format!("{owner:#x}").as_str(),
                 vec![
-                    (format!("{:#x}", asset_id_a).as_str(), 301, None),
-                    (format!("{:#x}", asset_id_b).as_str(), 301, None),
+                    (format!("{asset_id_a:#x}").as_str(), 301, None),
+                    (format!("{asset_id_b:#x}").as_str(), 301, None),
                 ],
                 None,
             )
@@ -205,10 +205,10 @@ mod coins {
         // not enough inputs
         let resources_per_asset = client
             .resources_to_spend(
-                format!("{:#x}", owner).as_str(),
+                format!("{owner:#x}").as_str(),
                 vec![
-                    (format!("{:#x}", asset_id_a).as_str(), 300, Some(2)),
-                    (format!("{:#x}", asset_id_b).as_str(), 300, Some(2)),
+                    (format!("{asset_id_a:#x}").as_str(), 300, Some(2)),
+                    (format!("{asset_id_b:#x}").as_str(), 300, Some(2)),
                 ],
                 None,
             )
@@ -277,8 +277,8 @@ mod messages {
         // query resources for `base_asset_id` and target 1
         let resources_per_asset = client
             .resources_to_spend(
-                format!("{:#x}", owner).as_str(),
-                vec![(format!("{:#x}", base_asset_id).as_str(), 1, None)],
+                format!("{owner:#x}").as_str(),
+                vec![(format!("{base_asset_id:#x}").as_str(), 1, None)],
                 None,
             )
             .await
@@ -292,8 +292,8 @@ mod messages {
         // query for 300 base assets
         let resources_per_asset = client
             .resources_to_spend(
-                format!("{:#x}", owner).as_str(),
-                vec![(format!("{:#x}", base_asset_id).as_str(), 300, None)],
+                format!("{owner:#x}").as_str(),
+                vec![(format!("{base_asset_id:#x}").as_str(), 300, None)],
                 None,
             )
             .await
@@ -308,8 +308,8 @@ mod messages {
         // query for 300 base assets
         let resources_per_asset = client
             .resources_to_spend(
-                format!("{:#x}", owner).as_str(),
-                vec![(format!("{:#x}", base_asset_id).as_str(), 300, None)],
+                format!("{owner:#x}").as_str(),
+                vec![(format!("{base_asset_id:#x}").as_str(), 300, None)],
                 None,
             )
             .await
@@ -329,8 +329,8 @@ mod messages {
         let all_message_ids = all_message_ids.iter().map(String::as_str).collect();
         let resources_per_asset = client
             .resources_to_spend(
-                format!("{:#x}", owner).as_str(),
-                vec![(format!("{:#x}", base_asset_id).as_str(), 1, None)],
+                format!("{owner:#x}").as_str(),
+                vec![(format!("{base_asset_id:#x}").as_str(), 1, None)],
                 Some((vec![], all_message_ids)),
             )
             .await;
@@ -351,8 +351,8 @@ mod messages {
         // max resources reached
         let resources_per_asset = client
             .resources_to_spend(
-                format!("{:#x}", owner).as_str(),
-                vec![(format!("{:#x}", base_asset_id).as_str(), 301, None)],
+                format!("{owner:#x}").as_str(),
+                vec![(format!("{base_asset_id:#x}").as_str(), 301, None)],
                 None,
             )
             .await;
@@ -373,8 +373,8 @@ mod messages {
         // not enough inputs
         let resources_per_asset = client
             .resources_to_spend(
-                format!("{:#x}", owner).as_str(),
-                vec![(format!("{:#x}", base_asset_id).as_str(), 300, Some(2))],
+                format!("{owner:#x}").as_str(),
+                vec![(format!("{base_asset_id:#x}").as_str(), 300, Some(2))],
                 None,
             )
             .await;
@@ -462,10 +462,10 @@ mod messages_and_coins {
         // query resources for `base_asset_id` and target 1
         let resources_per_asset = client
             .resources_to_spend(
-                format!("{:#x}", owner).as_str(),
+                format!("{owner:#x}").as_str(),
                 vec![
-                    (format!("{:#x}", asset_id_a).as_str(), 1, None),
-                    (format!("{:#x}", asset_id_b).as_str(), 1, None),
+                    (format!("{asset_id_a:#x}").as_str(), 1, None),
+                    (format!("{asset_id_b:#x}").as_str(), 1, None),
                 ],
                 None,
             )
@@ -484,10 +484,10 @@ mod messages_and_coins {
         // query for 300 base assets
         let resources_per_asset = client
             .resources_to_spend(
-                format!("{:#x}", owner).as_str(),
+                format!("{owner:#x}").as_str(),
                 vec![
-                    (format!("{:#x}", asset_id_a).as_str(), 300, None),
-                    (format!("{:#x}", asset_id_b).as_str(), 300, None),
+                    (format!("{asset_id_a:#x}").as_str(), 300, None),
+                    (format!("{asset_id_b:#x}").as_str(), 300, None),
                 ],
                 None,
             )
@@ -506,10 +506,10 @@ mod messages_and_coins {
         // query for 300 base assets
         let resources_per_asset = client
             .resources_to_spend(
-                format!("{:#x}", owner).as_str(),
+                format!("{owner:#x}").as_str(),
                 vec![
-                    (format!("{:#x}", asset_id_a).as_str(), 300, None),
-                    (format!("{:#x}", asset_id_b).as_str(), 300, None),
+                    (format!("{asset_id_a:#x}").as_str(), 300, None),
+                    (format!("{asset_id_b:#x}").as_str(), 300, None),
                 ],
                 None,
             )
@@ -548,10 +548,10 @@ mod messages_and_coins {
 
         let resources_per_asset = client
             .resources_to_spend(
-                format!("{:#x}", owner).as_str(),
+                format!("{owner:#x}").as_str(),
                 vec![
-                    (format!("{:#x}", asset_id_a).as_str(), 1, None),
-                    (format!("{:#x}", asset_id_b).as_str(), 1, None),
+                    (format!("{asset_id_a:#x}").as_str(), 1, None),
+                    (format!("{asset_id_b:#x}").as_str(), 1, None),
                 ],
                 Some((all_utxo_ids, all_message_ids)),
             )
@@ -573,10 +573,10 @@ mod messages_and_coins {
         // max resources reached
         let resources_per_asset = client
             .resources_to_spend(
-                format!("{:#x}", owner).as_str(),
+                format!("{owner:#x}").as_str(),
                 vec![
-                    (format!("{:#x}", asset_id_a).as_str(), 301, None),
-                    (format!("{:#x}", asset_id_b).as_str(), 301, None),
+                    (format!("{asset_id_a:#x}").as_str(), 301, None),
+                    (format!("{asset_id_b:#x}").as_str(), 301, None),
                 ],
                 None,
             )
@@ -598,10 +598,10 @@ mod messages_and_coins {
         // not enough inputs
         let resources_per_asset = client
             .resources_to_spend(
-                format!("{:#x}", owner).as_str(),
+                format!("{owner:#x}").as_str(),
                 vec![
-                    (format!("{:#x}", asset_id_a).as_str(), 300, Some(2)),
-                    (format!("{:#x}", asset_id_b).as_str(), 300, Some(2)),
+                    (format!("{asset_id_a:#x}").as_str(), 300, Some(2)),
+                    (format!("{asset_id_b:#x}").as_str(), 300, Some(2)),
                 ],
                 None,
             )
@@ -639,7 +639,7 @@ async fn resources_to_spend_empty(
 
     // empty spend_query
     let resources_per_asset = client
-        .resources_to_spend(format!("{:#x}", owner).as_str(), vec![], None)
+        .resources_to_spend(format!("{owner:#x}").as_str(), vec![], None)
         .await
         .unwrap();
     assert!(resources_per_asset.is_empty());
@@ -657,11 +657,11 @@ async fn resources_to_spend_error_duplicate_asset_query(
     // the queries with the same id
     let resources_per_asset = client
         .resources_to_spend(
-            format!("{:#x}", owner).as_str(),
+            format!("{owner:#x}").as_str(),
             vec![
-                (format!("{:#x}", asset_id).as_str(), 1, None),
-                (format!("{:#x}", asset_id).as_str(), 2, None),
-                (format!("{:#x}", asset_id).as_str(), 3, None),
+                (format!("{asset_id:#x}").as_str(), 1, None),
+                (format!("{asset_id:#x}").as_str(), 2, None),
+                (format!("{asset_id:#x}").as_str(), 3, None),
             ],
             None,
         )

@@ -3,10 +3,7 @@
 use crate::{
     blockchain::{
         header::BlockHeader,
-        primitives::{
-            BlockHeight,
-            DaBlockHeight,
-        },
+        primitives::DaBlockHeight,
     },
     fuel_tx::{
         Input,
@@ -24,6 +21,24 @@ use core::ops::Deref;
 /// Message send from Da layer to fuel by bridge
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct CompressedMessage {
+    /// Account that sent the message from the da layer
+    pub sender: Address,
+    /// Fuel account receiving the message
+    pub recipient: Address,
+    /// Nonce must be unique. It's used to prevent replay attacks
+    pub nonce: Word,
+    /// The amount of the base asset of Fuel chain sent along this message
+    pub amount: Word,
+    /// Arbitrary message data
+    pub data: Vec<u8>,
+    /// The block height from the parent da layer that originated this message
+    pub da_height: DaBlockHeight,
+}
+
+/// Message send from Da layer to fuel by bridge
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Message {
     /// Account that sent the message from the da layer
     pub sender: Address,
@@ -37,11 +52,11 @@ pub struct Message {
     pub data: Vec<u8>,
     /// The block height from the parent da layer that originated this message
     pub da_height: DaBlockHeight,
-    /// When the message was spent in the Fuel chain
-    pub fuel_block_spend: Option<BlockHeight>, // TODO: get rid of this
+    /// Whether a message has been spent or not
+    pub status: MessageStatus,
 }
 
-impl Message {
+impl CompressedMessage {
     /// Computed message id
     pub fn id(&self) -> MessageId {
         Input::compute_message_id(
@@ -58,12 +73,50 @@ impl Message {
         let id = self.id();
         CheckedMessage { message: self, id }
     }
+
+    /// Decompress the message
+    pub fn decompress(self, status: MessageStatus) -> Message {
+        Message {
+            status,
+            sender: self.sender,
+            recipient: self.recipient,
+            nonce: self.nonce,
+            amount: self.amount,
+            data: self.data,
+            da_height: self.da_height,
+        }
+    }
+}
+
+impl Message {
+    /// Compress the message
+    pub fn compress(self) -> CompressedMessage {
+        CompressedMessage {
+            sender: self.sender,
+            recipient: self.recipient,
+            nonce: self.nonce,
+            amount: self.amount,
+            data: self.data,
+            da_height: self.da_height,
+        }
+    }
+
+    /// Computed message id
+    pub fn id(&self) -> MessageId {
+        Input::compute_message_id(
+            &self.sender,
+            &self.recipient,
+            self.nonce,
+            self.amount,
+            &self.data,
+        )
+    }
 }
 
 /// A message associated with precomputed id
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct CheckedMessage {
-    message: Message,
+    message: CompressedMessage,
     id: MessageId,
 }
 
@@ -89,6 +142,18 @@ pub struct MessageProof {
     pub data: Vec<u8>,
 }
 
+/// Whether the message has been spent or not
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Default)]
+#[repr(u8)]
+pub enum MessageStatus {
+    #[default]
+    /// Message has not been spent
+    Unspent,
+    /// Message has been spent
+    Spent,
+}
+
 impl MessageProof {
     /// Compute message id from the proof
     pub fn message_id(&self) -> MessageId {
@@ -109,30 +174,30 @@ impl CheckedMessage {
     }
 
     /// Returns the message.
-    pub fn message(&self) -> &Message {
+    pub fn message(&self) -> &CompressedMessage {
         &self.message
     }
 
     /// Unpacks inner values of the checked message.
-    pub fn unpack(self) -> (MessageId, Message) {
+    pub fn unpack(self) -> (MessageId, CompressedMessage) {
         (self.id, self.message)
     }
 }
 
-impl From<CheckedMessage> for Message {
+impl From<CheckedMessage> for CompressedMessage {
     fn from(checked_message: CheckedMessage) -> Self {
         checked_message.message
     }
 }
 
-impl AsRef<Message> for CheckedMessage {
-    fn as_ref(&self) -> &Message {
+impl AsRef<CompressedMessage> for CheckedMessage {
+    fn as_ref(&self) -> &CompressedMessage {
         &self.message
     }
 }
 
 impl Deref for CheckedMessage {
-    type Target = Message;
+    type Target = CompressedMessage;
 
     fn deref(&self) -> &Self::Target {
         &self.message

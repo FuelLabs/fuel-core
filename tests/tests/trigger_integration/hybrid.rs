@@ -117,10 +117,8 @@ async fn poa_hybrid_produces_nonempty_blocks_at_correct_rate() {
     let client = FuelClient::from(srv.bound_address);
 
     for i in 0..200 {
-        let mut tx = TransactionBuilder::script(
-            [Opcode::MOVI(0x10, i as Immediate18)].into_iter().collect(),
-            vec![],
-        );
+        let mut tx =
+            TransactionBuilder::script([op::movi(0x10, i)].into_iter().collect(), vec![]);
         let _tx_id = client.submit(&tx.finalize().into()).await.unwrap();
     }
 

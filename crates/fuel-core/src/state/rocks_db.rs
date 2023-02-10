@@ -37,6 +37,7 @@ use rocksdb::{
 };
 use std::{
     convert::TryFrom,
+    iter,
     path::Path,
     sync::Arc,
 };
@@ -71,6 +72,7 @@ impl RocksDb {
                 match DB::open_cf(&opts, &path, &[] as &[&str]) {
                     Ok(db) => {
                         for i in columns {
+                            let opts = Self::cf_opts(i);
                             db.create_cf(RocksDb::col_name(i), &opts)
                                 .map_err(|e| DatabaseError::Other(e.into()))?;
                         }
@@ -122,9 +124,15 @@ impl RocksDb {
     fn cf_opts(column: Column) -> Options {
         let mut opts = Options::default();
         opts.create_if_missing(true);
+        opts.set_compression_type(DBCompressionType::Lz4);
 
+        // All double-keys should be configured here
         match column {
-            Column::OwnedCoins | Column::TransactionsByOwnerBlockIdx => {
+            Column::OwnedCoins
+            | Column::TransactionsByOwnerBlockIdx
+            | Column::OwnedMessageIds
+            | Column::ContractsAssets
+            | Column::ContractsState => {
                 // prefix is address length
                 opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32))
             }
@@ -132,6 +140,31 @@ impl RocksDb {
         };
 
         opts
+    }
+
+    fn _iter_all(
+        &self,
+        column: Column,
+        opts: ReadOptions,
+        iter_mode: IteratorMode,
+    ) -> impl Iterator<Item = KVItem> + '_ {
+        self.db
+            .iterator_cf_opt(&self.cf(column), opts, iter_mode)
+            .map(|item| {
+                item.map(|(key, value)| {
+                    let value_as_vec = Vec::from(value);
+                    let key_as_vec = Vec::from(key);
+                    #[cfg(feature = "metrics")]
+                    {
+                        DATABASE_METRICS.read_meter.inc();
+                        DATABASE_METRICS
+                            .bytes_read
+                            .observe((key_as_vec.len() + value_as_vec.len()) as f64);
+                    }
+                    (key_as_vec, value_as_vec)
+                })
+                .map_err(|e| DatabaseError::Other(e.into()))
+            })
     }
 }
 
@@ -145,11 +178,8 @@ impl KeyValueStore for RocksDb {
             .map_err(|e| DatabaseError::Other(e.into()));
         #[cfg(feature = "metrics")]
         {
-            if value.is_ok() && value.as_ref().unwrap().is_some() {
-                let value_as_vec = value.as_ref().cloned().unwrap().unwrap();
-                DATABASE_METRICS
-                    .bytes_read
-                    .observe(value_as_vec.len() as f64);
+            if let Ok(Some(value)) = &value {
+                DATABASE_METRICS.bytes_read.observe(value.len() as f64);
             }
         }
         value
@@ -193,69 +223,57 @@ impl KeyValueStore for RocksDb {
     fn iter_all(
         &self,
         column: Column,
-        prefix: Option<Vec<u8>>,
-        start: Option<Vec<u8>>,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
         direction: IterDirection,
     ) -> BoxedIter<KVItem> {
-        let iter_mode = start.as_ref().map_or_else(
-            || {
-                prefix.as_ref().map_or_else(
-                    || {
-                        // if no start or prefix just start iterating over entire keyspace
-                        match direction {
-                            IterDirection::Forward => IteratorMode::Start,
-                            // end always iterates in reverse
-                            IterDirection::Reverse => IteratorMode::End,
-                        }
-                    },
-                    // start iterating in a certain direction within the keyspace
-                    |prefix| IteratorMode::From(prefix, direction.into()),
-                )
-            },
-            // start iterating in a certain direction from the start key
-            |k| IteratorMode::From(k, direction.into()),
-        );
+        match (prefix, start) {
+            (None, None) => {
+                let iter_mode =
+                    // if no start or prefix just start iterating over entire keyspace
+                    match direction {
+                        IterDirection::Forward => IteratorMode::Start,
+                        // end always iterates in reverse
+                        IterDirection::Reverse => IteratorMode::End,
+                    };
+                self._iter_all(column, ReadOptions::default(), iter_mode)
+                    .into_boxed()
+            }
+            (Some(prefix), None) => {
+                // start iterating in a certain direction within the keyspace
+                let iter_mode = IteratorMode::From(prefix, direction.into());
+                let mut opts = ReadOptions::default();
+                opts.set_prefix_same_as_start(true);
 
-        let mut opts = ReadOptions::default();
-        if prefix.is_some() {
-            opts.set_prefix_same_as_start(true);
-        }
-
-        let iter = self
-            .db
-            .iterator_cf_opt(&self.cf(column), opts, iter_mode)
-            .map(|item| {
-                item.map(|(key, value)| {
-                    // TODO: Avoid copy of the slices into vector.
-                    //  We can extract slice from the `Box` and put it inside the `Vec`
-                    //  https://github.com/FuelLabs/fuel-core/issues/622
-                    let value_as_vec = value.to_vec();
-                    let key_as_vec = key.to_vec();
-                    #[cfg(feature = "metrics")]
-                    {
-                        DATABASE_METRICS.read_meter.inc();
-                        DATABASE_METRICS
-                            .bytes_read
-                            .observe((key_as_vec.len() + value_as_vec.len()) as f64);
-                    }
-                    (key_as_vec, value_as_vec)
-                })
-                .map_err(|e| DatabaseError::Other(e.into()))
-            });
-
-        if let Some(prefix) = prefix {
-            let prefix = prefix.to_vec();
-            // end iterating when we've gone outside the prefix
-            iter.take_while(move |item| {
-                if let Ok((key, _)) = item {
-                    key.starts_with(prefix.as_slice())
-                } else {
-                    true
+                self._iter_all(column, opts, iter_mode).into_boxed()
+            }
+            (None, Some(start)) => {
+                // start iterating in a certain direction from the start key
+                let iter_mode = IteratorMode::From(start, direction.into());
+                self._iter_all(column, ReadOptions::default(), iter_mode)
+                    .into_boxed()
+            }
+            (Some(prefix), Some(start)) => {
+                // TODO: Maybe we want to allow the `start` to be without a `prefix` in the future.
+                // If the `start` doesn't have the same `prefix`, return nothing.
+                if !start.starts_with(prefix) {
+                    return iter::empty().into_boxed()
                 }
-            })
-            .into_boxed()
-        } else {
-            iter.into_boxed()
+
+                // start iterating in a certain direction from the start key
+                // and end iterating when we've gone outside the prefix
+                let prefix = prefix.to_vec();
+                let iter_mode = IteratorMode::From(start, direction.into());
+                self._iter_all(column, ReadOptions::default(), iter_mode)
+                    .take_while(move |item| {
+                        if let Ok((key, _)) = item {
+                            key.starts_with(prefix.as_slice())
+                        } else {
+                            true
+                        }
+                    })
+                    .into_boxed()
+            }
         }
     }
 }
@@ -387,5 +405,92 @@ mod tests {
         db.batch_write(&mut ops.into_iter()).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap(), None);
+    }
+
+    #[test]
+    fn can_use_unit_value() {
+        let key = vec![0x00];
+
+        let (db, _tmp) = create_db();
+        db.put(&key, Column::Metadata, vec![]).unwrap();
+
+        assert_eq!(
+            db.get(&key, Column::Metadata).unwrap().unwrap(),
+            Vec::<u8>::with_capacity(0)
+        );
+
+        assert!(db.exists(&key, Column::Metadata).unwrap());
+
+        assert_eq!(
+            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()[0],
+            (key.clone(), Vec::<u8>::with_capacity(0))
+        );
+
+        assert_eq!(
+            db.delete(&key, Column::Metadata).unwrap().unwrap(),
+            Vec::<u8>::with_capacity(0)
+        );
+
+        assert!(!db.exists(&key, Column::Metadata).unwrap());
+    }
+
+    #[test]
+    fn can_use_unit_key() {
+        let key: Vec<u8> = Vec::with_capacity(0);
+
+        let (db, _tmp) = create_db();
+        db.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+
+        assert_eq!(
+            db.get(&key, Column::Metadata).unwrap().unwrap(),
+            vec![1, 2, 3]
+        );
+
+        assert!(db.exists(&key, Column::Metadata).unwrap());
+
+        assert_eq!(
+            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()[0],
+            (key.clone(), vec![1, 2, 3])
+        );
+
+        assert_eq!(
+            db.delete(&key, Column::Metadata).unwrap().unwrap(),
+            vec![1, 2, 3]
+        );
+
+        assert!(!db.exists(&key, Column::Metadata).unwrap());
+    }
+
+    #[test]
+    fn can_use_unit_key_and_value() {
+        let key: Vec<u8> = Vec::with_capacity(0);
+
+        let (db, _tmp) = create_db();
+        db.put(&key, Column::Metadata, vec![]).unwrap();
+
+        assert_eq!(
+            db.get(&key, Column::Metadata).unwrap().unwrap(),
+            Vec::<u8>::with_capacity(0)
+        );
+
+        assert!(db.exists(&key, Column::Metadata).unwrap());
+
+        assert_eq!(
+            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()[0],
+            (key.clone(), Vec::<u8>::with_capacity(0))
+        );
+
+        assert_eq!(
+            db.delete(&key, Column::Metadata).unwrap().unwrap(),
+            Vec::<u8>::with_capacity(0)
+        );
+
+        assert!(!db.exists(&key, Column::Metadata).unwrap());
     }
 }

@@ -19,6 +19,7 @@ use fuel_core_types::{
     fuel_types::{
         Bytes32,
         ContractId,
+        MessageId,
     },
 };
 use serde::{
@@ -125,7 +126,7 @@ where
     }
 
     fn contains_key(&self, key: &T::Key) -> StorageResult<bool> {
-        self.exists(key.database_key().as_ref(), T::column())
+        self.contains_key(key.database_key().as_ref(), T::column())
             .map_err(Into::into)
     }
 }
@@ -142,7 +143,7 @@ where
         key: &T::Key,
         value: &T::Value,
     ) -> StorageResult<Option<T::OwnedValue>> {
-        Database::insert(self, key.database_key().as_ref(), T::column(), value)
+        Database::insert(self, key.database_key().as_ref(), T::column(), &value)
             .map_err(Into::into)
     }
 
@@ -187,6 +188,14 @@ impl ToDatabaseKey for ContractId {
     }
 }
 
+impl ToDatabaseKey for MessageId {
+    type Type<'a> = &'a [u8];
+
+    fn database_key(&self) -> Self::Type<'_> {
+        self.as_ref()
+    }
+}
+
 impl ToDatabaseKey for BlockId {
     type Type<'a> = &'a [u8];
 
@@ -200,5 +209,13 @@ impl ToDatabaseKey for TxId {
 
     fn database_key(&self) -> Self::Type<'_> {
         self.as_ref()
+    }
+}
+
+impl ToDatabaseKey for () {
+    type Type<'a> = &'a [u8];
+
+    fn database_key(&self) -> Self::Type<'_> {
+        &[]
     }
 }

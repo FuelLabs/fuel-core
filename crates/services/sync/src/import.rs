@@ -66,6 +66,15 @@ pub struct Config {
     pub max_get_txns_requests: usize,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            max_get_header_requests: 10,
+            max_get_txns_requests: 10,
+        }
+    }
+}
+
 pub(crate) struct Import<P, E, C> {
     /// Shared state between import and sync tasks.
     state: SharedMutex<State>,
@@ -185,6 +194,9 @@ where
                         tracing::warn!("Header {:?} failed consensus check", header);
                         return Ok(None)
                     }
+
+                    // Wait for the da to be at least the da height on the header.
+                    consensus_port.await_da_height(&header.entity.da_height).await?;
 
                     get_transactions_on_block(p2p.as_ref(), block_id, header).await
                 }

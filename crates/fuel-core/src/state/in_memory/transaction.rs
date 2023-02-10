@@ -40,6 +40,7 @@ use std::{
 #[derive(Debug)]
 pub struct MemoryTransactionView {
     view_layer: MemoryStore,
+    // TODO: Remove `Mutex` and usage of the `column_key`.
     // use hashmap to collapse changes (e.g. insert then remove the same key)
     changes: Arc<Mutex<HashMap<Vec<u8>, WriteOperation>>>,
     data_source: DataSource,
@@ -129,8 +130,8 @@ impl KeyValueStore for MemoryTransactionView {
     fn iter_all(
         &self,
         column: Column,
-        prefix: Option<Vec<u8>>,
-        start: Option<Vec<u8>>,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
         direction: IterDirection,
     ) -> BoxedIter<DatabaseResult<(Vec<u8>, Vec<u8>)>> {
         // iterate over inmemory + db while also filtering deleted entries
@@ -138,7 +139,7 @@ impl KeyValueStore for MemoryTransactionView {
 
         self.view_layer
                 // iter_all returns items in sorted order
-                .iter_all(column, prefix.clone(), start.clone(), direction)
+                .iter_all(column, prefix, start, direction)
                 // Merge two sorted iterators (our current view overlay + backing data source)
                 .merge_join_by(
                     self.data_source.iter_all(column, prefix, start, direction),
@@ -512,5 +513,137 @@ mod tests {
             .unwrap();
         // verify
         assert_eq!(ret, vec![2, 4, 8])
+    }
+
+    #[test]
+    fn can_use_unit_value() {
+        let key = vec![0x00];
+
+        let store = Arc::new(MemoryStore::default());
+        let db = MemoryTransactionView::new(store.clone());
+        db.put(&key, Column::Metadata, vec![]).unwrap();
+
+        assert_eq!(
+            db.get(&key, Column::Metadata).unwrap().unwrap(),
+            Vec::<u8>::with_capacity(0)
+        );
+
+        assert!(db.exists(&key, Column::Metadata).unwrap());
+
+        assert_eq!(
+            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap(),
+            vec![(key.clone(), Vec::<u8>::with_capacity(0))]
+        );
+
+        assert_eq!(
+            db.delete(&key, Column::Metadata).unwrap().unwrap(),
+            Vec::<u8>::with_capacity(0)
+        );
+
+        assert!(!db.exists(&key, Column::Metadata).unwrap());
+
+        db.commit().unwrap();
+
+        assert!(!store.exists(&key, Column::Metadata).unwrap());
+
+        let store = Arc::new(MemoryStore::default());
+        let db = MemoryTransactionView::new(store.clone());
+        db.put(&key, Column::Metadata, vec![]).unwrap();
+        db.commit().unwrap();
+
+        assert_eq!(
+            store.get(&key, Column::Metadata).unwrap().unwrap(),
+            Vec::<u8>::with_capacity(0)
+        );
+    }
+
+    #[test]
+    fn can_use_unit_key() {
+        let key: Vec<u8> = Vec::with_capacity(0);
+
+        let store = Arc::new(MemoryStore::default());
+        let db = MemoryTransactionView::new(store.clone());
+        db.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+
+        assert_eq!(
+            db.get(&key, Column::Metadata).unwrap().unwrap(),
+            vec![1, 2, 3]
+        );
+
+        assert!(db.exists(&key, Column::Metadata).unwrap());
+
+        assert_eq!(
+            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap(),
+            vec![(key.clone(), vec![1, 2, 3])]
+        );
+
+        assert_eq!(
+            db.delete(&key, Column::Metadata).unwrap().unwrap(),
+            vec![1, 2, 3]
+        );
+
+        assert!(!db.exists(&key, Column::Metadata).unwrap());
+
+        db.commit().unwrap();
+
+        assert!(!store.exists(&key, Column::Metadata).unwrap());
+
+        let store = Arc::new(MemoryStore::default());
+        let db = MemoryTransactionView::new(store.clone());
+        db.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+        db.commit().unwrap();
+
+        assert_eq!(
+            store.get(&key, Column::Metadata).unwrap().unwrap(),
+            vec![1, 2, 3]
+        );
+    }
+
+    #[test]
+    fn can_use_unit_key_and_value() {
+        let key: Vec<u8> = Vec::with_capacity(0);
+
+        let store = Arc::new(MemoryStore::default());
+        let db = MemoryTransactionView::new(store.clone());
+        db.put(&key, Column::Metadata, vec![]).unwrap();
+
+        assert_eq!(
+            db.get(&key, Column::Metadata).unwrap().unwrap(),
+            Vec::<u8>::with_capacity(0)
+        );
+
+        assert!(db.exists(&key, Column::Metadata).unwrap());
+
+        assert_eq!(
+            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap(),
+            vec![(key.clone(), Vec::<u8>::with_capacity(0))]
+        );
+
+        assert_eq!(
+            db.delete(&key, Column::Metadata).unwrap().unwrap(),
+            Vec::<u8>::with_capacity(0)
+        );
+
+        assert!(!db.exists(&key, Column::Metadata).unwrap());
+
+        db.commit().unwrap();
+
+        assert!(!store.exists(&key, Column::Metadata).unwrap());
+
+        let store = Arc::new(MemoryStore::default());
+        let db = MemoryTransactionView::new(store.clone());
+        db.put(&key, Column::Metadata, vec![]).unwrap();
+        db.commit().unwrap();
+
+        assert_eq!(
+            store.get(&key, Column::Metadata).unwrap().unwrap(),
+            Vec::<u8>::with_capacity(0)
+        );
     }
 }

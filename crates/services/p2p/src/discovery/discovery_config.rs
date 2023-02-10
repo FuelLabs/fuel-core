@@ -2,7 +2,6 @@ use crate::discovery::{
     mdns::MdnsWrapper,
     DiscoveryBehaviour,
 };
-use futures_timer::Delay;
 use libp2p::{
     kad::{
         store::MemoryStore,
@@ -121,7 +120,7 @@ impl DiscoveryConfig {
         // kademlia setup
         let memory_store = MemoryStore::new(local_peer_id.to_owned());
         let mut kademlia_config = KademliaConfig::default();
-        let network = format!("/fuel/kad/{}/kad/1.0.0", network_name);
+        let network = format!("/fuel/kad/{network_name}/kad/1.0.0");
         let network_name = network.as_bytes().to_vec();
         kademlia_config.set_protocol_names(vec![network_name.into()]);
         kademlia_config.set_connection_idle_timeout(connection_idle_timeout);
@@ -161,7 +160,9 @@ impl DiscoveryConfig {
         }
 
         let next_kad_random_walk = {
-            let random_walk = self.random_walk.map(Delay::new);
+            let random_walk = self
+                .random_walk
+                .map(|duration| Box::pin(tokio::time::sleep(duration)));
 
             // no need to preferm random walk if we don't want the node to connect to non-whitelisted peers
             if !reserved_nodes_only_mode {

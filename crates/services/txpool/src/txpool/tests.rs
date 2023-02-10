@@ -402,8 +402,7 @@ async fn overpriced_tx_contract_input_not_inserted() {
             err.downcast_ref::<Error>(),
             Some(Error::NotInsertedContractPricedLower(id)) if id == &contract_id
         ),
-        "wrong err {:?}",
-        err
+        "wrong err {err:?}"
     );
 }
 
@@ -490,8 +489,7 @@ async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
     assert_eq!(
         vec.removed.len(),
         2,
-        "Tx1 and Tx2 should be removed:{:?}",
-        vec
+        "Tx1 and Tx2 should be removed:{vec:?}",
     );
     assert_eq!(vec.removed[0].id(), tx1.id(), "Tx1 id should be removed");
     assert_eq!(vec.removed[1].id(), tx2.id(), "Tx2 id should be removed");
@@ -534,8 +532,7 @@ async fn more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
     assert_eq!(
         squeezed.removed.len(),
         1,
-        "Tx2 should be removed:{:?}",
-        squeezed
+        "Tx2 should be removed:{squeezed:?}"
     );
 }
 
@@ -798,7 +795,7 @@ async fn tx_below_min_gas_price_is_not_insertable() {
 
 #[tokio::test]
 async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
-    let (message, input) = create_message_predicate_from_message(5000, None);
+    let (message, input) = create_message_predicate_from_message(5000);
 
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
@@ -819,8 +816,7 @@ async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
 
 #[tokio::test]
 async fn tx_rejected_when_input_message_id_is_spent() {
-    let (message, input) =
-        create_message_predicate_from_message(5_000, Some(1u64.into()));
+    let (message, input) = create_message_predicate_from_message(5_000);
 
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
@@ -831,6 +827,7 @@ async fn tx_rejected_when_input_message_id_is_spent() {
 
     let db = MockDb::default();
     db.insert_message(message.clone());
+    db.spend_message(message.id());
     let mut txpool = TxPool::new(Default::default(), db);
 
     let err = txpool.insert_inner(tx).expect_err("should fail");
@@ -844,7 +841,7 @@ async fn tx_rejected_when_input_message_id_is_spent() {
 
 #[tokio::test]
 async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
-    let (message, input) = create_message_predicate_from_message(5000, None);
+    let (message, input) = create_message_predicate_from_message(5000);
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_limit(GAS_LIMIT)
@@ -873,7 +870,7 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
     let gas_price_high = 2u64;
     let gas_price_low = 1u64;
     let (message, conflicting_message_input) =
-        create_message_predicate_from_message(message_amount, None);
+        create_message_predicate_from_message(message_amount);
 
     let tx_high = Arc::new(
         TransactionBuilder::script(vec![], vec![])
@@ -920,7 +917,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
     let gas_price_high = 2u64;
     let gas_price_low = 1u64;
     let (message, conflicting_message_input) =
-        create_message_predicate_from_message(message_amount, None);
+        create_message_predicate_from_message(message_amount);
 
     // Insert a tx for the message id with a low gas amount
     let tx_low = Arc::new(
@@ -964,10 +961,8 @@ async fn message_of_squeezed_out_tx_can_be_resubmitted_at_lower_gas_price() {
     // tx3 (message 2) gas_price 1
     //   works since tx1 is no longer part of txpool state even though gas price is less
 
-    let (message_1, message_input_1) =
-        create_message_predicate_from_message(10_000, None);
-    let (message_2, message_input_2) =
-        create_message_predicate_from_message(20_000, None);
+    let (message_1, message_input_1) = create_message_predicate_from_message(10_000);
+    let (message_2, message_input_2) = create_message_predicate_from_message(20_000);
 
     // Insert a tx for the message id with a low gas amount
     let tx_1 = Arc::new(

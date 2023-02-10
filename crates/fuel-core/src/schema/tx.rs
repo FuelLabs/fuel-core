@@ -22,6 +22,7 @@ use crate::{
     },
     state::IterDirection,
 };
+use anyhow::anyhow;
 use async_graphql::{
     connection::{
         Connection,
@@ -31,7 +32,6 @@ use async_graphql::{
     Object,
     Subscription,
 };
-use fuel_core_poa::ports::BlockProducer as BlockProducerTrait;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     fuel_tx::{
@@ -43,7 +43,6 @@ use fuel_core_types::{
 };
 use futures::{
     Stream,
-    StreamExt,
     TryStreamExt,
 };
 use itertools::Itertools;
@@ -52,7 +51,6 @@ use std::{
     ops::Deref,
     sync::Arc,
 };
-use tokio_stream::wrappers::BroadcastStream;
 use types::Transaction;
 
 use self::types::TransactionStatus;
@@ -76,7 +74,7 @@ impl TxQuery {
         let id = id.0;
         let txpool = ctx.data_unchecked::<TxPool>();
 
-        if let Some(transaction) = txpool.shared.find_one(id) {
+        if let Some(transaction) = txpool.find_one(id) {
             Ok(Some(Transaction(transaction.tx().clone().deref().into())))
         } else {
             query.transaction(&id).into_api_result()
@@ -156,6 +154,13 @@ impl TxQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<TxPointer, Transaction, EmptyFields, EmptyFields>>
     {
+        // Rocksdb doesn't support reverse iteration over a prefix
+        if matches!(last, Some(last) if last > 0) {
+            return Err(
+                anyhow!("reverse pagination isn't supported for this resource").into(),
+            )
+        }
+
         let query = TransactionQueryContext(ctx.data_unchecked());
         let owner = fuel_types::Address::from(owner);
 
@@ -167,7 +172,7 @@ impl TxQuery {
             |start: &Option<TxPointer>, direction| {
                 let start = (*start).map(Into::into);
                 let txs = query
-                    .owned_transactions(&owner, start, direction)
+                    .owned_transactions(owner, start, direction)
                     .map(|result| result.map(|(cursor, tx)| (cursor.into(), tx.into())));
                 Ok(txs)
             },
@@ -196,7 +201,7 @@ impl TxMutation {
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute();
 
-        let receipts = block_producer.dry_run(tx, None, utxo_validation).await?;
+        let receipts = block_producer.dry_run_tx(tx, None, utxo_validation).await?;
         Ok(receipts.iter().map(Into::into).collect())
     }
 
@@ -210,7 +215,6 @@ impl TxMutation {
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute();
         let _: Vec<_> = txpool
-            .shared
             .insert(vec![Arc::new(tx.clone())])
             .into_iter()
             .try_collect()?;
@@ -224,7 +228,7 @@ impl TxMutation {
 pub struct TxStatusSubscription;
 
 struct StreamState<'a> {
-    txpool: TxPool,
+    txpool: &'a TxPool,
     db: &'a Database,
 }
 
@@ -247,12 +251,12 @@ impl TxStatusSubscription {
         ctx: &Context<'a>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a {
-        let txpool = ctx.data_unchecked::<TxPool>().clone();
+        let txpool = ctx.data_unchecked::<TxPool>();
         let db = ctx.data_unchecked::<Database>();
-        let rx = BroadcastStream::new(txpool.shared.tx_update_subscribe());
+        let rx = txpool.tx_update_subscribe();
         let state = StreamState { txpool, db };
 
-        transaction_status_change(state, rx.boxed(), id.into())
+        transaction_status_change(state, rx, id.into())
             .await
             .map_err(async_graphql::Error::from)
     }
@@ -264,6 +268,6 @@ impl<'a> TxnStatusChangeState for StreamState<'a> {
         &self,
         id: fuel_types::Bytes32,
     ) -> StorageResult<Option<TransactionStatus>> {
-        types::get_tx_status(id, &TransactionQueryContext(self.db), &self.txpool).await
+        types::get_tx_status(id, &TransactionQueryContext(self.db), self.txpool).await
     }
 }
