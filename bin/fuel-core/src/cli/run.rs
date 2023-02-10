@@ -21,6 +21,7 @@ use fuel_core::{
         config::Trigger,
         Config,
         DbType,
+        RelayerVerifierConfig,
         ServiceTrait,
         VMConfig,
     },
@@ -144,6 +145,11 @@ pub struct Command {
 
     #[arg(long = "metrics", env)]
     pub metrics: bool,
+
+    #[clap(long = "verify_max_da_lag", default_value = "10", env)]
+    pub max_da_lag: u64,
+    #[clap(long = "verify_max_relayer_wait", default_value = "30s", env)]
+    pub max_wait_time: humantime::Duration,
 }
 
 impl Command {
@@ -169,6 +175,8 @@ impl Command {
             #[cfg(feature = "p2p")]
             sync_args,
             metrics,
+            max_da_lag,
+            max_wait_time,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -218,6 +226,11 @@ impl Command {
                 .unwrap_or_default()
         };
 
+        let verifier = RelayerVerifierConfig {
+            max_da_lag: max_da_lag.into(),
+            max_wait_time: max_wait_time.into(),
+        };
+
         Ok(Config {
             addr,
             database_path,
@@ -245,6 +258,7 @@ impl Command {
             sync: sync_args.into(),
             consensus_key,
             name: String::default(),
+            verifier,
         })
     }
 }
@@ -257,7 +271,14 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     // initialize the server
     let server = FuelService::new_node(config).await?;
     // pause the main task while service is running
-    server.await_stop().await?;
+    tokio::select! {
+        result = server.await_stop() => {
+            result?;
+        }
+        _ = shutdown_signal() => {}
+    }
+
+    server.stop_and_await().await?;
 
     Ok(())
 }
@@ -280,4 +301,33 @@ fn load_consensus_key(
     } else {
         Ok(None)
     }
+}
+
+async fn shutdown_signal() -> anyhow::Result<()> {
+    #[cfg(unix)]
+    {
+        let mut sigterm =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+
+        let mut sigint =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
+        loop {
+            tokio::select! {
+                _ = sigterm.recv() => {
+                    tracing::info!("sigterm received");
+                    break;
+                }
+                _ = sigint.recv() => {
+                    tracing::log::info!("sigint received");
+                    break;
+                }
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        tokio::signal::ctrl_c().await?;
+        tracing::log::info!("CTRL+C received");
+    }
+    Ok(())
 }

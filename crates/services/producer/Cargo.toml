@@ -1,28 +1,28 @@
 [package]
-authors = ["Fuel Labs <contact@fuel.sh>"]
+authors = { workspace = true }
 description = "Fuel Block Producer"
-edition = "2021"
-homepage = "https://fuel.network/"
+edition = { workspace = true }
+homepage = { workspace = true }
 keywords = ["blockchain", "fuel", "fuel-vm"]
-license = "BUSL-1.1"
+license = { workspace = true }
 name = "fuel-core-producer"
-repository = "https://github.com/FuelLabs/fuel-core"
-version = "0.16.1"
+repository = { workspace = true }
+version = { workspace = true }
 
 [dependencies]
-anyhow = "1.0"
-async-trait = "0.1"
-fuel-core-storage = { path = "../../storage", version = "0.16.1" }
-fuel-core-types = { path = "../../types", version = "0.16.1" }
-thiserror = "1.0"
-tokio = { version = "1.21", features = ["full"] }
-tracing = { version = "0.1" }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+fuel-core-storage = { workspace = true }
+fuel-core-types = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
 
 [dev-dependencies]
 fuel-core-producer = { path = "", features = ["test-helpers"] }
 fuel-core-trace = { path = "../../trace" }
 fuel-core-types = { path = "../../types", features = ["test-helpers"] }
-rand = "0.8"
+rand = { workspace = true }
 
 [features]
 test-helpers = ["fuel-core-types/test-helpers"]

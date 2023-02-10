@@ -3,10 +3,7 @@ use fuel_core::service::{
     FuelService,
 };
 use fuel_core_client::client::FuelClient;
-use fuel_core_types::{
-    fuel_asm::*,
-    fuel_vm::consts::*,
-};
+use fuel_core_types::fuel_asm::*;
 use std::convert::TryInto;
 
 #[tokio::test]
@@ -47,7 +44,7 @@ async fn reset() {
     assert_eq!(0x00, register);
 
     let result = client
-        .execute(id, &Opcode::ADDI(0x10, 0x10, 0xfa))
+        .execute(id, &op::addi(0x10, 0x10, 0xfa))
         .await
         .unwrap();
     assert!(result);
@@ -56,24 +53,21 @@ async fn reset() {
     assert_eq!(0xfa, register);
 
     let result = client
-        .execute(id, &Opcode::ADDI(0x11, 0x11, 0x08))
+        .execute(id, &op::addi(0x11, 0x11, 0x08))
         .await
         .unwrap();
     assert!(result);
 
-    let result = client.execute(id, &Opcode::ALOC(0x11)).await.unwrap();
-    assert!(result);
-
-    let result = client
-        .execute(id, &Opcode::ADDI(0x11, REG_HP, 1))
-        .await
-        .unwrap();
+    let result = client.execute(id, &op::aloc(0x11)).await.unwrap();
     assert!(result);
 
     let result = client
-        .execute(id, &Opcode::SW(0x11, 0x10, 0))
+        .execute(id, &op::addi(0x11, RegId::HP, 1))
         .await
         .unwrap();
+    assert!(result);
+
+    let result = client.execute(id, &op::sw(0x11, 0x10, 0)).await.unwrap();
     assert!(result);
 
     let memory = client.register(id, 0x11).await.unwrap();

@@ -35,7 +35,7 @@ impl TxPoolAdapter {
 
 #[derive(Clone)]
 pub struct ExecutorAdapter {
-    pub database: Database,
+    pub relayer: MaybeRelayerAdapter,
     pub config: Config,
 }
 
@@ -48,7 +48,9 @@ pub struct VerifierAdapter {
 pub struct MaybeRelayerAdapter {
     pub database: Database,
     #[cfg(feature = "relayer")]
-    pub relayer_synced: Option<fuel_core_relayer::SharedState>,
+    pub relayer_synced: Option<fuel_core_relayer::SharedState<Database>>,
+    #[cfg(feature = "relayer")]
+    pub da_deploy_height: fuel_core_types::blockchain::primitives::DaBlockHeight,
 }
 
 #[derive(Clone)]

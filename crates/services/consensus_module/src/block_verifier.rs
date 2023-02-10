@@ -8,13 +8,19 @@ mod tests;
 
 use crate::block_verifier::config::Config;
 use anyhow::ensure;
-use fuel_core_poa::ports::Database as PoAVerifierDatabase;
+use fuel_core_poa::ports::{
+    Database as PoAVerifierDatabase,
+    RelayerPort,
+};
 use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::Consensus,
         header::BlockHeader,
-        primitives::BlockHeight,
+        primitives::{
+            BlockHeight,
+            DaBlockHeight,
+        },
         SealedBlockHeader,
     },
     fuel_types::Bytes32,
@@ -25,16 +31,16 @@ use fuel_core_types::{
 pub struct Verifier<D, R> {
     config: Config,
     database: D,
-    _relayer: R,
+    relayer: R,
 }
 
 impl<D, R> Verifier<D, R> {
     /// Creates a new instance of the verifier.
-    pub fn new(config: Config, database: D, _relayer: R) -> Self {
+    pub fn new(config: Config, database: D, relayer: R) -> Self {
         Self {
             config,
             database,
-            _relayer,
+            relayer,
         }
     }
 }
@@ -42,6 +48,7 @@ impl<D, R> Verifier<D, R> {
 impl<D, R> Verifier<D, R>
 where
     D: PoAVerifierDatabase,
+    R: RelayerPort,
 {
     /// Verifies **all** fields of the block based on used consensus to produce a block.
     ///
@@ -84,6 +91,18 @@ where
                 consensus,
             ),
         }
+    }
+
+    /// Wait for the relayer to be in sync with the given DA height
+    /// if the `da_height` is within the range of the current
+    /// relayer sync'd height - `max_da_lag`.
+    pub async fn await_da_height(&self, da_height: &DaBlockHeight) -> anyhow::Result<()> {
+        tokio::time::timeout(
+            self.config.relayer.max_wait_time,
+            self.relayer
+                .await_until_if_in_range(da_height, &self.config.relayer.max_da_lag),
+        )
+        .await?
     }
 }
 

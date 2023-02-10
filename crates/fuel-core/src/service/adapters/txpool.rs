@@ -11,6 +11,7 @@ use fuel_core_storage::{
         Coins,
         ContractsRawCode,
         Messages,
+        SpentMessages,
     },
     Result as StorageResult,
     StorageAsRef,
@@ -20,7 +21,7 @@ use fuel_core_types::{
     blockchain::primitives::BlockHeight,
     entities::{
         coin::CompressedCoin,
-        message::Message,
+        message::CompressedMessage,
     },
     fuel_tx::{
         Transaction,
@@ -118,10 +119,17 @@ impl fuel_core_txpool::ports::TxPoolDb for Database {
         self.storage::<ContractsRawCode>().contains_key(contract_id)
     }
 
-    fn message(&self, message_id: &MessageId) -> StorageResult<Option<Message>> {
+    fn message(
+        &self,
+        message_id: &MessageId,
+    ) -> StorageResult<Option<CompressedMessage>> {
         self.storage::<Messages>()
             .get(message_id)
             .map(|t| t.map(|t| t.as_ref().clone()))
+    }
+
+    fn is_message_spent(&self, message_id: &MessageId) -> StorageResult<bool> {
+        self.storage::<SpentMessages>().contains_key(message_id)
     }
 
     fn current_block_height(&self) -> StorageResult<BlockHeight> {

@@ -9,10 +9,7 @@ use fuel_core_services::{
     State,
     StateWatcher,
 };
-use std::{
-    net::SocketAddr,
-    panic,
-};
+use std::net::SocketAddr;
 use tracing::log::warn;
 
 pub use config::{
@@ -21,6 +18,8 @@ pub use config::{
     VMConfig,
 };
 pub use fuel_core_services::Service as ServiceTrait;
+
+pub use fuel_core_consensus_module::RelayerVerifierConfig;
 
 use self::adapters::BlockImporterAdapter;
 
@@ -39,7 +38,7 @@ pub struct SharedState {
     pub network: fuel_core_p2p::service::SharedState,
     #[cfg(feature = "relayer")]
     /// The Relayer shared state.
-    pub relayer: Option<fuel_core_relayer::SharedState>,
+    pub relayer: Option<fuel_core_relayer::SharedState<Database>>,
     /// The GraphQL shared state.
     pub graph_ql: crate::fuel_core_graphql_api::service::SharedState,
     /// Subscribe to new block production.
@@ -83,7 +82,17 @@ impl FuelService {
         // initialize database
         let database = match config.database_type {
             #[cfg(feature = "rocksdb")]
-            DbType::RocksDb => Database::open(&config.database_path)?,
+            DbType::RocksDb => {
+                // use a default tmp rocksdb if no path is provided
+                if config.database_path.as_os_str().is_empty() {
+                    warn!(
+                        "No RocksDB path configured, initializing database with a tmp directory"
+                    );
+                    Database::default()
+                } else {
+                    Database::open(&config.database_path)?
+                }
+            }
             DbType::InMemory => Database::in_memory(),
             #[cfg(not(feature = "rocksdb"))]
             _ => Database::in_memory(),
@@ -221,7 +230,6 @@ impl RunnableTask for Task {
         for service in &self.services {
             stop_signals.push(service.await_stop())
         }
-        stop_signals.push(Box::pin(shutdown_signal()));
         stop_signals.push(Box::pin(watcher.while_started()));
 
         let (result, _, _) = futures::future::select_all(stop_signals).await;
@@ -245,35 +253,6 @@ impl RunnableTask for Task {
 
         Ok(false /* should_continue */)
     }
-}
-
-async fn shutdown_signal() -> anyhow::Result<State> {
-    #[cfg(unix)]
-    {
-        let mut sigterm =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
-
-        let mut sigint =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
-        loop {
-            tokio::select! {
-                _ = sigterm.recv() => {
-                    tracing::info!("sigterm received");
-                    break;
-                }
-                _ = sigint.recv() => {
-                    tracing::log::info!("sigint received");
-                    break;
-                }
-            }
-        }
-    }
-    #[cfg(not(unix))]
-    {
-        tokio::signal::ctrl_c().await?;
-        tracing::log::info!("CTRL+C received");
-    }
-    Ok(State::Stopped)
 }
 
 #[cfg(test)]

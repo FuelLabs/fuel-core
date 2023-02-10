@@ -6,7 +6,10 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         header::BlockHeader,
-        primitives::BlockHeight,
+        primitives::{
+            BlockHeight,
+            DaBlockHeight,
+        },
     },
     fuel_asm::Word,
     fuel_tx::{
@@ -79,4 +82,18 @@ pub trait Database {
 
     /// Gets the block header BMT MMR root at `height`.
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32>;
+}
+
+#[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
+/// Port for communication with the relayer.
+pub trait RelayerPort {
+    /// Wait for the relayer to be in sync with the given DA height
+    /// if the `da_height` is within the range of the current
+    /// relayer sync'd height - `max_da_lag`.
+    async fn await_until_if_in_range(
+        &self,
+        da_height: &DaBlockHeight,
+        max_da_lag: &DaBlockHeight,
+    ) -> anyhow::Result<()>;
 }

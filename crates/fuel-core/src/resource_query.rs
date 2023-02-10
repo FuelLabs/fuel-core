@@ -241,7 +241,10 @@ mod tests {
                 CoinStatus,
                 CompressedCoin,
             },
-            message::Message,
+            message::{
+                CompressedMessage,
+                Message,
+            },
         },
         fuel_asm::Word,
         fuel_tx::*,
@@ -878,18 +881,21 @@ mod tests {
             coin.uncompress(id)
         }
 
-        pub fn make_message(&mut self, owner: Address, amount: Word) -> Message {
+        pub fn make_message(
+            &mut self,
+            owner: Address,
+            amount: Word,
+        ) -> CompressedMessage {
             let nonce = self.last_message_index;
             self.last_message_index += 1;
 
-            let message = Message {
+            let message = CompressedMessage {
                 sender: Default::default(),
                 recipient: owner,
                 nonce,
                 amount,
                 data: vec![],
                 da_height: DaBlockHeight::from(1u64),
-                fuel_block_spend: None,
             };
 
             let db = &mut self.database;

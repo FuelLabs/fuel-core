@@ -5,3 +5,4 @@
 extern crate core;
 
 pub mod block_verifier;
+pub use block_verifier::config::RelayerVerifierConfig;

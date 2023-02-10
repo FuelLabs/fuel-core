@@ -7,7 +7,7 @@ use fuel_core_types::{
             Coin,
             CompressedCoin,
         },
-        message::Message,
+        message::CompressedMessage,
     },
     fuel_tx::{
         Contract,
@@ -17,7 +17,10 @@ use fuel_core_types::{
     },
 };
 use std::{
-    collections::HashMap,
+    collections::{
+        HashMap,
+        HashSet,
+    },
     sync::{
         Arc,
         Mutex,
@@ -28,7 +31,8 @@ use std::{
 pub struct Data {
     pub coins: HashMap<UtxoId, CompressedCoin>,
     pub contracts: HashMap<ContractId, Contract>,
-    pub messages: HashMap<MessageId, Message>,
+    pub messages: HashMap<MessageId, CompressedMessage>,
+    pub spent_messages: HashSet<MessageId>,
 }
 
 #[derive(Clone, Default)]
@@ -45,12 +49,16 @@ impl MockDb {
             .insert(coin.utxo_id, coin.compress());
     }
 
-    pub fn insert_message(&self, message: Message) {
+    pub fn insert_message(&self, message: CompressedMessage) {
         self.data
             .lock()
             .unwrap()
             .messages
             .insert(message.id(), message);
+    }
+
+    pub fn spend_message(&self, message_id: MessageId) {
+        self.data.lock().unwrap().spent_messages.insert(message_id);
     }
 }
 
@@ -74,7 +82,10 @@ impl TxPoolDb for MockDb {
             .contains_key(contract_id))
     }
 
-    fn message(&self, message_id: &MessageId) -> StorageResult<Option<Message>> {
+    fn message(
+        &self,
+        message_id: &MessageId,
+    ) -> StorageResult<Option<CompressedMessage>> {
         Ok(self
             .data
             .lock()
@@ -82,6 +93,15 @@ impl TxPoolDb for MockDb {
             .messages
             .get(message_id)
             .map(Clone::clone))
+    }
+
+    fn is_message_spent(&self, message_id: &MessageId) -> StorageResult<bool> {
+        Ok(self
+            .data
+            .lock()
+            .unwrap()
+            .spent_messages
+            .contains(message_id))
     }
 
     fn current_block_height(&self) -> StorageResult<BlockHeight> {

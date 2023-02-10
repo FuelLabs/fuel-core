@@ -41,7 +41,6 @@ type DatabaseError = Error;
 type DatabaseResult<T> = Result<T>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
-
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
 #[cfg(feature = "rocksdb")]
@@ -113,10 +112,17 @@ pub enum Column {
     FuelBlockMerkleData = 17,
     /// See [`FuelBlockMerkleData`](storage::FuelBlockMerkleData)
     FuelBlockMerkleMetadata = 18,
+    /// Messages that have been spent.
+    /// Existence of a key in this column means that the message has been spent.
+    /// See [`SpentMessages`](fuel_core_storage::tables::SpentMessages)
+    SpentMessages = 19,
+    /// Metadata for the relayer
+    /// See [`RelayerMetadata`](fuel_core_relayer::ports::RelayerMetadata)
+    RelayerMetadata = 20,
     /// See [`ContractsAssetsMerkleData`](storage::ContractsAssetsMerkleData)
-    ContractsAssetsMerkleData = 19,
+    ContractsAssetsMerkleData = 21,
     /// See [`ContractsAssetsMerkleMetadata`](storage::ContractsAssetsMerkleMetadata)
-    ContractsAssetsMerkleMetadata = 20,
+    ContractsAssetsMerkleMetadata = 22,
 }
 
 #[derive(Clone, Debug)]
@@ -166,7 +172,8 @@ unsafe impl Sync for Database {}
 impl Database {
     #[cfg(feature = "rocksdb")]
     pub fn open(path: &Path) -> DatabaseResult<Self> {
-        let db = RocksDb::default_open(path)?;
+        use anyhow::Context;
+        let db = RocksDb::default_open(path).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
 
         Ok(Database {
             data: Arc::new(db),
@@ -302,7 +309,9 @@ impl Database {
     }
 }
 
-impl Transactional<Database> for Database {
+impl Transactional for Database {
+    type Storage = Database;
+
     fn transaction(&self) -> StorageTransaction<Database> {
         StorageTransaction::new(self.transaction())
     }

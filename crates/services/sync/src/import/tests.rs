@@ -36,6 +36,9 @@ use super::*;
         consensus_port.expect_check_sealed_header()
             .times(2)
             .returning(|h| Ok(**h.entity.height() != 5));
+        consensus_port.expect_await_da_height()
+            .times(1)
+            .returning(|_| Ok(()));
         Mocks{
             consensus_port,
             p2p: DefaultMocks::times([2, 1]),
@@ -348,6 +351,9 @@ use super::*;
             } else {
                 Ok(true)
             });
+        consensus_port.expect_await_da_height()
+            .times(1)
+            .returning(|_| Ok(()));
         Mocks{
             consensus_port,
             p2p: DefaultMocks::times([2, 1]),
@@ -549,10 +555,15 @@ impl DefaultMocks for MockConsensusPort {
         <T as IntoIterator>::IntoIter: Clone,
     {
         let mut consensus_port = MockConsensusPort::new();
+        let mut t = t.into_iter().cycle();
         consensus_port
             .expect_check_sealed_header()
-            .times(t.into_iter().next().unwrap())
+            .times(t.next().unwrap())
             .returning(|_| Ok(true));
+        consensus_port
+            .expect_await_da_height()
+            .times(t.next().unwrap())
+            .returning(|_| Ok(()));
         consensus_port
     }
 }

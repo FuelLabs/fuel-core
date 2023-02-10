@@ -51,6 +51,7 @@ pub struct Config {
     pub sync: fuel_core_sync::Config,
     pub consensus_key: Option<Secret<SecretKeyWrapper>>,
     pub name: String,
+    pub verifier: fuel_core_consensus_module::RelayerVerifierConfig,
 }
 
 impl Config {
@@ -61,6 +62,9 @@ impl Config {
         Self {
             addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
             database_path: Default::default(),
+            #[cfg(feature = "rocksdb")]
+            database_type: DbType::RocksDb,
+            #[cfg(not(feature = "rocksdb"))]
             database_type: DbType::InMemory,
             chain_conf: chain_conf.clone(),
             manual_blocks_enabled: false,
@@ -80,12 +84,10 @@ impl Config {
             #[cfg(feature = "p2p")]
             p2p: P2PConfig::<NotInitialized>::default("test_network"),
             #[cfg(feature = "p2p")]
-            sync: fuel_core_sync::Config {
-                max_get_header_requests: 10,
-                max_get_txns_requests: 10,
-            },
+            sync: fuel_core_sync::Config::default(),
             consensus_key: Some(Secret::new(default_consensus_dev_key().into())),
             name: String::default(),
+            verifier: Default::default(),
         }
     }
 }

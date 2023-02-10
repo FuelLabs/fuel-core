@@ -7,5 +7,5 @@ cargo clippy --all-targets --all-features &&
 cargo make check --locked &&
 cargo make check --all-features --locked &&
 cargo test --all-features --workspace &&
-cargo test --no-default-features --workspace &&
+cargo make test --no-default-features &&
 cargo test --manifest-path version-compatibility/Cargo.toml --workspace

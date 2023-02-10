@@ -22,6 +22,7 @@ use fuel_core_types::{
     fuel_types::{
         Bytes32,
         ContractId,
+        MessageId,
     },
 };
 use serde::{
@@ -232,6 +233,14 @@ impl ToDatabaseKey for ContractId {
     }
 }
 
+impl ToDatabaseKey for MessageId {
+    type Type<'a> = &'a [u8];
+
+    fn database_key(&self) -> Self::Type<'_> {
+        self.as_ref()
+    }
+}
+
 impl ToDatabaseKey for BlockId {
     type Type<'a> = &'a [u8];
 
@@ -245,5 +254,13 @@ impl ToDatabaseKey for TxId {
 
     fn database_key(&self) -> Self::Type<'_> {
         self.as_ref()
+    }
+}
+
+impl ToDatabaseKey for () {
+    type Type<'a> = &'a [u8];
+
+    fn database_key(&self) -> Self::Type<'_> {
+        &[]
     }
 }

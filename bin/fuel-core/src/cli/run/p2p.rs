@@ -8,6 +8,7 @@ use fuel_core::{
             NotInitialized,
         },
         gossipsub_config::default_gossipsub_builder,
+        HeartbeatConfig,
         Multiaddr,
     },
     types::{
@@ -20,6 +21,7 @@ use std::{
         IpAddr,
         Ipv4Addr,
     },
+    num::NonZeroU32,
     path::PathBuf,
     str::FromStr,
     time::Duration,
@@ -130,9 +132,9 @@ pub struct P2PArgs {
     #[clap(long = "history_gossip", default_value = "3", env)]
     pub history_gossip: usize,
 
-    /// Time between each heartbeat
-    #[clap(long = "heartbeat_interval", default_value = "1", env)]
-    pub heartbeat_interval: u64,
+    /// Time between each gossipsub heartbeat
+    #[clap(long = "gossip_heartbeat_interval", default_value = "1", env)]
+    pub gossip_heartbeat_interval: u64,
 
     /// The maximum byte size for each gossip
     #[clap(long = "max_transmit_size", default_value = "2048", env)]
@@ -145,6 +147,20 @@ pub struct P2PArgs {
     /// Choose how long RequestResponse protocol connections will live if idle
     #[clap(long = "connection_keep_alive", default_value = "20", env)]
     pub connection_keep_alive: u64,
+
+    /// Sending of `BlockHeight` should not take longer than this duration, in seconds.
+    #[clap(long = "heartbeat_send_duration", default_value = "2", env)]
+    pub heartbeat_send_duration: u64,
+
+    /// Idle time in seconds before sending next `BlockHeight`
+    #[clap(long = "heartbeat_idle_duration", default_value = "1", env)]
+    pub heartbeat_idle_duration: u64,
+
+    /// Max failures allowed at `Heartbeat` protocol.
+    /// If reached, the protocol will request disconnect.
+    /// Cannot be zero.
+    #[clap(long = "heartbeat_max_failures", default_value = "5", env)]
+    pub heartbeat_max_failures: NonZeroU32,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -224,7 +240,7 @@ impl P2PArgs {
             .mesh_n_high(self.max_mesh_size)
             .history_length(self.history_length)
             .history_gossip(self.history_gossip)
-            .heartbeat_interval(Duration::from_secs(self.heartbeat_interval))
+            .heartbeat_interval(Duration::from_secs(self.gossip_heartbeat_interval))
             .max_transmit_size(self.max_transmit_size)
             .build()
             .expect("valid gossipsub configuration");
@@ -233,6 +249,16 @@ impl P2PArgs {
             None
         } else {
             Some(Duration::from_secs(self.random_walk))
+        };
+
+        let heartbeat_config = {
+            let send_duration = Duration::from_secs(self.heartbeat_send_duration);
+            let idle_duration = Duration::from_secs(self.heartbeat_idle_duration);
+            HeartbeatConfig::new(
+                send_duration,
+                idle_duration,
+                self.heartbeat_max_failures,
+            )
         };
 
         Ok(Config {
@@ -258,6 +284,7 @@ impl P2PArgs {
             )),
             topics: self.topics,
             gossipsub_config,
+            heartbeat_config,
             set_request_timeout: Duration::from_secs(self.request_timeout),
             set_connection_keep_alive: Duration::from_secs(self.connection_keep_alive),
             info_interval: Some(Duration::from_secs(self.info_interval)),

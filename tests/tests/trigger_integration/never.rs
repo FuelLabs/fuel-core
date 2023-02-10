@@ -12,7 +12,7 @@ use fuel_core_client::client::{
 };
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
-    fuel_asm::Opcode,
+    fuel_asm::op,
     fuel_crypto::SecretKey,
     fuel_tx::{
         Finalizable,
@@ -38,10 +38,8 @@ async fn poa_never_trigger_doesnt_produce_blocks() {
     let client = FuelClient::from(srv.bound_address);
 
     for i in 0..10 {
-        let mut tx = TransactionBuilder::script(
-            [Opcode::MOVI(0x10, i)].into_iter().collect(),
-            vec![],
-        );
+        let mut tx =
+            TransactionBuilder::script([op::movi(0x10, i)].into_iter().collect(), vec![]);
         let _tx_id = client.submit(&tx.finalize().into()).await.unwrap();
         tokio::time::advance(tokio::time::Duration::new(10, 0)).await;
         let resp = client

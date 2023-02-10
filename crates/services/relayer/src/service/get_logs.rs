@@ -1,5 +1,4 @@
 use super::*;
-use anyhow::anyhow;
 use futures::TryStreamExt;
 
 #[cfg(test)]
@@ -29,7 +28,8 @@ where
                         let filter = Filter::new()
                             .from_block(page.oldest())
                             .to_block(page.latest())
-                            .address(ValueOrArray::Array(contracts));
+                            .address(ValueOrArray::Array(contracts))
+                            .topic0(*crate::config::ETH_LOG_MESSAGE);
 
                         tracing::info!(
                             "Downloading logs for block range: {}..={}",
@@ -61,25 +61,23 @@ where
     S: futures::Stream<Item = Result<(u64, Vec<Log>), ProviderError>>,
 {
     tokio::pin!(logs);
-    while let Some((to_block, events)) = logs.try_next().await? {
-        for event in events {
-            let event: EthEventLog = (&event).try_into()?;
-            match event {
-                EthEventLog::Message(m) => {
-                    let m = Message::from(&m).check();
-                    if database.insert_message(&m)?.is_some() {
-                        // TODO: https://github.com/FuelLabs/fuel-core/issues/681
-                        return Err(anyhow!(
-                            "The message for {:?} already existed",
-                            m.id()
-                        ))
+    while let Some((height, events)) = logs.try_next().await? {
+        let messages = events
+            .into_iter()
+            .filter_map(|event| match EthEventLog::try_from(&event) {
+                Ok(event) => {
+                    match event {
+                        EthEventLog::Message(m) => {
+                            Some(Ok(CompressedMessage::from(&m).check()))
+                        }
+                        // TODO: Log out ignored messages.
+                        EthEventLog::Ignored => None,
                     }
                 }
-                // TODO: Log out ignored messages.
-                EthEventLog::Ignored => (),
-            }
-        }
-        database.set_finalized_da_height(to_block.into())?;
+                Err(e) => Some(Err(e)),
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        database.insert_messages(&height.into(), &messages)?;
     }
     Ok(())
 }

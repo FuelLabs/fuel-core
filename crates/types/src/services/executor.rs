@@ -251,6 +251,8 @@ pub enum Error {
     //  `fuel-core-executor`.
     #[error("got error during work with storage {0}")]
     StorageError(Box<dyn StdError + Send + Sync>),
+    #[error("got error during work with relayer {0}")]
+    RelayerError(Box<dyn StdError + Send + Sync>),
     #[error("Transaction({transaction_id:#x}) execution error: {error:?}")]
     VmExecution {
         error: InterpreterError,
@@ -294,6 +296,16 @@ pub enum TransactionValidityError {
     MessageSpendTooEarly(MessageId),
     #[error("The specified message doesn't exist")]
     MessageDoesNotExist(MessageId),
+    #[error("The input message sender doesn't match the relayer message sender")]
+    MessageSenderMismatch(MessageId),
+    #[error("The input message recipient doesn't match the relayer message recipient")]
+    MessageRecipientMismatch(MessageId),
+    #[error("The input message amount doesn't match the relayer message amount")]
+    MessageAmountMismatch(MessageId),
+    #[error("The input message nonce doesn't match the relayer message nonce")]
+    MessageNonceMismatch(MessageId),
+    #[error("The input message data doesn't match the relayer message data")]
+    MessageDataMismatch(MessageId),
     #[error("Contract output index isn't valid: {0:#x}")]
     InvalidContractInputIndex(UtxoId),
     #[error("The transaction must have at least one coin or message input type: {0:#x}")]

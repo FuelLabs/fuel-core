@@ -45,7 +45,7 @@ use fuel_core_types::{
             CoinStatus,
             CompressedCoin,
         },
-        message::Message,
+        message::CompressedMessage,
     },
     fuel_merkle::binary,
     fuel_tx::{
@@ -304,14 +304,13 @@ fn init_da_messages(
     if let Some(state) = &state {
         if let Some(message_state) = &state.messages {
             for msg in message_state {
-                let message = Message {
+                let message = CompressedMessage {
                     sender: msg.sender,
                     recipient: msg.recipient,
                     nonce: msg.nonce,
                     amount: msg.amount,
                     data: msg.data.clone(),
                     da_height: msg.da_height,
-                    fuel_block_spend: None,
                 };
 
                 let message_id = message.id();
@@ -371,7 +370,7 @@ mod tests {
             DaBlockHeight,
         },
         entities::coin::Coin,
-        fuel_asm::Opcode,
+        fuel_asm::op,
         fuel_types::{
             Address,
             AssetId,
@@ -539,7 +538,7 @@ mod tests {
         let test_value: Bytes32 = rng.gen();
         let state = vec![(test_key, test_value)];
         let salt: Salt = rng.gen();
-        let contract = Contract::from(Opcode::RET(0x10).to_bytes().to_vec());
+        let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
         let root = contract.root();
         let id = contract.id(&salt, &root, &Contract::default_state_root());
 
@@ -597,7 +596,7 @@ mod tests {
 
         maybe_initialize_state(&config, db).unwrap();
 
-        let expected_msg: Message = msg.into();
+        let expected_msg: CompressedMessage = msg.into();
 
         let ret_msg = db
             .storage::<Messages>()
@@ -617,7 +616,7 @@ mod tests {
         let test_balance: u64 = rng.next_u64();
         let balances = vec![(test_asset_id, test_balance)];
         let salt: Salt = rng.gen();
-        let contract = Contract::from(Opcode::RET(0x10).to_bytes().to_vec());
+        let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
         let root = contract.root();
         let id = contract.id(&salt, &root, &Contract::default_state_root());
 

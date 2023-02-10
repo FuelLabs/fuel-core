@@ -13,6 +13,7 @@ use fuel_core_storage::{
 use fuel_core_types::{
     entities::{
         coin::CoinStatus,
+        message::MessageStatus,
         resource::{
             Resource,
             ResourceId,
@@ -142,7 +143,7 @@ impl<'a> AssetsQuery<'a> {
             })
             .filter_ok(|message| {
                 if let Resource::Message(message) = message {
-                    message.fuel_block_spend.is_none()
+                    matches!(message.status, MessageStatus::Unspent)
                 } else {
                     true
                 }
