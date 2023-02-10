@@ -11,6 +11,7 @@ use fuel_core_types::{
         PeerReport,
         PeerScore,
         DEFAULT_PEER_SCORE,
+        MAX_PEER_SCORE,
         MIN_PEER_SCORE,
     },
 };
@@ -606,7 +607,8 @@ impl PeerManager {
         score: PeerScore,
     ) -> Option<PeerScore> {
         if let Some(peer) = self.non_reserved_connected_peers.get_mut(peer_id) {
-            peer.score += score;
+            // score should not go over `MAX_PEER_SCORE`
+            peer.score = MAX_PEER_SCORE.min(peer.score + score);
             Some(peer.score)
         } else {
             log_missing_peer(peer_id);
