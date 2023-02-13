@@ -117,18 +117,6 @@ where
     }
 }
 
-impl<S> Clone for ServiceRunner<S>
-where
-    S: RunnableService + 'static,
-{
-    fn clone(&self) -> Self {
-        Self {
-            shared: self.shared.clone(),
-            state: self.state.clone(),
-        }
-    }
-}
-
 impl<S> ServiceRunner<S>
 where
     S: RunnableService + 'static,
