@@ -1,13 +1,11 @@
-use crate::{
-    database::{
-        Column,
-        Database,
-        Error as DatabaseError,
-    },
-    state::IterDirection,
+use crate::database::{
+    Column,
+    Database,
+    Error as DatabaseError,
 };
 use anyhow::anyhow;
 use fuel_core_storage::{
+    iter::IterDirection,
     not_found,
     tables::ContractsState,
     ContractsStateKey,

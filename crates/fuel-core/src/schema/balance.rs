@@ -1,5 +1,8 @@
 use crate::{
-    query::BalanceQueryContext,
+    query::{
+        BalanceQueryContext,
+        BalanceQueryData,
+    },
     schema::scalars::{
         Address,
         AssetId,

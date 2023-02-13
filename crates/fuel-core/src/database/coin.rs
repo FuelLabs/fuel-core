@@ -1,14 +1,12 @@
-use crate::{
-    database::{
-        Column,
-        Database,
-        Error as DatabaseError,
-        Result as DatabaseResult,
-    },
-    state::IterDirection,
+use crate::database::{
+    Column,
+    Database,
+    Error as DatabaseError,
+    Result as DatabaseResult,
 };
 use fuel_core_chain_config::CoinConfig;
 use fuel_core_storage::{
+    iter::IterDirection,
     tables::Coins,
     Error as StorageError,
     StorageInspect,

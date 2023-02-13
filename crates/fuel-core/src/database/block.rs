@@ -1,20 +1,18 @@
-use crate::{
-    database::{
-        storage::{
-            DenseMerkleMetadata,
-            FuelBlockMerkleData,
-            FuelBlockMerkleMetadata,
-            FuelBlockSecondaryKeyBlockHeights,
-            ToDatabaseKey,
-        },
-        Column,
-        Database,
-        Error as DatabaseError,
-        Result as DatabaseResult,
+use crate::database::{
+    storage::{
+        DenseMerkleMetadata,
+        FuelBlockMerkleData,
+        FuelBlockMerkleMetadata,
+        FuelBlockSecondaryKeyBlockHeights,
+        ToDatabaseKey,
     },
-    state::IterDirection,
+    Column,
+    Database,
+    Error as DatabaseError,
+    Result as DatabaseResult,
 };
 use fuel_core_storage::{
+    iter::IterDirection,
     not_found,
     tables::{
         FuelBlocks,

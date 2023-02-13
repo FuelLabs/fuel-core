@@ -1,8 +1,6 @@
-use crate::{
-    graphql_api::service::Database,
-    state::IterDirection,
-};
+use crate::graphql_api::service::Database;
 use fuel_core_storage::{
+    iter::IterDirection,
     not_found,
     tables::Coins,
     Result as StorageResult,

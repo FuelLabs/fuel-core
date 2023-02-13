@@ -20,7 +20,6 @@ use crate::{
         TransactionId,
         TxPointer,
     },
-    state::IterDirection,
 };
 use async_graphql::{
     connection::{
@@ -31,7 +30,10 @@ use async_graphql::{
     Object,
     Subscription,
 };
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    iter::IterDirection,
+    Result as StorageResult,
+};
 use fuel_core_types::{
     fuel_tx::{
         Cacheable,

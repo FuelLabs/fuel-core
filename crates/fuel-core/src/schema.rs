@@ -1,4 +1,3 @@
-use crate::state::IterDirection;
 use anyhow::anyhow;
 use async_graphql::{
     connection::{
@@ -14,7 +13,10 @@ use async_graphql::{
     Schema,
     SchemaBuilder,
 };
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    iter::IterDirection,
+    Result as StorageResult,
+};
 use itertools::Itertools;
 
 pub mod balance;

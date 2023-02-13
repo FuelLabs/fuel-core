@@ -223,10 +223,10 @@ mod tests {
             ResourceQueryError,
             SpendQuery,
         },
-        state::IterDirection,
     };
     use assert_matches::assert_matches;
     use fuel_core_storage::{
+        iter::IterDirection,
         tables::{
             Coins,
             Messages,

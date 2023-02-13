@@ -1,13 +1,13 @@
-use crate::{
-    database::{
-        storage::DatabaseColumn,
-        Column,
-        Database,
-        Result as DatabaseResult,
-    },
-    state::IterDirection,
+use crate::database::{
+    storage::DatabaseColumn,
+    Column,
+    Database,
+    Result as DatabaseResult,
 };
-use fuel_core_storage::tables::Transactions;
+use fuel_core_storage::{
+    iter::IterDirection,
+    tables::Transactions,
+};
 use fuel_core_types::{
     self,
     blockchain::primitives::BlockHeight,

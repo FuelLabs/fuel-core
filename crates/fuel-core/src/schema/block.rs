@@ -20,7 +20,6 @@ use crate::{
         },
         tx::types::Transaction,
     },
-    state::IterDirection,
 };
 use anyhow::anyhow;
 use async_graphql::{
@@ -35,7 +34,10 @@ use async_graphql::{
     Union,
 };
 use fuel_core_storage::{
-    iter::IntoBoxedIter,
+    iter::{
+        IntoBoxedIter,
+        IterDirection,
+    },
     Result as StorageResult,
 };
 use fuel_core_types::{

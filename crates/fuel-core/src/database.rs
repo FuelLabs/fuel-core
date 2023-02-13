@@ -3,7 +3,6 @@ use crate::{
     state::{
         in_memory::memory_store::MemoryStore,
         DataSource,
-        IterDirection,
     },
 };
 use fuel_core_chain_config::{
@@ -13,6 +12,7 @@ use fuel_core_chain_config::{
     MessageConfig,
 };
 use fuel_core_storage::{
+    iter::IterDirection,
     transactional::{
         StorageTransaction,
         Transactional,

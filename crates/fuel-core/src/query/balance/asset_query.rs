@@ -4,9 +4,9 @@ use crate::{
         CoinQueryContext,
         MessageQueryContext,
     },
-    state::IterDirection,
 };
 use fuel_core_storage::{
+    iter::IterDirection,
     Error as StorageError,
     Result as StorageResult,
 };

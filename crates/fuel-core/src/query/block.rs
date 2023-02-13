@@ -1,8 +1,6 @@
-use crate::{
-    fuel_core_graphql_api::service::Database,
-    state::IterDirection,
-};
+use crate::fuel_core_graphql_api::service::Database;
 use fuel_core_storage::{
+    iter::IterDirection,
     not_found,
     tables::{
         FuelBlocks,

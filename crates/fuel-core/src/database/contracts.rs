@@ -1,15 +1,13 @@
-use crate::{
-    database::{
-        storage::DatabaseColumn,
-        Column,
-        Database,
-        Error as DatabaseError,
-        Result as DatabaseResult,
-    },
-    state::IterDirection,
+use crate::database::{
+    storage::DatabaseColumn,
+    Column,
+    Database,
+    Error as DatabaseError,
+    Result as DatabaseResult,
 };
 use fuel_core_chain_config::ContractConfig;
 use fuel_core_storage::{
+    iter::IterDirection,
     tables::{
         ContractsInfo,
         ContractsLatestUtxo,

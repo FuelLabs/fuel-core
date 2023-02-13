@@ -7,9 +7,9 @@ use crate::{
         BlockQueryContext,
         TransactionQueryContext,
     },
-    state::IterDirection,
 };
 use fuel_core_storage::{
+    iter::IterDirection,
     not_found,
     tables::{
         Messages,

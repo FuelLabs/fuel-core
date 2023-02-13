@@ -16,7 +16,6 @@ use crate::{
         TxPoolPort,
     },
     service::sub_services::TxPoolService,
-    state::IterDirection,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -24,6 +23,7 @@ use fuel_core_storage::{
     iter::{
         BoxedIter,
         IntoBoxedIter,
+        IterDirection,
     },
     not_found,
     Error as StorageError,

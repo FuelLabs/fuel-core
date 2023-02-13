@@ -1,8 +1,10 @@
-use crate::state::IterDirection;
 use anyhow::Result;
 use async_trait::async_trait;
 use fuel_core_storage::{
-    iter::BoxedIter,
+    iter::{
+        BoxedIter,
+        IterDirection,
+    },
     tables::{
         Coins,
         ContractsAssets,

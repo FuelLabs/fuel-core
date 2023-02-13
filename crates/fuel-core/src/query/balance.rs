@@ -1,19 +1,22 @@
-use crate::{
-    fuel_core_graphql_api::service::Database,
-    state::IterDirection,
-};
+use crate::fuel_core_graphql_api::service::Database;
 use asset_query::{
     AssetQuery,
     AssetSpendTarget,
     AssetsQuery,
 };
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    iter::{
+        BoxedIter,
+        IterDirection, IntoBoxedIter,
+    },
+    Result as StorageResult,
+};
 use fuel_core_types::{
     fuel_tx::{
         Address,
         AssetId,
     },
-    services::graphql_api::AddressBalance,
+    services::graphql_api::{AddressBalance, Balance},
 };
 use itertools::Itertools;
 use std::{
@@ -25,8 +28,22 @@ pub mod asset_query;
 
 pub struct BalanceQueryContext<'a>(pub &'a Database);
 
-impl BalanceQueryContext<'_> {
-    pub fn balance(
+pub trait BalanceQueryData {
+    fn balance(
+        &self,
+        owner: Address,
+        asset_id: AssetId,
+    ) -> StorageResult<AddressBalance>;
+
+    fn balances(
+        &self,
+        owner: Address,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<AddressBalance>>;
+}
+
+impl BalanceQueryData for BalanceQueryContext<'_> {
+    fn balance(
         &self,
         owner: Address,
         asset_id: AssetId,
@@ -56,11 +73,11 @@ impl BalanceQueryContext<'_> {
         })
     }
 
-    pub fn balances(
+    fn balances(
         &self,
         owner: Address,
         direction: IterDirection,
-    ) -> impl Iterator<Item = StorageResult<AddressBalance>> + '_ {
+    ) -> BoxedIter<StorageResult<AddressBalance>> {
         let db = self.0;
 
         let mut amounts_per_asset = HashMap::new();
@@ -102,6 +119,6 @@ impl BalanceQueryContext<'_> {
         balances
             .into_iter()
             .map(Ok)
-            .chain(errors.into_iter().map(Err))
+            .chain(errors.into_iter().map(Err)).into_boxed()
     }
 }
