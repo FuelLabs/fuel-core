@@ -40,10 +40,6 @@ spec:
       port: {{ .Values.app.http_port }}
       protocol: TCP
       targetPort: {{ .Values.app.target_port }}
-    - name: p2p
-      port: {{ .Values.app.peering_port }}
-      protocol: TCP
-      targetPort: {{ .Values.app.peering_port }}
 {{- end }}
 ---
 kind: Service
