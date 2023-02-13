@@ -10,10 +10,7 @@ use crate::{
         CoreSchema,
         CoreSchemaBuilder,
     },
-    service::{
-        adapters::P2PAdapter,
-        metrics::metrics,
-    },
+    service::metrics::metrics,
 };
 use async_graphql::{
     extensions::Tracing,

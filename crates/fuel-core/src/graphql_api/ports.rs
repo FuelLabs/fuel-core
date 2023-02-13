@@ -1,6 +1,6 @@
 use crate::state::IterDirection;
-use anyhow::Result;
 use async_trait::async_trait;
+use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
     iter::BoxedIter,
     tables::{
@@ -19,6 +19,7 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageInspect,
 };
+use fuel_core_txpool::service::TxUpdate;
 use fuel_core_types::{
     blockchain::primitives::{
         BlockHeight,
@@ -145,14 +146,15 @@ pub trait DatabaseChain {
 
     fn base_chain_height(&self) -> StorageResult<DaBlockHeight>;
 }
+
 pub trait TxPoolPort: Send + Sync {
     fn find_one(&self, id: TxId) -> Option<TxInfo>;
+
     fn insert(&self, txs: Vec<Arc<Transaction>>) -> Vec<anyhow::Result<InsertionResult>>;
+
     fn tx_update_subscribe(
         &self,
-    ) -> fuel_core_services::stream::BoxStream<
-        Result<fuel_core_txpool::service::TxUpdate, BroadcastStreamRecvError>,
-    >;
+    ) -> BoxStream<Result<TxUpdate, BroadcastStreamRecvError>>;
 }
 
 #[async_trait]
@@ -162,7 +164,7 @@ pub trait DryRunExecution {
         transaction: Transaction,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
-    ) -> Result<Vec<Receipt>>;
+    ) -> anyhow::Result<Vec<Receipt>>;
 }
 
 pub trait BlockProducerPort: Send + Sync + DryRunExecution {}

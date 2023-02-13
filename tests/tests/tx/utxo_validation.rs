@@ -173,9 +173,9 @@ async fn dry_run_override_utxo_validation() {
     .add_witness(Default::default())
     .finalize_as_transaction();
 
-    let client = TestSetupBuilder::new(2322).finalize().await.client;
+    let context = TestSetupBuilder::new(2322).finalize().await;
 
-    let log = client.dry_run_opt(&tx, Some(false)).await.unwrap();
+    let log = context.client.dry_run_opt(&tx, Some(false)).await.unwrap();
     assert_eq!(2, log.len());
 
     assert!(matches!(log[0],
