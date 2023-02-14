@@ -13,4 +13,5 @@ description = "Command line utilities for fuel-core key management"
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 fuel-core-types = { workspace = true, features = ["serde", "random"] }
+libp2p-core = { version = "0.38", features = ["secp256k1"] }
 serde_json = { workspace = true, features = ["raw_value"] }
