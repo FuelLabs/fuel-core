@@ -1,6 +1,9 @@
 use crate::{
     fuel_core_graphql_api::IntoApiResult,
-    query::ContractQueryContext,
+    query::{
+        ContractQueryContext,
+        ContractQueryData,
+    },
     schema::scalars::{
         AssetId,
         ContractId,

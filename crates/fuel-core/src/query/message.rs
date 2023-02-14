@@ -7,6 +7,7 @@ use crate::{
         BlockQueryContext,
         BlockQueryData,
         TransactionQueryContext,
+        TransactionQueryData,
     },
 };
 use fuel_core_storage::{

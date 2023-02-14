@@ -1,6 +1,10 @@
 use crate::graphql_api::service::Database;
 use fuel_core_storage::{
-    iter::IterDirection,
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IterDirection,
+    },
     not_found,
     tables::{
         ContractsAssets,
@@ -21,8 +25,25 @@ use fuel_core_types::{
 
 pub struct ContractQueryContext<'a>(pub &'a Database);
 
-impl ContractQueryContext<'_> {
-    pub fn contract_id(&self, id: ContractId) -> StorageResult<ContractId> {
+pub trait ContractQueryData {
+    fn contract_id(&self, id: ContractId) -> StorageResult<ContractId>;
+    fn contract_bytecode(&self, id: ContractId) -> StorageResult<Vec<u8>>;
+    fn contract_salt(&self, id: ContractId) -> StorageResult<Salt>;
+    fn contract_balance(
+        &self,
+        contract_id: ContractId,
+        asset_id: AssetId,
+    ) -> StorageResult<ContractBalance>;
+    fn contract_balances(
+        &self,
+        contract_id: ContractId,
+        start_asset: Option<AssetId>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<ContractBalance>>;
+}
+
+impl ContractQueryData for ContractQueryContext<'_> {
+    fn contract_id(&self, id: ContractId) -> StorageResult<ContractId> {
         let contract_exists = self
             .0
             .as_ref()
@@ -35,7 +56,7 @@ impl ContractQueryContext<'_> {
         }
     }
 
-    pub fn contract_bytecode(&self, id: ContractId) -> StorageResult<Vec<u8>> {
+    fn contract_bytecode(&self, id: ContractId) -> StorageResult<Vec<u8>> {
         let contract = self
             .0
             .as_ref()
@@ -47,7 +68,7 @@ impl ContractQueryContext<'_> {
         Ok(contract.into())
     }
 
-    pub fn contract_salt(&self, id: ContractId) -> StorageResult<Salt> {
+    fn contract_salt(&self, id: ContractId) -> StorageResult<Salt> {
         let (salt, _) = self
             .0
             .as_ref()
@@ -59,7 +80,7 @@ impl ContractQueryContext<'_> {
         Ok(salt)
     }
 
-    pub fn contract_balance(
+    fn contract_balance(
         &self,
         contract_id: ContractId,
         asset_id: AssetId,
@@ -79,13 +100,14 @@ impl ContractQueryContext<'_> {
         })
     }
 
-    pub fn contract_balances(
+    fn contract_balances(
         &self,
         contract_id: ContractId,
         start_asset: Option<AssetId>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = StorageResult<ContractBalance>> + '_ {
+    ) -> BoxedIter<StorageResult<ContractBalance>> {
         self.0
             .contract_balances(contract_id, start_asset, direction)
+            .into_boxed()
     }
 }

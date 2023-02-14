@@ -2,7 +2,8 @@ use crate::graphql_api::service::Database;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
-        IterDirection, IntoBoxedIter,
+        IntoBoxedIter,
+        IterDirection,
     },
     not_found,
     tables::Coins,
@@ -53,8 +54,10 @@ impl<'a> CoinQueryData for CoinQueryContext<'a> {
         owner: &Address,
         start_coin: Option<UtxoId>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<UtxoId>>{
-        self.0.owned_coins_ids(owner, start_coin, direction).into_boxed()
+    ) -> BoxedIter<StorageResult<UtxoId>> {
+        self.0
+            .owned_coins_ids(owner, start_coin, direction)
+            .into_boxed()
     }
 
     fn owned_coins(
@@ -64,6 +67,7 @@ impl<'a> CoinQueryData for CoinQueryContext<'a> {
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<Coin>> {
         self.owned_coins_ids(owner, start_coin, direction)
-            .map(|res| res.and_then(|id| self.coin(id))).into_boxed()
+            .map(|res| res.and_then(|id| self.coin(id)))
+            .into_boxed()
     }
 }

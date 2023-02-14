@@ -1,6 +1,10 @@
 use crate::fuel_core_graphql_api::service::Database;
 use fuel_core_storage::{
-    iter::IterDirection,
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IterDirection,
+    },
     not_found,
     tables::{
         Receipts,
@@ -22,8 +26,20 @@ use fuel_core_types::{
 
 pub struct TransactionQueryContext<'a>(pub &'a Database);
 
-impl TransactionQueryContext<'_> {
-    pub fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
+pub trait TransactionQueryData {
+    fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction>;
+    fn receipts(&self, tx_id: &TxId) -> StorageResult<Vec<Receipt>>;
+    fn status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
+    fn owned_transactions(
+        &self,
+        owner: Address,
+        start: Option<TxPointer>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<(TxPointer, Transaction)>>;
+}
+
+impl TransactionQueryData for TransactionQueryContext<'_> {
+    fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
         self.0
             .as_ref()
             .storage::<Transactions>()
@@ -31,7 +47,7 @@ impl TransactionQueryContext<'_> {
             .and_then(|v| v.ok_or(not_found!(Transactions)).map(|tx| tx.into_owned()))
     }
 
-    pub fn receipts(&self, tx_id: &TxId) -> StorageResult<Vec<Receipt>> {
+    fn receipts(&self, tx_id: &TxId) -> StorageResult<Vec<Receipt>> {
         self.0
             .as_ref()
             .storage::<Receipts>()
@@ -39,16 +55,16 @@ impl TransactionQueryContext<'_> {
             .and_then(|v| v.ok_or(not_found!(Transactions)).map(|tx| tx.into_owned()))
     }
 
-    pub fn status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
+    fn status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
         self.0.tx_status(tx_id)
     }
 
-    pub fn owned_transactions(
+    fn owned_transactions(
         &self,
         owner: Address,
         start: Option<TxPointer>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = StorageResult<(TxPointer, Transaction)>> + '_ {
+    ) -> BoxedIter<StorageResult<(TxPointer, Transaction)>> {
         self.0
             .owned_transactions_ids(owner, start, direction)
             .map(|result| {
@@ -58,5 +74,6 @@ impl TransactionQueryContext<'_> {
                     Ok((tx_pointer, tx))
                 })
             })
+            .into_boxed()
     }
 }

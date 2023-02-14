@@ -21,7 +21,7 @@ pub use fuel_core_types as types;
 pub mod database;
 pub mod executor;
 pub mod model;
-mod query;
+pub mod query;
 pub mod resource_query;
 pub mod schema;
 pub mod service;

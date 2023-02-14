@@ -12,6 +12,7 @@ use crate::{
         BlockQueryContext,
         BlockQueryData,
         TransactionQueryContext,
+        TransactionQueryData,
         TxnStatusChangeState,
     },
     schema::scalars::{

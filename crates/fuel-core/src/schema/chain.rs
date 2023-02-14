@@ -6,8 +6,8 @@ use crate::{
     query::{
         BlockQueryContext,
         BlockQueryData,
-        ChainQueryData,
         ChainQueryContext,
+        ChainQueryData,
     },
     schema::{
         block::Block,
@@ -94,6 +94,8 @@ impl ChainInfo {
     }
 
     async fn base_chain_height(&self, ctx: &Context<'_>) -> U64 {
+        let query = BlockQueryContext(ctx.data_unchecked());
+
         let height = ctx
             .data_unchecked::<Database>()
             .base_chain_height()
