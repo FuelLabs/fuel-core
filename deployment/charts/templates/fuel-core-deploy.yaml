@@ -21,6 +21,27 @@ data:
   chainspec.json: |-
 {{ .Files.Get "chainspec.json" | indent 4 }}
 ---
+{{- if .Values.app.sentry_enabled }}
+kind: Service
+apiVersion: v1
+metadata:
+  labels:
+    app: {{ template "fuel-core.name" . }}
+    chart: {{ template "fuel-core.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  name: {{ template "fuel-core.name" . }}-lb-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: {{ template "fuel-core.name" . }}
+  ports:
+    - name: http
+      port: {{ .Values.app.http_port }}
+      protocol: TCP
+      targetPort: {{ .Values.app.target_port }}
+{{- end }}
+---
 kind: Service
 apiVersion: v1
 metadata:
@@ -159,7 +180,13 @@ spec:
             - "--relayer-eth-sync-log-freq-s"
             - "{{ .Values.app.relayer_eth_sync_log_freq_s }}"
           {{- end }}
-          resources: {}
+          resources:
+            limits:
+              cpu: {{ .Values.app.resources.cpu_limits }}
+              memory: {{ .Values.app.resources.memory_limits }}
+            requests:
+              cpu: {{ .Values.app.resources.cpu_requests }}
+              memory: {{ .Values.app.resources.memory_requests }}
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           ports:
             - name: http

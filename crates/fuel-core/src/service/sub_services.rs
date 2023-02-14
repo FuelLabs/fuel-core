@@ -118,14 +118,16 @@ pub fn init_sub_services(
     let poa_config: fuel_core_poa::Config = config.try_into()?;
     let production_enabled =
         !matches!(poa_config.trigger, Trigger::Never) || config.manual_blocks_enabled;
-    let poa = fuel_core_poa::new_service(
-        last_height,
-        poa_config,
-        tx_pool_adapter,
-        producer_adapter.clone(),
-        importer_adapter.clone(),
-    );
-    let poa_adapter = PoAAdapter::new(poa.shared.clone());
+    let poa = (production_enabled).then(|| {
+        fuel_core_poa::new_service(
+            last_height,
+            poa_config,
+            tx_pool_adapter.clone(),
+            producer_adapter.clone(),
+            importer_adapter.clone(),
+        )
+    });
+    let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));
 
     #[cfg(feature = "p2p")]
     let sync = (!production_enabled)
@@ -164,7 +166,7 @@ pub fn init_sub_services(
         gql_database,
         schema,
         Box::new(producer_adapter),
-        Box::new(txpool.clone()),
+        Box::new(tx_pool_adapter),
         Box::new(poa_adapter),
     )?;
 
@@ -188,7 +190,7 @@ pub fn init_sub_services(
         Box::new(txpool),
     ];
 
-    if production_enabled {
+    if let Some(poa) = poa {
         services.push(Box::new(poa));
     }
 
