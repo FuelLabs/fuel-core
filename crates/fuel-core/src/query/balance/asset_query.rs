@@ -102,7 +102,8 @@ impl<'a> AssetsQuery<'a> {
     // TODO: Optimize this by creating an index
     //  https://github.com/FuelLabs/fuel-core/issues/588
     pub fn unspent_resources(&self) -> BoxedIter<StorageResult<Resource>> {
-        let coins_iter = CoinQueryContext(self.database)
+        let coin_context = CoinQueryContext(self.database);
+        let coins_iter = coin_context
             .owned_coins_ids(self.owner, None, IterDirection::Forward)
             .filter_ok(|id| {
                 if let Some(exclude) = self.exclude {
@@ -130,7 +131,9 @@ impl<'a> AssetsQuery<'a> {
                 }
             });
 
-        let messages_iter = MessageQueryContext(self.database)
+
+        let message_context = MessageQueryContext(self.database);
+        let messages_iter = message_context
             .owned_message_ids(self.owner, None, IterDirection::Forward)
             .filter_ok(|id| {
                 if let Some(exclude) = self.exclude {
@@ -160,7 +163,7 @@ impl<'a> AssetsQuery<'a> {
                     .map(|assets| assets.contains(&AssetId::BASE))
                     .unwrap_or(true)
             }))
-            .into_boxed()
+            .into_boxed().collect::<Vec<_>>().into_iter().into_boxed()
     }
 }
 
