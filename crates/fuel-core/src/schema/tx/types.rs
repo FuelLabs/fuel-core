@@ -10,6 +10,7 @@ use crate::{
     },
     query::{
         BlockQueryContext,
+        BlockQueryData,
         TransactionQueryContext,
     },
     schema::{

@@ -6,10 +6,11 @@ use crate::{
     fuel_core_graphql_api::{
         service::ConsensusModule,
         Config as GraphQLConfig,
-        IntoApiResult,
     },
+    graphql_api::IntoApiResult,
     query::{
         BlockQueryContext,
+        BlockQueryData,
         TransactionQueryContext,
     },
     schema::{

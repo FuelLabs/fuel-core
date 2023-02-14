@@ -1,6 +1,9 @@
 use crate::graphql_api::service::Database;
 use fuel_core_storage::{
-    iter::IterDirection,
+    iter::{
+        BoxedIter,
+        IterDirection, IntoBoxedIter,
+    },
     not_found,
     tables::Coins,
     Result as StorageResult,
@@ -14,8 +17,26 @@ use fuel_core_types::{
 
 pub struct CoinQueryContext<'a>(pub &'a Database);
 
-impl<'a> CoinQueryContext<'a> {
-    pub fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin> {
+pub trait CoinQueryData {
+    fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin>;
+
+    fn owned_coins_ids(
+        &self,
+        owner: &Address,
+        start_coin: Option<UtxoId>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<UtxoId>>;
+
+    fn owned_coins(
+        &self,
+        owner: &Address,
+        start_coin: Option<UtxoId>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<Coin>>;
+}
+
+impl<'a> CoinQueryData for CoinQueryContext<'a> {
+    fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin> {
         let coin = self
             .0
             .as_ref()
@@ -27,22 +48,22 @@ impl<'a> CoinQueryContext<'a> {
         Ok(coin.uncompress(utxo_id))
     }
 
-    pub fn owned_coins_ids(
+    fn owned_coins_ids(
         &self,
         owner: &Address,
         start_coin: Option<UtxoId>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = StorageResult<UtxoId>> + 'a {
-        self.0.owned_coins_ids(owner, start_coin, direction)
+    ) -> BoxedIter<StorageResult<UtxoId>>{
+        self.0.owned_coins_ids(owner, start_coin, direction).into_boxed()
     }
 
-    pub fn owned_coins(
+    fn owned_coins(
         &self,
         owner: &Address,
         start_coin: Option<UtxoId>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = StorageResult<Coin>> + '_ {
+    ) -> BoxedIter<StorageResult<Coin>> {
         self.owned_coins_ids(owner, start_coin, direction)
-            .map(|res| res.and_then(|id| self.coin(id)))
+            .map(|res| res.and_then(|id| self.coin(id))).into_boxed()
     }
 }

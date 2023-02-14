@@ -1,6 +1,9 @@
 use crate::{
     fuel_core_graphql_api::IntoApiResult,
-    query::CoinQueryContext,
+    query::{
+        CoinQueryData,
+        CoinQueryContext,
+    },
     schema::scalars::{
         Address,
         AssetId,

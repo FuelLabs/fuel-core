@@ -7,7 +7,8 @@ use asset_query::{
 use fuel_core_storage::{
     iter::{
         BoxedIter,
-        IterDirection, IntoBoxedIter,
+        IntoBoxedIter,
+        IterDirection,
     },
     Result as StorageResult,
 };
@@ -16,7 +17,7 @@ use fuel_core_types::{
         Address,
         AssetId,
     },
-    services::graphql_api::{AddressBalance, Balance},
+    services::graphql_api::AddressBalance,
 };
 use itertools::Itertools;
 use std::{
@@ -29,11 +30,8 @@ pub mod asset_query;
 pub struct BalanceQueryContext<'a>(pub &'a Database);
 
 pub trait BalanceQueryData {
-    fn balance(
-        &self,
-        owner: Address,
-        asset_id: AssetId,
-    ) -> StorageResult<AddressBalance>;
+    fn balance(&self, owner: Address, asset_id: AssetId)
+        -> StorageResult<AddressBalance>;
 
     fn balances(
         &self,
@@ -119,6 +117,7 @@ impl BalanceQueryData for BalanceQueryContext<'_> {
         balances
             .into_iter()
             .map(Ok)
-            .chain(errors.into_iter().map(Err)).into_boxed()
+            .chain(errors.into_iter().map(Err))
+            .into_boxed()
     }
 }

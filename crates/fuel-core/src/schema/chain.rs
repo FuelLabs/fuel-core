@@ -5,6 +5,8 @@ use crate::{
     },
     query::{
         BlockQueryContext,
+        BlockQueryData,
+        ChainQueryData,
         ChainQueryContext,
     },
     schema::{

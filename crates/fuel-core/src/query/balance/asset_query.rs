@@ -1,12 +1,13 @@
 use crate::{
     fuel_core_graphql_api::service::Database,
     query::{
+        CoinQueryData,
         CoinQueryContext,
         MessageQueryContext,
     },
 };
 use fuel_core_storage::{
-    iter::IterDirection,
+    iter::{IterDirection, BoxedIter, IntoBoxedIter},
     Error as StorageError,
     Result as StorageResult,
 };
@@ -97,7 +98,7 @@ impl<'a> AssetsQuery<'a> {
     //  https://github.com/FuelLabs/fuel-core/issues/588
     pub fn unspent_resources(
         &self,
-    ) -> impl Iterator<Item = StorageResult<Resource>> + '_ {
+    ) -> BoxedIter<StorageResult<Resource> + '_> {
         let coins_iter = CoinQueryContext(self.database)
             .owned_coins_ids(self.owner, None, IterDirection::Forward)
             .filter_ok(|id| {
@@ -154,7 +155,7 @@ impl<'a> AssetsQuery<'a> {
                 .as_ref()
                 .map(|assets| assets.contains(&AssetId::BASE))
                 .unwrap_or(true)
-        }))
+        })).into_boxed()
     }
 }
 
