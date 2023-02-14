@@ -25,6 +25,7 @@ use std::collections::HashMap;
 
 /// Helper for wrapping a currently running node environment
 pub struct TestContext {
+    pub srv: FuelService,
     pub rng: StdRng,
     pub client: FuelClient,
 }
@@ -34,7 +35,7 @@ impl TestContext {
         let rng = StdRng::seed_from_u64(seed);
         let srv = FuelService::new_node(Config::local_node()).await.unwrap();
         let client = FuelClient::from(srv.bound_address);
-        Self { rng, client }
+        Self { srv, rng, client }
     }
 }
 
@@ -149,6 +150,7 @@ impl TestSetupBuilder {
         let client = FuelClient::from(srv.bound_address);
 
         TestContext {
+            srv,
             rng: self.rng.clone(),
             client,
         }
