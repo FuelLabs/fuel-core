@@ -126,8 +126,13 @@ impl RocksDb {
         opts.create_if_missing(true);
         opts.set_compression_type(DBCompressionType::Lz4);
 
+        // All double-keys should be configured here
         match column {
-            Column::OwnedCoins | Column::TransactionsByOwnerBlockIdx => {
+            Column::OwnedCoins
+            | Column::TransactionsByOwnerBlockIdx
+            | Column::OwnedMessageIds
+            | Column::ContractsAssets
+            | Column::ContractsState => {
                 // prefix is address length
                 opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32))
             }

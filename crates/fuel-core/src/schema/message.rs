@@ -13,6 +13,7 @@ use crate::query::{
     MessageQueryContext,
     MessageQueryData,
 };
+use anyhow::anyhow;
 use async_graphql::{
     connection::{
         Connection,
@@ -89,6 +90,14 @@ impl MessageQuery {
             let start = *start;
 
             let messages = if let Some(owner) = owner {
+                // Rocksdb doesn't support reverse iteration over a prefix
+                if matches!(last, Some(last) if last > 0) {
+                    return Err(anyhow!(
+                        "reverse pagination isn't supported for this resource"
+                    )
+                    .into())
+                }
+
                 query
                     .owned_messages(&owner.0, start.map(Into::into), direction)
                     .into_boxed()

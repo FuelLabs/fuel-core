@@ -6,6 +6,6 @@ license = "BUSL-1.1"
 publish = false
 
 [dependencies]
-fuel-core-types = { path = "../../crates/types", version = "0.17.0", default-features = false, features = ["random", "test-helpers"] }
+fuel-core-types = { path = "../../crates/types", version = "0.17.1", default-features = false, features = ["random", "test-helpers"] }
 
 [workspace]
