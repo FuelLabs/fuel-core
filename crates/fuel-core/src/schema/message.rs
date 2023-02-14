@@ -9,7 +9,10 @@ use super::{
         U64,
     },
 };
-use crate::query::MessageQueryContext;
+use crate::query::{
+    MessageQueryContext,
+    MessageQueryData,
+};
 use anyhow::anyhow;
 use async_graphql::{
     connection::{

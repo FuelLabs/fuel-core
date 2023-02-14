@@ -10,6 +10,16 @@ use crate::{
         CoreSchema,
         CoreSchemaBuilder,
     },
+    query::{
+        BalanceQueryData,
+        BlockQueryData,
+        ChainQueryData,
+        CoinQueryData,
+        ContractQueryData,
+        MessageQueryData,
+        MessageProofData,
+        TransactionQueryData,
+    },
     service::metrics::metrics,
 };
 use async_graphql::{

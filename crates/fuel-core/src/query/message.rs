@@ -11,7 +11,7 @@ use crate::{
     },
 };
 use fuel_core_storage::{
-    iter::IterDirection,
+    iter::{IterDirection, BoxedIter, IntoBoxedIter},
     not_found,
     tables::{
         Messages,
@@ -56,8 +56,29 @@ mod test;
 
 pub struct MessageQueryContext<'a>(pub &'a Database);
 
-impl<'a> MessageQueryContext<'a> {
-    pub fn message(&self, message_id: &MessageId) -> StorageResult<Message> {
+pub trait MessageQueryData {
+    fn message(&self, message_id: &MessageId) -> StorageResult<Message>;
+    fn owned_message_ids(
+        &self,
+        owner: &Address,
+        start_message_id: Option<MessageId>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<MessageId>>;
+    fn owned_messages(
+        &self,
+        owner: &Address,
+        start_message_id: Option<MessageId>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<Message>>;
+    fn all_messages(
+        &self,
+        start_message_id: Option<MessageId>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<Message>>;
+}
+
+impl<'a> MessageQueryData for MessageQueryContext<'a> {
+    fn message(&self, message_id: &MessageId) -> StorageResult<Message> {
         self.0
             .as_ref()
             .storage::<Messages>()
@@ -78,31 +99,31 @@ impl<'a> MessageQueryContext<'a> {
             })
     }
 
-    pub fn owned_message_ids(
+    fn owned_message_ids(
         &self,
         owner: &Address,
         start_message_id: Option<MessageId>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = StorageResult<MessageId>> + 'a {
-        self.0.owned_message_ids(owner, start_message_id, direction)
+    ) -> BoxedIter<StorageResult<MessageId>> {
+        self.0.owned_message_ids(owner, start_message_id, direction).into_boxed()
     }
 
-    pub fn owned_messages(
+    fn owned_messages(
         &self,
         owner: &Address,
         start_message_id: Option<MessageId>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = StorageResult<Message>> + '_ {
+    ) -> BoxedIter<StorageResult<Message>> {
         self.owned_message_ids(owner, start_message_id, direction)
-            .map(|result| result.and_then(|id| self.message(&id)))
+            .map(|result| result.and_then(|id| self.message(&id))).into_boxed()
     }
 
-    pub fn all_messages(
+    fn all_messages(
         &self,
         start_message_id: Option<MessageId>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = StorageResult<Message>> + 'a {
-        self.0.all_messages(start_message_id, direction)
+    ) -> BoxedIter<StorageResult<Message>> {
+        self.0.all_messages(start_message_id, direction).into_boxed()
     }
 }
 

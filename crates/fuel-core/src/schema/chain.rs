@@ -96,11 +96,9 @@ impl ChainInfo {
     async fn base_chain_height(&self, ctx: &Context<'_>) -> U64 {
         let query = BlockQueryContext(ctx.data_unchecked());
 
-        let height = ctx
-            .data_unchecked::<Database>()
-            .base_chain_height()
-            .unwrap_or_default();
-        height.0.into()
+        let height = query.latest_block_height().unwrap_or_default();
+
+        height.into()
     }
 
     async fn peer_count(&self) -> u16 {

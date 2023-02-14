@@ -4,6 +4,7 @@ use crate::{
         CoinQueryContext,
         CoinQueryData,
         MessageQueryContext,
+        MessageQueryData,
     },
 };
 use fuel_core_storage::{
