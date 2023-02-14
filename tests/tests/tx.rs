@@ -390,7 +390,7 @@ async fn get_transactions() {
 async fn get_transactions_from_manual_blocks() {
     let (executor, db) = get_executor_and_db();
     // get access to a client
-    let client = initialize_client(db).await;
+    let context = initialize_client(db).await;
 
     // create 10 txs
     let txs: Vec<Transaction> = (0..10).map(create_mock_tx).collect();
@@ -438,7 +438,11 @@ async fn get_transactions_from_manual_blocks() {
         results: 4,
         direction: PageDirection::Forward,
     };
-    let response = client.transactions(page_request_forwards).await.unwrap();
+    let response = context
+        .client
+        .transactions(page_request_forwards)
+        .await
+        .unwrap();
     let transactions = &response
         .results
         .iter()
@@ -455,7 +459,8 @@ async fn get_transactions_from_manual_blocks() {
         results: 5,
         direction: PageDirection::Forward,
     };
-    let response = client
+    let response = context
+        .client
         .transactions(next_page_request_forwards)
         .await
         .unwrap();
@@ -476,7 +481,11 @@ async fn get_transactions_from_manual_blocks() {
         results: 10,
         direction: PageDirection::Backward,
     };
-    let response = client.transactions(page_request_backwards).await.unwrap();
+    let response = context
+        .client
+        .transactions(page_request_backwards)
+        .await
+        .unwrap();
     let transactions = &response
         .results
         .iter()
@@ -596,10 +605,15 @@ fn get_executor_and_db() -> (Executor<MaybeRelayerAdapter>, Database) {
     (executor, db)
 }
 
-async fn initialize_client(db: Database) -> FuelClient {
+async fn initialize_client(db: Database) -> TestContext {
     let config = Config::local_node();
-    let service = FuelService::from_database(db, config).await.unwrap();
-    FuelClient::from(service.bound_address)
+    let srv = FuelService::from_database(db, config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+    TestContext {
+        srv,
+        rng: StdRng::seed_from_u64(0x123),
+        client,
+    }
 }
 
 // add random val for unique tx

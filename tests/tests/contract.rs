@@ -28,7 +28,11 @@ async fn test_contract_salt() {
     let (_, contract_id) = test_builder.setup_contract(vec![], None);
 
     // spin up node
-    let TestContext { client, .. } = test_builder.finalize().await;
+    let TestContext {
+        client,
+        srv: _dont_drop,
+        ..
+    } = test_builder.finalize().await;
 
     let contract = client
         .contract(format!("{contract_id:#x}").as_str())
@@ -52,7 +56,11 @@ async fn test_contract_balance(
         test_builder.setup_contract(vec![], Some(vec![(asset, test_balance)]));
 
     // spin up node
-    let TestContext { client, .. } = test_builder.finalize().await;
+    let TestContext {
+        client,
+        srv: _dont_drop,
+        ..
+    } = test_builder.finalize().await;
 
     let balance = client
         .contract_balance(
@@ -85,7 +93,11 @@ async fn test_5_contract_balances(
         ]),
     );
 
-    let TestContext { client, .. } = test_builder.finalize().await;
+    let TestContext {
+        client,
+        srv: _dont_drop,
+        ..
+    } = test_builder.finalize().await;
 
     let contract_balances = client
         .contract_balances(

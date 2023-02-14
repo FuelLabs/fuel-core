@@ -19,7 +19,7 @@ pub mod txpool;
 
 #[derive(Clone)]
 pub struct PoAAdapter {
-    shared_state: fuel_core_poa::service::SharedState,
+    shared_state: Option<fuel_core_poa::service::SharedState>,
 }
 
 #[derive(Clone)]

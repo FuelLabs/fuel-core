@@ -268,7 +268,7 @@ async fn test_multiple_producers_different_keys() {
     }
 
     // Wait producers to produce all blocks.
-    for (expected, mut producer) in expected.iter().zip(producers) {
+    for (expected, producer) in expected.iter().zip(producers.iter_mut()) {
         producer.consistency_10s(expected).await;
     }
 
