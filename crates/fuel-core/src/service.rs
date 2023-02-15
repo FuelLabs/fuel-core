@@ -65,6 +65,7 @@ impl FuelService {
     /// Creates a `FuelService` instance from service config
     #[tracing::instrument(skip_all, fields(name = %config.name))]
     pub fn new(database: Database, mut config: Config) -> anyhow::Result<Self> {
+        database.init(&config.chain_conf)?;
         Self::make_config_consistent(&mut config);
         let task = Task::new(database, config)?;
         let runner = ServiceRunner::new(task);
