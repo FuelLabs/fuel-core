@@ -41,8 +41,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
-      - name: Install Cargo.toml linter
+      - name: setup binstall
         uses: taiki-e/install-action@cargo-binstall
+      - name: Install Cargo.toml linter
         run: cargo binstall cargo-sort
       - name: Run Cargo.toml sort check
         run: cargo sort -w --check
