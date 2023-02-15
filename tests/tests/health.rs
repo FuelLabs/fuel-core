@@ -3,11 +3,9 @@ use fuel_core::{
     service::{
         Config,
         FuelService,
-        ServiceTrait,
     },
 };
 use fuel_core_client::client::FuelClient;
-use tempfile::TempDir;
 
 #[tokio::test]
 async fn health() {
@@ -23,10 +21,12 @@ async fn health() {
 #[cfg(feature = "default")]
 #[tokio::test]
 async fn can_restart_node() {
+    use tempfile::TempDir;
     let tmp_dir = TempDir::new().unwrap();
 
     // start node once
     {
+        use fuel_core::service::ServiceTrait;
         let database = Database::open(tmp_dir.path()).unwrap();
         let first_startup = FuelService::from_database(database, Config::local_node())
             .await
