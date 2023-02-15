@@ -42,10 +42,8 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
       - name: Install Cargo.toml linter
-        uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-sort
-          version: '1.0.9'
+        uses: taiki-e/install-action@cargo-binstall
+        run: cargo binstall cargo-sort
       - name: Run Cargo.toml sort check
         run: cargo sort -w --check
       - name: Notify if Job Fails
