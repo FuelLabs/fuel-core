@@ -251,7 +251,7 @@ where
 
             let _ = stop_sender.send_if_modified(|state| {
                 if !state.stopped() {
-                    *state = stopped_state;
+                    *state = stopped_state.clone();
                     tracing::debug!("Wasn't stopped, so sent stop.");
                     true
                 } else {
@@ -259,6 +259,10 @@ where
                     false
                 }
             });
+
+            if let State::StoppedWithError(err) = stopped_state {
+                std::panic::resume_unwind(Box::new(err));
+            }
         }
         .in_current_span(),
     );
