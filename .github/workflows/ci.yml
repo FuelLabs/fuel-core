@@ -44,7 +44,7 @@ jobs:
       - name: setup binstall
         uses: taiki-e/install-action@cargo-binstall
       - name: Install Cargo.toml linter
-        run: cargo binstall cargo-sort
+        run: cargo binstall --no-confirm cargo-sort
       - name: Run Cargo.toml sort check
         run: cargo sort -w --check
       - name: Notify if Job Fails
