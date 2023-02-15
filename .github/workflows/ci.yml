@@ -19,6 +19,7 @@ env:
   NIGHTLY_RUST_VERSION: nightly-2022-12-14
   RUSTFLAGS: -D warnings
   REGISTRY: ghcr.io
+  SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 
 jobs:
   rustfmt:
@@ -139,7 +140,6 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
           RUSTFLAGS: -D warnings
-          SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
 
   publish-crates-check:
     runs-on: buildjet-4vcpu-ubuntu-2204
