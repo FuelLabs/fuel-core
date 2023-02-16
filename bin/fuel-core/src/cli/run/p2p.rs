@@ -136,8 +136,8 @@ pub struct P2PArgs {
     #[clap(long = "gossip_heartbeat_interval", default_value = "1", env)]
     pub gossip_heartbeat_interval: u64,
 
-    /// The maximum byte size for each gossip
-    #[clap(long = "max_transmit_size", default_value = "2048", env)]
+    /// The maximum byte size for each gossip (default is 7.5 MiB)
+    #[clap(long = "max_transmit_size", default_value = "7864320", env)]
     pub max_transmit_size: usize,
 
     /// Choose timeout for sent requests in RequestResponse protocol
