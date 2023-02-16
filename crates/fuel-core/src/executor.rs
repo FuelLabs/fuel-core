@@ -268,8 +268,6 @@ where
         if let Some(pre_exec_block_id) = pre_exec_block_id {
             // The block id comparison compares the whole blocks including all fields.
             if pre_exec_block_id != finalized_block_id {
-                // In theory this shouldn't happen since any deviance in the block should've already
-                // been checked by now.
                 return Err(ExecutorError::InvalidBlockId)
             }
         }
