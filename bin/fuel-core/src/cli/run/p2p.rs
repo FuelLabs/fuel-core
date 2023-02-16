@@ -35,8 +35,8 @@ pub struct P2PArgs {
 
     /// The name of the p2p Network
     /// If this value is not provided the p2p network won't start
-    #[clap(long = "network", default_value = "", env)]
-    pub network: String,
+    #[clap(long = "network", env)]
+    pub network: Option<String>,
 
     /// p2p network's IP Address
     #[clap(long = "address", env)]
@@ -208,7 +208,10 @@ impl From<SyncArgs> for fuel_core::sync::Config {
 }
 
 impl P2PArgs {
-    pub fn into_config(self, metrics: bool) -> anyhow::Result<Config<NotInitialized>> {
+    pub fn into_config(
+        self,
+        metrics: bool,
+    ) -> anyhow::Result<Option<Config<NotInitialized>>> {
         let local_keypair = {
             match self.keypair {
                 Some(KeypairArg::Path(path)) => {
@@ -220,17 +223,12 @@ impl P2PArgs {
                             "m/44'/60'/0'/0/0",
                         )?;
 
-                    convert_to_libp2p_keypair(&mut secret_key.to_vec())?
+                    Some(convert_to_libp2p_keypair(&mut secret_key.to_vec())?)
                 }
                 Some(KeypairArg::InlineSecret(secret_key)) => {
-                    convert_to_libp2p_keypair(&mut secret_key.to_vec())?
+                    Some(convert_to_libp2p_keypair(&mut secret_key.to_vec())?)
                 }
-                _ => {
-                    let mut rand = fuel_crypto::rand::thread_rng();
-                    let secret_key = fuel_crypto::SecretKey::random(&mut rand);
-
-                    convert_to_libp2p_keypair(&mut secret_key.to_vec())?
-                }
+                _ => None,
             }
         };
 
@@ -261,36 +259,42 @@ impl P2PArgs {
             )
         };
 
-        Ok(Config {
-            keypair: local_keypair,
-            network_name: self.network,
-            checksum: Default::default(),
-            address: self
-                .address
-                .unwrap_or_else(|| IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]))),
-            public_address: self.public_address,
-            tcp_port: self.peering_port,
-            max_block_size: self.max_block_size,
-            bootstrap_nodes: self.bootstrap_nodes,
-            reserved_nodes: self.reserved_nodes,
-            reserved_nodes_only_mode: self.reserved_nodes_only_mode,
-            enable_mdns: self.enable_mdns,
-            max_peers_connected: self.max_peers_connected,
-            max_connections_per_peer: self.max_connections_per_peer,
-            allow_private_addresses: self.allow_private_addresses,
-            random_walk,
-            connection_idle_timeout: Some(Duration::from_secs(
-                self.connection_idle_timeout,
-            )),
-            topics: self.topics,
-            gossipsub_config,
-            heartbeat_config,
-            set_request_timeout: Duration::from_secs(self.request_timeout),
-            set_connection_keep_alive: Duration::from_secs(self.connection_keep_alive),
-            info_interval: Some(Duration::from_secs(self.info_interval)),
-            identify_interval: Some(Duration::from_secs(self.identify_interval)),
-            metrics,
-            state: NotInitialized,
-        })
+        let config = || -> Option<Config<NotInitialized>> {
+            Some(Config {
+                keypair: local_keypair?,
+                network_name: self.network?,
+                checksum: Default::default(),
+                address: self
+                    .address
+                    .unwrap_or_else(|| IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]))),
+                public_address: self.public_address,
+                tcp_port: self.peering_port,
+                max_block_size: self.max_block_size,
+                bootstrap_nodes: self.bootstrap_nodes,
+                reserved_nodes: self.reserved_nodes,
+                reserved_nodes_only_mode: self.reserved_nodes_only_mode,
+                enable_mdns: self.enable_mdns,
+                max_peers_connected: self.max_peers_connected,
+                max_connections_per_peer: self.max_connections_per_peer,
+                allow_private_addresses: self.allow_private_addresses,
+                random_walk,
+                connection_idle_timeout: Some(Duration::from_secs(
+                    self.connection_idle_timeout,
+                )),
+                topics: self.topics,
+                gossipsub_config,
+                heartbeat_config,
+                set_request_timeout: Duration::from_secs(self.request_timeout),
+                set_connection_keep_alive: Duration::from_secs(
+                    self.connection_keep_alive,
+                ),
+                info_interval: Some(Duration::from_secs(self.info_interval)),
+                identify_interval: Some(Duration::from_secs(self.identify_interval)),
+                metrics,
+                state: NotInitialized,
+            })
+        };
+
+        Ok(config())
     }
 }
