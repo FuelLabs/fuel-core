@@ -118,7 +118,7 @@ async fn can_paginate_logs(input: Input) -> Expected {
         data.best_block.number =
             Some((eth_gap.end() + Config::DEFAULT_DA_FINALIZATION).into());
     });
-    let count = Arc::new(AtomicUsize::new(0));
+    let count = std::sync::Arc::new(AtomicUsize::new(0));
     let num_calls = count.clone();
     eth_node.set_after_event(move |_, evt| {
         if let TriggerType::GetLogs(_) = evt {
@@ -129,7 +129,7 @@ async fn can_paginate_logs(input: Input) -> Expected {
     let result = download_logs(
         &EthSyncGap::new(*eth_gap.start(), *eth_gap.end()),
         contracts,
-        Arc::new(eth_node),
+        &eth_node,
         Config::DEFAULT_LOG_PAGE_SIZE,
     )
     .map_ok(|(_, l)| l)
