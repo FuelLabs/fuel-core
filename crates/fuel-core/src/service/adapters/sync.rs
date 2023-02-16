@@ -27,24 +27,33 @@ use fuel_core_types::{
 impl PeerToPeerPort for P2PAdapter {
     fn height_stream(&self) -> BoxStream<BlockHeight> {
         use futures::StreamExt;
-        fuel_core_services::stream::IntoBoxStream::into_boxed(
-            tokio_stream::wrappers::BroadcastStream::new(
-                self.service.subscribe_block_height(),
+        if let Some(service) = &self.service {
+            fuel_core_services::stream::IntoBoxStream::into_boxed(
+                tokio_stream::wrappers::BroadcastStream::new(
+                    service.subscribe_block_height(),
+                )
+                .filter_map(|r| futures::future::ready(r.ok().map(|r| r.block_height))),
             )
-            .filter_map(|r| futures::future::ready(r.ok().map(|r| r.block_height))),
-        )
+        } else {
+            fuel_core_services::stream::IntoBoxStream::into_boxed(tokio_stream::pending())
+        }
     }
 
     async fn get_sealed_block_header(
         &self,
         height: BlockHeight,
     ) -> anyhow::Result<Option<SourcePeer<SealedBlockHeader>>> {
-        Ok(self.service.get_sealed_block_header(height).await?.map(
-            |(peer_id, header)| SourcePeer {
-                peer_id: peer_id.into(),
-                data: header,
-            },
-        ))
+        if let Some(service) = &self.service {
+            Ok(service
+                .get_sealed_block_header(height)
+                .await?
+                .map(|(peer_id, header)| SourcePeer {
+                    peer_id: peer_id.into(),
+                    data: header,
+                }))
+        } else {
+            Ok(None)
+        }
     }
 
     async fn get_transactions(
@@ -55,9 +64,13 @@ impl PeerToPeerPort for P2PAdapter {
             peer_id,
             data: block,
         } = block;
-        self.service
-            .get_transactions_from_peer(peer_id.into(), block)
-            .await
+        if let Some(service) = &self.service {
+            service
+                .get_transactions_from_peer(peer_id.into(), block)
+                .await
+        } else {
+            Ok(None)
+        }
     }
 }
 

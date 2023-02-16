@@ -31,6 +31,7 @@ app:
   relayer_min_duration_s: "${fuel_core_relayer_min_duration_s}"
   relayer_eth_sync_call_freq_s: "${fuel_core_relayer_eth_sync_call_freq_s}"
   relayer_eth_sync_log_freq_s: "${fuel_core_relayer_eth_sync_log_freq_s}"
+  sentry_enabled: ${fuel_core_sentry_enabled}
   image:
     repository: ${fuel_core_image_repository}
     tag: ${fuel_core_image_tag}
@@ -42,4 +43,9 @@ app:
     storageclass: ${pvc_storage_class}
     storagerequests: ${pvc_storage_requests}
     accessmodes: ReadWriteOnce
-
+  resources:
+    cpu_requests: ${fuel_core_cpu_requests}
+    memory_requests: ${fuel_core_memory_requests}
+    cpu_limits: ${fuel_core_cpu_limits}
+    memory_limits: ${fuel_core_memory_limits}
+    

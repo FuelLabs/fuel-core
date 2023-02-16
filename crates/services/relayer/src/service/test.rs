@@ -31,7 +31,7 @@ async fn can_download_logs() {
     let result = download_logs(
         &eth_state.needs_to_sync_eth().unwrap(),
         contracts,
-        Arc::new(eth_node),
+        &eth_node,
         Config::DEFAULT_LOG_PAGE_SIZE,
     )
     .map_ok(|(_, l)| l)
@@ -53,9 +53,8 @@ async fn deploy_height_does_not_override() {
         ..Default::default()
     };
     let eth_node = MockMiddleware::default();
-    let (tx, _) = watch::channel(None);
-    let mut relayer = Task::new(tx, eth_node, mock_db.clone(), config);
-    relayer.set_deploy_height();
+    let relayer = NotInitializedTask::new(eth_node, mock_db.clone(), config);
+    let _ = relayer.into_task(&Default::default()).await;
 
     assert_eq!(*mock_db.get_finalized_da_height().unwrap(), 50);
 }
@@ -72,9 +71,8 @@ async fn deploy_height_does_override() {
         ..Default::default()
     };
     let eth_node = MockMiddleware::default();
-    let (tx, _) = watch::channel(None);
-    let mut relayer = Task::new(tx, eth_node, mock_db.clone(), config);
-    relayer.set_deploy_height();
+    let relayer = NotInitializedTask::new(eth_node, mock_db.clone(), config);
+    let _ = relayer.into_task(&Default::default()).await;
 
     assert_eq!(*mock_db.get_finalized_da_height().unwrap(), 52);
 }

@@ -60,7 +60,7 @@ fn create_node_config_from_inputs(inputs: &[Input]) -> Config {
     initial_state.coins = Some(coin_configs);
     node_config.chain_conf.initial_state = Some(initial_state);
     node_config.utxo_validation = true;
-    node_config.p2p.enable_mdns = true;
+    node_config.p2p.as_mut().unwrap().enable_mdns = true;
     node_config
 }
 

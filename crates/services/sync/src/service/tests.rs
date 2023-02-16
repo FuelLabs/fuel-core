@@ -50,6 +50,7 @@ async fn test_new_service() {
     consensus
         .expect_check_sealed_header()
         .returning(|_| Ok(true));
+    consensus.expect_await_da_height().returning(|_| Ok(()));
     let params = Config {
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
@@ -60,12 +61,15 @@ async fn test_new_service() {
         s.start_and_await().await.unwrap(),
         fuel_core_services::State::Started
     );
+    let mut last_value = 0;
     while let Some(h) = rx.recv().await {
+        last_value = h;
         if h == 16 {
             break
         }
     }
 
+    assert_eq!(last_value, 16);
     assert_eq!(
         s.stop_and_await().await.unwrap(),
         fuel_core_services::State::Stopped
