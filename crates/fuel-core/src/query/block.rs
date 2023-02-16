@@ -24,7 +24,7 @@ use fuel_core_types::blockchain::{
 
 pub struct BlockQueryContext<'a>(pub &'a Database);
 
-pub trait BlockQueryData {
+pub trait BlockQueryData: Send + Sync {
     fn block(&self, id: &BlockId) -> StorageResult<CompressedBlock>;
 
     fn block_id(&self, height: &BlockHeight) -> StorageResult<BlockId>;

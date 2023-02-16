@@ -6,19 +6,19 @@ use crate::{
         TxPoolPort,
     },
     graphql_api::Config,
-    schema::{
-        CoreSchema,
-        CoreSchemaBuilder,
-    },
     query::{
         BalanceQueryData,
         BlockQueryData,
         ChainQueryData,
         CoinQueryData,
         ContractQueryData,
-        MessageQueryData,
         MessageProofData,
+        MessageQueryData,
         TransactionQueryData,
+    },
+    schema::{
+        CoreSchema,
+        CoreSchemaBuilder,
     },
     service::metrics::metrics,
 };
@@ -146,19 +146,27 @@ impl RunnableTask for Task {
 
 pub fn new_service(
     config: Config,
-    database: Database,
     schema: CoreSchemaBuilder,
-    producer: BlockProducer,
-    txpool: TxPool,
-    consensus_module: ConsensusModule,
+    balance_query_data: Box<dyn BalanceQueryData>,
+    block_query_data: Box<dyn BlockQueryData>,
+    chain_query_data: Box<dyn ChainQueryData>,
+    coin_query_data: Box<dyn CoinQueryData>,
+    contract_query_data: Box<dyn ContractQueryData>,
+    message_query_data: Box<dyn MessageQueryData>,
+    message_proof_data: Box<dyn MessageProofData>,
+    transaction_query_data: Box<dyn TransactionQueryData>,
 ) -> anyhow::Result<Service> {
     let network_addr = config.addr;
     let schema = schema
         .data(config)
-        .data(database)
-        .data(producer)
-        .data(txpool)
-        .data(consensus_module)
+        .data(balance_query_data)
+        .data(block_query_data)
+        .data(chain_query_data)
+        .data(coin_query_data)
+        .data(contract_query_data)
+        .data(message_query_data)
+        .data(message_proof_data)
+        .data(transaction_query_data)
         .extension(Tracing)
         .finish();
 

@@ -26,7 +26,7 @@ use fuel_core_types::{
 
 pub struct TransactionQueryContext<'a>(pub &'a Database);
 
-pub trait TransactionQueryData {
+pub trait TransactionQueryData: Send + Sync {
     fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction>;
     fn receipts(&self, tx_id: &TxId) -> StorageResult<Vec<Receipt>>;
     fn status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;

@@ -4,7 +4,7 @@ use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
 pub struct ChainQueryContext<'a>(pub &'a Database);
 
-pub trait ChainQueryData {
+pub trait ChainQueryData: Send + Sync {
     fn name(&self) -> StorageResult<String>;
     fn base_chain_height(&self) -> StorageResult<DaBlockHeight>;
 }

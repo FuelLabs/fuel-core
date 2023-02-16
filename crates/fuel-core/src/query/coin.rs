@@ -18,7 +18,7 @@ use fuel_core_types::{
 
 pub struct CoinQueryContext<'a>(pub &'a Database);
 
-pub trait CoinQueryData {
+pub trait CoinQueryData: Send + Sync {
     fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin>;
 
     fn owned_coins_ids(

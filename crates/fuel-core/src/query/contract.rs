@@ -25,7 +25,7 @@ use fuel_core_types::{
 
 pub struct ContractQueryContext<'a>(pub &'a Database);
 
-pub trait ContractQueryData {
+pub trait ContractQueryData: Send + Sync {
     fn contract_id(&self, id: ContractId) -> StorageResult<ContractId>;
     fn contract_bytecode(&self, id: ContractId) -> StorageResult<Vec<u8>>;
     fn contract_salt(&self, id: ContractId) -> StorageResult<Salt>;

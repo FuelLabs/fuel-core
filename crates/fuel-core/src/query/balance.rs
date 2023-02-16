@@ -29,7 +29,7 @@ pub mod asset_query;
 
 pub struct BalanceQueryContext<'a>(pub &'a Database);
 
-pub trait BalanceQueryData {
+pub trait BalanceQueryData: Send + Sync {
     fn balance(&self, owner: Address, asset_id: AssetId)
         -> StorageResult<AddressBalance>;
 

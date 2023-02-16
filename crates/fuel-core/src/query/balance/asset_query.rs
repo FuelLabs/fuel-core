@@ -131,7 +131,6 @@ impl<'a> AssetsQuery<'a> {
                 }
             });
 
-
         let message_context = MessageQueryContext(self.database);
         let messages_iter = message_context
             .owned_message_ids(self.owner, None, IterDirection::Forward)
@@ -163,7 +162,10 @@ impl<'a> AssetsQuery<'a> {
                     .map(|assets| assets.contains(&AssetId::BASE))
                     .unwrap_or(true)
             }))
-            .into_boxed().collect::<Vec<_>>().into_iter().into_boxed()
+            .into_boxed()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .into_boxed()
     }
 }
 

@@ -11,7 +11,11 @@ use crate::{
     },
 };
 use fuel_core_storage::{
-    iter::{IterDirection, BoxedIter, IntoBoxedIter},
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IterDirection,
+    },
     not_found,
     tables::{
         Messages,
@@ -56,7 +60,7 @@ mod test;
 
 pub struct MessageQueryContext<'a>(pub &'a Database);
 
-pub trait MessageQueryData {
+pub trait MessageQueryData: Send + Sync {
     fn message(&self, message_id: &MessageId) -> StorageResult<Message>;
     fn owned_message_ids(
         &self,
@@ -105,7 +109,9 @@ impl<'a> MessageQueryData for MessageQueryContext<'a> {
         start_message_id: Option<MessageId>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<MessageId>> {
-        self.0.owned_message_ids(owner, start_message_id, direction).into_boxed()
+        self.0
+            .owned_message_ids(owner, start_message_id, direction)
+            .into_boxed()
     }
 
     fn owned_messages(
@@ -115,7 +121,8 @@ impl<'a> MessageQueryData for MessageQueryContext<'a> {
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<Message>> {
         self.owned_message_ids(owner, start_message_id, direction)
-            .map(|result| result.and_then(|id| self.message(&id))).into_boxed()
+            .map(|result| result.and_then(|id| self.message(&id)))
+            .into_boxed()
     }
 
     fn all_messages(
@@ -123,13 +130,15 @@ impl<'a> MessageQueryData for MessageQueryContext<'a> {
         start_message_id: Option<MessageId>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<Message>> {
-        self.0.all_messages(start_message_id, direction).into_boxed()
+        self.0
+            .all_messages(start_message_id, direction)
+            .into_boxed()
     }
 }
 
 #[cfg_attr(test, mockall::automock)]
 /// Trait that specifies all the data required by the output message query.
-pub trait MessageProofData {
+pub trait MessageProofData: Send + Sync {
     /// Return all receipts in the given transaction.
     fn receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>>;
     /// Get the transaction.
