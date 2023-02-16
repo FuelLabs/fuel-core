@@ -210,10 +210,14 @@ spec:
           env:
             - name: HUMAN_LOGGING
               value: {{ .Values.app.human_logging | quote }}
+            {{- if .Values.app.reserved_nodes }}
             - name: RESERVED_NODES
               value: {{ .Values.app.reserved_nodes | quote }}
+            {{- end }}
+            {{- if .Values.app.bootstrap_nodes }}
             - name: BOOTSTRAP_NODES
               value: {{ .Values.app.bootstrap_nodes | quote }}
+            {{- end }}
             # TODO: do we need to do anything to make this more optional for non-consensus nodes?
             - name: CONSENSUS_KEY_SECRET
               valueFrom:
