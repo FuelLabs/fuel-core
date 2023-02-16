@@ -67,7 +67,7 @@ pub struct BlockImporterAdapter {
 #[cfg(feature = "p2p")]
 #[derive(Clone)]
 pub struct P2PAdapter {
-    service: fuel_core_p2p::service::SharedState,
+    service: Option<fuel_core_p2p::service::SharedState>,
 }
 
 #[cfg(not(feature = "p2p"))]
@@ -76,7 +76,7 @@ pub struct P2PAdapter;
 
 #[cfg(feature = "p2p")]
 impl P2PAdapter {
-    pub fn new(service: fuel_core_p2p::service::SharedState) -> Self {
+    pub fn new(service: Option<fuel_core_p2p::service::SharedState>) -> Self {
         Self { service }
     }
 }

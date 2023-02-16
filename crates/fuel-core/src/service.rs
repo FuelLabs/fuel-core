@@ -35,7 +35,7 @@ pub struct SharedState {
     pub txpool: fuel_core_txpool::service::SharedState<P2PAdapter, Database>,
     /// The P2P network shared state.
     #[cfg(feature = "p2p")]
-    pub network: fuel_core_p2p::service::SharedState,
+    pub network: Option<fuel_core_p2p::service::SharedState>,
     #[cfg(feature = "relayer")]
     /// The Relayer shared state.
     pub relayer: Option<fuel_core_relayer::SharedState<Database>>,
