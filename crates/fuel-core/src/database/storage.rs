@@ -264,3 +264,11 @@ impl ToDatabaseKey for () {
         &[]
     }
 }
+
+impl<const N: usize> ToDatabaseKey for [u8; N] {
+    type Type<'a> = &'a [u8];
+
+    fn database_key(&self) -> Self::Type<'_> {
+        self.as_slice()
+    }
+}
