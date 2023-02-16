@@ -177,6 +177,10 @@ impl ServiceTrait for FuelService {
     fn state(&self) -> State {
         self.runner.state()
     }
+
+    fn state_watcher(&self) -> StateWatcher {
+        self.runner.state_watcher()
+    }
 }
 
 pub type SubServices = Vec<Box<dyn ServiceTrait + Send + Sync + 'static>>;
@@ -241,7 +245,12 @@ impl RunnableTask for Task {
 
         // We received the stop signal from any of one source, so stop this service and
         // all sub-services.
-        for service in &self.services {
+        let should_continue = false;
+        Ok(should_continue)
+    }
+
+    async fn shutdown(self) -> anyhow::Result<()> {
+        for service in self.services {
             let result = service.stop_and_await().await;
 
             if let Err(err) = result {
@@ -251,8 +260,7 @@ impl RunnableTask for Task {
                 );
             }
         }
-
-        Ok(false /* should_continue */)
+        Ok(())
     }
 }
 
@@ -289,11 +297,6 @@ mod tests {
             if i < task.sub_services().len() {
                 task.sub_services()[i].stop_and_await().await.unwrap();
                 assert!(!task.run(&mut watcher).await.unwrap());
-
-                for service in task.sub_services() {
-                    // Check that the state is `Stopped`(not `StoppedWithError`)
-                    assert_eq!(service.state(), State::Stopped);
-                }
             } else {
                 break
             }
@@ -316,5 +319,27 @@ mod tests {
 
         // # Dev-note: Update the `expected_services` when we add/remove a new/old service.
         assert_eq!(i, expected_services);
+    }
+
+    #[tokio::test]
+    async fn shutdown_stops_all_services() {
+        let task = Task::new(Default::default(), Config::local_node()).unwrap();
+        let mut task = task.into_task(&Default::default()).await.unwrap();
+        let sub_services_watchers: Vec<_> = task
+            .sub_services()
+            .iter()
+            .map(|s| s.state_watcher())
+            .collect();
+
+        sleep(Duration::from_secs(1));
+        for service in task.sub_services() {
+            assert_eq!(service.state(), State::Started);
+        }
+        task.shutdown().await.unwrap();
+
+        for mut service in sub_services_watchers {
+            // Check that the state is `Stopped`(not `StoppedWithError`)
+            assert_eq!(service.borrow_and_update().clone(), State::Stopped);
+        }
     }
 }

@@ -19,3 +19,6 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 mockall = { workspace = true }
+
+[features]
+test-helpers = []

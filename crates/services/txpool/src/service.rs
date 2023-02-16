@@ -186,6 +186,14 @@ where
         }
         Ok(should_continue)
     }
+
+    async fn shutdown(self) -> anyhow::Result<()> {
+        // Nothing to shut down because we don't have any temporary state that should be dumped,
+        // and we don't spawn any sub-tasks that we need to finish or await.
+        // Maybe we will save and load the previous list of transactions in the future to
+        // avoid losing them.
+        Ok(())
+    }
 }
 
 // TODO: Remove `find` and `find_one` methods from `txpool`. It is used only by GraphQL.

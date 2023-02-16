@@ -46,6 +46,14 @@ impl State {
 #[derive(Clone)]
 pub struct StateWatcher(watch::Receiver<State>);
 
+#[cfg(feature = "test-helpers")]
+impl Default for StateWatcher {
+    fn default() -> Self {
+        let (_, receiver) = watch::channel(State::NotStarted);
+        Self(receiver)
+    }
+}
+
 impl StateWatcher {
     /// See [`watch::Receiver::borrow`].
     pub fn borrow(&self) -> watch::Ref<'_, State> {
