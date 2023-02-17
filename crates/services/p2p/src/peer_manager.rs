@@ -8,7 +8,6 @@ use crate::{
 use fuel_core_types::{
     blockchain::primitives::BlockHeight,
     services::p2p::peer_reputation::{
-        PeerReport,
         PeerScore,
         DEFAULT_PEER_SCORE,
         MAX_PEER_SCORE,
@@ -172,15 +171,15 @@ impl PeerManagerBehaviour {
         self.peer_manager.get_peer_id_with_height(height)
     }
 
-    pub fn report_peer<T: PeerReport>(
+    pub fn report_peer(
         &mut self,
         peer_id: PeerId,
-        report: T,
+        peer_score: PeerScore,
         reporting_service: &str,
     ) {
-        let score = report.get_score_from_report();
-        if let Some(latest_peer_score) =
-            self.peer_manager.update_peer_score_with(&peer_id, score)
+        if let Some(latest_peer_score) = self
+            .peer_manager
+            .update_peer_score_with(&peer_id, peer_score)
         {
             info!(target: "fuel-libp2p", "{reporting_service} updated {peer_id} with new score {latest_peer_score}");
         }

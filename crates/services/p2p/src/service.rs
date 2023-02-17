@@ -43,10 +43,15 @@ use fuel_core_types::{
     },
     fuel_tx::Transaction,
     services::p2p::{
+        peer_reputation::{
+            PeerReport,
+            PeerScore,
+        },
         BlockHeightHeartbeatData,
         GossipData,
         GossipsubMessageAcceptance,
         GossipsubMessageInfo,
+        PeerId as FuelPeerId,
         TransactionGossipData,
     },
 };
@@ -94,6 +99,11 @@ enum TaskRequest {
     },
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
+    RespondWithPeerReport {
+        peer_id: PeerId,
+        peer_score: PeerScore,
+        reporting_service: &'static str,
+    },
 }
 
 impl Debug for TaskRequest {
@@ -221,6 +231,9 @@ where
                     }
                     Some(TaskRequest::RespondWithGossipsubMessageReport((message, acceptance))) => {
                         report_message(&mut self.p2p_service, message, acceptance);
+                    }
+                    Some(TaskRequest::RespondWithPeerReport { peer_id, peer_score, reporting_service }) => {
+                        self.p2p_service.report_peer(peer_id, peer_score, reporting_service)
                     }
                     None => {
                         unreachable!("The `Task` is holder of the `Sender`, so it should not be possible");
@@ -421,6 +434,32 @@ impl SharedState {
         &self,
     ) -> broadcast::Receiver<BlockHeightHeartbeatData> {
         self.block_height_broadcast.subscribe()
+    }
+
+    pub fn report_peer<T: PeerReport>(
+        &self,
+        peer_id: FuelPeerId,
+        peer_report: T,
+        reporting_service: &'static str,
+    ) -> anyhow::Result<()> {
+        match Vec::from(peer_id).try_into() {
+            Ok(peer_id) => {
+                let peer_score = peer_report.get_score_from_report();
+
+                self.request_sender
+                    .try_send(TaskRequest::RespondWithPeerReport {
+                        peer_id,
+                        peer_score,
+                        reporting_service,
+                    })?;
+
+                Ok(())
+            }
+            Err(e) => {
+                warn!(target: "fuel-libp2p", "Failed to read PeerId from {e:?}");
+                Err(anyhow::anyhow!("Failed to read PeerId from {e:?}"))
+            }
+        }
     }
 }
 

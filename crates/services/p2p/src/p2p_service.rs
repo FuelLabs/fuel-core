@@ -34,7 +34,7 @@ use crate::{
 use fuel_core_metrics::p2p_metrics::P2P_METRICS;
 use fuel_core_types::{
     blockchain::primitives::BlockHeight,
-    services::p2p::peer_reputation::PeerReport,
+    services::p2p::peer_reputation::PeerScore,
 };
 use futures::prelude::*;
 use libp2p::{
@@ -340,15 +340,15 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         self.swarm.behaviour_mut().update_block_height(block_height)
     }
 
-    pub fn report_peer<T: PeerReport>(
+    pub fn report_peer(
         &mut self,
         peer_id: PeerId,
-        report: T,
+        peer_score: PeerScore,
         reporting_service: &str,
     ) {
         self.swarm
             .behaviour_mut()
-            .report_peer(peer_id, report, reporting_service);
+            .report_peer(peer_id, peer_score, reporting_service);
 
         self.check_peer_score(peer_id)
     }
