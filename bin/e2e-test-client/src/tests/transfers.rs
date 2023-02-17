@@ -2,6 +2,7 @@ use fuel_core_e2e_client::test_context::TestContext;
 use libtest_mimic::Failed;
 use tokio::time::timeout;
 
+// Alice makes transfer to Bob of `100` native tokens.
 pub async fn basic_transfer(ctx: &TestContext) -> Result<(), Failed> {
     // alice makes transfer to bob
     let result = ctx.alice.transfer(ctx.bob.address, 100, None).await?;
@@ -23,6 +24,36 @@ pub async fn basic_transfer(ctx: &TestContext) -> Result<(), Failed> {
     let received_transfer = ctx.bob.owns_coin(result.transferred_utxo).await?;
     if !received_transfer {
         return Err("Bob failed to receive transfer".into())
+    }
+
+    Ok(())
+}
+
+// Alice makes transfer to Bob of `100` native tokens - `basic_transfer`.
+// Bob returns `50` tokens back to Alice.
+pub async fn transfer_back(ctx: &TestContext) -> Result<(), Failed> {
+    basic_transfer(ctx).await?;
+
+    // bob makes transfer to alice
+    let result = ctx.bob.transfer(ctx.alice.address, 50, None).await?;
+    if !result.success {
+        return Err("transfer failed".into())
+    }
+    // wait until alice sees the transaction
+    timeout(
+        ctx.config.sync_timeout(),
+        ctx.alice
+            .client
+            .await_transaction_commit(&result.tx_id.to_string()),
+    )
+    .await??;
+
+    // alice checks to see if utxo was received
+    // we don't check balance in order to avoid brittleness in the case of
+    // external activity on these wallets
+    let received_transfer = ctx.alice.owns_coin(result.transferred_utxo).await?;
+    if !received_transfer {
+        return Err("Alice failed to receive transfer".into())
     }
 
     Ok(())
