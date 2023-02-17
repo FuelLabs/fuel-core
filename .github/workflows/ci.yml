@@ -37,6 +37,7 @@ jobs:
   lint-toml-files:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v3
       - uses: FuelLabs/.github/.github/actions/lint-toml-template/action.yml@lint-toml-template
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v2
