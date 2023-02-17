@@ -39,18 +39,10 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: FuelLabs/.github/.github/actions/lint-toml-template@lint-toml-template
-      - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v2
-        if: always() && github.ref == 'refs/heads/master'
+      - uses: FuelLabs/.github/.github/actions/slack-notify-template@notify-slack-template
         with:
-          status: ${{ job.status }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          notification_title: '{workflow} has {status_message}'
-          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
-          footer: ''
-          notify_when: 'failure'
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
   prevent-openssl:
     runs-on: ubuntu-latest
