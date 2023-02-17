@@ -3,10 +3,8 @@ use crate::state::{
     StateWatcher,
 };
 use anyhow::anyhow;
-use tokio::{
-    sync::watch,
-    task::JoinHandle,
-};
+use futures::FutureExt;
+use tokio::sync::watch;
 use tracing::Instrument;
 
 /// Alias for Arc<T>
@@ -53,6 +51,9 @@ pub trait Service {
 
     /// The current state of the service (i.e. `Started`, `Stopped`, etc..)
     fn state(&self) -> State;
+
+    /// Returns the state watcher of the service.
+    fn state_watcher(&self) -> StateWatcher;
 }
 
 /// Trait used by `ServiceRunner` to encapsulate the business logic tasks for a service.
@@ -94,6 +95,9 @@ pub trait RunnableTask: Send {
     /// will stop. If the service should react to the state change earlier, it should handle it in
     /// the `run` loop on its own. See [`StateWatcher::while_started`].
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool>;
+
+    /// Gracefully shutdowns the task after the end of the execution cycle.
+    async fn shutdown(self) -> anyhow::Result<()>;
 }
 
 /// The service runner manages the lifecycle, execution and error handling of a `RunnableService`.
@@ -213,6 +217,10 @@ where
     fn state(&self) -> State {
         self.state.borrow().clone()
     }
+
+    fn state_watcher(&self) -> StateWatcher {
+        self.state.subscribe().into()
+    }
 }
 
 #[tracing::instrument(skip_all, fields(service = S::NAME))]
@@ -228,12 +236,13 @@ where
     tokio::task::spawn(
         async move {
             tracing::debug!("running");
-            let join_handler = run(service, stop_sender.clone());
+            let run = std::panic::AssertUnwindSafe(run(service, stop_sender.clone()));
             tracing::debug!("awaiting run");
-            let result = join_handler.await;
+            let result = run.catch_unwind().await;
 
             let stopped_state = if let Err(e) = result {
-                State::StoppedWithError(e.to_string())
+                let panic_information = panic_to_string(e);
+                State::StoppedWithError(panic_information)
             } else {
                 State::Stopped
             };
@@ -242,7 +251,7 @@ where
 
             let _ = stop_sender.send_if_modified(|state| {
                 if !state.stopped() {
-                    *state = stopped_state;
+                    *state = stopped_state.clone();
                     tracing::debug!("Wasn't stopped, so sent stop.");
                     true
                 } else {
@@ -250,67 +259,95 @@ where
                     false
                 }
             });
+
+            if let State::StoppedWithError(err) = stopped_state {
+                std::panic::resume_unwind(Box::new(err));
+            }
         }
         .in_current_span(),
     );
     state
 }
 
-/// Spawns a task for the main background run loop.
-fn run<S>(service: S, sender: Shared<watch::Sender<State>>) -> JoinHandle<()>
+/// Runs the main loop.
+async fn run<S>(service: S, sender: Shared<watch::Sender<State>>)
 where
     S: RunnableService + 'static,
 {
     let mut state: StateWatcher = sender.subscribe().into();
-    tokio::task::spawn(
-        async move {
-            if state.borrow_and_update().not_started() {
-                // We can panic here, because it is inside of the task.
-                state.changed().await.expect("The service is destroyed");
-            }
+    if state.borrow_and_update().not_started() {
+        // We can panic here, because it is inside of the task.
+        state.changed().await.expect("The service is destroyed");
+    }
 
-            // If the state after update is not `Starting` then return to stop the service.
-            if !state.borrow().starting() {
-                return
-            }
+    // If the state after update is not `Starting` then return to stop the service.
+    if !state.borrow().starting() {
+        return
+    }
 
-            // We can panic here, because it is inside of the task.
-            let mut task = service
-                .into_task(&state)
-                .await
-                .expect("The initialization of the service failed.");
+    // We can panic here, because it is inside of the task.
+    let mut task = service
+        .into_task(&state)
+        .await
+        .expect("The initialization of the service failed.");
 
-            let started = sender.send_if_modified(|s| {
-                if s.starting() {
-                    *s = State::Started;
-                    true
-                } else {
-                    false
+    sender.send_if_modified(|s| {
+        if s.starting() {
+            *s = State::Started;
+            true
+        } else {
+            false
+        }
+    });
+
+    let mut got_panic = None;
+
+    while state.borrow_and_update().started() {
+        let task = std::panic::AssertUnwindSafe(task.run(&mut state));
+        let panic_result = task.catch_unwind().await;
+
+        match panic_result {
+            Ok(Ok(should_continue)) => {
+                if !should_continue {
+                    tracing::debug!("stopping");
+                    break
                 }
-            });
-
-            if !started {
-                return
+                tracing::debug!("run loop");
             }
-
-            while state.borrow_and_update().started() {
-                match task.run(&mut state).await {
-                    Ok(should_continue) => {
-                        if !should_continue {
-                            tracing::debug!("stopping");
-                            return
-                        }
-                        tracing::debug!("run loop");
-                    }
-                    Err(e) => {
-                        let e: &dyn std::error::Error = &*e;
-                        tracing::error!(e);
-                    }
-                }
+            Ok(Err(e)) => {
+                let e: &dyn std::error::Error = &*e;
+                tracing::error!(e);
+            }
+            Err(panic) => {
+                tracing::debug!("got a panic");
+                got_panic = Some(panic);
+                break
             }
         }
-        .in_current_span(),
-    )
+    }
+
+    let shutdown = std::panic::AssertUnwindSafe(task.shutdown());
+    match shutdown.catch_unwind().await {
+        Ok(Ok(_)) => {}
+        Ok(Err(e)) => {
+            tracing::error!("Go an error during shutdown of the task: {e}");
+        }
+        Err(e) => {
+            if got_panic.is_some() {
+                let panic_information = panic_to_string(e);
+                tracing::error!(
+                    "Go a panic during execution and shutdown of the task. \
+                    The error during shutdown: {panic_information}"
+                );
+            } else {
+                got_panic = Some(e);
+            }
+        }
+    }
+
+    if let Some(panic) = got_panic {
+        std::panic::resume_unwind(panic)
+    }
 }
 
 impl<T> SharedMutex<T> {
@@ -326,7 +363,17 @@ impl<T> SharedMutex<T> {
     }
 }
 
-// TODO: Add tests
+fn panic_to_string(e: Box<dyn core::any::Any + Send>) -> String {
+    let panic_information = match e.downcast::<String>() {
+        Ok(v) => *v,
+        Err(e) => match e.downcast::<&str>() {
+            Ok(v) => v.to_string(),
+            _ => "Unknown Source of Error".to_owned(),
+        },
+    };
+    panic_information
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -361,6 +408,8 @@ mod tests {
                 '_self: 'a,
                 '_state: 'a,
                 Self: Sync + 'a;
+
+            async fn shutdown(self) -> anyhow::Result<()>;
         }
     }
 
@@ -374,9 +423,11 @@ mod tests {
                     let mut watcher = watcher.clone();
                     Box::pin(async move {
                         watcher.while_started().await.unwrap();
-                        Ok(false)
+                        let should_continue = false;
+                        Ok(should_continue)
                     })
                 });
+                mock.expect_shutdown().times(1).returning(|| Ok(()));
                 Ok(mock)
             });
             mock
@@ -389,7 +440,7 @@ mod tests {
         let state = service.start_and_await().await.unwrap();
         assert!(state.started());
         let state = service.stop_and_await().await.unwrap();
-        assert!(state.stopped());
+        assert!(matches!(state, State::Stopped));
     }
 
     #[tokio::test]
@@ -410,6 +461,7 @@ mod tests {
     async fn stop_without_start() {
         let service = ServiceRunner::new(MockService::new_empty());
         service.stop_and_await().await.unwrap();
+        assert!(matches!(service.state(), State::Stopped));
     }
 
     #[tokio::test]
@@ -419,14 +471,44 @@ mod tests {
         mock.expect_into_task().returning(|_| {
             let mut mock = MockTask::default();
             mock.expect_run().returning(|_| panic!("Should fail"));
+            mock.expect_shutdown().times(1).returning(|| Ok(()));
             Ok(mock)
         });
         let service = ServiceRunner::new(mock);
         let state = service.start_and_await().await.unwrap();
-        assert!(matches!(state, State::StoppedWithError(_)));
+        assert!(matches!(state, State::StoppedWithError(s) if s.contains("Should fail")));
 
         let state = service.await_stop().await.unwrap();
-        assert!(matches!(state, State::StoppedWithError(_)));
+        assert!(matches!(state, State::StoppedWithError(s) if s.contains("Should fail")));
+    }
+
+    #[tokio::test]
+    async fn panic_during_shutdown() {
+        let mut mock = MockService::default();
+        mock.expect_shared_data().returning(|| EmptyShared);
+        mock.expect_into_task().returning(|_| {
+            let mut mock = MockTask::default();
+            mock.expect_run().returning(|_| {
+                Box::pin(async move {
+                    let should_continue = false;
+                    Ok(should_continue)
+                })
+            });
+            mock.expect_shutdown()
+                .times(1)
+                .returning(|| panic!("Shutdown should fail"));
+            Ok(mock)
+        });
+        let service = ServiceRunner::new(mock);
+        let state = service.start_and_await().await.unwrap();
+        assert!(
+            matches!(state, State::StoppedWithError(s) if s.contains("Shutdown should fail"))
+        );
+
+        let state = service.await_stop().await.unwrap();
+        assert!(
+            matches!(state, State::StoppedWithError(s) if s.contains("Shutdown should fail"))
+        );
     }
 
     #[tokio::test]
@@ -436,9 +518,9 @@ mod tests {
         service.stop();
 
         let state = service.await_stop().await.unwrap();
-        assert!(state.stopped());
+        assert!(matches!(state, State::Stopped));
         let state = service.await_stop().await.unwrap();
-        assert!(state.stopped());
+        assert!(matches!(state, State::Stopped));
     }
 
     #[tokio::test]
@@ -447,9 +529,9 @@ mod tests {
         service.start().unwrap();
 
         let state = service.stop_and_await().await.unwrap();
-        assert!(state.stopped());
+        assert!(matches!(state, State::Stopped));
         let state = service.stop_and_await().await.unwrap();
-        assert!(state.stopped());
+        assert!(matches!(state, State::Stopped));
     }
 
     #[tokio::test]
@@ -464,6 +546,6 @@ mod tests {
         receiver.changed().await.unwrap();
         assert!(matches!(receiver.borrow().clone(), State::Stopping));
         receiver.changed().await.unwrap();
-        assert!(receiver.borrow().stopped());
+        assert!(matches!(receiver.borrow().clone(), State::Stopped));
     }
 }

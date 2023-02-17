@@ -1,9 +1,5 @@
 use crate::{
     database::{
-        metadata::{
-            DB_VERSION,
-            DB_VERSION_KEY,
-        },
         Column,
         Error as DatabaseError,
         Result as DatabaseResult,
@@ -36,7 +32,6 @@ use rocksdb::{
     WriteBatch,
 };
 use std::{
-    convert::TryFrom,
     iter,
     path::Path,
     sync::Arc,
@@ -85,30 +80,7 @@ impl RocksDb {
         }
         .map_err(|e| DatabaseError::Other(e.into()))?;
         let rocks_db = RocksDb { db };
-        rocks_db.validate_or_set_db_version()?;
         Ok(rocks_db)
-    }
-
-    fn validate_or_set_db_version(&self) -> DatabaseResult<()> {
-        let data = self.get(DB_VERSION_KEY, Column::Metadata)?;
-        match data {
-            None => {
-                self.put(
-                    DB_VERSION_KEY,
-                    Column::Metadata,
-                    DB_VERSION.to_be_bytes().to_vec(),
-                )?;
-            }
-            Some(v) => {
-                let b = <[u8; 4]>::try_from(v.as_slice())
-                    .map_err(|_| DatabaseError::InvalidDatabaseVersion)?;
-                let version = u32::from_be_bytes(b);
-                if version != DB_VERSION {
-                    return Err(DatabaseError::InvalidDatabaseVersion)
-                }
-            }
-        };
-        Ok(())
     }
 
     fn cf(&self, column: Column) -> Arc<BoundColumnFamily> {

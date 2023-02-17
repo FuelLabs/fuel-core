@@ -71,7 +71,7 @@ pub fn maybe_initialize_state(
     database: &Database,
 ) -> anyhow::Result<()> {
     // check if chain is initialized
-    if database.get_chain_name()?.is_none() {
+    if database.ids_of_latest_block()?.is_none() {
         import_genesis_block(config, database)?;
     }
 
@@ -87,7 +87,6 @@ fn import_genesis_block(
 
     let database = database_transaction.as_mut();
     // Initialize the chain id and height.
-    database.init(&config.chain_conf)?;
 
     let chain_config_hash = config.chain_conf.root()?.into();
     let coins_root = init_coin_state(database, &config.chain_conf.initial_state)?.into();

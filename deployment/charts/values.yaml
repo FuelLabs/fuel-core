@@ -12,6 +12,7 @@ app:
   p2p_key: ${fuel_core_p2p_key}
   allow_private_addresses: ${fuel_core_allow_private_addresses}
   human_logging: ${fuel_core_human_logging}
+  rust_log: ${fuel_core_rust_log}
   utxo_validation: ${fuel_core_utxo_validation}
   vm_backtrace: ${fuel_core_vm_backtrace}
   min_gas_price: ${fuel_core_min_gas_price}
