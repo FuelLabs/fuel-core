@@ -36,7 +36,7 @@ jobs:
 
   lint-toml-files:
     runs-on: ubuntu-latest
-    - uses: FuelLabs/.github/.github/workflows/lint-toml-template.yml@lint-toml-template
+    uses: FuelLabs/.github/.github/workflows/lint-toml-template.yml@lint-toml-template
     - name: Notify if Job Fails
       uses: ravsamhq/notify-slack-action@v2
       if: always() && github.ref == 'refs/heads/master'
