@@ -218,6 +218,10 @@ spec:
             - name: BOOTSTRAP_NODES
               value: {{ .Values.app.bootstrap_nodes | quote }}
             {{- end }}
+            {{- if .Values.app.rust_log }}
+            - name: RUST_LOG
+              value: {{ .Values.app.rust_log | quote }}
+            {{- end }}
             # TODO: do we need to do anything to make this more optional for non-consensus nodes?
             - name: CONSENSUS_KEY_SECRET
               valueFrom:
