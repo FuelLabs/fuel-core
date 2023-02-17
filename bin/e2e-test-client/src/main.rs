@@ -43,7 +43,7 @@ fn main() {
         Trial::test(
             "can transfer from alice to bob and back",
             with_cloned(&config, |config| {
-                let ctx = TestContext::new(config.clone());
+                let ctx = TestContext::new(config);
                 async_execute(tests::transfers::transfer_back(&ctx))
             }),
         ),
