@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: FuelLabs/.github/.github/actions/lint-toml-template/action.yml@lint-toml-template
+      - uses: FuelLabs/.github/.github/actions/lint-toml-template@lint-toml-template
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v2
         if: always() && github.ref == 'refs/heads/master'
