@@ -457,7 +457,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                                 })
                             }
                             Err(err) => {
-                                warn!(target: "fuel-libp2p", "Failed to decode a message. ID: {}, Message: {:?} with error: {:?}", message_id, &message.data, err);
+                                warn!(target: "fuel-p2p", "Failed to decode a message. ID: {}, Message: {:?} with error: {:?}", message_id, &message.data, err);
 
                                 match self.report_message_validation_result(
                                     &message_id,
@@ -465,19 +465,19 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                                     MessageAcceptance::Reject,
                                 ) {
                                     Ok(false) => {
-                                        warn!(target: "fuel-libp2p", "Message was not found in the cache, peer with PeerId: {} has been reported.", propagation_source);
+                                        warn!(target: "fuel-p2p", "Message was not found in the cache, peer with PeerId: {} has been reported.", propagation_source);
                                     }
                                     Ok(true) => {
-                                        info!(target: "fuel-libp2p", "Message found in the cache, peer with PeerId: {} has been reported.", propagation_source);
+                                        info!(target: "fuel-p2p", "Message found in the cache, peer with PeerId: {} has been reported.", propagation_source);
                                     }
                                     Err(e) => {
-                                        warn!(target: "fuel-libp2p", "Failed to publish the message with following error: {:?}.", e);
+                                        warn!(target: "fuel-p2p", "Failed to publish the message with following error: {:?}.", e);
                                     }
                                 }
                             }
                         }
                     } else {
-                        warn!(target: "fuel-libp2p", "GossipTopicTag does not exist for {:?}", &message.topic);
+                        warn!(target: "fuel-p2p", "GossipTopicTag does not exist for {:?}", &message.topic);
                     }
                 }
             }

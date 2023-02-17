@@ -181,7 +181,7 @@ impl PeerManagerBehaviour {
             .peer_manager
             .update_peer_score_with(&peer_id, peer_score)
         {
-            info!(target: "fuel-libp2p", "{reporting_service} updated {peer_id} with new score {latest_peer_score}");
+            info!(target: "fuel-p2p", "{reporting_service} updated {peer_id} with new score {latest_peer_score}");
         }
     }
 }
@@ -354,7 +354,7 @@ impl NetworkBehaviour for PeerManagerBehaviour {
                 .collect();
 
             for peer_id in disconnected_peers {
-                debug!(target: "fuel-libp2p", "Trying to reconnect to reserved peer {:?}", peer_id);
+                debug!(target: "fuel-p2p", "Trying to reconnect to reserved peer {:?}", peer_id);
 
                 self.peer_manager
                     .pending_events
@@ -413,7 +413,7 @@ impl NetworkBehaviour for PeerManagerBehaviour {
                     .get_peer_info(&peer_id)
                     .and_then(|info| info.heartbeat_data.seconds_since_last_heartbeat())
                 {
-                    debug!(target: "fuel-libp2p", "Previous hearbeat happened {:?} seconds ago", previous_heartbeat);
+                    debug!(target: "fuel-p2p", "Previous hearbeat happened {:?} seconds ago", previous_heartbeat);
                 }
 
                 self.peer_manager.insert_peer_info(
@@ -482,7 +482,7 @@ impl NetworkBehaviour for PeerManagerBehaviour {
                         } => {
                             if listen_addrs.len() > MAX_IDENTIFY_ADDRESSES {
                                 debug!(
-                                    target: "fuel-libp2p",
+                                    target: "fuel-p2p",
                                     "Node {:?} has reported more than {} addresses; it is identified by {:?} and {:?}",
                                     peer_id, MAX_IDENTIFY_ADDRESSES, protocol_version, agent_version
                                 );
@@ -507,7 +507,7 @@ impl NetworkBehaviour for PeerManagerBehaviour {
                             ))
                         }
                         IdentifyEvent::Error { peer_id, error } => {
-                            debug!(target: "fuel-libp2p", "Identification with peer {:?} failed => {}", peer_id, error)
+                            debug!(target: "fuel-p2p", "Identification with peer {:?} failed => {}", peer_id, error)
                         }
                         _ => {}
                     }
@@ -817,7 +817,7 @@ fn insert_client_version(
 }
 
 fn log_missing_peer(peer_id: &PeerId) {
-    debug!(target: "fuel-libp2p", "Peer with PeerId: {:?} is not among the connected peers", peer_id)
+    debug!(target: "fuel-p2p", "Peer with PeerId: {:?} is not among the connected peers", peer_id)
 }
 
 #[cfg(test)]

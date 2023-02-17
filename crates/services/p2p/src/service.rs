@@ -456,7 +456,7 @@ impl SharedState {
                 Ok(())
             }
             Err(e) => {
-                warn!(target: "fuel-libp2p", "Failed to read PeerId from {e:?}");
+                warn!(target: "fuel-p2p", "Failed to read PeerId from {e:?}");
                 Err(anyhow::anyhow!("Failed to read PeerId from {e:?}"))
             }
         }
@@ -503,17 +503,17 @@ fn report_message<T: NetworkCodec>(
 
         match p2p_service.report_message_validation_result(&msg_id, peer_id, acceptance) {
             Ok(true) => {
-                debug!(target: "fuel-libp2p", "Sent a report for MessageId: {} from PeerId: {}", msg_id, peer_id);
+                debug!(target: "fuel-p2p", "Sent a report for MessageId: {} from PeerId: {}", msg_id, peer_id);
             }
             Ok(false) => {
-                warn!(target: "fuel-libp2p", "Message with MessageId: {} not found in the Gossipsub Message Cache", msg_id);
+                warn!(target: "fuel-p2p", "Message with MessageId: {} not found in the Gossipsub Message Cache", msg_id);
             }
             Err(e) => {
-                error!(target: "fuel-libp2p", "Failed to publish Message with MessageId: {} with Error: {:?}", msg_id, e);
+                error!(target: "fuel-p2p", "Failed to publish Message with MessageId: {} with Error: {:?}", msg_id, e);
             }
         }
     } else {
-        warn!(target: "fuel-libp2p", "Failed to read PeerId from received GossipsubMessageId: {}", msg_id);
+        warn!(target: "fuel-p2p", "Failed to read PeerId from received GossipsubMessageId: {}", msg_id);
     }
 }
 
