@@ -6,6 +6,7 @@ use crate::{
         U64,
     },
 };
+use anyhow::anyhow;
 use async_graphql::{
     connection::{
         Connection,
@@ -58,6 +59,8 @@ impl BalanceQuery {
 
     // TODO: We can't paginate over `AssetId` because it is not unique.
     //  It should be replaced with `UtxoId`.
+    //  This API should be migrated to the indexer for better support and
+    //  discontinued within fuel-core.
     async fn balances(
         &self,
         ctx: &Context<'_>,
@@ -68,6 +71,9 @@ impl BalanceQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<AssetId, Balance, EmptyFields, EmptyFields>>
     {
+        if before.is_some() || after.is_some() {
+            return Err(anyhow!("pagination is not yet supported").into())
+        }
         let query = BalanceQueryContext(ctx.data_unchecked());
         crate::schema::query_pagination(after, before, first, last, |_, direction| {
             let owner = filter.owner.into();
