@@ -1,12 +1,12 @@
 /// PeerScore type used for Peer Reputation
-pub type PeerScore = i8;
+pub type PeerScore = f64;
 
 /// Minimum allowed peer score before peer is banned
-pub const MIN_PEER_SCORE: PeerScore = 0;
+pub const MIN_PEER_SCORE: PeerScore = 0.0;
 /// Default value for peer score
-pub const DEFAULT_PEER_SCORE: PeerScore = 50;
+pub const DEFAULT_PEER_SCORE: PeerScore = 50.0;
 /// Maximum value a Peer can reach with its PeerScore
-pub const MAX_PEER_SCORE: PeerScore = 100;
+pub const MAX_PEER_SCORE: PeerScore = 150.0;
 
 /// Types implementing this can report new PeerScore
 pub trait PeerReport {
@@ -28,9 +28,9 @@ pub enum NegativePeerReport {
 impl PeerReport for NegativePeerReport {
     fn get_score_from_report(&self) -> PeerScore {
         match self {
-            Self::Fatal => -MAX_PEER_SCORE - 10,
-            Self::Major => -10,
-            Self::Minor => -5,
+            Self::Fatal => -MAX_PEER_SCORE - 10.0,
+            Self::Major => -10.0,
+            Self::Minor => -5.0,
         }
     }
 }
@@ -47,8 +47,8 @@ pub enum PositivePeerReport {
 impl PeerReport for PositivePeerReport {
     fn get_score_from_report(&self) -> PeerScore {
         match self {
-            Self::Major => 5,
-            Self::Minor => 1,
+            Self::Major => 5.0,
+            Self::Minor => 1.0,
         }
     }
 }

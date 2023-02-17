@@ -83,6 +83,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         p2p_config: &Config,
         codec: Codec,
         connection_state: Arc<RwLock<ConnectionState>>,
+        peer_score_config: &PeerScoreConfig,
     ) -> Self {
         let local_public_key = p2p_config.keypair.public();
         let local_peer_id = PeerId::from_public_key(&local_public_key);
@@ -110,8 +111,6 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
             discovery_config
         };
 
-        // build here all gossipsub/peer rep params and pass them
-        let peer_score_config = PeerScoreConfig::default();
         let peer_manager = PeerManagerBehaviour::new(p2p_config, connection_state);
 
         let req_res_protocol =
@@ -199,8 +198,6 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         self.peer_manager.update_block_height(block_height);
     }
 
-    // Currently only used in testing, but should be useful for the P2P Service API
-    #[allow(dead_code)]
     pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<&PeerInfo> {
         self.peer_manager.get_peer_info(peer_id)
     }
@@ -217,6 +214,10 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
     ) {
         self.peer_manager
             .report_peer(peer_id, report, reporting_service)
+    }
+
+    pub fn get_gossipsub_peer_score(&self, peer_id: &PeerId) -> Option<f64> {
+        self.gossipsub.peer_score(peer_id)
     }
 }
 

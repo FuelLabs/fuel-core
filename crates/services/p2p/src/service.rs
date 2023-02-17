@@ -462,8 +462,7 @@ fn report_message<T: NetworkCodec>(
     if let Ok(peer_id) = peer_id.try_into() {
         let acceptance = to_message_acceptance(&acceptance);
 
-        match p2p_service.report_message_validation_result(&msg_id, &peer_id, acceptance)
-        {
+        match p2p_service.report_message_validation_result(&msg_id, peer_id, acceptance) {
             Ok(true) => {
                 debug!(target: "fuel-libp2p", "Sent a report for MessageId: {} from PeerId: {}", msg_id, peer_id);
             }

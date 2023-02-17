@@ -12,7 +12,6 @@ use fuel_core_types::{
         PeerScore,
         DEFAULT_PEER_SCORE,
         MAX_PEER_SCORE,
-        MIN_PEER_SCORE,
     },
 };
 use libp2p::{
@@ -94,9 +93,6 @@ pub enum PeerInfoEvent {
     PeerInfoUpdated {
         peer_id: PeerId,
         block_height: BlockHeight,
-    },
-    BanPeer {
-        peer_id: PeerId,
     },
 }
 
@@ -187,12 +183,6 @@ impl PeerManagerBehaviour {
             self.peer_manager.update_peer_score_with(&peer_id, score)
         {
             info!(target: "fuel-libp2p", "{reporting_service} updated {peer_id} with new score {latest_peer_score}");
-
-            if latest_peer_score < MIN_PEER_SCORE {
-                self.peer_manager
-                    .pending_events
-                    .push_back(PeerInfoEvent::BanPeer { peer_id })
-            }
         }
     }
 }
@@ -607,7 +597,7 @@ impl PeerManager {
     ) -> Option<PeerScore> {
         if let Some(peer) = self.non_reserved_connected_peers.get_mut(peer_id) {
             // score should not go over `MAX_PEER_SCORE`
-            let new_score = peer.score.saturating_add(score);
+            let new_score = peer.score + score;
             peer.score = MAX_PEER_SCORE.min(new_score);
             Some(peer.score)
         } else {

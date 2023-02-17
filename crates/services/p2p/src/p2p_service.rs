@@ -16,6 +16,7 @@ use crate::{
         },
         topics::GossipsubTopics,
     },
+    gossipsub_config::PeerScoreConfig,
     peer_manager::{
         PeerInfoEvent,
         PeerManagerBehaviour,
@@ -108,6 +109,7 @@ pub struct FuelP2PService<Codec: NetworkCodec> {
 #[derive(Debug)]
 struct NetworkMetadata {
     gossipsub_topics: GossipsubTopics,
+    peer_score_config: PeerScoreConfig,
 }
 
 #[derive(Debug, Clone)]
@@ -135,9 +137,16 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     pub fn new(config: Config, codec: Codec) -> Self {
         let local_peer_id = PeerId::from(config.keypair.public());
 
+        let peer_score_config = PeerScoreConfig::default();
+
         // configure and build P2P Service
         let (transport, connection_state) = build_transport(&config);
-        let behaviour = FuelBehaviour::new(&config, codec.clone(), connection_state);
+        let behaviour = FuelBehaviour::new(
+            &config,
+            codec.clone(),
+            connection_state,
+            &peer_score_config,
+        );
 
         let total_connections = {
             // Reserved nodes do not count against the configured peer input/output limits.
@@ -173,7 +182,10 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 .build();
 
         let gossipsub_topics = GossipsubTopics::new(&config.network_name);
-        let network_metadata = NetworkMetadata { gossipsub_topics };
+        let network_metadata = NetworkMetadata {
+            gossipsub_topics,
+            peer_score_config,
+        };
 
         let metrics = config.metrics;
 
@@ -310,14 +322,18 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     pub fn report_message_validation_result(
         &mut self,
         msg_id: &MessageId,
-        propagation_source: &PeerId,
+        propagation_source: PeerId,
         acceptance: MessageAcceptance,
     ) -> Result<bool, PublishError> {
-        self.swarm.behaviour_mut().report_message_validation_result(
+        let result = self.swarm.behaviour_mut().report_message_validation_result(
             msg_id,
-            propagation_source,
+            &propagation_source,
             acceptance,
-        )
+        );
+
+        self.check_peer_score(propagation_source);
+
+        result
     }
 
     pub fn update_block_height(&mut self, block_height: BlockHeight) {
@@ -333,6 +349,37 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         self.swarm
             .behaviour_mut()
             .report_peer(peer_id, report, reporting_service);
+
+        self.check_peer_score(peer_id)
+    }
+
+    fn check_peer_score(&mut self, peer_id: PeerId) {
+        if let Some(app_score) = self
+            .swarm
+            .behaviour()
+            .get_peer_info(&peer_id)
+            .map(|peer_info| peer_info.score)
+        {
+            if app_score < self.network_metadata.peer_score_config.get_min_app_score() {
+                // ban peer from the network
+                self.swarm.ban_peer_id(peer_id);
+                return
+            }
+        }
+
+        if let Some(gossip_score) =
+            self.swarm.behaviour().get_gossipsub_peer_score(&peer_id)
+        {
+            if gossip_score
+                < self
+                    .network_metadata
+                    .peer_score_config
+                    .get_min_gossipsub_score()
+            {
+                // ban peer from the network
+                self.swarm.ban_peer_id(peer_id);
+            }
+        }
     }
 
     #[tracing::instrument(skip_all,
@@ -414,7 +461,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 
                                 match self.report_message_validation_result(
                                     &message_id,
-                                    &propagation_source,
+                                    propagation_source,
                                     MessageAcceptance::Reject,
                                 ) {
                                     Ok(false) => {
@@ -471,10 +518,6 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 PeerInfoEvent::TooManyPeers { peer_to_disconnect } => {
                     // disconnect the surplus peer
                     let _ = self.swarm.disconnect_peer_id(peer_to_disconnect);
-                }
-                PeerInfoEvent::BanPeer { peer_id } => {
-                    info!(target: "fuel-libp2p", "Banning {peer_id}");
-                    self.swarm.ban_peer_id(peer_id);
                 }
             },
             FuelBehaviourEvent::RequestResponse(req_res_event) => match req_res_event {
