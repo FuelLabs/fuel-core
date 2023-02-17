@@ -1,6 +1,6 @@
 //! # Helpers for creating networks of nodes
 
-use fuel_core::{
+use crate::{
     chain_config::ChainConfig,
     database::Database,
     p2p::Multiaddr,
@@ -237,9 +237,7 @@ pub async fn make_nodes(
                     );
                     if let Some(BootstrapSetup { pub_key, .. }) = boot {
                         match &mut node_config.chain_conf.consensus {
-                            fuel_core::chain_config::ConsensusConfig::PoA {
-                                signing_key,
-                            } => {
+                            crate::chain_config::ConsensusConfig::PoA { signing_key } => {
                                 *signing_key = pub_key;
                             }
                         }
@@ -265,12 +263,12 @@ pub async fn make_nodes(
 
         let mut test_txs = Vec::with_capacity(0);
         node_config.block_production = Trigger::Instant;
-        node_config.p2p.bootstrap_nodes = boots.clone();
+        node_config.p2p.as_mut().unwrap().bootstrap_nodes = boots.clone();
 
         if let Some((ProducerSetup { secret, .. }, txs)) = s {
             let pub_key = secret.public_key();
             match &mut node_config.chain_conf.consensus {
-                fuel_core::chain_config::ConsensusConfig::PoA { signing_key } => {
+                crate::chain_config::ConsensusConfig::PoA { signing_key } => {
                     *signing_key = Input::owner(&pub_key);
                 }
             }
@@ -295,11 +293,11 @@ pub async fn make_nodes(
             chain_config.clone(),
         );
         node_config.block_production = Trigger::Never;
-        node_config.p2p.bootstrap_nodes = boots.clone();
+        node_config.p2p.as_mut().unwrap().bootstrap_nodes = boots.clone();
 
         if let Some(ValidatorSetup { pub_key, .. }) = s {
             match &mut node_config.chain_conf.consensus {
-                fuel_core::chain_config::ConsensusConfig::PoA { signing_key } => {
+                crate::chain_config::ConsensusConfig::PoA { signing_key } => {
                     *signing_key = pub_key;
                 }
             }
@@ -343,7 +341,10 @@ fn extract_p2p_config(node_config: &Config) -> fuel_core_p2p::config::Config {
     let bootstrap_config = node_config.p2p.clone();
     let db = Database::in_memory();
     maybe_initialize_state(node_config, &db).unwrap();
-    bootstrap_config.init(db.get_genesis().unwrap()).unwrap()
+    bootstrap_config
+        .unwrap()
+        .init(db.get_genesis().unwrap())
+        .unwrap()
 }
 
 impl Node {

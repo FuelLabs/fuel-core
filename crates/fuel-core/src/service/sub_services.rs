@@ -78,16 +78,25 @@ pub fn init_sub_services(
     );
 
     #[cfg(feature = "p2p")]
-    let network = {
-        let p2p_db = database.clone();
-        let genesis = p2p_db.get_genesis()?;
-        let p2p_config = config.p2p.clone().init(genesis)?;
+    let mut network = {
+        if let Some(config) = config.p2p.clone() {
+            let p2p_db = database.clone();
+            let genesis = p2p_db.get_genesis()?;
+            let p2p_config = config.init(genesis)?;
 
-        fuel_core_p2p::service::new_service(p2p_config, p2p_db, importer_adapter.clone())
+            Some(fuel_core_p2p::service::new_service(
+                p2p_config,
+                p2p_db,
+                importer_adapter.clone(),
+            ))
+        } else {
+            None
+        }
     };
 
     #[cfg(feature = "p2p")]
-    let p2p_adapter = P2PAdapter::new(network.shared.clone());
+    let p2p_adapter =
+        P2PAdapter::new(network.as_ref().map(|network| network.shared.clone()));
     #[cfg(not(feature = "p2p"))]
     let p2p_adapter = P2PAdapter::new();
 
@@ -173,7 +182,7 @@ pub fn init_sub_services(
     let shared = SharedState {
         txpool: txpool.shared.clone(),
         #[cfg(feature = "p2p")]
-        network: network.shared.clone(),
+        network: network.as_ref().map(|n| n.shared.clone()),
         #[cfg(feature = "relayer")]
         relayer: relayer_service.as_ref().map(|r| r.shared.clone()),
         graph_ql: graph_ql.shared.clone(),
@@ -201,9 +210,11 @@ pub fn init_sub_services(
 
     #[cfg(feature = "p2p")]
     {
-        services.push(Box::new(network));
-        if let Some(sync) = sync {
-            services.push(Box::new(sync));
+        if let Some(network) = network.take() {
+            services.push(Box::new(network));
+            if let Some(sync) = sync {
+                services.push(Box::new(sync));
+            }
         }
     }
 

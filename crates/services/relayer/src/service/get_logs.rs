@@ -5,12 +5,12 @@ use futures::TryStreamExt;
 mod test;
 
 /// Download the logs from the DA layer.
-pub(crate) fn download_logs<P>(
+pub(crate) fn download_logs<'a, P>(
     eth_sync_gap: &state::EthSyncGap,
     contracts: Vec<H160>,
-    eth_node: Arc<P>,
+    eth_node: &'a P,
     page_size: u64,
-) -> impl futures::Stream<Item = Result<(u64, Vec<Log>), ProviderError>>
+) -> impl futures::Stream<Item = Result<(u64, Vec<Log>), ProviderError>> + 'a
 where
     P: Middleware<Error = ProviderError> + 'static,
 {
@@ -19,7 +19,6 @@ where
         eth_sync_gap.page(page_size),
         move |page: Option<state::EthSyncPage>| {
             let contracts = contracts.clone();
-            let eth_node = eth_node.clone();
             async move {
                 match page {
                     None => Ok(None),
