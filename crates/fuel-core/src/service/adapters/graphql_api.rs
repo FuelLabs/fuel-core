@@ -15,7 +15,6 @@ use crate::{
         DryRunExecution,
         TxPoolPort,
     },
-    service::sub_services::TxPoolService,
     service::adapters::TxPoolAdapter,
 };
 use async_trait::async_trait;

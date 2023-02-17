@@ -1,9 +1,6 @@
 use crate::{
     fuel_core_graphql_api::IntoApiResult,
-    query::{
-        ContractQueryContext,
-        ContractQueryData,
-    },
+    query::ContractQueryData,
     schema::scalars::{
         AssetId,
         ContractId,
@@ -42,7 +39,7 @@ impl Contract {
     }
 
     async fn bytecode(&self, ctx: &Context<'_>) -> async_graphql::Result<HexString> {
-        let context = ContractQueryContext(ctx.data_unchecked());
+        let context: &Box<dyn ContractQueryData> = ctx.data_unchecked();
         context
             .contract_bytecode(self.0)
             .map(HexString)
@@ -50,7 +47,7 @@ impl Contract {
     }
 
     async fn salt(&self, ctx: &Context<'_>) -> async_graphql::Result<Salt> {
-        let context = ContractQueryContext(ctx.data_unchecked());
+        let context: &Box<dyn ContractQueryData> = ctx.data_unchecked();
         context
             .contract_salt(self.0)
             .map(Into::into)
@@ -68,7 +65,7 @@ impl ContractQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "ID of the Contract")] id: ContractId,
     ) -> async_graphql::Result<Option<Contract>> {
-        let data = ContractQueryContext(ctx.data_unchecked());
+        let data: &Box<dyn ContractQueryData> = ctx.data_unchecked();
         data.contract_id(id.0).into_api_result()
     }
 }
@@ -109,7 +106,7 @@ impl ContractBalanceQuery {
     ) -> async_graphql::Result<ContractBalance> {
         let contract_id = contract.into();
         let asset_id = asset.into();
-        let context = ContractQueryContext(ctx.data_unchecked());
+        let context: &Box<dyn ContractQueryData> = ctx.data_unchecked();
         context
             .contract_balance(contract_id, asset_id)
             .into_api_result()
@@ -136,7 +133,7 @@ impl ContractBalanceQuery {
     ) -> async_graphql::Result<
         Connection<AssetId, ContractBalance, EmptyFields, EmptyFields>,
     > {
-        let query = ContractQueryContext(ctx.data_unchecked());
+        let query: &Box<dyn ContractQueryData> = ctx.data_unchecked();
 
         // Rocksdb doesn't support reverse iteration over a prefix
         if matches!(last, Some(last) if last > 0) {

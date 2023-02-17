@@ -9,9 +9,7 @@ use crate::{
         IntoApiResult,
     },
     query::{
-        BlockQueryContext,
         BlockQueryData,
-        TransactionQueryContext,
         TransactionQueryData,
     },
     schema::{
@@ -141,7 +139,7 @@ pub struct SuccessStatus {
 #[Object]
 impl SuccessStatus {
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query = BlockQueryContext(ctx.data_unchecked());
+        let query: &Box<dyn BlockQueryData> = ctx.data_unchecked();
         let block = query.block(&self.block_id)?;
         Ok(block.into())
     }
@@ -166,7 +164,7 @@ pub struct FailureStatus {
 #[Object]
 impl FailureStatus {
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query = BlockQueryContext(ctx.data_unchecked());
+        let query: &Box<dyn BlockQueryData> = ctx.data_unchecked();
         let block = query.block(&self.block_id)?;
         Ok(block.into())
     }
@@ -398,16 +396,16 @@ impl Transaction {
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<TransactionStatus>> {
         let id = self.0.id();
-        let query = TransactionQueryContext(ctx.data_unchecked());
+        let query: &Box<dyn TransactionQueryData> = ctx.data_unchecked();
         let txpool = ctx.data_unchecked::<TxPool>();
-        get_tx_status(id, &query, txpool).await.map_err(Into::into)
+        get_tx_status(id, query, txpool).await.map_err(Into::into)
     }
 
     async fn receipts(
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<Vec<Receipt>>> {
-        let query = TransactionQueryContext(ctx.data_unchecked());
+        let query: &Box<dyn TransactionQueryData> = ctx.data_unchecked();
         let receipts = query
             .receipts(&self.0.id())
             .into_api_result::<Vec<_>, async_graphql::Error>()?;
@@ -494,7 +492,7 @@ impl Transaction {
 #[tracing::instrument(level = "debug", skip(query, txpool), ret, err)]
 pub(super) async fn get_tx_status(
     id: fuel_core_types::fuel_types::Bytes32,
-    query: &TransactionQueryContext<'_>,
+    query: &Box<dyn TransactionQueryData>,
     txpool: &TxPool,
 ) -> Result<Option<TransactionStatus>, StorageError> {
     match query

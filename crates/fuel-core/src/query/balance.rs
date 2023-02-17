@@ -27,7 +27,7 @@ use std::{
 
 pub mod asset_query;
 
-pub struct BalanceQueryContext<'a>(pub &'a Database);
+pub struct BalanceQueryContext(pub Database);
 
 pub trait BalanceQueryData: Send + Sync {
     fn balance(&self, owner: Address, asset_id: AssetId)
@@ -40,7 +40,7 @@ pub trait BalanceQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<AddressBalance>>;
 }
 
-impl BalanceQueryData for BalanceQueryContext<'_> {
+impl BalanceQueryData for BalanceQueryContext {
     fn balance(
         &self,
         owner: Address,
@@ -51,7 +51,7 @@ impl BalanceQueryData for BalanceQueryContext<'_> {
             &owner,
             &AssetSpendTarget::new(asset_id, u64::MAX, u64::MAX),
             None,
-            db,
+            &db,
         )
         .unspent_resources()
         .map(|res| res.map(|resource| *resource.amount()))
@@ -81,7 +81,7 @@ impl BalanceQueryData for BalanceQueryContext<'_> {
         let mut amounts_per_asset = HashMap::new();
         let mut errors = vec![];
 
-        for resource in AssetsQuery::new(&owner, None, None, db).unspent_resources() {
+        for resource in AssetsQuery::new(&owner, None, None, &db).unspent_resources() {
             match resource {
                 Ok(resource) => {
                     *amounts_per_asset.entry(*resource.asset_id()).or_default() +=

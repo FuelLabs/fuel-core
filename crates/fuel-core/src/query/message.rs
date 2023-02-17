@@ -58,7 +58,7 @@ use std::borrow::Cow;
 #[cfg(test)]
 mod test;
 
-pub struct MessageQueryContext<'a>(pub &'a Database);
+pub struct MessageQueryContext(pub Database);
 
 pub trait MessageQueryData: Send + Sync {
     fn message(&self, message_id: &MessageId) -> StorageResult<Message>;
@@ -81,7 +81,7 @@ pub trait MessageQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<Message>>;
 }
 
-impl<'a> MessageQueryData for MessageQueryContext<'a> {
+impl<'a> MessageQueryData for MessageQueryContext {
     fn message(&self, message_id: &MessageId) -> StorageResult<Message> {
         self.0
             .as_ref()
@@ -156,7 +156,7 @@ pub trait MessageProofData: Send + Sync {
     fn block(&self, block_id: &BlockId) -> StorageResult<CompressedBlock>;
 }
 
-impl MessageProofData for MessageQueryContext<'_> {
+impl MessageProofData for MessageQueryContext {
     fn receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>> {
         TransactionQueryContext(self.0).receipts(transaction_id)
     }
@@ -192,8 +192,8 @@ impl MessageProofData for MessageQueryContext<'_> {
 
 /// Generate an output proof.
 // TODO: Do we want to return `Option` here?
-pub fn message_proof<Data: MessageProofData>(
-    data: &Data,
+pub fn message_proof(
+    data: &Box<dyn MessageProofData>,
     transaction_id: Bytes32,
     message_id: MessageId,
 ) -> StorageResult<Option<MessageProof>> {

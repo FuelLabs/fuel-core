@@ -4,23 +4,14 @@ use super::adapters::P2PAdapter;
 use crate::{
     database::Database,
     fuel_core_graphql_api::Config as GraphQLConfig,
-    graphql_api::ports::DatabasePort,
     query::{
         BalanceQueryContext,
-        BalanceQueryData,
         BlockQueryContext,
-        BlockQueryData,
         ChainQueryContext,
-        ChainQueryData,
         CoinQueryContext,
-        CoinQueryData,
         ContractQueryContext,
-        ContractQueryData,
         MessageQueryContext,
-        MessageProofData,
-        MessageQueryData,
         TransactionQueryContext,
-        TransactionQueryData,
     },
     schema::{
         build_schema,
@@ -177,23 +168,16 @@ pub fn init_sub_services(
     )
     .data(database.clone());
 
-    let gql_database: Box<dyn DatabasePort> = Box::new(database.clone());
-    let block_query_data: Box<dyn BlockQueryData> =
-        Box::new(BlockQueryContext(&Box::new(database.clone())));
-    let balance_query_data: Box<dyn BalanceQueryData> =
-        Box::new(BalanceQueryContext(&gql_database));
-    let chain_query_data: Box<dyn ChainQueryData> =
-        Box::new(ChainQueryContext(&gql_database));
-    let coin_query_data: Box<dyn CoinQueryData> =
-        Box::new(CoinQueryContext(&gql_database));
-    let contract_query_data: Box<dyn ContractQueryData> =
-        Box::new(ContractQueryContext(&gql_database));
-    let message_query_data: Box<dyn MessageQueryData> =
-        Box::new(MessageQueryContext(&gql_database));
-    let message_proof_data: Box<dyn MessageProofData> =
-        Box::new(MessageQueryContext(&gql_database));
-    let transaction_query_data: Box<dyn TransactionQueryData> =
-        Box::new(TransactionQueryContext(&gql_database));
+    let gql_database: crate::fuel_core_graphql_api::service::Database =
+        Box::new(database.clone());
+    let block_query_data = BlockQueryContext(gql_database);
+    let balance_query_data = BalanceQueryContext(gql_database);
+    let chain_query_data = ChainQueryContext(gql_database);
+    let coin_query_data = CoinQueryContext(gql_database);
+    let contract_query_data = ContractQueryContext(gql_database);
+    let message_query_data = MessageQueryContext(gql_database);
+    let message_proof_data = MessageQueryContext(gql_database);
+    let transaction_query_data = TransactionQueryContext(gql_database);
 
     let graph_ql = crate::fuel_core_graphql_api::service::new_service(
         GraphQLConfig {
@@ -208,14 +192,14 @@ pub fn init_sub_services(
             consensus_key: config.consensus_key.clone(),
         },
         schema,
-        balance_query_data,
-        block_query_data,
-        chain_query_data,
-        coin_query_data,
-        contract_query_data,
-        message_query_data,
-        message_proof_data,
-        transaction_query_data,
+        Box::new(balance_query_data),
+        Box::new(block_query_data),
+        Box::new(chain_query_data),
+        Box::new(coin_query_data),
+        Box::new(contract_query_data),
+        Box::new(message_query_data),
+        Box::new(message_proof_data),
+        Box::new(transaction_query_data),
     )?;
 
     let shared = SharedState {

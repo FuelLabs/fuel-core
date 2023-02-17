@@ -16,7 +16,7 @@ use fuel_core_types::{
     fuel_types::Address,
 };
 
-pub struct CoinQueryContext<'a>(pub &'a Database);
+pub struct CoinQueryContext(pub Database);
 
 pub trait CoinQueryData: Send + Sync {
     fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin>;
@@ -36,7 +36,7 @@ pub trait CoinQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<Coin>>;
 }
 
-impl<'a> CoinQueryData for CoinQueryContext<'a> {
+impl<'a> CoinQueryData for CoinQueryContext {
     fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin> {
         let coin = self
             .0

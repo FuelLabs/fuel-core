@@ -10,7 +10,7 @@ use super::{
     },
 };
 use crate::query::{
-    MessageQueryContext,
+    MessageProofData,
     MessageQueryData,
 };
 use anyhow::anyhow;
@@ -85,7 +85,7 @@ impl MessageQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<MessageId, Message, EmptyFields, EmptyFields>>
     {
-        let query = MessageQueryContext(ctx.data_unchecked());
+        let query: &Box<dyn MessageQueryData> = ctx.data_unchecked();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
             let start = *start;
 
@@ -124,9 +124,9 @@ impl MessageQuery {
         transaction_id: TransactionId,
         message_id: MessageId,
     ) -> async_graphql::Result<Option<MessageProof>> {
-        let data = MessageQueryContext(ctx.data_unchecked());
+        let data: &Box<dyn MessageProofData> = ctx.data_unchecked();
         Ok(
-            crate::query::message_proof(&data, transaction_id.into(), message_id.into())?
+            crate::query::message_proof(data, transaction_id.into(), message_id.into())?
                 .map(MessageProof),
         )
     }

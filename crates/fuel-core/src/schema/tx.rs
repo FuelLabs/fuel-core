@@ -9,7 +9,6 @@ use crate::{
     },
     query::{
         transaction_status_change,
-        BlockQueryContext,
         BlockQueryData,
         TransactionQueryContext,
         TransactionQueryData,
@@ -74,7 +73,7 @@ impl TxQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> async_graphql::Result<Option<Transaction>> {
-        let query = TransactionQueryContext(ctx.data_unchecked());
+        let query: &Box<dyn TransactionQueryData> = ctx.data_unchecked();
         let id = id.0;
         let txpool = ctx.data_unchecked::<TxPool>();
 
@@ -95,9 +94,8 @@ impl TxQuery {
     ) -> async_graphql::Result<
         Connection<SortedTxCursor, Transaction, EmptyFields, EmptyFields>,
     > {
-        let db = ctx.data_unchecked();
-        let db_query = BlockQueryContext(db);
-        let tx_query = TransactionQueryContext(db);
+        let db_query: &Box<dyn BlockQueryData> = ctx.data_unchecked();
+        let tx_query: &Box<dyn TransactionQueryData> = ctx.data_unchecked();
         crate::schema::query_pagination(
             after,
             before,
@@ -165,7 +163,7 @@ impl TxQuery {
             )
         }
 
-        let query = TransactionQueryContext(ctx.data_unchecked());
+        let query: &Box<dyn TransactionQueryData> = ctx.data_unchecked();
         let owner = fuel_types::Address::from(owner);
 
         crate::schema::query_pagination(
@@ -272,6 +270,8 @@ impl<'a> TxnStatusChangeState for StreamState<'a> {
         &self,
         id: fuel_types::Bytes32,
     ) -> StorageResult<Option<TransactionStatus>> {
-        types::get_tx_status(id, &TransactionQueryContext(self.db), self.txpool).await
+        let data = TransactionQueryContext(self.db);
+        let boxed_data: Box<dyn TransactionQueryData> = Box::new(data);
+        types::get_tx_status(id, &boxed_data, self.txpool).await
     }
 }

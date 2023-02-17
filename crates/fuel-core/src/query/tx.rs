@@ -24,7 +24,7 @@ use fuel_core_types::{
     services::txpool::TransactionStatus,
 };
 
-pub struct TransactionQueryContext<'a>(pub &'a Database);
+pub struct TransactionQueryContext(pub Database);
 
 pub trait TransactionQueryData: Send + Sync {
     fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction>;
@@ -38,7 +38,7 @@ pub trait TransactionQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<(TxPointer, Transaction)>>;
 }
 
-impl TransactionQueryData for TransactionQueryContext<'_> {
+impl TransactionQueryData for TransactionQueryContext {
     fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
         self.0
             .as_ref()

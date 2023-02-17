@@ -1,8 +1,5 @@
 use crate::{
-    query::{
-        BalanceQueryContext,
-        BalanceQueryData,
-    },
+    query::BalanceQueryData,
     schema::scalars::{
         Address,
         AssetId,
@@ -54,7 +51,7 @@ impl BalanceQuery {
         #[graphql(desc = "address of the owner")] owner: Address,
         #[graphql(desc = "asset_id of the coin")] asset_id: AssetId,
     ) -> async_graphql::Result<Balance> {
-        let data = BalanceQueryContext(ctx.data_unchecked());
+        let data: &Box<dyn BalanceQueryData> = ctx.data_unchecked();
         let balance = data.balance(owner.0, asset_id.0)?.into();
         Ok(balance)
     }
@@ -71,7 +68,7 @@ impl BalanceQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<AssetId, Balance, EmptyFields, EmptyFields>>
     {
-        let query = BalanceQueryContext(ctx.data_unchecked());
+        let query: &Box<dyn BalanceQueryData> = ctx.data_unchecked();
         crate::schema::query_pagination(after, before, first, last, |_, direction| {
             let owner = filter.owner.into();
             Ok(query.balances(owner, direction).map(|result| {

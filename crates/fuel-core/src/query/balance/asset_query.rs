@@ -102,7 +102,7 @@ impl<'a> AssetsQuery<'a> {
     // TODO: Optimize this by creating an index
     //  https://github.com/FuelLabs/fuel-core/issues/588
     pub fn unspent_resources(&self) -> BoxedIter<StorageResult<Resource>> {
-        let coin_context = CoinQueryContext(self.database);
+        let coin_context = CoinQueryContext(*self.database);
         let coins_iter = coin_context
             .owned_coins_ids(self.owner, None, IterDirection::Forward)
             .filter_ok(|id| {
@@ -114,7 +114,7 @@ impl<'a> AssetsQuery<'a> {
             })
             .map(move |res| {
                 res.map_err(StorageError::from).and_then(|id| {
-                    let coin = CoinQueryContext(self.database).coin(id)?;
+                    let coin = CoinQueryContext(*self.database).coin(id)?;
 
                     Ok(Resource::Coin(coin))
                 })
@@ -131,7 +131,7 @@ impl<'a> AssetsQuery<'a> {
                 }
             });
 
-        let message_context = MessageQueryContext(self.database);
+        let message_context = MessageQueryContext(*self.database);
         let messages_iter = message_context
             .owned_message_ids(self.owner, None, IterDirection::Forward)
             .filter_ok(|id| {
@@ -143,7 +143,7 @@ impl<'a> AssetsQuery<'a> {
             })
             .map(move |res| {
                 res.and_then(|id| {
-                    let message = MessageQueryContext(self.database).message(&id)?;
+                    let message = MessageQueryContext(*self.database).message(&id)?;
                     Ok(Resource::Message(message))
                 })
             })
