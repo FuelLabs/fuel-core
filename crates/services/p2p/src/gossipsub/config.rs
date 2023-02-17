@@ -71,8 +71,14 @@ pub struct PeerScoreConfig {
     min_gossipsub_score_allowed: f64,
 }
 
+impl Default for PeerScoreConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PeerScoreConfig {
-    pub fn default() -> Self {
+    pub fn new() -> Self {
         Self {
             max_app_score: MAX_PEER_SCORE,
             min_app_score_allowed: MIN_PEER_SCORE,
@@ -260,7 +266,7 @@ pub(crate) fn build_gossipsub_behaviour(
             .set(Box::new(p2p_registry))
             .unwrap_or(());
 
-        initialize_gossipsub(&mut gossipsub, p2p_config, &peer_score_config);
+        initialize_gossipsub(&mut gossipsub, p2p_config, peer_score_config);
 
         gossipsub
     } else {
@@ -270,7 +276,7 @@ pub(crate) fn build_gossipsub_behaviour(
         )
         .expect("gossipsub initialized");
 
-        initialize_gossipsub(&mut gossipsub, p2p_config, &peer_score_config);
+        initialize_gossipsub(&mut gossipsub, p2p_config, peer_score_config);
 
         gossipsub
     }

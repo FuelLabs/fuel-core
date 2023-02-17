@@ -125,7 +125,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
 
         Self {
             discovery: discovery_config.finish(),
-            gossipsub: build_gossipsub_behaviour(p2p_config, &peer_score_config),
+            gossipsub: build_gossipsub_behaviour(p2p_config, peer_score_config),
             peer_manager,
             request_response,
         }

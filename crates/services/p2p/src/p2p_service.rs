@@ -1353,7 +1353,7 @@ mod tests {
                         // If it's `Accept`, Node B will propagate the message to Node C
                         // If it's `Ignore` or `Reject`, Node C should not receive anything
                         let msg_acceptance = to_message_acceptance(&acceptance);
-                        let _ = node_b.report_message_validation_result(&message_id, &peer_id, msg_acceptance);
+                        let _ = node_b.report_message_validation_result(&message_id, peer_id, msg_acceptance);
                         if topic_hash != selected_topic.hash() {
                             tracing::error!("Wrong topic hash, expected: {} - actual: {}", selected_topic.hash(), topic_hash);
                             panic!("Wrong Topic");
