@@ -108,15 +108,15 @@ mod coins {
             )
             .await
             .unwrap();
-        // spend all messages
 
+        // spend all coins
         let mut script = TransactionBuilder::script(vec![], vec![]);
 
         for asset_group in resources_per_asset {
             for asset in asset_group {
                 if let Resource::Coin(coin) = asset {
                     script.add_unsigned_coin_input(
-                        secret_key.clone(),
+                        secret_key,
                         coin.utxo_id.0 .0,
                         coin.amount.0,
                         coin.asset_id.0 .0,
@@ -389,14 +389,14 @@ mod messages {
             )
             .await
             .unwrap();
-        // spend all messages
 
+        // spend all messages
         let mut script = TransactionBuilder::script(vec![], vec![]);
 
         resources_per_asset[0].iter().for_each(|resource| {
             if let Resource::Message(message) = resource {
                 script.add_unsigned_message_input(
-                    secret_key.clone(),
+                    secret_key,
                     message.sender.0 .0,
                     message.nonce.0,
                     message.amount.0,
