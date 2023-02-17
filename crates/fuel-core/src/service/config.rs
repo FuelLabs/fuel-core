@@ -71,11 +71,12 @@ impl Config {
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,
-            txpool: fuel_core_txpool::Config::new(
-                chain_conf,
+            txpool: fuel_core_txpool::Config {
+                chain_config: chain_conf.clone(),
                 min_gas_price,
                 utxo_validation,
-            ),
+                ..fuel_core_txpool::Config::default()
+            },
             block_producer: Default::default(),
             block_executor: Default::default(),
             block_importer: Default::default(),
