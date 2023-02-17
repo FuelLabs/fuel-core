@@ -42,7 +42,6 @@ use libp2p::{
         GossipsubEvent,
         MessageAcceptance,
         MessageId,
-        Topic,
         TopicHash,
     },
     multiaddr::Protocol,
@@ -172,12 +171,6 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             SwarmBuilder::with_tokio_executor(transport, behaviour, local_peer_id)
                 .connection_limits(connection_limits)
                 .build();
-
-        // subscribe to gossipsub topics with the network name suffix
-        for topic in config.topics {
-            let t = Topic::new(format!("{}/{}", topic, config.network_name));
-            swarm.behaviour_mut().subscribe_to_topic(&t).unwrap();
-        }
 
         let gossipsub_topics = GossipsubTopics::new(&config.network_name);
         let network_metadata = NetworkMetadata { gossipsub_topics };

@@ -15,6 +15,7 @@ use crate::{
         config::build_gossipsub_behaviour,
         topics::GossipTopic,
     },
+    gossipsub_config::PeerScoreConfig,
     peer_manager::{
         ConnectionState,
         PeerInfo,
@@ -32,10 +33,7 @@ use fuel_core_types::{
 };
 use libp2p::{
     gossipsub::{
-        error::{
-            PublishError,
-            SubscriptionError,
-        },
+        error::PublishError,
         Gossipsub,
         GossipsubEvent,
         MessageAcceptance,
@@ -112,6 +110,8 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
             discovery_config
         };
 
+        // build here all gossipsub/peer rep params and pass them
+        let peer_score_config = PeerScoreConfig::default();
         let peer_manager = PeerManagerBehaviour::new(p2p_config, connection_state);
 
         let req_res_protocol =
@@ -126,7 +126,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
 
         Self {
             discovery: discovery_config.finish(),
-            gossipsub: build_gossipsub_behaviour(p2p_config),
+            gossipsub: build_gossipsub_behaviour(p2p_config, &peer_score_config),
             peer_manager,
             request_response,
         }
@@ -164,13 +164,6 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         encoded_data: Vec<u8>,
     ) -> Result<MessageId, PublishError> {
         self.gossipsub.publish(topic, encoded_data)
-    }
-
-    pub fn subscribe_to_topic(
-        &mut self,
-        topic: &GossipTopic,
-    ) -> Result<bool, SubscriptionError> {
-        self.gossipsub.subscribe(topic)
     }
 
     pub fn send_request_msg(
