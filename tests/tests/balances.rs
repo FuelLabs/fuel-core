@@ -145,52 +145,66 @@ async fn balance() {
 
 #[tokio::test]
 async fn first_5_balances() {
-    let owner = Address::default();
+    let owner = Address::from([10u8; 32]);
     let asset_ids = (0..=5u8)
         .map(|i| AssetId::new([i; 32]))
         .collect::<Vec<AssetId>>();
+
+    let all_owners = vec![Address::default(), owner, Address::from([20u8; 32])];
+    let coins = {
+        // setup all coins for all owners
+        let mut coins = vec![];
+        for owner in &all_owners {
+            coins.extend(
+                asset_ids
+                    .clone()
+                    .into_iter()
+                    .flat_map(|asset_id| {
+                        vec![
+                            (owner, 50, asset_id),
+                            (owner, 100, asset_id),
+                            (owner, 150, asset_id),
+                        ]
+                    })
+                    .map(|(owner, amount, asset_id)| CoinConfig {
+                        tx_id: None,
+                        output_index: None,
+                        block_created: None,
+                        maturity: None,
+                        owner: *owner,
+                        amount,
+                        asset_id,
+                    }),
+            );
+        }
+        coins
+    };
+
+    let messages = {
+        // setup all messages for all owners
+        let mut messages = vec![];
+        for owner in &all_owners {
+            messages.extend(vec![(owner, 60), (owner, 90)].into_iter().enumerate().map(
+                |(nonce, (owner, amount))| MessageConfig {
+                    sender: *owner,
+                    recipient: *owner,
+                    nonce: nonce as u64,
+                    amount,
+                    data: vec![],
+                    da_height: DaBlockHeight::from(1usize),
+                },
+            ))
+        }
+        messages
+    };
 
     // setup config
     let mut config = Config::local_node();
     config.chain_conf.initial_state = Some(StateConfig {
         height: None,
         contracts: None,
-        coins: Some(
-            asset_ids
-                .clone()
-                .into_iter()
-                .flat_map(|asset_id| {
-                    vec![
-                        (owner, 50, asset_id),
-                        (owner, 100, asset_id),
-                        (owner, 150, asset_id),
-                    ]
-                })
-                .map(|(owner, amount, asset_id)| CoinConfig {
-                    tx_id: None,
-                    output_index: None,
-                    block_created: None,
-                    maturity: None,
-                    owner,
-                    amount,
-                    asset_id,
-                })
-                .collect(),
-        ),
-        messages: Some(
-            vec![(owner, 60), (owner, 90)]
-                .into_iter()
-                .enumerate()
-                .map(|(nonce, (owner, amount))| MessageConfig {
-                    sender: owner,
-                    recipient: owner,
-                    nonce: nonce as u64,
-                    amount,
-                    data: vec![],
-                    da_height: DaBlockHeight::from(1usize),
-                })
-                .collect(),
-        ),
+        coins: Some(coins),
+        messages: Some(messages),
     });
 
     // setup server & client
