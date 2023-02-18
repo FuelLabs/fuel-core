@@ -27,13 +27,16 @@ use fuel_core_types::{
         InsertionResult,
         TxInfo,
     },
+    tai64::Tai64,
 };
 use std::{
     cmp::Reverse,
     collections::HashMap,
     ops::Deref,
     sync::Arc,
+    time::SystemTime,
 };
+use tokio::time::Instant;
 
 #[derive(Debug, Clone)]
 pub struct TxPool<DB> {
@@ -352,6 +355,24 @@ where
             removed.extend(rem.into_iter());
         }
         removed
+    }
+
+    /// checks all transactions for older than rebroadcast interval
+    pub fn ttl_checks(&mut self) -> Vec<(TxId, Tai64)> {
+        let now = Tai64::now();
+
+        self.by_hash
+            .iter()
+            .filter_map(|(id, info)| {
+                if now.to_unix() - info.submitted_time().to_unix()
+                    > self.config.transaction_rebroadcast_interval.as_secs() as i64
+                {
+                    Some((id.clone(), info.submitted_time()))
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 

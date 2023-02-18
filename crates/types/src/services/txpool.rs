@@ -36,6 +36,7 @@ use fuel_vm_private::prelude::GasCosts;
 use std::{
     ops::Deref,
     sync::Arc,
+    time::Instant,
 };
 use tai64::Tai64;
 

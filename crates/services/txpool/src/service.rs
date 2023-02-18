@@ -38,10 +38,24 @@ use fuel_core_types::{
             TxStatus,
         },
     },
+    tai64::Tai64,
 };
-use parking_lot::Mutex as ParkingMutex;
-use std::sync::Arc;
-use tokio::sync::broadcast;
+use parking_lot::{
+    Mutex as ParkingMutex,
+    Mutex,
+};
+use std::{
+    ops::DerefMut,
+    pin::Pin,
+    sync::Arc,
+};
+use tokio::{
+    sync::broadcast,
+    time::{
+        interval,
+        sleep,
+    },
+};
 use tokio_stream::StreamExt;
 
 pub type Service<P2P, DB> = ServiceRunner<Task<P2P, DB>>;
@@ -107,6 +121,7 @@ pub struct Task<P2P, DB> {
     gossiped_tx_stream: BoxStream<TransactionGossipData>,
     committed_block_stream: BoxStream<Arc<ImportResult>>,
     shared: SharedState<P2P, DB>,
+    ttl_timer: tokio::time::Interval,
 }
 
 #[async_trait::async_trait]
@@ -137,6 +152,7 @@ where
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
+
         tokio::select! {
             _ = watcher.while_started() => {
                 should_continue = false;
@@ -182,6 +198,19 @@ where
                 } else {
                     should_continue = false;
                 }
+            }
+
+            _ = self.ttl_timer.tick() => {
+                // get all older than the interval period
+
+                let ttl_txs = self.shared.txpool.lock().ttl_checks();
+                let now = Tai64::now();
+                for (tx_id, submitted_at) in ttl_txs {
+                    // remove the ones that are past expiration
+                    // rebroadcast the remaining ones
+                }
+
+                should_continue = true
             }
         }
         Ok(should_continue)
@@ -331,6 +360,7 @@ where
     let p2p = Arc::new(p2p);
     let gossiped_tx_stream = p2p.gossiped_transaction_events();
     let committed_block_stream = importer.block_events();
+    let ttl_timer = interval(config.transaction_rebroadcast_interval);
     let txpool = Arc::new(ParkingMutex::new(TxPool::new(config, db)));
     let task = Task {
         gossiped_tx_stream,
@@ -340,6 +370,7 @@ where
             txpool,
             p2p,
         },
+        ttl_timer,
     };
 
     Service::new(task)
