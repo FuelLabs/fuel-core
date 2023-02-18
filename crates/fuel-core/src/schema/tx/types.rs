@@ -490,9 +490,9 @@ impl Transaction {
 }
 
 #[tracing::instrument(level = "debug", skip(query, txpool), ret, err)]
-pub(super) async fn get_tx_status(
+pub(super) async fn get_tx_status<'a>(
     id: fuel_core_types::fuel_types::Bytes32,
-    query: &Box<dyn TransactionQueryData>,
+    query: &'a Box<dyn TransactionQueryData>,
     txpool: &TxPool,
 ) -> Result<Option<TransactionStatus>, StorageError> {
     match query

@@ -23,7 +23,7 @@ use fuel_core_types::{
     services::graphql_api::ContractBalance,
 };
 
-pub struct ContractQueryContext(pub Database);
+pub struct ContractQueryContext<'a>(pub &'a Database);
 
 pub trait ContractQueryData: Send + Sync {
     fn contract_id(&self, id: ContractId) -> StorageResult<ContractId>;
@@ -42,7 +42,7 @@ pub trait ContractQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<ContractBalance>>;
 }
 
-impl ContractQueryData for ContractQueryContext {
+impl ContractQueryData for ContractQueryContext<'_> {
     fn contract_id(&self, id: ContractId) -> StorageResult<ContractId> {
         let contract_exists = self
             .0

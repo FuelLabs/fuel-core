@@ -145,7 +145,7 @@ pub fn init_sub_services(
             importer_adapter.clone(),
         )
     });
-    let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));
+    let _poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));
 
     #[cfg(feature = "p2p")]
     let sync = (!production_enabled)
@@ -170,14 +170,14 @@ pub fn init_sub_services(
 
     let gql_database: crate::fuel_core_graphql_api::service::Database =
         Box::new(database.clone());
-    let block_query_data = BlockQueryContext(gql_database);
-    let balance_query_data = BalanceQueryContext(gql_database);
-    let chain_query_data = ChainQueryContext(gql_database);
-    let coin_query_data = CoinQueryContext(gql_database);
-    let contract_query_data = ContractQueryContext(gql_database);
-    let message_query_data = MessageQueryContext(gql_database);
-    let message_proof_data = MessageQueryContext(gql_database);
-    let transaction_query_data = TransactionQueryContext(gql_database);
+    let block_query_data = BlockQueryContext(&gql_database);
+    let balance_query_data = BalanceQueryContext(&gql_database);
+    let chain_query_data = ChainQueryContext(&gql_database);
+    let coin_query_data = CoinQueryContext(&gql_database);
+    let contract_query_data = ContractQueryContext(&gql_database);
+    let message_query_data = MessageQueryContext(&gql_database);
+    let message_proof_data = MessageQueryContext(&gql_database);
+    let transaction_query_data = TransactionQueryContext(&gql_database);
 
     let graph_ql = crate::fuel_core_graphql_api::service::new_service(
         GraphQLConfig {

@@ -22,7 +22,7 @@ use fuel_core_types::blockchain::{
     },
 };
 
-pub struct BlockQueryContext(pub Database);
+pub struct BlockQueryContext<'a>(pub &'a Database);
 
 pub trait BlockQueryData: Send + Sync {
     fn block(&self, id: &BlockId) -> StorageResult<CompressedBlock>;
@@ -44,7 +44,7 @@ pub trait BlockQueryData: Send + Sync {
     fn consensus(&self, id: &BlockId) -> StorageResult<Consensus>;
 }
 
-impl BlockQueryData for BlockQueryContext {
+impl BlockQueryData for BlockQueryContext<'_> {
     fn block(&self, id: &BlockId) -> StorageResult<CompressedBlock> {
         let db = self.0;
 

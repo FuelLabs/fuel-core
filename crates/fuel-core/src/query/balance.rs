@@ -27,7 +27,7 @@ use std::{
 
 pub mod asset_query;
 
-pub struct BalanceQueryContext(pub Database);
+pub struct BalanceQueryContext<'a>(pub &'a Database);
 
 pub trait BalanceQueryData: Send + Sync {
     fn balance(&self, owner: Address, asset_id: AssetId)
@@ -40,7 +40,7 @@ pub trait BalanceQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<AddressBalance>>;
 }
 
-impl BalanceQueryData for BalanceQueryContext {
+impl BalanceQueryData for BalanceQueryContext<'_> {
     fn balance(
         &self,
         owner: Address,

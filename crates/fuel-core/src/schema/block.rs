@@ -9,9 +9,7 @@ use crate::{
     },
     graphql_api::IntoApiResult,
     query::{
-        BlockQueryContext,
         BlockQueryData,
-        TransactionQueryContext,
         TransactionQueryData,
     },
     schema::{

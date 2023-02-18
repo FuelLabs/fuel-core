@@ -24,7 +24,7 @@ use fuel_core_types::{
     services::txpool::TransactionStatus,
 };
 
-pub struct TransactionQueryContext(pub Database);
+pub struct TransactionQueryContext<'a>(pub &'a Database);
 
 pub trait TransactionQueryData: Send + Sync {
     fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction>;
@@ -38,7 +38,7 @@ pub trait TransactionQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<(TxPointer, Transaction)>>;
 }
 
-impl TransactionQueryData for TransactionQueryContext {
+impl TransactionQueryData for TransactionQueryContext<'_> {
     fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
         self.0
             .as_ref()
@@ -77,3 +77,24 @@ impl TransactionQueryData for TransactionQueryContext {
             .into_boxed()
     }
 }
+
+/* 
+impl TransactionQueryData for Box<dyn TransactionQueryData> {
+    fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
+        self.as_ref().transaction(tx_id)
+    }
+    fn receipts(&self, tx_id: &TxId) -> StorageResult<Vec<Receipt>> {
+        self.as_ref().receipts(tx_id)
+    }
+    fn status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
+        self.as_ref().status(tx_id)
+    }
+    fn owned_transactions(
+        &self,
+        owner: Address,
+        start: Option<TxPointer>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<(TxPointer, Transaction)>> {
+        self.as_ref().owned_transactions(owner, start, direction)
+    }
+} */
