@@ -1,4 +1,4 @@
-use crate::fuel_core_graphql_api::service::Database;
+use crate::graphql_api::ports::DatabasePort;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -24,8 +24,6 @@ use fuel_core_types::{
     services::txpool::TransactionStatus,
 };
 
-pub struct TransactionQueryContext<'a>(pub &'a Database);
-
 pub trait TransactionQueryData: Send + Sync {
     fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction>;
     fn receipts(&self, tx_id: &TxId) -> StorageResult<Vec<Receipt>>;
@@ -38,25 +36,21 @@ pub trait TransactionQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<(TxPointer, Transaction)>>;
 }
 
-impl TransactionQueryData for TransactionQueryContext<'_> {
+impl<D: DatabasePort + ?Sized> TransactionQueryData for D {
     fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
-        self.0
-            .as_ref()
-            .storage::<Transactions>()
+        self.storage::<Transactions>()
             .get(tx_id)
             .and_then(|v| v.ok_or(not_found!(Transactions)).map(|tx| tx.into_owned()))
     }
 
     fn receipts(&self, tx_id: &TxId) -> StorageResult<Vec<Receipt>> {
-        self.0
-            .as_ref()
-            .storage::<Receipts>()
+        self.storage::<Receipts>()
             .get(tx_id)
             .and_then(|v| v.ok_or(not_found!(Transactions)).map(|tx| tx.into_owned()))
     }
 
     fn status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
-        self.0.tx_status(tx_id)
+        self.tx_status(tx_id)
     }
 
     fn owned_transactions(
@@ -65,8 +59,7 @@ impl TransactionQueryData for TransactionQueryContext<'_> {
         start: Option<TxPointer>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<(TxPointer, Transaction)>> {
-        self.0
-            .owned_transactions_ids(owner, start, direction)
+        self.owned_transactions_ids(owner, start, direction)
             .map(|result| {
                 result.and_then(|(tx_pointer, tx_id)| {
                     let tx = self.transaction(&tx_id)?;
@@ -77,24 +70,3 @@ impl TransactionQueryData for TransactionQueryContext<'_> {
             .into_boxed()
     }
 }
-
-/* 
-impl TransactionQueryData for Box<dyn TransactionQueryData> {
-    fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
-        self.as_ref().transaction(tx_id)
-    }
-    fn receipts(&self, tx_id: &TxId) -> StorageResult<Vec<Receipt>> {
-        self.as_ref().receipts(tx_id)
-    }
-    fn status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
-        self.as_ref().status(tx_id)
-    }
-    fn owned_transactions(
-        &self,
-        owner: Address,
-        start: Option<TxPointer>,
-        direction: IterDirection,
-    ) -> BoxedIter<StorageResult<(TxPointer, Transaction)>> {
-        self.as_ref().owned_transactions(owner, start, direction)
-    }
-} */

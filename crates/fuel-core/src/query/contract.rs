@@ -1,4 +1,4 @@
-use crate::graphql_api::service::Database;
+use crate::graphql_api::ports::DatabasePort;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -23,8 +23,6 @@ use fuel_core_types::{
     services::graphql_api::ContractBalance,
 };
 
-pub struct ContractQueryContext<'a>(pub &'a Database);
-
 pub trait ContractQueryData: Send + Sync {
     fn contract_id(&self, id: ContractId) -> StorageResult<ContractId>;
     fn contract_bytecode(&self, id: ContractId) -> StorageResult<Vec<u8>>;
@@ -42,13 +40,9 @@ pub trait ContractQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<ContractBalance>>;
 }
 
-impl ContractQueryData for ContractQueryContext<'_> {
+impl<D: DatabasePort> ContractQueryData for D {
     fn contract_id(&self, id: ContractId) -> StorageResult<ContractId> {
-        let contract_exists = self
-            .0
-            .as_ref()
-            .storage::<ContractsRawCode>()
-            .contains_key(&id)?;
+        let contract_exists = self.storage::<ContractsRawCode>().contains_key(&id)?;
         if contract_exists {
             Ok(id)
         } else {
@@ -58,8 +52,6 @@ impl ContractQueryData for ContractQueryContext<'_> {
 
     fn contract_bytecode(&self, id: ContractId) -> StorageResult<Vec<u8>> {
         let contract = self
-            .0
-            .as_ref()
             .storage::<ContractsRawCode>()
             .get(&id)?
             .ok_or(not_found!(ContractsRawCode))?
@@ -70,8 +62,6 @@ impl ContractQueryData for ContractQueryContext<'_> {
 
     fn contract_salt(&self, id: ContractId) -> StorageResult<Salt> {
         let (salt, _) = self
-            .0
-            .as_ref()
             .storage::<ContractsInfo>()
             .get(&id)?
             .ok_or(not_found!(ContractsInfo))?
@@ -86,8 +76,6 @@ impl ContractQueryData for ContractQueryContext<'_> {
         asset_id: AssetId,
     ) -> StorageResult<ContractBalance> {
         let amount = self
-            .0
-            .as_ref()
             .storage::<ContractsAssets>()
             .get(&(&contract_id, &asset_id).into())?
             .ok_or(not_found!(ContractsAssets))?
@@ -106,8 +94,7 @@ impl ContractQueryData for ContractQueryContext<'_> {
         start_asset: Option<AssetId>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<ContractBalance>> {
-        self.0
-            .contract_balances(contract_id, start_asset, direction)
+        self.contract_balances(contract_id, start_asset, direction)
             .into_boxed()
     }
 }

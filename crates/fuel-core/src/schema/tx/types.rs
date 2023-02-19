@@ -120,7 +120,7 @@ pub enum TransactionStatus {
 }
 
 #[derive(Debug)]
-pub struct SubmittedStatus(Tai64);
+pub struct SubmittedStatus(pub Tai64);
 
 #[Object]
 impl SubmittedStatus {
@@ -398,7 +398,19 @@ impl Transaction {
         let id = self.0.id();
         let query: &Box<dyn TransactionQueryData> = ctx.data_unchecked();
         let txpool = ctx.data_unchecked::<TxPool>();
-        get_tx_status(id, query, txpool).await.map_err(Into::into)
+        match query
+            .status(&id)
+            .into_api_result::<txpool::TransactionStatus, StorageError>()?
+        {
+            Some(status) => Ok(Some(status.into())),
+            None => match txpool.find_one(id) {
+                Some(transaction_in_pool) => {
+                    let time = transaction_in_pool.submitted_time();
+                    Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
+                }
+                _ => Ok(None),
+            },
+        }
     }
 
     async fn receipts(
@@ -492,7 +504,7 @@ impl Transaction {
 #[tracing::instrument(level = "debug", skip(query, txpool), ret, err)]
 pub(super) async fn get_tx_status<'a>(
     id: fuel_core_types::fuel_types::Bytes32,
-    query: &'a Box<dyn TransactionQueryData>,
+    query: &'a dyn TransactionQueryData,
     txpool: &TxPool,
 ) -> Result<Option<TransactionStatus>, StorageError> {
     match query

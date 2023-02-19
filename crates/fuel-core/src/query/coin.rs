@@ -1,4 +1,4 @@
-use crate::graphql_api::service::Database;
+use crate::graphql_api::ports::DatabasePort;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -15,8 +15,6 @@ use fuel_core_types::{
     fuel_tx::UtxoId,
     fuel_types::Address,
 };
-
-pub struct CoinQueryContext<'a>(pub &'a Database);
 
 pub trait CoinQueryData: Send + Sync {
     fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin>;
@@ -36,11 +34,9 @@ pub trait CoinQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<Coin>>;
 }
 
-impl<'a> CoinQueryData for CoinQueryContext<'_> {
+impl<D: DatabasePort> CoinQueryData for D {
     fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin> {
         let coin = self
-            .0
-            .as_ref()
             .storage::<Coins>()
             .get(&utxo_id)?
             .ok_or(not_found!(Coins))?
@@ -55,8 +51,7 @@ impl<'a> CoinQueryData for CoinQueryContext<'_> {
         start_coin: Option<UtxoId>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<UtxoId>> {
-        self.0
-            .owned_coins_ids(owner, start_coin, direction)
+        self.owned_coins_ids(owner, start_coin, direction)
             .into_boxed()
     }
 

@@ -1,12 +1,10 @@
 use crate::{
     fuel_core_graphql_api::{
-        service::Database,
+        ports::DatabasePort,
         IntoApiResult,
     },
     query::{
-        BlockQueryContext,
         BlockQueryData,
-        TransactionQueryContext,
         TransactionQueryData,
     },
 };
@@ -58,8 +56,6 @@ use std::borrow::Cow;
 #[cfg(test)]
 mod test;
 
-pub struct MessageQueryContext<'a>(pub &'a Database);
-
 pub trait MessageQueryData: Send + Sync {
     fn message(&self, message_id: &MessageId) -> StorageResult<Message>;
     fn owned_message_ids(
@@ -81,21 +77,14 @@ pub trait MessageQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<Message>>;
 }
 
-impl<'a> MessageQueryData for MessageQueryContext<'_> {
+impl<D: DatabasePort> MessageQueryData for D {
     fn message(&self, message_id: &MessageId) -> StorageResult<Message> {
-        self.0
-            .as_ref()
-            .storage::<Messages>()
+        self.storage::<Messages>()
             .get(message_id)?
             .ok_or(not_found!(Messages))
             .map(Cow::into_owned)
             .and_then(|m| {
-                if self
-                    .0
-                    .as_ref()
-                    .storage::<SpentMessages>()
-                    .contains_key(message_id)?
-                {
+                if self.storage::<SpentMessages>().contains_key(message_id)? {
                     Ok(m.decompress(MessageStatus::Spent))
                 } else {
                     Ok(m.decompress(MessageStatus::Unspent))
@@ -109,8 +98,7 @@ impl<'a> MessageQueryData for MessageQueryContext<'_> {
         start_message_id: Option<MessageId>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<MessageId>> {
-        self.0
-            .owned_message_ids(owner, start_message_id, direction)
+        self.owned_message_ids(owner, start_message_id, direction)
             .into_boxed()
     }
 
@@ -130,9 +118,7 @@ impl<'a> MessageQueryData for MessageQueryContext<'_> {
         start_message_id: Option<MessageId>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<Message>> {
-        self.0
-            .all_messages(start_message_id, direction)
-            .into_boxed()
+        self.all_messages(start_message_id, direction).into_boxed()
     }
 }
 
@@ -156,28 +142,29 @@ pub trait MessageProofData: Send + Sync {
     fn block(&self, block_id: &BlockId) -> StorageResult<CompressedBlock>;
 }
 
-impl MessageProofData for MessageQueryContext<'_> {
+impl<D: DatabasePort> MessageProofData for D {
     fn receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>> {
-        TransactionQueryContext(self.0).receipts(transaction_id)
+        crate::query::tx::TransactionQueryData::receipts(self, transaction_id)
     }
 
     fn transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction> {
-        TransactionQueryContext(self.0).transaction(transaction_id)
+        crate::query::tx::TransactionQueryData::transaction(self, transaction_id)
     }
 
     fn transaction_status(
         &self,
         transaction_id: &TxId,
     ) -> StorageResult<TransactionStatus> {
-        TransactionQueryContext(self.0).status(transaction_id)
+        self.status(transaction_id)
     }
 
     fn transactions_on_block(&self, block_id: &BlockId) -> StorageResult<Vec<TxId>> {
-        self.block(block_id).map(|block| block.into_inner().1)
+        crate::query::block::BlockQueryData::block(self, block_id)
+            .map(|block| block.into_inner().1)
     }
 
     fn signature(&self, block_id: &BlockId) -> StorageResult<Signature> {
-        let consensus = BlockQueryContext(self.0).consensus(block_id)?;
+        let consensus = self.consensus(block_id)?;
         match consensus {
             // TODO: https://github.com/FuelLabs/fuel-core/issues/816
             Consensus::Genesis(_) => Ok(Default::default()),
@@ -186,7 +173,7 @@ impl MessageProofData for MessageQueryContext<'_> {
     }
 
     fn block(&self, block_id: &BlockId) -> StorageResult<CompressedBlock> {
-        BlockQueryContext(self.0).block(block_id)
+        crate::query::block::BlockQueryData::block(self, block_id)
     }
 }
 

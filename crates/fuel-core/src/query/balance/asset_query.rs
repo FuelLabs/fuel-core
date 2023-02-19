@@ -1,11 +1,6 @@
-use crate::{
-    fuel_core_graphql_api::service::Database,
-    query::{
-        CoinQueryContext,
-        CoinQueryData,
-        MessageQueryContext,
-        MessageQueryData,
-    },
+use crate::query::{
+    CoinQueryData,
+    MessageQueryData,
 };
 use fuel_core_storage::{
     iter::{
@@ -78,7 +73,8 @@ pub struct AssetsQuery<'a> {
     pub owner: &'a Address,
     pub assets: Option<HashSet<&'a AssetId>>,
     pub exclude: Option<&'a Exclude>,
-    pub database: &'a Database,
+    pub message_context: Box<dyn MessageQueryData + 'a>,
+    pub coin_context: Box<dyn CoinQueryData + 'a>,
 }
 
 impl<'a> AssetsQuery<'a> {
@@ -86,13 +82,15 @@ impl<'a> AssetsQuery<'a> {
         owner: &'a Address,
         assets: Option<HashSet<&'a AssetId>>,
         exclude: Option<&'a Exclude>,
-        database: &'a Database,
+        message_context: Box<dyn MessageQueryData + 'a>,
+        coin_context: Box<dyn CoinQueryData + 'a>,
     ) -> Self {
         Self {
             owner,
             assets,
             exclude,
-            database,
+            message_context,
+            coin_context,
         }
     }
 
@@ -102,7 +100,7 @@ impl<'a> AssetsQuery<'a> {
     // TODO: Optimize this by creating an index
     //  https://github.com/FuelLabs/fuel-core/issues/588
     pub fn unspent_resources(&self) -> BoxedIter<StorageResult<Resource>> {
-        let coin_context = CoinQueryContext(self.database);
+        let coin_context = self.coin_context;
         let coins_iter = coin_context
             .owned_coins_ids(self.owner, None, IterDirection::Forward)
             .filter_ok(|id| {
@@ -114,7 +112,7 @@ impl<'a> AssetsQuery<'a> {
             })
             .map(move |res| {
                 res.map_err(StorageError::from).and_then(|id| {
-                    let coin = CoinQueryContext(self.database).coin(id)?;
+                    let coin = self.coin_context.coin(id)?;
 
                     Ok(Resource::Coin(coin))
                 })
@@ -131,7 +129,7 @@ impl<'a> AssetsQuery<'a> {
                 }
             });
 
-        let message_context = MessageQueryContext(self.database);
+        let message_context = self.message_context;
         let messages_iter = message_context
             .owned_message_ids(self.owner, None, IterDirection::Forward)
             .filter_ok(|id| {
@@ -143,7 +141,7 @@ impl<'a> AssetsQuery<'a> {
             })
             .map(move |res| {
                 res.and_then(|id| {
-                    let message = MessageQueryContext(self.database).message(&id)?;
+                    let message = self.message_context.message(&id)?;
                     Ok(Resource::Message(message))
                 })
             })
@@ -173,7 +171,8 @@ pub struct AssetQuery<'a> {
     pub owner: &'a Address,
     pub asset: &'a AssetSpendTarget,
     pub exclude: Option<&'a Exclude>,
-    pub database: &'a Database,
+    pub message_context: Box<dyn MessageQueryData + 'a>,
+    pub coin_context: Box<dyn CoinQueryData + 'a>,
     query: AssetsQuery<'a>,
 }
 
@@ -182,7 +181,8 @@ impl<'a> AssetQuery<'a> {
         owner: &'a Address,
         asset: &'a AssetSpendTarget,
         exclude: Option<&'a Exclude>,
-        database: &'a Database,
+        message_context: Box<dyn MessageQueryData + 'a>,
+        coin_context: Box<dyn CoinQueryData + 'a>,
     ) -> Self {
         let mut allowed = HashSet::new();
         allowed.insert(&asset.id);
@@ -190,8 +190,15 @@ impl<'a> AssetQuery<'a> {
             owner,
             asset,
             exclude,
-            database,
-            query: AssetsQuery::new(owner, Some(allowed), exclude, database),
+            message_context,
+            coin_context,
+            query: AssetsQuery::new(
+                owner,
+                Some(allowed),
+                exclude,
+                message_context,
+                coin_context,
+            ),
         }
     }
 

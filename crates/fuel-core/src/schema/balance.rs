@@ -71,7 +71,6 @@ impl BalanceQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<AssetId, Balance, EmptyFields, EmptyFields>>
     {
-
         if before.is_some() || after.is_some() {
             return Err(anyhow!("pagination is not yet supported").into())
         }

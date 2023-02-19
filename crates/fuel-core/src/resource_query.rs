@@ -95,7 +95,7 @@ impl SpendQuery {
     pub fn asset_queries<'a>(&'a self, db: &'a Database) -> Vec<AssetQuery<'a>> {
         self.query_per_asset
             .iter()
-            .map(|asset| AssetQuery::new(&self.owner, asset, Some(&self.exclude), db))
+            .map(|asset| AssetQuery::new(&self.owner, asset, Some(&self.exclude), db, db))
             .collect()
     }
 
@@ -209,13 +209,9 @@ mod tests {
     use crate::{
         database::Database,
         fuel_core_graphql_api::service::Database as ServiceDatabase,
-        query::{
-            asset_query::{
-                AssetQuery,
-                AssetSpendTarget,
-            },
-            CoinQueryContext,
-            MessageQueryContext,
+        query::asset_query::{
+            AssetQuery,
+            AssetSpendTarget,
         },
         resource_query::{
             largest_first,
@@ -305,7 +301,7 @@ mod tests {
             let result: Vec<_> = spend_query
                 .iter()
                 .map(|asset| {
-                    largest_first(&AssetQuery::new(owner, asset, None, db)).map(
+                    largest_first(&AssetQuery::new(owner, asset, None, db, db)).map(
                         |resources| {
                             resources
                                 .iter()

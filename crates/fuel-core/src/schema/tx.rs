@@ -10,7 +10,6 @@ use crate::{
     query::{
         transaction_status_change,
         BlockQueryData,
-        TransactionQueryContext,
         TransactionQueryData,
         TxnStatusChangeState,
     },
@@ -264,13 +263,28 @@ impl TxStatusSubscription {
     }
 }
 
+use crate::schema::tx::types::SubmittedStatus;
+use fuel_core_storage::Error as StorageError;
+
 #[async_trait::async_trait]
 impl<'a> TxnStatusChangeState for StreamState<'a> {
     async fn get_tx_status(
         &self,
         id: fuel_types::Bytes32,
     ) -> StorageResult<Option<TransactionStatus>> {
-        let data = TransactionQueryContext(self.db);
-        types::get_tx_status(id, &Box::new(data), self.txpool).await
+        let query = self.db;
+        match query
+        .status(&id)
+        .into_api_result::<fuel_core_types::services::txpool::TransactionStatus, StorageError>()?
+        {
+            Some(status) => Ok(Some(status.into())),
+            None => match self.txpool.find_one(id) {
+                Some(transaction_in_pool) => {
+                    let time = transaction_in_pool.submitted_time();
+                    Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
+                }
+                _ => Ok(None),
+            },
+        }
     }
 }
