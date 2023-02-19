@@ -1,3 +1,6 @@
+#[allow(clippy::borrowed_box)] 
+// Boxes are used to house type objects, but when passed through the context they become borrowed
+// so avoiding this lint just results in double references, which is the same as a box
 use anyhow::anyhow;
 use async_graphql::{
     connection::{
