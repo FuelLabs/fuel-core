@@ -93,9 +93,12 @@ impl SpendQuery {
 
     /// Return [`AssetQuery`]s.
     pub fn asset_queries<'a>(&'a self, db: &'a Database) -> Vec<AssetQuery<'a>> {
+        let db = db.to_owned();
+        let db = db.as_ref();
+
         self.query_per_asset
             .iter()
-            .map(|asset| AssetQuery::new(&self.owner, asset, Some(&self.exclude), db, db))
+            .map(|asset| AssetQuery::new(&self.owner, asset, Some(&self.exclude), db))
             .collect()
     }
 
@@ -301,7 +304,7 @@ mod tests {
             let result: Vec<_> = spend_query
                 .iter()
                 .map(|asset| {
-                    largest_first(&AssetQuery::new(owner, asset, None, db, db)).map(
+                    largest_first(&AssetQuery::new(owner, asset, None, db)).map(
                         |resources| {
                             resources
                                 .iter()

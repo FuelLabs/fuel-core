@@ -34,7 +34,7 @@ pub trait CoinQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<Coin>>;
 }
 
-impl<D: DatabasePort> CoinQueryData for D {
+impl<D: DatabasePort + ?Sized> CoinQueryData for D {
     fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin> {
         let coin = self
             .storage::<Coins>()

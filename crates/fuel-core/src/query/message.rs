@@ -77,7 +77,7 @@ pub trait MessageQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<Message>>;
 }
 
-impl<D: DatabasePort> MessageQueryData for D {
+impl<D: DatabasePort + ?Sized> MessageQueryData for D {
     fn message(&self, message_id: &MessageId) -> StorageResult<Message> {
         self.storage::<Messages>()
             .get(message_id)?
