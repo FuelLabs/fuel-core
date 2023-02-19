@@ -304,16 +304,18 @@ mod tests {
             let result: Vec<_> = spend_query
                 .iter()
                 .map(|asset| {
-                    largest_first(&AssetQuery::new(owner, asset, None, db)).map(
-                        |resources| {
-                            resources
-                                .iter()
-                                .map(|resource| {
-                                    (*resource.asset_id(), *resource.amount())
-                                })
-                                .collect()
-                        },
-                    )
+                    largest_first(&AssetQuery::new(
+                        owner,
+                        asset,
+                        None,
+                        db.to_owned().as_ref(),
+                    ))
+                    .map(|resources| {
+                        resources
+                            .iter()
+                            .map(|resource| (*resource.asset_id(), *resource.amount()))
+                            .collect()
+                    })
                 })
                 .try_collect()?;
             Ok(result)
@@ -904,21 +906,19 @@ mod tests {
         }
 
         pub fn owned_coins(&self, owner: &Address) -> Vec<Coin> {
+            use crate::query::CoinQueryData;
             let db = self.service_database();
-            let query = CoinQueryContext(&db);
-            query
-                .owned_coins_ids(owner, None, IterDirection::Forward)
-                .map(|res| res.map(|id| query.coin(id).unwrap()))
+            db.owned_coins_ids(owner, None, IterDirection::Forward)
+                .map(|res| res.map(|id| db.coin(id).unwrap()))
                 .try_collect()
                 .unwrap()
         }
 
         pub fn owned_messages(&self, owner: &Address) -> Vec<Message> {
+            use crate::query::MessageQueryData;
             let db = self.service_database();
-            let query = MessageQueryContext(&db);
-            query
-                .owned_message_ids(owner, None, IterDirection::Forward)
-                .map(|res| res.map(|id| query.message(&id).unwrap()))
+            db.owned_message_ids(owner, None, IterDirection::Forward)
+                .map(|res| res.map(|id| db.message(&id).unwrap()))
                 .try_collect()
                 .unwrap()
         }

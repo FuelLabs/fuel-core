@@ -179,8 +179,8 @@ impl<D: DatabasePort> MessageProofData for D {
 
 /// Generate an output proof.
 // TODO: Do we want to return `Option` here?
-pub fn message_proof(
-    data: &Box<dyn MessageProofData>,
+pub fn message_proof<'a>(
+    data: &Box<dyn MessageProofData + 'a>,
     transaction_id: Bytes32,
     message_id: MessageId,
 ) -> StorageResult<Option<MessageProof>> {

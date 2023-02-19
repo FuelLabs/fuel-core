@@ -168,6 +168,7 @@ async fn can_build_message_proof() {
             }
         });
 
+    let data: Box<dyn MessageProofData> = Box::new(data);
     let p = message_proof(&data, transaction_id, message_id)
         .unwrap()
         .unwrap();
