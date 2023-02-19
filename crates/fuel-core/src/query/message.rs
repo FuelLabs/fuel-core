@@ -179,6 +179,7 @@ impl<D: DatabasePort> MessageProofData for D {
 
 /// Generate an output proof.
 // TODO: Do we want to return `Option` here?
+#[allow(clippy::borrowed_box)]
 pub fn message_proof<'a>(
     data: &Box<dyn MessageProofData + 'a>,
     transaction_id: Bytes32,
