@@ -136,8 +136,7 @@ pub fn init_sub_services(
             importer_adapter.clone(),
         )
     });
-    let _poa_adapter =
-        PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));
+    let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));
 
     #[cfg(feature = "p2p")]
     let sync = (!production_enabled)
@@ -181,6 +180,10 @@ pub fn init_sub_services(
         Box::new(database.clone()),
         Box::new(database.clone()),
         Box::new(database.clone()),
+        Box::new(database.clone()),
+        Box::new(tx_pool_adapter),
+        Box::new(producer_adapter),
+        Box::new(poa_adapter),
     )?;
 
     let shared = SharedState {

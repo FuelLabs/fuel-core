@@ -164,6 +164,10 @@ pub fn new_service(
     message_query_data: Box<dyn MessageQueryData>,
     message_proof_data: Box<dyn MessageProofData>,
     transaction_query_data: Box<dyn TransactionQueryData>,
+    database: Database,
+    txpool: TxPool,
+    producer: BlockProducer,
+    consensus_module: ConsensusModule,
 ) -> anyhow::Result<Service> {
     let network_addr = config.addr;
     let schema = schema
@@ -176,6 +180,10 @@ pub fn new_service(
         .data(message_query_data)
         .data(message_proof_data)
         .data(transaction_query_data)
+        .data(database)
+        .data(txpool)
+        .data(producer)
+        .data(consensus_module)
         .extension(Tracing)
         .finish();
 
