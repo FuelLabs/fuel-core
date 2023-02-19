@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: FuelLabs/.github/.github/actions/lint-toml-template@lint-toml-template
+      - uses: FuelLabs/.github/.github/actions/lint-toml-template@master
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@notify-slack-template
         if: always() && github.ref == 'refs/heads/master'
         with:
