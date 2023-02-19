@@ -152,7 +152,7 @@ impl RunnableTask for Task {
 }
 
 // Need a seperate Data Object for each Query endpoint, cannot be avoided
-#[allow(clippy::too_many_arguments)] 
+#[allow(clippy::too_many_arguments)]
 pub fn new_service(
     config: Config,
     schema: CoreSchemaBuilder,
