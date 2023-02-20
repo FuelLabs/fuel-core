@@ -8,10 +8,7 @@ use crate::{
         service::TxPool,
         IntoApiResult,
     },
-    query::{
-        BlockQueryData,
-        TransactionQueryData,
-    },
+    query::QueryData,
     schema::{
         block::Block,
         contract::Contract,
@@ -139,7 +136,7 @@ pub struct SuccessStatus {
 #[Object]
 impl SuccessStatus {
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query: &Box<dyn BlockQueryData> = ctx.data_unchecked();
+        let query: &Box<dyn QueryData> = ctx.data_unchecked();
         let block = query.block(&self.block_id)?;
         Ok(block.into())
     }
@@ -164,7 +161,7 @@ pub struct FailureStatus {
 #[Object]
 impl FailureStatus {
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query: &Box<dyn BlockQueryData> = ctx.data_unchecked();
+        let query: &Box<dyn QueryData> = ctx.data_unchecked();
         let block = query.block(&self.block_id)?;
         Ok(block.into())
     }
@@ -396,7 +393,7 @@ impl Transaction {
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<TransactionStatus>> {
         let id = self.0.id();
-        let query: &Box<dyn TransactionQueryData> = ctx.data_unchecked();
+        let query: &Box<dyn QueryData> = ctx.data_unchecked();
         let txpool = ctx.data_unchecked::<TxPool>();
         match query
             .status(&id)
@@ -417,7 +414,7 @@ impl Transaction {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<Vec<Receipt>>> {
-        let query: &Box<dyn TransactionQueryData> = ctx.data_unchecked();
+        let query: &Box<dyn QueryData> = ctx.data_unchecked();
         let receipts = query
             .receipts(&self.0.id())
             .into_api_result::<Vec<_>, async_graphql::Error>()?;
@@ -504,7 +501,7 @@ impl Transaction {
 #[tracing::instrument(level = "debug", skip(query, txpool), ret, err)]
 pub(super) async fn get_tx_status<'a>(
     id: fuel_core_types::fuel_types::Bytes32,
-    query: &'a dyn TransactionQueryData,
+    query: &'a dyn QueryData,
     txpool: &TxPool,
 ) -> Result<Option<TransactionStatus>, StorageError> {
     match query

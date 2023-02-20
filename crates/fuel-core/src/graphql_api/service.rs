@@ -6,16 +6,7 @@ use crate::{
         TxPoolPort,
     },
     graphql_api::Config,
-    query::{
-        BalanceQueryData,
-        BlockQueryData,
-        ChainQueryData,
-        CoinQueryData,
-        ContractQueryData,
-        MessageProofData,
-        MessageQueryData,
-        TransactionQueryData,
-    },
+    query::QueryData,
     schema::{
         CoreSchema,
         CoreSchemaBuilder,
@@ -152,34 +143,20 @@ impl RunnableTask for Task {
 }
 
 // Need a seperate Data Object for each Query endpoint, cannot be avoided
-#[allow(clippy::too_many_arguments)]
 pub fn new_service(
     config: Config,
     schema: CoreSchemaBuilder,
-    balance_query_data: Box<dyn BalanceQueryData>,
-    block_query_data: Box<dyn BlockQueryData>,
-    chain_query_data: Box<dyn ChainQueryData>,
-    coin_query_data: Box<dyn CoinQueryData>,
-    contract_query_data: Box<dyn ContractQueryData>,
-    message_query_data: Box<dyn MessageQueryData>,
-    message_proof_data: Box<dyn MessageProofData>,
-    transaction_query_data: Box<dyn TransactionQueryData>,
+    query_data: Box<dyn QueryData>,
     database: Database,
     txpool: TxPool,
     producer: BlockProducer,
     consensus_module: ConsensusModule,
 ) -> anyhow::Result<Service> {
     let network_addr = config.addr;
+
     let schema = schema
         .data(config)
-        .data(balance_query_data)
-        .data(block_query_data)
-        .data(chain_query_data)
-        .data(coin_query_data)
-        .data(contract_query_data)
-        .data(message_query_data)
-        .data(message_proof_data)
-        .data(transaction_query_data)
+        .data(query_data)
         .data(database)
         .data(txpool)
         .data(producer)

@@ -1,3 +1,4 @@
+use crate::graphql_api::ports::DatabasePort;
 mod balance;
 mod block;
 mod chain;
@@ -6,6 +7,21 @@ mod contract;
 mod message;
 mod subscriptions;
 mod tx;
+
+pub trait QueryData:
+    Send
+    + Sync
+    + BalanceQueryData
+    + BlockQueryData
+    + ChainQueryData
+    + CoinQueryData
+    + ContractQueryData
+    + MessageQueryData
+    + MessageProofData
+    + TransactionQueryData
+{
+}
+impl<D: DatabasePort + 'static> QueryData for D {}
 
 // TODO: Remove reexporting of everything
 pub use balance::*;

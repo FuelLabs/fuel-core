@@ -125,10 +125,6 @@ impl<D: DatabasePort + ?Sized> MessageQueryData for D {
 #[cfg_attr(test, mockall::automock)]
 /// Trait that specifies all the data required by the output message query.
 pub trait MessageProofData: Send + Sync {
-    /// Return all receipts in the given transaction.
-    fn receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>>;
-    /// Get the transaction.
-    fn transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction>;
     /// Get the status of a transaction.
     fn transaction_status(
         &self,
@@ -138,19 +134,16 @@ pub trait MessageProofData: Send + Sync {
     fn transactions_on_block(&self, block_id: &BlockId) -> StorageResult<Vec<Bytes32>>;
     /// Get the signature of a fuel block.
     fn signature(&self, block_id: &BlockId) -> StorageResult<Signature>;
-    /// Get the fuel block.
-    fn block(&self, block_id: &BlockId) -> StorageResult<CompressedBlock>;
+
+    // Testing methods only which should be removed in subsequent interface changes, as they just bind to other query methods
+    fn msg_block(&self, block_id: &BlockId) -> StorageResult<CompressedBlock>;
+
+    fn msg_transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction>;
+
+    fn msg_receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>>;
 }
 
 impl<D: DatabasePort> MessageProofData for D {
-    fn receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>> {
-        crate::query::tx::TransactionQueryData::receipts(self, transaction_id)
-    }
-
-    fn transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction> {
-        crate::query::tx::TransactionQueryData::transaction(self, transaction_id)
-    }
-
     fn transaction_status(
         &self,
         transaction_id: &TxId,
@@ -172,7 +165,15 @@ impl<D: DatabasePort> MessageProofData for D {
         }
     }
 
-    fn block(&self, block_id: &BlockId) -> StorageResult<CompressedBlock> {
+    fn msg_receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>> {
+        crate::query::tx::TransactionQueryData::receipts(self, transaction_id)
+    }
+
+    fn msg_transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction> {
+        crate::query::tx::TransactionQueryData::transaction(self, transaction_id)
+    }
+
+    fn msg_block(&self, block_id: &BlockId) -> StorageResult<CompressedBlock> {
         crate::query::block::BlockQueryData::block(self, block_id)
     }
 }
@@ -180,14 +181,14 @@ impl<D: DatabasePort> MessageProofData for D {
 /// Generate an output proof.
 // TODO: Do we want to return `Option` here?
 #[allow(clippy::borrowed_box)]
-pub fn message_proof<'a>(
-    data: &Box<dyn MessageProofData + 'a>,
+pub fn message_proof<'a, T: MessageProofData + ?Sized>(
+    data: &Box<T>,
     transaction_id: Bytes32,
     message_id: MessageId,
 ) -> StorageResult<Option<MessageProof>> {
     // Check if the receipts for this transaction actually contain this message id or exit.
     let receipt = data
-        .receipts(&transaction_id)?
+        .msg_receipts(&transaction_id)?
         .into_iter()
         .find_map(|r| match r {
             Receipt::MessageOut {
@@ -225,7 +226,7 @@ pub fn message_proof<'a>(
         .filter_map(|id| {
             // Filter out transactions that contain no messages
             // and get the receipts for the rest.
-            let result = data.transaction(&id).and_then(|tx| {
+            let result = data.msg_transaction(&id).and_then(|tx| {
                 let outputs = match &tx {
                     Transaction::Script(script) => script.outputs(),
                     Transaction::Create(create) => create.outputs(),
@@ -234,7 +235,7 @@ pub fn message_proof<'a>(
                 outputs
                     .iter()
                     .any(Output::is_message)
-                    .then(|| data.receipts(&id))
+                    .then(|| data.msg_receipts(&id))
                     .transpose()
             });
             result.transpose()
@@ -287,7 +288,7 @@ pub fn message_proof<'a>(
 
             // Get the fuel block.
             let header = match data
-                .block(&block_id)
+                .msg_block(&block_id)
                 .into_api_result::<CompressedBlock, StorageError>()?
             {
                 Some(t) => t.into_inner().0,
