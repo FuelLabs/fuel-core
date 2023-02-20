@@ -9,7 +9,6 @@ use crate::{
     Config,
     Error,
 };
-use anyhow::anyhow;
 use fuel_core_metrics::txpool_metrics::TXPOOL_METRICS;
 use fuel_core_types::{
     blockchain::SealedBlock,
@@ -120,14 +119,6 @@ where
                 block_limit: self.config.chain_config.block_gas_limit,
             }
             .into())
-        }
-
-        // verify predicates
-        if !tx.check_predicates(
-            self.config.chain_config.transaction_parameters,
-            self.config.chain_config.gas_costs.clone(),
-        ) {
-            return Err(anyhow!("transaction predicate verification failed"))
         }
 
         if self.by_hash.contains_key(&tx.id()) {

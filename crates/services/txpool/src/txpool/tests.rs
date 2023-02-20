@@ -1,6 +1,8 @@
 use crate::{
     test_helpers::{
+        add_coin_to_state,
         create_output_and_input,
+        custom_predicate,
         random_predicate,
         setup_coin,
         TEST_COIN_AMOUNT,
@@ -19,13 +21,19 @@ use crate::{
 };
 use fuel_core_types::{
     entities::coin::CoinStatus,
-    fuel_asm::Word,
+    fuel_asm::{
+        op,
+        RegId,
+        Word,
+    },
     fuel_crypto::rand::{
         rngs::StdRng,
         SeedableRng,
     },
     fuel_tx::{
+        Address,
         AssetId,
+        Input,
         Output,
         TransactionBuilder,
         UniqueIdentifier,
@@ -42,8 +50,8 @@ use std::{
 
 const GAS_LIMIT: Word = 1000;
 
-#[tokio::test]
-async fn insert_simple_tx_succeeds() {
+#[test]
+fn insert_simple_tx_succeeds() {
     let mut rng = StdRng::seed_from_u64(0);
     let db = MockDb::default();
     let mut txpool = TxPool::new(Default::default(), db);
@@ -61,8 +69,8 @@ async fn insert_simple_tx_succeeds() {
         .expect("Transaction should be OK, got Err");
 }
 
-#[tokio::test]
-async fn insert_simple_tx_dependency_chain_succeeds() {
+#[test]
+fn insert_simple_tx_dependency_chain_succeeds() {
     let mut rng = StdRng::seed_from_u64(0);
     let db = MockDb::default();
     let mut txpool = TxPool::new(Default::default(), db);
@@ -95,8 +103,8 @@ async fn insert_simple_tx_dependency_chain_succeeds() {
         .expect("Tx2 dependent should be OK, got Err");
 }
 
-#[tokio::test]
-async fn faulty_t2_collided_on_contract_id_from_tx1() {
+#[test]
+fn faulty_t2_collided_on_contract_id_from_tx1() {
     let mut rng = StdRng::seed_from_u64(0);
     let db = MockDb::default();
     let mut txpool = TxPool::new(Default::default(), db);
@@ -154,8 +162,8 @@ async fn faulty_t2_collided_on_contract_id_from_tx1() {
     ));
 }
 
-#[tokio::test]
-async fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
+#[test]
+fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
     let mut rng = StdRng::seed_from_u64(0);
     let db = MockDb::default();
     let mut txpool = TxPool::new(Default::default(), db);
@@ -205,8 +213,8 @@ async fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
     ));
 }
 
-#[tokio::test]
-async fn not_inserted_known_tx() {
+#[test]
+fn not_inserted_known_tx() {
     let mut txpool = TxPool::new(Default::default(), MockDb::default());
 
     let tx =
@@ -225,8 +233,8 @@ async fn not_inserted_known_tx() {
     ));
 }
 
-#[tokio::test]
-async fn try_to_insert_tx2_missing_utxo() {
+#[test]
+fn try_to_insert_tx2_missing_utxo() {
     let mut rng = StdRng::seed_from_u64(0);
     let mut txpool = TxPool::new(Default::default(), MockDb::default());
 
@@ -248,8 +256,8 @@ async fn try_to_insert_tx2_missing_utxo() {
     ));
 }
 
-#[tokio::test]
-async fn tx_try_to_use_spent_coin() {
+#[test]
+fn tx_try_to_use_spent_coin() {
     let mut rng = StdRng::seed_from_u64(0);
     let db = MockDb::default();
     let mut txpool = TxPool::new(Default::default(), db);
@@ -277,8 +285,8 @@ async fn tx_try_to_use_spent_coin() {
     ));
 }
 
-#[tokio::test]
-async fn higher_priced_tx_removes_lower_priced_tx() {
+#[test]
+fn higher_priced_tx_removes_lower_priced_tx() {
     let mut rng = StdRng::seed_from_u64(0);
     let db = MockDb::default();
     let mut txpool = TxPool::new(Default::default(), db);
@@ -308,8 +316,8 @@ async fn higher_priced_tx_removes_lower_priced_tx() {
     assert_eq!(vec.removed[0].id(), tx1.id(), "Tx1 id should be removed");
 }
 
-#[tokio::test]
-async fn underpriced_tx1_not_included_coin_collision() {
+#[test]
+fn underpriced_tx1_not_included_coin_collision() {
     let mut rng = StdRng::seed_from_u64(0);
     let db = MockDb::default();
     let mut txpool = TxPool::new(Default::default(), db);
@@ -357,8 +365,8 @@ async fn underpriced_tx1_not_included_coin_collision() {
     ));
 }
 
-#[tokio::test]
-async fn overpriced_tx_contract_input_not_inserted() {
+#[test]
+fn overpriced_tx_contract_input_not_inserted() {
     let mut rng = StdRng::seed_from_u64(0);
     let db = MockDb::default();
     let mut txpool = TxPool::new(Default::default(), db);
@@ -406,8 +414,8 @@ async fn overpriced_tx_contract_input_not_inserted() {
     );
 }
 
-#[tokio::test]
-async fn dependent_contract_input_inserted() {
+#[test]
+fn dependent_contract_input_inserted() {
     let mut rng = StdRng::seed_from_u64(0);
     let db = MockDb::default();
     let mut txpool = TxPool::new(Default::default(), db);
@@ -445,8 +453,8 @@ async fn dependent_contract_input_inserted() {
     txpool.insert_inner(tx2).expect("Tx2 should be Ok, got Err");
 }
 
-#[tokio::test]
-async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
+#[test]
+fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
     let mut rng = StdRng::seed_from_u64(0);
     let db = MockDb::default();
     let mut txpool = TxPool::new(Default::default(), db);
@@ -495,8 +503,8 @@ async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
     assert_eq!(vec.removed[1].id(), tx2.id(), "Tx2 id should be removed");
 }
 
-#[tokio::test]
-async fn more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
+#[test]
+fn more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
     let mut rng = StdRng::seed_from_u64(0);
     let db = MockDb::default();
     let mut txpool = TxPool::new(Default::default(), db);
@@ -536,8 +544,8 @@ async fn more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
     );
 }
 
-#[tokio::test]
-async fn tx_limit_hit() {
+#[test]
+fn tx_limit_hit() {
     let mut rng = StdRng::seed_from_u64(0);
     let db = MockDb::default();
     let mut txpool = TxPool::new(
@@ -575,8 +583,8 @@ async fn tx_limit_hit() {
     ));
 }
 
-#[tokio::test]
-async fn tx_depth_hit() {
+#[test]
+fn tx_depth_hit() {
     let mut rng = StdRng::seed_from_u64(0);
     let db = MockDb::default();
     let mut txpool = TxPool::new(
@@ -1000,4 +1008,93 @@ async fn message_of_squeezed_out_tx_can_be_resubmitted_at_lower_gas_price() {
     txpool.insert_inner(tx_2).expect("should succeed");
 
     txpool.insert_inner(tx_3).expect("should succeed");
+}
+
+#[test]
+fn predicates_with_incorrect_owner_fails() {
+    let mut rng = StdRng::seed_from_u64(0);
+    let db = MockDb::default();
+    let mut txpool = TxPool::new(Default::default(), db.clone());
+    let mut coin = random_predicate(&mut rng, AssetId::BASE, TEST_COIN_AMOUNT, None);
+    if let Input::CoinPredicate { owner, .. } = &mut coin {
+        *owner = Address::zeroed();
+    }
+
+    let (_, gas_coin) = add_coin_to_state(coin, Some(&db));
+    let tx = Arc::new(
+        TransactionBuilder::script(vec![], vec![])
+            .gas_limit(GAS_LIMIT)
+            .add_input(gas_coin)
+            .finalize_as_transaction(),
+    );
+
+    let err = txpool
+        .insert_inner(tx)
+        .expect_err("Transaction should be err, got ok");
+    assert!(
+        err.to_string().contains("InputPredicateOwner"),
+        "unexpected error: {err}",
+    )
+}
+
+#[test]
+fn predicate_without_enough_gas_returns_out_of_gas() {
+    let mut rng = StdRng::seed_from_u64(0);
+    let db = MockDb::default();
+    let mut txpool = TxPool::new(Default::default(), db.clone());
+    let coin = custom_predicate(
+        &mut rng,
+        AssetId::BASE,
+        TEST_COIN_AMOUNT,
+        // forever loop
+        vec![op::jmp(RegId::ZERO)].into_iter().collect(),
+        None,
+    );
+
+    let (_, gas_coin) = add_coin_to_state(coin, Some(&db));
+    let tx = Arc::new(
+        TransactionBuilder::script(vec![], vec![])
+            .gas_limit(GAS_LIMIT)
+            .add_input(gas_coin)
+            .finalize_as_transaction(),
+    );
+
+    let err = txpool
+        .insert_inner(tx)
+        .expect_err("Transaction should be err, got ok");
+    assert!(
+        err.to_string().contains("PredicateExhaustedGas"),
+        "unexpected error: {err}",
+    )
+}
+
+#[test]
+fn predicate_that_returns_false_is_invalid() {
+    let mut rng = StdRng::seed_from_u64(0);
+    let db = MockDb::default();
+    let mut txpool = TxPool::new(Default::default(), db.clone());
+    let coin = custom_predicate(
+        &mut rng,
+        AssetId::BASE,
+        TEST_COIN_AMOUNT,
+        // forever loop
+        vec![op::ret(RegId::ZERO)].into_iter().collect(),
+        None,
+    );
+
+    let (_, gas_coin) = add_coin_to_state(coin, Some(&db));
+    let tx = Arc::new(
+        TransactionBuilder::script(vec![], vec![])
+            .gas_limit(GAS_LIMIT)
+            .add_input(gas_coin)
+            .finalize_as_transaction(),
+    );
+
+    let err = txpool
+        .insert_inner(tx)
+        .expect_err("Transaction should be err, got ok");
+    assert!(
+        err.to_string().contains("PredicateVerificationFailed"),
+        "unexpected error: {err}",
+    )
 }
