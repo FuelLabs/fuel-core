@@ -10,7 +10,6 @@ use crate::{
         },
         Cacheable,
         Chargeable,
-        ConsensusParameters,
         Create,
         Input,
         Output,
@@ -27,12 +26,9 @@ use crate::{
     },
     fuel_vm::{
         checked_transaction::Checked,
-        Interpreter,
-        PredicateStorage,
         ProgramState,
     },
 };
-use fuel_vm_private::prelude::GasCosts;
 use std::{
     ops::Deref,
     sync::Arc,
@@ -117,31 +113,6 @@ impl PoolTransaction {
         match self {
             PoolTransaction::Script(script) => script.metadata().fee.max_gas(),
             PoolTransaction::Create(create) => create.metadata().fee.max_gas(),
-        }
-    }
-
-    pub fn check_predicates(
-        &self,
-        params: ConsensusParameters,
-        gas_costs: GasCosts,
-    ) -> bool {
-        match self {
-            PoolTransaction::Script(script) => {
-                Interpreter::<PredicateStorage>::check_predicates(
-                    script.clone(),
-                    params,
-                    gas_costs,
-                )
-                .is_ok()
-            }
-            PoolTransaction::Create(create) => {
-                Interpreter::<PredicateStorage>::check_predicates(
-                    create.clone(),
-                    params,
-                    gas_costs,
-                )
-                .is_ok()
-            }
         }
     }
 }

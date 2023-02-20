@@ -45,7 +45,6 @@ pub struct TestSetupBuilder {
     pub contracts: HashMap<ContractId, ContractConfig>,
     pub initial_coins: Vec<CoinConfig>,
     pub min_gas_price: u64,
-    pub predicates: bool,
 }
 
 impl TestSetupBuilder {
@@ -165,7 +164,6 @@ impl Default for TestSetupBuilder {
             contracts: Default::default(),
             initial_coins: vec![],
             min_gas_price: 0,
-            predicates: false,
         }
     }
 }
