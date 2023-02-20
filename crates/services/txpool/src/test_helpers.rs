@@ -30,6 +30,10 @@ pub const TEST_COIN_AMOUNT: u64 = 100_000_000u64;
 
 pub(crate) fn setup_coin(rng: &mut StdRng, mock_db: Option<&MockDb>) -> (Coin, Input) {
     let input = random_predicate(rng, AssetId::BASE, TEST_COIN_AMOUNT, None);
+    add_coin_to_state(input, mock_db)
+}
+
+pub(crate) fn add_coin_to_state(input: Input, mock_db: Option<&MockDb>) -> (Coin, Input) {
     let coin = CompressedCoin {
         owner: *input.input_owner().unwrap(),
         amount: TEST_COIN_AMOUNT,
@@ -96,6 +100,26 @@ pub(crate) fn random_predicate(
         Default::default(),
         0,
         predicate_code,
+        vec![],
+    )
+}
+
+pub(crate) fn custom_predicate(
+    rng: &mut StdRng,
+    asset_id: AssetId,
+    amount: Word,
+    code: Vec<u8>,
+    utxo_id: Option<UtxoId>,
+) -> Input {
+    let owner = Input::predicate_owner(&code);
+    Input::coin_predicate(
+        utxo_id.unwrap_or_else(|| rng.gen()),
+        owner,
+        amount,
+        asset_id,
+        Default::default(),
+        0,
+        code,
         vec![],
     )
 }
