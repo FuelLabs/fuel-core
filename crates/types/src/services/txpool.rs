@@ -36,7 +36,6 @@ use fuel_vm_private::prelude::GasCosts;
 use std::{
     ops::Deref,
     sync::Arc,
-    time::Instant,
 };
 use tai64::Tai64;
 
@@ -183,6 +182,7 @@ pub struct InsertionResult {
 }
 
 /// Information of a transaction fetched from the txpool
+// TODO: Move me to `fuel-core-txpool` crate
 #[derive(Debug, Clone)]
 pub struct TxInfo {
     tx: ArcPoolTx,
@@ -332,6 +332,8 @@ pub enum Error {
     // small todo for now it can pass but in future we should include better messages
     #[error("Transaction removed.")]
     Removed,
+    #[error("Transaction removed because of the TTL.")]
+    TTLReason,
     #[error("Transaction squeezed out because {0}")]
     SqueezedOut(String),
     // TODO: We need it for now until channels are removed from TxPool.

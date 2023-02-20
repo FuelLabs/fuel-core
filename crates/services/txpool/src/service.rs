@@ -33,29 +33,16 @@ use fuel_core_types::{
         },
         txpool::{
             ArcPoolTx,
+            Error,
             InsertionResult,
             TxInfo,
             TxStatus,
         },
     },
-    tai64::Tai64,
 };
-use parking_lot::{
-    Mutex as ParkingMutex,
-    Mutex,
-};
-use std::{
-    ops::DerefMut,
-    pin::Pin,
-    sync::Arc,
-};
-use tokio::{
-    sync::broadcast,
-    time::{
-        interval,
-        sleep,
-    },
-};
+use parking_lot::Mutex as ParkingMutex;
+use std::sync::Arc;
+use tokio::sync::broadcast;
 use tokio_stream::StreamExt;
 
 pub type Service<P2P, DB> = ServiceRunner<Task<P2P, DB>>;
@@ -201,14 +188,12 @@ where
             }
 
             _ = self.ttl_timer.tick() => {
-                // get all older than the interval period
-
-                let ttl_txs = self.shared.txpool.lock().ttl_checks();
-                let now = Tai64::now();
-                for (tx_id, submitted_at) in ttl_txs {
-                    // remove the ones that are past expiration
-                    // rebroadcast the remaining ones
+                let removed = self.shared.txpool.lock().prune_old_txs();
+                for tx in removed {
+                    self.shared.tx_status_sender.send_squeezed_out(tx.id(), Error::TTLReason);
                 }
+
+                self.ttl_timer.reset();
 
                 should_continue = true
             }
@@ -360,7 +345,7 @@ where
     let p2p = Arc::new(p2p);
     let gossiped_tx_stream = p2p.gossiped_transaction_events();
     let committed_block_stream = importer.block_events();
-    let ttl_timer = interval(config.transaction_rebroadcast_interval);
+    let ttl_timer = tokio::time::interval(config.transaction_ttl);
     let txpool = Arc::new(ParkingMutex::new(TxPool::new(config, db)));
     let task = Task {
         gossiped_tx_stream,

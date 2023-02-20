@@ -153,9 +153,6 @@ pub struct Command {
 
     #[clap(long = "tx-pool-ttl", default_value = "5m", env)]
     pub tx_pool_ttl: humantime::Duration,
-
-    #[clap(long = "tx-pool-rebroadcast-interval", default_value = "30s", env)]
-    pub tx_pool_rebroadcast_interval: humantime::Duration,
 }
 
 impl Command {
@@ -184,7 +181,6 @@ impl Command {
             max_da_lag,
             max_wait_time,
             tx_pool_ttl,
-            tx_pool_rebroadcast_interval,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -256,7 +252,6 @@ impl Command {
                 utxo_validation,
                 metrics,
                 tx_pool_ttl.into(),
-                tx_pool_rebroadcast_interval.into(),
             ),
             block_producer: ProducerConfig {
                 utxo_validation,

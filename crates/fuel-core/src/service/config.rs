@@ -72,7 +72,7 @@ impl Config {
             vm: Default::default(),
             utxo_validation,
             txpool: fuel_core_txpool::Config {
-                chain_config: chain_conf.clone(),
+                chain_config: chain_conf,
                 min_gas_price,
                 utxo_validation,
                 ..fuel_core_txpool::Config::default()

@@ -17,8 +17,6 @@ pub struct Config {
     pub metrics: bool,
     /// Transaction TTL
     pub transaction_ttl: Duration,
-    /// Rebroadcast interval for txs
-    pub transaction_rebroadcast_interval: Duration,
 }
 
 impl Default for Config {
@@ -28,16 +26,12 @@ impl Default for Config {
         let metrics = false;
         // 5 minute TTL
         let transaction_ttl = Duration::from_secs(60 * 5);
-        // 30 second rebroadcast interval
-        // TODO: ensure no punishment occurs for rebroadcasting
-        let transaction_rebroadcast_interval = Duration::from_secs(30);
         Self::new(
             ChainConfig::default(),
             min_gas_price,
             utxo_validation,
             metrics,
             transaction_ttl,
-            transaction_rebroadcast_interval,
         )
     }
 }
@@ -49,7 +43,6 @@ impl Config {
         utxo_validation: bool,
         metrics: bool,
         transaction_ttl: Duration,
-        transaction_rebroadcast_interval: Duration,
     ) -> Self {
         // # Dev-note: If you add a new field, be sure that this field is propagated correctly
         //  in all places where `new` is used.
@@ -61,7 +54,6 @@ impl Config {
             chain_config,
             metrics,
             transaction_ttl,
-            transaction_rebroadcast_interval,
         }
     }
 }
