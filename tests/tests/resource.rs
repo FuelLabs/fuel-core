@@ -23,6 +23,8 @@ use rand::{
 
 mod coins {
     use super::*;
+    use fuel_core_types::fuel_crypto::SecretKey;
+    use rand::Rng;
 
     async fn setup(
         owner: Address,
@@ -82,6 +84,78 @@ mod coins {
         exclude_all(owner, asset_id_a, asset_id_b).await;
         query_more_than_we_have(owner, asset_id_a, asset_id_b).await;
         query_limit_resources(owner, asset_id_a, asset_id_b).await;
+    }
+
+    #[tokio::test]
+    async fn excludes_spent_coins() {
+        let mut rng = StdRng::seed_from_u64(1234);
+        let asset_id_a: AssetId = rng.gen();
+        let asset_id_b: AssetId = rng.gen();
+        let secret_key: SecretKey = rng.gen();
+        let pk = secret_key.public_key();
+        let owner = Input::owner(&pk);
+        let context = setup(owner, asset_id_a, asset_id_b).await;
+        // select all available messages to spend
+        let resources_per_asset = context
+            .client
+            .resources_to_spend(
+                format!("{owner:#x}").as_str(),
+                vec![
+                    (format!("{asset_id_a:#x}").as_str(), 300, None),
+                    (format!("{asset_id_b:#x}").as_str(), 300, None),
+                ],
+                None,
+            )
+            .await
+            .unwrap();
+
+        // spend all coins
+        let mut script = TransactionBuilder::script(vec![], vec![]);
+
+        for asset_group in resources_per_asset {
+            for asset in asset_group {
+                if let Resource::Coin(coin) = asset {
+                    script.add_unsigned_coin_input(
+                        secret_key,
+                        coin.utxo_id.0 .0,
+                        coin.amount.0,
+                        coin.asset_id.0 .0,
+                        Default::default(),
+                        coin.maturity.0,
+                    );
+                }
+            }
+        }
+        // send change to different address
+        script.add_output(Output::change(rng.gen(), 0, asset_id_a));
+        script.add_output(Output::change(rng.gen(), 0, asset_id_b));
+        let tx = script.finalize_as_transaction();
+
+        context.client.submit_and_await_commit(&tx).await.unwrap();
+
+        // select all available asset a coins to spend
+        let remaining_resources_a = context
+            .client
+            .resources_to_spend(
+                format!("{owner:#x}").as_str(),
+                vec![(format!("{asset_id_a:#x}").as_str(), 1, None)],
+                None,
+            )
+            .await;
+        // there should be none left
+        assert!(remaining_resources_a.is_err());
+
+        // select all available asset a coins to spend
+        let remaining_resources_b = context
+            .client
+            .resources_to_spend(
+                format!("{owner:#x}").as_str(),
+                vec![(format!("{asset_id_b:#x}").as_str(), 1, None)],
+                None,
+            )
+            .await;
+        // there should be none left
+        assert!(remaining_resources_b.is_err())
     }
 
     async fn query_target_1(owner: Address, asset_id_a: AssetId, asset_id_b: AssetId) {
@@ -239,7 +313,11 @@ mod coins {
 }
 
 mod messages {
-    use fuel_core_types::blockchain::primitives::DaBlockHeight;
+    use fuel_core_types::{
+        blockchain::primitives::DaBlockHeight,
+        fuel_crypto::SecretKey,
+    };
+    use rand::Rng;
 
     use super::*;
 
@@ -291,6 +369,58 @@ mod messages {
         exclude_all(owner).await;
         query_more_than_we_have(owner).await;
         query_limit_resources(owner).await;
+    }
+
+    #[tokio::test]
+    async fn excludes_spent_messages() {
+        let mut rng = StdRng::seed_from_u64(1234);
+
+        let secret_key: SecretKey = rng.gen();
+        let pk = secret_key.public_key();
+        let owner = Input::owner(&pk);
+        let (base_asset_id, context) = setup(owner).await;
+        // select all available messages to spend
+        let resources_per_asset = context
+            .client
+            .resources_to_spend(
+                format!("{owner:#x}").as_str(),
+                vec![(format!("{base_asset_id:#x}").as_str(), 300, None)],
+                None,
+            )
+            .await
+            .unwrap();
+
+        // spend all messages
+        let mut script = TransactionBuilder::script(vec![], vec![]);
+
+        resources_per_asset[0].iter().for_each(|resource| {
+            if let Resource::Message(message) = resource {
+                script.add_unsigned_message_input(
+                    secret_key,
+                    message.sender.0 .0,
+                    message.nonce.0,
+                    message.amount.0,
+                    message.data.0 .0.clone(),
+                );
+            }
+        });
+        // send change to different address
+        script.add_output(Output::change(rng.gen(), 0, base_asset_id));
+        let tx = script.finalize_as_transaction();
+
+        context.client.submit_and_await_commit(&tx).await.unwrap();
+
+        // select all available messages to spend
+        let remaining_resources = context
+            .client
+            .resources_to_spend(
+                format!("{owner:#x}").as_str(),
+                vec![(format!("{base_asset_id:#x}").as_str(), 1, None)],
+                None,
+            )
+            .await;
+        // there should be none left
+        assert!(remaining_resources.is_err())
     }
 
     async fn query_target_1(owner: Address) {

@@ -15,40 +15,7 @@ use rand::{
 };
 
 #[tokio::test]
-async fn transaction_with_predicates_is_rejected_when_feature_disabled() {
-    let mut rng = StdRng::seed_from_u64(2322);
-
-    // setup tx with a predicate input
-    let asset_id = rng.gen();
-    let predicate_tx = TransactionBuilder::script(Default::default(), Default::default())
-        .add_input(Input::coin_predicate(
-            rng.gen(),
-            rng.gen(),
-            500,
-            asset_id,
-            Default::default(),
-            0,
-            rng.gen::<[u8; 32]>().to_vec(),
-            rng.gen::<[u8; 32]>().to_vec(),
-        ))
-        .add_output(Output::change(rng.gen(), 0, asset_id))
-        .finalize();
-
-    // create test context with predicates disabled
-    let context = TestSetupBuilder {
-        predicates: false,
-        ..Default::default()
-    }
-    .config_coin_inputs_from_transactions(&[&predicate_tx])
-    .finalize()
-    .await;
-
-    let result = context.client.submit(&predicate_tx.into()).await;
-    assert!(result.is_err());
-}
-
-#[tokio::test]
-async fn transaction_with_predicate_is_executed_when_feature_enabled() {
+async fn transaction_with_valid_predicate_is_executed() {
     let mut rng = StdRng::seed_from_u64(2322);
 
     // setup tx with a predicate input
@@ -74,13 +41,10 @@ async fn transaction_with_predicate_is_executed_when_feature_enabled() {
         .finalize();
 
     // create test context with predicates disabled
-    let context = TestSetupBuilder {
-        predicates: true,
-        ..Default::default()
-    }
-    .config_coin_inputs_from_transactions(&[&predicate_tx])
-    .finalize()
-    .await;
+    let context = TestSetupBuilder::default()
+        .config_coin_inputs_from_transactions(&[&predicate_tx])
+        .finalize()
+        .await;
 
     let predicate_tx = predicate_tx.into();
     context
@@ -104,7 +68,7 @@ async fn transaction_with_predicate_is_executed_when_feature_enabled() {
 }
 
 #[tokio::test]
-async fn transaction_with_invalid_predicate_is_rejected_when_feature_is_enabled() {
+async fn transaction_with_invalid_predicate_is_rejected() {
     let mut rng = StdRng::seed_from_u64(2322);
 
     // setup tx with a predicate input
@@ -128,15 +92,54 @@ async fn transaction_with_invalid_predicate_is_rejected_when_feature_is_enabled(
         .finalize();
 
     // create test context with predicates disabled
-    let context = TestSetupBuilder {
-        predicates: true,
-        ..Default::default()
-    }
-    .config_coin_inputs_from_transactions(&[&predicate_tx])
-    .finalize()
-    .await;
+    let context = TestSetupBuilder::default()
+        .config_coin_inputs_from_transactions(&[&predicate_tx])
+        .finalize()
+        .await;
 
     let result = context.client.submit(&predicate_tx.into()).await;
 
     assert!(result.is_err())
+}
+
+#[tokio::test]
+async fn transaction_with_predicates_that_exhaust_gas_limit_are_rejected() {
+    let mut rng = StdRng::seed_from_u64(2322);
+
+    // setup tx with a predicate input
+    let amount = 500;
+    let asset_id = rng.gen();
+    // make predicate jump in infinite loop
+    let predicate = op::jmp(RegId::ZERO).to_bytes().to_vec();
+    let owner = Input::predicate_owner(&predicate);
+    let predicate_tx = TransactionBuilder::script(Default::default(), Default::default())
+        .add_input(Input::coin_predicate(
+            rng.gen(),
+            owner,
+            amount,
+            asset_id,
+            Default::default(),
+            0,
+            predicate,
+            vec![],
+        ))
+        .add_output(Output::change(rng.gen(), 0, asset_id))
+        .finalize();
+
+    // create test context with predicates disabled
+    let context = TestSetupBuilder::default()
+        .config_coin_inputs_from_transactions(&[&predicate_tx])
+        .finalize()
+        .await;
+
+    let err = context
+        .client
+        .submit(&predicate_tx.into())
+        .await
+        .expect_err("expected tx to fail");
+
+    assert!(
+        err.to_string().contains("PredicateExhaustedGas"),
+        "got unexpected error {err}"
+    )
 }
