@@ -19,14 +19,35 @@ use std::{
 pub mod tests;
 
 fn main() {
-    let args = Arguments::from_args();
+    fn with_cloned(
+        config: &SuiteConfig,
+        f: impl FnOnce(SuiteConfig) -> anyhow::Result<(), Failed>,
+    ) -> impl FnOnce() -> anyhow::Result<(), Failed> {
+        let config = config.clone();
+        move || f(config)
+    }
 
+    let mut args = Arguments::from_args();
+    // If we run tests in parallel they may fail because try to use the same state like UTXOs.
+    args.test_threads = Some(1);
     let config = load_config();
-    let ctx = TestContext::new(config);
 
-    let tests = vec![Trial::test("can transfer from alice to bob", move || {
-        async_execute(tests::transfers::basic_transfer(&ctx))
-    })];
+    let tests = vec![
+        Trial::test(
+            "can transfer from alice to bob",
+            with_cloned(&config, |config| {
+                let ctx = TestContext::new(config);
+                async_execute(tests::transfers::basic_transfer(&ctx))
+            }),
+        ),
+        Trial::test(
+            "can transfer from alice to bob and back",
+            with_cloned(&config, |config| {
+                let ctx = TestContext::new(config);
+                async_execute(tests::transfers::transfer_back(&ctx))
+            }),
+        ),
+    ];
 
     libtest_mimic::run(&args, tests).exit();
 }
