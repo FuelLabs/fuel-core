@@ -1,8 +1,8 @@
-use crate::types::*;
-use fuel_core_types::services::txpool::{
-    ArcPoolTx,
+use crate::{
+    types::*,
     TxInfo,
 };
+use fuel_core_types::services::txpool::ArcPoolTx;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]

@@ -7,6 +7,7 @@ use crate::{
     transaction_selector::select_transactions,
     Config,
     Error as TxPoolError,
+    TxInfo,
     TxPool,
 };
 use fuel_core_services::{
@@ -35,7 +36,6 @@ use fuel_core_types::{
             ArcPoolTx,
             Error,
             InsertionResult,
-            TxInfo,
             TxStatus,
         },
     },
@@ -129,7 +129,8 @@ where
         self.shared.clone()
     }
 
-    async fn into_task(self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
+    async fn into_task(mut self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
+        self.ttl_timer.reset();
         Ok(self)
     }
 }
@@ -155,8 +156,6 @@ where
                 for tx in removed {
                     self.shared.tx_status_sender.send_squeezed_out(tx.id(), Error::TTLReason);
                 }
-
-                self.ttl_timer.reset();
 
                 should_continue = true
             }
@@ -352,7 +351,7 @@ where
     let gossiped_tx_stream = p2p.gossiped_transaction_events();
     let committed_block_stream = importer.block_events();
     let mut ttl_timer = tokio::time::interval(config.transaction_ttl);
-    ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Burst);
+    ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let txpool = Arc::new(ParkingMutex::new(TxPool::new(config, db)));
     let task = Task {
         gossiped_tx_stream,

@@ -4,8 +4,8 @@ use crate::{
         SortableKey,
     },
     types::*,
+    TxInfo,
 };
-use fuel_core_types::services::txpool::TxInfo;
 use std::cmp;
 
 /// all transactions sorted by min/max price

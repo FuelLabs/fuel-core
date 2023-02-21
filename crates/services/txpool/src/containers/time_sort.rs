@@ -4,28 +4,36 @@ use crate::{
         SortableKey,
     },
     types::*,
+    TxInfo,
 };
-use fuel_core_types::{
-    services::txpool::TxInfo,
-    tai64::Tai64,
+use core::{
+    cmp,
+    time::Duration,
 };
-use std::cmp;
 
 /// all transactions sorted by min/max time
 pub type TimeSort = Sort<TimeSortKey>;
 
 #[derive(Clone, Debug)]
 pub struct TimeSortKey {
-    time: Tai64,
+    time: Duration,
+    created: tokio::time::Instant,
     tx_id: TxId,
 }
 
+impl TimeSortKey {
+    pub fn created(&self) -> &tokio::time::Instant {
+        &self.created
+    }
+}
+
 impl SortableKey for TimeSortKey {
-    type Value = Tai64;
+    type Value = Duration;
 
     fn new(info: &TxInfo) -> Self {
         Self {
             time: info.submitted_time(),
+            created: info.created(),
             tx_id: info.tx().id(),
         }
     }

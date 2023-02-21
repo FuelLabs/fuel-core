@@ -2,7 +2,6 @@ use crate::{
     containers::{
         dependency::Dependency,
         price_sort::PriceSort,
-        sort::SortableKey,
         time_sort::TimeSort,
     },
     ports::TxPoolDb,
@@ -10,6 +9,7 @@ use crate::{
     types::*,
     Config,
     Error,
+    TxInfo,
 };
 use fuel_core_metrics::txpool_metrics::TXPOOL_METRICS;
 use fuel_core_types::{
@@ -26,9 +26,7 @@ use fuel_core_types::{
     services::txpool::{
         ArcPoolTx,
         InsertionResult,
-        TxInfo,
     },
-    tai64::Tai64N,
 };
 use std::{
     cmp::Reverse,
@@ -361,15 +359,13 @@ where
 
     /// Remove all old transactions from the pool.
     pub fn prune_old_txs(&mut self) -> Vec<ArcPoolTx> {
-        let now = Tai64N::now() - self.config.transaction_ttl;
-        let deadline = now.0;
+        let deadline = tokio::time::Instant::now() - self.config.transaction_ttl;
 
         let mut result = vec![];
 
         while let Some((oldest_time, oldest_tx)) = self.by_time.lowest() {
-            let oldest_time = *oldest_time.value();
             let oldest_tx = oldest_tx.clone();
-            if oldest_time < deadline {
+            if oldest_time.created() <= &deadline {
                 let removed = self.remove_inner(&oldest_tx);
                 result.extend(removed.into_iter());
             } else {
