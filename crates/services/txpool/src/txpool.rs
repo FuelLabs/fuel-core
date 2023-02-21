@@ -2,12 +2,14 @@ use crate::{
     containers::{
         dependency::Dependency,
         price_sort::PriceSort,
+        time_sort::TimeSort,
     },
     ports::TxPoolDb,
     service::TxStatusChange,
     types::*,
     Config,
     Error,
+    TxInfo,
 };
 use fuel_core_metrics::txpool_metrics::TXPOOL_METRICS;
 use fuel_core_types::{
@@ -24,7 +26,6 @@ use fuel_core_types::{
     services::txpool::{
         ArcPoolTx,
         InsertionResult,
-        TxInfo,
     },
 };
 use std::{
@@ -38,6 +39,7 @@ use std::{
 pub struct TxPool<DB> {
     by_hash: HashMap<TxId, TxInfo>,
     by_gas_price: PriceSort,
+    by_time: TimeSort,
     by_dependency: Dependency,
     config: Config,
     database: DB,
@@ -53,6 +55,7 @@ where
         Self {
             by_hash: HashMap::new(),
             by_gas_price: PriceSort::default(),
+            by_time: TimeSort::default(),
             by_dependency: Dependency::new(max_depth, config.utxo_validation),
             config,
             database,
@@ -130,7 +133,7 @@ where
         if self.by_hash.len() >= self.config.max_tx {
             max_limit_hit = true;
             // limit is hit, check if we can push out lowest priced tx
-            let lowest_price = self.by_gas_price.lowest_price();
+            let lowest_price = self.by_gas_price.lowest_value().unwrap_or_default();
             if lowest_price >= tx.price() {
                 return Err(Error::NotInsertedLimitHit.into())
             }
@@ -148,14 +151,16 @@ where
         let rem = self
             .by_dependency
             .insert(&self.by_hash, &self.database, &tx)?;
-        self.by_hash.insert(tx.id(), TxInfo::new(tx.clone()));
-        self.by_gas_price.insert(&tx);
+        let info = TxInfo::new(tx.clone());
+        self.by_gas_price.insert(&info);
+        self.by_time.insert(&info);
+        self.by_hash.insert(tx.id(), info);
 
         // if some transaction were removed so we don't need to check limit
         let removed = if rem.is_empty() {
             if max_limit_hit {
                 // remove last tx from sort
-                let rem_tx = self.by_gas_price.last().unwrap(); // safe to unwrap limit is hit
+                let rem_tx = self.by_gas_price.lowest_tx().unwrap(); // safe to unwrap limit is hit
                 self.remove_inner(&rem_tx);
                 vec![rem_tx]
             } else {
@@ -164,10 +169,7 @@ where
         } else {
             // remove ret from by_hash and from by_price
             for rem in rem.iter() {
-                self.by_hash
-                    .remove(&rem.id())
-                    .expect("Expect to hash of tx to be present");
-                self.by_gas_price.remove(rem);
+                self.remove_tx(&rem.id());
             }
 
             rem
@@ -194,18 +196,28 @@ where
     }
 
     /// remove transaction from pool needed on user demand. Low priority
+    // TODO: Seems this function should be recursive
     pub fn remove_by_tx_id(&mut self, tx_id: &TxId) -> Vec<ArcPoolTx> {
-        if let Some(tx) = self.by_hash.remove(tx_id) {
+        if let Some(tx) = self.remove_tx(tx_id) {
             let removed = self
                 .by_dependency
                 .recursively_remove_all_dependencies(&self.by_hash, tx.tx().clone());
             for remove in removed.iter() {
-                self.by_gas_price.remove(remove);
-                self.by_hash.remove(&remove.id());
+                self.remove_tx(&remove.id());
             }
             return removed
         }
         Vec::new()
+    }
+
+    fn remove_tx(&mut self, tx_id: &TxId) -> Option<TxInfo> {
+        let info = self.by_hash.remove(tx_id);
+        if let Some(info) = &info {
+            self.by_time.remove(info);
+            self.by_gas_price.remove(info);
+        }
+
+        info
     }
 
     /// Removes transaction from `TxPool` with assumption that it is committed into the blockchain.
@@ -343,6 +355,25 @@ where
             removed.extend(rem.into_iter());
         }
         removed
+    }
+
+    /// Remove all old transactions from the pool.
+    pub fn prune_old_txs(&mut self) -> Vec<ArcPoolTx> {
+        let deadline = tokio::time::Instant::now() - self.config.transaction_ttl;
+
+        let mut result = vec![];
+
+        while let Some((oldest_time, oldest_tx)) = self.by_time.lowest() {
+            let oldest_tx = oldest_tx.clone();
+            if oldest_time.created() <= &deadline {
+                let removed = self.remove_inner(&oldest_tx);
+                result.extend(removed.into_iter());
+            } else {
+                break
+            }
+        }
+
+        result
     }
 }
 

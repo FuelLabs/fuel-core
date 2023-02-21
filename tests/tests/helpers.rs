@@ -136,11 +136,12 @@ impl TestSetupBuilder {
         let utxo_validation = true;
         let config = Config {
             utxo_validation,
-            txpool: fuel_core_txpool::Config::new(
-                chain_config.clone(),
-                self.min_gas_price,
+            txpool: fuel_core_txpool::Config {
+                chain_config: chain_config.clone(),
+                min_gas_price: self.min_gas_price,
                 utxo_validation,
-            ),
+                ..fuel_core_txpool::Config::default()
+            },
             chain_conf: chain_config,
             ..Config::local_node()
         };

@@ -29,10 +29,7 @@ use crate::{
         ProgramState,
     },
 };
-use std::{
-    ops::Deref,
-    sync::Arc,
-};
+use std::sync::Arc;
 use tai64::Tai64;
 
 /// The alias for transaction pool result.
@@ -150,38 +147,6 @@ pub struct InsertionResult {
     pub inserted: ArcPoolTx,
     /// These were removed during the insertion
     pub removed: Vec<ArcPoolTx>,
-}
-
-/// Information of a transaction fetched from the txpool
-#[derive(Debug, Clone)]
-pub struct TxInfo {
-    tx: ArcPoolTx,
-    submitted_time: Tai64,
-}
-
-#[allow(missing_docs)]
-impl TxInfo {
-    pub fn new(tx: ArcPoolTx) -> Self {
-        Self {
-            tx,
-            submitted_time: Tai64::now(),
-        }
-    }
-
-    pub fn tx(&self) -> &ArcPoolTx {
-        &self.tx
-    }
-
-    pub fn submitted_time(&self) -> Tai64 {
-        self.submitted_time
-    }
-}
-
-impl Deref for TxInfo {
-    type Target = ArcPoolTx;
-    fn deref(&self) -> &Self::Target {
-        &self.tx
-    }
 }
 
 /// The status of the transaction during its life from the tx pool until the block.
@@ -302,6 +267,8 @@ pub enum Error {
     // small todo for now it can pass but in future we should include better messages
     #[error("Transaction removed.")]
     Removed,
+    #[error("Transaction expired because it exceeded the configured time to live `tx-pool-ttl`.")]
+    TTLReason,
     #[error("Transaction squeezed out because {0}")]
     SqueezedOut(String),
     // TODO: We need it for now until channels are removed from TxPool.
