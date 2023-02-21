@@ -267,7 +267,7 @@ pub enum Error {
     // small todo for now it can pass but in future we should include better messages
     #[error("Transaction removed.")]
     Removed,
-    #[error("Transaction removed because of the TTL.")]
+    #[error("Transaction expired because it exceeded the configured time to live `tx-pool-ttl`.")]
     TTLReason,
     #[error("Transaction squeezed out because {0}")]
     SqueezedOut(String),
