@@ -42,7 +42,10 @@ use fuel_core_types::{
 };
 use parking_lot::Mutex as ParkingMutex;
 use std::sync::Arc;
-use tokio::sync::broadcast;
+use tokio::{
+    sync::broadcast,
+    time::MissedTickBehavior,
+};
 use tokio_stream::StreamExt;
 
 pub type Service<P2P, DB> = ServiceRunner<Task<P2P, DB>>;
@@ -141,9 +144,32 @@ where
         let should_continue;
 
         tokio::select! {
+            biased;
+
             _ = watcher.while_started() => {
                 should_continue = false;
             }
+
+            _ = self.ttl_timer.tick() => {
+                let removed = self.shared.txpool.lock().prune_old_txs();
+                for tx in removed {
+                    self.shared.tx_status_sender.send_squeezed_out(tx.id(), Error::TTLReason);
+                }
+
+                self.ttl_timer.reset();
+
+                should_continue = true
+            }
+
+            result = self.committed_block_stream.next() => {
+                if let Some(result) = result {
+                    self.shared.txpool.lock().block_update(&self.shared.tx_status_sender, &result.sealed_block);
+                    should_continue = true;
+                } else {
+                    should_continue = false;
+                }
+            }
+
             new_transaction = self.gossiped_tx_stream.next() => {
                 if let Some(GossipData { data: Some(tx), message_id, peer_id }) = new_transaction {
                     let id = tx.id();
@@ -176,26 +202,6 @@ where
                 } else {
                     should_continue = false;
                 }
-            }
-
-            result = self.committed_block_stream.next() => {
-                if let Some(result) = result {
-                    self.shared.txpool.lock().block_update(&self.shared.tx_status_sender, &result.sealed_block);
-                    should_continue = true;
-                } else {
-                    should_continue = false;
-                }
-            }
-
-            _ = self.ttl_timer.tick() => {
-                let removed = self.shared.txpool.lock().prune_old_txs();
-                for tx in removed {
-                    self.shared.tx_status_sender.send_squeezed_out(tx.id(), Error::TTLReason);
-                }
-
-                self.ttl_timer.reset();
-
-                should_continue = true
             }
         }
         Ok(should_continue)
@@ -345,7 +351,8 @@ where
     let p2p = Arc::new(p2p);
     let gossiped_tx_stream = p2p.gossiped_transaction_events();
     let committed_block_stream = importer.block_events();
-    let ttl_timer = tokio::time::interval(config.transaction_ttl);
+    let mut ttl_timer = tokio::time::interval(config.transaction_ttl);
+    ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Burst);
     let txpool = Arc::new(ParkingMutex::new(TxPool::new(config, db)));
     let task = Task {
         gossiped_tx_stream,

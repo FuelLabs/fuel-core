@@ -361,17 +361,19 @@ where
 
     /// Remove all old transactions from the pool.
     pub fn prune_old_txs(&mut self) -> Vec<ArcPoolTx> {
-        let now = Tai64N::now() + self.config.transaction_ttl;
-        let now = now.0;
+        let now = Tai64N::now() - self.config.transaction_ttl;
+        let deadline = now.0;
 
         let mut result = vec![];
 
         while let Some((oldest_time, oldest_tx)) = self.by_time.lowest() {
             let oldest_time = *oldest_time.value();
             let oldest_tx = oldest_tx.clone();
-            if oldest_time < now {
+            if oldest_time < deadline {
                 let removed = self.remove_inner(&oldest_tx);
                 result.extend(removed.into_iter());
+            } else {
+                break
             }
         }
 
