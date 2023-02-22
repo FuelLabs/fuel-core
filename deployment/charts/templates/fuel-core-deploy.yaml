@@ -1,3 +1,19 @@
+{{- if .Values.app.prometheus.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ template "fuel-core.name" . }}-service-monitor
+  labels:
+    release: {{ .Values.app.prometheus.helm_release_name }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "fuel-core.name" . }}
+  endpoints:
+  - path: /metrics 
+    port: http
+{{- end }}
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
