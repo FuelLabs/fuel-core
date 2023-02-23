@@ -127,6 +127,7 @@ impl MockImporter {
 }
 
 pub struct TestContextBuilder {
+    config: Option<Config>,
     mock_db: MockDb,
     rng: StdRng,
     p2p: Option<MockP2P>,
@@ -142,11 +143,17 @@ impl Default for TestContextBuilder {
 impl TestContextBuilder {
     pub fn new() -> Self {
         Self {
+            config: None,
             mock_db: MockDb::default(),
             rng: StdRng::seed_from_u64(10),
             p2p: None,
             importer: None,
         }
+    }
+
+    pub fn with_config(mut self, config: Config) -> Self {
+        self.config = Some(config);
+        self
     }
 
     pub fn with_importer(&mut self, importer: MockImporter) {
@@ -169,9 +176,10 @@ impl TestContextBuilder {
     pub fn setup_coin(&mut self) -> (Coin, Input) {
         crate::test_helpers::setup_coin(&mut self.rng, Some(&self.mock_db))
     }
+
     pub fn build(self) -> TestContext {
         let rng = RefCell::new(self.rng);
-        let config = Config::default();
+        let config = self.config.unwrap_or_default();
         let mock_db = self.mock_db;
 
         let p2p = self.p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![]));

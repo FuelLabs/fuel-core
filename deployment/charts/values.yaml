@@ -49,4 +49,6 @@ app:
     memory_requests: ${fuel_core_memory_requests}
     cpu_limits: ${fuel_core_cpu_limits}
     memory_limits: ${fuel_core_memory_limits}
-    
+  prometheus:
+    enabled: ${fuel_core_prometheus_enabled}
+    helm_release_name: ${fuel_core_prometheus_helm_release_name}

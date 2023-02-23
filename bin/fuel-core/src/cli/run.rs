@@ -150,6 +150,9 @@ pub struct Command {
     pub max_da_lag: u64,
     #[clap(long = "verify_max_relayer_wait", default_value = "30s", env)]
     pub max_wait_time: humantime::Duration,
+
+    #[clap(long = "tx-pool-ttl", default_value = "5m", env)]
+    pub tx_pool_ttl: humantime::Duration,
 }
 
 impl Command {
@@ -177,6 +180,7 @@ impl Command {
             metrics,
             max_da_lag,
             max_wait_time,
+            tx_pool_ttl,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -242,7 +246,13 @@ impl Command {
             vm: VMConfig {
                 backtrace: vm_backtrace,
             },
-            txpool: TxPoolConfig::new(chain_conf, min_gas_price, utxo_validation),
+            txpool: TxPoolConfig::new(
+                chain_conf,
+                min_gas_price,
+                utxo_validation,
+                metrics,
+                tx_pool_ttl.into(),
+            ),
             block_producer: ProducerConfig {
                 utxo_validation,
                 coinbase_recipient,

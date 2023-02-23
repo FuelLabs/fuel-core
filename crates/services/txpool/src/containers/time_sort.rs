@@ -6,29 +6,40 @@ use crate::{
     types::*,
     TxInfo,
 };
-use std::cmp;
+use core::{
+    cmp,
+    time::Duration,
+};
 
-/// all transactions sorted by min/max price
-pub type PriceSort = Sort<PriceSortKey>;
+/// all transactions sorted by min/max time
+pub type TimeSort = Sort<TimeSortKey>;
 
 #[derive(Clone, Debug)]
-pub struct PriceSortKey {
-    price: GasPrice,
+pub struct TimeSortKey {
+    time: Duration,
+    created: tokio::time::Instant,
     tx_id: TxId,
 }
 
-impl SortableKey for PriceSortKey {
-    type Value = GasPrice;
+impl TimeSortKey {
+    pub fn created(&self) -> &tokio::time::Instant {
+        &self.created
+    }
+}
+
+impl SortableKey for TimeSortKey {
+    type Value = Duration;
 
     fn new(info: &TxInfo) -> Self {
         Self {
-            price: info.tx().price(),
+            time: info.submitted_time(),
+            created: info.created(),
             tx_id: info.tx().id(),
         }
     }
 
     fn value(&self) -> &Self::Value {
-        &self.price
+        &self.time
     }
 
     fn tx_id(&self) -> &TxId {
@@ -36,17 +47,17 @@ impl SortableKey for PriceSortKey {
     }
 }
 
-impl PartialEq for PriceSortKey {
+impl PartialEq for TimeSortKey {
     fn eq(&self, other: &Self) -> bool {
         self.tx_id == other.tx_id
     }
 }
 
-impl Eq for PriceSortKey {}
+impl Eq for TimeSortKey {}
 
-impl PartialOrd for PriceSortKey {
+impl PartialOrd for TimeSortKey {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        match self.price.partial_cmp(&other.price) {
+        match self.time.partial_cmp(&other.time) {
             Some(core::cmp::Ordering::Equal) => {}
             ord => return ord,
         }
@@ -54,9 +65,9 @@ impl PartialOrd for PriceSortKey {
     }
 }
 
-impl Ord for PriceSortKey {
+impl Ord for TimeSortKey {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        let cmp = self.price.cmp(&other.price);
+        let cmp = self.time.cmp(&other.time);
         if cmp == cmp::Ordering::Equal {
             return self.tx_id.cmp(&other.tx_id)
         }

@@ -50,7 +50,6 @@ use futures::{
 use itertools::Itertools;
 use std::{
     iter,
-    ops::Deref,
     sync::Arc,
 };
 use types::Transaction;
@@ -76,8 +75,8 @@ impl TxQuery {
         let id = id.0;
         let txpool = ctx.data_unchecked::<TxPool>();
 
-        if let Some(transaction) = txpool.find_one(id) {
-            Ok(Some(Transaction(transaction.tx().clone().deref().into())))
+        if let Some(transaction) = txpool.transaction(id) {
+            Ok(Some(Transaction(transaction)))
         } else {
             query.transaction(&id).into_api_result()
         }

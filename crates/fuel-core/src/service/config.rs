@@ -13,6 +13,7 @@ use std::{
         SocketAddr,
     },
     path::PathBuf,
+    time::Duration,
 };
 use strum_macros::{
     Display,
@@ -71,11 +72,13 @@ impl Config {
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,
-            txpool: fuel_core_txpool::Config::new(
-                chain_conf,
+            txpool: fuel_core_txpool::Config {
+                chain_config: chain_conf,
                 min_gas_price,
                 utxo_validation,
-            ),
+                transaction_ttl: Duration::from_secs(60 * 100000000),
+                ..fuel_core_txpool::Config::default()
+            },
             block_producer: Default::default(),
             block_executor: Default::default(),
             block_importer: Default::default(),
