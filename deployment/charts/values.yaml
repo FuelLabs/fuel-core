@@ -4,6 +4,7 @@
 
 app:
   name: ${fuel_core_service_name}
+  selector_name: ${fuel_core_selector_name}
   replicas: ${fuel_core_pod_replicas}
   http_port: 80
   target_port: 4000

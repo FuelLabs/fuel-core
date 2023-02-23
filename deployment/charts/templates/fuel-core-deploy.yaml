@@ -8,7 +8,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: {{ template "fuel-core.name" . }}
+      app: {{ .Values.app.selector_name }}
   endpoints:
   - path: /metrics 
     port: http
@@ -42,15 +42,16 @@ kind: Service
 apiVersion: v1
 metadata:
   labels:
-    app: {{ template "fuel-core.name" . }}
+    app: {{ .Values.app.selector_name }}
     chart: {{ template "fuel-core.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
   name: {{ template "fuel-core.name" . }}-lb-service
 spec:
   type: LoadBalancer
+  sessionAffinity: ClientIP
   selector:
-    app: {{ template "fuel-core.name" . }}
+    app: {{ .Values.app.selector_name }}
   ports:
     - name: http
       port: {{ .Values.app.http_port }}
@@ -62,7 +63,7 @@ kind: Service
 apiVersion: v1
 metadata:
   labels:
-    app: {{ template "fuel-core.name" . }}
+    app: {{ .Values.app.selector_name }}
     chart: {{ template "fuel-core.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
@@ -70,7 +71,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    app: {{ template "fuel-core.name" . }}
+    app: {{ .Values.app.selector_name }}
   ports:
     - name: http
       port: {{ .Values.app.http_port }}
@@ -86,14 +87,14 @@ kind: Deployment
 metadata:
   name: {{ template "fuel-core.name" . }}-k8s
   labels:
-    app: {{ template "fuel-core.name" . }}
+    app: {{ .Values.app.selector_name }}
     chart: {{ template "fuel-core.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
 spec:
   selector:
     matchLabels:
-      app: {{ template "fuel-core.name" . }}
+      app: {{ .Values.app.selector_name }}
       release: {{ .Release.Name }}
   replicas: {{ .Values.app.replicas }}
   strategy:
@@ -101,7 +102,7 @@ spec:
   template:
     metadata:
       labels:
-        app: {{ template "fuel-core.name" . }}
+        app: {{ .Values.app.selector_name }}
         release: {{ .Release.Name }}
     spec:
       containers:
