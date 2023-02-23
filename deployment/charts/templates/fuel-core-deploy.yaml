@@ -48,7 +48,7 @@ metadata:
     heritage: {{ .Release.Service }}
   name: {{ template "fuel-core.name" . }}-lb-service
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   sessionAffinity: ClientIP
   selector:
     app: {{ .Values.app.selector_name }}
