@@ -6,11 +6,7 @@ use crate::{
     },
 };
 use fuel_core_storage::{
-    iter::{
-        BoxedIter,
-        IntoBoxedIter,
-        IterDirection,
-    },
+    iter::IterDirection,
     Error as StorageError,
     Result as StorageResult,
 };
@@ -99,7 +95,9 @@ impl<'a> AssetsQuery<'a> {
     /// # Note: The resources of different type are not grouped by the `asset_id`.
     // TODO: Optimize this by creating an index
     //  https://github.com/FuelLabs/fuel-core/issues/588
-    pub fn unspent_resources(&self) -> BoxedIter<StorageResult<Resource>> {
+    pub fn unspent_resources(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<Resource>> + '_ {
         let coin_context = self.database;
         let coins_iter = coin_context
             .owned_coins_ids(self.owner, None, IterDirection::Forward)
@@ -153,17 +151,12 @@ impl<'a> AssetsQuery<'a> {
                 }
             });
 
-        coins_iter
-            .chain(messages_iter.take_while(|_| {
-                self.assets
-                    .as_ref()
-                    .map(|assets| assets.contains(&AssetId::BASE))
-                    .unwrap_or(true)
-            }))
-            .into_boxed()
-            .collect::<Vec<_>>()
-            .into_iter()
-            .into_boxed()
+        coins_iter.chain(messages_iter.take_while(|_| {
+            self.assets
+                .as_ref()
+                .map(|assets| assets.contains(&AssetId::BASE))
+                .unwrap_or(true)
+        }))
     }
 }
 
