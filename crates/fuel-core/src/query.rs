@@ -21,7 +21,19 @@ pub trait QueryData:
     + TransactionQueryData
 {
 }
-impl<D: DatabasePort + 'static> QueryData for D {}
+impl<D> QueryData for D 
+where D:
+     Send
+     + Sync
+     + BalanceQueryData
+     + BlockQueryData
+     + ChainQueryData
+     + CoinQueryData
+     + ContractQueryData
+     + MessageQueryData
+     + MessageProofData
+     + TransactionQueryData
+     {}
 
 // TODO: Remove reexporting of everything
 pub use balance::*;
