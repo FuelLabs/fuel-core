@@ -1,4 +1,3 @@
-use crate::graphql_api::ports::DatabasePort;
 mod balance;
 mod block;
 mod chain;
@@ -21,19 +20,19 @@ pub trait QueryData:
     + TransactionQueryData
 {
 }
-impl<D> QueryData for D 
-where D:
-     Send
-     + Sync
-     + BalanceQueryData
-     + BlockQueryData
-     + ChainQueryData
-     + CoinQueryData
-     + ContractQueryData
-     + MessageQueryData
-     + MessageProofData
-     + TransactionQueryData
-     {}
+impl<D> QueryData for D where
+    D: Send
+        + Sync
+        + BalanceQueryData
+        + BlockQueryData
+        + ChainQueryData
+        + CoinQueryData
+        + ContractQueryData
+        + MessageQueryData
+        + MessageProofData
+        + TransactionQueryData
+{
+}
 
 // TODO: Remove reexporting of everything
 pub use balance::*;

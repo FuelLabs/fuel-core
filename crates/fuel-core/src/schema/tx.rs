@@ -277,9 +277,8 @@ impl<'a> TxnStatusChangeState for StreamState<'a> {
         .into_api_result::<fuel_core_types::services::txpool::TransactionStatus, StorageError>()?
         {
             Some(status) => Ok(Some(status.into())),
-            None => match self.txpool.find_one(id) {
-                Some(transaction_in_pool) => {
-                    let time = transaction_in_pool.submitted_time();
+            None => match self.txpool.submission_time(id) {
+                Some(time) => {
                     Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
                 }
                 _ => Ok(None),
