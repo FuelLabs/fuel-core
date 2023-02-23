@@ -3,7 +3,9 @@ use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
 pub trait ChainQueryData: Send + Sync {
+    
     fn name(&self) -> StorageResult<String>;
+
     fn base_chain_height(&self) -> StorageResult<DaBlockHeight>;
 }
 

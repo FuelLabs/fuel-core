@@ -25,9 +25,13 @@ use fuel_core_types::{
 };
 
 pub trait TransactionQueryData: Send + Sync {
+    
     fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction>;
+
     fn receipts(&self, tx_id: &TxId) -> StorageResult<Vec<Receipt>>;
+
     fn status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
+
     fn owned_transactions(
         &self,
         owner: Address,

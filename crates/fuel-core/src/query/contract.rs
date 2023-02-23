@@ -24,14 +24,19 @@ use fuel_core_types::{
 };
 
 pub trait ContractQueryData: Send + Sync {
+
     fn contract_id(&self, id: ContractId) -> StorageResult<ContractId>;
+
     fn contract_bytecode(&self, id: ContractId) -> StorageResult<Vec<u8>>;
+
     fn contract_salt(&self, id: ContractId) -> StorageResult<Salt>;
+
     fn contract_balance(
         &self,
         contract_id: ContractId,
         asset_id: AssetId,
     ) -> StorageResult<ContractBalance>;
+    
     fn contract_balances(
         &self,
         contract_id: ContractId,
