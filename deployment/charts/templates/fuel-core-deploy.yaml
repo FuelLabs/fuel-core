@@ -49,6 +49,7 @@ metadata:
   name: {{ template "fuel-core.name" . }}-lb-service
 spec:
   type: LoadBalancer
+  sessionAffinity: ClientIP
   selector:
     app: {{ .Values.app.selector_name }}
   ports:
