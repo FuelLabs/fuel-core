@@ -46,6 +46,11 @@ use fuel_core_types::{
     fuel_types,
     tai64::Tai64,
 };
+use crate::fuel_core_graphql_api::service::Database;
+use crate::query::{
+    TransactionQueryData,
+    BlockQueryData,
+};
 
 pub struct Block(pub(crate) CompressedBlock);
 
@@ -89,7 +94,7 @@ impl Block {
     }
 
     async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
-        let query: &Box<dyn QueryData> = ctx.data_unchecked();
+        let query: &Database = ctx.data_unchecked();
         let id = self.0.header().id();
         let consensus = query.consensus(&id)?;
 
@@ -100,7 +105,7 @@ impl Block {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Vec<Transaction>> {
-        let query: &Box<dyn QueryData> = ctx.data_unchecked();
+        let query: &Database = ctx.data_unchecked();
         self.0
             .transactions()
             .iter()
@@ -185,7 +190,7 @@ impl BlockQuery {
         #[graphql(desc = "ID of the block")] id: Option<BlockId>,
         #[graphql(desc = "Height of the block")] height: Option<U64>,
     ) -> async_graphql::Result<Option<Block>> {
-        let data: &Box<dyn QueryData> = ctx.data_unchecked();
+        let data: &Database = ctx.data_unchecked();
         let id = match (id, height) {
             (Some(_), Some(_)) => {
                 return Err(async_graphql::Error::new(
@@ -214,7 +219,7 @@ impl BlockQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<usize, Block, EmptyFields, EmptyFields>> {
-        let db: &Box<dyn QueryData> = ctx.data_unchecked();
+        let db: &Database = ctx.data_unchecked();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
             Ok(blocks_query(db, *start, direction))
         })
@@ -247,7 +252,7 @@ impl HeaderQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<usize, Header, EmptyFields, EmptyFields>> {
-        let db: &Box<dyn QueryData> = ctx.data_unchecked();
+        let db: &Database = ctx.data_unchecked();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
             Ok(blocks_query(db, *start, direction))
         })
@@ -256,7 +261,7 @@ impl HeaderQuery {
 }
 
 fn blocks_query<T>(
-    query: &Box<dyn QueryData>,
+    query: &Database,
     start: Option<usize>,
     direction: IterDirection,
 ) -> BoxedIter<StorageResult<(usize, T)>>
@@ -292,7 +297,7 @@ impl BlockMutation {
         blocks_to_produce: U64,
         time: Option<TimeParameters>,
     ) -> async_graphql::Result<U64> {
-        let query: &Box<dyn QueryData> = ctx.data_unchecked();
+        let query: &Database = ctx.data_unchecked();
         let consensus_module = ctx.data_unchecked::<ConsensusModule>();
         let config = ctx.data_unchecked::<GraphQLConfig>().clone();
 

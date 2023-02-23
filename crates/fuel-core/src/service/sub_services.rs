@@ -4,7 +4,6 @@ use super::adapters::P2PAdapter;
 use crate::{
     database::Database,
     fuel_core_graphql_api::Config as GraphQLConfig,
-    query::QueryData,
     schema::{
         build_schema,
         dap,
@@ -160,8 +159,6 @@ pub fn init_sub_services(
     )
     .data(database.clone());
 
-    let query_data: Box<dyn QueryData> = Box::new(database.clone());
-
     let graph_ql = crate::fuel_core_graphql_api::service::new_service(
         GraphQLConfig {
             addr: config.addr,
@@ -175,7 +172,6 @@ pub fn init_sub_services(
             consensus_key: config.consensus_key.clone(),
         },
         schema,
-        query_data,
         Box::new(database.clone()),
         Box::new(tx_pool_adapter),
         Box::new(producer_adapter),

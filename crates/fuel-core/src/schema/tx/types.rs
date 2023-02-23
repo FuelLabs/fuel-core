@@ -5,8 +5,12 @@ use super::{
 };
 use crate::{
     fuel_core_graphql_api::{
-        service::TxPool,
+        service::{
+            Database,    
+            TxPool,
+        },
         IntoApiResult,
+        
     },
     query::QueryData,
     schema::{
@@ -61,6 +65,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
+use crate::query::{BlockQueryData, TransactionQueryData};
 
 pub struct ProgramState {
     return_type: ReturnType,
@@ -136,7 +141,7 @@ pub struct SuccessStatus {
 #[Object]
 impl SuccessStatus {
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query: &Box<dyn QueryData> = ctx.data_unchecked();
+        let query: &Database = ctx.data_unchecked();
         let block = query.block(&self.block_id)?;
         Ok(block.into())
     }
@@ -161,7 +166,7 @@ pub struct FailureStatus {
 #[Object]
 impl FailureStatus {
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query: &Box<dyn QueryData> = ctx.data_unchecked();
+        let query: &Database = ctx.data_unchecked();
         let block = query.block(&self.block_id)?;
         Ok(block.into())
     }
@@ -393,7 +398,7 @@ impl Transaction {
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<TransactionStatus>> {
         let id = self.0.id();
-        let query: &Box<dyn QueryData> = ctx.data_unchecked();
+        let query: &Database = ctx.data_unchecked();
         let txpool = ctx.data_unchecked::<TxPool>();
         match query
             .status(&id)
@@ -413,7 +418,7 @@ impl Transaction {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<Vec<Receipt>>> {
-        let query: &Box<dyn QueryData> = ctx.data_unchecked();
+        let query: &Database = ctx.data_unchecked();
         let receipts = query
             .receipts(&self.0.id())
             .into_api_result::<Vec<_>, async_graphql::Error>()?;

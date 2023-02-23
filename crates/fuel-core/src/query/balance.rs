@@ -38,7 +38,7 @@ pub trait BalanceQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<AddressBalance>>;
 }
 
-impl<D: DatabasePort> BalanceQueryData for D {
+impl<D: DatabasePort + ?Sized> BalanceQueryData for D {
     fn balance(
         &self,
         owner: Address,
@@ -49,7 +49,7 @@ impl<D: DatabasePort> BalanceQueryData for D {
             &owner,
             &AssetSpendTarget::new(asset_id, u64::MAX, u64::MAX),
             None,
-            db,
+            &db,
         )
         .unspent_resources()
         .map(|res| res.map(|resource| *resource.amount()))
@@ -77,7 +77,7 @@ impl<D: DatabasePort> BalanceQueryData for D {
         let mut amounts_per_asset = HashMap::new();
         let mut errors = vec![];
 
-        for resource in AssetsQuery::new(&owner, None, None, self).unspent_resources() {
+        for resource in AssetsQuery::new(&owner, None, None, &self).unspent_resources() {
             match resource {
                 Ok(resource) => {
                     *amounts_per_asset.entry(*resource.asset_id()).or_default() +=

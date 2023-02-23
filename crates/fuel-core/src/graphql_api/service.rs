@@ -6,7 +6,6 @@ use crate::{
         TxPoolPort,
     },
     graphql_api::Config,
-    query::QueryData,
     schema::{
         CoreSchema,
         CoreSchemaBuilder,
@@ -146,7 +145,6 @@ impl RunnableTask for Task {
 pub fn new_service(
     config: Config,
     schema: CoreSchemaBuilder,
-    query_data: Box<dyn QueryData>,
     database: Database,
     txpool: TxPool,
     producer: BlockProducer,
@@ -156,7 +154,6 @@ pub fn new_service(
 
     let schema = schema
         .data(config)
-        .data(query_data)
         .data(database)
         .data(txpool)
         .data(producer)

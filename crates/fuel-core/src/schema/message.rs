@@ -9,7 +9,7 @@ use super::{
         U64,
     },
 };
-use crate::query::QueryData;
+use crate::query::MessageQueryData;
 use anyhow::anyhow;
 use async_graphql::{
     connection::{
@@ -22,6 +22,7 @@ use async_graphql::{
 };
 use fuel_core_storage::iter::IntoBoxedIter;
 use fuel_core_types::entities;
+use crate::fuel_core_graphql_api::service::Database;
 
 pub struct Message(pub(crate) entities::message::Message);
 
@@ -82,7 +83,7 @@ impl MessageQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<MessageId, Message, EmptyFields, EmptyFields>>
     {
-        let query: &Box<dyn QueryData> = ctx.data_unchecked();
+        let query: &Database = ctx.data_unchecked();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
             let start = *start;
 
@@ -121,7 +122,7 @@ impl MessageQuery {
         transaction_id: TransactionId,
         message_id: MessageId,
     ) -> async_graphql::Result<Option<MessageProof>> {
-        let data: &Box<dyn QueryData> = ctx.data_unchecked();
+        let data: &Database = ctx.data_unchecked();
         Ok(
             crate::query::message_proof(data, transaction_id.into(), message_id.into())?
                 .map(MessageProof),

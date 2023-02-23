@@ -1,6 +1,5 @@
 use crate::{
     fuel_core_graphql_api::Config as GraphQLConfig,
-    query::QueryData,
     schema::{
         block::Block,
         scalars::U64,
@@ -11,6 +10,8 @@ use async_graphql::{
     Object,
 };
 use fuel_core_types::fuel_tx;
+use crate::fuel_core_graphql_api::service::Database;
+use crate::query::{ChainQueryData, BlockQueryData};
 
 pub struct ChainInfo;
 
@@ -74,19 +75,19 @@ impl ConsensusParameters {
 #[Object]
 impl ChainInfo {
     async fn name(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
-        let data: &Box<dyn QueryData> = ctx.data_unchecked();
+        let data: &Database = ctx.data_unchecked();
         Ok(data.name()?)
     }
 
     async fn latest_block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query: &Box<dyn QueryData> = ctx.data_unchecked();
+        let query: &Database = ctx.data_unchecked();
 
         let latest_block = query.latest_block()?.into();
         Ok(latest_block)
     }
 
     async fn base_chain_height(&self, ctx: &Context<'_>) -> U64 {
-        let query: &Box<dyn QueryData> = ctx.data_unchecked();
+        let query: &Database = ctx.data_unchecked();
 
         let height = query.latest_block_height().unwrap_or_default();
 

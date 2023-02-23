@@ -42,7 +42,7 @@ pub trait BlockQueryData: Send + Sync {
     fn consensus(&self, id: &BlockId) -> StorageResult<Consensus>;
 }
 
-impl<D: DatabasePort> BlockQueryData for D {
+impl<D: DatabasePort + ?Sized> BlockQueryData for D {
     fn block(&self, id: &BlockId) -> StorageResult<CompressedBlock> {
         let block = self
             .storage::<FuelBlocks>()

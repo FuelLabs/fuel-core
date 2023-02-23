@@ -143,7 +143,7 @@ pub trait MessageProofData: Send + Sync {
     fn msg_receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>>;
 }
 
-impl<D: DatabasePort> MessageProofData for D {
+impl<D: DatabasePort + ?Sized> MessageProofData for D {
     fn transaction_status(
         &self,
         transaction_id: &TxId,

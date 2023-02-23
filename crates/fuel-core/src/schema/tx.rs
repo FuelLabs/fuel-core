@@ -9,7 +9,7 @@ use crate::{
     },
     query::{
         transaction_status_change,
-        QueryData,
+        BlockQueryData,
         TransactionQueryData,
         TxnStatusChangeState,
     },
@@ -71,7 +71,7 @@ impl TxQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> async_graphql::Result<Option<Transaction>> {
-        let query: &Box<dyn QueryData> = ctx.data_unchecked();
+        let query: &Database = ctx.data_unchecked();
         let id = id.0;
         let txpool = ctx.data_unchecked::<TxPool>();
 
@@ -92,8 +92,8 @@ impl TxQuery {
     ) -> async_graphql::Result<
         Connection<SortedTxCursor, Transaction, EmptyFields, EmptyFields>,
     > {
-        let db_query: &Box<dyn QueryData> = ctx.data_unchecked();
-        let tx_query: &Box<dyn QueryData> = ctx.data_unchecked();
+        let db_query: &Database = ctx.data_unchecked();
+        let tx_query: &Database = ctx.data_unchecked();
         crate::schema::query_pagination(
             after,
             before,
@@ -161,7 +161,7 @@ impl TxQuery {
             )
         }
 
-        let query: &Box<dyn QueryData> = ctx.data_unchecked();
+        let query: &Database = ctx.data_unchecked();
         let owner = fuel_types::Address::from(owner);
 
         crate::schema::query_pagination(

@@ -44,7 +44,7 @@ pub trait ContractQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<ContractBalance>>;
 }
 
-impl<D: DatabasePort> ContractQueryData for D {
+impl<D: DatabasePort + ?Sized> ContractQueryData for D {
     fn contract_id(&self, id: ContractId) -> StorageResult<ContractId> {
         let contract_exists = self.storage::<ContractsRawCode>().contains_key(&id)?;
         if contract_exists {

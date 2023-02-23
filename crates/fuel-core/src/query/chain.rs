@@ -8,7 +8,7 @@ pub trait ChainQueryData: Send + Sync {
     fn base_chain_height(&self) -> StorageResult<DaBlockHeight>;
 }
 
-impl<D: DatabasePort> ChainQueryData for D {
+impl<D: DatabasePort + ?Sized> ChainQueryData for D {
     fn name(&self) -> StorageResult<String> {
         self.chain_name()
     }
