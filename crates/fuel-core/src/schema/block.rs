@@ -8,7 +8,6 @@ use crate::{
         Config as GraphQLConfig,
     },
     graphql_api::IntoApiResult,
-    query::QueryData,
     schema::{
         scalars::{
             BlockId,

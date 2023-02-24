@@ -1,5 +1,4 @@
 use crate::{
-    query::QueryData,
     schema::scalars::{
         Address,
         AssetId,

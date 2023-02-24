@@ -1,5 +1,7 @@
 use crate::{
-    graphql_api::ports::DatabasePort,
+    graphql_api::{
+        service::Database,
+    },
     query::{
         CoinQueryData,
         MessageQueryData,
@@ -10,6 +12,7 @@ use fuel_core_storage::{
     Error as StorageError,
     Result as StorageResult,
 };
+use crate::query::balance::DatabasePort;
 use fuel_core_types::{
     entities::{
         coin::CoinStatus,
@@ -98,7 +101,7 @@ impl<'a> AssetsQuery<'a> {
     pub fn unspent_resources(
         &self,
     ) -> impl Iterator<Item = StorageResult<Resource>> + '_ {
-        let coin_context = self.database;
+        let coin_context = &self.database;
         let coins_iter = coin_context
             .owned_coins_ids(self.owner, None, IterDirection::Forward)
             .filter_ok(|id| {

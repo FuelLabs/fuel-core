@@ -7,33 +7,6 @@ mod message;
 mod subscriptions;
 mod tx;
 
-pub trait QueryData:
-    Send
-    + Sync
-    + BalanceQueryData
-    + BlockQueryData
-    + ChainQueryData
-    + CoinQueryData
-    + ContractQueryData
-    + MessageQueryData
-    + MessageProofData
-    + TransactionQueryData
-{
-}
-impl<D> QueryData for D where
-    D: Send
-        + Sync
-        + BalanceQueryData
-        + BlockQueryData
-        + ChainQueryData
-        + CoinQueryData
-        + ContractQueryData
-        + MessageQueryData
-        + MessageProofData
-        + TransactionQueryData
-{
-}
-
 // TODO: Remove reexporting of everything
 pub use balance::*;
 pub use block::*;

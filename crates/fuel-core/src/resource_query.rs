@@ -4,9 +4,10 @@ use crate::{
         AssetQuery,
         AssetSpendTarget,
         Exclude,
-    },
+    }, graphql_api::ports::DatabasePort,
 };
 use core::mem::swap;
+use async_graphql::Data;
 use fuel_core_storage::Error as StorageError;
 use fuel_core_types::{
     entities::resource::{
@@ -92,10 +93,9 @@ impl SpendQuery {
     }
 
     /// Return [`AssetQuery`]s.
-    pub fn asset_queries<'a>(&'a self, db: &'a Database) -> Vec<AssetQuery<'a>> {
+    pub fn asset_queries<'a>(&self, db: &'a Database) -> Vec<AssetQuery> {
         let db = db.to_owned();
         let db = db.as_ref();
-
         self.query_per_asset
             .iter()
             .map(|asset| AssetQuery::new(&self.owner, asset, Some(&self.exclude), db))
