@@ -1,4 +1,6 @@
 use crate::{
+    fuel_core_graphql_api::service::Database,
+    query::BalanceQueryData,
     schema::scalars::{
         Address,
         AssetId,
@@ -16,8 +18,6 @@ use async_graphql::{
     Object,
 };
 use fuel_core_types::services::graphql_api;
-use crate::fuel_core_graphql_api::service::Database;
-use crate::query::BalanceQueryData;
 
 pub struct Balance(graphql_api::AddressBalance);
 

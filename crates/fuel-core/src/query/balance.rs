@@ -38,7 +38,7 @@ pub trait BalanceQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<AddressBalance>>;
 }
 
-impl<D: DatabasePort + ?Sized> BalanceQueryData for D {
+impl BalanceQueryData for Box<dyn DatabasePort> {
     fn balance(
         &self,
         owner: Address,

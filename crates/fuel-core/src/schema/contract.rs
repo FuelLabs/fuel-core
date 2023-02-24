@@ -1,5 +1,9 @@
 use crate::{
-    fuel_core_graphql_api::IntoApiResult,
+    fuel_core_graphql_api::{
+        service::Database,
+        IntoApiResult,
+    },
+    query::ContractQueryData,
     schema::scalars::{
         AssetId,
         ContractId,
@@ -22,8 +26,6 @@ use fuel_core_types::{
     fuel_types,
     services::graphql_api,
 };
-use crate::fuel_core_graphql_api::service::Database;
-use crate::query::ContractQueryData;
 
 pub struct Contract(pub(crate) fuel_types::ContractId);
 

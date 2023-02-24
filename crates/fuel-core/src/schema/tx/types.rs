@@ -6,11 +6,14 @@ use super::{
 use crate::{
     fuel_core_graphql_api::{
         service::{
-            Database,    
+            Database,
             TxPool,
         },
         IntoApiResult,
-        
+    },
+    query::{
+        BlockQueryData,
+        TransactionQueryData,
     },
     schema::{
         block::Block,
@@ -64,7 +67,6 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use crate::query::{BlockQueryData, TransactionQueryData};
 
 pub struct ProgramState {
     return_type: ReturnType,

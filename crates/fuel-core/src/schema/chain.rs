@@ -1,5 +1,12 @@
 use crate::{
-    fuel_core_graphql_api::Config as GraphQLConfig,
+    fuel_core_graphql_api::{
+        service::Database,
+        Config as GraphQLConfig,
+    },
+    query::{
+        BlockQueryData,
+        ChainQueryData,
+    },
     schema::{
         block::Block,
         scalars::U64,
@@ -10,8 +17,6 @@ use async_graphql::{
     Object,
 };
 use fuel_core_types::fuel_tx;
-use crate::fuel_core_graphql_api::service::Database;
-use crate::query::{ChainQueryData, BlockQueryData};
 
 pub struct ChainInfo;
 

@@ -1,5 +1,9 @@
 use crate::{
-    fuel_core_graphql_api::IntoApiResult,
+    fuel_core_graphql_api::{
+        service::Database,
+        IntoApiResult,
+    },
+    query::CoinQueryData,
     schema::scalars::{
         Address,
         AssetId,
@@ -25,8 +29,6 @@ use fuel_core_types::{
     },
     fuel_tx,
 };
-use crate::fuel_core_graphql_api::service::Database;
-use crate::query::CoinQueryData;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 #[graphql(remote = "CoinStatusModel")]

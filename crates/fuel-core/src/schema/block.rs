@@ -4,10 +4,17 @@ use super::scalars::{
 };
 use crate::{
     fuel_core_graphql_api::{
-        service::ConsensusModule,
+        service::{
+            ConsensusModule,
+            Database,
+        },
         Config as GraphQLConfig,
     },
     graphql_api::IntoApiResult,
+    query::{
+        BlockQueryData,
+        TransactionQueryData,
+    },
     schema::{
         scalars::{
             BlockId,
@@ -44,11 +51,6 @@ use fuel_core_types::{
     },
     fuel_types,
     tai64::Tai64,
-};
-use crate::fuel_core_graphql_api::service::Database;
-use crate::query::{
-    TransactionQueryData,
-    BlockQueryData,
 };
 
 pub struct Block(pub(crate) CompressedBlock);

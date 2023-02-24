@@ -9,7 +9,10 @@ use super::{
         U64,
     },
 };
-use crate::query::MessageQueryData;
+use crate::{
+    fuel_core_graphql_api::service::Database,
+    query::MessageQueryData,
+};
 use anyhow::anyhow;
 use async_graphql::{
     connection::{
@@ -22,7 +25,6 @@ use async_graphql::{
 };
 use fuel_core_storage::iter::IntoBoxedIter;
 use fuel_core_types::entities;
-use crate::fuel_core_graphql_api::service::Database;
 
 pub struct Message(pub(crate) entities::message::Message);
 
