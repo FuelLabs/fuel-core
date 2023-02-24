@@ -135,13 +135,6 @@ pub trait MessageProofData: Send + Sync {
     fn transactions_on_block(&self, block_id: &BlockId) -> StorageResult<Vec<Bytes32>>;
     /// Get the signature of a fuel block.
     fn signature(&self, block_id: &BlockId) -> StorageResult<Signature>;
-
-    // Testing methods only which should be removed in subsequent interface changes, as they just bind to other query methods
-    fn msg_block(&self, block_id: &BlockId) -> StorageResult<CompressedBlock>;
-
-    fn msg_transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction>;
-
-    fn msg_receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>>;
 }
 
 impl<D: DatabasePort + ?Sized> MessageProofData for D {
@@ -165,18 +158,6 @@ impl<D: DatabasePort + ?Sized> MessageProofData for D {
             Consensus::PoA(c) => Ok(c.signature),
         }
     }
-
-    fn msg_receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>> {
-        crate::query::tx::TransactionQueryData::receipts(self, transaction_id)
-    }
-
-    fn msg_transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction> {
-        crate::query::tx::TransactionQueryData::transaction(self, transaction_id)
-    }
-
-    fn msg_block(&self, block_id: &BlockId) -> StorageResult<CompressedBlock> {
-        crate::query::block::BlockQueryData::block(self, block_id)
-    }
 }
 
 /// Generate an output proof.
@@ -188,7 +169,7 @@ pub fn message_proof(
 ) -> StorageResult<Option<MessageProof>> {
     // Check if the receipts for this transaction actually contain this message id or exit.
     let receipt = data
-        .msg_receipts(&transaction_id)?
+        .receipts(&transaction_id)?
         .into_iter()
         .find_map(|r| match r {
             Receipt::MessageOut {
@@ -226,7 +207,7 @@ pub fn message_proof(
         .filter_map(|id| {
             // Filter out transactions that contain no messages
             // and get the receipts for the rest.
-            let result = data.msg_transaction(&id).and_then(|tx| {
+            let result = data.transaction(&id).and_then(|tx| {
                 let outputs = match &tx {
                     Transaction::Script(script) => script.outputs(),
                     Transaction::Create(create) => create.outputs(),
@@ -235,7 +216,7 @@ pub fn message_proof(
                 outputs
                     .iter()
                     .any(Output::is_message)
-                    .then(|| data.msg_receipts(&id))
+                    .then(|| data.receipts(&id))
                     .transpose()
             });
             result.transpose()
@@ -288,7 +269,7 @@ pub fn message_proof(
 
             // Get the fuel block.
             let header = match data
-                .msg_block(&block_id)
+                .block(&block_id)
                 .into_api_result::<CompressedBlock, StorageError>()?
             {
                 Some(t) => t.into_inner().0,

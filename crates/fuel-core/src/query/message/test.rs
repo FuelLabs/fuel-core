@@ -101,7 +101,7 @@ async fn can_build_message_proof() {
     let mut data = MockMessageProofData::new();
     let mut count = 0;
 
-    data.expect_msg_receipts().returning(move |txn_id| {
+    data.expect_receipts().returning(move |txn_id| {
         if *txn_id == transaction_id {
             Ok(receipts.to_vec())
         } else {
@@ -124,7 +124,7 @@ async fn can_build_message_proof() {
         .with(eq(BlockId::default()))
         .returning(|_| Ok(TXNS.to_vec()));
 
-    data.expect_msg_transaction().returning(move |txn_id| {
+    data.expect_transaction().returning(move |txn_id| {
         let tx = TXNS
             .iter()
             .find(|t| *t == txn_id)
@@ -155,7 +155,7 @@ async fn can_build_message_proof() {
             generated: Default::default(),
         },
     };
-    data.expect_msg_block()
+    data.msg_block()
         .once()
         .with(eq(BlockId::default()))
         .returning({
@@ -169,7 +169,7 @@ async fn can_build_message_proof() {
         });
 
     let data: Box<dyn MessageProofData> = Box::new(data);
-    let p = message_proof(&data, transaction_id, message_id)
+    let p = message_proof(data, transaction_id, message_id)
         .unwrap()
         .unwrap();
     assert_eq!(p.message_id(), message_id);
