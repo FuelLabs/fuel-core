@@ -2,6 +2,7 @@ use crate::{
     fuel_core_graphql_api::{
         ports::DatabasePort,
         IntoApiResult,
+        service::Database,
     },
     query::{
         BlockQueryData,
@@ -180,9 +181,8 @@ impl<D: DatabasePort + ?Sized> MessageProofData for D {
 
 /// Generate an output proof.
 // TODO: Do we want to return `Option` here?
-#[allow(clippy::borrowed_box)]
-pub fn message_proof<T: MessageProofData + ?Sized>(
-    data: &Box<T>,
+pub fn message_proof(
+    data: &Database,
     transaction_id: Bytes32,
     message_id: MessageId,
 ) -> StorageResult<Option<MessageProof>> {
