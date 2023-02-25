@@ -21,7 +21,6 @@ anyhow = { workspace = true }
 fuel-core-types = { workspace = true }
 fuel-vm-private = { workspace = true }
 mockall = { workspace = true, optional = true }
-rocksdb = { version = "0.19", default-features = false }
 thiserror = { workspace = true }
 
 [features]

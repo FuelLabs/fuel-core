@@ -52,7 +52,6 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use mockall::automock;
 use std::sync::Arc;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 

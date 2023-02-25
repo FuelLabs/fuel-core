@@ -1,6 +1,3 @@
-#![allow(clippy::borrowed_box)]
-// Boxes are used to house type objects, but when passed through the context they become borrowed
-// so avoiding this lint just results in double references, which is the same as a box
 use anyhow::anyhow;
 use async_graphql::{
     connection::{
@@ -21,6 +18,18 @@ use fuel_core_storage::{
     Result as StorageResult,
 };
 use itertools::Itertools;
+
+struct SchemaIterDirection(fuel_core_storage::iter::IterDirection);
+
+impl From<SchemaIterDirection> for rocksdb::Direction {
+    fn from(d: SchemaIterDirection) -> Self {
+        let d = d.0;
+        match d {
+            IterDirection::Forward => rocksdb::Direction::Forward,
+            IterDirection::Reverse => rocksdb::Direction::Reverse,
+        }
+    }
+}
 
 pub mod balance;
 pub mod block;

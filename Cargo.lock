@@ -2672,7 +2672,6 @@ dependencies = [
  "fuel-core-types",
  "fuel-vm",
  "mockall",
- "rocksdb",
  "thiserror",
 ]
 

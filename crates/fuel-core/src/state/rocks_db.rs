@@ -1,6 +1,7 @@
 use crate::{
     database::{
         Column,
+        DatabaseIterDirection,
         Error as DatabaseError,
         Result as DatabaseResult,
     },
@@ -213,7 +214,8 @@ impl KeyValueStore for RocksDb {
             }
             (Some(prefix), None) => {
                 // start iterating in a certain direction within the keyspace
-                let iter_mode = IteratorMode::From(prefix, direction.into());
+                let iter_mode =
+                    IteratorMode::From(prefix, DatabaseIterDirection(direction).into());
                 let mut opts = ReadOptions::default();
                 opts.set_prefix_same_as_start(true);
 
@@ -221,7 +223,8 @@ impl KeyValueStore for RocksDb {
             }
             (None, Some(start)) => {
                 // start iterating in a certain direction from the start key
-                let iter_mode = IteratorMode::From(start, direction.into());
+                let iter_mode =
+                    IteratorMode::From(start, DatabaseIterDirection(direction).into());
                 self._iter_all(column, ReadOptions::default(), iter_mode)
                     .into_boxed()
             }
@@ -235,7 +238,8 @@ impl KeyValueStore for RocksDb {
                 // start iterating in a certain direction from the start key
                 // and end iterating when we've gone outside the prefix
                 let prefix = prefix.to_vec();
-                let iter_mode = IteratorMode::From(start, direction.into());
+                let iter_mode =
+                    IteratorMode::From(start, DatabaseIterDirection(direction).into());
                 self._iter_all(column, ReadOptions::default(), iter_mode)
                     .take_while(move |item| {
                         if let Ok((key, _)) = item {

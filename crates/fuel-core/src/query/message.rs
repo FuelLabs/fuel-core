@@ -1,8 +1,8 @@
 use crate::{
     fuel_core_graphql_api::{
         ports::DatabasePort,
-        IntoApiResult,
         service::Database,
+        IntoApiResult,
     },
     query::{
         BlockQueryData,

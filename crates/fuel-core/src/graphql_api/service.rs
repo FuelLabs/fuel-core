@@ -1,8 +1,8 @@
 use crate::{
     fuel_core_graphql_api::ports::{
-        DatabasePort,
         BlockProducerPort,
         ConsensusModulePort,
+        DatabasePort,
         TxPoolPort,
     },
     graphql_api::Config,

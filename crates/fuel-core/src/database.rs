@@ -369,3 +369,15 @@ impl ChainConfigDb for Database {
         Self::latest_height(self)
     }
 }
+
+pub struct DatabaseIterDirection(pub fuel_core_storage::iter::IterDirection);
+
+impl From<DatabaseIterDirection> for rocksdb::Direction {
+    fn from(d: DatabaseIterDirection) -> Self {
+        let d = d.0;
+        match d {
+            IterDirection::Forward => rocksdb::Direction::Forward,
+            IterDirection::Reverse => rocksdb::Direction::Reverse,
+        }
+    }
+}

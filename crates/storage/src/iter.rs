@@ -44,12 +44,3 @@ impl Default for IterDirection {
         Self::Forward
     }
 }
-
-impl From<IterDirection> for rocksdb::Direction {
-    fn from(d: IterDirection) -> Self {
-        match d {
-            IterDirection::Forward => rocksdb::Direction::Forward,
-            IterDirection::Reverse => rocksdb::Direction::Reverse,
-        }
-    }
-}
