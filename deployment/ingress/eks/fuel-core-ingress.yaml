@@ -20,7 +20,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: ${fuel_core_service_name}-service
+                name: ${fuel_core_ingress_service_name}
                 port:
                   number: ${fuel_core_ingress_http_port}
   tls:

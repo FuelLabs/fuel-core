@@ -10,22 +10,35 @@ pub(crate) const DB_VERSION_KEY: &[u8] = b"version";
 pub(crate) const CHAIN_NAME_KEY: &[u8] = b"chain_name";
 
 /// Can be used to perform migrations in the future.
-pub(crate) const DB_VERSION: u32 = 0;
+pub(crate) const DB_VERSION: u32 = 0x00;
 
 impl Database {
+    /// Ensures the database is initialized and that the database version is correct
     pub fn init(&self, config: &ChainConfig) -> DatabaseResult<()> {
-        // check only for one field if it initialized or not.
-        self.insert(CHAIN_NAME_KEY, Column::Metadata, &config.chain_name)
-            .and_then(|v: Option<String>| {
-                if v.is_some() {
-                    Err(DatabaseError::ChainAlreadyInitialized)
-                } else {
-                    Ok(())
-                }
-            })?;
+        // initialize chain name if not set
+        if self.get_chain_name()?.is_none() {
+            self.insert(CHAIN_NAME_KEY, Column::Metadata, &config.chain_name)
+                .and_then(|v: Option<String>| {
+                    if v.is_some() {
+                        Err(DatabaseError::ChainAlreadyInitialized)
+                    } else {
+                        Ok(())
+                    }
+                })?;
+        }
 
-        let _: Option<u32> =
-            self.insert(DB_VERSION_KEY, Column::Metadata, &DB_VERSION)?;
+        // Ensure the database version is correct
+        if let Some(version) = self.get::<u32>(DB_VERSION_KEY, Column::Metadata)? {
+            if version != DB_VERSION {
+                return Err(DatabaseError::InvalidDatabaseVersion {
+                    found: version,
+                    expected: DB_VERSION,
+                })?
+            }
+        } else {
+            let _: Option<u32> =
+                self.insert(DB_VERSION_KEY, Column::Metadata, &DB_VERSION)?;
+        }
         Ok(())
     }
 

@@ -7,6 +7,7 @@ use crate::{
     transaction_selector::select_transactions,
     Config,
     Error as TxPoolError,
+    TxInfo,
     TxPool,
 };
 use fuel_core_services::{
@@ -33,15 +34,18 @@ use fuel_core_types::{
         },
         txpool::{
             ArcPoolTx,
+            Error,
             InsertionResult,
-            TxInfo,
             TxStatus,
         },
     },
 };
 use parking_lot::Mutex as ParkingMutex;
 use std::sync::Arc;
-use tokio::sync::broadcast;
+use tokio::{
+    sync::broadcast,
+    time::MissedTickBehavior,
+};
 use tokio_stream::StreamExt;
 
 pub type Service<P2P, DB> = ServiceRunner<Task<P2P, DB>>;
@@ -107,6 +111,7 @@ pub struct Task<P2P, DB> {
     gossiped_tx_stream: BoxStream<TransactionGossipData>,
     committed_block_stream: BoxStream<Arc<ImportResult>>,
     shared: SharedState<P2P, DB>,
+    ttl_timer: tokio::time::Interval,
 }
 
 #[async_trait::async_trait]
@@ -124,7 +129,8 @@ where
         self.shared.clone()
     }
 
-    async fn into_task(self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
+    async fn into_task(mut self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
+        self.ttl_timer.reset();
         Ok(self)
     }
 }
@@ -137,10 +143,32 @@ where
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
+
         tokio::select! {
+            biased;
+
             _ = watcher.while_started() => {
                 should_continue = false;
             }
+
+            _ = self.ttl_timer.tick() => {
+                let removed = self.shared.txpool.lock().prune_old_txs();
+                for tx in removed {
+                    self.shared.tx_status_sender.send_squeezed_out(tx.id(), Error::TTLReason);
+                }
+
+                should_continue = true
+            }
+
+            result = self.committed_block_stream.next() => {
+                if let Some(result) = result {
+                    self.shared.txpool.lock().block_update(&self.shared.tx_status_sender, &result.sealed_block);
+                    should_continue = true;
+                } else {
+                    should_continue = false;
+                }
+            }
+
             new_transaction = self.gossiped_tx_stream.next() => {
                 if let Some(GossipData { data: Some(tx), message_id, peer_id }) = new_transaction {
                     let id = tx.id();
@@ -174,17 +202,16 @@ where
                     should_continue = false;
                 }
             }
-
-            result = self.committed_block_stream.next() => {
-                if let Some(result) = result {
-                    self.shared.txpool.lock().block_update(&self.shared.tx_status_sender, &result.sealed_block);
-                    should_continue = true;
-                } else {
-                    should_continue = false;
-                }
-            }
         }
         Ok(should_continue)
+    }
+
+    async fn shutdown(self) -> anyhow::Result<()> {
+        // Nothing to shut down because we don't have any temporary state that should be dumped,
+        // and we don't spawn any sub-tasks that we need to finish or await.
+        // Maybe we will save and load the previous list of transactions in the future to
+        // avoid losing them.
+        Ok(())
     }
 }
 
@@ -323,6 +350,8 @@ where
     let p2p = Arc::new(p2p);
     let gossiped_tx_stream = p2p.gossiped_transaction_events();
     let committed_block_stream = importer.block_events();
+    let mut ttl_timer = tokio::time::interval(config.transaction_ttl);
+    ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let txpool = Arc::new(ParkingMutex::new(TxPool::new(config, db)));
     let task = Task {
         gossiped_tx_stream,
@@ -332,6 +361,7 @@ where
             txpool,
             p2p,
         },
+        ttl_timer,
     };
 
     Service::new(task)

@@ -15,11 +15,11 @@ use crate::{
         DryRunExecution,
         TxPoolPort,
     },
-    service::sub_services::TxPoolService,
+    service::adapters::TxPoolAdapter,
     state::IterDirection,
 };
-use anyhow::Result;
 use async_trait::async_trait;
+use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -29,9 +29,12 @@ use fuel_core_storage::{
     Error as StorageError,
     Result as StorageResult,
 };
-use fuel_core_txpool::types::{
-    ContractId,
-    TxId,
+use fuel_core_txpool::{
+    service::TxUpdate,
+    types::{
+        ContractId,
+        TxId,
+    },
 };
 use fuel_core_types::{
     blockchain::primitives::{
@@ -56,8 +59,12 @@ use fuel_core_types::{
             TransactionStatus,
         },
     },
+    tai64::Tai64,
 };
-use std::sync::Arc;
+use std::{
+    ops::Deref,
+    sync::Arc,
+};
 use tokio_stream::wrappers::{
     errors::BroadcastStreamRecvError,
     BroadcastStream,
@@ -198,21 +205,27 @@ impl DatabaseChain for Database {
 
 impl DatabasePort for Database {}
 
-impl TxPoolPort for TxPoolService {
+impl TxPoolPort for TxPoolAdapter {
+    fn transaction(&self, id: TxId) -> Option<Transaction> {
+        self.service
+            .find_one(id)
+            .map(|info| info.tx().clone().deref().into())
+    }
+
+    fn submission_time(&self, id: TxId) -> Option<Tai64> {
+        self.service
+            .find_one(id)
+            .map(|info| Tai64::from_unix(info.submitted_time().as_secs() as i64))
+    }
+
     fn insert(&self, txs: Vec<Arc<Transaction>>) -> Vec<anyhow::Result<InsertionResult>> {
-        self.shared.insert(txs)
+        self.service.insert(txs)
     }
 
     fn tx_update_subscribe(
         &self,
-    ) -> fuel_core_services::stream::BoxStream<
-        Result<fuel_core_txpool::service::TxUpdate, BroadcastStreamRecvError>,
-    > {
-        Box::pin(BroadcastStream::new(self.shared.tx_update_subscribe()))
-    }
-
-    fn find_one(&self, id: TxId) -> Option<fuel_core_types::services::txpool::TxInfo> {
-        self.shared.find_one(id)
+    ) -> BoxStream<Result<TxUpdate, BroadcastStreamRecvError>> {
+        Box::pin(BroadcastStream::new(self.service.tx_update_subscribe()))
     }
 }
 
@@ -223,7 +236,7 @@ impl DryRunExecution for BlockProducerAdapter {
         transaction: Transaction,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
-    ) -> Result<Vec<TxReceipt>> {
+    ) -> anyhow::Result<Vec<TxReceipt>> {
         self.block_producer
             .dry_run(transaction, height, utxo_validation)
             .await

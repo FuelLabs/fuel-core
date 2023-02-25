@@ -25,6 +25,7 @@ use std::collections::HashMap;
 
 /// Helper for wrapping a currently running node environment
 pub struct TestContext {
+    pub srv: FuelService,
     pub rng: StdRng,
     pub client: FuelClient,
 }
@@ -34,7 +35,7 @@ impl TestContext {
         let rng = StdRng::seed_from_u64(seed);
         let srv = FuelService::new_node(Config::local_node()).await.unwrap();
         let client = FuelClient::from(srv.bound_address);
-        Self { rng, client }
+        Self { srv, rng, client }
     }
 }
 
@@ -44,7 +45,6 @@ pub struct TestSetupBuilder {
     pub contracts: HashMap<ContractId, ContractConfig>,
     pub initial_coins: Vec<CoinConfig>,
     pub min_gas_price: u64,
-    pub predicates: bool,
 }
 
 impl TestSetupBuilder {
@@ -136,11 +136,12 @@ impl TestSetupBuilder {
         let utxo_validation = true;
         let config = Config {
             utxo_validation,
-            txpool: fuel_core_txpool::Config::new(
-                chain_config.clone(),
-                self.min_gas_price,
+            txpool: fuel_core_txpool::Config {
+                chain_config: chain_config.clone(),
+                min_gas_price: self.min_gas_price,
                 utxo_validation,
-            ),
+                ..fuel_core_txpool::Config::default()
+            },
             chain_conf: chain_config,
             ..Config::local_node()
         };
@@ -149,6 +150,7 @@ impl TestSetupBuilder {
         let client = FuelClient::from(srv.bound_address);
 
         TestContext {
+            srv,
             rng: self.rng.clone(),
             client,
         }
@@ -162,7 +164,6 @@ impl Default for TestSetupBuilder {
             contracts: Default::default(),
             initial_coins: vec![],
             min_gas_price: 0,
-            predicates: false,
         }
     }
 }
