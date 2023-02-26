@@ -45,7 +45,7 @@ use fuel_core_types::{
             CoinStatus,
             CompressedCoin,
         },
-        message::Message,
+        message::CompressedMessage,
     },
     fuel_merkle::binary,
     fuel_tx::{
@@ -71,7 +71,7 @@ pub fn maybe_initialize_state(
     database: &Database,
 ) -> anyhow::Result<()> {
     // check if chain is initialized
-    if database.get_chain_name()?.is_none() {
+    if database.ids_of_latest_block()?.is_none() {
         import_genesis_block(config, database)?;
     }
 
@@ -87,7 +87,6 @@ fn import_genesis_block(
 
     let database = database_transaction.as_mut();
     // Initialize the chain id and height.
-    database.init(&config.chain_conf)?;
 
     let chain_config_hash = config.chain_conf.root()?.into();
     let coins_root = init_coin_state(database, &config.chain_conf.initial_state)?.into();
@@ -304,14 +303,13 @@ fn init_da_messages(
     if let Some(state) = &state {
         if let Some(message_state) = &state.messages {
             for msg in message_state {
-                let message = Message {
+                let message = CompressedMessage {
                     sender: msg.sender,
                     recipient: msg.recipient,
                     nonce: msg.nonce,
                     amount: msg.amount,
                     data: msg.data.clone(),
                     da_height: msg.da_height,
-                    fuel_block_spend: None,
                 };
 
                 let message_id = message.id();
@@ -597,7 +595,7 @@ mod tests {
 
         maybe_initialize_state(&config, db).unwrap();
 
-        let expected_msg: Message = msg.into();
+        let expected_msg: CompressedMessage = msg.into();
 
         let ret_msg = db
             .storage::<Messages>()

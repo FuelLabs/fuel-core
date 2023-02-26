@@ -9,12 +9,15 @@ use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::message::{
         CheckedMessage,
-        Message,
+        CompressedMessage,
     },
     fuel_tx::MessageId,
 };
 use std::{
-    collections::HashMap,
+    collections::{
+        BTreeMap,
+        HashMap,
+    },
     sync::{
         Arc,
         Mutex,
@@ -23,7 +26,7 @@ use std::{
 
 #[derive(Default)]
 pub struct Data {
-    pub messages: HashMap<MessageId, Message>,
+    pub messages: BTreeMap<DaBlockHeight, HashMap<MessageId, CompressedMessage>>,
     pub finalized_da_height: Option<DaBlockHeight>,
 }
 
@@ -37,27 +40,42 @@ pub struct MockDb {
 }
 
 impl MockDb {
-    pub fn get_message(&self, id: &MessageId) -> Option<Message> {
-        self.data.lock().unwrap().messages.get(id).map(Clone::clone)
+    pub fn get_message(&self, id: &MessageId) -> Option<CompressedMessage> {
+        self.data
+            .lock()
+            .unwrap()
+            .messages
+            .iter()
+            .find_map(|(_, map)| map.get(id).cloned())
     }
 }
 
 impl RelayerDb for MockDb {
-    fn insert_message(
+    fn insert_messages(
         &mut self,
-        message: &CheckedMessage,
-    ) -> StorageResult<Option<Message>> {
-        let (message_id, message) = message.clone().unpack();
-        Ok(self
-            .data
-            .lock()
-            .unwrap()
-            .messages
-            .insert(message_id, message))
+        da_height: &DaBlockHeight,
+        messages: &[CheckedMessage],
+    ) -> StorageResult<()> {
+        let mut m = self.data.lock().unwrap();
+        for message in messages {
+            let (message_id, message) = message.clone().unpack();
+            m.messages
+                .entry(message.da_height)
+                .or_default()
+                .insert(message_id, message);
+        }
+        let max = m.finalized_da_height.get_or_insert(0u64.into());
+        *max = (*max).max(*da_height);
+        Ok(())
     }
 
-    fn set_finalized_da_height(&mut self, height: DaBlockHeight) -> StorageResult<()> {
-        self.data.lock().unwrap().finalized_da_height = Some(height);
+    fn set_finalized_da_height_to_at_least(
+        &mut self,
+        height: &DaBlockHeight,
+    ) -> StorageResult<()> {
+        let mut lock = self.data.lock().unwrap();
+        let max = lock.finalized_da_height.get_or_insert(0u64.into());
+        *max = (*max).max(*height);
         Ok(())
     }
 

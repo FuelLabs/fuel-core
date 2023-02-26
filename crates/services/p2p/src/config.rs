@@ -7,6 +7,7 @@ use crate::{
             NEW_TX_GOSSIP_TOPIC,
         },
     },
+    heartbeat::HeartbeatConfig,
     peer_manager::ConnectionState,
 };
 use fuel_core_types::blockchain::consensus::Genesis;
@@ -123,6 +124,8 @@ pub struct Config<State = Initialized> {
     pub gossipsub_config: GossipsubConfig,
     pub topics: Vec<String>,
 
+    pub heartbeat_config: HeartbeatConfig,
+
     // RequestResponse related fields
     /// Sets the timeout for inbound and outbound requests.
     pub set_request_timeout: Duration,
@@ -171,6 +174,7 @@ impl Config<NotInitialized> {
             info_interval: self.info_interval,
             gossipsub_config: self.gossipsub_config,
             topics: self.topics,
+            heartbeat_config: self.heartbeat_config,
             set_request_timeout: self.set_request_timeout,
             set_connection_keep_alive: self.set_connection_keep_alive,
             metrics: self.metrics,
@@ -216,6 +220,7 @@ impl Config<NotInitialized> {
                 CON_VOTE_GOSSIP_TOPIC.into(),
             ],
             gossipsub_config: default_gossipsub_config(),
+            heartbeat_config: HeartbeatConfig::default(),
             set_request_timeout: REQ_RES_TIMEOUT,
             set_connection_keep_alive: REQ_RES_TIMEOUT,
             info_interval: Some(Duration::from_secs(3)),

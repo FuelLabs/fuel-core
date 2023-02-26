@@ -19,7 +19,7 @@ pub mod txpool;
 
 #[derive(Clone)]
 pub struct PoAAdapter {
-    shared_state: fuel_core_poa::service::SharedState,
+    shared_state: Option<fuel_core_poa::service::SharedState>,
 }
 
 #[derive(Clone)]
@@ -35,7 +35,7 @@ impl TxPoolAdapter {
 
 #[derive(Clone)]
 pub struct ExecutorAdapter {
-    pub database: Database,
+    pub relayer: MaybeRelayerAdapter,
     pub config: Config,
 }
 
@@ -48,7 +48,9 @@ pub struct VerifierAdapter {
 pub struct MaybeRelayerAdapter {
     pub database: Database,
     #[cfg(feature = "relayer")]
-    pub relayer_synced: Option<fuel_core_relayer::SharedState>,
+    pub relayer_synced: Option<fuel_core_relayer::SharedState<Database>>,
+    #[cfg(feature = "relayer")]
+    pub da_deploy_height: fuel_core_types::blockchain::primitives::DaBlockHeight,
 }
 
 #[derive(Clone)]
@@ -65,7 +67,7 @@ pub struct BlockImporterAdapter {
 #[cfg(feature = "p2p")]
 #[derive(Clone)]
 pub struct P2PAdapter {
-    service: fuel_core_p2p::service::SharedState,
+    service: Option<fuel_core_p2p::service::SharedState>,
 }
 
 #[cfg(not(feature = "p2p"))]
@@ -74,7 +76,7 @@ pub struct P2PAdapter;
 
 #[cfg(feature = "p2p")]
 impl P2PAdapter {
-    pub fn new(service: fuel_core_p2p::service::SharedState) -> Self {
+    pub fn new(service: Option<fuel_core_p2p::service::SharedState>) -> Self {
         Self { service }
     }
 }

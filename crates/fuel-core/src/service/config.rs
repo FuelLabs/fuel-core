@@ -13,6 +13,7 @@ use std::{
         SocketAddr,
     },
     path::PathBuf,
+    time::Duration,
 };
 use strum_macros::{
     Display,
@@ -46,11 +47,12 @@ pub struct Config {
     #[cfg(feature = "relayer")]
     pub relayer: fuel_core_relayer::Config,
     #[cfg(feature = "p2p")]
-    pub p2p: P2PConfig<NotInitialized>,
+    pub p2p: Option<P2PConfig<NotInitialized>>,
     #[cfg(feature = "p2p")]
     pub sync: fuel_core_sync::Config,
     pub consensus_key: Option<Secret<SecretKeyWrapper>>,
     pub name: String,
+    pub verifier: fuel_core_consensus_module::RelayerVerifierConfig,
 }
 
 impl Config {
@@ -61,31 +63,34 @@ impl Config {
         Self {
             addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
             database_path: Default::default(),
+            #[cfg(feature = "rocksdb")]
+            database_type: DbType::RocksDb,
+            #[cfg(not(feature = "rocksdb"))]
             database_type: DbType::InMemory,
             chain_conf: chain_conf.clone(),
             manual_blocks_enabled: false,
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,
-            txpool: fuel_core_txpool::Config::new(
-                chain_conf,
+            txpool: fuel_core_txpool::Config {
+                chain_config: chain_conf,
                 min_gas_price,
                 utxo_validation,
-            ),
+                transaction_ttl: Duration::from_secs(60 * 100000000),
+                ..fuel_core_txpool::Config::default()
+            },
             block_producer: Default::default(),
             block_executor: Default::default(),
             block_importer: Default::default(),
             #[cfg(feature = "relayer")]
             relayer: Default::default(),
             #[cfg(feature = "p2p")]
-            p2p: P2PConfig::<NotInitialized>::default("test_network"),
+            p2p: Some(P2PConfig::<NotInitialized>::default("test_network")),
             #[cfg(feature = "p2p")]
-            sync: fuel_core_sync::Config {
-                max_get_header_requests: 10,
-                max_get_txns_requests: 10,
-            },
+            sync: fuel_core_sync::Config::default(),
             consensus_key: Some(Secret::new(default_consensus_dev_key().into())),
             name: String::default(),
+            verifier: Default::default(),
         }
     }
 }

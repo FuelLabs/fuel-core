@@ -4,6 +4,7 @@
 
 app:
   name: ${fuel_core_service_name}
+  selector_name: ${fuel_core_selector_name}
   replicas: ${fuel_core_pod_replicas}
   http_port: 80
   target_port: 4000
@@ -12,6 +13,7 @@ app:
   p2p_key: ${fuel_core_p2p_key}
   allow_private_addresses: ${fuel_core_allow_private_addresses}
   human_logging: ${fuel_core_human_logging}
+  rust_log: ${fuel_core_rust_log}
   utxo_validation: ${fuel_core_utxo_validation}
   vm_backtrace: ${fuel_core_vm_backtrace}
   min_gas_price: ${fuel_core_min_gas_price}
@@ -31,6 +33,7 @@ app:
   relayer_min_duration_s: "${fuel_core_relayer_min_duration_s}"
   relayer_eth_sync_call_freq_s: "${fuel_core_relayer_eth_sync_call_freq_s}"
   relayer_eth_sync_log_freq_s: "${fuel_core_relayer_eth_sync_log_freq_s}"
+  sentry_enabled: ${fuel_core_sentry_enabled}
   image:
     repository: ${fuel_core_image_repository}
     tag: ${fuel_core_image_tag}
@@ -42,4 +45,11 @@ app:
     storageclass: ${pvc_storage_class}
     storagerequests: ${pvc_storage_requests}
     accessmodes: ReadWriteOnce
-
+  resources:
+    cpu_requests: ${fuel_core_cpu_requests}
+    memory_requests: ${fuel_core_memory_requests}
+    cpu_limits: ${fuel_core_cpu_limits}
+    memory_limits: ${fuel_core_memory_limits}
+  prometheus:
+    enabled: ${fuel_core_prometheus_enabled}
+    helm_release_name: ${fuel_core_prometheus_helm_release_name}

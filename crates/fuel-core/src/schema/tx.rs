@@ -22,6 +22,7 @@ use crate::{
     },
     state::IterDirection,
 };
+use anyhow::anyhow;
 use async_graphql::{
     connection::{
         Connection,
@@ -47,7 +48,6 @@ use futures::{
 use itertools::Itertools;
 use std::{
     iter,
-    ops::Deref,
     sync::Arc,
 };
 use types::Transaction;
@@ -73,8 +73,8 @@ impl TxQuery {
         let id = id.0;
         let txpool = ctx.data_unchecked::<TxPool>();
 
-        if let Some(transaction) = txpool.find_one(id) {
-            Ok(Some(Transaction(transaction.tx().clone().deref().into())))
+        if let Some(transaction) = txpool.transaction(id) {
+            Ok(Some(Transaction(transaction)))
         } else {
             query.transaction(&id).into_api_result()
         }
@@ -153,6 +153,13 @@ impl TxQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<TxPointer, Transaction, EmptyFields, EmptyFields>>
     {
+        // Rocksdb doesn't support reverse iteration over a prefix
+        if matches!(last, Some(last) if last > 0) {
+            return Err(
+                anyhow!("reverse pagination isn't supported for this resource").into(),
+            )
+        }
+
         let query = TransactionQueryContext(ctx.data_unchecked());
         let owner = fuel_types::Address::from(owner);
 

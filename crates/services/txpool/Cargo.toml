@@ -29,6 +29,10 @@ fuel-core-txpool = { path = "", features = ["test-helpers"] }
 itertools = { workspace = true }
 mockall = { workspace = true }
 rstest = "0.15"
+tokio = { workspace = true, features = [
+    "sync",
+    "test-util",
+] }
 
 [features]
 test-helpers = [

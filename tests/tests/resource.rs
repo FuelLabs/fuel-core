@@ -1,3 +1,4 @@
+use crate::helpers::TestContext;
 use fuel_core::{
     chain_config::{
         CoinConfig,
@@ -15,15 +16,21 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_types::fuel_tx::*;
+use rand::{
+    prelude::StdRng,
+    SeedableRng,
+};
 
 mod coins {
     use super::*;
+    use fuel_core_types::fuel_crypto::SecretKey;
+    use rand::Rng;
 
     async fn setup(
         owner: Address,
         asset_id_a: AssetId,
         asset_id_b: AssetId,
-    ) -> FuelClient {
+    ) -> TestContext {
         // setup config
         let mut config = Config::local_node();
         config.chain_conf.initial_state = Some(StateConfig {
@@ -55,7 +62,13 @@ mod coins {
 
         // setup server & client
         let srv = FuelService::new_node(config).await.unwrap();
-        FuelClient::from(srv.bound_address)
+        let client = FuelClient::from(srv.bound_address);
+
+        TestContext {
+            srv,
+            rng: StdRng::seed_from_u64(0x123),
+            client,
+        }
     }
 
     #[rstest::rstest]
@@ -73,11 +86,84 @@ mod coins {
         query_limit_resources(owner, asset_id_a, asset_id_b).await;
     }
 
+    #[tokio::test]
+    async fn excludes_spent_coins() {
+        let mut rng = StdRng::seed_from_u64(1234);
+        let asset_id_a: AssetId = rng.gen();
+        let asset_id_b: AssetId = rng.gen();
+        let secret_key: SecretKey = rng.gen();
+        let pk = secret_key.public_key();
+        let owner = Input::owner(&pk);
+        let context = setup(owner, asset_id_a, asset_id_b).await;
+        // select all available messages to spend
+        let resources_per_asset = context
+            .client
+            .resources_to_spend(
+                format!("{owner:#x}").as_str(),
+                vec![
+                    (format!("{asset_id_a:#x}").as_str(), 300, None),
+                    (format!("{asset_id_b:#x}").as_str(), 300, None),
+                ],
+                None,
+            )
+            .await
+            .unwrap();
+
+        // spend all coins
+        let mut script = TransactionBuilder::script(vec![], vec![]);
+
+        for asset_group in resources_per_asset {
+            for asset in asset_group {
+                if let Resource::Coin(coin) = asset {
+                    script.add_unsigned_coin_input(
+                        secret_key,
+                        coin.utxo_id.0 .0,
+                        coin.amount.0,
+                        coin.asset_id.0 .0,
+                        Default::default(),
+                        coin.maturity.0,
+                    );
+                }
+            }
+        }
+        // send change to different address
+        script.add_output(Output::change(rng.gen(), 0, asset_id_a));
+        script.add_output(Output::change(rng.gen(), 0, asset_id_b));
+        let tx = script.finalize_as_transaction();
+
+        context.client.submit_and_await_commit(&tx).await.unwrap();
+
+        // select all available asset a coins to spend
+        let remaining_resources_a = context
+            .client
+            .resources_to_spend(
+                format!("{owner:#x}").as_str(),
+                vec![(format!("{asset_id_a:#x}").as_str(), 1, None)],
+                None,
+            )
+            .await;
+        // there should be none left
+        assert!(remaining_resources_a.is_err());
+
+        // select all available asset a coins to spend
+        let remaining_resources_b = context
+            .client
+            .resources_to_spend(
+                format!("{owner:#x}").as_str(),
+                vec![(format!("{asset_id_b:#x}").as_str(), 1, None)],
+                None,
+            )
+            .await;
+        // there should be none left
+        assert!(remaining_resources_b.is_err())
+    }
+
     async fn query_target_1(owner: Address, asset_id_a: AssetId, asset_id_b: AssetId) {
-        let client = setup(owner, asset_id_a, asset_id_b).await;
+        let context = setup(owner, asset_id_a, asset_id_b).await;
 
         // spend_query for 1 a and 1 b
-        let resources_per_asset = client
+        let resources_per_asset = context
+            .client
             .resources_to_spend(
                 format!("{owner:#x}").as_str(),
                 vec![
@@ -96,10 +182,11 @@ mod coins {
     }
 
     async fn query_target_300(owner: Address, asset_id_a: AssetId, asset_id_b: AssetId) {
-        let client = setup(owner, asset_id_a, asset_id_b).await;
+        let context = setup(owner, asset_id_a, asset_id_b).await;
 
         // spend_query for 300 a and 300 b
-        let resources_per_asset = client
+        let resources_per_asset = context
+            .client
             .resources_to_spend(
                 format!("{owner:#x}").as_str(),
                 vec![
@@ -118,10 +205,11 @@ mod coins {
     }
 
     async fn exclude_all(owner: Address, asset_id_a: AssetId, asset_id_b: AssetId) {
-        let client = setup(owner, asset_id_a, asset_id_b).await;
+        let context = setup(owner, asset_id_a, asset_id_b).await;
 
         // query all resources
-        let resources_per_asset = client
+        let resources_per_asset = context
+            .client
             .resources_to_spend(
                 format!("{owner:#x}").as_str(),
                 vec![
@@ -145,7 +233,8 @@ mod coins {
             })
             .collect();
         let all_utxo_ids = all_utxos.iter().map(String::as_str).collect();
-        let resources_per_asset = client
+        let resources_per_asset = context
+            .client
             .resources_to_spend(
                 format!("{owner:#x}").as_str(),
                 vec![
@@ -171,10 +260,11 @@ mod coins {
         asset_id_a: AssetId,
         asset_id_b: AssetId,
     ) {
-        let client = setup(owner, asset_id_a, asset_id_b).await;
+        let context = setup(owner, asset_id_a, asset_id_b).await;
 
         // not enough resources
-        let resources_per_asset = client
+        let resources_per_asset = context
+            .client
             .resources_to_spend(
                 format!("{owner:#x}").as_str(),
                 vec![
@@ -200,10 +290,11 @@ mod coins {
         asset_id_a: AssetId,
         asset_id_b: AssetId,
     ) {
-        let client = setup(owner, asset_id_a, asset_id_b).await;
+        let context = setup(owner, asset_id_a, asset_id_b).await;
 
         // not enough inputs
-        let resources_per_asset = client
+        let resources_per_asset = context
+            .client
             .resources_to_spend(
                 format!("{owner:#x}").as_str(),
                 vec![
@@ -222,11 +313,15 @@ mod coins {
 }
 
 mod messages {
-    use fuel_core_types::blockchain::primitives::DaBlockHeight;
+    use fuel_core_types::{
+        blockchain::primitives::DaBlockHeight,
+        fuel_crypto::SecretKey,
+    };
+    use rand::Rng;
 
     use super::*;
 
-    async fn setup(owner: Address) -> (AssetId, FuelClient) {
+    async fn setup(owner: Address) -> (AssetId, TestContext) {
         let base_asset_id = AssetId::BASE;
 
         // setup config
@@ -254,8 +349,13 @@ mod messages {
         // setup server & client
         let srv = FuelService::new_node(config).await.unwrap();
         let client = FuelClient::from(srv.bound_address);
+        let context = TestContext {
+            srv,
+            rng: StdRng::seed_from_u64(0x123),
+            client,
+        };
 
-        (base_asset_id, client)
+        (base_asset_id, context)
     }
 
     #[rstest::rstest]
@@ -271,11 +371,64 @@ mod messages {
         query_limit_resources(owner).await;
     }
 
+    #[tokio::test]
+    async fn excludes_spent_messages() {
+        let mut rng = StdRng::seed_from_u64(1234);
+
+        let secret_key: SecretKey = rng.gen();
+        let pk = secret_key.public_key();
+        let owner = Input::owner(&pk);
+        let (base_asset_id, context) = setup(owner).await;
+        // select all available messages to spend
+        let resources_per_asset = context
+            .client
+            .resources_to_spend(
+                format!("{owner:#x}").as_str(),
+                vec![(format!("{base_asset_id:#x}").as_str(), 300, None)],
+                None,
+            )
+            .await
+            .unwrap();
+
+        // spend all messages
+        let mut script = TransactionBuilder::script(vec![], vec![]);
+
+        resources_per_asset[0].iter().for_each(|resource| {
+            if let Resource::Message(message) = resource {
+                script.add_unsigned_message_input(
+                    secret_key,
+                    message.sender.0 .0,
+                    message.nonce.0,
+                    message.amount.0,
+                    message.data.0 .0.clone(),
+                );
+            }
+        });
+        // send change to different address
+        script.add_output(Output::change(rng.gen(), 0, base_asset_id));
+        let tx = script.finalize_as_transaction();
+
+        context.client.submit_and_await_commit(&tx).await.unwrap();
+
+        // select all available messages to spend
+        let remaining_resources = context
+            .client
+            .resources_to_spend(
+                format!("{owner:#x}").as_str(),
+                vec![(format!("{base_asset_id:#x}").as_str(), 1, None)],
+                None,
+            )
+            .await;
+        // there should be none left
+        assert!(remaining_resources.is_err())
+    }
+
     async fn query_target_1(owner: Address) {
-        let (base_asset_id, client) = setup(owner).await;
+        let (base_asset_id, context) = setup(owner).await;
 
         // query resources for `base_asset_id` and target 1
-        let resources_per_asset = client
+        let resources_per_asset = context
+            .client
             .resources_to_spend(
                 format!("{owner:#x}").as_str(),
                 vec![(format!("{base_asset_id:#x}").as_str(), 1, None)],
@@ -287,10 +440,11 @@ mod messages {
     }
 
     async fn query_target_300(owner: Address) {
-        let (base_asset_id, client) = setup(owner).await;
+        let (base_asset_id, context) = setup(owner).await;
 
         // query for 300 base assets
-        let resources_per_asset = client
+        let resources_per_asset = context
+            .client
             .resources_to_spend(
                 format!("{owner:#x}").as_str(),
                 vec![(format!("{base_asset_id:#x}").as_str(), 300, None)],
@@ -303,10 +457,11 @@ mod messages {
     }
 
     async fn exclude_all(owner: Address) {
-        let (base_asset_id, client) = setup(owner).await;
+        let (base_asset_id, context) = setup(owner).await;
 
         // query for 300 base assets
-        let resources_per_asset = client
+        let resources_per_asset = context
+            .client
             .resources_to_spend(
                 format!("{owner:#x}").as_str(),
                 vec![(format!("{base_asset_id:#x}").as_str(), 300, None)],
@@ -327,7 +482,8 @@ mod messages {
             })
             .collect();
         let all_message_ids = all_message_ids.iter().map(String::as_str).collect();
-        let resources_per_asset = client
+        let resources_per_asset = context
+            .client
             .resources_to_spend(
                 format!("{owner:#x}").as_str(),
                 vec![(format!("{base_asset_id:#x}").as_str(), 1, None)],
@@ -346,10 +502,11 @@ mod messages {
     }
 
     async fn query_more_than_we_have(owner: Address) {
-        let (base_asset_id, client) = setup(owner).await;
+        let (base_asset_id, context) = setup(owner).await;
 
         // max resources reached
-        let resources_per_asset = client
+        let resources_per_asset = context
+            .client
             .resources_to_spend(
                 format!("{owner:#x}").as_str(),
                 vec![(format!("{base_asset_id:#x}").as_str(), 301, None)],
@@ -368,10 +525,11 @@ mod messages {
     }
 
     async fn query_limit_resources(owner: Address) {
-        let (base_asset_id, client) = setup(owner).await;
+        let (base_asset_id, context) = setup(owner).await;
 
         // not enough inputs
-        let resources_per_asset = client
+        let resources_per_asset = context
+            .client
             .resources_to_spend(
                 format!("{owner:#x}").as_str(),
                 vec![(format!("{base_asset_id:#x}").as_str(), 300, Some(2))],
@@ -392,7 +550,7 @@ mod messages_and_coins {
 
     use super::*;
 
-    async fn setup(owner: Address, asset_id_b: AssetId) -> (AssetId, FuelClient) {
+    async fn setup(owner: Address, asset_id_b: AssetId) -> (AssetId, TestContext) {
         let asset_id_a = AssetId::BASE;
 
         // setup config
@@ -438,8 +596,13 @@ mod messages_and_coins {
         // setup server & client
         let srv = FuelService::new_node(config).await.unwrap();
         let client = FuelClient::from(srv.bound_address);
+        let context = TestContext {
+            srv,
+            rng: StdRng::seed_from_u64(0x123),
+            client,
+        };
 
-        (asset_id_a, client)
+        (asset_id_a, context)
     }
 
     #[rstest::rstest]
@@ -457,10 +620,11 @@ mod messages_and_coins {
     }
 
     async fn query_target_1(owner: Address, asset_id_b: AssetId) {
-        let (asset_id_a, client) = setup(owner, asset_id_b).await;
+        let (asset_id_a, context) = setup(owner, asset_id_b).await;
 
         // query resources for `base_asset_id` and target 1
-        let resources_per_asset = client
+        let resources_per_asset = context
+            .client
             .resources_to_spend(
                 format!("{owner:#x}").as_str(),
                 vec![
@@ -479,10 +643,11 @@ mod messages_and_coins {
     }
 
     async fn query_target_300(owner: Address, asset_id_b: AssetId) {
-        let (asset_id_a, client) = setup(owner, asset_id_b).await;
+        let (asset_id_a, context) = setup(owner, asset_id_b).await;
 
         // query for 300 base assets
-        let resources_per_asset = client
+        let resources_per_asset = context
+            .client
             .resources_to_spend(
                 format!("{owner:#x}").as_str(),
                 vec![
@@ -501,10 +666,11 @@ mod messages_and_coins {
     }
 
     async fn exclude_all(owner: Address, asset_id_b: AssetId) {
-        let (asset_id_a, client) = setup(owner, asset_id_b).await;
+        let (asset_id_a, context) = setup(owner, asset_id_b).await;
 
         // query for 300 base assets
-        let resources_per_asset = client
+        let resources_per_asset = context
+            .client
             .resources_to_spend(
                 format!("{owner:#x}").as_str(),
                 vec![
@@ -546,7 +712,8 @@ mod messages_and_coins {
         assert_eq!(all_utxo_ids.len(), 4);
         assert_eq!(all_message_ids.len(), 2);
 
-        let resources_per_asset = client
+        let resources_per_asset = context
+            .client
             .resources_to_spend(
                 format!("{owner:#x}").as_str(),
                 vec![
@@ -568,10 +735,11 @@ mod messages_and_coins {
     }
 
     async fn query_more_than_we_have(owner: Address, asset_id_b: AssetId) {
-        let (asset_id_a, client) = setup(owner, asset_id_b).await;
+        let (asset_id_a, context) = setup(owner, asset_id_b).await;
 
         // max resources reached
-        let resources_per_asset = client
+        let resources_per_asset = context
+            .client
             .resources_to_spend(
                 format!("{owner:#x}").as_str(),
                 vec![
@@ -593,10 +761,11 @@ mod messages_and_coins {
     }
 
     async fn query_limit_resources(owner: Address, asset_id_b: AssetId) {
-        let (asset_id_a, client) = setup(owner, asset_id_b).await;
+        let (asset_id_a, context) = setup(owner, asset_id_b).await;
 
         // not enough inputs
-        let resources_per_asset = client
+        let resources_per_asset = context
+            .client
             .resources_to_spend(
                 format!("{owner:#x}").as_str(),
                 vec![
@@ -614,7 +783,7 @@ mod messages_and_coins {
     }
 }
 
-async fn empty_setup() -> FuelClient {
+async fn empty_setup() -> TestContext {
     // setup config
     let mut config = Config::local_node();
     config.chain_conf.initial_state = Some(StateConfig {
@@ -626,7 +795,13 @@ async fn empty_setup() -> FuelClient {
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
-    FuelClient::from(srv.bound_address)
+    let client = FuelClient::from(srv.bound_address);
+
+    TestContext {
+        srv,
+        rng: StdRng::seed_from_u64(0x123),
+        client,
+    }
 }
 
 #[rstest::rstest]
@@ -635,10 +810,11 @@ async fn resources_to_spend_empty(
     #[values(Address::default(), Address::from([5; 32]), Address::from([16; 32]))]
     owner: Address,
 ) {
-    let client = empty_setup().await;
+    let context = empty_setup().await;
 
     // empty spend_query
-    let resources_per_asset = client
+    let resources_per_asset = context
+        .client
         .resources_to_spend(format!("{owner:#x}").as_str(), vec![], None)
         .await
         .unwrap();
@@ -652,10 +828,11 @@ async fn resources_to_spend_error_duplicate_asset_query(
     owner: Address,
     #[values(AssetId::new([1u8; 32]), AssetId::new([99u8; 32]))] asset_id: AssetId,
 ) {
-    let client = empty_setup().await;
+    let context = empty_setup().await;
 
     // the queries with the same id
-    let resources_per_asset = client
+    let resources_per_asset = context
+        .client
         .resources_to_spend(
             format!("{owner:#x}").as_str(),
             vec![

@@ -10,12 +10,14 @@ use super::{
     },
 };
 use crate::query::MessageQueryContext;
+use anyhow::anyhow;
 use async_graphql::{
     connection::{
         Connection,
         EmptyFields,
     },
     Context,
+    Enum,
     Object,
 };
 use fuel_core_storage::iter::IntoBoxedIter;
@@ -53,9 +55,16 @@ impl Message {
         self.0.da_height.as_u64().into()
     }
 
-    async fn fuel_block_spend(&self) -> Option<U64> {
-        self.0.fuel_block_spend.map(|v| v.into())
+    async fn status(&self) -> MessageStatus {
+        self.0.status.into()
     }
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+#[graphql(remote = "entities::message::MessageStatus")]
+pub enum MessageStatus {
+    Unspent,
+    Spent,
 }
 
 #[derive(Default)]
@@ -78,6 +87,14 @@ impl MessageQuery {
             let start = *start;
 
             let messages = if let Some(owner) = owner {
+                // Rocksdb doesn't support reverse iteration over a prefix
+                if matches!(last, Some(last) if last > 0) {
+                    return Err(anyhow!(
+                        "reverse pagination isn't supported for this resource"
+                    )
+                    .into())
+                }
+
                 query
                     .owned_messages(&owner.0, start.map(Into::into), direction)
                     .into_boxed()

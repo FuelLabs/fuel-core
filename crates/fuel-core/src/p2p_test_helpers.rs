@@ -1,6 +1,6 @@
 //! # Helpers for creating networks of nodes
 
-use fuel_core::{
+use crate::{
     chain_config::ChainConfig,
     database::Database,
     p2p::Multiaddr,
@@ -40,7 +40,6 @@ use fuel_core_types::{
         Bytes32,
     },
     secrecy::Secret,
-    services::block_importer::ImportResult,
 };
 use futures::StreamExt;
 use itertools::Itertools;
@@ -91,7 +90,6 @@ pub struct Node {
     pub db: Database,
     pub config: Config,
     pub test_txs: Vec<Transaction>,
-    pub block_subscription: broadcast::Receiver<Arc<ImportResult>>,
 }
 
 pub struct Bootstrap {
@@ -237,9 +235,7 @@ pub async fn make_nodes(
                     );
                     if let Some(BootstrapSetup { pub_key, .. }) = boot {
                         match &mut node_config.chain_conf.consensus {
-                            fuel_core::chain_config::ConsensusConfig::PoA {
-                                signing_key,
-                            } => {
+                            crate::chain_config::ConsensusConfig::PoA { signing_key } => {
                                 *signing_key = pub_key;
                             }
                         }
@@ -265,12 +261,12 @@ pub async fn make_nodes(
 
         let mut test_txs = Vec::with_capacity(0);
         node_config.block_production = Trigger::Instant;
-        node_config.p2p.bootstrap_nodes = boots.clone();
+        node_config.p2p.as_mut().unwrap().bootstrap_nodes = boots.clone();
 
         if let Some((ProducerSetup { secret, .. }, txs)) = s {
             let pub_key = secret.public_key();
             match &mut node_config.chain_conf.consensus {
-                fuel_core::chain_config::ConsensusConfig::PoA { signing_key } => {
+                crate::chain_config::ConsensusConfig::PoA { signing_key } => {
                     *signing_key = Input::owner(&pub_key);
                 }
             }
@@ -295,11 +291,11 @@ pub async fn make_nodes(
             chain_config.clone(),
         );
         node_config.block_production = Trigger::Never;
-        node_config.p2p.bootstrap_nodes = boots.clone();
+        node_config.p2p.as_mut().unwrap().bootstrap_nodes = boots.clone();
 
         if let Some(ValidatorSetup { pub_key, .. }) = s {
             match &mut node_config.chain_conf.consensus {
-                fuel_core::chain_config::ConsensusConfig::PoA { signing_key } => {
+                crate::chain_config::ConsensusConfig::PoA { signing_key } => {
                     *signing_key = pub_key;
                 }
             }
@@ -328,14 +324,12 @@ async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node {
         .await
         .unwrap();
 
-    let block_subscription = node.shared.block_importer.block_importer.subscribe();
     let config = node.shared.config.clone();
     Node {
         node,
         db,
         config,
         test_txs,
-        block_subscription,
     }
 }
 
@@ -343,20 +337,20 @@ fn extract_p2p_config(node_config: &Config) -> fuel_core_p2p::config::Config {
     let bootstrap_config = node_config.p2p.clone();
     let db = Database::in_memory();
     maybe_initialize_state(node_config, &db).unwrap();
-    bootstrap_config.init(db.get_genesis().unwrap()).unwrap()
+    bootstrap_config
+        .unwrap()
+        .init(db.get_genesis().unwrap())
+        .unwrap()
 }
 
 impl Node {
     /// Wait for the node to reach consistency with the given transactions.
     pub async fn consistency(&mut self, txs: &HashMap<Bytes32, Transaction>) {
-        let Self {
-            db,
-            block_subscription,
-            ..
-        } = self;
+        let Self { db, .. } = self;
+        let mut tx_status = self.node.shared.txpool.tx_status_subscribe();
         while !not_found_txs(db, txs).is_empty() {
             tokio::select! {
-                result = block_subscription.recv() => {
+                result = tx_status.recv() => {
                     result.unwrap();
                 }
                 _ = self.node.await_stop() => {
@@ -418,8 +412,6 @@ impl Node {
             .await
             .unwrap();
         self.node = node;
-        self.block_subscription =
-            self.node.shared.block_importer.block_importer.subscribe();
     }
 
     /// Stop a node.

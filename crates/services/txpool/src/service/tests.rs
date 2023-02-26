@@ -8,6 +8,7 @@ use fuel_core_types::{
     fuel_tx::UniqueIdentifier,
     services::txpool::Error as TxpoolError,
 };
+use std::time::Duration;
 
 #[tokio::test]
 async fn test_start_stop() {
@@ -43,6 +44,102 @@ async fn test_find() {
     let id = out[0].as_ref().unwrap().id();
     assert_eq!(id, tx1.id(), "Found tx id match{out:?}");
     assert!(out[1].is_none(), "Tx3 should not be found:{out:?}");
+    service.stop_and_await().await.unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn test_prune_transactions() {
+    const TIMEOUT: u64 = 10;
+
+    let config = Config {
+        transaction_ttl: Duration::from_secs(TIMEOUT),
+        ..Default::default()
+    };
+    let ctx = TestContextBuilder::new()
+        .with_config(config)
+        .build_and_start()
+        .await;
+
+    let tx1 = Arc::new(ctx.setup_script_tx(10));
+    let tx2 = Arc::new(ctx.setup_script_tx(20));
+    let tx3 = Arc::new(ctx.setup_script_tx(30));
+
+    let service = ctx.service();
+
+    let out = service
+        .shared
+        .insert(vec![tx1.clone(), tx2.clone(), tx3.clone()]);
+
+    // Check that we have all transactions after insertion.
+    assert_eq!(out.len(), 3, "Should be len 3:{out:?}");
+    assert!(out[0].is_ok(), "Tx1 should be OK, got err:{out:?}");
+    assert!(out[1].is_ok(), "Tx2 should be OK, got err:{out:?}");
+    assert!(out[2].is_ok(), "Tx3 should be OK, got err:{out:?}");
+
+    tokio::time::sleep(Duration::from_secs(TIMEOUT / 2)).await;
+    let out = service.shared.find(vec![tx1.id(), tx2.id(), tx3.id()]);
+    assert_eq!(out.len(), 3, "Should be len 3:{out:?}");
+    assert!(out[0].is_some(), "Tx1 should exist");
+    assert!(out[1].is_some(), "Tx2 should exist");
+    assert!(out[2].is_some(), "Tx3 should exist");
+
+    tokio::time::sleep(Duration::from_secs(TIMEOUT / 2 + 1)).await;
+    let out = service.shared.find(vec![tx1.id(), tx2.id(), tx3.id()]);
+    assert_eq!(out.len(), 3, "Should be len 3:{out:?}");
+    assert!(out[0].is_none(), "Tx1 should be pruned");
+    assert!(out[1].is_none(), "Tx2 should be pruned");
+    assert!(out[2].is_none(), "Tx3 should be pruned");
+
+    service.stop_and_await().await.unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn test_prune_transactions_the_oldest() {
+    const TIMEOUT: u64 = 10;
+    const DELAY: u64 = 2;
+
+    let config = Config {
+        transaction_ttl: Duration::from_secs(TIMEOUT),
+        ..Default::default()
+    };
+    let ctx = TestContextBuilder::new()
+        .with_config(config)
+        .build_and_start()
+        .await;
+
+    let tx1 = Arc::new(ctx.setup_script_tx(10));
+    let tx2 = Arc::new(ctx.setup_script_tx(20));
+    let tx3 = Arc::new(ctx.setup_script_tx(30));
+
+    let service = ctx.service();
+
+    let out = service.shared.insert(vec![tx1.clone()]);
+    assert!(out[0].is_ok(), "Tx1 should be OK, got err:{out:?}");
+
+    tokio::time::sleep(Duration::from_secs(TIMEOUT - DELAY)).await;
+    let out = service.shared.insert(vec![tx2.clone()]);
+    assert!(out[0].is_ok(), "Tx2 should be OK, got err:{out:?}");
+
+    let out = service.shared.find(vec![tx1.id(), tx2.id(), tx3.id()]);
+    assert!(out[0].is_some(), "Tx1 should exist");
+    assert!(out[1].is_some(), "Tx2 should exist");
+
+    tokio::time::sleep(Duration::from_secs(TIMEOUT)).await;
+    let out = service.shared.insert(vec![tx3.clone()]);
+    assert!(out[0].is_ok(), "Tx3 should be OK, got err:{out:?}");
+
+    let out = service.shared.find(vec![tx1.id(), tx2.id(), tx3.id()]);
+    assert!(out[0].is_none(), "Tx1 should pruned");
+    assert!(out[1].is_some(), "Tx2 should exist");
+    assert!(out[2].is_some(), "Tx3 should exist");
+
+    tokio::time::sleep(Duration::from_secs(TIMEOUT)).await;
+
+    let out = service.shared.find(vec![tx1.id(), tx2.id(), tx3.id()]);
+    assert!(out[0].is_none(), "Tx1 should pruned");
+    assert!(out[1].is_none(), "Tx2 should pruned");
+    assert!(out[2].is_some(), "Tx3 should exist");
+
     service.stop_and_await().await.unwrap();
 }
 

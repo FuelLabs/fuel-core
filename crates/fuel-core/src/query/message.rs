@@ -11,7 +11,10 @@ use crate::{
 };
 use fuel_core_storage::{
     not_found,
-    tables::Messages,
+    tables::{
+        Messages,
+        SpentMessages,
+    },
     Error as StorageError,
     Result as StorageResult,
     StorageAsRef,
@@ -25,6 +28,7 @@ use fuel_core_types::{
     entities::message::{
         Message,
         MessageProof,
+        MessageStatus,
     },
     fuel_crypto::Signature,
     fuel_merkle,
@@ -58,6 +62,18 @@ impl<'a> MessageQueryContext<'a> {
             .get(message_id)?
             .ok_or(not_found!(Messages))
             .map(Cow::into_owned)
+            .and_then(|m| {
+                if self
+                    .0
+                    .as_ref()
+                    .storage::<SpentMessages>()
+                    .contains_key(message_id)?
+                {
+                    Ok(m.decompress(MessageStatus::Spent))
+                } else {
+                    Ok(m.decompress(MessageStatus::Unspent))
+                }
+            })
     }
 
     pub fn owned_message_ids(

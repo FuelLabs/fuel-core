@@ -1,9 +1,5 @@
 use crate::{
     database::{
-        metadata::{
-            DB_VERSION,
-            DB_VERSION_KEY,
-        },
         Column,
         Error as DatabaseError,
         Result as DatabaseResult,
@@ -36,7 +32,6 @@ use rocksdb::{
     WriteBatch,
 };
 use std::{
-    convert::TryFrom,
     iter,
     path::Path,
     sync::Arc,
@@ -85,30 +80,7 @@ impl RocksDb {
         }
         .map_err(|e| DatabaseError::Other(e.into()))?;
         let rocks_db = RocksDb { db };
-        rocks_db.validate_or_set_db_version()?;
         Ok(rocks_db)
-    }
-
-    fn validate_or_set_db_version(&self) -> DatabaseResult<()> {
-        let data = self.get(DB_VERSION_KEY, Column::Metadata)?;
-        match data {
-            None => {
-                self.put(
-                    DB_VERSION_KEY,
-                    Column::Metadata,
-                    DB_VERSION.to_be_bytes().to_vec(),
-                )?;
-            }
-            Some(v) => {
-                let b = <[u8; 4]>::try_from(v.as_slice())
-                    .map_err(|_| DatabaseError::InvalidDatabaseVersion)?;
-                let version = u32::from_be_bytes(b);
-                if version != DB_VERSION {
-                    return Err(DatabaseError::InvalidDatabaseVersion)
-                }
-            }
-        };
-        Ok(())
     }
 
     fn cf(&self, column: Column) -> Arc<BoundColumnFamily> {
@@ -126,8 +98,13 @@ impl RocksDb {
         opts.create_if_missing(true);
         opts.set_compression_type(DBCompressionType::Lz4);
 
+        // All double-keys should be configured here
         match column {
-            Column::OwnedCoins | Column::TransactionsByOwnerBlockIdx => {
+            Column::OwnedCoins
+            | Column::TransactionsByOwnerBlockIdx
+            | Column::OwnedMessageIds
+            | Column::ContractsAssets
+            | Column::ContractsState => {
                 // prefix is address length
                 opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32))
             }
@@ -501,5 +478,92 @@ mod tests {
         db.batch_write(&mut ops.into_iter()).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap(), None);
+    }
+
+    #[test]
+    fn can_use_unit_value() {
+        let key = vec![0x00];
+
+        let (db, _tmp) = create_db();
+        db.put(&key, Column::Metadata, vec![]).unwrap();
+
+        assert_eq!(
+            db.get(&key, Column::Metadata).unwrap().unwrap(),
+            Vec::<u8>::with_capacity(0)
+        );
+
+        assert!(db.exists(&key, Column::Metadata).unwrap());
+
+        assert_eq!(
+            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()[0],
+            (key.clone(), Vec::<u8>::with_capacity(0))
+        );
+
+        assert_eq!(
+            db.delete(&key, Column::Metadata).unwrap().unwrap(),
+            Vec::<u8>::with_capacity(0)
+        );
+
+        assert!(!db.exists(&key, Column::Metadata).unwrap());
+    }
+
+    #[test]
+    fn can_use_unit_key() {
+        let key: Vec<u8> = Vec::with_capacity(0);
+
+        let (db, _tmp) = create_db();
+        db.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+
+        assert_eq!(
+            db.get(&key, Column::Metadata).unwrap().unwrap(),
+            vec![1, 2, 3]
+        );
+
+        assert!(db.exists(&key, Column::Metadata).unwrap());
+
+        assert_eq!(
+            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()[0],
+            (key.clone(), vec![1, 2, 3])
+        );
+
+        assert_eq!(
+            db.delete(&key, Column::Metadata).unwrap().unwrap(),
+            vec![1, 2, 3]
+        );
+
+        assert!(!db.exists(&key, Column::Metadata).unwrap());
+    }
+
+    #[test]
+    fn can_use_unit_key_and_value() {
+        let key: Vec<u8> = Vec::with_capacity(0);
+
+        let (db, _tmp) = create_db();
+        db.put(&key, Column::Metadata, vec![]).unwrap();
+
+        assert_eq!(
+            db.get(&key, Column::Metadata).unwrap().unwrap(),
+            Vec::<u8>::with_capacity(0)
+        );
+
+        assert!(db.exists(&key, Column::Metadata).unwrap());
+
+        assert_eq!(
+            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()[0],
+            (key.clone(), Vec::<u8>::with_capacity(0))
+        );
+
+        assert_eq!(
+            db.delete(&key, Column::Metadata).unwrap().unwrap(),
+            Vec::<u8>::with_capacity(0)
+        );
+
+        assert!(!db.exists(&key, Column::Metadata).unwrap());
     }
 }

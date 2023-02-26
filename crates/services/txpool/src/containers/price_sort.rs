@@ -1,38 +1,15 @@
-use crate::types::*;
-use fuel_core_types::services::txpool::ArcPoolTx;
-use std::{
-    cmp,
-    collections::BTreeMap,
+use crate::{
+    containers::sort::{
+        Sort,
+        SortableKey,
+    },
+    types::*,
+    TxInfo,
 };
+use std::cmp;
 
-#[derive(Debug, Default, Clone)]
-pub struct PriceSort {
-    /// all transactions sorted by min/max value
-    pub sort: BTreeMap<PriceSortKey, ArcPoolTx>,
-}
-
-impl PriceSort {
-    pub fn remove(&mut self, tx: &ArcPoolTx) {
-        self.sort.remove(&PriceSortKey::new(tx));
-    }
-
-    // get last transaction. It has lowest gas price.
-    pub fn last(&self) -> Option<ArcPoolTx> {
-        self.sort.iter().next().map(|(_, tx)| tx.clone())
-    }
-
-    pub fn lowest_price(&self) -> GasPrice {
-        self.sort
-            .iter()
-            .next()
-            .map(|(price, _)| price.price)
-            .unwrap_or_default()
-    }
-
-    pub fn insert(&mut self, tx: &ArcPoolTx) {
-        self.sort.insert(PriceSortKey::new(tx), tx.clone());
-    }
-}
+/// all transactions sorted by min/max price
+pub type PriceSort = Sort<PriceSortKey>;
 
 #[derive(Clone, Debug)]
 pub struct PriceSortKey {
@@ -40,12 +17,22 @@ pub struct PriceSortKey {
     tx_id: TxId,
 }
 
-impl PriceSortKey {
-    pub fn new(tx: &ArcPoolTx) -> Self {
+impl SortableKey for PriceSortKey {
+    type Value = GasPrice;
+
+    fn new(info: &TxInfo) -> Self {
         Self {
-            price: tx.price(),
-            tx_id: tx.id(),
+            price: info.tx().price(),
+            tx_id: info.tx().id(),
         }
+    }
+
+    fn value(&self) -> &Self::Value {
+        &self.price
+    }
+
+    fn tx_id(&self) -> &TxId {
+        &self.tx_id
     }
 }
 

@@ -1,17 +1,16 @@
 use super::*;
-use anyhow::anyhow;
 use futures::TryStreamExt;
 
 #[cfg(test)]
 mod test;
 
 /// Download the logs from the DA layer.
-pub(crate) fn download_logs<P>(
+pub(crate) fn download_logs<'a, P>(
     eth_sync_gap: &state::EthSyncGap,
     contracts: Vec<H160>,
-    eth_node: Arc<P>,
+    eth_node: &'a P,
     page_size: u64,
-) -> impl futures::Stream<Item = Result<(u64, Vec<Log>), ProviderError>>
+) -> impl futures::Stream<Item = Result<(u64, Vec<Log>), ProviderError>> + 'a
 where
     P: Middleware<Error = ProviderError> + 'static,
 {
@@ -20,7 +19,6 @@ where
         eth_sync_gap.page(page_size),
         move |page: Option<state::EthSyncPage>| {
             let contracts = contracts.clone();
-            let eth_node = eth_node.clone();
             async move {
                 match page {
                     None => Ok(None),
@@ -29,7 +27,8 @@ where
                         let filter = Filter::new()
                             .from_block(page.oldest())
                             .to_block(page.latest())
-                            .address(ValueOrArray::Array(contracts));
+                            .address(ValueOrArray::Array(contracts))
+                            .topic0(*crate::config::ETH_LOG_MESSAGE);
 
                         tracing::info!(
                             "Downloading logs for block range: {}..={}",
@@ -61,25 +60,23 @@ where
     S: futures::Stream<Item = Result<(u64, Vec<Log>), ProviderError>>,
 {
     tokio::pin!(logs);
-    while let Some((to_block, events)) = logs.try_next().await? {
-        for event in events {
-            let event: EthEventLog = (&event).try_into()?;
-            match event {
-                EthEventLog::Message(m) => {
-                    let m = Message::from(&m).check();
-                    if database.insert_message(&m)?.is_some() {
-                        // TODO: https://github.com/FuelLabs/fuel-core/issues/681
-                        return Err(anyhow!(
-                            "The message for {:?} already existed",
-                            m.id()
-                        ))
+    while let Some((height, events)) = logs.try_next().await? {
+        let messages = events
+            .into_iter()
+            .filter_map(|event| match EthEventLog::try_from(&event) {
+                Ok(event) => {
+                    match event {
+                        EthEventLog::Message(m) => {
+                            Some(Ok(CompressedMessage::from(&m).check()))
+                        }
+                        // TODO: Log out ignored messages.
+                        EthEventLog::Ignored => None,
                     }
                 }
-                // TODO: Log out ignored messages.
-                EthEventLog::Ignored => (),
-            }
-        }
-        database.set_finalized_da_height(to_block.into())?;
+                Err(e) => Some(Err(e)),
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        database.insert_messages(&height.into(), &messages)?;
     }
     Ok(())
 }

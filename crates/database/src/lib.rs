@@ -28,8 +28,13 @@ pub enum Error {
     #[error("Chain is not yet initialized")]
     ChainUninitialized,
     /// The version of database or data is invalid (possibly not migrated).
-    #[error("Invalid database version")]
-    InvalidDatabaseVersion,
+    #[error("Invalid database version, expected {expected:#x}, found {found:#x}")]
+    InvalidDatabaseVersion {
+        /// the current database version
+        found: u32,
+        /// the database version expected by this build of fuel-core
+        expected: u32,
+    },
     /// Not related to database error.
     #[error(transparent)]
     Other(#[from] anyhow::Error),

@@ -14,6 +14,7 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    schema::message::MessageStatus,
     types::TransactionStatus,
     FuelClient,
     PageDirection,
@@ -212,10 +213,7 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     );
 
     // verify the spent status of the message
-    assert_eq!(
-        query.results[0].fuel_block_spend.clone().map(u64::from),
-        Some(1u64)
-    );
+    assert_eq!(query.results[0].status, MessageStatus::Spent,);
 
     srv.stop_and_await().await.unwrap();
     eth_node_handle.shutdown.send(()).unwrap();

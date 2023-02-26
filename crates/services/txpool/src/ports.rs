@@ -4,7 +4,7 @@ use fuel_core_types::{
     blockchain::primitives::BlockHeight,
     entities::{
         coin::CompressedCoin,
-        message::Message,
+        message::CompressedMessage,
     },
     fuel_tx::{
         Transaction,
@@ -52,7 +52,10 @@ pub trait TxPoolDb: Send + Sync {
 
     fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool>;
 
-    fn message(&self, message_id: &MessageId) -> StorageResult<Option<Message>>;
+    fn message(&self, message_id: &MessageId)
+        -> StorageResult<Option<CompressedMessage>>;
+
+    fn is_message_spent(&self, message_id: &MessageId) -> StorageResult<bool>;
 
     fn current_block_height(&self) -> StorageResult<BlockHeight>;
 }

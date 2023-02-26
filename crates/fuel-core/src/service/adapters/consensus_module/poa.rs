@@ -8,6 +8,7 @@ use crate::{
         TxPoolAdapter,
     },
 };
+use anyhow::anyhow;
 use fuel_core_poa::{
     ports::{
         BlockImporter,
@@ -37,7 +38,7 @@ use fuel_core_types::{
 };
 
 impl PoAAdapter {
-    pub fn new(shared_state: SharedState) -> Self {
+    pub fn new(shared_state: Option<SharedState>) -> Self {
         Self { shared_state }
     }
 }
@@ -48,7 +49,11 @@ impl ConsensusModulePort for PoAAdapter {
         &self,
         block_times: Vec<Option<Tai64>>,
     ) -> anyhow::Result<()> {
-        self.shared_state.manually_produce_block(block_times).await
+        self.shared_state
+            .as_ref()
+            .ok_or(anyhow!("The block production is disabled"))?
+            .manually_produce_block(block_times)
+            .await
     }
 }
 

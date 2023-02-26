@@ -8,6 +8,7 @@ use fuel_core::{
             NotInitialized,
         },
         gossipsub_config::default_gossipsub_builder,
+        HeartbeatConfig,
         Multiaddr,
     },
     types::{
@@ -20,6 +21,7 @@ use std::{
         IpAddr,
         Ipv4Addr,
     },
+    num::NonZeroU32,
     path::PathBuf,
     str::FromStr,
     time::Duration,
@@ -33,8 +35,8 @@ pub struct P2PArgs {
 
     /// The name of the p2p Network
     /// If this value is not provided the p2p network won't start
-    #[clap(long = "network", default_value = "", env)]
-    pub network: String,
+    #[clap(long = "network", env)]
+    pub network: Option<String>,
 
     /// p2p network's IP Address
     #[clap(long = "address", env)]
@@ -130,12 +132,12 @@ pub struct P2PArgs {
     #[clap(long = "history_gossip", default_value = "3", env)]
     pub history_gossip: usize,
 
-    /// Time between each heartbeat
-    #[clap(long = "heartbeat_interval", default_value = "1", env)]
-    pub heartbeat_interval: u64,
+    /// Time between each gossipsub heartbeat
+    #[clap(long = "gossip_heartbeat_interval", default_value = "1", env)]
+    pub gossip_heartbeat_interval: u64,
 
-    /// The maximum byte size for each gossip
-    #[clap(long = "max_transmit_size", default_value = "2048", env)]
+    /// The maximum byte size for each gossip (default is 7.5 MiB)
+    #[clap(long = "max_transmit_size", default_value = "7864320", env)]
     pub max_transmit_size: usize,
 
     /// Choose timeout for sent requests in RequestResponse protocol
@@ -145,6 +147,20 @@ pub struct P2PArgs {
     /// Choose how long RequestResponse protocol connections will live if idle
     #[clap(long = "connection_keep_alive", default_value = "20", env)]
     pub connection_keep_alive: u64,
+
+    /// Sending of `BlockHeight` should not take longer than this duration, in seconds.
+    #[clap(long = "heartbeat_send_duration", default_value = "2", env)]
+    pub heartbeat_send_duration: u64,
+
+    /// Idle time in seconds before sending next `BlockHeight`
+    #[clap(long = "heartbeat_idle_duration", default_value = "1", env)]
+    pub heartbeat_idle_duration: u64,
+
+    /// Max failures allowed at `Heartbeat` protocol.
+    /// If reached, the protocol will request disconnect.
+    /// Cannot be zero.
+    #[clap(long = "heartbeat_max_failures", default_value = "5", env)]
+    pub heartbeat_max_failures: NonZeroU32,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -192,7 +208,10 @@ impl From<SyncArgs> for fuel_core::sync::Config {
 }
 
 impl P2PArgs {
-    pub fn into_config(self, metrics: bool) -> anyhow::Result<Config<NotInitialized>> {
+    pub fn into_config(
+        self,
+        metrics: bool,
+    ) -> anyhow::Result<Option<Config<NotInitialized>>> {
         let local_keypair = {
             match self.keypair {
                 Some(KeypairArg::Path(path)) => {
@@ -204,17 +223,12 @@ impl P2PArgs {
                             "m/44'/60'/0'/0/0",
                         )?;
 
-                    convert_to_libp2p_keypair(&mut secret_key.to_vec())?
+                    Some(convert_to_libp2p_keypair(&mut secret_key.to_vec())?)
                 }
                 Some(KeypairArg::InlineSecret(secret_key)) => {
-                    convert_to_libp2p_keypair(&mut secret_key.to_vec())?
+                    Some(convert_to_libp2p_keypair(&mut secret_key.to_vec())?)
                 }
-                _ => {
-                    let mut rand = fuel_crypto::rand::thread_rng();
-                    let secret_key = fuel_crypto::SecretKey::random(&mut rand);
-
-                    convert_to_libp2p_keypair(&mut secret_key.to_vec())?
-                }
+                _ => None,
             }
         };
 
@@ -224,7 +238,7 @@ impl P2PArgs {
             .mesh_n_high(self.max_mesh_size)
             .history_length(self.history_length)
             .history_gossip(self.history_gossip)
-            .heartbeat_interval(Duration::from_secs(self.heartbeat_interval))
+            .heartbeat_interval(Duration::from_secs(self.gossip_heartbeat_interval))
             .max_transmit_size(self.max_transmit_size)
             .build()
             .expect("valid gossipsub configuration");
@@ -235,35 +249,52 @@ impl P2PArgs {
             Some(Duration::from_secs(self.random_walk))
         };
 
-        Ok(Config {
-            keypair: local_keypair,
-            network_name: self.network,
-            checksum: Default::default(),
-            address: self
-                .address
-                .unwrap_or_else(|| IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]))),
-            public_address: self.public_address,
-            tcp_port: self.peering_port,
-            max_block_size: self.max_block_size,
-            bootstrap_nodes: self.bootstrap_nodes,
-            reserved_nodes: self.reserved_nodes,
-            reserved_nodes_only_mode: self.reserved_nodes_only_mode,
-            enable_mdns: self.enable_mdns,
-            max_peers_connected: self.max_peers_connected,
-            max_connections_per_peer: self.max_connections_per_peer,
-            allow_private_addresses: self.allow_private_addresses,
-            random_walk,
-            connection_idle_timeout: Some(Duration::from_secs(
-                self.connection_idle_timeout,
-            )),
-            topics: self.topics,
-            gossipsub_config,
-            set_request_timeout: Duration::from_secs(self.request_timeout),
-            set_connection_keep_alive: Duration::from_secs(self.connection_keep_alive),
-            info_interval: Some(Duration::from_secs(self.info_interval)),
-            identify_interval: Some(Duration::from_secs(self.identify_interval)),
-            metrics,
-            state: NotInitialized,
-        })
+        let heartbeat_config = {
+            let send_duration = Duration::from_secs(self.heartbeat_send_duration);
+            let idle_duration = Duration::from_secs(self.heartbeat_idle_duration);
+            HeartbeatConfig::new(
+                send_duration,
+                idle_duration,
+                self.heartbeat_max_failures,
+            )
+        };
+
+        let config = || -> Option<Config<NotInitialized>> {
+            Some(Config {
+                keypair: local_keypair?,
+                network_name: self.network?,
+                checksum: Default::default(),
+                address: self
+                    .address
+                    .unwrap_or_else(|| IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]))),
+                public_address: self.public_address,
+                tcp_port: self.peering_port,
+                max_block_size: self.max_block_size,
+                bootstrap_nodes: self.bootstrap_nodes,
+                reserved_nodes: self.reserved_nodes,
+                reserved_nodes_only_mode: self.reserved_nodes_only_mode,
+                enable_mdns: self.enable_mdns,
+                max_peers_connected: self.max_peers_connected,
+                max_connections_per_peer: self.max_connections_per_peer,
+                allow_private_addresses: self.allow_private_addresses,
+                random_walk,
+                connection_idle_timeout: Some(Duration::from_secs(
+                    self.connection_idle_timeout,
+                )),
+                topics: self.topics,
+                gossipsub_config,
+                heartbeat_config,
+                set_request_timeout: Duration::from_secs(self.request_timeout),
+                set_connection_keep_alive: Duration::from_secs(
+                    self.connection_keep_alive,
+                ),
+                info_interval: Some(Duration::from_secs(self.info_interval)),
+                identify_interval: Some(Duration::from_secs(self.identify_interval)),
+                metrics,
+                state: NotInitialized,
+            })
+        };
+
+        Ok(config())
     }
 }

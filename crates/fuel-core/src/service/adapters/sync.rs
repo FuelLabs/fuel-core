@@ -14,6 +14,7 @@ use fuel_core_types::{
         primitives::{
             BlockHeight,
             BlockId,
+            DaBlockHeight,
         },
         SealedBlock,
         SealedBlockHeader,
@@ -26,24 +27,33 @@ use fuel_core_types::{
 impl PeerToPeerPort for P2PAdapter {
     fn height_stream(&self) -> BoxStream<BlockHeight> {
         use futures::StreamExt;
-        fuel_core_services::stream::IntoBoxStream::into_boxed(
-            tokio_stream::wrappers::BroadcastStream::new(
-                self.service.subscribe_block_height(),
+        if let Some(service) = &self.service {
+            fuel_core_services::stream::IntoBoxStream::into_boxed(
+                tokio_stream::wrappers::BroadcastStream::new(
+                    service.subscribe_block_height(),
+                )
+                .filter_map(|r| futures::future::ready(r.ok().map(|r| r.block_height))),
             )
-            .filter_map(|r| futures::future::ready(r.ok().map(|r| r.block_height))),
-        )
+        } else {
+            fuel_core_services::stream::IntoBoxStream::into_boxed(tokio_stream::pending())
+        }
     }
 
     async fn get_sealed_block_header(
         &self,
         height: BlockHeight,
     ) -> anyhow::Result<Option<SourcePeer<SealedBlockHeader>>> {
-        Ok(self.service.get_sealed_block_header(height).await?.map(
-            |(peer_id, header)| SourcePeer {
-                peer_id: peer_id.into(),
-                data: header,
-            },
-        ))
+        if let Some(service) = &self.service {
+            Ok(service
+                .get_sealed_block_header(height)
+                .await?
+                .map(|(peer_id, header)| SourcePeer {
+                    peer_id: peer_id.into(),
+                    data: header,
+                }))
+        } else {
+            Ok(None)
+        }
     }
 
     async fn get_transactions(
@@ -54,9 +64,13 @@ impl PeerToPeerPort for P2PAdapter {
             peer_id,
             data: block,
         } = block;
-        self.service
-            .get_transactions_from_peer(peer_id.into(), block)
-            .await
+        if let Some(service) = &self.service {
+            service
+                .get_transactions_from_peer(peer_id.into(), block)
+                .await
+        } else {
+            Ok(None)
+        }
     }
 }
 
@@ -78,8 +92,12 @@ impl BlockImporterPort for BlockImporterAdapter {
     }
 }
 
+#[async_trait::async_trait]
 impl ConsensusPort for VerifierAdapter {
     fn check_sealed_header(&self, header: &SealedBlockHeader) -> anyhow::Result<bool> {
         Ok(self.block_verifier.verify_consensus(header))
+    }
+    async fn await_da_height(&self, da_height: &DaBlockHeight) -> anyhow::Result<()> {
+        self.block_verifier.await_da_height(da_height).await
     }
 }

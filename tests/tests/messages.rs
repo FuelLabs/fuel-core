@@ -15,61 +15,14 @@ use fuel_core_client::client::{
     PaginationRequest,
 };
 use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
     fuel_asm::*,
     fuel_crypto::*,
     fuel_tx::*,
 };
-use rand::{
-    rngs::StdRng,
-    Rng,
-    SeedableRng,
-};
 use rstest::rstest;
 
-#[tokio::test]
-async fn can_submit_genesis_message() {
-    let mut rng = StdRng::seed_from_u64(1234);
-
-    let secret_key: SecretKey = rng.gen();
-    let pk = secret_key.public_key();
-
-    let msg1 = MessageConfig {
-        sender: rng.gen(),
-        recipient: Input::owner(&pk),
-        nonce: rng.gen(),
-        amount: rng.gen(),
-        data: vec![rng.gen()],
-        da_height: DaBlockHeight(0),
-    };
-    let tx1 = TransactionBuilder::script(vec![op::ret(0)].into_iter().collect(), vec![])
-        .gas_limit(100000)
-        .add_unsigned_message_input(
-            secret_key,
-            msg1.sender,
-            msg1.nonce,
-            msg1.amount,
-            msg1.data.clone(),
-        )
-        .finalize_as_transaction();
-
-    let mut node_config = Config::local_node();
-    node_config.chain_conf.initial_state = Some(StateConfig {
-        messages: Some(vec![msg1]),
-        ..Default::default()
-    });
-    node_config.utxo_validation = true;
-
-    let srv = FuelService::new_node(node_config.clone()).await.unwrap();
-    let client = FuelClient::from(srv.bound_address);
-
-    // verify tx is successful
-    let status = client.submit_and_await_commit(&tx1).await.unwrap();
-    assert!(
-        matches!(status, TransactionStatus::Success { .. }),
-        "expected success, received {status:?}",
-    );
-}
+#[cfg(feature = "relayer")]
+mod relayer;
 
 #[tokio::test]
 async fn messages_returns_messages_for_all_owners() {
@@ -124,6 +77,7 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
     // create some owners
     let owner_a = Address::new([1; 32]);
     let owner_b = Address::new([2; 32]);
+    let owner_c = Address::new([3; 32]);
 
     // create some messages for owner A
     let first_msg = MessageConfig {
@@ -185,12 +139,23 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
     assert_eq!(result.results.len(), 1);
 
     assert_eq!(result.results[0].recipient.0 .0, owner_b);
+
+    // get the messages from Owner C
+    let result = client
+        .messages(Some(&owner_c.to_string()), request.clone())
+        .await
+        .unwrap();
+
+    // verify that Owner C has no messages
+    assert_eq!(result.results.len(), 0);
 }
 
 #[rstest]
 #[tokio::test]
 async fn messages_empty_results_for_owner_with_no_messages(
-    #[values(PageDirection::Forward, PageDirection::Backward)] direction: PageDirection,
+    #[values(PageDirection::Forward)] direction: PageDirection,
+    //#[values(PageDirection::Forward, PageDirection::Backward)] direction: PageDirection,
+    // reverse iteration with prefix not supported by rocksdb
     #[values(Address::new([16; 32]), Address::new([0; 32]))] owner: Address,
 ) {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
@@ -488,7 +453,8 @@ fn verify_signature(
     block_id: fuel_core_types::blockchain::primitives::BlockId,
     signature: fuel_core_client::client::schema::Signature,
 ) -> bool {
-    let signature = Signature::from(Bytes64::from(signature));
+    let bytes: Bytes64 = signature.into();
+    let signature = Signature::from_bytes(bytes.into());
     let m = block_id.as_message();
     let public_key = signature.recover(m).unwrap();
     signature.verify(&public_key, m).is_ok()

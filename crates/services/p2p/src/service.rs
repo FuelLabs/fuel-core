@@ -260,25 +260,19 @@ where
                     Some(FuelP2PEvent::RequestMessage { request_message, request_id }) => {
                         match request_message {
                             RequestMessage::Block(block_height) => {
-                                let db = self.db.clone();
-
                                 // TODO: Process `StorageError` somehow.
-                                let block_response = db.get_sealed_block(&block_height)?
+                                let block_response = self.db.get_sealed_block(&block_height)?
                                     .map(Arc::new);
                                 let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Block(block_response));
                             }
                             RequestMessage::Transactions(block_id) => {
-                                let db = self.db.clone();
-
-                                let transactions_response = db.get_transactions(&block_id)?
+                                let transactions_response = self.db.get_transactions(&block_id)?
                                     .map(Arc::new);
 
                                 let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(transactions_response));
                             }
                             RequestMessage::SealedHeader(block_height) => {
-                                let db = self.db.clone();
-
-                                let response = db.get_sealed_header(&block_height)?
+                                let response = self.db.get_sealed_header(&block_height)?
                                     .map(Arc::new);
 
                                 let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeader(response));
@@ -299,6 +293,17 @@ where
         }
 
         Ok(should_continue)
+    }
+
+    async fn shutdown(self) -> anyhow::Result<()> {
+        // Nothing to shut down because we don't have any temporary state that should be dumped,
+        // and we don't spawn any sub-tasks that we need to finish or await.
+
+        // `FuelP2PService` doesn't support graceful shutdown(with informing of connected peers).
+        // https://github.com/libp2p/specs/blob/master/ROADMAP.md#%EF%B8%8F-polite-peering
+        // Dropping of the `FuelP2PService` will close all connections.
+
+        Ok(())
     }
 }
 

@@ -8,6 +8,7 @@ use crate::{
         U64,
     },
 };
+use anyhow::anyhow;
 use async_graphql::{
     connection::{
         Connection,
@@ -100,6 +101,13 @@ impl CoinQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<UtxoId, Coin, EmptyFields, EmptyFields>> {
+        // Rocksdb doesn't support reverse iteration over a prefix
+        if matches!(last, Some(last) if last > 0) {
+            return Err(
+                anyhow!("reverse pagination isn't supported for this resource").into(),
+            )
+        }
+
         let query = CoinQueryContext(ctx.data_unchecked());
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
             let owner: fuel_tx::Address = filter.owner.into();

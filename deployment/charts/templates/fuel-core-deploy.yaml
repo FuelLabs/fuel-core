@@ -1,3 +1,19 @@
+{{- if .Values.app.prometheus.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ template "fuel-core.name" . }}-service-monitor
+  labels:
+    release: {{ .Values.app.prometheus.helm_release_name }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Values.app.selector_name }}
+  endpoints:
+  - path: /metrics 
+    port: http
+{{- end }}
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -21,11 +37,33 @@ data:
   chainspec.json: |-
 {{ .Files.Get "chainspec.json" | indent 4 }}
 ---
+{{- if .Values.app.sentry_enabled }}
 kind: Service
 apiVersion: v1
 metadata:
   labels:
-    app: {{ template "fuel-core.name" . }}
+    app: {{ .Values.app.selector_name }}
+    chart: {{ template "fuel-core.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  name: {{ template "fuel-core.name" . }}-lb-service
+spec:
+  type: ClusterIP
+  sessionAffinity: ClientIP
+  selector:
+    app: {{ .Values.app.selector_name }}
+  ports:
+    - name: http
+      port: {{ .Values.app.http_port }}
+      protocol: TCP
+      targetPort: {{ .Values.app.target_port }}
+{{- end }}
+---
+kind: Service
+apiVersion: v1
+metadata:
+  labels:
+    app: {{ .Values.app.selector_name }}
     chart: {{ template "fuel-core.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
@@ -33,7 +71,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    app: {{ template "fuel-core.name" . }}
+    app: {{ .Values.app.selector_name }}
   ports:
     - name: http
       port: {{ .Values.app.http_port }}
@@ -49,14 +87,14 @@ kind: Deployment
 metadata:
   name: {{ template "fuel-core.name" . }}-k8s
   labels:
-    app: {{ template "fuel-core.name" . }}
+    app: {{ .Values.app.selector_name }}
     chart: {{ template "fuel-core.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
 spec:
   selector:
     matchLabels:
-      app: {{ template "fuel-core.name" . }}
+      app: {{ .Values.app.selector_name }}
       release: {{ .Release.Name }}
   replicas: {{ .Values.app.replicas }}
   strategy:
@@ -64,7 +102,7 @@ spec:
   template:
     metadata:
       labels:
-        app: {{ template "fuel-core.name" . }}
+        app: {{ .Values.app.selector_name }}
         release: {{ .Release.Name }}
     spec:
       containers:
@@ -159,7 +197,13 @@ spec:
             - "--relayer-eth-sync-log-freq-s"
             - "{{ .Values.app.relayer_eth_sync_log_freq_s }}"
           {{- end }}
-          resources: {}
+          resources:
+            limits:
+              cpu: {{ .Values.app.resources.cpu_limits }}
+              memory: {{ .Values.app.resources.memory_limits }}
+            requests:
+              cpu: {{ .Values.app.resources.cpu_requests }}
+              memory: {{ .Values.app.resources.memory_requests }}
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           ports:
             - name: http
@@ -183,10 +227,18 @@ spec:
           env:
             - name: HUMAN_LOGGING
               value: {{ .Values.app.human_logging | quote }}
+            {{- if .Values.app.reserved_nodes }}
             - name: RESERVED_NODES
               value: {{ .Values.app.reserved_nodes | quote }}
+            {{- end }}
+            {{- if .Values.app.bootstrap_nodes }}
             - name: BOOTSTRAP_NODES
               value: {{ .Values.app.bootstrap_nodes | quote }}
+            {{- end }}
+            {{- if .Values.app.rust_log }}
+            - name: RUST_LOG
+              value: {{ .Values.app.rust_log | quote }}
+            {{- end }}
             # TODO: do we need to do anything to make this more optional for non-consensus nodes?
             - name: CONSENSUS_KEY_SECRET
               valueFrom:
