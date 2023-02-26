@@ -180,3 +180,6 @@ pub trait ConsensusModulePort: Send + Sync {
         block_times: Vec<Option<Tai64>>,
     ) -> anyhow::Result<()>;
 }
+
+#[cfg(test)]
+use fuel_core_storage::test_helpers::MockStorage;
