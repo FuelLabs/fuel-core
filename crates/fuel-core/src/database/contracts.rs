@@ -71,6 +71,10 @@ impl StorageInspect<ContractsRawCode> for Database {
     }
 }
 
+// # Dev-note: The value of the `ContractsRawCode` has a unique implementation of serialization
+// and deserialization. Because the value is a contract byte code represented by bytes,
+// we don't use `serde::Deserialization` and `serde::Serialization` for `Vec`, because we don't
+// need to store the size of the contract. We store/load raw bytes.
 impl StorageMutate<ContractsRawCode> for Database {
     fn insert(
         &mut self,

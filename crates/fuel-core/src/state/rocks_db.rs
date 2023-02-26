@@ -178,7 +178,9 @@ impl KeyValueStore for RocksDb {
     }
 
     fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
+        // FIXME: This is a race condition. We should use a transaction.
         let prev = self.get(key, column)?;
+        // FIXME: This is a race condition. We should use a transaction.
         self.db
             .delete_cf(&self.cf(column), key)
             .map_err(|e| DatabaseError::Other(e.into()))
