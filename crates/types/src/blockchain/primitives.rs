@@ -56,18 +56,12 @@ pub struct BlockId(Bytes32);
 impl BlockId {
     /// Converts the hash into a message having the same bytes.
     pub fn into_message(self) -> fuel_crypto::Message {
-        // This is safe because BlockId is a cryptographically secure hash.
-        unsafe { fuel_crypto::Message::from_bytes_unchecked(*self.0) }
-        // Without this, the signature would be using a hash of the id making it more
-        // difficult to verify.
+        fuel_crypto::Message::from_bytes(*self.0)
     }
 
     /// Converts the hash into a message having the same bytes.
     pub fn as_message(&self) -> &fuel_crypto::Message {
-        // This is safe because BlockId is a cryptographically secure hash.
-        unsafe { fuel_crypto::Message::as_ref_unchecked(self.0.as_slice()) }
-        // Without this, the signature would be using a hash of the id making it more
-        // difficult to verify.
+        fuel_crypto::Message::from_bytes_ref(&self.0)
     }
 
     /// Represents `BlockId` as slice of bytes.

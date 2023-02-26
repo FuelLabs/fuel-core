@@ -191,32 +191,29 @@ async fn dry_run_no_utxo_validation_override() {
 
     let asset_id = rng.gen();
     // construct a tx with invalid inputs
-    let tx = TransactionBuilder::script(
-        Opcode::RET(REG_ONE).to_bytes().into_iter().collect(),
-        vec![],
-    )
-    .gas_limit(1000)
-    .add_input(Input::coin_signed(
-        rng.gen(),
-        rng.gen(),
-        1000,
-        AssetId::default(),
-        Default::default(),
-        0,
-        Default::default(),
-    ))
-    .add_input(Input::coin_signed(
-        rng.gen(),
-        rng.gen(),
-        rng.gen(),
-        asset_id,
-        Default::default(),
-        0,
-        Default::default(),
-    ))
-    .add_output(Output::change(rng.gen(), 0, asset_id))
-    .add_witness(Default::default())
-    .finalize_as_transaction();
+    let tx = TransactionBuilder::script(vec![], vec![])
+        .gas_limit(1000)
+        .add_input(Input::coin_signed(
+            rng.gen(),
+            rng.gen(),
+            1000,
+            AssetId::default(),
+            Default::default(),
+            0,
+            Default::default(),
+        ))
+        .add_input(Input::coin_signed(
+            rng.gen(),
+            rng.gen(),
+            rng.gen(),
+            asset_id,
+            Default::default(),
+            0,
+            Default::default(),
+        ))
+        .add_output(Output::change(rng.gen(), 0, asset_id))
+        .add_witness(Default::default())
+        .finalize_as_transaction();
 
     let client = TestSetupBuilder::new(2322).finalize().await.client;
 

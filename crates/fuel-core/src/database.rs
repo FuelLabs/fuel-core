@@ -128,8 +128,8 @@ pub struct Database {
     _drop: Arc<DropResources>,
 }
 
-trait DropFnTrait: FnOnce() {}
-impl<F> DropFnTrait for F where F: FnOnce() {}
+trait DropFnTrait: FnOnce() + Send + Sync {}
+impl<F> DropFnTrait for F where F: FnOnce() + Send + Sync {}
 type DropFn = Box<dyn DropFnTrait>;
 
 impl fmt::Debug for DropFn {
@@ -144,7 +144,7 @@ struct DropResources {
     drop: Option<DropFn>,
 }
 
-impl<F: 'static + FnOnce()> From<F> for DropResources {
+impl<F: 'static + FnOnce() + Send + Sync> From<F> for DropResources {
     fn from(closure: F) -> Self {
         Self {
             drop: Option::Some(Box::new(closure)),
@@ -159,11 +159,6 @@ impl Drop for DropResources {
         }
     }
 }
-
-/// * SAFETY: we are safe to do it because DataSource is Send+Sync and there is nowhere it is overwritten
-/// it is not Send+Sync by default because Storage insert fn takes &mut self
-unsafe impl Send for Database {}
-unsafe impl Sync for Database {}
 
 impl Database {
     #[cfg(feature = "rocksdb")]
@@ -184,6 +179,14 @@ impl Database {
         }
     }
 
+    pub fn transaction(&self) -> DatabaseTransaction {
+        self.into()
+    }
+}
+
+/// Mutable methods.
+// TODO: Add `&mut self` to them.
+impl Database {
     fn insert<K: AsRef<[u8]>, V: Serialize, R: DeserializeOwned>(
         &self,
         key: K,
@@ -215,15 +218,28 @@ impl Database {
             .transpose()
     }
 
-    fn get<V: DeserializeOwned>(
+    fn write(&self, key: &[u8], column: Column, buf: Vec<u8>) -> DatabaseResult<usize> {
+        self.data.write(key, column, buf)
+    }
+
+    fn replace(
         &self,
         key: &[u8],
         column: Column,
-    ) -> DatabaseResult<Option<V>> {
-        self.data
-            .get(key, column)?
-            .map(|val| postcard::from_bytes(&val).map_err(|_| DatabaseError::Codec))
-            .transpose()
+        buf: Vec<u8>,
+    ) -> DatabaseResult<(usize, Option<Vec<u8>>)> {
+        self.data.replace(key, column, buf)
+    }
+
+    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
+        self.data.take(key, column)
+    }
+}
+
+/// Read-only methods.
+impl Database {
+    fn contains_key(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
+        self.data.exists(key, column)
     }
 
     fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
@@ -243,25 +259,15 @@ impl Database {
         self.data.read_alloc(key, column)
     }
 
-    fn write(&self, key: &[u8], column: Column, buf: Vec<u8>) -> DatabaseResult<usize> {
-        self.data.write(key, column, buf)
-    }
-
-    fn replace(
+    fn get<V: DeserializeOwned>(
         &self,
         key: &[u8],
         column: Column,
-        buf: Vec<u8>,
-    ) -> DatabaseResult<(usize, Option<Vec<u8>>)> {
-        self.data.replace(key, column, buf)
-    }
-
-    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
-        self.data.take(key, column)
-    }
-
-    fn contains_key(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
-        self.data.exists(key, column)
+    ) -> DatabaseResult<Option<V>> {
+        self.data
+            .get(key, column)?
+            .map(|val| postcard::from_bytes(&val).map_err(|_| DatabaseError::Codec))
+            .transpose()
     }
 
     fn iter_all<K, V>(
@@ -332,10 +338,6 @@ impl Database {
                     Ok((key, value))
                 })
             })
-    }
-
-    pub fn transaction(&self) -> DatabaseTransaction {
-        self.into()
     }
 }
 

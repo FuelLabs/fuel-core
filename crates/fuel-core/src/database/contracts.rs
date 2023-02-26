@@ -120,26 +120,40 @@ impl StorageRead<ContractsRawCode> for Database {
 }
 
 impl StorageWrite<ContractsRawCode> for Database {
-    fn write(&self, key: &ContractId, buf: Vec<u8>) -> Result<usize, Self::Error> {
-        Ok(self.write(key.as_ref(), Column::ContractsRawCode, buf)?)
+    fn write(&mut self, key: &ContractId, buf: Vec<u8>) -> Result<usize, Self::Error> {
+        Ok(Database::write(
+            self,
+            key.as_ref(),
+            Column::ContractsRawCode,
+            buf,
+        )?)
     }
 
     fn replace(
-        &self,
+        &mut self,
         key: &<ContractsRawCode as fuel_core_storage::Mappable>::Key,
         buf: Vec<u8>,
     ) -> Result<(usize, Option<Vec<u8>>), <Self as StorageInspect<ContractsRawCode>>::Error>
     where
         Self: StorageSize<ContractsRawCode>,
     {
-        Ok(self.replace(key.as_ref(), Column::ContractsRawCode, buf)?)
+        Ok(Database::replace(
+            self,
+            key.as_ref(),
+            Column::ContractsRawCode,
+            buf,
+        )?)
     }
 
     fn take(
-        &self,
+        &mut self,
         key: &<ContractsRawCode as fuel_core_storage::Mappable>::Key,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(self.take(key.as_ref(), Column::ContractsRawCode)?)
+        Ok(Database::take(
+            self,
+            key.as_ref(),
+            Column::ContractsRawCode,
+        )?)
     }
 }
 
