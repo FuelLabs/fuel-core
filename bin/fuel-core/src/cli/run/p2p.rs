@@ -29,7 +29,8 @@ use std::{
 
 #[derive(Debug, Clone, Args)]
 pub struct P2PArgs {
-    /// Peering secret key. Supports either a hex encoded secret key inline or a path to bip32 mnemonic encoded secret file.
+    /// Peering secret key. Supports either a hex encoded secret key inline or a path to
+    /// bip32 mnemonic encoded secret file.
     #[clap(long = "keypair", env, value_parser = KeypairArg::try_from_string)]
     pub keypair: Option<KeypairArg>,
 
@@ -42,7 +43,8 @@ pub struct P2PArgs {
     #[clap(long = "address", env)]
     pub address: Option<IpAddr>,
 
-    /// Optional address of your local node made reachable for other nodes in the network.
+    /// Optional address of your local node made reachable for other nodes in the
+    /// network.
     #[clap(long = "public_address", env)]
     pub public_address: Option<Multiaddr>,
 
@@ -64,7 +66,8 @@ pub struct P2PArgs {
     #[clap(long = "reserved_nodes", value_delimiter = ',', env)]
     pub reserved_nodes: Vec<Multiaddr>,
 
-    /// With this set to `true` you create a guarded node that is only ever connected to trusted, reserved nodes.    
+    /// With this set to `true` you create a guarded node that is only ever connected to
+    /// trusted, reserved nodes.
     #[clap(long = "reserved_nodes_only_mode", env)]
     pub reserved_nodes_only_mode: bool,
 
@@ -74,12 +77,14 @@ pub struct P2PArgs {
 
     /// Max number of unique peers connected
     /// This number should be at least number of `mesh_n` from `Gossipsub` configuration.
-    /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
+    /// The total number of connections will be `(max_peers_connected +
+    /// reserved_nodes.len()) * max_connections_per_peer`
     #[clap(long = "max_peers_connected", default_value = "50", env)]
     pub max_peers_connected: u32,
 
     /// Max number of connections per single peer
-    /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
+    /// The total number of connections will be `(max_peers_connected +
+    /// reserved_nodes.len()) * max_connections_per_peer`
     #[clap(long = "max_connections_per_peer", default_value = "3", env)]
     pub max_connections_per_peer: u32,
 

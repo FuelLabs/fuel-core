@@ -139,8 +139,8 @@ async fn submit_utxo_verified_tx_below_min_gas_price_fails() {
         .contains("The gas price is too low"));
 }
 
-// verify that dry run can disable utxo_validation by simulating a transaction with unsigned
-// non-existent coin inputs
+// verify that dry run can disable utxo_validation by simulating a transaction with
+// unsigned non-existent coin inputs
 #[tokio::test]
 async fn dry_run_override_utxo_validation() {
     let mut rng = StdRng::seed_from_u64(2322);

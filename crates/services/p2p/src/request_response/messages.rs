@@ -31,13 +31,14 @@ pub type ChannelItem<T> = oneshot::Sender<Option<T>>;
 
 // Peer receives a `RequestMessage`.
 // It prepares a response in form of `OutboundResponse`
-// This `OutboundResponse` gets prepared to be sent over the wire in `NetworkResponse` format.
-// The Peer that requested the message receives the response over the wire in `NetworkResponse` format.
-// It then unpacks it into `ResponseMessage`.
-// `ResponseChannelItem` is used to forward the data within `ResponseMessage` to the receving channel.
-// Client Peer: `RequestMessage` (send request)
-// Server Peer: `RequestMessage` (receive request) -> `OutboundResponse` -> `NetworkResponse` (send response)
-// Client Peer: `NetworkResponse` (receive response) -> `ResponseMessage(data)` -> `ResponseChannelItem(channel, data)` (handle response)
+// This `OutboundResponse` gets prepared to be sent over the wire in `NetworkResponse`
+// format. The Peer that requested the message receives the response over the wire in
+// `NetworkResponse` format. It then unpacks it into `ResponseMessage`.
+// `ResponseChannelItem` is used to forward the data within `ResponseMessage` to the
+// receving channel. Client Peer: `RequestMessage` (send request)
+// Server Peer: `RequestMessage` (receive request) -> `OutboundResponse` ->
+// `NetworkResponse` (send response) Client Peer: `NetworkResponse` (receive response) ->
+// `ResponseMessage(data)` -> `ResponseChannelItem(channel, data)` (handle response)
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, Copy)]

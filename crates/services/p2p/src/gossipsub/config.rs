@@ -67,7 +67,8 @@ pub(crate) fn build_gossipsub_behaviour(p2p_config: &Config) -> Gossipsub {
         )
         .expect("gossipsub initialized");
 
-        // This couldn't be set unless multiple p2p services are running? So it's ok to unwrap
+        // This couldn't be set unless multiple p2p services are running? So it's ok to
+        // unwrap
         P2P_METRICS
             .gossip_sub_registry
             .set(Box::new(p2p_registry))

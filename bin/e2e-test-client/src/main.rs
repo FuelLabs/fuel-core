@@ -28,7 +28,8 @@ fn main() {
     }
 
     let mut args = Arguments::from_args();
-    // If we run tests in parallel they may fail because try to use the same state like UTXOs.
+    // If we run tests in parallel they may fail because try to use the same state like
+    // UTXOs.
     args.test_threads = Some(1);
     let config = load_config();
 

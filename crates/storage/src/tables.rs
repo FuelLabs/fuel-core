@@ -1,5 +1,5 @@
-//! The module contains definition of storage tables used by default implementation of fuel
-//! services.
+//! The module contains definition of storage tables used by default implementation of
+//! fuel services.
 
 use crate::Mappable;
 use fuel_core_types::{
@@ -44,9 +44,10 @@ impl Mappable for FuelBlocks {
     type Value = Self::OwnedValue;
 }
 
-/// The latest UTXO id of the contract. The contract's UTXO represents the unique id of the state.
-/// After each transaction, old UTXO is consumed, and new UTXO is produced. UTXO is used as an
-/// input to the next transaction related to the `ContractId` smart contract.
+/// The latest UTXO id of the contract. The contract's UTXO represents the unique id of
+/// the state. After each transaction, old UTXO is consumed, and new UTXO is produced.
+/// UTXO is used as an input to the next transaction related to the `ContractId` smart
+/// contract.
 pub struct ContractsLatestUtxo;
 
 impl Mappable for ContractsLatestUtxo {
@@ -100,7 +101,8 @@ impl Mappable for Messages {
     type Value = Self::OwnedValue;
 }
 
-/// The storage table that indicates if the [`Message`](crate::model::Message) is spent or not.
+/// The storage table that indicates if the [`Message`](crate::model::Message) is spent or
+/// not.
 pub struct SpentMessages;
 
 impl Mappable for SpentMessages {

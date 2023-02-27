@@ -141,8 +141,8 @@ where
             //  the same `SchemaKey`.
             let entries = entries.skip_while(|result| {
                 if let Ok((key, _)) = result {
-                    // TODO: `entries` should return information about `has_previous_page` for wild
-                    //  queries
+                    // TODO: `entries` should return information about `has_previous_page`
+                    // for wild  queries
                     if let Some(start) = start.as_ref() {
                         // Skip until start + 1
                         if key == start {

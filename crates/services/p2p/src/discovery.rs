@@ -95,7 +95,8 @@ pub struct DiscoveryBehaviour {
 }
 
 impl DiscoveryBehaviour {
-    /// Adds a known listen address of a peer participating in the DHT to the routing table.
+    /// Adds a known listen address of a peer participating in the DHT to the routing
+    /// table.
     pub fn add_address(&mut self, peer_id: &PeerId, address: Multiaddr) {
         self.kademlia.add_address(peer_id, address);
     }
@@ -167,7 +168,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             return Poll::Ready(NetworkBehaviourAction::GenerateEvent(next_event))
         }
 
-        // if random walk is enabled poll the stream that will fire when random walk is scheduled
+        // if random walk is enabled poll the stream that will fire when random walk is
+        // scheduled
         if let Some(next_kad_random_query) = self.next_kad_random_walk.as_mut() {
             while next_kad_random_query.poll_unpin(cx).is_ready() {
                 if self.connected_peers.len() < self.max_peers_connected {
@@ -177,8 +179,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
                 *next_kad_random_query =
                     Box::pin(tokio::time::sleep(self.duration_to_next_kad));
-                // duration to next random walk should either be exponentially bigger than the previous
-                // or at max 60 seconds
+                // duration to next random walk should either be exponentially bigger than
+                // the previous or at max 60 seconds
                 self.duration_to_next_kad =
                     std::cmp::min(self.duration_to_next_kad * 2, SIXTY_SECONDS);
             }
@@ -446,8 +448,9 @@ mod tests {
                             SwarmEvent::Behaviour(DiscoveryEvent::UnroutablePeer(
                                 peer_id,
                             )) => {
-                                // kademlia discovered a peer but does not have it's address
-                                // we simulate Identify happening and provide the address
+                                // kademlia discovered a peer but does not have it's
+                                // address we simulate
+                                // Identify happening and provide the address
                                 let unroutable_peer_addr = discovery_swarms
                                     .iter()
                                     .find_map(|(_, next_addr, next_peer_id)| {

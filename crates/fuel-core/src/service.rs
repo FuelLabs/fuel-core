@@ -52,8 +52,8 @@ pub struct FuelService {
     /// The `ServiceRunner` used for `FuelService`.
     ///
     /// # Dev-note: The `FuelService` is already exposed as a public API and used by many crates.
-    /// To provide a user-friendly API and avoid breaking many downstream crates, `ServiceRunner`
-    /// is wrapped inside.
+    /// To provide a user-friendly API and avoid breaking many downstream crates,
+    /// `ServiceRunner` is wrapped inside.
     runner: ServiceRunner<Task>,
     /// The shared state of the service
     pub shared: SharedState,
@@ -102,7 +102,8 @@ impl FuelService {
         Self::from_database(database, config).await
     }
 
-    /// Creates and starts fuel node instance from service config and a pre-existing database
+    /// Creates and starts fuel node instance from service config and a pre-existing
+    /// database
     pub async fn from_database(
         database: Database,
         config: Config,
@@ -318,7 +319,8 @@ mod tests {
             expected_services += 1;
         }
 
-        // # Dev-note: Update the `expected_services` when we add/remove a new/old service.
+        // # Dev-note: Update the `expected_services` when we add/remove a new/old
+        // service.
         assert_eq!(i, expected_services);
     }
 

@@ -30,7 +30,8 @@ pub struct BlockHeader {
     /// The consensus header.
     pub consensus: ConsensusHeader<GeneratedConsensusFields>,
     /// The header metadata calculated during creation.
-    /// The field is private to enforce the use of the [`PartialBlockHeader::generate`] method.
+    /// The field is private to enforce the use of the [`PartialBlockHeader::generate`]
+    /// method.
     #[cfg_attr(feature = "serde", serde(skip))]
     metadata: Option<BlockHeaderMetadata>,
 }
@@ -52,12 +53,12 @@ pub struct PartialBlockHeader {
 /// The fuel block application header.
 /// Contains everything except consensus related data.
 pub struct ApplicationHeader<Generated> {
-    /// The layer 1 height of messages and events to include since the last layer 1 block number.
-    /// This is not meant to represent the layer 1 block this was committed to. Validators will need
-    /// to have some rules in place to ensure the block number was chosen in a reasonable way. For
-    /// example, they should verify that the block number satisfies the finality requirements of the
-    /// layer 1 chain. They should also verify that the block number isn't too stale and is increasing.
-    /// Some similar concerns are noted in this issue: https://github.com/FuelLabs/fuel-specs/issues/220
+    /// The layer 1 height of messages and events to include since the last layer 1 block
+    /// number. This is not meant to represent the layer 1 block this was committed
+    /// to. Validators will need to have some rules in place to ensure the block
+    /// number was chosen in a reasonable way. For example, they should verify that
+    /// the block number satisfies the finality requirements of the layer 1 chain.
+    /// They should also verify that the block number isn't too stale and is increasing. Some similar concerns are noted in this issue: https://github.com/FuelLabs/fuel-specs/issues/220
     pub da_height: DaBlockHeight,
     /// Generated application fields.
     pub generated: Generated,
@@ -187,9 +188,9 @@ impl BlockHeader {
 
     /// Get the hash of the fuel header.
     pub fn hash(&self) -> BlockId {
-        // The `BlockHeader` can be created only via the [`PartialBlockHeader::generate`] method,
-        // which calculates the hash of the `ApplicationHeader`. So the block header is immutable
-        // and can't change its final hash on the fly.
+        // The `BlockHeader` can be created only via the [`PartialBlockHeader::generate`]
+        // method, which calculates the hash of the `ApplicationHeader`. So the
+        // block header is immutable and can't change its final hash on the fly.
         //
         // This assertion is a double-checks that this behavior is not changed.
         debug_assert_eq!(self.consensus.application_hash, self.application.hash());

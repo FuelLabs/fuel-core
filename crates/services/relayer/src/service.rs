@@ -1,4 +1,5 @@
-//! This module handles bridge communications between the fuel node and the data availability layer.
+//! This module handles bridge communications between the fuel node and the data
+//! availability layer.
 
 use crate::{
     log::EthEventLog,
@@ -235,8 +236,9 @@ where
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        // Nothing to shut down because we don't have any temporary state that should be dumped,
-        // and we don't spawn any sub-tasks that we need to finish or await.
+        // Nothing to shut down because we don't have any temporary state that should be
+        // dumped, and we don't spawn any sub-tasks that we need to finish or
+        // await.
         Ok(())
     }
 }
@@ -291,8 +293,8 @@ impl<D> SharedState<D> {
             .filter(|message| message.da_height <= *da_height))
     }
 
-    /// Get finalized da height that represents last block from da layer that got finalized.
-    /// Panics if height is not set as of initialization of the relayer.
+    /// Get finalized da height that represents last block from da layer that got
+    /// finalized. Panics if height is not set as of initialization of the relayer.
     pub fn get_finalized_da_height(&self) -> anyhow::Result<DaBlockHeight>
     where
         D: RelayerDb + 'static,

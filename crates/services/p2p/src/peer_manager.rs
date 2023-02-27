@@ -603,7 +603,8 @@ impl PeerManager {
         if !self.reserved_peers.contains(&peer_id) {
             // check if all the slots are already taken
             if non_reserved_peers_connected >= self.max_non_reserved_peers {
-                // Too many peers already connected, disconnect the Peer with the first priority.
+                // Too many peers already connected, disconnect the Peer with the first
+                // priority.
                 self.pending_events.push_front(PeerInfoEvent::TooManyPeers {
                     peer_to_disconnect: peer_id,
                 });

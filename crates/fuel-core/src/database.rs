@@ -49,7 +49,8 @@ use std::path::Path;
 use tempfile::TempDir;
 
 // Storages implementation
-// TODO: Move to separate `database/storage` folder, because it is only implementation of storages traits.
+// TODO: Move to separate `database/storage` folder, because it is only implementation of
+// storages traits.
 mod block;
 mod code_root;
 mod coin;
@@ -104,7 +105,8 @@ pub enum Column {
     FuelBlockSecondaryKeyBlockHeights = 13,
     /// See [`Messages`](fuel_core_storage::tables::Messages)
     Messages = 14,
-    /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
+    /// The column of the table that stores `true` if `owner` owns `Message` with
+    /// `message_id`
     OwnedMessageIds = 15,
     /// See [`SealedBlockConsensus`](fuel_core_storage::tables::SealedBlockConsensus)
     FuelBlockConsensus = 16,

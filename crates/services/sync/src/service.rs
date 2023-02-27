@@ -176,8 +176,9 @@ where
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        // Nothing to shut down because we don't have any temporary state that should be dumped,
-        // and we don't spawn any sub-tasks that we need to finish or await.
+        // Nothing to shut down because we don't have any temporary state that should be
+        // dumped, and we don't spawn any sub-tasks that we need to finish or
+        // await.
         Ok(())
     }
 }

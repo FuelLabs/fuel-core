@@ -33,9 +33,10 @@ async fn can_set_da_height() {
 
 #[tokio::test(start_paused = true)]
 async fn stop_service_at_the_begin() {
-    // The test verifies that if the service is stopped at the beginning, it will sync nothing.
-    // It is possible to test because we simulate delay from the Ethereum node by the
-    // `tokio::task::yield_now().await` in each method of the `MockMiddleware`.
+    // The test verifies that if the service is stopped at the beginning, it will sync
+    // nothing. It is possible to test because we simulate delay from the Ethereum
+    // node by the `tokio::task::yield_now().await` in each method of the
+    // `MockMiddleware`.
     let mock_db = MockDb::default();
     let eth_node = MockMiddleware::default();
     // Setup the eth node with a block high enough that there
@@ -51,8 +52,8 @@ async fn stop_service_at_the_begin() {
 
 #[tokio::test(start_paused = true)]
 async fn stop_service_at_the_middle() {
-    // The test verifies that if the service is stopped in the middle of the synchronization,
-    // it will stop immediately.
+    // The test verifies that if the service is stopped in the middle of the
+    // synchronization, it will stop immediately.
     // It is possible to test because we simulate delay from the Ethereum node by the
     // `tokio::task::yield_now().await` in each method of the `MockMiddleware`.
     let mock_db = MockDb::default();
@@ -74,7 +75,8 @@ async fn stop_service_at_the_middle() {
     relayer.stop();
 
     assert!(relayer.shared.await_synced().await.is_err());
-    // During each iteration we sync 5 blocks, so the final 5 * `NUMBER_OF_SYNC_ITERATIONS`
+    // During each iteration we sync 5 blocks, so the final 5 *
+    // `NUMBER_OF_SYNC_ITERATIONS`
     assert_eq!(
         *mock_db.get_finalized_da_height().unwrap(),
         NUMBER_OF_SYNC_ITERATIONS * 5

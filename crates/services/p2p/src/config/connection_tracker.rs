@@ -15,8 +15,9 @@ use std::{
     },
 };
 
-/// A `ConnectionTracker` allows either Reserved Peers or other peers if there is an available slot.
-/// It is synced with `PeerManager` which keeps track of the `ConnectionState`.
+/// A `ConnectionTracker` allows either Reserved Peers or other peers if there is an
+/// available slot. It is synced with `PeerManager` which keeps track of the
+/// `ConnectionState`.
 #[derive(Debug, Clone)]
 pub(crate) struct ConnectionTracker {
     reserved_nodes: HashSet<PeerId>,

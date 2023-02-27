@@ -207,18 +207,18 @@ where
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        // Nothing to shut down because we don't have any temporary state that should be dumped,
-        // and we don't spawn any sub-tasks that we need to finish or await.
-        // Maybe we will save and load the previous list of transactions in the future to
-        // avoid losing them.
+        // Nothing to shut down because we don't have any temporary state that should be
+        // dumped, and we don't spawn any sub-tasks that we need to finish or
+        // await. Maybe we will save and load the previous list of transactions in
+        // the future to avoid losing them.
         Ok(())
     }
 }
 
 // TODO: Remove `find` and `find_one` methods from `txpool`. It is used only by GraphQL.
 //  Instead, `fuel-core` can create a `DatabaseWithTxPool` that aggregates `TxPool` and
-//  storage `Database` together. GraphQL will retrieve data from this `DatabaseWithTxPool` via
-//  `StorageInspect` trait.
+//  storage `Database` together. GraphQL will retrieve data from this `DatabaseWithTxPool`
+// via  `StorageInspect` trait.
 impl<P2P, DB> SharedState<P2P, DB>
 where
     DB: TxPoolDb,
@@ -288,7 +288,8 @@ where
                 Ok(_) => {
                     let result = self.p2p.broadcast_transaction(tx.clone());
                     if let Err(e) = result {
-                        // It can be only in the case of p2p being down or requests overloading it.
+                        // It can be only in the case of p2p being down or requests
+                        // overloading it.
                         tracing::error!(
                             "Unable to broadcast transaction, got an {} error",
                             e

@@ -257,7 +257,8 @@ async fn hybrid_trigger_produces_blocks_correctly_max_block_time() -> anyhow::Re
         Err(broadcast::error::TryRecvError::Empty)
     ));
 
-    // Make sure no blocks are produced when txpool is empty and max_block_time is not exceeded
+    // Make sure no blocks are produced when txpool is empty and max_block_time is not
+    // exceeded
     time::sleep(Duration::new(9, 0)).await;
 
     // Make sure the empty block is actually produced
@@ -297,15 +298,16 @@ async fn hybrid_trigger_produces_blocks_correctly_max_block_time_not_overrides_m
         metrics: false,
     });
 
-    // Make sure no blocks are produced when txpool is empty and `MAX_BLOCK_TIME` is not exceeded
+    // Make sure no blocks are produced when txpool is empty and `MAX_BLOCK_TIME` is not
+    // exceeded
     time::sleep(Duration::new(9, 0)).await;
     assert!(matches!(
         ctx.block_import.try_recv(),
         Err(broadcast::error::TryRecvError::Empty)
     ));
 
-    // Emulate tx status update to trigger the execution. It should produce the block after
-    // `MAX_TX_IDLE_TIME`.
+    // Emulate tx status update to trigger the execution. It should produce the block
+    // after `MAX_TX_IDLE_TIME`.
     ctx.status_sender.send_replace(Some(TxStatus::Submitted));
     assert!(matches!(
         ctx.block_import.try_recv(),

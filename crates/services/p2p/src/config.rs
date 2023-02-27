@@ -77,13 +77,15 @@ pub struct Config<State = Initialized> {
     /// Name of the Network
     pub network_name: String,
 
-    /// Checksum is a hash(sha256) of [`Genesis`](fuel_core_types::blockchain::consensus::Genesis) - chain id.
+    /// Checksum is a hash(sha256) of
+    /// [`Genesis`](fuel_core_types::blockchain::consensus::Genesis) - chain id.
     pub checksum: Checksum,
 
     /// IP address for Swarm to listen on
     pub address: IpAddr,
 
-    /// Optional address of your local node made reachable for other nodes in the network.
+    /// Optional address of your local node made reachable for other nodes in the
+    /// network.
     pub public_address: Option<Multiaddr>,
 
     /// The TCP port that Swarm listens on
@@ -108,10 +110,12 @@ pub struct Config<State = Initialized> {
     // `PeerManager` fields
     /// Max number of unique peers connected
     /// This number should be at least number of `mesh_n` from `Gossipsub` configuration.
-    /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
+    /// The total number of connections will be `(max_peers_connected +
+    /// reserved_nodes.len()) * max_connections_per_peer`
     pub max_peers_connected: u32,
     /// Max number of connections per single peer
-    /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
+    /// The total number of connections will be `(max_peers_connected +
+    /// reserved_nodes.len()) * max_connections_per_peer`
     pub max_connections_per_peer: u32,
     /// The interval at which identification requests are sent to
     /// the remote on established connections after the first request
@@ -135,13 +139,14 @@ pub struct Config<State = Initialized> {
     /// Enables prometheus metrics for this fuel-service
     pub metrics: bool,
 
-    /// It is the state of the config initialization. Everyone can create an instance of the `Self`
-    /// with the `NotInitialized` state. But it can be set into the `Initialized` state only with
-    /// the `init` method.
+    /// It is the state of the config initialization. Everyone can create an instance of
+    /// the `Self` with the `NotInitialized` state. But it can be set into the
+    /// `Initialized` state only with the `init` method.
     pub state: State,
 }
 
-/// The initialized state can be achieved only by the `init` function because `()` is private.
+/// The initialized state can be achieved only by the `init` function because `()` is
+/// private.
 #[derive(Clone, Debug)]
 pub struct Initialized(());
 

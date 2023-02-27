@@ -21,7 +21,8 @@ use libp2p::{
 use std::pin::Pin;
 
 pub(crate) trait Approver {
-    /// Allows Peer connection based on it's PeerId and the Approver's knowledge of the Connection State
+    /// Allows Peer connection based on it's PeerId and the Approver's knowledge of the
+    /// Connection State
     fn allow_peer(&self, peer_id: &PeerId) -> bool;
 }
 

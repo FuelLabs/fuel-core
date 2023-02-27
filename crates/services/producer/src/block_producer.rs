@@ -88,12 +88,12 @@ where
         //  - get previous block info (hash, root, etc)
         //  - select best da_height from relayer
         //  - get available txs from txpool
-        //  - select best txs based on factors like:
-        //      1. fees
-        //      2. parallel throughput
-        //  - Execute block with production mode to correctly malleate txs outputs and block headers
+        //  - select best txs based on factors like: 1. fees 2. parallel throughput
+        //  - Execute block with production mode to correctly malleate txs outputs and
+        //    block headers
 
-        // prevent simultaneous block production calls, the guard will drop at the end of this fn.
+        // prevent simultaneous block production calls, the guard will drop at the end of
+        // this fn.
         let _production_guard = self.lock.lock().await;
 
         let best_transactions = self.txpool.get_includable_txs(height, max_gas);
@@ -120,9 +120,9 @@ where
     }
 
     // TODO: Support custom `block_time` for `dry_run`.
-    /// Simulate a transaction without altering any state. Does not aquire the production lock
-    /// since it is basically a "read only" operation and shouldn't get in the way of normal
-    /// production.
+    /// Simulate a transaction without altering any state. Does not aquire the production
+    /// lock since it is basically a "read only" operation and shouldn't get in the
+    /// way of normal production.
     pub async fn dry_run(
         &self,
         transaction: Transaction,
@@ -145,7 +145,8 @@ where
             PartialFuelBlock::new(header, vec![transaction].into_iter().collect());
 
         let executor = self.executor.clone();
-        // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
+        // use the blocking threadpool for dry_run to avoid clogging up the main async
+        // runtime
         let res: Vec<_> = spawn_blocking(move || -> anyhow::Result<Vec<Receipt>> {
             Ok(executor
                 .dry_run(ExecutionBlock::Production(block), utxo_validation)?
@@ -197,7 +198,8 @@ where
         let best_height = self.relayer.wait_for_at_least(&previous_da_height).await?;
         if best_height < previous_da_height {
             // If this happens, it could mean a block was erroneously imported
-            // without waiting for our relayer's da_height to catch up to imported da_height.
+            // without waiting for our relayer's da_height to catch up to imported
+            // da_height.
             return Err(Error::InvalidDaFinalizationState {
                 best: best_height,
                 previous_block: previous_da_height,
@@ -211,9 +213,9 @@ where
         &self,
         height: BlockHeight,
     ) -> anyhow::Result<PreviousBlockInfo> {
-        // TODO: It is not guaranteed that the genesis height is `0` height. Update the code to
-        //  use a genesis height from the database. If the `height` less than genesis height ->
-        //  return a new error.
+        // TODO: It is not guaranteed that the genesis height is `0` height. Update the
+        // code to  use a genesis height from the database. If the `height` less
+        // than genesis height ->  return a new error.
         // block 0 is reserved for genesis
         if height == 0u32.into() {
             Err(Error::GenesisBlock.into())

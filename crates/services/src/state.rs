@@ -41,8 +41,8 @@ impl State {
     }
 }
 
-/// The wrapper around the `watch::Receiver<State>`. It repeats the `Receiver` functionality +
-/// a new one.
+/// The wrapper around the `watch::Receiver<State>`. It repeats the `Receiver`
+/// functionality + a new one.
 #[derive(Clone)]
 pub struct StateWatcher(watch::Receiver<State>);
 
@@ -83,7 +83,8 @@ impl StateWatcher {
 
 impl StateWatcher {
     #[tracing::instrument(level = "debug", skip(self), err, ret)]
-    /// Infinity loop while the state is `State::Started`. Returns the next received state.
+    /// Infinity loop while the state is `State::Started`. Returns the next received
+    /// state.
     pub async fn while_started(&mut self) -> anyhow::Result<State> {
         loop {
             let state = self.borrow().clone();

@@ -35,7 +35,8 @@ impl From<[u8; 32]> for Checksum {
 /// When two nodes want to establish a connection they need to
 /// exchange the Hash of their respective Chain Id and Chain Config.
 /// The connection is only accepted if their hashes match.
-/// This is used to aviod peers having same network name but different configurations connecting to each other.
+/// This is used to aviod peers having same network name but different configurations
+/// connecting to each other.
 #[derive(Debug, Clone)]
 pub(crate) struct FuelUpgrade {
     checksum: Checksum,
@@ -119,11 +120,13 @@ where
 
     fn upgrade_outbound(self, mut socket: C, _: Self::Info) -> Self::Future {
         async move {
-            // Outbound node sends their own checksum for comparison with the inbound node.
+            // Outbound node sends their own checksum for comparison with the inbound
+            // node.
             write_length_prefixed(&mut socket, &self.checksum.0).await?;
 
-            // Note: outbound node does not need to receive the checksum from the inbound node,
-            // since inbound node will reject the connection if the two don't match on its side.
+            // Note: outbound node does not need to receive the checksum from the inbound
+            // node, since inbound node will reject the connection if the two
+            // don't match on its side.
 
             Ok(socket)
         }

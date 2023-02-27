@@ -94,7 +94,8 @@ pub struct Command {
     )]
     pub chain_config: String,
 
-    /// Allows GraphQL Endpoints to arbitrarily advanced blocks. Should be used for local development only
+    /// Allows GraphQL Endpoints to arbitrarily advanced blocks. Should be used for local
+    /// development only
     #[arg(long = "manual_blocks_enabled", env)]
     pub manual_blocks_enabled: bool,
 

@@ -44,8 +44,8 @@ mod utxo_validation;
 
 #[test]
 fn basic_script_snapshot() {
-    // Since this script is referenced in docs, snapshot the byte representation in-case opcodes
-    // are reassigned in the future
+    // Since this script is referenced in docs, snapshot the byte representation in-case
+    // opcodes are reassigned in the future
     let script = vec![
         op::addi(0x10, RegId::ZERO, 0xca),
         op::addi(0x11, RegId::ZERO, 0xba),
@@ -195,11 +195,12 @@ async fn submit() {
 #[ignore]
 #[tokio::test]
 async fn transaction_status_submitted() {
-    // This test should ensure a transaction's status is Submitted while it is in the mempool
-    // This test should also ensure a transaction's time of submission is correct in the returned status
-    // Currently blocked until https://github.com/FuelLabs/fuel-core/issues/50 is resolved
-    // as execution must be separate from submission for a tx to persist inside of the txpool
-    // Merge with the submit_utxo_verified_tx test once utxo_verification is the default
+    // This test should ensure a transaction's status is Submitted while it is in the
+    // mempool This test should also ensure a transaction's time of submission is
+    // correct in the returned status Currently blocked until https://github.com/FuelLabs/fuel-core/issues/50 is resolved
+    // as execution must be separate from submission for a tx to persist inside of the
+    // txpool Merge with the submit_utxo_verified_tx test once utxo_verification is
+    // the default
     todo!();
 }
 
@@ -318,21 +319,24 @@ async fn get_transactions() {
     assert!(response.has_next_page);
     assert!(!response.has_previous_page);
 
-    // Query for second page 2 with last given cursor: [coinbase_tx4, tx4, coinbase_tx5, tx5]
+    // Query for second page 2 with last given cursor: [coinbase_tx4, tx4, coinbase_tx5,
+    // tx5]
     let page_request_middle_page = PaginationRequest {
         cursor: response.cursor.clone(),
         results: 4,
         direction: PageDirection::Forward,
     };
 
-    // Query backwards from last given cursor [3]: [coinbase_tx3, tx2, coinbase_tx2, tx1, coinbase_tx1]
+    // Query backwards from last given cursor [3]: [coinbase_tx3, tx2, coinbase_tx2, tx1,
+    // coinbase_tx1]
     let page_request_backwards = PaginationRequest {
         cursor: response.cursor.clone(),
         results: 6,
         direction: PageDirection::Backward,
     };
 
-    // Query forwards from last given cursor [3]: [coinbase_tx4, tx4, coinbase_tx5, tx5, coinbase_tx6, tx6]
+    // Query forwards from last given cursor [3]: [coinbase_tx4, tx4, coinbase_tx5, tx5,
+    // coinbase_tx6, tx6]
     let page_request_forwards = PaginationRequest {
         cursor: response.cursor,
         results: 6,
@@ -570,7 +574,8 @@ async fn get_transactions_from_manual_blocks() {
     assert_eq!(transactions[3], txs[5].id());
     assert_eq!(transactions[4], txs[6].id());
 
-    // Query backwards from last given cursor [8]: [5, coinbase_tx2, 4, 3, 2, 1, 0, coinbase_tx1]
+    // Query backwards from last given cursor [8]: [5, coinbase_tx2, 4, 3, 2, 1, 0,
+    // coinbase_tx1]
     let page_request_backwards = PaginationRequest {
         cursor: response.cursor,
         results: 10,

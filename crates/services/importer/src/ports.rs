@@ -53,8 +53,8 @@ pub trait ExecutorDatabase: ImporterDatabase {
 /// The verifier of the block.
 pub trait BlockVerifier {
     /// Verifies the consistency of the block fields for the block's height.
-    /// It includes the verification of **all** fields, it includes the consensus rules for
-    /// the corresponding height.
+    /// It includes the verification of **all** fields, it includes the consensus rules
+    /// for the corresponding height.
     ///
     /// Return an error if the verification failed, otherwise `Ok(())`.
     fn verify_block_fields(

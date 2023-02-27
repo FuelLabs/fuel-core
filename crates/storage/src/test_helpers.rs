@@ -45,8 +45,8 @@ impl Transaction<EmptyStorage> for EmptyStorage {
     }
 }
 
-/// The trait is used to provide a generic mocked implementation for all possible `StorageInspect`,
-/// `StorageMutate`, and `MerkleRootStorage` traits.
+/// The trait is used to provide a generic mocked implementation for all possible
+/// `StorageInspect`, `StorageMutate`, and `MerkleRootStorage` traits.
 pub trait MockStorageMethods {
     /// The mocked implementation fot the `StorageInspect<M>::get` method.
     fn get<M: Mappable + 'static>(
@@ -116,7 +116,8 @@ mockall::mock! {
 }
 
 impl MockStorage {
-    /// Packs `self` into one more `MockStorage` and implements `Transactional` trait by this move.
+    /// Packs `self` into one more `MockStorage` and implements `Transactional` trait by
+    /// this move.
     pub fn into_transactional(self) -> MockStorage {
         let mut db = MockStorage::default();
         db.expect_transaction()

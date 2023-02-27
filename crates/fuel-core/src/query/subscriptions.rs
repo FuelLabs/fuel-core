@@ -63,7 +63,8 @@ where
                                 tracing::debug!(
                                     "transaction was squeezed out: {reason:?}"
                                 );
-                                // Squeezed out status is never stored in the database so must be
+                                // Squeezed out status is never stored in the database so
+                                // must be
                                 // outputted inline.
                                 let status =
                                     TransactionStatus::SqueezedOut(SqueezedOutStatus {

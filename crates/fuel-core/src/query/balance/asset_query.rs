@@ -90,7 +90,8 @@ impl<'a> AssetsQuery<'a> {
         }
     }
 
-    /// Returns the iterator over all valid(spendable, allowed by `exclude`) resources of the `owner`.
+    /// Returns the iterator over all valid(spendable, allowed by `exclude`) resources of
+    /// the `owner`.
     ///
     /// # Note: The resources of different type are not grouped by the `asset_id`.
     // TODO: Optimize this by creating an index
@@ -184,8 +185,8 @@ impl<'a> AssetQuery<'a> {
         }
     }
 
-    /// Returns the iterator over all valid(spendable, allowed by `exclude`) resources of the `owner`
-    /// for the `asset_id`.
+    /// Returns the iterator over all valid(spendable, allowed by `exclude`) resources of
+    /// the `owner` for the `asset_id`.
     pub fn unspent_resources(
         &self,
     ) -> impl Iterator<Item = StorageResult<Resource>> + '_ {

@@ -1,6 +1,6 @@
-//! The crate `fuel-core-types` contains plain rust common type used by `fuel-core` and related
-//! libraries. This crate doesn't contain any business logic and is to be such primitive as that
-//! is possible.
+//! The crate `fuel-core-types` contains plain rust common type used by `fuel-core` and
+//! related libraries. This crate doesn't contain any business logic and is to be such
+//! primitive as that is possible.
 
 #![deny(unused_crate_dependencies)]
 #![deny(missing_docs)]

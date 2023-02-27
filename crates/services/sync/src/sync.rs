@@ -57,7 +57,8 @@ impl SyncHeights {
         let state_change = match height {
             IncomingHeight::Committed(height) => {
                 self.state.apply(|s| s.commit(*height));
-                // A new committed height doesn't represent new work for the import stream.
+                // A new committed height doesn't represent new work for the import
+                // stream.
                 false
             }
             IncomingHeight::Observed(height) => self.state.apply(|s| s.observe(*height)),

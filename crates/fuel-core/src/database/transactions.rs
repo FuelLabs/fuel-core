@@ -45,10 +45,10 @@ impl Database {
         .map(|res| res.map(|(_, tx)| tx))
     }
 
-    /// Iterates over a KV mapping of `[address + block height + tx idx] => transaction id`. This
-    /// allows for efficient lookup of transaction ids associated with an address, sorted by
-    /// block age and ordering within a block. The cursor tracks the `[block height + tx idx]` for
-    /// pagination purposes.
+    /// Iterates over a KV mapping of `[address + block height + tx idx] => transaction
+    /// id`. This allows for efficient lookup of transaction ids associated with an
+    /// address, sorted by block age and ordering within a block. The cursor tracks
+    /// the `[block height + tx idx]` for pagination purposes.
     pub fn owned_transactions(
         &self,
         owner: Address,
@@ -119,7 +119,8 @@ fn owned_tx_index_key(
     default
 }
 
-////////////////////////////////////// Not storage part //////////////////////////////////////
+////////////////////////////////////// Not storage part
+////////////////////////////////////// //////////////////////////////////////
 
 pub type TransactionIndex = u16;
 

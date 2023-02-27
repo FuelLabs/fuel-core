@@ -34,8 +34,8 @@ pub enum GossipsubMessageAcceptance {
 #[derive(Debug, Clone)]
 pub struct GossipData<T> {
     /// The gossipped message payload
-    /// This is meant to be consumed once to avoid cloning. Subsequent attempts to fetch data from
-    /// the message should return None.
+    /// This is meant to be consumed once to avoid cloning. Subsequent attempts to fetch
+    /// data from the message should return None.
     pub data: Option<T>,
     /// The ID of the network peer that sent this message
     pub peer_id: PeerId,

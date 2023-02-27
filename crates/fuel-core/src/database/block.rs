@@ -205,7 +205,8 @@ impl Database {
             .next()
             .transpose()?
             .map(|(height, block)| {
-                // safety: we know that all block heights are stored with the correct amount of bytes
+                // safety: we know that all block heights are stored with the correct
+                // amount of bytes
                 let bytes = <[u8; 4]>::try_from(height.as_slice()).unwrap();
                 (u32::from_be_bytes(bytes).into(), block)
             });

@@ -62,15 +62,16 @@ pub struct ResourceQuery;
 
 #[Object]
 impl ResourceQuery {
-    /// For each `query_per_asset`, get some spendable resources(of asset specified by the query) owned by
-    /// `owner` that add up at least the query amount. The returned resources are actual resources
-    /// that can be spent. The number of resources is optimized to prevent dust accumulation.
-    /// Max number of resources and excluded resources can also be specified.
+    /// For each `query_per_asset`, get some spendable resources(of asset specified by the
+    /// query) owned by `owner` that add up at least the query amount. The returned
+    /// resources are actual resources that can be spent. The number of resources is
+    /// optimized to prevent dust accumulation. Max number of resources and excluded
+    /// resources can also be specified.
     ///
     /// Returns:
-    ///     The list of spendable resources per asset from the query. The length of the result is
-    ///     the same as the length of `query_per_asset`. The ordering of assets and `query_per_asset`
-    ///     is the same.
+    ///     The list of spendable resources per asset from the query. The length of the
+    /// result is     the same as the length of `query_per_asset`. The ordering of
+    /// assets and `query_per_asset`     is the same.
     async fn resources_to_spend(
         &self,
         ctx: &Context<'_>,

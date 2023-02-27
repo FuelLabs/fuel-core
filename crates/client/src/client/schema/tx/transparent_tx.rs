@@ -230,7 +230,8 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
         // This `match` block is added here to enforce compilation error if a new variant
         // is added into the `fuel_tx::Transaction` enum.
         //
-        // If you face a compilation error, please update the code above and add a new variant below.
+        // If you face a compilation error, please update the code above and add a new
+        // variant below.
         match tx {
             fuel_tx::Transaction::Script(_) => {}
             fuel_tx::Transaction::Create(_) => {}

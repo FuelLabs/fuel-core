@@ -91,8 +91,8 @@ async fn snapshot_state_config() {
     let state_coin = state_conf.clone().coins.unwrap();
 
     for i in 0..starting_coin.len() {
-        // all values are checked except tx_id and output_index as those are generated and not
-        // known at initialization
+        // all values are checked except tx_id and output_index as those are generated and
+        // not known at initialization
         assert_eq!(state_coin[i].owner, starting_coin[i].owner);
         assert_eq!(state_coin[i].asset_id, starting_coin[i].asset_id);
         assert_eq!(state_coin[i].amount, starting_coin[i].amount);

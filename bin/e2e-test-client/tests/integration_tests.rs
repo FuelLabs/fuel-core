@@ -117,6 +117,7 @@ fn save_config_file(config: SuiteConfig) -> TestConfig {
 
 struct TestConfig {
     path: String,
-    // keep the temp dir alive to defer the deletion of the temp dir until the end of the test
+    // keep the temp dir alive to defer the deletion of the temp dir until the end of the
+    // test
     _dir: TempDir,
 }

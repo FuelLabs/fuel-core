@@ -61,7 +61,8 @@ pub struct ContractState {
     used_by: HashSet<TxId>,
     /// how deep are we inside UTXO dependency
     depth: usize,
-    /// origin is needed for child to parent rel, in case when contract is in dependency this is how we make a chain.
+    /// origin is needed for child to parent rel, in case when contract is in dependency
+    /// this is how we make a chain.
     origin: Option<UtxoId>,
     /// gas_price. We can probably derive this from Tx
     gas_price: GasPrice,
@@ -74,8 +75,8 @@ impl ContractState {
     }
 }
 
-/// Always in database. No need for optional spenders, as this state would just be removed from
-/// the hashmap if the message id isn't being spent.
+/// Always in database. No need for optional spenders, as this state would just be removed
+/// from the hashmap if the message id isn't being spent.
 #[derive(Debug, Clone)]
 pub struct MessageState {
     spent_by: TxId,
@@ -112,7 +113,8 @@ impl Dependency {
                 parent_tx = Some(parent.clone());
                 parent.tx().clone()
             });
-            // for every input check if tx_id is inside seen. if not, check coins/contract map.
+            // for every input check if tx_id is inside seen. if not, check coins/contract
+            // map.
             if let Some(parent_tx) = parent_tx {
                 for input in parent_tx.inputs() {
                     // if found and depth is not zero add it to `check`.
@@ -261,7 +263,8 @@ impl Dependency {
                             return Err(Error::NotInsertedIoWrongAssetId.into())
                         }
                     }
-                    // else do nothing, everything is variable and can be only check on execution
+                    // else do nothing, everything is variable and can be only check on
+                    // execution
                 }
                 Output::ContractCreated { .. } => {
                     return Err(Error::NotInsertedIoContractOutput.into())
@@ -307,8 +310,8 @@ impl Dependency {
     }
 
     /// Check for collision. Used only inside insert function.
-    /// Id doesn't change any dependency it just checks if it has possibility to be included.
-    /// Returns: (max_depth, db_coins, db_contracts, collided_transactions);
+    /// Id doesn't change any dependency it just checks if it has possibility to be
+    /// included. Returns: (max_depth, db_coins, db_contracts, collided_transactions);
     #[allow(clippy::type_complexity)]
     fn check_for_collision<'a>(
         &'a self,
@@ -354,7 +357,8 @@ impl Dependency {
                                 .into())
                             } else {
                                 if state.is_in_database() {
-                                    // this means it is loaded from db. Get tx to compare output.
+                                    // this means it is loaded from db. Get tx to compare
+                                    // output.
                                     if self.utxo_validation {
                                         let coin = db.utxo(utxo_id)?.ok_or(
                                             Error::NotInsertedInputUtxoIdNotExisting(
@@ -404,7 +408,8 @@ impl Dependency {
                 | Input::MessageSigned { message_id, .. } => {
                     // verify message id integrity
                     Self::check_if_message_input_matches_id(input)?;
-                    // since message id is derived, we don't need to double check all the fields
+                    // since message id is derived, we don't need to double check all the
+                    // fields
                     if self.utxo_validation {
                         if db.message(message_id)?.is_some() {
                             // return an error if spent block is set
@@ -422,7 +427,8 @@ impl Dependency {
                     }
 
                     if let Some(state) = self.messages.get(message_id) {
-                        // some other is already attempting to spend this message, compare gas price
+                        // some other is already attempting to spend this message, compare
+                        // gas price
                         if state.gas_price >= tx.price() {
                             return Err(Error::NotInsertedCollisionMessageId(
                                 state.spent_by,
@@ -442,7 +448,8 @@ impl Dependency {
                     );
                 }
                 Input::Contract { contract_id, .. } => {
-                    // Does contract exist. We don't need to do any check here other then if contract_id exist or not.
+                    // Does contract exist. We don't need to do any check here other then
+                    // if contract_id exist or not.
                     if let Some(state) = self.contracts.get(contract_id) {
                         // check if contract is created after this transaction.
                         if tx.price() > state.gas_price {
@@ -483,7 +490,8 @@ impl Dependency {
             }
         }
 
-        // nice, our inputs don't collide. Now check if our newly created contracts collide on ContractId
+        // nice, our inputs don't collide. Now check if our newly created contracts
+        // collide on ContractId
         for output in tx.outputs() {
             if let Output::ContractCreated { contract_id, .. } = output {
                 if let Some(contract) = self.contracts.get(contract_id) {
@@ -527,7 +535,8 @@ impl Dependency {
         let (max_depth, db_coins, db_contracts, db_messages, collided) =
             self.check_for_collision(txs, db, tx)?;
 
-        // now we are sure that transaction can be included. remove all collided transactions
+        // now we are sure that transaction can be included. remove all collided
+        // transactions
         let mut removed_tx = Vec::new();
         for collided in collided.into_iter() {
             let collided = txs
@@ -549,9 +558,10 @@ impl Dependency {
                     }
                 }
                 Input::Contract { contract_id, .. } => {
-                    // Contract that we want to use can be already inside dependency (this case)
-                    // or it will be added when db_contracts extends self.contracts (and it
-                    // already contains changed used_by)
+                    // Contract that we want to use can be already inside dependency (this
+                    // case) or it will be added when db_contracts
+                    // extends self.contracts (and it already contains
+                    // changed used_by)
                     if let Some(state) = self.contracts.get_mut(contract_id) {
                         state.used_by.insert(tx.id());
                     }
@@ -562,8 +572,8 @@ impl Dependency {
 
         // insert all coins/contracts that we got from db;
         self.coins.extend(db_coins.into_iter());
-        // for contracts from db that are not found in dependency, we already inserted used_by
-        // and are okay to just extend current list
+        // for contracts from db that are not found in dependency, we already inserted
+        // used_by and are okay to just extend current list
         self.contracts.extend(db_contracts.into_iter());
         // insert / overwrite all applicable message id spending relations
         self.messages.extend(db_messages.into_iter());
@@ -615,7 +625,8 @@ impl Dependency {
     ) -> Vec<ArcPoolTx> {
         let mut removed_transactions = vec![tx.clone()];
 
-        // recursively remove all transactions that depend on the outputs of the current tx
+        // recursively remove all transactions that depend on the outputs of the current
+        // tx
         for (index, output) in tx.outputs().iter().enumerate() {
             match output {
                 Output::Message { .. } | Output::Contract { .. } => {
@@ -637,13 +648,15 @@ impl Dependency {
                             );
                         }
                     } else {
-                        // this shouldn't happen since the output belongs to this unique transaction,
-                        // no other resources should remove this coin state except this transaction.
+                        // this shouldn't happen since the output belongs to this unique
+                        // transaction, no other resources should
+                        // remove this coin state except this transaction.
                         warn!("expected a coin state to be associated with {:?}", &utxo);
                     }
                 }
                 Output::ContractCreated { contract_id, .. } => {
-                    // remove any other pending txs that depend on our yet to be created contract
+                    // remove any other pending txs that depend on our yet to be created
+                    // contract
                     if let Some(contract) = self.contracts.remove(contract_id) {
                         for spend_by in contract.used_by {
                             let rem_tx =
@@ -666,9 +679,11 @@ impl Dependency {
                 Input::CoinSigned { utxo_id, .. }
                 | Input::CoinPredicate { utxo_id, .. } => {
                     // Input coin cases
-                    // 1. coin state was already removed if parent tx was also removed, no cleanup required.
-                    // 2. coin state spent_by needs to be freed from this tx if parent tx isn't being removed
-                    // 3. coin state can be removed if this is a database coin, as no other txs are involved.
+                    // 1. coin state was already removed if parent tx was also removed, no
+                    // cleanup required. 2. coin state spent_by needs
+                    // to be freed from this tx if parent tx isn't being removed
+                    // 3. coin state can be removed if this is a database coin, as no
+                    // other txs are involved.
                     if let Some(state) = self.coins.get_mut(utxo_id) {
                         if !state.is_in_database() {
                             // case 2
@@ -681,14 +696,17 @@ impl Dependency {
                 }
                 Input::Contract { contract_id, .. } => {
                     // Input contract cases
-                    // 1. contract state no longer exists because the parent tx that created the
-                    //    contract was already removed from the graph
-                    // 2. contract state exists and this tx needs to be removed as a user of it.
-                    // 2.a. contract state can be removed if it's from the database and this is the
-                    //      last tx to use it, since no other txs are involved.
+                    // 1. contract state no longer exists because the parent tx that
+                    // created the    contract was already removed
+                    // from the graph 2. contract state exists and
+                    // this tx needs to be removed as a user of it.
+                    // 2.a. contract state can be removed if it's from the database and
+                    // this is the      last tx to use it, since no
+                    // other txs are involved.
                     if let Some(state) = self.contracts.get_mut(contract_id) {
                         state.used_by.remove(&tx.id());
-                        // if contract list is empty and is in db, flag contract state for removal.
+                        // if contract list is empty and is in db, flag contract state for
+                        // removal.
                         if state.used_by.is_empty() && state.is_in_database() {
                             self.contracts.remove(contract_id);
                         }

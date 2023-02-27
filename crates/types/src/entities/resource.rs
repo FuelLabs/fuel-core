@@ -1,4 +1,5 @@
-//! The resources module is an aggregation of all possible spendable entities(utxos, messages, etc).
+//! The resources module is an aggregation of all possible spendable entities(utxos,
+//! messages, etc).
 
 use crate::{
     entities::{
@@ -21,8 +22,9 @@ pub enum ResourceId {
     Message(MessageId),
 }
 
-/// The primary type of spent or not spent resources(coins, messages, etc). The not spent resource
-/// can be used as a source of information for the creation of the transaction's input.
+/// The primary type of spent or not spent resources(coins, messages, etc). The not spent
+/// resource can be used as a source of information for the creation of the transaction's
+/// input.
 #[allow(missing_docs)]
 #[derive(Debug)]
 pub enum Resource {

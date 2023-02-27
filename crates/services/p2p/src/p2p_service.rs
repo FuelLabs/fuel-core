@@ -92,7 +92,8 @@ pub struct FuelP2PService<Codec: NetworkCodec> {
     /// It will send it to the specified Peer via its unique ResponseChannel    
     inbound_requests_table: HashMap<RequestId, ResponseChannel<NetworkResponse>>,
 
-    /// NetworkCodec used as <GossipsubCodec> for encoding and decoding of Gossipsub messages    
+    /// NetworkCodec used as <GossipsubCodec> for encoding and decoding of Gossipsub
+    /// messages
     network_codec: Codec,
 
     /// Stores additional p2p network info    
@@ -138,7 +139,8 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let behaviour = FuelBehaviour::new(&config, codec.clone(), connection_state);
 
         let total_connections = {
-            // Reserved nodes do not count against the configured peer input/output limits.
+            // Reserved nodes do not count against the configured peer input/output
+            // limits.
             let total_peers =
                 config.max_peers_connected + config.reserved_nodes.len() as u32;
 
@@ -339,8 +341,8 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     /// Handles P2P Events.
     /// Returns only events that are of interest to the Network Orchestrator.
     pub async fn next_event(&mut self) -> Option<FuelP2PEvent> {
-        // TODO: add handling for when the stream closes and return None only when there are no
-        //       more events to consume
+        // TODO: add handling for when the stream closes and return None only when there
+        // are no       more events to consume
         let event = self.swarm.select_next_some().await;
         tracing::debug!(?event);
         match event {
@@ -663,7 +665,8 @@ mod tests {
     }
 
     impl NodeData {
-        /// Generates a random `keypair` and takes a free tcp port and returns it as `NodeData`
+        /// Generates a random `keypair` and takes a free tcp port and returns it as
+        /// `NodeData`
         fn random() -> Self {
             let keypair = Keypair::generate_secp256k1();
             let tcp_port = get_unused_port();
@@ -733,12 +736,13 @@ mod tests {
         }
     }
 
-    // Single sentry node connects to multiple reserved nodes and `max_peers_allowed` amount of non-reserved nodes.
-    // It also tries to dial extra non-reserved nodes to establish the connection.
-    // A single reserved node is not started immediately with the rest of the nodes.
-    // Once sentry node establishes the connection with the allowed number of nodes
-    // we start the reserved node, and await for it to establish the connection.
-    // This test proves that there is always an available slot for the reserved node to connect to.
+    // Single sentry node connects to multiple reserved nodes and `max_peers_allowed`
+    // amount of non-reserved nodes. It also tries to dial extra non-reserved nodes to
+    // establish the connection. A single reserved node is not started immediately
+    // with the rest of the nodes. Once sentry node establishes the connection with
+    // the allowed number of nodes we start the reserved node, and await for it to
+    // establish the connection. This test proves that there is always an available
+    // slot for the reserved node to connect to.
     #[tokio::test(flavor = "multi_thread")]
     #[instrument]
     async fn reserved_nodes_reconnect_works() {
@@ -822,8 +826,9 @@ mod tests {
         stop_sender.send(()).unwrap();
     }
 
-    // We start with two nodes, node_a and node_b, bootstrapped with `bootstrap_nodes_count` other nodes.
-    // Yet node_a and node_b are only allowed to connect to specified amount of nodes.
+    // We start with two nodes, node_a and node_b, bootstrapped with
+    // `bootstrap_nodes_count` other nodes. Yet node_a and node_b are only allowed to
+    // connect to specified amount of nodes.
     #[tokio::test]
     #[instrument]
     async fn max_peers_connected_works() {
@@ -1050,8 +1055,8 @@ mod tests {
         }
     }
 
-    // Simulates 2 p2p nodes that are on the same network but their Fuel Upgrade checksum is different
-    // (different chain id or chain config)
+    // Simulates 2 p2p nodes that are on the same network but their Fuel Upgrade checksum
+    // is different (different chain id or chain config)
     // So they are not able to connect
     #[tokio::test]
     #[instrument]
@@ -1134,8 +1139,8 @@ mod tests {
         }
     }
 
-    // Simulates 2 p2p nodes that connect to each other and consequently exchange Peer Info
-    // On sucessful connection, node B updates its latest BlockHeight
+    // Simulates 2 p2p nodes that connect to each other and consequently exchange Peer
+    // Info On sucessful connection, node B updates its latest BlockHeight
     // and shares it with Peer A via Heartbeat protocol
     #[tokio::test]
     #[instrument]
@@ -1274,7 +1279,8 @@ mod tests {
         let mut node_c = build_service_from_config(p2p_config.clone());
 
         // Node C does not connecto to Node A
-        // it should receive the propagated message from Node B if `GossipsubMessageAcceptance` is `Accept`
+        // it should receive the propagated message from Node B if
+        // `GossipsubMessageAcceptance` is `Accept`
         node_c.swarm.ban_peer_id(node_a.local_peer_id);
 
         loop {

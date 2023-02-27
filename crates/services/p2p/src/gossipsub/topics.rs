@@ -61,7 +61,8 @@ impl GossipsubTopics {
     }
 
     /// Given a `GossipsubBroadcastRequest` retruns a `GossipTopic`
-    /// which is broadcast over the network with the serialized inner value of `GossipsubBroadcastRequest`
+    /// which is broadcast over the network with the serialized inner value of
+    /// `GossipsubBroadcastRequest`
     pub fn get_gossipsub_topic(
         &self,
         outgoing_request: &GossipsubBroadcastRequest,
@@ -109,7 +110,8 @@ mod tests {
             consensus_vote_topic.hash()
         );
 
-        // Test given a TopicHash that `get_gossipsub_tag()` returns matching `GossipTopicTag`
+        // Test given a TopicHash that `get_gossipsub_tag()` returns matching
+        // `GossipTopicTag`
         assert_eq!(
             gossipsub_topics.get_gossipsub_tag(&new_tx_topic.hash()),
             Some(GossipTopicTag::NewTx)
@@ -123,7 +125,8 @@ mod tests {
             Some(GossipTopicTag::ConsensusVote)
         );
 
-        // Test given a `GossipsubBroadcastRequest` that `get_gossipsub_topic()` returns matching `Topic`
+        // Test given a `GossipsubBroadcastRequest` that `get_gossipsub_topic()` returns
+        // matching `Topic`
         let broadcast_req =
             GossipsubBroadcastRequest::ConsensusVote(Arc::new(ConsensusVote::default()));
         assert_eq!(

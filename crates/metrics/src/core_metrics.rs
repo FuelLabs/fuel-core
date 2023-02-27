@@ -9,7 +9,8 @@ use prometheus_client::{
 
 pub struct DatabaseMetrics {
     pub registry: Registry,
-    // For descriptions of each Counter, see the `new` function where each Counter/Histogram is initialized
+    // For descriptions of each Counter, see the `new` function where each
+    // Counter/Histogram is initialized
     pub write_meter: Counter,
     pub read_meter: Counter,
     pub bytes_written: Histogram,

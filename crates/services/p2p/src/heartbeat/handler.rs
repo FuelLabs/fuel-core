@@ -312,7 +312,8 @@ enum OutboundState {
     RequestingBlockHeight {
         stream: NegotiatedSubstream,
         /// `false` if the BlockHeight has not been requested yet.
-        /// `true` if the BlockHeight has been requested in the current `Heartbeat` cycle.
+        /// `true` if the BlockHeight has been requested in the current `Heartbeat`
+        /// cycle.
         requested: bool,
     },
     SendingBlockHeight(OutboundData),

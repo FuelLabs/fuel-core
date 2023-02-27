@@ -491,8 +491,8 @@ where
         verifier_result.clone(),
     );
 
-    // We tested commit part in the `commit_result_and_execute_and_commit_poa` so setup the
-    // databases to always pass the committing part.
+    // We tested commit part in the `commit_result_and_execute_and_commit_poa` so setup
+    // the databases to always pass the committing part.
     let expected_height: u32 = sealed_block.entity.header().consensus.height.into();
     let previous_height = expected_height.checked_sub(1).unwrap_or_default();
     let execute_and_commit_result = execute_and_commit_assert(

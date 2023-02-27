@@ -165,7 +165,8 @@ pub fn message_proof<Data: MessageProofData>(
     transaction_id: Bytes32,
     message_id: MessageId,
 ) -> StorageResult<Option<MessageProof>> {
-    // Check if the receipts for this transaction actually contain this message id or exit.
+    // Check if the receipts for this transaction actually contain this message id or
+    // exit.
     let receipt = data
         .receipts(&transaction_id)?
         .into_iter()

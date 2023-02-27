@@ -119,8 +119,8 @@ pub struct Task<T, B, I> {
     /// a bit, but doesn't cause any other issues.
     last_block_created: Instant,
     trigger: Trigger,
-    // TODO: Consider that the creation of the block takes some time, and maybe we need to
-    //  patch the timer to generate the block earlier.
+    // TODO: Consider that the creation of the block takes some time, and maybe we need
+    // to  patch the timer to generate the block earlier.
     //  https://github.com/FuelLabs/fuel-core/issues/918
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
@@ -251,7 +251,8 @@ where
             }
             (Trigger::Instant, _) => {}
             (Trigger::Interval { block_time }, RequestType::Trigger) => {
-                // TODO: instead of sleeping for `block_time`, subtract the time we used for processing
+                // TODO: instead of sleeping for `block_time`, subtract the time we used
+                // for processing
                 self.timer.set_timeout(block_time, OnConflict::Min).await;
             }
             (
@@ -319,7 +320,8 @@ where
                     {
                         self.produce_next_block().await?;
                     } else if self.txpool.pending_number() > 0 {
-                        // We have at least one transaction, so tx_max_idle_time is the limit
+                        // We have at least one transaction, so tx_max_idle_time is the
+                        // limit
                         self.timer
                             .set_timeout(max_tx_idle_time, OnConflict::Min)
                             .await;
@@ -330,7 +332,8 @@ where
             },
             TxStatus::Completed => Ok(()), // This has been processed already
             TxStatus::SqueezedOut { .. } => {
-                // TODO: If this is the only tx, set timer deadline to last_block_time + max_block_time
+                // TODO: If this is the only tx, set timer deadline to last_block_time +
+                // max_block_time
                 Ok(())
             }
         }
@@ -341,8 +344,8 @@ where
             Trigger::Instant | Trigger::Never => {
                 unreachable!("Timer is never set in this mode");
             }
-            // In the Interval mode the timer expires only when a new block should be created.
-            // In the Hybrid mode the timer can be either:
+            // In the Interval mode the timer expires only when a new block should be
+            // created. In the Hybrid mode the timer can be either:
             // 1. min_block_time expired after it was set when a block
             //    would have been produced too soon
             // 2. max_tx_idle_time expired after a tx has arrived
@@ -437,8 +440,9 @@ where
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        // Nothing to shut down because we don't have any temporary state that should be dumped,
-        // and we don't spawn any sub-tasks that we need to finish or await.
+        // Nothing to shut down because we don't have any temporary state that should be
+        // dumped, and we don't spawn any sub-tasks that we need to finish or
+        // await.
         Ok(())
     }
 }

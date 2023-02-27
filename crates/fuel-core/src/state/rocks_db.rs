@@ -230,8 +230,9 @@ impl KeyValueStore for RocksDb {
                     .into_boxed()
             }
             (Some(prefix), Some(start)) => {
-                // TODO: Maybe we want to allow the `start` to be without a `prefix` in the future.
-                // If the `start` doesn't have the same `prefix`, return nothing.
+                // TODO: Maybe we want to allow the `start` to be without a `prefix` in
+                // the future. If the `start` doesn't have the same
+                // `prefix`, return nothing.
                 if !start.starts_with(prefix) {
                     return iter::empty().into_boxed()
                 }

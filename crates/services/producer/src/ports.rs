@@ -66,9 +66,9 @@ pub trait Executor<Database>: Send + Sync {
         block: ExecutionBlock,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>>;
 
-    /// Executes the block without committing it to the database. During execution collects the
-    /// receipts to return them. The `utxo_validation` field can be used to disable the validation
-    /// of utxos during execution.
+    /// Executes the block without committing it to the database. During execution
+    /// collects the receipts to return them. The `utxo_validation` field can be used
+    /// to disable the validation of utxos during execution.
     fn dry_run(
         &self,
         block: ExecutionBlock,

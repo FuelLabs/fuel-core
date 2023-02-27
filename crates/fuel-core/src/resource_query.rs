@@ -110,9 +110,9 @@ impl SpendQuery {
     }
 }
 
-/// Returns the biggest inputs of the `owner` to satisfy the required `target` of the asset. The
-/// number of inputs for each asset can't exceed `max_inputs`, otherwise throw an error that query
-/// can't be satisfied.
+/// Returns the biggest inputs of the `owner` to satisfy the required `target` of the
+/// asset. The number of inputs for each asset can't exceed `max_inputs`, otherwise throw
+/// an error that query can't be satisfied.
 pub fn largest_first(query: &AssetQuery) -> Result<Vec<Resource>, ResourceQueryError> {
     let mut inputs: Vec<_> = query.unspent_resources().try_collect()?;
     inputs.sort_by_key(|resource| Reverse(*resource.amount()));

@@ -44,8 +44,8 @@ impl Config {
         metrics: bool,
         transaction_ttl: Duration,
     ) -> Self {
-        // # Dev-note: If you add a new field, be sure that this field is propagated correctly
-        //  in all places where `new` is used.
+        // # Dev-note: If you add a new field, be sure that this field is propagated
+        // correctly  in all places where `new` is used.
         Self {
             max_tx: 4064,
             max_depth: 10,

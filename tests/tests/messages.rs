@@ -154,7 +154,8 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
 #[tokio::test]
 async fn messages_empty_results_for_owner_with_no_messages(
     #[values(PageDirection::Forward)] direction: PageDirection,
-    //#[values(PageDirection::Forward, PageDirection::Backward)] direction: PageDirection,
+    //#[values(PageDirection::Forward, PageDirection::Backward)] direction:
+    //#[values(PageDirection::Forward, PageDirection,
     // reverse iteration with prefix not supported by rocksdb
     #[values(Address::new([16; 32]), Address::new([0; 32]))] owner: Address,
 ) {
@@ -223,7 +224,8 @@ async fn can_get_message_proof() {
                 op::movi(0x13, 10),
                 // Send the message output.
                 op::smo(0x10, 0x11, 0x12, 0x13),
-                // Offset to the next recipient address (this recipient address + message data len)
+                // Offset to the next recipient address (this recipient address + message
+                // data len)
                 op::addi(0x10, 0x10, 32 + arg.message_data.len() as u16),
             ]
         }));

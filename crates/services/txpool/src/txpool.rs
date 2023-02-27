@@ -220,11 +220,13 @@ where
         info
     }
 
-    /// Removes transaction from `TxPool` with assumption that it is committed into the blockchain.
+    /// Removes transaction from `TxPool` with assumption that it is committed into the
+    /// blockchain.
     // TODO: Don't remove recursively dependent transactions on block commit.
     //  The same logic should be fixed in the `select_transactions`.
     //  This method is used during `select_transactions`, so we need to handle the case
-    //  when transaction was skipped during block execution(`ExecutionResult.skipped_transaction`).
+    //  when transaction was skipped during block
+    // execution(`ExecutionResult.skipped_transaction`).
     pub fn remove_committed_tx(&mut self, tx_id: &TxId) -> Vec<ArcPoolTx> {
         self.remove_by_tx_id(tx_id)
     }
@@ -254,8 +256,9 @@ where
         tx_status_sender: &TxStatusChange,
         txs: &[Arc<Transaction>],
     ) -> Vec<anyhow::Result<InsertionResult>> {
-        // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
-        // should be done before transaction comes to txpool, or before it enters RwLocked region.
+        // Check if that data is okay (witness match input/output, and if recovered
+        // signatures ara valid). should be done before transaction comes to
+        // txpool, or before it enters RwLocked region.
         let mut res = Vec::new();
         for tx in txs.iter() {
             res.push(self.insert_inner(tx.clone()))
@@ -265,7 +268,8 @@ where
             match ret {
                 Ok(InsertionResult { removed, inserted }) => {
                     for removed in removed {
-                        // small todo there is possibility to have removal reason (ReplacedByHigherGas, DependencyRemoved)
+                        // small todo there is possibility to have removal reason
+                        // (ReplacedByHigherGas, DependencyRemoved)
                         // but for now it is okay to just use Error::Removed.
                         tx_status_sender.send_squeezed_out(removed.id(), Error::Removed);
                     }
@@ -292,7 +296,8 @@ where
         self.txs().get(hash).cloned()
     }
 
-    /// find all dependent tx and return them with requested dependencies in one list sorted by Price.
+    /// find all dependent tx and return them with requested dependencies in one list
+    /// sorted by Price.
     pub fn find_dependent(&self, hashes: &[TxId]) -> Vec<ArcPoolTx> {
         let mut seen = HashMap::new();
         {
@@ -329,7 +334,8 @@ where
         self.sorted_includable()
     }
 
-    /// When block is updated we need to receive all spend outputs and remove them from txpool.
+    /// When block is updated we need to receive all spend outputs and remove them from
+    /// txpool.
     pub fn block_update(
         &mut self,
         tx_status_sender: &TxStatusChange,

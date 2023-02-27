@@ -75,25 +75,25 @@ enum Boolean {
 )]
 struct Hybrid {
     /// Hybrid trigger option.
-    /// Sets a minimum lower bound between blocks. This should be set high enough to ensure
-    /// peers can sync the blockchain.
+    /// Sets a minimum lower bound between blocks. This should be set high enough to
+    /// ensure peers can sync the blockchain.
     /// Cannot be combined with other poa mode options (instant or interval).
     #[arg(long = "poa-hybrid-min-time", requires_all = ["idle_time", "max_time"], env)]
     min_time: Option<Duration>,
     /// Hybrid trigger option.
-    /// Sets the max time block production will wait after a period of inactivity before producing
-    /// a new block. If there are txs available but not enough for a full block,
-    /// this is how long the trigger will wait for more txs.
+    /// Sets the max time block production will wait after a period of inactivity before
+    /// producing a new block. If there are txs available but not enough for a full
+    /// block, this is how long the trigger will wait for more txs.
     /// This ensures that if a burst of transactions are submitted,
-    /// they will all be included into the next block instead of making a new block immediately and
-    /// then waiting for the minimum block time to process the rest.
+    /// they will all be included into the next block instead of making a new block
+    /// immediately and then waiting for the minimum block time to process the rest.
     /// Cannot be combined with other poa mode options (instant or interval).
     #[arg(long = "poa-hybrid-idle-time", requires_all = ["min_time", "max_time"], env)]
     idle_time: Option<Duration>,
     /// Hybrid trigger option.
-    /// Sets the maximum time block production will wait to produce a block (even if empty). This
-    /// ensures that there is a regular cadence even under sustained load.
-    /// Cannot be combined with other poa mode options (instant or interval).
+    /// Sets the maximum time block production will wait to produce a block (even if
+    /// empty). This ensures that there is a regular cadence even under sustained
+    /// load. Cannot be combined with other poa mode options (instant or interval).
     #[arg(long = "poa-hybrid-max-time", requires_all = ["min_time", "idle_time"], env)]
     max_time: Option<Duration>,
 }

@@ -366,7 +366,8 @@ impl Node {
         assert_eq!(count, txs.len());
     }
 
-    /// Wait for the node to reach consistency with the given transactions within 10 seconds.
+    /// Wait for the node to reach consistency with the given transactions within 10
+    /// seconds.
     pub async fn consistency_10s(&mut self, txs: &HashMap<Bytes32, Transaction>) {
         tokio::time::timeout(Duration::from_secs(10), self.consistency(txs))
             .await
@@ -375,7 +376,8 @@ impl Node {
             });
     }
 
-    /// Wait for the node to reach consistency with the given transactions within 20 seconds.
+    /// Wait for the node to reach consistency with the given transactions within 20
+    /// seconds.
     pub async fn consistency_20s(&mut self, txs: &HashMap<Bytes32, Transaction>) {
         tokio::time::timeout(Duration::from_secs(20), self.consistency(txs))
             .await

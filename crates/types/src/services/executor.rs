@@ -37,10 +37,11 @@ pub type UncommittedResult<DatabaseTransaction> =
 /// The result of transactions execution.
 #[derive(Debug)]
 pub struct ExecutionResult {
-    /// Created block during the execution of transactions. It contains only valid transactions.
+    /// Created block during the execution of transactions. It contains only valid
+    /// transactions.
     pub block: Block,
-    /// The list of skipped transactions with corresponding errors. Those transactions were
-    /// not included in the block and didn't affect the state of the blockchain.
+    /// The list of skipped transactions with corresponding errors. Those transactions
+    /// were not included in the block and didn't affect the state of the blockchain.
     pub skipped_transactions: Vec<(Transaction, Error)>,
     /// The status of the transactions execution included into the block.
     pub tx_status: Vec<TransactionExecutionStatus>,
@@ -247,8 +248,8 @@ pub enum Error {
     CoinbaseAmountMismatch,
     #[error("Invalid transaction: {0}")]
     TransactionValidity(#[from] TransactionValidityError),
-    // TODO: Replace with `fuel_core_storage::Error` when execution error will live in the
-    //  `fuel-core-executor`.
+    // TODO: Replace with `fuel_core_storage::Error` when execution error will live in
+    // the  `fuel-core-executor`.
     #[error("got error during work with storage {0}")]
     StorageError(Box<dyn StdError + Send + Sync>),
     #[error("got error during work with relayer {0}")]

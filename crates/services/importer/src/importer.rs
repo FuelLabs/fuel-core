@@ -135,8 +135,8 @@ where
     /// It expects that the `UncommittedResult` contains the result of the block
     /// execution(It includes the block itself), but not more.
     ///
-    /// It doesn't do any checks regarding block validity(execution, fields, signing, etc.).
-    /// It only checks the validity of the database.
+    /// It doesn't do any checks regarding block validity(execution, fields, signing,
+    /// etc.). It only checks the validity of the database.
     ///
     /// After the commit into the database notifies about a new imported block.
     ///
@@ -179,14 +179,15 @@ where
 
         // During importing of the genesis block, the database should not be initialized
         // and the genesis block defines the next height.
-        // During the production of the non-genesis block, the next height should be underlying
-        // database height + 1.
+        // During the production of the non-genesis block, the next height should be
+        // underlying database height + 1.
         let expected_next_height = match consensus {
             Consensus::Genesis(_) => {
                 let result = self.database.latest_block_height();
                 let found = !result.is_not_found();
-                // Because the genesis block is not committed, it should return non found error.
-                // If we find the latest height, something is wrong with the state of the database.
+                // Because the genesis block is not committed, it should return non found
+                // error. If we find the latest height, something is wrong
+                // with the state of the database.
                 if found {
                     return Err(Error::InvalidUnderlyingDatabaseGenesisState)
                 }
@@ -245,7 +246,8 @@ where
     /// the block(As a result returns the uncommitted state).
     ///
     /// It validates only the `Block` execution rules and the `Block` fields' validity.
-    /// The validity of the `SealedBlock` and seal information is not the concern of this function.
+    /// The validity of the `SealedBlock` and seal information is not the concern of this
+    /// function.
     ///
     /// The method doesn't require synchronous access, so it could be called in a
     /// concurrent environment.
@@ -294,8 +296,8 @@ where
 
         let actual_block_id = block.id();
         if actual_block_id != sealed_block_id {
-            // It should not be possible because, during validation, we don't touch the block.
-            // But while we pass it by value, let's check it.
+            // It should not be possible because, during validation, we don't touch the
+            // block. But while we pass it by value, let's check it.
             return Err(Error::BlockIdMismatch(sealed_block_id, actual_block_id))
         }
 
@@ -318,7 +320,8 @@ where
     V: BlockVerifier,
 {
     /// The method validates the `Block` fields and commits the `SealedBlock`.
-    /// It is a combination of the [`Importer::verify_and_execute_block`] and [`Importer::commit_result`].
+    /// It is a combination of the [`Importer::verify_and_execute_block`] and
+    /// [`Importer::commit_result`].
     pub fn execute_and_commit(&self, sealed_block: SealedBlock) -> Result<(), Error> {
         let _guard = self.lock()?;
         let result = self.verify_and_execute_block(sealed_block)?;

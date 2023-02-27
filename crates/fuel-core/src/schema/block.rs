@@ -62,12 +62,13 @@ type CoreConsensus = fuel_core_types::blockchain::consensus::Consensus;
 
 #[derive(SimpleObject)]
 pub struct Genesis {
-    /// The chain configs define what consensus type to use, what settlement layer to use,
-    /// rules of block validity, etc.
+    /// The chain configs define what consensus type to use, what settlement layer to
+    /// use, rules of block validity, etc.
     pub chain_config_hash: Bytes32,
     /// The Binary Merkle Tree root of all genesis coins.
     pub coins_root: Bytes32,
-    /// The Binary Merkle Tree root of state, balances, contracts code hash of each contract.
+    /// The Binary Merkle Tree root of state, balances, contracts code hash of each
+    /// contract.
     pub contracts_root: Bytes32,
     /// The Binary Merkle Tree root of all genesis messages.
     pub messages_root: Bytes32,
@@ -120,7 +121,8 @@ impl Header {
         bytes.into()
     }
 
-    /// The layer 1 height of messages and events to include since the last layer 1 block number.
+    /// The layer 1 height of messages and events to include since the last layer 1 block
+    /// number.
     async fn da_height(&self) -> U64 {
         self.0.da_height.0.into()
     }

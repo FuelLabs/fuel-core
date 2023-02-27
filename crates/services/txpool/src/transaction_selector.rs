@@ -5,7 +5,8 @@ use fuel_core_types::{
 use std::cmp::Reverse;
 
 // transaction selection could use a plugin based approach in the
-// future for block producers to customize block building (e.g. alternative priorities besides gas fees)
+// future for block producers to customize block building (e.g. alternative priorities
+// besides gas fees)
 
 pub fn select_transactions(
     mut includable_txs: Vec<ArcPoolTx>,
@@ -70,7 +71,8 @@ mod tests {
     }
 
     /// A test helper that generates set of txs with given gas prices and limits and runs
-    /// `select_transactions` against that, returning the list of selected gas price, limit pairs
+    /// `select_transactions` against that, returning the list of selected gas price,
+    /// limit pairs
     fn make_txs_and_select(txs: &[TxGas], block_gas_limit: Word) -> Vec<TxGas> {
         let mut rng = thread_rng();
 

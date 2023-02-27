@@ -185,14 +185,15 @@ pub struct TxMutation;
 
 #[Object]
 impl TxMutation {
-    /// Execute a dry-run of the transaction using a fork of current state, no changes are committed.
+    /// Execute a dry-run of the transaction using a fork of current state, no changes are
+    /// committed.
     async fn dry_run(
         &self,
         ctx: &Context<'_>,
         tx: HexString,
-        // If set to false, disable input utxo validation, overriding the configuration of the node.
-        // This allows for non-existent inputs to be used without signature validation
-        // for read-only calls.
+        // If set to false, disable input utxo validation, overriding the configuration
+        // of the node. This allows for non-existent inputs to be used without
+        // signature validation for read-only calls.
         utxo_validation: Option<bool>,
     ) -> async_graphql::Result<Vec<receipt::Receipt>> {
         let block_producer = ctx.data_unchecked::<BlockProducer>();
@@ -234,10 +235,11 @@ struct StreamState<'a> {
 #[Subscription]
 impl TxStatusSubscription {
     /// Returns a stream of status updates for the given transaction id.
-    /// If the current status is [`TransactionStatus::Success`], [`TransactionStatus::SqueezedOut`]
-    /// or [`TransactionStatus::Failed`] the stream will return that and end immediately.
-    /// If the current status is [`TransactionStatus::Submitted`] this will be returned
-    /// and the stream will wait for a future update.
+    /// If the current status is [`TransactionStatus::Success`],
+    /// [`TransactionStatus::SqueezedOut`] or [`TransactionStatus::Failed`] the stream
+    /// will return that and end immediately. If the current status is
+    /// [`TransactionStatus::Submitted`] this will be returned and the stream will
+    /// wait for a future update.
     ///
     /// This stream will wait forever so it's advised to use within a timeout.
     ///

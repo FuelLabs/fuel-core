@@ -31,15 +31,15 @@ pub trait RelayerDb: Send + Sync {
         messages: &[CheckedMessage],
     ) -> StorageResult<()>;
 
-    /// Set finalized da height that represent last block from da layer that got finalized.
-    /// This will only set the value if it is greater than the current.
+    /// Set finalized da height that represent last block from da layer that got
+    /// finalized. This will only set the value if it is greater than the current.
     fn set_finalized_da_height_to_at_least(
         &mut self,
         block: &DaBlockHeight,
     ) -> StorageResult<()>;
 
-    /// Get finalized da height that represent last block from da layer that got finalized.
-    /// Panics if height is not set as of initialization of database.
+    /// Get finalized da height that represent last block from da layer that got
+    /// finalized. Panics if height is not set as of initialization of database.
     fn get_finalized_da_height(&self) -> StorageResult<DaBlockHeight>;
 }
 

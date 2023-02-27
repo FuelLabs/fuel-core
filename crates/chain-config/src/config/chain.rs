@@ -57,8 +57,8 @@ pub const LOCAL_TESTNET: &str = "local_testnet";
 pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 
 #[serde_as]
-// TODO: Remove not consensus/network fields from `ChainConfig` or create a new config only
-//  for consensus/network fields.
+// TODO: Remove not consensus/network fields from `ChainConfig` or create a new config
+// only  for consensus/network fields.
 #[skip_serializing_none]
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct ChainConfig {
@@ -168,8 +168,9 @@ impl FromStr for ChainConfig {
 impl GenesisCommitment for ChainConfig {
     fn root(&self) -> anyhow::Result<MerkleRoot> {
         // # Dev-note: If `ChainConfig` got a new field, maybe we need to hash it too.
-        // Avoid using the `..` in the code below. Use `_` instead if you don't need to hash
-        // the field. Explicit fields help to prevent a bug of missing fields in the hash.
+        // Avoid using the `..` in the code below. Use `_` instead if you don't need to
+        // hash the field. Explicit fields help to prevent a bug of missing fields
+        // in the hash.
         let ChainConfig {
             chain_name,
             block_gas_limit,

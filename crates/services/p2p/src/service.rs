@@ -296,11 +296,12 @@ where
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        // Nothing to shut down because we don't have any temporary state that should be dumped,
-        // and we don't spawn any sub-tasks that we need to finish or await.
+        // Nothing to shut down because we don't have any temporary state that should be
+        // dumped, and we don't spawn any sub-tasks that we need to finish or
+        // await.
 
-        // `FuelP2PService` doesn't support graceful shutdown(with informing of connected peers).
-        // https://github.com/libp2p/specs/blob/master/ROADMAP.md#%EF%B8%8F-polite-peering
+        // `FuelP2PService` doesn't support graceful shutdown(with informing of connected
+        // peers). https://github.com/libp2p/specs/blob/master/ROADMAP.md#%EF%B8%8F-polite-peering
         // Dropping of the `FuelP2PService` will close all connections.
 
         Ok(())

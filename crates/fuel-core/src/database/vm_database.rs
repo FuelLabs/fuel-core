@@ -173,8 +173,8 @@ impl InterpreterStorage for VmDatabase {
     }
 
     fn block_hash(&self, block_height: u32) -> Result<Bytes32, Self::DataError> {
-        // Block header hashes for blocks with height greater than or equal to current block height are zero (0x00**32).
-        // https://github.com/FuelLabs/fuel-specs/blob/master/specs/vm/instruction_set.md#bhsh-block-hash
+        // Block header hashes for blocks with height greater than or equal to current
+        // block height are zero (0x00**32). https://github.com/FuelLabs/fuel-specs/blob/master/specs/vm/instruction_set.md#bhsh-block-hash
         if block_height >= self.current_block_height || block_height == 0 {
             Ok(Bytes32::zeroed())
         } else {
@@ -225,7 +225,8 @@ impl InterpreterStorage for VmDatabase {
                     // We found expected key, put value into results
                     results.push(Some(Cow::Owned(value)));
                 } else {
-                    // Iterator moved beyond next expected key, push none until we find the key
+                    // Iterator moved beyond next expected key, push none until we find
+                    // the key
                     results.push(None);
                 }
                 expected_key.increase()?;

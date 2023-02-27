@@ -164,7 +164,8 @@ impl DiscoveryConfig {
                 .random_walk
                 .map(|duration| Box::pin(tokio::time::sleep(duration)));
 
-            // no need to preferm random walk if we don't want the node to connect to non-whitelisted peers
+            // no need to preferm random walk if we don't want the node to connect to
+            // non-whitelisted peers
             if !reserved_nodes_only_mode {
                 random_walk
             } else {

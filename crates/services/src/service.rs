@@ -62,10 +62,10 @@ pub trait RunnableService: Send {
     /// The name of the runnable service, used for namespacing error messages.
     const NAME: &'static str;
 
-    /// Service specific shared data. This is used when you have data that needs to be shared by
-    /// one or more tasks. It is the implementors responsibility to ensure cloning this
-    /// type is shallow and doesn't provide a full duplication of data that is meant
-    /// to be shared between asynchronous processes.
+    /// Service specific shared data. This is used when you have data that needs to be
+    /// shared by one or more tasks. It is the implementors responsibility to ensure
+    /// cloning this type is shallow and doesn't provide a full duplication of data
+    /// that is meant to be shared between asynchronous processes.
     type SharedData: Clone + Send + Sync;
 
     /// The initialized runnable task type.
@@ -76,32 +76,33 @@ pub trait RunnableService: Send {
 
     /// Converts the service into a runnable task before the main run loop.
     ///
-    /// The `state` is a `State` watcher of the service. Some tasks may handle state changes
-    /// on their own.
+    /// The `state` is a `State` watcher of the service. Some tasks may handle state
+    /// changes on their own.
     async fn into_task(self, state_watcher: &StateWatcher) -> anyhow::Result<Self::Task>;
 }
 
-/// The trait is implemented by the service task and contains a single iteration of the infinity
-/// loop.
+/// The trait is implemented by the service task and contains a single iteration of the
+/// infinity loop.
 #[async_trait::async_trait]
 pub trait RunnableTask: Send {
-    /// This function should contain the main business logic of the service task. It will run until
-    /// the service either returns false, panics or a stop signal is received.
-    /// If the service returns an error, it will be logged and execution will resume.
-    /// This is intended to be called only by the `ServiceRunner`.
+    /// This function should contain the main business logic of the service task. It will
+    /// run until the service either returns false, panics or a stop signal is
+    /// received. If the service returns an error, it will be logged and execution
+    /// will resume. This is intended to be called only by the `ServiceRunner`.
     ///
-    /// The `ServiceRunner` continue to call the `run` method in the loop while the state is
-    /// `State::Started`. So first, the `run` method should return a value, and after, the service
-    /// will stop. If the service should react to the state change earlier, it should handle it in
-    /// the `run` loop on its own. See [`StateWatcher::while_started`].
+    /// The `ServiceRunner` continue to call the `run` method in the loop while the state
+    /// is `State::Started`. So first, the `run` method should return a value, and
+    /// after, the service will stop. If the service should react to the state change
+    /// earlier, it should handle it in the `run` loop on its own. See
+    /// [`StateWatcher::while_started`].
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool>;
 
     /// Gracefully shutdowns the task after the end of the execution cycle.
     async fn shutdown(self) -> anyhow::Result<()>;
 }
 
-/// The service runner manages the lifecycle, execution and error handling of a `RunnableService`.
-/// It can be cloned and passed between threads.
+/// The service runner manages the lifecycle, execution and error handling of a
+/// `RunnableService`. It can be cloned and passed between threads.
 #[derive(Debug)]
 pub struct ServiceRunner<S>
 where
@@ -232,7 +233,8 @@ where
     let (sender, _) = watch::channel(State::NotStarted);
     let state = Shared::new(sender);
     let stop_sender = state.clone();
-    // Spawned as a task to check if the service is already running and to capture any panics.
+    // Spawned as a task to check if the service is already running and to capture any
+    // panics.
     tokio::task::spawn(
         async move {
             tracing::debug!("running");

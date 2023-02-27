@@ -1,5 +1,6 @@
 max_width = 90 # changed
 comment_width = 90 # changed
+wrap_comments = true # changed
 normalize_comments = true # changed
 imports_layout = "Vertical" # changed
 imports_granularity = "Crate" # changed

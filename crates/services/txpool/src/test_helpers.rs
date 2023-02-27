@@ -24,8 +24,8 @@ use fuel_core_types::{
     },
 };
 
-// use some arbitrary large amount, this shouldn't affect the txpool logic except for covering
-// the byte and gas price fees.
+// use some arbitrary large amount, this shouldn't affect the txpool logic except for
+// covering the byte and gas price fees.
 pub const TEST_COIN_AMOUNT: u64 = 100_000_000u64;
 
 pub(crate) fn setup_coin(rng: &mut StdRng, mock_db: Option<&MockDb>) -> (Coin, Input) {

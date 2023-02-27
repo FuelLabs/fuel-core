@@ -128,15 +128,16 @@ impl RunnableService for NotInitializedTask {
 impl RunnableTask for Task {
     async fn run(&mut self, _: &mut StateWatcher) -> anyhow::Result<bool> {
         self.server.as_mut().await?;
-        // The `axum::Server` has its internal loop. If `await` is finished, we get an internal
-        // error or stop signal.
+        // The `axum::Server` has its internal loop. If `await` is finished, we get an
+        // internal error or stop signal.
         Ok(false /* should_continue */)
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        // Nothing to shut down because we don't have any temporary state that should be dumped,
-        // and we don't spawn any sub-tasks that we need to finish or await.
-        // The `axum::Server` was already gracefully shutdown at this point.
+        // Nothing to shut down because we don't have any temporary state that should be
+        // dumped, and we don't spawn any sub-tasks that we need to finish or
+        // await. The `axum::Server` was already gracefully shutdown at this
+        // point.
         Ok(())
     }
 }

@@ -117,9 +117,9 @@ impl CompressedBlock {
 impl<TransactionRepresentation> Block<TransactionRepresentation> {
     /// Get the hash of the header.
     pub fn id(&self) -> BlockId {
-        // The `Block` can be created only via the `Block::new` method, which calculates the
-        // identifier based on the header. So the block is immutable and can't change its
-        // identifier on the fly.
+        // The `Block` can be created only via the `Block::new` method, which calculates
+        // the identifier based on the header. So the block is immutable and can't
+        // change its identifier on the fly.
         //
         // This assertion is a double-checks that this behavior is not changed.
         debug_assert_eq!(self.header.id(), self.header.hash());

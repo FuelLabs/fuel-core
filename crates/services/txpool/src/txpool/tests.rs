@@ -858,8 +858,8 @@ async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
     );
 
     let db = MockDb::default();
-    // Do not insert any messages into the DB to ensure there is no matching message for the
-    // tx.
+    // Do not insert any messages into the DB to ensure there is no matching message for
+    // the tx.
     let mut txpool = TxPool::new(Default::default(), db);
 
     let err = txpool.insert_inner(tx).expect_err("should fail");
@@ -907,9 +907,9 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
         .expect("expected successful insertion");
 
     // Insert a tx for the message id with a low gas amount
-    // Because the new transaction's id matches an existing transaction, we compare the gas
-    // prices of both the new and existing transactions. Since the existing transaction's gas
-    // price is higher, we must now reject the new transaction.
+    // Because the new transaction's id matches an existing transaction, we compare the
+    // gas prices of both the new and existing transactions. Since the existing
+    // transaction's gas price is higher, we must now reject the new transaction.
     let err = txpool.insert_inner(tx_low).expect_err("expected failure");
 
     // check error
@@ -944,9 +944,10 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
     txpool.insert_inner(tx_low.clone()).expect("should succeed");
 
     // Insert a tx for the message id with a high gas amount
-    // Because the new transaction's id matches an existing transaction, we compare the gas
-    // prices of both the new and existing transactions. Since the existing transaction's gas
-    // price is lower, we accept the new transaction and squeeze out the old transaction.
+    // Because the new transaction's id matches an existing transaction, we compare the
+    // gas prices of both the new and existing transactions. Since the existing
+    // transaction's gas price is lower, we accept the new transaction and squeeze out
+    // the old transaction.
     let tx_high = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(gas_price_high)
