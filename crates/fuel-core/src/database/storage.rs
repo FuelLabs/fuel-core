@@ -105,7 +105,7 @@ impl Mappable for FuelBlockMerkleMetadata {
 pub struct ContractsAssetsMerkleData;
 
 impl Mappable for ContractsAssetsMerkleData {
-    type Key = Bytes32;
+    type Key = [u8; 32];
     type OwnedKey = Self::Key;
     type Value = sparse::Primitive;
     type OwnedValue = Self::Value;

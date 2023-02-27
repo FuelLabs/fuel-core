@@ -25,12 +25,9 @@ use fuel_core_types::{
     fuel_vm::crypto,
 };
 use itertools::Itertools;
-use std::{
-    borrow::{
-        BorrowMut,
-        Cow,
-    },
-    ops::Deref,
+use std::borrow::{
+    BorrowMut,
+    Cow,
 };
 
 impl StorageInspect<ContractsAssets> for Database {
@@ -75,8 +72,8 @@ impl StorageMutate<ContractsAssets> for Database {
         let root = prev_metadata.root;
         let storage = self.borrow_mut();
         let mut tree: MerkleTree<ContractsAssetsMerkleData, _> =
-            MerkleTree::load(storage, root.deref())
-                .map_err(|err| StorageError::Other(anyhow::anyhow!("{:?}", err)))?;
+            MerkleTree::load(storage, &root)
+                .map_err(|err| StorageError::Other(err.into()))?;
 
         prev
     }
