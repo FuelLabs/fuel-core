@@ -1,5 +1,6 @@
 use crate::{
     config::Config,
+    gossipsub_config::PeerScoreConfig,
     heartbeat::{
         Heartbeat,
         HeartbeatEvent,
@@ -9,6 +10,7 @@ use fuel_core_types::{
     blockchain::primitives::BlockHeight,
     services::p2p::peer_reputation::{
         PeerScore,
+        DECAY_PEER_SCORE,
         DEFAULT_PEER_SCORE,
         MAX_PEER_SCORE,
     },
@@ -63,7 +65,11 @@ use std::{
         Instant,
     },
 };
-use tokio::time::Interval;
+use tokio::time::{
+    self,
+    Interval,
+};
+
 use tracing::{
     debug,
     info,
@@ -72,6 +78,7 @@ use tracing::{
 /// Maximum amount of peer's addresses that we are ready to store per peer
 const MAX_IDENTIFY_ADDRESSES: usize = 10;
 const HEALTH_CHECK_INTERVAL_IN_SECONDS: u64 = 10;
+const REPUTATION_DECAY_INTERVAL_IN_SECONDS: u64 = 1;
 
 /// Events emitted by PeerInfoBehaviour
 #[derive(Debug, Clone)]
@@ -83,6 +90,9 @@ pub enum PeerInfoEvent {
     },
     TooManyPeers {
         peer_to_disconnect: PeerId,
+    },
+    BanPeer {
+        peer_id: PeerId,
     },
     ReconnectToPeer(PeerId),
     PeerIdentified {
@@ -102,12 +112,14 @@ pub struct PeerManagerBehaviour {
     peer_manager: PeerManager,
     // regulary checks if reserved nodes are connected
     health_check: Interval,
+    decay_interval: Interval,
 }
 
 impl PeerManagerBehaviour {
     pub(crate) fn new(
         config: &Config,
         connection_state: Arc<RwLock<ConnectionState>>,
+        peer_score_config: PeerScoreConfig,
     ) -> Self {
         let identify = {
             let identify_config =
@@ -129,6 +141,7 @@ impl PeerManagerBehaviour {
             .collect();
 
         let peer_manager = PeerManager::new(
+            peer_score_config,
             reserved_peers,
             connection_state,
             config.max_peers_connected as usize,
@@ -138,8 +151,11 @@ impl PeerManagerBehaviour {
             heartbeat,
             identify,
             peer_manager,
-            health_check: tokio::time::interval(Duration::from_secs(
+            health_check: time::interval(Duration::from_secs(
                 HEALTH_CHECK_INTERVAL_IN_SECONDS,
+            )),
+            decay_interval: time::interval(Duration::from_secs(
+                REPUTATION_DECAY_INTERVAL_IN_SECONDS,
             )),
         }
     }
@@ -176,12 +192,33 @@ impl PeerManagerBehaviour {
         peer_id: PeerId,
         peer_score: PeerScore,
         reporting_service: &str,
-    ) {
+    ) -> Option<PeerScore> {
         if let Some(latest_peer_score) = self
             .peer_manager
-            .update_peer_score_with(&peer_id, peer_score)
+            .update_peer_score_with(peer_id, peer_score)
         {
             info!(target: "fuel-p2p", "{reporting_service} updated {peer_id} with new score {latest_peer_score}");
+
+            Some(latest_peer_score)
+        } else {
+            None
+        }
+    }
+
+    pub fn report_gossip_score(&mut self, peer_id: &PeerId, gossip_score: f64) {
+        if self
+            .peer_manager
+            .non_reserved_connected_peers
+            .contains_key(peer_id)
+            && gossip_score
+                < self
+                    .peer_manager
+                    .peer_score_config
+                    .get_min_gossipsub_score()
+        {
+            self.peer_manager
+                .pending_events
+                .push_front(PeerInfoEvent::BanPeer { peer_id: *peer_id })
         }
     }
 }
@@ -346,6 +383,10 @@ impl NetworkBehaviour for PeerManagerBehaviour {
         cx: &mut Context<'_>,
         params: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+        if self.decay_interval.poll_tick(cx).is_ready() {
+            self.peer_manager.batch_update_score(DECAY_PEER_SCORE);
+        }
+
         if self.health_check.poll_tick(cx).is_ready() {
             let disconnected_peers: Vec<_> = self
                 .peer_manager
@@ -565,6 +606,7 @@ enum PeerInfoInsert {
 /// Manages Peers and their events
 #[derive(Debug, Default, Clone)]
 struct PeerManager {
+    peer_score_config: PeerScoreConfig,
     pending_events: VecDeque<PeerInfoEvent>,
     non_reserved_connected_peers: HashMap<PeerId, PeerInfo>,
     reserved_connected_peers: HashMap<PeerId, PeerInfo>,
@@ -575,11 +617,13 @@ struct PeerManager {
 
 impl PeerManager {
     fn new(
+        peer_score_config: PeerScoreConfig,
         reserved_peers: HashSet<PeerId>,
         connection_state: Arc<RwLock<ConnectionState>>,
         max_non_reserved_peers: usize,
     ) -> Self {
         Self {
+            peer_score_config,
             pending_events: VecDeque::default(),
             non_reserved_connected_peers: HashMap::with_capacity(max_non_reserved_peers),
             reserved_connected_peers: HashMap::with_capacity(reserved_peers.len()),
@@ -589,18 +633,37 @@ impl PeerManager {
         }
     }
 
+    fn batch_update_score(&mut self, score: PeerScore) {
+        for (peer_id, peer_info) in &mut self.non_reserved_connected_peers {
+            let new_score = peer_info.score + score;
+            peer_info.score = new_score;
+
+            if new_score < self.peer_score_config.get_min_app_score() {
+                self.pending_events
+                    .push_front(PeerInfoEvent::BanPeer { peer_id: *peer_id })
+            }
+        }
+    }
+
     fn update_peer_score_with(
         &mut self,
-        peer_id: &PeerId,
+        peer_id: PeerId,
         score: PeerScore,
     ) -> Option<PeerScore> {
-        if let Some(peer) = self.non_reserved_connected_peers.get_mut(peer_id) {
+        if let Some(peer) = self.non_reserved_connected_peers.get_mut(&peer_id) {
             // score should not go over `MAX_PEER_SCORE`
             let new_score = peer.score + score;
             peer.score = MAX_PEER_SCORE.min(new_score);
+
+            if new_score < self.peer_score_config.get_min_app_score() {
+                // ban the peer with low score
+                self.pending_events
+                    .push_front(PeerInfoEvent::BanPeer { peer_id })
+            }
+
             Some(peer.score)
         } else {
-            log_missing_peer(peer_id);
+            log_missing_peer(&peer_id);
             None
         }
     }
@@ -835,6 +898,7 @@ mod tests {
         let connection_state = ConnectionState::new();
 
         PeerManager::new(
+            PeerScoreConfig::default(),
             reserved_peers.into_iter().collect(),
             connection_state,
             max_non_reserved_peers,
