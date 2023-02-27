@@ -59,8 +59,12 @@ use fuel_core_types::{
             TransactionStatus,
         },
     },
+    tai64::Tai64,
 };
-use std::sync::Arc;
+use std::{
+    ops::Deref,
+    sync::Arc,
+};
 use tokio_stream::wrappers::{
     errors::BroadcastStreamRecvError,
     BroadcastStream,
@@ -202,6 +206,18 @@ impl DatabaseChain for Database {
 impl DatabasePort for Database {}
 
 impl TxPoolPort for TxPoolAdapter {
+    fn transaction(&self, id: TxId) -> Option<Transaction> {
+        self.service
+            .find_one(id)
+            .map(|info| info.tx().clone().deref().into())
+    }
+
+    fn submission_time(&self, id: TxId) -> Option<Tai64> {
+        self.service
+            .find_one(id)
+            .map(|info| Tai64::from_unix(info.submitted_time().as_secs() as i64))
+    }
+
     fn insert(&self, txs: Vec<Arc<Transaction>>) -> Vec<anyhow::Result<InsertionResult>> {
         self.service.insert(txs)
     }
@@ -210,10 +226,6 @@ impl TxPoolPort for TxPoolAdapter {
         &self,
     ) -> BoxStream<Result<TxUpdate, BroadcastStreamRecvError>> {
         Box::pin(BroadcastStream::new(self.service.tx_update_subscribe()))
-    }
-
-    fn find_one(&self, id: TxId) -> Option<fuel_core_types::services::txpool::TxInfo> {
-        self.service.find_one(id)
     }
 }
 

@@ -45,7 +45,6 @@ use fuel_core_types::{
         txpool::{
             InsertionResult,
             TransactionStatus,
-            TxInfo,
         },
     },
     tai64::Tai64,
@@ -148,7 +147,9 @@ pub trait DatabaseChain {
 }
 
 pub trait TxPoolPort: Send + Sync {
-    fn find_one(&self, id: TxId) -> Option<TxInfo>;
+    fn transaction(&self, id: TxId) -> Option<Transaction>;
+
+    fn submission_time(&self, id: TxId) -> Option<Tai64>;
 
     fn insert(&self, txs: Vec<Arc<Transaction>>) -> Vec<anyhow::Result<InsertionResult>>;
 
