@@ -132,14 +132,17 @@ impl BlockHeader {
     pub fn prev_root(&self) -> &Bytes32 {
         &self.as_ref().prev_root
     }
+
     /// Fuel block height.
     pub fn height(&self) -> &BlockHeight {
         &self.as_ref().height
     }
+
     /// The block producer time.
     pub fn time(&self) -> Tai64 {
         self.as_ref().time
     }
+
     /// The hash of the application header.
     pub fn application_hash(&self) -> &Bytes32 {
         &self.as_ref().application_hash
@@ -157,14 +160,17 @@ impl PartialBlockHeader {
     pub fn prev_root(&self) -> &Bytes32 {
         &self.as_ref().prev_root
     }
+
     /// Fuel block height.
     pub fn height(&self) -> &BlockHeight {
         &self.as_ref().height
     }
+
     /// The block producer time.
     pub fn time(&self) -> &Tai64 {
         &self.as_ref().time
     }
+
     /// The type of consensus this header is using.
     pub fn consensus_type(&self) -> ConsensusType {
         ConsensusType::PoA

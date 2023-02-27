@@ -87,6 +87,7 @@ impl BlockImporterPort for BlockImporterAdapter {
                 }),
         )
     }
+
     async fn execute_and_commit(&self, block: SealedBlock) -> anyhow::Result<()> {
         self.execute_and_commit(block).await
     }
@@ -97,6 +98,7 @@ impl ConsensusPort for VerifierAdapter {
     fn check_sealed_header(&self, header: &SealedBlockHeader) -> anyhow::Result<bool> {
         Ok(self.block_verifier.verify_consensus(header))
     }
+
     async fn await_da_height(&self, da_height: &DaBlockHeight) -> anyhow::Result<()> {
         self.block_verifier.await_da_height(da_height).await
     }

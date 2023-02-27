@@ -70,6 +70,7 @@ impl TxInfo {
 
 impl Deref for TxInfo {
     type Target = ArcPoolTx;
+
     fn deref(&self) -> &Self::Target {
         &self.tx
     }

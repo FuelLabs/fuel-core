@@ -95,10 +95,10 @@ pub struct Task {
 
 #[async_trait::async_trait]
 impl RunnableService for NotInitializedTask {
-    const NAME: &'static str = "GraphQL";
-
     type SharedData = SharedState;
     type Task = Task;
+
+    const NAME: &'static str = "GraphQL";
 
     fn shared_data(&self) -> Self::SharedData {
         SharedState {

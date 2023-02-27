@@ -137,11 +137,10 @@ where
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 {
-    const NAME: &'static str = "fuel-core-sync";
-
     type SharedData = ();
-
     type Task = SyncTask<P, E, C>;
+
+    const NAME: &'static str = "fuel-core-sync";
 
     fn shared_data(&self) -> Self::SharedData {}
 
@@ -190,11 +189,10 @@ where
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 {
-    const NAME: &'static str = "fuel-core-sync/import-task";
-
     type SharedData = ();
-
     type Task = ImportTask<P, E, C>;
+
+    const NAME: &'static str = "fuel-core-sync/import-task";
 
     fn shared_data(&self) -> Self::SharedData {}
 

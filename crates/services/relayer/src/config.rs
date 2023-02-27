@@ -45,12 +45,12 @@ pub struct Config {
 
 #[allow(missing_docs)]
 impl Config {
-    pub const DEFAULT_LOG_PAGE_SIZE: u64 = 5;
-    pub const DEFAULT_DA_FINALIZATION: u64 = 100;
     pub const DEFAULT_DA_DEPLOY_HEIGHT: u64 = 0;
-    pub const DEFAULT_SYNC_MINIMUM_DURATION: Duration = Duration::from_secs(5);
+    pub const DEFAULT_DA_FINALIZATION: u64 = 100;
+    pub const DEFAULT_LOG_PAGE_SIZE: u64 = 5;
     pub const DEFAULT_SYNCING_CALL_FREQ: Duration = Duration::from_secs(5);
     pub const DEFAULT_SYNCING_LOG_FREQ: Duration = Duration::from_secs(60);
+    pub const DEFAULT_SYNC_MINIMUM_DURATION: Duration = Duration::from_secs(5);
 }
 
 impl Default for Config {

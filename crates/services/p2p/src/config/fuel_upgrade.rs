@@ -90,9 +90,9 @@ impl<C> InboundUpgrade<C> for FuelUpgrade
 where
     C: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    type Output = C;
     type Error = FuelUpgradeError;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
+    type Output = C;
 
     fn upgrade_inbound(self, mut socket: C, _: Self::Info) -> Self::Future {
         async move {
@@ -113,9 +113,9 @@ impl<C> OutboundUpgrade<C> for FuelUpgrade
 where
     C: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    type Output = C;
     type Error = FuelUpgradeError;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
+    type Output = C;
 
     fn upgrade_outbound(self, mut socket: C, _: Self::Info) -> Self::Future {
         async move {

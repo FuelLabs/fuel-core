@@ -174,10 +174,10 @@ where
     P: Middleware<Error = ProviderError> + 'static,
     D: RelayerDb + Clone + 'static,
 {
-    const NAME: &'static str = "Relayer";
-
     type SharedData = SharedState<D>;
     type Task = Task<P, D>;
+
+    const NAME: &'static str = "Relayer";
 
     fn shared_data(&self) -> Self::SharedData {
         let synced = self.synced.subscribe();

@@ -95,10 +95,10 @@ impl<T> IsNotFound for Result<T> {
 /// ```
 #[macro_export]
 macro_rules! not_found {
-    ($name: literal) => {
+    ($name:literal) => {
         $crate::Error::NotFound($name, concat!(file!(), ":", line!()))
     };
-    ($ty: path) => {
+    ($ty:path) => {
         $crate::Error::NotFound(
             ::core::any::type_name::<<$ty as $crate::Mappable>::OwnedValue>(),
             concat!(file!(), ":", line!()),

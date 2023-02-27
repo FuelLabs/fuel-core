@@ -65,9 +65,9 @@ where
     C: Protocol<C> + AsRef<[u8]> + Zeroize + Send + 'static,
     A: Approver + Send + 'static,
 {
-    type Output = (PeerId, NoiseOutput<T>);
     type Error = NoiseError;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
+    type Output = (PeerId, NoiseOutput<T>);
 
     fn upgrade_inbound(self, socket: T, info: Self::Info) -> Self::Future {
         Box::pin(
@@ -94,9 +94,9 @@ where
     C: Protocol<C> + AsRef<[u8]> + Zeroize + Send + 'static,
     A: Approver + Send + 'static,
 {
-    type Output = (PeerId, NoiseOutput<T>);
     type Error = NoiseError;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
+    type Output = (PeerId, NoiseOutput<T>);
 
     fn upgrade_outbound(self, socket: T, info: Self::Info) -> Self::Future {
         Box::pin(

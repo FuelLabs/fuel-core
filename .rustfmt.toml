@@ -1,4 +1,5 @@
 max_width = 90 # changed
+comment_width = 90 # changed
 normalize_comments = true # changed
 imports_layout = "Vertical" # changed
 imports_granularity = "Crate" # changed
@@ -6,3 +7,6 @@ trailing_semicolon = false # changed
 edition = "2021" # changed
 use_try_shorthand = true # changed
 use_field_init_shorthand = true # changed
+reorder_impl_items = true # changed
+normalize_doc_attributes = true # changed
+format_macro_matchers = true # changed

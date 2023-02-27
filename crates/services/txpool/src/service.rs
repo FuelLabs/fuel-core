@@ -120,10 +120,10 @@ where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
     DB: TxPoolDb,
 {
-    const NAME: &'static str = "TxPool";
-
     type SharedData = SharedState<P2P, DB>;
     type Task = Task<P2P, DB>;
+
+    const NAME: &'static str = "TxPool";
 
     fn shared_data(&self) -> Self::SharedData {
         self.shared.clone()

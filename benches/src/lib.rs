@@ -87,8 +87,8 @@ pub struct VmBenchPrepared {
 }
 
 impl VmBench {
-    pub const SALT: Salt = Salt::zeroed();
     pub const CONTRACT: ContractId = ContractId::zeroed();
+    pub const SALT: Salt = Salt::zeroed();
 
     pub fn new(instruction: Instruction) -> Self {
         Self {

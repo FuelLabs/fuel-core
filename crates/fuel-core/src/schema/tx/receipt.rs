@@ -61,84 +61,111 @@ impl Receipt {
     async fn contract(&self) -> Option<Contract> {
         Some((*self.0.id()?).into())
     }
+
     async fn pc(&self) -> Option<U64> {
         self.0.pc().map(Into::into)
     }
+
     async fn is(&self) -> Option<U64> {
         self.0.is().map(Into::into)
     }
+
     async fn to(&self) -> Option<Contract> {
         self.0.to().copied().map(Into::into)
     }
+
     async fn to_address(&self) -> Option<Address> {
         self.0.to_address().copied().map(Into::into)
     }
+
     async fn amount(&self) -> Option<U64> {
         self.0.amount().map(Into::into)
     }
+
     async fn asset_id(&self) -> Option<AssetId> {
         self.0.asset_id().copied().map(Into::into)
     }
+
     async fn gas(&self) -> Option<U64> {
         self.0.gas().map(Into::into)
     }
+
     async fn param1(&self) -> Option<U64> {
         self.0.param1().map(Into::into)
     }
+
     async fn param2(&self) -> Option<U64> {
         self.0.param2().map(Into::into)
     }
+
     async fn val(&self) -> Option<U64> {
         self.0.val().map(Into::into)
     }
+
     async fn ptr(&self) -> Option<U64> {
         self.0.ptr().map(Into::into)
     }
+
     async fn digest(&self) -> Option<Bytes32> {
         self.0.digest().copied().map(Into::into)
     }
+
     async fn reason(&self) -> Option<U64> {
         self.0.reason().map(|r| U64(r.into()))
     }
+
     async fn ra(&self) -> Option<U64> {
         self.0.ra().map(Into::into)
     }
+
     async fn rb(&self) -> Option<U64> {
         self.0.rb().map(Into::into)
     }
+
     async fn rc(&self) -> Option<U64> {
         self.0.rc().map(Into::into)
     }
+
     async fn rd(&self) -> Option<U64> {
         self.0.rd().map(Into::into)
     }
+
     async fn len(&self) -> Option<U64> {
         self.0.len().map(Into::into)
     }
+
     async fn receipt_type(&self) -> ReceiptType {
         (&self.0).into()
     }
+
     async fn raw_payload(&self) -> HexString {
         HexString(self.0.clone().to_bytes())
     }
+
     async fn result(&self) -> Option<U64> {
         self.0.result().map(|r| Word::from(*r).into())
     }
+
     async fn gas_used(&self) -> Option<U64> {
         self.0.gas_used().map(Into::into)
     }
+
     async fn data(&self) -> Option<HexString> {
         self.0.data().map(|d| d.to_vec().into())
     }
+
     async fn message_id(&self) -> Option<MessageId> {
         self.0.message_id().copied().map(MessageId)
     }
+
     async fn sender(&self) -> Option<Address> {
         self.0.sender().copied().map(Address)
     }
+
     async fn recipient(&self) -> Option<Address> {
         self.0.recipient().copied().map(Address)
     }
+
     async fn nonce(&self) -> Option<Bytes32> {
         self.0.nonce().copied().map(Bytes32)
     }

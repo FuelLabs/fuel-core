@@ -44,6 +44,7 @@ pub mod test_builder {
         async fn current(&self) -> anyhow::Result<u64> {
             Ok(self.eth_remote_current)
         }
+
         fn finalization_period(&self) -> u64 {
             self.eth_remote_finalization_period
         }

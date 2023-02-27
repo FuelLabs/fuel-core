@@ -57,9 +57,9 @@ impl Mappable for FuelBlockSecondaryKeyBlockHeights {
     /// Secondary key - `BlockHeight`.
     type Key = BlockHeight;
     type OwnedKey = Self::Key;
+    type OwnedValue = Self::Value;
     /// Primary key - `BlockId`.
     type Value = BlockId;
-    type OwnedValue = Self::Value;
 }
 
 /// The table of BMT MMR data for the fuel blocks.
@@ -68,8 +68,8 @@ pub struct FuelBlockMerkleData;
 impl Mappable for FuelBlockMerkleData {
     type Key = u64;
     type OwnedKey = Self::Key;
-    type Value = binary::Primitive;
     type OwnedValue = Self::Value;
+    type Value = binary::Primitive;
 }
 
 /// The metadata table for [`FuelBlockMerkleData`] table.
@@ -78,8 +78,8 @@ pub struct FuelBlockMerkleMetadata;
 impl Mappable for FuelBlockMerkleMetadata {
     type Key = BlockHeight;
     type OwnedKey = Self::Key;
-    type Value = DenseMerkleMetadata;
     type OwnedValue = Self::Value;
+    type Value = DenseMerkleMetadata;
 }
 
 /// The table has a corresponding column in the database.

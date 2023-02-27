@@ -124,14 +124,13 @@ impl HeartbeatHandler {
 }
 
 impl ConnectionHandler for HeartbeatHandler {
-    type InEvent = HeartbeatInEvent;
-    type OutEvent = HeartbeatOutEvent;
     type Error = HeartbeatFailure;
-
-    type InboundProtocol = ReadyUpgrade<&'static [u8]>;
-    type OutboundProtocol = ReadyUpgrade<&'static [u8]>;
-    type OutboundOpenInfo = ();
+    type InEvent = HeartbeatInEvent;
     type InboundOpenInfo = ();
+    type InboundProtocol = ReadyUpgrade<&'static [u8]>;
+    type OutEvent = HeartbeatOutEvent;
+    type OutboundOpenInfo = ();
+    type OutboundProtocol = ReadyUpgrade<&'static [u8]>;
 
     fn listen_protocol(&self) -> SubstreamProtocol<ReadyUpgrade<&'static [u8]>, ()> {
         SubstreamProtocol::new(ReadyUpgrade::new(HEARTBEAT_PROTOCOL), ())

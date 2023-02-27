@@ -361,10 +361,10 @@ impl<T, B, I> RunnableService for Task<T, B, I>
 where
     Self: RunnableTask,
 {
-    const NAME: &'static str = "PoA";
-
     type SharedData = SharedState;
     type Task = Task<T, B, I>;
+
+    const NAME: &'static str = "PoA";
 
     fn shared_data(&self) -> Self::SharedData {
         self.shared_state.clone()

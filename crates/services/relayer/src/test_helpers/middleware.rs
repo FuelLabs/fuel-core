@@ -227,8 +227,8 @@ impl JsonRpcClient for MockMiddleware {
 #[async_trait]
 impl Middleware for MockMiddleware {
     type Error = ProviderError;
-    type Provider = Self;
     type Inner = Self;
+    type Provider = Self;
 
     fn inner(&self) -> &Self::Inner {
         unreachable!("There is no inner provider here")

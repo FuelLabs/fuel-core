@@ -149,6 +149,7 @@ impl PeerToPeerPort for PressurePeerToPeerPort {
     fn height_stream(&self) -> BoxStream<BlockHeight> {
         self.0.height_stream()
     }
+
     async fn get_sealed_block_header(
         &self,
         height: BlockHeight,
@@ -161,6 +162,7 @@ impl PeerToPeerPort for PressurePeerToPeerPort {
         });
         self.0.get_sealed_block_header(height).await
     }
+
     async fn get_transactions(
         &self,
         block_id: SourcePeer<BlockId>,
@@ -236,34 +238,43 @@ impl Counts {
         self.now.headers += 1;
         self.max.headers = self.max.headers.max(self.now.headers);
     }
+
     fn dec_headers(&mut self) {
         self.now.headers -= 1;
     }
+
     fn inc_transactions(&mut self) {
         self.now.transactions += 1;
         self.max.transactions = self.max.transactions.max(self.now.transactions);
     }
+
     fn dec_transactions(&mut self) {
         self.now.transactions -= 1;
     }
+
     fn inc_consensus(&mut self) {
         self.now.consensus += 1;
         self.max.consensus = self.max.consensus.max(self.now.consensus);
     }
+
     fn dec_consensus(&mut self) {
         self.now.consensus -= 1;
     }
+
     fn inc_executes(&mut self) {
         self.now.executes += 1;
         self.max.executes = self.max.executes.max(self.now.executes);
     }
+
     fn dec_executes(&mut self) {
         self.now.executes -= 1;
     }
+
     fn inc_blocks(&mut self) {
         self.now.blocks += 1;
         self.max.blocks = self.max.blocks.max(self.now.blocks);
     }
+
     fn dec_blocks(&mut self) {
         self.now.blocks -= 1;
     }

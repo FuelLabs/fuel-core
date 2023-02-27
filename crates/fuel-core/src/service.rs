@@ -211,9 +211,10 @@ impl Task {
 
 #[async_trait::async_trait]
 impl RunnableService for Task {
-    const NAME: &'static str = "FuelService";
     type SharedData = SharedState;
     type Task = Task;
+
+    const NAME: &'static str = "FuelService";
 
     fn shared_data(&self) -> Self::SharedData {
         self.shared.clone()

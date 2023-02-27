@@ -132,8 +132,8 @@ pub struct RelayerMetadata;
 impl Mappable for RelayerMetadata {
     type Key = Self::OwnedKey;
     type OwnedKey = ();
-    type Value = Self::OwnedValue;
     type OwnedValue = DaBlockHeight;
+    type Value = Self::OwnedValue;
 }
 
 /// Key for da height.
