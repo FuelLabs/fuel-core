@@ -30,8 +30,10 @@ pub struct Coin {
     pub maturity: BlockHeight,
     /// Whether a coin has been spent or not
     pub status: CoinStatus,
-    /// Which block this coin was created in
+    /// The height of the block this coin was created in
     pub block_created: BlockHeight,
+    /// The index of the tx this coin was created in
+    pub block_created_tx_idx: u16,
 }
 
 impl Coin {
@@ -44,6 +46,7 @@ impl Coin {
             maturity: self.maturity,
             status: self.status,
             block_created: self.block_created,
+            block_created_tx_idx: self.block_created_tx_idx,
         }
     }
 }
@@ -65,8 +68,10 @@ pub struct CompressedCoin {
     // TODO: Remove `status` when we will not use it for API functionality.
     /// Whether a coin has been spent or not
     pub status: CoinStatus,
-    /// Which block this coin was created in
+    /// The height of the block that created this coin (TxPointer)
     pub block_created: BlockHeight,
+    /// Index of the tx that created this coin (TxPointer)
+    pub block_created_tx_idx: u16,
 }
 
 impl CompressedCoin {
@@ -80,6 +85,7 @@ impl CompressedCoin {
             maturity: self.maturity,
             status: self.status,
             block_created: self.block_created,
+            block_created_tx_idx: self.block_created_tx_idx,
         }
     }
 }

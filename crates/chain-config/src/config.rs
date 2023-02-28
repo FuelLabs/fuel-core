@@ -231,7 +231,7 @@ mod tests {
                 coins: Some(vec![CoinConfig {
                     tx_id,
                     output_index,
-                    block_created,
+                    tx_pointer_block_height: block_created,
                     maturity,
                     owner,
                     amount,

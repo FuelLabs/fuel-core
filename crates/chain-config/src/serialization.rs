@@ -31,6 +31,26 @@ impl SerializeAs<u64> for HexNumber {
     }
 }
 
+impl SerializeAs<u32> for HexNumber {
+    fn serialize_as<S>(value: &u32, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let bytes = value.to_be_bytes();
+        serde_hex::serialize(bytes, serializer)
+    }
+}
+
+impl SerializeAs<u16> for HexNumber {
+    fn serialize_as<S>(value: &u16, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let bytes = value.to_be_bytes();
+        serde_hex::serialize(bytes, serializer)
+    }
+}
+
 impl<'de> DeserializeAs<'de, Word> for HexNumber {
     fn deserialize_as<D>(deserializer: D) -> Result<Word, D::Error>
     where
@@ -59,12 +79,68 @@ impl<'de> DeserializeAs<'de, Word> for HexNumber {
     }
 }
 
+impl<'de> DeserializeAs<'de, u32> for HexNumber {
+    fn deserialize_as<D>(deserializer: D) -> Result<u32, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let mut bytes: Vec<u8> = serde_hex::deserialize(deserializer)?;
+        match bytes.len() {
+            len if len > WORD_SIZE => {
+                return Err(D::Error::custom(format!(
+                    "value cant exceed {WORD_SIZE} bytes"
+                )))
+            }
+            len if len < WORD_SIZE => {
+                // pad if length < word size
+                bytes = (0..WORD_SIZE - len)
+                    .map(|_| 0u8)
+                    .chain(bytes.into_iter())
+                    .collect();
+            }
+            _ => {}
+        }
+        // We've already verified the bytes.len == WORD_SIZE, force the conversion here.
+        Ok(u32::from_be_bytes(
+            bytes.try_into().expect("byte lengths checked"),
+        ))
+    }
+}
+
+impl<'de> DeserializeAs<'de, u16> for HexNumber {
+    fn deserialize_as<D>(deserializer: D) -> Result<u16, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let mut bytes: Vec<u8> = serde_hex::deserialize(deserializer)?;
+        match bytes.len() {
+            len if len > WORD_SIZE => {
+                return Err(D::Error::custom(format!(
+                    "value cant exceed {WORD_SIZE} bytes"
+                )))
+            }
+            len if len < WORD_SIZE => {
+                // pad if length < word size
+                bytes = (0..WORD_SIZE - len)
+                    .map(|_| 0u8)
+                    .chain(bytes.into_iter())
+                    .collect();
+            }
+            _ => {}
+        }
+        // We've already verified the bytes.len == WORD_SIZE, force the conversion here.
+        Ok(u16::from_be_bytes(
+            bytes.try_into().expect("byte lengths checked"),
+        ))
+    }
+}
+
 impl SerializeAs<BlockHeight> for HexNumber {
     fn serialize_as<S>(value: &BlockHeight, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let number: u64 = (*value).into();
+        let number: u32 = (*value).into();
         HexNumber::serialize_as(&number, serializer)
     }
 }

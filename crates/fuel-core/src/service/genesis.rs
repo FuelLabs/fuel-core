@@ -194,7 +194,8 @@ fn init_coin_state(
                     asset_id: coin.asset_id,
                     maturity: coin.maturity.unwrap_or_default(),
                     status: CoinStatus::Unspent,
-                    block_created: coin.block_created.unwrap_or_default(),
+                    block_created: coin.tx_pointer_block_height.unwrap_or_default(),
+                    block_created_tx_idx: coin.tx_pointer_tx_idx.unwrap_or_default(),
                 };
 
                 if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
@@ -462,7 +463,7 @@ mod tests {
                         CoinConfig {
                             tx_id: alice_tx_id,
                             output_index: alice_output_index.map(|i| i as u64),
-                            block_created: alice_block_created,
+                            tx_pointer_block_height: alice_block_created,
                             maturity: alice_maturity,
                             owner: alice,
                             amount: alice_value,
@@ -471,7 +472,7 @@ mod tests {
                         CoinConfig {
                             tx_id: None,
                             output_index: None,
-                            block_created: None,
+                            tx_pointer_block_height: None,
                             maturity: None,
                             owner: bob,
                             amount: bob_value,

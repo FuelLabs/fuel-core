@@ -16,7 +16,6 @@ use fuel_core_types::{
         Bytes32,
     },
 };
-
 use serde::{
     Deserialize,
     Serialize,
@@ -37,10 +36,15 @@ pub struct CoinConfig {
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]
     pub output_index: Option<u64>,
-    /// used if coin is forked from another chain to preserve id
+    /// used if coin is forked from another chain to preserve id & tx_pointer
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]
-    pub block_created: Option<BlockHeight>,
+    pub tx_pointer_block_height: Option<BlockHeight>,
+    /// used if coin is forked from another chain to preserve id & tx_pointer
+    /// The index of the originating tx within `block_created`
+    #[serde_as(as = "Option<HexNumber>")]
+    #[serde(default)]
+    pub tx_pointer_tx_idx: Option<u16>,
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]
     pub maturity: Option<BlockHeight>,
@@ -61,6 +65,7 @@ impl GenesisCommitment for CompressedCoin {
             .chain((*self.maturity).to_be_bytes())
             .chain([self.status as u8])
             .chain((*self.block_created).to_be_bytes())
+            .chain(self.block_created_tx_idx.to_be_bytes())
             .finalize();
 
         Ok(coin_hash)

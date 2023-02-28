@@ -108,7 +108,7 @@ impl TestSetupBuilder {
                         Some(CoinConfig {
                             tx_id: Some(*utxo_id.tx_id()),
                             output_index: Some(utxo_id.output_index() as u64),
-                            block_created: None,
+                            tx_pointer_block_height: None,
                             maturity: None,
                             owner: *owner,
                             amount: *amount,
