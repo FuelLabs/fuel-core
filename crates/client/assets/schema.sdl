@@ -265,8 +265,8 @@ type FailureStatus {
 
 type Genesis {
 	"""
-	The chain configs define what consensus type to use, what settlement layer to use,
-	rules of block validity, etc.
+	The chain configs define what consensus type to use, what settlement layer to
+	use, rules of block validity, etc.
 	"""
 	chainConfigHash: Bytes32!
 	"""
@@ -274,7 +274,8 @@ type Genesis {
 	"""
 	coinsRoot: Bytes32!
 	"""
-	The Binary Merkle Tree root of state, balances, contracts code hash of each contract.
+	The Binary Merkle Tree root of state, balances, contracts code hash of each
+	contract.
 	"""
 	contractsRoot: Bytes32!
 	"""
@@ -289,7 +290,8 @@ type Header {
 	"""
 	id: BlockId!
 	"""
-	The layer 1 height of messages and events to include since the last layer 1 block number.
+	The layer 1 height of messages and events to include since the last layer 1 block
+	number.
 	"""
 	daHeight: U64!
 	"""
@@ -438,7 +440,8 @@ type Mutation {
 	startTx(id: ID!, txJson: String!): RunResult!
 	continueTx(id: ID!): RunResult!
 	"""
-	Execute a dry-run of the transaction using a fork of current state, no changes are committed.
+	Execute a dry-run of the transaction using a fork of current state, no changes are
+	committed.
 	"""
 	dryRun(tx: HexString!, utxoValidation: Boolean): [Receipt!]!
 	"""
@@ -533,15 +536,16 @@ type Query {
 	messages(owner: Address, first: Int, after: String, last: Int, before: String): MessageConnection!
 	messageProof(transactionId: TransactionId!, messageId: MessageId!): MessageProof
 	"""
-	For each `query_per_asset`, get some spendable resources(of asset specified by the query) owned by
-	`owner` that add up at least the query amount. The returned resources are actual resources
-	that can be spent. The number of resources is optimized to prevent dust accumulation.
-	Max number of resources and excluded resources can also be specified.
+	For each `query_per_asset`, get some spendable resources(of asset specified by the
+	query) owned by `owner` that add up at least the query amount. The returned
+	resources are actual resources that can be spent. The number of resources is
+	optimized to prevent dust accumulation. Max number of resources and excluded
+	resources can also be specified.
 	
 	Returns:
-	The list of spendable resources per asset from the query. The length of the result is
-	the same as the length of `query_per_asset`. The ordering of assets and `query_per_asset`
-	is the same.
+	The list of spendable resources per asset from the query. The length of the
+	result is     the same as the length of `query_per_asset`. The ordering of
+	assets and `query_per_asset`     is the same.
 	"""
 	resourcesToSpend(owner: Address!, queryPerAsset: [SpendQueryElementInput!]!, excludedIds: ExcludeInput): [[Resource!]!]!
 }
@@ -645,10 +649,11 @@ type SubmittedStatus {
 type Subscription {
 	"""
 	Returns a stream of status updates for the given transaction id.
-	If the current status is [`TransactionStatus::Success`], [`TransactionStatus::SqueezedOut`]
-	or [`TransactionStatus::Failed`] the stream will return that and end immediately.
-	If the current status is [`TransactionStatus::Submitted`] this will be returned
-	and the stream will wait for a future update.
+	If the current status is [`TransactionStatus::Success`],
+	[`TransactionStatus::SqueezedOut`] or [`TransactionStatus::Failed`] the stream
+	will return that and end immediately. If the current status is
+	[`TransactionStatus::Submitted`] this will be returned and the stream will
+	wait for a future update.
 	
 	This stream will wait forever so it's advised to use within a timeout.
 	
