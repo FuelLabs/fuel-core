@@ -655,7 +655,7 @@ impl PeerManager {
             let new_score = peer.score + score;
             peer.score = MAX_PEER_SCORE.min(new_score);
 
-            if new_score < self.peer_score_config.get_min_app_score() {
+            if peer.score < self.peer_score_config.get_min_app_score() {
                 // ban the peer with low score
                 self.pending_events
                     .push_front(PeerInfoEvent::BanPeer { peer_id })

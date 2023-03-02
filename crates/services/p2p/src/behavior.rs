@@ -196,9 +196,11 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
             acceptance,
         );
 
-        if let Some(gossip_score) = self.gossipsub.peer_score(propagation_source) {
-            self.peer_manager
-                .report_gossip_score(propagation_source, gossip_score);
+        if let MessageAcceptance::Reject = acceptance {
+            if let Some(gossip_score) = self.gossipsub.peer_score(propagation_source) {
+                self.peer_manager
+                    .report_gossip_score(propagation_source, gossip_score);
+            }
         }
 
         result
