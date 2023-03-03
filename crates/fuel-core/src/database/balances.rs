@@ -11,7 +11,6 @@ use crate::{
     state::IterDirection,
 };
 use fuel_core_storage::{
-    not_found,
     tables::ContractsAssets,
     Error as StorageError,
     Mappable,
@@ -23,7 +22,10 @@ use fuel_core_storage::{
     StorageMutate,
 };
 use fuel_core_types::{
-    fuel_merkle::sparse::MerkleTree,
+    fuel_merkle::sparse::{
+        in_memory,
+        MerkleTree,
+    },
     fuel_types::ContractId,
 };
 use std::borrow::{
@@ -148,9 +150,10 @@ impl MerkleRootStorage<ContractId, ContractsAssets> for Database {
     fn root(&self, parent: &ContractId) -> Result<MerkleRoot, Self::Error> {
         let metadata = self
             .storage::<ContractsAssetsMerkleMetadata>()
-            .get(parent)?
-            .ok_or(not_found!("ContractId"))?;
-        let root = metadata.root.into();
+            .get(parent)?;
+        let root = metadata
+            .map(|metadata| metadata.root.into())
+            .unwrap_or_else(|| in_memory::MerkleTree::new().root());
         Ok(root)
     }
 }

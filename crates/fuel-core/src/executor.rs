@@ -2668,7 +2668,7 @@ mod tests {
             .unwrap();
 
         // Assert the balance and state roots should be the same before and after execution.
-        let empty_state = Bytes32::from(*empty_sum_sha256());
+        let empty_state = [0; 32].into();
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
             tx_status[2].result,
