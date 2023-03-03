@@ -75,6 +75,8 @@ impl StorageMutate<ContractsAssets> for Database {
             MerkleTree::load(storage, &root)
                 .map_err(|err| StorageError::Other(err.into()))?;
 
+        tree.update(&(*key.asset_id()).into(), value.to_be_bytes().as_slice())
+            .map_err(|err| StorageError::Other(err.into()))?;
         prev
     }
 
