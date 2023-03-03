@@ -384,7 +384,7 @@ impl NetworkBehaviour for PeerManagerBehaviour {
         params: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
         if self.decay_interval.poll_tick(cx).is_ready() {
-            self.peer_manager.batch_update_score(DECAY_PEER_SCORE);
+            self.peer_manager.batch_update_score_with_decay();
         }
 
         if self.health_check.poll_tick(cx).is_ready() {
@@ -633,15 +633,9 @@ impl PeerManager {
         }
     }
 
-    fn batch_update_score(&mut self, score: PeerScore) {
-        for (peer_id, peer_info) in &mut self.non_reserved_connected_peers {
-            let new_score = peer_info.score + score;
-            peer_info.score = new_score;
-
-            if new_score < self.peer_score_config.get_min_app_score() {
-                self.pending_events
-                    .push_front(PeerInfoEvent::BanPeer { peer_id: *peer_id })
-            }
+    fn batch_update_score_with_decay(&mut self) {
+        for (_, peer_info) in &mut self.non_reserved_connected_peers {
+            peer_info.score = peer_info.score * DECAY_PEER_SCORE;
         }
     }
 
