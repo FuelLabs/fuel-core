@@ -20,7 +20,7 @@ use crate::{
     TxPool,
 };
 use fuel_core_types::{
-    entities::coin::CoinStatus,
+    entities::coins::CoinStatus,
     fuel_asm::{
         op,
         RegId,

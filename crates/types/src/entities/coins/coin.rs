@@ -1,5 +1,6 @@
 //! Coin
 
+use super::CoinStatus;
 use crate::{
     blockchain::primitives::BlockHeight,
     fuel_asm::Word,
@@ -15,7 +16,7 @@ use crate::{
 /// it can be used as an input to the transaction and can be spent up to the `amount`.
 /// After usage as an input of a transaction, the `Coin` becomes `CoinStatus::Spent`.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]
 pub struct Coin {
     /// The coin utxo id.
     pub utxo_id: UtxoId,
@@ -82,15 +83,4 @@ impl CompressedCoin {
             block_created: self.block_created,
         }
     }
-}
-
-/// Whether a coin has been spent or not
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]
-#[repr(u8)]
-pub enum CoinStatus {
-    /// Coin has not been spent
-    Unspent,
-    /// Coin has been spent
-    Spent,
 }

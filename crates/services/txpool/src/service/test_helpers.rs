@@ -9,7 +9,7 @@ use fuel_core_services::{
 };
 use fuel_core_types::{
     blockchain::SealedBlock,
-    entities::coin::Coin,
+    entities::coins::coin::Coin,
     fuel_crypto::rand::{
         rngs::StdRng,
         SeedableRng,

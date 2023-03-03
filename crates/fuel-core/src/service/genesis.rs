@@ -41,9 +41,9 @@ use fuel_core_types::{
         SealedBlock,
     },
     entities::{
-        coin::{
+        coins::{
+            coin::CompressedCoin,
             CoinStatus,
-            CompressedCoin,
         },
         message::CompressedMessage,
     },
@@ -368,7 +368,7 @@ mod tests {
             BlockHeight,
             DaBlockHeight,
         },
-        entities::coin::Coin,
+        entities::coins::coin::Coin,
         fuel_asm::op,
         fuel_types::{
             Address,

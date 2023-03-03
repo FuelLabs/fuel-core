@@ -15,8 +15,8 @@ use fuel_core_storage::{
     StorageAsMut,
 };
 use fuel_core_types::{
-    entities::coin::{
-        Coin,
+    entities::coins::{
+        coin::Coin,
         CoinStatus,
     },
     fuel_asm::*,
@@ -56,7 +56,7 @@ async fn first_5_coins(
             amount: i as Word,
             asset_id: Default::default(),
             maturity: Default::default(),
-            status: fuel_core_types::entities::coin::CoinStatus::Unspent,
+            status: CoinStatus::Unspent,
             block_created: Default::default(),
         })
         .collect();

@@ -12,7 +12,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     entities::{
-        coin::CoinStatus,
+        coins::CoinStatus,
         message::MessageStatus,
         resource::{
             Resource,

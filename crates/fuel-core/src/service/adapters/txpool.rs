@@ -20,7 +20,7 @@ use fuel_core_txpool::ports::BlockImporter;
 use fuel_core_types::{
     blockchain::primitives::BlockHeight,
     entities::{
-        coin::CompressedCoin,
+        coins::coin::CompressedCoin,
         message::CompressedMessage,
     },
     fuel_tx::{

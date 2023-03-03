@@ -3,10 +3,12 @@
 
 use crate::MockDb;
 use fuel_core_types::{
-    entities::coin::{
-        Coin,
+    entities::coins::{
+        coin::{
+            Coin,
+            CompressedCoin,
+        },
         CoinStatus,
-        CompressedCoin,
     },
     fuel_asm::op,
     fuel_crypto::rand::{

@@ -8,7 +8,6 @@ use crate::{
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     blockchain::primitives::BlockHeight,
-    entities::coin::CompressedCoin,
     fuel_crypto::Hasher,
     fuel_types::{
         Address,
@@ -17,6 +16,7 @@ use fuel_core_types::{
     },
 };
 
+use fuel_core_types::entities::coins::coin::CompressedCoin;
 use serde::{
     Deserialize,
     Serialize,

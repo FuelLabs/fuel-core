@@ -36,26 +36,6 @@ pub struct CompressedMessage {
     pub da_height: DaBlockHeight,
 }
 
-/// Message send from Da layer to fuel by bridge
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct Message {
-    /// Account that sent the message from the da layer
-    pub sender: Address,
-    /// Fuel account receiving the message
-    pub recipient: Address,
-    /// Nonce must be unique. It's used to prevent replay attacks
-    pub nonce: Word,
-    /// The amount of the base asset of Fuel chain sent along this message
-    pub amount: Word,
-    /// Arbitrary message data
-    pub data: Vec<u8>,
-    /// The block height from the parent da layer that originated this message
-    pub da_height: DaBlockHeight,
-    /// Whether a message has been spent or not
-    pub status: MessageStatus,
-}
-
 impl CompressedMessage {
     /// Computed message id
     pub fn id(&self) -> MessageId {
@@ -88,6 +68,38 @@ impl CompressedMessage {
     }
 }
 
+/// Whether the message has been spent or not
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Default)]
+#[repr(u8)]
+pub enum MessageStatus {
+    #[default]
+    /// Message has not been spent
+    Unspent,
+    /// Message has been spent
+    Spent,
+}
+
+/// Message send from Da layer to fuel by bridge
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Message {
+    /// Account that sent the message from the da layer
+    pub sender: Address,
+    /// Fuel account receiving the message
+    pub recipient: Address,
+    /// Nonce must be unique. It's used to prevent replay attacks
+    pub nonce: Word,
+    /// The amount of the base asset of Fuel chain sent along this message
+    pub amount: Word,
+    /// Arbitrary message data
+    pub data: Vec<u8>,
+    /// The block height from the parent da layer that originated this message
+    pub da_height: DaBlockHeight,
+    /// Whether a message has been spent or not
+    pub status: MessageStatus,
+}
+
 impl Message {
     /// Compress the message
     pub fn compress(self) -> CompressedMessage {
@@ -113,13 +125,6 @@ impl Message {
     }
 }
 
-/// A message associated with precomputed id
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct CheckedMessage {
-    message: CompressedMessage,
-    id: MessageId,
-}
-
 /// Proves to da layer that this message was included in a Fuel block
 pub struct MessageProof {
     /// The proof set of the message proof.
@@ -142,18 +147,6 @@ pub struct MessageProof {
     pub data: Vec<u8>,
 }
 
-/// Whether the message has been spent or not
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Default)]
-#[repr(u8)]
-pub enum MessageStatus {
-    #[default]
-    /// Message has not been spent
-    Unspent,
-    /// Message has been spent
-    Spent,
-}
-
 impl MessageProof {
     /// Compute message id from the proof
     pub fn message_id(&self) -> MessageId {
@@ -165,6 +158,13 @@ impl MessageProof {
             &self.data,
         )
     }
+}
+
+/// A message associated with precomputed id
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct CheckedMessage {
+    message: CompressedMessage,
+    id: MessageId,
 }
 
 impl CheckedMessage {

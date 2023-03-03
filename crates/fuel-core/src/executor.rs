@@ -37,9 +37,9 @@ use fuel_core_types::{
             DaBlockHeight,
         },
     },
-    entities::coin::{
+    entities::coins::{
+        coin::CompressedCoin,
         CoinStatus,
-        CompressedCoin,
     },
     fuel_asm::{
         RegId,
@@ -1192,7 +1192,7 @@ where
                     }
                 }
                 Output::Message { .. } => {
-                    // TODO: Handle message outputs somehow (new field on the block type?)
+                    // TODO: Remove me please
                 }
                 Output::Change {
                     to,
