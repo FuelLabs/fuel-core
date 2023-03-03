@@ -121,6 +121,26 @@ impl Mappable for ContractsAssetsMerkleMetadata {
     type OwnedValue = Self::Value;
 }
 
+/// The table of SMT data for Contract state.
+pub struct ContractsStateMerkleData;
+
+impl Mappable for ContractsStateMerkleData {
+    type Key = [u8; 32];
+    type OwnedKey = Self::Key;
+    type Value = sparse::Primitive;
+    type OwnedValue = Self::Value;
+}
+
+/// The metadata table for [`ContractsStateMerkleData`](ContractsStateMerkleData) table
+pub struct ContractsStateMerkleMetadata;
+
+impl Mappable for ContractsStateMerkleMetadata {
+    type Key = ContractId;
+    type OwnedKey = Self::Key;
+    type Value = SparseMerkleMetadata;
+    type OwnedValue = Self::Value;
+}
+
 /// The table has a corresponding column in the database.
 ///
 /// Using this trait allows the configured mappable type to have its'
@@ -160,6 +180,18 @@ impl DatabaseColumn for ContractsAssetsMerkleData {
 impl DatabaseColumn for ContractsAssetsMerkleMetadata {
     fn column() -> Column {
         Column::ContractsAssetsMerkleMetadata
+    }
+}
+
+impl DatabaseColumn for ContractsStateMerkleData {
+    fn column() -> Column {
+        Column::ContractsStateMerkleData
+    }
+}
+
+impl DatabaseColumn for ContractsStateMerkleMetadata {
+    fn column() -> Column {
+        Column::ContractsStateMerkleMetadata
     }
 }
 

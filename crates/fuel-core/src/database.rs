@@ -123,6 +123,10 @@ pub enum Column {
     ContractsAssetsMerkleData = 21,
     /// See [`ContractsAssetsMerkleMetadata`](storage::ContractsAssetsMerkleMetadata)
     ContractsAssetsMerkleMetadata = 22,
+    /// See [`ContractsStateMerkleData`](storage::ContractsStateMerkleData)
+    ContractsStateMerkleData = 23,
+    /// See [`ContractsStateMerkleMetadata`](storage::ContractsStateMerkleMetadata)
+    ContractsStateMerkleMetadata = 24,
 }
 
 #[derive(Clone, Debug)]
