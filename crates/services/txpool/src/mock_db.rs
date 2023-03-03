@@ -3,7 +3,7 @@ use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::primitives::BlockHeight,
     entities::{
-        coin::{
+        coins::coin::{
             Coin,
             CompressedCoin,
         },

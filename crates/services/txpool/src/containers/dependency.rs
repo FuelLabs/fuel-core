@@ -6,7 +6,9 @@ use crate::{
 };
 use anyhow::anyhow;
 use fuel_core_types::{
-    entities::coin::CompressedCoin,
+    entities::coins::{
+        coin::CompressedCoin,
+    },
     fuel_tx::{
         Input,
         Output,

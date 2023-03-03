@@ -9,7 +9,7 @@ use fuel_core_types::{
         primitives::BlockId,
     },
     entities::{
-        coin::CompressedCoin,
+        coins::coin::CompressedCoin,
         contract::ContractUtxoInfo,
         message::Message,
     },
@@ -80,7 +80,7 @@ impl Mappable for SealedBlockConsensus {
 }
 
 /// The storage table of coins. Each
-/// [`CompressedCoin`](fuel_core_types::entities::coin::CompressedCoin)
+/// [`CompressedCoin`](fuel_core_types::entities::coins::coin::CompressedCoin)
 /// is represented by unique `UtxoId`.
 pub struct Coins;
 

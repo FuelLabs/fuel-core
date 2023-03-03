@@ -2,7 +2,7 @@
 
 use crate::{
     entities::{
-        coin::Coin,
+        coins::coin::Coin,
         message::Message,
     },
     fuel_asm::Word,

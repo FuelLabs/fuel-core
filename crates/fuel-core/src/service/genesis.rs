@@ -41,9 +41,11 @@ use fuel_core_types::{
         SealedBlock,
     },
     entities::{
-        coin::CompressedCoin,
+        coins::{
+            coin::CompressedCoin,
+        },
         contract::ContractUtxoInfo,
-        message::Message,
+        message::CompressedMessage,
     },
     fuel_merkle::binary,
     fuel_tx::{
@@ -405,7 +407,7 @@ mod tests {
             BlockHeight,
             DaBlockHeight,
         },
-        entities::coin::Coin,
+        entities::coins::coin::Coin,
         fuel_asm::op,
         fuel_types::{
             Address,

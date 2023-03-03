@@ -11,9 +11,11 @@ use fuel_core_storage::{
     Result as StorageResult,
 };
 use fuel_core_types::{
-    entities::resource::{
-        Resource,
-        ResourceId,
+    entities::{
+        resource::{
+            Resource,
+            ResourceId,
+        },
     },
     fuel_tx::UtxoId,
     fuel_types::{

@@ -22,7 +22,9 @@ use async_graphql::{
     Object,
 };
 use fuel_core_types::{
-    entities::coin::Coin as CoinModel,
+    entities::coins::{
+        coin::Coin as CoinModel,
+    },
     fuel_tx,
 };
 

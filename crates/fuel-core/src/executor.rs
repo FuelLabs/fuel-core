@@ -38,7 +38,7 @@ use fuel_core_types::{
             DaBlockHeight,
         },
     },
-    entities::{
+    entities::coins::{
         coin::CompressedCoin,
         contract::ContractUtxoInfo,
     },
@@ -1244,7 +1244,7 @@ where
                     }
                 }
                 Output::Message { .. } => {
-                    // TODO: Handle message outputs somehow (new field on the block type?)
+                    // TODO: Remove me please
                 }
                 Output::Change {
                     to,

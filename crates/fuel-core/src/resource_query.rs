@@ -232,9 +232,11 @@ mod tests {
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         entities::{
-            coin::{
-                Coin,
-                CompressedCoin,
+            coins::{
+                coin::{
+                    Coin,
+                    CompressedCoin,
+                },
             },
             message::Message,
         },

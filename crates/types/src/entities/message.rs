@@ -55,13 +55,6 @@ impl Message {
     }
 }
 
-/// A message associated with precomputed id
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct CheckedMessage {
-    message: Message,
-    id: MessageId,
-}
-
 /// Proves to da layer that this message was included in a Fuel block
 pub struct MessageProof {
     /// The proof set of the message proof.
@@ -84,18 +77,6 @@ pub struct MessageProof {
     pub data: Vec<u8>,
 }
 
-/// Whether the message has been spent or not
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Default)]
-#[repr(u8)]
-pub enum MessageStatus {
-    #[default]
-    /// Message has not been spent
-    Unspent,
-    /// Message has been spent
-    Spent,
-}
-
 impl MessageProof {
     /// Compute message id from the proof
     pub fn message_id(&self) -> MessageId {
@@ -107,6 +88,13 @@ impl MessageProof {
             &self.data,
         )
     }
+}
+
+/// A message associated with precomputed id
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct CheckedMessage {
+    message: CompressedMessage,
+    id: MessageId,
 }
 
 impl CheckedMessage {
