@@ -115,7 +115,7 @@ impl Mappable for ContractsAssetsMerkleData {
 pub struct ContractsAssetsMerkleMetadata;
 
 impl Mappable for ContractsAssetsMerkleMetadata {
-    type Key = u64;
+    type Key = ContractId;
     type OwnedKey = Self::Key;
     type Value = SparseMerkleMetadata;
     type OwnedValue = Self::Value;
@@ -154,6 +154,12 @@ impl DatabaseColumn for FuelBlockMerkleMetadata {
 impl DatabaseColumn for ContractsAssetsMerkleData {
     fn column() -> Column {
         Column::ContractsAssetsMerkleData
+    }
+}
+
+impl DatabaseColumn for ContractsAssetsMerkleMetadata {
+    fn column() -> Column {
+        Column::ContractsAssetsMerkleMetadata
     }
 }
 

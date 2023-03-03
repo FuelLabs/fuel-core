@@ -79,7 +79,7 @@ impl StorageMutate<FuelBlocks> for Database {
         self.storage::<FuelBlockSecondaryKeyBlockHeights>()
             .insert(height, key)?;
 
-        // get latest metadata entry
+        // Get latest metadata entry
         let prev_metadata = self
             .iter_all::<Vec<u8>, DenseMerkleMetadata>(
                 Column::FuelBlockMerkleMetadata,

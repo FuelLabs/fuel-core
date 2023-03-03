@@ -2,6 +2,7 @@ use crate::{
     database::{
         storage::{
             ContractsAssetsMerkleData,
+            ContractsAssetsMerkleMetadata,
             SparseMerkleMetadata,
         },
         Column,
@@ -10,21 +11,21 @@ use crate::{
     state::IterDirection,
 };
 use fuel_core_storage::{
+    not_found,
     tables::ContractsAssets,
     Error as StorageError,
     Mappable,
     MerkleRoot,
     MerkleRootStorage,
+    StorageAsMut,
+    StorageAsRef,
     StorageInspect,
     StorageMutate,
 };
 use fuel_core_types::{
-    fuel_asm::Word,
     fuel_merkle::sparse::MerkleTree,
     fuel_types::ContractId,
-    fuel_vm::crypto,
 };
-use itertools::Itertools;
 use std::borrow::{
     BorrowMut,
     Cow,
@@ -59,6 +60,7 @@ impl StorageMutate<ContractsAssets> for Database {
         let prev = Database::insert(self, key.as_ref(), Column::ContractsAssets, value)
             .map_err(Into::into);
 
+        // Get latest metadata entry
         let prev_metadata = self
             .iter_all::<Vec<u8>, SparseMerkleMetadata>(
                 Column::ContractsAssetsMerkleMetadata,
@@ -70,13 +72,29 @@ impl StorageMutate<ContractsAssets> for Database {
             .unwrap_or_default();
 
         let root = prev_metadata.root;
-        let storage = self.borrow_mut();
-        let mut tree: MerkleTree<ContractsAssetsMerkleData, _> =
-            MerkleTree::load(storage, &root)
-                .map_err(|err| StorageError::Other(err.into()))?;
+        let mut tree: MerkleTree<ContractsAssetsMerkleData, _> = {
+            let storage = self.borrow_mut();
+            if root == [0; 32].into() {
+                // The tree is empty
+                MerkleTree::new(storage)
+            } else {
+                // Load the tree saved in metadata
+                MerkleTree::load(storage, &root)
+                    .map_err(|err| StorageError::Other(err.into()))?
+            }
+        };
 
-        tree.update(&(*key.asset_id()).into(), value.to_be_bytes().as_slice())
+        // Update the key-value dataset. The key is the contract id and the
+        // value is the 32 bytes
+        tree.update(&(*key.contract_id()).into(), value.to_be_bytes().as_slice())
             .map_err(|err| StorageError::Other(err.into()))?;
+
+        // Generate new metadata for the updated tree
+        let root = tree.root().into();
+        let metadata = SparseMerkleMetadata { root };
+        self.storage::<ContractsAssetsMerkleMetadata>()
+            .insert(key.contract_id(), &metadata)?;
+
         prev
     }
 
@@ -84,29 +102,56 @@ impl StorageMutate<ContractsAssets> for Database {
         &mut self,
         key: &<ContractsAssets as Mappable>::Key,
     ) -> Result<Option<<ContractsAssets as Mappable>::OwnedValue>, Self::Error> {
-        Database::remove(self, key.as_ref(), Column::ContractsAssets).map_err(Into::into)
+        let prev = Database::remove(self, key.as_ref(), Column::ContractsAssets)
+            .map_err(Into::into);
+
+        // Get latest metadata entry
+        let prev_metadata = self
+            .iter_all::<Vec<u8>, SparseMerkleMetadata>(
+                Column::ContractsAssetsMerkleMetadata,
+                Some(IterDirection::Reverse),
+            )
+            .next()
+            .transpose()?
+            .map(|(_, metadata)| metadata)
+            .unwrap_or_default();
+
+        let root = prev_metadata.root;
+        let mut tree: MerkleTree<ContractsAssetsMerkleData, _> = {
+            let storage = self.borrow_mut();
+            if root == [0; 32].into() {
+                // The tree is empty
+                MerkleTree::new(storage)
+            } else {
+                // Load the tree saved in metadata
+                MerkleTree::load(storage, &root)
+                    .map_err(|err| StorageError::Other(err.into()))?
+            }
+        };
+
+        // Update the key-value dataset. The key is the contract id and the
+        // value is the 32 bytes
+        tree.delete(&(*key.contract_id()).into())
+            .map_err(|err| StorageError::Other(err.into()))?;
+
+        // Generate new metadata for the updated tree
+        let root = tree.root().into();
+        let metadata = SparseMerkleMetadata { root };
+        self.storage::<ContractsAssetsMerkleMetadata>()
+            .insert(key.contract_id(), &metadata)?;
+
+        prev
     }
 }
 
 impl MerkleRootStorage<ContractId, ContractsAssets> for Database {
     fn root(&self, parent: &ContractId) -> Result<MerkleRoot, Self::Error> {
-        let items: Vec<(Vec<u8>, Word)> = Database::iter_all_by_prefix(
-            self,
-            Column::ContractsAssets,
-            Some(parent),
-            Some(IterDirection::Forward),
-        )
-        .try_collect()?;
-
-        let root = items
-            .iter()
-            .filter_map(|(key, value)| {
-                (&key[..parent.len()] == parent.as_ref()).then_some((key, value))
-            })
-            .sorted_by_key(|t| t.0)
-            .map(|(_, value)| value.to_be_bytes());
-
-        Ok(crypto::ephemeral_merkle_root(root).into())
+        let metadata = self
+            .storage::<ContractsAssetsMerkleMetadata>()
+            .get(parent)?
+            .ok_or(not_found!("ContractId"))?;
+        let root = metadata.root.into();
+        Ok(root)
     }
 }
 
@@ -117,7 +162,10 @@ mod tests {
         StorageAsMut,
         StorageAsRef,
     };
-    use fuel_core_types::fuel_types::AssetId;
+    use fuel_core_types::fuel_types::{
+        AssetId,
+        Word,
+    };
 
     #[test]
     fn get() {
