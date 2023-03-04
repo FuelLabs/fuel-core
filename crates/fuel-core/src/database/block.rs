@@ -247,8 +247,7 @@ impl MerkleRootStorage<BlockHeight, FuelBlocks> for Database {
         let metadata = self
             .storage::<FuelBlockMerkleMetadata>()
             .get(key)?
-            .ok_or(not_found!(FuelBlocks))
-            .map(Cow::into_owned)?;
+            .ok_or(not_found!(FuelBlocks))?;
         Ok(metadata.root.into())
     }
 }
