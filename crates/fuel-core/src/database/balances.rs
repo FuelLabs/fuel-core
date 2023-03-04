@@ -119,17 +119,16 @@ impl StorageMutate<ContractsAssets> for Database {
             .unwrap_or_default();
 
         let root = prev_metadata.root;
-        let mut tree: MerkleTree<ContractsAssetsMerkleData, _> = {
-            let storage = self.borrow_mut();
-            if root == [0; 32].into() {
-                // The tree is empty
-                MerkleTree::new(storage)
-            } else {
-                // Load the tree saved in metadata
-                MerkleTree::load(storage, &root)
-                    .map_err(|err| StorageError::Other(err.into()))?
-            }
-        };
+        if root == [0; 32].into() {
+            // The tree is empty
+            return prev
+        }
+
+        // Load the tree saved in metadata
+        let storage = self.borrow_mut();
+        let mut tree: MerkleTree<ContractsAssetsMerkleData, _> =
+            MerkleTree::load(storage, &root)
+                .map_err(|err| StorageError::Other(err.into()))?;
 
         // Update the key-value dataset. The key is the contract id and the
         // value is the 32 bytes
