@@ -99,7 +99,7 @@ impl StorageMutate<FuelBlocks> for Database {
 
         // Generate new metadata for the updated tree
         let version = tree.leaves_count();
-        let root = tree.root().into();
+        let root = tree.root();
         let metadata = DenseMerkleMetadata { version, root };
         self.storage::<FuelBlockMerkleMetadata>()
             .insert(height, &metadata)?;
@@ -248,7 +248,7 @@ impl MerkleRootStorage<BlockHeight, FuelBlocks> for Database {
             .storage::<FuelBlockMerkleMetadata>()
             .get(key)?
             .ok_or(not_found!(FuelBlocks))?;
-        Ok(metadata.root.into())
+        Ok(metadata.root)
     }
 }
 

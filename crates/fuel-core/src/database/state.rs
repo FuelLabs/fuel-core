@@ -92,7 +92,7 @@ impl StorageMutate<ContractsState> for Database {
             .map_err(|err| StorageError::Other(err.into()))?;
 
         // Generate new metadata for the updated tree
-        let root = tree.root().into();
+        let root = tree.root();
         let metadata = SparseMerkleMetadata { root };
         self.storage::<ContractsStateMerkleMetadata>()
             .insert(key.contract_id(), &metadata)?;
@@ -136,7 +136,7 @@ impl StorageMutate<ContractsState> for Database {
             .map_err(|err| StorageError::Other(err.into()))?;
 
         // Generate new metadata for the updated tree
-        let root = tree.root().into();
+        let root = tree.root();
         let metadata = SparseMerkleMetadata { root };
         self.storage::<ContractsStateMerkleMetadata>()
             .insert(key.contract_id(), &metadata)?;
@@ -149,7 +149,7 @@ impl MerkleRootStorage<ContractId, ContractsState> for Database {
     fn root(&self, parent: &ContractId) -> Result<MerkleRoot, Self::Error> {
         let metadata = self.storage::<ContractsStateMerkleMetadata>().get(parent)?;
         let root = metadata
-            .map(|metadata| metadata.root.into())
+            .map(|metadata| metadata.root)
             .unwrap_or_else(|| in_memory::MerkleTree::new().root());
         Ok(root)
     }

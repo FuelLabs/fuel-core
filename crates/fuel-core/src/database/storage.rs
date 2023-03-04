@@ -46,7 +46,7 @@ impl Default for DenseMerkleMetadata {
     fn default() -> Self {
         let empty_merkle_tree = binary::in_memory::MerkleTree::new();
         Self {
-            root: empty_merkle_tree.root().into(),
+            root: empty_merkle_tree.root(),
             version: 0,
         }
     }
@@ -63,7 +63,7 @@ impl Default for SparseMerkleMetadata {
     fn default() -> Self {
         let empty_merkle_tree = sparse::in_memory::MerkleTree::new();
         Self {
-            root: empty_merkle_tree.root().into(),
+            root: empty_merkle_tree.root(),
         }
     }
 }
