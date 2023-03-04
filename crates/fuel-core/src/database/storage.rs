@@ -5,6 +5,7 @@ use crate::database::{
 use fuel_core_storage::{
     Error as StorageError,
     Mappable,
+    MerkleRoot,
     Result as StorageResult,
     StorageInspect,
     StorageMutate,
@@ -20,7 +21,6 @@ use fuel_core_types::{
     },
     fuel_tx::TxId,
     fuel_types::{
-        Bytes32,
         ContractId,
         MessageId,
     },
@@ -35,7 +35,7 @@ use std::borrow::Cow;
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct DenseMerkleMetadata {
     /// The root hash of the dense Merkle tree structure
-    pub root: Bytes32,
+    pub root: MerkleRoot,
     /// The version of the dense Merkle tree structure is equal to the number of
     /// leaves. Every time we append a new leaf to the Merkle tree data set, we
     /// increment the version number.
@@ -56,7 +56,7 @@ impl Default for DenseMerkleMetadata {
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct SparseMerkleMetadata {
     /// The root hash of the sparse Merkle tree structure
-    pub root: Bytes32,
+    pub root: MerkleRoot,
 }
 
 impl Default for SparseMerkleMetadata {

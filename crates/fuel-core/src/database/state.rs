@@ -76,7 +76,7 @@ impl StorageMutate<ContractsState> for Database {
         let root = prev_metadata.root;
         let mut tree: MerkleTree<ContractsStateMerkleData, _> = {
             let storage = self.borrow_mut();
-            if root == [0; 32].into() {
+            if root == [0; 32] {
                 // The tree is empty
                 MerkleTree::new(storage)
             } else {
@@ -119,7 +119,7 @@ impl StorageMutate<ContractsState> for Database {
             .unwrap_or_default();
 
         let root = prev_metadata.root;
-        if root == [0; 32].into() {
+        if root == [0; 32] {
             // The tree is empty
             return prev
         }
