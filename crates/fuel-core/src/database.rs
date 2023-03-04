@@ -110,7 +110,7 @@ pub enum Column {
     FuelBlockConsensus = 16,
     /// See [`FuelBlockMerkleData`](storage::FuelBlockMerkleData)
     FuelBlockMerkleData = 17,
-    /// See [`FuelBlockMerkleData`](storage::FuelBlockMerkleData)
+    /// See [`FuelBlockMerkleMetadata`](storage::FuelBlockMerkleMetadata)
     FuelBlockMerkleMetadata = 18,
     /// Messages that have been spent.
     /// Existence of a key in this column means that the message has been spent.

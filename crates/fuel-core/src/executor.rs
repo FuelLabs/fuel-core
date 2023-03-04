@@ -2625,7 +2625,7 @@ mod tests {
     fn contracts_balance_and_state_roots_no_modifications_updated() {
         // Values in inputs and outputs are random. If the execution of the transaction successful,
         // it should actualize them to use a valid the balance and state roots. Because it is not
-        // changes, the balance the root should be default - `fuel_merkle::common::empty_sum_sha256()`.
+        // changes, the balance the root should be default - `[0; 32]`.
         let mut rng = StdRng::seed_from_u64(2322u64);
 
         let (create, contract_id) = create_contract(vec![], &mut rng);
