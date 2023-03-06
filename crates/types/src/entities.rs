@@ -1,5 +1,14 @@
 //! Higher level domain types
 
+use crate::fuel_asm::Word;
+#[cfg(feature = "random")]
+use crate::fuel_crypto::rand::{
+    distributions::{
+        Distribution,
+        Standard,
+    },
+    Rng,
+};
 use coins::{
     deposit_coin::{
         CompressedDepositCoin,
@@ -8,7 +17,6 @@ use coins::{
     CoinStatus,
 };
 use message::{
-    CheckedMessage,
     CompressedMessage,
     Message,
     MessageStatus,
@@ -16,13 +24,41 @@ use message::{
 
 pub mod coins;
 pub mod message;
-pub mod resource;
 
-impl TryFrom<CheckedMessage> for CompressedDepositCoin {
+/// The nonce is a unique identifier for the message.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(
+    Debug,
+    Default,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    derive_more::Add,
+    derive_more::Sub,
+    derive_more::Display,
+    derive_more::Into,
+    derive_more::From,
+    derive_more::Deref,
+    derive_more::LowerHex,
+    derive_more::UpperHex,
+)]
+pub struct Nonce(Word);
+
+#[cfg(feature = "random")]
+impl Distribution<Nonce> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Nonce {
+        Nonce(rng.gen())
+    }
+}
+
+impl TryFrom<CompressedMessage> for CompressedDepositCoin {
     type Error = anyhow::Error;
 
-    fn try_from(checked_message: CheckedMessage) -> Result<Self, Self::Error> {
-        let (_, message) = checked_message.unpack();
+    fn try_from(message: CompressedMessage) -> Result<Self, Self::Error> {
         let CompressedMessage {
             sender,
             recipient,

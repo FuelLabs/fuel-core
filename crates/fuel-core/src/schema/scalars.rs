@@ -8,10 +8,12 @@ use async_graphql::{
 };
 use fuel_core_types::{
     blockchain::primitives::BlockHeight,
+    entities::Nonce,
     fuel_types,
     tai64::Tai64,
 };
 use std::{
+    array::TryFromSliceError,
     convert::TryInto,
     fmt::{
         Display,
@@ -49,6 +51,18 @@ impl ScalarType for U64 {
 impl From<BlockHeight> for U64 {
     fn from(h: BlockHeight) -> Self {
         U64(h.to_usize() as u64)
+    }
+}
+
+impl From<Nonce> for U64 {
+    fn from(n: Nonce) -> Self {
+        U64(*n)
+    }
+}
+
+impl From<U64> for Nonce {
+    fn from(value: U64) -> Self {
+        value.0.into()
     }
 }
 
@@ -158,6 +172,22 @@ impl FromStr for HexString {
         // decode into bytes
         let bytes = hex::decode(value).map_err(|e| e.to_string())?;
         Ok(HexString(bytes))
+    }
+}
+
+impl From<Nonce> for HexString {
+    fn from(n: Nonce) -> Self {
+        HexString(n.to_be_bytes().to_vec())
+    }
+}
+
+impl TryInto<Nonce> for HexString {
+    type Error = TryFromSliceError;
+
+    fn try_into(self) -> Result<Nonce, Self::Error> {
+        Ok(Nonce::from(u64::from_be_bytes(
+            self.0.as_slice().try_into()?,
+        )))
     }
 }
 

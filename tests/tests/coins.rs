@@ -5,7 +5,7 @@ use fuel_core::{
         MessageConfig,
         StateConfig,
     },
-    resource_query::ResourceQueryError,
+    coins_query::CoinsQueryError,
     service::{
         Config,
         FuelService,
@@ -21,7 +21,7 @@ use rand::{
     SeedableRng,
 };
 
-mod coins {
+mod coin {
     use super::*;
     use fuel_core_types::fuel_crypto::SecretKey;
     use rand::Rng;
@@ -95,7 +95,7 @@ mod coins {
         let pk = secret_key.public_key();
         let owner = Input::owner(&pk);
         let context = setup(owner, asset_id_a, asset_id_b).await;
-        // select all available messages to spend
+        // select all available coins to spend
         let resources_per_asset = context
             .client
             .resources_to_spend(
@@ -247,7 +247,7 @@ mod coins {
         assert!(resources_per_asset.is_err());
         assert_eq!(
             resources_per_asset.unwrap_err().to_string(),
-            ResourceQueryError::InsufficientResources {
+            CoinsQueryError::InsufficientCoins {
                 asset_id: asset_id_a,
                 collected_amount: 0,
             }
@@ -277,7 +277,7 @@ mod coins {
         assert!(resources_per_asset.is_err());
         assert_eq!(
             resources_per_asset.unwrap_err().to_string(),
-            ResourceQueryError::InsufficientResources {
+            CoinsQueryError::InsufficientCoins {
                 asset_id: asset_id_a,
                 collected_amount: 300,
             }
@@ -307,12 +307,12 @@ mod coins {
         assert!(resources_per_asset.is_err());
         assert_eq!(
             resources_per_asset.unwrap_err().to_string(),
-            ResourceQueryError::MaxResourcesReached.to_str_error_string()
+            CoinsQueryError::MaxCoinsReached.to_str_error_string()
         );
     }
 }
 
-mod messages {
+mod deposit_coin {
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         fuel_crypto::SecretKey,
@@ -337,7 +337,7 @@ mod messages {
                     .map(|(nonce, (owner, amount))| MessageConfig {
                         sender: owner,
                         recipient: owner,
-                        nonce: nonce as u64,
+                        nonce: (nonce as u64).into(),
                         amount,
                         data: vec![],
                         da_height: DaBlockHeight::from(1u64),
@@ -372,14 +372,14 @@ mod messages {
     }
 
     #[tokio::test]
-    async fn excludes_spent_messages() {
+    async fn excludes_spent_coins() {
         let mut rng = StdRng::seed_from_u64(1234);
 
         let secret_key: SecretKey = rng.gen();
         let pk = secret_key.public_key();
         let owner = Input::owner(&pk);
         let (base_asset_id, context) = setup(owner).await;
-        // select all available messages to spend
+        // select all available coins to spend
         let resources_per_asset = context
             .client
             .resources_to_spend(
@@ -390,7 +390,7 @@ mod messages {
             .await
             .unwrap();
 
-        // spend all messages
+        // spend all coins
         let mut script = TransactionBuilder::script(vec![], vec![]);
 
         resources_per_asset[0].iter().for_each(|resource| {
@@ -410,7 +410,7 @@ mod messages {
 
         context.client.submit_and_await_commit(&tx).await.unwrap();
 
-        // select all available messages to spend
+        // select all available coins to spend
         let remaining_resources = context
             .client
             .resources_to_spend(
@@ -493,7 +493,7 @@ mod messages {
         assert!(resources_per_asset.is_err());
         assert_eq!(
             resources_per_asset.unwrap_err().to_string(),
-            ResourceQueryError::InsufficientResources {
+            CoinsQueryError::InsufficientCoins {
                 asset_id: base_asset_id,
                 collected_amount: 0,
             }
@@ -516,7 +516,7 @@ mod messages {
         assert!(resources_per_asset.is_err());
         assert_eq!(
             resources_per_asset.unwrap_err().to_string(),
-            ResourceQueryError::InsufficientResources {
+            CoinsQueryError::InsufficientCoins {
                 asset_id: base_asset_id,
                 collected_amount: 300,
             }
@@ -539,13 +539,13 @@ mod messages {
         assert!(resources_per_asset.is_err());
         assert_eq!(
             resources_per_asset.unwrap_err().to_string(),
-            ResourceQueryError::MaxResourcesReached.to_str_error_string()
+            CoinsQueryError::MaxCoinsReached.to_str_error_string()
         );
     }
 }
 
-// It is combination of coins and messages test cases.
-mod messages_and_coins {
+// It is combination of coins and deposit coins test cases.
+mod all_coins {
     use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
     use super::*;
@@ -584,7 +584,7 @@ mod messages_and_coins {
                     .map(|(nonce, (owner, amount))| MessageConfig {
                         sender: owner,
                         recipient: owner,
-                        nonce: nonce as u64,
+                        nonce: (nonce as u64).into(),
                         amount,
                         data: vec![],
                         da_height: DaBlockHeight::from(1u64),
@@ -726,7 +726,7 @@ mod messages_and_coins {
         assert!(resources_per_asset.is_err());
         assert_eq!(
             resources_per_asset.unwrap_err().to_string(),
-            ResourceQueryError::InsufficientResources {
+            CoinsQueryError::InsufficientCoins {
                 asset_id: asset_id_a,
                 collected_amount: 0,
             }
@@ -752,7 +752,7 @@ mod messages_and_coins {
         assert!(resources_per_asset.is_err());
         assert_eq!(
             resources_per_asset.unwrap_err().to_string(),
-            ResourceQueryError::InsufficientResources {
+            CoinsQueryError::InsufficientCoins {
                 asset_id: asset_id_a,
                 collected_amount: 300,
             }
@@ -778,7 +778,7 @@ mod messages_and_coins {
         assert!(resources_per_asset.is_err());
         assert_eq!(
             resources_per_asset.unwrap_err().to_string(),
-            ResourceQueryError::MaxResourcesReached.to_str_error_string()
+            CoinsQueryError::MaxCoinsReached.to_str_error_string()
         );
     }
 }
@@ -846,7 +846,7 @@ async fn resources_to_spend_error_duplicate_asset_query(
     assert!(resources_per_asset.is_err());
     assert_eq!(
         resources_per_asset.unwrap_err().to_string(),
-        ResourceQueryError::DuplicateAssets(asset_id).to_str_error_string()
+        CoinsQueryError::DuplicateAssets(asset_id).to_str_error_string()
     );
 }
 
@@ -854,7 +854,7 @@ trait ToStdErrorString {
     fn to_str_error_string(self) -> String;
 }
 
-impl ToStdErrorString for ResourceQueryError {
+impl ToStdErrorString for CoinsQueryError {
     fn to_str_error_string(self) -> String {
         fuel_core_client::client::from_strings_errors_to_std_error(vec![self.to_string()])
             .to_string()
@@ -867,6 +867,6 @@ trait CumulativeAmount {
 
 impl CumulativeAmount for Vec<Resource> {
     fn amount(&self) -> u64 {
-        self.iter().map(|resource| resource.amount()).sum()
+        self.iter().map(|coin| coin.amount()).sum()
     }
 }

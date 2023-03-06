@@ -111,7 +111,7 @@ async fn can_get_messages() {
     relayer.shared.await_synced().await.unwrap();
 
     for msg in expected_messages {
-        assert_eq!(&mock_db.get_message(msg.id()).unwrap(), msg.message());
+        assert_eq!(mock_db.get_message(msg.id()).unwrap(), msg);
     }
 }
 

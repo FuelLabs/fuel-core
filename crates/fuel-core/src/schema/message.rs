@@ -27,10 +27,6 @@ pub struct Message(pub(crate) entities::message::Message);
 
 #[Object]
 impl Message {
-    async fn message_id(&self) -> MessageId {
-        self.0.id().into()
-    }
-
     async fn amount(&self) -> U64 {
         self.0.amount.into()
     }
@@ -80,38 +76,46 @@ impl MessageQuery {
         after: Option<String>,
         last: Option<i32>,
         before: Option<String>,
-    ) -> async_graphql::Result<Connection<MessageId, Message, EmptyFields, EmptyFields>>
+    ) -> async_graphql::Result<Connection<HexString, Message, EmptyFields, EmptyFields>>
     {
         let query = MessageQueryContext(ctx.data_unchecked());
-        crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            let start = *start;
+        crate::schema::query_pagination(
+            after,
+            before,
+            first,
+            last,
+            |start: &Option<HexString>, direction| {
+                let start = if let Some(start) = start.clone() {
+                    Some(start.try_into().map_err(|err| anyhow!("{}", err))?)
+                } else {
+                    None
+                };
 
-            let messages = if let Some(owner) = owner {
-                // Rocksdb doesn't support reverse iteration over a prefix
-                if matches!(last, Some(last) if last > 0) {
-                    return Err(anyhow!(
-                        "reverse pagination isn't supported for this resource"
-                    )
-                    .into())
-                }
+                let messages = if let Some(owner) = owner {
+                    // Rocksdb doesn't support reverse iteration over a prefix
+                    if matches!(last, Some(last) if last > 0) {
+                        return Err(anyhow!(
+                            "reverse pagination isn't supported for this resource"
+                        )
+                        .into())
+                    }
 
-                query
-                    .owned_messages(&owner.0, start.map(Into::into), direction)
-                    .into_boxed()
-            } else {
-                query
-                    .all_messages(start.map(Into::into), direction)
-                    .into_boxed()
-            };
+                    query
+                        .owned_messages(&owner.0, start, direction)
+                        .into_boxed()
+                } else {
+                    query.all_messages(start, direction).into_boxed()
+                };
 
-            let messages = messages.map(|result| {
-                result
-                    .map(|message| (message.id().into(), message.into()))
-                    .map_err(Into::into)
-            });
+                let messages = messages.map(|result| {
+                    result
+                        .map(|message| (message.nonce.into(), message.into()))
+                        .map_err(Into::into)
+                });
 
-            Ok(messages)
-        })
+                Ok(messages)
+            },
+        )
         .await
     }
 

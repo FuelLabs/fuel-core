@@ -3,10 +3,9 @@
 use super::CoinStatus;
 use crate::{
     blockchain::primitives::DaBlockHeight,
-    fuel_tx::Input,
+    entities::Nonce,
     fuel_types::{
         Address,
-        MessageId,
         Word,
     },
 };
@@ -20,7 +19,7 @@ pub struct CompressedDepositCoin {
     /// Fuel account receiving the message
     pub recipient: Address,
     /// Nonce must be unique. It's used to prevent replay attacks
-    pub nonce: Word,
+    pub nonce: Nonce,
     /// The amount of the base asset of Fuel chain sent along this message
     pub amount: Word,
     /// The block height from the parent da layer that originated this message
@@ -28,6 +27,11 @@ pub struct CompressedDepositCoin {
 }
 
 impl CompressedDepositCoin {
+    /// Returns the id of the message
+    pub fn id(&self) -> &Word {
+        &self.nonce
+    }
+
     /// Decompress the deposit coin
     pub fn decompress(self, status: CoinStatus) -> DepositCoin {
         DepositCoin {
@@ -50,7 +54,7 @@ pub struct DepositCoin {
     /// Fuel account receiving the message
     pub recipient: Address,
     /// Nonce must be unique. It's used to prevent replay attacks
-    pub nonce: Word,
+    pub nonce: Nonce,
     /// The amount of the base asset of Fuel chain sent along this message
     pub amount: Word,
     /// The block height from the parent da layer that originated this message

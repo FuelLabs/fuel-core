@@ -14,6 +14,7 @@ use fuel_core_types::{
         BlockHeight,
         BlockId,
     },
+    entities::Nonce,
     fuel_merkle::binary,
     fuel_tx::TxId,
     fuel_types::{
@@ -26,7 +27,10 @@ use serde::{
     de::DeserializeOwned,
     Serialize,
 };
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    ops::Deref,
+};
 
 /// Metadata for dense Merkle trees
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -177,6 +181,14 @@ impl ToDatabaseKey for u64 {
 
     fn database_key(&self) -> Self::Type<'_> {
         self.to_be_bytes()
+    }
+}
+
+impl ToDatabaseKey for Nonce {
+    type Type<'a> = [u8; 8];
+
+    fn database_key(&self) -> Self::Type<'_> {
+        self.deref().to_be_bytes()
     }
 }
 

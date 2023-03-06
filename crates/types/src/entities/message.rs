@@ -5,6 +5,7 @@ use crate::{
         header::BlockHeader,
         primitives::DaBlockHeight,
     },
+    entities::Nonce,
     fuel_tx::{
         Input,
         Output,
@@ -16,7 +17,6 @@ use crate::{
         Word,
     },
 };
-use core::ops::Deref;
 
 /// Message send from Da layer to fuel by bridge
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -27,7 +27,7 @@ pub struct CompressedMessage {
     /// Fuel account receiving the message
     pub recipient: Address,
     /// Nonce must be unique. It's used to prevent replay attacks
-    pub nonce: Word,
+    pub nonce: Nonce,
     /// The amount of the base asset of Fuel chain sent along this message
     pub amount: Word,
     /// Arbitrary message data
@@ -37,21 +37,20 @@ pub struct CompressedMessage {
 }
 
 impl CompressedMessage {
+    /// Returns the id of the message
+    pub fn id(&self) -> &Nonce {
+        &self.nonce
+    }
+
     /// Computed message id
-    pub fn id(&self) -> MessageId {
+    pub fn message_id(&self) -> MessageId {
         Input::compute_message_id(
             &self.sender,
             &self.recipient,
-            self.nonce,
+            *self.nonce,
             self.amount,
             &self.data,
         )
-    }
-
-    /// Compute checked message
-    pub fn check(self) -> CheckedMessage {
-        let id = self.id();
-        CheckedMessage { message: self, id }
     }
 
     /// Decompress the message
@@ -89,7 +88,7 @@ pub struct Message {
     /// Fuel account receiving the message
     pub recipient: Address,
     /// Nonce must be unique. It's used to prevent replay attacks
-    pub nonce: Word,
+    pub nonce: Nonce,
     /// The amount of the base asset of Fuel chain sent along this message
     pub amount: Word,
     /// Arbitrary message data
@@ -113,15 +112,9 @@ impl Message {
         }
     }
 
-    /// Computed message id
-    pub fn id(&self) -> MessageId {
-        Input::compute_message_id(
-            &self.sender,
-            &self.recipient,
-            self.nonce,
-            self.amount,
-            &self.data,
-        )
+    /// Returns message id
+    pub fn id(&self) -> &Nonce {
+        &self.nonce
     }
 }
 
@@ -157,49 +150,5 @@ impl MessageProof {
             self.amount,
             &self.data,
         )
-    }
-}
-
-/// A message associated with precomputed id
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct CheckedMessage {
-    message: CompressedMessage,
-    id: MessageId,
-}
-
-impl CheckedMessage {
-    /// Returned computed message id.
-    pub fn id(&self) -> &MessageId {
-        &self.id
-    }
-
-    /// Returns the message.
-    pub fn message(&self) -> &CompressedMessage {
-        &self.message
-    }
-
-    /// Unpacks inner values of the checked message.
-    pub fn unpack(self) -> (MessageId, CompressedMessage) {
-        (self.id, self.message)
-    }
-}
-
-impl From<CheckedMessage> for CompressedMessage {
-    fn from(checked_message: CheckedMessage) -> Self {
-        checked_message.message
-    }
-}
-
-impl AsRef<CompressedMessage> for CheckedMessage {
-    fn as_ref(&self) -> &CompressedMessage {
-        &self.message
-    }
-}
-
-impl Deref for CheckedMessage {
-    type Target = CompressedMessage;
-
-    fn deref(&self) -> &Self::Target {
-        &self.message
     }
 }

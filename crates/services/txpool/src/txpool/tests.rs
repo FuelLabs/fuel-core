@@ -265,7 +265,7 @@ fn tx_try_to_use_spent_coin() {
     // put a spent coin into the database
     let (mut coin, input) = setup_coin(&mut rng, None);
     coin.status = CoinStatus::Spent;
-    txpool.database.insert_coin(coin.clone());
+    txpool.database.insert_coin(coin);
 
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
@@ -835,7 +835,7 @@ async fn tx_rejected_when_input_message_id_is_spent() {
 
     let db = MockDb::default();
     db.insert_message(message.clone());
-    db.spend_message(message.id());
+    db.spend_message(*message.id());
     let mut txpool = TxPool::new(Default::default(), db);
 
     let err = txpool.insert_inner(tx).expect_err("should fail");
@@ -843,7 +843,7 @@ async fn tx_rejected_when_input_message_id_is_spent() {
     // check error
     assert!(matches!(
         err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedInputMessageIdSpent(msg_id)) if msg_id == &message.id()
+        Some(Error::NotInsertedInputMessageSpent(msg_id)) if msg_id == message.id()
     ));
 }
 
@@ -867,7 +867,7 @@ async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
     // check error
     assert!(matches!(
         err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedInputMessageUnknown(msg_id)) if msg_id == &message.id()
+        Some(Error::NotInsertedInputMessageUnknown(msg_id)) if msg_id == message.id()
     ));
 }
 
@@ -915,7 +915,7 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
     // check error
     assert!(matches!(
         err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedCollisionMessageId(tx_id, msg_id)) if tx_id == &tx_high.id() && msg_id == &message.id()
+        Some(Error::NotInsertedCollisionMessageId(tx_id, msg_id)) if tx_id == &tx_high.id() && msg_id == message.id()
     ));
 }
 

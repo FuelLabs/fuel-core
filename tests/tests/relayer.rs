@@ -110,8 +110,8 @@ async fn relayer_can_download_logs() {
     // check the db for downloaded messages
     for msg in expected_messages {
         assert_eq!(
-            &*db.storage::<Messages>().get(msg.id()).unwrap().unwrap(),
-            &*msg
+            *db.storage::<Messages>().get(msg.id()).unwrap().unwrap(),
+            msg
         );
     }
     srv.stop_and_await().await.unwrap();

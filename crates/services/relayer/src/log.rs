@@ -10,7 +10,10 @@ use ethers_core::{
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::CompressedMessage,
+    entities::{
+        message::CompressedMessage,
+        Nonce,
+    },
     fuel_types::{
         Address,
         Word,
@@ -22,7 +25,7 @@ use fuel_core_types::{
 pub struct MessageLog {
     pub sender: Address,
     pub recipient: Address,
-    pub nonce: Word,
+    pub nonce: Nonce,
     pub amount: Word,
     pub data: Vec<u8>,
     pub da_height: DaBlockHeight,
@@ -70,7 +73,7 @@ impl TryFrom<&Log> for EthEventLog {
                 let message = abi::bridge::SentMessageFilter::decode_log(&raw_log)?;
                 let amount = message.amount;
                 let data = message.data.to_vec();
-                let nonce = message.nonce;
+                let nonce = message.nonce.into();
                 let recipient = Address::from(message.recipient);
                 let sender = Address::from(message.sender);
 

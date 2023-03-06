@@ -34,8 +34,10 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::CompressedMessage,
-    fuel_types::MessageId,
+    entities::{
+        message::CompressedMessage,
+        Nonce,
+    },
 };
 use futures::StreamExt;
 use std::{
@@ -277,7 +279,7 @@ impl<D> SharedState<D> {
     /// and is <= the given height.
     pub fn get_message(
         &self,
-        id: &MessageId,
+        id: &Nonce,
         da_height: &DaBlockHeight,
     ) -> anyhow::Result<Option<CompressedMessage>>
     where

@@ -37,9 +37,12 @@ use fuel_core_types::{
             DaBlockHeight,
         },
     },
-    entities::coins::{
-        coin::CompressedCoin,
-        CoinStatus,
+    entities::{
+        coins::{
+            coin::CompressedCoin,
+            CoinStatus,
+        },
+        Nonce,
     },
     fuel_asm::{
         RegId,
@@ -760,7 +763,6 @@ where
                 }
                 Input::Contract { .. } => {}
                 Input::MessageSigned {
-                    message_id,
                     sender,
                     recipient,
                     amount,
@@ -769,7 +771,6 @@ where
                     ..
                 }
                 | Input::MessagePredicate {
-                    message_id,
                     sender,
                     recipient,
                     amount,
@@ -777,60 +778,58 @@ where
                     data,
                     ..
                 } => {
+                    let nonce = Nonce::from(*nonce);
                     if let Some(message) = self
                         .relayer
-                        .get_message(message_id, &block_da_height)
+                        .get_message(&nonce, &block_da_height)
                         .map_err(|e| ExecutorError::RelayerError(e.into()))?
                     {
-                        if db.is_message_spent(message_id)? {
+                        if db.is_message_spent(&nonce)? {
                             return Err(TransactionValidityError::MessageAlreadySpent(
-                                *message_id,
+                                nonce,
                             )
                             .into())
                         }
                         if message.da_height > block_da_height {
                             return Err(TransactionValidityError::MessageSpendTooEarly(
-                                *message_id,
+                                nonce,
                             )
                             .into())
                         }
                         if message.sender != *sender {
                             return Err(TransactionValidityError::MessageSenderMismatch(
-                                *message_id,
+                                nonce,
                             )
                             .into())
                         }
                         if message.recipient != *recipient {
                             return Err(
-                                TransactionValidityError::MessageRecipientMismatch(
-                                    *message_id,
-                                )
-                                .into(),
+                                TransactionValidityError::MessageRecipientMismatch(nonce)
+                                    .into(),
                             )
                         }
                         if message.amount != *amount {
                             return Err(TransactionValidityError::MessageAmountMismatch(
-                                *message_id,
+                                nonce,
                             )
                             .into())
                         }
-                        if message.nonce != *nonce {
+                        if message.nonce != nonce {
                             return Err(TransactionValidityError::MessageNonceMismatch(
-                                *message_id,
+                                nonce,
                             )
                             .into())
                         }
                         if message.data != *data {
                             return Err(TransactionValidityError::MessageDataMismatch(
-                                *message_id,
+                                nonce,
                             )
                             .into())
                         }
                     } else {
-                        return Err(TransactionValidityError::MessageDoesNotExist(
-                            *message_id,
+                        return Err(
+                            TransactionValidityError::MessageDoesNotExist(nonce).into()
                         )
-                        .into())
                     }
                 }
             }
@@ -932,9 +931,10 @@ where
                         },
                     )?;
                 }
-                Input::MessageSigned { message_id, .. }
-                | Input::MessagePredicate { message_id, .. } => {
-                    db.storage::<SpentMessages>().insert(message_id, &())?;
+                Input::MessageSigned { nonce, .. }
+                | Input::MessagePredicate { nonce, .. } => {
+                    let nonce = Nonce::from(*nonce);
+                    db.storage::<SpentMessages>().insert(&nonce, &())?;
                 }
                 _ => {}
             }
@@ -1419,10 +1419,7 @@ mod tests {
     use fuel_core_storage::tables::Messages;
     use fuel_core_types::{
         blockchain::header::ConsensusHeader,
-        entities::message::{
-            CheckedMessage,
-            CompressedMessage,
-        },
+        entities::message::CompressedMessage,
         fuel_asm::op,
         fuel_crypto::SecretKey,
         fuel_merkle::common::empty_sum_sha256,
@@ -3243,7 +3240,7 @@ mod tests {
     fn make_tx_and_message(
         rng: &mut StdRng,
         da_height: u64,
-    ) -> (Transaction, CheckedMessage) {
+    ) -> (Transaction, CompressedMessage) {
         let mut message = CompressedMessage {
             sender: rng.gen(),
             recipient: rng.gen(),
@@ -3257,7 +3254,7 @@ mod tests {
             .add_unsigned_message_input(
                 rng.gen(),
                 message.sender,
-                message.nonce,
+                message.nonce.into(),
                 message.amount,
                 vec![],
             )
@@ -3269,18 +3266,18 @@ mod tests {
             unreachable!();
         }
 
-        (tx.into(), message.check())
+        (tx.into(), message)
     }
 
     /// Helper to build database and executor for some of the message tests
-    fn make_executor(messages: &[&CheckedMessage]) -> Executor<Database> {
+    fn make_executor(messages: &[&CompressedMessage]) -> Executor<Database> {
         let mut database = Database::default();
         let database_ref = &mut database;
 
         for message in messages {
             database_ref
                 .storage::<Messages>()
-                .insert(message.id(), message.as_ref())
+                .insert(message.id(), message)
                 .unwrap();
         }
 

@@ -22,17 +22,14 @@ use ethers_core::{
     },
 };
 use fuel_core_types::{
-    entities::message::{
-        CheckedMessage,
-        CompressedMessage,
-    },
+    entities::message::CompressedMessage,
     fuel_types::Address,
 };
 
 pub mod middleware;
 
 pub trait LogTestHelper {
-    fn to_msg(&self) -> CheckedMessage;
+    fn to_msg(&self) -> CompressedMessage;
 }
 
 pub trait EvtToLog {
@@ -40,9 +37,9 @@ pub trait EvtToLog {
 }
 
 impl LogTestHelper for Log {
-    fn to_msg(&self) -> CheckedMessage {
+    fn to_msg(&self) -> CompressedMessage {
         match EthEventLog::try_from(self).unwrap() {
-            EthEventLog::Message(m) => CompressedMessage::from(&m).check(),
+            EthEventLog::Message(m) => CompressedMessage::from(&m),
             _ => panic!("This log does not form a message"),
         }
     }

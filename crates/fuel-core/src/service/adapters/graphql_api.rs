@@ -42,11 +42,13 @@ use fuel_core_types::{
         BlockId,
         DaBlockHeight,
     },
-    entities::message::Message,
+    entities::{
+        message::Message,
+        Nonce,
+    },
     fuel_tx::{
         Address,
         AssetId,
-        MessageId,
         Receipt as TxReceipt,
         Transaction,
         TxPointer,
@@ -122,9 +124,9 @@ impl DatabaseMessages for Database {
     fn owned_message_ids(
         &self,
         owner: &Address,
-        start_message_id: Option<MessageId>,
+        start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<MessageId>> {
+    ) -> BoxedIter<'_, StorageResult<Nonce>> {
         self.owned_message_ids(owner, start_message_id, Some(direction))
             .map(|result| result.map_err(StorageError::from))
             .into_boxed()
@@ -132,13 +134,13 @@ impl DatabaseMessages for Database {
 
     fn all_messages(
         &self,
-        start_message_id: Option<MessageId>,
+        start_message_id: Option<Nonce>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<Message>> {
         self.all_messages(start_message_id, Some(direction))
             .map(|result| match result {
                 Ok(message) => {
-                    let id = message.id();
+                    let id = *message.id();
                     Ok(message.decompress(self.message_status(&id)?))
                 }
                 Err(err) => Err(StorageError::from(err)),

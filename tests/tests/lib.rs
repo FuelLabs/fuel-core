@@ -4,6 +4,7 @@ mod balances;
 mod blocks;
 mod chain;
 mod coin;
+mod coins;
 mod contract;
 mod dap;
 mod debugger;
@@ -14,7 +15,6 @@ mod node_info;
 mod poa;
 #[cfg(feature = "relayer")]
 mod relayer;
-mod resource;
 mod snapshot;
 #[cfg(feature = "p2p")]
 mod sync;

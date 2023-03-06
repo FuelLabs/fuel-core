@@ -50,7 +50,6 @@ use fuel_core_types::{
     fuel_merkle::binary,
     fuel_tx::{
         Contract,
-        MessageId,
         UtxoId,
     },
     fuel_types::{
@@ -92,8 +91,7 @@ fn import_genesis_block(
     let coins_root = init_coin_state(database, &config.chain_conf.initial_state)?.into();
     let contracts_root =
         init_contracts(database, &config.chain_conf.initial_state)?.into();
-    let (messages_root, message_ids) =
-        init_da_messages(database, &config.chain_conf.initial_state)?;
+    let messages_root = init_da_messages(database, &config.chain_conf.initial_state)?;
     let messages_root = messages_root.into();
 
     let genesis = Genesis {
@@ -127,7 +125,7 @@ fn import_genesis_block(
         },
         // Genesis block doesn't have any transaction.
         vec![],
-        &message_ids,
+        &[],
     );
 
     let block_id = block.id();
@@ -297,9 +295,8 @@ fn init_contract_state(
 fn init_da_messages(
     db: &mut Database,
     state: &Option<StateConfig>,
-) -> anyhow::Result<(MerkleRoot, Vec<MessageId>)> {
+) -> anyhow::Result<MerkleRoot> {
     let mut message_tree = binary::in_memory::MerkleTree::new();
-    let mut message_ids = vec![];
     if let Some(state) = &state {
         if let Some(message_state) = &state.messages {
             for msg in message_state {
@@ -312,21 +309,19 @@ fn init_da_messages(
                     da_height: msg.da_height,
                 };
 
-                let message_id = message.id();
                 if db
                     .storage::<Messages>()
-                    .insert(&message_id, &message)?
+                    .insert(message.id(), &message)?
                     .is_some()
                 {
                     return Err(anyhow!("Message should not exist"))
                 }
                 message_tree.push(message.root()?.as_slice());
-                message_ids.push(message_id);
             }
         }
     }
 
-    Ok((message_tree.root(), message_ids))
+    Ok(message_tree.root())
 }
 
 fn init_contract_balance(
@@ -599,7 +594,7 @@ mod tests {
 
         let ret_msg = db
             .storage::<Messages>()
-            .get(&expected_msg.id())
+            .get(expected_msg.id())
             .unwrap()
             .unwrap()
             .into_owned();

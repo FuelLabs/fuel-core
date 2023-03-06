@@ -16,6 +16,7 @@ use fuel_core_types::{
         BlockHeight,
         DaBlockHeight,
     },
+    entities::Nonce,
     fuel_types::*,
 };
 use rand::{
@@ -68,7 +69,7 @@ async fn snapshot_state_config() {
         messages: Some(vec![MessageConfig {
             sender: rng.gen(),
             recipient: rng.gen(),
-            nonce: rng.gen_range(0..1000),
+            nonce: Nonce::from(rng.gen_range(0..1000)),
             amount: rng.gen_range(0..1000),
             data: vec![],
             da_height: DaBlockHeight(rng.gen_range(0..1000)),

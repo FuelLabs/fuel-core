@@ -26,7 +26,10 @@ use fuel_core_types::{
         BlockId,
         DaBlockHeight,
     },
-    entities::message::Message,
+    entities::{
+        message::Message,
+        Nonce,
+    },
     fuel_tx::{
         Receipt,
         Transaction,
@@ -38,7 +41,6 @@ use fuel_core_types::{
         Address,
         AssetId,
         ContractId,
-        MessageId,
     },
     services::{
         graphql_api::ContractBalance,
@@ -104,13 +106,13 @@ pub trait DatabaseMessages:
     fn owned_message_ids(
         &self,
         owner: &Address,
-        start_message_id: Option<MessageId>,
+        start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<MessageId>>;
+    ) -> BoxedIter<'_, StorageResult<Nonce>>;
 
     fn all_messages(
         &self,
-        start_message_id: Option<MessageId>,
+        start_message_id: Option<Nonce>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<Message>>;
 }

@@ -4,6 +4,7 @@ use fuel_core_types::{
         BlockHeight,
         DaBlockHeight,
     },
+    entities::Nonce,
     fuel_asm::Word,
     fuel_types::bytes::WORD_SIZE,
 };
@@ -89,8 +90,28 @@ impl SerializeAs<DaBlockHeight> for HexNumber {
     }
 }
 
+impl SerializeAs<Nonce> for HexNumber {
+    fn serialize_as<S>(value: &Nonce, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let number: u64 = (*value).into();
+        HexNumber::serialize_as(&number, serializer)
+    }
+}
+
 impl<'de> DeserializeAs<'de, DaBlockHeight> for HexNumber {
     fn deserialize_as<D>(deserializer: D) -> Result<DaBlockHeight, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let number: u64 = HexNumber::deserialize_as(deserializer)?;
+        Ok(number.into())
+    }
+}
+
+impl<'de> DeserializeAs<'de, Nonce> for HexNumber {
+    fn deserialize_as<D>(deserializer: D) -> Result<Nonce, D::Error>
     where
         D: Deserializer<'de>,
     {

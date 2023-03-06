@@ -22,15 +22,13 @@ use fuel_core_types::{
     entities::{
         coins::coin::CompressedCoin,
         message::CompressedMessage,
+        Nonce,
     },
     fuel_tx::{
         Transaction,
         UtxoId,
     },
-    fuel_types::{
-        ContractId,
-        MessageId,
-    },
+    fuel_types::ContractId,
     services::{
         block_importer::ImportResult,
         p2p::{
@@ -130,17 +128,14 @@ impl fuel_core_txpool::ports::TxPoolDb for Database {
         self.storage::<ContractsRawCode>().contains_key(contract_id)
     }
 
-    fn message(
-        &self,
-        message_id: &MessageId,
-    ) -> StorageResult<Option<CompressedMessage>> {
+    fn message(&self, id: &Nonce) -> StorageResult<Option<CompressedMessage>> {
         self.storage::<Messages>()
-            .get(message_id)
+            .get(id)
             .map(|t| t.map(|t| t.as_ref().clone()))
     }
 
-    fn is_message_spent(&self, message_id: &MessageId) -> StorageResult<bool> {
-        self.storage::<SpentMessages>().contains_key(message_id)
+    fn is_message_spent(&self, id: &Nonce) -> StorageResult<bool> {
+        self.storage::<SpentMessages>().contains_key(id)
     }
 
     fn current_block_height(&self) -> StorageResult<BlockHeight> {

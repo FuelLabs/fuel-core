@@ -8,11 +8,11 @@ use fuel_core_types::{
             CompressedCoin,
         },
         message::CompressedMessage,
+        Nonce,
     },
     fuel_tx::{
         Contract,
         ContractId,
-        MessageId,
         UtxoId,
     },
 };
@@ -31,8 +31,8 @@ use std::{
 pub struct Data {
     pub coins: HashMap<UtxoId, CompressedCoin>,
     pub contracts: HashMap<ContractId, Contract>,
-    pub messages: HashMap<MessageId, CompressedMessage>,
-    pub spent_messages: HashSet<MessageId>,
+    pub messages: HashMap<Nonce, CompressedMessage>,
+    pub spent_messages: HashSet<Nonce>,
 }
 
 #[derive(Clone, Default)]
@@ -54,11 +54,11 @@ impl MockDb {
             .lock()
             .unwrap()
             .messages
-            .insert(message.id(), message);
+            .insert(*message.id(), message);
     }
 
-    pub fn spend_message(&self, message_id: MessageId) {
-        self.data.lock().unwrap().spent_messages.insert(message_id);
+    pub fn spend_message(&self, id: Nonce) {
+        self.data.lock().unwrap().spent_messages.insert(id);
     }
 }
 
@@ -82,26 +82,12 @@ impl TxPoolDb for MockDb {
             .contains_key(contract_id))
     }
 
-    fn message(
-        &self,
-        message_id: &MessageId,
-    ) -> StorageResult<Option<CompressedMessage>> {
-        Ok(self
-            .data
-            .lock()
-            .unwrap()
-            .messages
-            .get(message_id)
-            .map(Clone::clone))
+    fn message(&self, id: &Nonce) -> StorageResult<Option<CompressedMessage>> {
+        Ok(self.data.lock().unwrap().messages.get(id).map(Clone::clone))
     }
 
-    fn is_message_spent(&self, message_id: &MessageId) -> StorageResult<bool> {
-        Ok(self
-            .data
-            .lock()
-            .unwrap()
-            .spent_messages
-            .contains(message_id))
+    fn is_message_spent(&self, id: &Nonce) -> StorageResult<bool> {
+        Ok(self.data.lock().unwrap().spent_messages.contains(id))
     }
 
     fn current_block_height(&self) -> StorageResult<BlockHeight> {

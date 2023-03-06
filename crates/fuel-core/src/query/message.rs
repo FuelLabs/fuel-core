@@ -25,10 +25,13 @@ use fuel_core_types::{
         consensus::Consensus,
         primitives::BlockId,
     },
-    entities::message::{
-        Message,
-        MessageProof,
-        MessageStatus,
+    entities::{
+        message::{
+            Message,
+            MessageProof,
+            MessageStatus,
+        },
+        Nonce,
     },
     fuel_crypto::Signature,
     fuel_merkle,
@@ -55,11 +58,11 @@ mod test;
 pub struct MessageQueryContext<'a>(pub &'a Database);
 
 impl<'a> MessageQueryContext<'a> {
-    pub fn message(&self, message_id: &MessageId) -> StorageResult<Message> {
+    pub fn message(&self, id: &Nonce) -> StorageResult<Message> {
         self.0
             .as_ref()
             .storage::<Messages>()
-            .get(message_id)?
+            .get(id)?
             .ok_or(not_found!(Messages))
             .map(Cow::into_owned)
             .and_then(|m| {
@@ -67,7 +70,7 @@ impl<'a> MessageQueryContext<'a> {
                     .0
                     .as_ref()
                     .storage::<SpentMessages>()
-                    .contains_key(message_id)?
+                    .contains_key(id)?
                 {
                     Ok(m.decompress(MessageStatus::Spent))
                 } else {
@@ -79,16 +82,16 @@ impl<'a> MessageQueryContext<'a> {
     pub fn owned_message_ids(
         &self,
         owner: &Address,
-        start_message_id: Option<MessageId>,
+        start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = StorageResult<MessageId>> + 'a {
+    ) -> impl Iterator<Item = StorageResult<Nonce>> + 'a {
         self.0.owned_message_ids(owner, start_message_id, direction)
     }
 
     pub fn owned_messages(
         &self,
         owner: &Address,
-        start_message_id: Option<MessageId>,
+        start_message_id: Option<Nonce>,
         direction: IterDirection,
     ) -> impl Iterator<Item = StorageResult<Message>> + '_ {
         self.owned_message_ids(owner, start_message_id, direction)
@@ -97,7 +100,7 @@ impl<'a> MessageQueryContext<'a> {
 
     pub fn all_messages(
         &self,
-        start_message_id: Option<MessageId>,
+        start_message_id: Option<Nonce>,
         direction: IterDirection,
     ) -> impl Iterator<Item = StorageResult<Message>> + 'a {
         self.0.all_messages(start_message_id, direction)

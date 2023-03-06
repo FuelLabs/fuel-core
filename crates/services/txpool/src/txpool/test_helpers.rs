@@ -5,6 +5,7 @@ use fuel_core_types::{
         Contract,
         ContractId,
         Input,
+        MessageId,
         Output,
         TxId,
         UtxoId,
@@ -19,7 +20,7 @@ pub(crate) fn create_message_predicate_from_message(
     let message = CompressedMessage {
         sender: Default::default(),
         recipient: Input::predicate_owner(&predicate),
-        nonce: 0,
+        nonce: 0.into(),
         amount,
         data: vec![],
         da_height: Default::default(),
@@ -28,11 +29,12 @@ pub(crate) fn create_message_predicate_from_message(
     (
         message.clone(),
         Input::message_predicate(
-            message.id(),
+            // TODO: Remove me
+            MessageId::zeroed(),
             message.sender,
             Input::predicate_owner(&predicate),
             message.amount,
-            message.nonce,
+            message.nonce.into(),
             message.data,
             predicate,
             Default::default(),

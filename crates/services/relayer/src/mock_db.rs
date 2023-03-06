@@ -7,11 +7,10 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::{
-        CheckedMessage,
-        CompressedMessage,
+    entities::{
+        message::CompressedMessage,
+        Nonce,
     },
-    fuel_tx::MessageId,
 };
 use std::{
     collections::{
@@ -26,7 +25,7 @@ use std::{
 
 #[derive(Default)]
 pub struct Data {
-    pub messages: BTreeMap<DaBlockHeight, HashMap<MessageId, CompressedMessage>>,
+    pub messages: BTreeMap<DaBlockHeight, HashMap<Nonce, CompressedMessage>>,
     pub finalized_da_height: Option<DaBlockHeight>,
 }
 
@@ -40,7 +39,7 @@ pub struct MockDb {
 }
 
 impl MockDb {
-    pub fn get_message(&self, id: &MessageId) -> Option<CompressedMessage> {
+    pub fn get_message(&self, id: &Nonce) -> Option<CompressedMessage> {
         self.data
             .lock()
             .unwrap()
@@ -54,15 +53,14 @@ impl RelayerDb for MockDb {
     fn insert_messages(
         &mut self,
         da_height: &DaBlockHeight,
-        messages: &[CheckedMessage],
+        messages: &[CompressedMessage],
     ) -> StorageResult<()> {
         let mut m = self.data.lock().unwrap();
         for message in messages {
-            let (message_id, message) = message.clone().unpack();
             m.messages
                 .entry(message.da_height)
                 .or_default()
-                .insert(message_id, message);
+                .insert(*message.id(), message.clone());
         }
         let max = m.finalized_da_height.get_or_insert(0u64.into());
         *max = (*max).max(*da_height);
