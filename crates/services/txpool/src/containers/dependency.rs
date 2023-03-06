@@ -6,15 +6,18 @@ use crate::{
 };
 use anyhow::anyhow;
 use fuel_core_types::{
-    entities::coins::{
-        coin::CompressedCoin,
+    entities::{
+        coins::{
+            coin::CompressedCoin,
+        },
+        message::Message,
+        Nonce,
     },
     fuel_tx::{
         Input,
         Output,
         UtxoId,
     },
-    fuel_types::MessageId,
     services::txpool::ArcPoolTx,
 };
 use std::collections::{
@@ -32,7 +35,7 @@ pub struct Dependency {
     /// Contract-> Tx mapping.
     contracts: HashMap<ContractId, ContractState>,
     /// messageId -> tx mapping
-    messages: HashMap<MessageId, MessageState>,
+    messages: HashMap<Nonce, MessageState>,
     /// max depth of dependency.
     max_depth: usize,
     /// utxo-validation feature flag
@@ -267,11 +270,13 @@ impl Dependency {
         Ok(())
     }
 
-    /// Verifies the integrity of the message ID
-    fn check_if_message_input_matches_id(input: &Input) -> anyhow::Result<()> {
+    /// Verifies the integrity of the message
+    fn check_if_message_input_matches_database(
+        input: &Input,
+        db_message: &CompressedMessage,
+    ) -> anyhow::Result<()> {
         match input {
             Input::MessageSigned {
-                message_id,
                 sender,
                 recipient,
                 nonce,
@@ -280,7 +285,6 @@ impl Dependency {
                 ..
             }
             | Input::MessagePredicate {
-                message_id,
                 sender,
                 recipient,
                 nonce,
@@ -288,10 +292,13 @@ impl Dependency {
                 data,
                 ..
             } => {
-                let computed_id =
-                    Input::compute_message_id(sender, recipient, *nonce, *amount, data);
-                if message_id != &computed_id {
-                    return Err(Error::NotInsertedIoWrongMessageId.into())
+                if &db_message.sender != sender
+                    || &db_message.recipient != recipient
+                    || &*db_message.nonce != nonce
+                    || &db_message.amount != amount
+                    || &db_message.data != data
+                {
+                    return Err(Error::NotInsertedIoMessageMismatch.into())
                 }
             }
             _ => {}
@@ -313,7 +320,7 @@ impl Dependency {
         usize,
         HashMap<UtxoId, CoinState>,
         HashMap<ContractId, ContractState>,
-        HashMap<MessageId, MessageState>,
+        HashMap<Nonce, MessageState>,
         Vec<TxId>,
     )> {
         let mut collided: Vec<TxId> = Vec::new();
@@ -321,7 +328,7 @@ impl Dependency {
         let mut max_depth = 0;
         let mut db_coins: HashMap<UtxoId, CoinState> = HashMap::new();
         let mut db_contracts: HashMap<ContractId, ContractState> = HashMap::new();
-        let mut db_messages: HashMap<MessageId, MessageState> = HashMap::new();
+        let mut db_messages: HashMap<Nonce, MessageState> = HashMap::new();
         for input in tx.inputs() {
             // check if all required inputs are here.
             match input {
@@ -394,33 +401,34 @@ impl Dependency {
                     );
                     // yey we got our coin
                 }
-                Input::MessagePredicate { message_id, .. }
-                | Input::MessageSigned { message_id, .. } => {
-                    // verify message id integrity
-                    Self::check_if_message_input_matches_id(input)?;
+                Input::MessagePredicate { nonce, .. }
+                | Input::MessageSigned { nonce, .. } => {
+                    let nonce = Nonce::from(*nonce);
                     // since message id is derived, we don't need to double check all the fields
                     if self.utxo_validation {
-                        if db.message(message_id)?.is_some() {
+                        if let Some(db_message) = db.message(&nonce)? {
+                            // verify message id integrity
+                            Self::check_if_message_input_matches_database(
+                                input,
+                                &db_message,
+                            )?;
                             // return an error if spent block is set
-                            if db.is_message_spent(message_id)? {
-                                return Err(Error::NotInsertedInputMessageIdSpent(
-                                    *message_id,
+                            if db.is_message_spent(&nonce)? {
+                                return Err(
+                                    Error::NotInsertedInputMessageSpent(nonce).into()
                                 )
-                                .into())
                             }
                         } else {
-                            return Err(
-                                Error::NotInsertedInputMessageUnknown(*message_id).into()
-                            )
+                            return Err(Error::NotInsertedInputMessageUnknown(nonce).into())
                         }
                     }
 
-                    if let Some(state) = self.messages.get(message_id) {
+                    if let Some(state) = self.messages.get(&nonce) {
                         // some other is already attempting to spend this message, compare gas price
                         if state.gas_price >= tx.price() {
                             return Err(Error::NotInsertedCollisionMessageId(
                                 state.spent_by,
-                                *message_id,
+                                nonce,
                             )
                             .into())
                         } else {
@@ -428,7 +436,7 @@ impl Dependency {
                         }
                     }
                     db_messages.insert(
-                        *message_id,
+                        nonce,
                         MessageState {
                             spent_by: tx.id(),
                             gas_price: tx.price(),
@@ -688,9 +696,9 @@ impl Dependency {
                         }
                     }
                 }
-                Input::MessageSigned { message_id, .. }
-                | Input::MessagePredicate { message_id, .. } => {
-                    self.messages.remove(message_id);
+                Input::MessageSigned { nonce, .. }
+                | Input::MessagePredicate { nonce, .. } => {
+                    self.messages.remove(&Nonce::from(*nonce));
                 }
             }
         }

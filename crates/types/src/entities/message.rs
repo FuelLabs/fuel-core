@@ -5,6 +5,7 @@ use crate::{
         header::BlockHeader,
         primitives::DaBlockHeight,
     },
+    entities::Nonce,
     fuel_tx::{
         Input,
         Output,
@@ -16,7 +17,6 @@ use crate::{
         Word,
     },
 };
-use core::ops::Deref;
 
 /// Message send from Da layer to fuel by bridge
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -27,7 +27,7 @@ pub struct Message {
     /// Fuel account receiving the message
     pub recipient: Address,
     /// Nonce must be unique. It's used to prevent replay attacks
-    pub nonce: Word,
+    pub nonce: Nonce,
     /// The amount of the base asset of Fuel chain sent along this message
     pub amount: Word,
     /// Arbitrary message data
@@ -38,20 +38,14 @@ pub struct Message {
 
 impl Message {
     /// Computed message id
-    pub fn id(&self) -> MessageId {
+    pub fn message_id(&self) -> MessageId {
         Input::compute_message_id(
             &self.sender,
             &self.recipient,
-            self.nonce,
+            *self.nonce,
             self.amount,
             &self.data,
         )
-    }
-
-    /// Compute checked message
-    pub fn check(self) -> CheckedMessage {
-        let id = self.id();
-        CheckedMessage { message: self, id }
     }
 }
 

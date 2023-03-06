@@ -5,15 +5,13 @@ use fuel_core_types::{
     entities::{
         coins::coin::CompressedCoin,
         message::Message,
+        Nonce,
     },
     fuel_tx::{
         Transaction,
         UtxoId,
     },
-    fuel_types::{
-        ContractId,
-        MessageId,
-    },
+    fuel_types::ContractId,
     services::{
         block_importer::ImportResult,
         p2p::{
@@ -52,9 +50,9 @@ pub trait TxPoolDb: Send + Sync {
 
     fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool>;
 
-    fn message(&self, message_id: &MessageId) -> StorageResult<Option<Message>>;
+    fn message(&self, message_id: &Nonce) -> StorageResult<Option<Message>>;
 
-    fn is_message_spent(&self, message_id: &MessageId) -> StorageResult<bool>;
+    fn is_message_spent(&self, message_id: &Nonce) -> StorageResult<bool>;
 
     fn current_block_height(&self) -> StorageResult<BlockHeight>;
 }

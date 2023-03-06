@@ -26,7 +26,7 @@ async fn can_submit_genesis_message() {
         .add_unsigned_message_input(
             secret_key,
             msg1.sender,
-            msg1.nonce,
+            *msg1.nonce,
             msg1.amount,
             msg1.data.clone(),
         )

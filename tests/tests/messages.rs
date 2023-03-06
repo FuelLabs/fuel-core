@@ -33,19 +33,19 @@ async fn messages_returns_messages_for_all_owners() {
     // create some messages for owner A
     let first_msg = MessageConfig {
         recipient: owner_a,
-        nonce: 1,
+        nonce: 1.into(),
         ..Default::default()
     };
     let second_msg = MessageConfig {
         recipient: owner_a,
-        nonce: 2,
+        nonce: 2.into(),
         ..Default::default()
     };
 
     // create a message for owner B
     let third_msg = MessageConfig {
         recipient: owner_b,
-        nonce: 3,
+        nonce: 3.into(),
         ..Default::default()
     };
 
@@ -82,19 +82,19 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
     // create some messages for owner A
     let first_msg = MessageConfig {
         recipient: owner_a,
-        nonce: 1,
+        nonce: 1.into(),
         ..Default::default()
     };
     let second_msg = MessageConfig {
         recipient: owner_a,
-        nonce: 2,
+        nonce: 2.into(),
         ..Default::default()
     };
 
     // create a message for owner B
     let third_msg = MessageConfig {
         recipient: owner_b,
-        nonce: 3,
+        nonce: 3.into(),
         ..Default::default()
     };
 

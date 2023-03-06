@@ -10,8 +10,8 @@ use fuel_core_types::{
     },
     entities::{
         coins::coin::CompressedCoin,
-        contract::ContractUtxoInfo,
         message::Message,
+        Nonce,
     },
     fuel_tx::{
         Receipt,
@@ -22,7 +22,6 @@ use fuel_core_types::{
     fuel_types::{
         Bytes32,
         ContractId,
-        MessageId,
     },
 };
 pub use fuel_vm_private::storage::{
@@ -96,7 +95,7 @@ pub struct Messages;
 
 impl Mappable for Messages {
     type Key = Self::OwnedKey;
-    type OwnedKey = MessageId;
+    type OwnedKey = Nonce;
     type Value = Self::OwnedValue;
     type OwnedValue = Message;
 }
@@ -106,7 +105,7 @@ pub struct SpentMessages;
 
 impl Mappable for SpentMessages {
     type Key = Self::OwnedKey;
-    type OwnedKey = MessageId;
+    type OwnedKey = Nonce;
     type Value = Self::OwnedValue;
     type OwnedValue = ();
 }

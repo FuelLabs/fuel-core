@@ -57,7 +57,7 @@ async fn balance() {
                 .map(|(nonce, (owner, amount))| MessageConfig {
                     sender: owner,
                     recipient: owner,
-                    nonce: nonce as u64,
+                    nonce: (nonce as u64).into(),
                     amount,
                     data: vec![],
                     da_height: DaBlockHeight::from(1usize),
@@ -190,7 +190,7 @@ async fn first_5_balances() {
                 |(nonce, (owner, amount))| MessageConfig {
                     sender: *owner,
                     recipient: *owner,
-                    nonce: nonce as u64,
+                    nonce: (nonce as u64).into(),
                     amount,
                     data: vec![],
                     da_height: DaBlockHeight::from(1usize),

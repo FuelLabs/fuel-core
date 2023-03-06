@@ -38,9 +38,11 @@ use fuel_core_types::{
             DaBlockHeight,
         },
     },
-    entities::coins::{
-        coin::CompressedCoin,
-        contract::ContractUtxoInfo,
+    entities::{
+        coins::{
+            coin::CompressedCoin,
+        },
+        Nonce,
     },
     fuel_asm::{
         RegId,
@@ -758,7 +760,6 @@ where
                 }
                 Input::Contract { .. } => {}
                 Input::MessageSigned {
-                    message_id,
                     sender,
                     recipient,
                     amount,
@@ -767,7 +768,6 @@ where
                     ..
                 }
                 | Input::MessagePredicate {
-                    message_id,
                     sender,
                     recipient,
                     amount,
@@ -775,10 +775,11 @@ where
                     data,
                     ..
                 } => {
+                    let nonce = Nonce::from(*nonce);
                     // Eagerly return already spent if status is known.
-                    if db.is_message_spent(message_id)? {
+                    if db.is_message_spent(&nonce)? {
                         return Err(TransactionValidityError::MessageAlreadySpent(
-                            *message_id,
+                            nonce,
                         )
                         .into())
                     }
@@ -789,47 +790,44 @@ where
                     {
                         if message.da_height > block_da_height {
                             return Err(TransactionValidityError::MessageSpendTooEarly(
-                                *message_id,
+                                nonce,
                             )
                             .into())
                         }
                         if message.sender != *sender {
                             return Err(TransactionValidityError::MessageSenderMismatch(
-                                *message_id,
+                                nonce,
                             )
                             .into())
                         }
                         if message.recipient != *recipient {
                             return Err(
-                                TransactionValidityError::MessageRecipientMismatch(
-                                    *message_id,
-                                )
-                                .into(),
+                                TransactionValidityError::MessageRecipientMismatch(nonce)
+                                    .into(),
                             )
                         }
                         if message.amount != *amount {
                             return Err(TransactionValidityError::MessageAmountMismatch(
-                                *message_id,
+                                nonce,
                             )
                             .into())
                         }
-                        if message.nonce != *nonce {
+                        if message.nonce != nonce {
                             return Err(TransactionValidityError::MessageNonceMismatch(
-                                *message_id,
+                                nonce,
                             )
                             .into())
                         }
                         if message.data != *data {
                             return Err(TransactionValidityError::MessageDataMismatch(
-                                *message_id,
+                                nonce,
                             )
                             .into())
                         }
                     } else {
-                        return Err(TransactionValidityError::MessageDoesNotExist(
-                            *message_id,
+                        return Err(
+                            TransactionValidityError::MessageDoesNotExist(nonce).into()
                         )
-                        .into())
                     }
                 }
             }
@@ -891,17 +889,18 @@ where
                     // prune utxo from db
                     db.storage::<Coins>().remove(utxo_id)?;
                 }
-                Input::MessageSigned { message_id, .. }
-                | Input::MessagePredicate { message_id, .. } => {
+                Input::MessageSigned { nonce, .. }
+                | Input::MessagePredicate { nonce, .. } => {
+                    let nonce = Nonce::from(*nonce);
                     // mark message id as spent
                     let was_already_spent =
-                        db.storage::<SpentMessages>().insert(message_id, &())?;
+                        db.storage::<SpentMessages>().insert(&nonce, &())?;
                     // ensure message wasn't already marked as spent
                     if was_already_spent.is_some() {
                         return Err(ExecutorError::MessageAlreadySpent(*message_id))
                     }
                     // cleanup message contents
-                    db.storage::<Messages>().remove(message_id)?;
+                    db.storage::<Messages>().remove(&nonce)?;
                 }
                 _ => {}
             }
@@ -1478,10 +1477,7 @@ mod tests {
     use fuel_core_storage::tables::Messages;
     use fuel_core_types::{
         blockchain::header::ConsensusHeader,
-        entities::message::{
-            CheckedMessage,
-            Message,
-        },
+        entities::message::Message,
         fuel_asm::op,
         fuel_crypto::SecretKey,
         fuel_tx,
@@ -3188,7 +3184,7 @@ mod tests {
     fn make_tx_and_message(
         rng: &mut StdRng,
         da_height: u64,
-    ) -> (Transaction, CheckedMessage) {
+    ) -> (Transaction, Message) {
         let mut message = Message {
             sender: rng.gen(),
             recipient: rng.gen(),
@@ -3202,7 +3198,7 @@ mod tests {
             .add_unsigned_message_input(
                 rng.gen(),
                 message.sender,
-                message.nonce,
+                message.nonce.into(),
                 message.amount,
                 vec![],
             )
@@ -3214,18 +3210,18 @@ mod tests {
             unreachable!();
         }
 
-        (tx.into(), message.check())
+        (tx.into(), message)
     }
 
     /// Helper to build database and executor for some of the message tests
-    fn make_executor(messages: &[&CheckedMessage]) -> Executor<Database> {
+    fn make_executor(messages: &[&CompressedMessage]) -> Executor<Database> {
         let mut database = Database::default();
         let database_ref = &mut database;
 
         for message in messages {
             database_ref
                 .storage::<Messages>()
-                .insert(message.id(), message.as_ref())
+                .insert(message.id(), message)
                 .unwrap();
         }
 

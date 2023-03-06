@@ -28,9 +28,13 @@ use fuel_core_types::{
         consensus::Consensus,
         primitives::BlockId,
     },
-    entities::message::{
-        Message,
-        MessageProof,
+    entities::{
+        message::{
+            Message,
+            MessageProof,
+            MessageStatus,
+        },
+        Nonce,
     },
     fuel_crypto::Signature,
     fuel_merkle,
@@ -79,9 +83,9 @@ pub trait MessageQueryData: Send + Sync {
 }
 
 impl<D: DatabasePort + ?Sized> MessageQueryData for D {
-    fn message(&self, message_id: &MessageId) -> StorageResult<Message> {
+    fn message(&self, id: &Nonce) -> StorageResult<Message> {
         self.storage::<Messages>()
-            .get(message_id)?
+            .get(id)?
             .ok_or(not_found!(Messages))
             .map(Cow::into_owned)
     }
@@ -89,7 +93,7 @@ impl<D: DatabasePort + ?Sized> MessageQueryData for D {
     fn owned_message_ids(
         &self,
         owner: &Address,
-        start_message_id: Option<MessageId>,
+        start_message_id: Option<Nonce>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<MessageId>> {
         self.owned_message_ids(owner, start_message_id, direction)
@@ -98,7 +102,7 @@ impl<D: DatabasePort + ?Sized> MessageQueryData for D {
     fn owned_messages(
         &self,
         owner: &Address,
-        start_message_id: Option<MessageId>,
+        start_message_id: Option<Nonce>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<Message>> {
         self.owned_message_ids(owner, start_message_id, direction)
@@ -108,7 +112,7 @@ impl<D: DatabasePort + ?Sized> MessageQueryData for D {
 
     fn all_messages(
         &self,
-        start_message_id: Option<MessageId>,
+        start_message_id: Option<Nonce>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<Message>> {
         self.all_messages(start_message_id, direction)
