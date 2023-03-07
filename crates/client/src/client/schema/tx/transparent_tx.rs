@@ -12,7 +12,7 @@ use crate::client::schema::{
     ConnectionArgs,
     ConversionError,
     HexString,
-    MessageId,
+    Nonce,
     PageInfo,
     Salt,
     TransactionId,
@@ -278,11 +278,10 @@ pub struct InputContract {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct InputMessage {
-    message_id: MessageId,
     sender: Address,
     recipient: Address,
     amount: U64,
-    nonce: U64,
+    nonce: Nonce,
     witness_index: i32,
     data: HexString,
     predicate: HexString,
@@ -328,21 +327,27 @@ impl TryFrom<Input> for fuel_tx::Input {
             Input::InputMessage(message) => {
                 if message.predicate.0 .0.is_empty() {
                     fuel_tx::Input::MessageSigned {
-                        message_id: message.message_id.into(),
+                        // TODO: Remove when ready
+                        message_id: Default::default(),
                         sender: message.sender.into(),
                         recipient: message.recipient.into(),
                         amount: message.amount.into(),
-                        nonce: message.nonce.into(),
+                        // TODO: Replace when ready
+                        // nonce: message.nonce.into(),
+                        nonce: 0,
                         witness_index: message.witness_index.try_into()?,
                         data: message.data.into(),
                     }
                 } else {
                     fuel_tx::Input::MessagePredicate {
-                        message_id: message.message_id.into(),
+                        // TODO: Remove when ready
+                        message_id: Default::default(),
                         sender: message.sender.into(),
                         recipient: message.recipient.into(),
                         amount: message.amount.into(),
-                        nonce: message.nonce.into(),
+                        // TODO: Replace when ready
+                        // nonce: message.nonce.into(),
+                        nonce: 0,
                         data: message.data.into(),
                         predicate: message.predicate.into(),
                         predicate_data: message.predicate_data.into(),

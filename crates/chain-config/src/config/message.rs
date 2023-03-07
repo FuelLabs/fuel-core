@@ -55,13 +55,22 @@ impl From<MessageConfig> for CompressedMessage {
 
 impl GenesisCommitment for CompressedMessage {
     fn root(&self) -> anyhow::Result<MerkleRoot> {
+        let Self {
+            sender,
+            recipient,
+            nonce,
+            amount,
+            data,
+            da_height,
+        } = self;
+
         let message_hash = *Hasher::default()
-            .chain(self.sender)
-            .chain(self.recipient)
-            .chain(self.nonce.to_be_bytes())
-            .chain(self.amount.to_be_bytes())
-            .chain(self.data.as_slice())
-            .chain(self.da_height.to_be_bytes())
+            .chain(sender)
+            .chain(recipient)
+            .chain(nonce.to_be_bytes())
+            .chain(amount.to_be_bytes())
+            .chain(data.as_slice())
+            .chain(da_height.to_be_bytes())
             .finalize();
         Ok(message_hash)
     }

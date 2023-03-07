@@ -1,5 +1,5 @@
 ---
-source: crates/client/src/client/schema/coin.rs
+source: crates/client/src/client/schema/coins.rs
 expression: operation.query
 ---
 query($filter: CoinFilterInput!, $after: String, $before: String, $first: Int, $last: Int) {

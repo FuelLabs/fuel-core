@@ -5,6 +5,7 @@ use super::{
         Bytes32,
         HexString,
         MessageId,
+        Nonce,
         TransactionId,
         U64,
     },
@@ -39,7 +40,7 @@ impl Message {
         self.0.recipient.into()
     }
 
-    async fn nonce(&self) -> U64 {
+    async fn nonce(&self) -> Nonce {
         self.0.nonce.into()
     }
 
@@ -158,7 +159,7 @@ impl MessageProof {
         self.0.recipient.into()
     }
 
-    async fn nonce(&self) -> Bytes32 {
+    async fn nonce(&self) -> Nonce {
         self.0.nonce.into()
     }
 

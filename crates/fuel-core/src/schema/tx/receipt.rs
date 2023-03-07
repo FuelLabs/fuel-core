@@ -6,7 +6,7 @@ use crate::schema::{
         Bytes32,
         ContractId,
         HexString,
-        MessageId,
+        Nonce,
         U64,
     },
 };
@@ -130,19 +130,15 @@ impl Receipt {
     async fn data(&self) -> Option<HexString> {
         self.0.data().map(|d| d.to_vec().into())
     }
-    async fn message_id(&self) -> Option<MessageId> {
-        self.0.message_id().copied().map(MessageId)
-    }
     async fn sender(&self) -> Option<Address> {
         self.0.sender().copied().map(Address)
     }
     async fn recipient(&self) -> Option<Address> {
         self.0.recipient().copied().map(Address)
     }
-    async fn nonce(&self) -> Option<Bytes32> {
-        self.0.nonce().copied().map(Bytes32)
+    async fn nonce(&self) -> Option<Nonce> {
+        self.0.nonce().copied().map(Nonce)
     }
-
     async fn contract_id(&self) -> Option<ContractId> {
         self.0.contract_id().map(|id| ContractId(*id))
     }

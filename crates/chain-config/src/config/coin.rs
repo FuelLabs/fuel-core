@@ -8,6 +8,7 @@ use crate::{
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     blockchain::primitives::BlockHeight,
+    entities::coins::coin::CompressedCoin,
     fuel_crypto::Hasher,
     fuel_types::{
         Address,
@@ -15,8 +16,6 @@ use fuel_core_types::{
         Bytes32,
     },
 };
-
-use fuel_core_types::entities::coins::coin::CompressedCoin;
 use serde::{
     Deserialize,
     Serialize,
@@ -54,13 +53,22 @@ pub struct CoinConfig {
 
 impl GenesisCommitment for CompressedCoin {
     fn root(&self) -> anyhow::Result<MerkleRoot> {
+        let Self {
+            owner,
+            amount,
+            asset_id,
+            maturity,
+            status,
+            block_created,
+        } = self;
+
         let coin_hash = *Hasher::default()
-            .chain(self.owner)
-            .chain(self.amount.to_be_bytes())
-            .chain(self.asset_id)
-            .chain((*self.maturity).to_be_bytes())
-            .chain([self.status as u8])
-            .chain((*self.block_created).to_be_bytes())
+            .chain(owner)
+            .chain(amount.to_be_bytes())
+            .chain(asset_id)
+            .chain((*maturity).to_be_bytes())
+            .chain([*status as u8])
+            .chain((*block_created).to_be_bytes())
             .finalize();
 
         Ok(coin_hash)

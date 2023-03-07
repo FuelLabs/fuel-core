@@ -10,7 +10,7 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
-    schema::resource::Resource,
+    schema::coins::Coins,
     FuelClient,
     PageDirection,
     PaginationRequest,
@@ -79,9 +79,9 @@ async fn balance() {
         .unwrap();
     assert_eq!(balance, 450);
 
-    // spend some resources and check again
-    let resources_per_asset = client
-        .resources_to_spend(
+    // spend some coins and check again
+    let coins_per_asset = client
+        .coins_to_spend(
             format!("{owner:#x}").as_str(),
             vec![(format!("{asset_id:#x}").as_str(), 1, None)],
             None,
@@ -92,10 +92,10 @@ async fn balance() {
     let mut tx = TransactionBuilder::script(vec![], vec![])
         .gas_limit(1_000_000)
         .to_owned();
-    for resources in resources_per_asset {
-        for resource in resources {
-            match resource {
-                Resource::Coin(coin) => tx.add_input(Input::CoinSigned {
+    for coins in coins_per_asset {
+        for coin in coins {
+            match coin {
+                Coins::Coin(coin) => tx.add_input(Input::CoinSigned {
                     utxo_id: coin.utxo_id.into(),
                     owner: coin.owner.into(),
                     amount: coin.amount.into(),
@@ -104,16 +104,19 @@ async fn balance() {
                     witness_index: 0,
                     tx_pointer: Default::default(),
                 }),
-                Resource::Message(message) => tx.add_input(Input::MessageSigned {
-                    message_id: message.message_id.into(),
+                Coins::DepositCoin(message) => tx.add_input(Input::MessageSigned {
+                    // TODO: Remove when ready
+                    message_id: Default::default(),
                     sender: message.sender.into(),
                     amount: message.amount.into(),
                     witness_index: 0,
                     recipient: message.recipient.into(),
-                    nonce: message.nonce.into(),
+                    // TODO: Replace when it is ready
+                    // nonce: message.nonce.into(),
+                    nonce: 0,
                     data: Default::default(),
                 }),
-                Resource::Unknown => panic!("Unknown resource"),
+                Coins::Unknown => panic!("Unknown coin"),
             };
         }
     }
@@ -183,15 +186,20 @@ async fn first_5_balances() {
     let messages = {
         // setup all messages for all owners
         let mut messages = vec![];
-        for owner in &all_owners {
-            messages.extend(vec![(owner, 60), (owner, 90)].into_iter().enumerate().map(
-                |(nonce, (owner, amount))| MessageConfig {
-                    sender: *owner,
-                    recipient: *owner,
-                    nonce: (nonce as u64).into(),
-                    amount,
-                    data: vec![],
-                    da_height: DaBlockHeight::from(1usize),
+        let mut nonce = 0;
+        for owner in all_owners.iter() {
+            messages.extend(vec![(owner, 60), (owner, 90)].into_iter().map(
+                |(owner, amount)| {
+                    let message = MessageConfig {
+                        sender: *owner,
+                        recipient: *owner,
+                        nonce: (nonce as u64).into(),
+                        amount,
+                        data: vec![],
+                        da_height: DaBlockHeight::from(1usize),
+                    };
+                    nonce += 1;
+                    message
                 },
             ))
         }

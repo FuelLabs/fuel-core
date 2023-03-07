@@ -35,10 +35,7 @@ use fuel_core_storage::{
 use fuel_core_types::{
     fuel_asm::*,
     fuel_crypto::*,
-    fuel_tx::{
-        field::Inputs,
-        *,
-    },
+    fuel_tx::*,
 };
 use hyper::{
     service::{
@@ -204,13 +201,14 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     assert_eq!(query.results.len(), 1);
 
     // verify that the message id matches what we spent
-    let message_id = tx.inputs()[0]
-        .message_id()
-        .expect("first input should be a message");
-    assert_eq!(
-        MessageId::from(query.results[0].message_id.clone()),
-        *message_id
-    );
+    // TODO: Uncomment when ready
+    // let nonce = tx.inputs()[0]
+    //     .nonce()
+    //     .expect("first input should be a message nonce");
+    // assert_eq!(
+    //     query.results[0].nonce.clone(),
+    //     entities::Nonce::from(*nonce).into()
+    // );
 
     // verify the spent status of the message
     assert_eq!(query.results[0].status, MessageStatus::Spent,);

@@ -15,6 +15,7 @@ use crate::{
     schema::scalars::{
         Address,
         AssetId,
+        Nonce,
         UtxoId,
         U64,
     },
@@ -89,11 +90,11 @@ impl DepositCoin {
         self.0.sender.into()
     }
 
-    async fn owner(&self) -> Address {
+    async fn recipient(&self) -> Address {
         self.0.recipient.into()
     }
 
-    async fn nonce(&self) -> U64 {
+    async fn nonce(&self) -> Nonce {
         self.0.nonce.into()
     }
 
@@ -146,7 +147,7 @@ pub struct ExcludeInput {
     /// Utxos to exclude from the selection.
     utxos: Vec<UtxoId>,
     /// Messages to exclude from the selection.
-    messages: Vec<U64>,
+    messages: Vec<Nonce>,
 }
 
 #[derive(Default)]
@@ -177,9 +178,7 @@ impl CoinQuery {
     ) -> async_graphql::Result<Connection<UtxoId, Coin, EmptyFields, EmptyFields>> {
         // Rocksdb doesn't support reverse iteration over a prefix
         if matches!(last, Some(last) if last > 0) {
-            return Err(
-                anyhow!("reverse pagination isn't supported for this resource").into(),
-            )
+            return Err(anyhow!("reverse pagination isn't supported for this coins").into())
         }
 
         let query = CoinQueryContext(ctx.data_unchecked());
@@ -218,14 +217,15 @@ impl CoinQuery {
     async fn coins_to_spend(
         &self,
         ctx: &Context<'_>,
-        #[graphql(desc = "The `Address` of the resources owner.")] owner: Address,
+        #[graphql(desc = "The `Address` of the coins owner.")] owner: Address,
         #[graphql(desc = "\
-            The list of requested assets` resources with asset ids, `target` amount the user wants \
-            to reach, and the `max` number of resources in the selection. Several entries with the \
+            The list of requested assets` coins with asset ids, `target` amount the user wants \
+            to reach, and the `max` number of coins in the selection. Several entries with the \
             same asset id are not allowed.")]
         query_per_asset: Vec<SpendQueryElementInput>,
-        #[graphql(desc = "The excluded resources from the selection.")]
-        excluded_ids: Option<ExcludeInput>,
+        #[graphql(desc = "The excluded coins from the selection.")] excluded_ids: Option<
+            ExcludeInput,
+        >,
     ) -> async_graphql::Result<Vec<Vec<Coins>>> {
         let config = ctx.data_unchecked::<GraphQLConfig>();
 

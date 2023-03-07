@@ -8,7 +8,7 @@ use async_graphql::{
 };
 use fuel_core_types::{
     blockchain::primitives::BlockHeight,
-    entities::Nonce,
+    entities,
     fuel_types,
     tai64::Tai64,
 };
@@ -51,18 +51,6 @@ impl ScalarType for U64 {
 impl From<BlockHeight> for U64 {
     fn from(h: BlockHeight) -> Self {
         U64(h.to_usize() as u64)
-    }
-}
-
-impl From<Nonce> for U64 {
-    fn from(n: Nonce) -> Self {
-        U64(*n)
-    }
-}
-
-impl From<U64> for Nonce {
-    fn from(value: U64) -> Self {
-        value.0.into()
     }
 }
 
@@ -175,17 +163,17 @@ impl FromStr for HexString {
     }
 }
 
-impl From<Nonce> for HexString {
-    fn from(n: Nonce) -> Self {
+impl From<entities::Nonce> for HexString {
+    fn from(n: entities::Nonce) -> Self {
         HexString(n.to_be_bytes().to_vec())
     }
 }
 
-impl TryInto<Nonce> for HexString {
+impl TryInto<entities::Nonce> for HexString {
     type Error = TryFromSliceError;
 
-    fn try_into(self) -> Result<Nonce, Self::Error> {
-        Ok(Nonce::from(u64::from_be_bytes(
+    fn try_into(self) -> Result<entities::Nonce, Self::Error> {
+        Ok(entities::Nonce::from(u64::from_be_bytes(
             self.0.as_slice().try_into()?,
         )))
     }
@@ -271,7 +259,25 @@ fuel_type_scalar!("ContractId", ContractId, ContractId, 32);
 fuel_type_scalar!("Salt", Salt, Salt, 32);
 fuel_type_scalar!("TransactionId", TransactionId, Bytes32, 32);
 fuel_type_scalar!("MessageId", MessageId, MessageId, 32);
+fuel_type_scalar!("Nonce", Nonce, Bytes32, 32);
 fuel_type_scalar!("Signature", Signature, Bytes64, 64);
+
+impl From<entities::Nonce> for Nonce {
+    fn from(value: entities::Nonce) -> Self {
+        let mut nonce = [0u8; 32];
+        nonce[..8].copy_from_slice(value.to_be_bytes().as_slice());
+        Nonce::from(fuel_types::Bytes32::from(nonce))
+    }
+}
+
+impl From<Nonce> for entities::Nonce {
+    fn from(value: Nonce) -> Self {
+        let array: fuel_types::Bytes32 = value.into();
+        let nonce =
+            u64::from_be_bytes(array[..8].try_into().expect("It is 8 bytes array"));
+        nonce.into()
+    }
+}
 
 impl From<fuel_core_types::fuel_vm::Signature> for Signature {
     fn from(s: fuel_core_types::fuel_vm::Signature) -> Self {

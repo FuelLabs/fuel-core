@@ -6,7 +6,7 @@ use crate::schema::{
         Bytes32,
         ContractId,
         HexString,
-        MessageId,
+        Nonce,
         TxPointer,
         UtxoId,
         U64,
@@ -16,7 +16,10 @@ use async_graphql::{
     Object,
     Union,
 };
-use fuel_core_types::fuel_tx;
+use fuel_core_types::{
+    entities,
+    fuel_tx,
+};
 
 #[derive(Union)]
 pub enum Input {
@@ -108,11 +111,10 @@ impl InputContract {
 }
 
 pub struct InputMessage {
-    message_id: MessageId,
     sender: Address,
     recipient: Address,
     amount: U64,
-    nonce: U64,
+    nonce: Nonce,
     witness_index: u8,
     data: HexString,
     predicate: HexString,
@@ -121,10 +123,6 @@ pub struct InputMessage {
 
 #[Object]
 impl InputMessage {
-    async fn message_id(&self) -> MessageId {
-        self.message_id
-    }
-
     async fn sender(&self) -> Address {
         self.sender
     }
@@ -137,7 +135,7 @@ impl InputMessage {
         self.amount
     }
 
-    async fn nonce(&self) -> U64 {
+    async fn nonce(&self) -> Nonce {
         self.nonce
     }
 
@@ -214,26 +212,24 @@ impl From<&fuel_tx::Input> for Input {
                 contract_id: ContractId(*contract_id),
             }),
             fuel_tx::Input::MessageSigned {
-                message_id,
                 sender,
                 recipient,
                 amount,
                 nonce,
                 witness_index,
                 data,
+                ..
             } => Input::Message(InputMessage {
-                message_id: MessageId(*message_id),
                 sender: Address(*sender),
                 recipient: Address(*recipient),
                 amount: (*amount).into(),
-                nonce: (*nonce).into(),
+                nonce: entities::Nonce::from(*nonce).into(),
                 witness_index: *witness_index,
                 data: HexString(data.clone()),
                 predicate: HexString(Default::default()),
                 predicate_data: HexString(Default::default()),
             }),
             fuel_tx::Input::MessagePredicate {
-                message_id,
                 sender,
                 recipient,
                 amount,
@@ -241,12 +237,12 @@ impl From<&fuel_tx::Input> for Input {
                 data,
                 predicate,
                 predicate_data,
+                ..
             } => Input::Message(InputMessage {
-                message_id: MessageId(*message_id),
                 sender: Address(*sender),
                 recipient: Address(*recipient),
                 amount: (*amount).into(),
-                nonce: (*nonce).into(),
+                nonce: entities::Nonce::from(*nonce).into(),
                 witness_index: Default::default(),
                 data: HexString(data.clone()),
                 predicate: HexString(predicate.clone()),
