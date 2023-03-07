@@ -3,6 +3,7 @@ use crate::helpers::{
     TestSetupBuilder,
 };
 use fuel_core::{
+    chain_config::CoinConfig,
     database::Database,
     service::{
         Config,
@@ -21,7 +22,9 @@ use fuel_core_types::{
         Output,
         Transaction,
         TransactionBuilder,
+        TxPointer,
         UniqueIdentifier,
+        UtxoId,
     },
 };
 use itertools::Itertools;
@@ -38,12 +41,17 @@ async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
     let (_, contract_id) = test_builder.setup_contract(vec![], None);
     // initialize 10 random transactions that transfer coins and call a contract
 
+    let tx_pointer = TxPointer::new(10, rng.gen());
+    let coin_utxo_id: UtxoId = rng.gen();
+    let secret_key: SecretKey = rng.gen();
+    let amount = 1000;
+
     let script = TransactionBuilder::script(vec![], vec![])
         .gas_limit(10000)
         .gas_price(1)
         .add_unsigned_coin_input(
-            SecretKey::random(&mut rng),
-            rng.gen(),
+            secret_key,
+            coin_utxo_id,
             1000,
             Default::default(),
             Default::default(),
@@ -69,7 +77,18 @@ async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
         .finalize();
 
     // setup genesis block with coins that transactions can spend
-    test_builder.config_coin_inputs_from_transactions(&[&script]);
+    test_builder.initial_coins.push(CoinConfig {
+        tx_id: None,
+        output_index: None,
+        tx_pointer_block_height: None,
+        tx_pointer_tx_idx: None,
+        maturity: None,
+        owner: Default::default(),
+        amount: 0,
+        asset_id: Default::default(),
+    });
+
+    // zero out tx pointers on tx
 
     // spin up node
     let TestContext {

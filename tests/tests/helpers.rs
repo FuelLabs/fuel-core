@@ -95,6 +95,7 @@ impl TestSetupBuilder {
                         owner,
                         asset_id,
                         utxo_id,
+                        tx_pointer,
                         ..
                     }
                     | Input::CoinPredicate {
@@ -102,13 +103,17 @@ impl TestSetupBuilder {
                         owner,
                         asset_id,
                         utxo_id,
+                        tx_pointer,
                         ..
                     } = input
                     {
                         Some(CoinConfig {
                             tx_id: Some(*utxo_id.tx_id()),
                             output_index: Some(utxo_id.output_index() as u64),
-                            tx_pointer_block_height: None,
+                            tx_pointer_block_height: Some(
+                                tx_pointer.block_height().into(),
+                            ),
+                            tx_pointer_tx_idx: Some(tx_pointer.tx_index()),
                             maturity: None,
                             owner: *owner,
                             amount: *amount,
