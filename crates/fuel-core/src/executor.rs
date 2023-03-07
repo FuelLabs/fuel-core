@@ -721,6 +721,7 @@ where
             id: tx_id,
             result: status,
         });
+        // TODO: Check that each `message_id` is generated right based on the fields.
         execution_data
             .message_ids
             .extend(vm_result.receipts().iter().filter_map(|r| match r {

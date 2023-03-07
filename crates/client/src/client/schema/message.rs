@@ -13,17 +13,17 @@ use crate::client::schema::{
     schema,
     Address,
     MessageId,
+    Nonce,
     U64,
 };
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Message {
-    pub message_id: MessageId,
     pub amount: U64,
     pub sender: Address,
     pub recipient: Address,
-    pub nonce: U64,
+    pub nonce: Nonce,
     pub data: HexString,
     pub da_height: U64,
 }
@@ -95,7 +95,7 @@ pub struct MessageProof {
     /// The messages recipient address.
     pub recipient: Address,
     /// The nonce from the message.
-    pub nonce: Bytes32,
+    pub nonce: Nonce,
     /// The amount from the message.
     pub amount: U64,
     /// The data from the message.

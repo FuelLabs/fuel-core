@@ -7,7 +7,6 @@ query($owner: Address, $after: String, $before: String, $first: Int, $last: Int)
     edges {
       cursor
       node {
-        messageId
         amount
         sender
         recipient
