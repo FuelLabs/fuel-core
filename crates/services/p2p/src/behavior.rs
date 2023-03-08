@@ -1,8 +1,3 @@
-use std::sync::{
-    Arc,
-    RwLock,
-};
-
 use crate::{
     codecs::NetworkCodec,
     config::Config,
@@ -16,21 +11,17 @@ use crate::{
         topics::GossipTopic,
     },
     gossipsub_config::PeerScoreConfig,
-    peer_manager::{
-        ConnectionState,
-        PeerInfo,
-        PeerInfoEvent,
-        PeerManagerBehaviour,
+    peer_report::{
+        PeerReportBehaviour,
+        PeerReportEvent,
     },
     request_response::messages::{
         NetworkResponse,
         RequestMessage,
     },
 };
-use fuel_core_types::{
-    blockchain::primitives::BlockHeight,
-    services::p2p::peer_reputation::PeerScore,
-};
+
+use fuel_core_types::blockchain::primitives::BlockHeight;
 use libp2p::{
     gossipsub::{
         error::PublishError,
@@ -51,11 +42,16 @@ use libp2p::{
     Multiaddr,
     PeerId,
 };
+use tracing::{
+    debug,
+    error,
+    log::warn,
+};
 
 #[derive(Debug)]
 pub enum FuelBehaviourEvent {
     Discovery(DiscoveryEvent),
-    PeerInfo(PeerInfoEvent),
+    PeerReport(PeerReportEvent),
     Gossipsub(GossipsubEvent),
     RequestResponse(RequestResponseEvent<RequestMessage, NetworkResponse>),
 }
@@ -67,9 +63,8 @@ pub struct FuelBehaviour<Codec: NetworkCodec> {
     /// Node discovery
     discovery: DiscoveryBehaviour,
 
-    /// Handles Peer Connections
     /// Identifies and periodically requests `BlockHeight` from connected nodes
-    peer_manager: PeerManagerBehaviour,
+    peer_report: PeerReportBehaviour,
 
     /// Message propagation for p2p
     gossipsub: Gossipsub,
@@ -82,7 +77,6 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
     pub(crate) fn new(
         p2p_config: &Config,
         codec: Codec,
-        connection_state: Arc<RwLock<ConnectionState>>,
         peer_score_config: PeerScoreConfig,
     ) -> Self {
         let local_public_key = p2p_config.keypair.public();
@@ -113,8 +107,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
 
         let gossipsub = build_gossipsub_behaviour(p2p_config, &peer_score_config);
 
-        let peer_manager =
-            PeerManagerBehaviour::new(p2p_config, connection_state, peer_score_config);
+        let peer_report = PeerReportBehaviour::new(p2p_config);
 
         let req_res_protocol =
             std::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
@@ -129,17 +122,9 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         Self {
             discovery: discovery_config.finish(),
             gossipsub,
-            peer_manager,
+            peer_report,
             request_response,
         }
-    }
-
-    pub fn add_addresses_to_peer_info(
-        &mut self,
-        peer_id: &PeerId,
-        addresses: Vec<Multiaddr>,
-    ) {
-        self.peer_manager.insert_peer_addresses(peer_id, addresses);
     }
 
     pub fn add_addresses_to_discovery(
@@ -150,14 +135,6 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         for address in addresses {
             self.discovery.add_address(peer_id, address.clone());
         }
-    }
-
-    pub fn get_peers_ids(&self) -> impl Iterator<Item = &PeerId> {
-        self.peer_manager.get_peers_ids()
-    }
-
-    pub fn total_peers_connected(&self) -> usize {
-        self.peer_manager.total_peers_connected()
     }
 
     pub fn publish_message(
@@ -189,45 +166,33 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         msg_id: &MessageId,
         propagation_source: &PeerId,
         acceptance: MessageAcceptance,
-    ) -> Result<bool, PublishError> {
-        let result = self.gossipsub.report_message_validation_result(
+    ) -> Option<f64> {
+        let should_check_score = matches!(acceptance, MessageAcceptance::Reject);
+
+        match self.gossipsub.report_message_validation_result(
             msg_id,
             propagation_source,
             acceptance,
-        );
-
-        if let MessageAcceptance::Reject = acceptance {
-            if let Some(gossip_score) = self.gossipsub.peer_score(propagation_source) {
-                self.peer_manager
-                    .report_gossip_score(propagation_source, gossip_score);
+        ) {
+            Ok(true) => {
+                debug!(target: "fuel-p2p", "Sent a report for MessageId: {} from PeerId: {}", msg_id, propagation_source);
+                if should_check_score {
+                    return self.gossipsub.peer_score(propagation_source)
+                }
+            }
+            Ok(false) => {
+                warn!(target: "fuel-p2p", "Message with MessageId: {} not found in the Gossipsub Message Cache", msg_id);
+            }
+            Err(e) => {
+                error!(target: "fuel-p2p", "Failed to publish Message with MessageId: {} with Error: {:?}", msg_id, e);
             }
         }
 
-        result
+        None
     }
 
     pub fn update_block_height(&mut self, block_height: BlockHeight) {
-        self.peer_manager.update_block_height(block_height);
-    }
-
-    // Currently only used in testing, but should be useful for the P2P Service API
-    #[allow(dead_code)]
-    pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<&PeerInfo> {
-        self.peer_manager.get_peer_info(peer_id)
-    }
-
-    pub fn peer_manager(&self) -> &PeerManagerBehaviour {
-        &self.peer_manager
-    }
-
-    pub fn report_peer(
-        &mut self,
-        peer_id: PeerId,
-        peer_score: PeerScore,
-        reporting_service: &str,
-    ) -> Option<PeerScore> {
-        self.peer_manager
-            .report_peer(peer_id, peer_score, reporting_service)
+        self.peer_report.update_block_height(block_height);
     }
 }
 
@@ -237,9 +202,9 @@ impl From<DiscoveryEvent> for FuelBehaviourEvent {
     }
 }
 
-impl From<PeerInfoEvent> for FuelBehaviourEvent {
-    fn from(event: PeerInfoEvent) -> Self {
-        FuelBehaviourEvent::PeerInfo(event)
+impl From<PeerReportEvent> for FuelBehaviourEvent {
+    fn from(event: PeerReportEvent) -> Self {
+        FuelBehaviourEvent::PeerReport(event)
     }
 }
 

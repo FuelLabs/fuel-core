@@ -18,9 +18,12 @@ use crate::{
     },
     gossipsub_config::PeerScoreConfig,
     peer_manager::{
-        PeerInfoEvent,
-        PeerManagerBehaviour,
+        HeartbeatData,
+        PeerInfoInsert,
+        PeerManager,
+        PeerScoreUpdated,
     },
+    peer_report::PeerReportEvent,
     request_response::messages::{
         NetworkResponse,
         OutboundResponse,
@@ -103,6 +106,9 @@ pub struct FuelP2PService<Codec: NetworkCodec> {
 
     /// Whether or not metrics collection is enabled
     metrics: bool,
+
+    /// Holds peers' information, and manages existing connections
+    peer_manager: PeerManager,
 }
 
 /// Holds additional Network data for FuelBehavior
@@ -140,12 +146,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 
         // configure and build P2P Service
         let (transport, connection_state) = build_transport(&config);
-        let behaviour = FuelBehaviour::new(
-            &config,
-            codec.clone(),
-            connection_state,
-            peer_score_config,
-        );
+        let behaviour = FuelBehaviour::new(&config, codec.clone(), peer_score_config);
 
         let total_connections = {
             // Reserved nodes do not count against the configured peer input/output limits.
@@ -189,6 +190,12 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             let _ = swarm.add_external_address(public_address, AddressScore::Infinite);
         }
 
+        let reserved_peers = config
+            .reserved_nodes
+            .iter()
+            .filter_map(PeerId::try_from_multiaddr)
+            .collect();
+
         Self {
             local_peer_id,
             local_address: config.address,
@@ -199,6 +206,12 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             inbound_requests_table: HashMap::default(),
             network_metadata,
             metrics,
+            peer_manager: PeerManager::new(
+                peer_score_config,
+                reserved_peers,
+                connection_state,
+                config.max_peers_connected as usize,
+            ),
         }
     }
 
@@ -226,7 +239,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     }
 
     pub fn get_peers_ids(&self) -> impl Iterator<Item = &PeerId> {
-        self.swarm.behaviour().get_peers_ids()
+        self.peer_manager.get_peers_ids()
     }
 
     pub fn publish_message(
@@ -259,7 +272,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             Some(peer_id) => peer_id,
             _ => {
                 let peers = self.get_peers_ids();
-                let peers_count = self.swarm.behaviour().total_peers_connected();
+                let peers_count = self.peer_manager.total_peers_connected();
 
                 if peers_count == 0 {
                     return Err(RequestError::NoPeersConnected)
@@ -324,14 +337,19 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         msg_id: &MessageId,
         propagation_source: PeerId,
         acceptance: MessageAcceptance,
-    ) -> Result<bool, PublishError> {
-        let result = self.swarm.behaviour_mut().report_message_validation_result(
-            msg_id,
-            &propagation_source,
-            acceptance,
-        );
-
-        result
+    ) {
+        if let Some(peer_score) = self
+            .swarm
+            .behaviour_mut()
+            .report_message_validation_result(msg_id, &propagation_source, acceptance)
+        {
+            if self
+                .peer_manager
+                .should_ban_peer_for_gossip(&propagation_source, peer_score)
+            {
+                self.swarm.ban_peer_id(propagation_source);
+            }
+        }
     }
 
     pub fn report_peer(
@@ -340,9 +358,16 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         peer_score: PeerScore,
         reporting_service: &str,
     ) {
-        self.swarm
-            .behaviour_mut()
-            .report_peer(peer_id, peer_score, reporting_service);
+        if let Some(PeerScoreUpdated { should_ban, score }) = self
+            .peer_manager
+            .update_peer_score_with(peer_id, peer_score)
+        {
+            info!(target: "fuel-p2p", "{reporting_service} updated {peer_id} with new score {score}");
+
+            if should_ban {
+                self.swarm.ban_peer_id(peer_id);
+            }
+        }
     }
 
     #[tracing::instrument(skip_all,
@@ -380,8 +405,8 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         }
     }
 
-    pub fn peer_manager(&self) -> &PeerManagerBehaviour {
-        self.swarm.behaviour().peer_manager()
+    pub fn peer_manager(&self) -> &PeerManager {
+        &self.peer_manager
     }
 
     fn handle_behaviour_event(
@@ -393,9 +418,8 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 if let DiscoveryEvent::PeerInfoOnConnect { peer_id, addresses } =
                     discovery_event
                 {
-                    self.swarm
-                        .behaviour_mut()
-                        .add_addresses_to_peer_info(&peer_id, addresses);
+                    self.peer_manager
+                        .insert_peer_info(&peer_id, PeerInfoInsert::Addresses(addresses));
                 }
             }
             FuelBehaviourEvent::Gossipsub(gossipsub_event) => {
@@ -422,21 +446,11 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                             Err(err) => {
                                 warn!(target: "fuel-p2p", "Failed to decode a message. ID: {}, Message: {:?} with error: {:?}", message_id, &message.data, err);
 
-                                match self.report_message_validation_result(
+                                self.report_message_validation_result(
                                     &message_id,
                                     propagation_source,
                                     MessageAcceptance::Reject,
-                                ) {
-                                    Ok(false) => {
-                                        warn!(target: "fuel-p2p", "Message was not found in the cache, peer with PeerId: {} has been reported.", propagation_source);
-                                    }
-                                    Ok(true) => {
-                                        info!(target: "fuel-p2p", "Message found in the cache, peer with PeerId: {} has been reported.", propagation_source);
-                                    }
-                                    Err(e) => {
-                                        warn!(target: "fuel-p2p", "Failed to publish the message with following error: {:?}.", e);
-                                    }
-                                }
+                                );
                             }
                         }
                     } else {
@@ -445,46 +459,95 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 }
             }
 
-            FuelBehaviourEvent::PeerInfo(peer_info_event) => match peer_info_event {
-                PeerInfoEvent::PeerIdentified { peer_id, addresses } => {
+            FuelBehaviourEvent::PeerReport(peer_info_event) => match peer_info_event {
+                PeerReportEvent::PeerIdentified {
+                    peer_id,
+                    addresses,
+                    agent_version,
+                } => {
                     if self.metrics {
                         P2P_METRICS.unique_peers.inc();
                     }
+                    self.peer_manager.insert_peer_info(
+                        &peer_id,
+                        PeerInfoInsert::ClientVersion(agent_version),
+                    );
+
+                    self.peer_manager.insert_peer_info(
+                        &peer_id,
+                        PeerInfoInsert::Addresses(addresses.clone()),
+                    );
+
                     self.swarm
                         .behaviour_mut()
                         .add_addresses_to_discovery(&peer_id, addresses);
                 }
-                PeerInfoEvent::PeerInfoUpdated {
+                PeerReportEvent::PerformDecay => {
+                    self.peer_manager.batch_update_score_with_decay()
+                }
+                PeerReportEvent::CheckReservedNodesHealth => {
+                    let disconnected_peers: Vec<_> = self
+                        .peer_manager
+                        .get_disconnected_reserved_peers()
+                        .copied()
+                        .collect();
+
+                    for peer_id in disconnected_peers {
+                        debug!(target: "fuel-p2p", "Trying to reconnect to reserved peer {:?}", peer_id);
+
+                        let _ = self.swarm.dial(peer_id);
+                    }
+                }
+                PeerReportEvent::PeerInfoUpdated {
                     peer_id,
                     block_height,
                 } => {
+                    if let Some(previous_heartbeat) =
+                        self.peer_manager.get_peer_info(&peer_id).and_then(|info| {
+                            info.heartbeat_data.seconds_since_last_heartbeat()
+                        })
+                    {
+                        debug!(target: "fuel-p2p", "Previous hearbeat happened {:?} seconds ago", previous_heartbeat);
+                    }
+
+                    let heartbeat_data = HeartbeatData::new(block_height);
+
+                    self.peer_manager.insert_peer_info(
+                        &peer_id,
+                        PeerInfoInsert::HeartbeatData(heartbeat_data),
+                    );
+
                     return Some(FuelP2PEvent::PeerInfoUpdated {
                         peer_id,
                         block_height,
                     })
                 }
-                PeerInfoEvent::PeerConnected(peer_id) => {
-                    return Some(FuelP2PEvent::PeerConnected(peer_id))
-                }
-                PeerInfoEvent::ReconnectToPeer(peer_id) => {
-                    let _ = self.swarm.dial(peer_id);
-                }
-                PeerInfoEvent::PeerDisconnected {
+                PeerReportEvent::PeerConnected {
                     peer_id,
-                    should_reconnect,
+                    addresses,
+                    initial_connection,
                 } => {
-                    if should_reconnect {
+                    if initial_connection {
+                        if self
+                            .peer_manager
+                            .handle_initial_connection(peer_id, addresses)
+                        {
+                            let _ = self.swarm.disconnect_peer_id(peer_id);
+                        } else {
+                            return Some(FuelP2PEvent::PeerConnected(peer_id))
+                        }
+                    } else {
+                        self.peer_manager.insert_peer_info(
+                            &peer_id,
+                            PeerInfoInsert::Addresses(addresses),
+                        );
+                    }
+                }
+                PeerReportEvent::PeerDisconnected { peer_id } => {
+                    if self.peer_manager.handle_peer_disconnect(peer_id) {
                         let _ = self.swarm.dial(peer_id);
                     }
                     return Some(FuelP2PEvent::PeerDisconnected(peer_id))
-                }
-                PeerInfoEvent::TooManyPeers { peer_to_disconnect } => {
-                    // disconnect the surplus peer
-                    let _ = self.swarm.disconnect_peer_id(peer_to_disconnect);
-                }
-                PeerInfoEvent::BanPeer { peer_id } => {
-                    // ban peer in the swarm
-                    self.swarm.ban_peer_id(peer_id);
                 }
             },
             FuelBehaviourEvent::RequestResponse(req_res_event) => match req_res_event {
@@ -746,9 +809,10 @@ mod tests {
                     // listener address registered, we are good to go
                     break
                 }
+                SwarmEvent::Behaviour(_) => {}
                 other_event => {
                     tracing::error!("Unexpected event: {:?}", other_event);
-                    panic!("Unexpected event")
+                    panic!("Unexpected event {other_event:?}")
                 }
             }
         }
@@ -820,7 +884,7 @@ mod tests {
             tokio::select! {
                 sentry_node_event = sentry_node.next_event() => {
                     // we've connected to all other peers
-                    if sentry_node.swarm.behaviour().total_peers_connected() >= 5 {
+                    if sentry_node.peer_manager.total_peers_connected() >= 5 {
                         // if the `reserved_node` is not included,
                         // create and insert it, to be polled with rest of the nodes
                         if !all_nodes_ids
@@ -1177,7 +1241,7 @@ mod tests {
             tokio::select! {
                 node_a_event = node_a.next_event() => {
                     if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                        if let Some(PeerInfo { peer_addresses, heartbeat_data, client_version, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
+                        if let Some(PeerInfo { peer_addresses, heartbeat_data, client_version, .. }) = node_a.peer_manager.get_peer_info(&peer_id) {
                             // Exits after it verifies that:
                             // 1. Peer Addresses are known
                             // 2. Client Version is known
@@ -1302,7 +1366,7 @@ mod tests {
             tokio::select! {
                 node_a_event = node_a.next_event() => {
                     if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                        if let Some(PeerInfo { peer_addresses, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
+                        if let Some(PeerInfo { peer_addresses, .. }) = node_a.peer_manager.get_peer_info(&peer_id) {
                             // verifies that we've got at least a single peer address to send message to
                             if !peer_addresses.is_empty() && !message_sent  {
                                 message_sent = true;
@@ -1320,7 +1384,7 @@ mod tests {
                         // If it's `Accept`, Node B will propagate the message to Node C
                         // If it's `Ignore` or `Reject`, Node C should not receive anything
                         let msg_acceptance = to_message_acceptance(&acceptance);
-                        let _ = node_b.report_message_validation_result(&message_id, peer_id, msg_acceptance);
+                        node_b.report_message_validation_result(&message_id, peer_id, msg_acceptance);
                         if topic_hash != selected_topic.hash() {
                             tracing::error!("Wrong topic hash, expected: {} - actual: {}", selected_topic.hash(), topic_hash);
                             panic!("Wrong Topic");
@@ -1409,7 +1473,7 @@ mod tests {
                 }
                 node_a_event = node_a.next_event() => {
                     if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                        if let Some(PeerInfo { peer_addresses, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
+                        if let Some(PeerInfo { peer_addresses, .. }) = node_a.peer_manager.get_peer_info(&peer_id) {
                             // 0. verifies that we've got at least a single peer address to request message from
                             if !peer_addresses.is_empty() && !request_sent {
                                 request_sent = true;
@@ -1554,7 +1618,7 @@ mod tests {
             tokio::select! {
                 node_a_event = node_a.next_event() => {
                     if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                        if let Some(PeerInfo { peer_addresses, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
+                        if let Some(PeerInfo { peer_addresses, .. }) = node_a.peer_manager.get_peer_info(&peer_id) {
                             // 0. verifies that we've got at least a single peer address to request message from
                             if !peer_addresses.is_empty() && !request_sent {
                                 request_sent = true;

@@ -69,11 +69,7 @@ use tokio::sync::{
     mpsc,
     oneshot,
 };
-use tracing::{
-    debug,
-    error,
-    warn,
-};
+use tracing::warn;
 
 pub type Service<D> = ServiceRunner<Task<D>>;
 
@@ -505,18 +501,7 @@ fn report_message<T: NetworkCodec>(
 
     if let Ok(peer_id) = peer_id.try_into() {
         let acceptance = to_message_acceptance(&acceptance);
-
-        match p2p_service.report_message_validation_result(&msg_id, peer_id, acceptance) {
-            Ok(true) => {
-                debug!(target: "fuel-p2p", "Sent a report for MessageId: {} from PeerId: {}", msg_id, peer_id);
-            }
-            Ok(false) => {
-                warn!(target: "fuel-p2p", "Message with MessageId: {} not found in the Gossipsub Message Cache", msg_id);
-            }
-            Err(e) => {
-                error!(target: "fuel-p2p", "Failed to publish Message with MessageId: {} with Error: {:?}", msg_id, e);
-            }
-        }
+        p2p_service.report_message_validation_result(&msg_id, peer_id, acceptance);
     } else {
         warn!(target: "fuel-p2p", "Failed to read PeerId from received GossipsubMessageId: {}", msg_id);
     }
