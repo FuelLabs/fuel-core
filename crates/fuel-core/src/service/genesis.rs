@@ -702,6 +702,74 @@ mod tests {
         assert_eq!(test_balance, ret)
     }
 
+    #[tokio::test]
+    async fn coin_tx_pointer_cant_exceed_genesis_height() {
+        let service_config = Config {
+            chain_conf: ChainConfig {
+                initial_state: Some(StateConfig {
+                    height: Some(BlockHeight::from(10u32)),
+                    coins: Some(vec![CoinConfig {
+                        tx_id: None,
+                        output_index: None,
+                        // set txpointer height > genesis height
+                        tx_pointer_block_height: Some(BlockHeight::from(11u32)),
+                        tx_pointer_tx_idx: Some(0),
+                        maturity: None,
+                        owner: Default::default(),
+                        amount: 10,
+                        asset_id: Default::default(),
+                    }]),
+                    ..Default::default()
+                }),
+                ..ChainConfig::local_testnet()
+            },
+            ..Config::local_node()
+        };
+
+        let db = Database::default();
+        let init_result = FuelService::from_database(db.clone(), service_config).await;
+
+        assert!(init_result.is_err())
+    }
+
+    #[tokio::test]
+    async fn contract_tx_pointer_cant_exceed_genesis_height() {
+        let mut rng = StdRng::seed_from_u64(10);
+
+        let test_asset_id: AssetId = rng.gen();
+        let test_balance: u64 = rng.next_u64();
+        let balances = vec![(test_asset_id, test_balance)];
+        let salt: Salt = rng.gen();
+        let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
+
+        let service_config = Config {
+            chain_conf: ChainConfig {
+                initial_state: Some(StateConfig {
+                    height: Some(BlockHeight::from(10u32)),
+                    contracts: Some(vec![ContractConfig {
+                        code: contract.into(),
+                        salt,
+                        state: None,
+                        balances: Some(balances),
+                        tx_id: None,
+                        output_index: None,
+                        // set txpointer height > genesis height
+                        tx_pointer_block_height: Some(BlockHeight::from(11u32)),
+                        tx_pointer_tx_idx: Some(0),
+                    }]),
+                    ..Default::default()
+                }),
+                ..ChainConfig::local_testnet()
+            },
+            ..Config::local_node()
+        };
+
+        let db = Database::default();
+        let init_result = FuelService::from_database(db.clone(), service_config).await;
+
+        assert!(init_result.is_err())
+    }
+
     fn get_coins(db: &Database, owner: &Address) -> Vec<Coin> {
         db.owned_coins_ids(owner, None, None)
             .map(|r| {
