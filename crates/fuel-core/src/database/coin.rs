@@ -1,5 +1,6 @@
 use crate::{
     database::{
+        storage::DatabaseColumn,
         Column,
         Database,
         Error as DatabaseError,
@@ -9,7 +10,10 @@ use crate::{
 };
 use fuel_core_chain_config::CoinConfig;
 use fuel_core_storage::{
-    tables::Coins,
+    tables::{
+        Coins,
+        OwnedCoins,
+    },
     Error as StorageError,
     StorageInspect,
     StorageMutate,
@@ -29,7 +33,7 @@ use fuel_core_types::{
 use std::borrow::Cow;
 
 // TODO: Reuse `fuel_vm::storage::double_key` macro.
-fn owner_coin_id_key(
+pub fn owner_coin_id_key(
     owner: &Address,
     coin_id: &UtxoId,
 ) -> [u8; Address::LEN + TxId::LEN + 1] {
@@ -44,6 +48,12 @@ fn utxo_id_to_bytes(utxo_id: &UtxoId) -> [u8; TxId::LEN + 1] {
     default[0..TxId::LEN].copy_from_slice(utxo_id.tx_id().as_ref());
     default[TxId::LEN] = utxo_id.output_index();
     default
+}
+
+impl DatabaseColumn for OwnedCoins {
+    fn column() -> Column {
+        Column::OwnedCoins
+    }
 }
 
 impl StorageInspect<Coins> for Database {

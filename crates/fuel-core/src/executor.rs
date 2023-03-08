@@ -1,5 +1,6 @@
 use crate::{
     database::{
+        coin::owner_coin_id_key,
         transaction::DatabaseTransaction,
         transactions::TransactionIndex,
         vm_database::VmDatabase,
@@ -13,6 +14,7 @@ use fuel_core_storage::{
         Coins,
         ContractsLatestUtxo,
         FuelBlocks,
+        OwnedCoins,
         Receipts,
         SpentMessages,
         Transactions,
@@ -931,6 +933,10 @@ where
                             block_created,
                         },
                     )?;
+                    // Remove spent coin from owned index
+                    // TODO: avoid updating coin owners index when updating the coin status above
+                    db.storage::<OwnedCoins>()
+                        .remove(&owner_coin_id_key(owner, utxo_id))?;
                 }
                 Input::MessageSigned { message_id, .. }
                 | Input::MessagePredicate { message_id, .. } => {

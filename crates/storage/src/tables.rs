@@ -13,6 +13,7 @@ use fuel_core_types::{
         message::CompressedMessage,
     },
     fuel_tx::{
+        Address,
         Receipt,
         Transaction,
         TxId,
@@ -88,6 +89,18 @@ impl Mappable for Coins {
     type OwnedKey = UtxoId;
     type Value = Self::OwnedValue;
     type OwnedValue = CompressedCoin;
+}
+
+/// The storage table of owned coin ids. Maps addresses to owned coins.
+pub struct OwnedCoins;
+/// The storage key for owned coins: `Address ++ UtxoId`
+pub type OwnedCoinKey = [u8; Address::LEN + TxId::LEN + 1];
+
+impl Mappable for OwnedCoins {
+    type Key = Self::OwnedKey;
+    type OwnedKey = OwnedCoinKey;
+    type Value = Self::OwnedValue;
+    type OwnedValue = bool;
 }
 
 /// The storage table of bridged Ethereum [`Message`](crate::model::Message)s.
