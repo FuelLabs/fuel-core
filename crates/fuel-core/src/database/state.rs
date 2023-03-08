@@ -1,14 +1,11 @@
-use crate::{
-    database::{
-        storage::{
-            ContractsStateMerkleData,
-            ContractsStateMerkleMetadata,
-            SparseMerkleMetadata,
-        },
-        Column,
-        Database,
+use crate::database::{
+    storage::{
+        ContractsStateMerkleData,
+        ContractsStateMerkleMetadata,
+        SparseMerkleMetadata,
     },
-    state::IterDirection,
+    Column,
+    Database,
 };
 use fuel_core_storage::{
     tables::ContractsState,
@@ -62,15 +59,10 @@ impl StorageMutate<ContractsState> for Database {
         let prev = Database::insert(self, key.as_ref(), Column::ContractsState, value)
             .map_err(Into::into);
 
-        // Get latest metadata entry
+        // Get latest metadata entry for this contract id
         let prev_metadata = self
-            .iter_all::<Vec<u8>, SparseMerkleMetadata>(
-                Column::ContractsStateMerkleMetadata,
-                Some(IterDirection::Reverse),
-            )
-            .next()
-            .transpose()?
-            .map(|(_, metadata)| metadata)
+            .storage::<ContractsStateMerkleMetadata>()
+            .get(key.contract_id())?
             .unwrap_or_default();
 
         let root = prev_metadata.root;
@@ -107,15 +99,10 @@ impl StorageMutate<ContractsState> for Database {
         let prev = Database::remove(self, key.as_ref(), Column::ContractsState)
             .map_err(Into::into);
 
-        // Get latest metadata entry
+        // Get latest metadata entry for this contract id
         let prev_metadata = self
-            .iter_all::<Vec<u8>, SparseMerkleMetadata>(
-                Column::ContractsStateMerkleMetadata,
-                Some(IterDirection::Reverse),
-            )
-            .next()
-            .transpose()?
-            .map(|(_, metadata)| metadata)
+            .storage::<ContractsStateMerkleMetadata>()
+            .get(key.contract_id())?
             .unwrap_or_default();
 
         let root = prev_metadata.root;

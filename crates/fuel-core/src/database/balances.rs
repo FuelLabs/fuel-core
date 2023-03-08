@@ -1,14 +1,11 @@
-use crate::{
-    database::{
-        storage::{
-            ContractsAssetsMerkleData,
-            ContractsAssetsMerkleMetadata,
-            SparseMerkleMetadata,
-        },
-        Column,
-        Database,
+use crate::database::{
+    storage::{
+        ContractsAssetsMerkleData,
+        ContractsAssetsMerkleMetadata,
+        SparseMerkleMetadata,
     },
-    state::IterDirection,
+    Column,
+    Database,
 };
 use fuel_core_storage::{
     tables::ContractsAssets,
@@ -62,15 +59,10 @@ impl StorageMutate<ContractsAssets> for Database {
         let prev = Database::insert(self, key.as_ref(), Column::ContractsAssets, value)
             .map_err(Into::into);
 
-        // Get latest metadata entry
+        // Get latest metadata entry for this contract id
         let prev_metadata = self
-            .iter_all::<Vec<u8>, SparseMerkleMetadata>(
-                Column::ContractsAssetsMerkleMetadata,
-                Some(IterDirection::Reverse),
-            )
-            .next()
-            .transpose()?
-            .map(|(_, metadata)| metadata)
+            .storage::<ContractsAssetsMerkleMetadata>()
+            .get(key.contract_id())?
             .unwrap_or_default();
 
         let root = prev_metadata.root;
@@ -87,7 +79,7 @@ impl StorageMutate<ContractsAssets> for Database {
         };
 
         // Update the key-value dataset. The key is the contract id and the
-        // value is the 32 bytes
+        // value the Word
         tree.update(&(*key.contract_id()).into(), value.to_be_bytes().as_slice())
             .map_err(|err| StorageError::Other(err.into()))?;
 
@@ -107,15 +99,10 @@ impl StorageMutate<ContractsAssets> for Database {
         let prev = Database::remove(self, key.as_ref(), Column::ContractsAssets)
             .map_err(Into::into);
 
-        // Get latest metadata entry
+        // Get latest metadata entry for this contract id
         let prev_metadata = self
-            .iter_all::<Vec<u8>, SparseMerkleMetadata>(
-                Column::ContractsAssetsMerkleMetadata,
-                Some(IterDirection::Reverse),
-            )
-            .next()
-            .transpose()?
-            .map(|(_, metadata)| metadata)
+            .storage::<ContractsAssetsMerkleMetadata>()
+            .get(key.contract_id())?
             .unwrap_or_default();
 
         let root = prev_metadata.root;
@@ -131,7 +118,7 @@ impl StorageMutate<ContractsAssets> for Database {
                 .map_err(|err| StorageError::Other(err.into()))?;
 
         // Update the key-value dataset. The key is the contract id and the
-        // value is the 32 bytes
+        // value is the Word
         tree.delete(&(*key.contract_id()).into())
             .map_err(|err| StorageError::Other(err.into()))?;
 
