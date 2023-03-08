@@ -4,7 +4,6 @@ use fuel_core_types::{
         BlockHeight,
         DaBlockHeight,
     },
-    fuel_asm::Word,
     fuel_types::bytes::WORD_SIZE,
 };
 use serde::{
@@ -20,161 +19,6 @@ use std::convert::TryFrom;
 
 /// Used for primitive number types which don't implement AsRef or TryFrom<&[u8]>
 pub(crate) struct HexNumber;
-
-impl SerializeAs<u64> for HexNumber {
-    fn serialize_as<S>(value: &u64, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let bytes = value.to_be_bytes();
-        serde_hex::serialize(bytes, serializer)
-    }
-}
-
-impl SerializeAs<u32> for HexNumber {
-    fn serialize_as<S>(value: &u32, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let bytes = value.to_be_bytes();
-        serde_hex::serialize(bytes, serializer)
-    }
-}
-
-impl SerializeAs<u16> for HexNumber {
-    fn serialize_as<S>(value: &u16, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let bytes = value.to_be_bytes();
-        serde_hex::serialize(bytes, serializer)
-    }
-}
-
-impl SerializeAs<u8> for HexNumber {
-    fn serialize_as<S>(value: &u8, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let bytes = value.to_be_bytes();
-        serde_hex::serialize(bytes, serializer)
-    }
-}
-
-impl<'de> DeserializeAs<'de, Word> for HexNumber {
-    fn deserialize_as<D>(deserializer: D) -> Result<Word, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let mut bytes: Vec<u8> = serde_hex::deserialize(deserializer)?;
-        match bytes.len() {
-            len if len > WORD_SIZE => {
-                return Err(D::Error::custom(format!(
-                    "value cant exceed {WORD_SIZE} bytes"
-                )))
-            }
-            len if len < WORD_SIZE => {
-                // pad if length < word size
-                bytes = (0..WORD_SIZE - len)
-                    .map(|_| 0u8)
-                    .chain(bytes.into_iter())
-                    .collect();
-            }
-            _ => {}
-        }
-        // We've already verified the bytes.len == WORD_SIZE, force the conversion here.
-        Ok(Word::from_be_bytes(
-            bytes.try_into().expect("byte lengths checked"),
-        ))
-    }
-}
-
-impl<'de> DeserializeAs<'de, u32> for HexNumber {
-    fn deserialize_as<D>(deserializer: D) -> Result<u32, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        const SIZE: usize = core::mem::size_of::<u32>();
-        let mut bytes: Vec<u8> = serde_hex::deserialize(deserializer)?;
-        match bytes.len() {
-            len if len > SIZE => {
-                return Err(D::Error::custom(format!(
-                    "value cant exceed {WORD_SIZE} bytes"
-                )))
-            }
-            len if len < SIZE => {
-                // pad if length < word size
-                bytes = (0..SIZE - len)
-                    .map(|_| 0u8)
-                    .chain(bytes.into_iter())
-                    .collect();
-            }
-            _ => {}
-        }
-        // We've already verified the bytes.len == WORD_SIZE, force the conversion here.
-        Ok(u32::from_be_bytes(
-            bytes.try_into().expect("byte lengths checked"),
-        ))
-    }
-}
-
-impl<'de> DeserializeAs<'de, u16> for HexNumber {
-    fn deserialize_as<D>(deserializer: D) -> Result<u16, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        const SIZE: usize = core::mem::size_of::<u16>();
-        let mut bytes: Vec<u8> = serde_hex::deserialize(deserializer)?;
-        match bytes.len() {
-            len if len > SIZE => {
-                return Err(D::Error::custom(format!(
-                    "value cant exceed {WORD_SIZE} bytes"
-                )))
-            }
-            len if len < SIZE => {
-                // pad if length < word size
-                bytes = (0..SIZE - len)
-                    .map(|_| 0u8)
-                    .chain(bytes.into_iter())
-                    .collect();
-            }
-            _ => {}
-        }
-        // We've already verified the bytes.len == WORD_SIZE, force the conversion here.
-        Ok(u16::from_be_bytes(
-            bytes.try_into().expect("byte lengths checked"),
-        ))
-    }
-}
-
-impl<'de> DeserializeAs<'de, u8> for HexNumber {
-    fn deserialize_as<D>(deserializer: D) -> Result<u8, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        const SIZE: usize = core::mem::size_of::<u8>();
-        let mut bytes: Vec<u8> = serde_hex::deserialize(deserializer)?;
-        match bytes.len() {
-            len if len > SIZE => {
-                return Err(D::Error::custom(format!(
-                    "value cant exceed {WORD_SIZE} bytes"
-                )))
-            }
-            len if len < SIZE => {
-                // pad if length < word size
-                bytes = (0..SIZE - len)
-                    .map(|_| 0u8)
-                    .chain(bytes.into_iter())
-                    .collect();
-            }
-            _ => {}
-        }
-        // We've already verified the bytes.len == WORD_SIZE, force the conversion here.
-        Ok(u8::from_be_bytes(
-            bytes.try_into().expect("byte lengths checked"),
-        ))
-    }
-}
 
 impl SerializeAs<BlockHeight> for HexNumber {
     fn serialize_as<S>(value: &BlockHeight, serializer: S) -> Result<S::Ok, S::Error>
@@ -276,3 +120,51 @@ pub mod serde_hex {
         Ok(result)
     }
 }
+
+macro_rules! impl_hex_number {
+    ($i:ident) => {
+        impl SerializeAs<$i> for HexNumber {
+            fn serialize_as<S>(value: &$i, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: Serializer,
+            {
+                let bytes = value.to_be_bytes();
+                serde_hex::serialize(bytes, serializer)
+            }
+        }
+
+        impl<'de> DeserializeAs<'de, $i> for HexNumber {
+            fn deserialize_as<D>(deserializer: D) -> Result<$i, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                const SIZE: usize = core::mem::size_of::<$i>();
+                let mut bytes: Vec<u8> = serde_hex::deserialize(deserializer)?;
+                match bytes.len() {
+                    len if len > SIZE => {
+                        return Err(D::Error::custom(format!(
+                            "value cant exceed {WORD_SIZE} bytes"
+                        )))
+                    }
+                    len if len < SIZE => {
+                        // pad if length < word size
+                        bytes = (0..SIZE - len)
+                            .map(|_| 0u8)
+                            .chain(bytes.into_iter())
+                            .collect();
+                    }
+                    _ => {}
+                }
+                // We've already verified the bytes.len == WORD_SIZE, force the conversion here.
+                Ok($i::from_be_bytes(
+                    bytes.try_into().expect("byte lengths checked"),
+                ))
+            }
+        }
+    };
+}
+
+impl_hex_number!(u8);
+impl_hex_number!(u16);
+impl_hex_number!(u32);
+impl_hex_number!(u64);
