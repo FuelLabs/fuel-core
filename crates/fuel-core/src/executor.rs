@@ -1,6 +1,5 @@
 use crate::{
     database::{
-        coin::owner_coin_id_key,
         transaction::DatabaseTransaction,
         transactions::TransactionIndex,
         vm_database::VmDatabase,
@@ -14,7 +13,7 @@ use fuel_core_storage::{
         Coins,
         ContractsLatestUtxo,
         FuelBlocks,
-        OwnedCoins,
+        Messages,
         Receipts,
         SpentMessages,
         Transactions,
@@ -646,11 +645,7 @@ where
         }
 
         // change the spent status of the tx inputs
-        self.spend_input_utxos(
-            &tx,
-            tx_db_transaction.deref_mut(),
-            self.config.utxo_validation,
-        )?;
+        self.spend_input_utxos(&tx, tx_db_transaction.deref_mut())?;
 
         // Persist utxos first and after calculate the not utxo outputs
         self.persist_output_utxos(
@@ -883,64 +878,23 @@ where
     }
 
     /// Mark input utxos as spent
-    fn spend_input_utxos<Tx>(
-        &self,
-        tx: &Tx,
-        db: &mut Database,
-        utxo_validation: bool,
-    ) -> ExecutorResult<()>
+    fn spend_input_utxos<Tx>(&self, tx: &Tx, db: &mut Database) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
     {
         for input in tx.inputs() {
             match input {
-                Input::CoinSigned {
-                    utxo_id,
-                    owner,
-                    amount,
-                    asset_id,
-                    maturity,
-                    ..
-                }
-                | Input::CoinPredicate {
-                    utxo_id,
-                    owner,
-                    amount,
-                    asset_id,
-                    maturity,
-                    ..
-                } => {
-                    let block_created = if utxo_validation {
-                        db.storage::<Coins>()
-                            .get(utxo_id)?
-                            .ok_or(ExecutorError::TransactionValidity(
-                                TransactionValidityError::CoinDoesNotExist(*utxo_id),
-                            ))?
-                            .block_created
-                    } else {
-                        // if utxo validation is disabled, just assign this new input to the original block
-                        Default::default()
-                    };
-
-                    db.storage::<Coins>().insert(
-                        utxo_id,
-                        &CompressedCoin {
-                            owner: *owner,
-                            amount: *amount,
-                            asset_id: *asset_id,
-                            maturity: (*maturity).into(),
-                            status: CoinStatus::Spent,
-                            block_created,
-                        },
-                    )?;
-                    // Remove spent coin from owned index
-                    // TODO: avoid updating coin owners index when updating the coin status above
-                    db.storage::<OwnedCoins>()
-                        .remove(&owner_coin_id_key(owner, utxo_id))?;
+                Input::CoinSigned { utxo_id, .. }
+                | Input::CoinPredicate { utxo_id, .. } => {
+                    // prune utxo from db
+                    db.storage::<Coins>().remove(utxo_id)?;
                 }
                 Input::MessageSigned { message_id, .. }
                 | Input::MessagePredicate { message_id, .. } => {
+                    // mark message id as spent
                     db.storage::<SpentMessages>().insert(message_id, &())?;
+                    // cleanup message contents
+                    db.storage::<Messages>().remove(message_id)?;
                 }
                 _ => {}
             }
@@ -2530,9 +2484,9 @@ mod tests {
         let coin = db
             .storage::<Coins>()
             .get(first_input.utxo_id().unwrap())
-            .unwrap()
             .unwrap();
-        assert_eq!(coin.status, CoinStatus::Spent);
+        // verify coin is pruned from utxo set
+        assert!(coin.is_none());
         // The second input should be `Unspent` after execution.
         let coin = db
             .storage::<Coins>()
@@ -2623,9 +2577,9 @@ mod tests {
                     .utxo_id()
                     .unwrap(),
             )
-            .unwrap()
             .unwrap();
-        assert_eq!(coin.status, CoinStatus::Spent);
+        // spent coins should be removed
+        assert!(coin.is_none());
     }
 
     #[test]
@@ -3029,11 +2983,8 @@ mod tests {
                     .utxo_id()
                     .unwrap(),
             )
-            .unwrap()
             .unwrap();
-        assert_eq!(coin.status, CoinStatus::Spent);
-        // assert block created from coin before spend is still intact (only a concern when utxo-validation is enabled)
-        assert_eq!(coin.block_created, starting_block)
+        assert!(coin.is_none());
     }
 
     #[test]
