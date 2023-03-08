@@ -35,7 +35,7 @@ pub struct CoinConfig {
     pub tx_id: Option<Bytes32>,
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]
-    pub output_index: Option<u64>,
+    pub output_index: Option<u8>,
     /// used if coin is forked from another chain to preserve id & tx_pointer
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]

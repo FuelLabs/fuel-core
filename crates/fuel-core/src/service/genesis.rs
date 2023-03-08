@@ -51,6 +51,7 @@ use fuel_core_types::{
     fuel_tx::{
         Contract,
         MessageId,
+        TxPointer,
         UtxoId,
     },
     fuel_types::{
@@ -223,6 +224,37 @@ fn init_contracts(
                 let root = contract.root();
                 let contract_id =
                     contract.id(&salt, &root, &Contract::default_state_root());
+                let utxo_id = if let (Some(tx_id), Some(output_idx)) =
+                    (contract_config.tx_id, contract_config.output_index)
+                {
+                    UtxoId::new(tx_id, output_idx)
+                } else {
+                    UtxoId::new(
+                        // generated transaction id([0..[out_index/255]])
+                        Bytes32::try_from(
+                            (0..(Bytes32::LEN - WORD_SIZE))
+                                .map(|_| 0u8)
+                                .chain(
+                                    (generated_output_index as u64 / 255)
+                                        .to_be_bytes()
+                                        .into_iter(),
+                                )
+                                .collect_vec()
+                                .as_slice(),
+                        )
+                        .expect("Incorrect genesis transaction id byte length"),
+                        generated_output_index as u8,
+                    )
+                };
+                let tx_pointer = if let (Some(block_height), Some(tx_idx)) = (
+                    contract_config.tx_pointer_block_height,
+                    contract_config.tx_pointer_tx_idx,
+                ) {
+                    TxPointer::new(block_height.into(), tx_idx)
+                } else {
+                    TxPointer::default()
+                };
+
                 // insert contract code
                 if db
                     .storage::<ContractsRawCode>()
@@ -242,25 +274,7 @@ fn init_contracts(
                 }
                 if db
                     .storage::<ContractsLatestUtxo>()
-                    .insert(
-                        &contract_id,
-                        &UtxoId::new(
-                            // generated transaction id([0..[out_index/255]])
-                            Bytes32::try_from(
-                                (0..(Bytes32::LEN - WORD_SIZE))
-                                    .map(|_| 0u8)
-                                    .chain(
-                                        (generated_output_index as u64 / 255)
-                                            .to_be_bytes()
-                                            .into_iter(),
-                                    )
-                                    .collect_vec()
-                                    .as_slice(),
-                            )
-                            .expect("Incorrect genesis transaction id byte length"),
-                            generated_output_index as u8,
-                        ),
-                    )?
+                    .insert(&contract_id, &(utxo_id, tx_pointer))?
                     .is_some()
                 {
                     return Err(anyhow!("Contract utxo should not exist"))

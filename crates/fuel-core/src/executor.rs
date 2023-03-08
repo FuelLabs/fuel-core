@@ -997,11 +997,12 @@ where
                             ref mut utxo_id,
                             ref mut balance_root,
                             ref mut state_root,
+                            ref mut tx_pointer,
                             ref contract_id,
                             ..
                         } => {
                             let mut contract = ContractRef::new(&mut *db, *contract_id);
-                            *utxo_id =
+                            (*utxo_id, *tx_pointer) =
                                 contract.validated_utxo(self.config.utxo_validation)?;
                             *balance_root = contract.balance_root()?;
                             *state_root = contract.state_root()?;
@@ -1057,12 +1058,12 @@ where
                             balance_root,
                             state_root,
                             contract_id,
+                            tx_pointer,
                             ..
                         } => {
                             let mut contract = ContractRef::new(&mut *db, *contract_id);
-                            if utxo_id
-                                != &contract
-                                    .validated_utxo(self.config.utxo_validation)?
+                            if (*utxo_id, *tx_pointer)
+                                != contract.validated_utxo(self.config.utxo_validation)?
                             {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx.id(),
@@ -1250,8 +1251,10 @@ where
                     if let Some(Input::Contract { contract_id, .. }) =
                         inputs.get(*input_idx as usize)
                     {
-                        db.storage::<ContractsLatestUtxo>()
-                            .insert(contract_id, &utxo_id)?;
+                        db.storage::<ContractsLatestUtxo>().insert(
+                            contract_id,
+                            &(utxo_id, TxPointer::new(block_height.into(), tx_idx)),
+                        )?;
                     } else {
                         return Err(ExecutorError::TransactionValidity(
                             TransactionValidityError::InvalidContractInputIndex(utxo_id),
@@ -1288,8 +1291,10 @@ where
                     db,
                 )?,
                 Output::ContractCreated { contract_id, .. } => {
-                    db.storage::<ContractsLatestUtxo>()
-                        .insert(contract_id, &utxo_id)?;
+                    db.storage::<ContractsLatestUtxo>().insert(
+                        contract_id,
+                        &(utxo_id, TxPointer::new(block_height.into(), tx_idx)),
+                    )?;
                 }
             }
         }

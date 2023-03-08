@@ -82,6 +82,13 @@ impl Database {
                     .expect("Contract does not exist")
                     .into_owned();
 
+                let (utxo, tx_pointer) = self
+                    .storage::<ContractsLatestUtxo>()
+                    .get(&contract_id)
+                    .unwrap()
+                    .expect("contract does not exist")
+                    .into_owned();
+
                 let state = Some(
                     self.iter_all_by_prefix::<Vec<u8>, Bytes32, _>(
                         Column::ContractsState,
@@ -125,6 +132,10 @@ impl Database {
                     salt,
                     state,
                     balances,
+                    tx_id: Some(utxo.tx_id().clone()),
+                    output_index: Some(utxo.output_index()),
+                    tx_pointer_block_height: Some(tx_pointer.block_height().into()),
+                    tx_pointer_tx_idx: Some(tx_pointer.tx_index()),
                 })
             })
             .collect::<StorageResult<Vec<ContractConfig>>>()?;

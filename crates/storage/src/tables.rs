@@ -54,7 +54,7 @@ impl Mappable for ContractsLatestUtxo {
     type OwnedKey = ContractId;
     /// The latest UTXO id.
     type Value = Self::OwnedValue;
-    type OwnedValue = UtxoId;
+    type OwnedValue = (UtxoId, fuel_core_types::fuel_tx::TxPointer);
 }
 
 /// Receipts of different hidden internal operations.

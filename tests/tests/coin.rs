@@ -58,6 +58,7 @@ async fn first_5_coins(
             maturity: Default::default(),
             status: fuel_core_types::entities::coin::CoinStatus::Unspent,
             block_created: Default::default(),
+            block_created_tx_idx: 0,
         })
         .collect();
 
@@ -106,6 +107,7 @@ async fn only_asset_id_filtered_coins() {
             maturity: Default::default(),
             status: CoinStatus::Unspent,
             block_created: Default::default(),
+            block_created_tx_idx: 0,
         })
         .collect();
 
@@ -163,6 +165,7 @@ async fn get_unspent_and_spent_coins(
                 CoinStatus::Spent
             },
             block_created: Default::default(),
+            block_created_tx_idx: 0,
         })
         .collect();
 

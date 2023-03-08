@@ -21,6 +21,7 @@ use fuel_core_types::{
 use rand::{
     rngs::StdRng,
     Rng,
+    RngCore,
     SeedableRng,
 };
 
@@ -46,6 +47,10 @@ async fn snapshot_state_config() {
                 (AssetId::new([3u8; 32]), 100),
                 (AssetId::new([10u8; 32]), 10000),
             ]),
+            tx_id: Some(rng.gen()),
+            output_index: Some(rng.gen()),
+            tx_pointer_block_height: Some(rng.next_u32().into()),
+            tx_pointer_tx_idx: Some(rng.gen()),
         }]),
         coins: Some(
             vec![
@@ -58,6 +63,7 @@ async fn snapshot_state_config() {
                 tx_id: None,
                 output_index: None,
                 tx_pointer_block_height: Some(BlockHeight::from(0u64)),
+                tx_pointer_tx_idx: Some(0),
                 maturity: Some(BlockHeight::from(0u64)),
                 owner,
                 amount,
