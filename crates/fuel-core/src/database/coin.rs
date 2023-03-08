@@ -15,6 +15,7 @@ use fuel_core_storage::{
         OwnedCoins,
     },
     Error as StorageError,
+    StorageAsMut,
     StorageInspect,
     StorageMutate,
 };
@@ -79,8 +80,8 @@ impl StorageMutate<Coins> for Database {
         // insert primary record
         let insert = Database::insert(self, utxo_id_to_bytes(key), Column::Coins, value)?;
         // insert secondary index by owner
-        let _: Option<bool> =
-            Database::insert(self, coin_by_owner, Column::OwnedCoins, &true)?;
+        self.storage_as_mut::<OwnedCoins>()
+            .insert(&coin_by_owner, &true)?;
         Ok(insert)
     }
 
@@ -91,8 +92,7 @@ impl StorageMutate<Coins> for Database {
         // cleanup secondary index
         if let Some(coin) = &coin {
             let key = owner_coin_id_key(&coin.owner, key);
-            let _: Option<bool> =
-                Database::remove(self, key.as_slice(), Column::OwnedCoins)?;
+            self.storage_as_mut::<OwnedCoins>().remove(&key)?;
         }
 
         Ok(coin)
