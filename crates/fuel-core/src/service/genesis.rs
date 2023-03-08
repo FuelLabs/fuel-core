@@ -195,8 +195,12 @@ fn init_coin_state(
                     asset_id: coin.asset_id,
                     maturity: coin.maturity.unwrap_or_default(),
                     status: CoinStatus::Unspent,
-                    block_created: coin.tx_pointer_block_height.unwrap_or_default(),
-                    block_created_tx_idx: coin.tx_pointer_tx_idx.unwrap_or_default(),
+                    tx_pointer: TxPointer::new(
+                        coin.tx_pointer_block_height
+                            .map(|b| b.into())
+                            .unwrap_or_default(),
+                        coin.tx_pointer_tx_idx.unwrap_or_default(),
+                    ),
                 };
 
                 if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
@@ -524,14 +528,14 @@ mod tests {
                 owner,
                 amount,
                 asset_id,
-                block_created,
+                tx_pointer,
                 maturity,
                 ..
             }] if utxo_id == alice_utxo_id
             && owner == alice
             && amount == alice_value
             && asset_id == asset_id_alice
-            && block_created == alice_block_created.unwrap()
+            && tx_pointer.block_height() == *alice_block_created.unwrap()
             && maturity == alice_maturity.unwrap(),
         ));
         assert!(matches!(

@@ -746,7 +746,10 @@ where
                             )
                             .into())
                         }
-                        if block_height < coin.block_created + coin.maturity {
+                        if block_height
+                            < BlockHeight::from(coin.tx_pointer.block_height())
+                                + coin.maturity
+                        {
                             return Err(TransactionValidityError::CoinHasNotMatured(
                                 *utxo_id,
                             )
@@ -988,10 +991,7 @@ where
                                 *asset_id,
                                 (*maturity).into(),
                             )?;
-                            *tx_pointer = TxPointer::new(
-                                coin.block_created.into(),
-                                coin.block_created_tx_idx,
-                            );
+                            *tx_pointer = coin.tx_pointer.clone();
                         }
                         Input::Contract {
                             ref mut utxo_id,
@@ -1042,12 +1042,7 @@ where
                                 *asset_id,
                                 (*maturity).into(),
                             )?;
-                            if tx_pointer
-                                != &TxPointer::new(
-                                    coin.block_created.into(),
-                                    coin.block_created_tx_idx,
-                                )
-                            {
+                            if tx_pointer != &coin.tx_pointer {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx.id(),
                                 })
@@ -1192,8 +1187,7 @@ where
                 asset_id,
                 maturity,
                 status: CoinStatus::Spent,
-                block_created: Default::default(),
-                block_created_tx_idx: Default::default(),
+                tx_pointer: Default::default(),
             })
         }
     }
@@ -1320,8 +1314,7 @@ where
                 asset_id: *asset_id,
                 maturity: 0u32.into(),
                 status: CoinStatus::Unspent,
-                block_created: block_height,
-                block_created_tx_idx: tx_idx,
+                tx_pointer: TxPointer::new(block_height.into(), tx_idx),
             };
 
             if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
@@ -2218,8 +2211,7 @@ mod tests {
             asset_id,
             maturity,
             status: CoinStatus::Spent,
-            block_created,
-            block_created_tx_idx,
+            tx_pointer: TxPointer::new(block_created, block_created_tx_idx),
         };
 
         let db = &mut Database::default();
@@ -2541,8 +2533,7 @@ mod tests {
                     asset_id: AssetId::default(),
                     maturity: Default::default(),
                     status: CoinStatus::Unspent,
-                    block_created: Default::default(),
-                    block_created_tx_idx: Default::default(),
+                    tx_pointer: Default::default(),
                 },
             )
             .unwrap();
@@ -2555,8 +2546,7 @@ mod tests {
                     asset_id: AssetId::default(),
                     maturity: Default::default(),
                     status: CoinStatus::Unspent,
-                    block_created: Default::default(),
-                    block_created_tx_idx: Default::default(),
+                    tx_pointer: Default::default(),
                 },
             )
             .unwrap();
@@ -3069,8 +3059,10 @@ mod tests {
                         asset_id,
                         maturity: Default::default(),
                         status: CoinStatus::Unspent,
-                        block_created: starting_block,
-                        block_created_tx_idx: starting_block_tx_idx,
+                        tx_pointer: TxPointer::new(
+                            starting_block.into(),
+                            starting_block_tx_idx,
+                        ),
                     },
                 )
                 .unwrap();
@@ -3111,7 +3103,7 @@ mod tests {
             .unwrap();
         assert_eq!(coin.status, CoinStatus::Spent);
         // assert block created from coin before spend is still intact (only a concern when utxo-validation is enabled)
-        assert_eq!(coin.block_created, starting_block)
+        assert_eq!(coin.tx_pointer.block_height(), *starting_block)
     }
 
     #[test]
@@ -3585,9 +3577,8 @@ mod tests {
                     amount: coin_input.amount().unwrap(),
                     asset_id: *coin_input.asset_id().unwrap(),
                     maturity: (coin_input.maturity().unwrap()).into(),
-                    block_created: 0u64.into(),
                     status: CoinStatus::Unspent,
-                    block_created_tx_idx: block_tx_idx,
+                    tx_pointer: TxPointer::new(0u32, block_tx_idx),
                 },
             )
             .unwrap();
@@ -3659,9 +3650,8 @@ mod tests {
                     amount: coin_input.amount().unwrap(),
                     asset_id: *coin_input.asset_id().unwrap(),
                     maturity: (coin_input.maturity().unwrap()).into(),
-                    block_created: 0u64.into(),
                     status: CoinStatus::Unspent,
-                    block_created_tx_idx: 0,
+                    tx_pointer: TxPointer::default(),
                 },
             )
             .unwrap();
