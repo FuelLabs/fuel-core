@@ -49,7 +49,7 @@ pub struct ContractConfig {
     pub tx_pointer_block_height: Option<BlockHeight>,
     /// TxPointer: auto-generated if None
     /// used if contract is forked from another chain to preserve id & tx_pointer
-    /// The index of the originating tx within `block_created`
+    /// The index of the originating tx within `tx_pointer_block_height`
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]
     pub tx_pointer_tx_idx: Option<u16>,
