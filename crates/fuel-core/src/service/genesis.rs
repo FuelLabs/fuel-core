@@ -45,6 +45,7 @@ use fuel_core_types::{
             CoinStatus,
             CompressedCoin,
         },
+        contract::ContractUtxoInfo,
         message::CompressedMessage,
     },
     fuel_merkle::binary,
@@ -278,7 +279,13 @@ fn init_contracts(
                 }
                 if db
                     .storage::<ContractsLatestUtxo>()
-                    .insert(&contract_id, &(utxo_id, tx_pointer))?
+                    .insert(
+                        &contract_id,
+                        &ContractUtxoInfo {
+                            utxo_id,
+                            tx_pointer,
+                        },
+                    )?
                     .is_some()
                 {
                     return Err(anyhow!("Contract utxo should not exist"))

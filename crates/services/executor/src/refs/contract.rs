@@ -131,7 +131,7 @@ where
             .get(&contract_id)?
             .ok_or(not_found!(ContractsLatestUtxo))?
             .into_owned()
-            .0;
+            .utxo_id;
 
         let state_root = self
             .database()

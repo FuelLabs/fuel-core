@@ -28,6 +28,7 @@ use fuel_core_storage::{
     StorageWrite,
 };
 use fuel_core_types::{
+    entities::contract::ContractUtxoInfo,
     fuel_types::{
         AssetId,
         Bytes32,
@@ -205,7 +206,10 @@ impl Database {
                     .expect("Contract does not exist")
                     .into_owned();
 
-                let (utxo, tx_pointer) = self
+                let ContractUtxoInfo {
+                    utxo_id,
+                    tx_pointer,
+                } = self
                     .storage::<ContractsLatestUtxo>()
                     .get(&contract_id)
                     .unwrap()
@@ -255,8 +259,8 @@ impl Database {
                     salt,
                     state,
                     balances,
-                    tx_id: Some(*utxo.tx_id()),
-                    output_index: Some(utxo.output_index()),
+                    tx_id: Some(*utxo_id.tx_id()),
+                    output_index: Some(utxo_id.output_index()),
                     tx_pointer_block_height: Some(tx_pointer.block_height().into()),
                     tx_pointer_tx_idx: Some(tx_pointer.tx_index()),
                 })
@@ -365,12 +369,15 @@ mod tests {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
         let tx_pointer = TxPointer::new(1u32, 5);
-
+        let utxo_info = ContractUtxoInfo {
+            utxo_id,
+            tx_pointer,
+        };
         let database = &mut Database::default();
 
         database
             .storage::<ContractsLatestUtxo>()
-            .insert(&contract_id, &(utxo_id, tx_pointer))
+            .insert(&contract_id, &utxo_info)
             .unwrap();
 
         assert_eq!(
@@ -380,7 +387,7 @@ mod tests {
                 .unwrap()
                 .unwrap()
                 .into_owned(),
-            (utxo_id, tx_pointer)
+            utxo_info
         );
     }
 
@@ -389,19 +396,24 @@ mod tests {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
         let tx_pointer = TxPointer::new(1u32, 5);
+        let utxo_info = ContractUtxoInfo {
+            utxo_id,
+            tx_pointer,
+        };
 
         let database = &mut Database::default();
         database
             .storage::<ContractsLatestUtxo>()
-            .insert(&contract_id, &(utxo_id, tx_pointer))
+            .insert(&contract_id, &utxo_info)
             .unwrap();
 
-        let returned: (UtxoId, TxPointer) = *database
+        let returned: ContractUtxoInfo = database
             .storage::<ContractsLatestUtxo>()
             .get(&contract_id)
             .unwrap()
-            .unwrap();
-        assert_eq!(returned, (utxo_id, tx_pointer));
+            .unwrap()
+            .into_owned();
+        assert_eq!(returned, utxo_info);
     }
 
     #[test]
@@ -413,7 +425,13 @@ mod tests {
         let database = &mut Database::default();
         database
             .storage::<ContractsLatestUtxo>()
-            .insert(&contract_id, &(utxo_id, tx_pointer))
+            .insert(
+                &contract_id,
+                &ContractUtxoInfo {
+                    utxo_id,
+                    tx_pointer,
+                },
+            )
             .unwrap();
 
         database
@@ -436,7 +454,13 @@ mod tests {
         let database = &mut Database::default();
         database
             .storage::<ContractsLatestUtxo>()
-            .insert(&contract_id, &(utxo_id, tx_pointer))
+            .insert(
+                &contract_id,
+                &ContractUtxoInfo {
+                    utxo_id,
+                    tx_pointer,
+                },
+            )
             .unwrap();
 
         assert!(database

@@ -10,6 +10,7 @@ use fuel_core_types::{
     },
     entities::{
         coin::CompressedCoin,
+        contract::ContractUtxoInfo,
         message::CompressedMessage,
     },
     fuel_tx::{
@@ -54,7 +55,7 @@ impl Mappable for ContractsLatestUtxo {
     type OwnedKey = ContractId;
     /// The latest UTXO id.
     type Value = Self::OwnedValue;
-    type OwnedValue = (UtxoId, fuel_core_types::fuel_tx::TxPointer);
+    type OwnedValue = ContractUtxoInfo;
 }
 
 /// Receipts of different hidden internal operations.

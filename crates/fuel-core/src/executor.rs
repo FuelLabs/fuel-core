@@ -37,9 +37,12 @@ use fuel_core_types::{
             DaBlockHeight,
         },
     },
-    entities::coin::{
-        CoinStatus,
-        CompressedCoin,
+    entities::{
+        coin::{
+            CoinStatus,
+            CompressedCoin,
+        },
+        contract::ContractUtxoInfo,
     },
     fuel_asm::{
         RegId,
@@ -1002,8 +1005,10 @@ where
                             ..
                         } => {
                             let mut contract = ContractRef::new(&mut *db, *contract_id);
-                            (*utxo_id, *tx_pointer) =
+                            let utxo_info =
                                 contract.validated_utxo(self.config.utxo_validation)?;
+                            *utxo_id = utxo_info.utxo_id;
+                            *tx_pointer = utxo_info.tx_pointer;
                             *balance_root = contract.balance_root()?;
                             *state_root = contract.state_root()?;
                             // TODO: Also calculate `tx_pointer` based on utxo's pointer.
@@ -1057,7 +1062,11 @@ where
                             ..
                         } => {
                             let mut contract = ContractRef::new(&mut *db, *contract_id);
-                            if (*utxo_id, *tx_pointer)
+                            let provided_info = ContractUtxoInfo {
+                                utxo_id: *utxo_id,
+                                tx_pointer: *tx_pointer,
+                            };
+                            if provided_info
                                 != contract.validated_utxo(self.config.utxo_validation)?
                             {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
@@ -1247,7 +1256,10 @@ where
                     {
                         db.storage::<ContractsLatestUtxo>().insert(
                             contract_id,
-                            &(utxo_id, TxPointer::new(block_height.into(), tx_idx)),
+                            &ContractUtxoInfo {
+                                utxo_id,
+                                tx_pointer: TxPointer::new(block_height.into(), tx_idx),
+                            },
                         )?;
                     } else {
                         return Err(ExecutorError::TransactionValidity(
@@ -1287,7 +1299,10 @@ where
                 Output::ContractCreated { contract_id, .. } => {
                     db.storage::<ContractsLatestUtxo>().insert(
                         contract_id,
-                        &(utxo_id, TxPointer::new(block_height.into(), tx_idx)),
+                        &ContractUtxoInfo {
+                            utxo_id,
+                            tx_pointer: TxPointer::new(block_height.into(), tx_idx),
+                        },
                     )?;
                 }
             }
