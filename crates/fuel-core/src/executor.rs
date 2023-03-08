@@ -994,7 +994,7 @@ where
                                 *asset_id,
                                 (*maturity).into(),
                             )?;
-                            *tx_pointer = coin.tx_pointer.clone();
+                            *tx_pointer = coin.tx_pointer;
                         }
                         Input::Contract {
                             ref mut utxo_id,
