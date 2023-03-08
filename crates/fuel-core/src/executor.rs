@@ -1538,8 +1538,6 @@ mod tests {
         SeedableRng,
     };
 
-    mod tx_pointer_tests;
-
     pub(crate) fn setup_executable_script() -> (Create, Script) {
         let mut rng = StdRng::seed_from_u64(2322);
         let asset_id: AssetId = rng.gen();
@@ -2213,6 +2211,7 @@ mod tests {
         let asset_id = Default::default();
         let maturity = Default::default();
         let block_created = Default::default();
+        let block_created_tx_idx = Default::default();
         let coin = CompressedCoin {
             owner,
             amount,
@@ -2220,6 +2219,7 @@ mod tests {
             maturity,
             status: CoinStatus::Spent,
             block_created,
+            block_created_tx_idx,
         };
 
         let db = &mut Database::default();
@@ -2542,6 +2542,7 @@ mod tests {
                     maturity: Default::default(),
                     status: CoinStatus::Unspent,
                     block_created: Default::default(),
+                    block_created_tx_idx: Default::default(),
                 },
             )
             .unwrap();
@@ -2555,6 +2556,7 @@ mod tests {
                     maturity: Default::default(),
                     status: CoinStatus::Unspent,
                     block_created: Default::default(),
+                    block_created_tx_idx: Default::default(),
                 },
             )
             .unwrap();
@@ -2596,7 +2598,10 @@ mod tests {
         // `tx2` should be skipped.
         assert_eq!(block.transactions().len(), 2 /* coinbase and `tx1` */);
         assert_eq!(skipped_transactions.len(), 1);
-        assert_eq!(skipped_transactions[0].0.as_script(), Some(&tx2));
+        assert_eq!(
+            skipped_transactions[0].0.as_script().unwrap().id(),
+            tx2.id()
+        );
 
         // The first input should be spent by `tx1` after execution.
         let coin = db
@@ -2655,13 +2660,12 @@ mod tests {
         // `tx1` should be skipped.
         assert_eq!(skipped_transactions.len(), 1);
         assert_eq!(skipped_transactions[0].0.as_script(), Some(&tx1));
-        // TODO: Uncomment when https://github.com/FuelLabs/fuel-core/issues/544 ready
-        // let tx2_index_in_the_block =
-        //     block.transactions()[2].as_script().unwrap().inputs()[0]
-        //         .tx_pointer()
-        //         .unwrap()
-        //         .tx_index();
-        // assert_eq!(tx2_index_in_the_block, 1);
+        let tx2_index_in_the_block =
+            block.transactions()[2].as_script().unwrap().inputs()[0]
+                .tx_pointer()
+                .unwrap()
+                .tx_index();
+        assert_eq!(tx2_index_in_the_block, 1);
     }
 
     #[test]
@@ -3018,6 +3022,7 @@ mod tests {
         // ensure coins are marked as spent after tx is processed
         let mut rng = StdRng::seed_from_u64(2322u64);
         let starting_block = BlockHeight::from(5u64);
+        let starting_block_tx_idx = Default::default();
 
         let tx = TransactionBuilder::script(
             vec![op::ret(RegId::ONE)].into_iter().collect(),
@@ -3065,6 +3070,7 @@ mod tests {
                         maturity: Default::default(),
                         status: CoinStatus::Unspent,
                         block_created: starting_block,
+                        block_created_tx_idx: starting_block_tx_idx,
                     },
                 )
                 .unwrap();
@@ -3554,6 +3560,7 @@ mod tests {
 
         // setup block
         let block_height = rng.gen_range(5u32..1000u32);
+        let block_tx_idx = rng.gen();
 
         let block = PartialFuelBlock {
             header: PartialBlockHeader {
@@ -3580,6 +3587,7 @@ mod tests {
                     maturity: (coin_input.maturity().unwrap()).into(),
                     block_created: 0u64.into(),
                     status: CoinStatus::Unspent,
+                    block_created_tx_idx: block_tx_idx,
                 },
             )
             .unwrap();
@@ -3653,6 +3661,7 @@ mod tests {
                     maturity: (coin_input.maturity().unwrap()).into(),
                     block_created: 0u64.into(),
                     status: CoinStatus::Unspent,
+                    block_created_tx_idx: 0,
                 },
             )
             .unwrap();

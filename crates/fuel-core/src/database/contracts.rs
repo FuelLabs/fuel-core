@@ -151,6 +151,7 @@ mod tests {
     use fuel_core_types::fuel_tx::{
         Contract,
         TxId,
+        TxPointer,
         UtxoId,
     };
 
@@ -240,12 +241,13 @@ mod tests {
     fn latest_utxo_get() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
+        let tx_pointer = TxPointer::new(1u32.into(), 5);
 
         let database = &mut Database::default();
 
         database
             .storage::<ContractsLatestUtxo>()
-            .insert(&contract_id, &utxo_id)
+            .insert(&contract_id, &(utxo_id, tx_pointer))
             .unwrap();
 
         assert_eq!(
@@ -255,7 +257,7 @@ mod tests {
                 .unwrap()
                 .unwrap()
                 .into_owned(),
-            utxo_id
+            (utxo_id, tx_pointer)
         );
     }
 
@@ -263,30 +265,32 @@ mod tests {
     fn latest_utxo_put() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
+        let tx_pointer = TxPointer::new(1u32.into(), 5);
 
         let database = &mut Database::default();
         database
             .storage::<ContractsLatestUtxo>()
-            .insert(&contract_id, &utxo_id)
+            .insert(&contract_id, &(utxo_id, tx_pointer))
             .unwrap();
 
-        let returned: UtxoId = *database
+        let returned: (UtxoId, TxPointer) = *database
             .storage::<ContractsLatestUtxo>()
             .get(&contract_id)
             .unwrap()
             .unwrap();
-        assert_eq!(returned, utxo_id);
+        assert_eq!(returned, (utxo_id, tx_pointer));
     }
 
     #[test]
     fn latest_utxo_remove() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
+        let tx_pointer = TxPointer::new(1u32.into(), 5);
 
         let database = &mut Database::default();
         database
             .storage::<ContractsLatestUtxo>()
-            .insert(&contract_id, &utxo_id)
+            .insert(&contract_id, &(utxo_id, tx_pointer))
             .unwrap();
 
         database
@@ -304,11 +308,12 @@ mod tests {
     fn latest_utxo_exists() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
+        let tx_pointer = TxPointer::new(1u32.into(), 5);
 
         let database = &mut Database::default();
         database
             .storage::<ContractsLatestUtxo>()
-            .insert(&contract_id, &utxo_id)
+            .insert(&contract_id, &(utxo_id, tx_pointer))
             .unwrap();
 
         assert!(database

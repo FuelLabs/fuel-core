@@ -24,6 +24,10 @@ mod tests {
         fuel_vm::Contract,
     };
 
+    use fuel_core_types::fuel_tx::{
+        TxPointer,
+        UtxoId,
+    };
     use rand::{
         prelude::StdRng,
         Rng,
@@ -106,14 +110,14 @@ mod tests {
 
     #[test]
     fn snapshot_simple_contract() {
-        let config = test_config_contract(false, false);
+        let config = test_config_contract(false, false, false, false);
         let json = serde_json::to_string_pretty(&config).unwrap();
         insta::assert_snapshot!(json);
     }
 
     #[test]
     fn can_roundtrip_simple_contract() {
-        let config = test_config_contract(false, false);
+        let config = test_config_contract(false, false, false, false);
         let json = serde_json::to_string(&config).unwrap();
         let deserialized_config: ChainConfig =
             serde_json::from_str(json.as_str()).unwrap();
@@ -122,14 +126,14 @@ mod tests {
 
     #[test]
     fn snapshot_contract_with_state() {
-        let config = test_config_contract(true, false);
+        let config = test_config_contract(true, false, false, false);
         let json = serde_json::to_string_pretty(&config).unwrap();
         insta::assert_snapshot!(json);
     }
 
     #[test]
     fn can_roundtrip_contract_with_state() {
-        let config = test_config_contract(true, false);
+        let config = test_config_contract(true, false, false, false);
         let json = serde_json::to_string(&config).unwrap();
         let deserialized_config: ChainConfig =
             serde_json::from_str(json.as_str()).unwrap();
@@ -138,14 +142,46 @@ mod tests {
 
     #[test]
     fn snapshot_contract_with_balances() {
-        let config = test_config_contract(false, true);
+        let config = test_config_contract(false, true, false, false);
         let json = serde_json::to_string_pretty(&config).unwrap();
         insta::assert_snapshot!(json);
     }
 
     #[test]
     fn can_roundtrip_contract_with_balances() {
-        let config = test_config_contract(false, true);
+        let config = test_config_contract(false, true, false, false);
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized_config: ChainConfig =
+            serde_json::from_str(json.as_str()).unwrap();
+        assert_eq!(config, deserialized_config);
+    }
+
+    #[test]
+    fn snapshot_contract_with_utxo_id() {
+        let config = test_config_contract(false, false, true, false);
+        let json = serde_json::to_string_pretty(&config).unwrap();
+        insta::assert_snapshot!(json);
+    }
+
+    #[test]
+    fn can_roundtrip_contract_with_utxoid() {
+        let config = test_config_contract(false, false, true, false);
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized_config: ChainConfig =
+            serde_json::from_str(json.as_str()).unwrap();
+        assert_eq!(config, deserialized_config);
+    }
+
+    #[test]
+    fn snapshot_contract_with_tx_pointer() {
+        let config = test_config_contract(false, false, false, true);
+        let json = serde_json::to_string_pretty(&config).unwrap();
+        insta::assert_snapshot!(json);
+    }
+
+    #[test]
+    fn can_roundtrip_contract_with_tx_pointer() {
+        let config = test_config_contract(false, false, false, true);
         let json = serde_json::to_string(&config).unwrap();
         let deserialized_config: ChainConfig =
             serde_json::from_str(json.as_str()).unwrap();
@@ -184,7 +220,12 @@ mod tests {
         assert_eq!(config, deserialized_config);
     }
 
-    fn test_config_contract(state: bool, balances: bool) -> ChainConfig {
+    fn test_config_contract(
+        state: bool,
+        balances: bool,
+        utxo_id: bool,
+        tx_pointer: bool,
+    ) -> ChainConfig {
         let mut rng = StdRng::seed_from_u64(1);
         let state = if state {
             let test_key: Bytes32 = rng.gen();
@@ -200,6 +241,17 @@ mod tests {
         } else {
             None
         };
+        let utxo_id = if utxo_id {
+            Some(UtxoId::new(rng.gen(), rng.gen()))
+        } else {
+            None
+        };
+        let tx_pointer = if tx_pointer {
+            Some(TxPointer::new(rng.gen(), rng.gen()))
+        } else {
+            None
+        };
+
         let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
 
         ChainConfig {
@@ -209,6 +261,10 @@ mod tests {
                     salt: Default::default(),
                     state,
                     balances,
+                    tx_id: utxo_id.map(|utxo_id| utxo_id.tx_id().clone()),
+                    output_index: utxo_id.map(|utxo_id| utxo_id.output_index()),
+                    tx_pointer_block_height: tx_pointer.map(|p| p.block_height().into()),
+                    tx_pointer_tx_idx: tx_pointer.map(|p| p.tx_index()),
                 }]),
                 ..Default::default()
             }),
@@ -219,8 +275,9 @@ mod tests {
     fn test_config_coin_state() -> ChainConfig {
         let mut rng = StdRng::seed_from_u64(1);
         let tx_id: Option<Bytes32> = Some(rng.gen());
-        let output_index: Option<u64> = Some(rng.gen());
+        let output_index: Option<u8> = Some(rng.gen());
         let block_created = Some(rng.next_u32().into());
+        let block_created_tx_idx = Some(rng.gen());
         let maturity = Some(rng.next_u32().into());
         let owner = rng.gen();
         let amount = rng.gen();
@@ -232,6 +289,7 @@ mod tests {
                     tx_id,
                     output_index,
                     tx_pointer_block_height: block_created,
+                    tx_pointer_tx_idx: block_created_tx_idx,
                     maturity,
                     owner,
                     amount,

@@ -123,7 +123,7 @@ impl<'de> DeserializeAs<'de, u16> for HexNumber {
     where
         D: Deserializer<'de>,
     {
-        const SIZE: usize = core::mem::size_of::<u32>();
+        const SIZE: usize = core::mem::size_of::<u16>();
         let mut bytes: Vec<u8> = serde_hex::deserialize(deserializer)?;
         match bytes.len() {
             len if len > SIZE => {

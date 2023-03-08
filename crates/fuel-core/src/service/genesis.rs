@@ -460,6 +460,7 @@ mod tests {
         let alice_value = rng.gen();
         let alice_maturity = Some(rng.next_u32().into());
         let alice_block_created = Some(rng.next_u32().into());
+        let alice_block_created_tx_idx = Some(rng.gen());
         let alice_tx_id = Some(rng.gen());
         let alice_output_index = Some(rng.gen());
         let alice_utxo_id =
@@ -476,8 +477,9 @@ mod tests {
                     coins: Some(vec![
                         CoinConfig {
                             tx_id: alice_tx_id,
-                            output_index: alice_output_index.map(|i| i as u64),
+                            output_index: alice_output_index,
                             tx_pointer_block_height: alice_block_created,
+                            tx_pointer_tx_idx: alice_block_created_tx_idx,
                             maturity: alice_maturity,
                             owner: alice,
                             amount: alice_value,
@@ -487,6 +489,7 @@ mod tests {
                             tx_id: None,
                             output_index: None,
                             tx_pointer_block_height: None,
+                            tx_pointer_tx_idx: None,
                             maturity: None,
                             owner: bob,
                             amount: bob_value,
@@ -564,6 +567,10 @@ mod tests {
                         salt,
                         state: Some(state),
                         balances: None,
+                        tx_id: Some(rng.gen()),
+                        output_index: Some(rng.gen()),
+                        tx_pointer_block_height: Some(0u32.into()),
+                        tx_pointer_tx_idx: Some(rng.gen()),
                     }]),
                     ..Default::default()
                 }),
@@ -642,6 +649,10 @@ mod tests {
                         salt,
                         state: None,
                         balances: Some(balances),
+                        tx_id: None,
+                        output_index: None,
+                        tx_pointer_block_height: None,
+                        tx_pointer_tx_idx: None,
                     }]),
                     ..Default::default()
                 }),
