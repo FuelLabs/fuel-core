@@ -51,7 +51,7 @@ async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
 
     // add coin to genesis block
     test_builder.initial_coins.push(CoinConfig {
-        tx_id: Some(coin_utxo_id.tx_id().clone()),
+        tx_id: Some(*coin_utxo_id.tx_id()),
         output_index: Some(coin_utxo_id.output_index()),
         tx_pointer_block_height: Some(coin_tx_pointer.block_height().into()),
         tx_pointer_tx_idx: Some(coin_tx_pointer.tx_index()),

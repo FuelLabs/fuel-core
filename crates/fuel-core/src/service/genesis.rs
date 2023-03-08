@@ -183,7 +183,7 @@ fn init_coin_state(
                         )
                         .expect("Incorrect genesis transaction id byte length")
                     }),
-                    coin.output_index.map(|i| i as u8).unwrap_or_else(|| {
+                    coin.output_index.unwrap_or_else(|| {
                         generated_output_index += 1;
                         (generated_output_index % 255) as u8
                     }),

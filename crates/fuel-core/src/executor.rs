@@ -1190,7 +1190,7 @@ where
                 owner,
                 amount,
                 asset_id,
-                maturity: (maturity).into(),
+                maturity,
                 status: CoinStatus::Spent,
                 block_created: Default::default(),
                 block_created_tx_idx: Default::default(),
