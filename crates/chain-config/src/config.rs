@@ -17,16 +17,15 @@ mod tests {
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         fuel_asm::op,
+        fuel_tx::{
+            TxPointer,
+            UtxoId,
+        },
         fuel_types::{
             AssetId,
             Bytes32,
         },
         fuel_vm::Contract,
-    };
-
-    use fuel_core_types::fuel_tx::{
-        TxPointer,
-        UtxoId,
     };
     use rand::{
         prelude::StdRng,

@@ -21,7 +21,6 @@ use fuel_core_types::{
 use rand::{
     rngs::StdRng,
     Rng,
-    RngCore,
     SeedableRng,
 };
 
@@ -49,7 +48,7 @@ async fn snapshot_state_config() {
             ]),
             tx_id: Some(rng.gen()),
             output_index: Some(rng.gen()),
-            tx_pointer_block_height: Some(rng.next_u32().into()),
+            tx_pointer_block_height: Some(BlockHeight::from(10u64)),
             tx_pointer_tx_idx: Some(rng.gen()),
         }]),
         coins: Some(

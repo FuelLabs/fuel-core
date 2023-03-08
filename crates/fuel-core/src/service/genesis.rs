@@ -204,6 +204,15 @@ fn init_coin_state(
                     ),
                 };
 
+                // ensure coin can't point to blocks in the future
+                if coin.tx_pointer.block_height()
+                    > state.height.unwrap_or_default().into()
+                {
+                    return Err(anyhow!(
+                        "coin tx_pointer height cannot be greater than genesis block"
+                    ))
+                }
+
                 if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
                     return Err(anyhow!("Coin should not exist"))
                 }
@@ -259,6 +268,12 @@ fn init_contracts(
                 } else {
                     TxPointer::default()
                 };
+
+                if tx_pointer.block_height() > state.height.unwrap_or_default().into() {
+                    return Err(anyhow!(
+                        "contract tx_pointer cannot be greater than genesis block"
+                    ))
+                }
 
                 // insert contract code
                 if db

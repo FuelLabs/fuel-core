@@ -1011,7 +1011,6 @@ where
                             *tx_pointer = utxo_info.tx_pointer;
                             *balance_root = contract.balance_root()?;
                             *state_root = contract.state_root()?;
-                            // TODO: Also calculate `tx_pointer` based on utxo's pointer.
                         }
                         _ => {}
                     }

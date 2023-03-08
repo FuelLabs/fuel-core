@@ -45,7 +45,7 @@ impl Mappable for FuelBlocks {
     type OwnedValue = CompressedBlock;
 }
 
-/// The latest UTXO id of the contract. The contract's UTXO represents the unique id of the state.
+/// The latest UTXO info of the contract. The contract's UTXO represents the unique id of the state.
 /// After each transaction, old UTXO is consumed, and new UTXO is produced. UTXO is used as an
 /// input to the next transaction related to the `ContractId` smart contract.
 pub struct ContractsLatestUtxo;
@@ -53,7 +53,7 @@ pub struct ContractsLatestUtxo;
 impl Mappable for ContractsLatestUtxo {
     type Key = Self::OwnedKey;
     type OwnedKey = ContractId;
-    /// The latest UTXO id.
+    /// The latest UTXO info
     type Value = Self::OwnedValue;
     type OwnedValue = ContractUtxoInfo;
 }
