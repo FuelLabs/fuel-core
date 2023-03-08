@@ -119,14 +119,14 @@ where
     C: ConsensusPort + Send + Sync + 'static,
 {
     #[tracing::instrument(level = "debug", skip_all, err, ret)]
-    async fn run(
-        &mut self,
-        _: &mut fuel_core_services::StateWatcher,
-    ) -> anyhow::Result<bool> {
-        if self.import_task_handle.state().stopped() {
-            return Ok(false)
-        }
+    async fn run(&mut self, _: &mut StateWatcher) -> anyhow::Result<bool> {
         Ok(self.sync_heights.sync().await.is_some())
+    }
+
+    async fn shutdown(self) -> anyhow::Result<()> {
+        tracing::info!("Sync task shutting down");
+        self.import_task_handle.stop_and_await().await?;
+        Ok(())
     }
 }
 
@@ -146,15 +146,19 @@ where
     fn shared_data(&self) -> Self::SharedData {}
 
     async fn into_task(mut self, watcher: &StateWatcher) -> anyhow::Result<Self::Task> {
-        let mut watcher = watcher.clone();
+        let mut sync_watcher = watcher.clone();
+        self.import_task_handle.start_and_await().await?;
+        let mut import_watcher = self.import_task_handle.state_watcher();
         self.sync_heights.map_stream(|height_stream| {
             height_stream
                 .take_until(async move {
-                    let _ = watcher.while_started().await;
+                    tokio::select! {
+                        _ = sync_watcher.while_started() => {},
+                        _ = import_watcher.while_started() => {},
+                    }
                 })
                 .into_boxed()
         });
-        self.import_task_handle.start_and_await().await?;
 
         Ok(self)
     }
@@ -168,11 +172,14 @@ where
     C: ConsensusPort + Send + Sync + 'static,
 {
     #[tracing::instrument(level = "debug", skip_all, err, ret)]
-    async fn run(
-        &mut self,
-        watcher: &mut fuel_core_services::StateWatcher,
-    ) -> anyhow::Result<bool> {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         self.0.import(watcher).await
+    }
+
+    async fn shutdown(self) -> anyhow::Result<()> {
+        // Nothing to shut down because we don't have any temporary state that should be dumped,
+        // and we don't spawn any sub-tasks that we need to finish or await.
+        Ok(())
     }
 }
 
@@ -193,17 +200,5 @@ where
 
     async fn into_task(self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
         Ok(self)
-    }
-}
-
-impl<P, E, C> Drop for SyncTask<P, E, C>
-where
-    P: PeerToPeerPort + Send + Sync + 'static,
-    E: BlockImporterPort + Send + Sync + 'static,
-    C: ConsensusPort + Send + Sync + 'static,
-{
-    fn drop(&mut self) {
-        tracing::info!("Sync task shutting down");
-        self.import_task_handle.stop();
     }
 }

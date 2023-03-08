@@ -2,6 +2,7 @@ use crate::{
     ports::TxPoolDb,
     types::*,
     Error,
+    TxInfo,
 };
 use anyhow::anyhow;
 use fuel_core_types::{
@@ -15,10 +16,7 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::MessageId,
-    services::txpool::{
-        ArcPoolTx,
-        TxInfo,
-    },
+    services::txpool::ArcPoolTx,
 };
 use std::collections::{
     HashMap,

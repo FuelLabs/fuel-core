@@ -60,7 +60,11 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 
     fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()> {
-        self.service.broadcast_transaction(transaction)
+        if let Some(service) = &self.service {
+            service.broadcast_transaction(transaction)
+        } else {
+            Ok(())
+        }
     }
 
     fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction> {
@@ -68,10 +72,14 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
             wrappers::BroadcastStream,
             StreamExt,
         };
-        Box::pin(
-            BroadcastStream::new(self.service.subscribe_tx())
-                .filter_map(|result| result.ok()),
-        )
+        if let Some(service) = &self.service {
+            Box::pin(
+                BroadcastStream::new(service.subscribe_tx())
+                    .filter_map(|result| result.ok()),
+            )
+        } else {
+            fuel_core_services::stream::IntoBoxStream::into_boxed(tokio_stream::pending())
+        }
     }
 
     fn notify_gossip_transaction_validity(
@@ -79,8 +87,11 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         message_info: GossipsubMessageInfo,
         validity: GossipsubMessageAcceptance,
     ) -> anyhow::Result<()> {
-        self.service
-            .notify_gossip_transaction_validity(message_info, validity)
+        if let Some(service) = &self.service {
+            service.notify_gossip_transaction_validity(message_info, validity)
+        } else {
+            Ok(())
+        }
     }
 }
 

@@ -240,6 +240,7 @@ impl Middleware for MockMiddleware {
 
     /// Needs for initial sync of relayer
     async fn syncing(&self) -> Result<SyncingStatus, Self::Error> {
+        tokio::task::yield_now().await;
         self.before_event(TriggerType::Syncing);
         let r = Ok(self.update_data(|data| data.is_syncing.clone()));
         self.after_event(TriggerType::Syncing);
@@ -248,6 +249,7 @@ impl Middleware for MockMiddleware {
 
     /// Used in initial sync to get current best eth block
     async fn get_block_number(&self) -> Result<U64, Self::Error> {
+        tokio::task::yield_now().await;
         let this = self;
         let _ = this.before_event(TriggerType::GetBlockNumber);
         let r = Ok(self.update_data(|data| data.best_block.number.unwrap()));
@@ -257,6 +259,7 @@ impl Middleware for MockMiddleware {
 
     /// used for initial sync to get logs of already finalized diffs
     async fn get_logs(&self, filter: &Filter) -> Result<Vec<Log>, Self::Error> {
+        tokio::task::yield_now().await;
         self.before_event(TriggerType::GetLogs(filter));
         let r = self.update_data(|data| {
             data.logs_batch
@@ -292,6 +295,7 @@ impl Middleware for MockMiddleware {
         &self,
         block_hash_or_number: T,
     ) -> Result<Option<Block<TxHash>>, Self::Error> {
+        tokio::task::yield_now().await;
         let block_id = block_hash_or_number.into();
         self.before_event(TriggerType::GetBlock(block_id));
         let r = Ok(Some(self.update_data(|data| data.best_block.clone())));

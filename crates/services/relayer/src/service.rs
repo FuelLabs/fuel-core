@@ -37,11 +37,11 @@ use fuel_core_types::{
     entities::message::CompressedMessage,
     fuel_types::MessageId,
 };
+use futures::StreamExt;
 use std::{
     borrow::Cow,
     convert::TryInto,
     ops::Deref,
-    sync::Arc,
 };
 use synced::update_synced;
 use tokio::sync::watch;
@@ -65,7 +65,7 @@ type NotifySynced = watch::Sender<Option<DaBlockHeight>>;
 
 /// The alias of runnable relayer service.
 pub type Service<D> = CustomizableService<Provider<Http>, D>;
-type CustomizableService<P, D> = ServiceRunner<Task<P, D>>;
+type CustomizableService<P, D> = ServiceRunner<NotInitializedTask<P, D>>;
 
 /// The shared state of the relayer task.
 #[derive(Clone)]
@@ -75,25 +75,40 @@ pub struct SharedState<D> {
     database: D,
 }
 
-/// The actual relayer that runs on a background task
-/// to sync with the DA layer.
-pub struct Task<P, D> {
+/// Not initialized version of the [`Task`].
+pub struct NotInitializedTask<P, D> {
     /// Sends signals when the relayer reaches consistency with the DA layer.
     synced: NotifySynced,
     /// The node that communicates with Ethereum.
-    eth_node: Arc<P>,
+    eth_node: P,
     /// The fuel database.
     database: D,
     /// Configuration settings.
     config: Config,
 }
 
-impl<P, D> Task<P, D> {
+/// The actual relayer background task that syncs with the DA layer.
+pub struct Task<P, D> {
+    /// Sends signals when the relayer reaches consistency with the DA layer.
+    synced: NotifySynced,
+    /// The node that communicates with Ethereum.
+    eth_node: P,
+    /// The fuel database.
+    database: D,
+    /// Configuration settings.
+    config: Config,
+    /// The watcher used to track the state of the service. If the service stops,
+    /// the task will stop synchronization.
+    shutdown: StateWatcher,
+}
+
+impl<P, D> NotInitializedTask<P, D> {
     /// Create a new relayer task.
-    fn new(synced: NotifySynced, eth_node: P, database: D, config: Config) -> Self {
+    fn new(eth_node: P, database: D, config: Config) -> Self {
+        let (synced, _) = watch::channel(None);
         Self {
             synced,
-            eth_node: Arc::new(eth_node),
+            eth_node,
             database,
             config,
         }
@@ -102,7 +117,6 @@ impl<P, D> Task<P, D> {
 
 impl<P, D> Task<P, D>
 where
-    P: Middleware<Error = ProviderError> + 'static,
     D: RelayerDb + 'static,
 {
     fn set_deploy_height(&mut self) {
@@ -119,12 +133,20 @@ where
     D: RelayerDb + 'static,
 {
     async fn wait_if_eth_syncing(&self) -> anyhow::Result<()> {
-        syncing::wait_if_eth_syncing(
-            &self.eth_node,
-            self.config.syncing_call_frequency,
-            self.config.syncing_log_frequency,
-        )
-        .await
+        let mut shutdown = self.shutdown.clone();
+        tokio::select! {
+            biased;
+            _ = shutdown.while_started() => {
+                Err(anyhow::anyhow!("The relayer got a stop signal"))
+            },
+            result = syncing::wait_if_eth_syncing(
+                &self.eth_node,
+                self.config.syncing_call_frequency,
+                self.config.syncing_log_frequency,
+            ) => {
+                result
+            }
+        }
     }
 
     async fn download_logs(
@@ -134,9 +156,10 @@ where
         let logs = download_logs(
             eth_sync_gap,
             self.config.eth_v2_listening_contracts.clone(),
-            self.eth_node.clone(),
+            &self.eth_node,
             self.config.log_page_size,
         );
+        let logs = logs.take_until(self.shutdown.while_started());
         write_logs(&mut self.database, logs).await
     }
 
@@ -146,7 +169,7 @@ where
 }
 
 #[async_trait]
-impl<P, D> RunnableService for Task<P, D>
+impl<P, D> RunnableService for NotInitializedTask<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
     D: RelayerDb + Clone + 'static,
@@ -165,9 +188,24 @@ where
         }
     }
 
-    async fn into_task(mut self, _watcher: &StateWatcher) -> anyhow::Result<Self::Task> {
-        self.set_deploy_height();
-        Ok(self)
+    async fn into_task(mut self, watcher: &StateWatcher) -> anyhow::Result<Self::Task> {
+        let shutdown = watcher.clone();
+        let NotInitializedTask {
+            synced,
+            eth_node,
+            database,
+            config,
+        } = self;
+        let mut task = Task {
+            synced,
+            eth_node,
+            database,
+            config,
+            shutdown,
+        };
+        task.set_deploy_height();
+
+        Ok(task)
     }
 }
 
@@ -177,23 +215,29 @@ where
     P: Middleware<Error = ProviderError> + 'static,
     D: RelayerDb + 'static,
 {
-    async fn run(&mut self, _watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+    async fn run(&mut self, _: &mut StateWatcher) -> anyhow::Result<bool> {
         let now = tokio::time::Instant::now();
         let should_continue = true;
 
-        // TODO: Pass `_watcher` into `Task` to handle graceful shutdown for
-        //  `download_logs`, `wait_if_eth_syncing`, `build_eth` methods.
-        //  Otherwise, the shutdown process can take a lot of time.
         let result = run::run(self).await;
-        // Sleep the loop so the da node is not spammed.
-        tokio::time::sleep(
-            self.config
-                .sync_minimum_duration
-                .saturating_sub(now.elapsed()),
-        )
-        .await;
+
+        if self.shutdown.borrow_and_update().started() {
+            // Sleep the loop so the da node is not spammed.
+            tokio::time::sleep(
+                self.config
+                    .sync_minimum_duration
+                    .saturating_sub(now.elapsed()),
+            )
+            .await;
+        }
 
         result.map(|_| should_continue)
+    }
+
+    async fn shutdown(self) -> anyhow::Result<()> {
+        // Nothing to shut down because we don't have any temporary state that should be dumped,
+        // and we don't spawn any sub-tasks that we need to finish or await.
+        Ok(())
     }
 }
 
@@ -264,7 +308,16 @@ where
     D: RelayerDb + 'static,
 {
     async fn current(&self) -> anyhow::Result<u64> {
-        Ok(self.eth_node.get_block_number().await?.as_u64())
+        let mut shutdown = self.shutdown.clone();
+        tokio::select! {
+            biased;
+            _ = shutdown.while_started() => {
+                Err(anyhow::anyhow!("The relayer got a stop signal"))
+            },
+            block_number = self.eth_node.get_block_number() => {
+                Ok(block_number?.as_u64())
+            }
+        }
     }
 
     fn finalization_period(&self) -> u64 {
@@ -322,8 +375,7 @@ where
     P: Middleware<Error = ProviderError> + 'static,
     D: RelayerDb + Clone + 'static,
 {
-    let (tx, _) = watch::channel(None);
-    let task = Task::new(tx, eth_node, database, config);
+    let task = NotInitializedTask::new(eth_node, database, config);
 
     CustomizableService::new(task)
 }

@@ -1,8 +1,8 @@
+use fuel_core::p2p_test_helpers::*;
 use fuel_core_types::{
     fuel_crypto::SecretKey,
     fuel_tx::Input,
 };
-use helpers::*;
 use itertools::Itertools;
 use rand::{
     rngs::StdRng,
@@ -20,8 +20,6 @@ use std::{
     },
 };
 use test_case::test_case;
-
-mod helpers;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_producer_getting_own_blocks_back() {
