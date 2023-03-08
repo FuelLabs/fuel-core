@@ -270,6 +270,8 @@ pub enum Error {
     InvalidBlockId,
     #[error("No matching utxo for contract id ${0:#x}")]
     ContractUtxoMissing(ContractId),
+    #[error("Expected input of type {0}")]
+    InputTypeMismatch(String),
 }
 
 impl From<Backtrace> for Error {
