@@ -16,15 +16,41 @@ pub type ColumnId = u32;
 pub type KVItem = DatabaseResult<(Vec<u8>, Vec<u8>)>;
 
 pub trait KeyValueStore {
-    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>>;
     fn put(
         &self,
         key: &[u8],
         column: Column,
         value: Vec<u8>,
     ) -> DatabaseResult<Option<Vec<u8>>>;
+
+    fn write(&self, key: &[u8], column: Column, buf: Vec<u8>) -> DatabaseResult<usize>;
+
+    fn replace(
+        &self,
+        key: &[u8],
+        column: Column,
+        buf: Vec<u8>,
+    ) -> DatabaseResult<(usize, Option<Vec<u8>>)>;
+
+    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>>;
+
     fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>>;
+
     fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool>;
+
+    fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>>;
+
+    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>>;
+
+    fn read(
+        &self,
+        key: &[u8],
+        column: Column,
+        buf: &mut [u8],
+    ) -> DatabaseResult<Option<usize>>;
+
+    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>>;
+
     fn iter_all(
         &self,
         column: Column,

@@ -453,7 +453,8 @@ fn verify_signature(
     block_id: fuel_core_types::blockchain::primitives::BlockId,
     signature: fuel_core_client::client::schema::Signature,
 ) -> bool {
-    let signature = Signature::from(Bytes64::from(signature));
+    let bytes: Bytes64 = signature.into();
+    let signature = Signature::from_bytes(bytes.into());
     let m = block_id.as_message();
     let public_key = signature.recover(m).unwrap();
     signature.verify(&public_key, m).is_ok()

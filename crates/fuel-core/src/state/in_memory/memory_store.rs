@@ -1,6 +1,7 @@
 use crate::{
     database::{
         Column,
+        Error as DatabaseError,
         Result as DatabaseResult,
     },
     state::{
@@ -130,6 +131,75 @@ impl KeyValueStore for MemoryStore {
         direction: IterDirection,
     ) -> BoxedIter<KVItem> {
         self.iter_all(column, prefix, start, direction).into_boxed()
+    }
+
+    fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
+        Ok(self
+            .inner
+            .lock()
+            .expect("poisoned")
+            .get(&column_key(key, column))
+            .map(|v| v.len()))
+    }
+
+    fn read(
+        &self,
+        key: &[u8],
+        column: Column,
+        mut buf: &mut [u8],
+    ) -> DatabaseResult<Option<usize>> {
+        self.inner
+            .lock()
+            .expect("poisoned")
+            .get(&column_key(key, column))
+            .map(|value| {
+                let read = value.len();
+                std::io::Write::write_all(&mut buf, value.as_ref())
+                    .map_err(|e| DatabaseError::Other(anyhow::anyhow!(e)))?;
+                DatabaseResult::Ok(read)
+            })
+            .transpose()
+    }
+
+    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
+        Ok(self
+            .inner
+            .lock()
+            .expect("poisoned")
+            .get(&column_key(key, column))
+            .map(|value| value.to_vec()))
+    }
+
+    fn write(&self, key: &[u8], column: Column, buf: Vec<u8>) -> DatabaseResult<usize> {
+        let len = buf.len();
+        self.inner
+            .lock()
+            .expect("poisoned")
+            .insert(column_key(key, column), buf);
+        Ok(len)
+    }
+
+    fn replace(
+        &self,
+        key: &[u8],
+        column: Column,
+        buf: Vec<u8>,
+    ) -> DatabaseResult<(usize, Option<Vec<u8>>)> {
+        let len = buf.len();
+        let existing = self
+            .inner
+            .lock()
+            .expect("poisoned")
+            .insert(column_key(key, column), buf);
+        Ok((len, existing))
+    }
+
+    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
+        Ok(self
+            .inner
+            .lock()
+            .expect("poisoned")
+            .remove(&column_key(key, column)))
     }
 }
 
