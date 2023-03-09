@@ -892,7 +892,12 @@ where
                 Input::MessageSigned { message_id, .. }
                 | Input::MessagePredicate { message_id, .. } => {
                     // mark message id as spent
-                    db.storage::<SpentMessages>().insert(message_id, &())?;
+                    let was_already_spent =
+                        db.storage::<SpentMessages>().insert(message_id, &())?;
+                    // ensure message wasn't already marked as spent
+                    if was_already_spent.is_some() {
+                        return Err(ExecutorError::MessageAlreadySpent(*message_id))
+                    }
                     // cleanup message contents
                     db.storage::<Messages>().remove(message_id)?;
                 }

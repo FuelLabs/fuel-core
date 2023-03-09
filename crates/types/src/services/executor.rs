@@ -270,6 +270,8 @@ pub enum Error {
     InvalidBlockId,
     #[error("No matching utxo for contract id ${0:#x}")]
     ContractUtxoMissing(ContractId),
+    #[error("message already spent {0:#x}")]
+    MessageAlreadySpent(MessageId),
 }
 
 impl From<Backtrace> for Error {
