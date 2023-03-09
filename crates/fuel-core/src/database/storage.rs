@@ -3,7 +3,6 @@ use crate::database::{
     Database,
 };
 use fuel_core_storage::{
-    tables::OwnedCoinKey,
     Error as StorageError,
     Mappable,
     Result as StorageResult,
@@ -210,14 +209,6 @@ impl ToDatabaseKey for TxId {
 
     fn database_key(&self) -> Self::Type<'_> {
         self.as_ref()
-    }
-}
-
-impl ToDatabaseKey for OwnedCoinKey {
-    type Type<'a> = &'a [u8];
-
-    fn database_key(&self) -> Self::Type<'_> {
-        &self[..]
     }
 }
 

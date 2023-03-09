@@ -1,6 +1,9 @@
 use crate::{
     database::{
-        storage::DatabaseColumn,
+        storage::{
+            DatabaseColumn,
+            ToDatabaseKey,
+        },
         Column,
         Database,
         Error as DatabaseError,
@@ -10,11 +13,9 @@ use crate::{
 };
 use fuel_core_chain_config::CoinConfig;
 use fuel_core_storage::{
-    tables::{
-        Coins,
-        OwnedCoins,
-    },
+    tables::Coins,
     Error as StorageError,
+    Mappable,
     StorageAsMut,
     StorageInspect,
     StorageMutate,
@@ -51,9 +52,29 @@ fn utxo_id_to_bytes(utxo_id: &UtxoId) -> [u8; TxId::LEN + 1] {
     default
 }
 
+/// The storage table of owned coin ids. Maps addresses to owned coins.
+pub struct OwnedCoins;
+/// The storage key for owned coins: `Address ++ UtxoId`
+pub type OwnedCoinKey = [u8; Address::LEN + TxId::LEN + 1];
+
+impl Mappable for OwnedCoins {
+    type Key = Self::OwnedKey;
+    type OwnedKey = OwnedCoinKey;
+    type Value = Self::OwnedValue;
+    type OwnedValue = bool;
+}
+
 impl DatabaseColumn for OwnedCoins {
     fn column() -> Column {
         Column::OwnedCoins
+    }
+}
+
+impl ToDatabaseKey for OwnedCoinKey {
+    type Type<'a> = &'a [u8];
+
+    fn database_key(&self) -> Self::Type<'_> {
+        &self[..]
     }
 }
 
