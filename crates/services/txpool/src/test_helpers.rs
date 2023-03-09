@@ -40,7 +40,7 @@ pub(crate) fn add_coin_to_state(input: Input, mock_db: Option<&MockDb>) -> (Coin
         asset_id: *input.asset_id().unwrap(),
         maturity: Default::default(),
         status: CoinStatus::Unspent,
-        block_created: Default::default(),
+        tx_pointer: Default::default(),
     };
     let utxo_id = *input.utxo_id().unwrap();
     if let Some(mock_db) = mock_db {

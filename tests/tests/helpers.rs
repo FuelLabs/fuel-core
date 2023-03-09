@@ -11,9 +11,12 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::FuelClient;
-use fuel_core_types::fuel_tx::{
-    field::Inputs,
-    *,
+use fuel_core_types::{
+    blockchain::primitives::BlockHeight,
+    fuel_tx::{
+        field::Inputs,
+        *,
+    },
 };
 use itertools::Itertools;
 use rand::{
@@ -45,6 +48,8 @@ pub struct TestSetupBuilder {
     pub contracts: HashMap<ContractId, ContractConfig>,
     pub initial_coins: Vec<CoinConfig>,
     pub min_gas_price: u64,
+    pub starting_block: Option<BlockHeight>,
+    pub utxo_validation: bool,
 }
 
 impl TestSetupBuilder {
@@ -60,6 +65,8 @@ impl TestSetupBuilder {
         &mut self,
         code: Vec<u8>,
         balances: Option<Vec<(AssetId, u64)>>,
+        utxo_id: Option<UtxoId>,
+        tx_pointer: Option<TxPointer>,
     ) -> (Salt, ContractId) {
         let contract = Contract::from(code.clone());
         let root = contract.root();
@@ -74,6 +81,11 @@ impl TestSetupBuilder {
                 salt,
                 state: None,
                 balances,
+                tx_id: utxo_id.map(|utxo_id| *utxo_id.tx_id()),
+                output_index: utxo_id.map(|utxo_id| utxo_id.output_index()),
+                tx_pointer_block_height: tx_pointer
+                    .map(|pointer| pointer.block_height().into()),
+                tx_pointer_tx_idx: tx_pointer.map(|pointer| pointer.tx_index()),
             },
         );
 
@@ -95,6 +107,7 @@ impl TestSetupBuilder {
                         owner,
                         asset_id,
                         utxo_id,
+                        tx_pointer,
                         ..
                     }
                     | Input::CoinPredicate {
@@ -102,13 +115,17 @@ impl TestSetupBuilder {
                         owner,
                         asset_id,
                         utxo_id,
+                        tx_pointer,
                         ..
                     } = input
                     {
                         Some(CoinConfig {
                             tx_id: Some(*utxo_id.tx_id()),
-                            output_index: Some(utxo_id.output_index() as u64),
-                            block_created: None,
+                            output_index: Some(utxo_id.output_index()),
+                            tx_pointer_block_height: Some(
+                                tx_pointer.block_height().into(),
+                            ),
+                            tx_pointer_tx_idx: Some(tx_pointer.tx_index()),
                             maturity: None,
                             owner: *owner,
                             amount: *amount,
@@ -129,17 +146,16 @@ impl TestSetupBuilder {
             initial_state: Some(StateConfig {
                 coins: Some(self.initial_coins.clone()),
                 contracts: Some(self.contracts.values().cloned().collect_vec()),
+                height: self.starting_block,
                 ..StateConfig::default()
             }),
             ..ChainConfig::local_testnet()
         };
-        let utxo_validation = true;
         let config = Config {
-            utxo_validation,
+            utxo_validation: self.utxo_validation,
             txpool: fuel_core_txpool::Config {
                 chain_config: chain_config.clone(),
                 min_gas_price: self.min_gas_price,
-                utxo_validation,
                 ..fuel_core_txpool::Config::default()
             },
             chain_conf: chain_config,
@@ -164,6 +180,8 @@ impl Default for TestSetupBuilder {
             contracts: Default::default(),
             initial_coins: vec![],
             min_gas_price: 0,
+            starting_block: None,
+            utxo_validation: true,
         }
     }
 }

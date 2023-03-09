@@ -45,12 +45,14 @@ use fuel_core_types::{
             CoinStatus,
             CompressedCoin,
         },
+        contract::ContractUtxoInfo,
         message::CompressedMessage,
     },
     fuel_merkle::binary,
     fuel_tx::{
         Contract,
         MessageId,
+        TxPointer,
         UtxoId,
     },
     fuel_types::{
@@ -182,7 +184,7 @@ fn init_coin_state(
                         )
                         .expect("Incorrect genesis transaction id byte length")
                     }),
-                    coin.output_index.map(|i| i as u8).unwrap_or_else(|| {
+                    coin.output_index.unwrap_or_else(|| {
                         generated_output_index += 1;
                         (generated_output_index % 255) as u8
                     }),
@@ -194,8 +196,22 @@ fn init_coin_state(
                     asset_id: coin.asset_id,
                     maturity: coin.maturity.unwrap_or_default(),
                     status: CoinStatus::Unspent,
-                    block_created: coin.block_created.unwrap_or_default(),
+                    tx_pointer: TxPointer::new(
+                        coin.tx_pointer_block_height
+                            .map(|b| b.into())
+                            .unwrap_or_default(),
+                        coin.tx_pointer_tx_idx.unwrap_or_default(),
+                    ),
                 };
+
+                // ensure coin can't point to blocks in the future
+                if coin.tx_pointer.block_height()
+                    > state.height.unwrap_or_default().into()
+                {
+                    return Err(anyhow!(
+                        "coin tx_pointer height cannot be greater than genesis block"
+                    ))
+                }
 
                 if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
                     return Err(anyhow!("Coin should not exist"))
@@ -222,6 +238,43 @@ fn init_contracts(
                 let root = contract.root();
                 let contract_id =
                     contract.id(&salt, &root, &Contract::default_state_root());
+                let utxo_id = if let (Some(tx_id), Some(output_idx)) =
+                    (contract_config.tx_id, contract_config.output_index)
+                {
+                    UtxoId::new(tx_id, output_idx)
+                } else {
+                    UtxoId::new(
+                        // generated transaction id([0..[out_index/255]])
+                        Bytes32::try_from(
+                            (0..(Bytes32::LEN - WORD_SIZE))
+                                .map(|_| 0u8)
+                                .chain(
+                                    (generated_output_index as u64 / 255)
+                                        .to_be_bytes()
+                                        .into_iter(),
+                                )
+                                .collect_vec()
+                                .as_slice(),
+                        )
+                        .expect("Incorrect genesis transaction id byte length"),
+                        generated_output_index as u8,
+                    )
+                };
+                let tx_pointer = if let (Some(block_height), Some(tx_idx)) = (
+                    contract_config.tx_pointer_block_height,
+                    contract_config.tx_pointer_tx_idx,
+                ) {
+                    TxPointer::new(block_height.into(), tx_idx)
+                } else {
+                    TxPointer::default()
+                };
+
+                if tx_pointer.block_height() > state.height.unwrap_or_default().into() {
+                    return Err(anyhow!(
+                        "contract tx_pointer cannot be greater than genesis block"
+                    ))
+                }
+
                 // insert contract code
                 if db
                     .storage::<ContractsRawCode>()
@@ -243,22 +296,10 @@ fn init_contracts(
                     .storage::<ContractsLatestUtxo>()
                     .insert(
                         &contract_id,
-                        &UtxoId::new(
-                            // generated transaction id([0..[out_index/255]])
-                            Bytes32::try_from(
-                                (0..(Bytes32::LEN - WORD_SIZE))
-                                    .map(|_| 0u8)
-                                    .chain(
-                                        (generated_output_index as u64 / 255)
-                                            .to_be_bytes()
-                                            .into_iter(),
-                                    )
-                                    .collect_vec()
-                                    .as_slice(),
-                            )
-                            .expect("Incorrect genesis transaction id byte length"),
-                            generated_output_index as u8,
-                        ),
+                        &ContractUtxoInfo {
+                            utxo_id,
+                            tx_pointer,
+                        },
                     )?
                     .is_some()
                 {
@@ -445,6 +486,7 @@ mod tests {
         let alice_value = rng.gen();
         let alice_maturity = Some(rng.next_u32().into());
         let alice_block_created = Some(rng.next_u32().into());
+        let alice_block_created_tx_idx = Some(rng.gen());
         let alice_tx_id = Some(rng.gen());
         let alice_output_index = Some(rng.gen());
         let alice_utxo_id =
@@ -461,8 +503,9 @@ mod tests {
                     coins: Some(vec![
                         CoinConfig {
                             tx_id: alice_tx_id,
-                            output_index: alice_output_index.map(|i| i as u64),
-                            block_created: alice_block_created,
+                            output_index: alice_output_index,
+                            tx_pointer_block_height: alice_block_created,
+                            tx_pointer_tx_idx: alice_block_created_tx_idx,
                             maturity: alice_maturity,
                             owner: alice,
                             amount: alice_value,
@@ -471,7 +514,8 @@ mod tests {
                         CoinConfig {
                             tx_id: None,
                             output_index: None,
-                            block_created: None,
+                            tx_pointer_block_height: None,
+                            tx_pointer_tx_idx: None,
                             maturity: None,
                             owner: bob,
                             amount: bob_value,
@@ -506,14 +550,14 @@ mod tests {
                 owner,
                 amount,
                 asset_id,
-                block_created,
+                tx_pointer,
                 maturity,
                 ..
             }] if utxo_id == alice_utxo_id
             && owner == alice
             && amount == alice_value
             && asset_id == asset_id_alice
-            && block_created == alice_block_created.unwrap()
+            && tx_pointer.block_height() == *alice_block_created.unwrap()
             && maturity == alice_maturity.unwrap(),
         ));
         assert!(matches!(
@@ -549,6 +593,10 @@ mod tests {
                         salt,
                         state: Some(state),
                         balances: None,
+                        tx_id: Some(rng.gen()),
+                        output_index: Some(rng.gen()),
+                        tx_pointer_block_height: Some(0u32.into()),
+                        tx_pointer_tx_idx: Some(rng.gen()),
                     }]),
                     ..Default::default()
                 }),
@@ -627,6 +675,10 @@ mod tests {
                         salt,
                         state: None,
                         balances: Some(balances),
+                        tx_id: None,
+                        output_index: None,
+                        tx_pointer_block_height: None,
+                        tx_pointer_tx_idx: None,
                     }]),
                     ..Default::default()
                 }),
@@ -648,6 +700,74 @@ mod tests {
             .into_owned();
 
         assert_eq!(test_balance, ret)
+    }
+
+    #[tokio::test]
+    async fn coin_tx_pointer_cant_exceed_genesis_height() {
+        let service_config = Config {
+            chain_conf: ChainConfig {
+                initial_state: Some(StateConfig {
+                    height: Some(BlockHeight::from(10u32)),
+                    coins: Some(vec![CoinConfig {
+                        tx_id: None,
+                        output_index: None,
+                        // set txpointer height > genesis height
+                        tx_pointer_block_height: Some(BlockHeight::from(11u32)),
+                        tx_pointer_tx_idx: Some(0),
+                        maturity: None,
+                        owner: Default::default(),
+                        amount: 10,
+                        asset_id: Default::default(),
+                    }]),
+                    ..Default::default()
+                }),
+                ..ChainConfig::local_testnet()
+            },
+            ..Config::local_node()
+        };
+
+        let db = Database::default();
+        let init_result = FuelService::from_database(db.clone(), service_config).await;
+
+        assert!(init_result.is_err())
+    }
+
+    #[tokio::test]
+    async fn contract_tx_pointer_cant_exceed_genesis_height() {
+        let mut rng = StdRng::seed_from_u64(10);
+
+        let test_asset_id: AssetId = rng.gen();
+        let test_balance: u64 = rng.next_u64();
+        let balances = vec![(test_asset_id, test_balance)];
+        let salt: Salt = rng.gen();
+        let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
+
+        let service_config = Config {
+            chain_conf: ChainConfig {
+                initial_state: Some(StateConfig {
+                    height: Some(BlockHeight::from(10u32)),
+                    contracts: Some(vec![ContractConfig {
+                        code: contract.into(),
+                        salt,
+                        state: None,
+                        balances: Some(balances),
+                        tx_id: None,
+                        output_index: None,
+                        // set txpointer height > genesis height
+                        tx_pointer_block_height: Some(BlockHeight::from(11u32)),
+                        tx_pointer_tx_idx: Some(0),
+                    }]),
+                    ..Default::default()
+                }),
+                ..ChainConfig::local_testnet()
+            },
+            ..Config::local_node()
+        };
+
+        let db = Database::default();
+        let init_result = FuelService::from_database(db.clone(), service_config).await;
+
+        assert!(init_result.is_err())
     }
 
     fn get_coins(db: &Database, owner: &Address) -> Vec<Coin> {
