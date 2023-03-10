@@ -3,7 +3,10 @@
 use crate::{
     blockchain::primitives::BlockHeight,
     fuel_asm::Word,
-    fuel_tx::UtxoId,
+    fuel_tx::{
+        TxPointer,
+        UtxoId,
+    },
     fuel_types::{
         Address,
         AssetId,
@@ -31,8 +34,8 @@ pub struct Coin {
     pub maturity: BlockHeight,
     /// Whether a coin has been spent or not
     pub status: CoinStatus,
-    /// Which block this coin was created in
-    pub block_created: BlockHeight,
+    /// Indexes the block and transaction this coin originated from
+    pub tx_pointer: TxPointer,
 }
 
 impl Coin {
@@ -44,7 +47,7 @@ impl Coin {
             asset_id: self.asset_id,
             maturity: self.maturity,
             status: self.status,
-            block_created: self.block_created,
+            tx_pointer: self.tx_pointer,
         }
     }
 }
@@ -66,8 +69,8 @@ pub struct CompressedCoin {
     // TODO: Remove `status` when we will not use it for API functionality.
     /// Whether a coin has been spent or not
     pub status: CoinStatus,
-    /// Which block this coin was created in
-    pub block_created: BlockHeight,
+    /// Indexes the block and transaction this coin originated from
+    pub tx_pointer: TxPointer,
 }
 
 impl CompressedCoin {
@@ -80,7 +83,7 @@ impl CompressedCoin {
             asset_id: self.asset_id,
             maturity: self.maturity,
             status: self.status,
-            block_created: self.block_created,
+            tx_pointer: self.tx_pointer,
         }
     }
 }

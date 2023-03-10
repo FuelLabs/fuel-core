@@ -872,7 +872,7 @@ mod tests {
                 asset_id,
                 maturity: Default::default(),
                 status: CoinStatus::Unspent,
-                block_created: Default::default(),
+                tx_pointer: Default::default(),
             };
 
             let db = &mut self.database;
