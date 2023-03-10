@@ -104,7 +104,7 @@ jobs:
           version: "0.36.4"
       - name: Install Protoc
         run: |
-          sudo apt-get update || true
+          sudo apt-get update
           sudo apt-get install protobuf-compiler
       - uses: Swatinem/rust-cache@v2
         with:
