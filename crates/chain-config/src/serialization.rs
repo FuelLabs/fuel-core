@@ -155,7 +155,8 @@ macro_rules! impl_hex_number {
                     }
                     _ => {}
                 }
-                // We've already verified the bytes.len == WORD_SIZE, force the conversion here.
+                // We've already verified the bytes.len == WORD_SIZE, force the conversion
+                // here.
                 Ok($i::from_be_bytes(
                     bytes.try_into().expect("byte lengths checked"),
                 ))

@@ -117,10 +117,11 @@ use tracing::{
 
 mod ports;
 
-/// ! The executor is used for block production and validation. Given a block, it will execute all
-/// the transactions contained in the block and persist changes to the underlying database as needed.
-/// In production mode, block fields like transaction commitments are set based on the executed txs.
-/// In validation mode, the processed block commitments are compared with the proposed block.
+/// ! The executor is used for block production and validation. Given a block, it will
+/// execute all the transactions contained in the block and persist changes to the
+/// underlying database as needed. In production mode, block fields like transaction
+/// commitments are set based on the executed txs. In validation mode, the processed block
+/// commitments are compared with the proposed block.
 #[derive(Clone, Debug)]
 pub struct Executor<R>
 where
@@ -143,7 +144,8 @@ impl<R> Executor<R>
 where
     R: RelayerPort + Clone,
 {
-    /// Executes the block and commits the result of the execution into the inner `Database`.
+    /// Executes the block and commits the result of the execution into the inner
+    /// `Database`.
     pub fn execute_and_commit(
         &self,
         block: ExecutionBlock,
@@ -333,7 +335,8 @@ where
         let mut coinbase_tx: Mint = match execution_kind {
             ExecutionKind::Production => {
                 // The coinbase transaction should be the first.
-                // We will add actual amount of `Output::Coin` at the end of transactions execution.
+                // We will add actual amount of `Output::Coin` at the end of transactions
+                // execution.
                 Transaction::mint(
                     TxPointer::new(block_height, 0),
                     vec![Output::coin(
@@ -373,13 +376,17 @@ where
                     if let Err(err) = result {
                         return match execution_kind {
                             ExecutionKind::Production => {
-                                // If, during block production, we get an invalid transaction,
-                                // remove it from the block and continue block creation. An invalid
-                                // transaction means that the caller didn't validate it first, so
-                                // maybe something is wrong with validation rules in the `TxPool`
-                                // (or in another place that should validate it). Or we forgot to
-                                // clean up some dependent/conflict transactions. But it definitely
-                                // means that something went wrong, and we must fix it.
+                                // If, during block production, we get an invalid
+                                // transaction,
+                                // remove it from the block and continue block creation.
+                                // An invalid transaction
+                                // means that the caller didn't validate it first, so
+                                // maybe something is wrong with validation rules in the
+                                // `TxPool` (or in another
+                                // place that should validate it). Or we forgot to
+                                // clean up some dependent/conflict transactions. But it
+                                // definitely means that
+                                // something went wrong, and we must fix it.
                                 execution_data.skipped_transactions.push((tx, err));
                                 None
                             }
@@ -401,7 +408,8 @@ where
             })
             .try_collect()?;
 
-        // After the execution of all transactions in production mode, we can set the final fee.
+        // After the execution of all transactions in production mode, we can set the
+        // final fee.
         if let ExecutionKind::Production = execution_kind {
             coinbase_tx.outputs_mut().clear();
             coinbase_tx.outputs_mut().push(Output::coin(
@@ -1092,7 +1100,8 @@ where
         Ok(())
     }
 
-    // TODO: Maybe we need move it to `fuel-vm`? O_o Because other `Outputs` are processed there
+    // TODO: Maybe we need move it to `fuel-vm`? O_o Because other `Outputs` are processed
+    // there
     /// Computes all zeroed or variable outputs.
     /// In production mode, updates the outputs with computed values.
     /// In validation mode, compares the outputs with computed inputs.
@@ -1106,8 +1115,8 @@ where
     {
         match tx {
             ExecutionTypes::Production(tx) => {
-                // TODO: Inputs, in most cases, are heavier than outputs, so cloning them, but we
-                //  to avoid it in the future.
+                // TODO: Inputs, in most cases, are heavier than outputs, so cloning them,
+                // but we  to avoid it in the future.
                 let mut outputs = tx.outputs().clone();
                 for output in outputs.iter_mut() {
                     if let Output::Contract {
@@ -1188,7 +1197,8 @@ where
                 ))
                 .map(Cow::into_owned)
         } else {
-            // if utxo validation is disabled, just assign this new input to the original block
+            // if utxo validation is disabled, just assign this new input to the original
+            // block
             Ok(CompressedCoin {
                 owner,
                 amount,
@@ -1581,7 +1591,8 @@ mod tests {
                 op::movi(0x11, data_offset),
                 // set reg 0x12 to call amount
                 op::movi(0x12, variable_transfer_amount),
-                // call contract without any tokens to transfer in (3rd arg arbitrary when 2nd is zero)
+                // call contract without any tokens to transfer in (3rd arg arbitrary
+                // when 2nd is zero)
                 op::call(0x10, 0x12, 0x11, RegId::CGAS),
                 op::ret(RegId::ONE),
             ],
@@ -2512,11 +2523,11 @@ mod tests {
 
     #[test]
     fn skipped_tx_not_changed_spent_status() {
-        // `tx2` has two inputs: one used by `tx1` and on random. So after the execution of `tx1`,
-        // the `tx2` become invalid and should be skipped by the block producers. Skipped
-        // transactions should not affect the state so the second input should be `Unspent`.
-        // # Dev-note: `TxBuilder::new(2322u64)` is used to create transactions, it produces
-        // the same first input.
+        // `tx2` has two inputs: one used by `tx1` and on random. So after the execution
+        // of `tx1`, the `tx2` become invalid and should be skipped by the block
+        // producers. Skipped transactions should not affect the state so the
+        // second input should be `Unspent`. # Dev-note: `TxBuilder::new(2322u64)`
+        // is used to create transactions, it produces the same first input.
         let tx1 = TxBuilder::new(2322u64)
             .coin_input(AssetId::default(), 100)
             .change_output(AssetId::default())
@@ -2630,8 +2641,9 @@ mod tests {
         // `tx3` is a `Script` transaction that depends on `tx2`. It will be skipped
         // if `tx2` is not executed before `tx3`.
         //
-        // The test checks that execution for the block with transactions [tx1, tx2, tx3] skips
-        // transaction `tx1` and produce a block [tx2, tx3] with the expected order.
+        // The test checks that execution for the block with transactions [tx1, tx2, tx3]
+        // skips transaction `tx1` and produce a block [tx2, tx3] with the
+        // expected order.
         let mut tx1 = Script::default();
         tx1.set_gas_limit(1000000);
         tx1.set_gas_price(1000000);
@@ -2710,9 +2722,10 @@ mod tests {
 
     #[test]
     fn contracts_balance_and_state_roots_no_modifications_updated() {
-        // Values in inputs and outputs are random. If the execution of the transaction successful,
-        // it should actualize them to use a valid the balance and state roots. Because it is not
-        // changes, the balance the root should be default - `fuel_merkle::common::empty_sum_sha256()`.
+        // Values in inputs and outputs are random. If the execution of the transaction
+        // successful, it should actualize them to use a valid the balance and
+        // state roots. Because it is not changes, the balance the root should be
+        // default - `fuel_merkle::common::empty_sum_sha256()`.
         let mut rng = StdRng::seed_from_u64(2322u64);
 
         let (create, contract_id) = create_contract(vec![], &mut rng);
@@ -2753,7 +2766,8 @@ mod tests {
             .execute_and_commit(ExecutionBlock::Production(block))
             .unwrap();
 
-        // Assert the balance and state roots should be the same before and after execution.
+        // Assert the balance and state roots should be the same before and after
+        // execution.
         let empty_state = Bytes32::from(*empty_sum_sha256());
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
@@ -2778,8 +2792,9 @@ mod tests {
 
     #[test]
     fn contracts_balance_and_state_roots_updated_no_modifications_on_fail() {
-        // Values in inputs and outputs are random. If the execution of the transaction fails,
-        // it still should actualize them to use the balance and state roots before the execution.
+        // Values in inputs and outputs are random. If the execution of the transaction
+        // fails, it still should actualize them to use the balance and state
+        // roots before the execution.
         let mut rng = StdRng::seed_from_u64(2322u64);
 
         let (create, contract_id) = create_contract(vec![], &mut rng);
@@ -2819,7 +2834,8 @@ mod tests {
             .execute_and_commit(ExecutionBlock::Production(block))
             .unwrap();
 
-        // Assert the balance and state roots should be the same before and after execution.
+        // Assert the balance and state roots should be the same before and after
+        // execution.
         let empty_state = Bytes32::from(*empty_sum_sha256());
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
@@ -2850,8 +2866,9 @@ mod tests {
 
     #[test]
     fn contracts_balance_and_state_roots_updated_modifications_updated() {
-        // Values in inputs and outputs are random. If the execution of the transaction that
-        // modifies the state and the balance is successful, it should update roots.
+        // Values in inputs and outputs are random. If the execution of the transaction
+        // that modifies the state and the balance is successful, it should update
+        // roots.
         let mut rng = StdRng::seed_from_u64(2322u64);
 
         // Create a contract that modifies the state
@@ -2962,7 +2979,8 @@ mod tests {
 
     #[test]
     fn foreign_transfer_should_not_affect_balance_root() {
-        // The foreign transfer of tokens should not affect the balance root of the transaction.
+        // The foreign transfer of tokens should not affect the balance root of the
+        // transaction.
         let mut rng = StdRng::seed_from_u64(2322u64);
 
         let (create, contract_id) = create_contract(vec![], &mut rng);
@@ -3116,7 +3134,8 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(coin.status, CoinStatus::Spent);
-        // assert block created from coin before spend is still intact (only a concern when utxo-validation is enabled)
+        // assert block created from coin before spend is still intact (only a concern
+        // when utxo-validation is enabled)
         assert_eq!(coin.tx_pointer.block_height(), *starting_block)
     }
 
@@ -3124,7 +3143,8 @@ mod tests {
     fn validation_succeeds_when_input_contract_utxo_id_uses_expected_value() {
         let mut rng = StdRng::seed_from_u64(2322);
         // create a contract in block 1
-        // verify a block 2 with tx containing contract id from block 1, using the correct contract utxo_id from block 1.
+        // verify a block 2 with tx containing contract id from block 1, using the correct
+        // contract utxo_id from block 1.
         let (tx, contract_id) = create_contract(vec![], &mut rng);
         let first_block = PartialFuelBlock {
             header: Default::default(),
@@ -3180,7 +3200,8 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(2322);
 
         // create a contract in block 1
-        // verify a block 2 containing contract id from block 1, with wrong input contract utxo_id
+        // verify a block 2 containing contract id from block 1, with wrong input contract
+        // utxo_id
         let (tx, contract_id) = create_contract(vec![], &mut rng);
         let tx2: Transaction = TxBuilder::new(2322)
             .start_script(vec![op::addi(0x10, RegId::ZERO, 0), op::ret(1)], vec![])
@@ -3237,7 +3258,8 @@ mod tests {
         // Corrupt the utxo_id of the contract output
         if let Transaction::Script(script) = &mut second_block.transactions_mut()[1] {
             if let Input::Contract { utxo_id, .. } = &mut script.inputs_mut()[0] {
-                // use a previously valid contract id which isn't the correct one for this block
+                // use a previously valid contract id which isn't the correct one for this
+                // block
                 *utxo_id = UtxoId::new(tx_id, 0);
             }
         }

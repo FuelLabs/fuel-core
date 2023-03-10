@@ -28,8 +28,8 @@ use rand::{
     SeedableRng,
 };
 
-/// Verifies that tx_pointer's are correctly set for both coin and contract input types when
-/// using resources from genesis.
+/// Verifies that tx_pointer's are correctly set for both coin and contract input types
+/// when using resources from genesis.
 #[tokio::test]
 async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
     let mut rng = StdRng::seed_from_u64(2322);
@@ -79,7 +79,8 @@ async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
     let tx = script.into();
     client.submit_and_await_commit(&tx).await.unwrap();
 
-    // verify that the tx returned from the api has tx pointers set matching the genesis config
+    // verify that the tx returned from the api has tx pointers set matching the genesis
+    // config
     let ret_tx = client
         .transaction(&tx.id().to_string())
         .await
@@ -174,7 +175,8 @@ async fn tx_pointer_set_from_previous_block() {
     )
 }
 
-/// Verifies that tx_pointer is null for coins and contracts when utxo validation is disabled
+/// Verifies that tx_pointer is null for coins and contracts when utxo validation is
+/// disabled
 #[tokio::test]
 async fn tx_pointer_unset_when_utxo_validation_disabled() {
     // spend a coin + use a contract
