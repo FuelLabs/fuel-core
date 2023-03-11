@@ -78,9 +78,9 @@ impl StorageMutate<ContractsAssets> for Database {
             }
         };
 
-        // Update the key-value dataset. The key is the contract id and the
+        // Update the contact's key-value dataset. The key is the asset id and the
         // value the Word
-        tree.update(&(*key.contract_id()).into(), value.to_be_bytes().as_slice())
+        tree.update(&(*key.asset_id()).into(), value.to_be_bytes().as_slice())
             .map_err(|err| StorageError::Other(err.into()))?;
 
         // Generate new metadata for the updated tree
@@ -117,9 +117,9 @@ impl StorageMutate<ContractsAssets> for Database {
             MerkleTree::load(storage, &root)
                 .map_err(|err| StorageError::Other(err.into()))?;
 
-        // Update the key-value dataset. The key is the contract id and the
-        // value is the Word
-        tree.delete(&(*key.contract_id()).into())
+        // Update the contract's key-value dataset. The key is the asset id and
+        // the value is the Word
+        tree.delete(&(*key.asset_id()).into())
             .map_err(|err| StorageError::Other(err.into()))?;
 
         // Generate new metadata for the updated tree
@@ -246,5 +246,86 @@ mod tests {
             .storage::<ContractsAssets>()
             .root(key.contract_id());
         assert!(root.is_ok())
+    }
+
+    #[test]
+    fn put_updates_the_assets_merkle_root_for_the_given_contract() {
+        let contract_id = ContractId::from([1u8; 32]);
+        let database = &mut Database::default();
+
+        // Write the first contract asset
+        let asset_id = AssetId::new([1u8; 32]);
+        let key = (&contract_id, &asset_id).into();
+        let balance: Word = 100;
+        database
+            .storage::<ContractsAssets>()
+            .insert(&key, &balance)
+            .unwrap();
+
+        // Read the first Merkle root
+        let root_1 = database
+            .storage::<ContractsAssets>()
+            .root(&contract_id)
+            .unwrap();
+
+        // Write the second contract asset
+        let asset_id = AssetId::new([2u8; 32]);
+        let key = (&contract_id, &asset_id).into();
+        let balance: Word = 100;
+        database
+            .storage::<ContractsAssets>()
+            .insert(&key, &balance)
+            .unwrap();
+
+        // Read the second Merkle root
+        let root_2 = database
+            .storage::<ContractsAssets>()
+            .root(&contract_id)
+            .unwrap();
+
+        assert_ne!(root_1, root_2);
+    }
+
+    #[test]
+    fn remove_updates_the_assets_merkle_root_for_the_given_contract() {
+        let contract_id = ContractId::from([1u8; 32]);
+        let database = &mut Database::default();
+
+        // Write the first contract asset
+        let asset_id = AssetId::new([1u8; 32]);
+        let key = (&contract_id, &asset_id).into();
+        let balance: Word = 100;
+        database
+            .storage::<ContractsAssets>()
+            .insert(&key, &balance)
+            .unwrap();
+
+        // Write the second contract asset
+        let asset_id = AssetId::new([2u8; 32]);
+        let key = (&contract_id, &asset_id).into();
+        let balance: Word = 100;
+        database
+            .storage::<ContractsAssets>()
+            .insert(&key, &balance)
+            .unwrap();
+
+        // Read the first Merkle root
+        let root_1 = database
+            .storage::<ContractsAssets>()
+            .root(&contract_id)
+            .unwrap();
+
+        // Remove the first contract asset
+        let asset_id = AssetId::new([2u8; 32]);
+        let key = (&contract_id, &asset_id).into();
+        database.storage::<ContractsAssets>().remove(&key).unwrap();
+
+        // Read the second Merkle root
+        let root_2 = database
+            .storage::<ContractsAssets>()
+            .root(&contract_id)
+            .unwrap();
+
+        assert_ne!(root_1, root_2);
     }
 }
