@@ -78,9 +78,9 @@ impl StorageMutate<ContractsState> for Database {
             }
         };
 
-        // Update the key-value dataset. The key is the contract id and the
-        // value is the 32 bytes
-        tree.update(&(*key.contract_id()).into(), value.as_slice())
+        // Update the contract's key-value dataset. The key is the state key and
+        // the value is the 32 bytes
+        tree.update(&(*key.state_key()).into(), value.as_slice())
             .map_err(|err| StorageError::Other(err.into()))?;
 
         // Generate new metadata for the updated tree
@@ -117,8 +117,8 @@ impl StorageMutate<ContractsState> for Database {
             MerkleTree::load(storage, &root)
                 .map_err(|err| StorageError::Other(err.into()))?;
 
-        // Update the key-value dataset. The key is the contract id and the
-        // value is the 32 bytes
+        // Update the contract's key-value dataset. The key is the state key and
+        // the value is the 32 bytes
         tree.delete(&(*key.contract_id()).into())
             .map_err(|err| StorageError::Other(err.into()))?;
 
@@ -239,5 +239,86 @@ mod tests {
 
         let root = database.storage::<ContractsState>().root(key.contract_id());
         assert!(root.is_ok())
+    }
+
+    #[test]
+    fn put_updates_the_state_merkle_root_for_the_given_contract() {
+        let contract_id = ContractId::from([1u8; 32]);
+        let database = &mut Database::default();
+
+        // Write the first contract state
+        let state_key = Bytes32::from([1u8; 32]);
+        let state: Bytes32 = Bytes32::from([0xff; 32]);
+        let key = (&contract_id, &state_key).into();
+        database
+            .storage::<ContractsState>()
+            .insert(&key, &state)
+            .unwrap();
+
+        // Read the first Merkle root
+        let root_1 = database
+            .storage::<ContractsState>()
+            .root(&contract_id)
+            .unwrap();
+
+        // Write the second contract state
+        let state_key = Bytes32::from([2u8; 32]);
+        let state: Bytes32 = Bytes32::from([0xff; 32]);
+        let key = (&contract_id, &state_key).into();
+        database
+            .storage::<ContractsState>()
+            .insert(&key, &state)
+            .unwrap();
+
+        // Read the second Merkle root
+        let root_2 = database
+            .storage::<ContractsState>()
+            .root(&contract_id)
+            .unwrap();
+
+        assert_ne!(root_1, root_2);
+    }
+
+    #[test]
+    fn remove_updates_the_state_merkle_root_for_the_given_contract() {
+        let contract_id = ContractId::from([1u8; 32]);
+        let database = &mut Database::default();
+
+        // Write the first contract state
+        let state_key = Bytes32::new([1u8; 32]);
+        let state: Bytes32 = Bytes32::from([0xff; 32]);
+        let key = (&contract_id, &state_key).into();
+        database
+            .storage::<ContractsState>()
+            .insert(&key, &state)
+            .unwrap();
+
+        // Write the second contract state
+        let state_key = Bytes32::new([2u8; 32]);
+        let state: Bytes32 = Bytes32::from([0xff; 32]);
+        let key = (&contract_id, &state_key).into();
+        database
+            .storage::<ContractsState>()
+            .insert(&key, &state)
+            .unwrap();
+
+        // Read the first Merkle root
+        let root_1 = database
+            .storage::<ContractsState>()
+            .root(&contract_id)
+            .unwrap();
+
+        // Remove the first contract state
+        let state_key = Bytes32::new([1u8; 32]);
+        let key = (&contract_id, &state_key).into();
+        database.storage::<ContractsState>().remove(&key).unwrap();
+
+        // Read the second Merkle root
+        let root_2 = database
+            .storage::<ContractsState>()
+            .root(&contract_id)
+            .unwrap();
+
+        assert_ne!(root_1, root_2);
     }
 }
