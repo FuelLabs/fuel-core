@@ -22,9 +22,23 @@ use fuel_core_types::blockchain::{
     },
 };
 
-pub trait BlockQueryData: Send + Sync {
+pub trait SimpleBlockData: Send + Sync {
     fn block(&self, id: &BlockId) -> StorageResult<CompressedBlock>;
+}
 
+impl<D: DatabasePort + ?Sized> SimpleBlockData for D {
+    fn block(&self, id: &BlockId) -> StorageResult<CompressedBlock> {
+        let block = self
+            .storage::<FuelBlocks>()
+            .get(id)?
+            .ok_or_else(|| not_found!(FuelBlocks))?
+            .into_owned();
+
+        Ok(block)
+    }
+}
+
+pub trait BlockQueryData: Send + Sync + SimpleBlockData {
     fn block_id(&self, height: &BlockHeight) -> StorageResult<BlockId>;
 
     fn latest_block_id(&self) -> StorageResult<BlockId>;
@@ -43,16 +57,6 @@ pub trait BlockQueryData: Send + Sync {
 }
 
 impl<D: DatabasePort + ?Sized> BlockQueryData for D {
-    fn block(&self, id: &BlockId) -> StorageResult<CompressedBlock> {
-        let block = self
-            .storage::<FuelBlocks>()
-            .get(id)?
-            .ok_or_else(|| not_found!(FuelBlocks))?
-            .into_owned();
-
-        Ok(block)
-    }
-
     fn block_id(&self, height: &BlockHeight) -> StorageResult<BlockId> {
         self.block_id(height)
     }

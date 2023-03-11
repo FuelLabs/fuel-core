@@ -13,7 +13,8 @@ use crate::{
     graphql_api::IntoApiResult,
     query::{
         BlockQueryData,
-        TransactionQueryData,
+        SimpleBlockData,
+        SimpleTransactionData,
     },
     schema::{
         scalars::{

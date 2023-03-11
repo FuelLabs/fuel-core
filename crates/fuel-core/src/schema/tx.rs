@@ -10,6 +10,7 @@ use crate::{
     query::{
         transaction_status_change,
         BlockQueryData,
+        SimpleTransactionData,
         TransactionQueryData,
         TxnStatusChangeState,
     },

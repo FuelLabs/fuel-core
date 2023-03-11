@@ -4,7 +4,6 @@ use crate::database::{
     Database,
     Error as DatabaseError,
     Result as DatabaseResult,
-use std::borrow::Cow;
 };
 use fuel_core_chain_config::ContractConfig;
 use fuel_core_storage::{
@@ -34,6 +33,7 @@ use fuel_core_types::{
     },
     fuel_vm::Contract,
 };
+use std::borrow::Cow;
 
 impl DatabaseColumn for ContractsLatestUtxo {
     fn column() -> Column {

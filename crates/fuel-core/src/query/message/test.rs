@@ -67,6 +67,24 @@ fn other_out() -> Output {
     }
 }
 
+mockall::mock! {
+    pub ProofDataStorage {}
+    impl SimpleBlockData for ProofDataStorage{
+        fn block(&self, block_id: &BlockId) -> StorageResult<CompressedBlock>;
+    }
+
+    impl SimpleTransactionData for ProofDataStorage{
+        fn transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction>;
+        fn receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>>;
+    }
+
+    impl MessageProofData for ProofDataStorage {
+        fn transaction_status(&self, transaction_id: &TxId) -> StorageResult<TransactionStatus>;
+        fn transactions_on_block(&self, block_id: &BlockId) -> StorageResult<Vec<Bytes32>>;
+        fn signature(&self, block_id: &BlockId) -> StorageResult<Signature>;
+    }
+}
+
 #[tokio::test]
 async fn can_build_message_proof() {
     use mockall::predicate::*;
@@ -98,11 +116,10 @@ async fn can_build_message_proof() {
     out.insert(TXNS[1], vec![message_out(), other_out()]);
     out.insert(TXNS[2], vec![message_out(), other_out()]);
 
-    let mut msg_data = MockMessageProofData::new();
-
+    let mut data = MockProofDataStorage::new();
     let mut count = 0;
 
-    msg_data.expect_receipts().returning(move |txn_id| {
+    data.expect_receipts().returning(move |txn_id| {
         if *txn_id == transaction_id {
             Ok(receipts.to_vec())
         } else {
@@ -139,7 +156,7 @@ async fn can_build_message_proof() {
         Ok(tx)
     });
 
-    msg_data.expect_signature()
+    data.expect_signature()
         .once()
         .with(eq(BlockId::default()))
         .returning(|_| Ok(Signature::default()));
@@ -156,7 +173,7 @@ async fn can_build_message_proof() {
             generated: Default::default(),
         },
     };
-    msg_data.msg_block()
+    data.expect_block()
         .once()
         .with(eq(BlockId::default()))
         .returning({
@@ -169,7 +186,8 @@ async fn can_build_message_proof() {
             }
         });
 
-    let data: Box<dyn MessageProofData> = Box::new(msg_data);
+    let data: Box<dyn MessageProofData> = Box::new(data);
+
     let p = message_proof(&data, transaction_id, message_id)
         .unwrap()
         .unwrap();

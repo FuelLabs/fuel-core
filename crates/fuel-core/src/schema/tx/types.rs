@@ -12,7 +12,8 @@ use crate::{
         IntoApiResult,
     },
     query::{
-        BlockQueryData,
+        SimpleBlockData,
+        SimpleTransactionData,
         TransactionQueryData,
     },
     schema::{

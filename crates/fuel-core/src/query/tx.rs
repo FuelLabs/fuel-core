@@ -24,22 +24,14 @@ use fuel_core_types::{
     services::txpool::TransactionStatus,
 };
 
-pub trait TransactionQueryData: Send + Sync {
-    fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction>;
-
-    fn receipts(&self, tx_id: &TxId) -> StorageResult<Vec<Receipt>>;
-
-    fn status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
-
-    fn owned_transactions(
-        &self,
-        owner: Address,
-        start: Option<TxPointer>,
-        direction: IterDirection,
-    ) -> BoxedIter<StorageResult<(TxPointer, Transaction)>>;
+pub trait SimpleTransactionData: Send + Sync {
+    /// Return all receipts in the given transaction.
+    fn receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>>;
+    /// Get the transaction.
+    fn transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction>;
 }
 
-impl<D: DatabasePort + ?Sized> TransactionQueryData for D {
+impl<D: DatabasePort + ?Sized> SimpleTransactionData for D {
     fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
         self.storage::<Transactions>()
             .get(tx_id)
@@ -51,7 +43,20 @@ impl<D: DatabasePort + ?Sized> TransactionQueryData for D {
             .get(tx_id)
             .and_then(|v| v.ok_or(not_found!(Transactions)).map(|tx| tx.into_owned()))
     }
+}
 
+pub trait TransactionQueryData: Send + Sync + SimpleTransactionData {
+    fn status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
+
+    fn owned_transactions(
+        &self,
+        owner: Address,
+        start: Option<TxPointer>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<(TxPointer, Transaction)>>;
+}
+
+impl<D: DatabasePort + ?Sized> TransactionQueryData for D {
     fn status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
         self.tx_status(tx_id)
     }

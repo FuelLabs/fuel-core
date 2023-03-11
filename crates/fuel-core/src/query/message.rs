@@ -1,11 +1,12 @@
 use crate::{
     fuel_core_graphql_api::{
         ports::DatabasePort,
-        service::Database,
         IntoApiResult,
     },
     query::{
         BlockQueryData,
+        SimpleBlockData,
+        SimpleTransactionData,
         TransactionQueryData,
     },
 };
@@ -123,9 +124,10 @@ impl<D: DatabasePort + ?Sized> MessageQueryData for D {
     }
 }
 
-#[cfg_attr(test, mockall::automock)]
 /// Trait that specifies all the data required by the output message query.
-pub trait MessageProofData: Send + Sync {
+pub trait MessageProofData:
+    Send + Sync + SimpleBlockData + SimpleTransactionData
+{
     /// Get the status of a transaction.
     fn transaction_status(
         &self,
@@ -146,8 +148,7 @@ impl<D: DatabasePort + ?Sized> MessageProofData for D {
     }
 
     fn transactions_on_block(&self, block_id: &BlockId) -> StorageResult<Vec<TxId>> {
-        crate::query::block::BlockQueryData::block(self, block_id)
-            .map(|block| block.into_inner().1)
+        self.block(block_id).map(|block| block.into_inner().1)
     }
 
     fn signature(&self, block_id: &BlockId) -> StorageResult<Signature> {
@@ -162,8 +163,9 @@ impl<D: DatabasePort + ?Sized> MessageProofData for D {
 
 /// Generate an output proof.
 // TODO: Do we want to return `Option` here?
-pub fn message_proof(
-    data: &Database,
+#[allow(clippy::borrowed_box)]
+pub fn message_proof<'a>(
+    data: &Box<dyn MessageProofData + 'a>,
     transaction_id: Bytes32,
     message_id: MessageId,
 ) -> StorageResult<Option<MessageProof>> {
