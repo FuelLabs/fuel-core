@@ -21,6 +21,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
+        header::BlockHeader,
         primitives::{
             BlockHeight,
             SecretKeyWrapper,
@@ -45,6 +46,7 @@ use fuel_core_types::{
             TxStatus,
         },
     },
+    tai64::Tai64,
 };
 use rand::{
     prelude::StdRng,
@@ -137,8 +139,13 @@ impl TestContextBuilder {
             .txpool
             .unwrap_or_else(MockTransactionPool::no_tx_updates);
 
-        let service =
-            new_service(BlockHeight::from(1u64), config, txpool, producer, importer);
+        let service = new_service(
+            &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
+            config,
+            txpool,
+            producer,
+            importer,
+        );
         service.start().unwrap();
         TestContext { service }
     }
@@ -300,7 +307,7 @@ async fn remove_skipped_transactions() {
         metrics: false,
     };
     let mut task = Task::new(
-        BlockHeight::from(1u32),
+        &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
         txpool,
         block_producer,
@@ -340,7 +347,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         metrics: false,
     };
     let mut task = Task::new(
-        BlockHeight::from(1u32),
+        &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
         txpool,
         block_producer,
@@ -395,7 +402,7 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
         metrics: false,
     };
     let task = Task::new(
-        BlockHeight::from(1u32),
+        &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
         txpool,
         block_producer,

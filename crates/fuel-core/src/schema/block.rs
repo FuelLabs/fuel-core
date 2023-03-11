@@ -29,7 +29,6 @@ use async_graphql::{
         EmptyFields,
     },
     Context,
-    InputObject,
     Object,
     SimpleObject,
     Union,
@@ -277,21 +276,13 @@ where
 #[derive(Default)]
 pub struct BlockMutation;
 
-#[derive(InputObject)]
-struct TimeParameters {
-    /// The time to set on the first block
-    start_time: U64,
-    /// The time interval between subsequent blocks
-    block_time_interval: U64,
-}
-
 #[Object]
 impl BlockMutation {
     async fn produce_blocks(
         &self,
         ctx: &Context<'_>,
+        start_timestamp: Option<U64>,
         blocks_to_produce: U64,
-        time: Option<TimeParameters>,
     ) -> async_graphql::Result<U64> {
         let query = BlockQueryContext(ctx.data_unchecked());
         let consensus_module = ctx.data_unchecked::<ConsensusModule>();
@@ -303,80 +294,19 @@ impl BlockMutation {
             )
         }
 
-        let latest_block = query.latest_block()?;
-        let block_times = get_time_closure(&latest_block, time, blocks_to_produce.0)?;
-        consensus_module.manual_produce_block(block_times).await?;
+        let start_time = start_timestamp
+            .map(|timestamp| Tai64(timestamp.into()))
+            .unwrap_or(Tai64::now());
+        let blocks_to_produce: u64 = blocks_to_produce.into();
+        consensus_module
+            .manual_produce_block(start_time, blocks_to_produce as u32)
+            .await?;
 
         query
             .latest_block_height()
             .map(Into::into)
             .map_err(Into::into)
     }
-}
-
-fn get_time_closure(
-    latest_block: &CompressedBlock,
-    time_parameters: Option<TimeParameters>,
-    blocks_to_produce: u64,
-) -> anyhow::Result<Vec<Option<Tai64>>> {
-    if let Some(params) = time_parameters {
-        let start_time = params.start_time.into();
-        check_start_after_latest_block(latest_block, start_time)?;
-        check_block_time_overflow(&params, blocks_to_produce)?;
-        let interval: u64 = params.block_time_interval.into();
-
-        let vec = (0..blocks_to_produce)
-            .into_iter()
-            .map(|idx| {
-                let (timestamp, _) = params
-                    .start_time
-                    .0
-                    .overflowing_add(interval.overflowing_mul(idx).0);
-                Some(Tai64(timestamp))
-            })
-            .collect();
-        return Ok(vec)
-    };
-
-    Ok(vec![None; blocks_to_produce as usize])
-}
-
-fn check_start_after_latest_block(
-    latest_block: &CompressedBlock,
-    start_time: u64,
-) -> anyhow::Result<()> {
-    let current_height = *latest_block.header().height();
-
-    if current_height.as_usize() == 0 {
-        return Ok(())
-    }
-
-    let latest_time = latest_block.header().time();
-    if latest_time.0 > start_time {
-        return Err(anyhow!(
-            "The start time must be set after the latest block time: {:?}",
-            latest_time
-        ))
-    }
-
-    Ok(())
-}
-
-fn check_block_time_overflow(
-    params: &TimeParameters,
-    blocks_to_produce: u64,
-) -> anyhow::Result<()> {
-    let (final_offset, overflow_mul) = params
-        .block_time_interval
-        .0
-        .overflowing_mul(blocks_to_produce);
-    let (_, overflow_add) = params.start_time.0.overflowing_add(final_offset);
-
-    if overflow_mul || overflow_add {
-        return Err(anyhow!("The provided time parameters lead to an overflow"))
-    };
-
-    Ok(())
 }
 
 impl From<CompressedBlock> for Block {

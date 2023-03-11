@@ -52,7 +52,7 @@ pub trait BlockProducer: Send + Sync {
     async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
-        block_time: Option<Tai64>,
+        block_time: Tai64,
         max_gas: Word,
     ) -> anyhow::Result<UncommittedExecutionResult<StorageTransaction<Self::Database>>>;
 

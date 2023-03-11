@@ -43,7 +43,9 @@ pub fn init_sub_services(
     config: &Config,
     database: &Database,
 ) -> anyhow::Result<(SubServices, SharedState)> {
-    let last_height = database.latest_height()?;
+    let last_block = database.get_current_block()?.ok_or(anyhow::anyhow!(
+        "The blockchain is not initialized with any block"
+    ))?;
     #[cfg(feature = "relayer")]
     let relayer_service = if config.relayer.eth_client.is_some() {
         Some(fuel_core_relayer::new_service(
@@ -129,7 +131,7 @@ pub fn init_sub_services(
         !matches!(poa_config.trigger, Trigger::Never) || config.manual_blocks_enabled;
     let poa = (production_enabled).then(|| {
         fuel_core_poa::new_service(
-            last_height,
+            last_block.header(),
             poa_config,
             tx_pool_adapter.clone(),
             producer_adapter.clone(),
@@ -142,7 +144,7 @@ pub fn init_sub_services(
     let sync = (!production_enabled)
         .then(|| {
             fuel_core_sync::service::new_service(
-                last_height,
+                *last_block.header().height(),
                 p2p_adapter,
                 importer_adapter.clone(),
                 verifier,

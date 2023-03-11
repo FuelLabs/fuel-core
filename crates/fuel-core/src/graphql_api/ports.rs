@@ -174,6 +174,7 @@ pub trait BlockProducerPort: Send + Sync + DryRunExecution {}
 pub trait ConsensusModulePort: Send + Sync {
     async fn manual_produce_block(
         &self,
-        block_times: Vec<Option<Tai64>>,
+        block_time: Tai64,
+        number_of_blocks: u32,
     ) -> anyhow::Result<()>;
 }
