@@ -119,7 +119,7 @@ impl StorageMutate<ContractsState> for Database {
 
         // Update the contract's key-value dataset. The key is the state key and
         // the value is the 32 bytes
-        tree.delete(&(*key.contract_id()).into())
+        tree.delete(&(*key.state_key()).into())
             .map_err(|err| StorageError::Other(err.into()))?;
 
         // Generate new metadata for the updated tree
