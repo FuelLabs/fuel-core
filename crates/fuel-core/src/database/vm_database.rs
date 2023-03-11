@@ -18,6 +18,8 @@ use fuel_core_storage::{
     StorageAsMut,
     StorageInspect,
     StorageMutate,
+    StorageRead,
+    StorageSize,
 };
 use fuel_core_types::{
     blockchain::header::ConsensusHeader,
@@ -114,6 +116,31 @@ where
 
     fn remove(&mut self, key: &M::Key) -> Result<Option<M::OwnedValue>, Self::Error> {
         StorageMutate::<M>::remove(&mut self.database, key)
+    }
+}
+
+impl<M: Mappable> StorageSize<M> for VmDatabase
+where
+    Database: StorageSize<M, Error = StorageError>,
+{
+    fn size_of_value(&self, key: &M::Key) -> Result<Option<usize>, Self::Error> {
+        StorageSize::<M>::size_of_value(&self.database, key)
+    }
+}
+
+impl<M: Mappable> StorageRead<M> for VmDatabase
+where
+    Database: StorageRead<M, Error = StorageError>,
+{
+    fn read(&self, key: &M::Key, buf: &mut [u8]) -> Result<Option<usize>, Self::Error> {
+        StorageRead::<M>::read(&self.database, key, buf)
+    }
+
+    fn read_alloc(
+        &self,
+        key: &<M as Mappable>::Key,
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        StorageRead::<M>::read_alloc(&self.database, key)
     }
 }
 

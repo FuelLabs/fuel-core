@@ -272,6 +272,8 @@ pub enum Error {
     ContractUtxoMissing(ContractId),
     #[error("message already spent {0:#x}")]
     MessageAlreadySpent(MessageId),
+    #[error("Expected input of type {0}")]
+    InputTypeMismatch(String),
 }
 
 impl From<Backtrace> for Error {

@@ -46,6 +46,10 @@ async fn snapshot_state_config() {
                 (AssetId::new([3u8; 32]), 100),
                 (AssetId::new([10u8; 32]), 10000),
             ]),
+            tx_id: Some(rng.gen()),
+            output_index: Some(rng.gen()),
+            tx_pointer_block_height: Some(BlockHeight::from(10u64)),
+            tx_pointer_tx_idx: Some(rng.gen()),
         }]),
         coins: Some(
             vec![
@@ -57,7 +61,8 @@ async fn snapshot_state_config() {
             .map(|(owner, amount, asset_id)| CoinConfig {
                 tx_id: None,
                 output_index: None,
-                block_created: Some(BlockHeight::from(0u64)),
+                tx_pointer_block_height: Some(BlockHeight::from(0u64)),
+                tx_pointer_tx_idx: Some(0),
                 maturity: Some(BlockHeight::from(0u64)),
                 owner,
                 amount,
@@ -96,7 +101,10 @@ async fn snapshot_state_config() {
         assert_eq!(state_coin[i].owner, starting_coin[i].owner);
         assert_eq!(state_coin[i].asset_id, starting_coin[i].asset_id);
         assert_eq!(state_coin[i].amount, starting_coin[i].amount);
-        assert_eq!(state_coin[i].block_created, starting_coin[i].block_created);
+        assert_eq!(
+            state_coin[i].tx_pointer_block_height,
+            starting_coin[i].tx_pointer_block_height
+        );
         assert_eq!(state_coin[i].maturity, starting_coin[i].maturity);
     }
 
