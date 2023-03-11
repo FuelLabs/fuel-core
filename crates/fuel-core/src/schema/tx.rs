@@ -263,9 +263,6 @@ impl TxStatusSubscription {
     }
 }
 
-use crate::schema::tx::types::SubmittedStatus;
-use fuel_core_storage::Error as StorageError;
-
 #[async_trait::async_trait]
 impl<'a> TxnStatusChangeState for StreamState<'a> {
     async fn get_tx_status(
@@ -273,17 +270,6 @@ impl<'a> TxnStatusChangeState for StreamState<'a> {
         id: fuel_types::Bytes32,
     ) -> StorageResult<Option<TransactionStatus>> {
         let query = self.db;
-        match query
-        .status(&id)
-        .into_api_result::<fuel_core_types::services::txpool::TransactionStatus, StorageError>()?
-        {
-            Some(status) => Ok(Some(status.into())),
-            None => match self.txpool.submission_time(id) {
-                Some(time) => {
-                    Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
-                }
-                _ => Ok(None),
-            },
-        }
+        types::get_tx_status(id, query, self.txpool).await
     }
 }
