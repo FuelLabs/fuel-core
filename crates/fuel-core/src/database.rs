@@ -408,6 +408,7 @@ impl ChainConfigDb for Database {
 
 pub struct DatabaseIterDirection(pub fuel_core_storage::iter::IterDirection);
 
+#[cfg(feature = "rocksdb")]
 impl From<DatabaseIterDirection> for rocksdb::Direction {
     fn from(d: DatabaseIterDirection) -> Self {
         let d = d.0;

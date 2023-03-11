@@ -19,8 +19,10 @@ use fuel_core_storage::{
 };
 use itertools::Itertools;
 
+#[cfg(feature = "rocksdb")]
 struct SchemaIterDirection(fuel_core_storage::iter::IterDirection);
 
+#[cfg(feature = "rocksdb")]
 impl From<SchemaIterDirection> for rocksdb::Direction {
     fn from(d: SchemaIterDirection) -> Self {
         let d = d.0;

@@ -11,10 +11,7 @@ use super::{
 };
 use crate::{
     fuel_core_graphql_api::service::Database,
-    query::{
-        MessageProofData,
-        MessageQueryData,
-    },
+    query::MessageQueryData,
 };
 use anyhow::anyhow;
 use async_graphql::{
@@ -128,7 +125,7 @@ impl MessageQuery {
         message_id: MessageId,
     ) -> async_graphql::Result<Option<MessageProof>> {
         #[allow(clippy::borrowed_box)]
-        let data: &Box<dyn MessageProofData> = ctx.data_unchecked();
+        let data: &Database = ctx.data_unchecked();
         Ok(
             crate::query::message_proof(data, transaction_id.into(), message_id.into())?
                 .map(MessageProof),
