@@ -242,6 +242,18 @@ mod tests {
     }
 
     #[test]
+    fn root_returns_empty_root_for_invalid_contract() {
+        let invalid_contract_id = ContractId::from([1u8; 32]);
+        let database = Database::default();
+        let empty_root = in_memory::MerkleTree::new().root();
+        let root = database
+            .storage::<ContractsState>()
+            .root(&invalid_contract_id)
+            .unwrap();
+        assert_eq!(root, empty_root)
+    }
+
+    #[test]
     fn put_updates_the_state_merkle_root_for_the_given_contract() {
         let contract_id = ContractId::from([1u8; 32]);
         let database = &mut Database::default();
