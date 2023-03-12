@@ -316,7 +316,7 @@ mod tests {
             .unwrap();
 
         // Remove the first contract asset
-        let asset_id = AssetId::new([2u8; 32]);
+        let asset_id = AssetId::new([1u8; 32]);
         let key = (&contract_id, &asset_id).into();
         database.storage::<ContractsAssets>().remove(&key).unwrap();
 
