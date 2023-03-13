@@ -73,6 +73,7 @@ pub trait MessageQueryData: Send + Sync {
         start_message_id: Option<MessageId>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<Message>>;
+
     fn all_messages(
         &self,
         start_message_id: Option<MessageId>,
