@@ -38,7 +38,7 @@ use std::borrow::Cow;
 pub fn owner_coin_id_key(
     owner: &Address,
     coin_id: &UtxoId,
-) -> [u8; Address::LEN + TxId::LEN + 1] {
+) -> OwnedCoinKey {
     let mut default = [0u8; Address::LEN + TxId::LEN + 1];
     default[0..Address::LEN].copy_from_slice(owner.as_ref());
     default[Address::LEN..].copy_from_slice(utxo_id_to_bytes(coin_id).as_ref());
