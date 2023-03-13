@@ -19,10 +19,11 @@ env:
   NIGHTLY_RUST_VERSION: nightly-2022-12-14
   RUSTFLAGS: -D warnings
   REGISTRY: ghcr.io
+  SEGMENT_DOWNLOAD_TIMEOUT_MINS: 2
 
 jobs:
   rustfmt:
-    runs-on: ubuntu-latest
+    runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
       - uses: actions/checkout@v3
       - name: Install latest nightly
@@ -35,10 +36,18 @@ jobs:
         run: cargo +${{ env.NIGHTLY_RUST_VERSION }} fmt --all -- --check
 
   lint-toml-files:
-    runs-on: ubuntu-latest
+    runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
       - uses: actions/checkout@v3
-      - uses: FuelLabs/.github/.github/actions/lint-toml-template@master
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      - name: setup binstall
+        uses: taiki-e/install-action@cargo-binstall
+      - name: Install Cargo.toml linter
+        run: cargo binstall --no-confirm cargo-sort
+      - name: Run Cargo.toml sort check
+        run: cargo sort -w --check
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
         if: always() && github.ref == 'refs/heads/master'
         with:
@@ -46,7 +55,7 @@ jobs:
           slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
   prevent-openssl:
-    runs-on: ubuntu-latest
+    runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
       - uses: actions/checkout@v3
       # ensure openssl hasn't crept into the dep tree
@@ -63,7 +72,7 @@ jobs:
       - lint-toml-files
       - prevent-openssl
       - rustfmt
-    runs-on: ubuntu-latest
+    runs-on: buildjet-4vcpu-ubuntu-2204
     strategy:
       matrix:
         include:
@@ -112,15 +121,13 @@ jobs:
           RUSTFLAGS: -D warnings
 
   publish-crates-check:
-    runs-on: ubuntu-latest
+    runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
-
       - name: Publish crate check
         uses: katyo/publish-crates@v2
         with:
@@ -132,14 +139,14 @@ jobs:
     needs:
       - cargo-verifications
       - publish-crates-check
-    runs-on: ubuntu-latest
+    runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
       - run: echo "pass"
 
   verify-tag-version:
     # Only do this job if publishing a release
     if: github.event_name == 'release' && github.event.action == 'published'
-    runs-on: ubuntu-latest
+    runs-on: buildjet-4vcpu-ubuntu-2204
 
     steps:
       - name: Checkout repository
@@ -162,7 +169,7 @@ jobs:
       - verify-tag-version
       - verifications-complete
     if: github.event_name == 'release' && github.event.action == 'published'
-    runs-on: ubuntu-latest
+    runs-on: buildjet-4vcpu-ubuntu-2204
 
     steps:
       - name: Checkout repository
@@ -193,7 +200,7 @@ jobs:
   publish-docker-image:
     needs:
       - verifications-complete
-    runs-on: ubuntu-latest
+    runs-on: buildjet-4vcpu-ubuntu-2204
     permissions:
       contents: read
       packages: write
@@ -307,11 +314,11 @@ jobs:
       fail-fast: false
       matrix:
         job:
-          - os: ubuntu-latest
+          - os: buildjet-4vcpu-ubuntu-2204
             platform: linux
             target: x86_64-unknown-linux-gnu
             cross_image: x86_64-linux-gnu
-          - os: ubuntu-latest
+          - os: buildjet-4vcpu-ubuntu-2204
             platform: linux-arm
             target: aarch64-unknown-linux-gnu
             cross_image: aarch64-linux-gnu
@@ -434,7 +441,7 @@ jobs:
     if:  startsWith(github.head_ref, 'preview/')
     needs:
       - publish-docker-image
-    runs-on: ubuntu-latest
+    runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
       - name: Set Environment Variables
         run: |
@@ -462,7 +469,7 @@ jobs:
     if: github.ref == 'refs/heads/master'
     needs:
       - publish-docker-image
-    runs-on: ubuntu-latest
+    runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
       - name: Set Environment Variables
         run: |

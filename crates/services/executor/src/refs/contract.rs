@@ -130,7 +130,8 @@ where
             .storage::<ContractsLatestUtxo>()
             .get(&contract_id)?
             .ok_or(not_found!(ContractsLatestUtxo))?
-            .into_owned();
+            .into_owned()
+            .utxo_id;
 
         let state_root = self
             .database()

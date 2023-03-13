@@ -49,7 +49,8 @@ mod coins {
                 .map(|(owner, amount, asset_id)| CoinConfig {
                     tx_id: None,
                     output_index: None,
-                    block_created: None,
+                    tx_pointer_block_height: None,
+                    tx_pointer_tx_idx: None,
                     maturity: None,
                     owner,
                     amount,
@@ -569,7 +570,8 @@ mod messages_and_coins {
                 .map(|(owner, amount, asset_id)| CoinConfig {
                     tx_id: None,
                     output_index: None,
-                    block_created: None,
+                    tx_pointer_block_height: None,
+                    tx_pointer_tx_idx: None,
                     maturity: None,
                     owner,
                     amount,

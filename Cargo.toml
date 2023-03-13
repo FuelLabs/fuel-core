@@ -75,8 +75,7 @@ fuel-core-tests = { version = "0.0.0", path = "./tests" }
 fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 
 # Fuel dependencies
-fuel-vm = { version = "0.26" }
-fuel-vm-private = { version = "0.26", package = "fuel-vm" }
+fuel-vm-private = { version = "0.27", package = "fuel-vm" }
 
 # Common dependencies
 anyhow = "1.0"
@@ -103,4 +102,3 @@ prometheus-client = "0.18"
 itertools = "0.10"
 insta = "1.8"
 tempfile = "3.4"
-

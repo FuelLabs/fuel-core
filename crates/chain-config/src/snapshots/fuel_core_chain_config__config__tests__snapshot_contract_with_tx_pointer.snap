@@ -6,7 +6,14 @@ expression: json
   "chain_name": "local_testnet",
   "block_gas_limit": 1000000000,
   "initial_state": {
-    "height": "0x14c8be1f"
+    "contracts": [
+      {
+        "code": "0x24400000",
+        "salt": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "tx_pointer_block_height": "0xd3301861",
+        "tx_pointer_tx_idx": "0x1a64"
+      }
+    ]
   },
   "transaction_parameters": {
     "contract_max_size": 16777216,

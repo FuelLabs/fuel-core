@@ -37,9 +37,12 @@ use fuel_core_types::{
             DaBlockHeight,
         },
     },
-    entities::coin::{
-        CoinStatus,
-        CompressedCoin,
+    entities::{
+        coin::{
+            CoinStatus,
+            CompressedCoin,
+        },
+        contract::ContractUtxoInfo,
     },
     fuel_asm::{
         RegId,
@@ -100,9 +103,12 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 pub use ports::RelayerPort;
-use std::ops::{
-    Deref,
-    DerefMut,
+use std::{
+    borrow::Cow,
+    ops::{
+        Deref,
+        DerefMut,
+    },
 };
 use tracing::{
     debug,
@@ -478,6 +484,7 @@ where
         let coinbase_id = coinbase_tx.id();
         self.persist_output_utxos(
             block_height,
+            0,
             &coinbase_id,
             block_db_transaction,
             &[],
@@ -544,8 +551,7 @@ where
 
     fn execute_create_or_script<Tx>(
         &self,
-        // TODO: Use it to calculate `TxPointer`.
-        _idx: u16,
+        idx: u16,
         original_tx: &mut Tx,
         header: &PartialBlockHeader,
         execution_data: &mut ExecutionData,
@@ -644,15 +650,12 @@ where
         }
 
         // change the spent status of the tx inputs
-        self.spend_input_utxos(
-            &tx,
-            tx_db_transaction.deref_mut(),
-            self.config.utxo_validation,
-        )?;
+        self.spend_input_utxos(&tx, tx_db_transaction.deref_mut())?;
 
         // Persist utxos first and after calculate the not utxo outputs
         self.persist_output_utxos(
             *header.height(),
+            idx,
             &tx_id,
             tx_db_transaction.deref_mut(),
             tx.inputs(),
@@ -746,7 +749,10 @@ where
                             )
                             .into())
                         }
-                        if block_height < coin.block_created + coin.maturity {
+                        if block_height
+                            < BlockHeight::from(coin.tx_pointer.block_height())
+                                + coin.maturity
+                        {
                             return Err(TransactionValidityError::CoinHasNotMatured(
                                 *utxo_id,
                             )
@@ -881,12 +887,7 @@ where
     }
 
     /// Mark input utxos as spent
-    fn spend_input_utxos<Tx>(
-        &self,
-        tx: &Tx,
-        db: &mut Database,
-        utxo_validation: bool,
-    ) -> ExecutorResult<()>
+    fn spend_input_utxos<Tx>(&self, tx: &Tx, db: &mut Database) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
     {
@@ -908,29 +909,17 @@ where
                     maturity,
                     ..
                 } => {
-                    let block_created = if utxo_validation {
-                        db.storage::<Coins>()
-                            .get(utxo_id)?
-                            .ok_or(ExecutorError::TransactionValidity(
-                                TransactionValidityError::CoinDoesNotExist(*utxo_id),
-                            ))?
-                            .block_created
-                    } else {
-                        // if utxo validation is disabled, just assign this new input to the original block
-                        Default::default()
-                    };
-
-                    db.storage::<Coins>().insert(
-                        utxo_id,
-                        &CompressedCoin {
-                            owner: *owner,
-                            amount: *amount,
-                            asset_id: *asset_id,
-                            maturity: (*maturity).into(),
-                            status: CoinStatus::Spent,
-                            block_created,
-                        },
+                    let mut coin = self.get_coin_or_default(
+                        db,
+                        *utxo_id,
+                        *owner,
+                        *amount,
+                        *asset_id,
+                        (*maturity).into(),
                     )?;
+                    coin.status = CoinStatus::Spent;
+
+                    db.storage::<Coins>().insert(utxo_id, &coin)?;
                 }
                 Input::MessageSigned { message_id, .. }
                 | Input::MessagePredicate { message_id, .. } => {
@@ -979,25 +968,49 @@ where
             ExecutionTypes::Production(tx) => {
                 for input in tx.inputs_mut() {
                     match input {
-                        Input::CoinSigned { tx_pointer, .. }
-                        | Input::CoinPredicate { tx_pointer, .. } => {
-                            let _ = tx_pointer;
-                            // TODO: Also calculate `tx_pointer` based on utxo's pointer.
-                            // *tx_pointer = TxPointer::new(height.into(), idx);
+                        Input::CoinSigned {
+                            tx_pointer,
+                            utxo_id,
+                            owner,
+                            amount,
+                            asset_id,
+                            maturity,
+                            ..
+                        }
+                        | Input::CoinPredicate {
+                            tx_pointer,
+                            utxo_id,
+                            owner,
+                            amount,
+                            asset_id,
+                            maturity,
+                            ..
+                        } => {
+                            let coin = self.get_coin_or_default(
+                                db,
+                                *utxo_id,
+                                *owner,
+                                *amount,
+                                *asset_id,
+                                (*maturity).into(),
+                            )?;
+                            *tx_pointer = coin.tx_pointer;
                         }
                         Input::Contract {
                             ref mut utxo_id,
                             ref mut balance_root,
                             ref mut state_root,
+                            ref mut tx_pointer,
                             ref contract_id,
                             ..
                         } => {
                             let mut contract = ContractRef::new(&mut *db, *contract_id);
-                            *utxo_id =
+                            let utxo_info =
                                 contract.validated_utxo(self.config.utxo_validation)?;
+                            *utxo_id = utxo_info.utxo_id;
+                            *tx_pointer = utxo_info.tx_pointer;
                             *balance_root = contract.balance_root()?;
                             *state_root = contract.state_root()?;
-                            // TODO: Also calculate `tx_pointer` based on utxo's pointer.
                         }
                         _ => {}
                     }
@@ -1007,27 +1020,53 @@ where
             ExecutionTypes::Validation(tx) => {
                 for input in tx.inputs() {
                     match input {
-                        Input::CoinSigned { tx_pointer, .. }
-                        | Input::CoinPredicate { tx_pointer, .. } => {
-                            let _ = tx_pointer;
-                            // TODO: Also calculate `tx_pointer` based on `utxo_id` pointer.
-                            // if tx_pointer != &TxPointer::new(height.into(), idx) {
-                            //     return Err(ExecutorError::InvalidTransactionOutcome {
-                            //         transaction_id: tx.id(),
-                            //     })
-                            // }
+                        Input::CoinSigned {
+                            tx_pointer,
+                            utxo_id,
+                            owner,
+                            amount,
+                            asset_id,
+                            maturity,
+                            ..
+                        }
+                        | Input::CoinPredicate {
+                            tx_pointer,
+                            utxo_id,
+                            owner,
+                            amount,
+                            asset_id,
+                            maturity,
+                            ..
+                        } => {
+                            let coin = self.get_coin_or_default(
+                                db,
+                                *utxo_id,
+                                *owner,
+                                *amount,
+                                *asset_id,
+                                (*maturity).into(),
+                            )?;
+                            if tx_pointer != &coin.tx_pointer {
+                                return Err(ExecutorError::InvalidTransactionOutcome {
+                                    transaction_id: tx.id(),
+                                })
+                            }
                         }
                         Input::Contract {
                             utxo_id,
                             balance_root,
                             state_root,
                             contract_id,
+                            tx_pointer,
                             ..
                         } => {
                             let mut contract = ContractRef::new(&mut *db, *contract_id);
-                            if utxo_id
-                                != &contract
-                                    .validated_utxo(self.config.utxo_validation)?
+                            let provided_info = ContractUtxoInfo {
+                                utxo_id: *utxo_id,
+                                tx_pointer: *tx_pointer,
+                            };
+                            if provided_info
+                                != contract.validated_utxo(self.config.utxo_validation)?
                             {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx.id(),
@@ -1132,6 +1171,35 @@ where
         Ok(())
     }
 
+    pub fn get_coin_or_default(
+        &self,
+        db: &mut Database,
+        utxo_id: UtxoId,
+        owner: Address,
+        amount: u64,
+        asset_id: AssetId,
+        maturity: BlockHeight,
+    ) -> ExecutorResult<CompressedCoin> {
+        if self.config.utxo_validation {
+            db.storage::<Coins>()
+                .get(&utxo_id)?
+                .ok_or(ExecutorError::TransactionValidity(
+                    TransactionValidityError::CoinDoesNotExist(utxo_id),
+                ))
+                .map(Cow::into_owned)
+        } else {
+            // if utxo validation is disabled, just assign this new input to the original block
+            Ok(CompressedCoin {
+                owner,
+                amount,
+                asset_id,
+                maturity,
+                status: CoinStatus::Spent,
+                tx_pointer: Default::default(),
+            })
+        }
+    }
+
     /// Log a VM backtrace if configured to do so
     fn log_backtrace<Tx>(&self, vm: &Interpreter<VmDatabase, Tx>, receipts: &[Receipt]) {
         if self.config.vm.backtrace {
@@ -1156,6 +1224,7 @@ where
     fn persist_output_utxos(
         &self,
         block_height: BlockHeight,
+        tx_idx: u16,
         tx_id: &Bytes32,
         db: &mut Database,
         inputs: &[Input],
@@ -1169,7 +1238,8 @@ where
                     asset_id,
                     to,
                 } => Self::insert_coin(
-                    block_height.into(),
+                    block_height,
+                    tx_idx,
                     utxo_id,
                     amount,
                     asset_id,
@@ -1183,8 +1253,13 @@ where
                     if let Some(Input::Contract { contract_id, .. }) =
                         inputs.get(*input_idx as usize)
                     {
-                        db.storage::<ContractsLatestUtxo>()
-                            .insert(contract_id, &utxo_id)?;
+                        db.storage::<ContractsLatestUtxo>().insert(
+                            contract_id,
+                            &ContractUtxoInfo {
+                                utxo_id,
+                                tx_pointer: TxPointer::new(block_height.into(), tx_idx),
+                            },
+                        )?;
                     } else {
                         return Err(ExecutorError::TransactionValidity(
                             TransactionValidityError::InvalidContractInputIndex(utxo_id),
@@ -1199,7 +1274,8 @@ where
                     asset_id,
                     amount,
                 } => Self::insert_coin(
-                    block_height.into(),
+                    block_height,
+                    tx_idx,
                     utxo_id,
                     amount,
                     asset_id,
@@ -1211,7 +1287,8 @@ where
                     asset_id,
                     amount,
                 } => Self::insert_coin(
-                    block_height.into(),
+                    block_height,
+                    tx_idx,
                     utxo_id,
                     amount,
                     asset_id,
@@ -1219,8 +1296,13 @@ where
                     db,
                 )?,
                 Output::ContractCreated { contract_id, .. } => {
-                    db.storage::<ContractsLatestUtxo>()
-                        .insert(contract_id, &utxo_id)?;
+                    db.storage::<ContractsLatestUtxo>().insert(
+                        contract_id,
+                        &ContractUtxoInfo {
+                            utxo_id,
+                            tx_pointer: TxPointer::new(block_height.into(), tx_idx),
+                        },
+                    )?;
                 }
             }
         }
@@ -1228,7 +1310,8 @@ where
     }
 
     fn insert_coin(
-        fuel_height: u32,
+        block_height: BlockHeight,
+        tx_idx: u16,
         utxo_id: UtxoId,
         amount: &Word,
         asset_id: &AssetId,
@@ -1245,7 +1328,7 @@ where
                 asset_id: *asset_id,
                 maturity: 0u32.into(),
                 status: CoinStatus::Unspent,
-                block_created: fuel_height.into(),
+                tx_pointer: TxPointer::new(block_height.into(), tx_idx),
             };
 
             if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
@@ -1462,7 +1545,7 @@ mod tests {
         SeedableRng,
     };
 
-    fn setup_executable_script() -> (Create, Script) {
+    pub(crate) fn setup_executable_script() -> (Create, Script) {
         let mut rng = StdRng::seed_from_u64(2322);
         let asset_id: AssetId = rng.gen();
         let owner: Address = rng.gen();
@@ -1537,7 +1620,7 @@ mod tests {
         (create, script)
     }
 
-    fn test_block(num_txs: usize) -> Block {
+    pub(crate) fn test_block(num_txs: usize) -> Block {
         let transactions = (1..num_txs + 1)
             .into_iter()
             .map(|i| {
@@ -1558,7 +1641,7 @@ mod tests {
         block
     }
 
-    fn create_contract<R: Rng>(
+    pub(crate) fn create_contract<R: Rng>(
         contract_code: Vec<u8>,
         rng: &mut R,
     ) -> (Create, ContractId) {
@@ -2135,13 +2218,14 @@ mod tests {
         let asset_id = Default::default();
         let maturity = Default::default();
         let block_created = Default::default();
+        let block_created_tx_idx = Default::default();
         let coin = CompressedCoin {
             owner,
             amount,
             asset_id,
             maturity,
             status: CoinStatus::Spent,
-            block_created,
+            tx_pointer: TxPointer::new(block_created, block_created_tx_idx),
         };
 
         let db = &mut Database::default();
@@ -2463,7 +2547,7 @@ mod tests {
                     asset_id: AssetId::default(),
                     maturity: Default::default(),
                     status: CoinStatus::Unspent,
-                    block_created: Default::default(),
+                    tx_pointer: Default::default(),
                 },
             )
             .unwrap();
@@ -2476,7 +2560,7 @@ mod tests {
                     asset_id: AssetId::default(),
                     maturity: Default::default(),
                     status: CoinStatus::Unspent,
-                    block_created: Default::default(),
+                    tx_pointer: Default::default(),
                 },
             )
             .unwrap();
@@ -2518,7 +2602,10 @@ mod tests {
         // `tx2` should be skipped.
         assert_eq!(block.transactions().len(), 2 /* coinbase and `tx1` */);
         assert_eq!(skipped_transactions.len(), 1);
-        assert_eq!(skipped_transactions[0].0.as_script(), Some(&tx2));
+        assert_eq!(
+            skipped_transactions[0].0.as_script().unwrap().id(),
+            tx2.id()
+        );
 
         // The first input should be spent by `tx1` after execution.
         let coin = db
@@ -2577,13 +2664,12 @@ mod tests {
         // `tx1` should be skipped.
         assert_eq!(skipped_transactions.len(), 1);
         assert_eq!(skipped_transactions[0].0.as_script(), Some(&tx1));
-        // TODO: Uncomment when https://github.com/FuelLabs/fuel-core/issues/544 ready
-        // let tx2_index_in_the_block =
-        //     block.transactions()[2].as_script().unwrap().inputs()[0]
-        //         .tx_pointer()
-        //         .unwrap()
-        //         .tx_index();
-        // assert_eq!(tx2_index_in_the_block, 1);
+        let tx2_index_in_the_block =
+            block.transactions()[2].as_script().unwrap().inputs()[0]
+                .tx_pointer()
+                .unwrap()
+                .tx_index();
+        assert_eq!(tx2_index_in_the_block, 1);
     }
 
     #[test]
@@ -2940,6 +3026,7 @@ mod tests {
         // ensure coins are marked as spent after tx is processed
         let mut rng = StdRng::seed_from_u64(2322u64);
         let starting_block = BlockHeight::from(5u64);
+        let starting_block_tx_idx = Default::default();
 
         let tx = TransactionBuilder::script(
             vec![op::ret(RegId::ONE)].into_iter().collect(),
@@ -2986,7 +3073,10 @@ mod tests {
                         asset_id,
                         maturity: Default::default(),
                         status: CoinStatus::Unspent,
-                        block_created: starting_block,
+                        tx_pointer: TxPointer::new(
+                            starting_block.into(),
+                            starting_block_tx_idx,
+                        ),
                     },
                 )
                 .unwrap();
@@ -3027,7 +3117,7 @@ mod tests {
             .unwrap();
         assert_eq!(coin.status, CoinStatus::Spent);
         // assert block created from coin before spend is still intact (only a concern when utxo-validation is enabled)
-        assert_eq!(coin.block_created, starting_block)
+        assert_eq!(coin.tx_pointer.block_height(), *starting_block)
     }
 
     #[test]
@@ -3476,6 +3566,7 @@ mod tests {
 
         // setup block
         let block_height = rng.gen_range(5u32..1000u32);
+        let block_tx_idx = rng.gen();
 
         let block = PartialFuelBlock {
             header: PartialBlockHeader {
@@ -3500,8 +3591,8 @@ mod tests {
                     amount: coin_input.amount().unwrap(),
                     asset_id: *coin_input.asset_id().unwrap(),
                     maturity: (coin_input.maturity().unwrap()).into(),
-                    block_created: 0u64.into(),
                     status: CoinStatus::Unspent,
+                    tx_pointer: TxPointer::new(0u32, block_tx_idx),
                 },
             )
             .unwrap();
@@ -3573,8 +3664,8 @@ mod tests {
                     amount: coin_input.amount().unwrap(),
                     asset_id: *coin_input.asset_id().unwrap(),
                     maturity: (coin_input.maturity().unwrap()).into(),
-                    block_created: 0u64.into(),
                     status: CoinStatus::Unspent,
+                    tx_pointer: TxPointer::default(),
                 },
             )
             .unwrap();
