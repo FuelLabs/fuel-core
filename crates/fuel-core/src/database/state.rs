@@ -25,9 +25,12 @@ use fuel_core_types::{
     },
     fuel_types::ContractId,
 };
-use std::borrow::{
-    BorrowMut,
-    Cow,
+use std::{
+    borrow::{
+        BorrowMut,
+        Cow,
+    },
+    ops::Deref,
 };
 
 impl StorageInspect<ContractsState> for Database {
@@ -80,7 +83,7 @@ impl StorageMutate<ContractsState> for Database {
 
         // Update the contract's key-value dataset. The key is the state key and
         // the value is the 32 bytes
-        tree.update(&(*key.state_key()).into(), value.as_slice())
+        tree.update(key.state_key().deref(), value.as_slice())
             .map_err(|err| StorageError::Other(err.into()))?;
 
         // Generate new metadata for the updated tree
@@ -119,7 +122,7 @@ impl StorageMutate<ContractsState> for Database {
 
         // Update the contract's key-value dataset. The key is the state key and
         // the value is the 32 bytes
-        tree.delete(&(*key.state_key()).into())
+        tree.delete(key.state_key().deref())
             .map_err(|err| StorageError::Other(err.into()))?;
 
         // Generate new metadata for the updated tree
