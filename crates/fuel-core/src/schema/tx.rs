@@ -269,7 +269,6 @@ impl<'a> TxnStatusChangeState for StreamState<'a> {
         &self,
         id: fuel_types::Bytes32,
     ) -> StorageResult<Option<TransactionStatus>> {
-        let query = self.db;
-        types::get_tx_status(id, query, self.txpool).await
+        types::get_tx_status(id, self.db, self.txpool).await
     }
 }
