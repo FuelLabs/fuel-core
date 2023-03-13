@@ -193,7 +193,7 @@ where
                 if now > self.last_timestamp {
                     Ok(now)
                 } else {
-                    let duration = Instant::now().duration_since(self.last_block_created);
+                    let duration = self.last_block_created.elapsed();
                     increase_time(self.last_timestamp, duration)
                 }
             }

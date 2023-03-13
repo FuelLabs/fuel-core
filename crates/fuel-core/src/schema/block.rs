@@ -278,6 +278,10 @@ pub struct BlockMutation;
 
 #[Object]
 impl BlockMutation {
+    /// Sequentially produces `blocks_to_produce` blocks. The first block starts with
+    /// `start_timestamp`. If the block production in the [`crate::service::Config`] is
+    /// `Trigger::Interval { block_time }`, produces blocks with `block_time ` intervals between
+    /// them. The `start_timestamp` is the timestamp in seconds.
     async fn produce_blocks(
         &self,
         ctx: &Context<'_>,
