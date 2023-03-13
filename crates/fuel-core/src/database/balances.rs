@@ -314,6 +314,10 @@ mod tests {
             .storage::<ContractsAssets>()
             .insert(&key, &balance)
             .unwrap();
+        let root_0 = database
+            .storage::<ContractsAssets>()
+            .root(&contract_id)
+            .unwrap();
 
         // Write the second contract asset
         let asset_id = AssetId::new([2u8; 32]);
@@ -331,7 +335,7 @@ mod tests {
             .unwrap();
 
         // Remove the first contract asset
-        let asset_id = AssetId::new([1u8; 32]);
+        let asset_id = AssetId::new([2u8; 32]);
         let key = (&contract_id, &asset_id).into();
         database.storage::<ContractsAssets>().remove(&key).unwrap();
 
@@ -342,5 +346,6 @@ mod tests {
             .unwrap();
 
         assert_ne!(root_1, root_2);
+        assert_eq!(root_0, root_2);
     }
 }

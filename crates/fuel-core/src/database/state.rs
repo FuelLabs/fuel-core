@@ -307,6 +307,10 @@ mod tests {
             .storage::<ContractsState>()
             .insert(&key, &state)
             .unwrap();
+        let root_0 = database
+            .storage::<ContractsState>()
+            .root(&contract_id)
+            .unwrap();
 
         // Write the second contract state
         let state_key = Bytes32::new([2u8; 32]);
@@ -324,7 +328,7 @@ mod tests {
             .unwrap();
 
         // Remove the first contract state
-        let state_key = Bytes32::new([1u8; 32]);
+        let state_key = Bytes32::new([2u8; 32]);
         let key = (&contract_id, &state_key).into();
         database.storage::<ContractsState>().remove(&key).unwrap();
 
@@ -335,5 +339,6 @@ mod tests {
             .unwrap();
 
         assert_ne!(root_1, root_2);
+        assert_eq!(root_0, root_2);
     }
 }
