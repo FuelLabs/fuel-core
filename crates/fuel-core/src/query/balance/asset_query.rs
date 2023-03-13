@@ -98,7 +98,8 @@ impl<'a> AssetsQuery<'a> {
     pub fn unspent_resources(
         &self,
     ) -> impl Iterator<Item = StorageResult<Resource>> + '_ {
-        let coins_iter = self.database
+        let coins_iter = self
+            .database
             .owned_coins_ids(self.owner, None, IterDirection::Forward)
             .filter_ok(|id| {
                 if let Some(exclude) = self.exclude {
