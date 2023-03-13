@@ -11,7 +11,7 @@ use std::{
 };
 
 pub(crate) static ETH_LOG_MESSAGE: Lazy<H256> =
-    Lazy::new(crate::abi::bridge::message::SentMessageFilter::signature);
+    Lazy::new(crate::abi::bridge::SentMessageFilter::signature);
 
 // TODO: Move settlement fields into `ChainConfig` because it is part of the consensus.
 #[derive(Clone, Debug)]

@@ -1,7 +1,6 @@
 #![cfg(feature = "test-helpers")]
-
 use fuel_core_relayer::{
-    bridge::message::SentMessageFilter,
+    bridge::SentMessageFilter,
     mock_db::MockDb,
     new_service_test,
     ports::RelayerDb,

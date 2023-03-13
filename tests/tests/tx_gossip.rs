@@ -88,16 +88,14 @@ async fn test_tx_gossiping() {
         .finalize();
 
     let node_config = create_node_config_from_inputs(tx.inputs());
-    let node_one = FuelService::new_node(node_config).await.unwrap();
+
+    let node_one = FuelService::new_node(node_config.clone()).await.unwrap();
     let client_one = FuelClient::from(node_one.bound_address);
 
-    let node_config = create_node_config_from_inputs(tx.inputs());
     let node_two = FuelService::new_node(node_config).await.unwrap();
     let client_two = FuelClient::from(node_two.bound_address);
 
     let wait_time = Duration::from_secs(6);
-
-    tokio::time::sleep(wait_time).await;
 
     let tx = tx.into();
     client_one.submit_and_await_commit(&tx).await.unwrap();
