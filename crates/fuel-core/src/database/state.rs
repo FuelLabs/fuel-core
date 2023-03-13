@@ -69,8 +69,8 @@ impl StorageMutate<ContractsState> for Database {
             .unwrap_or_default();
 
         let root = prev_metadata.root;
+        let storage = self.borrow_mut();
         let mut tree: MerkleTree<ContractsStateMerkleData, _> = {
-            let storage = self.borrow_mut();
             if root == [0; 32] {
                 // The tree is empty
                 MerkleTree::new(storage)
@@ -105,31 +105,34 @@ impl StorageMutate<ContractsState> for Database {
         // Get latest metadata entry for this contract id
         let prev_metadata = self
             .storage::<ContractsStateMerkleMetadata>()
-            .get(key.contract_id())?
-            .unwrap_or_default();
+            .get(key.contract_id())?;
 
-        let root = prev_metadata.root;
-        if root == [0; 32] {
-            // The tree is empty
-            return prev
-        }
+        if let Some(prev_metadata) = prev_metadata {
+            let root = prev_metadata.root;
 
-        // Load the tree saved in metadata
-        let storage = self.borrow_mut();
-        let mut tree: MerkleTree<ContractsStateMerkleData, _> =
-            MerkleTree::load(storage, &root)
+            // Load the tree saved in metadata
+            let storage = self.borrow_mut();
+            let mut tree: MerkleTree<ContractsStateMerkleData, _> =
+                MerkleTree::load(storage, &root)
+                    .map_err(|err| StorageError::Other(err.into()))?;
+
+            // Update the contract's key-value dataset. The key is the state key and
+            // the value is the 32 bytes
+            tree.delete(key.state_key().deref())
                 .map_err(|err| StorageError::Other(err.into()))?;
 
-        // Update the contract's key-value dataset. The key is the state key and
-        // the value is the 32 bytes
-        tree.delete(key.state_key().deref())
-            .map_err(|err| StorageError::Other(err.into()))?;
-
-        // Generate new metadata for the updated tree
-        let root = tree.root();
-        let metadata = SparseMerkleMetadata { root };
-        self.storage::<ContractsStateMerkleMetadata>()
-            .insert(key.contract_id(), &metadata)?;
+            let root = tree.root();
+            if root == in_memory::MerkleTree::new().root() {
+                // The tree is now empty; remove the metadata
+                self.storage::<ContractsStateMerkleMetadata>()
+                    .remove(key.contract_id())?;
+            } else {
+                // Generate new metadata for the updated tree
+                let metadata = SparseMerkleMetadata { root };
+                self.storage::<ContractsStateMerkleMetadata>()
+                    .insert(key.contract_id(), &metadata)?;
+            }
+        }
 
         prev
     }
