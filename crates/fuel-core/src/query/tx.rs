@@ -27,6 +27,7 @@ use fuel_core_types::{
 pub trait SimpleTransactionData: Send + Sync {
     /// Return all receipts in the given transaction.
     fn receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>>;
+
     /// Get the transaction.
     fn transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction>;
 }
