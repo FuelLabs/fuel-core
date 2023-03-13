@@ -35,10 +35,7 @@ use fuel_core_types::{
 use std::borrow::Cow;
 
 // TODO: Reuse `fuel_vm::storage::double_key` macro.
-pub fn owner_coin_id_key(
-    owner: &Address,
-    coin_id: &UtxoId,
-) -> OwnedCoinKey {
+pub fn owner_coin_id_key(owner: &Address, coin_id: &UtxoId) -> OwnedCoinKey {
     let mut default = [0u8; Address::LEN + TxId::LEN + 1];
     default[0..Address::LEN].copy_from_slice(owner.as_ref());
     default[Address::LEN..].copy_from_slice(utxo_id_to_bytes(coin_id).as_ref());
