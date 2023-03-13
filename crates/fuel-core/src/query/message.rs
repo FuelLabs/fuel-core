@@ -60,6 +60,7 @@ mod test;
 
 pub trait MessageQueryData: Send + Sync {
     fn message(&self, message_id: &MessageId) -> StorageResult<Message>;
+
     fn owned_message_ids(
         &self,
         owner: &Address,
