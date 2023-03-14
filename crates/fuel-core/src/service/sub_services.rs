@@ -158,7 +158,6 @@ pub fn init_sub_services(
         config.chain_conf.gas_costs.clone(),
     )
     .data(database.clone());
-    let gql_database = Box::new(database.clone());
 
     let graph_ql = crate::fuel_core_graphql_api::service::new_service(
         GraphQLConfig {
@@ -172,10 +171,10 @@ pub fn init_sub_services(
             transaction_parameters: config.chain_conf.transaction_parameters,
             consensus_key: config.consensus_key.clone(),
         },
-        gql_database,
         schema,
-        Box::new(producer_adapter),
+        Box::new(database.clone()),
         Box::new(tx_pool_adapter),
+        Box::new(producer_adapter),
         Box::new(poa_adapter),
     )?;
 

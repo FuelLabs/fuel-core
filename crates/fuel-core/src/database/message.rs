@@ -1,13 +1,11 @@
-use crate::{
-    database::{
-        Column,
-        Database,
-        Result as DatabaseResult,
-    },
-    state::IterDirection,
+use crate::database::{
+    Column,
+    Database,
+    Result as DatabaseResult,
 };
 use fuel_core_chain_config::MessageConfig;
 use fuel_core_storage::{
+    iter::IterDirection,
     tables::{
         Messages,
         SpentMessages,

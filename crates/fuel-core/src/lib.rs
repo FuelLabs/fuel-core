@@ -23,7 +23,7 @@ pub mod executor;
 pub mod model;
 #[cfg(all(feature = "p2p", feature = "test-helpers"))]
 pub mod p2p_test_helpers;
-mod query;
+pub mod query;
 pub mod resource_query;
 pub mod schema;
 pub mod service;
