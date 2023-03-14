@@ -402,18 +402,7 @@ impl Transaction {
         let id = self.0.id();
         let query: &Database = ctx.data_unchecked();
         let txpool = ctx.data_unchecked::<TxPool>();
-        match query
-            .status(&id)
-            .into_api_result::<txpool::TransactionStatus, StorageError>()?
-        {
-            Some(status) => Ok(Some(status.into())),
-            None => match txpool.submission_time(id) {
-                Some(time) => {
-                    Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
-                }
-                _ => Ok(None),
-            },
-        }
+        get_tx_status(id, query, txpool).await.map_err(Into::into)
     }
 
     async fn receipts(

@@ -124,7 +124,6 @@ impl MessageQuery {
         transaction_id: TransactionId,
         message_id: MessageId,
     ) -> async_graphql::Result<Option<MessageProof>> {
-        #[allow(clippy::borrowed_box)]
         let data: &Database = ctx.data_unchecked();
         Ok(crate::query::message_proof(
             data.deref(),

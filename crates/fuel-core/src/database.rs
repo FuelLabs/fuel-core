@@ -406,15 +406,12 @@ impl ChainConfigDb for Database {
     }
 }
 
-pub struct DatabaseIterDirection(pub fuel_core_storage::iter::IterDirection);
-
 #[cfg(feature = "rocksdb")]
-impl From<DatabaseIterDirection> for rocksdb::Direction {
-    fn from(d: DatabaseIterDirection) -> Self {
-        let d = d.0;
-        match d {
-            IterDirection::Forward => rocksdb::Direction::Forward,
-            IterDirection::Reverse => rocksdb::Direction::Reverse,
-        }
+pub fn convert_to_rocksdb_direction(
+    direction: fuel_core_storage::iter::IterDirection,
+) -> rocksdb::Direction {
+    match direction {
+        IterDirection::Forward => rocksdb::Direction::Forward,
+        IterDirection::Reverse => rocksdb::Direction::Reverse,
     }
 }

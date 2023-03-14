@@ -44,12 +44,11 @@ impl BalanceQueryData for Box<dyn DatabasePort> {
         owner: Address,
         asset_id: AssetId,
     ) -> StorageResult<AddressBalance> {
-        let db = self;
         let amount = AssetQuery::new(
             &owner,
             &AssetSpendTarget::new(asset_id, u64::MAX, u64::MAX),
             None,
-            db,
+            self,
         )
         .unspent_resources()
         .map(|res| res.map(|resource| *resource.amount()))

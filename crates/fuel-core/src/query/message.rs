@@ -67,7 +67,7 @@ pub trait MessageQueryData: Send + Sync {
         start_message_id: Option<MessageId>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<MessageId>>;
-    
+
     fn owned_messages(
         &self,
         owner: &Address,
@@ -165,7 +165,6 @@ impl<D: DatabasePort + ?Sized> MessageProofData for D {
 
 /// Generate an output proof.
 // TODO: Do we want to return `Option` here?
-#[allow(clippy::borrowed_box)]
 pub fn message_proof<T: MessageProofData + ?Sized>(
     data: &T,
     transaction_id: Bytes32,
