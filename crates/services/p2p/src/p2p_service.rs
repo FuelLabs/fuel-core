@@ -8,7 +8,6 @@ use crate::{
         build_transport,
         Config,
     },
-    discovery::DiscoveryEvent,
     gossipsub::{
         messages::{
             GossipsubBroadcastRequest,
@@ -18,8 +17,6 @@ use crate::{
     },
     gossipsub_config::PeerScoreConfig,
     peer_manager::{
-        HeartbeatData,
-        PeerInfoInsert,
         PeerManager,
         PeerScoreUpdated,
     },
@@ -414,14 +411,6 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         event: FuelBehaviourEvent,
     ) -> Option<FuelP2PEvent> {
         match event {
-            FuelBehaviourEvent::Discovery(discovery_event) => {
-                if let DiscoveryEvent::PeerInfoOnConnect { peer_id, addresses } =
-                    discovery_event
-                {
-                    self.peer_manager
-                        .insert_peer_info(&peer_id, PeerInfoInsert::Addresses(addresses));
-                }
-            }
             FuelBehaviourEvent::Gossipsub(gossipsub_event) => {
                 if let GossipsubEvent::Message {
                     propagation_source,
@@ -459,97 +448,80 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 }
             }
 
-            FuelBehaviourEvent::PeerReport(peer_info_event) => match peer_info_event {
-                PeerReportEvent::PeerIdentified {
-                    peer_id,
-                    addresses,
-                    agent_version,
-                } => {
-                    if self.metrics {
-                        P2P_METRICS.unique_peers.inc();
+            FuelBehaviourEvent::PeerReport(peer_report_event) => {
+                match peer_report_event {
+                    PeerReportEvent::PeerIdentified {
+                        peer_id,
+                        addresses,
+                        agent_version,
+                    } => {
+                        if self.metrics {
+                            P2P_METRICS.unique_peers.inc();
+                        }
+
+                        self.peer_manager.handle_peer_identified(
+                            &peer_id,
+                            addresses.clone(),
+                            agent_version,
+                        );
+
+                        self.swarm
+                            .behaviour_mut()
+                            .add_addresses_to_discovery(&peer_id, addresses);
                     }
-                    self.peer_manager.insert_peer_info(
-                        &peer_id,
-                        PeerInfoInsert::ClientVersion(agent_version),
-                    );
-
-                    self.peer_manager.insert_peer_info(
-                        &peer_id,
-                        PeerInfoInsert::Addresses(addresses.clone()),
-                    );
-
-                    self.swarm
-                        .behaviour_mut()
-                        .add_addresses_to_discovery(&peer_id, addresses);
-                }
-                PeerReportEvent::PerformDecay => {
-                    self.peer_manager.batch_update_score_with_decay()
-                }
-                PeerReportEvent::CheckReservedNodesHealth => {
-                    let disconnected_peers: Vec<_> = self
-                        .peer_manager
-                        .get_disconnected_reserved_peers()
-                        .copied()
-                        .collect();
-
-                    for peer_id in disconnected_peers {
-                        debug!(target: "fuel-p2p", "Trying to reconnect to reserved peer {:?}", peer_id);
-
-                        let _ = self.swarm.dial(peer_id);
+                    PeerReportEvent::PerformDecay => {
+                        self.peer_manager.batch_update_score_with_decay()
                     }
-                }
-                PeerReportEvent::PeerInfoUpdated {
-                    peer_id,
-                    block_height,
-                } => {
-                    if let Some(previous_heartbeat) =
-                        self.peer_manager.get_peer_info(&peer_id).and_then(|info| {
-                            info.heartbeat_data.seconds_since_last_heartbeat()
-                        })
-                    {
-                        debug!(target: "fuel-p2p", "Previous hearbeat happened {:?} seconds ago", previous_heartbeat);
+                    PeerReportEvent::CheckReservedNodesHealth => {
+                        let disconnected_peers: Vec<_> = self
+                            .peer_manager
+                            .get_disconnected_reserved_peers()
+                            .copied()
+                            .collect();
+
+                        for peer_id in disconnected_peers {
+                            debug!(target: "fuel-p2p", "Trying to reconnect to reserved peer {:?}", peer_id);
+
+                            let _ = self.swarm.dial(peer_id);
+                        }
                     }
-
-                    let heartbeat_data = HeartbeatData::new(block_height);
-
-                    self.peer_manager.insert_peer_info(
-                        &peer_id,
-                        PeerInfoInsert::HeartbeatData(heartbeat_data),
-                    );
-
-                    return Some(FuelP2PEvent::PeerInfoUpdated {
+                    PeerReportEvent::PeerInfoUpdated {
                         peer_id,
                         block_height,
-                    })
-                }
-                PeerReportEvent::PeerConnected {
-                    peer_id,
-                    addresses,
-                    initial_connection,
-                } => {
-                    if initial_connection {
-                        if self
-                            .peer_manager
-                            .handle_initial_connection(peer_id, addresses)
-                        {
+                    } => {
+                        self.peer_manager
+                            .handle_peer_info_updated(&peer_id, block_height);
+
+                        return Some(FuelP2PEvent::PeerInfoUpdated {
+                            peer_id,
+                            block_height,
+                        })
+                    }
+                    PeerReportEvent::PeerConnected {
+                        peer_id,
+                        addresses,
+                        initial_connection,
+                    } => {
+                        if self.peer_manager.handle_peer_connected(
+                            &peer_id,
+                            addresses,
+                            initial_connection,
+                        ) {
                             let _ = self.swarm.disconnect_peer_id(peer_id);
                         } else {
-                            return Some(FuelP2PEvent::PeerConnected(peer_id))
+                            if initial_connection {
+                                return Some(FuelP2PEvent::PeerConnected(peer_id))
+                            }
                         }
-                    } else {
-                        self.peer_manager.insert_peer_info(
-                            &peer_id,
-                            PeerInfoInsert::Addresses(addresses),
-                        );
+                    }
+                    PeerReportEvent::PeerDisconnected { peer_id } => {
+                        if self.peer_manager.handle_peer_disconnect(peer_id) {
+                            let _ = self.swarm.dial(peer_id);
+                        }
+                        return Some(FuelP2PEvent::PeerDisconnected(peer_id))
                     }
                 }
-                PeerReportEvent::PeerDisconnected { peer_id } => {
-                    if self.peer_manager.handle_peer_disconnect(peer_id) {
-                        let _ = self.swarm.dial(peer_id);
-                    }
-                    return Some(FuelP2PEvent::PeerDisconnected(peer_id))
-                }
-            },
+            }
             FuelBehaviourEvent::RequestResponse(req_res_event) => match req_res_event {
                 RequestResponseEvent::Message { peer, message } => match message {
                     RequestResponseMessage::Request {
@@ -634,6 +606,8 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 }
                 _ => {}
             },
+
+            _ => {}
         }
 
         None
