@@ -98,9 +98,7 @@ impl MessageQuery {
                     .into())
                 }
 
-                query
-                    .owned_messages(&owner.0, start.map(Into::into), direction)
-                    .into_boxed()
+                query.owned_messages(&owner.0, start.map(Into::into), direction)
             } else {
                 query
                     .all_messages(start.map(Into::into), direction)

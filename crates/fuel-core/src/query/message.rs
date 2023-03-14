@@ -122,7 +122,7 @@ impl<D: DatabasePort + ?Sized> MessageQueryData for D {
         start_message_id: Option<MessageId>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<Message>> {
-        self.all_messages(start_message_id, direction).into_boxed()
+        self.all_messages(start_message_id, direction)
     }
 }
 

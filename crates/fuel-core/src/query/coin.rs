@@ -52,7 +52,6 @@ impl<D: DatabasePort + ?Sized> CoinQueryData for D {
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<UtxoId>> {
         self.owned_coins_ids(owner, start_coin, direction)
-            .into_boxed()
     }
 
     fn owned_coins(

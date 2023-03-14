@@ -2,7 +2,6 @@ use crate::graphql_api::ports::DatabasePort;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
-        IntoBoxedIter,
         IterDirection,
     },
     not_found,
@@ -99,6 +98,5 @@ impl<D: DatabasePort + ?Sized> ContractQueryData for D {
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<ContractBalance>> {
         self.contract_balances(contract_id, start_asset, direction)
-            .into_boxed()
     }
 }
