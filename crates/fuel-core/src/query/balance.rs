@@ -1,4 +1,4 @@
-use crate::graphql_api::ports::DatabasePort;
+use crate::fuel_core_graphql_api::service::Database;
 use asset_query::{
     AssetQuery,
     AssetSpendTarget,
@@ -38,7 +38,7 @@ pub trait BalanceQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<AddressBalance>>;
 }
 
-impl BalanceQueryData for Box<dyn DatabasePort> {
+impl BalanceQueryData for Database {
     fn balance(
         &self,
         owner: Address,
