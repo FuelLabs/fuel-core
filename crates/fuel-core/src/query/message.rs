@@ -67,6 +67,7 @@ pub trait MessageQueryData: Send + Sync {
         start_message_id: Option<MessageId>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<MessageId>>;
+    
     fn owned_messages(
         &self,
         owner: &Address,
