@@ -10,7 +10,6 @@ use crate::{
         config::build_gossipsub_behaviour,
         topics::GossipTopic,
     },
-    gossipsub_config::PeerScoreConfig,
     peer_report::{
         PeerReportBehaviour,
         PeerReportEvent,
@@ -77,7 +76,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
     pub(crate) fn new(
         p2p_config: &Config,
         codec: Codec,
-        peer_score_config: PeerScoreConfig,
+        max_gossipsub_score: f64,
     ) -> Self {
         let local_public_key = p2p_config.keypair.public();
         let local_peer_id = PeerId::from_public_key(&local_public_key);
@@ -105,7 +104,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
             discovery_config
         };
 
-        let gossipsub = build_gossipsub_behaviour(p2p_config, &peer_score_config);
+        let gossipsub = build_gossipsub_behaviour(p2p_config, max_gossipsub_score);
 
         let peer_report = PeerReportBehaviour::new(p2p_config);
 

@@ -15,7 +15,6 @@ use crate::{
         },
         topics::GossipsubTopics,
     },
-    gossipsub_config::PeerScoreConfig,
     peer_manager::{
         PeerManager,
         PeerScoreUpdated,
@@ -108,10 +107,27 @@ pub struct FuelP2PService<Codec: NetworkCodec> {
     peer_manager: PeerManager,
 }
 
+#[derive(Debug)]
+struct GossipsubData {
+    topics: GossipsubTopics,
+    max_score: f64,
+    min_score_allowed: f64,
+}
+
+impl GossipsubData {
+    pub fn with_topics(topics: GossipsubTopics) -> Self {
+        Self {
+            topics,
+            max_score: 9.,
+            min_score_allowed: 0.,
+        }
+    }
+}
+
 /// Holds additional Network data for FuelBehavior
 #[derive(Debug)]
 struct NetworkMetadata {
-    gossipsub_topics: GossipsubTopics,
+    gossipsub_data: GossipsubData,
 }
 
 #[derive(Debug, Clone)]
@@ -139,11 +155,17 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     pub fn new(config: Config, codec: Codec) -> Self {
         let local_peer_id = PeerId::from(config.keypair.public());
 
-        let peer_score_config = PeerScoreConfig::default();
+        let gossipsub_data =
+            GossipsubData::with_topics(GossipsubTopics::new(&config.network_name));
+        let network_metadata = NetworkMetadata { gossipsub_data };
 
         // configure and build P2P Service
         let (transport, connection_state) = build_transport(&config);
-        let behaviour = FuelBehaviour::new(&config, codec.clone(), peer_score_config);
+        let behaviour = FuelBehaviour::new(
+            &config,
+            codec.clone(),
+            network_metadata.gossipsub_data.max_score,
+        );
 
         let total_connections = {
             // Reserved nodes do not count against the configured peer input/output limits.
@@ -178,9 +200,6 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 .connection_limits(connection_limits)
                 .build();
 
-        let gossipsub_topics = GossipsubTopics::new(&config.network_name);
-        let network_metadata = NetworkMetadata { gossipsub_topics };
-
         let metrics = config.metrics;
 
         if let Some(public_address) = config.public_address {
@@ -204,7 +223,6 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             network_metadata,
             metrics,
             peer_manager: PeerManager::new(
-                peer_score_config,
                 reserved_peers,
                 connection_state,
                 config.max_peers_connected as usize,
@@ -245,7 +263,8 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     ) -> Result<MessageId, PublishError> {
         let topic = self
             .network_metadata
-            .gossipsub_topics
+            .gossipsub_data
+            .topics
             .get_gossipsub_topic(&message);
 
         match self.network_codec.encode(message) {
@@ -340,9 +359,11 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             .behaviour_mut()
             .report_message_validation_result(msg_id, &propagation_source, acceptance)
         {
-            if self
-                .peer_manager
-                .should_ban_peer_for_gossip(&propagation_source, peer_score)
+            let min_score_allowed =
+                self.network_metadata.gossipsub_data.min_score_allowed;
+
+            if peer_score < min_score_allowed
+                && !self.peer_manager.is_reserved_peer(&propagation_source)
             {
                 self.swarm.ban_peer_id(propagation_source);
             }
@@ -411,40 +432,38 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         event: FuelBehaviourEvent,
     ) -> Option<FuelP2PEvent> {
         match event {
-            FuelBehaviourEvent::Gossipsub(gossipsub_event) => {
-                if let GossipsubEvent::Message {
-                    propagation_source,
-                    message,
-                    message_id,
-                } = gossipsub_event
+            FuelBehaviourEvent::Gossipsub(GossipsubEvent::Message {
+                propagation_source,
+                message,
+                message_id,
+            }) => {
+                if let Some(correct_topic) = self
+                    .network_metadata
+                    .gossipsub_data
+                    .topics
+                    .get_gossipsub_tag(&message.topic)
                 {
-                    if let Some(correct_topic) = self
-                        .network_metadata
-                        .gossipsub_topics
-                        .get_gossipsub_tag(&message.topic)
-                    {
-                        match self.network_codec.decode(&message.data, correct_topic) {
-                            Ok(decoded_message) => {
-                                return Some(FuelP2PEvent::GossipsubMessage {
-                                    peer_id: propagation_source,
-                                    message_id,
-                                    topic_hash: message.topic,
-                                    message: decoded_message,
-                                })
-                            }
-                            Err(err) => {
-                                warn!(target: "fuel-p2p", "Failed to decode a message. ID: {}, Message: {:?} with error: {:?}", message_id, &message.data, err);
-
-                                self.report_message_validation_result(
-                                    &message_id,
-                                    propagation_source,
-                                    MessageAcceptance::Reject,
-                                );
-                            }
+                    match self.network_codec.decode(&message.data, correct_topic) {
+                        Ok(decoded_message) => {
+                            return Some(FuelP2PEvent::GossipsubMessage {
+                                peer_id: propagation_source,
+                                message_id,
+                                topic_hash: message.topic,
+                                message: decoded_message,
+                            })
                         }
-                    } else {
-                        warn!(target: "fuel-p2p", "GossipTopicTag does not exist for {:?}", &message.topic);
+                        Err(err) => {
+                            warn!(target: "fuel-p2p", "Failed to decode a message. ID: {}, Message: {:?} with error: {:?}", message_id, &message.data, err);
+
+                            self.report_message_validation_result(
+                                &message_id,
+                                propagation_source,
+                                MessageAcceptance::Reject,
+                            );
+                        }
                     }
+                } else {
+                    warn!(target: "fuel-p2p", "GossipTopicTag does not exist for {:?}", &message.topic);
                 }
             }
 
@@ -508,10 +527,8 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                             initial_connection,
                         ) {
                             let _ = self.swarm.disconnect_peer_id(peer_id);
-                        } else {
-                            if initial_connection {
-                                return Some(FuelP2PEvent::PeerConnected(peer_id))
-                            }
+                        } else if initial_connection {
+                            return Some(FuelP2PEvent::PeerConnected(peer_id))
                         }
                     }
                     PeerReportEvent::PeerDisconnected { peer_id } => {

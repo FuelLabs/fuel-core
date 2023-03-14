@@ -2,11 +2,6 @@ use std::time::Duration;
 
 use crate::config::Config;
 use fuel_core_metrics::p2p_metrics::P2P_METRICS;
-use fuel_core_types::services::p2p::peer_reputation::{
-    PeerScore,
-    MAX_PEER_SCORE,
-    MIN_PEER_SCORE,
-};
 use libp2p::gossipsub::{
     metrics::Config as MetricsConfig,
     FastMessageId,
@@ -61,46 +56,6 @@ pub(crate) fn default_gossipsub_config() -> GossipsubConfig {
         .mesh_n_high(12)
         .build()
         .expect("valid gossipsub configuration")
-}
-
-#[derive(Clone, Debug, Copy)]
-pub struct PeerScoreConfig {
-    max_app_score: PeerScore,
-    min_app_score_allowed: PeerScore,
-    max_gossipsub_score: f64,
-    min_gossipsub_score_allowed: f64,
-}
-
-impl Default for PeerScoreConfig {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl PeerScoreConfig {
-    pub fn new() -> Self {
-        Self {
-            max_app_score: MAX_PEER_SCORE,
-            min_app_score_allowed: MIN_PEER_SCORE,
-            max_gossipsub_score: 150.0,
-            min_gossipsub_score_allowed: -100.0,
-        }
-    }
-    pub fn get_max_app_score(&self) -> PeerScore {
-        self.max_app_score
-    }
-
-    pub fn get_min_app_score(&self) -> PeerScore {
-        self.min_app_score_allowed
-    }
-
-    pub fn get_max_gossipsub_score(&self) -> f64 {
-        self.max_gossipsub_score
-    }
-
-    pub fn get_min_gossipsub_score(&self) -> f64 {
-        self.min_gossipsub_score_allowed
-    }
 }
 
 fn initialize_topic_score_params() -> TopicScoreParams {
@@ -244,7 +199,7 @@ fn initialize_peer_score_thresholds() -> PeerScoreThresholds {
 /// Given a `P2pConfig` containing `GossipsubConfig` creates a Gossipsub Behaviour
 pub(crate) fn build_gossipsub_behaviour(
     p2p_config: &Config,
-    peer_score_config: &PeerScoreConfig,
+    max_score: f64,
 ) -> Gossipsub {
     if p2p_config.metrics {
         // Move to Metrics related feature flag
@@ -266,7 +221,7 @@ pub(crate) fn build_gossipsub_behaviour(
             .set(Box::new(p2p_registry))
             .unwrap_or(());
 
-        initialize_gossipsub(&mut gossipsub, p2p_config, peer_score_config);
+        initialize_gossipsub(&mut gossipsub, p2p_config, max_score);
 
         gossipsub
     } else {
@@ -276,19 +231,14 @@ pub(crate) fn build_gossipsub_behaviour(
         )
         .expect("gossipsub initialized");
 
-        initialize_gossipsub(&mut gossipsub, p2p_config, peer_score_config);
+        initialize_gossipsub(&mut gossipsub, p2p_config, max_score);
 
         gossipsub
     }
 }
 
-fn initialize_gossipsub(
-    gossipsub: &mut Gossipsub,
-    p2p_config: &Config,
-    peer_score_config: &PeerScoreConfig,
-) {
-    let peer_score_params =
-        initialize_peer_score_params(peer_score_config.max_gossipsub_score);
+fn initialize_gossipsub(gossipsub: &mut Gossipsub, p2p_config: &Config, max_score: f64) {
+    let peer_score_params = initialize_peer_score_params(max_score);
 
     let peer_score_thresholds = initialize_peer_score_thresholds();
 

@@ -5,6 +5,7 @@ use fuel_core_types::{
         DECAY_PEER_SCORE,
         DEFAULT_PEER_SCORE,
         MAX_PEER_SCORE,
+        MIN_PEER_SCORE,
     },
 };
 use libp2p::{
@@ -25,8 +26,6 @@ use std::{
 };
 use tokio::time::Instant;
 use tracing::debug;
-
-use crate::gossipsub_config::PeerScoreConfig;
 
 #[derive(Debug, Clone, Copy)]
 pub struct PeerScoreUpdated {
@@ -73,19 +72,22 @@ pub struct PeerManager {
 
 impl PeerManager {
     pub fn new(
-        peer_score_config: PeerScoreConfig,
         reserved_peers: HashSet<PeerId>,
         connection_state: Arc<RwLock<ConnectionState>>,
         max_non_reserved_peers: usize,
     ) -> Self {
         Self {
-            peer_score_config,
+            peer_score_config: PeerScoreConfig::default(),
             non_reserved_connected_peers: HashMap::with_capacity(max_non_reserved_peers),
             reserved_connected_peers: HashMap::with_capacity(reserved_peers.len()),
             reserved_peers,
             connection_state,
             max_non_reserved_peers,
         }
+    }
+
+    pub fn is_reserved_peer(&self, peer_id: &PeerId) -> bool {
+        self.reserved_peers.contains(peer_id)
     }
 
     pub fn handle_peer_info_updated(
@@ -130,15 +132,6 @@ impl PeerManager {
         self.insert_peer_info(peer_id, PeerInfoInsert::Addresses(addresses));
     }
 
-    pub fn should_ban_peer_for_gossip(
-        &self,
-        peer_id: &PeerId,
-        gossip_score: f64,
-    ) -> bool {
-        self.non_reserved_connected_peers.contains_key(peer_id)
-            && gossip_score < self.peer_score_config.get_min_gossipsub_score()
-    }
-
     pub fn batch_update_score_with_decay(&mut self) {
         for peer_info in self.non_reserved_connected_peers.values_mut() {
             peer_info.score *= DECAY_PEER_SCORE;
@@ -152,10 +145,10 @@ impl PeerManager {
     ) -> Option<PeerScoreUpdated> {
         if let Some(peer) = self.non_reserved_connected_peers.get_mut(&peer_id) {
             // score should not go over `MAX_PEER_SCORE`
-            let new_score = MAX_PEER_SCORE.min(peer.score + score);
+            let new_score = self.peer_score_config.max_app_score.min(peer.score + score);
             peer.score = new_score;
 
-            let should_ban = new_score < self.peer_score_config.get_min_app_score();
+            let should_ban = new_score < self.peer_score_config.min_app_score_allowed;
 
             Some(PeerScoreUpdated {
                 should_ban,
@@ -373,6 +366,27 @@ fn log_missing_peer(peer_id: &PeerId) {
     debug!(target: "fuel-p2p", "Peer with PeerId: {:?} is not among the connected peers", peer_id)
 }
 
+#[derive(Clone, Debug, Copy)]
+struct PeerScoreConfig {
+    max_app_score: PeerScore,
+    min_app_score_allowed: PeerScore,
+}
+
+impl Default for PeerScoreConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PeerScoreConfig {
+    pub fn new() -> Self {
+        Self {
+            max_app_score: MAX_PEER_SCORE,
+            min_app_score_allowed: MIN_PEER_SCORE,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -388,7 +402,6 @@ mod tests {
         let connection_state = ConnectionState::new();
 
         PeerManager::new(
-            PeerScoreConfig::default(),
             reserved_peers.into_iter().collect(),
             connection_state,
             max_non_reserved_peers,
