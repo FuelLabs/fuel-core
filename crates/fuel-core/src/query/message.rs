@@ -103,7 +103,6 @@ impl<D: DatabasePort + ?Sized> MessageQueryData for D {
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<MessageId>> {
         self.owned_message_ids(owner, start_message_id, direction)
-            .into_boxed()
     }
 
     fn owned_messages(
