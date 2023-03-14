@@ -348,6 +348,9 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         self.swarm.behaviour_mut().update_block_height(block_height)
     }
 
+    /// The report is forwarded to gossipsub behaviour
+    /// If acceptance is "Rejected" the gossipsub peer score is calculated
+    /// And if it's below allowed threshold the peer is banned
     pub fn report_message_validation_result(
         &mut self,
         msg_id: &MessageId,
@@ -370,6 +373,9 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         }
     }
 
+    /// Report application score
+    /// If application peer score is below allowed threshold
+    /// the peer is banend
     pub fn report_peer(
         &mut self,
         peer_id: PeerId,
