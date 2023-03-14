@@ -1,17 +1,13 @@
-use std::borrow::Cow;
-
-use crate::{
-    database::{
-        storage::DatabaseColumn,
-        Column,
-        Database,
-        Error as DatabaseError,
-        Result as DatabaseResult,
-    },
-    state::IterDirection,
+use crate::database::{
+    storage::DatabaseColumn,
+    Column,
+    Database,
+    Error as DatabaseError,
+    Result as DatabaseResult,
 };
 use fuel_core_chain_config::ContractConfig;
 use fuel_core_storage::{
+    iter::IterDirection,
     tables::{
         ContractsInfo,
         ContractsLatestUtxo,
@@ -37,6 +33,7 @@ use fuel_core_types::{
     },
     fuel_vm::Contract,
 };
+use std::borrow::Cow;
 
 impl DatabaseColumn for ContractsLatestUtxo {
     fn column() -> Column {

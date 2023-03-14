@@ -1,13 +1,17 @@
-use crate::{
-    fuel_core_graphql_api::service::Database,
-    state::IterDirection,
-};
+use crate::fuel_core_graphql_api::service::Database;
 use asset_query::{
     AssetQuery,
     AssetSpendTarget,
     AssetsQuery,
 };
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IterDirection,
+    },
+    Result as StorageResult,
+};
 use fuel_core_types::{
     fuel_tx::{
         Address,
@@ -23,20 +27,28 @@ use std::{
 
 pub mod asset_query;
 
-pub struct BalanceQueryContext<'a>(pub &'a Database);
+pub trait BalanceQueryData: Send + Sync {
+    fn balance(&self, owner: Address, asset_id: AssetId)
+        -> StorageResult<AddressBalance>;
 
-impl BalanceQueryContext<'_> {
-    pub fn balance(
+    fn balances(
+        &self,
+        owner: Address,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<AddressBalance>>;
+}
+
+impl BalanceQueryData for Database {
+    fn balance(
         &self,
         owner: Address,
         asset_id: AssetId,
     ) -> StorageResult<AddressBalance> {
-        let db = self.0;
         let amount = AssetQuery::new(
             &owner,
             &AssetSpendTarget::new(asset_id, u64::MAX, u64::MAX),
             None,
-            db,
+            self,
         )
         .unspent_resources()
         .map(|res| res.map(|resource| *resource.amount()))
@@ -56,17 +68,15 @@ impl BalanceQueryContext<'_> {
         })
     }
 
-    pub fn balances(
+    fn balances(
         &self,
         owner: Address,
         direction: IterDirection,
-    ) -> impl Iterator<Item = StorageResult<AddressBalance>> + '_ {
-        let db = self.0;
-
+    ) -> BoxedIter<StorageResult<AddressBalance>> {
         let mut amounts_per_asset = HashMap::new();
         let mut errors = vec![];
 
-        for resource in AssetsQuery::new(&owner, None, None, db).unspent_resources() {
+        for resource in AssetsQuery::new(&owner, None, None, self).unspent_resources() {
             match resource {
                 Ok(resource) => {
                     *amounts_per_asset.entry(*resource.asset_id()).or_default() +=
@@ -103,5 +113,6 @@ impl BalanceQueryContext<'_> {
             .into_iter()
             .map(Ok)
             .chain(errors.into_iter().map(Err))
+            .into_boxed()
     }
 }

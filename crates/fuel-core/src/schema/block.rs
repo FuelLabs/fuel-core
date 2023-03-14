@@ -4,13 +4,17 @@ use super::scalars::{
 };
 use crate::{
     fuel_core_graphql_api::{
-        service::ConsensusModule,
+        service::{
+            ConsensusModule,
+            Database,
+        },
         Config as GraphQLConfig,
-        IntoApiResult,
     },
+    graphql_api::IntoApiResult,
     query::{
-        BlockQueryContext,
-        TransactionQueryContext,
+        BlockQueryData,
+        SimpleBlockData,
+        SimpleTransactionData,
     },
     schema::{
         scalars::{
@@ -20,7 +24,6 @@ use crate::{
         },
         tx::types::Transaction,
     },
-    state::IterDirection,
 };
 use anyhow::anyhow;
 use async_graphql::{
@@ -35,7 +38,11 @@ use async_graphql::{
     Union,
 };
 use fuel_core_storage::{
-    iter::IntoBoxedIter,
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IterDirection,
+    },
     Result as StorageResult,
 };
 use fuel_core_types::{
@@ -89,7 +96,7 @@ impl Block {
     }
 
     async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
-        let query = BlockQueryContext(ctx.data_unchecked());
+        let query: &Database = ctx.data_unchecked();
         let id = self.0.header().id();
         let consensus = query.consensus(&id)?;
 
@@ -100,7 +107,7 @@ impl Block {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Vec<Transaction>> {
-        let query = TransactionQueryContext(ctx.data_unchecked());
+        let query: &Database = ctx.data_unchecked();
         self.0
             .transactions()
             .iter()
@@ -185,7 +192,7 @@ impl BlockQuery {
         #[graphql(desc = "ID of the block")] id: Option<BlockId>,
         #[graphql(desc = "Height of the block")] height: Option<U64>,
     ) -> async_graphql::Result<Option<Block>> {
-        let data = BlockQueryContext(ctx.data_unchecked());
+        let data: &Database = ctx.data_unchecked();
         let id = match (id, height) {
             (Some(_), Some(_)) => {
                 return Err(async_graphql::Error::new(
@@ -214,9 +221,9 @@ impl BlockQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<usize, Block, EmptyFields, EmptyFields>> {
-        let db = BlockQueryContext(ctx.data_unchecked());
+        let db: &Database = ctx.data_unchecked();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            Ok(blocks_query(&db, *start, direction))
+            Ok(blocks_query(db, *start, direction))
         })
         .await
     }
@@ -247,23 +254,22 @@ impl HeaderQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<usize, Header, EmptyFields, EmptyFields>> {
-        let db = BlockQueryContext(ctx.data_unchecked());
+        let db: &Database = ctx.data_unchecked();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            Ok(blocks_query(&db, *start, direction))
+            Ok(blocks_query(db, *start, direction))
         })
         .await
     }
 }
 
-fn blocks_query<'a, T>(
-    query: &'a BlockQueryContext<'a>,
+fn blocks_query<T>(
+    query: &Database,
     start: Option<usize>,
     direction: IterDirection,
-) -> impl Iterator<Item = StorageResult<(usize, T)>> + 'a
+) -> BoxedIter<StorageResult<(usize, T)>>
 where
     T: async_graphql::OutputType,
     T: From<CompressedBlock>,
-    T: 'a,
 {
     let blocks = query
         .compressed_blocks(start.map(Into::into), direction)
@@ -293,7 +299,7 @@ impl BlockMutation {
         blocks_to_produce: U64,
         time: Option<TimeParameters>,
     ) -> async_graphql::Result<U64> {
-        let query = BlockQueryContext(ctx.data_unchecked());
+        let query: &Database = ctx.data_unchecked();
         let consensus_module = ctx.data_unchecked::<ConsensusModule>();
         let config = ctx.data_unchecked::<GraphQLConfig>().clone();
 

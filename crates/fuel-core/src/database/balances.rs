@@ -1,11 +1,9 @@
-use crate::{
-    database::{
-        Column,
-        Database,
-    },
-    state::IterDirection,
+use crate::database::{
+    Column,
+    Database,
 };
 use fuel_core_storage::{
+    iter::IterDirection,
     tables::ContractsAssets,
     Error as StorageError,
     Mappable,
