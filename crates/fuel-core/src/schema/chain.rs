@@ -94,7 +94,9 @@ impl ChainInfo {
     async fn base_chain_height(&self, ctx: &Context<'_>) -> U64 {
         let query: &Database = ctx.data_unchecked();
 
-        let height = query.latest_block_height().expect("The blockchain always should have genesis block");
+        let height = query
+            .latest_block_height()
+            .expect("The blockchain always should have genesis block");
 
         height.into()
     }

@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use super::{
     block::Header,
     scalars::{
@@ -124,10 +126,12 @@ impl MessageQuery {
     ) -> async_graphql::Result<Option<MessageProof>> {
         #[allow(clippy::borrowed_box)]
         let data: &Database = ctx.data_unchecked();
-        Ok(
-            crate::query::message_proof(data, transaction_id.into(), message_id.into())?
-                .map(MessageProof),
-        )
+        Ok(crate::query::message_proof(
+            data.deref(),
+            transaction_id.into(),
+            message_id.into(),
+        )?
+        .map(MessageProof))
     }
 }
 
