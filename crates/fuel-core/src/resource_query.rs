@@ -209,13 +209,9 @@ mod tests {
     use crate::{
         database::Database,
         fuel_core_graphql_api::service::Database as ServiceDatabase,
-        query::{
-            asset_query::{
-                AssetQuery,
-                AssetSpendTarget,
-            },
-            CoinQueryContext,
-            MessageQueryContext,
+        query::asset_query::{
+            AssetQuery,
+            AssetSpendTarget,
         },
         resource_query::{
             largest_first,
@@ -223,10 +219,10 @@ mod tests {
             ResourceQueryError,
             SpendQuery,
         },
-        state::IterDirection,
     };
     use assert_matches::assert_matches;
     use fuel_core_storage::{
+        iter::IterDirection,
         tables::{
             Coins,
             Messages,
@@ -905,21 +901,19 @@ mod tests {
         }
 
         pub fn owned_coins(&self, owner: &Address) -> Vec<Coin> {
+            use crate::query::CoinQueryData;
             let db = self.service_database();
-            let query = CoinQueryContext(&db);
-            query
-                .owned_coins_ids(owner, None, IterDirection::Forward)
-                .map(|res| res.map(|id| query.coin(id).unwrap()))
+            db.owned_coins_ids(owner, None, IterDirection::Forward)
+                .map(|res| res.map(|id| db.coin(id).unwrap()))
                 .try_collect()
                 .unwrap()
         }
 
         pub fn owned_messages(&self, owner: &Address) -> Vec<Message> {
+            use crate::query::MessageQueryData;
             let db = self.service_database();
-            let query = MessageQueryContext(&db);
-            query
-                .owned_message_ids(owner, None, IterDirection::Forward)
-                .map(|res| res.map(|id| query.message(&id).unwrap()))
+            db.owned_message_ids(owner, None, IterDirection::Forward)
+                .map(|res| res.map(|id| db.message(&id).unwrap()))
                 .try_collect()
                 .unwrap()
         }

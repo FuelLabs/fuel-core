@@ -4,8 +4,8 @@ use crate::{
         Config as GraphQLConfig,
     },
     query::{
-        BlockQueryContext,
-        ChainQueryContext,
+        BlockQueryData,
+        ChainQueryData,
     },
     schema::{
         block::Block,
@@ -80,23 +80,25 @@ impl ConsensusParameters {
 #[Object]
 impl ChainInfo {
     async fn name(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
-        let data = ChainQueryContext(ctx.data_unchecked());
+        let data: &Database = ctx.data_unchecked();
         Ok(data.name()?)
     }
 
     async fn latest_block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query = BlockQueryContext(ctx.data_unchecked());
+        let query: &Database = ctx.data_unchecked();
 
         let latest_block = query.latest_block()?.into();
         Ok(latest_block)
     }
 
     async fn base_chain_height(&self, ctx: &Context<'_>) -> U64 {
-        let height = ctx
-            .data_unchecked::<Database>()
-            .base_chain_height()
-            .unwrap_or_default();
-        height.0.into()
+        let query: &Database = ctx.data_unchecked();
+
+        let height = query
+            .latest_block_height()
+            .expect("The blockchain always should have genesis block");
+
+        height.into()
     }
 
     async fn peer_count(&self) -> u16 {
