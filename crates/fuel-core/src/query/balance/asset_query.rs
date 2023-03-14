@@ -12,7 +12,6 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     entities::{
-        coin::CoinStatus,
         message::MessageStatus,
         resource::{
             Resource,
@@ -116,11 +115,10 @@ impl<'a> AssetsQuery<'a> {
             })
             .filter_ok(|coin| {
                 if let Resource::Coin(coin) = coin {
-                    let is_unspent = coin.status == CoinStatus::Unspent;
                     self.assets
                         .as_ref()
-                        .map(|assets| assets.contains(&coin.asset_id) && is_unspent)
-                        .unwrap_or(is_unspent)
+                        .map(|assets| assets.contains(&coin.asset_id))
+                        .unwrap_or(true)
                 } else {
                     true
                 }

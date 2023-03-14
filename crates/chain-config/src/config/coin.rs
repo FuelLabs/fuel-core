@@ -63,7 +63,6 @@ impl GenesisCommitment for CompressedCoin {
             .chain(self.amount.to_be_bytes())
             .chain(self.asset_id)
             .chain((*self.maturity).to_be_bytes())
-            .chain([self.status as u8])
             .chain(self.tx_pointer.block_height().to_be_bytes())
             .chain(self.tx_pointer.tx_index().to_be_bytes())
             .finalize();

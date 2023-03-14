@@ -41,10 +41,7 @@ use fuel_core_types::{
         SealedBlock,
     },
     entities::{
-        coin::{
-            CoinStatus,
-            CompressedCoin,
-        },
+        coin::CompressedCoin,
         contract::ContractUtxoInfo,
         message::CompressedMessage,
     },
@@ -195,7 +192,6 @@ fn init_coin_state(
                     amount: coin.amount,
                     asset_id: coin.asset_id,
                     maturity: coin.maturity.unwrap_or_default(),
-                    status: CoinStatus::Unspent,
                     tx_pointer: TxPointer::new(
                         coin.tx_pointer_block_height
                             .map(|b| b.into())

@@ -20,7 +20,6 @@ use crate::{
     TxPool,
 };
 use fuel_core_types::{
-    entities::coin::CoinStatus,
     fuel_asm::{
         op,
         RegId,
@@ -253,35 +252,6 @@ fn try_to_insert_tx2_missing_utxo() {
     assert!(matches!(
         err.downcast_ref::<Error>(),
         Some(Error::NotInsertedInputUtxoIdNotExisting(_))
-    ));
-}
-
-#[test]
-fn tx_try_to_use_spent_coin() {
-    let mut rng = StdRng::seed_from_u64(0);
-    let db = MockDb::default();
-    let mut txpool = TxPool::new(Default::default(), db);
-
-    // put a spent coin into the database
-    let (mut coin, input) = setup_coin(&mut rng, None);
-    coin.status = CoinStatus::Spent;
-    txpool.database.insert_coin(coin.clone());
-
-    let tx = Arc::new(
-        TransactionBuilder::script(vec![], vec![])
-            .gas_price(10)
-            .gas_limit(GAS_LIMIT)
-            .add_input(input)
-            .finalize_as_transaction(),
-    );
-
-    // attempt to insert the tx with an already spent coin
-    let err = txpool
-        .insert_inner(tx)
-        .expect_err("Tx should be Err, got Ok");
-    assert!(matches!(
-        err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedInputUtxoIdSpent(id)) if id == &coin.utxo_id
     ));
 }
 

@@ -22,10 +22,7 @@ use fuel_core_storage::{
 };
 use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
-    entities::coin::{
-        CoinStatus,
-        CompressedCoin,
-    },
+    entities::coin::CompressedCoin,
     fuel_tx::{
         Address,
         Bytes32,
@@ -144,18 +141,6 @@ impl Database {
     pub fn get_coin_config(&self) -> DatabaseResult<Option<Vec<CoinConfig>>> {
         let configs = self
             .iter_all::<Vec<u8>, CompressedCoin>(Column::Coins, None)
-            .filter_map(|coin| {
-                // Return only unspent coins
-                if let Ok(coin) = coin {
-                    if coin.1.status == CoinStatus::Unspent {
-                        Some(Ok(coin))
-                    } else {
-                        None
-                    }
-                } else {
-                    Some(coin)
-                }
-            })
             .map(|raw_coin| -> DatabaseResult<CoinConfig> {
                 let coin = raw_coin?;
 

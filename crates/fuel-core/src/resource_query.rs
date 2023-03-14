@@ -238,7 +238,6 @@ mod tests {
         entities::{
             coin::{
                 Coin,
-                CoinStatus,
                 CompressedCoin,
             },
             message::{
@@ -871,7 +870,6 @@ mod tests {
                 amount,
                 asset_id,
                 maturity: Default::default(),
-                status: CoinStatus::Unspent,
                 tx_pointer: Default::default(),
             };
 
