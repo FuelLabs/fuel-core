@@ -16,8 +16,8 @@ publish = true
 anyhow = { workspace = true }
 fuel-core = { workspace = true, default-features = false, optional = true }
 fuel-core-client = { workspace = true }
-fuel-core-types = { workspace = true, features = ["test-helpers"] }
 fuel-core-trace = { workspace = true }
+fuel-core-types = { workspace = true, features = ["test-helpers"] }
 humantime-serde = "1.1"
 libtest-mimic = "0.6.0"
 serde = { workspace = true }
