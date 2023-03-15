@@ -28,8 +28,7 @@ use std::{
     time::Duration,
 };
 
-const MAX_RESPONSE_SIZE_STR: &'static str =
-    const_format::formatcp!("{MAX_RESPONSE_SIZE}");
+const MAX_RESPONSE_SIZE_STR: &str = const_format::formatcp!("{MAX_RESPONSE_SIZE}");
 
 #[derive(Debug, Clone, Args)]
 pub struct P2PArgs {
