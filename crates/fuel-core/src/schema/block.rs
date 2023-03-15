@@ -291,7 +291,7 @@ impl BlockMutation {
     async fn produce_blocks(
         &self,
         ctx: &Context<'_>,
-        start_timestamp: Option<U64>,
+        start_timestamp: Option<Tai64Timestamp>,
         blocks_to_produce: U64,
     ) -> async_graphql::Result<U64> {
         let query: &Database = ctx.data_unchecked();
@@ -305,11 +305,11 @@ impl BlockMutation {
         }
 
         let start_time = start_timestamp
-            .map(|timestamp| Tai64(timestamp.into()))
+            .map(|timestamp| timestamp.0)
             .unwrap_or(Tai64::now());
         let blocks_to_produce: u64 = blocks_to_produce.into();
         consensus_module
-            .manual_produce_block(start_time, blocks_to_produce as u32)
+            .manually_produce_blocks(start_time, blocks_to_produce as u32)
             .await?;
 
         query

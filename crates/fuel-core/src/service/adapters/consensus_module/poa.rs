@@ -45,15 +45,15 @@ impl PoAAdapter {
 
 #[async_trait::async_trait]
 impl ConsensusModulePort for PoAAdapter {
-    async fn manual_produce_block(
+    async fn manually_produce_blocks(
         &self,
-        block_time: Tai64,
+        start_time: Tai64,
         number_of_blocks: u32,
     ) -> anyhow::Result<()> {
         self.shared_state
             .as_ref()
             .ok_or(anyhow!("The block production is disabled"))?
-            .manually_produce_block(block_time, number_of_blocks)
+            .manually_produce_block(start_time, number_of_blocks)
             .await
     }
 }

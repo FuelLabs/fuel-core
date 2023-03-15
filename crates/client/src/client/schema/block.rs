@@ -102,7 +102,7 @@ pub struct BlockIdFragment {
 
 #[derive(cynic::QueryVariables, Debug)]
 pub struct ProduceBlockArgs {
-    pub start_timestamp: Option<U64>,
+    pub start_timestamp: Option<Tai64Timestamp>,
     pub blocks_to_produce: U64,
 }
 

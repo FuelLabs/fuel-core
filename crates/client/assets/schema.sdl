@@ -461,7 +461,7 @@ type Mutation {
 	`Trigger::Interval { block_time }`, produces blocks with `block_time ` intervals between
 	them. The `start_timestamp` is the timestamp in seconds.
 	"""
-	produceBlocks(startTimestamp: U64, blocksToProduce: U64!): U64!
+	produceBlocks(startTimestamp: Tai64Timestamp, blocksToProduce: U64!): U64!
 }
 
 type NodeInfo {

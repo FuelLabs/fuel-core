@@ -79,7 +79,7 @@ pub struct SharedState {
 impl SharedState {
     pub async fn manually_produce_block(
         &self,
-        block_time: Tai64,
+        start_time: Tai64,
         number_of_blocks: u32,
     ) -> anyhow::Result<()> {
         let (sender, receiver) = oneshot::channel();
@@ -87,7 +87,7 @@ impl SharedState {
         self.request_sender
             .send(Request::ManualBlocks((
                 ManualProduction {
-                    block_time,
+                    start_time,
                     number_of_blocks,
                 },
                 sender,
@@ -98,7 +98,7 @@ impl SharedState {
 }
 
 struct ManualProduction {
-    pub block_time: Tai64,
+    pub start_time: Tai64,
     pub number_of_blocks: u32,
 }
 
@@ -154,7 +154,8 @@ where
         let tx_status_update_stream = txpool.transaction_status_events();
         let (request_sender, request_receiver) = mpsc::channel(100);
         let last_timestamp = last_block.time();
-        let duration = Duration::from_secs(Tai64::now().0 - last_timestamp.0);
+        let duration =
+            Duration::from_secs(Tai64::now().0.saturating_sub(last_timestamp.0));
         let last_block_created = Instant::now() - duration;
         Self {
             block_gas_limit: config.block_gas_limit,
@@ -231,7 +232,7 @@ where
         &mut self,
         block_production: ManualProduction,
     ) -> anyhow::Result<()> {
-        let mut block_time = block_production.block_time;
+        let mut block_time = block_production.start_time;
         for _ in 0..block_production.number_of_blocks {
             self.produce_block(self.next_height(), block_time, RequestType::Manual)
                 .await?;

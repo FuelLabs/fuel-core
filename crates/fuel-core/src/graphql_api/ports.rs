@@ -175,9 +175,9 @@ pub trait BlockProducerPort: Send + Sync + DryRunExecution {}
 
 #[async_trait::async_trait]
 pub trait ConsensusModulePort: Send + Sync {
-    async fn manual_produce_block(
+    async fn manually_produce_blocks(
         &self,
-        block_time: Tai64,
+        start_time: Tai64,
         number_of_blocks: u32,
     ) -> anyhow::Result<()>;
 }

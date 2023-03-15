@@ -3,6 +3,7 @@ use crate::client::schema::{
     contract::ContractBalanceQueryArgs,
     resource::ExcludeInput,
     tx::DryRunArg,
+    Tai64Timestamp,
 };
 use anyhow::Context;
 #[cfg(feature = "subscriptions")]
@@ -562,7 +563,8 @@ impl FuelClient {
     ) -> io::Result<u64> {
         let query = schema::block::BlockMutation::build(ProduceBlockArgs {
             blocks_to_produce: blocks_to_produce.into(),
-            start_timestamp: start_timestamp.map(|timestamp| timestamp.into()),
+            start_timestamp: start_timestamp
+                .map(|timestamp| Tai64Timestamp::from_unix(timestamp as i64)),
         });
 
         let new_height = self.query(query).await?.produce_blocks;
