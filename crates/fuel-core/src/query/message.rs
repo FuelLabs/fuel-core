@@ -1,15 +1,21 @@
 use crate::{
     fuel_core_graphql_api::{
-        service::Database,
+        ports::DatabasePort,
         IntoApiResult,
     },
     query::{
-        BlockQueryContext,
-        TransactionQueryContext,
+        BlockQueryData,
+        SimpleBlockData,
+        SimpleTransactionData,
+        TransactionQueryData,
     },
-    state::IterDirection,
 };
 use fuel_core_storage::{
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IterDirection,
+    },
     not_found,
     tables::{
         Messages,
@@ -52,23 +58,38 @@ use std::borrow::Cow;
 #[cfg(test)]
 mod test;
 
-pub struct MessageQueryContext<'a>(pub &'a Database);
+pub trait MessageQueryData: Send + Sync {
+    fn message(&self, message_id: &MessageId) -> StorageResult<Message>;
 
-impl<'a> MessageQueryContext<'a> {
-    pub fn message(&self, message_id: &MessageId) -> StorageResult<Message> {
-        self.0
-            .as_ref()
-            .storage::<Messages>()
+    fn owned_message_ids(
+        &self,
+        owner: &Address,
+        start_message_id: Option<MessageId>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<MessageId>>;
+
+    fn owned_messages(
+        &self,
+        owner: &Address,
+        start_message_id: Option<MessageId>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<Message>>;
+
+    fn all_messages(
+        &self,
+        start_message_id: Option<MessageId>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<Message>>;
+}
+
+impl<D: DatabasePort + ?Sized> MessageQueryData for D {
+    fn message(&self, message_id: &MessageId) -> StorageResult<Message> {
+        self.storage::<Messages>()
             .get(message_id)?
             .ok_or(not_found!(Messages))
             .map(Cow::into_owned)
             .and_then(|m| {
-                if self
-                    .0
-                    .as_ref()
-                    .storage::<SpentMessages>()
-                    .contains_key(message_id)?
-                {
+                if self.storage::<SpentMessages>().contains_key(message_id)? {
                     Ok(m.decompress(MessageStatus::Spent))
                 } else {
                     Ok(m.decompress(MessageStatus::Unspent))
@@ -76,41 +97,39 @@ impl<'a> MessageQueryContext<'a> {
             })
     }
 
-    pub fn owned_message_ids(
+    fn owned_message_ids(
         &self,
         owner: &Address,
         start_message_id: Option<MessageId>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = StorageResult<MessageId>> + 'a {
-        self.0.owned_message_ids(owner, start_message_id, direction)
+    ) -> BoxedIter<StorageResult<MessageId>> {
+        self.owned_message_ids(owner, start_message_id, direction)
     }
 
-    pub fn owned_messages(
+    fn owned_messages(
         &self,
         owner: &Address,
         start_message_id: Option<MessageId>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = StorageResult<Message>> + '_ {
+    ) -> BoxedIter<StorageResult<Message>> {
         self.owned_message_ids(owner, start_message_id, direction)
             .map(|result| result.and_then(|id| self.message(&id)))
+            .into_boxed()
     }
 
-    pub fn all_messages(
+    fn all_messages(
         &self,
         start_message_id: Option<MessageId>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = StorageResult<Message>> + 'a {
-        self.0.all_messages(start_message_id, direction)
+    ) -> BoxedIter<StorageResult<Message>> {
+        self.all_messages(start_message_id, direction)
     }
 }
 
-#[cfg_attr(test, mockall::automock)]
 /// Trait that specifies all the data required by the output message query.
-pub trait MessageProofData {
-    /// Return all receipts in the given transaction.
-    fn receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>>;
-    /// Get the transaction.
-    fn transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction>;
+pub trait MessageProofData:
+    Send + Sync + SimpleBlockData + SimpleTransactionData
+{
     /// Get the status of a transaction.
     fn transaction_status(
         &self,
@@ -120,24 +139,14 @@ pub trait MessageProofData {
     fn transactions_on_block(&self, block_id: &BlockId) -> StorageResult<Vec<Bytes32>>;
     /// Get the signature of a fuel block.
     fn signature(&self, block_id: &BlockId) -> StorageResult<Signature>;
-    /// Get the fuel block.
-    fn block(&self, block_id: &BlockId) -> StorageResult<CompressedBlock>;
 }
 
-impl MessageProofData for MessageQueryContext<'_> {
-    fn receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>> {
-        TransactionQueryContext(self.0).receipts(transaction_id)
-    }
-
-    fn transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction> {
-        TransactionQueryContext(self.0).transaction(transaction_id)
-    }
-
+impl<D: DatabasePort + ?Sized> MessageProofData for D {
     fn transaction_status(
         &self,
         transaction_id: &TxId,
     ) -> StorageResult<TransactionStatus> {
-        TransactionQueryContext(self.0).status(transaction_id)
+        self.status(transaction_id)
     }
 
     fn transactions_on_block(&self, block_id: &BlockId) -> StorageResult<Vec<TxId>> {
@@ -145,23 +154,19 @@ impl MessageProofData for MessageQueryContext<'_> {
     }
 
     fn signature(&self, block_id: &BlockId) -> StorageResult<Signature> {
-        let consensus = BlockQueryContext(self.0).consensus(block_id)?;
+        let consensus = self.consensus(block_id)?;
         match consensus {
             // TODO: https://github.com/FuelLabs/fuel-core/issues/816
             Consensus::Genesis(_) => Ok(Default::default()),
             Consensus::PoA(c) => Ok(c.signature),
         }
     }
-
-    fn block(&self, block_id: &BlockId) -> StorageResult<CompressedBlock> {
-        BlockQueryContext(self.0).block(block_id)
-    }
 }
 
 /// Generate an output proof.
 // TODO: Do we want to return `Option` here?
-pub fn message_proof<Data: MessageProofData>(
-    data: &Data,
+pub fn message_proof<T: MessageProofData + ?Sized>(
+    data: &T,
     transaction_id: Bytes32,
     message_id: MessageId,
 ) -> StorageResult<Option<MessageProof>> {

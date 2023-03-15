@@ -5,7 +5,10 @@ use crate::{
     },
     state::in_memory::transaction::MemoryTransactionView,
 };
-use fuel_core_storage::iter::BoxedIter;
+use fuel_core_storage::iter::{
+    BoxedIter,
+    IterDirection,
+};
 use std::{
     fmt::Debug,
     sync::Arc,
@@ -58,18 +61,6 @@ pub trait KeyValueStore {
         start: Option<&[u8]>,
         direction: IterDirection,
     ) -> BoxedIter<KVItem>;
-}
-
-#[derive(Copy, Clone, Debug, PartialOrd, Eq, PartialEq)]
-pub enum IterDirection {
-    Forward,
-    Reverse,
-}
-
-impl Default for IterDirection {
-    fn default() -> Self {
-        Self::Forward
-    }
 }
 
 pub trait BatchOperations: KeyValueStore {

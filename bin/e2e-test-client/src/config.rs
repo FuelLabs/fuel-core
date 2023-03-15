@@ -14,6 +14,8 @@ pub struct SuiteConfig {
     /// Default is [`SYNC_TIMEOUT`](crate::SYNC_TIMEOUT)
     #[serde(with = "humantime_serde")]
     pub wallet_sync_timeout: Duration,
+    /// Enable slower but more stressful tests. Should be used in full E2E tests but not in CI.
+    pub full_test: bool,
     /// Wallet A must contain pre-existing funds
     pub wallet_a: ClientConfig,
     pub wallet_b: ClientConfig,
@@ -29,6 +31,8 @@ impl Default for SuiteConfig {
     fn default() -> Self {
         Self {
             endpoint: "http://localhost:4000".to_string(),
+            wallet_sync_timeout: SYNC_TIMEOUT,
+            full_test: false,
             wallet_a: ClientConfig {
                 endpoint: None,
                 secret:
@@ -43,7 +47,6 @@ impl Default for SuiteConfig {
                         .parse()
                         .unwrap(),
             },
-            wallet_sync_timeout: SYNC_TIMEOUT,
         }
     }
 }

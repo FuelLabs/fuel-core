@@ -4,8 +4,8 @@ metadata:
   name: ${fuel_core_service_name}-ingress
   namespace: ${k8s_namespace}
   annotations:
-    nginx.ingress.kubernetes.io/proxy-body-size: "7m"
-    nginx.org/client-max-body-size: "7m"
+    nginx.ingress.kubernetes.io/proxy-body-size: "18m"
+    nginx.org/client-max-body-size: "18m"
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
     nginx.ingress.kubernetes.io/rewrite-target: /

@@ -29,3 +29,18 @@ where
         }
     }
 }
+
+/// A enum for iterating across the database
+#[derive(Copy, Clone, Debug, PartialOrd, Eq, PartialEq)]
+pub enum IterDirection {
+    /// Iterate forward
+    Forward,
+    /// Iterate backward
+    Reverse,
+}
+
+impl Default for IterDirection {
+    fn default() -> Self {
+        Self::Forward
+    }
+}

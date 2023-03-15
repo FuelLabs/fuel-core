@@ -71,6 +71,7 @@ use tower_http::{
 pub type Service = fuel_core_services::ServiceRunner<NotInitializedTask>;
 
 pub type Database = Box<dyn DatabasePort>;
+
 pub type BlockProducer = Box<dyn BlockProducerPort>;
 // In the future GraphQL should not be aware of `TxPool`. It should
 //  use only `Database` to receive all information about transactions.
@@ -141,20 +142,22 @@ impl RunnableTask for Task {
     }
 }
 
+// Need a seperate Data Object for each Query endpoint, cannot be avoided
 pub fn new_service(
     config: Config,
-    database: Database,
     schema: CoreSchemaBuilder,
-    producer: BlockProducer,
+    database: Database,
     txpool: TxPool,
+    producer: BlockProducer,
     consensus_module: ConsensusModule,
 ) -> anyhow::Result<Service> {
     let network_addr = config.addr;
+
     let schema = schema
         .data(config)
         .data(database)
-        .data(producer)
         .data(txpool)
+        .data(producer)
         .data(consensus_module)
         .extension(Tracing)
         .finish();
