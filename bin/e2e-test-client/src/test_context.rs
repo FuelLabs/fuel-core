@@ -151,6 +151,7 @@ impl Wallet {
             )
             .await?[0];
 
+        // build transaction
         let mut tx = TransactionBuilder::script(Default::default(), Default::default());
         tx.gas_price(1);
         tx.gas_limit(BASE_AMOUNT);
@@ -188,7 +189,6 @@ impl Wallet {
         // we know the transferred coin should be output 0 from above
         let transferred_utxo = UtxoId::new(tx.id(), 0);
 
-        // build transaction
         // get status and return the utxo id of transferred coin
         Ok(TransferResult {
             tx_id: tx.id(),
@@ -252,6 +252,7 @@ impl Wallet {
             .submit_and_await_commit(&tx.clone().into())
             .await?;
 
+        // check status of contract deployment
         if let TransactionStatus::Failure { .. } | TransactionStatus::SqueezedOut { .. } =
             &status
         {
@@ -261,8 +262,6 @@ impl Wallet {
             )))
         }
 
-        // build transaction
-        // get status and return the utxo id of transferred coin
         Ok(())
     }
 }
