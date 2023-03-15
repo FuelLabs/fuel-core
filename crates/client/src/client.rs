@@ -80,6 +80,7 @@ use std::{
         FromStr,
     },
 };
+use tai64::Tai64;
 use tracing as _;
 use types::{
     TransactionResponse,
@@ -564,7 +565,7 @@ impl FuelClient {
         let query = schema::block::BlockMutation::build(ProduceBlockArgs {
             blocks_to_produce: blocks_to_produce.into(),
             start_timestamp: start_timestamp
-                .map(|timestamp| Tai64Timestamp::from_unix(timestamp as i64)),
+                .map(|timestamp| Tai64Timestamp::from(Tai64(timestamp))),
         });
 
         let new_height = self.query(query).await?.produce_blocks;
