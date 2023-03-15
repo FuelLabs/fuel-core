@@ -69,7 +69,7 @@ impl TxStatusChange {
 
     pub fn send_complete(&self, id: Bytes32, block_height: &BlockHeight) {
         tracing::info!(
-            "Transaction {id} successfully included in a block {block_height}"
+            "Transaction {id} successfully included in block {block_height}"
         );
         let _ = self.status_sender.send(TxStatus::Completed);
         self.updated(id);
