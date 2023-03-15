@@ -180,30 +180,30 @@ spec:
             - "{{ .Values.app.relayer_eth_sync_log_freq_s }}"
           {{- end }}
           {{- if .Values.app.network_name }}
-          - "--network"
-          - "{{ .Values.app.network_name }}"
+            - "--network"
+            - "{{ .Values.app.network_name }}"
           {{- end }}
           {{- if .Values.app.p2p_key }}
-          - "--keypair"
-          - "{{ .Values.app.p2p_key }}"
+            - "--keypair"
+            - "{{ .Values.app.p2p_key }}"
           {{- end }}
           {{- if .Values.app.peering_port }}
-          - "--peering_port"
-          - "{{ .Values.app.peering_port }}"
+            - "--peering_port"
+            - "{{ .Values.app.peering_port }}"
           {{- end }}
           {{- if .Values.app.max_block_size }}
-          - "--max_block_size"
-          - "{{ .Values.app.max_block_size }}"
+            - "--max_block_size"
+            - "{{ .Values.app.max_block_size }}"
           {{- end }}
           {{- if .Values.app.max_transmit_size }}
-          - "--max_transmit_size"
-          - "{{ .Values.app.max_transmit_size }}"
+            - "--max_transmit_size"
+            - "{{ .Values.app.max_transmit_size }}"
           {{- end }}
           {{- if .Values.app.reserved_nodes_only_mode }}
-          - "--reserved_nodes_only_mode"
+            - "--reserved_nodes_only_mode"
           {{- end}}
           {{- if .Values.app.allow_private_addresses }}
-          - "--allow_private_addresses"
+            - "--allow_private_addresses"
           {{- end }}
           resources:
             limits:
