@@ -62,8 +62,11 @@ mod guarded_node;
 
 const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// Maximum number of frames buffered per substream.
-const MAX_NUM_OF_FRAMES_BUFFERED: usize = 256;
+/// Maximum response size from the p2p.
+/// The configuration of the ingress should be the same:
+/// - `nginx.org/client-max-body-size`
+/// - `nginx.ingress.kubernetes.io/proxy-body-size`
+pub const MAX_RESPONSE_SIZE: usize = 18 * 1024 * 1024;
 
 /// Adds a timeout to the setup and protocol upgrade process for all
 /// inbound and outbound connections established through the transport.
@@ -204,7 +207,7 @@ impl Config<NotInitialized> {
             address: IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0])),
             public_address: None,
             tcp_port: 0,
-            max_block_size: 100_000,
+            max_block_size: MAX_RESPONSE_SIZE,
             bootstrap_nodes: vec![],
             enable_mdns: false,
             max_peers_connected: 50,
@@ -272,10 +275,10 @@ pub(crate) fn build_transport(
     };
 
     let multiplex_config = {
-        let mut mplex_config = mplex::MplexConfig::new();
-        mplex_config.set_max_buffer_size(MAX_NUM_OF_FRAMES_BUFFERED);
+        let mplex_config = mplex::MplexConfig::default();
 
-        let yamux_config = yamux::YamuxConfig::default();
+        let mut yamux_config = yamux::YamuxConfig::default();
+        yamux_config.set_max_buffer_size(MAX_RESPONSE_SIZE);
         libp2p::core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
     };
 

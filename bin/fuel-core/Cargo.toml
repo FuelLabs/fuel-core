@@ -18,6 +18,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
+const_format = { version = "0.2", optional = true }
 dirs = "4.0"
 fuel-core = { workspace = true }
 humantime = "2.1"
@@ -39,7 +40,7 @@ test-case = { workspace = true }
 debug = ["fuel-core/debug"]
 default = ["debug", "metrics", "relayer", "rocksdb"]
 metrics = ["fuel-core/metrics"]
-p2p = ["fuel-core/p2p"]
+p2p = ["fuel-core/p2p", "const_format"]
 relayer = ["fuel-core/relayer", "dep:url", "dep:serde_json"]
 rocksdb = ["fuel-core/rocksdb"]
 rocksdb-production = ["fuel-core/rocksdb-production"]

@@ -47,6 +47,13 @@ fn main() {
                 async_execute(tests::transfers::transfer_back(&ctx))
             }),
         ),
+        Trial::test(
+            "can deploy a large contract",
+            with_cloned(&config, |config| {
+                let ctx = TestContext::new(config);
+                async_execute(tests::contracts::deploy_large_contract(&ctx))
+            }),
+        ),
     ];
 
     libtest_mimic::run(&args, tests).exit();

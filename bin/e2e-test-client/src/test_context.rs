@@ -1,6 +1,9 @@
 //! Utilities and helper methods for writing tests
 
-use anyhow::Context;
+use anyhow::{
+    anyhow,
+    Context,
+};
 use fuel_core_client::client::{
     schema::resource::Resource,
     types::TransactionStatus,
@@ -9,7 +12,14 @@ use fuel_core_client::client::{
     PaginationRequest,
 };
 use fuel_core_types::{
-    fuel_crypto::PublicKey,
+    fuel_crypto::{
+        rand::{
+            prelude::StdRng,
+            Rng,
+            SeedableRng,
+        },
+        PublicKey,
+    },
     fuel_tx::{
         Finalizable,
         Input,
@@ -20,10 +30,14 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
+        bytes::SizedBytes,
         Address,
         AssetId,
     },
-    fuel_vm::SecretKey,
+    fuel_vm::{
+        Contract,
+        SecretKey,
+    },
 };
 
 use crate::config::{
@@ -137,6 +151,7 @@ impl Wallet {
             )
             .await?[0];
 
+        // build transaction
         let mut tx = TransactionBuilder::script(Default::default(), Default::default());
         tx.gas_price(1);
         tx.gas_limit(BASE_AMOUNT);
@@ -174,13 +189,80 @@ impl Wallet {
         // we know the transferred coin should be output 0 from above
         let transferred_utxo = UtxoId::new(tx.id(), 0);
 
-        // build transaction
         // get status and return the utxo id of transferred coin
         Ok(TransferResult {
             tx_id: tx.id(),
             transferred_utxo,
             success: matches!(status, TransactionStatus::Success { .. }),
         })
+    }
+
+    pub async fn deploy_contract(&self, bytes: Vec<u8>) -> anyhow::Result<()> {
+        let mut rng = StdRng::seed_from_u64(2222);
+        let asset_id = AssetId::zeroed();
+        let asset_id_string = asset_id.to_string();
+        let asset_id_str = asset_id_string.as_str();
+        let total_amount = BASE_AMOUNT;
+        // select coins
+        let resources = &self
+            .client
+            .resources_to_spend(
+                self.address.to_string().as_str(),
+                vec![(asset_id_str, total_amount, None)],
+                None,
+            )
+            .await?[0];
+
+        let salt = rng.gen();
+        let contract = Contract::from(bytes.clone());
+        let root = contract.root();
+        let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
+
+        let mut tx = TransactionBuilder::create(bytes.into(), salt, Default::default());
+        tx.gas_price(1);
+        tx.gas_limit(BASE_AMOUNT);
+
+        for resource in resources {
+            if let Resource::Coin(coin) = resource {
+                tx.add_unsigned_coin_input(
+                    self.secret,
+                    coin.utxo_id.clone().into(),
+                    coin.amount.clone().into(),
+                    coin.asset_id.clone().into(),
+                    Default::default(),
+                    coin.maturity.clone().into(),
+                );
+            }
+        }
+        tx.add_output(Output::ContractCreated {
+            contract_id,
+            state_root: Contract::default_state_root(),
+        });
+        tx.add_output(Output::Change {
+            to: self.address,
+            amount: 0,
+            asset_id,
+        });
+
+        let tx = tx.finalize();
+        println!("The size of the transaction is {}", tx.serialized_size());
+
+        let status = self
+            .client
+            .submit_and_await_commit(&tx.clone().into())
+            .await?;
+
+        // check status of contract deployment
+        if let TransactionStatus::Failure { .. } | TransactionStatus::SqueezedOut { .. } =
+            &status
+        {
+            return Err(anyhow!(format!(
+                "unexpected transaction status {:?}",
+                status
+            )))
+        }
+
+        Ok(())
     }
 }
 
