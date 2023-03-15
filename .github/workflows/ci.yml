@@ -54,6 +54,19 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
+  lint-helm-chart:
+    runs-on: buildjet-4vcpu-ubuntu-2204
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.10.0
+      - name: helm lint
+        run: |
+          cd deployment/charts
+          helm lint
+
   prevent-openssl:
     runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
@@ -139,6 +152,7 @@ jobs:
     needs:
       - cargo-verifications
       - publish-crates-check
+      - lint-helm-chart
     runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
       - run: echo "pass"
