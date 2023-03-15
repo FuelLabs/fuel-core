@@ -157,6 +157,7 @@ jobs:
     needs:
       - cargo-verifications
       - publish-crates-check
+      - lint-helm-chart
     runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
       - run: echo "pass"
