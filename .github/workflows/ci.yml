@@ -62,11 +62,6 @@ jobs:
         uses: azure/setup-helm@v3
         with:
           version: v3.10.0
-      - name: Substitue values
-        run: |
-          source deployment/scripts/.env
-          envsubst deployment/charts/values.yaml
-          envsubst deployment/charts/Chart.yaml
       - name: helm lint
         run: |
           cd deployment/charts
