@@ -181,6 +181,7 @@ where
                         let broadcast = GossipsubBroadcastRequest::NewTx(transaction);
                         let result = self.p2p_service.publish_message(broadcast);
                         if let Err(e) = result {
+                            eprintln!("{e:?}");
                             tracing::error!("Got an error during transaction broadcasting {}", e);
                         }
                     }

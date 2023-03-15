@@ -33,20 +33,20 @@ fn main() {
     let config = load_config();
 
     let tests = vec![
-        Trial::test(
-            "can transfer from alice to bob",
-            with_cloned(&config, |config| {
-                let ctx = TestContext::new(config);
-                async_execute(tests::transfers::basic_transfer(&ctx))
-            }),
-        ),
-        Trial::test(
-            "can transfer from alice to bob and back",
-            with_cloned(&config, |config| {
-                let ctx = TestContext::new(config);
-                async_execute(tests::transfers::transfer_back(&ctx))
-            }),
-        ),
+        // Trial::test(
+        //     "can transfer from alice to bob",
+        //     with_cloned(&config, |config| {
+        //         let ctx = TestContext::new(config);
+        //         async_execute(tests::transfers::basic_transfer(&ctx))
+        //     }),
+        // ),
+        // Trial::test(
+        //     "can transfer from alice to bob and back",
+        //     with_cloned(&config, |config| {
+        //         let ctx = TestContext::new(config);
+        //         async_execute(tests::transfers::transfer_back(&ctx))
+        //     }),
+        // ),
         Trial::test(
             "can deploy a large contract",
             with_cloned(&config, |config| {

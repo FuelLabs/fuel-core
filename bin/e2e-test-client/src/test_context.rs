@@ -217,8 +217,7 @@ impl Wallet {
         let root = contract.root();
         let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
 
-        let mut tx =
-            TransactionBuilder::create(bytes.into(), rng.gen(), Default::default());
+        let mut tx = TransactionBuilder::create(bytes.into(), salt, Default::default());
         tx.gas_price(1);
         tx.gas_limit(BASE_AMOUNT);
 
@@ -234,6 +233,13 @@ impl Wallet {
                 );
             }
         }
+        // tx.add_input(Input::contract(
+        //     Default::default(),
+        //     Default::default(),
+        //     Default::default(),
+        //     Default::default(),
+        //     contract_id,
+        // ));
         tx.add_output(Output::ContractCreated {
             contract_id,
             state_root: Contract::default_state_root(),

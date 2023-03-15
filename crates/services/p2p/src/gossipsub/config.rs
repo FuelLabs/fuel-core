@@ -18,6 +18,7 @@ use sha2::{
     Digest,
     Sha256,
 };
+use std::time::Duration;
 
 /// Creates `GossipsubConfigBuilder` with few of the Gossipsub values already defined
 pub fn default_gossipsub_builder() -> GossipsubConfigBuilder {
@@ -47,6 +48,8 @@ pub(crate) fn default_gossipsub_config() -> GossipsubConfig {
         .mesh_n(6)
         .mesh_n_low(4)
         .mesh_n_high(12)
+        .max_transmit_size(7864320)
+        .heartbeat_interval(Duration::from_secs(1))
         .build()
         .expect("valid gossipsub configuration")
 }
