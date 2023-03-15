@@ -1,4 +1,7 @@
-use crate::config::Config;
+use crate::config::{
+    Config,
+    MAX_RESPONSE_SIZE,
+};
 use fuel_core_metrics::p2p_metrics::P2P_METRICS;
 use libp2p::gossipsub::{
     metrics::Config as MetricsConfig,
@@ -18,6 +21,7 @@ use sha2::{
     Digest,
     Sha256,
 };
+use std::time::Duration;
 
 /// Creates `GossipsubConfigBuilder` with few of the Gossipsub values already defined
 pub fn default_gossipsub_builder() -> GossipsubConfigBuilder {
@@ -47,6 +51,8 @@ pub(crate) fn default_gossipsub_config() -> GossipsubConfig {
         .mesh_n(6)
         .mesh_n_low(4)
         .mesh_n_high(12)
+        .max_transmit_size(MAX_RESPONSE_SIZE)
+        .heartbeat_interval(Duration::from_secs(1))
         .build()
         .expect("valid gossipsub configuration")
 }
