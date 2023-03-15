@@ -118,8 +118,8 @@ impl GossipsubData {
     pub fn with_topics(topics: GossipsubTopics) -> Self {
         Self {
             topics,
-            max_score: 9.,
-            min_score_allowed: 0.,
+            max_score: 150.0,
+            min_score_allowed: -100.0,
         }
     }
 }
