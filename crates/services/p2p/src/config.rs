@@ -275,8 +275,7 @@ pub(crate) fn build_transport(
     };
 
     let multiplex_config = {
-        let mut mplex_config = mplex::MplexConfig::default();
-        mplex_config.set_max_buffer_size(usize::MAX);
+        let mplex_config = mplex::MplexConfig::default();
 
         let mut yamux_config = yamux::YamuxConfig::default();
         yamux_config.set_max_buffer_size(MAX_RESPONSE_SIZE);
