@@ -6,7 +6,13 @@ use tokio::time::timeout;
 // deploy a large contract (16mb)
 pub async fn deploy_large_contract(ctx: &TestContext) -> Result<(), Failed> {
     // generate large bytecode
-    let bytecode = vec![0u8; 16 * 1024 * 1024];
+    let bytecode = if ctx.config.full_test {
+        // 16mib takes a long time to process due to contract root calculations
+        // it is under an optional flag to avoid slowing down every CI run.
+        vec![0u8; 16 * 1024 * 1024]
+    } else {
+        vec![0u8; 1024 * 1024]
+    };
 
     let deployment_request = ctx.bob.deploy_contract(bytecode);
 
