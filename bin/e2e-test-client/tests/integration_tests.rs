@@ -120,3 +120,5 @@ struct TestConfig {
     // keep the temp dir alive to defer the deletion of the temp dir until the end of the test
     _dir: TempDir,
 }
+
+fuel_core_trace::enable_tracing!();

@@ -6,6 +6,7 @@ use fuel_core::{
             convert_to_libp2p_keypair,
             Config,
             NotInitialized,
+            MAX_RESPONSE_SIZE,
         },
         gossipsub_config::default_gossipsub_builder,
         HeartbeatConfig,
@@ -26,6 +27,8 @@ use std::{
     str::FromStr,
     time::Duration,
 };
+
+const MAX_RESPONSE_SIZE_STR: &str = const_format::formatcp!("{MAX_RESPONSE_SIZE}");
 
 #[derive(Debug, Clone, Args)]
 pub struct P2PArgs {
@@ -51,7 +54,7 @@ pub struct P2PArgs {
     pub peering_port: u16,
 
     /// Max Block size
-    #[clap(long = "max_block_size", default_value = "100000", env)]
+    #[clap(long = "max_block_size", default_value = MAX_RESPONSE_SIZE_STR, env)]
     pub max_block_size: usize,
 
     /// Addresses of the bootstrap nodes
@@ -136,8 +139,8 @@ pub struct P2PArgs {
     #[clap(long = "gossip_heartbeat_interval", default_value = "1", env)]
     pub gossip_heartbeat_interval: u64,
 
-    /// The maximum byte size for each gossip (default is 7.5 MiB)
-    #[clap(long = "max_transmit_size", default_value = "7864320", env)]
+    /// The maximum byte size for each gossip (default is 18 MiB)
+    #[clap(long = "max_transmit_size", default_value = MAX_RESPONSE_SIZE_STR, env)]
     pub max_transmit_size: usize,
 
     /// Choose timeout for sent requests in RequestResponse protocol
