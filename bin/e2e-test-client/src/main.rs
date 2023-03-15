@@ -79,5 +79,3 @@ fn async_execute<F: Future<Output = anyhow::Result<(), Failed>>>(
         .unwrap()
         .block_on(func)
 }
-
-fuel_core_trace::enable_tracing!();
