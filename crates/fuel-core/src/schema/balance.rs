@@ -1,5 +1,6 @@
 use crate::{
-    query::BalanceQueryContext,
+    fuel_core_graphql_api::service::Database,
+    query::BalanceQueryData,
     schema::scalars::{
         Address,
         AssetId,
@@ -52,7 +53,7 @@ impl BalanceQuery {
         #[graphql(desc = "address of the owner")] owner: Address,
         #[graphql(desc = "asset_id of the coin")] asset_id: AssetId,
     ) -> async_graphql::Result<Balance> {
-        let data = BalanceQueryContext(ctx.data_unchecked());
+        let data: &Database = ctx.data_unchecked();
         let balance = data.balance(owner.0, asset_id.0)?.into();
         Ok(balance)
     }
@@ -74,7 +75,7 @@ impl BalanceQuery {
         if before.is_some() || after.is_some() {
             return Err(anyhow!("pagination is not yet supported").into())
         }
-        let query = BalanceQueryContext(ctx.data_unchecked());
+        let query: &Database = ctx.data_unchecked();
         crate::schema::query_pagination(after, before, first, last, |_, direction| {
             let owner = filter.owner.into();
             Ok(query.balances(owner, direction).map(|result| {

@@ -9,8 +9,9 @@ use crate::{
     },
     query::{
         transaction_status_change,
-        BlockQueryContext,
-        TransactionQueryContext,
+        BlockQueryData,
+        SimpleTransactionData,
+        TransactionQueryData,
         TxnStatusChangeState,
     },
     schema::scalars::{
@@ -20,7 +21,6 @@ use crate::{
         TransactionId,
         TxPointer,
     },
-    state::IterDirection,
 };
 use anyhow::anyhow;
 use async_graphql::{
@@ -32,7 +32,10 @@ use async_graphql::{
     Object,
     Subscription,
 };
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    iter::IterDirection,
+    Result as StorageResult,
+};
 use fuel_core_types::{
     fuel_tx::{
         Cacheable,
@@ -69,7 +72,7 @@ impl TxQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> async_graphql::Result<Option<Transaction>> {
-        let query = TransactionQueryContext(ctx.data_unchecked());
+        let query: &Database = ctx.data_unchecked();
         let id = id.0;
         let txpool = ctx.data_unchecked::<TxPool>();
 
@@ -90,9 +93,8 @@ impl TxQuery {
     ) -> async_graphql::Result<
         Connection<SortedTxCursor, Transaction, EmptyFields, EmptyFields>,
     > {
-        let db = ctx.data_unchecked();
-        let db_query = BlockQueryContext(db);
-        let tx_query = TransactionQueryContext(db);
+        let db_query: &Database = ctx.data_unchecked();
+        let tx_query: &Database = ctx.data_unchecked();
         crate::schema::query_pagination(
             after,
             before,
@@ -160,7 +162,7 @@ impl TxQuery {
             )
         }
 
-        let query = TransactionQueryContext(ctx.data_unchecked());
+        let query: &Database = ctx.data_unchecked();
         let owner = fuel_types::Address::from(owner);
 
         crate::schema::query_pagination(
@@ -267,6 +269,6 @@ impl<'a> TxnStatusChangeState for StreamState<'a> {
         &self,
         id: fuel_types::Bytes32,
     ) -> StorageResult<Option<TransactionStatus>> {
-        types::get_tx_status(id, &TransactionQueryContext(self.db), self.txpool).await
+        types::get_tx_status(id, self.db, self.txpool).await
     }
 }

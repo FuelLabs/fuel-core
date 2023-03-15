@@ -1,6 +1,9 @@
 use crate::{
-    fuel_core_graphql_api::IntoApiResult,
-    query::CoinQueryContext,
+    fuel_core_graphql_api::{
+        service::Database,
+        IntoApiResult,
+    },
+    query::CoinQueryData,
     schema::scalars::{
         Address,
         AssetId,
@@ -77,7 +80,7 @@ impl CoinQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "The ID of the coin")] utxo_id: UtxoId,
     ) -> async_graphql::Result<Option<Coin>> {
-        let data = CoinQueryContext(ctx.data_unchecked());
+        let data: &Database = ctx.data_unchecked();
         data.coin(utxo_id.0).into_api_result()
     }
 
@@ -99,7 +102,7 @@ impl CoinQuery {
             )
         }
 
-        let query = CoinQueryContext(ctx.data_unchecked());
+        let query: &Database = ctx.data_unchecked();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
             let owner: fuel_tx::Address = filter.owner.into();
             let coins = query
