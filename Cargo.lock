@@ -1131,6 +1131,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cec318a675afcb6a1ea1d4340e2d377e56e47c266f28043ceccbf4412ddfdd3b"
 
 [[package]]
+name = "const_format"
+version = "0.2.30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7309d9b4d3d2c0641e018d449232f2e28f1b22933c137f157d3dbc14228b8c0e"
+dependencies = [
+ "const_format_proc_macros",
+]
+
+[[package]]
+name = "const_format_proc_macros"
+version = "0.2.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d897f47bf7270cf70d370f8f98c1abb6d2d4cf60a6845d30e05bfb90c6568650"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-xid",
+]
+
+[[package]]
 name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2396,6 +2416,7 @@ version = "0.17.3"
 dependencies = [
  "anyhow",
  "clap 4.1.6",
+ "const_format",
  "dirs",
  "fuel-core",
  "humantime",
@@ -2493,6 +2514,7 @@ dependencies = [
  "fuel-core",
  "fuel-core-client",
  "fuel-core-e2e-client",
+ "fuel-core-trace",
  "fuel-core-types",
  "humantime-serde",
  "insta",

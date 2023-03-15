@@ -9,20 +9,22 @@ app:
   http_port: 80
   target_port: 4000
   peering_port: 30333
-  network_name: ${fuel_core_network_name}
-  p2p_key: ${fuel_core_p2p_key}
-  allow_private_addresses: ${fuel_core_allow_private_addresses}
   human_logging: ${fuel_core_human_logging}
   rust_log: ${fuel_core_rust_log}
   utxo_validation: ${fuel_core_utxo_validation}
   vm_backtrace: ${fuel_core_vm_backtrace}
   min_gas_price: ${fuel_core_min_gas_price}
-  reserved_nodes_only_mode: ${fuel_core_reserved_only}
+  network_name: ${fuel_core_network_name}
   poa_instant: "${fuel_core_poa_instant}"
   poa_interval_period: ${fuel_core_poa_interval_period}
   poa_hybrid_min_time: ${fuel_core_poa_hybrid_min_time}
   poa_hybrid_idle_time: ${fuel_core_poa_hybrid_idle_time}
   poa_hybrid_max_time: ${fuel_core_poa_hybrid_max_time}
+  max_block_size: ${fuel_core_max_buffer_size}
+  max_transmit_size: ${fuel_core_max_buffer_size}
+  p2p_key: ${fuel_core_p2p_key}
+  allow_private_addresses: ${fuel_core_allow_private_addresses}
+  reserved_nodes_only_mode: ${fuel_core_reserved_only}
   reserved_nodes: ${fuel_core_reserved_nodes}
   bootstrap_nodes: ${fuel_core_bootstrap_nodes}
   relayer: ${fuel_core_relayer}

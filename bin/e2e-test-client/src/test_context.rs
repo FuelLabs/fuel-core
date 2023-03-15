@@ -30,6 +30,7 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
+        bytes::SizedBytes,
         Address,
         AssetId,
     },
@@ -233,13 +234,6 @@ impl Wallet {
                 );
             }
         }
-        // tx.add_input(Input::contract(
-        //     Default::default(),
-        //     Default::default(),
-        //     Default::default(),
-        //     Default::default(),
-        //     contract_id,
-        // ));
         tx.add_output(Output::ContractCreated {
             contract_id,
             state_root: Contract::default_state_root(),
@@ -251,6 +245,7 @@ impl Wallet {
         });
 
         let tx = tx.finalize();
+        println!("The size of the transaction is {}", tx.serialized_size());
 
         let status = self
             .client
