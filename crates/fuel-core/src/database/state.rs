@@ -1,26 +1,37 @@
 use crate::database::{
+    storage::{
+        ContractsStateMerkleData,
+        ContractsStateMerkleMetadata,
+        SparseMerkleMetadata,
+    },
     Column,
     Database,
 };
 use fuel_core_storage::{
-    iter::IterDirection,
     tables::ContractsState,
     Error as StorageError,
     Mappable,
     MerkleRoot,
     MerkleRootStorage,
+    StorageAsMut,
+    StorageAsRef,
     StorageInspect,
     StorageMutate,
 };
 use fuel_core_types::{
-    fuel_types::{
-        Bytes32,
-        ContractId,
+    fuel_merkle::sparse::{
+        in_memory,
+        MerkleTree,
     },
-    fuel_vm::crypto,
+    fuel_types::ContractId,
 };
-use itertools::Itertools;
-use std::borrow::Cow;
+use std::{
+    borrow::{
+        BorrowMut,
+        Cow,
+    },
+    ops::Deref,
+};
 
 impl StorageInspect<ContractsState> for Database {
     type Error = StorageError;
@@ -48,37 +59,92 @@ impl StorageMutate<ContractsState> for Database {
         key: &<ContractsState as Mappable>::Key,
         value: &<ContractsState as Mappable>::Value,
     ) -> Result<Option<<ContractsState as Mappable>::OwnedValue>, Self::Error> {
-        Database::insert(self, key.as_ref(), Column::ContractsState, value)
-            .map_err(Into::into)
+        let prev = Database::insert(self, key.as_ref(), Column::ContractsState, value)
+            .map_err(Into::into);
+
+        // Get latest metadata entry for this contract id
+        let prev_metadata = self
+            .storage::<ContractsStateMerkleMetadata>()
+            .get(key.contract_id())?
+            .unwrap_or_default();
+
+        let root = prev_metadata.root;
+        let storage = self.borrow_mut();
+        let mut tree: MerkleTree<ContractsStateMerkleData, _> = {
+            if root == [0; 32] {
+                // The tree is empty
+                MerkleTree::new(storage)
+            } else {
+                // Load the tree saved in metadata
+                MerkleTree::load(storage, &root)
+                    .map_err(|err| StorageError::Other(err.into()))?
+            }
+        };
+
+        // Update the contract's key-value dataset. The key is the state key and
+        // the value is the 32 bytes
+        tree.update(key.state_key().deref(), value.as_slice())
+            .map_err(|err| StorageError::Other(err.into()))?;
+
+        // Generate new metadata for the updated tree
+        let root = tree.root();
+        let metadata = SparseMerkleMetadata { root };
+        self.storage::<ContractsStateMerkleMetadata>()
+            .insert(key.contract_id(), &metadata)?;
+
+        prev
     }
 
     fn remove(
         &mut self,
         key: &<ContractsState as Mappable>::Key,
     ) -> Result<Option<<ContractsState as Mappable>::OwnedValue>, Self::Error> {
-        Database::remove(self, key.as_ref(), Column::ContractsState).map_err(Into::into)
+        let prev = Database::remove(self, key.as_ref(), Column::ContractsState)
+            .map_err(Into::into);
+
+        // Get latest metadata entry for this contract id
+        let prev_metadata = self
+            .storage::<ContractsStateMerkleMetadata>()
+            .get(key.contract_id())?;
+
+        if let Some(prev_metadata) = prev_metadata {
+            let root = prev_metadata.root;
+
+            // Load the tree saved in metadata
+            let storage = self.borrow_mut();
+            let mut tree: MerkleTree<ContractsStateMerkleData, _> =
+                MerkleTree::load(storage, &root)
+                    .map_err(|err| StorageError::Other(err.into()))?;
+
+            // Update the contract's key-value dataset. The key is the state key and
+            // the value is the 32 bytes
+            tree.delete(key.state_key().deref())
+                .map_err(|err| StorageError::Other(err.into()))?;
+
+            let root = tree.root();
+            if root == in_memory::MerkleTree::new().root() {
+                // The tree is now empty; remove the metadata
+                self.storage::<ContractsStateMerkleMetadata>()
+                    .remove(key.contract_id())?;
+            } else {
+                // Generate new metadata for the updated tree
+                let metadata = SparseMerkleMetadata { root };
+                self.storage::<ContractsStateMerkleMetadata>()
+                    .insert(key.contract_id(), &metadata)?;
+            }
+        }
+
+        prev
     }
 }
 
 impl MerkleRootStorage<ContractId, ContractsState> for Database {
     fn root(&self, parent: &ContractId) -> Result<MerkleRoot, Self::Error> {
-        let items: Vec<_> = Database::iter_all_by_prefix::<Vec<u8>, Bytes32, _>(
-            self,
-            Column::ContractsState,
-            Some(parent),
-            Some(IterDirection::Forward),
-        )
-        .try_collect()?;
-
-        let root = items
-            .iter()
-            .filter_map(|(key, value)| {
-                (&key[..parent.len()] == parent.as_ref()).then_some((key, value))
-            })
-            .sorted_by_key(|t| t.0)
-            .map(|(_, value)| value);
-
-        Ok(crypto::ephemeral_merkle_root(root).into())
+        let metadata = self.storage::<ContractsStateMerkleMetadata>().get(parent)?;
+        let root = metadata
+            .map(|metadata| metadata.root)
+            .unwrap_or_else(|| in_memory::MerkleTree::new().root());
+        Ok(root)
     }
 }
 
@@ -89,6 +155,7 @@ mod tests {
         StorageAsMut,
         StorageAsRef,
     };
+    use fuel_core_types::fuel_types::Bytes32;
 
     #[test]
     fn get() {
@@ -178,5 +245,103 @@ mod tests {
 
         let root = database.storage::<ContractsState>().root(key.contract_id());
         assert!(root.is_ok())
+    }
+
+    #[test]
+    fn root_returns_empty_root_for_invalid_contract() {
+        let invalid_contract_id = ContractId::from([1u8; 32]);
+        let database = Database::default();
+        let empty_root = in_memory::MerkleTree::new().root();
+        let root = database
+            .storage::<ContractsState>()
+            .root(&invalid_contract_id)
+            .unwrap();
+        assert_eq!(root, empty_root)
+    }
+
+    #[test]
+    fn put_updates_the_state_merkle_root_for_the_given_contract() {
+        let contract_id = ContractId::from([1u8; 32]);
+        let database = &mut Database::default();
+
+        // Write the first contract state
+        let state_key = Bytes32::from([1u8; 32]);
+        let state: Bytes32 = Bytes32::from([0xff; 32]);
+        let key = (&contract_id, &state_key).into();
+        database
+            .storage::<ContractsState>()
+            .insert(&key, &state)
+            .unwrap();
+
+        // Read the first Merkle root
+        let root_1 = database
+            .storage::<ContractsState>()
+            .root(&contract_id)
+            .unwrap();
+
+        // Write the second contract state
+        let state_key = Bytes32::from([2u8; 32]);
+        let state: Bytes32 = Bytes32::from([0xff; 32]);
+        let key = (&contract_id, &state_key).into();
+        database
+            .storage::<ContractsState>()
+            .insert(&key, &state)
+            .unwrap();
+
+        // Read the second Merkle root
+        let root_2 = database
+            .storage::<ContractsState>()
+            .root(&contract_id)
+            .unwrap();
+
+        assert_ne!(root_1, root_2);
+    }
+
+    #[test]
+    fn remove_updates_the_state_merkle_root_for_the_given_contract() {
+        let contract_id = ContractId::from([1u8; 32]);
+        let database = &mut Database::default();
+
+        // Write the first contract state
+        let state_key = Bytes32::new([1u8; 32]);
+        let state: Bytes32 = Bytes32::from([0xff; 32]);
+        let key = (&contract_id, &state_key).into();
+        database
+            .storage::<ContractsState>()
+            .insert(&key, &state)
+            .unwrap();
+        let root_0 = database
+            .storage::<ContractsState>()
+            .root(&contract_id)
+            .unwrap();
+
+        // Write the second contract state
+        let state_key = Bytes32::new([2u8; 32]);
+        let state: Bytes32 = Bytes32::from([0xff; 32]);
+        let key = (&contract_id, &state_key).into();
+        database
+            .storage::<ContractsState>()
+            .insert(&key, &state)
+            .unwrap();
+
+        // Read the first Merkle root
+        let root_1 = database
+            .storage::<ContractsState>()
+            .root(&contract_id)
+            .unwrap();
+
+        // Remove the first contract state
+        let state_key = Bytes32::new([2u8; 32]);
+        let key = (&contract_id, &state_key).into();
+        database.storage::<ContractsState>().remove(&key).unwrap();
+
+        // Read the second Merkle root
+        let root_2 = database
+            .storage::<ContractsState>()
+            .root(&contract_id)
+            .unwrap();
+
+        assert_ne!(root_1, root_2);
+        assert_eq!(root_0, root_2);
     }
 }

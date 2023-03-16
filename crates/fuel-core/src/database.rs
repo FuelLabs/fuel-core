@@ -119,6 +119,14 @@ pub enum Column {
     /// Metadata for the relayer
     /// See [`RelayerMetadata`](fuel_core_relayer::ports::RelayerMetadata)
     RelayerMetadata = 20,
+    /// See [`ContractsAssetsMerkleData`](storage::ContractsAssetsMerkleData)
+    ContractsAssetsMerkleData = 21,
+    /// See [`ContractsAssetsMerkleMetadata`](storage::ContractsAssetsMerkleMetadata)
+    ContractsAssetsMerkleMetadata = 22,
+    /// See [`ContractsStateMerkleData`](storage::ContractsStateMerkleData)
+    ContractsStateMerkleData = 23,
+    /// See [`ContractsStateMerkleMetadata`](storage::ContractsStateMerkleMetadata)
+    ContractsStateMerkleMetadata = 24,
 }
 
 #[derive(Clone, Debug)]
