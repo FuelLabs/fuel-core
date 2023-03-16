@@ -86,7 +86,7 @@ async fn can_manually_produce_block(
 
     ctx.service
         .shared
-        .manually_produce_block(start_time, number_of_blocks)
+        .manually_produce_block(Some(start_time), number_of_blocks)
         .await
         .unwrap();
     for _ in 0..num_txns {

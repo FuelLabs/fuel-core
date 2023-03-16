@@ -79,7 +79,7 @@ pub struct SharedState {
 impl SharedState {
     pub async fn manually_produce_block(
         &self,
-        start_time: Tai64,
+        start_time: Option<Tai64>,
         number_of_blocks: u32,
     ) -> anyhow::Result<()> {
         let (sender, receiver) = oneshot::channel();
@@ -98,7 +98,7 @@ impl SharedState {
 }
 
 struct ManualProduction {
-    pub start_time: Tai64,
+    pub start_time: Option<Tai64>,
     pub number_of_blocks: u32,
 }
 
@@ -179,10 +179,12 @@ where
     }
 
     fn next_time(&self, request_type: RequestType) -> anyhow::Result<Tai64> {
-        let now = Tai64::now();
         match request_type {
             RequestType::Manual => match self.trigger {
-                Trigger::Never | Trigger::Instant => self.next_time(RequestType::Trigger),
+                Trigger::Never | Trigger::Instant => {
+                    let duration = self.last_block_created.elapsed();
+                    increase_time(self.last_timestamp, duration)
+                }
                 Trigger::Interval { block_time } => {
                     increase_time(self.last_timestamp, block_time)
                 }
@@ -191,11 +193,11 @@ where
                 }
             },
             RequestType::Trigger => {
+                let now = Tai64::now();
                 if now > self.last_timestamp {
                     Ok(now)
                 } else {
-                    let duration = self.last_block_created.elapsed();
-                    increase_time(self.last_timestamp, duration)
+                    self.next_time(RequestType::Manual)
                 }
             }
         }
@@ -232,7 +234,9 @@ where
         &mut self,
         block_production: ManualProduction,
     ) -> anyhow::Result<()> {
-        let mut block_time = block_production.start_time;
+        let mut block_time = block_production
+            .start_time
+            .unwrap_or(self.next_time(RequestType::Manual)?);
         for _ in 0..block_production.number_of_blocks {
             self.produce_block(self.next_height(), block_time, RequestType::Manual)
                 .await?;

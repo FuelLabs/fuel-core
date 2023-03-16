@@ -1,4 +1,3 @@
-use anyhow::Result;
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
@@ -158,7 +157,7 @@ pub trait TxPoolPort: Send + Sync {
 
     fn tx_update_subscribe(
         &self,
-    ) -> BoxStream<Result<TxUpdate, BroadcastStreamRecvError>>;
+    ) -> BoxStream<anyhow::Result<TxUpdate, BroadcastStreamRecvError>>;
 }
 
 #[async_trait]
@@ -177,7 +176,7 @@ pub trait BlockProducerPort: Send + Sync + DryRunExecution {}
 pub trait ConsensusModulePort: Send + Sync {
     async fn manually_produce_blocks(
         &self,
-        start_time: Tai64,
+        start_time: Option<Tai64>,
         number_of_blocks: u32,
     ) -> anyhow::Result<()>;
 }

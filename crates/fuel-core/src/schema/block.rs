@@ -50,7 +50,6 @@ use fuel_core_types::{
         header::BlockHeader,
     },
     fuel_types,
-    tai64::Tai64,
 };
 
 pub struct Block(pub(crate) CompressedBlock);
@@ -304,9 +303,7 @@ impl BlockMutation {
             )
         }
 
-        let start_time = start_timestamp
-            .map(|timestamp| timestamp.0)
-            .unwrap_or(Tai64::now());
+        let start_time = start_timestamp.map(|timestamp| timestamp.0);
         let blocks_to_produce: u64 = blocks_to_produce.into();
         consensus_module
             .manually_produce_blocks(start_time, blocks_to_produce as u32)

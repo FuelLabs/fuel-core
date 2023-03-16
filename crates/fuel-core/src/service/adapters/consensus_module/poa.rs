@@ -47,7 +47,7 @@ impl PoAAdapter {
 impl ConsensusModulePort for PoAAdapter {
     async fn manually_produce_blocks(
         &self,
-        start_time: Tai64,
+        start_time: Option<Tai64>,
         number_of_blocks: u32,
     ) -> anyhow::Result<()> {
         self.shared_state
