@@ -1,8 +1,5 @@
 use crate::database::{
-    storage::{
-        DatabaseColumn,
-        ToDatabaseKey,
-    },
+    storage::DatabaseColumn,
     Column,
     Database,
     Error as DatabaseError,
@@ -59,14 +56,6 @@ impl Mappable for OwnedCoins {
 impl DatabaseColumn for OwnedCoins {
     fn column() -> Column {
         Column::OwnedCoins
-    }
-}
-
-impl ToDatabaseKey for OwnedCoinKey {
-    type Type<'a> = &'a [u8];
-
-    fn database_key(&self) -> Self::Type<'_> {
-        &self[..]
     }
 }
 

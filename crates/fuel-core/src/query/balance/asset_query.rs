@@ -91,9 +91,7 @@ impl<'a> AssetsQuery<'a> {
     /// # Note: The resources of different type are not grouped by the `asset_id`.
     // TODO: Optimize this by creating an index
     //  https://github.com/FuelLabs/fuel-core/issues/588
-    pub fn unspent_resources(
-        &self,
-    ) -> impl Iterator<Item = StorageResult<Resource>> + '_ {
+    pub fn resources(&self) -> impl Iterator<Item = StorageResult<Resource>> + '_ {
         let coins_iter = self
             .database
             .owned_coins_ids(self.owner, None, IterDirection::Forward)
@@ -176,9 +174,7 @@ impl<'a> AssetQuery<'a> {
 
     /// Returns the iterator over all valid(spendable, allowed by `exclude`) resources of the `owner`
     /// for the `asset_id`.
-    pub fn unspent_resources(
-        &self,
-    ) -> impl Iterator<Item = StorageResult<Resource>> + '_ {
-        self.query.unspent_resources()
+    pub fn resources(&self) -> impl Iterator<Item = StorageResult<Resource>> + '_ {
+        self.query.resources()
     }
 }
