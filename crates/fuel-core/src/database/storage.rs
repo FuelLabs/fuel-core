@@ -5,6 +5,7 @@ use crate::database::{
 use fuel_core_storage::{
     Error as StorageError,
     Mappable,
+    MerkleRoot,
     Result as StorageResult,
     StorageInspect,
     StorageMutate,
@@ -14,10 +15,12 @@ use fuel_core_types::{
         BlockHeight,
         BlockId,
     },
-    fuel_merkle::binary,
+    fuel_merkle::{
+        binary,
+        sparse,
+    },
     fuel_tx::TxId,
     fuel_types::{
-        Bytes32,
         ContractId,
         MessageId,
     },
@@ -32,7 +35,7 @@ use std::borrow::Cow;
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct DenseMerkleMetadata {
     /// The root hash of the dense Merkle tree structure
-    pub root: Bytes32,
+    pub root: MerkleRoot,
     /// The version of the dense Merkle tree structure is equal to the number of
     /// leaves. Every time we append a new leaf to the Merkle tree data set, we
     /// increment the version number.
@@ -43,8 +46,24 @@ impl Default for DenseMerkleMetadata {
     fn default() -> Self {
         let empty_merkle_tree = binary::in_memory::MerkleTree::new();
         Self {
-            root: empty_merkle_tree.root().into(),
+            root: empty_merkle_tree.root(),
             version: 0,
+        }
+    }
+}
+
+/// Metadata for sparse Merkle trees
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct SparseMerkleMetadata {
+    /// The root hash of the sparse Merkle tree structure
+    pub root: MerkleRoot,
+}
+
+impl Default for SparseMerkleMetadata {
+    fn default() -> Self {
+        let empty_merkle_tree = sparse::in_memory::MerkleTree::new();
+        Self {
+            root: empty_merkle_tree.root(),
         }
     }
 }
@@ -62,7 +81,7 @@ impl Mappable for FuelBlockSecondaryKeyBlockHeights {
     type OwnedValue = Self::Value;
 }
 
-/// The table of BMT MMR data for the fuel blocks.
+/// The table of BMT data for Fuel blocks.
 pub struct FuelBlockMerkleData;
 
 impl Mappable for FuelBlockMerkleData {
@@ -72,13 +91,53 @@ impl Mappable for FuelBlockMerkleData {
     type OwnedValue = Self::Value;
 }
 
-/// The metadata table for [`FuelBlockMerkleData`] table.
+/// The metadata table for [`FuelBlockMerkleData`](FuelBlockMerkleData) table.
 pub struct FuelBlockMerkleMetadata;
 
 impl Mappable for FuelBlockMerkleMetadata {
     type Key = BlockHeight;
     type OwnedKey = Self::Key;
     type Value = DenseMerkleMetadata;
+    type OwnedValue = Self::Value;
+}
+
+/// The table of SMT data for Contract assets.
+pub struct ContractsAssetsMerkleData;
+
+impl Mappable for ContractsAssetsMerkleData {
+    type Key = [u8; 32];
+    type OwnedKey = Self::Key;
+    type Value = sparse::Primitive;
+    type OwnedValue = Self::Value;
+}
+
+/// The metadata table for [`ContractsAssetsMerkleData`](ContractsAssetsMerkleData) table
+pub struct ContractsAssetsMerkleMetadata;
+
+impl Mappable for ContractsAssetsMerkleMetadata {
+    type Key = ContractId;
+    type OwnedKey = Self::Key;
+    type Value = SparseMerkleMetadata;
+    type OwnedValue = Self::Value;
+}
+
+/// The table of SMT data for Contract state.
+pub struct ContractsStateMerkleData;
+
+impl Mappable for ContractsStateMerkleData {
+    type Key = [u8; 32];
+    type OwnedKey = Self::Key;
+    type Value = sparse::Primitive;
+    type OwnedValue = Self::Value;
+}
+
+/// The metadata table for [`ContractsStateMerkleData`](ContractsStateMerkleData) table
+pub struct ContractsStateMerkleMetadata;
+
+impl Mappable for ContractsStateMerkleMetadata {
+    type Key = ContractId;
+    type OwnedKey = Self::Key;
+    type Value = SparseMerkleMetadata;
     type OwnedValue = Self::Value;
 }
 
@@ -109,6 +168,30 @@ impl DatabaseColumn for FuelBlockMerkleData {
 impl DatabaseColumn for FuelBlockMerkleMetadata {
     fn column() -> Column {
         Column::FuelBlockMerkleMetadata
+    }
+}
+
+impl DatabaseColumn for ContractsAssetsMerkleData {
+    fn column() -> Column {
+        Column::ContractsAssetsMerkleData
+    }
+}
+
+impl DatabaseColumn for ContractsAssetsMerkleMetadata {
+    fn column() -> Column {
+        Column::ContractsAssetsMerkleMetadata
+    }
+}
+
+impl DatabaseColumn for ContractsStateMerkleData {
+    fn column() -> Column {
+        Column::ContractsStateMerkleData
+    }
+}
+
+impl DatabaseColumn for ContractsStateMerkleMetadata {
+    fn column() -> Column {
+        Column::ContractsStateMerkleMetadata
     }
 }
 
@@ -217,5 +300,13 @@ impl ToDatabaseKey for () {
 
     fn database_key(&self) -> Self::Type<'_> {
         &[]
+    }
+}
+
+impl<const N: usize> ToDatabaseKey for [u8; N] {
+    type Type<'a> = &'a [u8];
+
+    fn database_key(&self) -> Self::Type<'_> {
+        self.as_slice()
     }
 }
