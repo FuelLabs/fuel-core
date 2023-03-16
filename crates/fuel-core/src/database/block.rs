@@ -77,7 +77,7 @@ impl StorageMutate<FuelBlocks> for Database {
         self.storage::<FuelBlockSecondaryKeyBlockHeights>()
             .insert(height, key)?;
 
-        // get latest metadata entry
+        // Get latest metadata entry
         let prev_metadata = self
             .iter_all::<Vec<u8>, DenseMerkleMetadata>(
                 Column::FuelBlockMerkleMetadata,
@@ -97,7 +97,7 @@ impl StorageMutate<FuelBlocks> for Database {
 
         // Generate new metadata for the updated tree
         let version = tree.leaves_count();
-        let root = tree.root().into();
+        let root = tree.root();
         let metadata = DenseMerkleMetadata { version, root };
         self.storage::<FuelBlockMerkleMetadata>()
             .insert(height, &metadata)?;
@@ -245,9 +245,8 @@ impl MerkleRootStorage<BlockHeight, FuelBlocks> for Database {
         let metadata = self
             .storage::<FuelBlockMerkleMetadata>()
             .get(key)?
-            .ok_or(not_found!(FuelBlocks))
-            .map(Cow::into_owned)?;
-        Ok(metadata.root.into())
+            .ok_or(not_found!(FuelBlocks))?;
+        Ok(metadata.root)
     }
 }
 

@@ -1484,7 +1484,6 @@ mod tests {
         },
         fuel_asm::op,
         fuel_crypto::SecretKey,
-        fuel_merkle::common::empty_sum_sha256,
         fuel_tx,
         fuel_tx::{
             field::{
@@ -2572,7 +2571,7 @@ mod tests {
     fn contracts_balance_and_state_roots_no_modifications_updated() {
         // Values in inputs and outputs are random. If the execution of the transaction successful,
         // it should actualize them to use a valid the balance and state roots. Because it is not
-        // changes, the balance the root should be default - `fuel_merkle::common::empty_sum_sha256()`.
+        // changes, the balance the root should be default - `[0; 32]`.
         let mut rng = StdRng::seed_from_u64(2322u64);
 
         let (create, contract_id) = create_contract(vec![], &mut rng);
@@ -2614,7 +2613,7 @@ mod tests {
             .unwrap();
 
         // Assert the balance and state roots should be the same before and after execution.
-        let empty_state = Bytes32::from(*empty_sum_sha256());
+        let empty_state = [0; 32].into();
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
             tx_status[2].result,
@@ -2680,7 +2679,7 @@ mod tests {
             .unwrap();
 
         // Assert the balance and state roots should be the same before and after execution.
-        let empty_state = Bytes32::from(*empty_sum_sha256());
+        let empty_state = [0; 32].into();
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
             tx_status[2].result,
@@ -2791,7 +2790,7 @@ mod tests {
             .execute_and_commit(ExecutionBlock::Production(block))
             .unwrap();
 
-        let empty_state = Bytes32::from(*empty_sum_sha256());
+        let empty_state = [0; 32].into();
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
             tx_status[2].result,
@@ -2874,7 +2873,7 @@ mod tests {
             .unwrap();
 
         // Assert the balance root should not be affected.
-        let empty_state = Bytes32::from(*empty_sum_sha256());
+        let empty_state = [0; 32].into();
         assert_eq!(
             ContractRef::new(db, contract_id).balance_root().unwrap(),
             empty_state
