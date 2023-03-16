@@ -17,7 +17,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     entities::message::{
-        CompressedMessage,
+        Message,
         MessageStatus,
     },
     fuel_types::{
@@ -36,10 +36,7 @@ use super::storage::DatabaseColumn;
 impl StorageInspect<Messages> for Database {
     type Error = StorageError;
 
-    fn get(
-        &self,
-        key: &MessageId,
-    ) -> Result<Option<Cow<CompressedMessage>>, Self::Error> {
+    fn get(&self, key: &MessageId) -> Result<Option<Cow<Message>>, Self::Error> {
         Database::get(self, key.as_ref(), Column::Messages).map_err(Into::into)
     }
 
@@ -52,8 +49,8 @@ impl StorageMutate<Messages> for Database {
     fn insert(
         &mut self,
         key: &MessageId,
-        value: &CompressedMessage,
-    ) -> Result<Option<CompressedMessage>, Self::Error> {
+        value: &Message,
+    ) -> Result<Option<Message>, Self::Error> {
         // insert primary record
         let result = Database::insert(self, key.as_ref(), Column::Messages, value)?;
 
@@ -68,11 +65,8 @@ impl StorageMutate<Messages> for Database {
         Ok(result)
     }
 
-    fn remove(
-        &mut self,
-        key: &MessageId,
-    ) -> Result<Option<CompressedMessage>, Self::Error> {
-        let result: Option<CompressedMessage> =
+    fn remove(&mut self, key: &MessageId) -> Result<Option<Message>, Self::Error> {
+        let result: Option<Message> =
             Database::remove(self, key.as_ref(), Column::Messages)?;
 
         if let Some(message) = &result {
@@ -118,14 +112,10 @@ impl Database {
         &self,
         start: Option<MessageId>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<CompressedMessage>> + '_ {
+    ) -> impl Iterator<Item = DatabaseResult<Message>> + '_ {
         let start = start.map(|v| v.deref().to_vec());
-        self.iter_all_by_start::<Vec<u8>, CompressedMessage, _>(
-            Column::Messages,
-            start,
-            direction,
-        )
-        .map(|res| res.map(|(_, message)| message))
+        self.iter_all_by_start::<Vec<u8>, Message, _>(Column::Messages, start, direction)
+            .map(|res| res.map(|(_, message)| message))
     }
 
     pub fn get_message_config(&self) -> StorageResult<Option<Vec<MessageConfig>>> {
@@ -194,7 +184,7 @@ mod tests {
     #[test]
     fn owned_message_ids() {
         let mut db = Database::default();
-        let message = CompressedMessage::default();
+        let message = Message::default();
 
         // insert a message with the first id
         let first_id = MessageId::new([1; 32]);

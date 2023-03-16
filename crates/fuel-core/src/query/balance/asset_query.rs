@@ -11,12 +11,9 @@ use fuel_core_storage::{
     Result as StorageResult,
 };
 use fuel_core_types::{
-    entities::{
-        message::MessageStatus,
-        resource::{
-            Resource,
-            ResourceId,
-        },
+    entities::resource::{
+        Resource,
+        ResourceId,
     },
     fuel_tx::UtxoId,
     fuel_types::{
@@ -140,13 +137,6 @@ impl<'a> AssetsQuery<'a> {
                     let message = self.database.message(&id)?;
                     Ok(Resource::Message(message))
                 })
-            })
-            .filter_ok(|message| {
-                if let Resource::Message(message) = message {
-                    matches!(message.status, MessageStatus::Unspent)
-                } else {
-                    true
-                }
             });
 
         coins_iter.chain(messages_iter.take_while(|_| {

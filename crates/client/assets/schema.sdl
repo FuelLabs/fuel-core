@@ -111,10 +111,6 @@ type Coin {
 	assetId: AssetId!
 	maturity: U64!
 	"""
-	The spendable status of the coin
-	"""
-	status: CoinStatus!
-	"""
 	TxPointer - the height of the block this coin was created in
 	"""
 	blockCreated: U64!
@@ -168,11 +164,6 @@ type CoinOutput {
 	to: Address!
 	amount: U64!
 	assetId: AssetId!
-}
-
-enum CoinStatus {
-	UNSPENT
-	SPENT
 }
 
 union Consensus = Genesis | PoAConsensus
@@ -382,7 +373,6 @@ type Message {
 	nonce: U64!
 	data: HexString!
 	daHeight: U64!
-	status: MessageStatus!
 }
 
 type MessageConnection {
@@ -431,11 +421,6 @@ type MessageProof {
 	data: HexString!
 	signature: Signature!
 	header: Header!
-}
-
-enum MessageStatus {
-	UNSPENT
-	SPENT
 }
 
 type Mutation {

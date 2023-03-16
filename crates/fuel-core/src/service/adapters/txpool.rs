@@ -21,7 +21,7 @@ use fuel_core_types::{
     blockchain::primitives::BlockHeight,
     entities::{
         coin::CompressedCoin,
-        message::CompressedMessage,
+        message::Message,
     },
     fuel_tx::{
         Transaction,
@@ -130,10 +130,7 @@ impl fuel_core_txpool::ports::TxPoolDb for Database {
         self.storage::<ContractsRawCode>().contains_key(contract_id)
     }
 
-    fn message(
-        &self,
-        message_id: &MessageId,
-    ) -> StorageResult<Option<CompressedMessage>> {
+    fn message(&self, message_id: &MessageId) -> StorageResult<Option<Message>> {
         self.storage::<Messages>()
             .get(message_id)
             .map(|t| t.map(|t| t.as_ref().clone()))

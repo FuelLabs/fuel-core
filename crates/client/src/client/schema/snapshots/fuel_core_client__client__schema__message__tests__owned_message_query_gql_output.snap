@@ -14,7 +14,6 @@ query($owner: Address, $after: String, $before: String, $first: Int, $last: Int)
         nonce
         data
         daHeight
-        status
       }
     }
     pageInfo {

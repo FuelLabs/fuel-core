@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use fuel_core_storage::test_helpers::MockStorage;
-use fuel_core_types::entities::message::CompressedMessage;
+use fuel_core_types::entities::message::Message;
 use test_case::test_case;
 
 use super::*;
@@ -22,7 +22,7 @@ fn test_insert_messages() {
         .returning(|_| Ok(Some(std::borrow::Cow::Owned(9u64.into()))));
     let mut db = db.into_transactional();
 
-    let m = CompressedMessage {
+    let m = Message {
         amount: 10,
         da_height: 12u64.into(),
         ..Default::default()
@@ -39,7 +39,7 @@ fn test_insert_messages() {
 fn insert_always_raises_da_height_monotonically() {
     let messages: Vec<_> = (0..10)
         .map(|i| {
-            CompressedMessage {
+            Message {
                 amount: i,
                 da_height: i.into(),
                 ..Default::default()

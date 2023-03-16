@@ -7,7 +7,7 @@ use fuel_core_types::{
             Coin,
             CompressedCoin,
         },
-        message::CompressedMessage,
+        message::Message,
     },
     fuel_tx::{
         Contract,
@@ -31,7 +31,7 @@ use std::{
 pub struct Data {
     pub coins: HashMap<UtxoId, CompressedCoin>,
     pub contracts: HashMap<ContractId, Contract>,
-    pub messages: HashMap<MessageId, CompressedMessage>,
+    pub messages: HashMap<MessageId, Message>,
     pub spent_messages: HashSet<MessageId>,
 }
 
@@ -49,7 +49,7 @@ impl MockDb {
             .insert(coin.utxo_id, coin.compress());
     }
 
-    pub fn insert_message(&self, message: CompressedMessage) {
+    pub fn insert_message(&self, message: Message) {
         self.data
             .lock()
             .unwrap()
@@ -82,10 +82,7 @@ impl TxPoolDb for MockDb {
             .contains_key(contract_id))
     }
 
-    fn message(
-        &self,
-        message_id: &MessageId,
-    ) -> StorageResult<Option<CompressedMessage>> {
+    fn message(&self, message_id: &MessageId) -> StorageResult<Option<Message>> {
         Ok(self
             .data
             .lock()

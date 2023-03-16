@@ -26,14 +26,6 @@ pub struct Message {
     pub nonce: U64,
     pub data: HexString,
     pub da_height: U64,
-    pub status: MessageStatus,
-}
-
-#[derive(cynic::Enum, Clone, Copy, Debug, Eq, PartialEq)]
-#[cynic(schema_path = "./assets/schema.sdl")]
-pub enum MessageStatus {
-    Unspent,
-    Spent,
 }
 
 #[derive(cynic::QueryFragment, Debug)]

@@ -236,10 +236,7 @@ mod tests {
                 Coin,
                 CompressedCoin,
             },
-            message::{
-                CompressedMessage,
-                Message,
-            },
+            message::Message,
         },
         fuel_asm::Word,
         fuel_tx::*,
@@ -875,15 +872,11 @@ mod tests {
             coin.uncompress(id)
         }
 
-        pub fn make_message(
-            &mut self,
-            owner: Address,
-            amount: Word,
-        ) -> CompressedMessage {
+        pub fn make_message(&mut self, owner: Address, amount: Word) -> Message {
             let nonce = self.last_message_index;
             self.last_message_index += 1;
 
-            let message = CompressedMessage {
+            let message = Message {
                 sender: Default::default(),
                 recipient: owner,
                 nonce,

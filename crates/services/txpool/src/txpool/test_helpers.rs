@@ -1,5 +1,5 @@
 use fuel_core_types::{
-    entities::message::CompressedMessage,
+    entities::message::Message,
     fuel_asm::op,
     fuel_tx::{
         Contract,
@@ -12,11 +12,9 @@ use fuel_core_types::{
     fuel_types::Word,
 };
 
-pub(crate) fn create_message_predicate_from_message(
-    amount: Word,
-) -> (CompressedMessage, Input) {
+pub(crate) fn create_message_predicate_from_message(amount: Word) -> (Message, Input) {
     let predicate = vec![op::ret(1)].into_iter().collect::<Vec<u8>>();
-    let message = CompressedMessage {
+    let message = Message {
         sender: Default::default(),
         recipient: Input::predicate_owner(&predicate),
         nonce: 0,

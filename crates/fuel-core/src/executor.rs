@@ -775,17 +775,18 @@ where
                     data,
                     ..
                 } => {
+                    // Eagerly return already spent if status is known.
+                    if db.is_message_spent(message_id)? {
+                        return Err(TransactionValidityError::MessageAlreadySpent(
+                            *message_id,
+                        )
+                        .into())
+                    }
                     if let Some(message) = self
                         .relayer
                         .get_message(message_id, &block_da_height)
                         .map_err(|e| ExecutorError::RelayerError(e.into()))?
                     {
-                        if db.is_message_spent(message_id)? {
-                            return Err(TransactionValidityError::MessageAlreadySpent(
-                                *message_id,
-                            )
-                            .into())
-                        }
                         if message.da_height > block_da_height {
                             return Err(TransactionValidityError::MessageSpendTooEarly(
                                 *message_id,
@@ -1479,7 +1480,7 @@ mod tests {
         blockchain::header::ConsensusHeader,
         entities::message::{
             CheckedMessage,
-            CompressedMessage,
+            Message,
         },
         fuel_asm::op,
         fuel_crypto::SecretKey,
@@ -3189,7 +3190,7 @@ mod tests {
         rng: &mut StdRng,
         da_height: u64,
     ) -> (Transaction, CheckedMessage) {
-        let mut message = CompressedMessage {
+        let mut message = Message {
             sender: rng.gen(),
             recipient: rng.gen(),
             nonce: rng.gen(),
