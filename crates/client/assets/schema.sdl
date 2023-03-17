@@ -110,8 +110,18 @@ type Coin {
 	amount: U64!
 	assetId: AssetId!
 	maturity: U64!
+	"""
+	The spendable status of the coin
+	"""
 	status: CoinStatus!
+	"""
+	TxPointer - the height of the block this coin was created in
+	"""
 	blockCreated: U64!
+	"""
+	TxPointer - the index of the transaction that created this coin
+	"""
+	txCreatedIdx: U64!
 }
 
 type CoinConnection {

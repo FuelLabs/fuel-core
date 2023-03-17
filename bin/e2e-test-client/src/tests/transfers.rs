@@ -1,11 +1,17 @@
-use fuel_core_e2e_client::test_context::TestContext;
+use fuel_core_e2e_client::test_context::{
+    TestContext,
+    BASE_AMOUNT,
+};
 use libtest_mimic::Failed;
 use tokio::time::timeout;
 
-// Alice makes transfer to Bob of `100` native tokens.
+// Alice makes transfer to Bob of `4 * BASE_AMOUNT` native tokens.
 pub async fn basic_transfer(ctx: &TestContext) -> Result<(), Failed> {
     // alice makes transfer to bob
-    let result = ctx.alice.transfer(ctx.bob.address, 100, None).await?;
+    let result = ctx
+        .alice
+        .transfer(ctx.bob.address, 4 * BASE_AMOUNT, None)
+        .await?;
     if !result.success {
         return Err("transfer failed".into())
     }
@@ -29,13 +35,16 @@ pub async fn basic_transfer(ctx: &TestContext) -> Result<(), Failed> {
     Ok(())
 }
 
-// Alice makes transfer to Bob of `100` native tokens - `basic_transfer`.
-// Bob returns `50` tokens back to Alice.
+// Alice makes transfer to Bob of `4 * BASE_AMOUNT` native tokens - `basic_transfer`.
+// Bob returns `3 * BASE_AMOUNT` tokens back to Alice and pays `BASE_AMOUNT` as a fee.
 pub async fn transfer_back(ctx: &TestContext) -> Result<(), Failed> {
     basic_transfer(ctx).await?;
 
     // bob makes transfer to alice
-    let result = ctx.bob.transfer(ctx.alice.address, 50, None).await?;
+    let result = ctx
+        .bob
+        .transfer(ctx.alice.address, 3 * BASE_AMOUNT, None)
+        .await?;
     if !result.success {
         return Err("transfer failed".into())
     }

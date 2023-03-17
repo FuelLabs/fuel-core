@@ -41,7 +41,8 @@ async fn balance() {
             .map(|(owner, amount, asset_id)| CoinConfig {
                 tx_id: None,
                 output_index: None,
-                block_created: None,
+                tx_pointer_block_height: None,
+                tx_pointer_tx_idx: None,
                 maturity: None,
                 owner,
                 amount,
@@ -169,7 +170,8 @@ async fn first_5_balances() {
                     .map(|(owner, amount, asset_id)| CoinConfig {
                         tx_id: None,
                         output_index: None,
-                        block_created: None,
+                        tx_pointer_block_height: None,
+                        tx_pointer_tx_idx: None,
                         maturity: None,
                         owner: *owner,
                         amount,

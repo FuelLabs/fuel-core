@@ -25,7 +25,7 @@ const SEED: u64 = 2322;
 #[tokio::test]
 async fn test_contract_salt() {
     let mut test_builder = TestSetupBuilder::new(SEED);
-    let (_, contract_id) = test_builder.setup_contract(vec![], None);
+    let (_, contract_id) = test_builder.setup_contract(vec![], None, None, None);
 
     // spin up node
     let TestContext {
@@ -52,8 +52,12 @@ async fn test_contract_balance(
     #[values(100, 0, 18446744073709551615)] test_balance: u64,
 ) {
     let mut test_builder = TestSetupBuilder::new(SEED);
-    let (_, contract_id) =
-        test_builder.setup_contract(vec![], Some(vec![(asset, test_balance)]));
+    let (_, contract_id) = test_builder.setup_contract(
+        vec![],
+        Some(vec![(asset, test_balance)]),
+        None,
+        None,
+    );
 
     // spin up node
     let TestContext {
@@ -91,6 +95,8 @@ async fn test_5_contract_balances(
             (AssetId::new([2u8; 32]), 400),
             (AssetId::new([3u8; 32]), 700),
         ]),
+        None,
+        None,
     );
 
     let TestContext {

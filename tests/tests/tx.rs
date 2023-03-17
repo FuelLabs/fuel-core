@@ -39,6 +39,7 @@ use std::{
 };
 
 mod predicates;
+mod tx_pointer;
 mod txn_status_subscription;
 mod utxo_validation;
 

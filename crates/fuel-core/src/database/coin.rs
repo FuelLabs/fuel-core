@@ -137,8 +137,11 @@ impl Database {
 
                 Ok(CoinConfig {
                     tx_id: Some(byte_id),
-                    output_index: Some(output_index.into()),
-                    block_created: Some(coin.1.block_created),
+                    output_index: Some(output_index),
+                    tx_pointer_block_height: Some(
+                        coin.1.tx_pointer.block_height().into(),
+                    ),
+                    tx_pointer_tx_idx: Some(coin.1.tx_pointer.tx_index()),
                     maturity: Some(coin.1.maturity),
                     owner: coin.1.owner,
                     amount: coin.1.amount,

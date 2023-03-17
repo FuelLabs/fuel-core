@@ -132,8 +132,9 @@ impl ChainConfig {
 
         CoinConfig {
             tx_id: utxo_id.as_ref().map(|u| *u.tx_id()),
-            output_index: utxo_id.as_ref().map(|u| u.output_index() as u64),
-            block_created: None,
+            output_index: utxo_id.as_ref().map(|u| u.output_index()),
+            tx_pointer_block_height: None,
+            tx_pointer_tx_idx: None,
             maturity: None,
             owner: address,
             amount,

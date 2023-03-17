@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::{
     database::{
         storage::DatabaseColumn,
@@ -16,25 +18,147 @@ use fuel_core_storage::{
         ContractsRawCode,
     },
     ContractsAssetKey,
+    Error as StorageError,
     Result as StorageResult,
     StorageAsRef,
+    StorageInspect,
+    StorageMutate,
+    StorageRead,
+    StorageSize,
+    StorageWrite,
 };
-use fuel_core_types::fuel_types::{
-    AssetId,
-    Bytes32,
-    ContractId,
-    Word,
+use fuel_core_types::{
+    entities::contract::ContractUtxoInfo,
+    fuel_types::{
+        AssetId,
+        Bytes32,
+        ContractId,
+        Word,
+    },
+    fuel_vm::Contract,
 };
-
-impl DatabaseColumn for ContractsRawCode {
-    fn column() -> Column {
-        Column::ContractsRawCode
-    }
-}
 
 impl DatabaseColumn for ContractsLatestUtxo {
     fn column() -> Column {
         Column::ContractsLatestUtxo
+    }
+}
+
+impl StorageInspect<ContractsRawCode> for Database {
+    type Error = StorageError;
+
+    fn get(
+        &self,
+        key: &<ContractsRawCode as fuel_core_storage::Mappable>::Key,
+    ) -> Result<
+        Option<
+            std::borrow::Cow<
+                <ContractsRawCode as fuel_core_storage::Mappable>::OwnedValue,
+            >,
+        >,
+        Self::Error,
+    > {
+        Ok(self
+            .read_alloc(key.as_ref(), Column::ContractsRawCode)?
+            .map(|v| Cow::Owned(Contract::from(v))))
+    }
+
+    fn contains_key(
+        &self,
+        key: &<ContractsRawCode as fuel_core_storage::Mappable>::Key,
+    ) -> Result<bool, Self::Error> {
+        self.contains_key(key.as_ref(), Column::ContractsRawCode)
+            .map_err(Into::into)
+    }
+}
+
+// # Dev-note: The value of the `ContractsRawCode` has a unique implementation of serialization
+// and deserialization. Because the value is a contract byte code represented by bytes,
+// we don't use `serde::Deserialization` and `serde::Serialization` for `Vec`, because we don't
+// need to store the size of the contract. We store/load raw bytes.
+impl StorageMutate<ContractsRawCode> for Database {
+    fn insert(
+        &mut self,
+        key: &<ContractsRawCode as fuel_core_storage::Mappable>::Key,
+        value: &<ContractsRawCode as fuel_core_storage::Mappable>::Value,
+    ) -> Result<
+        Option<<ContractsRawCode as fuel_core_storage::Mappable>::OwnedValue>,
+        Self::Error,
+    > {
+        let existing =
+            <Self as StorageWrite<ContractsRawCode>>::replace(self, key, value.to_vec())?;
+        Ok(existing.1.map(Contract::from))
+    }
+
+    fn remove(
+        &mut self,
+        key: &<ContractsRawCode as fuel_core_storage::Mappable>::Key,
+    ) -> Result<
+        Option<<ContractsRawCode as fuel_core_storage::Mappable>::OwnedValue>,
+        Self::Error,
+    > {
+        Ok(
+            <Self as StorageWrite<ContractsRawCode>>::take(self, key)?
+                .map(Contract::from),
+        )
+    }
+}
+
+impl StorageSize<ContractsRawCode> for Database {
+    fn size_of_value(&self, key: &ContractId) -> Result<Option<usize>, Self::Error> {
+        Ok(self.size_of_value(key.as_ref(), Column::ContractsRawCode)?)
+    }
+}
+
+impl StorageRead<ContractsRawCode> for Database {
+    fn read(
+        &self,
+        key: &ContractId,
+        buf: &mut [u8],
+    ) -> Result<Option<usize>, Self::Error> {
+        Ok(self.read(key.as_ref(), Column::ContractsRawCode, buf)?)
+    }
+
+    fn read_alloc(&self, key: &ContractId) -> Result<Option<Vec<u8>>, Self::Error> {
+        Ok(self.read_alloc(key.as_ref(), Column::ContractsRawCode)?)
+    }
+}
+
+impl StorageWrite<ContractsRawCode> for Database {
+    fn write(&mut self, key: &ContractId, buf: Vec<u8>) -> Result<usize, Self::Error> {
+        Ok(Database::write(
+            self,
+            key.as_ref(),
+            Column::ContractsRawCode,
+            buf,
+        )?)
+    }
+
+    fn replace(
+        &mut self,
+        key: &<ContractsRawCode as fuel_core_storage::Mappable>::Key,
+        buf: Vec<u8>,
+    ) -> Result<(usize, Option<Vec<u8>>), <Self as StorageInspect<ContractsRawCode>>::Error>
+    where
+        Self: StorageSize<ContractsRawCode>,
+    {
+        Ok(Database::replace(
+            self,
+            key.as_ref(),
+            Column::ContractsRawCode,
+            buf,
+        )?)
+    }
+
+    fn take(
+        &mut self,
+        key: &<ContractsRawCode as fuel_core_storage::Mappable>::Key,
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        Ok(Database::take(
+            self,
+            key.as_ref(),
+            Column::ContractsRawCode,
+        )?)
     }
 }
 
@@ -82,6 +206,16 @@ impl Database {
                     .expect("Contract does not exist")
                     .into_owned();
 
+                let ContractUtxoInfo {
+                    utxo_id,
+                    tx_pointer,
+                } = self
+                    .storage::<ContractsLatestUtxo>()
+                    .get(&contract_id)
+                    .unwrap()
+                    .expect("contract does not exist")
+                    .into_owned();
+
                 let state = Some(
                     self.iter_all_by_prefix::<Vec<u8>, Bytes32, _>(
                         Column::ContractsState,
@@ -125,6 +259,10 @@ impl Database {
                     salt,
                     state,
                     balances,
+                    tx_id: Some(*utxo_id.tx_id()),
+                    output_index: Some(utxo_id.output_index()),
+                    tx_pointer_block_height: Some(tx_pointer.block_height().into()),
+                    tx_pointer_tx_idx: Some(tx_pointer.tx_index()),
                 })
             })
             .collect::<StorageResult<Vec<ContractConfig>>>()?;
@@ -140,6 +278,7 @@ mod tests {
     use fuel_core_types::fuel_tx::{
         Contract,
         TxId,
+        TxPointer,
         UtxoId,
     };
 
@@ -229,12 +368,16 @@ mod tests {
     fn latest_utxo_get() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
-
+        let tx_pointer = TxPointer::new(1u32, 5);
+        let utxo_info = ContractUtxoInfo {
+            utxo_id,
+            tx_pointer,
+        };
         let database = &mut Database::default();
 
         database
             .storage::<ContractsLatestUtxo>()
-            .insert(&contract_id, &utxo_id)
+            .insert(&contract_id, &utxo_info)
             .unwrap();
 
         assert_eq!(
@@ -244,7 +387,7 @@ mod tests {
                 .unwrap()
                 .unwrap()
                 .into_owned(),
-            utxo_id
+            utxo_info
         );
     }
 
@@ -252,30 +395,43 @@ mod tests {
     fn latest_utxo_put() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
+        let tx_pointer = TxPointer::new(1u32, 5);
+        let utxo_info = ContractUtxoInfo {
+            utxo_id,
+            tx_pointer,
+        };
 
         let database = &mut Database::default();
         database
             .storage::<ContractsLatestUtxo>()
-            .insert(&contract_id, &utxo_id)
+            .insert(&contract_id, &utxo_info)
             .unwrap();
 
-        let returned: UtxoId = *database
+        let returned: ContractUtxoInfo = database
             .storage::<ContractsLatestUtxo>()
             .get(&contract_id)
             .unwrap()
-            .unwrap();
-        assert_eq!(returned, utxo_id);
+            .unwrap()
+            .into_owned();
+        assert_eq!(returned, utxo_info);
     }
 
     #[test]
     fn latest_utxo_remove() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
+        let tx_pointer = TxPointer::new(1u32, 5);
 
         let database = &mut Database::default();
         database
             .storage::<ContractsLatestUtxo>()
-            .insert(&contract_id, &utxo_id)
+            .insert(
+                &contract_id,
+                &ContractUtxoInfo {
+                    utxo_id,
+                    tx_pointer,
+                },
+            )
             .unwrap();
 
         database
@@ -293,11 +449,18 @@ mod tests {
     fn latest_utxo_exists() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
+        let tx_pointer = TxPointer::new(1u32, 5);
 
         let database = &mut Database::default();
         database
             .storage::<ContractsLatestUtxo>()
-            .insert(&contract_id, &utxo_id)
+            .insert(
+                &contract_id,
+                &ContractUtxoInfo {
+                    utxo_id,
+                    tx_pointer,
+                },
+            )
             .unwrap();
 
         assert!(database

@@ -58,12 +58,19 @@ impl Coin {
         self.0.maturity.into()
     }
 
+    /// The spendable status of the coin
     async fn status(&self) -> CoinStatus {
         self.0.status.into()
     }
 
+    /// TxPointer - the height of the block this coin was created in
     async fn block_created(&self) -> U64 {
-        self.0.block_created.into()
+        u64::from(self.0.tx_pointer.block_height()).into()
+    }
+
+    /// TxPointer - the index of the transaction that created this coin
+    async fn tx_created_idx(&self) -> U64 {
+        u64::from(self.0.tx_pointer.tx_index()).into()
     }
 }
 
