@@ -8,7 +8,7 @@ pub const DEFAULT_PEER_SCORE: PeerScore = 50.0;
 /// Maximum value a Peer can reach with its PeerScore
 pub const MAX_PEER_SCORE: PeerScore = 150.0;
 /// Score by which we slowly decrease active peer reputation
-pub const DECAY_PEER_SCORE: PeerScore = -1.0;
+pub const DECAY_PEER_SCORE: PeerScore = 0.9;
 
 /// Types implementing this can report new PeerScore
 pub trait PeerReport {
