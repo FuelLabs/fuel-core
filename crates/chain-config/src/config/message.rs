@@ -8,7 +8,7 @@ use crate::{
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::CompressedMessage,
+    entities::message::Message,
     fuel_asm::Word,
     fuel_types::Address,
 };
@@ -40,9 +40,9 @@ pub struct MessageConfig {
     pub da_height: DaBlockHeight,
 }
 
-impl From<MessageConfig> for CompressedMessage {
+impl From<MessageConfig> for Message {
     fn from(msg: MessageConfig) -> Self {
-        CompressedMessage {
+        Message {
             sender: msg.sender,
             recipient: msg.recipient,
             nonce: msg.nonce,
@@ -53,7 +53,7 @@ impl From<MessageConfig> for CompressedMessage {
     }
 }
 
-impl GenesisCommitment for CompressedMessage {
+impl GenesisCommitment for Message {
     fn root(&self) -> anyhow::Result<MerkleRoot> {
         Ok(self.id().into())
     }

@@ -137,10 +137,7 @@ impl DatabaseMessages for Database {
     ) -> BoxedIter<'_, StorageResult<Message>> {
         self.all_messages(start_message_id, Some(direction))
             .map(|result| match result {
-                Ok(message) => {
-                    let id = message.id();
-                    Ok(message.decompress(self.message_status(&id)?))
-                }
+                Ok(message) => Ok(message),
                 Err(err) => Err(StorageError::from(err)),
             })
             .into_boxed()

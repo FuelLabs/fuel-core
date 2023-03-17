@@ -52,7 +52,6 @@ use tempfile::TempDir;
 // TODO: Move to separate `database/storage` folder, because it is only implementation of storages traits.
 mod block;
 mod code_root;
-mod coin;
 mod contracts;
 mod message;
 mod receipts;
@@ -60,6 +59,8 @@ mod receipts;
 mod relayer;
 mod sealed_block;
 mod state;
+
+pub(crate) mod coin;
 
 pub mod balances;
 pub mod metadata;

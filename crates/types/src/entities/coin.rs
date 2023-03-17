@@ -31,8 +31,6 @@ pub struct Coin {
     pub asset_id: AssetId,
     /// This coin cannot be spent until the given height
     pub maturity: BlockHeight,
-    /// Whether a coin has been spent or not
-    pub status: CoinStatus,
     /// Indexes the block and transaction this coin originated from
     pub tx_pointer: TxPointer,
 }
@@ -45,7 +43,6 @@ impl Coin {
             amount: self.amount,
             asset_id: self.asset_id,
             maturity: self.maturity,
-            status: self.status,
             tx_pointer: self.tx_pointer,
         }
     }
@@ -65,9 +62,6 @@ pub struct CompressedCoin {
     pub asset_id: AssetId,
     /// This coin cannot be spent until the given height
     pub maturity: BlockHeight,
-    // TODO: Remove `status` when we will not use it for API functionality.
-    /// Whether a coin has been spent or not
-    pub status: CoinStatus,
     /// Indexes the block and transaction this coin originated from
     pub tx_pointer: TxPointer,
 }
@@ -81,19 +75,7 @@ impl CompressedCoin {
             amount: self.amount,
             asset_id: self.asset_id,
             maturity: self.maturity,
-            status: self.status,
             tx_pointer: self.tx_pointer,
         }
     }
-}
-
-/// Whether a coin has been spent or not
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]
-#[repr(u8)]
-pub enum CoinStatus {
-    /// Coin has not been spent
-    Unspent,
-    /// Coin has been spent
-    Spent,
 }

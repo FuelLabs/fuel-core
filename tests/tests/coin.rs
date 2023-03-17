@@ -15,10 +15,7 @@ use fuel_core_storage::{
     StorageAsMut,
 };
 use fuel_core_types::{
-    entities::coin::{
-        Coin,
-        CoinStatus,
-    },
+    entities::coin::Coin,
     fuel_asm::*,
     fuel_tx::*,
 };
@@ -56,7 +53,6 @@ async fn first_5_coins(
             amount: i as Word,
             asset_id: Default::default(),
             maturity: Default::default(),
-            status: fuel_core_types::entities::coin::CoinStatus::Unspent,
             tx_pointer: Default::default(),
         })
         .collect();
@@ -104,7 +100,6 @@ async fn only_asset_id_filtered_coins() {
             amount: i as Word,
             asset_id: if i <= 5 { asset_id } else { Default::default() },
             maturity: Default::default(),
-            status: CoinStatus::Unspent,
             tx_pointer: Default::default(),
         })
         .collect();
@@ -145,7 +140,7 @@ async fn only_asset_id_filtered_coins() {
 
 #[rstest]
 #[tokio::test]
-async fn get_unspent_and_spent_coins(
+async fn get_coins_forwards_backwards(
     #[values(Address::default(), Address::from([16; 32]))] owner: Address,
     #[values(AssetId::from([1u8; 32]), AssetId::from([32u8; 32]))] asset_id: AssetId,
 ) {
@@ -157,11 +152,6 @@ async fn get_unspent_and_spent_coins(
             amount: i as Word,
             asset_id,
             maturity: Default::default(),
-            status: if i <= 5 {
-                CoinStatus::Unspent
-            } else {
-                CoinStatus::Spent
-            },
             tx_pointer: Default::default(),
         })
         .collect();

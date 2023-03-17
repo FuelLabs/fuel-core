@@ -6,10 +6,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use fuel_core_types::{
-    entities::coin::{
-        CoinStatus,
-        CompressedCoin,
-    },
+    entities::coin::CompressedCoin,
     fuel_tx::{
         Input,
         Output,
@@ -156,14 +153,12 @@ impl Dependency {
     ) -> anyhow::Result<()> {
         match input {
             Input::CoinSigned {
-                utxo_id,
                 owner,
                 amount,
                 asset_id,
                 ..
             }
             | Input::CoinPredicate {
-                utxo_id,
                 owner,
                 amount,
                 asset_id,
@@ -177,9 +172,6 @@ impl Dependency {
                 }
                 if *asset_id != coin.asset_id {
                     return Err(Error::NotInsertedIoWrongAssetId.into())
-                }
-                if coin.status == CoinStatus::Spent {
-                    return Err(Error::NotInsertedInputUtxoIdSpent(*utxo_id).into())
                 }
                 Ok(())
             }

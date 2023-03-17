@@ -17,10 +17,7 @@ use fuel_core_storage::{
         IterDirection,
     },
     not_found,
-    tables::{
-        Messages,
-        SpentMessages,
-    },
+    tables::Messages,
     Error as StorageError,
     Result as StorageResult,
     StorageAsRef,
@@ -34,7 +31,6 @@ use fuel_core_types::{
     entities::message::{
         Message,
         MessageProof,
-        MessageStatus,
     },
     fuel_crypto::Signature,
     fuel_merkle,
@@ -88,13 +84,6 @@ impl<D: DatabasePort + ?Sized> MessageQueryData for D {
             .get(message_id)?
             .ok_or(not_found!(Messages))
             .map(Cow::into_owned)
-            .and_then(|m| {
-                if self.storage::<SpentMessages>().contains_key(message_id)? {
-                    Ok(m.decompress(MessageStatus::Spent))
-                } else {
-                    Ok(m.decompress(MessageStatus::Unspent))
-                }
-            })
     }
 
     fn owned_message_ids(

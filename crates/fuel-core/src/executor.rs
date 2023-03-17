@@ -13,6 +13,7 @@ use fuel_core_storage::{
         Coins,
         ContractsLatestUtxo,
         FuelBlocks,
+        Messages,
         Receipts,
         SpentMessages,
         Transactions,
@@ -38,10 +39,7 @@ use fuel_core_types::{
         },
     },
     entities::{
-        coin::{
-            CoinStatus,
-            CompressedCoin,
-        },
+        coin::CompressedCoin,
         contract::ContractUtxoInfo,
     },
     fuel_asm::{
@@ -743,12 +741,6 @@ where
                 Input::CoinSigned { utxo_id, .. }
                 | Input::CoinPredicate { utxo_id, .. } => {
                     if let Some(coin) = db.storage::<Coins>().get(utxo_id)? {
-                        if coin.status == CoinStatus::Spent {
-                            return Err(TransactionValidityError::CoinAlreadySpent(
-                                *utxo_id,
-                            )
-                            .into())
-                        }
                         if block_height
                             < BlockHeight::from(coin.tx_pointer.block_height())
                                 + coin.maturity
@@ -783,17 +775,18 @@ where
                     data,
                     ..
                 } => {
+                    // Eagerly return already spent if status is known.
+                    if db.is_message_spent(message_id)? {
+                        return Err(TransactionValidityError::MessageAlreadySpent(
+                            *message_id,
+                        )
+                        .into())
+                    }
                     if let Some(message) = self
                         .relayer
                         .get_message(message_id, &block_da_height)
                         .map_err(|e| ExecutorError::RelayerError(e.into()))?
                     {
-                        if db.is_message_spent(message_id)? {
-                            return Err(TransactionValidityError::MessageAlreadySpent(
-                                *message_id,
-                            )
-                            .into())
-                        }
                         if message.da_height > block_da_height {
                             return Err(TransactionValidityError::MessageSpendTooEarly(
                                 *message_id,
@@ -893,37 +886,22 @@ where
     {
         for input in tx.inputs() {
             match input {
-                Input::CoinSigned {
-                    utxo_id,
-                    owner,
-                    amount,
-                    asset_id,
-                    maturity,
-                    ..
-                }
-                | Input::CoinPredicate {
-                    utxo_id,
-                    owner,
-                    amount,
-                    asset_id,
-                    maturity,
-                    ..
-                } => {
-                    let mut coin = self.get_coin_or_default(
-                        db,
-                        *utxo_id,
-                        *owner,
-                        *amount,
-                        *asset_id,
-                        (*maturity).into(),
-                    )?;
-                    coin.status = CoinStatus::Spent;
-
-                    db.storage::<Coins>().insert(utxo_id, &coin)?;
+                Input::CoinSigned { utxo_id, .. }
+                | Input::CoinPredicate { utxo_id, .. } => {
+                    // prune utxo from db
+                    db.storage::<Coins>().remove(utxo_id)?;
                 }
                 Input::MessageSigned { message_id, .. }
                 | Input::MessagePredicate { message_id, .. } => {
-                    db.storage::<SpentMessages>().insert(message_id, &())?;
+                    // mark message id as spent
+                    let was_already_spent =
+                        db.storage::<SpentMessages>().insert(message_id, &())?;
+                    // ensure message wasn't already marked as spent
+                    if was_already_spent.is_some() {
+                        return Err(ExecutorError::MessageAlreadySpent(*message_id))
+                    }
+                    // cleanup message contents
+                    db.storage::<Messages>().remove(message_id)?;
                 }
                 _ => {}
             }
@@ -1194,7 +1172,6 @@ where
                 amount,
                 asset_id,
                 maturity,
-                status: CoinStatus::Spent,
                 tx_pointer: Default::default(),
             })
         }
@@ -1327,7 +1304,6 @@ where
                 amount: *amount,
                 asset_id: *asset_id,
                 maturity: 0u32.into(),
-                status: CoinStatus::Unspent,
                 tx_pointer: TxPointer::new(block_height.into(), tx_idx),
             };
 
@@ -1504,7 +1480,7 @@ mod tests {
         blockchain::header::ConsensusHeader,
         entities::message::{
             CheckedMessage,
-            CompressedMessage,
+            Message,
         },
         fuel_asm::op,
         fuel_crypto::SecretKey,
@@ -2206,114 +2182,6 @@ mod tests {
         ));
     }
 
-    // invalidate a block if a tx input contains a previously used txo
-    #[test]
-    fn executor_invalidates_spent_inputs() {
-        let mut rng = StdRng::seed_from_u64(2322u64);
-
-        let spent_utxo_id = rng.gen();
-        let owner = Default::default();
-        let amount = 10;
-        let asset_id = Default::default();
-        let maturity = Default::default();
-        let block_created = Default::default();
-        let block_created_tx_idx = Default::default();
-        let coin = CompressedCoin {
-            owner,
-            amount,
-            asset_id,
-            maturity,
-            status: CoinStatus::Spent,
-            tx_pointer: TxPointer::new(block_created, block_created_tx_idx),
-        };
-
-        let db = &mut Database::default();
-        // initialize database with coin that was already spent
-        db.storage::<Coins>().insert(&spent_utxo_id, &coin).unwrap();
-
-        // create an input referring to a coin that is already spent
-        let input = Input::coin_signed(
-            spent_utxo_id,
-            owner,
-            amount,
-            asset_id,
-            Default::default(),
-            0,
-            0,
-        );
-        let output = Output::Change {
-            to: owner,
-            amount: 0,
-            asset_id,
-        };
-        let tx: Transaction = Transaction::script(
-            0,
-            0,
-            0,
-            vec![],
-            vec![],
-            vec![input],
-            vec![output],
-            vec![Default::default()],
-        )
-        .into();
-
-        // setup executor with utxo-validation enabled
-        let config = Config {
-            utxo_validation: true,
-            ..Config::local_node()
-        };
-        let producer = Executor::test(db.clone(), config.clone());
-
-        let verifier = Executor::test(db.clone(), config);
-
-        let mut block = PartialFuelBlock {
-            header: Default::default(),
-            transactions: vec![tx.clone()],
-        };
-
-        let mut block_db_transaction = producer.database.transaction();
-        let ExecutionData {
-            skipped_transactions,
-            ..
-        } = producer
-            .execute_transactions(
-                &mut block_db_transaction,
-                ExecutionType::Production(&mut block),
-            )
-            .unwrap();
-        let produce_result = &skipped_transactions[0].1;
-        assert!(matches!(
-            produce_result,
-            &ExecutorError::TransactionValidity(
-                TransactionValidityError::CoinAlreadySpent(_)
-            )
-        ));
-
-        // Produced block is valid
-        let mut block_db_transaction = verifier.database.transaction();
-        verifier
-            .execute_transactions(
-                &mut block_db_transaction,
-                ExecutionType::Validation(&mut block),
-            )
-            .unwrap();
-
-        // Invalidate block by adding transaction with spent coin
-        block.transactions.push(tx);
-        let mut block_db_transaction = verifier.database.transaction();
-        let verify_result = verifier.execute_transactions(
-            &mut block_db_transaction,
-            ExecutionType::Validation(&mut block),
-        );
-        assert!(matches!(
-            verify_result,
-            Err(ExecutorError::TransactionValidity(
-                TransactionValidityError::CoinAlreadySpent(_)
-            ))
-        ));
-    }
-
     // invalidate a block if a tx input doesn't exist
     #[test]
     fn executor_invalidates_missing_inputs() {
@@ -2545,7 +2413,6 @@ mod tests {
                     amount: 100,
                     asset_id: AssetId::default(),
                     maturity: Default::default(),
-                    status: CoinStatus::Unspent,
                     tx_pointer: Default::default(),
                 },
             )
@@ -2558,7 +2425,6 @@ mod tests {
                     amount: 100,
                     asset_id: AssetId::default(),
                     maturity: Default::default(),
-                    status: CoinStatus::Unspent,
                     tx_pointer: Default::default(),
                 },
             )
@@ -2577,19 +2443,15 @@ mod tests {
         };
 
         // The first input should be `Unspent` before execution.
-        let coin = db
-            .storage::<Coins>()
+        db.storage::<Coins>()
             .get(first_input.utxo_id().unwrap())
             .unwrap()
-            .unwrap();
-        assert_eq!(coin.status, CoinStatus::Unspent);
+            .expect("coin should be unspent");
         // The second input should be `Unspent` before execution.
-        let coin = db
-            .storage::<Coins>()
+        db.storage::<Coins>()
             .get(second_input.utxo_id().unwrap())
             .unwrap()
-            .unwrap();
-        assert_eq!(coin.status, CoinStatus::Unspent);
+            .expect("coin should be unspent");
 
         let ExecutionResult {
             block,
@@ -2610,16 +2472,14 @@ mod tests {
         let coin = db
             .storage::<Coins>()
             .get(first_input.utxo_id().unwrap())
-            .unwrap()
             .unwrap();
-        assert_eq!(coin.status, CoinStatus::Spent);
+        // verify coin is pruned from utxo set
+        assert!(coin.is_none());
         // The second input should be `Unspent` after execution.
-        let coin = db
-            .storage::<Coins>()
+        db.storage::<Coins>()
             .get(second_input.utxo_id().unwrap())
             .unwrap()
-            .unwrap();
-        assert_eq!(coin.status, CoinStatus::Unspent);
+            .expect("coin should be unspent");
     }
 
     #[test]
@@ -2702,9 +2562,9 @@ mod tests {
                     .utxo_id()
                     .unwrap(),
             )
-            .unwrap()
             .unwrap();
-        assert_eq!(coin.status, CoinStatus::Spent);
+        // spent coins should be removed
+        assert!(coin.is_none());
     }
 
     #[test]
@@ -3071,7 +2931,6 @@ mod tests {
                         amount,
                         asset_id,
                         maturity: Default::default(),
-                        status: CoinStatus::Unspent,
                         tx_pointer: TxPointer::new(
                             starting_block.into(),
                             starting_block_tx_idx,
@@ -3112,11 +2971,8 @@ mod tests {
                     .utxo_id()
                     .unwrap(),
             )
-            .unwrap()
             .unwrap();
-        assert_eq!(coin.status, CoinStatus::Spent);
-        // assert block created from coin before spend is still intact (only a concern when utxo-validation is enabled)
-        assert_eq!(coin.tx_pointer.block_height(), *starting_block)
+        assert!(coin.is_none());
     }
 
     #[test]
@@ -3333,7 +3189,7 @@ mod tests {
         rng: &mut StdRng,
         da_height: u64,
     ) -> (Transaction, CheckedMessage) {
-        let mut message = CompressedMessage {
+        let mut message = Message {
             sender: rng.gen(),
             recipient: rng.gen(),
             nonce: rng.gen(),
@@ -3590,7 +3446,6 @@ mod tests {
                     amount: coin_input.amount().unwrap(),
                     asset_id: *coin_input.asset_id().unwrap(),
                     maturity: (coin_input.maturity().unwrap()).into(),
-                    status: CoinStatus::Unspent,
                     tx_pointer: TxPointer::new(0u32, block_tx_idx),
                 },
             )
@@ -3663,7 +3518,6 @@ mod tests {
                     amount: coin_input.amount().unwrap(),
                     asset_id: *coin_input.asset_id().unwrap(),
                     maturity: (coin_input.maturity().unwrap()).into(),
-                    status: CoinStatus::Unspent,
                     tx_pointer: TxPointer::default(),
                 },
             )

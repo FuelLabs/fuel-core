@@ -5,7 +5,6 @@ use crate::MockDb;
 use fuel_core_types::{
     entities::coin::{
         Coin,
-        CoinStatus,
         CompressedCoin,
     },
     fuel_asm::op,
@@ -39,7 +38,6 @@ pub(crate) fn add_coin_to_state(input: Input, mock_db: Option<&MockDb>) -> (Coin
         amount: TEST_COIN_AMOUNT,
         asset_id: *input.asset_id().unwrap(),
         maturity: Default::default(),
-        status: CoinStatus::Unspent,
         tx_pointer: Default::default(),
     };
     let utxo_id = *input.utxo_id().unwrap();
