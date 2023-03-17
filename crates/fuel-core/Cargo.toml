@@ -22,6 +22,7 @@ fuel-core-chain-config = { workspace = true }
 fuel-core-consensus-module = { workspace = true }
 fuel-core-database = { workspace = true }
 fuel-core-executor = { workspace = true }
+fuel-core-graphql = { workspace = true }
 fuel-core-importer = { workspace = true }
 fuel-core-metrics = { workspace = true, optional = true }
 fuel-core-p2p = { workspace = true, optional = true }
@@ -35,7 +36,6 @@ fuel-core-txpool = { workspace = true }
 fuel-core-types = { workspace = true, features = [
     "serde",
 ] }
-fuel-core-graphql = { workspace = true }
 futures = { workspace = true }
 hex = { version = "0.4", features = ["serde"] }
 itertools = { workspace = true }

@@ -17,17 +17,18 @@ async-graphql = { version = "4.0", features = [
 ], default-features = false }
 async-trait = { workspace = true }
 axum = { workspace = true }
+cargo-sort = "1.0.9"
 clap = { workspace = true, features = ["derive"] }
 derive_more = { version = "0.99" }
 enum-iterator = "1.2"
 fuel-core-chain-config = { workspace = true }
+fuel-core-metrics = { workspace = true }
+fuel-core-services = { workspace = true }
+fuel-core-storage = { workspace = true }
 fuel-core-txpool = { workspace = true }
 fuel-core-types = { workspace = true, features = [
     "serde",
 ] }
-fuel-core-storage = { workspace = true }
-fuel-core-services = { workspace = true }
-fuel-core-metrics = { workspace = true }
 futures = { workspace = true }
 hex = { version = "0.4", features = ["serde"] }
 hyper = { version = "0.14" }
