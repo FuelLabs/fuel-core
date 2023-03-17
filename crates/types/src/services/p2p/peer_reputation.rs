@@ -2,9 +2,9 @@
 pub type PeerScore = f64;
 
 /// Minimum allowed peer score before peer is banned
-pub const MIN_PEER_SCORE: PeerScore = 0.0;
+pub const MIN_PEER_SCORE: PeerScore = -50.0;
 /// Default value for peer score
-pub const DEFAULT_PEER_SCORE: PeerScore = 50.0;
+pub const DEFAULT_PEER_SCORE: PeerScore = 0.0;
 /// Maximum value a Peer can reach with its PeerScore
 pub const MAX_PEER_SCORE: PeerScore = 150.0;
 /// Score by which we slowly decrease active peer reputation
