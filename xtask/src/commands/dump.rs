@@ -1,5 +1,5 @@
 use clap::Parser;
-use fuel_core::schema::build_schema;
+use fuel_core_graphql::schema::build_schema;
 use std::{
     env,
     fs::{

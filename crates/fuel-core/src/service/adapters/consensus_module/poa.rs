@@ -1,6 +1,5 @@
 use crate::{
     database::Database,
-    fuel_core_graphql_api::ports::ConsensusModulePort,
     service::adapters::{
         BlockImporterAdapter,
         BlockProducerAdapter,
@@ -8,6 +7,8 @@ use crate::{
         TxPoolAdapter,
     },
 };
+use fuel_core_graphql::ports::ConsensusModulePort;
+
 use anyhow::anyhow;
 use fuel_core_poa::{
     ports::{

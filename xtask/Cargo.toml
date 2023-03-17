@@ -8,7 +8,4 @@ publish = false
 
 [dependencies]
 clap = { workspace = true, features = ["env", "derive"] }
-fuel-core = { path = "../crates/fuel-core", default-features = false }
-
-[features]
-default = ["fuel-core/default"]
+fuel-core-graphql = { workspace = true }

@@ -3,21 +3,21 @@ use crate::{
         transactions::OwnedTransactionIndexCursor,
         Database,
     },
-    fuel_core_graphql_api::ports::{
-        BlockProducerPort,
-        DatabaseBlocks,
-        DatabaseChain,
-        DatabaseCoins,
-        DatabaseContracts,
-        DatabaseMessages,
-        DatabasePort,
-        DatabaseTransactions,
-        DryRunExecution,
-        TxPoolPort,
-    },
     service::adapters::TxPoolAdapter,
 };
 use async_trait::async_trait;
+use fuel_core_graphql::ports::{
+    BlockProducerPort,
+    DatabaseBlocks,
+    DatabaseChain,
+    DatabaseCoins,
+    DatabaseContracts,
+    DatabaseMessages,
+    DatabasePort,
+    DatabaseTransactions,
+    DryRunExecution,
+    TxPoolPort,
+};
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
     iter::{

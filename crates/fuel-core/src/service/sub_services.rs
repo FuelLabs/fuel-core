@@ -3,11 +3,6 @@ use super::adapters::P2PAdapter;
 
 use crate::{
     database::Database,
-    fuel_core_graphql_api::Config as GraphQLConfig,
-    schema::{
-        build_schema,
-        dap,
-    },
     service::{
         adapters::{
             BlockImporterAdapter,
@@ -23,6 +18,10 @@ use crate::{
         SubServices,
     },
 };
+use fuel_core_graphql::{
+    schema::build_schema,
+    Config as GraphQLConfig,
+};
 use fuel_core_poa::Trigger;
 use std::sync::Arc;
 use tokio::sync::{
@@ -37,7 +36,7 @@ pub type RelayerService = fuel_core_relayer::Service<Database>;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database>;
 pub type TxPoolService = fuel_core_txpool::Service<P2PAdapter, Database>;
-pub type GraphQL = crate::fuel_core_graphql_api::service::Service;
+pub type GraphQL = fuel_core_graphql::service::Service;
 
 pub fn init_sub_services(
     config: &Config,
@@ -154,14 +153,14 @@ pub fn init_sub_services(
         .transpose()?;
 
     // TODO: Figure out on how to move it into `fuel-core-graphql-api`.
-    let schema = dap::init(
+    let schema = crate::dap::init(
         build_schema(),
         config.chain_conf.transaction_parameters,
         config.chain_conf.gas_costs.clone(),
     )
     .data(database.clone());
 
-    let graph_ql = crate::fuel_core_graphql_api::service::new_service(
+    let graph_ql = fuel_core_graphql::service::new_service(
         GraphQLConfig {
             addr: config.addr,
             utxo_validation: config.utxo_validation,

@@ -16,9 +16,7 @@ async-graphql = { version = "4.0", features = [
     "tracing",
 ], default-features = false }
 async-trait = { workspace = true }
-axum = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
-derive_more = { version = "0.99" }
 enum-iterator = "1.2"
 fuel-core-chain-config = { workspace = true }
 fuel-core-consensus-module = { workspace = true }
@@ -37,14 +35,13 @@ fuel-core-txpool = { workspace = true }
 fuel-core-types = { workspace = true, features = [
     "serde",
 ] }
+fuel-core-graphql = { workspace = true }
 futures = { workspace = true }
 hex = { version = "0.4", features = ["serde"] }
-hyper = { version = "0.14" }
 itertools = { workspace = true }
 num_cpus = "1.13"
 postcard = { workspace = true, features = ["use-std"] }
 primitive-types = "0.12"
-rand = { workspace = true }
 rocksdb = { version = "0.19", default-features = false, features = [
     "lz4",
     "multi-threaded-cf",
@@ -54,10 +51,8 @@ serde_json = { workspace = true, features = ["raw_value"] }
 strum = "0.24"
 strum_macros = "0.24"
 tempfile = { workspace = true, optional = true }
-thiserror = "1.0"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tokio-stream = { workspace = true, features = ["sync"] }
-tower-http = { version = "0.3", features = ["set-header", "trace"] }
 tracing = { workspace = true }
 uuid = { version = "1.1", features = ["v4"] }
 

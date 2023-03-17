@@ -26,7 +26,6 @@ use self::adapters::BlockImporterAdapter;
 pub mod adapters;
 pub mod config;
 pub mod genesis;
-pub mod metrics;
 pub mod sub_services;
 
 #[derive(Clone)]
@@ -40,7 +39,7 @@ pub struct SharedState {
     /// The Relayer shared state.
     pub relayer: Option<fuel_core_relayer::SharedState<Database>>,
     /// The GraphQL shared state.
-    pub graph_ql: crate::fuel_core_graphql_api::service::SharedState,
+    pub graph_ql: fuel_core_graphql::service::SharedState,
     /// Subscribe to new block production.
     pub block_importer: BlockImporterAdapter,
     #[cfg(feature = "test-helpers")]

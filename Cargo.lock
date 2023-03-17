@@ -2360,14 +2360,13 @@ dependencies = [
  "assert_matches",
  "async-graphql",
  "async-trait",
- "axum",
  "clap 4.1.8",
- "derive_more",
  "enum-iterator",
  "fuel-core-chain-config",
  "fuel-core-consensus-module",
  "fuel-core-database",
  "fuel-core-executor",
+ "fuel-core-graphql",
  "fuel-core-importer",
  "fuel-core-metrics",
  "fuel-core-p2p",
@@ -2382,13 +2381,11 @@ dependencies = [
  "fuel-core-types",
  "futures",
  "hex",
- "hyper",
  "itertools",
  "mockall",
  "num_cpus",
  "postcard",
  "primitive-types",
- "rand 0.8.5",
  "rocksdb",
  "serde",
  "serde_json",
@@ -2396,10 +2393,8 @@ dependencies = [
  "strum_macros",
  "tempfile",
  "test-case",
- "thiserror",
  "tokio",
  "tokio-stream",
- "tower-http",
  "tracing",
  "uuid 1.3.0",
 ]
@@ -7989,7 +7984,7 @@ name = "xtask"
 version = "0.0.0"
 dependencies = [
  "clap 4.1.8",
- "fuel-core",
+ "fuel-core-graphql",
 ]
 
 [[package]]

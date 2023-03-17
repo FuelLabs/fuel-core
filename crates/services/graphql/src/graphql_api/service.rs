@@ -6,11 +6,11 @@ use crate::{
         TxPoolPort,
     },
     graphql_api::Config,
+    metrics::metrics,
     schema::{
         CoreSchema,
         CoreSchemaBuilder,
     },
-    metrics::metrics,
 };
 use async_graphql::{
     extensions::Tracing,
