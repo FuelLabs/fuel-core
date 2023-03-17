@@ -10,7 +10,7 @@ use crate::{
         CoreSchema,
         CoreSchemaBuilder,
     },
-    service::metrics::metrics,
+    metrics::metrics,
 };
 use async_graphql::{
     extensions::Tracing,

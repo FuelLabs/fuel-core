@@ -24,7 +24,6 @@ pub mod block;
 pub mod chain;
 pub mod coin;
 pub mod contract;
-pub mod dap;
 pub mod health;
 pub mod message;
 pub mod node_info;
@@ -34,7 +33,6 @@ pub mod tx;
 
 #[derive(MergedObject, Default)]
 pub struct Query(
-    dap::DapQuery,
     balance::BalanceQuery,
     block::BlockQuery,
     chain::ChainQuery,
@@ -49,7 +47,7 @@ pub struct Query(
 );
 
 #[derive(MergedObject, Default)]
-pub struct Mutation(dap::DapMutation, tx::TxMutation, block::BlockMutation);
+pub struct Mutation(tx::TxMutation, block::BlockMutation);
 
 #[derive(MergedSubscription, Default)]
 pub struct Subscription(tx::TxStatusSubscription);

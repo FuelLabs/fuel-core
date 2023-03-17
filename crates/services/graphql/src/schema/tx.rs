@@ -1,5 +1,5 @@
 use crate::{
-    fuel_core_graphql_api::{
+    graphql_api::{
         service::{
             BlockProducer,
             Database,
