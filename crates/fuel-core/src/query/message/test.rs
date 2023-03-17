@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    ops::Deref,
+};
 
 use fuel_core_types::{
     blockchain::header::{
@@ -67,6 +70,24 @@ fn other_out() -> Output {
     }
 }
 
+mockall::mock! {
+    pub ProofDataStorage {}
+    impl SimpleBlockData for ProofDataStorage{
+        fn block(&self, block_id: &BlockId) -> StorageResult<CompressedBlock>;
+    }
+
+    impl SimpleTransactionData for ProofDataStorage{
+        fn transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction>;
+        fn receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>>;
+    }
+
+    impl MessageProofData for ProofDataStorage {
+        fn transaction_status(&self, transaction_id: &TxId) -> StorageResult<TransactionStatus>;
+        fn transactions_on_block(&self, block_id: &BlockId) -> StorageResult<Vec<Bytes32>>;
+        fn signature(&self, block_id: &BlockId) -> StorageResult<Signature>;
+    }
+}
+
 #[tokio::test]
 async fn can_build_message_proof() {
     use mockall::predicate::*;
@@ -98,7 +119,7 @@ async fn can_build_message_proof() {
     out.insert(TXNS[1], vec![message_out(), other_out()]);
     out.insert(TXNS[2], vec![message_out(), other_out()]);
 
-    let mut data = MockMessageProofData::new();
+    let mut data = MockProofDataStorage::new();
     let mut count = 0;
 
     data.expect_receipts().returning(move |txn_id| {
@@ -168,7 +189,9 @@ async fn can_build_message_proof() {
             }
         });
 
-    let p = message_proof(&data, transaction_id, message_id)
+    let data: Box<dyn MessageProofData> = Box::new(data);
+
+    let p = message_proof(data.deref(), transaction_id, message_id)
         .unwrap()
         .unwrap();
     assert_eq!(p.message_id(), message_id);

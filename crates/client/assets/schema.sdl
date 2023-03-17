@@ -111,10 +111,6 @@ type Coin {
 	assetId: AssetId!
 	maturity: U64!
 	"""
-	The spendable status of the coin
-	"""
-	status: CoinStatus!
-	"""
 	TxPointer - the height of the block this coin was created in
 	"""
 	blockCreated: U64!
@@ -168,11 +164,6 @@ type CoinOutput {
 	to: Address!
 	amount: U64!
 	assetId: AssetId!
-}
-
-enum CoinStatus {
-	UNSPENT
-	SPENT
 }
 
 union Consensus = Genesis | PoAConsensus
@@ -382,7 +373,6 @@ type Message {
 	nonce: U64!
 	data: HexString!
 	daHeight: U64!
-	status: MessageStatus!
 }
 
 type MessageConnection {
@@ -433,11 +423,6 @@ type MessageProof {
 	header: Header!
 }
 
-enum MessageStatus {
-	UNSPENT
-	SPENT
-}
-
 type Mutation {
 	startSession: ID!
 	endSession(id: ID!): Boolean!
@@ -455,7 +440,13 @@ type Mutation {
 	Submits transaction to the txpool
 	"""
 	submit(tx: HexString!): Transaction!
-	produceBlocks(blocksToProduce: U64!, time: TimeParameters): U64!
+	"""
+	Sequentially produces `blocks_to_produce` blocks. The first block starts with
+	`start_timestamp`. If the block production in the [`crate::service::Config`] is
+	`Trigger::Interval { block_time }`, produces blocks with `block_time ` intervals between
+	them. The `start_timestamp` is the timestamp in seconds.
+	"""
+	produceBlocks(startTimestamp: Tai64Timestamp, blocksToProduce: U64!): U64!
 }
 
 type NodeInfo {
@@ -677,17 +668,6 @@ type SuccessStatus {
 }
 
 scalar Tai64Timestamp
-
-input TimeParameters {
-	"""
-	The time to set on the first block
-	"""
-	startTime: U64!
-	"""
-	The time interval between subsequent blocks
-	"""
-	blockTimeInterval: U64!
-}
 
 type Transaction {
 	id: TransactionId!

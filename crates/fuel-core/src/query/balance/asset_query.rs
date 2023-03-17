@@ -1,23 +1,19 @@
 use crate::{
-    fuel_core_graphql_api::service::Database,
+    graphql_api::service::Database,
     query::{
-        CoinQueryContext,
-        MessageQueryContext,
+        CoinQueryData,
+        MessageQueryData,
     },
-    state::IterDirection,
 };
 use fuel_core_storage::{
+    iter::IterDirection,
     Error as StorageError,
     Result as StorageResult,
 };
 use fuel_core_types::{
-    entities::{
-        coin::CoinStatus,
-        message::MessageStatus,
-        resource::{
-            Resource,
-            ResourceId,
-        },
+    entities::resource::{
+        Resource,
+        ResourceId,
     },
     fuel_tx::UtxoId,
     fuel_types::{
@@ -95,10 +91,9 @@ impl<'a> AssetsQuery<'a> {
     /// # Note: The resources of different type are not grouped by the `asset_id`.
     // TODO: Optimize this by creating an index
     //  https://github.com/FuelLabs/fuel-core/issues/588
-    pub fn unspent_resources(
-        &self,
-    ) -> impl Iterator<Item = StorageResult<Resource>> + '_ {
-        let coins_iter = CoinQueryContext(self.database)
+    pub fn resources(&self) -> impl Iterator<Item = StorageResult<Resource>> + '_ {
+        let coins_iter = self
+            .database
             .owned_coins_ids(self.owner, None, IterDirection::Forward)
             .filter_ok(|id| {
                 if let Some(exclude) = self.exclude {
@@ -109,24 +104,24 @@ impl<'a> AssetsQuery<'a> {
             })
             .map(move |res| {
                 res.map_err(StorageError::from).and_then(|id| {
-                    let coin = CoinQueryContext(self.database).coin(id)?;
+                    let coin = self.database.coin(id)?;
 
                     Ok(Resource::Coin(coin))
                 })
             })
             .filter_ok(|coin| {
                 if let Resource::Coin(coin) = coin {
-                    let is_unspent = coin.status == CoinStatus::Unspent;
                     self.assets
                         .as_ref()
-                        .map(|assets| assets.contains(&coin.asset_id) && is_unspent)
-                        .unwrap_or(is_unspent)
+                        .map(|assets| assets.contains(&coin.asset_id))
+                        .unwrap_or(true)
                 } else {
                     true
                 }
             });
 
-        let messages_iter = MessageQueryContext(self.database)
+        let messages_iter = self
+            .database
             .owned_message_ids(self.owner, None, IterDirection::Forward)
             .filter_ok(|id| {
                 if let Some(exclude) = self.exclude {
@@ -137,16 +132,9 @@ impl<'a> AssetsQuery<'a> {
             })
             .map(move |res| {
                 res.and_then(|id| {
-                    let message = MessageQueryContext(self.database).message(&id)?;
+                    let message = self.database.message(&id)?;
                     Ok(Resource::Message(message))
                 })
-            })
-            .filter_ok(|message| {
-                if let Resource::Message(message) = message {
-                    matches!(message.status, MessageStatus::Unspent)
-                } else {
-                    true
-                }
             });
 
         coins_iter.chain(messages_iter.take_while(|_| {
@@ -186,9 +174,7 @@ impl<'a> AssetQuery<'a> {
 
     /// Returns the iterator over all valid(spendable, allowed by `exclude`) resources of the `owner`
     /// for the `asset_id`.
-    pub fn unspent_resources(
-        &self,
-    ) -> impl Iterator<Item = StorageResult<Resource>> + '_ {
-        self.query.unspent_resources()
+    pub fn resources(&self) -> impl Iterator<Item = StorageResult<Resource>> + '_ {
+        self.query.resources()
     }
 }

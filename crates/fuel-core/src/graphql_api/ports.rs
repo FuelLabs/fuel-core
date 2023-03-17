@@ -1,8 +1,10 @@
-use crate::state::IterDirection;
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
-    iter::BoxedIter,
+    iter::{
+        BoxedIter,
+        IterDirection,
+    },
     tables::{
         Coins,
         ContractsAssets,
@@ -155,7 +157,7 @@ pub trait TxPoolPort: Send + Sync {
 
     fn tx_update_subscribe(
         &self,
-    ) -> BoxStream<Result<TxUpdate, BroadcastStreamRecvError>>;
+    ) -> BoxStream<anyhow::Result<TxUpdate, BroadcastStreamRecvError>>;
 }
 
 #[async_trait]
@@ -172,8 +174,9 @@ pub trait BlockProducerPort: Send + Sync + DryRunExecution {}
 
 #[async_trait::async_trait]
 pub trait ConsensusModulePort: Send + Sync {
-    async fn manual_produce_block(
+    async fn manually_produce_blocks(
         &self,
-        block_times: Vec<Option<Tai64>>,
+        start_time: Option<Tai64>,
+        number_of_blocks: u32,
     ) -> anyhow::Result<()>;
 }

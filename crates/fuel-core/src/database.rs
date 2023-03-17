@@ -3,7 +3,6 @@ use crate::{
     state::{
         in_memory::memory_store::MemoryStore,
         DataSource,
-        IterDirection,
     },
 };
 use fuel_core_chain_config::{
@@ -13,6 +12,7 @@ use fuel_core_chain_config::{
     MessageConfig,
 };
 use fuel_core_storage::{
+    iter::IterDirection,
     transactional::{
         StorageTransaction,
         Transactional,
@@ -52,7 +52,6 @@ use tempfile::TempDir;
 // TODO: Move to separate `database/storage` folder, because it is only implementation of storages traits.
 mod block;
 mod code_root;
-mod coin;
 mod contracts;
 mod message;
 mod receipts;
@@ -60,6 +59,8 @@ mod receipts;
 mod relayer;
 mod sealed_block;
 mod state;
+
+pub(crate) mod coin;
 
 pub mod balances;
 pub mod metadata;
@@ -119,6 +120,14 @@ pub enum Column {
     /// Metadata for the relayer
     /// See [`RelayerMetadata`](fuel_core_relayer::ports::RelayerMetadata)
     RelayerMetadata = 20,
+    /// See [`ContractsAssetsMerkleData`](storage::ContractsAssetsMerkleData)
+    ContractsAssetsMerkleData = 21,
+    /// See [`ContractsAssetsMerkleMetadata`](storage::ContractsAssetsMerkleMetadata)
+    ContractsAssetsMerkleMetadata = 22,
+    /// See [`ContractsStateMerkleData`](storage::ContractsStateMerkleData)
+    ContractsStateMerkleData = 23,
+    /// See [`ContractsStateMerkleMetadata`](storage::ContractsStateMerkleMetadata)
+    ContractsStateMerkleMetadata = 24,
 }
 
 #[derive(Clone, Debug)]
@@ -403,5 +412,15 @@ impl ChainConfigDb for Database {
 
     fn get_block_height(&self) -> StorageResult<BlockHeight> {
         Self::latest_height(self)
+    }
+}
+
+#[cfg(feature = "rocksdb")]
+pub fn convert_to_rocksdb_direction(
+    direction: fuel_core_storage::iter::IterDirection,
+) -> rocksdb::Direction {
+    match direction {
+        IterDirection::Forward => rocksdb::Direction::Forward,
+        IterDirection::Reverse => rocksdb::Direction::Reverse,
     }
 }

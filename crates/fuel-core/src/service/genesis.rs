@@ -41,12 +41,9 @@ use fuel_core_types::{
         SealedBlock,
     },
     entities::{
-        coin::{
-            CoinStatus,
-            CompressedCoin,
-        },
+        coin::CompressedCoin,
         contract::ContractUtxoInfo,
-        message::CompressedMessage,
+        message::Message,
     },
     fuel_merkle::binary,
     fuel_tx::{
@@ -195,7 +192,6 @@ fn init_coin_state(
                     amount: coin.amount,
                     asset_id: coin.asset_id,
                     maturity: coin.maturity.unwrap_or_default(),
-                    status: CoinStatus::Unspent,
                     tx_pointer: TxPointer::new(
                         coin.tx_pointer_block_height
                             .map(|b| b.into())
@@ -344,7 +340,7 @@ fn init_da_messages(
     if let Some(state) = &state {
         if let Some(message_state) = &state.messages {
             for msg in message_state {
-                let message = CompressedMessage {
+                let message = Message {
                     sender: msg.sender,
                     recipient: msg.recipient,
                     nonce: msg.nonce,
@@ -643,7 +639,7 @@ mod tests {
 
         maybe_initialize_state(&config, db).unwrap();
 
-        let expected_msg: CompressedMessage = msg.into();
+        let expected_msg: Message = msg.into();
 
         let ret_msg = db
             .storage::<Messages>()

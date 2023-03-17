@@ -10,7 +10,6 @@ query($utxoId: UtxoId!) {
     utxoId
     maturity
     owner
-    status
   }
 }
 

@@ -13,7 +13,6 @@ query($filter: CoinFilterInput!, $after: String, $before: String, $first: Int, $
         utxoId
         maturity
         owner
-        status
       }
     }
     pageInfo {

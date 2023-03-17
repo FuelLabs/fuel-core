@@ -82,7 +82,7 @@ where
     pub async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
-        block_time: Option<Tai64>,
+        block_time: Tai64,
         max_gas: Word,
     ) -> anyhow::Result<UncommittedResult<StorageTransaction<Database>>> {
         //  - get previous block info (hash, root, etc)
@@ -140,7 +140,7 @@ where
         } + 1u64.into();
 
         let is_script = transaction.is_script();
-        let header = self.new_header(height, None).await?;
+        let header = self.new_header(height, Tai64::now()).await?;
         let block =
             PartialFuelBlock::new(header, vec![transaction].into_iter().collect());
 
@@ -169,7 +169,7 @@ where
     async fn new_header(
         &self,
         height: BlockHeight,
-        block_time: Option<Tai64>,
+        block_time: Tai64,
     ) -> anyhow::Result<PartialBlockHeader> {
         let previous_block_info = self.previous_block_info(height)?;
         let new_da_height = self
@@ -184,7 +184,7 @@ where
             consensus: ConsensusHeader {
                 prev_root: previous_block_info.prev_root,
                 height,
-                time: block_time.unwrap_or_else(Tai64::now),
+                time: block_time,
                 generated: Default::default(),
             },
         })

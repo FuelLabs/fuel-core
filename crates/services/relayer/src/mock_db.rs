@@ -9,7 +9,7 @@ use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::message::{
         CheckedMessage,
-        CompressedMessage,
+        Message,
     },
     fuel_tx::MessageId,
 };
@@ -26,7 +26,7 @@ use std::{
 
 #[derive(Default)]
 pub struct Data {
-    pub messages: BTreeMap<DaBlockHeight, HashMap<MessageId, CompressedMessage>>,
+    pub messages: BTreeMap<DaBlockHeight, HashMap<MessageId, Message>>,
     pub finalized_da_height: Option<DaBlockHeight>,
 }
 
@@ -40,7 +40,7 @@ pub struct MockDb {
 }
 
 impl MockDb {
-    pub fn get_message(&self, id: &MessageId) -> Option<CompressedMessage> {
+    pub fn get_message(&self, id: &MessageId) -> Option<Message> {
         self.data
             .lock()
             .unwrap()

@@ -114,7 +114,7 @@ impl SpendQuery {
 /// number of inputs for each asset can't exceed `max_inputs`, otherwise throw an error that query
 /// can't be satisfied.
 pub fn largest_first(query: &AssetQuery) -> Result<Vec<Resource>, ResourceQueryError> {
-    let mut inputs: Vec<_> = query.unspent_resources().try_collect()?;
+    let mut inputs: Vec<_> = query.resources().try_collect()?;
     inputs.sort_by_key(|resource| Reverse(*resource.amount()));
 
     let mut collected_amount = 0u64;
@@ -154,7 +154,7 @@ pub fn random_improve(
     let mut resources_per_asset = vec![];
 
     for query in spend_query.asset_queries(db) {
-        let mut inputs: Vec<_> = query.unspent_resources().try_collect()?;
+        let mut inputs: Vec<_> = query.resources().try_collect()?;
         inputs.shuffle(&mut thread_rng());
         inputs.truncate(query.asset.max);
 
@@ -209,13 +209,9 @@ mod tests {
     use crate::{
         database::Database,
         fuel_core_graphql_api::service::Database as ServiceDatabase,
-        query::{
-            asset_query::{
-                AssetQuery,
-                AssetSpendTarget,
-            },
-            CoinQueryContext,
-            MessageQueryContext,
+        query::asset_query::{
+            AssetQuery,
+            AssetSpendTarget,
         },
         resource_query::{
             largest_first,
@@ -223,10 +219,10 @@ mod tests {
             ResourceQueryError,
             SpendQuery,
         },
-        state::IterDirection,
     };
     use assert_matches::assert_matches;
     use fuel_core_storage::{
+        iter::IterDirection,
         tables::{
             Coins,
             Messages,
@@ -238,13 +234,9 @@ mod tests {
         entities::{
             coin::{
                 Coin,
-                CoinStatus,
                 CompressedCoin,
             },
-            message::{
-                CompressedMessage,
-                Message,
-            },
+            message::Message,
         },
         fuel_asm::Word,
         fuel_tx::*,
@@ -871,7 +863,6 @@ mod tests {
                 amount,
                 asset_id,
                 maturity: Default::default(),
-                status: CoinStatus::Unspent,
                 tx_pointer: Default::default(),
             };
 
@@ -881,15 +872,11 @@ mod tests {
             coin.uncompress(id)
         }
 
-        pub fn make_message(
-            &mut self,
-            owner: Address,
-            amount: Word,
-        ) -> CompressedMessage {
+        pub fn make_message(&mut self, owner: Address, amount: Word) -> Message {
             let nonce = self.last_message_index;
             self.last_message_index += 1;
 
-            let message = CompressedMessage {
+            let message = Message {
                 sender: Default::default(),
                 recipient: owner,
                 nonce,
@@ -905,21 +892,19 @@ mod tests {
         }
 
         pub fn owned_coins(&self, owner: &Address) -> Vec<Coin> {
+            use crate::query::CoinQueryData;
             let db = self.service_database();
-            let query = CoinQueryContext(&db);
-            query
-                .owned_coins_ids(owner, None, IterDirection::Forward)
-                .map(|res| res.map(|id| query.coin(id).unwrap()))
+            db.owned_coins_ids(owner, None, IterDirection::Forward)
+                .map(|res| res.map(|id| db.coin(id).unwrap()))
                 .try_collect()
                 .unwrap()
         }
 
         pub fn owned_messages(&self, owner: &Address) -> Vec<Message> {
+            use crate::query::MessageQueryData;
             let db = self.service_database();
-            let query = MessageQueryContext(&db);
-            query
-                .owned_message_ids(owner, None, IterDirection::Forward)
-                .map(|res| res.map(|id| query.message(&id).unwrap()))
+            db.owned_message_ids(owner, None, IterDirection::Forward)
+                .map(|res| res.map(|id| db.message(&id).unwrap()))
                 .try_collect()
                 .unwrap()
         }

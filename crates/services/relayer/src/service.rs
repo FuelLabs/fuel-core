@@ -34,7 +34,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::CompressedMessage,
+    entities::message::Message,
     fuel_types::MessageId,
 };
 use futures::StreamExt;
@@ -279,7 +279,7 @@ impl<D> SharedState<D> {
         &self,
         id: &MessageId,
         da_height: &DaBlockHeight,
-    ) -> anyhow::Result<Option<CompressedMessage>>
+    ) -> anyhow::Result<Option<Message>>
     where
         D: StorageInspect<Messages, Error = fuel_core_storage::Error>,
     {

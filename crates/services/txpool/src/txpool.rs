@@ -337,7 +337,7 @@ where
         // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
         for tx in block.entity.transactions() {
-            tx_status_sender.send_complete(tx.id());
+            tx_status_sender.send_complete(tx.id(), block.entity.header().height());
             self.remove_committed_tx(&tx.id());
         }
     }

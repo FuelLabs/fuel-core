@@ -7,15 +7,12 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
-    schema::{
-        block::TimeParameters,
-        U64,
-    },
     types::TransactionStatus,
     FuelClient,
     PageDirection,
     PaginationRequest,
 };
+use fuel_core_poa::Trigger;
 use fuel_core_storage::{
     tables::{
         FuelBlocks,
@@ -30,13 +27,17 @@ use fuel_core_types::{
     },
     fuel_tx::*,
     secrecy::ExposeSecret,
+    tai64::Tai64,
 };
 use itertools::{
     rev,
     Itertools,
 };
 use rstest::rstest;
-use std::ops::Deref;
+use std::{
+    ops::Deref,
+    time::Duration,
+};
 
 #[tokio::test]
 async fn block() {
@@ -206,26 +207,28 @@ async fn produce_block_custom_time() {
     let mut config = Config::local_node();
 
     config.manual_blocks_enabled = true;
+    config.block_production = Trigger::Interval {
+        block_time: Duration::from_secs(10),
+    };
 
     let srv = FuelService::from_database(db.clone(), config)
         .await
         .unwrap();
 
     let client = FuelClient::from(srv.bound_address);
-
-    let time = TimeParameters {
-        start_time: U64::from(100u64),
-        block_time_interval: U64::from(10u64),
-    };
-    let new_height = client.produce_blocks(5, Some(time)).await.unwrap();
+    let start_timestamp = Tai64::UNIX_EPOCH.0 + 100u64;
+    let new_height = client
+        .produce_blocks(5, Some(start_timestamp))
+        .await
+        .unwrap();
 
     assert_eq!(5, new_height);
 
-    assert_eq!(db.block_time(&1u32.into()).unwrap().0, 100);
-    assert_eq!(db.block_time(&2u32.into()).unwrap().0, 110);
-    assert_eq!(db.block_time(&3u32.into()).unwrap().0, 120);
-    assert_eq!(db.block_time(&4u32.into()).unwrap().0, 130);
-    assert_eq!(db.block_time(&5u32.into()).unwrap().0, 140);
+    assert_eq!(db.block_time(&1u32.into()).unwrap().0, start_timestamp);
+    assert_eq!(db.block_time(&2u32.into()).unwrap().0, start_timestamp + 10);
+    assert_eq!(db.block_time(&3u32.into()).unwrap().0, start_timestamp + 20);
+    assert_eq!(db.block_time(&4u32.into()).unwrap().0, start_timestamp + 30);
+    assert_eq!(db.block_time(&5u32.into()).unwrap().0, start_timestamp + 40);
 }
 
 #[tokio::test]
@@ -246,16 +249,12 @@ async fn produce_block_bad_start_time() {
     let _ = client.produce_blocks(1, None).await.unwrap();
 
     // try producing block with an ealier timestamp
-    let time = TimeParameters {
-        start_time: U64::from(100u64),
-        block_time_interval: U64::from(10u64),
-    };
     let err = client
-        .produce_blocks(1, Some(time))
+        .produce_blocks(1, Some(100u64))
         .await
         .expect_err("Completed unexpectedly");
     assert!(err.to_string().starts_with(
-        "Response errors; The start time must be set after the latest block time"
+        "Response errors; The block timestamp should monotonically increase"
     ));
 }
 
@@ -265,6 +264,9 @@ async fn produce_block_overflow_time() {
 
     let mut config = Config::local_node();
 
+    config.block_production = Trigger::Interval {
+        block_time: Duration::from_secs(10),
+    };
     config.manual_blocks_enabled = true;
 
     let srv = FuelService::from_database(db.clone(), config)
@@ -273,16 +275,8 @@ async fn produce_block_overflow_time() {
 
     let client = FuelClient::from(srv.bound_address);
 
-    // produce block with current timestamp
-    let _ = client.produce_blocks(1, None).await.unwrap();
-
-    // try producing block with an ealier timestamp
-    let time = TimeParameters {
-        start_time: U64::from(u64::MAX),
-        block_time_interval: U64::from(1u64),
-    };
     let err = client
-        .produce_blocks(1, Some(time))
+        .produce_blocks(2, Some(u64::MAX))
         .await
         .expect_err("Completed unexpectedly");
     assert!(err.to_string().starts_with(

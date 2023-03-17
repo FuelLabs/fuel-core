@@ -14,7 +14,6 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
-    schema::message::MessageStatus,
     types::TransactionStatus,
     FuelClient,
     PageDirection,
@@ -35,10 +34,7 @@ use fuel_core_storage::{
 use fuel_core_types::{
     fuel_asm::*,
     fuel_crypto::*,
-    fuel_tx::{
-        field::Inputs,
-        *,
-    },
+    fuel_tx::*,
 };
 use hyper::{
     service::{
@@ -169,6 +165,21 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     // wait for relayer to catch up to eth node
     srv.await_relayer_synced().await.unwrap();
 
+    // verify we have downloaded the message
+    let query = client
+        .messages(
+            None,
+            PaginationRequest {
+                cursor: None,
+                results: 1,
+                direction: PageDirection::Forward,
+            },
+        )
+        .await
+        .unwrap();
+    // we should have one message before spending
+    assert_eq!(query.results.len(), 1);
+
     // attempt to spend the message downloaded from the relayer
     let tx = TransactionBuilder::script(vec![op::ret(0)].into_iter().collect(), vec![])
         .gas_limit(10_000)
@@ -201,19 +212,8 @@ async fn messages_are_spendable_after_relayer_is_synced() {
         )
         .await
         .unwrap();
-    assert_eq!(query.results.len(), 1);
-
-    // verify that the message id matches what we spent
-    let message_id = tx.inputs()[0]
-        .message_id()
-        .expect("first input should be a message");
-    assert_eq!(
-        MessageId::from(query.results[0].message_id.clone()),
-        *message_id
-    );
-
-    // verify the spent status of the message
-    assert_eq!(query.results[0].status, MessageStatus::Spent,);
+    // there should be no messages after spending
+    assert_eq!(query.results.len(), 0);
 
     srv.stop_and_await().await.unwrap();
     eth_node_handle.shutdown.send(()).unwrap();

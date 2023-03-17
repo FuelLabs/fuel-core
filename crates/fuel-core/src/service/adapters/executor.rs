@@ -10,7 +10,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::CompressedMessage,
+    entities::message::Message,
     fuel_tx::Receipt,
     fuel_types::MessageId,
     services::executor::{
@@ -59,7 +59,7 @@ impl crate::executor::RelayerPort for MaybeRelayerAdapter {
         &self,
         id: &MessageId,
         da_height: &DaBlockHeight,
-    ) -> anyhow::Result<Option<CompressedMessage>> {
+    ) -> anyhow::Result<Option<Message>> {
         #[cfg(feature = "relayer")]
         {
             match self.relayer_synced.as_ref() {

@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use super::{
     block::Header,
     scalars::{
@@ -9,7 +11,10 @@ use super::{
         U64,
     },
 };
-use crate::query::MessageQueryContext;
+use crate::{
+    fuel_core_graphql_api::service::Database,
+    query::MessageQueryData,
+};
 use anyhow::anyhow;
 use async_graphql::{
     connection::{
@@ -17,7 +22,6 @@ use async_graphql::{
         EmptyFields,
     },
     Context,
-    Enum,
     Object,
 };
 use fuel_core_storage::iter::IntoBoxedIter;
@@ -54,17 +58,6 @@ impl Message {
     async fn da_height(&self) -> U64 {
         self.0.da_height.as_u64().into()
     }
-
-    async fn status(&self) -> MessageStatus {
-        self.0.status.into()
-    }
-}
-
-#[derive(Enum, Copy, Clone, Eq, PartialEq)]
-#[graphql(remote = "entities::message::MessageStatus")]
-pub enum MessageStatus {
-    Unspent,
-    Spent,
 }
 
 #[derive(Default)]
@@ -82,7 +75,7 @@ impl MessageQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<MessageId, Message, EmptyFields, EmptyFields>>
     {
-        let query = MessageQueryContext(ctx.data_unchecked());
+        let query: &Database = ctx.data_unchecked();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
             let start = *start;
 
@@ -95,9 +88,7 @@ impl MessageQuery {
                     .into())
                 }
 
-                query
-                    .owned_messages(&owner.0, start.map(Into::into), direction)
-                    .into_boxed()
+                query.owned_messages(&owner.0, start.map(Into::into), direction)
             } else {
                 query
                     .all_messages(start.map(Into::into), direction)
@@ -121,11 +112,13 @@ impl MessageQuery {
         transaction_id: TransactionId,
         message_id: MessageId,
     ) -> async_graphql::Result<Option<MessageProof>> {
-        let data = MessageQueryContext(ctx.data_unchecked());
-        Ok(
-            crate::query::message_proof(&data, transaction_id.into(), message_id.into())?
-                .map(MessageProof),
-        )
+        let data: &Database = ctx.data_unchecked();
+        Ok(crate::query::message_proof(
+            data.deref(),
+            transaction_id.into(),
+            message_id.into(),
+        )?
+        .map(MessageProof))
     }
 }
 

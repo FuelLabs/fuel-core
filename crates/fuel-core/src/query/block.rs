@@ -1,8 +1,10 @@
-use crate::{
-    fuel_core_graphql_api::service::Database,
-    state::IterDirection,
-};
+use crate::graphql_api::ports::DatabasePort;
 use fuel_core_storage::{
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IterDirection,
+    },
     not_found,
     tables::{
         FuelBlocks,
@@ -20,14 +22,13 @@ use fuel_core_types::blockchain::{
     },
 };
 
-pub struct BlockQueryContext<'a>(pub &'a Database);
+pub trait SimpleBlockData: Send + Sync {
+    fn block(&self, id: &BlockId) -> StorageResult<CompressedBlock>;
+}
 
-impl BlockQueryContext<'_> {
-    pub fn block(&self, id: &BlockId) -> StorageResult<CompressedBlock> {
-        let db = self.0;
-
-        let block = db
-            .as_ref()
+impl<D: DatabasePort + ?Sized> SimpleBlockData for D {
+    fn block(&self, id: &BlockId) -> StorageResult<CompressedBlock> {
+        let block = self
             .storage::<FuelBlocks>()
             .get(id)?
             .ok_or_else(|| not_found!(FuelBlocks))?
@@ -35,30 +36,49 @@ impl BlockQueryContext<'_> {
 
         Ok(block)
     }
+}
 
-    pub fn block_id(&self, height: &BlockHeight) -> StorageResult<BlockId> {
-        self.0.block_id(height)
-    }
+pub trait BlockQueryData: Send + Sync + SimpleBlockData {
+    fn block_id(&self, height: &BlockHeight) -> StorageResult<BlockId>;
 
-    pub fn latest_block_id(&self) -> StorageResult<BlockId> {
-        self.0.ids_of_latest_block().map(|(_, id)| id)
-    }
+    fn latest_block_id(&self) -> StorageResult<BlockId>;
 
-    pub fn latest_block_height(&self) -> StorageResult<BlockHeight> {
-        self.0.ids_of_latest_block().map(|(height, _)| height)
-    }
+    fn latest_block_height(&self) -> StorageResult<BlockHeight>;
 
-    pub fn latest_block(&self) -> StorageResult<CompressedBlock> {
-        self.latest_block_id().and_then(|id| self.block(&id))
-    }
+    fn latest_block(&self) -> StorageResult<CompressedBlock>;
 
-    pub fn compressed_blocks(
+    fn compressed_blocks(
         &self,
         start: Option<BlockHeight>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = StorageResult<CompressedBlock>> + '_ {
-        let db = self.0;
-        db.blocks_ids(start.map(Into::into), direction)
+    ) -> BoxedIter<StorageResult<CompressedBlock>>;
+
+    fn consensus(&self, id: &BlockId) -> StorageResult<Consensus>;
+}
+
+impl<D: DatabasePort + ?Sized> BlockQueryData for D {
+    fn block_id(&self, height: &BlockHeight) -> StorageResult<BlockId> {
+        self.block_id(height)
+    }
+
+    fn latest_block_id(&self) -> StorageResult<BlockId> {
+        self.ids_of_latest_block().map(|(_, id)| id)
+    }
+
+    fn latest_block_height(&self) -> StorageResult<BlockHeight> {
+        self.ids_of_latest_block().map(|(height, _)| height)
+    }
+
+    fn latest_block(&self) -> StorageResult<CompressedBlock> {
+        self.latest_block_id().and_then(|id| self.block(&id))
+    }
+
+    fn compressed_blocks(
+        &self,
+        start: Option<BlockHeight>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<CompressedBlock>> {
+        self.blocks_ids(start.map(Into::into), direction)
             .into_iter()
             .map(|result| {
                 result.and_then(|(_, id)| {
@@ -67,12 +87,11 @@ impl BlockQueryContext<'_> {
                     Ok(block)
                 })
             })
+            .into_boxed()
     }
 
-    pub fn consensus(&self, id: &BlockId) -> StorageResult<Consensus> {
-        self.0
-            .as_ref()
-            .storage::<SealedBlockConsensus>()
+    fn consensus(&self, id: &BlockId) -> StorageResult<Consensus> {
+        self.storage::<SealedBlockConsensus>()
             .get(id)
             .map(|c| c.map(|c| c.into_owned()))?
             .ok_or(not_found!(SealedBlockConsensus))

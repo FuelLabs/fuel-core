@@ -126,6 +126,19 @@ impl Default for BlockHeader {
     }
 }
 
+#[cfg(any(test, feature = "test-helpers"))]
+impl BlockHeader {
+    /// Creates the block header around the `height` and `time`.
+    /// The method should be used only for tests.
+    pub fn new_block(height: BlockHeight, time: Tai64) -> Self {
+        let mut default = Self::default();
+        default.consensus.height = height;
+        default.consensus.time = time;
+        default.recalculate_metadata();
+        default
+    }
+}
+
 // Accessors for the consensus header.
 impl BlockHeader {
     /// Merkle root of all previous block header hashes.

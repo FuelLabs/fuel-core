@@ -1,6 +1,9 @@
 use crate::{
-    fuel_core_graphql_api::IntoApiResult,
-    query::CoinQueryContext,
+    fuel_core_graphql_api::{
+        service::Database,
+        IntoApiResult,
+    },
+    query::CoinQueryData,
     schema::scalars::{
         Address,
         AssetId,
@@ -15,24 +18,13 @@ use async_graphql::{
         EmptyFields,
     },
     Context,
-    Enum,
     InputObject,
     Object,
 };
 use fuel_core_types::{
-    entities::coin::{
-        Coin as CoinModel,
-        CoinStatus as CoinStatusModel,
-    },
+    entities::coin::Coin as CoinModel,
     fuel_tx,
 };
-
-#[derive(Enum, Copy, Clone, Eq, PartialEq)]
-#[graphql(remote = "CoinStatusModel")]
-pub enum CoinStatus {
-    Unspent,
-    Spent,
-}
 
 pub struct Coin(pub(crate) CoinModel);
 
@@ -56,11 +48,6 @@ impl Coin {
 
     async fn maturity(&self) -> U64 {
         self.0.maturity.into()
-    }
-
-    /// The spendable status of the coin
-    async fn status(&self) -> CoinStatus {
-        self.0.status.into()
     }
 
     /// TxPointer - the height of the block this coin was created in
@@ -93,7 +80,7 @@ impl CoinQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "The ID of the coin")] utxo_id: UtxoId,
     ) -> async_graphql::Result<Option<Coin>> {
-        let data = CoinQueryContext(ctx.data_unchecked());
+        let data: &Database = ctx.data_unchecked();
         data.coin(utxo_id.0).into_api_result()
     }
 
@@ -115,7 +102,7 @@ impl CoinQuery {
             )
         }
 
-        let query = CoinQueryContext(ctx.data_unchecked());
+        let query: &Database = ctx.data_unchecked();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
             let owner: fuel_tx::Address = filter.owner.into();
             let coins = query

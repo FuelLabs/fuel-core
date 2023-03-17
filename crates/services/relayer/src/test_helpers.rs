@@ -24,7 +24,7 @@ use ethers_core::{
 use fuel_core_types::{
     entities::message::{
         CheckedMessage,
-        CompressedMessage,
+        Message,
     },
     fuel_types::Address,
 };
@@ -42,15 +42,15 @@ pub trait EvtToLog {
 impl LogTestHelper for Log {
     fn to_msg(&self) -> CheckedMessage {
         match EthEventLog::try_from(self).unwrap() {
-            EthEventLog::Message(m) => CompressedMessage::from(&m).check(),
+            EthEventLog::Message(m) => Message::from(&m).check(),
             _ => panic!("This log does not form a message"),
         }
     }
 }
 
-impl EvtToLog for crate::abi::bridge::message::SentMessageFilter {
+impl EvtToLog for crate::abi::bridge::SentMessageFilter {
     fn into_log(self) -> Log {
-        event_to_log(self, &crate::abi::bridge::message::MESSAGE_ABI)
+        event_to_log(self, &crate::abi::bridge::SENTMESSAGE_ABI)
     }
 }
 

@@ -21,24 +21,6 @@ use core::ops::Deref;
 /// Message send from Da layer to fuel by bridge
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct CompressedMessage {
-    /// Account that sent the message from the da layer
-    pub sender: Address,
-    /// Fuel account receiving the message
-    pub recipient: Address,
-    /// Nonce must be unique. It's used to prevent replay attacks
-    pub nonce: Word,
-    /// The amount of the base asset of Fuel chain sent along this message
-    pub amount: Word,
-    /// Arbitrary message data
-    pub data: Vec<u8>,
-    /// The block height from the parent da layer that originated this message
-    pub da_height: DaBlockHeight,
-}
-
-/// Message send from Da layer to fuel by bridge
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Message {
     /// Account that sent the message from the da layer
     pub sender: Address,
@@ -52,11 +34,9 @@ pub struct Message {
     pub data: Vec<u8>,
     /// The block height from the parent da layer that originated this message
     pub da_height: DaBlockHeight,
-    /// Whether a message has been spent or not
-    pub status: MessageStatus,
 }
 
-impl CompressedMessage {
+impl Message {
     /// Computed message id
     pub fn id(&self) -> MessageId {
         Input::compute_message_id(
@@ -73,50 +53,12 @@ impl CompressedMessage {
         let id = self.id();
         CheckedMessage { message: self, id }
     }
-
-    /// Decompress the message
-    pub fn decompress(self, status: MessageStatus) -> Message {
-        Message {
-            status,
-            sender: self.sender,
-            recipient: self.recipient,
-            nonce: self.nonce,
-            amount: self.amount,
-            data: self.data,
-            da_height: self.da_height,
-        }
-    }
-}
-
-impl Message {
-    /// Compress the message
-    pub fn compress(self) -> CompressedMessage {
-        CompressedMessage {
-            sender: self.sender,
-            recipient: self.recipient,
-            nonce: self.nonce,
-            amount: self.amount,
-            data: self.data,
-            da_height: self.da_height,
-        }
-    }
-
-    /// Computed message id
-    pub fn id(&self) -> MessageId {
-        Input::compute_message_id(
-            &self.sender,
-            &self.recipient,
-            self.nonce,
-            self.amount,
-            &self.data,
-        )
-    }
 }
 
 /// A message associated with precomputed id
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct CheckedMessage {
-    message: CompressedMessage,
+    message: Message,
     id: MessageId,
 }
 
@@ -174,30 +116,30 @@ impl CheckedMessage {
     }
 
     /// Returns the message.
-    pub fn message(&self) -> &CompressedMessage {
+    pub fn message(&self) -> &Message {
         &self.message
     }
 
     /// Unpacks inner values of the checked message.
-    pub fn unpack(self) -> (MessageId, CompressedMessage) {
+    pub fn unpack(self) -> (MessageId, Message) {
         (self.id, self.message)
     }
 }
 
-impl From<CheckedMessage> for CompressedMessage {
+impl From<CheckedMessage> for Message {
     fn from(checked_message: CheckedMessage) -> Self {
         checked_message.message
     }
 }
 
-impl AsRef<CompressedMessage> for CheckedMessage {
-    fn as_ref(&self) -> &CompressedMessage {
+impl AsRef<Message> for CheckedMessage {
+    fn as_ref(&self) -> &Message {
         &self.message
     }
 }
 
 impl Deref for CheckedMessage {
-    type Target = CompressedMessage;
+    type Target = Message;
 
     fn deref(&self) -> &Self::Target {
         &self.message
