@@ -30,6 +30,7 @@ use fuel_core_types::{
             poa::PoAConsensus,
             Consensus,
         },
+        header::BlockHeader,
         primitives::{
             BlockHeight,
             SecretKeyWrapper,
@@ -54,7 +55,10 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::ops::Deref;
+use std::{
+    ops::Deref,
+    time::Duration,
+};
 use tokio::{
     sync::{
         mpsc,
@@ -75,22 +79,34 @@ pub struct SharedState {
 impl SharedState {
     pub async fn manually_produce_block(
         &self,
-        block_times: Vec<Option<Tai64>>,
+        start_time: Option<Tai64>,
+        number_of_blocks: u32,
     ) -> anyhow::Result<()> {
         let (sender, receiver) = oneshot::channel();
 
         self.request_sender
-            .send(Request::ManualBlocks((block_times, sender)))
+            .send(Request::ManualBlocks((
+                ManualProduction {
+                    start_time,
+                    number_of_blocks,
+                },
+                sender,
+            )))
             .await?;
         receiver.await?
     }
+}
+
+struct ManualProduction {
+    pub start_time: Option<Tai64>,
+    pub number_of_blocks: u32,
 }
 
 /// Requests accepted by the task.
 enum Request {
     /// Manually produces the next blocks with `Tai64` block timestamp.
     /// The block timestamp should be higher than previous one.
-    ManualBlocks((Vec<Option<Tai64>>, oneshot::Sender<anyhow::Result<()>>)),
+    ManualBlocks((ManualProduction, oneshot::Sender<anyhow::Result<()>>)),
 }
 
 impl core::fmt::Debug for Request {
@@ -114,9 +130,7 @@ pub struct Task<T, B, I> {
     request_receiver: mpsc::Receiver<Request>,
     shared_state: SharedState,
     last_height: BlockHeight,
-    /// Last block creation time. When starting up, this is initialized
-    /// to `Instant::now()`, which delays the first block on startup for
-    /// a bit, but doesn't cause any other issues.
+    last_timestamp: Tai64,
     last_block_created: Instant,
     trigger: Trigger,
     // TODO: Consider that the creation of the block takes some time, and maybe we need to
@@ -131,7 +145,7 @@ where
     T: TransactionPool,
 {
     pub fn new(
-        last_height: BlockHeight,
+        last_block: &BlockHeader,
         config: Config,
         txpool: T,
         block_producer: B,
@@ -139,6 +153,10 @@ where
     ) -> Self {
         let tx_status_update_stream = txpool.transaction_status_events();
         let (request_sender, request_receiver) = mpsc::channel(100);
+        let last_timestamp = last_block.time();
+        let duration =
+            Duration::from_secs(Tai64::now().0.saturating_sub(last_timestamp.0));
+        let last_block_created = Instant::now() - duration;
         Self {
             block_gas_limit: config.block_gas_limit,
             signing_key: config.signing_key,
@@ -148,8 +166,9 @@ where
             tx_status_update_stream,
             request_receiver,
             shared_state: SharedState { request_sender },
-            last_height,
-            last_block_created: Instant::now(),
+            last_height: *last_block.height(),
+            last_timestamp,
+            last_block_created,
             trigger: config.trigger,
             timer: DeadlineClock::new(),
         }
@@ -157,6 +176,31 @@ where
 
     fn next_height(&self) -> BlockHeight {
         self.last_height + 1u32.into()
+    }
+
+    fn next_time(&self, request_type: RequestType) -> anyhow::Result<Tai64> {
+        match request_type {
+            RequestType::Manual => match self.trigger {
+                Trigger::Never | Trigger::Instant => {
+                    let duration = self.last_block_created.elapsed();
+                    increase_time(self.last_timestamp, duration)
+                }
+                Trigger::Interval { block_time } => {
+                    increase_time(self.last_timestamp, block_time)
+                }
+                Trigger::Hybrid { min_block_time, .. } => {
+                    increase_time(self.last_timestamp, min_block_time)
+                }
+            },
+            RequestType::Trigger => {
+                let now = Tai64::now();
+                if now > self.last_timestamp {
+                    Ok(now)
+                } else {
+                    self.next_time(RequestType::Manual)
+                }
+            }
+        }
     }
 }
 
@@ -170,7 +214,7 @@ where
     async fn signal_produce_block(
         &self,
         height: BlockHeight,
-        block_time: Option<Tai64>,
+        block_time: Tai64,
     ) -> anyhow::Result<UncommittedExecutionResult<StorageTransaction<D>>> {
         self.block_producer
             .produce_and_execute_block(height, block_time, self.block_gas_limit)
@@ -178,30 +222,43 @@ where
     }
 
     pub(crate) async fn produce_next_block(&mut self) -> anyhow::Result<()> {
-        self.produce_block(self.next_height(), None, RequestType::Trigger)
-            .await
+        self.produce_block(
+            self.next_height(),
+            self.next_time(RequestType::Trigger)?,
+            RequestType::Trigger,
+        )
+        .await
     }
 
-    pub(crate) async fn produce_manual_blocks(
+    async fn produce_manual_blocks(
         &mut self,
-        block_times: Vec<Option<Tai64>>,
+        block_production: ManualProduction,
     ) -> anyhow::Result<()> {
-        for block_time in block_times {
+        let mut block_time = block_production
+            .start_time
+            .unwrap_or(self.next_time(RequestType::Manual)?);
+        for _ in 0..block_production.number_of_blocks {
             self.produce_block(self.next_height(), block_time, RequestType::Manual)
                 .await?;
+            block_time = self.next_time(RequestType::Manual)?;
         }
         Ok(())
     }
 
-    pub(crate) async fn produce_block(
+    async fn produce_block(
         &mut self,
         height: BlockHeight,
-        block_time: Option<Tai64>,
+        block_time: Tai64,
         request_type: RequestType,
     ) -> anyhow::Result<()> {
+        let produce_block_start = Instant::now();
         // verify signing key is set
         if self.signing_key.is_none() {
             return Err(anyhow!("unable to produce blocks without a consensus key"))
+        }
+
+        if self.last_timestamp > block_time {
+            return Err(anyhow!("The block timestamp should monotonically increase"))
         }
 
         // Ask the block producer to create the block
@@ -241,6 +298,7 @@ where
 
         // Update last block time
         self.last_height = height;
+        self.last_timestamp = block_time;
         self.last_block_created = Instant::now();
 
         // Set timer for the next block
@@ -251,8 +309,14 @@ where
             }
             (Trigger::Instant, _) => {}
             (Trigger::Interval { block_time }, RequestType::Trigger) => {
-                // TODO: instead of sleeping for `block_time`, subtract the time we used for processing
-                self.timer.set_timeout(block_time, OnConflict::Min).await;
+                self.timer
+                    .set_deadline(produce_block_start + block_time, OnConflict::Min)
+                    .await;
+            }
+            (Trigger::Interval { block_time }, RequestType::Manual) => {
+                self.timer
+                    .set_deadline(produce_block_start + block_time, OnConflict::Overwrite)
+                    .await;
             }
             (
                 Trigger::Hybrid {
@@ -281,9 +345,8 @@ where
                         .await;
                 }
             }
-            (Trigger::Interval { .. }, RequestType::Manual)
-            | (Trigger::Hybrid { .. }, RequestType::Manual) => {
-                unreachable!("Trigger types interval and hybrid cannot be used with manual. This is enforced during config validation")
+            (Trigger::Hybrid { .. }, RequestType::Manual) => {
+                unreachable!("Trigger types hybrid cannot be used with manual. This is enforced during config validation")
             }
         }
 
@@ -404,8 +467,8 @@ where
             request = self.request_receiver.recv() => {
                 if let Some(request) = request {
                     match request {
-                        Request::ManualBlocks((block_times, response)) => {
-                            let result = self.produce_manual_blocks(block_times).await;
+                        Request::ManualBlocks((block, response)) => {
+                            let result = self.produce_manual_blocks(block).await;
                             let _ = response.send(result);
                         }
                     }
@@ -444,7 +507,7 @@ where
 }
 
 pub fn new_service<D, T, B, I>(
-    last_height: BlockHeight,
+    last_block: &BlockHeader,
     config: Config,
     txpool: T,
     block_producer: B,
@@ -456,7 +519,7 @@ where
     I: BlockImporter<Database = D> + 'static,
 {
     Service::new(Task::new(
-        last_height,
+        last_block,
         config,
         txpool,
         block_producer,
@@ -481,4 +544,14 @@ fn seal_block(
     } else {
         Err(anyhow!("no PoA signing key configured"))
     }
+}
+
+fn increase_time(time: Tai64, duration: Duration) -> anyhow::Result<Tai64> {
+    let timestamp = time.0;
+    let timestamp = timestamp
+        .checked_add(duration.as_secs())
+        .ok_or(anyhow::anyhow!(
+            "The provided time parameters lead to an overflow"
+        ))?;
+    Ok(Tai64(timestamp))
 }

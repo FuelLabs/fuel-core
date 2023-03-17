@@ -102,8 +102,11 @@ impl TryFrom<&Config> for fuel_core_poa::Config {
         // If manual block production then require trigger never or instant.
         anyhow::ensure!(
             !config.manual_blocks_enabled
-                || matches!(config.block_production, Trigger::Never | Trigger::Instant),
-            "Cannot use manual block production unless trigger mode is never or instant."
+                || matches!(
+                    config.block_production,
+                    Trigger::Never | Trigger::Instant | Trigger::Interval { .. }
+                ),
+            "Cannot use manual block production unless trigger mode is never, instant or interval."
         );
 
         Ok(fuel_core_poa::Config {

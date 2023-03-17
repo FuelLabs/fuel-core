@@ -45,14 +45,15 @@ impl PoAAdapter {
 
 #[async_trait::async_trait]
 impl ConsensusModulePort for PoAAdapter {
-    async fn manual_produce_block(
+    async fn manually_produce_blocks(
         &self,
-        block_times: Vec<Option<Tai64>>,
+        start_time: Option<Tai64>,
+        number_of_blocks: u32,
     ) -> anyhow::Result<()> {
         self.shared_state
             .as_ref()
             .ok_or(anyhow!("The block production is disabled"))?
-            .manually_produce_block(block_times)
+            .manually_produce_block(start_time, number_of_blocks)
             .await
     }
 }
@@ -89,7 +90,7 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
     async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
-        block_time: Option<Tai64>,
+        block_time: Tai64,
         max_gas: Word,
     ) -> anyhow::Result<UncommittedResult<StorageTransaction<Database>>> {
         self.block_producer
