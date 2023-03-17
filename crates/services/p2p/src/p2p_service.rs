@@ -33,7 +33,7 @@ use crate::{
 use fuel_core_metrics::p2p_metrics::P2P_METRICS;
 use fuel_core_types::{
     blockchain::primitives::BlockHeight,
-    services::p2p::peer_reputation::PeerScore,
+    services::p2p::peer_reputation::AppScore,
 };
 use futures::prelude::*;
 use libp2p::{
@@ -379,12 +379,11 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     pub fn report_peer(
         &mut self,
         peer_id: PeerId,
-        peer_score: PeerScore,
+        app_score: AppScore,
         reporting_service: &str,
     ) {
-        if let Some(PeerScoreUpdated { should_ban, score }) = self
-            .peer_manager
-            .update_peer_score_with(peer_id, peer_score)
+        if let Some(PeerScoreUpdated { should_ban, score }) =
+            self.peer_manager.update_peer_score_with(peer_id, app_score)
         {
             info!(target: "fuel-p2p", "{reporting_service} updated {peer_id} with new score {score}");
 

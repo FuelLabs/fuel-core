@@ -44,8 +44,8 @@ use fuel_core_types::{
     fuel_tx::Transaction,
     services::p2p::{
         peer_reputation::{
+            AppScore,
             PeerReport,
-            PeerScore,
         },
         BlockHeightHeartbeatData,
         GossipData,
@@ -97,7 +97,7 @@ enum TaskRequest {
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
     RespondWithPeerReport {
         peer_id: PeerId,
-        peer_score: PeerScore,
+        peer_score: AppScore,
         reporting_service: &'static str,
     },
 }

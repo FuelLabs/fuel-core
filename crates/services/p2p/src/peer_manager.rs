@@ -1,11 +1,11 @@
 use fuel_core_types::{
     blockchain::primitives::BlockHeight,
     services::p2p::peer_reputation::{
-        PeerScore,
-        DECAY_PEER_SCORE,
-        DEFAULT_PEER_SCORE,
-        MAX_PEER_SCORE,
-        MIN_PEER_SCORE,
+        AppScore,
+        DECAY_APP_SCORE,
+        DEFAULT_APP_SCORE,
+        MAX_APP_SCORE,
+        MIN_APP_SCORE,
     },
 };
 use libp2p::{
@@ -30,7 +30,7 @@ use tracing::debug;
 #[derive(Debug, Clone, Copy)]
 pub struct PeerScoreUpdated {
     pub should_ban: bool,
-    pub score: PeerScore,
+    pub score: AppScore,
 }
 
 // Info about a single Peer that we're connected to
@@ -39,13 +39,13 @@ pub struct PeerInfo {
     pub peer_addresses: HashSet<Multiaddr>,
     pub client_version: Option<String>,
     pub heartbeat_data: HeartbeatData,
-    pub score: PeerScore,
+    pub score: AppScore,
 }
 
 impl Default for PeerInfo {
     fn default() -> Self {
         Self {
-            score: DEFAULT_PEER_SCORE,
+            score: DEFAULT_APP_SCORE,
             client_version: Default::default(),
             heartbeat_data: Default::default(),
             peer_addresses: Default::default(),
@@ -134,21 +134,21 @@ impl PeerManager {
 
     pub fn batch_update_score_with_decay(&mut self) {
         for peer_info in self.non_reserved_connected_peers.values_mut() {
-            peer_info.score *= DECAY_PEER_SCORE;
+            peer_info.score *= DECAY_APP_SCORE;
         }
     }
 
     pub fn update_peer_score_with(
         &mut self,
         peer_id: PeerId,
-        score: PeerScore,
+        score: AppScore,
     ) -> Option<PeerScoreUpdated> {
         if let Some(peer) = self.non_reserved_connected_peers.get_mut(&peer_id) {
             // score should not go over `MAX_PEER_SCORE`
-            let new_score = self.peer_score_config.max_app_score.min(peer.score + score);
+            let new_score = self.peer_score_config.max_score.min(peer.score + score);
             peer.score = new_score;
 
-            let should_ban = new_score < self.peer_score_config.min_app_score_allowed;
+            let should_ban = new_score < self.peer_score_config.min_score_allowed;
 
             Some(PeerScoreUpdated {
                 should_ban,
@@ -368,8 +368,8 @@ fn log_missing_peer(peer_id: &PeerId) {
 
 #[derive(Clone, Debug, Copy)]
 struct PeerScoreConfig {
-    max_app_score: PeerScore,
-    min_app_score_allowed: PeerScore,
+    max_score: AppScore,
+    min_score_allowed: AppScore,
 }
 
 impl Default for PeerScoreConfig {
@@ -381,8 +381,8 @@ impl Default for PeerScoreConfig {
 impl PeerScoreConfig {
     pub fn new() -> Self {
         Self {
-            max_app_score: MAX_PEER_SCORE,
-            min_app_score_allowed: MIN_PEER_SCORE,
+            max_score: MAX_APP_SCORE,
+            min_score_allowed: MIN_APP_SCORE,
         }
     }
 }
