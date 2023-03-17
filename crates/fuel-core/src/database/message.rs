@@ -1,10 +1,8 @@
-use crate::{
-    database::{
-        storage::ToDatabaseKey,
-        Column,
-        Database,
-        Result as DatabaseResult,
-    },
+use crate::database::{
+    storage::ToDatabaseKey,
+    Column,
+    Database,
+    Result as DatabaseResult,
 };
 use fuel_core_chain_config::MessageConfig;
 use fuel_core_storage::{
@@ -21,17 +19,10 @@ use fuel_core_storage::{
 use fuel_core_txpool::types::Word;
 use fuel_core_types::{
     entities::{
-        message::{
-            CompressedMessage,
-            MessageStatus,
-        },
+        message::Message,
         Nonce,
     },
-    fuel_types::{
-        Address,
-        Bytes32,
-        MessageId,
-    },
+    fuel_types::Address,
 };
 use std::{
     borrow::Cow,
@@ -43,7 +34,7 @@ use super::storage::DatabaseColumn;
 impl StorageInspect<Messages> for Database {
     type Error = StorageError;
 
-    fn get(&self, key: &Nonce) -> Result<Option<Cow<CompressedMessage>>, Self::Error> {
+    fn get(&self, key: &Nonce) -> Result<Option<Cow<Message>>, Self::Error> {
         let key = key.database_key();
         Database::get(self, key.as_ref(), Column::Messages).map_err(Into::into)
     }
@@ -128,7 +119,7 @@ impl Database {
         start: Option<Nonce>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = DatabaseResult<Message>> + '_ {
-        let start = start.map(|v| v.deref().to_vec());
+        let start = start.map(|v| v.deref().to_be_bytes().to_vec());
         self.iter_all_by_start::<Vec<u8>, Message, _>(Column::Messages, start, direction)
             .map(|res| res.map(|(_, message)| message))
     }
@@ -167,14 +158,6 @@ impl Database {
 
     pub fn is_message_spent(&self, id: &Nonce) -> StorageResult<bool> {
         fuel_core_storage::StorageAsRef::storage::<SpentMessages>(&self).contains_key(id)
-    }
-
-    pub fn message_status(&self, id: &Nonce) -> StorageResult<MessageStatus> {
-        if self.is_message_spent(id)? {
-            Ok(MessageStatus::Spent)
-        } else {
-            Ok(MessageStatus::Unspent)
-        }
     }
 }
 

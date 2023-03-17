@@ -29,7 +29,7 @@ use fuel_core_types::{
 pub mod middleware;
 
 pub trait LogTestHelper {
-    fn to_msg(&self) -> CompressedMessage;
+    fn to_msg(&self) -> Message;
 }
 
 pub trait EvtToLog {
@@ -37,7 +37,7 @@ pub trait EvtToLog {
 }
 
 impl LogTestHelper for Log {
-    fn to_msg(&self) -> CompressedMessage {
+    fn to_msg(&self) -> Message {
         match EthEventLog::try_from(self).unwrap() {
             EthEventLog::Message(m) => Message::from(&m),
             _ => panic!("This log does not form a message"),

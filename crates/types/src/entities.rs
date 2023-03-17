@@ -9,18 +9,11 @@ use crate::fuel_crypto::rand::{
     },
     Rng,
 };
-use coins::{
-    deposit_coin::{
-        CompressedDepositCoin,
-        DepositCoin,
-    },
-    CoinStatus,
+use coins::deposit_coin::{
+    CompressedDepositCoin,
+    DepositCoin,
 };
-use message::{
-    CompressedMessage,
-    Message,
-    MessageStatus,
-};
+use message::Message;
 
 pub mod coins;
 pub mod contract;
@@ -56,11 +49,11 @@ impl Distribution<Nonce> for Standard {
     }
 }
 
-impl TryFrom<CompressedMessage> for CompressedDepositCoin {
+impl TryFrom<Message> for CompressedDepositCoin {
     type Error = anyhow::Error;
 
-    fn try_from(message: CompressedMessage) -> Result<Self, Self::Error> {
-        let CompressedMessage {
+    fn try_from(message: Message) -> Result<Self, Self::Error> {
+        let Message {
             sender,
             recipient,
             nonce,
@@ -87,7 +80,7 @@ impl TryFrom<CompressedMessage> for CompressedDepositCoin {
     }
 }
 
-impl From<CompressedDepositCoin> for CompressedMessage {
+impl From<CompressedDepositCoin> for Message {
     fn from(coin: CompressedDepositCoin) -> Self {
         let CompressedDepositCoin {
             sender,
@@ -97,7 +90,7 @@ impl From<CompressedDepositCoin> for CompressedMessage {
             da_height,
         } = coin;
 
-        CompressedMessage {
+        Message {
             sender,
             recipient,
             nonce,
@@ -119,7 +112,6 @@ impl TryFrom<Message> for DepositCoin {
             amount,
             data,
             da_height,
-            status,
         } = message;
 
         if !data.is_empty() {
@@ -134,7 +126,6 @@ impl TryFrom<Message> for DepositCoin {
             nonce,
             amount,
             da_height,
-            status: status.into(),
         };
 
         Ok(coin)
@@ -149,7 +140,6 @@ impl From<DepositCoin> for Message {
             nonce,
             amount,
             da_height,
-            status,
         } = coin;
 
         Message {
@@ -159,27 +149,6 @@ impl From<DepositCoin> for Message {
             amount,
             data: vec![],
             da_height,
-            status: status.into(),
-        }
-    }
-}
-
-impl From<MessageStatus> for CoinStatus {
-    fn from(status: MessageStatus) -> Self {
-        if let MessageStatus::Spent = status {
-            CoinStatus::Spent
-        } else {
-            CoinStatus::Unspent
-        }
-    }
-}
-
-impl From<CoinStatus> for MessageStatus {
-    fn from(status: CoinStatus) -> Self {
-        if let CoinStatus::Spent = status {
-            MessageStatus::Spent
-        } else {
-            MessageStatus::Unspent
         }
     }
 }

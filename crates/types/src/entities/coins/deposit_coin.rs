@@ -1,6 +1,5 @@
 //! DepositCoin
 
-use super::CoinStatus;
 use crate::{
     blockchain::primitives::DaBlockHeight,
     entities::Nonce,
@@ -33,14 +32,13 @@ impl CompressedDepositCoin {
     }
 
     /// Decompress the deposit coin
-    pub fn decompress(self, status: CoinStatus) -> DepositCoin {
+    pub fn decompress(self) -> DepositCoin {
         DepositCoin {
             sender: self.sender,
             recipient: self.recipient,
             nonce: self.nonce,
             amount: self.amount,
             da_height: self.da_height,
-            status,
         }
     }
 }
@@ -59,8 +57,6 @@ pub struct DepositCoin {
     pub amount: Word,
     /// The block height from the parent da layer that originated this message
     pub da_height: DaBlockHeight,
-    /// Whether a message has been spent or not
-    pub status: CoinStatus,
 }
 
 impl DepositCoin {

@@ -232,11 +232,9 @@ mod tests {
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         entities::{
-            coins::{
-                coin::{
-                    Coin,
-                    CompressedCoin,
-                },
+            coins::coin::{
+                Coin,
+                CompressedCoin,
             },
             message::Message,
         },
@@ -869,11 +867,7 @@ mod tests {
             coin.uncompress(id)
         }
 
-        pub fn make_message(
-            &mut self,
-            owner: Address,
-            amount: Word,
-        ) -> Message {
+        pub fn make_message(&mut self, owner: Address, amount: Word) -> Message {
             let nonce = self.last_message_index.into();
             self.last_message_index += 1;
 

@@ -76,7 +76,7 @@ impl BalanceQueryData for Database {
         let mut amounts_per_asset = HashMap::new();
         let mut errors = vec![];
 
-        for coin in AssetsQuery::new(&owner, None, None, db).coins() {
+        for coin in AssetsQuery::new(&owner, None, None, self).coins() {
             match coin {
                 Ok(coin) => {
                     *amounts_per_asset.entry(*coin.asset_id()).or_default() +=

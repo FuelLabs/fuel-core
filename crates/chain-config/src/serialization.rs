@@ -5,7 +5,6 @@ use fuel_core_types::{
         DaBlockHeight,
     },
     entities::Nonce,
-    fuel_asm::Word,
     fuel_types::bytes::WORD_SIZE,
 };
 use serde::{

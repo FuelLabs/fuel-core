@@ -7,7 +7,7 @@ use fuel_core_types::{
             Coin,
             CompressedCoin,
         },
-        message::CompressedMessage,
+        message::Message,
         Nonce,
     },
     fuel_tx::{
@@ -82,7 +82,7 @@ impl TxPoolDb for MockDb {
             .contains_key(contract_id))
     }
 
-    fn message(&self, id: &Nonce) -> StorageResult<Option<CompressedMessage>> {
+    fn message(&self, id: &Nonce) -> StorageResult<Option<Message>> {
         Ok(self.data.lock().unwrap().messages.get(id).map(Clone::clone))
     }
 

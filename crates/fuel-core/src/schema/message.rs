@@ -25,7 +25,6 @@ use async_graphql::{
     Context,
     Object,
 };
-use fuel_core_storage::iter::IntoBoxedIter;
 use fuel_core_types::entities;
 
 pub struct Message(pub(crate) entities::message::Message);
@@ -94,11 +93,10 @@ impl MessageQuery {
                         .into())
                     }
 
-                query.owned_messages(&owner.0, start.map(Into::into), direction)
-            } else {
-                query
-                    .all_messages(start.map(Into::into), direction)
-            };
+                    query.owned_messages(&owner.0, start, direction)
+                } else {
+                    query.all_messages(start, direction)
+                };
 
                 let messages = messages.map(|result| {
                     result

@@ -14,7 +14,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::CompressedMessage,
+    entities::message::Message,
 };
 
 #[cfg(test)]
@@ -28,7 +28,7 @@ pub trait RelayerDb: Send + Sync {
     fn insert_messages(
         &mut self,
         da_height: &DaBlockHeight,
-        messages: &[CompressedMessage],
+        messages: &[Message],
     ) -> StorageResult<()>;
 
     /// Set finalized da height that represent last block from da layer that got finalized.
@@ -54,7 +54,7 @@ where
     fn insert_messages(
         &mut self,
         da_height: &DaBlockHeight,
-        messages: &[CompressedMessage],
+        messages: &[Message],
     ) -> StorageResult<()> {
         // A transaction is required to ensure that the height is
         // set atomically with the insertion based on the current

@@ -16,7 +16,6 @@ use fuel_core_types::{
         Bytes32,
     },
 };
-use fuel_core_types::entities::coins::coin::CompressedCoin;
 use serde::{
     Deserialize,
     Serialize,
@@ -64,7 +63,6 @@ impl GenesisCommitment for CompressedCoin {
             amount,
             asset_id,
             maturity,
-            status,
             tx_pointer,
         } = self;
 

@@ -204,9 +204,9 @@ impl Wallet {
         let asset_id_str = asset_id_string.as_str();
         let total_amount = BASE_AMOUNT;
         // select coins
-        let resources = &self
+        let coins = &self
             .client
-            .resources_to_spend(
+            .coins_to_spend(
                 self.address.to_string().as_str(),
                 vec![(asset_id_str, total_amount, None)],
                 None,
@@ -222,8 +222,8 @@ impl Wallet {
         tx.gas_price(1);
         tx.gas_limit(BASE_AMOUNT);
 
-        for resource in resources {
-            if let Resource::Coin(coin) = resource {
+        for coin in coins {
+            if let Coins::Coin(coin) = coin {
                 tx.add_unsigned_coin_input(
                     self.secret,
                     coin.utxo_id.clone().into(),

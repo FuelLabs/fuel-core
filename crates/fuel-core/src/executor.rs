@@ -39,9 +39,8 @@ use fuel_core_types::{
         },
     },
     entities::{
-        coins::{
-            coin::CompressedCoin,
-        },
+        coins::coin::CompressedCoin,
+        contract::ContractUtxoInfo,
         Nonce,
     },
     fuel_asm::{
@@ -779,14 +778,13 @@ where
                     let nonce = Nonce::from(*nonce);
                     // Eagerly return already spent if status is known.
                     if db.is_message_spent(&nonce)? {
-                        return Err(TransactionValidityError::MessageAlreadySpent(
-                            nonce,
+                        return Err(
+                            TransactionValidityError::MessageAlreadySpent(nonce).into()
                         )
-                        .into())
                     }
                     if let Some(message) = self
                         .relayer
-                        .get_message(message_id, &block_da_height)
+                        .get_message(&nonce, &block_da_height)
                         .map_err(|e| ExecutorError::RelayerError(e.into()))?
                     {
                         if message.da_height > block_da_height {
@@ -898,7 +896,7 @@ where
                         db.storage::<SpentMessages>().insert(&nonce, &())?;
                     // ensure message wasn't already marked as spent
                     if was_already_spent.is_some() {
-                        return Err(ExecutorError::MessageAlreadySpent(*message_id))
+                        return Err(ExecutorError::MessageAlreadySpent(nonce))
                     }
                     // cleanup message contents
                     db.storage::<Messages>().remove(&nonce)?;
@@ -3182,10 +3180,7 @@ mod tests {
     }
 
     /// Helper to build transactions and a message in it for some of the message tests
-    fn make_tx_and_message(
-        rng: &mut StdRng,
-        da_height: u64,
-    ) -> (Transaction, Message) {
+    fn make_tx_and_message(rng: &mut StdRng, da_height: u64) -> (Transaction, Message) {
         let mut message = Message {
             sender: rng.gen(),
             recipient: rng.gen(),
@@ -3215,7 +3210,7 @@ mod tests {
     }
 
     /// Helper to build database and executor for some of the message tests
-    fn make_executor(messages: &[&CompressedMessage]) -> Executor<Database> {
+    fn make_executor(messages: &[&Message]) -> Executor<Database> {
         let mut database = Database::default();
         let database_ref = &mut database;
 

@@ -173,7 +173,6 @@ pub struct DepositCoin {
     pub recipient: Address,
     pub nonce: Nonce,
     pub da_height: U64,
-    pub status: CoinStatus,
 }
 
 #[derive(cynic::InlineFragments, Debug)]

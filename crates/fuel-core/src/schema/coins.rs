@@ -10,7 +10,7 @@ use crate::{
     graphql_api::service::Database,
     query::{
         asset_query::AssetSpendTarget,
-        CoinQueryContext,
+        CoinQueryData,
     },
     schema::scalars::{
         Address,
@@ -27,7 +27,6 @@ use async_graphql::{
         EmptyFields,
     },
     Context,
-    Enum,
 };
 use fuel_core_types::{
     entities::{
@@ -35,19 +34,11 @@ use fuel_core_types::{
         coins::{
             coin::Coin as CoinModel,
             deposit_coin::DepositCoin as DepositCoinModel,
-            CoinStatus as CoinStatusModel,
         },
     },
     fuel_tx,
 };
 use itertools::Itertools;
-
-#[derive(Enum, Copy, Clone, Eq, PartialEq)]
-#[graphql(remote = "CoinStatusModel")]
-pub enum CoinStatus {
-    Unspent,
-    Spent,
-}
 
 pub struct Coin(pub(crate) CoinModel);
 
@@ -73,12 +64,14 @@ impl Coin {
         self.0.maturity.into()
     }
 
-    async fn status(&self) -> CoinStatus {
-        self.0.status.into()
+    /// TxPointer - the height of the block this coin was created in
+    async fn block_created(&self) -> U64 {
+        u64::from(self.0.tx_pointer.block_height()).into()
     }
 
-    async fn block_created(&self) -> U64 {
-        self.0.block_created.into()
+    /// TxPointer - the index of the transaction that created this coin
+    async fn tx_created_idx(&self) -> U64 {
+        u64::from(self.0.tx_pointer.tx_index()).into()
     }
 }
 
@@ -108,10 +101,6 @@ impl DepositCoin {
 
     async fn da_height(&self) -> U64 {
         self.0.da_height.0.into()
-    }
-
-    async fn status(&self) -> CoinStatus {
-        self.0.status.into()
     }
 }
 
@@ -161,12 +150,11 @@ impl CoinQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "The ID of the coin")] utxo_id: UtxoId,
     ) -> async_graphql::Result<Option<Coin>> {
-        let data = CoinQueryContext(ctx.data_unchecked());
+        let data: &Database = ctx.data_unchecked();
         data.coin(utxo_id.0).into_api_result()
     }
 
-    /// Gets all coins of some `owner` maybe filtered with by `asset_id` per page.
-    /// It includes `CoinStatus::Spent` and `CoinStatus::Unspent` coins.
+    /// Gets all unspent coins of some `owner` maybe filtered with by `asset_id` per page.
     async fn coins(
         &self,
         ctx: &Context<'_>,
@@ -181,7 +169,7 @@ impl CoinQuery {
             return Err(anyhow!("reverse pagination isn't supported for this coins").into())
         }
 
-        let query = CoinQueryContext(ctx.data_unchecked());
+        let query: &Database = ctx.data_unchecked();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
             let owner: fuel_tx::Address = filter.owner.into();
             let coins = query

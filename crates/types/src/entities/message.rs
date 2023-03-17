@@ -37,6 +37,11 @@ pub struct Message {
 }
 
 impl Message {
+    /// Returns the id of the message
+    pub fn id(&self) -> &Nonce {
+        &self.nonce
+    }
+
     /// Computed message id
     pub fn message_id(&self) -> MessageId {
         Input::compute_message_id(
@@ -81,49 +86,5 @@ impl MessageProof {
             self.amount,
             &self.data,
         )
-    }
-}
-
-/// A message associated with precomputed id
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct CheckedMessage {
-    message: CompressedMessage,
-    id: MessageId,
-}
-
-impl CheckedMessage {
-    /// Returned computed message id.
-    pub fn id(&self) -> &MessageId {
-        &self.id
-    }
-
-    /// Returns the message.
-    pub fn message(&self) -> &Message {
-        &self.message
-    }
-
-    /// Unpacks inner values of the checked message.
-    pub fn unpack(self) -> (MessageId, Message) {
-        (self.id, self.message)
-    }
-}
-
-impl From<CheckedMessage> for Message {
-    fn from(checked_message: CheckedMessage) -> Self {
-        checked_message.message
-    }
-}
-
-impl AsRef<Message> for CheckedMessage {
-    fn as_ref(&self) -> &Message {
-        &self.message
-    }
-}
-
-impl Deref for CheckedMessage {
-    type Target = Message;
-
-    fn deref(&self) -> &Self::Target {
-        &self.message
     }
 }

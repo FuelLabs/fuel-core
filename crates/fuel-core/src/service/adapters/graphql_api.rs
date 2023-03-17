@@ -138,6 +138,8 @@ impl DatabaseMessages for Database {
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<Message>> {
         self.all_messages(start_message_id, Some(direction))
+            .map(|result| result.map_err(StorageError::from))
+            .into_boxed()
     }
 }
 

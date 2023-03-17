@@ -271,7 +271,7 @@ pub enum Error {
     #[error("No matching utxo for contract id ${0:#x}")]
     ContractUtxoMissing(ContractId),
     #[error("message already spent {0:#x}")]
-    MessageAlreadySpent(MessageId),
+    MessageAlreadySpent(Nonce),
     #[error("Expected input of type {0}")]
     InputTypeMismatch(String),
 }

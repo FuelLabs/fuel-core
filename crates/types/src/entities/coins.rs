@@ -13,18 +13,6 @@ use fuel_vm_private::prelude::UtxoId;
 pub mod coin;
 pub mod deposit_coin;
 
-/// Whether a coin has been spent or not
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Default, Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]
-#[repr(u8)]
-pub enum CoinStatus {
-    /// Coin has not been spent
-    Unspent,
-    #[default]
-    /// Coin has been spent
-    Spent,
-}
-
 /// The unique identifier of the coin.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Ord, Hash)]
@@ -87,14 +75,6 @@ impl Coins {
         match self {
             Coins::Coin(coin) => &coin.asset_id,
             Coins::DepositCoin(_) => &AssetId::BASE,
-        }
-    }
-
-    /// Returns the status of the coin.
-    pub fn status(&self) -> CoinStatus {
-        match self {
-            Coins::Coin(coin) => coin.status,
-            Coins::DepositCoin(coin) => coin.status,
         }
     }
 }

@@ -32,7 +32,6 @@ use fuel_core_types::{
         message::{
             Message,
             MessageProof,
-            MessageStatus,
         },
         Nonce,
     },
@@ -59,25 +58,25 @@ use std::borrow::Cow;
 mod test;
 
 pub trait MessageQueryData: Send + Sync {
-    fn message(&self, message_id: &MessageId) -> StorageResult<Message>;
+    fn message(&self, message_id: &Nonce) -> StorageResult<Message>;
 
     fn owned_message_ids(
         &self,
         owner: &Address,
-        start_message_id: Option<MessageId>,
+        start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<MessageId>>;
+    ) -> BoxedIter<StorageResult<Nonce>>;
 
     fn owned_messages(
         &self,
         owner: &Address,
-        start_message_id: Option<MessageId>,
+        start_message_id: Option<Nonce>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<Message>>;
 
     fn all_messages(
         &self,
-        start_message_id: Option<MessageId>,
+        start_message_id: Option<Nonce>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<Message>>;
 }
@@ -95,7 +94,7 @@ impl<D: DatabasePort + ?Sized> MessageQueryData for D {
         owner: &Address,
         start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<MessageId>> {
+    ) -> BoxedIter<StorageResult<Nonce>> {
         self.owned_message_ids(owner, start_message_id, direction)
     }
 

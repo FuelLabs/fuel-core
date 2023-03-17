@@ -7,9 +7,7 @@ use crate::{
 use anyhow::anyhow;
 use fuel_core_types::{
     entities::{
-        coins::{
-            coin::CompressedCoin,
-        },
+        coins::coin::CompressedCoin,
         message::Message,
         Nonce,
     },
@@ -273,7 +271,7 @@ impl Dependency {
     /// Verifies the integrity of the message
     fn check_if_message_input_matches_database(
         input: &Input,
-        db_message: &CompressedMessage,
+        db_message: &Message,
     ) -> anyhow::Result<()> {
         match input {
             Input::MessageSigned {

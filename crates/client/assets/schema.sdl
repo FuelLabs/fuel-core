@@ -257,7 +257,6 @@ type DepositCoin {
 	amount: U64!
 	assetId: AssetId!
 	daHeight: U64!
-	status: CoinStatus!
 }
 
 input ExcludeInput {
@@ -538,8 +537,7 @@ type Query {
 	"""
 	coin(utxoId: UtxoId!): Coin
 	"""
-	Gets all coins of some `owner` maybe filtered with by `asset_id` per page.
-	It includes `CoinStatus::Spent` and `CoinStatus::Unspent` coins.
+	Gets all unspent coins of some `owner` maybe filtered with by `asset_id` per page.
 	"""
 	coins(filter: CoinFilterInput!, first: Int, after: String, last: Int, before: String): CoinConnection!
 	"""

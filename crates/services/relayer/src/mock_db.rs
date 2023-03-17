@@ -8,7 +8,7 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::{
-        message::CompressedMessage,
+        message::Message,
         Nonce,
     },
 };
@@ -53,7 +53,7 @@ impl RelayerDb for MockDb {
     fn insert_messages(
         &mut self,
         da_height: &DaBlockHeight,
-        messages: &[CompressedMessage],
+        messages: &[Message],
     ) -> StorageResult<()> {
         let mut m = self.data.lock().unwrap();
         for message in messages {

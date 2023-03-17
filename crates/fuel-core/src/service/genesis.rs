@@ -41,11 +41,9 @@ use fuel_core_types::{
         SealedBlock,
     },
     entities::{
-        coins::{
-            coin::CompressedCoin,
-        },
+        coins::coin::CompressedCoin,
         contract::ContractUtxoInfo,
-        message::CompressedMessage,
+        message::Message,
     },
     fuel_merkle::binary,
     fuel_tx::{
