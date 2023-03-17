@@ -6,19 +6,35 @@ use test_case::test_case;
 
 use super::*;
 
-#[test_case(vec![None; 10], Trigger::Never, 0)]
-#[test_case(vec![None; 10], Trigger::Instant, 0)]
-#[test_case(vec![Some(Tai64(20))], Trigger::Never, 0)]
-#[test_case(vec![Some(Tai64(20)), None, Some(Tai64(30))], Trigger::Never, 0)]
-#[test_case(vec![Some(Tai64(20)), None, Some(Tai64(30))], Trigger::Instant, 0)]
-#[test_case(vec![None; 10], Trigger::Never, 10)]
-#[test_case(vec![None; 10], Trigger::Instant, 10)]
-#[test_case(vec![Some(Tai64(20))], Trigger::Never, 10)]
-#[test_case(vec![Some(Tai64(20)), None, Some(Tai64(30))], Trigger::Never, 10)]
-#[test_case(vec![Some(Tai64(20)), None, Some(Tai64(30))], Trigger::Instant, 10)]
+#[test_case(Tai64::now(), 10, vec![Tai64::now(); 10], Trigger::Never, 0)]
+#[test_case(Tai64::now(), 10, vec![Tai64::now(); 10], Trigger::Instant, 0)]
+#[test_case(
+    Tai64::now(), 3, vec![Tai64::now(), Tai64::now() + 10, Tai64::now() + 20],
+    Trigger::Interval { block_time: Duration::from_secs(10) }, 0
+)]
+#[test_case(Tai64::now() + 100, 10, vec![Tai64::now() + 100; 10], Trigger::Never, 0)]
+#[test_case(Tai64::now() + 100, 10, vec![Tai64::now() + 100; 10], Trigger::Instant, 0)]
+#[test_case(
+    Tai64::now() + 100, 3, vec![Tai64::now() + 100, Tai64::now() + 110, Tai64::now() + 120],
+    Trigger::Interval { block_time: Duration::from_secs(10) }, 0
+)]
+#[test_case(Tai64::now(), 10, vec![Tai64::now(); 10], Trigger::Never, 10)]
+#[test_case(Tai64::now(), 10, vec![Tai64::now(); 10], Trigger::Instant, 10)]
+#[test_case(
+    Tai64::now(), 3, vec![Tai64::now(), Tai64::now() + 10, Tai64::now() + 20],
+    Trigger::Interval { block_time: Duration::from_secs(10) }, 10
+)]
+#[test_case(Tai64::now() + 100, 10, vec![Tai64::now() + 100; 10], Trigger::Never, 10)]
+#[test_case(Tai64::now() + 100, 10, vec![Tai64::now() + 100; 10], Trigger::Instant, 10)]
+#[test_case(
+    Tai64::now() + 100, 3, vec![Tai64::now() + 100, Tai64::now() + 110, Tai64::now() + 120],
+    Trigger::Interval { block_time: Duration::from_secs(10) }, 10
+)]
 #[tokio::test]
 async fn can_manually_produce_block(
-    times: Vec<Option<Tai64>>,
+    start_time: Tai64,
+    number_of_blocks: u32,
+    times: Vec<Tai64>,
     trigger: Trigger,
     num_txns: usize,
 ) {
@@ -42,7 +58,7 @@ async fn can_manually_produce_block(
     ctx_builder.with_txpool(txpool);
 
     let mut importer = MockBlockImporter::default();
-    let (tx, mut rx) = tokio::sync::mpsc::channel(times.len() + 1);
+    let (tx, mut rx) = tokio::sync::mpsc::channel(times.len());
     importer.expect_commit_result().returning(move |r| {
         tx.try_send(r.into_result().sealed_block.entity.header().time())
             .unwrap();
@@ -53,10 +69,8 @@ async fn can_manually_produce_block(
         .expect_produce_and_execute_block()
         .returning(|_, time, _| {
             let mut block = Block::default();
-            if let Some(time) = time {
-                block.header_mut().consensus.time = time;
-                block.header_mut().recalculate_metadata();
-            }
+            block.header_mut().consensus.time = time;
+            block.header_mut().recalculate_metadata();
             Ok(UncommittedResult::new(
                 ExecutionResult {
                     block,
@@ -72,21 +86,16 @@ async fn can_manually_produce_block(
 
     ctx.service
         .shared
-        .manually_produce_block(times.clone())
+        .manually_produce_block(Some(start_time), number_of_blocks)
         .await
         .unwrap();
     for _ in 0..num_txns {
         status_sender.send_replace(Some(TxStatus::Submitted));
     }
 
-    for t in times.into_iter().chain(
-        std::iter::once(None)
-            .take_while(|_| num_txns > 0 && matches!(trigger, Trigger::Instant)),
-    ) {
+    for t in times.into_iter() {
         let block_time = rx.recv().await.unwrap();
-        if let Some(t) = t {
-            assert_eq!(t, block_time);
-        }
+        assert_eq!(t, block_time);
     }
 
     // Stop

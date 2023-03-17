@@ -100,17 +100,10 @@ pub struct BlockIdFragment {
     pub id: BlockId,
 }
 
-#[derive(cynic::InputObject, Clone, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
-pub struct TimeParameters {
-    pub start_time: U64,
-    pub block_time_interval: U64,
-}
-
 #[derive(cynic::QueryVariables, Debug)]
 pub struct ProduceBlockArgs {
+    pub start_timestamp: Option<Tai64Timestamp>,
     pub blocks_to_produce: U64,
-    pub time: Option<TimeParameters>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -120,7 +113,7 @@ pub struct ProduceBlockArgs {
     graphql_type = "Mutation"
 )]
 pub struct BlockMutation {
-    #[arguments(blocksToProduce: $blocks_to_produce, time: $time)]
+    #[arguments(blocksToProduce: $blocks_to_produce, startTimestamp: $start_timestamp)]
     pub produce_blocks: U64,
 }
 
@@ -206,7 +199,7 @@ mod tests {
         use cynic::MutationBuilder;
         let operation = BlockMutation::build(ProduceBlockArgs {
             blocks_to_produce: U64(0),
-            time: None,
+            start_timestamp: None,
         });
         insta::assert_snapshot!(operation.query)
     }

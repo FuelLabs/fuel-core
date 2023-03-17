@@ -455,7 +455,13 @@ type Mutation {
 	Submits transaction to the txpool
 	"""
 	submit(tx: HexString!): Transaction!
-	produceBlocks(blocksToProduce: U64!, time: TimeParameters): U64!
+	"""
+	Sequentially produces `blocks_to_produce` blocks. The first block starts with
+	`start_timestamp`. If the block production in the [`crate::service::Config`] is
+	`Trigger::Interval { block_time }`, produces blocks with `block_time ` intervals between
+	them. The `start_timestamp` is the timestamp in seconds.
+	"""
+	produceBlocks(startTimestamp: Tai64Timestamp, blocksToProduce: U64!): U64!
 }
 
 type NodeInfo {
@@ -677,17 +683,6 @@ type SuccessStatus {
 }
 
 scalar Tai64Timestamp
-
-input TimeParameters {
-	"""
-	The time to set on the first block
-	"""
-	startTime: U64!
-	"""
-	The time interval between subsequent blocks
-	"""
-	blockTimeInterval: U64!
-}
 
 type Transaction {
 	id: TransactionId!

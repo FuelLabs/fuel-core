@@ -3,6 +3,7 @@ use crate::client::schema::{
     contract::ContractBalanceQueryArgs,
     resource::ExcludeInput,
     tx::DryRunArg,
+    Tai64Timestamp,
 };
 use anyhow::Context;
 #[cfg(feature = "subscriptions")]
@@ -79,6 +80,7 @@ use std::{
         FromStr,
     },
 };
+use tai64::Tai64;
 use tracing as _;
 use types::{
     TransactionResponse,
@@ -92,10 +94,7 @@ pub use schema::{
 };
 
 use self::schema::{
-    block::{
-        ProduceBlockArgs,
-        TimeParameters,
-    },
+    block::ProduceBlockArgs,
     message::MessageProofArgs,
 };
 
@@ -561,11 +560,12 @@ impl FuelClient {
     pub async fn produce_blocks(
         &self,
         blocks_to_produce: u64,
-        time: Option<TimeParameters>,
+        start_timestamp: Option<u64>,
     ) -> io::Result<u64> {
         let query = schema::block::BlockMutation::build(ProduceBlockArgs {
             blocks_to_produce: blocks_to_produce.into(),
-            time,
+            start_timestamp: start_timestamp
+                .map(|timestamp| Tai64Timestamp::from(Tai64(timestamp))),
         });
 
         let new_height = self.query(query).await?.produce_blocks;

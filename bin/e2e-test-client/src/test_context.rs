@@ -256,10 +256,7 @@ impl Wallet {
         if let TransactionStatus::Failure { .. } | TransactionStatus::SqueezedOut { .. } =
             &status
         {
-            return Err(anyhow!(format!(
-                "unexpected transaction status {:?}",
-                status
-            )))
+            return Err(anyhow!(format!("unexpected transaction status {status:?}")))
         }
 
         Ok(())
