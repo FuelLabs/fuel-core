@@ -19,7 +19,6 @@ use crate::{
         RequestMessage,
     },
 };
-
 use fuel_core_types::blockchain::primitives::BlockHeight;
 use libp2p::{
     gossipsub::{
