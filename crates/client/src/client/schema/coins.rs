@@ -167,7 +167,7 @@ pub struct SpendQueryElementInput {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
-pub struct DepositCoin {
+pub struct MessageCoin {
     pub amount: U64,
     pub sender: Address,
     pub recipient: Address,
@@ -179,7 +179,7 @@ pub struct DepositCoin {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum Coins {
     Coin(Coin),
-    DepositCoin(DepositCoin),
+    MessageCoin(MessageCoin),
     #[cynic(fallback)]
     Unknown,
 }
@@ -188,7 +188,7 @@ impl Coins {
     pub fn amount(&self) -> u64 {
         match self {
             Coins::Coin(c) => c.amount.0,
-            Coins::DepositCoin(m) => m.amount.0,
+            Coins::MessageCoin(m) => m.amount.0,
             Coins::Unknown => 0,
         }
     }

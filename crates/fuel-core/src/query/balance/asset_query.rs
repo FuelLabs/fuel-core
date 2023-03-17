@@ -145,7 +145,7 @@ impl<'a> AssetsQuery<'a> {
             .filter_ok(|message| message.data.is_empty())
             .map(|result| {
                 result.map(|message| {
-                    Coins::DepositCoin(
+                    Coins::MessageCoin(
                         message
                             .try_into()
                             .expect("The checked above that message data is empty."),

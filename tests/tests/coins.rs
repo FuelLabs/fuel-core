@@ -228,7 +228,7 @@ mod coin {
             .flat_map(|coins| {
                 coins.iter().filter_map(|b| match b {
                     Coins::Coin(c) => Some(format!("{:#x}", c.utxo_id)),
-                    Coins::DepositCoin(_) => None,
+                    Coins::MessageCoin(_) => None,
                     Coins::Unknown => None,
                 })
             })
@@ -309,7 +309,7 @@ mod coin {
     }
 }
 
-mod deposit_coin {
+mod message_coin {
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         fuel_crypto::SecretKey,
@@ -391,7 +391,7 @@ mod deposit_coin {
         let mut script = TransactionBuilder::script(vec![], vec![]);
 
         coins_per_asset[0].iter().for_each(|coin| {
-            if let Coins::DepositCoin(message) = coin {
+            if let Coins::MessageCoin(message) = coin {
                 script.add_unsigned_message_input(
                     secret_key,
                     message.sender.0 .0,
@@ -476,7 +476,7 @@ mod deposit_coin {
             .flat_map(|coins| {
                 coins.iter().filter_map(|b| match b {
                     Coins::Coin(_) => None,
-                    Coins::DepositCoin(m) => Some(format!("{:#x}", m.nonce)),
+                    Coins::MessageCoin(m) => Some(format!("{:#x}", m.nonce)),
                     Coins::Unknown => None,
                 })
             })
@@ -689,7 +689,7 @@ mod all_coins {
             .flat_map(|coins| {
                 coins.iter().filter_map(|b| match b {
                     Coins::Coin(_) => None,
-                    Coins::DepositCoin(m) => Some(format!("{:#x}", m.nonce)),
+                    Coins::MessageCoin(m) => Some(format!("{:#x}", m.nonce)),
                     Coins::Unknown => None,
                 })
             })
@@ -699,7 +699,7 @@ mod all_coins {
             .flat_map(|coins| {
                 coins.iter().filter_map(|b| match b {
                     Coins::Coin(c) => Some(format!("{:#x}", c.utxo_id)),
-                    Coins::DepositCoin(_) => None,
+                    Coins::MessageCoin(_) => None,
                     Coins::Unknown => None,
                 })
             })

@@ -1,4 +1,4 @@
-//! DepositCoin
+//! MessageCoin
 
 use crate::{
     blockchain::primitives::DaBlockHeight,
@@ -12,7 +12,7 @@ use crate::{
 /// Message send from Da layer to fuel by bridge
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct CompressedDepositCoin {
+pub struct CompressedMessageCoin {
     /// Account that sent the message from the da layer
     pub sender: Address,
     /// Fuel account receiving the message
@@ -25,15 +25,15 @@ pub struct CompressedDepositCoin {
     pub da_height: DaBlockHeight,
 }
 
-impl CompressedDepositCoin {
+impl CompressedMessageCoin {
     /// Returns the id of the message
     pub fn id(&self) -> &Word {
         &self.nonce
     }
 
     /// Decompress the deposit coin
-    pub fn decompress(self) -> DepositCoin {
-        DepositCoin {
+    pub fn decompress(self) -> MessageCoin {
+        MessageCoin {
             sender: self.sender,
             recipient: self.recipient,
             nonce: self.nonce,
@@ -46,7 +46,7 @@ impl CompressedDepositCoin {
 /// Message send from Da layer to fuel by bridge
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
-pub struct DepositCoin {
+pub struct MessageCoin {
     /// Account that sent the message from the da layer
     pub sender: Address,
     /// Fuel account receiving the message
@@ -59,10 +59,10 @@ pub struct DepositCoin {
     pub da_height: DaBlockHeight,
 }
 
-impl DepositCoin {
+impl MessageCoin {
     /// Compress the message
-    pub fn compress(self) -> CompressedDepositCoin {
-        CompressedDepositCoin {
+    pub fn compress(self) -> CompressedMessageCoin {
+        CompressedMessageCoin {
             sender: self.sender,
             recipient: self.recipient,
             nonce: self.nonce,

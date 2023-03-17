@@ -169,7 +169,7 @@ type CoinOutput {
 """
 The schema analog of the [`coins::Coins`].
 """
-union Coins = Coin | DepositCoin
+union Coins = Coin | MessageCoin
 
 union Consensus = Genesis | PoAConsensus
 
@@ -248,15 +248,6 @@ type ContractOutput {
 	inputIndex: Int!
 	balanceRoot: Bytes32!
 	stateRoot: Bytes32!
-}
-
-type DepositCoin {
-	sender: Address!
-	recipient: Address!
-	nonce: Nonce!
-	amount: U64!
-	assetId: AssetId!
-	daHeight: U64!
 }
 
 input ExcludeInput {
@@ -384,6 +375,15 @@ type Message {
 	recipient: Address!
 	nonce: Nonce!
 	data: HexString!
+	daHeight: U64!
+}
+
+type MessageCoin {
+	sender: Address!
+	recipient: Address!
+	nonce: Nonce!
+	amount: U64!
+	assetId: AssetId!
 	daHeight: U64!
 }
 
@@ -544,9 +544,9 @@ type Query {
 	For each `query_per_asset`, get some spendable coins(of asset specified by the query) owned by
 	`owner` that add up at least the query amount. The returned coins can be spent.
 	The number of coins is optimized to prevent dust accumulation.
-
+	
 	The query supports excluding and maximum the number of coins.
-
+	
 	Returns:
 	The list of spendable coins per asset from the query. The length of the result is
 	the same as the length of `query_per_asset`. The ordering of assets and `query_per_asset`

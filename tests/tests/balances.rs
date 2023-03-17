@@ -105,7 +105,7 @@ async fn balance() {
                     witness_index: 0,
                     tx_pointer: Default::default(),
                 }),
-                Coins::DepositCoin(message) => tx.add_input(Input::MessageSigned {
+                Coins::MessageCoin(message) => tx.add_input(Input::MessageSigned {
                     // TODO: Remove when ready
                     message_id: Default::default(),
                     sender: message.sender.into(),

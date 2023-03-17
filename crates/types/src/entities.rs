@@ -9,9 +9,9 @@ use crate::fuel_crypto::rand::{
     },
     Rng,
 };
-use coins::deposit_coin::{
-    CompressedDepositCoin,
-    DepositCoin,
+use coins::message_coin::{
+    CompressedMessageCoin,
+    MessageCoin,
 };
 use message::Message;
 
@@ -49,7 +49,7 @@ impl Distribution<Nonce> for Standard {
     }
 }
 
-impl TryFrom<Message> for CompressedDepositCoin {
+impl TryFrom<Message> for CompressedMessageCoin {
     type Error = anyhow::Error;
 
     fn try_from(message: Message) -> Result<Self, Self::Error> {
@@ -64,11 +64,11 @@ impl TryFrom<Message> for CompressedDepositCoin {
 
         if !data.is_empty() {
             return Err(anyhow::anyhow!(
-                "The data is not empty, impossible to convert into the `CompressedDepositCoin`"
+                "The data is not empty, impossible to convert into the `CompressedMessageCoin`"
             ))
         }
 
-        let coin = CompressedDepositCoin {
+        let coin = CompressedMessageCoin {
             sender,
             recipient,
             nonce,
@@ -80,9 +80,9 @@ impl TryFrom<Message> for CompressedDepositCoin {
     }
 }
 
-impl From<CompressedDepositCoin> for Message {
-    fn from(coin: CompressedDepositCoin) -> Self {
-        let CompressedDepositCoin {
+impl From<CompressedMessageCoin> for Message {
+    fn from(coin: CompressedMessageCoin) -> Self {
+        let CompressedMessageCoin {
             sender,
             recipient,
             nonce,
@@ -101,7 +101,7 @@ impl From<CompressedDepositCoin> for Message {
     }
 }
 
-impl TryFrom<Message> for DepositCoin {
+impl TryFrom<Message> for MessageCoin {
     type Error = anyhow::Error;
 
     fn try_from(message: Message) -> Result<Self, Self::Error> {
@@ -116,11 +116,11 @@ impl TryFrom<Message> for DepositCoin {
 
         if !data.is_empty() {
             return Err(anyhow::anyhow!(
-                "The data is not empty, impossible to convert into the `DepositCoin`"
+                "The data is not empty, impossible to convert into the `MessageCoin`"
             ))
         }
 
-        let coin = DepositCoin {
+        let coin = MessageCoin {
             sender,
             recipient,
             nonce,
@@ -132,9 +132,9 @@ impl TryFrom<Message> for DepositCoin {
     }
 }
 
-impl From<DepositCoin> for Message {
-    fn from(coin: DepositCoin) -> Self {
-        let DepositCoin {
+impl From<MessageCoin> for Message {
+    fn from(coin: MessageCoin) -> Self {
+        let MessageCoin {
             sender,
             recipient,
             nonce,
