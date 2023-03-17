@@ -183,7 +183,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
                 warn!(target: "fuel-p2p", "Message with MessageId: {} not found in the Gossipsub Message Cache", msg_id);
             }
             Err(e) => {
-                error!(target: "fuel-p2p", "Failed to publish Message with MessageId: {} with Error: {:?}", msg_id, e);
+                error!(target: "fuel-p2p", "Failed to report Message with MessageId: {} with Error: {:?}", msg_id, e);
             }
         }
 
