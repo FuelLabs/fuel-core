@@ -40,6 +40,7 @@ itertools = { workspace = true }
 num_cpus = "1.13"
 postcard = { workspace = true, features = ["use-std"] }
 primitive-types = "0.12"
+rand = { workspace = true }
 rocksdb = { version = "0.19", default-features = false, features = [
     "lz4",
     "multi-threaded-cf",
