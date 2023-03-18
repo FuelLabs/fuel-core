@@ -5,6 +5,7 @@ use crate::database::{
 };
 use async_graphql::{
     Context,
+    MergedObject,
     Object,
     SchemaBuilder,
     ID,
@@ -48,6 +49,12 @@ use tracing::{
     trace,
 };
 use uuid::Uuid;
+
+#[derive(MergedObject, Default)]
+pub struct QuerySchema(fuel_core_graphql::schema::Query, DapQuery);
+
+#[derive(MergedObject, Default)]
+pub struct MutationSchema(fuel_core_graphql::schema::Mutation, DapMutation);
 
 #[cfg(feature = "debug")]
 use fuel_core_types::fuel_vm::state::DebugEval;

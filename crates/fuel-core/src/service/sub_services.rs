@@ -154,7 +154,10 @@ pub fn init_sub_services(
 
     // TODO: Figure out on how to move it into `fuel-core-graphql-api`.
     let schema = crate::dap::init(
-        build_schema(),
+        build_schema(
+            crate::dap::QuerySchema::default(),
+            crate::dap::MutationSchema::default(),
+        ),
         config.chain_conf.transaction_parameters,
         config.chain_conf.gas_costs.clone(),
     )

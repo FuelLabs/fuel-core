@@ -10,6 +10,7 @@ use crate::{
     schema::{
         CoreSchema,
         CoreSchemaBuilder,
+        CoreSchemaQuery,
     },
 };
 use async_graphql::{
@@ -143,9 +144,9 @@ impl RunnableTask for Task {
 }
 
 // Need a seperate Data Object for each Query endpoint, cannot be avoided
-pub fn new_service(
+pub fn new_service<Q: CoreSchemaQuery, M: CoreSchemaQuery>(
     config: Config,
-    schema: CoreSchemaBuilder,
+    schema: CoreSchemaBuilder<Q, M>,
     database: Database,
     txpool: TxPool,
     producer: BlockProducer,
@@ -164,10 +165,10 @@ pub fn new_service(
 
     let router = Router::new()
         .route("/playground", get(graphql_playground))
-        .route("/graphql", post(graphql_handler).options(ok))
+        .route("/graphql", post(graphql_handler::<Q, M>).options(ok))
         .route(
             "/graphql-sub",
-            post(graphql_subscription_handler).options(ok),
+            post(graphql_subscription_handler::<Q, M>).options(ok),
         )
         .route("/metrics", get(metrics))
         .route("/health", get(health))
@@ -207,15 +208,15 @@ async fn health() -> Json<serde_json::Value> {
     Json(json!({ "up": true }))
 }
 
-async fn graphql_handler(
-    schema: Extension<CoreSchema>,
+async fn graphql_handler<Q: CoreSchemaQuery, M: CoreSchemaQuery>(
+    schema: Extension<CoreSchema<Q, M>>,
     req: Json<Request>,
 ) -> Json<Response> {
     schema.execute(req.0).await.into()
 }
 
-async fn graphql_subscription_handler(
-    schema: Extension<CoreSchema>,
+async fn graphql_subscription_handler<Q: CoreSchemaQuery, M: CoreSchemaQuery>(
+    schema: Extension<CoreSchema<Q, M>>,
     req: Json<Request>,
 ) -> Sse<impl Stream<Item = anyhow::Result<Event, serde_json::Error>>> {
     let stream = schema

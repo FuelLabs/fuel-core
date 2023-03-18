@@ -8140,6 +8140,7 @@ name = "xtask"
 version = "0.0.0"
 dependencies = [
  "clap 4.1.8",
+ "fuel-core",
  "fuel-core-graphql",
 ]
 

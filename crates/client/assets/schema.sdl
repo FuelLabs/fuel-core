@@ -83,6 +83,11 @@ type BlockEdge {
 scalar BlockId
 
 
+input Breakpoint {
+	contract: ContractId!
+	pc: U64!
+}
+
 scalar Bytes32
 
 type ChainInfo {
@@ -418,7 +423,7 @@ type MessageProof {
 	header: Header!
 }
 
-type Mutation {
+type MutationSchema {
 	"""
 	Execute a dry-run of the transaction using a fork of current state, no changes are committed.
 	"""
@@ -434,6 +439,14 @@ type Mutation {
 	them. The `start_timestamp` is the timestamp in seconds.
 	"""
 	produceBlocks(startTimestamp: Tai64Timestamp, blocksToProduce: U64!): U64!
+	startSession: ID!
+	endSession(id: ID!): Boolean!
+	reset(id: ID!): Boolean!
+	execute(id: ID!, op: String!): Boolean!
+	setSingleStepping(id: ID!, enable: Boolean!): Boolean!
+	setBreakpoint(id: ID!, breakpoint: Breakpoint!): Boolean!
+	startTx(id: ID!, txJson: String!): RunResult!
+	continueTx(id: ID!): RunResult!
 }
 
 type NodeInfo {
@@ -446,6 +459,15 @@ type NodeInfo {
 }
 
 union Output = CoinOutput | ContractOutput | MessageOutput | ChangeOutput | VariableOutput | ContractCreated
+
+"""
+A separate `Breakpoint` type to be used as an output, as a single
+type cannot act as both input and output type in async-graphql
+"""
+type OutputBreakpoint {
+	contract: ContractId!
+	pc: U64!
+}
 
 """
 Information about pagination in a connection
@@ -481,7 +503,7 @@ type ProgramState {
 	data: HexString!
 }
 
-type Query {
+type QuerySchema {
 	balance(owner: Address!, assetId: AssetId!): Balance!
 	balances(filter: BalanceFilterInput!, first: Int, after: String, last: Int, before: String): BalanceConnection!
 	block(id: BlockId, height: U64): Block
@@ -521,6 +543,8 @@ type Query {
 	is the same.
 	"""
 	resourcesToSpend(owner: Address!, queryPerAsset: [SpendQueryElementInput!]!, excludedIds: ExcludeInput): [[Resource!]!]!
+	register(id: ID!, register: U64!): U64!
+	memory(id: ID!, start: U64!, size: U64!): String!
 }
 
 type Receipt {
@@ -578,6 +602,17 @@ enum ReturnType {
 	RETURN
 	RETURN_DATA
 	REVERT
+}
+
+type RunResult {
+	state: RunState!
+	breakpoint: OutputBreakpoint
+	jsonReceipts: [String!]!
+}
+
+enum RunState {
+	COMPLETED
+	BREAKPOINT
 }
 
 scalar Salt
@@ -709,7 +744,7 @@ type VariableOutput {
 }
 
 schema {
-	query: Query
-	mutation: Mutation
+	query: QuerySchema
+	mutation: MutationSchema
 	subscription: Subscription
 }

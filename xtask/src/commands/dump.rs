@@ -30,7 +30,15 @@ pub fn dump_schema() -> Result<(), Box<dyn std::error::Error>> {
 
     File::create(assets)
         .and_then(|mut f| {
-            f.write_all(build_schema().finish().sdl().as_bytes())?;
+            f.write_all(
+                build_schema(
+                    fuel_core::dap::QuerySchema::default(),
+                    fuel_core::dap::MutationSchema::default(),
+                )
+                .finish()
+                .sdl()
+                .as_bytes(),
+            )?;
             f.sync_all()
         })
         .expect("Failed to write SDL schema to temporary file");
@@ -42,5 +50,14 @@ pub fn dump_schema() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn is_latest_schema_committed() {
     let current_content = fs::read(SCHEMA_URL).unwrap();
-    assert_eq!(current_content, build_schema().finish().sdl().as_bytes());
+    assert_eq!(
+        current_content,
+        build_schema(
+            fuel_core::dap::QuerySchema::default(),
+            fuel_core::dap::MutationSchema::default()
+        )
+        .finish()
+        .sdl()
+        .as_bytes()
+    );
 }

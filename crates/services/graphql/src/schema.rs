@@ -52,13 +52,20 @@ pub struct Mutation(tx::TxMutation, block::BlockMutation);
 #[derive(MergedSubscription, Default)]
 pub struct Subscription(tx::TxStatusSubscription);
 
-pub type CoreSchema = Schema<Query, Mutation, Subscription>;
-pub type CoreSchemaBuilder = SchemaBuilder<Query, Mutation, Subscription>;
+pub type CoreSchema<Q, M> = Schema<Q, M, Subscription>;
+pub type CoreSchemaBuilder<Q, M> = SchemaBuilder<Q, M, Subscription>;
 
-pub fn build_schema() -> CoreSchemaBuilder {
+pub trait CoreSchemaQuery: 'static + Send + Sync + async_graphql::ObjectType {}
+
+impl<T: 'static + Send + Sync + async_graphql::ObjectType> CoreSchemaQuery for T {}
+
+pub fn build_schema<Q: CoreSchemaQuery, M: CoreSchemaQuery>(
+    query: Q,
+    mutation: M,
+) -> CoreSchemaBuilder<Q, M> {
     Schema::build_with_ignore_name_conflicts(
-        Query::default(),
-        Mutation::default(),
+        query,
+        mutation,
         Subscription::default(),
         ["TransactionConnection", "MessageConnection"],
     )
