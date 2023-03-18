@@ -22,7 +22,7 @@ pub mod dap;
 pub mod database;
 pub mod executor;
 pub mod model;
-#[cfg(all(feature = "p2p", feature = "test-helpers"))]
+#[cfg(feature = "rand-test-helpers")]
 pub mod p2p_test_helpers;
 pub mod resource;
 pub mod service;
