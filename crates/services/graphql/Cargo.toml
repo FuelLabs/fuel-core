@@ -59,5 +59,6 @@ test-case = { workspace = true }
 
 [features]
 test-helpers = []
+metrics = []
 debug = ["fuel-core-types/debug"]
 default = ["debug"]
