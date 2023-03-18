@@ -50,6 +50,9 @@ version = "0.17.4"
 
 [workspace.dependencies]
 # Workspace members
+async-graphql = { version = "4.0", features = [
+    "tracing",
+], default-features = false }
 fuel-core = { version = "0.17.4", path = "./crates/fuel-core", default-features = false }
 fuel-core-client-bin = { version = "0.17.4", path = "./bin/client" }
 fuel-core-bin = { version = "0.17.4", path = "./bin/fuel-core" }

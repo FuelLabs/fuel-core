@@ -3,14 +3,16 @@ use crate::database::{
     vm_database::VmDatabase,
     Database,
 };
-use async_graphql::{
-    Context,
-    MergedObject,
-    Object,
-    SchemaBuilder,
-    ID,
+use fuel_core_graphql::{
+    async_graphql::{
+        Context,
+        MergedObject,
+        Object,
+        SchemaBuilder,
+        ID,
+    },
+    schema::scalars::U64,
 };
-use fuel_core_graphql::schema::scalars::U64;
 use fuel_core_storage::{
     not_found,
     InterpreterStorage,
@@ -206,12 +208,16 @@ impl DapQuery {
         ctx: &Context<'_>,
         id: ID,
         register: U64,
-    ) -> async_graphql::Result<U64> {
+    ) -> fuel_core_graphql::async_graphql::Result<U64> {
         ctx.data_unchecked::<GraphStorage>()
             .lock()
             .await
             .register(&id, register.into())
-            .ok_or_else(|| async_graphql::Error::new("Invalid register identifier"))
+            .ok_or_else(|| {
+                fuel_core_graphql::async_graphql::Error::new(
+                    "Invalid register identifier",
+                )
+            })
             .map(|val| val.into())
     }
 
@@ -221,19 +227,24 @@ impl DapQuery {
         id: ID,
         start: U64,
         size: U64,
-    ) -> async_graphql::Result<String> {
+    ) -> fuel_core_graphql::async_graphql::Result<String> {
         ctx.data_unchecked::<GraphStorage>()
             .lock()
             .await
             .memory(&id, start.into(), size.into())
-            .ok_or_else(|| async_graphql::Error::new("Invalid memory range"))
+            .ok_or_else(|| {
+                fuel_core_graphql::async_graphql::Error::new("Invalid memory range")
+            })
             .and_then(|mem| Ok(serde_json::to_string(mem)?))
     }
 }
 
 #[Object]
 impl DapMutation {
-    async fn start_session(&self, ctx: &Context<'_>) -> async_graphql::Result<ID> {
+    async fn start_session(
+        &self,
+        ctx: &Context<'_>,
+    ) -> fuel_core_graphql::async_graphql::Result<ID> {
         trace!("Initializing new interpreter");
 
         let db = ctx.data_unchecked::<Database>();
@@ -257,7 +268,11 @@ impl DapMutation {
         existed
     }
 
-    async fn reset(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<bool> {
+    async fn reset(
+        &self,
+        ctx: &Context<'_>,
+        id: ID,
+    ) -> fuel_core_graphql::async_graphql::Result<bool> {
         let db = ctx.data_unchecked::<Database>();
 
         ctx.data_unchecked::<GraphStorage>()
@@ -275,7 +290,7 @@ impl DapMutation {
         ctx: &Context<'_>,
         id: ID,
         op: String,
-    ) -> async_graphql::Result<bool> {
+    ) -> fuel_core_graphql::async_graphql::Result<bool> {
         trace!("Execute encoded op {}", op);
 
         let op: Instruction = serde_json::from_str(op.as_str())?;
@@ -308,14 +323,13 @@ impl DapMutation {
         ctx: &Context<'_>,
         id: ID,
         enable: bool,
-    ) -> async_graphql::Result<bool> {
+    ) -> fuel_core_graphql::async_graphql::Result<bool> {
         trace!("Set single stepping to {} for VM {:?}", enable, id);
 
         let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
-        let vm = locked
-            .vm
-            .get_mut(&id)
-            .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
+        let vm = locked.vm.get_mut(&id).ok_or_else(|| {
+            fuel_core_graphql::async_graphql::Error::new("VM not found")
+        })?;
 
         vm.set_single_stepping(enable);
         Ok(enable)
@@ -339,14 +353,13 @@ impl DapMutation {
         ctx: &Context<'_>,
         id: ID,
         breakpoint: self::gql_types::Breakpoint,
-    ) -> async_graphql::Result<bool> {
+    ) -> fuel_core_graphql::async_graphql::Result<bool> {
         trace!("Continue execution of VM {:?}", id);
 
         let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
-        let vm = locked
-            .vm
-            .get_mut(&id)
-            .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
+        let vm = locked.vm.get_mut(&id).ok_or_else(|| {
+            fuel_core_graphql::async_graphql::Error::new("VM not found")
+        })?;
 
         vm.set_breakpoint(breakpoint.into());
         Ok(true)
@@ -357,11 +370,12 @@ impl DapMutation {
         ctx: &Context<'_>,
         id: ID,
         tx_json: String,
-    ) -> async_graphql::Result<self::gql_types::RunResult> {
+    ) -> fuel_core_graphql::async_graphql::Result<self::gql_types::RunResult> {
         trace!("Spawning a new VM instance");
 
-        let tx: Transaction = serde_json::from_str(&tx_json)
-            .map_err(|_| async_graphql::Error::new("Invalid transaction JSON"))?;
+        let tx: Transaction = serde_json::from_str(&tx_json).map_err(|_| {
+            fuel_core_graphql::async_graphql::Error::new("Invalid transaction JSON")
+        })?;
 
         let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
 
@@ -371,15 +385,16 @@ impl DapMutation {
             .into_checked_basic(db.latest_height()?.into(), &locked.params)?
             .into();
 
-        let vm = locked
-            .vm
-            .get_mut(&id)
-            .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
+        let vm = locked.vm.get_mut(&id).ok_or_else(|| {
+            fuel_core_graphql::async_graphql::Error::new("VM not found")
+        })?;
 
         match checked_tx {
             CheckedTransaction::Script(script) => {
                 let state_ref = vm.transact(script).map_err(|err| {
-                    async_graphql::Error::new(format!("Transaction failed: {err:?}"))
+                    fuel_core_graphql::async_graphql::Error::new(format!(
+                        "Transaction failed: {err:?}"
+                    ))
                 })?;
 
                 let json_receipts = state_ref
@@ -418,7 +433,7 @@ impl DapMutation {
             }
             CheckedTransaction::Create(create) => {
                 vm.deploy(create).map_err(|err| {
-                    async_graphql::Error::new(format!(
+                    fuel_core_graphql::async_graphql::Error::new(format!(
                         "Transaction deploy failed: {err:?}"
                     ))
                 })?;
@@ -429,9 +444,9 @@ impl DapMutation {
                     json_receipts: vec![],
                 })
             }
-            CheckedTransaction::Mint(_) => {
-                Err(async_graphql::Error::new("`Mint` is not supported"))
-            }
+            CheckedTransaction::Mint(_) => Err(
+                fuel_core_graphql::async_graphql::Error::new("`Mint` is not supported"),
+            ),
         }
     }
 
@@ -451,14 +466,13 @@ impl DapMutation {
         &self,
         ctx: &Context<'_>,
         id: ID,
-    ) -> async_graphql::Result<self::gql_types::RunResult> {
+    ) -> fuel_core_graphql::async_graphql::Result<self::gql_types::RunResult> {
         trace!("Continue execution of VM {:?}", id);
 
         let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
-        let vm = locked
-            .vm
-            .get_mut(&id)
-            .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
+        let vm = locked.vm.get_mut(&id).ok_or_else(|| {
+            fuel_core_graphql::async_graphql::Error::new("VM not found")
+        })?;
 
         let receipt_count_before = vm.receipts().len();
 
@@ -474,7 +488,9 @@ impl DapMutation {
             }
             // The transaction was already completed earlier, so it cannot be resumed
             Err(err) => {
-                return Err(async_graphql::Error::new(format!("VM error: {err:?}")))
+                return Err(fuel_core_graphql::async_graphql::Error::new(format!(
+                    "VM error: {err:?}"
+                )))
             }
         };
 
@@ -503,7 +519,7 @@ impl DapMutation {
 
 mod gql_types {
     //! GraphQL type wrappers
-    use async_graphql::*;
+    use fuel_core_graphql::async_graphql::*;
 
     use fuel_core_graphql::schema::scalars::{
         ContractId,

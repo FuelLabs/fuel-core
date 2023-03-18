@@ -12,9 +12,7 @@ version = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-async-graphql = { version = "4.0", features = [
-    "tracing",
-], default-features = false }
+async-graphql = { workspace = true }
 async-trait = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 enum-iterator = "1.2"
@@ -50,7 +48,6 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 strum = "0.24"
 strum_macros = "0.24"
-rand = { workspace = true }
 tempfile = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tokio-stream = { workspace = true, features = ["sync"] }
