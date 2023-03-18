@@ -24,6 +24,7 @@ pub mod executor;
 pub mod model;
 #[cfg(all(feature = "p2p", feature = "test-helpers"))]
 pub mod p2p_test_helpers;
+pub mod resource;
 pub mod service;
 pub mod state;
 

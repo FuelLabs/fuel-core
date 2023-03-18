@@ -32,7 +32,7 @@ pub mod scalars;
 pub mod tx;
 
 #[derive(MergedObject, Default)]
-pub struct Query(
+pub struct QuerySchema(
     balance::BalanceQuery,
     block::BlockQuery,
     chain::ChainQuery,
@@ -47,7 +47,7 @@ pub struct Query(
 );
 
 #[derive(MergedObject, Default)]
-pub struct Mutation(tx::TxMutation, block::BlockMutation);
+pub struct MutationSchema(tx::TxMutation, block::BlockMutation);
 
 #[derive(MergedSubscription, Default)]
 pub struct Subscription(tx::TxStatusSubscription);

@@ -32,8 +32,8 @@ pub fn dump_schema() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|mut f| {
             f.write_all(
                 build_schema(
-                    fuel_core::dap::QuerySchema::default(),
-                    fuel_core::dap::MutationSchema::default(),
+                    fuel_core::dap::Query::default(),
+                    fuel_core::dap::Mutation::default(),
                 )
                 .finish()
                 .sdl()
@@ -53,8 +53,8 @@ fn is_latest_schema_committed() {
     assert_eq!(
         current_content,
         build_schema(
-            fuel_core::dap::QuerySchema::default(),
-            fuel_core::dap::MutationSchema::default()
+            fuel_core::dap::Query::default(),
+            fuel_core::dap::Mutation::default()
         )
         .finish()
         .sdl()

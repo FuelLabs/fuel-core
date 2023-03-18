@@ -423,7 +423,7 @@ type MessageProof {
 	header: Header!
 }
 
-type MutationSchema {
+type Mutation {
 	"""
 	Execute a dry-run of the transaction using a fork of current state, no changes are committed.
 	"""
@@ -503,7 +503,7 @@ type ProgramState {
 	data: HexString!
 }
 
-type QuerySchema {
+type Query {
 	balance(owner: Address!, assetId: AssetId!): Balance!
 	balances(filter: BalanceFilterInput!, first: Int, after: String, last: Int, before: String): BalanceConnection!
 	block(id: BlockId, height: U64): Block
@@ -744,7 +744,7 @@ type VariableOutput {
 }
 
 schema {
-	query: QuerySchema
-	mutation: MutationSchema
+	query: Query
+	mutation: Mutation
 	subscription: Subscription
 }

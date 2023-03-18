@@ -51,10 +51,10 @@ use tracing::{
 use uuid::Uuid;
 
 #[derive(MergedObject, Default)]
-pub struct QuerySchema(fuel_core_graphql::schema::Query, DapQuery);
+pub struct Query(fuel_core_graphql::schema::QuerySchema, DapQuery);
 
 #[derive(MergedObject, Default)]
-pub struct MutationSchema(fuel_core_graphql::schema::Mutation, DapMutation);
+pub struct Mutation(fuel_core_graphql::schema::MutationSchema, DapMutation);
 
 #[cfg(feature = "debug")]
 use fuel_core_types::fuel_vm::state::DebugEval;

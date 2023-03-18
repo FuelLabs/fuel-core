@@ -5,7 +5,6 @@ use fuel_core::{
         MessageConfig,
         StateConfig,
     },
-    resource_query::ResourceQueryError,
     service::{
         Config,
         FuelService,
@@ -15,6 +14,7 @@ use fuel_core_client::client::{
     schema::resource::Resource,
     FuelClient,
 };
+use fuel_core_graphql::resource_query::ResourceQueryError;
 use fuel_core_types::fuel_tx::*;
 use rand::{
     prelude::StdRng,

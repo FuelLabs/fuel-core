@@ -1,6 +1,5 @@
 use fuel_core::{
     database::Database,
-    schema::scalars::BlockId,
     service::{
         Config,
         FuelService,
@@ -12,6 +11,7 @@ use fuel_core_client::client::{
     PageDirection,
     PaginationRequest,
 };
+use fuel_core_graphql::schema::scalars::BlockId;
 use fuel_core_poa::Trigger;
 use fuel_core_storage::{
     tables::{
