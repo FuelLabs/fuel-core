@@ -45,7 +45,7 @@ pacman -Syu --needed --noconfirm cmake gcc pkgconf git clang protobuf-compiler
 1. Install Visual C++ Build tools as described in this first [stackoverflow answer, and make sure to select clang as well.](https://stackoverflow.com/questions/40504552/how-to-install-visual-c-build-tools)
 2. [Install protobuf and add it to the PATH](https://www.geeksforgeeks.org/how-to-install-protocol-buffers-on-windows/)
 3. Install make via `choco install make`
-4. Install the node via `cargo install fuel-core-bin` (or download this repo as a zip, `git clone` is a currently broken)
+4. Install the node via `cargo install fuel-core-bin`
 5. Test the node by running `fuel-core run --db-type in-memory`
 
 
