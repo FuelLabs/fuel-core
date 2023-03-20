@@ -391,7 +391,7 @@ async fn can_get_message_proof() {
 
             // 3. Verify the proof. (message_id, proof set, root, index, num_message_ids)
             assert!(verify_merkle(
-                result.header.output_messages_root.clone().into(),
+                result.header.message_receipt_root.clone().into(),
                 result.proof_index.0,
                 result
                     .proof_set
@@ -399,7 +399,7 @@ async fn can_get_message_proof() {
                     .cloned()
                     .map(Bytes32::from)
                     .collect(),
-                result.header.output_messages_count.0,
+                result.header.message_receipt_count.0,
                 generated_message_id,
             ));
 
@@ -420,7 +420,7 @@ async fn can_get_message_proof() {
 
             // Check the root matches the proof and the root on the header.
             assert_eq!(
-                <[u8; 32]>::from(Bytes32::from(result.header.output_messages_root)),
+                <[u8; 32]>::from(Bytes32::from(result.header.message_receipt_root)),
                 expected_root
             );
 

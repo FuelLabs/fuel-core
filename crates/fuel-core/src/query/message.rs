@@ -246,7 +246,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
                 None => return Ok(None),
             };
 
-            if *header.output_messages_root != proof.0 {
+            if *header.message_receipt_root != proof.0 {
                 // This is bad as it means there's a bug in our prove code.
                 tracing::error!(
                     "block header {:?} root doesn't match generated proof root {:?}",

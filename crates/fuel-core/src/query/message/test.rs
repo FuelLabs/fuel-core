@@ -166,5 +166,5 @@ async fn can_build_message_proof() {
     assert_eq!(p.message_id(), message_id);
     assert_eq!(p.signature, Signature::default());
     let header = header.generate(&[], &message_ids);
-    assert_eq!(p.header.output_messages_root, header.output_messages_root);
+    assert_eq!(p.header.message_receipt_root, header.message_receipt_root);
 }

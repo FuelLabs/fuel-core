@@ -1,66 +1,11 @@
 //! Higher level domain types
 
-use coins::message_coin::{
-    CompressedMessageCoin,
-    MessageCoin,
-};
+use coins::message_coin::MessageCoin;
 use message::Message;
 
 pub mod coins;
 pub mod contract;
 pub mod message;
-
-impl TryFrom<Message> for CompressedMessageCoin {
-    type Error = anyhow::Error;
-
-    fn try_from(message: Message) -> Result<Self, Self::Error> {
-        let Message {
-            sender,
-            recipient,
-            nonce,
-            amount,
-            data,
-            da_height,
-        } = message;
-
-        if !data.is_empty() {
-            return Err(anyhow::anyhow!(
-                "The data is not empty, impossible to convert into the `CompressedMessageCoin`"
-            ))
-        }
-
-        let coin = CompressedMessageCoin {
-            sender,
-            recipient,
-            nonce,
-            amount,
-            da_height,
-        };
-
-        Ok(coin)
-    }
-}
-
-impl From<CompressedMessageCoin> for Message {
-    fn from(coin: CompressedMessageCoin) -> Self {
-        let CompressedMessageCoin {
-            sender,
-            recipient,
-            nonce,
-            amount,
-            da_height,
-        } = coin;
-
-        Message {
-            sender,
-            recipient,
-            nonce,
-            amount,
-            data: vec![],
-            da_height,
-        }
-    }
-}
 
 impl TryFrom<Message> for MessageCoin {
     type Error = anyhow::Error;

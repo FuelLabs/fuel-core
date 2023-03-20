@@ -303,17 +303,17 @@ type Header {
 	"""
 	transactionsCount: U64!
 	"""
-	Number of output messages in this block.
+	Number of message receipts in this block.
 	"""
-	outputMessagesCount: U64!
+	messageReceiptCount: U64!
 	"""
 	Merkle root of transactions.
 	"""
 	transactionsRoot: Bytes32!
 	"""
-	Merkle root of messages in this block.
+	Merkle root of message receipts in this block.
 	"""
-	outputMessagesRoot: Bytes32!
+	messageReceiptRoot: Bytes32!
 	"""
 	Fuel block height.
 	"""
