@@ -56,6 +56,8 @@ fn txn(c: &mut Criterion) {
     let mut database = Database::default();
     let relayer = MaybeRelayerAdapter {
         database: database.clone(),
+        // relayer_synced: None,
+        // da_deploy_height: 0u64.into(),
     };
     let mut config = Config::local_node();
 
@@ -90,7 +92,7 @@ fn txn(c: &mut Criterion) {
 
     let mut execute = c.benchmark_group("execute_without_commit");
 
-    for num_inputs in [1, 2, 5, 10, 50, 100] {
+    for num_inputs in [0, 1, 2, 5, 10, 50, 100] {
         let header = PartialBlockHeader {
             application: ApplicationHeader {
                 da_height: 1u64.into(),
@@ -111,7 +113,7 @@ fn txn(c: &mut Criterion) {
         for (coin_utxo, compressed_coin) in coins.iter().take(num_inputs) {
             script.add_unsigned_coin_input(
                 secret_key,
-                coin_utxo.clone(),
+                *coin_utxo,
                 compressed_coin.amount,
                 compressed_coin.asset_id,
                 Default::default(),
