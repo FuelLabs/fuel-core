@@ -1509,7 +1509,6 @@ impl Fee for CreateCheckedMetadata {
     }
 }
 
-// TODO: Add test to verify that `MessageCoin` spent on revert and `MessageData` not
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3213,33 +3212,27 @@ mod tests {
         }
     }
 
+    fn message_from_input(input: &Input, da_height: u64) -> Message {
+        Message {
+            sender: *input.sender().unwrap(),
+            recipient: *input.recipient().unwrap(),
+            nonce: *input.nonce().unwrap(),
+            amount: input.amount().unwrap(),
+            data: input
+                .input_data()
+                .map(|data| data.to_vec())
+                .unwrap_or_default(),
+            da_height: DaBlockHeight(da_height),
+        }
+    }
+
     /// Helper to build transactions and a message in it for some of the message tests
     fn make_tx_and_message(rng: &mut StdRng, da_height: u64) -> (Transaction, Message) {
-        let mut message = Message {
-            sender: rng.gen(),
-            recipient: rng.gen(),
-            nonce: rng.gen(),
-            amount: 1000,
-            data: vec![],
-            da_height: DaBlockHeight(da_height),
-        };
-
         let tx = TransactionBuilder::script(vec![], vec![])
-            .add_unsigned_message_input(
-                rng.gen(),
-                message.sender,
-                message.nonce,
-                message.amount,
-                message.data.clone(),
-            )
+            .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), 1000, vec![])
             .finalize();
 
-        if let Some(recipient) = tx.inputs()[0].recipient() {
-            message.recipient = *recipient;
-        } else {
-            unreachable!();
-        }
-
+        let message = message_from_input(&tx.inputs()[0], da_height);
         (tx.into(), message)
     }
 
@@ -3282,6 +3275,120 @@ mod tests {
         make_executor(&[&message])
             .execute_and_commit(ExecutionBlock::Validation(block))
             .expect("block validation failed unexpectedly");
+    }
+
+    #[test]
+    fn successful_execution_consume_all_messages() {
+        let mut rng = StdRng::seed_from_u64(2322);
+        let to: Address = rng.gen();
+        let amount = 500;
+
+        let tx = TransactionBuilder::script(vec![], vec![])
+            // Add `Input::MessageCoin`
+            .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), amount, vec![])
+            // Add `Input::MessageData`
+            .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), amount, vec![0xff; 10])
+            .add_output(Output::change(to, amount + amount, AssetId::BASE))
+            .finalize();
+        let tx_id = tx.id();
+
+        let message_coin = message_from_input(&tx.inputs()[0], 0);
+        let message_data = message_from_input(&tx.inputs()[1], 0);
+        let messages = vec![&message_coin, &message_data];
+
+        let mut block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![tx.into()],
+        };
+
+        let exec = make_executor(&messages);
+        let mut block_db_transaction = exec.database.transaction();
+        assert_eq!(block_db_transaction.all_messages(None, None).count(), 2);
+
+        let ExecutionData {
+            skipped_transactions,
+            ..
+        } = exec
+            .execute_transactions(
+                &mut block_db_transaction,
+                ExecutionType::Production(&mut block),
+            )
+            .unwrap();
+        assert_eq!(skipped_transactions.len(), 0);
+
+        // Successful execution consumes `message_coin` and `message_data`.
+        assert_eq!(block_db_transaction.all_messages(None, None).count(), 0);
+        assert!(block_db_transaction
+            .is_message_spent(&message_coin.nonce)
+            .unwrap());
+        assert!(block_db_transaction
+            .is_message_spent(&message_data.nonce)
+            .unwrap());
+        assert_eq!(
+            block_db_transaction
+                .coin(&UtxoId::new(tx_id, 0))
+                .unwrap()
+                .amount,
+            amount + amount
+        );
+    }
+
+    #[test]
+    fn reverted_execution_consume_only_message_coins() {
+        let mut rng = StdRng::seed_from_u64(2322);
+        let to: Address = rng.gen();
+        let amount = 500;
+
+        // Script that return `1` - failed script -> execution result will be reverted.
+        let script = vec![op::ret(1)].into_iter().collect();
+        let tx = TransactionBuilder::script(script, vec![])
+            // Add `Input::MessageCoin`
+            .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), amount, vec![])
+            // Add `Input::MessageData`
+            .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), amount, vec![0xff; 10])
+            .add_output(Output::change(to, amount + amount, AssetId::BASE))
+            .finalize();
+        let tx_id = tx.id();
+
+        let message_coin = message_from_input(&tx.inputs()[0], 0);
+        let message_data = message_from_input(&tx.inputs()[1], 0);
+        let messages = vec![&message_coin, &message_data];
+
+        let mut block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![tx.into()],
+        };
+
+        let exec = make_executor(&messages);
+        let mut block_db_transaction = exec.database.transaction();
+        assert_eq!(block_db_transaction.all_messages(None, None).count(), 2);
+
+        let ExecutionData {
+            skipped_transactions,
+            ..
+        } = exec
+            .execute_transactions(
+                &mut block_db_transaction,
+                ExecutionType::Production(&mut block),
+            )
+            .unwrap();
+        assert_eq!(skipped_transactions.len(), 0);
+
+        // We should spend only `message_coin`. The `message_data` should be unspent.
+        assert_eq!(block_db_transaction.all_messages(None, None).count(), 1);
+        assert!(block_db_transaction
+            .is_message_spent(&message_coin.nonce)
+            .unwrap());
+        assert!(!block_db_transaction
+            .is_message_spent(&message_data.nonce)
+            .unwrap());
+        assert_eq!(
+            block_db_transaction
+                .coin(&UtxoId::new(tx_id, 0))
+                .unwrap()
+                .amount,
+            amount
+        );
     }
 
     #[test]

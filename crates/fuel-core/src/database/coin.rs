@@ -8,10 +8,13 @@ use crate::database::{
 use fuel_core_chain_config::CoinConfig;
 use fuel_core_storage::{
     iter::IterDirection,
+    not_found,
     tables::Coins,
     Error as StorageError,
     Mappable,
+    Result as StorageResult,
     StorageAsMut,
+    StorageAsRef,
     StorageInspect,
     StorageMutate,
 };
@@ -123,6 +126,16 @@ impl Database {
                 )
             })
         })
+    }
+
+    pub fn coin(&self, utxo_id: &UtxoId) -> StorageResult<CompressedCoin> {
+        let coin = self
+            .storage_as_ref::<Coins>()
+            .get(&utxo_id)?
+            .ok_or(not_found!(Coins))?
+            .into_owned();
+
+        Ok(coin)
     }
 
     pub fn get_coin_config(&self) -> DatabaseResult<Option<Vec<CoinConfig>>> {
