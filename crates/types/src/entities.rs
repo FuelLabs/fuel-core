@@ -42,6 +42,11 @@ pub mod message;
 )]
 pub struct Nonce(Word);
 
+impl Nonce {
+    /// The length of the serialized nonce.
+    pub const LEN: usize = 8;
+}
+
 #[cfg(feature = "random")]
 impl Distribution<Nonce> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Nonce {

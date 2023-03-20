@@ -103,11 +103,10 @@ impl Database {
         )
         .map(|res| {
             res.map(|(key, _)| {
-                const NONCE_LEN: usize = 8;
                 let nonce = Word::from_be_bytes(
-                    key[32..32 + NONCE_LEN]
+                    key[Address::LEN..Address::LEN + Nonce::LEN]
                         .try_into()
-                        .expect("key is always 8 bytes"),
+                        .expect("key is always {Nonce::LEN} bytes"),
                 );
                 nonce.into()
             })
@@ -161,13 +160,12 @@ impl Database {
     }
 }
 
-const NONCE_LEN: usize = 8;
-
+// TODO: Reuse `fuel_vm::storage::double_key` macro.
 /// Get a Key by chaining Owner + Nonce
-fn owner_msg_id_key(owner: &Address, msg_id: &Nonce) -> [u8; Address::LEN + NONCE_LEN] {
-    let mut default = [0u8; Address::LEN + NONCE_LEN];
+fn owner_msg_id_key(owner: &Address, msg_id: &Nonce) -> [u8; Address::LEN + Nonce::LEN] {
+    let mut default = [0u8; Address::LEN + Nonce::LEN];
     default[0..Address::LEN].copy_from_slice(owner.as_ref());
-    let msg_id: [u8; NONCE_LEN] = msg_id.to_be_bytes();
+    let msg_id: [u8; Nonce::LEN] = msg_id.to_be_bytes();
     default[Address::LEN..].copy_from_slice(msg_id.as_ref());
     default
 }
