@@ -774,7 +774,7 @@ async fn tx_below_min_gas_price_is_not_insertable() {
 
 #[tokio::test]
 async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
-    let (message, input) = create_message_predicate_from_message(5000);
+    let (message, input) = create_message_predicate_from_message(5000, 0);
 
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
@@ -795,7 +795,7 @@ async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
 
 #[tokio::test]
 async fn tx_rejected_when_input_message_id_is_spent() {
-    let (message, input) = create_message_predicate_from_message(5_000);
+    let (message, input) = create_message_predicate_from_message(5_000, 0);
 
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
@@ -820,7 +820,7 @@ async fn tx_rejected_when_input_message_id_is_spent() {
 
 #[tokio::test]
 async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
-    let (message, input) = create_message_predicate_from_message(5000);
+    let (message, input) = create_message_predicate_from_message(5000, 0);
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_limit(GAS_LIMIT)
@@ -849,7 +849,7 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
     let gas_price_high = 2u64;
     let gas_price_low = 1u64;
     let (message, conflicting_message_input) =
-        create_message_predicate_from_message(message_amount);
+        create_message_predicate_from_message(message_amount, 0);
 
     let tx_high = Arc::new(
         TransactionBuilder::script(vec![], vec![])
@@ -896,7 +896,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
     let gas_price_high = 2u64;
     let gas_price_low = 1u64;
     let (message, conflicting_message_input) =
-        create_message_predicate_from_message(message_amount);
+        create_message_predicate_from_message(message_amount, 0);
 
     // Insert a tx for the message id with a low gas amount
     let tx_low = Arc::new(
@@ -940,8 +940,8 @@ async fn message_of_squeezed_out_tx_can_be_resubmitted_at_lower_gas_price() {
     // tx3 (message 2) gas_price 1
     //   works since tx1 is no longer part of txpool state even though gas price is less
 
-    let (message_1, message_input_1) = create_message_predicate_from_message(10_000);
-    let (message_2, message_input_2) = create_message_predicate_from_message(20_000);
+    let (message_1, message_input_1) = create_message_predicate_from_message(10_000, 0);
+    let (message_2, message_input_2) = create_message_predicate_from_message(20_000, 1);
 
     // Insert a tx for the message id with a low gas amount
     let tx_1 = Arc::new(

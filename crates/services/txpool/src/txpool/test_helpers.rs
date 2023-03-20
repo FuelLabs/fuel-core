@@ -12,12 +12,15 @@ use fuel_core_types::{
     fuel_types::Word,
 };
 
-pub(crate) fn create_message_predicate_from_message(amount: Word) -> (Message, Input) {
+pub(crate) fn create_message_predicate_from_message(
+    amount: Word,
+    nonce: u64,
+) -> (Message, Input) {
     let predicate = vec![op::ret(1)].into_iter().collect::<Vec<u8>>();
     let message = Message {
         sender: Default::default(),
         recipient: Input::predicate_owner(&predicate),
-        nonce: 0.into(),
+        nonce: nonce.into(),
         amount,
         data: vec![],
         da_height: Default::default(),
