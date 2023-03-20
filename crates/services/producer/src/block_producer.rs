@@ -146,13 +146,22 @@ where
             PartialFuelBlock::new(header, vec![transaction].into_iter().collect());
 
         let executor = self.executor.clone();
+        let estimate_predicates = estimate_predicates.unwrap_or(false);
         // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
         let res: Vec<_> = spawn_blocking(move || -> anyhow::Result<Vec<Receipt>> {
-            Ok(executor
-                .dry_run(ExecutionBlock::Production(block), utxo_validation)?
-                .into_iter()
-                .flatten()
-                .collect())
+            if estimate_predicates {
+                Ok(executor
+                    .dry_run(ExecutionBlock::Estimation(block), utxo_validation)?
+                    .into_iter()
+                    .flatten()
+                    .collect())
+            } else {
+                Ok(executor
+                    .dry_run(ExecutionBlock::Production(block), utxo_validation)?
+                    .into_iter()
+                    .flatten()
+                    .collect())
+            }
         })
         .await??;
         if is_script && res.is_empty() {

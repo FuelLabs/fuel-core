@@ -16,6 +16,7 @@ use crate::{
         TxPoolPort,
     },
     service::adapters::TxPoolAdapter,
+    state::IterDirection,
 };
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
@@ -23,7 +24,6 @@ use fuel_core_storage::{
     iter::{
         BoxedIter,
         IntoBoxedIter,
-        IterDirection,
     },
     not_found,
     Error as StorageError,
@@ -137,7 +137,10 @@ impl DatabaseMessages for Database {
     ) -> BoxedIter<'_, StorageResult<Message>> {
         self.all_messages(start_message_id, Some(direction))
             .map(|result| match result {
-                Ok(message) => Ok(message),
+                Ok(message) => {
+                    let id = message.id();
+                    Ok(message.decompress(self.message_status(&id)?))
+                }
                 Err(err) => Err(StorageError::from(err)),
             })
             .into_boxed()
@@ -236,7 +239,7 @@ impl DryRunExecution for BlockProducerAdapter {
         estimate_predicates: Option<bool>,
     ) -> anyhow::Result<Vec<TxReceipt>> {
         self.block_producer
-            .dry_run(transaction, height, utxo_validation, estimate_predicates
+            .dry_run(transaction, height, utxo_validation, estimate_predicates)
             .await
     }
 }

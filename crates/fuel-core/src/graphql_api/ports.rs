@@ -167,6 +167,7 @@ pub trait DryRunExecution {
         transaction: Transaction,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
+        estimate_predicates: Option<bool>,
     ) -> anyhow::Result<Vec<Receipt>>;
 }
 

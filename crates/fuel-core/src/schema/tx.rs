@@ -206,7 +206,9 @@ impl TxMutation {
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute();
 
-        let receipts = block_producer.dry_run_tx(tx, None, utxo_validation).await?;
+        let receipts = block_producer
+            .dry_run_tx(tx, None, utxo_validation, estimate_predicates)
+            .await?;
         Ok(receipts.iter().map(Into::into).collect())
     }
 

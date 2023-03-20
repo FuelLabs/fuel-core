@@ -333,7 +333,7 @@ where
         let mut iter = ::core::mem::take(&mut block.transactions).into_iter();
 
         let mut coinbase_tx: Mint = match execution_kind {
-            ExecutionKind::Production => {
+            ExecutionKind::Estimation | EstimationKind::Production => {
                 // The coinbase transaction should be the first.
                 // We will add actual amount of `Output::Coin` at the end of transactions execution.
                 Transaction::mint(
@@ -374,7 +374,7 @@ where
 
                     if let Err(err) = result {
                         return match execution_kind {
-                            ExecutionKind::Production => {
+                            EstimationKind::Estimation | ExecutionKind::Production => {
                                 // If, during block production, we get an invalid transaction,
                                 // remove it from the block and continue block creation. An invalid
                                 // transaction means that the caller didn't validate it first, so
@@ -404,7 +404,7 @@ where
             .try_collect()?;
 
         // After the execution of all transactions in production mode, we can set the final fee.
-        if let ExecutionKind::Production = execution_kind {
+        if let ExecutionKind::Production | ExecutionKind::Estimation = execution_kind {
             coinbase_tx.outputs_mut().clear();
             coinbase_tx.outputs_mut().push(Output::coin(
                 self.config.block_producer.coinbase_recipient,
@@ -570,36 +570,75 @@ where
             match execution_kind {
                 ExecutionKind::Production => ExecutionTypes::Production(original_tx),
                 ExecutionKind::Validation => ExecutionTypes::Validation(original_tx),
+                ExecutionKind::Estimation => ExecutionTypes::Estimation(original_tx),
             },
             tx_db_transaction.deref_mut(),
         )?;
 
-        let checked_tx = original_tx.clone().into_checked_basic(
-            block_height as Word,
-            &self.config.chain_conf.transaction_parameters,
-        )?;
+        let tx_id = original_tx.id();
+        let min_fee = original_tx.metadata().min_fee();
+        let max_fee = original_tx.metadata().max_fee();
 
-        let tx_id = checked_tx.transaction().id();
-        let min_fee = checked_tx.metadata().min_fee();
-        let max_fee = checked_tx.metadata().max_fee();
+        let mut checked_tx : Checked<Tx>;
+        let mut estimated_tx : Estimated<Tx>;
 
-        self.verify_tx_predicates(checked_tx.clone())?;
+        match execution_kind {
+            ExecutionKind::Estimation => {
+                // Check the transaction against the block height.
+                estimated_tx = original_tx.clone().into_estimated_basic(
+                    block_height as Word,
+                    &self.config.chain_conf.transaction_parameters,
+                )?;
 
-        if self.config.utxo_validation {
-            // validate transaction has at least one coin
-            self.verify_tx_has_at_least_one_coin_or_message(checked_tx.transaction())?;
-            // validate utxos exist and maturity is properly set
-            self.verify_input_state(
-                tx_db_transaction.deref(),
-                checked_tx.transaction(),
-                *header.height(),
-                header.da_height,
-            )?;
-            // validate transaction signature
-            checked_tx
-                .transaction()
-                .check_signatures()
-                .map_err(TransactionValidityError::from)?;
+                self.estimate_tx_predicates(estimated_tx.clone())?;
+
+                if self.config.utxo_validation {
+                    // validate transaction has at least one coin
+                    self.verify_tx_has_at_least_one_coin_or_message(
+                        estimated_tx.transaction(),
+                    )?;
+                    // validate utxos exist and maturity is properly set
+                    self.verify_input_state(
+                        tx_db_transaction.deref(),
+                        estimated_tx.transaction(),
+                        *header.height(),
+                        header.da_height,
+                    )?;
+                    // validate transaction signature
+                    estimated_tx
+                        .transaction()
+                        .check_signatures()
+                        .map_err(TransactionValidityError::from)?;
+                }
+            },
+            ExecutionKind::Production | ExecutionKind::Validation => {
+                // Check the transaction against the block height.
+                let checked_tx = original_tx.clone().into_checked_basic(
+                    block_height as Word,
+                    &self.config.chain_conf.transaction_parameters,
+                )?;
+
+                self.verify_tx_predicates(checked_tx.clone())?;
+
+                if self.config.utxo_validation {
+                    // validate transaction has at least one coin
+                    self.verify_tx_has_at_least_one_coin_or_message(
+                        checked_tx.transaction(),
+                    )?;
+                    // validate utxos exist and maturity is properly set
+                    self.verify_input_state(
+                        tx_db_transaction.deref(),
+                        checked_tx.transaction(),
+                        *header.height(),
+                        header.da_height,
+                    )?;
+                    // validate transaction signature
+                    checked_tx
+                        .transaction()
+                        .check_signatures()
+                        .map_err(TransactionValidityError::from)?;
+                }
+            },
         }
 
         // execute transaction
@@ -617,13 +656,27 @@ where
             self.config.chain_conf.transaction_parameters,
             self.config.chain_conf.gas_costs.clone(),
         );
-        let vm_result: StateTransition<_> = vm
-            .transact(checked_tx.clone())
-            .map_err(|error| ExecutorError::VmExecution {
-                error,
-                transaction_id: tx_id,
-            })?
-            .into();
+        let vm_result: StateTransition<_> =
+            match execution_kind {
+                ExecutionKind::Production | ExecutionKind::Validation => {
+                    vm
+                        .transact(checked_tx.clone())
+                        .map_err(|error| ExecutorError::VmExecution {
+                            error,
+                            transaction_id: tx_id,
+                        })?
+                        .into()
+                },
+                ExecutionKind::Estimation => {
+                    vm
+                        .transact(estimated_tx.clone())
+                        .map_err(|error| ExecutorError::VmExecution {
+                            error,
+                            transaction_id: tx_id,
+                        })?
+                        .into()
+                },
+            };
 
         // TODO: Avoid cloning here, we can extract value from result
         let mut tx = vm_result.tx().clone();
@@ -646,7 +699,7 @@ where
                     })
                 }
             }
-            ExecutionKind::Production => {
+            ExecutionKind::Production | ExecutionKind::Estimation => {
                 // malleate the block with the resultant tx from the vm
             }
         }
@@ -667,6 +720,7 @@ where
             match execution_kind {
                 ExecutionKind::Production => ExecutionTypes::Production(&mut tx),
                 ExecutionKind::Validation => ExecutionTypes::Validation(&tx),
+                ExecutionKind::Estimation => ExecutionTypes::Estimation(&mut tx),
             },
             tx_db_transaction.deref_mut(),
         )?;
@@ -871,7 +925,7 @@ where
         <Tx as IntoChecked>::Metadata: CheckedMetadata,
     {
         let id = tx.transaction().id();
-        if Interpreter::<PredicateStorage>::estimate_predicateses(
+        if Interpreter::<PredicateStorage>::estimate_predicates(
             tx,
             self.config.chain_conf.transaction_parameters,
             self.config.chain_conf.gas_costs.clone(),
