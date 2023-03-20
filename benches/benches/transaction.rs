@@ -1,7 +1,10 @@
+use std::iter;
+
 use criterion::{
     black_box,
     criterion_group,
     criterion_main,
+    BenchmarkId,
     Criterion,
 };
 use fuel_core::{
@@ -50,65 +53,87 @@ fn txn(c: &mut Criterion) {
 
     let secret_key: SecretKey = rng.gen();
 
-    let coin_utxo: UtxoId = rng.gen();
-
-    let compressed_coin = CompressedCoin {
-        owner: Input::owner(&secret_key.public_key()),
-        amount: rng.gen(),
-        asset_id: rng.gen(),
-        tx_pointer: Default::default(),
-        maturity: 0u32.into(),
-    };
-
     let mut database = Database::default();
-    database
-        .storage::<Coins>()
-        .insert(&coin_utxo, &compressed_coin)
-        .unwrap();
-
     let relayer = MaybeRelayerAdapter {
         database: database.clone(),
     };
     let mut config = Config::local_node();
+
+    let coins: Vec<_> = iter::repeat_with(|| {
+        let coin_utxo: UtxoId = rng.gen();
+
+        let compressed_coin = CompressedCoin {
+            owner: Input::owner(&secret_key.public_key()),
+            amount: rng.gen(),
+            asset_id: rng.gen(),
+            tx_pointer: Default::default(),
+            maturity: 0u32.into(),
+        };
+        (coin_utxo, compressed_coin)
+    })
+    .take(100)
+    .collect();
+
+    for (coin_utxo, compressed_coin) in coins.iter() {
+        database
+            .storage::<Coins>()
+            .insert(coin_utxo, compressed_coin)
+            .unwrap();
+    }
+
     config.utxo_validation = true;
     let executor = Executor {
         database,
         relayer,
         config,
     };
-    let header = PartialBlockHeader {
-        application: ApplicationHeader {
-            da_height: 1u64.into(),
-            generated: Default::default(),
-        },
-        consensus: ConsensusHeader {
-            prev_root: Bytes32::zeroed(),
-            height: 1u32.into(),
-            time: fuel_core_types::tai64::Tai64::now(),
-            generated: Default::default(),
-        },
-    };
 
-    let script = TransactionBuilder::script(
-        vec![op::noop(), op::ret(0)].into_iter().collect(),
-        vec![],
-    )
-    .add_unsigned_coin_input(
-        secret_key,
-        coin_utxo,
-        compressed_coin.amount,
-        compressed_coin.asset_id,
-        Default::default(),
-        0,
-    )
-    .finalize();
+    let mut execute = c.benchmark_group("execute_without_commit");
 
-    let transactions = vec![script.into()];
-    let block = PartialFuelBlock::new(header, transactions);
-    let block = ExecutionBlock::Production(block);
-    c.bench_function("executor::execute", |b| {
-        b.iter(|| black_box(executor.execute_without_commit(block.clone())).unwrap())
-    });
+    for num_inputs in [1, 2, 5, 10, 50, 100] {
+        let header = PartialBlockHeader {
+            application: ApplicationHeader {
+                da_height: 1u64.into(),
+                generated: Default::default(),
+            },
+            consensus: ConsensusHeader {
+                prev_root: Bytes32::zeroed(),
+                height: 1u32.into(),
+                time: fuel_core_types::tai64::Tai64::now(),
+                generated: Default::default(),
+            },
+        };
+
+        let mut script = TransactionBuilder::script(
+            vec![op::noop(), op::ret(0)].into_iter().collect(),
+            vec![],
+        );
+        for (coin_utxo, compressed_coin) in coins.iter().take(num_inputs) {
+            script.add_unsigned_coin_input(
+                secret_key,
+                coin_utxo.clone(),
+                compressed_coin.amount,
+                compressed_coin.asset_id,
+                Default::default(),
+                0,
+            );
+        }
+        let script = script.finalize();
+
+        let transactions = vec![script.into()];
+        let block = PartialFuelBlock::new(header, transactions);
+        let block = ExecutionBlock::Production(block);
+        execute.throughput(criterion::Throughput::Elements(num_inputs as u64));
+        execute.bench_with_input(
+            BenchmarkId::from_parameter(num_inputs),
+            &num_inputs,
+            |b, _| {
+                b.iter(|| {
+                    black_box(executor.execute_without_commit(block.clone())).unwrap()
+                })
+            },
+        );
+    }
 }
 
 criterion_group!(benches, txn);
