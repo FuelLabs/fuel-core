@@ -30,6 +30,7 @@ use fuel_core_types::{
         SeedableRng,
     },
     fuel_tx::{
+        input::coin::CoinPredicate,
         Address,
         AssetId,
         Input,
@@ -986,7 +987,7 @@ fn predicates_with_incorrect_owner_fails() {
     let db = MockDb::default();
     let mut txpool = TxPool::new(Default::default(), db.clone());
     let mut coin = random_predicate(&mut rng, AssetId::BASE, TEST_COIN_AMOUNT, None);
-    if let Input::CoinPredicate { owner, .. } = &mut coin {
+    if let Input::CoinPredicate(CoinPredicate { owner, .. }) = &mut coin {
         *owner = Address::zeroed();
     }
 

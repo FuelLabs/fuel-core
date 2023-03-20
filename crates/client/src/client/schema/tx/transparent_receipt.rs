@@ -300,9 +300,6 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .into(),
             },
             ReceiptType::MessageOut => fuel_tx::Receipt::MessageOut {
-                // TODO: Remove me please
-                #[allow(unreachable_code)]
-                message_id: panic!("This fields is removed in the `fuel-vm` PR"),
                 sender: schema
                     .sender
                     .ok_or_else(|| MissingField("sender".to_string()))?

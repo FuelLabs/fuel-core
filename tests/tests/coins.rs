@@ -395,11 +395,8 @@ mod message_coin {
                 script.add_unsigned_message_input(
                     secret_key,
                     message.sender.0 .0,
-                    // TODO: Uncomment me when ready
-                    // message.nonce.0,
-                    0,
+                    message.nonce.0 .0,
                     message.amount.0,
-                    // TODO: Remove when ready
                     vec![],
                 );
             }

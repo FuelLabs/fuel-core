@@ -1,10 +1,12 @@
 //! The module for all possible coins.
 
 use crate::{
-    entities::Nonce,
     fuel_asm::Word,
     fuel_tx::Address,
-    fuel_types::AssetId,
+    fuel_types::{
+        AssetId,
+        Nonce,
+    },
 };
 use coin::Coin;
 use fuel_vm_private::prelude::UtxoId;

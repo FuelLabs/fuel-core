@@ -8,13 +8,13 @@ use crate::{
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::{
-        message::Message,
-        Nonce,
-    },
+    entities::message::Message,
     fuel_asm::Word,
     fuel_crypto::Hasher,
-    fuel_types::Address,
+    fuel_types::{
+        Address,
+        Nonce,
+    },
 };
 use serde::{
     Deserialize,
@@ -29,7 +29,7 @@ pub struct MessageConfig {
     pub sender: Address,
     #[serde_as(as = "HexType")]
     pub recipient: Address,
-    #[serde_as(as = "HexNumber")]
+    #[serde_as(as = "HexType")]
     pub nonce: Nonce,
     #[serde_as(as = "HexNumber")]
     pub amount: Word,
@@ -67,7 +67,7 @@ impl GenesisCommitment for Message {
         let message_hash = *Hasher::default()
             .chain(sender)
             .chain(recipient)
-            .chain(nonce.to_be_bytes())
+            .chain(nonce)
             .chain(amount.to_be_bytes())
             .chain(data.as_slice())
             .chain(da_height.to_be_bytes())

@@ -16,8 +16,10 @@ use fuel_core_types::{
         BlockHeight,
         DaBlockHeight,
     },
-    entities::Nonce,
-    fuel_types::*,
+    fuel_types::{
+        Nonce,
+        *,
+    },
 };
 use rand::{
     rngs::StdRng,

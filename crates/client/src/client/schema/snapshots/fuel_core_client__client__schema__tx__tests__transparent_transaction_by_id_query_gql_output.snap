@@ -60,10 +60,6 @@ query($id: TransactionId!) {
         balanceRoot
         stateRoot
       }
-      ... on MessageOutput {
-        recipient
-        amount
-      }
       ... on ChangeOutput {
         to
         amount

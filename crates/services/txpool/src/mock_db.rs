@@ -8,13 +8,13 @@ use fuel_core_types::{
             CompressedCoin,
         },
         message::Message,
-        Nonce,
     },
     fuel_tx::{
         Contract,
         ContractId,
         UtxoId,
     },
+    fuel_types::Nonce,
 };
 use std::{
     collections::{

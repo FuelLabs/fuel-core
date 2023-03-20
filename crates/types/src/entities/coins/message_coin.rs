@@ -2,9 +2,9 @@
 
 use crate::{
     blockchain::primitives::DaBlockHeight,
-    entities::Nonce,
     fuel_types::{
         Address,
+        Nonce,
         Word,
     },
 };
@@ -27,7 +27,7 @@ pub struct CompressedMessageCoin {
 
 impl CompressedMessageCoin {
     /// Returns the id of the message
-    pub fn id(&self) -> &Word {
+    pub fn id(&self) -> &Nonce {
         &self.nonce
     }
 

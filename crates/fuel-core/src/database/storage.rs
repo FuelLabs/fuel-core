@@ -15,7 +15,6 @@ use fuel_core_types::{
         BlockHeight,
         BlockId,
     },
-    entities::Nonce,
     fuel_merkle::{
         binary,
         sparse,
@@ -23,7 +22,7 @@ use fuel_core_types::{
     fuel_tx::TxId,
     fuel_types::{
         ContractId,
-        MessageId,
+        Nonce,
     },
 };
 use serde::{
@@ -268,26 +267,18 @@ impl ToDatabaseKey for u64 {
 }
 
 impl ToDatabaseKey for Nonce {
-    type Type<'a> = [u8; 8];
+    type Type<'a> = &'a [u8; 32];
 
     fn database_key(&self) -> Self::Type<'_> {
-        self.deref().to_be_bytes()
+        self.deref()
     }
 }
 
 impl ToDatabaseKey for ContractId {
-    type Type<'a> = &'a [u8];
+    type Type<'a> = &'a [u8; 32];
 
     fn database_key(&self) -> Self::Type<'_> {
-        self.as_ref()
-    }
-}
-
-impl ToDatabaseKey for MessageId {
-    type Type<'a> = &'a [u8];
-
-    fn database_key(&self) -> Self::Type<'_> {
-        self.as_ref()
+        self.deref()
     }
 }
 
@@ -300,10 +291,10 @@ impl ToDatabaseKey for BlockId {
 }
 
 impl ToDatabaseKey for TxId {
-    type Type<'a> = &'a [u8];
+    type Type<'a> = &'a [u8; 32];
 
     fn database_key(&self) -> Self::Type<'_> {
-        self.as_ref()
+        self.deref()
     }
 }
 

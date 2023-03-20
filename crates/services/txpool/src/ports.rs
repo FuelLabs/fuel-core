@@ -5,13 +5,15 @@ use fuel_core_types::{
     entities::{
         coins::coin::CompressedCoin,
         message::Message,
-        Nonce,
     },
     fuel_tx::{
         Transaction,
         UtxoId,
     },
-    fuel_types::ContractId,
+    fuel_types::{
+        ContractId,
+        Nonce,
+    },
     services::{
         block_importer::ImportResult,
         p2p::{

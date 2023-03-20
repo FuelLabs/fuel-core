@@ -2343,8 +2343,7 @@ checksum = "6c2141d6d6c8512188a7891b4b01590a45f6dac67afb4f255c4124dbb86d4eaa"
 [[package]]
 name = "fuel-asm"
 version = "0.27.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32e7eeabe487b707bb8820910b0642a8478ddea49cc819f33ba39e868b8483b7"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/remove-message-id#f1b9ff06766dc723ef8d1bc3e4eb6a89a6adb6ed"
 dependencies = [
  "bitflags",
  "fuel-types",
@@ -2810,14 +2809,12 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.27.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8516bafad9352b3af8e38d349efd9e4cffcee5bb48ee3a8f7830794d1b06ebd7"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/remove-message-id#f1b9ff06766dc723ef8d1bc3e4eb6a89a6adb6ed"
 dependencies = [
  "borrown",
  "coins-bip32",
  "coins-bip39",
  "fuel-types",
- "getrandom 0.2.8",
  "lazy_static",
  "rand 0.8.5",
  "secp256k1",
@@ -2829,8 +2826,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.27.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "692344538e0a3f0724f7be37482ff6e772aeecfc1d6c8d8127bafeaea0bd551b"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/remove-message-id#f1b9ff06766dc723ef8d1bc3e4eb6a89a6adb6ed"
 dependencies = [
  "digest 0.10.6",
  "fuel-storage",
@@ -2843,14 +2839,12 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.27.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74a7045bb1c6020dc463e6e8f9f159ca973d5fbd3169d5bb3949d49cbfeb34ef"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/remove-message-id#f1b9ff06766dc723ef8d1bc3e4eb6a89a6adb6ed"
 
 [[package]]
 name = "fuel-tx"
 version = "0.27.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a669e4fcd03f5466adbc251b320bc6d3883a116cc7432334b56e38488ada7e25"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/remove-message-id#f1b9ff06766dc723ef8d1bc3e4eb6a89a6adb6ed"
 dependencies = [
  "derivative",
  "fuel-asm",
@@ -2862,13 +2856,14 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "strum",
+ "strum_macros",
 ]
 
 [[package]]
 name = "fuel-types"
 version = "0.27.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddad99d773af58884e9a72989d73ded772712b409affdbd7509376a23d8ccd4f"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/remove-message-id#f1b9ff06766dc723ef8d1bc3e4eb6a89a6adb6ed"
 dependencies = [
  "rand 0.8.5",
  "serde",
@@ -2877,8 +2872,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.27.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4b89f53aeb2da8bbf3a22bc897c8ea6e04472eadd7a183eacd0c36a528a8c71"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/remove-message-id#f1b9ff06766dc723ef8d1bc3e4eb6a89a6adb6ed"
 dependencies = [
  "anyhow",
  "bitflags",

@@ -5,15 +5,12 @@ use crate::{
         header::BlockHeader,
         primitives::DaBlockHeight,
     },
-    entities::Nonce,
-    fuel_tx::{
-        Input,
-        Output,
-    },
+    fuel_tx::input::message::compute_message_id,
     fuel_types::{
         Address,
         Bytes32,
         MessageId,
+        Nonce,
         Word,
     },
 };
@@ -44,10 +41,10 @@ impl Message {
 
     /// Computed message id
     pub fn message_id(&self) -> MessageId {
-        Input::compute_message_id(
+        compute_message_id(
             &self.sender,
             &self.recipient,
-            *self.nonce,
+            &self.nonce,
             self.amount,
             &self.data,
         )
@@ -69,7 +66,7 @@ pub struct MessageProof {
     /// The messages recipient address.
     pub recipient: Address,
     /// The nonce from the message.
-    pub nonce: Bytes32,
+    pub nonce: Nonce,
     /// The amount from the message.
     pub amount: Word,
     /// The data from the message.
@@ -79,7 +76,7 @@ pub struct MessageProof {
 impl MessageProof {
     /// Compute message id from the proof
     pub fn message_id(&self) -> MessageId {
-        Output::message_id(
+        compute_message_id(
             &self.sender,
             &self.recipient,
             &self.nonce,

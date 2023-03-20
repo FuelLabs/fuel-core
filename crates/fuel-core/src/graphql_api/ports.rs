@@ -28,10 +28,7 @@ use fuel_core_types::{
         BlockId,
         DaBlockHeight,
     },
-    entities::{
-        message::Message,
-        Nonce,
-    },
+    entities::message::Message,
     fuel_tx::{
         Receipt,
         Transaction,
@@ -43,6 +40,7 @@ use fuel_core_types::{
         Address,
         AssetId,
         ContractId,
+        Nonce,
     },
     services::{
         graphql_api::ContractBalance,

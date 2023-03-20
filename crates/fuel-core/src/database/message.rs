@@ -16,13 +16,12 @@ use fuel_core_storage::{
     StorageInspect,
     StorageMutate,
 };
-use fuel_core_txpool::types::Word;
 use fuel_core_types::{
-    entities::{
-        message::Message,
+    entities::message::Message,
+    fuel_types::{
+        Address,
         Nonce,
     },
-    fuel_types::Address,
 };
 use std::{
     borrow::Cow,
@@ -103,12 +102,8 @@ impl Database {
         )
         .map(|res| {
             res.map(|(key, _)| {
-                let nonce = Word::from_be_bytes(
-                    key[Address::LEN..Address::LEN + Nonce::LEN]
-                        .try_into()
-                        .expect("key is always {Nonce::LEN} bytes"),
-                );
-                nonce.into()
+                Nonce::try_from(&key[Address::LEN..Address::LEN + Nonce::LEN])
+                    .expect("key is always {Nonce::LEN} bytes")
             })
         })
     }
@@ -118,7 +113,7 @@ impl Database {
         start: Option<Nonce>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = DatabaseResult<Message>> + '_ {
-        let start = start.map(|v| v.deref().to_be_bytes().to_vec());
+        let start = start.map(|v| v.deref().to_vec());
         self.iter_all_by_start::<Vec<u8>, Message, _>(Column::Messages, start, direction)
             .map(|res| res.map(|(_, message)| message))
     }
@@ -162,11 +157,10 @@ impl Database {
 
 // TODO: Reuse `fuel_vm::storage::double_key` macro.
 /// Get a Key by chaining Owner + Nonce
-fn owner_msg_id_key(owner: &Address, msg_id: &Nonce) -> [u8; Address::LEN + Nonce::LEN] {
+fn owner_msg_id_key(owner: &Address, nonce: &Nonce) -> [u8; Address::LEN + Nonce::LEN] {
     let mut default = [0u8; Address::LEN + Nonce::LEN];
     default[0..Address::LEN].copy_from_slice(owner.as_ref());
-    let msg_id: [u8; Nonce::LEN] = msg_id.to_be_bytes();
-    default[Address::LEN..].copy_from_slice(msg_id.as_ref());
+    default[Address::LEN..].copy_from_slice(nonce.as_ref());
     default
 }
 

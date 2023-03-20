@@ -118,7 +118,7 @@ impl Database {
         .map(|res| {
             res.map(|(key, _)| {
                 UtxoId::new(
-                    unsafe { Bytes32::from_slice_unchecked(&key[32..64]) },
+                    TxId::try_from(&key[32..64]).expect("The slice has size 32"),
                     key[64],
                 )
             })

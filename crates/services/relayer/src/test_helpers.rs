@@ -45,9 +45,9 @@ impl LogTestHelper for Log {
     }
 }
 
-impl EvtToLog for crate::abi::bridge::SentMessageFilter {
+impl EvtToLog for crate::abi::bridge::MessageSentFilter {
     fn into_log(self) -> Log {
-        event_to_log(self, &crate::abi::bridge::SENTMESSAGE_ABI)
+        event_to_log(self, &crate::abi::bridge::MESSAGESENT_ABI)
     }
 }
 

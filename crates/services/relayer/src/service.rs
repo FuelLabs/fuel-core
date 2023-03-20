@@ -34,10 +34,8 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::{
-        message::Message,
-        Nonce,
-    },
+    entities::message::Message,
+    fuel_types::Nonce,
 };
 use futures::StreamExt;
 use std::{

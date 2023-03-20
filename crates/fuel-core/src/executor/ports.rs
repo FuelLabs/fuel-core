@@ -1,9 +1,7 @@
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::{
-        message::Message,
-        Nonce,
-    },
+    entities::message::Message,
+    fuel_types::Nonce,
 };
 
 pub trait RelayerPort {

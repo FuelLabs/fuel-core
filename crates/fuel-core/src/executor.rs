@@ -41,7 +41,6 @@ use fuel_core_types::{
     entities::{
         coins::coin::CompressedCoin,
         contract::ContractUtxoInfo,
-        Nonce,
     },
     fuel_asm::{
         RegId,
@@ -52,6 +51,19 @@ use fuel_core_types::{
             Inputs,
             Outputs,
             TxPointer as TxPointerField,
+        },
+        input::{
+            coin::{
+                CoinPredicate,
+                CoinSigned,
+            },
+            contract::Contract,
+            message::{
+                MessageCoinPredicate,
+                MessageCoinSigned,
+                MessageDataPredicate,
+                MessageDataSigned,
+            },
         },
         Address,
         AssetId,
@@ -621,11 +633,12 @@ where
                 transaction_id: tx_id,
             })?
             .into();
+        let reverted = vm_result.should_revert();
 
         // TODO: Avoid cloning here, we can extract value from result
         let mut tx = vm_result.tx().clone();
         // only commit state changes if execution was a success
-        if !vm_result.should_revert() {
+        if !reverted {
             sub_block_db_commit.commit()?;
         }
 
@@ -649,7 +662,7 @@ where
         }
 
         // change the spent status of the tx inputs
-        self.spend_input_utxos(&tx, tx_db_transaction.deref_mut())?;
+        self.spend_input_utxos(&tx, tx_db_transaction.deref_mut(), reverted)?;
 
         // Persist utxos first and after calculate the not utxo outputs
         self.persist_output_utxos(
@@ -720,13 +733,9 @@ where
             id: tx_id,
             result: status,
         });
-        // TODO: Check that each `message_id` is generated right based on the fields.
         execution_data
             .message_ids
-            .extend(vm_result.receipts().iter().filter_map(|r| match r {
-                Receipt::MessageOut { message_id, .. } => Some(*message_id),
-                _ => None,
-            }));
+            .extend(vm_result.receipts().iter().filter_map(|r| r.message_id()));
 
         Ok(())
     }
@@ -740,8 +749,10 @@ where
     ) -> ExecutorResult<()> {
         for input in transaction.inputs() {
             match input {
-                Input::CoinSigned { utxo_id, .. }
-                | Input::CoinPredicate { utxo_id, .. } => {
+                Input::CoinSigned(CoinSigned { utxo_id, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
+                    // TODO: Check that fields are equal. We already do that check
+                    //  in the `fuel-core-txpool`, so we need to reuse the code here.
                     if let Some(coin) = db.storage::<Coins>().get(utxo_id)? {
                         if block_height
                             < BlockHeight::from(coin.tx_pointer.block_height())
@@ -758,74 +769,92 @@ where
                         )
                     }
                 }
-                Input::Contract { .. } => {}
-                Input::MessageSigned {
+                Input::Contract(_) => {}
+                Input::MessageCoinSigned(MessageCoinSigned {
                     sender,
                     recipient,
                     amount,
                     nonce,
-                    data,
                     ..
-                }
-                | Input::MessagePredicate {
+                })
+                | Input::MessageCoinPredicate(MessageCoinPredicate {
                     sender,
                     recipient,
                     amount,
                     nonce,
-                    data,
                     ..
-                } => {
-                    let nonce = Nonce::from(*nonce);
+                })
+                | Input::MessageDataSigned(MessageDataSigned {
+                    sender,
+                    recipient,
+                    amount,
+                    nonce,
+                    ..
+                })
+                | Input::MessageDataPredicate(MessageDataPredicate {
+                    sender,
+                    recipient,
+                    amount,
+                    nonce,
+                    ..
+                }) => {
                     // Eagerly return already spent if status is known.
-                    if db.is_message_spent(&nonce)? {
+                    if db.is_message_spent(nonce)? {
                         return Err(
-                            TransactionValidityError::MessageAlreadySpent(nonce).into()
+                            TransactionValidityError::MessageAlreadySpent(*nonce).into()
                         )
                     }
                     if let Some(message) = self
                         .relayer
-                        .get_message(&nonce, &block_da_height)
+                        .get_message(nonce, &block_da_height)
                         .map_err(|e| ExecutorError::RelayerError(e.into()))?
                     {
                         if message.da_height > block_da_height {
                             return Err(TransactionValidityError::MessageSpendTooEarly(
-                                nonce,
+                                *nonce,
                             )
                             .into())
                         }
                         if message.sender != *sender {
                             return Err(TransactionValidityError::MessageSenderMismatch(
-                                nonce,
+                                *nonce,
                             )
                             .into())
                         }
                         if message.recipient != *recipient {
                             return Err(
-                                TransactionValidityError::MessageRecipientMismatch(nonce)
-                                    .into(),
+                                TransactionValidityError::MessageRecipientMismatch(
+                                    *nonce,
+                                )
+                                .into(),
                             )
                         }
                         if message.amount != *amount {
                             return Err(TransactionValidityError::MessageAmountMismatch(
-                                nonce,
+                                *nonce,
                             )
                             .into())
                         }
-                        if message.nonce != nonce {
+                        if message.nonce != *nonce {
                             return Err(TransactionValidityError::MessageNonceMismatch(
-                                nonce,
+                                *nonce,
                             )
                             .into())
                         }
-                        if message.data != *data {
+                        let expected_data = if message.data.is_empty() {
+                            None
+                        } else {
+                            Some(message.data.as_slice())
+                        };
+                        if expected_data != input.input_data() {
                             return Err(TransactionValidityError::MessageDataMismatch(
-                                nonce,
+                                *nonce,
                             )
                             .into())
                         }
                     } else {
                         return Err(
-                            TransactionValidityError::MessageDoesNotExist(nonce).into()
+                            TransactionValidityError::MessageDoesNotExist(*nonce).into()
                         )
                     }
                 }
@@ -877,29 +906,42 @@ where
     }
 
     /// Mark input utxos as spent
-    fn spend_input_utxos<Tx>(&self, tx: &Tx, db: &mut Database) -> ExecutorResult<()>
+    fn spend_input_utxos<Tx>(
+        &self,
+        tx: &Tx,
+        db: &mut Database,
+        reverted: bool,
+    ) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
     {
         for input in tx.inputs() {
             match input {
-                Input::CoinSigned { utxo_id, .. }
-                | Input::CoinPredicate { utxo_id, .. } => {
+                Input::CoinSigned(CoinSigned { utxo_id, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     // prune utxo from db
                     db.storage::<Coins>().remove(utxo_id)?;
                 }
-                Input::MessageSigned { nonce, .. }
-                | Input::MessagePredicate { nonce, .. } => {
-                    let nonce = Nonce::from(*nonce);
+                Input::MessageDataSigned(_)
+                | Input::MessageDataPredicate(_)
+                    if reverted => {
+                    // Don't spend the retryable messages if transaction is reverted
+                    continue
+                }
+                Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
+                | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
+                | Input::MessageDataSigned(MessageDataSigned { nonce, .. }) // Spend only if tx is not reverted
+                | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) // Spend only if tx is not reverted
+                 => {
                     // mark message id as spent
                     let was_already_spent =
-                        db.storage::<SpentMessages>().insert(&nonce, &())?;
+                        db.storage::<SpentMessages>().insert(nonce, &())?;
                     // ensure message wasn't already marked as spent
                     if was_already_spent.is_some() {
-                        return Err(ExecutorError::MessageAlreadySpent(nonce))
+                        return Err(ExecutorError::MessageAlreadySpent(*nonce))
                     }
                     // cleanup message contents
-                    db.storage::<Messages>().remove(&nonce)?;
+                    db.storage::<Messages>().remove(nonce)?;
                 }
                 _ => {}
             }
@@ -944,7 +986,7 @@ where
             ExecutionTypes::Production(tx) => {
                 for input in tx.inputs_mut() {
                     match input {
-                        Input::CoinSigned {
+                        Input::CoinSigned(CoinSigned {
                             tx_pointer,
                             utxo_id,
                             owner,
@@ -952,8 +994,8 @@ where
                             asset_id,
                             maturity,
                             ..
-                        }
-                        | Input::CoinPredicate {
+                        })
+                        | Input::CoinPredicate(CoinPredicate {
                             tx_pointer,
                             utxo_id,
                             owner,
@@ -961,7 +1003,7 @@ where
                             asset_id,
                             maturity,
                             ..
-                        } => {
+                        }) => {
                             let coin = self.get_coin_or_default(
                                 db,
                                 *utxo_id,
@@ -972,14 +1014,14 @@ where
                             )?;
                             *tx_pointer = coin.tx_pointer;
                         }
-                        Input::Contract {
+                        Input::Contract(Contract {
                             ref mut utxo_id,
                             ref mut balance_root,
                             ref mut state_root,
                             ref mut tx_pointer,
                             ref contract_id,
                             ..
-                        } => {
+                        }) => {
                             let mut contract = ContractRef::new(&mut *db, *contract_id);
                             let utxo_info =
                                 contract.validated_utxo(self.config.utxo_validation)?;
@@ -996,7 +1038,7 @@ where
             ExecutionTypes::Validation(tx) => {
                 for input in tx.inputs() {
                     match input {
-                        Input::CoinSigned {
+                        Input::CoinSigned(CoinSigned {
                             tx_pointer,
                             utxo_id,
                             owner,
@@ -1004,8 +1046,8 @@ where
                             asset_id,
                             maturity,
                             ..
-                        }
-                        | Input::CoinPredicate {
+                        })
+                        | Input::CoinPredicate(CoinPredicate {
                             tx_pointer,
                             utxo_id,
                             owner,
@@ -1013,7 +1055,7 @@ where
                             asset_id,
                             maturity,
                             ..
-                        } => {
+                        }) => {
                             let coin = self.get_coin_or_default(
                                 db,
                                 *utxo_id,
@@ -1028,14 +1070,14 @@ where
                                 })
                             }
                         }
-                        Input::Contract {
+                        Input::Contract(Contract {
                             utxo_id,
                             balance_root,
                             state_root,
                             contract_id,
                             tx_pointer,
                             ..
-                        } => {
+                        }) => {
                             let mut contract = ContractRef::new(&mut *db, *contract_id);
                             let provided_info = ContractUtxoInfo {
                                 utxo_id: *utxo_id,
@@ -1058,7 +1100,6 @@ where
                                     transaction_id: tx.id(),
                                 })
                             }
-                            // TODO: Also check `tx_pointer` based on `utxo_id` pointer.
                         }
                         _ => {}
                     }
@@ -1092,16 +1133,17 @@ where
                         ref input_index,
                     } = output
                     {
-                        let contract_id =
-                            if let Some(Input::Contract { contract_id, .. }) =
-                                tx.inputs().get(*input_index as usize)
-                            {
-                                contract_id
-                            } else {
-                                return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx.id(),
-                                })
-                            };
+                        let contract_id = if let Some(Input::Contract(Contract {
+                            contract_id,
+                            ..
+                        })) = tx.inputs().get(*input_index as usize)
+                        {
+                            contract_id
+                        } else {
+                            return Err(ExecutorError::InvalidTransactionOutcome {
+                                transaction_id: tx.id(),
+                            })
+                        };
 
                         let mut contract = ContractRef::new(&mut *db, *contract_id);
                         *balance_root = contract.balance_root()?;
@@ -1118,16 +1160,17 @@ where
                         input_index,
                     } = output
                     {
-                        let contract_id =
-                            if let Some(Input::Contract { contract_id, .. }) =
-                                tx.inputs().get(*input_index as usize)
-                            {
-                                contract_id
-                            } else {
-                                return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx.id(),
-                                })
-                            };
+                        let contract_id = if let Some(Input::Contract(Contract {
+                            contract_id,
+                            ..
+                        })) = tx.inputs().get(*input_index as usize)
+                        {
+                            contract_id
+                        } else {
+                            return Err(ExecutorError::InvalidTransactionOutcome {
+                                transaction_id: tx.id(),
+                            })
+                        };
 
                         let mut contract = ContractRef::new(&mut *db, *contract_id);
                         if balance_root != &contract.balance_root()? {
@@ -1225,7 +1268,7 @@ where
                     input_index: input_idx,
                     ..
                 } => {
-                    if let Some(Input::Contract { contract_id, .. }) =
+                    if let Some(Input::Contract(Contract { contract_id, .. })) =
                         inputs.get(*input_idx as usize)
                     {
                         db.storage::<ContractsLatestUtxo>().insert(
@@ -1240,9 +1283,6 @@ where
                             TransactionValidityError::InvalidContractInputIndex(utxo_id),
                         ))
                     }
-                }
-                Output::Message { .. } => {
-                    // TODO: Remove me please
                 }
                 Output::Change {
                     to,
@@ -1373,8 +1413,8 @@ where
     ) -> ExecutorResult<()> {
         let mut owners = vec![];
         for input in inputs {
-            if let Input::CoinSigned { owner, .. } | Input::CoinPredicate { owner, .. } =
-                input
+            if let Input::CoinSigned(CoinSigned { owner, .. })
+            | Input::CoinPredicate(CoinPredicate { owner, .. }) = input
             {
                 owners.push(owner);
             }
@@ -1383,7 +1423,6 @@ where
         for output in outputs {
             match output {
                 Output::Coin { to, .. }
-                | Output::Message { recipient: to, .. }
                 | Output::Change { to, .. }
                 | Output::Variable { to, .. } => {
                     owners.push(to);
@@ -1470,6 +1509,7 @@ impl Fee for CreateCheckedMetadata {
     }
 }
 
+// TODO: Add test to verify that `MessageCoin` spent on revert and `MessageData` not
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1848,7 +1888,7 @@ mod tests {
                         // Store the pointer to the beginning of the free memory into 
                         // register `0x10`. It requires shifting of `RegId::HP` by 1 to point
                         // on the free memory.
-                        op::addi(0x10, RegId::HP, 1),
+                        op::addi(0x10, RegId::HP, 0),
                         // Store `config_coinbase` `Address` into MEM[$0x10; 32].
                         op::cb(0x10),
                         // Store the pointer on the beginning of script data into register `0x12`.
@@ -2903,20 +2943,13 @@ mod tests {
         let db = &mut Database::default();
 
         // insert coin into state
-        if let Input::CoinSigned {
+        if let Input::CoinSigned(CoinSigned {
             utxo_id,
             owner,
             amount,
             asset_id,
             ..
-        }
-        | Input::CoinPredicate {
-            utxo_id,
-            owner,
-            amount,
-            asset_id,
-            ..
-        } = tx.inputs()[0]
+        }) = tx.inputs()[0]
         {
             db.storage::<Coins>()
                 .insert(
@@ -3086,7 +3119,8 @@ mod tests {
             .unwrap();
         // Corrupt the utxo_id of the contract output
         if let Transaction::Script(script) = &mut second_block.transactions_mut()[1] {
-            if let Input::Contract { utxo_id, .. } = &mut script.inputs_mut()[0] {
+            if let Input::Contract(Contract { utxo_id, .. }) = &mut script.inputs_mut()[0]
+            {
                 // use a previously valid contract id which isn't the correct one for this block
                 *utxo_id = UtxoId::new(tx_id, 0);
             }
@@ -3194,14 +3228,14 @@ mod tests {
             .add_unsigned_message_input(
                 rng.gen(),
                 message.sender,
-                message.nonce.into(),
+                message.nonce,
                 message.amount,
-                vec![],
+                message.data.clone(),
             )
             .finalize();
 
-        if let Input::MessageSigned { recipient, .. } = tx.inputs()[0] {
-            message.recipient = recipient;
+        if let Some(recipient) = tx.inputs()[0].recipient() {
+            message.recipient = *recipient;
         } else {
             unreachable!();
         }

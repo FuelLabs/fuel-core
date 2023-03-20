@@ -28,26 +28,21 @@ use fuel_core_types::{
         consensus::Consensus,
         primitives::BlockId,
     },
-    entities::{
-        message::{
-            Message,
-            MessageProof,
-        },
-        Nonce,
+    entities::message::{
+        Message,
+        MessageProof,
     },
     fuel_crypto::Signature,
     fuel_merkle,
     fuel_tx::{
-        field::Outputs,
-        Output,
         Receipt,
-        Transaction,
         TxId,
     },
     fuel_types::{
         Address,
         Bytes32,
         MessageId,
+        Nonce,
     },
     services::txpool::TransactionStatus,
 };
@@ -168,14 +163,13 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         .into_iter()
         .find_map(|r| match r {
             Receipt::MessageOut {
-                message_id: id,
                 sender,
                 recipient,
                 nonce,
                 amount,
                 data: message_data,
                 ..
-            } if id == message_id => {
+            } if r.message_id() == Some(message_id) => {
                 Some((sender, recipient, nonce, amount, message_data))
             }
             _ => None,
@@ -199,23 +193,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
     let leaves: Vec<Vec<Receipt>> = data
         .transactions_on_block(&block_id)?
         .into_iter()
-        .filter_map(|id| {
-            // Filter out transactions that contain no messages
-            // and get the receipts for the rest.
-            let result = data.transaction(&id).and_then(|tx| {
-                let outputs = match &tx {
-                    Transaction::Script(script) => script.outputs(),
-                    Transaction::Create(create) => create.outputs(),
-                    Transaction::Mint(mint) => mint.outputs(),
-                };
-                outputs
-                    .iter()
-                    .any(Output::is_message)
-                    .then(|| data.receipts(&id))
-                    .transpose()
-            });
-            result.transpose()
-        })
+        .map(|id| data.receipts(&id))
         .filter_map(|result| result.into_api_result::<_, StorageError>().transpose())
         .try_collect()?;
 
@@ -223,10 +201,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         // Flatten the receipts after filtering on output messages
         // and mapping to message ids.
         .flat_map(|receipts|
-            receipts.into_iter().filter_map(|r| match r {
-                    Receipt::MessageOut { message_id, .. } => Some(message_id),
-                    _ => None,
-                })).enumerate();
+            receipts.into_iter().filter_map(|r| r.message_id())).enumerate();
 
     // Build the merkle proof from the above iterator.
     let mut tree = fuel_merkle::binary::in_memory::MerkleTree::new();

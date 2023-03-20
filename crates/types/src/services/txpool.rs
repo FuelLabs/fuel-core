@@ -2,7 +2,6 @@
 
 use crate::{
     blockchain::primitives::BlockId,
-    entities::Nonce,
     fuel_asm::Word,
     fuel_tx::{
         field::{
@@ -23,6 +22,7 @@ use crate::{
     fuel_types::{
         Bytes32,
         ContractId,
+        Nonce,
     },
     fuel_vm::{
         checked_transaction::Checked,
@@ -258,10 +258,6 @@ pub enum Error {
         "Transaction is not inserted. Input output mismatch. Expected coin but output is contract"
     )]
     NotInsertedIoContractOutput,
-    #[error(
-        "Transaction is not inserted. Input output mismatch. Expected coin but output is message"
-    )]
-    NotInsertedIoMessageInput,
     #[error("Transaction is not inserted. Maximum depth of dependent transaction chain reached")]
     NotInsertedMaxDepth,
     #[error("Transaction exceeds the max gas per block limit. Tx gas: {tx_gas}, block limit {block_limit}")]

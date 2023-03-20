@@ -96,27 +96,22 @@ async fn balance() {
     for coins in coins_per_asset {
         for coin in coins {
             match coin {
-                Coins::Coin(coin) => tx.add_input(Input::CoinSigned {
-                    utxo_id: coin.utxo_id.into(),
-                    owner: coin.owner.into(),
-                    amount: coin.amount.into(),
-                    asset_id: coin.asset_id.into(),
-                    maturity: coin.maturity.into(),
-                    witness_index: 0,
-                    tx_pointer: Default::default(),
-                }),
-                Coins::MessageCoin(message) => tx.add_input(Input::MessageSigned {
-                    // TODO: Remove when ready
-                    message_id: Default::default(),
-                    sender: message.sender.into(),
-                    amount: message.amount.into(),
-                    witness_index: 0,
-                    recipient: message.recipient.into(),
-                    // TODO: Replace when it is ready
-                    // nonce: message.nonce.into(),
-                    nonce: 0,
-                    data: Default::default(),
-                }),
+                Coins::Coin(coin) => tx.add_input(Input::coin_signed(
+                    coin.utxo_id.into(),
+                    coin.owner.into(),
+                    coin.amount.into(),
+                    coin.asset_id.into(),
+                    Default::default(),
+                    0,
+                    coin.maturity.into(),
+                )),
+                Coins::MessageCoin(message) => tx.add_input(Input::message_coin_signed(
+                    message.sender.into(),
+                    message.recipient.into(),
+                    message.amount.into(),
+                    message.nonce.into(),
+                    0,
+                )),
                 Coins::Unknown => panic!("Unknown coin"),
             };
         }

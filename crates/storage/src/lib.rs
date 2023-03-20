@@ -12,7 +12,10 @@ use std::io::ErrorKind;
 
 pub use fuel_vm_private::{
     fuel_storage::*,
-    storage::InterpreterStorage,
+    storage::{
+        ContractsAssetsStorage,
+        InterpreterStorage,
+    },
 };
 
 pub mod iter;

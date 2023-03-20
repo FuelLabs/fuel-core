@@ -8,7 +8,6 @@ use crate::{
         },
         primitives::BlockId,
     },
-    entities::Nonce,
     fuel_tx::{
         CheckError,
         Transaction,
@@ -18,6 +17,7 @@ use crate::{
     fuel_types::{
         Bytes32,
         ContractId,
+        Nonce,
     },
     fuel_vm::{
         Backtrace,

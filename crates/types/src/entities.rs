@@ -1,14 +1,5 @@
 //! Higher level domain types
 
-use crate::fuel_asm::Word;
-#[cfg(feature = "random")]
-use crate::fuel_crypto::rand::{
-    distributions::{
-        Distribution,
-        Standard,
-    },
-    Rng,
-};
 use coins::message_coin::{
     CompressedMessageCoin,
     MessageCoin,
@@ -18,41 +9,6 @@ use message::Message;
 pub mod coins;
 pub mod contract;
 pub mod message;
-
-/// The nonce is a unique identifier for the message.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(
-    Debug,
-    Default,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    derive_more::Add,
-    derive_more::Sub,
-    derive_more::Display,
-    derive_more::Into,
-    derive_more::From,
-    derive_more::Deref,
-    derive_more::LowerHex,
-    derive_more::UpperHex,
-)]
-pub struct Nonce(Word);
-
-impl Nonce {
-    /// The length of the serialized nonce.
-    pub const LEN: usize = 8;
-}
-
-#[cfg(feature = "random")]
-impl Distribution<Nonce> for Standard {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Nonce {
-        Nonce(rng.gen())
-    }
-}
 
 impl TryFrom<Message> for CompressedMessageCoin {
     type Error = anyhow::Error;

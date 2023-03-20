@@ -12,7 +12,6 @@ use fuel_core_types::{
         coins::coin::CompressedCoin,
         contract::ContractUtxoInfo,
         message::Message,
-        Nonce,
     },
     fuel_tx::{
         Receipt,
@@ -23,6 +22,7 @@ use fuel_core_types::{
     fuel_types::{
         Bytes32,
         ContractId,
+        Nonce,
     },
 };
 pub use fuel_vm_private::storage::{

@@ -10,11 +10,9 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::{
-        message::Message,
-        Nonce,
-    },
+    entities::message::Message,
     fuel_tx::Receipt,
+    fuel_types::Nonce,
     services::executor::{
         ExecutionBlock,
         Result as ExecutorResult,
