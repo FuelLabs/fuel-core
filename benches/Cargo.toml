@@ -22,5 +22,9 @@ serde_yaml = "0.9.13"
 harness = false
 name = "vm"
 
+[[bench]]
+harness = false
+name = "transaction"
+
 [features]
 default = ["fuel-core/rocksdb"]
