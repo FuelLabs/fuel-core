@@ -11,7 +11,14 @@ use fuel_core::{
         Config,
     },
 };
-use fuel_core_benches::{Database, Rng};
+use fuel_core_benches::{
+    Database,
+    Rng,
+};
+use fuel_core_storage::{
+    tables::Coins,
+    StorageAsMut,
+};
 use fuel_core_types::{
     blockchain::{
         block::PartialFuelBlock,
@@ -21,22 +28,44 @@ use fuel_core_types::{
             PartialBlockHeader,
         },
     },
+    entities::coin::CompressedCoin,
     fuel_asm::op,
     fuel_tx::{
         Finalizable,
+        Input,
         TransactionBuilder,
+        UtxoId,
     },
     fuel_types::Bytes32,
-    services::executor::ExecutionBlock, fuel_vm::SecretKey,
+    fuel_vm::SecretKey,
+    services::executor::ExecutionBlock,
 };
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{
+    rngs::StdRng,
+    SeedableRng,
+};
 
 fn txn(c: &mut Criterion) {
     let mut rng = StdRng::seed_from_u64(1234);
 
     let secret_key: SecretKey = rng.gen();
 
-    let database = Database::default();
+    let coin_utxo: UtxoId = rng.gen();
+
+    let compressed_coin = CompressedCoin {
+        owner: Input::owner(&secret_key.public_key()),
+        amount: rng.gen(),
+        asset_id: rng.gen(),
+        tx_pointer: Default::default(),
+        maturity: 0u32.into(),
+    };
+
+    let mut database = Database::default();
+    database
+        .storage::<Coins>()
+        .insert(&coin_utxo, &compressed_coin)
+        .unwrap();
+
     let relayer = MaybeRelayerAdapter {
         database: database.clone(),
     };
@@ -66,9 +95,9 @@ fn txn(c: &mut Criterion) {
     )
     .add_unsigned_coin_input(
         secret_key,
-        rng.gen(),
-        rng.gen(),
-        rng.gen(),
+        coin_utxo,
+        compressed_coin.amount,
+        compressed_coin.asset_id,
         Default::default(),
         0,
     )
@@ -78,9 +107,7 @@ fn txn(c: &mut Criterion) {
     let block = PartialFuelBlock::new(header, transactions);
     let block = ExecutionBlock::Production(block);
     c.bench_function("executor::execute", |b| {
-        b.iter(|| {
-            black_box(executor.execute_without_commit(block.clone())).unwrap();
-        })
+        b.iter(|| black_box(executor.execute_without_commit(block.clone())).unwrap())
     });
 }
 
