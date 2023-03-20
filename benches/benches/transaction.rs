@@ -11,7 +11,7 @@ use fuel_core::{
         Config,
     },
 };
-use fuel_core_benches::Database;
+use fuel_core_benches::{Database, Rng};
 use fuel_core_types::{
     blockchain::{
         block::PartialFuelBlock,
@@ -27,18 +27,25 @@ use fuel_core_types::{
         TransactionBuilder,
     },
     fuel_types::Bytes32,
-    services::executor::ExecutionBlock,
+    services::executor::ExecutionBlock, fuel_vm::SecretKey,
 };
+use rand::{rngs::StdRng, SeedableRng};
 
 fn txn(c: &mut Criterion) {
+    let mut rng = StdRng::seed_from_u64(1234);
+
+    let secret_key: SecretKey = rng.gen();
+
     let database = Database::default();
     let relayer = MaybeRelayerAdapter {
         database: database.clone(),
     };
+    let mut config = Config::local_node();
+    config.utxo_validation = true;
     let executor = Executor {
         database,
         relayer,
-        config: Config::local_node(),
+        config,
     };
     let header = PartialBlockHeader {
         application: ApplicationHeader {
@@ -52,11 +59,21 @@ fn txn(c: &mut Criterion) {
             generated: Default::default(),
         },
     };
+
     let script = TransactionBuilder::script(
         vec![op::noop(), op::ret(0)].into_iter().collect(),
         vec![],
     )
+    .add_unsigned_coin_input(
+        secret_key,
+        rng.gen(),
+        rng.gen(),
+        rng.gen(),
+        Default::default(),
+        0,
+    )
     .finalize();
+
     let transactions = vec![script.into()];
     let block = PartialFuelBlock::new(header, transactions);
     let block = ExecutionBlock::Production(block);
