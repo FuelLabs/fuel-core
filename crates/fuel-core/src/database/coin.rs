@@ -131,7 +131,7 @@ impl Database {
     pub fn coin(&self, utxo_id: &UtxoId) -> StorageResult<CompressedCoin> {
         let coin = self
             .storage_as_ref::<Coins>()
-            .get(&utxo_id)?
+            .get(utxo_id)?
             .ok_or(not_found!(Coins))?
             .into_owned();
 
