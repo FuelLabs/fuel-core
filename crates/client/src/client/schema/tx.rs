@@ -108,6 +108,26 @@ impl TryFrom<OpaqueTransaction> for fuel_tx::Transaction {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
+#[cynic(graphql_type = "Transaction", schema_path = "./assets/schema.sdl")]
+pub struct OpaqueTransactionTransparentReceipts {
+    pub raw_payload: HexString,
+    pub receipts: Option<Vec<transparent_receipt::Receipt>>,
+    pub status: Option<TransactionStatus>,
+}
+
+impl TryFrom<OpaqueTransactionTransparentReceipts> for fuel_tx::Transaction {
+    type Error = ConversionError;
+
+    fn try_from(
+        value: OpaqueTransactionTransparentReceipts,
+    ) -> Result<Self, Self::Error> {
+        let bytes = value.raw_payload.0 .0;
+        fuel_tx::Transaction::from_bytes(bytes.as_slice())
+            .map_err(ConversionError::TransactionFromBytesError)
+    }
+}
+
+#[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Transaction")]
 pub struct TransactionIdFragment {
     pub id: TransactionId,
@@ -278,6 +298,7 @@ pub struct TxArg {
 pub struct DryRunArg {
     pub tx: HexString,
     pub utxo_validation: Option<bool>,
+    pub estimate_predicates: Option<bool>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -287,8 +308,9 @@ pub struct DryRunArg {
     variables = "DryRunArg"
 )]
 pub struct DryRun {
-    #[arguments(tx: $tx, utxoValidation: $utxo_validation)]
-    pub dry_run: Vec<transparent_receipt::Receipt>,
+    #[arguments(tx: $tx, utxoValidation: $utxo_validation, estimatePredicates: $estimate_predicates)]
+    pub dry_run: OpaqueTransactionTransparentReceipts,
+    // Opaque transaction
 }
 
 #[derive(cynic::QueryFragment, Debug)]

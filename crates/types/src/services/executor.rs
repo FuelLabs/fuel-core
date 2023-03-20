@@ -75,16 +75,18 @@ pub enum TransactionExecutionResult {
 /// Execution wrapper where the types
 /// depend on the type of execution.
 #[derive(Debug, Clone, Copy)]
-pub enum ExecutionTypes<P, V> {
+pub enum ExecutionTypes<P, V, E> {
     /// Production mode where P is being produced.
     Production(P),
     /// Validation mode where V is being checked.
     Validation(V),
+    /// Estimation mode where E is being checked.
+    Estimation(E),
 }
 
 /// Starting point for executing a block. Production starts with a [`PartialFuelBlock`].
 /// Validation starts with a full [`FuelBlock`].
-pub type ExecutionBlock = ExecutionTypes<PartialFuelBlock, Block>;
+pub type ExecutionBlock = ExecutionTypes<PartialFuelBlock, Block, PartialFuelBlock>;
 
 impl ExecutionBlock {
     /// Get the hash of the full [`FuelBlock`] if validating.
@@ -92,6 +94,7 @@ impl ExecutionBlock {
         match self {
             ExecutionTypes::Production(_) => None,
             ExecutionTypes::Validation(v) => Some(v.id()),
+            ExecutionTypes::Estimation(_) => None,
         }
     }
 }
@@ -99,44 +102,60 @@ impl ExecutionBlock {
 // TODO: Move `ExecutionType` and `ExecutionKind` into `fuel-core-executor`
 
 /// Execution wrapper with only a single type.
-pub type ExecutionType<T> = ExecutionTypes<T, T>;
+pub type ExecutionType<T> = ExecutionTypes<T, T, T>;
 
-impl<P, V> ExecutionTypes<P, V> {
+impl<P, V, E> ExecutionTypes<P, V, E> {
     /// Map the production type if producing.
-    pub fn map_p<Q, F>(self, f: F) -> ExecutionTypes<Q, V>
+    pub fn map_p<Q, F>(self, f: F) -> ExecutionTypes<Q, V, E>
     where
         F: FnOnce(P) -> Q,
     {
         match self {
             ExecutionTypes::Production(p) => ExecutionTypes::Production(f(p)),
             ExecutionTypes::Validation(v) => ExecutionTypes::Validation(v),
+            ExecutionTypes::Estimation(e) => ExecutionTypes::Estimation(e),
         }
     }
 
     /// Map the validation type if validating.
-    pub fn map_v<W, F>(self, f: F) -> ExecutionTypes<P, W>
+    pub fn map_v<W, F>(self, f: F) -> ExecutionTypes<P, W, E>
     where
         F: FnOnce(V) -> W,
     {
         match self {
             ExecutionTypes::Production(p) => ExecutionTypes::Production(p),
             ExecutionTypes::Validation(v) => ExecutionTypes::Validation(f(v)),
+            ExecutionTypes::Estimation(e) => ExecutionTypes::Estimation(e),
+        }
+    }
+
+    /// Map the estimation type if estimating.
+    pub fn map_e<G, F>(self, f: F) -> ExecutionTypes<P, V, G>
+    where
+        F: FnOnce(E) -> G,
+    {
+        match self {
+            ExecutionTypes::Production(p) => ExecutionTypes::Production(p),
+            ExecutionTypes::Validation(v) => ExecutionTypes::Validation(v),
+            ExecutionTypes::Estimation(e) => ExecutionTypes::Estimation(f(e)),
         }
     }
 
     /// Get a reference version of the inner type.
-    pub fn as_ref(&self) -> ExecutionTypes<&P, &V> {
+    pub fn as_ref(&self) -> ExecutionTypes<&P, &V, &E> {
         match *self {
             ExecutionTypes::Production(ref p) => ExecutionTypes::Production(p),
             ExecutionTypes::Validation(ref v) => ExecutionTypes::Validation(v),
+            ExecutionTypes::Estimation(ref e) => ExecutionTypes::Estimation(e),
         }
     }
 
     /// Get a mutable reference version of the inner type.
-    pub fn as_mut(&mut self) -> ExecutionTypes<&mut P, &mut V> {
+    pub fn as_mut(&mut self) -> ExecutionTypes<&mut P, &mut V, &mut E> {
         match *self {
             ExecutionTypes::Production(ref mut p) => ExecutionTypes::Production(p),
             ExecutionTypes::Validation(ref mut v) => ExecutionTypes::Validation(v),
+            ExecutionTypes::Estimation(ref mut e) => ExecutionTypes::Estimation(e),
         }
     }
 
@@ -145,6 +164,7 @@ impl<P, V> ExecutionTypes<P, V> {
         match self {
             ExecutionTypes::Production(_) => ExecutionKind::Production,
             ExecutionTypes::Validation(_) => ExecutionKind::Validation,
+            ExecutionTypes::Estimation(_) => ExecutionKind::Estimation,
         }
     }
 }
@@ -158,6 +178,7 @@ impl<T> ExecutionType<T> {
         match self {
             ExecutionTypes::Production(p) => ExecutionTypes::Production(f(p)),
             ExecutionTypes::Validation(v) => ExecutionTypes::Validation(f(v)),
+            ExecutionTypes::Estimation(e) => ExecutionTypes::Estimation(f(e)),
         }
     }
 
@@ -169,13 +190,16 @@ impl<T> ExecutionType<T> {
         match self {
             ExecutionTypes::Production(p) => f(p).map(ExecutionTypes::Production),
             ExecutionTypes::Validation(v) => f(v).map(ExecutionTypes::Validation),
+            ExecutionTypes::Estimation(e) => f(e).map(ExecutionTypes::Estimation),
         }
     }
 
     /// Get the inner type.
     pub fn into_inner(self) -> T {
         match self {
-            ExecutionTypes::Production(t) | ExecutionTypes::Validation(t) => t,
+            ExecutionTypes::Production(t)
+            | ExecutionTypes::Validation(t)
+            | ExecutionTypes::Estimation(t) => t,
         }
     }
 
@@ -193,6 +217,7 @@ impl<T> core::ops::Deref for ExecutionType<T> {
         match self {
             ExecutionTypes::Production(p) => p,
             ExecutionTypes::Validation(v) => v,
+            ExecutionTypes::Estimation(e) => e,
         }
     }
 }
@@ -202,6 +227,7 @@ impl<T> core::ops::DerefMut for ExecutionType<T> {
         match self {
             ExecutionTypes::Production(p) => p,
             ExecutionTypes::Validation(v) => v,
+            ExecutionTypes::Estimation(e) => e,
         }
     }
 }
@@ -213,6 +239,8 @@ pub enum ExecutionKind {
     Production,
     /// Validating a block.
     Validation,
+    /// Estimating a block.
+    Estimation,
 }
 
 impl ExecutionKind {
@@ -221,6 +249,7 @@ impl ExecutionKind {
         match self {
             ExecutionKind::Production => ExecutionTypes::Production(t),
             ExecutionKind::Validation => ExecutionTypes::Validation(t),
+            ExecutionKind::Estimation => ExecutionTypes::Estimation(t),
         }
     }
 }

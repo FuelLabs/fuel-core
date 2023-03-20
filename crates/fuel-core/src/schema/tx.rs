@@ -196,6 +196,10 @@ impl TxMutation {
         // This allows for non-existent inputs to be used without signature validation
         // for read-only calls.
         utxo_validation: Option<bool>,
+        // If set to false, disable input utxo validation, overriding the configuration of the node.
+        // This allows for non-existent inputs to be used without signature validation
+        // for read-only calls.
+        estimate_predicates: Option<bool>,
     ) -> async_graphql::Result<Vec<receipt::Receipt>> {
         let block_producer = ctx.data_unchecked::<BlockProducer>();
 

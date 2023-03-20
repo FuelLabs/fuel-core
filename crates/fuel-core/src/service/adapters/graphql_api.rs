@@ -233,9 +233,10 @@ impl DryRunExecution for BlockProducerAdapter {
         transaction: Transaction,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
+        estimate_predicates: Option<bool>,
     ) -> anyhow::Result<Vec<TxReceipt>> {
         self.block_producer
-            .dry_run(transaction, height, utxo_validation)
+            .dry_run(transaction, height, utxo_validation, estimate_predicates
             .await
     }
 }

@@ -263,6 +263,7 @@ pub struct InputCoin {
     pub maturity: U64,
     pub predicate: HexString,
     pub predicate_data: HexString,
+    pub predicate_gas_used: U64,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -287,6 +288,7 @@ pub struct InputMessage {
     data: HexString,
     predicate: HexString,
     predicate_data: HexString,
+    predicate_gas_used: U64,
 }
 
 impl TryFrom<Input> for fuel_tx::Input {
@@ -315,6 +317,7 @@ impl TryFrom<Input> for fuel_tx::Input {
                         tx_pointer: coin.tx_pointer.into(),
                         predicate: coin.predicate.into(),
                         predicate_data: coin.predicate_data.into(),
+                        predicate_gas_used: coin.predicate_gas_used.into(),
                     }
                 }
             }
@@ -346,6 +349,7 @@ impl TryFrom<Input> for fuel_tx::Input {
                         data: message.data.into(),
                         predicate: message.predicate.into(),
                         predicate_data: message.predicate_data.into(),
+                        predicate_gas_used: message.predicate_gas_used.into(),
                     }
                 }
             }

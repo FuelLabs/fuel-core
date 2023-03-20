@@ -128,6 +128,7 @@ where
         transaction: Transaction,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
+        estimate_predicates: Option<bool>,
     ) -> anyhow::Result<Vec<Receipt>> {
         // setup the block with the provided tx and optional height
         // dry_run execute tx on the executor
