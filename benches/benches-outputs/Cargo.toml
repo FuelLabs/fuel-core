@@ -9,6 +9,3 @@ publish = false
 fuel-core-types = { path = "../../crates/types", default-features = false, features = ["random", "test-helpers"] }
 
 [workspace]
-
-[patch.crates-io]
-fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "master" }
