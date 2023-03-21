@@ -12,7 +12,7 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
-    schema::coins::Coins,
+    schema::coins::CoinType,
     FuelClient,
 };
 use fuel_core_types::fuel_tx::*;
@@ -115,7 +115,7 @@ mod coin {
 
         for asset_group in coins_per_asset {
             for asset in asset_group {
-                if let Coins::Coin(coin) = asset {
+                if let CoinType::Coin(coin) = asset {
                     script.add_unsigned_coin_input(
                         secret_key,
                         coin.utxo_id.0 .0,
@@ -227,9 +227,9 @@ mod coin {
             .iter()
             .flat_map(|coins| {
                 coins.iter().filter_map(|b| match b {
-                    Coins::Coin(c) => Some(format!("{:#x}", c.utxo_id)),
-                    Coins::MessageCoin(_) => None,
-                    Coins::Unknown => None,
+                    CoinType::Coin(c) => Some(format!("{:#x}", c.utxo_id)),
+                    CoinType::MessageCoin(_) => None,
+                    CoinType::Unknown => None,
                 })
             })
             .collect();
@@ -391,7 +391,7 @@ mod message_coin {
         let mut script = TransactionBuilder::script(vec![], vec![]);
 
         coins_per_asset[0].iter().for_each(|coin| {
-            if let Coins::MessageCoin(message) = coin {
+            if let CoinType::MessageCoin(message) = coin {
                 script.add_unsigned_message_input(
                     secret_key,
                     message.sender.0 .0,
@@ -472,9 +472,9 @@ mod message_coin {
             .iter()
             .flat_map(|coins| {
                 coins.iter().filter_map(|b| match b {
-                    Coins::Coin(_) => None,
-                    Coins::MessageCoin(m) => Some(format!("{:#x}", m.nonce)),
-                    Coins::Unknown => None,
+                    CoinType::Coin(_) => None,
+                    CoinType::MessageCoin(m) => Some(format!("{:#x}", m.nonce)),
+                    CoinType::Unknown => None,
                 })
             })
             .collect();
@@ -685,9 +685,9 @@ mod all_coins {
             .iter()
             .flat_map(|coins| {
                 coins.iter().filter_map(|b| match b {
-                    Coins::Coin(_) => None,
-                    Coins::MessageCoin(m) => Some(format!("{:#x}", m.nonce)),
-                    Coins::Unknown => None,
+                    CoinType::Coin(_) => None,
+                    CoinType::MessageCoin(m) => Some(format!("{:#x}", m.nonce)),
+                    CoinType::Unknown => None,
                 })
             })
             .collect();
@@ -695,9 +695,9 @@ mod all_coins {
             .iter()
             .flat_map(|coins| {
                 coins.iter().filter_map(|b| match b {
-                    Coins::Coin(c) => Some(format!("{:#x}", c.utxo_id)),
-                    Coins::MessageCoin(_) => None,
-                    Coins::Unknown => None,
+                    CoinType::Coin(c) => Some(format!("{:#x}", c.utxo_id)),
+                    CoinType::MessageCoin(_) => None,
+                    CoinType::Unknown => None,
                 })
             })
             .collect();
@@ -863,7 +863,7 @@ trait CumulativeAmount {
     fn amount(&self) -> u64;
 }
 
-impl CumulativeAmount for Vec<Coins> {
+impl CumulativeAmount for Vec<CoinType> {
     fn amount(&self) -> u64 {
         self.iter().map(|coin| coin.amount()).sum()
     }

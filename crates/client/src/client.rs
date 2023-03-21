@@ -642,7 +642,7 @@ impl FuelClient {
         spend_query: Vec<(&str, u64, Option<u64>)>,
         // (Utxos, Messages Nonce)
         excluded_ids: Option<(Vec<&str>, Vec<&str>)>,
-    ) -> io::Result<Vec<Vec<schema::coins::Coins>>> {
+    ) -> io::Result<Vec<Vec<schema::coins::CoinType>>> {
         let owner: schema::Address = owner.parse()?;
         let spend_query: Vec<SpendQueryElementInput> = spend_query
             .iter()

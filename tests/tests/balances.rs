@@ -10,7 +10,7 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
-    schema::coins::Coins,
+    schema::coins::CoinType,
     FuelClient,
     PageDirection,
     PaginationRequest,
@@ -96,7 +96,7 @@ async fn balance() {
     for coins in coins_per_asset {
         for coin in coins {
             match coin {
-                Coins::Coin(coin) => tx.add_input(Input::coin_signed(
+                CoinType::Coin(coin) => tx.add_input(Input::coin_signed(
                     coin.utxo_id.into(),
                     coin.owner.into(),
                     coin.amount.into(),
@@ -105,14 +105,16 @@ async fn balance() {
                     0,
                     coin.maturity.into(),
                 )),
-                Coins::MessageCoin(message) => tx.add_input(Input::message_coin_signed(
-                    message.sender.into(),
-                    message.recipient.into(),
-                    message.amount.into(),
-                    message.nonce.into(),
-                    0,
-                )),
-                Coins::Unknown => panic!("Unknown coin"),
+                CoinType::MessageCoin(message) => {
+                    tx.add_input(Input::message_coin_signed(
+                        message.sender.into(),
+                        message.recipient.into(),
+                        message.amount.into(),
+                        message.nonce.into(),
+                        0,
+                    ))
+                }
+                CoinType::Unknown => panic!("Unknown coin"),
             };
         }
     }

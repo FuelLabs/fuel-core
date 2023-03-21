@@ -167,9 +167,9 @@ type CoinOutput {
 }
 
 """
-The schema analog of the [`coins::Coins`].
+The schema analog of the [`coins::CoinType`].
 """
-union Coins = Coin | MessageCoin
+union CoinType = Coin | MessageCoin
 
 union Consensus = Genesis | PoAConsensus
 
@@ -547,7 +547,7 @@ type Query {
 	the same as the length of `query_per_asset`. The ordering of assets and `query_per_asset`
 	is the same.
 	"""
-	coinsToSpend(owner: Address!, queryPerAsset: [SpendQueryElementInput!]!, excludedIds: ExcludeInput): [[Coins!]!]!
+	coinsToSpend(owner: Address!, queryPerAsset: [SpendQueryElementInput!]!, excludedIds: ExcludeInput): [[CoinType!]!]!
 	contract(id: ContractId!): Contract
 	contractBalance(contract: ContractId!, asset: AssetId!): ContractBalance!
 	contractBalances(filter: ContractBalanceFilterInput!, first: Int, after: String, last: Int, before: String): ContractBalanceConnection!

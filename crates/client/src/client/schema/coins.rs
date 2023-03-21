@@ -177,19 +177,19 @@ pub struct MessageCoin {
 
 #[derive(cynic::InlineFragments, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
-pub enum Coins {
+pub enum CoinType {
     Coin(Coin),
     MessageCoin(MessageCoin),
     #[cynic(fallback)]
     Unknown,
 }
 
-impl Coins {
+impl CoinType {
     pub fn amount(&self) -> u64 {
         match self {
-            Coins::Coin(c) => c.amount.0,
-            Coins::MessageCoin(m) => m.amount.0,
-            Coins::Unknown => 0,
+            CoinType::Coin(c) => c.amount.0,
+            CoinType::MessageCoin(m) => m.amount.0,
+            CoinType::Unknown => 0,
         }
     }
 }
@@ -225,7 +225,7 @@ impl From<CoinsToSpendArgsTuple> for CoinsToSpendArgs {
 )]
 pub struct CoinsToSpendQuery {
     #[arguments(owner: $owner, queryPerAsset: $query_per_asset, excludedIds: $excluded_ids)]
-    pub coins_to_spend: Vec<Vec<Coins>>,
+    pub coins_to_spend: Vec<Vec<CoinType>>,
 }
 
 #[cfg(test)]

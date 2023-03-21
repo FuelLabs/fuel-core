@@ -5,7 +5,7 @@ use anyhow::{
     Context,
 };
 use fuel_core_client::client::{
-    schema::coins::Coins,
+    schema::coins::CoinType,
     types::TransactionStatus,
     FuelClient,
     PageDirection,
@@ -157,7 +157,7 @@ impl Wallet {
         tx.gas_limit(BASE_AMOUNT);
 
         for coin in coins {
-            if let Coins::Coin(coin) = coin {
+            if let CoinType::Coin(coin) = coin {
                 tx.add_unsigned_coin_input(
                     self.secret,
                     coin.utxo_id.clone().into(),
@@ -223,7 +223,7 @@ impl Wallet {
         tx.gas_limit(BASE_AMOUNT);
 
         for coin in coins {
-            if let Coins::Coin(coin) = coin {
+            if let CoinType::Coin(coin) = coin {
                 tx.add_unsigned_coin_input(
                     self.secret,
                     coin.utxo_id.clone().into(),

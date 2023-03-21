@@ -13,7 +13,7 @@ use fuel_core_storage::{
 use fuel_core_types::{
     entities::coins::{
         CoinId,
-        Coins,
+        CoinType,
     },
     fuel_types::{
         Address,
@@ -85,7 +85,7 @@ impl<'a> AssetsQuery<'a> {
     /// # Note: The coins of different type are not grouped by the `asset_id`.
     // TODO: Optimize this by creating an index
     //  https://github.com/FuelLabs/fuel-core/issues/588
-    pub fn coins(&self) -> impl Iterator<Item = StorageResult<Coins>> + '_ {
+    pub fn coins(&self) -> impl Iterator<Item = StorageResult<CoinType>> + '_ {
         let coins_iter = self
             .database
             .owned_coins_ids(self.owner, None, IterDirection::Forward)
@@ -106,11 +106,11 @@ impl<'a> AssetsQuery<'a> {
                     };
                     let coin = self.database.coin(id)?;
 
-                    Ok(Coins::Coin(coin))
+                    Ok(CoinType::Coin(coin))
                 })
             })
             .filter_ok(|coin| {
-                if let Coins::Coin(coin) = coin {
+                if let CoinType::Coin(coin) = coin {
                     self.assets
                         .as_ref()
                         .map(|assets| assets.contains(&coin.asset_id))
@@ -145,7 +145,7 @@ impl<'a> AssetsQuery<'a> {
             .filter_ok(|message| message.data.is_empty())
             .map(|result| {
                 result.map(|message| {
-                    Coins::MessageCoin(
+                    CoinType::MessageCoin(
                         message
                             .try_into()
                             .expect("The checked above that message data is empty."),
@@ -190,7 +190,7 @@ impl<'a> AssetQuery<'a> {
 
     /// Returns the iterator over all valid(spendable, allowed by `exclude`) coins of the `owner`
     /// for the `asset_id`.
-    pub fn coins(&self) -> impl Iterator<Item = StorageResult<Coins>> + '_ {
+    pub fn coins(&self) -> impl Iterator<Item = StorageResult<CoinType>> + '_ {
         self.query.coins()
     }
 }

@@ -11,7 +11,7 @@ use fuel_core_storage::Error as StorageError;
 use fuel_core_types::{
     entities::coins::{
         CoinId,
-        Coins,
+        CoinType,
     },
     fuel_types::{
         Address,
@@ -113,7 +113,7 @@ impl SpendQuery {
 /// Returns the biggest inputs of the `owner` to satisfy the required `target` of the asset. The
 /// number of inputs for each asset can't exceed `max_inputs`, otherwise throw an error that query
 /// can't be satisfied.
-pub fn largest_first(query: &AssetQuery) -> Result<Vec<Coins>, CoinsQueryError> {
+pub fn largest_first(query: &AssetQuery) -> Result<Vec<CoinType>, CoinsQueryError> {
     let mut inputs: Vec<_> = query.coins().try_collect()?;
     inputs.sort_by_key(|coin| Reverse(coin.amount()));
 
@@ -150,7 +150,7 @@ pub fn largest_first(query: &AssetQuery) -> Result<Vec<Coins>, CoinsQueryError> 
 pub fn random_improve(
     db: &Database,
     spend_query: &SpendQuery,
-) -> Result<Vec<Vec<Coins>>, CoinsQueryError> {
+) -> Result<Vec<Vec<CoinType>>, CoinsQueryError> {
     let mut coins_per_asset = vec![];
 
     for query in spend_query.asset_queries(db) {
