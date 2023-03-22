@@ -298,6 +298,29 @@ mod tests {
     }
 
     #[test]
+    fn put_creates_merkle_metadata_when_empty() {
+        let contract_id = ContractId::from([1u8; 32]);
+        let state_key = Bytes32::new([1u8; 32]);
+        let state = Bytes32::from([0xff; 32]);
+        let key = (&contract_id, &state_key).into();
+        let database = &mut Database::default();
+
+        // Write a contract state
+        database
+            .storage::<ContractsState>()
+            .insert(&key, &state)
+            .unwrap();
+
+        // Read the Merkle metadata
+        let metadata = database
+            .storage::<ContractsStateMerkleMetadata>()
+            .get(&contract_id)
+            .unwrap();
+
+        assert!(metadata.is_some());
+    }
+
+    #[test]
     fn remove_updates_the_state_merkle_root_for_the_given_contract() {
         let contract_id = ContractId::from([1u8; 32]);
         let database = &mut Database::default();

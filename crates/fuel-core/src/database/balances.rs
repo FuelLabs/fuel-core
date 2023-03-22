@@ -305,6 +305,29 @@ mod tests {
     }
 
     #[test]
+    fn put_creates_merkle_metadata_when_empty() {
+        let contract_id = ContractId::from([1u8; 32]);
+        let asset_id = AssetId::new([1u8; 32]);
+        let key = (&contract_id, &asset_id).into();
+        let database = &mut Database::default();
+
+        // Write a contract asset
+        let balance: Word = 100;
+        database
+            .storage::<ContractsAssets>()
+            .insert(&key, &balance)
+            .unwrap();
+
+        // Read the Merkle metadata
+        let metadata = database
+            .storage::<ContractsAssetsMerkleMetadata>()
+            .get(&contract_id)
+            .unwrap();
+
+        assert!(metadata.is_some());
+    }
+
+    #[test]
     fn remove_updates_the_assets_merkle_root_for_the_given_contract() {
         let contract_id = ContractId::from([1u8; 32]);
         let database = &mut Database::default();
