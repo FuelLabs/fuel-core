@@ -63,7 +63,7 @@ mockall::mock! {
     }
 
     impl DatabaseMessageProof for ProofDataStorage {
-        fn block_history_prove(
+        fn block_history_proof(
             &self,
             message_block_height: &BlockHeight,
             commit_block_height: &BlockHeight,
@@ -160,7 +160,7 @@ async fn can_build_message_proof() {
         proof_set: vec![message_block.id().into(), commit_block.id().into()],
         proof_index: 2,
     };
-    data.expect_block_history_prove()
+    data.expect_block_history_proof()
         .once()
         .with(
             eq(message_block_height),

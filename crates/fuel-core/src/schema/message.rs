@@ -127,7 +127,7 @@ impl MessageQuery {
                 data.block_id(&block_height)?
             }
             _ => Err(anyhow::anyhow!(
-                "Support either `commit_block_id` or `commit_block_height`"
+                "Either `commit_block_id` or `commit_block_height` must be provided exclusively"
             ))?,
         };
 

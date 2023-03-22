@@ -189,7 +189,7 @@ pub trait ConsensusModulePort: Send + Sync {
 pub trait DatabaseMessageProof: Send + Sync {
     /// Gets the [`MerkleProof`] for the message block at `message_block_height` height
     /// relatively to the commit block where message block <= commit block.
-    fn block_history_prove(
+    fn block_history_proof(
         &self,
         message_block_height: &BlockHeight,
         commit_block_height: &BlockHeight,

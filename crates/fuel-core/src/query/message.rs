@@ -190,13 +190,12 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         };
 
     if message_block_header.message_receipt_root != root {
-        // This is bad as it means there's a bug in our prove code.
-        tracing::error!(
+        // This is bad as it means there's a bug in our prove code or block production.
+        Err(anyhow::anyhow!(
             "block header {:?} root doesn't match generated proof root {:?}",
             message_block_header,
             root
-        );
-        return Ok(None)
+        ))?;
     }
 
     // Get the commit fuel block header.
@@ -209,7 +208,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
     };
 
     let verifiable_commit_block_height = *commit_block_header.height() - 1u32.into();
-    let block_proof = database.block_history_prove(
+    let block_proof = database.block_history_proof(
         message_block_header.height(),
         &verifiable_commit_block_height,
     )?;
@@ -228,14 +227,14 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
 }
 
 fn message_receipts_proof<T: MessageProofData + ?Sized>(
-    data: &T,
+    database: &T,
     message_id: MessageId,
     message_block_txs: &[Bytes32],
 ) -> StorageResult<Option<(Bytes32, MerkleProof)>> {
     // Get the message receipts from the block.
     let leaves: Vec<Vec<Receipt>> = message_block_txs
         .iter()
-        .map(|id| data.receipts(id))
+        .map(|id| database.receipts(id))
         .filter_map(|result| result.into_api_result::<_, StorageError>().transpose())
         .try_collect()?;
     let leaves = leaves.into_iter()
@@ -250,7 +249,7 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
     let mut proof_index = None;
 
     for (index, id) in leaves.enumerate() {
-        // Check id this is the message.
+        // Check if this is the message id being proved.
         if message_id == id {
             // Save the index of this message to use as the proof index.
             proof_index = Some(index as u64);

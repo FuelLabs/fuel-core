@@ -125,9 +125,14 @@ pub struct MessageProofArgs {
     pub transaction_id: TransactionId,
     /// Message id of the output message that requires a proof.
     pub message_id: MessageId,
+
+    /// The query supports either `commit_block_id`, or `commit_block_height` set on, not both.
+
     /// The block id of the commitment block.
+    /// If it is `None`, the `commit_block_height` should be `Some`.
     pub commit_block_id: Option<BlockId>,
     /// The block height of the commitment block.
+    /// If it is `None`, the `commit_block_id` should be `Some`.
     pub commit_block_height: Option<U64>,
 }
 

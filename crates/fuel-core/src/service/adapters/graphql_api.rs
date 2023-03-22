@@ -235,7 +235,7 @@ impl TxPoolPort for TxPoolAdapter {
 }
 
 impl DatabaseMessageProof for Database {
-    fn block_history_prove(
+    fn block_history_proof(
         &self,
         message_block_height: &BlockHeight,
         commit_block_height: &BlockHeight,
