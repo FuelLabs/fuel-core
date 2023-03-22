@@ -1,7 +1,10 @@
 use crate::client::schema::{
     block::BlockByHeightArgs,
+    coins::{
+        ExcludeInput,
+        SpendQueryElementInput,
+    },
     contract::ContractBalanceQueryArgs,
-    resource::ExcludeInput,
     tx::DryRunArg,
     Tai64Timestamp,
 };
@@ -35,7 +38,7 @@ use itertools::Itertools;
 use schema::{
     balance::BalanceArgs,
     block::BlockByIdArgs,
-    coin::{
+    coins::{
         Coin,
         CoinByIdArgs,
     },
@@ -43,7 +46,6 @@ use schema::{
         Contract,
         ContractByIdArgs,
     },
-    resource::SpendQueryElementInput,
     tx::{
         TxArg,
         TxIdArgs,
@@ -66,6 +68,11 @@ use schema::{
     TransactionId,
     U64,
 };
+pub use schema::{
+    PageDirection,
+    PaginatedResult,
+    PaginationRequest,
+};
 #[cfg(feature = "subscriptions")]
 use std::future;
 use std::{
@@ -85,12 +92,6 @@ use tracing as _;
 use types::{
     TransactionResponse,
     TransactionStatus,
-};
-
-pub use schema::{
-    PageDirection,
-    PaginatedResult,
-    PaginationRequest,
 };
 
 use self::schema::{
@@ -609,7 +610,7 @@ impl FuelClient {
     }
 
     pub async fn coin(&self, id: &str) -> io::Result<Option<Coin>> {
-        let query = schema::coin::CoinByIdQuery::build(CoinByIdArgs {
+        let query = schema::coins::CoinByIdQuery::build(CoinByIdArgs {
             utxo_id: id.parse()?,
         });
         let coin = self.query(query).await?.coin;
@@ -622,26 +623,26 @@ impl FuelClient {
         owner: &str,
         asset_id: Option<&str>,
         request: PaginationRequest<String>,
-    ) -> io::Result<PaginatedResult<schema::coin::Coin, String>> {
+    ) -> io::Result<PaginatedResult<schema::coins::Coin, String>> {
         let owner: schema::Address = owner.parse()?;
         let asset_id: schema::AssetId = match asset_id {
             Some(asset_id) => asset_id.parse()?,
             None => schema::AssetId::default(),
         };
-        let query = schema::coin::CoinsQuery::build((owner, asset_id, request).into());
+        let query = schema::coins::CoinsQuery::build((owner, asset_id, request).into());
 
         let coins = self.query(query).await?.coins.into();
         Ok(coins)
     }
 
-    /// Retrieve resources to spend in a transaction
-    pub async fn resources_to_spend(
+    /// Retrieve coins to spend in a transaction
+    pub async fn coins_to_spend(
         &self,
         owner: &str,
         spend_query: Vec<(&str, u64, Option<u64>)>,
-        // (Utxos, messages)
+        // (Utxos, Messages Nonce)
         excluded_ids: Option<(Vec<&str>, Vec<&str>)>,
-    ) -> io::Result<Vec<Vec<schema::resource::Resource>>> {
+    ) -> io::Result<Vec<Vec<schema::coins::CoinType>>> {
         let owner: schema::Address = owner.parse()?;
         let spend_query: Vec<SpendQueryElementInput> = spend_query
             .iter()
@@ -655,12 +656,12 @@ impl FuelClient {
             .try_collect()?;
         let excluded_ids: Option<ExcludeInput> =
             excluded_ids.map(ExcludeInput::from_tuple).transpose()?;
-        let query = schema::resource::ResourcesToSpendQuery::build(
+        let query = schema::coins::CoinsToSpendQuery::build(
             (owner, spend_query, excluded_ids).into(),
         );
 
-        let resources_per_asset = self.query(query).await?.resources_to_spend;
-        Ok(resources_per_asset)
+        let coins_per_asset = self.query(query).await?.coins_to_spend;
+        Ok(coins_per_asset)
     }
 
     pub async fn contract(&self, id: &str) -> io::Result<Option<Contract>> {

@@ -12,7 +12,7 @@ use crate::client::schema::{
     ConnectionArgs,
     ConversionError,
     HexString,
-    MessageId,
+    Nonce,
     PageInfo,
     Salt,
     TransactionId,
@@ -278,11 +278,10 @@ pub struct InputContract {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct InputMessage {
-    message_id: MessageId,
     sender: Address,
     recipient: Address,
     amount: U64,
-    nonce: U64,
+    nonce: Nonce,
     witness_index: i32,
     data: HexString,
     predicate: HexString,
@@ -296,57 +295,72 @@ impl TryFrom<Input> for fuel_tx::Input {
         Ok(match input {
             Input::InputCoin(coin) => {
                 if coin.predicate.0 .0.is_empty() {
-                    fuel_tx::Input::CoinSigned {
-                        utxo_id: coin.utxo_id.into(),
-                        owner: coin.owner.into(),
-                        amount: coin.amount.into(),
-                        asset_id: coin.asset_id.into(),
-                        tx_pointer: coin.tx_pointer.into(),
-                        witness_index: coin.witness_index.try_into()?,
-                        maturity: coin.maturity.into(),
-                    }
+                    fuel_tx::Input::coin_signed(
+                        coin.utxo_id.into(),
+                        coin.owner.into(),
+                        coin.amount.into(),
+                        coin.asset_id.into(),
+                        coin.tx_pointer.into(),
+                        coin.witness_index.try_into()?,
+                        coin.maturity.into(),
+                    )
                 } else {
-                    fuel_tx::Input::CoinPredicate {
-                        utxo_id: coin.utxo_id.into(),
-                        owner: coin.owner.into(),
-                        amount: coin.amount.into(),
-                        asset_id: coin.asset_id.into(),
-                        maturity: coin.maturity.into(),
-                        tx_pointer: coin.tx_pointer.into(),
-                        predicate: coin.predicate.into(),
-                        predicate_data: coin.predicate_data.into(),
-                    }
+                    fuel_tx::Input::coin_predicate(
+                        coin.utxo_id.into(),
+                        coin.owner.into(),
+                        coin.amount.into(),
+                        coin.asset_id.into(),
+                        coin.tx_pointer.into(),
+                        coin.maturity.into(),
+                        coin.predicate.into(),
+                        coin.predicate_data.into(),
+                    )
                 }
             }
-            Input::InputContract(contract) => fuel_tx::Input::Contract {
-                utxo_id: contract.utxo_id.into(),
-                balance_root: contract.balance_root.into(),
-                state_root: contract.state_root.into(),
-                tx_pointer: contract.tx_pointer.into(),
-                contract_id: contract.contract.id.into(),
-            },
+            Input::InputContract(contract) => fuel_tx::Input::contract(
+                contract.utxo_id.into(),
+                contract.balance_root.into(),
+                contract.state_root.into(),
+                contract.tx_pointer.into(),
+                contract.contract.id.into(),
+            ),
             Input::InputMessage(message) => {
-                if message.predicate.0 .0.is_empty() {
-                    fuel_tx::Input::MessageSigned {
-                        message_id: message.message_id.into(),
-                        sender: message.sender.into(),
-                        recipient: message.recipient.into(),
-                        amount: message.amount.into(),
-                        nonce: message.nonce.into(),
-                        witness_index: message.witness_index.try_into()?,
-                        data: message.data.into(),
-                    }
-                } else {
-                    fuel_tx::Input::MessagePredicate {
-                        message_id: message.message_id.into(),
-                        sender: message.sender.into(),
-                        recipient: message.recipient.into(),
-                        amount: message.amount.into(),
-                        nonce: message.nonce.into(),
-                        data: message.data.into(),
-                        predicate: message.predicate.into(),
-                        predicate_data: message.predicate_data.into(),
-                    }
+                match (
+                    message.data.0 .0.is_empty(),
+                    message.predicate.0 .0.is_empty(),
+                ) {
+                    (true, true) => Self::message_coin_signed(
+                        message.sender.into(),
+                        message.recipient.into(),
+                        message.amount.into(),
+                        message.nonce.into(),
+                        message.witness_index.try_into()?,
+                    ),
+                    (true, false) => Self::message_coin_predicate(
+                        message.sender.into(),
+                        message.recipient.into(),
+                        message.amount.into(),
+                        message.nonce.into(),
+                        message.predicate.into(),
+                        message.predicate_data.into(),
+                    ),
+                    (false, true) => Self::message_data_signed(
+                        message.sender.into(),
+                        message.recipient.into(),
+                        message.amount.into(),
+                        message.nonce.into(),
+                        message.witness_index.try_into()?,
+                        message.data.into(),
+                    ),
+                    (false, false) => Self::message_data_predicate(
+                        message.sender.into(),
+                        message.recipient.into(),
+                        message.amount.into(),
+                        message.nonce.into(),
+                        message.data.into(),
+                        message.predicate.into(),
+                        message.predicate_data.into(),
+                    ),
                 }
             }
             Input::Unknown => return Err(Self::Error::UnknownVariant("Input")),
@@ -359,7 +373,6 @@ impl TryFrom<Input> for fuel_tx::Input {
 pub enum Output {
     CoinOutput(CoinOutput),
     ContractOutput(ContractOutput),
-    MessageOutput(MessageOutput),
     ChangeOutput(ChangeOutput),
     VariableOutput(VariableOutput),
     ContractCreated(ContractCreated),
@@ -373,13 +386,6 @@ pub struct CoinOutput {
     pub to: Address,
     pub amount: U64,
     pub asset_id: AssetId,
-}
-
-#[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
-pub struct MessageOutput {
-    pub recipient: Address,
-    pub amount: U64,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -427,10 +433,6 @@ impl TryFrom<Output> for fuel_tx::Output {
                 input_index: contract.input_index.try_into()?,
                 balance_root: contract.balance_root.into(),
                 state_root: contract.state_root.into(),
-            },
-            Output::MessageOutput(message) => Self::Message {
-                recipient: message.recipient.into(),
-                amount: message.amount.into(),
             },
             Output::ChangeOutput(change) => Self::Change {
                 to: change.to.into(),

@@ -22,14 +22,17 @@ use fuel_core_types::{
     fuel_tx::TxId,
     fuel_types::{
         ContractId,
-        MessageId,
+        Nonce,
     },
 };
 use serde::{
     de::DeserializeOwned,
     Serialize,
 };
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    ops::Deref,
+};
 
 /// Metadata for dense Merkle trees
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -263,19 +266,19 @@ impl ToDatabaseKey for u64 {
     }
 }
 
-impl ToDatabaseKey for ContractId {
-    type Type<'a> = &'a [u8];
+impl ToDatabaseKey for Nonce {
+    type Type<'a> = &'a [u8; 32];
 
     fn database_key(&self) -> Self::Type<'_> {
-        self.as_ref()
+        self.deref()
     }
 }
 
-impl ToDatabaseKey for MessageId {
-    type Type<'a> = &'a [u8];
+impl ToDatabaseKey for ContractId {
+    type Type<'a> = &'a [u8; 32];
 
     fn database_key(&self) -> Self::Type<'_> {
-        self.as_ref()
+        self.deref()
     }
 }
 
@@ -288,10 +291,10 @@ impl ToDatabaseKey for BlockId {
 }
 
 impl ToDatabaseKey for TxId {
-    type Type<'a> = &'a [u8];
+    type Type<'a> = &'a [u8; 32];
 
     fn database_key(&self) -> Self::Type<'_> {
-        self.as_ref()
+        self.deref()
     }
 }
 

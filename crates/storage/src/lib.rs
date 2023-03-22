@@ -12,7 +12,10 @@ use std::io::ErrorKind;
 
 pub use fuel_vm_private::{
     fuel_storage::*,
-    storage::InterpreterStorage,
+    storage::{
+        ContractsAssetsStorage,
+        InterpreterStorage,
+    },
 };
 
 pub mod iter;
@@ -120,7 +123,7 @@ mod test {
         #[rustfmt::skip]
         assert_eq!(
             format!("{}", not_found!(Coins)),
-            format!("resource of type `fuel_core_types::entities::coin::CompressedCoin` was not found at the: {}:{}", file!(), line!() - 1)
+            format!("resource of type `fuel_core_types::entities::coins::coin::CompressedCoin` was not found at the: {}:{}", file!(), line!() - 1)
         );
     }
 }

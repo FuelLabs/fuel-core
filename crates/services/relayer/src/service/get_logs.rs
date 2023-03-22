@@ -66,7 +66,7 @@ where
             .filter_map(|event| match EthEventLog::try_from(&event) {
                 Ok(event) => {
                     match event {
-                        EthEventLog::Message(m) => Some(Ok(Message::from(&m).check())),
+                        EthEventLog::Message(m) => Some(Ok(Message::from(&m))),
                         // TODO: Log out ignored messages.
                         EthEventLog::Ignored => None,
                     }

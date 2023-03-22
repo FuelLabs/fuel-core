@@ -247,13 +247,13 @@ async fn can_get_message_proof() {
 
     // Set the contract input because we are calling a contract.
     let inputs = vec![
-        Input::Contract {
-            utxo_id: UtxoId::new(Bytes32::zeroed(), 0),
-            balance_root: Bytes32::zeroed(),
+        Input::contract(
+            UtxoId::new(Bytes32::zeroed(), 0),
+            Bytes32::zeroed(),
             state_root,
-            tx_pointer: TxPointer::default(),
-            contract_id: id,
-        },
+            TxPointer::default(),
+            id,
+        ),
         coin_input,
     ];
 

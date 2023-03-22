@@ -10,5 +10,5 @@ pub mod bridge {
     // 2. Build the contracts(Check the `README.md` file for details).
     // 3. Copy the content of the `abi` field in the
     //  `artifacts/contracts/fuelchain/FuelMessagePortal.sol/FuelMessagePortal.json`
-    super::abigen!(SentMessage, "abi/FuelMessagePortal.json");
+    super::abigen!(MessageSent, "abi/FuelMessagePortal.json");
 }

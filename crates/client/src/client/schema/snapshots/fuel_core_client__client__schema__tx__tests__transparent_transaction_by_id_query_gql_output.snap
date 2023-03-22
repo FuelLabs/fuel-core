@@ -35,7 +35,6 @@ query($id: TransactionId!) {
         }
       }
       ... on InputMessage {
-        messageId
         sender
         recipient
         amount
@@ -60,10 +59,6 @@ query($id: TransactionId!) {
         inputIndex
         balanceRoot
         stateRoot
-      }
-      ... on MessageOutput {
-        recipient
-        amount
       }
       ... on ChangeOutput {
         to
@@ -143,7 +138,6 @@ query($id: TransactionId!) {
       result
       gasUsed
       data
-      messageId
       sender
       recipient
       nonce

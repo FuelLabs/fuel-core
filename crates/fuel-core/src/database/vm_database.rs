@@ -8,6 +8,7 @@ use fuel_core_storage::{
     iter::IterDirection,
     not_found,
     tables::ContractsState,
+    ContractsAssetsStorage,
     ContractsStateKey,
     Error as StorageError,
     Mappable,
@@ -150,6 +151,8 @@ where
         MerkleRootStorage::<K, M>::root(&self.database, key)
     }
 }
+
+impl ContractsAssetsStorage for VmDatabase {}
 
 impl InterpreterStorage for VmDatabase {
     type DataError = StorageError;

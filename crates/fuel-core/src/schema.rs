@@ -22,13 +22,12 @@ use itertools::Itertools;
 pub mod balance;
 pub mod block;
 pub mod chain;
-pub mod coin;
+pub mod coins;
 pub mod contract;
 pub mod dap;
 pub mod health;
 pub mod message;
 pub mod node_info;
-pub mod resource;
 pub mod scalars;
 pub mod tx;
 
@@ -40,12 +39,11 @@ pub struct Query(
     chain::ChainQuery,
     tx::TxQuery,
     health::HealthQuery,
-    coin::CoinQuery,
+    coins::CoinQuery,
     contract::ContractQuery,
     contract::ContractBalanceQuery,
     node_info::NodeQuery,
     message::MessageQuery,
-    resource::ResourceQuery,
 );
 
 #[derive(MergedObject, Default)]
