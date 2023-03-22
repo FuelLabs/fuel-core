@@ -13,6 +13,7 @@ use fuel_core_types::{
     entities::message::Message,
     fuel_types::{
         Address,
+        Nonce,
         Word,
     },
 };
@@ -22,7 +23,7 @@ use fuel_core_types::{
 pub struct MessageLog {
     pub sender: Address,
     pub recipient: Address,
-    pub nonce: Word,
+    pub nonce: Nonce,
     pub amount: Word,
     pub data: Vec<u8>,
     pub da_height: DaBlockHeight,
@@ -58,7 +59,7 @@ impl TryFrom<&Log> for EthEventLog {
 
         let log = match log.topics[0] {
             n if n == *config::ETH_LOG_MESSAGE => {
-                if log.topics.len() != 3 {
+                if log.topics.len() != 4 {
                     return Err(anyhow!("Malformed topics for Message"))
                 }
 
@@ -67,10 +68,11 @@ impl TryFrom<&Log> for EthEventLog {
                     data: log.data.to_vec(),
                 };
 
-                let message = abi::bridge::SentMessageFilter::decode_log(&raw_log)?;
+                let message = abi::bridge::MessageSentFilter::decode_log(&raw_log)?;
                 let amount = message.amount;
                 let data = message.data.to_vec();
-                let nonce = message.nonce;
+                let mut nonce = Nonce::zeroed();
+                message.nonce.to_big_endian(nonce.as_mut());
                 let recipient = Address::from(message.recipient);
                 let sender = Address::from(message.sender);
 

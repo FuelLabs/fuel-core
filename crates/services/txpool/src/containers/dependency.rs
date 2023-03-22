@@ -6,13 +6,29 @@ use crate::{
 };
 use anyhow::anyhow;
 use fuel_core_types::{
-    entities::coin::CompressedCoin,
+    entities::{
+        coins::coin::CompressedCoin,
+        message::Message,
+    },
     fuel_tx::{
+        input::{
+            coin::{
+                CoinPredicate,
+                CoinSigned,
+            },
+            contract::Contract,
+            message::{
+                MessageCoinPredicate,
+                MessageCoinSigned,
+                MessageDataPredicate,
+                MessageDataSigned,
+            },
+        },
         Input,
         Output,
         UtxoId,
     },
-    fuel_types::MessageId,
+    fuel_types::Nonce,
     services::txpool::ArcPoolTx,
 };
 use std::collections::{
@@ -30,7 +46,7 @@ pub struct Dependency {
     /// Contract-> Tx mapping.
     contracts: HashMap<ContractId, ContractState>,
     /// messageId -> tx mapping
-    messages: HashMap<MessageId, MessageState>,
+    messages: HashMap<Nonce, MessageState>,
     /// max depth of dependency.
     max_depth: usize,
     /// utxo-validation feature flag
@@ -114,8 +130,8 @@ impl Dependency {
                 for input in parent_tx.inputs() {
                     // if found and depth is not zero add it to `check`.
                     match input {
-                        Input::CoinSigned { utxo_id, .. }
-                        | Input::CoinPredicate { utxo_id, .. } => {
+                        Input::CoinSigned(CoinSigned { utxo_id, .. })
+                        | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                             let state = self
                                 .coins
                                 .get(utxo_id)
@@ -124,7 +140,7 @@ impl Dependency {
                                 check.push(*utxo_id.tx_id());
                             }
                         }
-                        Input::Contract { contract_id, .. } => {
+                        Input::Contract(Contract { contract_id, .. }) => {
                             let state = self
                                 .contracts
                                 .get(contract_id)
@@ -138,7 +154,10 @@ impl Dependency {
                                 check.push(*origin.tx_id());
                             }
                         }
-                        Input::MessageSigned { .. } | Input::MessagePredicate { .. } => {
+                        Input::MessageCoinSigned(_)
+                        | Input::MessageCoinPredicate(_)
+                        | Input::MessageDataSigned(_)
+                        | Input::MessageDataPredicate(_) => {
                             // Message inputs do not depend on any other fuel transactions
                         }
                     }
@@ -152,18 +171,18 @@ impl Dependency {
         input: &Input,
     ) -> anyhow::Result<()> {
         match input {
-            Input::CoinSigned {
+            Input::CoinSigned(CoinSigned {
                 owner,
                 amount,
                 asset_id,
                 ..
-            }
-            | Input::CoinPredicate {
+            })
+            | Input::CoinPredicate(CoinPredicate {
                 owner,
                 amount,
                 asset_id,
                 ..
-            } => {
+            }) => {
                 if *owner != coin.owner {
                     return Err(Error::NotInsertedIoWrongOwner.into())
                 }
@@ -184,18 +203,18 @@ impl Dependency {
         input: &Input,
         is_output_filled: bool,
     ) -> anyhow::Result<()> {
-        if let Input::CoinSigned {
+        if let Input::CoinSigned(CoinSigned {
             owner,
             amount,
             asset_id,
             ..
-        }
-        | Input::CoinPredicate {
+        })
+        | Input::CoinPredicate(CoinPredicate {
             owner,
             amount,
             asset_id,
             ..
-        } = input
+        }) = input
         {
             let i_owner = owner;
             let i_amount = amount;
@@ -218,9 +237,6 @@ impl Dependency {
                 }
                 Output::Contract { .. } => {
                     return Err(Error::NotInsertedIoContractOutput.into())
-                }
-                Output::Message { .. } => {
-                    return Err(Error::NotInsertedIoMessageInput.into())
                 }
                 Output::Change {
                     to,
@@ -265,31 +281,52 @@ impl Dependency {
         Ok(())
     }
 
-    /// Verifies the integrity of the message ID
-    fn check_if_message_input_matches_id(input: &Input) -> anyhow::Result<()> {
+    /// Verifies the integrity of the message
+    fn check_if_message_input_matches_database(
+        input: &Input,
+        db_message: &Message,
+    ) -> anyhow::Result<()> {
         match input {
-            Input::MessageSigned {
-                message_id,
+            Input::MessageDataSigned(MessageDataSigned {
                 sender,
                 recipient,
                 nonce,
                 amount,
-                data,
                 ..
-            }
-            | Input::MessagePredicate {
-                message_id,
+            })
+            | Input::MessageDataPredicate(MessageDataPredicate {
                 sender,
                 recipient,
                 nonce,
                 amount,
-                data,
                 ..
-            } => {
-                let computed_id =
-                    Input::compute_message_id(sender, recipient, *nonce, *amount, data);
-                if message_id != &computed_id {
-                    return Err(Error::NotInsertedIoWrongMessageId.into())
+            })
+            | Input::MessageCoinSigned(MessageCoinSigned {
+                sender,
+                recipient,
+                nonce,
+                amount,
+                ..
+            })
+            | Input::MessageCoinPredicate(MessageCoinPredicate {
+                sender,
+                recipient,
+                nonce,
+                amount,
+                ..
+            }) => {
+                let expected_data = if db_message.data.is_empty() {
+                    None
+                } else {
+                    Some(db_message.data.as_slice())
+                };
+                if &db_message.sender != sender
+                    || &db_message.recipient != recipient
+                    || &db_message.nonce != nonce
+                    || &db_message.amount != amount
+                    || expected_data != input.input_data()
+                {
+                    return Err(Error::NotInsertedIoMessageMismatch.into())
                 }
             }
             _ => {}
@@ -311,7 +348,7 @@ impl Dependency {
         usize,
         HashMap<UtxoId, CoinState>,
         HashMap<ContractId, ContractState>,
-        HashMap<MessageId, MessageState>,
+        HashMap<Nonce, MessageState>,
         Vec<TxId>,
     )> {
         let mut collided: Vec<TxId> = Vec::new();
@@ -319,12 +356,12 @@ impl Dependency {
         let mut max_depth = 0;
         let mut db_coins: HashMap<UtxoId, CoinState> = HashMap::new();
         let mut db_contracts: HashMap<ContractId, ContractState> = HashMap::new();
-        let mut db_messages: HashMap<MessageId, MessageState> = HashMap::new();
+        let mut db_messages: HashMap<Nonce, MessageState> = HashMap::new();
         for input in tx.inputs() {
             // check if all required inputs are here.
             match input {
-                Input::CoinSigned { utxo_id, .. }
-                | Input::CoinPredicate { utxo_id, .. } => {
+                Input::CoinSigned(CoinSigned { utxo_id, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     // is it dependent output?
                     if let Some(state) = self.coins.get(utxo_id) {
                         // check depth
@@ -392,33 +429,37 @@ impl Dependency {
                     );
                     // yey we got our coin
                 }
-                Input::MessagePredicate { message_id, .. }
-                | Input::MessageSigned { message_id, .. } => {
-                    // verify message id integrity
-                    Self::check_if_message_input_matches_id(input)?;
+                Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
+                | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
+                | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
+                | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
                     // since message id is derived, we don't need to double check all the fields
                     if self.utxo_validation {
-                        if db.message(message_id)?.is_some() {
+                        if let Some(db_message) = db.message(nonce)? {
+                            // verify message id integrity
+                            Self::check_if_message_input_matches_database(
+                                input,
+                                &db_message,
+                            )?;
                             // return an error if spent block is set
-                            if db.is_message_spent(message_id)? {
-                                return Err(Error::NotInsertedInputMessageIdSpent(
-                                    *message_id,
+                            if db.is_message_spent(nonce)? {
+                                return Err(
+                                    Error::NotInsertedInputMessageSpent(*nonce).into()
                                 )
-                                .into())
                             }
                         } else {
                             return Err(
-                                Error::NotInsertedInputMessageUnknown(*message_id).into()
+                                Error::NotInsertedInputMessageUnknown(*nonce).into()
                             )
                         }
                     }
 
-                    if let Some(state) = self.messages.get(message_id) {
+                    if let Some(state) = self.messages.get(nonce) {
                         // some other is already attempting to spend this message, compare gas price
                         if state.gas_price >= tx.price() {
                             return Err(Error::NotInsertedCollisionMessageId(
                                 state.spent_by,
-                                *message_id,
+                                *nonce,
                             )
                             .into())
                         } else {
@@ -426,14 +467,14 @@ impl Dependency {
                         }
                     }
                     db_messages.insert(
-                        *message_id,
+                        *nonce,
                         MessageState {
                             spent_by: tx.id(),
                             gas_price: tx.price(),
                         },
                     );
                 }
-                Input::Contract { contract_id, .. } => {
+                Input::Contract(Contract { contract_id, .. }) => {
                     // Does contract exist. We don't need to do any check here other then if contract_id exist or not.
                     if let Some(state) = self.contracts.get(contract_id) {
                         // check if contract is created after this transaction.
@@ -533,14 +574,14 @@ impl Dependency {
         // iterate over all inputs and spend parent coins/contracts
         for input in tx.inputs() {
             match input {
-                Input::CoinSigned { utxo_id, .. }
-                | Input::CoinPredicate { utxo_id, .. } => {
+                Input::CoinSigned(CoinSigned { utxo_id, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     // spend coin
                     if let Some(state) = self.coins.get_mut(utxo_id) {
                         state.is_spend_by = Some(tx.id());
                     }
                 }
-                Input::Contract { contract_id, .. } => {
+                Input::Contract(Contract { contract_id, .. }) => {
                     // Contract that we want to use can be already inside dependency (this case)
                     // or it will be added when db_contracts extends self.contracts (and it
                     // already contains changed used_by)
@@ -548,7 +589,10 @@ impl Dependency {
                         state.used_by.insert(tx.id());
                     }
                 }
-                Input::MessageSigned { .. } | Input::MessagePredicate { .. } => {}
+                Input::MessageCoinSigned(_)
+                | Input::MessageCoinPredicate(_)
+                | Input::MessageDataSigned(_)
+                | Input::MessageDataPredicate(_) => {}
             }
         }
 
@@ -586,9 +630,6 @@ impl Dependency {
                         },
                     );
                 }
-                Output::Message { .. } => {
-                    // withdrawal does nothing and it should not be found in dependency.
-                }
                 Output::Contract { .. } => {
                     // do nothing, this contract is already already found in dependencies.
                     // as it is tied with input and used_by is already inserted.
@@ -610,7 +651,7 @@ impl Dependency {
         // recursively remove all transactions that depend on the outputs of the current tx
         for (index, output) in tx.outputs().iter().enumerate() {
             match output {
-                Output::Message { .. } | Output::Contract { .. } => {
+                Output::Contract { .. } => {
                     // no other transactions can depend on these types of outputs
                 }
                 Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
@@ -655,8 +696,8 @@ impl Dependency {
         // remove this transaction as a dependency of its' inputs.
         for input in tx.inputs() {
             match input {
-                Input::CoinSigned { utxo_id, .. }
-                | Input::CoinPredicate { utxo_id, .. } => {
+                Input::CoinSigned(CoinSigned { utxo_id, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     // Input coin cases
                     // 1. coin state was already removed if parent tx was also removed, no cleanup required.
                     // 2. coin state spent_by needs to be freed from this tx if parent tx isn't being removed
@@ -671,7 +712,7 @@ impl Dependency {
                         }
                     }
                 }
-                Input::Contract { contract_id, .. } => {
+                Input::Contract(Contract { contract_id, .. }) => {
                     // Input contract cases
                     // 1. contract state no longer exists because the parent tx that created the
                     //    contract was already removed from the graph
@@ -686,9 +727,11 @@ impl Dependency {
                         }
                     }
                 }
-                Input::MessageSigned { message_id, .. }
-                | Input::MessagePredicate { message_id, .. } => {
-                    self.messages.remove(message_id);
+                Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
+                | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
+                | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
+                | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
+                    self.messages.remove(nonce);
                 }
             }
         }
@@ -722,15 +765,15 @@ mod tests {
             amount: 10,
             asset_id: AssetId::default(),
         };
-        let input = Input::CoinSigned {
-            utxo_id: UtxoId::default(),
-            owner: Address::default(),
-            amount: 10,
-            asset_id: AssetId::default(),
-            tx_pointer: Default::default(),
-            witness_index: 0,
-            maturity: 0,
-        };
+        let input = Input::coin_signed(
+            UtxoId::default(),
+            Address::default(),
+            10,
+            AssetId::default(),
+            Default::default(),
+            0,
+            0,
+        );
         let out =
             Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_ok(), "test1. It should be Ok");
@@ -819,20 +862,6 @@ mod tests {
             "test6"
         );
 
-        let output = Output::Message {
-            recipient: Default::default(),
-            amount: 0,
-        };
-
-        let out =
-            Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
-        assert!(out.is_err(), "test7 There should be error");
-        assert_eq!(
-            out.err().unwrap().downcast_ref(),
-            Some(&Error::NotInsertedIoMessageInput),
-            "test7"
-        );
-
         let output = Output::ContractCreated {
             contract_id: ContractId::default(),
             state_root: Bytes32::default(),
@@ -844,7 +873,7 @@ mod tests {
         assert_eq!(
             out.err().unwrap().downcast_ref(),
             Some(&Error::NotInsertedIoContractOutput),
-            "test8"
+            "test7"
         );
     }
 }

@@ -1,6 +1,8 @@
 #![cfg(feature = "test-helpers")]
+
+use ethers_core::types::U256;
 use fuel_core_relayer::{
-    bridge::SentMessageFilter,
+    bridge::MessageSentFilter,
     mock_db::MockDb,
     new_service_test,
     ports::RelayerDb,
@@ -87,9 +89,10 @@ async fn can_get_messages() {
 
     let config = Config::default();
     let contract_address = config.eth_v2_listening_contracts[0];
-    let message = |nonce, block_number: u64| {
-        let message = SentMessageFilter {
-            nonce,
+    let message = |nonce: u64, block_number: u64| {
+        let message = MessageSentFilter {
+            nonce: U256::from_dec_str(nonce.to_string().as_str())
+                .expect("Should convert to U256"),
             ..Default::default()
         };
         let mut log = message.into_log();
@@ -110,7 +113,7 @@ async fn can_get_messages() {
     relayer.shared.await_synced().await.unwrap();
 
     for msg in expected_messages {
-        assert_eq!(&mock_db.get_message(msg.id()).unwrap(), msg.message());
+        assert_eq!(mock_db.get_message(msg.id()).unwrap(), msg);
     }
 }
 

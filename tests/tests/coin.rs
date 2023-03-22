@@ -15,7 +15,7 @@ use fuel_core_storage::{
     StorageAsMut,
 };
 use fuel_core_types::{
-    entities::coin::Coin,
+    entities::coins::coin::Coin,
     fuel_asm::*,
     fuel_tx::*,
 };

@@ -71,12 +71,12 @@ pub struct ApplicationHeader<Generated> {
 pub struct GeneratedApplicationFields {
     /// Number of transactions in this block.
     pub transactions_count: u64,
-    /// Number of output messages in this block.
-    pub output_messages_count: u64,
+    /// Number of message receipts in this block.
+    pub message_receipt_count: u64,
     /// Merkle root of transactions.
     pub transactions_root: Bytes32,
-    /// Merkle root of messages in this block.
-    pub output_messages_root: Bytes32,
+    /// Merkle root of message receipts in this block.
+    pub message_receipt_root: Bytes32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -248,15 +248,15 @@ impl PartialBlockHeader {
         for id in message_ids {
             message_tree.push(id.as_ref());
         }
-        let output_messages_root = message_tree.root().into();
+        let message_receipt_root = message_tree.root().into();
 
         let application = ApplicationHeader {
             da_height: self.application.da_height,
             generated: GeneratedApplicationFields {
                 transactions_count: transactions.len() as u64,
-                output_messages_count: message_ids.len() as u64,
+                message_receipt_count: message_ids.len() as u64,
                 transactions_root,
-                output_messages_root,
+                message_receipt_root,
             },
         };
 
@@ -299,9 +299,9 @@ impl ApplicationHeader<GeneratedApplicationFields> {
         let mut hasher = crate::fuel_crypto::Hasher::default();
         hasher.input(&self.da_height.to_bytes()[..]);
         hasher.input(self.transactions_count.to_be_bytes());
-        hasher.input(self.output_messages_count.to_be_bytes());
+        hasher.input(self.message_receipt_count.to_be_bytes());
         hasher.input(self.transactions_root.as_ref());
-        hasher.input(self.output_messages_root.as_ref());
+        hasher.input(self.message_receipt_root.as_ref());
         hasher.digest()
     }
 }

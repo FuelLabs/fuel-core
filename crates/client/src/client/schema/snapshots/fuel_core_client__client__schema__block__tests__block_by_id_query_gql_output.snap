@@ -9,9 +9,9 @@ query($id: BlockId) {
       id
       daHeight
       transactionsCount
-      outputMessagesCount
+      messageReceiptCount
       transactionsRoot
-      outputMessagesRoot
+      messageReceiptRoot
       height
       prevRoot
       time

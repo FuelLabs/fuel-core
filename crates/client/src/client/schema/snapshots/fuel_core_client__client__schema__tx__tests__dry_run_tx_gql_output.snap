@@ -31,7 +31,6 @@ mutation($tx: HexString!, $utxoValidation: Boolean) {
     result
     gasUsed
     data
-    messageId
     sender
     recipient
     nonce

@@ -11,6 +11,7 @@ use fuel_core_types::{
             Outputs,
         },
         Address,
+        AssetId,
         ContractId,
         Finalizable,
         Input,
@@ -239,22 +240,14 @@ fn script_tx(
             Default::default(),
             0,
         )
-        .add_input(Input::Contract {
-            utxo_id: Default::default(),
-            balance_root: Default::default(),
-            state_root: Default::default(),
-            tx_pointer: Default::default(),
+        .add_input(Input::contract(
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
             contract_id,
-        })
-        .add_output(Output::Change {
-            amount: 0,
-            asset_id: Default::default(),
-            to: change_owner,
-        })
-        .add_output(Output::Contract {
-            input_index: 1,
-            balance_root: Default::default(),
-            state_root: Default::default(),
-        })
+        ))
+        .add_output(Output::change(change_owner, 0, AssetId::default()))
+        .add_output(Output::contract(1, Default::default(), Default::default()))
         .finalize()
 }

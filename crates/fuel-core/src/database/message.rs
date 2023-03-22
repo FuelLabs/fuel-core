@@ -1,4 +1,5 @@
 use crate::database::{
+    storage::ToDatabaseKey,
     Column,
     Database,
     Result as DatabaseResult,
@@ -16,14 +17,10 @@ use fuel_core_storage::{
     StorageMutate,
 };
 use fuel_core_types::{
-    entities::message::{
-        Message,
-        MessageStatus,
-    },
+    entities::message::Message,
     fuel_types::{
         Address,
-        Bytes32,
-        MessageId,
+        Nonce,
     },
 };
 use std::{
@@ -36,11 +33,13 @@ use super::storage::DatabaseColumn;
 impl StorageInspect<Messages> for Database {
     type Error = StorageError;
 
-    fn get(&self, key: &MessageId) -> Result<Option<Cow<Message>>, Self::Error> {
+    fn get(&self, key: &Nonce) -> Result<Option<Cow<Message>>, Self::Error> {
+        let key = key.database_key();
         Database::get(self, key.as_ref(), Column::Messages).map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &MessageId) -> Result<bool, Self::Error> {
+    fn contains_key(&self, key: &Nonce) -> Result<bool, Self::Error> {
+        let key = key.database_key();
         Database::contains_key(self, key.as_ref(), Column::Messages).map_err(Into::into)
     }
 }
@@ -48,11 +47,12 @@ impl StorageInspect<Messages> for Database {
 impl StorageMutate<Messages> for Database {
     fn insert(
         &mut self,
-        key: &MessageId,
+        key: &Nonce,
         value: &Message,
     ) -> Result<Option<Message>, Self::Error> {
         // insert primary record
-        let result = Database::insert(self, key.as_ref(), Column::Messages, value)?;
+        let result =
+            Database::insert(self, key.database_key().as_ref(), Column::Messages, value)?;
 
         // insert secondary record by owner
         let _: Option<bool> = Database::insert(
@@ -65,9 +65,9 @@ impl StorageMutate<Messages> for Database {
         Ok(result)
     }
 
-    fn remove(&mut self, key: &MessageId) -> Result<Option<Message>, Self::Error> {
+    fn remove(&mut self, key: &Nonce) -> Result<Option<Message>, Self::Error> {
         let result: Option<Message> =
-            Database::remove(self, key.as_ref(), Column::Messages)?;
+            Database::remove(self, key.database_key().as_ref(), Column::Messages)?;
 
         if let Some(message) = &result {
             Database::remove::<bool>(
@@ -91,26 +91,26 @@ impl Database {
     pub fn owned_message_ids(
         &self,
         owner: &Address,
-        start_message_id: Option<MessageId>,
+        start_message_id: Option<Nonce>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<MessageId>> + '_ {
+    ) -> impl Iterator<Item = DatabaseResult<Nonce>> + '_ {
         self.iter_all_filtered::<Vec<u8>, bool, _, _>(
             Column::OwnedMessageIds,
             Some(*owner),
             start_message_id.map(|msg_id| owner_msg_id_key(owner, &msg_id)),
             direction,
         )
-        // Safety: key is always 64 bytes
         .map(|res| {
             res.map(|(key, _)| {
-                MessageId::new(unsafe { *Bytes32::from_slice_unchecked(&key[32..64]) })
+                Nonce::try_from(&key[Address::LEN..Address::LEN + Nonce::LEN])
+                    .expect("key is always {Nonce::LEN} bytes")
             })
         })
     }
 
     pub fn all_messages(
         &self,
-        start: Option<MessageId>,
+        start: Option<Nonce>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = DatabaseResult<Message>> + '_ {
         let start = start.map(|v| v.deref().to_vec());
@@ -124,7 +124,7 @@ impl Database {
             .filter_map(|msg| {
                 // Return only unspent messages
                 if let Ok(msg) = msg {
-                    match self.is_message_spent(&msg.id()) {
+                    match self.is_message_spent(msg.id()) {
                         Ok(false) => Some(Ok(msg)),
                         Ok(true) => None,
                         Err(e) => Some(Err(e)),
@@ -150,29 +150,17 @@ impl Database {
         Ok(Some(configs))
     }
 
-    pub fn is_message_spent(&self, message_id: &MessageId) -> StorageResult<bool> {
-        fuel_core_storage::StorageAsRef::storage::<SpentMessages>(&self)
-            .contains_key(message_id)
-    }
-
-    pub fn message_status(&self, message_id: &MessageId) -> StorageResult<MessageStatus> {
-        if self.is_message_spent(message_id)? {
-            Ok(MessageStatus::Spent)
-        } else {
-            Ok(MessageStatus::Unspent)
-        }
+    pub fn is_message_spent(&self, id: &Nonce) -> StorageResult<bool> {
+        fuel_core_storage::StorageAsRef::storage::<SpentMessages>(&self).contains_key(id)
     }
 }
 
 // TODO: Reuse `fuel_vm::storage::double_key` macro.
-/// Get a Key by chaining Owner + MessageId
-fn owner_msg_id_key(
-    owner: &Address,
-    msg_id: &MessageId,
-) -> [u8; Address::LEN + MessageId::LEN] {
-    let mut default = [0u8; Address::LEN + MessageId::LEN];
+/// Get a Key by chaining Owner + Nonce
+fn owner_msg_id_key(owner: &Address, nonce: &Nonce) -> [u8; Address::LEN + Nonce::LEN] {
+    let mut default = [0u8; Address::LEN + Nonce::LEN];
     default[0..Address::LEN].copy_from_slice(owner.as_ref());
-    default[Address::LEN..].copy_from_slice(msg_id.as_ref());
+    default[Address::LEN..].copy_from_slice(nonce.as_ref());
     default
 }
 
@@ -187,14 +175,14 @@ mod tests {
         let message = Message::default();
 
         // insert a message with the first id
-        let first_id = MessageId::new([1; 32]);
+        let first_id = 1.into();
         let _ = db
             .storage::<Messages>()
             .insert(&first_id, &message)
             .unwrap();
 
         // insert a message with the second id with the same Owner
-        let second_id = MessageId::new([2; 32]);
+        let second_id = 2.into();
         let _ = db
             .storage::<Messages>()
             .insert(&second_id, &message)

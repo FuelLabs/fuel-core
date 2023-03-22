@@ -1,3 +1,4 @@
+use ethers_core::types::U256;
 use std::{
     ops::RangeInclusive,
     sync::atomic::{
@@ -7,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    abi::bridge::SentMessageFilter,
+    abi::bridge::MessageSentFilter,
     service::state::EthSyncGap,
     test_helpers::{
         middleware::{
@@ -39,8 +40,9 @@ fn messages(
 }
 
 fn message(nonce: u64, block_number: u64, contract_address: u32) -> Log {
-    let message = SentMessageFilter {
-        nonce,
+    let message = MessageSentFilter {
+        nonce: U256::from_dec_str(nonce.to_string().as_str())
+            .expect("Should convert into U256"),
         ..Default::default()
     };
     let mut log = message.into_log();
