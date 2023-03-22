@@ -369,6 +369,11 @@ type InputMessage {
 }
 
 
+type MerkleProof {
+	proofSet: [Bytes32!]!
+	proofIndex: U64!
+}
+
 type Message {
 	amount: U64!
 	sender: Address!
@@ -419,15 +424,15 @@ type MessageEdge {
 scalar MessageId
 
 type MessageProof {
-	proofSet: [Bytes32!]!
-	proofIndex: U64!
+	messageProof: MerkleProof!
+	blockProof: MerkleProof!
+	messageBlockHeader: Header!
+	commitBlockHeader: Header!
 	sender: Address!
 	recipient: Address!
 	nonce: Nonce!
 	amount: U64!
 	data: HexString!
-	signature: Signature!
-	header: Header!
 }
 
 type Mutation {
@@ -553,7 +558,7 @@ type Query {
 	contractBalances(filter: ContractBalanceFilterInput!, first: Int, after: String, last: Int, before: String): ContractBalanceConnection!
 	nodeInfo: NodeInfo!
 	messages(owner: Address, first: Int, after: String, last: Int, before: String): MessageConnection!
-	messageProof(transactionId: TransactionId!, messageId: MessageId!): MessageProof
+	messageProof(transactionId: TransactionId!, messageId: MessageId!, commitBlockId: BlockId, commitBlockHeight: U64): MessageProof
 }
 
 type Receipt {

@@ -17,12 +17,14 @@ use fuel_core_client::client::{
 use fuel_core_types::{
     fuel_asm::*,
     fuel_crypto::*,
+    fuel_merkle,
     fuel_tx::{
         input::message::compute_message_id,
         *,
     },
 };
 use rstest::rstest;
+use std::ops::Deref;
 
 #[cfg(feature = "relayer")]
 mod relayer;
@@ -181,7 +183,9 @@ async fn messages_empty_results_for_owner_with_no_messages(
 #[tokio::test]
 async fn can_get_message_proof() {
     for n in [1, 2, 10] {
-        let config = Config::local_node();
+        let mut config = Config::local_node();
+        config.manual_blocks_enabled = true;
+
         let coin = config
             .chain_conf
             .initial_state
@@ -342,6 +346,9 @@ async fn can_get_message_proof() {
             Ok(TransactionStatus::Success { .. })
         );
 
+        // Produce one more block, because we can't create proof for the last block.
+        let last_height = client.produce_blocks(1, None).await.unwrap();
+
         // Get the receipts from the contract call.
         let receipts = client
             .receipts(transaction_id.to_string().as_str())
@@ -361,6 +368,8 @@ async fn can_get_message_proof() {
                 .message_proof(
                     transaction_id.to_string().as_str(),
                     message_id.to_string().as_str(),
+                    None,
+                    Some(last_height),
                 )
                 .await
                 .unwrap()
@@ -381,75 +390,91 @@ async fn can_get_message_proof() {
 
             // 2. Generate the block id. (full header)
             let mut hasher = Hasher::default();
-            hasher.input(Bytes32::from(result.header.prev_root).as_ref());
-            hasher
-                .input(&u32::try_from(result.header.height.0).unwrap().to_be_bytes()[..]);
-            hasher.input(result.header.time.0 .0.to_be_bytes());
-            hasher.input(Bytes32::from(result.header.application_hash).as_ref());
-            let block_id = hasher.digest();
-            assert_eq!(block_id, Bytes32::from(result.header.id));
+            hasher.input(Bytes32::from(result.message_block_header.prev_root).as_ref());
+            hasher.input(
+                &u32::try_from(result.message_block_header.height.0)
+                    .unwrap()
+                    .to_be_bytes()[..],
+            );
+            hasher.input(result.message_block_header.time.0 .0.to_be_bytes());
+            hasher.input(
+                Bytes32::from(result.message_block_header.application_hash).as_ref(),
+            );
+            let message_block_id = hasher.digest();
+            assert_eq!(
+                message_block_id,
+                Bytes32::from(result.message_block_header.id)
+            );
 
-            // 3. Verify the proof. (message_id, proof set, root, index, num_message_ids)
+            // 3. Verify the message proof. (message receipt root, message id, proof index, proof set, num message receipts in the block)
+            let message_proof_index = result.message_proof.proof_index.0;
+            let message_proof_set: Vec<_> = result
+                .message_proof
+                .proof_set
+                .iter()
+                .cloned()
+                .map(Bytes32::from)
+                .collect();
             assert!(verify_merkle(
-                result.header.message_receipt_root.clone().into(),
-                result.proof_index.0,
                 result
-                    .proof_set
-                    .iter()
-                    .cloned()
-                    .map(Bytes32::from)
-                    .collect(),
-                result.header.message_receipt_count.0,
+                    .message_block_header
+                    .message_receipt_root
+                    .clone()
+                    .into(),
                 generated_message_id,
+                message_proof_index,
+                &message_proof_set,
+                result.message_block_header.message_receipt_count.0,
             ));
 
             // Generate a proof to compare
-            let mut tree =
-                fuel_core_types::fuel_merkle::binary::in_memory::MerkleTree::new();
+            let mut tree = fuel_merkle::binary::in_memory::MerkleTree::new();
             for id in &message_ids {
                 tree.push(id.as_ref());
             }
-            let (expected_root, expected_set) = tree.prove(result.proof_index.0).unwrap();
+            let (expected_root, expected_set) = tree.prove(message_proof_index).unwrap();
+            let expected_set: Vec<_> =
+                expected_set.into_iter().map(Bytes32::from).collect();
 
-            let result_proof = result
-                .proof_set
-                .iter()
-                .map(|p| *Bytes32::from(p.clone()))
-                .collect::<Vec<_>>();
-            assert_eq!(result_proof, expected_set);
+            assert_eq!(message_proof_set, expected_set);
 
             // Check the root matches the proof and the root on the header.
             assert_eq!(
-                <[u8; 32]>::from(Bytes32::from(result.header.message_receipt_root)),
+                <[u8; 32]>::from(Bytes32::from(
+                    result.message_block_header.message_receipt_root
+                )),
                 expected_root
             );
 
-            // 4. Verify the signature. (block_id, signature)
-            assert!(verify_signature(block_id.into(), result.signature));
+            // 4. Verify the block proof. (prev_root, block id, proof index, proof set, block count)
+            let block_proof_index = result.block_proof.proof_index.0;
+            let block_proof_set: Vec<_> = result
+                .block_proof
+                .proof_set
+                .iter()
+                .cloned()
+                .map(Bytes32::from)
+                .collect();
+            let blocks_count = result.commit_block_header.height.0;
+            assert!(verify_merkle(
+                result.commit_block_header.prev_root.clone().into(),
+                message_block_id,
+                block_proof_index,
+                &block_proof_set,
+                blocks_count,
+            ));
         }
     }
 }
 
 // TODO: Others test:  Data missing etc.
-
-fn verify_merkle(
-    _root: Bytes32,
-    _index: u64,
-    _set: Vec<Bytes32>,
-    _leaf_count: u64,
-    _message_id: MessageId,
+fn verify_merkle<D: AsRef<[u8]>>(
+    root: Bytes32,
+    data: D,
+    index: u64,
+    set: &[Bytes32],
+    leaf_count: u64,
 ) -> bool {
-    // TODO: Verify using merkle tree verify().
-    true
-}
-
-fn verify_signature(
-    block_id: fuel_core_types::blockchain::primitives::BlockId,
-    signature: fuel_core_client::client::schema::Signature,
-) -> bool {
-    let bytes: Bytes64 = signature.into();
-    let signature = Signature::from_bytes(bytes.into());
-    let m = block_id.as_message();
-    let public_key = signature.recover(m).unwrap();
-    signature.verify(&public_key, m).is_ok()
+    let set: Vec<_> = set.iter().map(|bytes| *bytes.deref()).collect();
+    fuel_merkle::binary::verify(root.deref(), data, &set, index, leaf_count)
 }

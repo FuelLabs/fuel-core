@@ -28,7 +28,10 @@ use fuel_core_types::{
         BlockId,
         DaBlockHeight,
     },
-    entities::message::Message,
+    entities::message::{
+        MerkleProof,
+        Message,
+    },
     fuel_tx::{
         Receipt,
         Transaction,
@@ -64,6 +67,7 @@ pub trait DatabasePort:
     + DatabaseCoins
     + DatabaseContracts
     + DatabaseChain
+    + DatabaseMessageProof
 {
 }
 
@@ -179,4 +183,15 @@ pub trait ConsensusModulePort: Send + Sync {
         start_time: Option<Tai64>,
         number_of_blocks: u32,
     ) -> anyhow::Result<()>;
+}
+
+/// Trait that specifies queries supported by the database.
+pub trait DatabaseMessageProof: Send + Sync {
+    /// Gets the [`MerkleProof`] for the message block at `message_block_height` height
+    /// relatively to the commit block where message block <= commit block.
+    fn block_history_prove(
+        &self,
+        message_block_height: &BlockHeight,
+        commit_block_height: &BlockHeight,
+    ) -> StorageResult<MerkleProof>;
 }

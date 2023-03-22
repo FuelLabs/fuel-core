@@ -749,12 +749,20 @@ impl FuelClient {
         &self,
         transaction_id: &str,
         message_id: &str,
+        commit_block_id: Option<&str>,
+        commit_block_height: Option<u64>,
     ) -> io::Result<Option<schema::message::MessageProof>> {
         let transaction_id: schema::TransactionId = transaction_id.parse()?;
         let message_id: schema::MessageId = message_id.parse()?;
+        let commit_block_id: Option<schema::BlockId> = commit_block_id
+            .map(|commit_block_id| commit_block_id.parse())
+            .transpose()?;
+        let commit_block_height = commit_block_height.map(Into::into);
         let query = schema::message::MessageProofQuery::build(MessageProofArgs {
             transaction_id,
             message_id,
+            commit_block_id,
+            commit_block_height,
         });
 
         let proof = self.query(query).await?.message_proof;

@@ -102,3 +102,6 @@ prometheus-client = "0.18"
 itertools = "0.10"
 insta = "1.8"
 tempfile = "3.4"
+
+[patch.crates-io]
+fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "feature/public-verify" }
