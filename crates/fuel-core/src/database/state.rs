@@ -349,7 +349,7 @@ mod tests {
     fn remove_deletes_merkle_metadata_when_empty() {
         let contract_id = ContractId::from([1u8; 32]);
         let state_key = Bytes32::new([1u8; 32]);
-        let state: Bytes32 = Bytes32::from([0xff; 32]);
+        let state = Bytes32::from([0xff; 32]);
         let key = (&contract_id, &state_key).into();
         let database = &mut Database::default();
 
