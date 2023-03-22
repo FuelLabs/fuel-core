@@ -266,7 +266,7 @@ mod tests {
 
         // Write the first contract state
         let state_key = Bytes32::from([1u8; 32]);
-        let state: Bytes32 = Bytes32::from([0xff; 32]);
+        let state = Bytes32::from([0xff; 32]);
         let key = (&contract_id, &state_key).into();
         database
             .storage::<ContractsState>()
@@ -281,7 +281,7 @@ mod tests {
 
         // Write the second contract state
         let state_key = Bytes32::from([2u8; 32]);
-        let state: Bytes32 = Bytes32::from([0xff; 32]);
+        let state = Bytes32::from([0xff; 32]);
         let key = (&contract_id, &state_key).into();
         database
             .storage::<ContractsState>()
@@ -304,7 +304,7 @@ mod tests {
 
         // Write the first contract state
         let state_key = Bytes32::new([1u8; 32]);
-        let state: Bytes32 = Bytes32::from([0xff; 32]);
+        let state = Bytes32::from([0xff; 32]);
         let key = (&contract_id, &state_key).into();
         database
             .storage::<ContractsState>()
@@ -317,7 +317,7 @@ mod tests {
 
         // Write the second contract state
         let state_key = Bytes32::new([2u8; 32]);
-        let state: Bytes32 = Bytes32::from([0xff; 32]);
+        let state = Bytes32::from([0xff; 32]);
         let key = (&contract_id, &state_key).into();
         database
             .storage::<ContractsState>()
