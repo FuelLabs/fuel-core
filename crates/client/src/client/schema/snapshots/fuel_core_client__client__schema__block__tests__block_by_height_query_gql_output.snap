@@ -9,9 +9,9 @@ query($height: U64) {
       id
       daHeight
       transactionsCount
-      outputMessagesCount
+      messageReceiptCount
       transactionsRoot
-      outputMessagesRoot
+      messageReceiptRoot
       height
       prevRoot
       time

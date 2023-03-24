@@ -701,6 +701,7 @@ mod tests {
             .arg(&manifest_path)
             .output()
             .unwrap();
+        println!("{}", String::from_utf8(output.stderr).unwrap());
         assert!(output.status.success());
     }
 

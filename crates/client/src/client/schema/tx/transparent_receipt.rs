@@ -8,7 +8,7 @@ use crate::client::schema::{
     ConversionError,
     ConversionError::MissingField,
     HexString,
-    MessageId,
+    Nonce,
     U64,
 };
 use fuel_core_types::{
@@ -42,10 +42,9 @@ pub struct Receipt {
     pub result: Option<U64>,
     pub gas_used: Option<U64>,
     pub data: Option<HexString>,
-    pub message_id: Option<MessageId>,
     pub sender: Option<Address>,
     pub recipient: Option<Address>,
-    pub nonce: Option<Bytes32>,
+    pub nonce: Option<Nonce>,
     pub contract_id: Option<ContractId>,
 }
 
@@ -301,10 +300,6 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .into(),
             },
             ReceiptType::MessageOut => fuel_tx::Receipt::MessageOut {
-                message_id: schema
-                    .message_id
-                    .ok_or_else(|| MissingField("message_id".to_string()))?
-                    .into(),
                 sender: schema
                     .sender
                     .ok_or_else(|| MissingField("sender".to_string()))?

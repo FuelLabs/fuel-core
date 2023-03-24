@@ -12,7 +12,7 @@ use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::message::Message,
     fuel_tx::Receipt,
-    fuel_types::MessageId,
+    fuel_types::Nonce,
     services::executor::{
         ExecutionBlock,
         Result as ExecutorResult,
@@ -57,7 +57,7 @@ impl ContractStorageTrait for Database {
 impl crate::executor::RelayerPort for MaybeRelayerAdapter {
     fn get_message(
         &self,
-        id: &MessageId,
+        id: &Nonce,
         da_height: &DaBlockHeight,
     ) -> anyhow::Result<Option<Message>> {
         #[cfg(feature = "relayer")]

@@ -50,8 +50,8 @@ impl BalanceQueryData for Database {
             None,
             self,
         )
-        .resources()
-        .map(|res| res.map(|resource| *resource.amount()))
+        .coins()
+        .map(|res| res.map(|coins| coins.amount()))
         .try_fold(0u64, |mut balance, res| -> StorageResult<_> {
             let amount = res?;
 
@@ -76,11 +76,11 @@ impl BalanceQueryData for Database {
         let mut amounts_per_asset = HashMap::new();
         let mut errors = vec![];
 
-        for resource in AssetsQuery::new(&owner, None, None, self).resources() {
-            match resource {
-                Ok(resource) => {
-                    *amounts_per_asset.entry(*resource.asset_id()).or_default() +=
-                        resource.amount();
+        for coin in AssetsQuery::new(&owner, None, None, self).coins() {
+            match coin {
+                Ok(coin) => {
+                    *amounts_per_asset.entry(*coin.asset_id()).or_default() +=
+                        coin.amount();
                 }
                 Err(err) => {
                     errors.push(err);

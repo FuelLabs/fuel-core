@@ -5,18 +5,15 @@ use crate::{
         header::BlockHeader,
         primitives::DaBlockHeight,
     },
-    fuel_tx::{
-        Input,
-        Output,
-    },
+    fuel_tx::input::message::compute_message_id,
     fuel_types::{
         Address,
         Bytes32,
         MessageId,
+        Nonce,
         Word,
     },
 };
-use core::ops::Deref;
 
 /// Message send from Da layer to fuel by bridge
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -27,7 +24,7 @@ pub struct Message {
     /// Fuel account receiving the message
     pub recipient: Address,
     /// Nonce must be unique. It's used to prevent replay attacks
-    pub nonce: Word,
+    pub nonce: Nonce,
     /// The amount of the base asset of Fuel chain sent along this message
     pub amount: Word,
     /// Arbitrary message data
@@ -37,29 +34,21 @@ pub struct Message {
 }
 
 impl Message {
+    /// Returns the id of the message
+    pub fn id(&self) -> &Nonce {
+        &self.nonce
+    }
+
     /// Computed message id
-    pub fn id(&self) -> MessageId {
-        Input::compute_message_id(
+    pub fn message_id(&self) -> MessageId {
+        compute_message_id(
             &self.sender,
             &self.recipient,
-            self.nonce,
+            &self.nonce,
             self.amount,
             &self.data,
         )
     }
-
-    /// Compute checked message
-    pub fn check(self) -> CheckedMessage {
-        let id = self.id();
-        CheckedMessage { message: self, id }
-    }
-}
-
-/// A message associated with precomputed id
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct CheckedMessage {
-    message: Message,
-    id: MessageId,
 }
 
 /// Proves to da layer that this message was included in a Fuel block
@@ -77,71 +66,22 @@ pub struct MessageProof {
     /// The messages recipient address.
     pub recipient: Address,
     /// The nonce from the message.
-    pub nonce: Bytes32,
+    pub nonce: Nonce,
     /// The amount from the message.
     pub amount: Word,
     /// The data from the message.
     pub data: Vec<u8>,
 }
 
-/// Whether the message has been spent or not
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Default)]
-#[repr(u8)]
-pub enum MessageStatus {
-    #[default]
-    /// Message has not been spent
-    Unspent,
-    /// Message has been spent
-    Spent,
-}
-
 impl MessageProof {
     /// Compute message id from the proof
     pub fn message_id(&self) -> MessageId {
-        Output::message_id(
+        compute_message_id(
             &self.sender,
             &self.recipient,
             &self.nonce,
             self.amount,
             &self.data,
         )
-    }
-}
-
-impl CheckedMessage {
-    /// Returned computed message id.
-    pub fn id(&self) -> &MessageId {
-        &self.id
-    }
-
-    /// Returns the message.
-    pub fn message(&self) -> &Message {
-        &self.message
-    }
-
-    /// Unpacks inner values of the checked message.
-    pub fn unpack(self) -> (MessageId, Message) {
-        (self.id, self.message)
-    }
-}
-
-impl From<CheckedMessage> for Message {
-    fn from(checked_message: CheckedMessage) -> Self {
-        checked_message.message
-    }
-}
-
-impl AsRef<Message> for CheckedMessage {
-    fn as_ref(&self) -> &Message {
-        &self.message
-    }
-}
-
-impl Deref for CheckedMessage {
-    type Target = Message;
-
-    fn deref(&self) -> &Self::Target {
-        &self.message
     }
 }

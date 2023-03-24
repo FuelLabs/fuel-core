@@ -166,6 +166,11 @@ type CoinOutput {
 	assetId: AssetId!
 }
 
+"""
+The schema analog of the [`coins::CoinType`].
+"""
+union CoinType = Coin | MessageCoin
+
 union Consensus = Genesis | PoAConsensus
 
 type ConsensusParameters {
@@ -253,7 +258,7 @@ input ExcludeInput {
 	"""
 	Messages to exclude from the selection.
 	"""
-	messages: [MessageId!]!
+	messages: [Nonce!]!
 }
 
 type FailureStatus {
@@ -298,17 +303,17 @@ type Header {
 	"""
 	transactionsCount: U64!
 	"""
-	Number of output messages in this block.
+	Number of message receipts in this block.
 	"""
-	outputMessagesCount: U64!
+	messageReceiptCount: U64!
 	"""
 	Merkle root of transactions.
 	"""
 	transactionsRoot: Bytes32!
 	"""
-	Merkle root of messages in this block.
+	Merkle root of message receipts in this block.
 	"""
-	outputMessagesRoot: Bytes32!
+	messageReceiptRoot: Bytes32!
 	"""
 	Fuel block height.
 	"""
@@ -353,11 +358,10 @@ type InputContract {
 }
 
 type InputMessage {
-	messageId: MessageId!
 	sender: Address!
 	recipient: Address!
 	amount: U64!
-	nonce: U64!
+	nonce: Nonce!
 	witnessIndex: Int!
 	data: HexString!
 	predicate: HexString!
@@ -366,12 +370,20 @@ type InputMessage {
 
 
 type Message {
-	messageId: MessageId!
 	amount: U64!
 	sender: Address!
 	recipient: Address!
-	nonce: U64!
+	nonce: Nonce!
 	data: HexString!
+	daHeight: U64!
+}
+
+type MessageCoin {
+	sender: Address!
+	recipient: Address!
+	nonce: Nonce!
+	amount: U64!
+	assetId: AssetId!
 	daHeight: U64!
 }
 
@@ -406,17 +418,12 @@ type MessageEdge {
 
 scalar MessageId
 
-type MessageOutput {
-	recipient: Address!
-	amount: U64!
-}
-
 type MessageProof {
 	proofSet: [Bytes32!]!
 	proofIndex: U64!
 	sender: Address!
 	recipient: Address!
-	nonce: Bytes32!
+	nonce: Nonce!
 	amount: U64!
 	data: HexString!
 	signature: Signature!
@@ -458,7 +465,9 @@ type NodeInfo {
 	nodeVersion: String!
 }
 
-union Output = CoinOutput | ContractOutput | MessageOutput | ChangeOutput | VariableOutput | ContractCreated
+scalar Nonce
+
+union Output = CoinOutput | ContractOutput | ChangeOutput | VariableOutput | ContractCreated
 
 """
 A separate `Breakpoint` type to be used as an output, as a single
@@ -523,28 +532,28 @@ type Query {
 	"""
 	coin(utxoId: UtxoId!): Coin
 	"""
-	Gets all coins of some `owner` maybe filtered with by `asset_id` per page.
-	It includes `CoinStatus::Spent` and `CoinStatus::Unspent` coins.
+	Gets all unspent coins of some `owner` maybe filtered with by `asset_id` per page.
 	"""
 	coins(filter: CoinFilterInput!, first: Int, after: String, last: Int, before: String): CoinConnection!
+	"""
+	For each `query_per_asset`, get some spendable coins(of asset specified by the query) owned by
+	`owner` that add up at least the query amount. The returned coins can be spent.
+	The number of coins is optimized to prevent dust accumulation.
+	
+	The query supports excluding and maximum the number of coins.
+	
+	Returns:
+	The list of spendable coins per asset from the query. The length of the result is
+	the same as the length of `query_per_asset`. The ordering of assets and `query_per_asset`
+	is the same.
+	"""
+	coinsToSpend(owner: Address!, queryPerAsset: [SpendQueryElementInput!]!, excludedIds: ExcludeInput): [[CoinType!]!]!
 	contract(id: ContractId!): Contract
 	contractBalance(contract: ContractId!, asset: AssetId!): ContractBalance!
 	contractBalances(filter: ContractBalanceFilterInput!, first: Int, after: String, last: Int, before: String): ContractBalanceConnection!
 	nodeInfo: NodeInfo!
 	messages(owner: Address, first: Int, after: String, last: Int, before: String): MessageConnection!
 	messageProof(transactionId: TransactionId!, messageId: MessageId!): MessageProof
-	"""
-	For each `query_per_asset`, get some spendable resources(of asset specified by the query) owned by
-	`owner` that add up at least the query amount. The returned resources are actual resources
-	that can be spent. The number of resources is optimized to prevent dust accumulation.
-	Max number of resources and excluded resources can also be specified.
-	
-	Returns:
-	The list of spendable resources per asset from the query. The length of the result is
-	the same as the length of `query_per_asset`. The ordering of assets and `query_per_asset`
-	is the same.
-	"""
-	resourcesToSpend(owner: Address!, queryPerAsset: [SpendQueryElementInput!]!, excludedIds: ExcludeInput): [[Resource!]!]!
 }
 
 type Receipt {
@@ -572,10 +581,9 @@ type Receipt {
 	result: U64
 	gasUsed: U64
 	data: HexString
-	messageId: MessageId
 	sender: Address
 	recipient: Address
-	nonce: Bytes32
+	nonce: Nonce
 	contractId: ContractId
 }
 
@@ -592,11 +600,6 @@ enum ReceiptType {
 	SCRIPT_RESULT
 	MESSAGE_OUT
 }
-
-"""
-The schema analog of the [`resource::Resource`].
-"""
-union Resource = Coin | Message
 
 enum ReturnType {
 	RETURN

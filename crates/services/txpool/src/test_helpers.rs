@@ -3,7 +3,7 @@
 
 use crate::MockDb;
 use fuel_core_types::{
-    entities::coin::{
+    entities::coins::coin::{
         Coin,
         CompressedCoin,
     },
@@ -13,6 +13,13 @@ use fuel_core_types::{
         Rng,
     },
     fuel_tx::{
+        input::{
+            coin::{
+                CoinPredicate,
+                CoinSigned,
+            },
+            contract::Contract,
+        },
         Input,
         Output,
         UtxoId,
@@ -67,13 +74,12 @@ impl UnsetInput {
     pub fn into_input(self, new_utxo_id: UtxoId) -> Input {
         let mut input = self.0;
         match &mut input {
-            Input::CoinSigned { utxo_id, .. }
-            | Input::CoinPredicate { utxo_id, .. }
-            | Input::Contract { utxo_id, .. } => {
+            Input::CoinSigned(CoinSigned { utxo_id, .. })
+            | Input::CoinPredicate(CoinPredicate { utxo_id, .. })
+            | Input::Contract(Contract { utxo_id, .. }) => {
                 *utxo_id = new_utxo_id;
             }
-            Input::MessageSigned { .. } => {}
-            Input::MessagePredicate { .. } => {}
+            _ => {}
         }
         input
     }

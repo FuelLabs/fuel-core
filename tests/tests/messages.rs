@@ -17,7 +17,10 @@ use fuel_core_client::client::{
 use fuel_core_types::{
     fuel_asm::*,
     fuel_crypto::*,
-    fuel_tx::*,
+    fuel_tx::{
+        input::message::compute_message_id,
+        *,
+    },
 };
 use rstest::rstest;
 
@@ -33,19 +36,19 @@ async fn messages_returns_messages_for_all_owners() {
     // create some messages for owner A
     let first_msg = MessageConfig {
         recipient: owner_a,
-        nonce: 1,
+        nonce: 1.into(),
         ..Default::default()
     };
     let second_msg = MessageConfig {
         recipient: owner_a,
-        nonce: 2,
+        nonce: 2.into(),
         ..Default::default()
     };
 
     // create a message for owner B
     let third_msg = MessageConfig {
         recipient: owner_b,
-        nonce: 3,
+        nonce: 3.into(),
         ..Default::default()
     };
 
@@ -82,19 +85,19 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
     // create some messages for owner A
     let first_msg = MessageConfig {
         recipient: owner_a,
-        nonce: 1,
+        nonce: 1.into(),
         ..Default::default()
     };
     let second_msg = MessageConfig {
         recipient: owner_a,
-        nonce: 2,
+        nonce: 2.into(),
         ..Default::default()
     };
 
     // create a message for owner B
     let third_msg = MessageConfig {
         recipient: owner_b,
-        nonce: 3,
+        nonce: 3.into(),
         ..Default::default()
     };
 
@@ -292,26 +295,22 @@ async fn can_get_message_proof() {
 
         // Set the contract input because we are calling a contract.
         let inputs = vec![
-            Input::Contract {
-                utxo_id: UtxoId::new(Bytes32::zeroed(), 0),
-                balance_root: Bytes32::zeroed(),
+            Input::contract(
+                UtxoId::new(Bytes32::zeroed(), 0),
+                Bytes32::zeroed(),
                 state_root,
-                tx_pointer: TxPointer::default(),
-                contract_id: id,
-            },
+                TxPointer::default(),
+                id,
+            ),
             coin_input,
         ];
 
         // The transaction will output a contract output and message output.
-        let mut outputs = vec![Output::Contract {
+        let outputs = vec![Output::Contract {
             input_index: 0,
             balance_root: Bytes32::zeroed(),
             state_root: Bytes32::zeroed(),
         }];
-        outputs.extend(
-            args.iter()
-                .map(|arg| Output::message(arg.recipient_address.into(), 10)),
-        );
 
         // Create the contract calling script.
         let script = Transaction::script(
@@ -350,13 +349,8 @@ async fn can_get_message_proof() {
             .unwrap();
 
         // Get the message id from the receipts.
-        let message_ids: Vec<_> = receipts
-            .iter()
-            .filter_map(|r| match r {
-                Receipt::MessageOut { message_id, .. } => Some(*message_id),
-                _ => None,
-            })
-            .collect();
+        let message_ids: Vec<_> =
+            receipts.iter().filter_map(|r| r.message_id()).collect();
 
         // Check we actually go the correct amount of ids back.
         assert_eq!(message_ids.len(), args.len(), "{receipts:?}");
@@ -374,7 +368,7 @@ async fn can_get_message_proof() {
 
             // 1. Generate the message id (message fields)
             // Produce message id.
-            let generated_message_id = Output::message_id(
+            let generated_message_id = compute_message_id(
                 &(result.sender.into()),
                 &(result.recipient.into()),
                 &(result.nonce.into()),
@@ -397,7 +391,7 @@ async fn can_get_message_proof() {
 
             // 3. Verify the proof. (message_id, proof set, root, index, num_message_ids)
             assert!(verify_merkle(
-                result.header.output_messages_root.clone().into(),
+                result.header.message_receipt_root.clone().into(),
                 result.proof_index.0,
                 result
                     .proof_set
@@ -405,7 +399,7 @@ async fn can_get_message_proof() {
                     .cloned()
                     .map(Bytes32::from)
                     .collect(),
-                result.header.output_messages_count.0,
+                result.header.message_receipt_count.0,
                 generated_message_id,
             ));
 
@@ -426,7 +420,7 @@ async fn can_get_message_proof() {
 
             // Check the root matches the proof and the root on the header.
             assert_eq!(
-                <[u8; 32]>::from(Bytes32::from(result.header.output_messages_root)),
+                <[u8; 32]>::from(Bytes32::from(result.header.message_receipt_root)),
                 expected_root
             );
 

@@ -12,6 +12,10 @@ use fuel_core_client::client::FuelClient;
 use fuel_core_types::{
     fuel_tx::{
         field::*,
+        input::coin::{
+            CoinPredicate,
+            CoinSigned,
+        },
         *,
     },
     fuel_vm::*,
@@ -29,20 +33,20 @@ fn create_node_config_from_inputs(inputs: &[Input]) -> Config {
     let mut coin_configs = vec![];
 
     for input in inputs {
-        if let Input::CoinSigned {
+        if let Input::CoinSigned(CoinSigned {
             amount,
             owner,
             asset_id,
             utxo_id,
             ..
-        }
-        | Input::CoinPredicate {
+        })
+        | Input::CoinPredicate(CoinPredicate {
             amount,
             owner,
             asset_id,
             utxo_id,
             ..
-        } = input
+        }) = input
         {
             let coin_config = CoinConfig {
                 tx_id: Some(*utxo_id.tx_id()),

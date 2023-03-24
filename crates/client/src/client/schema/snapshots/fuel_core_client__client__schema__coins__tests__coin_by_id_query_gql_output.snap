@@ -1,5 +1,5 @@
 ---
-source: crates/client/src/client/schema/coin.rs
+source: crates/client/src/client/schema/coins.rs
 expression: operation.query
 ---
 query($utxoId: UtxoId!) {
