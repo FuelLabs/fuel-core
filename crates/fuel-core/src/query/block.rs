@@ -79,7 +79,6 @@ impl<D: DatabasePort + ?Sized> BlockQueryData for D {
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<CompressedBlock>> {
         self.blocks_ids(start.map(Into::into), direction)
-            .into_iter()
             .map(|result| {
                 result.and_then(|(_, id)| {
                     let block = self.block(&id)?;
