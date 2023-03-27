@@ -174,7 +174,6 @@ impl CoinQuery {
             let owner: fuel_tx::Address = filter.owner.into();
             let coins = query
                 .owned_coins(&owner, (*start).map(Into::into), direction)
-                .into_iter()
                 .filter_map(|result| {
                     if let (Ok(coin), Some(filter_asset_id)) = (&result, &filter.asset_id)
                     {

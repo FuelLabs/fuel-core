@@ -1631,7 +1631,6 @@ mod tests {
 
     pub(crate) fn test_block(num_txs: usize) -> Block {
         let transactions = (1..num_txs + 1)
-            .into_iter()
             .map(|i| {
                 TxBuilder::new(2322u64)
                     .gas_limit(10)

@@ -30,7 +30,6 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
     let (_, contract_id) = test_builder.setup_contract(vec![], None, None, None);
     // initialize 10 random transactions that transfer coins and call a contract
     let transactions = (1..=10)
-        .into_iter()
         .map(|i| {
             TransactionBuilder::script(
                 op::ret(RegId::ONE).to_bytes().into_iter().collect(),
@@ -227,7 +226,6 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
     // generate random txs
     let secret = SecretKey::random(&mut rng);
     let txs = (0..TEST_TXS)
-        .into_iter()
         .map(|i| {
             TransactionBuilder::script(
                 op::ret(RegId::ONE).to_bytes().into_iter().collect(),
