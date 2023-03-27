@@ -266,7 +266,7 @@ mod tests {
 
         // Write the first contract state
         let state_key = Bytes32::from([1u8; 32]);
-        let state: Bytes32 = Bytes32::from([0xff; 32]);
+        let state = Bytes32::from([0xff; 32]);
         let key = (&contract_id, &state_key).into();
         database
             .storage::<ContractsState>()
@@ -281,7 +281,7 @@ mod tests {
 
         // Write the second contract state
         let state_key = Bytes32::from([2u8; 32]);
-        let state: Bytes32 = Bytes32::from([0xff; 32]);
+        let state = Bytes32::from([0xff; 32]);
         let key = (&contract_id, &state_key).into();
         database
             .storage::<ContractsState>()
@@ -298,13 +298,36 @@ mod tests {
     }
 
     #[test]
+    fn put_creates_merkle_metadata_when_empty() {
+        let contract_id = ContractId::from([1u8; 32]);
+        let state_key = Bytes32::new([1u8; 32]);
+        let state = Bytes32::from([0xff; 32]);
+        let key = (&contract_id, &state_key).into();
+        let database = &mut Database::default();
+
+        // Write a contract state
+        database
+            .storage::<ContractsState>()
+            .insert(&key, &state)
+            .unwrap();
+
+        // Read the Merkle metadata
+        let metadata = database
+            .storage::<ContractsStateMerkleMetadata>()
+            .get(&contract_id)
+            .unwrap();
+
+        assert!(metadata.is_some());
+    }
+
+    #[test]
     fn remove_updates_the_state_merkle_root_for_the_given_contract() {
         let contract_id = ContractId::from([1u8; 32]);
         let database = &mut Database::default();
 
         // Write the first contract state
         let state_key = Bytes32::new([1u8; 32]);
-        let state: Bytes32 = Bytes32::from([0xff; 32]);
+        let state = Bytes32::from([0xff; 32]);
         let key = (&contract_id, &state_key).into();
         database
             .storage::<ContractsState>()
@@ -317,7 +340,7 @@ mod tests {
 
         // Write the second contract state
         let state_key = Bytes32::new([2u8; 32]);
-        let state: Bytes32 = Bytes32::from([0xff; 32]);
+        let state = Bytes32::from([0xff; 32]);
         let key = (&contract_id, &state_key).into();
         database
             .storage::<ContractsState>()
@@ -343,5 +366,38 @@ mod tests {
 
         assert_ne!(root_1, root_2);
         assert_eq!(root_0, root_2);
+    }
+
+    #[test]
+    fn remove_deletes_merkle_metadata_when_empty() {
+        let contract_id = ContractId::from([1u8; 32]);
+        let state_key = Bytes32::new([1u8; 32]);
+        let state = Bytes32::from([0xff; 32]);
+        let key = (&contract_id, &state_key).into();
+        let database = &mut Database::default();
+
+        // Write a contract state
+        database
+            .storage::<ContractsState>()
+            .insert(&key, &state)
+            .unwrap();
+
+        // Read the Merkle metadata
+        database
+            .storage::<ContractsStateMerkleMetadata>()
+            .get(&contract_id)
+            .unwrap()
+            .expect("Expected Merkle metadata to be present");
+
+        // Remove the contract asset
+        database.storage::<ContractsState>().remove(&key).unwrap();
+
+        // Read the Merkle metadata
+        let metadata = database
+            .storage::<ContractsStateMerkleMetadata>()
+            .get(&contract_id)
+            .unwrap();
+
+        assert!(metadata.is_none());
     }
 }
