@@ -183,20 +183,11 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         None => return Ok(None),
     };
 
-    let (root, message_proof) =
+    let message_proof =
         match message_receipts_proof(database, message_id, &message_block_txs)? {
             Some(proof) => proof,
             None => return Ok(None),
         };
-
-    if message_block_header.message_receipt_root != root {
-        // This is bad as it means there's a bug in our prove code or block production.
-        Err(anyhow::anyhow!(
-            "block header {:?} root doesn't match generated proof root {:?}",
-            message_block_header,
-            root
-        ))?;
-    }
 
     // Get the commit fuel block header.
     let commit_block_header = match database
@@ -230,7 +221,7 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
     database: &T,
     message_id: MessageId,
     message_block_txs: &[Bytes32],
-) -> StorageResult<Option<(Bytes32, MerkleProof)>> {
+) -> StorageResult<Option<MerkleProof>> {
     // Get the message receipts from the block.
     let leaves: Vec<Vec<Receipt>> = message_block_txs
         .iter()
@@ -264,13 +255,10 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
         Some(proof_index) => {
             // Generate the actual merkle proof.
             match tree.prove(proof_index) {
-                Some((root, proof_set)) => Ok(Some((
-                    root.into(),
-                    MerkleProof {
-                        proof_set,
-                        proof_index,
-                    },
-                ))),
+                Some((_, proof_set)) => Ok(Some(MerkleProof {
+                    proof_set,
+                    proof_index,
+                })),
                 None => Ok(None),
             }
         }
