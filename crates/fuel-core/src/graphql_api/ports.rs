@@ -24,7 +24,6 @@ use fuel_core_storage::{
 use fuel_core_txpool::service::TxUpdate;
 use fuel_core_types::{
     blockchain::primitives::{
-        BlockHeight,
         BlockId,
         DaBlockHeight,
     },
@@ -42,6 +41,7 @@ use fuel_core_types::{
     fuel_types::{
         Address,
         AssetId,
+        BlockHeight,
         ContractId,
         Nonce,
     },

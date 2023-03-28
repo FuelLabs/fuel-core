@@ -18,7 +18,6 @@ use fuel_core_storage::{
 };
 use fuel_core_txpool::ports::BlockImporter;
 use fuel_core_types::{
-    blockchain::primitives::BlockHeight,
     entities::{
         coins::coin::CompressedCoin,
         message::Message,
@@ -28,6 +27,7 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
+        BlockHeight,
         ContractId,
         Nonce,
     },

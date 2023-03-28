@@ -112,7 +112,7 @@ async fn produce_block() {
             .unwrap()
             .unwrap();
         let actual_pub_key = block.block_producer().unwrap();
-        let block_height: u64 = block.header.height.into();
+        let block_height: u32 = block.header.height.into();
         let expected_pub_key = config
             .consensus_key
             .unwrap()
@@ -143,7 +143,7 @@ async fn produce_block_manually() {
 
     let new_height = client.produce_blocks(1, None).await.unwrap();
 
-    assert_eq!(1, new_height);
+    assert_eq!(1, *new_height);
     let block = client.block_by_height(1).await.unwrap().unwrap();
     assert_eq!(block.header.height.0, 1);
     let actual_pub_key = block.block_producer().unwrap();
@@ -184,7 +184,7 @@ async fn produce_block_negative() {
     if let TransactionStatus::Success { block_id, .. } =
         transaction_response.unwrap().status
     {
-        let block_height: u64 = client
+        let block_height: u32 = client
             .block(block_id.to_string().as_str())
             .await
             .unwrap()
@@ -222,7 +222,7 @@ async fn produce_block_custom_time() {
         .await
         .unwrap();
 
-    assert_eq!(5, new_height);
+    assert_eq!(5, *new_height);
 
     assert_eq!(db.block_time(&1u32.into()).unwrap().0, start_timestamp);
     assert_eq!(db.block_time(&2u32.into()).unwrap().0, start_timestamp + 10);

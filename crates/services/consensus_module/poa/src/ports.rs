@@ -6,10 +6,7 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         header::BlockHeader,
-        primitives::{
-            BlockHeight,
-            DaBlockHeight,
-        },
+        primitives::DaBlockHeight,
     },
     fuel_asm::Word,
     fuel_tx::{
@@ -17,7 +14,10 @@ use fuel_core_types::{
         Transaction,
         TxId,
     },
-    fuel_types::Bytes32,
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+    },
     services::{
         block_importer::UncommittedResult as UncommittedImportResult,
         executor::UncommittedResult as UncommittedExecutionResult,

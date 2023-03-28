@@ -44,7 +44,6 @@ use fuel_core_txpool::{
 };
 use fuel_core_types::{
     blockchain::primitives::{
-        BlockHeight,
         BlockId,
         DaBlockHeight,
     },
@@ -61,7 +60,10 @@ use fuel_core_types::{
         TxPointer,
         UtxoId,
     },
-    fuel_types::Nonce,
+    fuel_types::{
+        BlockHeight,
+        Nonce,
+    },
     services::{
         graphql_api::ContractBalance,
         txpool::{
@@ -120,7 +122,7 @@ impl DatabaseTransactions for Database {
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<(TxPointer, TxId)>> {
         let start = start.map(|tx_pointer| OwnedTransactionIndexCursor {
-            block_height: tx_pointer.block_height().into(),
+            block_height: tx_pointer.block_height(),
             tx_idx: tx_pointer.tx_index(),
         });
         self.owned_transactions(owner, start, Some(direction))

@@ -1,8 +1,8 @@
 //! Contains types related to P2P data
 
 use crate::{
-    blockchain::primitives::BlockHeight,
     fuel_tx::Transaction,
+    fuel_types::BlockHeight,
 };
 use std::fmt::Debug;
 

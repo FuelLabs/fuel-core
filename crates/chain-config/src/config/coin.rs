@@ -7,12 +7,12 @@ use crate::{
 };
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
-    blockchain::primitives::BlockHeight,
     entities::coins::coin::CompressedCoin,
     fuel_crypto::Hasher,
     fuel_types::{
         Address,
         AssetId,
+        BlockHeight,
         Bytes32,
     },
 };

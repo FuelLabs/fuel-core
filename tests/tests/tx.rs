@@ -65,9 +65,9 @@ async fn dry_run_script() {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    let gas_price = 0;
+    let gas_price = Default::default();
     let gas_limit = 1_000_000;
-    let maturity = 0;
+    let maturity = Default::default();
 
     let script = vec![
         op::addi(0x10, RegId::ZERO, 0xca),
@@ -127,10 +127,10 @@ async fn dry_run_create() {
     let contract_id = contract.id(&salt, &root, &state_root);
 
     let tx = Transaction::create(
-        0,
-        0,
-        0,
-        0,
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        Default::default(),
         salt,
         vec![],
         vec![],
@@ -155,9 +155,9 @@ async fn submit() {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    let gas_price = 0;
+    let gas_price = Default::default();
     let gas_limit = 1_000_000;
-    let maturity = 0;
+    let maturity = Default::default();
 
     let script = vec![
         op::addi(0x10, RegId::ZERO, 0xca),
@@ -656,9 +656,9 @@ impl TestContext {
     ) -> io::Result<Bytes32> {
         let script = op::ret(0x10).to_bytes().to_vec();
         let tx = Transaction::script(
-            0,
+            Default::default(),
             1_000_000,
-            0,
+            Default::default(),
             script,
             vec![],
             vec![Input::coin_signed(
@@ -667,8 +667,8 @@ impl TestContext {
                 amount,
                 Default::default(),
                 Default::default(),
-                0,
-                0,
+                Default::default(),
+                Default::default(),
             )],
             vec![Output::coin(to, amount, Default::default())],
             vec![vec![].into()],
@@ -711,9 +711,9 @@ async fn initialize_client(db: Database) -> TestContext {
 // add random val for unique tx
 fn create_mock_tx(val: u64) -> Transaction {
     Transaction::script(
-        0,
-        0,
-        0,
+        Default::default(),
+        Default::default(),
+        Default::default(),
         Default::default(),
         val.to_be_bytes().to_vec(),
         Default::default(),

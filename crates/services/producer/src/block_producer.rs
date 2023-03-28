@@ -16,17 +16,17 @@ use fuel_core_types::{
             ConsensusHeader,
             PartialBlockHeader,
         },
-        primitives::{
-            BlockHeight,
-            DaBlockHeight,
-        },
+        primitives::DaBlockHeight,
     },
     fuel_asm::Word,
     fuel_tx::{
         Receipt,
         Transaction,
     },
-    fuel_types::Bytes32,
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+    },
     services::executor::{
         ExecutionBlock,
         UncommittedResult,
@@ -137,7 +137,7 @@ where
         let height = match height {
             None => self.db.current_block_height()?,
             Some(height) => height,
-        } + 1u64.into();
+        } + 1.into();
 
         let is_script = transaction.is_script();
         let header = self.new_header(height, Tai64::now()).await?;

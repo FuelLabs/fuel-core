@@ -17,6 +17,7 @@ use crate::{
         AssetId,
         Nonce,
         UtxoId,
+        U32,
         U64,
     },
 };
@@ -60,13 +61,13 @@ impl Coin {
         self.0.asset_id.into()
     }
 
-    async fn maturity(&self) -> U64 {
+    async fn maturity(&self) -> U32 {
         self.0.maturity.into()
     }
 
     /// TxPointer - the height of the block this coin was created in
-    async fn block_created(&self) -> U64 {
-        u64::from(self.0.tx_pointer.block_height()).into()
+    async fn block_created(&self) -> U32 {
+        u32::from(self.0.tx_pointer.block_height()).into()
     }
 
     /// TxPointer - the index of the transaction that created this coin

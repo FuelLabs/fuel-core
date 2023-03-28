@@ -210,6 +210,7 @@ async fn can_get_message_proof() {
             })
             .collect();
 
+        let amount = 10;
         let starting_offset = 32 + 8 + 8;
 
         let mut contract = vec![
@@ -227,7 +228,7 @@ async fn can_get_message_proof() {
                 // The index of the of the output message in the transactions outputs.
                 op::movi(0x12, (index + 1) as u32),
                 // The amount to send in coins.
-                op::movi(0x13, 10),
+                op::movi(0x13, amount),
                 // Send the message output.
                 op::smo(0x10, 0x11, 0x12, 0x13),
                 // Offset to the next recipient address (this recipient address + message data len)
@@ -253,20 +254,23 @@ async fn can_get_message_proof() {
             .add_output(output)
             .finalize_as_transaction();
 
-        let script_data = id
-        .iter()
-        .copied()
-        // Empty Param 1
-        .chain((0 as Word).to_be_bytes().iter().copied())
-        // Empty Param 2
-        .chain((0 as Word).to_be_bytes().iter().copied())
-        .chain(args.iter().flat_map(|arg| {
-            // Recipient address
-            arg.recipient_address.into_iter()
-            // The message data
-            .chain(arg.message_data.clone().into_iter())
-        }))
-        .collect();
+        let smo_data: Vec<_> = id
+            .iter()
+            .copied()
+            // Empty Param 1
+            .chain((0 as Word).to_be_bytes().iter().copied())
+            // Empty Param 2
+            .chain((0 as Word).to_be_bytes().iter().copied())
+            .chain(args.iter().flat_map(|arg| {
+                // Recipient address
+                arg.recipient_address.into_iter()
+                    // The message data
+                    .chain(arg.message_data.clone().into_iter())
+            })).collect();
+        let script_data = AssetId::BASE
+            .into_iter()
+            .chain(smo_data.into_iter())
+            .collect();
 
         // Call contract script.
         let script = vec![
@@ -274,8 +278,12 @@ async fn can_get_message_proof() {
             // This will be used to read the contract id + two
             // empty params. So 32 + 8 + 8.
             op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+            // load balance to forward to 0x11
+            op::movi(0x11, n as u32 * amount),
+            // shift the smo data into 0x10
+            op::addi(0x12, 0x10, AssetId::LEN as u16),
             // Call the contract and forward no coins.
-            op::call(0x10, RegId::ZERO, RegId::ZERO, RegId::CGAS),
+            op::call(0x12, 0x11, 0x10, RegId::CGAS),
             // Return.
             op::ret(RegId::ONE),
         ];
@@ -391,11 +399,7 @@ async fn can_get_message_proof() {
             // 2. Generate the block id. (full header)
             let mut hasher = Hasher::default();
             hasher.input(Bytes32::from(result.message_block_header.prev_root).as_ref());
-            hasher.input(
-                &u32::try_from(result.message_block_header.height.0)
-                    .unwrap()
-                    .to_be_bytes()[..],
-            );
+            hasher.input(&result.message_block_header.height.0.to_be_bytes()[..]);
             hasher.input(result.message_block_header.time.0 .0.to_be_bytes());
             hasher.input(
                 Bytes32::from(result.message_block_header.application_hash).as_ref(),
@@ -461,7 +465,7 @@ async fn can_get_message_proof() {
                 message_block_id,
                 block_proof_index,
                 &block_proof_set,
-                blocks_count,
+                blocks_count as u64,
             ));
         }
     }

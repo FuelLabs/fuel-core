@@ -32,12 +32,10 @@ use fuel_core_types::{
             Block,
             CompressedBlock,
         },
-        primitives::{
-            BlockHeight,
-            BlockId,
-        },
+        primitives::BlockId,
     },
     fuel_merkle::binary::MerkleTree,
+    fuel_types::BlockHeight,
     tai64::Tai64,
 };
 use itertools::Itertools;
@@ -171,12 +169,11 @@ impl Database {
         )
         .map(|res| {
             let (height, id) = res?;
-            Ok((
-                height
-                    .try_into()
-                    .expect("block height always has correct number of bytes"),
-                id,
-            ))
+            let block_height_bytes: [u8; 4] = height
+                .as_slice()
+                .try_into()
+                .expect("block height always has correct number of bytes");
+            Ok((block_height_bytes.into(), id))
         })
     }
 
@@ -272,7 +269,7 @@ mod tests {
     #[test_case(&[100, 101, 102, 103, 104, 105]; "five sequential blocks starting from height 100")]
     #[test_case(&[0, 2, 5, 7, 11]; "five non-sequential blocks starting from height 0")]
     #[test_case(&[100, 102, 105, 107, 111]; "five non-sequential blocks starting from height 100")]
-    fn can_get_merkle_root_of_inserted_blocks(heights: &[u64]) {
+    fn can_get_merkle_root_of_inserted_blocks(heights: &[u32]) {
         let mut database = Database::default();
         let blocks = heights
             .iter()
@@ -338,7 +335,7 @@ mod tests {
         let mut database = Database::default();
 
         // Generate 10 blocks with ascending heights
-        let blocks = (0u64..10)
+        let blocks = (0..10)
             .map(|height| {
                 let header = PartialBlockHeader {
                     application: Default::default(),

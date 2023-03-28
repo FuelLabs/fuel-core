@@ -1,20 +1,20 @@
 use std::ops::Deref;
 
 use fuel_core_types::{
-    blockchain::{
-        header::{
-            ApplicationHeader,
-            ConsensusHeader,
-            PartialBlockHeader,
-        },
-        primitives::BlockHeight,
+    blockchain::header::{
+        ApplicationHeader,
+        ConsensusHeader,
+        PartialBlockHeader,
     },
     entities::message::MerkleProof,
     fuel_tx::{
         Script,
         Transaction,
     },
-    fuel_types::*,
+    fuel_types::{
+        BlockHeight,
+        *,
+    },
     tai64::Tai64,
 };
 

@@ -7,6 +7,7 @@ use crate::client::{
         Nonce,
         PageInfo,
         UtxoId,
+        U32,
         U64,
     },
     PageDirection,
@@ -123,10 +124,10 @@ pub struct CoinEdge {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Coin {
     pub amount: U64,
-    pub block_created: U64,
+    pub block_created: U32,
     pub asset_id: AssetId,
     pub utxo_id: UtxoId,
-    pub maturity: U64,
+    pub maturity: U32,
     pub owner: Address,
 }
 

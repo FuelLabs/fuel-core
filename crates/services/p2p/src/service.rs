@@ -34,14 +34,12 @@ use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::ConsensusVote,
-        primitives::{
-            BlockHeight,
-            BlockId,
-        },
+        primitives::BlockId,
         SealedBlock,
         SealedBlockHeader,
     },
     fuel_tx::Transaction,
+    fuel_types::BlockHeight,
     services::p2p::{
         BlockHeightHeartbeatData,
         GossipData,
@@ -492,13 +490,15 @@ pub mod tests {
 
     use fuel_core_services::Service;
     use fuel_core_storage::Result as StorageResult;
-    use fuel_core_types::blockchain::{
-        block::Block,
-        consensus::{
-            poa::PoAConsensus,
-            Consensus,
+    use fuel_core_types::{
+        blockchain::{
+            block::Block,
+            consensus::{
+                poa::PoAConsensus,
+                Consensus,
+            },
         },
-        primitives::BlockHeight,
+        fuel_types::BlockHeight,
     };
 
     #[derive(Clone, Debug)]

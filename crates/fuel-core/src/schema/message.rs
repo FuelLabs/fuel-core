@@ -15,7 +15,10 @@ use super::{
 use crate::{
     fuel_core_graphql_api::service::Database,
     query::MessageQueryData,
-    schema::scalars::BlockId,
+    schema::scalars::{
+        BlockId,
+        U32,
+    },
 };
 use anyhow::anyhow;
 use async_graphql::{
@@ -117,7 +120,7 @@ impl MessageQuery {
         transaction_id: TransactionId,
         message_id: MessageId,
         commit_block_id: Option<BlockId>,
-        commit_block_height: Option<U64>,
+        commit_block_height: Option<U32>,
     ) -> async_graphql::Result<Option<MessageProof>> {
         let data: &Database = ctx.data_unchecked();
         let block_id = match (commit_block_id, commit_block_height) {

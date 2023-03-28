@@ -14,6 +14,7 @@ use crate::client::schema::{
     Address,
     MessageId,
     Nonce,
+    U32,
     U64,
 };
 
@@ -133,7 +134,7 @@ pub struct MessageProofArgs {
     pub commit_block_id: Option<BlockId>,
     /// The block height of the commitment block.
     /// If it is `None`, the `commit_block_id` should be `Some`.
-    pub commit_block_height: Option<U64>,
+    pub commit_block_height: Option<U32>,
 }
 
 impl From<(Option<Address>, PaginationRequest<String>)> for OwnedMessagesConnectionArgs {

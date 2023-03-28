@@ -7,8 +7,8 @@ use async_graphql::{
     Value,
 };
 use fuel_core_types::{
-    blockchain::primitives::BlockHeight,
     fuel_types,
+    fuel_types::BlockHeight,
     tai64::Tai64,
 };
 use std::{
@@ -27,34 +27,75 @@ pub mod message_id;
 pub mod tx_pointer;
 pub mod utxo_id;
 
-/// Need our own u64 type since GraphQL integers are restricted to i32.
-#[derive(Copy, Clone, Debug, derive_more::Into, derive_more::From)]
-pub struct U64(pub u64);
+macro_rules! number_scalar {
+    ($i:ident, $t:ty, $name:expr) => {
+        /// Need our own scalar type since GraphQL integers are restricted to i32.
+        #[derive(
+            Copy, Clone, Debug, derive_more::Into, derive_more::From, PartialEq, Eq,
+        )]
+        pub struct $i(pub $t);
 
-#[Scalar(name = "U64")]
-impl ScalarType for U64 {
-    fn parse(value: Value) -> InputValueResult<Self> {
-        if let Value::String(value) = &value {
-            let num: u64 = value.parse().map_err(InputValueError::custom)?;
-            Ok(U64(num))
-        } else {
-            Err(InputValueError::expected_type(value))
+        #[Scalar(name = $name)]
+        impl ScalarType for $i {
+            fn parse(value: Value) -> InputValueResult<Self> {
+                if let Value::String(value) = &value {
+                    let num: $t = value.parse().map_err(InputValueError::custom)?;
+                    Ok($i(num))
+                } else {
+                    Err(InputValueError::expected_type(value))
+                }
+            }
+
+            fn to_value(&self) -> Value {
+                Value::String(self.0.to_string())
+            }
         }
-    }
 
-    fn to_value(&self) -> Value {
-        Value::String(self.0.to_string())
-    }
+        impl Display for $i {
+            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                self.0.fmt(f)
+            }
+        }
+
+        impl FromStr for $i {
+            type Err = core::num::ParseIntError;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                Ok(Self(<$t>::from_str(s)?))
+            }
+        }
+
+        impl CursorType for $i {
+            type Error = core::num::ParseIntError;
+
+            fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
+                Self::from_str(s)
+            }
+
+            fn encode_cursor(&self) -> String {
+                self.to_string()
+            }
+        }
+    };
 }
 
-impl From<BlockHeight> for U64 {
+number_scalar!(U64, u64, "U64");
+number_scalar!(U32, u32, "U32");
+
+impl From<BlockHeight> for U32 {
     fn from(h: BlockHeight) -> Self {
-        U64(h.to_usize() as u64)
+        U32(*h)
     }
 }
 
-impl From<U64> for usize {
-    fn from(u: U64) -> Self {
+impl From<U32> for BlockHeight {
+    fn from(u: U32) -> Self {
+        u.0.into()
+    }
+}
+
+impl From<U32> for usize {
+    fn from(u: U32) -> Self {
         u.0 as usize
     }
 }
@@ -102,7 +143,7 @@ impl CursorType for SortedTxCursor {
             s.split_once('#').ok_or("Incorrect format provided")?;
 
         Ok(Self::new(
-            usize::from_str(block_height)
+            u32::from_str(block_height)
                 .map_err(|_| "Failed to decode block_height")?
                 .into(),
             Bytes32::decode_cursor(tx_id)?,

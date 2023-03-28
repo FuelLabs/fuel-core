@@ -19,11 +19,9 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 use fuel_core_types::{
-    blockchain::{
-        header::BlockHeader,
-        primitives::BlockHeight,
-    },
+    blockchain::header::BlockHeader,
     fuel_tx::Bytes32,
+    fuel_types::BlockHeight,
 };
 use std::sync::Arc;
 

@@ -10,7 +10,7 @@ use fuel_core_services::{
     },
     SharedMutex,
 };
-use fuel_core_types::blockchain::primitives::BlockHeight;
+use fuel_core_types::fuel_types::BlockHeight;
 use futures::stream::StreamExt;
 use tokio::sync::Notify;
 

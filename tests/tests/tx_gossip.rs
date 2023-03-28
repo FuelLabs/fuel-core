@@ -82,7 +82,7 @@ async fn test_tx_gossiping() {
             1000,
             Default::default(),
             Default::default(),
-            0,
+            Default::default(),
         )
         .add_output(Output::Change {
             amount: 0,
