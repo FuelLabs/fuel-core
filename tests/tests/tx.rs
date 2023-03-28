@@ -218,7 +218,7 @@ async fn receipts() {
         .expect("transaction should insert");
     // run test
     let receipts = client.receipts(&format!("{id:#x}")).await.unwrap();
-    assert!(!receipts.is_empty());
+    assert!(receipts.is_some());
 }
 
 #[tokio::test]
