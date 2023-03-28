@@ -1,2 +1,5 @@
 [alias]
 xtask = "run --package xtask --"
+
+[registries.crates-io]
+protocol = "sparse"
