@@ -2504,6 +2504,7 @@ dependencies = [
  "fuel-core-client",
  "fuel-core-e2e-client",
  "fuel-core-types",
+ "futures",
  "humantime-serde",
  "insta",
  "libtest-mimic",
@@ -5582,6 +5583,7 @@ checksum = "21eed90ec8570952d53b772ecf8f206aa1ec9a3d76b2521c56c42973f2d91ee9"
 dependencies = [
  "base64 0.21.0",
  "bytes",
+ "cookie",
  "cookie_store",
  "encoding_rs",
  "futures-core",

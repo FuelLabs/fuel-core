@@ -292,6 +292,7 @@ async fn can_get_message_proof() {
     let receipts = client
         .receipts(transaction_id.to_string().as_str())
         .await
+        .unwrap()
         .unwrap();
     let logd = receipts
         .iter()

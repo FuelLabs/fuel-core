@@ -180,6 +180,7 @@ impl Wallet {
             tx_id: tx.id(),
             transferred_utxo,
             success: matches!(status, TransactionStatus::Success { .. }),
+            status,
         })
     }
 }
@@ -188,4 +189,5 @@ pub struct TransferResult {
     pub tx_id: TxId,
     pub transferred_utxo: UtxoId,
     pub success: bool,
+    pub status: TransactionStatus,
 }

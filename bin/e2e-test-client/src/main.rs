@@ -41,6 +41,13 @@ fn main() {
             }),
         ),
         Trial::test(
+            "can execute script and get receipts",
+            with_cloned(&config, |config| {
+                let ctx = TestContext::new(config);
+                async_execute(tests::script::receipts(&ctx))
+            }),
+        ),
+        Trial::test(
             "can transfer from alice to bob and back",
             with_cloned(&config, |config| {
                 let ctx = TestContext::new(config);
