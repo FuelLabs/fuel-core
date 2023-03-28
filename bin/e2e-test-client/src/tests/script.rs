@@ -28,7 +28,7 @@ pub async fn receipts(ctx: &TestContext) -> Result<(), Failed> {
     for query in queries {
         let (query, query_number) = query;
         let receipts = query?;
-        if receipts.is_none() {
+        if receipts.is_empty() {
             return Err(
                 format!("Receipts are empty for query_number {query_number}").into(),
             )
