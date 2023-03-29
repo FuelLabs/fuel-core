@@ -9,6 +9,8 @@ use fuel_core_types::{
 };
 use std::net::SocketAddr;
 
+#[cfg(feature = "honeycomb")]
+mod honeycomb;
 pub mod ports;
 pub mod service;
 

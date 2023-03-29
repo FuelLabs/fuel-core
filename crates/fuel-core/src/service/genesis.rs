@@ -37,7 +37,10 @@ use fuel_core_types::{
             ConsensusHeader,
             PartialBlockHeader,
         },
-        primitives::Empty,
+        primitives::{
+            BlockHeight,
+            Empty,
+        },
         SealedBlock,
     },
     entities::{
