@@ -1,4 +1,7 @@
-use crate::cli::DEFAULT_DB_PATH;
+use crate::cli::{
+    init_logging,
+    DEFAULT_DB_PATH,
+};
 use clap::Parser;
 use std::path::PathBuf;
 
@@ -36,7 +39,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         },
         database::Database,
     };
-
+    init_logging("snapshot".to_string(), "local".to_string(), None).await?;
     let path = command.database_path;
     let config: ChainConfig = command.chain_config.parse()?;
     let db = Database::open(&path).context(format!(
