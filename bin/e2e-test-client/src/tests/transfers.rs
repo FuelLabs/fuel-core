@@ -1,4 +1,4 @@
-use fuel_core_e2e_client::test_context::{
+use crate::test_context::{
     TestContext,
     BASE_AMOUNT,
 };
