@@ -290,7 +290,8 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     let network_name = {
         #[cfg(feature = "p2p")]
         {
-            config.p2p.unwrap().network_name
+            let config = config.p2p.as_ref().unwrap();
+            config.network_name.clone()
         }
         #[cfg(not(feature = "p2p"))]
         "default_network".to_string()
