@@ -5,7 +5,10 @@ use crate::{
         DatabasePort,
         TxPoolPort,
     },
-    graphql_api::Config,
+    graphql_api::{
+        prometheus::PrometheusExtension,
+        Config,
+    },
     schema::{
         CoreSchema,
         CoreSchemaBuilder,
@@ -160,6 +163,7 @@ pub fn new_service(
         .data(producer)
         .data(consensus_module)
         .extension(Tracing)
+        .extension(PrometheusExtension {})
         .finish();
 
     let router = Router::new()

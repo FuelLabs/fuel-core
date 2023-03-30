@@ -10,6 +10,7 @@ use fuel_core_types::{
 use std::net::SocketAddr;
 
 pub mod ports;
+pub(crate) mod prometheus;
 pub mod service;
 
 #[derive(Clone, Debug)]
