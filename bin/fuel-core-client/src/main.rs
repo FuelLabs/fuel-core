@@ -57,7 +57,7 @@ impl CliArgs {
                     println!("{:?}", json!(tx).to_string())
                 }
                 TransactionCommands::Receipts { id } => {
-                    let receipts = client.receipts(id.as_str()).await.unwrap();
+                    let receipts = client.receipts(id.as_str()).await.unwrap().unwrap();
                     println!("{:?}", json!(receipts).to_string())
                 }
             },

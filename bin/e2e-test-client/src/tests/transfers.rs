@@ -23,6 +23,7 @@ pub async fn basic_transfer(ctx: &TestContext) -> Result<(), Failed> {
             .await_transaction_commit(&result.tx_id.to_string()),
     )
     .await??;
+    println!("The tx id of the transfer: {}", result.tx_id);
 
     // bob checks to see if utxo was received
     // we don't check balance in order to avoid brittleness in the case of
