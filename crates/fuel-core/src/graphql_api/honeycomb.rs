@@ -51,7 +51,7 @@ impl Extension for InternalHoneyTrace {
         next: NextRequest<'_>,
     ) -> Response {
         let response = self.inner_trace.request(ctx, next);
-        register_dist_tracing_root(TraceId::new(), None).unwrap();
+        let _ = register_dist_tracing_root(TraceId::new(), None);
         response.await
     }
 
@@ -63,7 +63,7 @@ impl Extension for InternalHoneyTrace {
         next: NextSubscribe<'_>,
     ) -> BoxStream<'s, Response> {
         let response = self.inner_trace.subscribe(ctx, stream, next);
-        register_dist_tracing_root(TraceId::new(), None).unwrap();
+        let _ = register_dist_tracing_root(TraceId::new(), None);
         response
     }
 
@@ -76,7 +76,7 @@ impl Extension for InternalHoneyTrace {
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
         let response = self.inner_trace.parse_query(ctx, query, variables, next);
-        register_dist_tracing_root(TraceId::new(), None).unwrap();
+        let _ = register_dist_tracing_root(TraceId::new(), None);
         response.await
     }
 
@@ -87,7 +87,7 @@ impl Extension for InternalHoneyTrace {
         next: NextValidation<'_>,
     ) -> Result<ValidationResult, Vec<ServerError>> {
         let response = self.inner_trace.validation(ctx, next);
-        register_dist_tracing_root(TraceId::new(), None).unwrap();
+        let _ = register_dist_tracing_root(TraceId::new(), None);
         response.await
     }
 
@@ -99,7 +99,7 @@ impl Extension for InternalHoneyTrace {
         next: NextExecute<'_>,
     ) -> Response {
         let response = self.inner_trace.execute(ctx, operation_name, next);
-        register_dist_tracing_root(TraceId::new(), None).unwrap();
+        let _ = register_dist_tracing_root(TraceId::new(), None);
         response.await
     }
 
@@ -111,7 +111,7 @@ impl Extension for InternalHoneyTrace {
         next: NextResolve<'_>,
     ) -> ServerResult<Option<Value>> {
         let response = self.inner_trace.resolve(ctx, info, next);
-        register_dist_tracing_root(TraceId::new(), None).unwrap();
+        let _ = register_dist_tracing_root(TraceId::new(), None);
         response.await
     }
 }
