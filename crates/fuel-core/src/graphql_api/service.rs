@@ -1,5 +1,3 @@
-#[cfg(feature = "honeycomb")]
-use crate::graphql_api::honeycomb::HoneyTrace;
 use crate::{
     fuel_core_graphql_api::ports::{
         BlockProducerPort,
@@ -7,16 +5,18 @@ use crate::{
         DatabasePort,
         TxPoolPort,
     },
-    graphql_api::Config,
+    graphql_api::{
+        honeycomb::HoneyTrace,
+        Config,
+    },
     schema::{
         CoreSchema,
         CoreSchemaBuilder,
     },
     service::metrics::metrics,
 };
-#[cfg(not(feature = "honeycomb"))]
-use async_graphql::extensions::Tracing;
 use async_graphql::{
+    extensions::Tracing,
     http::{
         playground_source,
         GraphQLPlaygroundConfig,
@@ -154,16 +154,20 @@ pub fn new_service(
 ) -> anyhow::Result<Service> {
     let network_addr = config.addr;
 
+    let honeycomb_enabled = config.honeycomb_enabled;
+
     let builder = schema
         .data(config)
         .data(database)
         .data(txpool)
         .data(producer)
         .data(consensus_module);
-    #[cfg(feature = "honeycomb")]
-    let builder = builder.extension(HoneyTrace);
-    #[cfg(not(feature = "honeycomb"))]
-    let builder = builder.extension(Tracing);
+    // use honeycomb tracing wrapper if api key is configured
+    let builder = if honeycomb_enabled {
+        builder.extension(HoneyTrace)
+    } else {
+        builder.extension(Tracing)
+    };
     let schema = builder.finish();
 
     let router = Router::new()
