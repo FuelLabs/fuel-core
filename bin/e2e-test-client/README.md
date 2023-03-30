@@ -17,3 +17,7 @@ secret = "de97d8624a438121b86a1956544bd72ed68cd69f2c99555b08b1e8c51ffd511c"
 [wallet_b]
 secret = "37fa81c84ccd547c30c176b118d5cb892bdb113e8e80141f266519422ef9eefd"
 ```
+
+```shell
+FUEL_CORE_E2E_CONFIG="/Users/your_user_name/fuel/e2e.toml" cargo run -p fuel-core-e2e-client
+```
