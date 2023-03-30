@@ -1,9 +1,5 @@
 use crate::{
     database::{
-        storage::{
-            FuelBlockMerkleData,
-            FuelBlockMerkleMetadata,
-        },
         transactions::OwnedTransactionIndexCursor,
         Database,
     },
@@ -33,7 +29,6 @@ use fuel_core_storage::{
     not_found,
     Error as StorageError,
     Result as StorageResult,
-    StorageAsRef,
 };
 use fuel_core_txpool::{
     service::TxUpdate,
@@ -51,7 +46,6 @@ use fuel_core_types::{
         MerkleProof,
         Message,
     },
-    fuel_merkle::binary::MerkleTree,
     fuel_tx::{
         Address,
         AssetId,
@@ -74,7 +68,6 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use std::{
-    borrow::Borrow,
     ops::Deref,
     sync::Arc,
 };
@@ -242,31 +235,7 @@ impl DatabaseMessageProof for Database {
         message_block_height: &BlockHeight,
         commit_block_height: &BlockHeight,
     ) -> StorageResult<MerkleProof> {
-        if message_block_height > commit_block_height {
-            Err(anyhow::anyhow!(
-                "The `message_block_height` is higher than `commit_block_height`"
-            ))?;
-        }
-
-        let commit_merkle_metadata = self
-            .storage::<FuelBlockMerkleMetadata>()
-            .get(commit_block_height)?
-            .ok_or(not_found!(FuelBlockMerkleMetadata))?;
-
-        let storage = self.borrow();
-        let tree: MerkleTree<FuelBlockMerkleData, _> =
-            MerkleTree::load(storage, commit_merkle_metadata.version)
-                .map_err(|err| StorageError::Other(err.into()))?;
-
-        let proof_index = message_block_height.as_usize() as u64;
-        let (_, proof_set) = tree
-            .prove(proof_index)
-            .map_err(|err| StorageError::Other(err.into()))?;
-
-        Ok(MerkleProof {
-            proof_set,
-            proof_index,
-        })
+        Database::block_history_proof(self, message_block_height, commit_block_height)
     }
 }
 
