@@ -5,6 +5,7 @@ use std::{
     str::FromStr,
 };
 use tracing::log::warn;
+#[cfg(feature = "honeycomb")]
 use tracing_honeycomb::{
     self,
     new_honeycomb_telemetry_layer,
@@ -66,18 +67,30 @@ pub async fn init_logging(
 
     let layer = tracing_subscriber::fmt::Layer::default().with_writer(std::io::stderr);
 
-    let telemetry_layer = honeycomb_key.map(|honeycomb_key| {
-        let service_name = format!("node-{}-{}", service_name, network_name);
-        let honeycomb_config = libhoney::Config {
-            options: libhoney::client::Options {
-                api_key: honeycomb_key,
-                dataset: service_name,
-                ..libhoney::client::Options::default()
-            },
-            transmission_options: libhoney::transmission::Options::default(),
-        };
-        new_honeycomb_telemetry_layer("fuel-core", honeycomb_config)
-    });
+    #[allow(clippy::bind_instead_of_map)]
+    let telemetry_layer: Option<Box<dyn Layer<_> + Send + Sync>> = honeycomb_key
+        .and_then(|honeycomb_key| {
+            #[cfg(feature = "honeycomb")]
+            {
+                let service_name = format!("node-{}-{}", service_name, network_name);
+                let honeycomb_config = libhoney::Config {
+                    options: libhoney::client::Options {
+                        api_key: honeycomb_key,
+                        dataset: service_name,
+                        ..libhoney::client::Options::default()
+                    },
+                    transmission_options: libhoney::transmission::Options::default(),
+                };
+                Some(new_honeycomb_telemetry_layer("fuel-core", honeycomb_config).boxed())
+            }
+            #[cfg(not(feature = "honeycomb"))]
+            {
+                if !honeycomb_key.is_empty() {
+                    warn!("honeycomb api key provided, but the compiler feature is disabled. {} {}", service_name, network_name)
+                }
+                None
+            }
+        });
 
     let fmt = if human_logging {
         // use pretty logs
