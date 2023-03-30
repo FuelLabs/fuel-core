@@ -1,3 +1,5 @@
+#[cfg(feature = "metrics")]
+use crate::graphql_api::prometheus::PrometheusExtension;
 use crate::{
     fuel_core_graphql_api::ports::{
         BlockProducerPort,
@@ -5,10 +7,7 @@ use crate::{
         DatabasePort,
         TxPoolPort,
     },
-    graphql_api::{
-        prometheus::PrometheusExtension,
-        Config,
-    },
+    graphql_api::Config,
     schema::{
         CoreSchema,
         CoreSchemaBuilder,
@@ -156,15 +155,18 @@ pub fn new_service(
 ) -> anyhow::Result<Service> {
     let network_addr = config.addr;
 
-    let schema = schema
+    let builder = schema
         .data(config)
         .data(database)
         .data(txpool)
         .data(producer)
         .data(consensus_module)
-        .extension(Tracing)
-        .extension(PrometheusExtension {})
-        .finish();
+        .extension(Tracing);
+
+    #[cfg(feature = "metrics")]
+    let builder = builder.extension(PrometheusExtension {});
+
+    let schema = builder.finish();
 
     let router = Router::new()
         .route("/playground", get(graphql_playground))
