@@ -190,7 +190,7 @@ impl Command {
             max_da_lag,
             max_wait_time,
             tx_pool_ttl,
-            honeycomb_key: _,
+            honeycomb_key,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -279,13 +279,12 @@ impl Command {
             consensus_key,
             name,
             verifier,
+            honeycomb_api_key: honeycomb_key,
         })
     }
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
-    let service_name = command.service_name.clone();
-    let honeycomb_api_key = command.honeycomb_key.clone();
     let config = command.get_config()?;
     let network_name = {
         #[cfg(feature = "p2p")]
@@ -296,7 +295,12 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         #[cfg(not(feature = "p2p"))]
         "default_network".to_string()
     };
-    init_logging(service_name, network_name, honeycomb_api_key).await?;
+    init_logging(
+        config.name.clone(),
+        network_name,
+        config.honeycomb_api_key.clone(),
+    )
+    .await?;
     // log fuel-core version
     info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
     trace!("Initializing in TRACE mode.");
