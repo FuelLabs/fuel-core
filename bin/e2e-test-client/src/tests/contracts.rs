@@ -1,4 +1,4 @@
-use fuel_core_e2e_client::test_context::TestContext;
+use crate::test_context::TestContext;
 use libtest_mimic::Failed;
 use std::time::Duration;
 use tokio::time::timeout;

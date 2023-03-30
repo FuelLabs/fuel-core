@@ -546,7 +546,7 @@ impl FuelClient {
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
-                "Failed to get status for transaction",
+                format!("Failed to get status for transaction {:?}", status_result),
             ))
         }
     }
