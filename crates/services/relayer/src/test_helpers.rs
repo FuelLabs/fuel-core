@@ -22,17 +22,14 @@ use ethers_core::{
     },
 };
 use fuel_core_types::{
-    entities::message::{
-        CheckedMessage,
-        Message,
-    },
+    entities::message::Message,
     fuel_types::Address,
 };
 
 pub mod middleware;
 
 pub trait LogTestHelper {
-    fn to_msg(&self) -> CheckedMessage;
+    fn to_msg(&self) -> Message;
 }
 
 pub trait EvtToLog {
@@ -40,17 +37,17 @@ pub trait EvtToLog {
 }
 
 impl LogTestHelper for Log {
-    fn to_msg(&self) -> CheckedMessage {
+    fn to_msg(&self) -> Message {
         match EthEventLog::try_from(self).unwrap() {
-            EthEventLog::Message(m) => Message::from(&m).check(),
+            EthEventLog::Message(m) => Message::from(&m),
             _ => panic!("This log does not form a message"),
         }
     }
 }
 
-impl EvtToLog for crate::abi::bridge::SentMessageFilter {
+impl EvtToLog for crate::abi::bridge::MessageSentFilter {
     fn into_log(self) -> Log {
-        event_to_log(self, &crate::abi::bridge::SENTMESSAGE_ABI)
+        event_to_log(self, &crate::abi::bridge::MESSAGESENT_ABI)
     }
 }
 

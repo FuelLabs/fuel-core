@@ -9,7 +9,7 @@ use fuel_core_types::{
         primitives::BlockId,
     },
     entities::{
-        coin::CompressedCoin,
+        coins::coin::CompressedCoin,
         contract::ContractUtxoInfo,
         message::Message,
     },
@@ -22,7 +22,7 @@ use fuel_core_types::{
     fuel_types::{
         Bytes32,
         ContractId,
-        MessageId,
+        Nonce,
     },
 };
 pub use fuel_vm_private::storage::{
@@ -80,7 +80,7 @@ impl Mappable for SealedBlockConsensus {
 }
 
 /// The storage table of coins. Each
-/// [`CompressedCoin`](fuel_core_types::entities::coin::CompressedCoin)
+/// [`CompressedCoin`](fuel_core_types::entities::coins::coin::CompressedCoin)
 /// is represented by unique `UtxoId`.
 pub struct Coins;
 
@@ -96,7 +96,7 @@ pub struct Messages;
 
 impl Mappable for Messages {
     type Key = Self::OwnedKey;
-    type OwnedKey = MessageId;
+    type OwnedKey = Nonce;
     type Value = Self::OwnedValue;
     type OwnedValue = Message;
 }
@@ -106,7 +106,7 @@ pub struct SpentMessages;
 
 impl Mappable for SpentMessages {
     type Key = Self::OwnedKey;
-    type OwnedKey = MessageId;
+    type OwnedKey = Nonce;
     type Value = Self::OwnedValue;
     type OwnedValue = ();
 }

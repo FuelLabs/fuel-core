@@ -20,7 +20,7 @@ use fuel_core_txpool::ports::BlockImporter;
 use fuel_core_types::{
     blockchain::primitives::BlockHeight,
     entities::{
-        coin::CompressedCoin,
+        coins::coin::CompressedCoin,
         message::Message,
     },
     fuel_tx::{
@@ -29,7 +29,7 @@ use fuel_core_types::{
     },
     fuel_types::{
         ContractId,
-        MessageId,
+        Nonce,
     },
     services::{
         block_importer::ImportResult,
@@ -130,14 +130,14 @@ impl fuel_core_txpool::ports::TxPoolDb for Database {
         self.storage::<ContractsRawCode>().contains_key(contract_id)
     }
 
-    fn message(&self, message_id: &MessageId) -> StorageResult<Option<Message>> {
+    fn message(&self, id: &Nonce) -> StorageResult<Option<Message>> {
         self.storage::<Messages>()
-            .get(message_id)
+            .get(id)
             .map(|t| t.map(|t| t.as_ref().clone()))
     }
 
-    fn is_message_spent(&self, message_id: &MessageId) -> StorageResult<bool> {
-        self.storage::<SpentMessages>().contains_key(message_id)
+    fn is_message_spent(&self, id: &Nonce) -> StorageResult<bool> {
+        self.storage::<SpentMessages>().contains_key(id)
     }
 
     fn current_block_height(&self) -> StorageResult<BlockHeight> {

@@ -111,8 +111,9 @@ fuel_type_scalar!(Salt, Salt);
 fuel_type_scalar!(TransactionId, Bytes32);
 fuel_type_scalar!(MessageId, MessageId);
 fuel_type_scalar!(Signature, Bytes64);
+fuel_type_scalar!(Nonce, Nonce);
 
-impl LowerHex for MessageId {
+impl LowerHex for Nonce {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         LowerHex::fmt(&self.0 .0, f)
     }

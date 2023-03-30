@@ -18,11 +18,12 @@ pub use fuel_core_txpool as txpool;
 #[doc(no_inline)]
 pub use fuel_core_types as types;
 
+pub mod coins_query;
 pub mod dap;
 pub mod database;
 pub mod executor;
 pub mod model;
-#[cfg(feature = "rand-test-helpers")]
+#[cfg(all(feature = "p2p", feature = "rand-test-helpers"))]
 pub mod p2p_test_helpers;
 pub mod resource;
 pub mod service;

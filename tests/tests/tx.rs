@@ -218,7 +218,7 @@ async fn receipts() {
         .expect("transaction should insert");
     // run test
     let receipts = client.receipts(&format!("{id:#x}")).await.unwrap();
-    assert!(!receipts.is_empty());
+    assert!(receipts.is_some());
 }
 
 #[tokio::test]
@@ -661,20 +661,16 @@ impl TestContext {
             0,
             script,
             vec![],
-            vec![Input::CoinSigned {
-                utxo_id: self.rng.gen(),
-                owner: from,
+            vec![Input::coin_signed(
+                self.rng.gen(),
+                from,
                 amount,
-                asset_id: Default::default(),
-                tx_pointer: Default::default(),
-                witness_index: 0,
-                maturity: 0,
-            }],
-            vec![Output::Coin {
-                amount,
-                to,
-                asset_id: Default::default(),
-            }],
+                Default::default(),
+                Default::default(),
+                0,
+                0,
+            )],
+            vec![Output::coin(to, amount, Default::default())],
             vec![vec![].into()],
         )
         .into();

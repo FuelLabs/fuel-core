@@ -15,6 +15,10 @@ use fuel_core_types::{
     blockchain::primitives::BlockHeight,
     fuel_tx::{
         field::Inputs,
+        input::coin::{
+            CoinPredicate,
+            CoinSigned,
+        },
         *,
     },
 };
@@ -102,22 +106,22 @@ impl TestSetupBuilder {
                 .iter()
                 .flat_map(|t| t.inputs())
                 .filter_map(|input| {
-                    if let Input::CoinSigned {
+                    if let Input::CoinSigned(CoinSigned {
                         amount,
                         owner,
                         asset_id,
                         utxo_id,
                         tx_pointer,
                         ..
-                    }
-                    | Input::CoinPredicate {
+                    })
+                    | Input::CoinPredicate(CoinPredicate {
                         amount,
                         owner,
                         asset_id,
                         utxo_id,
                         tx_pointer,
                         ..
-                    } = input
+                    }) = input
                     {
                         Some(CoinConfig {
                             tx_id: Some(*utxo_id.tx_id()),

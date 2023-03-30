@@ -21,7 +21,6 @@ use fuel_core_types::{
 pub enum Output {
     Coin(CoinOutput),
     Contract(ContractOutput),
-    Message(MessageOutput),
     Change(ChangeOutput),
     Variable(VariableOutput),
     ContractCreated(ContractCreated),
@@ -45,22 +44,6 @@ impl CoinOutput {
 
     async fn asset_id(&self) -> AssetId {
         self.asset_id.into()
-    }
-}
-
-pub struct MessageOutput {
-    amount: Word,
-    recipient: fuel_types::Address,
-}
-
-#[Object]
-impl MessageOutput {
-    async fn recipient(&self) -> Address {
-        self.recipient.into()
-    }
-
-    async fn amount(&self) -> U64 {
-        self.amount.into()
     }
 }
 
@@ -156,12 +139,6 @@ impl From<&fuel_tx::Output> for Output {
                 balance_root: *balance_root,
                 state_root: *state_root,
             }),
-            fuel_tx::Output::Message { recipient, amount } => {
-                Output::Message(MessageOutput {
-                    recipient: *recipient,
-                    amount: *amount,
-                })
-            }
             fuel_tx::Output::Change {
                 to,
                 amount,

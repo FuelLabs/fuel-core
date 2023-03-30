@@ -1,7 +1,10 @@
 use crate::client::schema::{
     block::BlockByHeightArgs,
+    coins::{
+        ExcludeInput,
+        SpendQueryElementInput,
+    },
     contract::ContractBalanceQueryArgs,
-    resource::ExcludeInput,
     tx::DryRunArg,
     Tai64Timestamp,
 };
@@ -32,10 +35,11 @@ use fuel_core_types::{
 #[cfg(feature = "subscriptions")]
 use futures::StreamExt;
 use itertools::Itertools;
+use reqwest::cookie::CookieStore;
 use schema::{
     balance::BalanceArgs,
     block::BlockByIdArgs,
-    coin::{
+    coins::{
         Coin,
         CoinByIdArgs,
     },
@@ -43,7 +47,6 @@ use schema::{
         Contract,
         ContractByIdArgs,
     },
-    resource::SpendQueryElementInput,
     tx::{
         TxArg,
         TxIdArgs,
@@ -66,6 +69,11 @@ use schema::{
     TransactionId,
     U64,
 };
+pub use schema::{
+    PageDirection,
+    PaginatedResult,
+    PaginationRequest,
+};
 #[cfg(feature = "subscriptions")]
 use std::future;
 use std::{
@@ -75,22 +83,18 @@ use std::{
         ErrorKind,
     },
     net,
+    ops::Deref,
     str::{
         self,
         FromStr,
     },
+    sync::Arc,
 };
 use tai64::Tai64;
 use tracing as _;
 use types::{
     TransactionResponse,
     TransactionStatus,
-};
-
-pub use schema::{
-    PageDirection,
-    PaginatedResult,
-    PaginationRequest,
 };
 
 use self::schema::{
@@ -101,8 +105,10 @@ use self::schema::{
 pub mod schema;
 pub mod types;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct FuelClient {
+    client: reqwest::Client,
+    cookie: Arc<reqwest::cookie::Jar>,
     url: reqwest::Url,
 }
 
@@ -118,7 +124,15 @@ impl FromStr for FuelClient {
         let mut url = reqwest::Url::parse(&raw_url)
             .with_context(|| format!("Invalid fuel-core URL: {str}"))?;
         url.set_path("/graphql");
-        Ok(Self { url })
+        let cookie = Arc::new(reqwest::cookie::Jar::default());
+        let client = reqwest::Client::builder()
+            .cookie_provider(cookie.clone())
+            .build()?;
+        Ok(Self {
+            client,
+            cookie,
+            url,
+        })
     }
 }
 
@@ -158,7 +172,8 @@ impl FuelClient {
         Vars: serde::Serialize,
         ResponseData: serde::de::DeserializeOwned + 'static,
     {
-        let response = reqwest::Client::new()
+        let response = self
+            .client
             .post(self.url.clone())
             .run_graphql(q)
             .await
@@ -195,7 +210,7 @@ impl FuelClient {
         let mut url = self.url.clone();
         url.set_path("/graphql-sub");
         let json_query = serde_json::to_string(&q)?;
-        let client = es::ClientBuilder::for_url(url.as_str())
+        let mut client_builder = es::ClientBuilder::for_url(url.as_str())
             .map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -210,8 +225,27 @@ impl FuelClient {
                     io::ErrorKind::Other,
                     format!("Failed to add header to client {e:?}"),
                 )
-            })?
-            .build_with_conn(es::HttpsConnector::with_webpki_roots());
+            })?;
+
+        if let Some(value) = self.cookie.deref().cookies(&self.url) {
+            let value = value.to_str().map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Unable convert header value to string {e:?}"),
+                )
+            })?;
+            client_builder = client_builder
+                .header(reqwest::header::COOKIE.as_str(), value)
+                .map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Failed to add header from `reqwest` to client {e:?}"),
+                    )
+                })?;
+        }
+
+        let client =
+            client_builder.build_with_conn(es::HttpsConnector::with_webpki_roots());
 
         let mut last = None;
 
@@ -512,7 +546,7 @@ impl FuelClient {
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
-                "Failed to get status for transaction",
+                format!("Failed to get status for transaction {:?}", status_result),
             ))
         }
     }
@@ -540,19 +574,21 @@ impl FuelClient {
         Ok(transactions)
     }
 
-    pub async fn receipts(&self, id: &str) -> io::Result<Vec<Receipt>> {
+    pub async fn receipts(&self, id: &str) -> io::Result<Option<Vec<Receipt>>> {
         let query = schema::tx::TransactionQuery::build(TxIdArgs { id: id.parse()? });
 
         let tx = self.query(query).await?.transaction.ok_or_else(|| {
             io::Error::new(ErrorKind::NotFound, format!("transaction {id} not found"))
         })?;
 
-        let receipts: Result<Vec<Receipt>, ConversionError> = tx
+        let receipts = tx
             .receipts
-            .unwrap_or_default()
-            .into_iter()
-            .map(|r| r.try_into())
-            .collect();
+            .map(|vec| {
+                let vec: Result<Vec<Receipt>, ConversionError> =
+                    vec.into_iter().map(TryInto::<Receipt>::try_into).collect();
+                vec
+            })
+            .transpose();
 
         Ok(receipts?)
     }
@@ -609,7 +645,7 @@ impl FuelClient {
     }
 
     pub async fn coin(&self, id: &str) -> io::Result<Option<Coin>> {
-        let query = schema::coin::CoinByIdQuery::build(CoinByIdArgs {
+        let query = schema::coins::CoinByIdQuery::build(CoinByIdArgs {
             utxo_id: id.parse()?,
         });
         let coin = self.query(query).await?.coin;
@@ -622,26 +658,26 @@ impl FuelClient {
         owner: &str,
         asset_id: Option<&str>,
         request: PaginationRequest<String>,
-    ) -> io::Result<PaginatedResult<schema::coin::Coin, String>> {
+    ) -> io::Result<PaginatedResult<schema::coins::Coin, String>> {
         let owner: schema::Address = owner.parse()?;
         let asset_id: schema::AssetId = match asset_id {
             Some(asset_id) => asset_id.parse()?,
             None => schema::AssetId::default(),
         };
-        let query = schema::coin::CoinsQuery::build((owner, asset_id, request).into());
+        let query = schema::coins::CoinsQuery::build((owner, asset_id, request).into());
 
         let coins = self.query(query).await?.coins.into();
         Ok(coins)
     }
 
-    /// Retrieve resources to spend in a transaction
-    pub async fn resources_to_spend(
+    /// Retrieve coins to spend in a transaction
+    pub async fn coins_to_spend(
         &self,
         owner: &str,
         spend_query: Vec<(&str, u64, Option<u64>)>,
-        // (Utxos, messages)
+        // (Utxos, Messages Nonce)
         excluded_ids: Option<(Vec<&str>, Vec<&str>)>,
-    ) -> io::Result<Vec<Vec<schema::resource::Resource>>> {
+    ) -> io::Result<Vec<Vec<schema::coins::CoinType>>> {
         let owner: schema::Address = owner.parse()?;
         let spend_query: Vec<SpendQueryElementInput> = spend_query
             .iter()
@@ -655,12 +691,12 @@ impl FuelClient {
             .try_collect()?;
         let excluded_ids: Option<ExcludeInput> =
             excluded_ids.map(ExcludeInput::from_tuple).transpose()?;
-        let query = schema::resource::ResourcesToSpendQuery::build(
+        let query = schema::coins::CoinsToSpendQuery::build(
             (owner, spend_query, excluded_ids).into(),
         );
 
-        let resources_per_asset = self.query(query).await?.resources_to_spend;
-        Ok(resources_per_asset)
+        let coins_per_asset = self.query(query).await?.coins_to_spend;
+        Ok(coins_per_asset)
     }
 
     pub async fn contract(&self, id: &str) -> io::Result<Option<Contract>> {

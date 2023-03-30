@@ -135,9 +135,9 @@ impl Header {
         self.0.transactions_count.into()
     }
 
-    /// Number of output messages in this block.
-    async fn output_messages_count(&self) -> U64 {
-        self.0.output_messages_count.into()
+    /// Number of message receipts in this block.
+    async fn message_receipt_count(&self) -> U64 {
+        self.0.message_receipt_count.into()
     }
 
     /// Merkle root of transactions.
@@ -145,9 +145,9 @@ impl Header {
         self.0.transactions_root.into()
     }
 
-    /// Merkle root of messages in this block.
-    async fn output_messages_root(&self) -> Bytes32 {
-        self.0.output_messages_root.into()
+    /// Merkle root of message receipts in this block.
+    async fn message_receipt_root(&self) -> Bytes32 {
+        self.0.message_receipt_root.into()
     }
 
     /// Fuel block height.

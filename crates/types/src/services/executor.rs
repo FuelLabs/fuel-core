@@ -17,7 +17,7 @@ use crate::{
     fuel_types::{
         Bytes32,
         ContractId,
-        MessageId,
+        Nonce,
     },
     fuel_vm::{
         Backtrace,
@@ -271,7 +271,7 @@ pub enum Error {
     #[error("No matching utxo for contract id ${0:#x}")]
     ContractUtxoMissing(ContractId),
     #[error("message already spent {0:#x}")]
-    MessageAlreadySpent(MessageId),
+    MessageAlreadySpent(Nonce),
     #[error("Expected input of type {0}")]
     InputTypeMismatch(String),
 }
@@ -293,23 +293,23 @@ pub enum TransactionValidityError {
     #[error("The specified coin doesn't exist")]
     CoinDoesNotExist(UtxoId),
     #[error("The specified message was already spent")]
-    MessageAlreadySpent(MessageId),
+    MessageAlreadySpent(Nonce),
     #[error(
         "Message is not yet spendable, as it's DA height is newer than this block allows"
     )]
-    MessageSpendTooEarly(MessageId),
+    MessageSpendTooEarly(Nonce),
     #[error("The specified message doesn't exist")]
-    MessageDoesNotExist(MessageId),
+    MessageDoesNotExist(Nonce),
     #[error("The input message sender doesn't match the relayer message sender")]
-    MessageSenderMismatch(MessageId),
+    MessageSenderMismatch(Nonce),
     #[error("The input message recipient doesn't match the relayer message recipient")]
-    MessageRecipientMismatch(MessageId),
+    MessageRecipientMismatch(Nonce),
     #[error("The input message amount doesn't match the relayer message amount")]
-    MessageAmountMismatch(MessageId),
+    MessageAmountMismatch(Nonce),
     #[error("The input message nonce doesn't match the relayer message nonce")]
-    MessageNonceMismatch(MessageId),
+    MessageNonceMismatch(Nonce),
     #[error("The input message data doesn't match the relayer message data")]
-    MessageDataMismatch(MessageId),
+    MessageDataMismatch(Nonce),
     #[error("Contract output index isn't valid: {0:#x}")]
     InvalidContractInputIndex(UtxoId),
     #[error("The transaction must have at least one coin or message input type: {0:#x}")]

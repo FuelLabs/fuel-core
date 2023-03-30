@@ -12,11 +12,7 @@ use fuel_core_types::{
         },
     },
     fuel_asm::Word,
-    fuel_tx::{
-        Receipt,
-        Transaction,
-        TxId,
-    },
+    fuel_tx::TxId,
     fuel_types::Bytes32,
     services::{
         block_importer::UncommittedResult as UncommittedImportResult,
@@ -55,13 +51,6 @@ pub trait BlockProducer: Send + Sync {
         block_time: Tai64,
         max_gas: Word,
     ) -> anyhow::Result<UncommittedExecutionResult<StorageTransaction<Self::Database>>>;
-
-    async fn dry_run(
-        &self,
-        transaction: Transaction,
-        height: Option<BlockHeight>,
-        utxo_validation: Option<bool>,
-    ) -> anyhow::Result<Vec<Receipt>>;
 }
 
 #[cfg_attr(test, mockall::automock(type Database=EmptyStorage;))]

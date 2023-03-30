@@ -22,7 +22,7 @@ use crate::{
     fuel_types::{
         Bytes32,
         ContractId,
-        MessageId,
+        Nonce,
     },
     fuel_vm::{
         checked_transaction::Checked,
@@ -221,9 +221,9 @@ pub enum Error {
     )]
     NotInsertedCollisionContractId(ContractId),
     #[error(
-        "Transaction is not inserted. A higher priced tx {0:#x} is already spending this messageId: {1:#x}"
+        "Transaction is not inserted. A higher priced tx {0:#x} is already spending this message: {1:#x}"
     )]
-    NotInsertedCollisionMessageId(TxId, MessageId),
+    NotInsertedCollisionMessageId(TxId, Nonce),
     #[error(
         "Transaction is not inserted. Dependent UTXO output is not existing: {0:#x}"
     )]
@@ -237,9 +237,9 @@ pub enum Error {
     #[error("Transaction is not inserted. UTXO is spent: {0:#x}")]
     NotInsertedInputUtxoIdSpent(UtxoId),
     #[error("Transaction is not inserted. Message is spent: {0:#x}")]
-    NotInsertedInputMessageIdSpent(MessageId),
+    NotInsertedInputMessageSpent(Nonce),
     #[error("Transaction is not inserted. Message id {0:#x} does not match any received message from the DA layer.")]
-    NotInsertedInputMessageUnknown(MessageId),
+    NotInsertedInputMessageUnknown(Nonce),
     #[error(
         "Transaction is not inserted. UTXO requires Contract input {0:#x} that is priced lower"
     )]
@@ -250,16 +250,14 @@ pub enum Error {
     NotInsertedIoWrongAmount,
     #[error("Transaction is not inserted. Input output mismatch. Coin output asset_id does not match expected inputs")]
     NotInsertedIoWrongAssetId,
-    #[error("Transaction is not inserted. The computed message id doesn't match the provided message id.")]
-    NotInsertedIoWrongMessageId,
+    #[error(
+        "Transaction is not inserted. Input message mismatch the values from database"
+    )]
+    NotInsertedIoMessageMismatch,
     #[error(
         "Transaction is not inserted. Input output mismatch. Expected coin but output is contract"
     )]
     NotInsertedIoContractOutput,
-    #[error(
-        "Transaction is not inserted. Input output mismatch. Expected coin but output is message"
-    )]
-    NotInsertedIoMessageInput,
     #[error("Transaction is not inserted. Maximum depth of dependent transaction chain reached")]
     NotInsertedMaxDepth,
     #[error("Transaction exceeds the max gas per block limit. Tx gas: {tx_gas}, block limit {block_limit}")]

@@ -30,7 +30,6 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
     let (_, contract_id) = test_builder.setup_contract(vec![], None, None, None);
     // initialize 10 random transactions that transfer coins and call a contract
     let transactions = (1..=10)
-        .into_iter()
         .map(|i| {
             TransactionBuilder::script(
                 op::ret(RegId::ONE).to_bytes().into_iter().collect(),
@@ -46,23 +45,15 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
                 Default::default(),
                 0,
             )
-            .add_input(Input::Contract {
-                utxo_id: Default::default(),
-                balance_root: Default::default(),
-                state_root: Default::default(),
-                tx_pointer: Default::default(),
+            .add_input(Input::contract(
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                Default::default(),
                 contract_id,
-            })
-            .add_output(Output::Change {
-                amount: 0,
-                asset_id: Default::default(),
-                to: rng.gen(),
-            })
-            .add_output(Output::Contract {
-                input_index: 1,
-                balance_root: Default::default(),
-                state_root: Default::default(),
-            })
+            ))
+            .add_output(Output::change(rng.gen(), 0, AssetId::default()))
+            .add_output(Output::contract(1, Default::default(), Default::default()))
             .finalize()
         })
         .collect_vec();
@@ -235,7 +226,6 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
     // generate random txs
     let secret = SecretKey::random(&mut rng);
     let txs = (0..TEST_TXS)
-        .into_iter()
         .map(|i| {
             TransactionBuilder::script(
                 op::ret(RegId::ONE).to_bytes().into_iter().collect(),
