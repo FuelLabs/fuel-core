@@ -55,6 +55,7 @@ use fuel_core_services::{
 use futures::Stream;
 use serde_json::json;
 use std::{
+    cmp::max,
     future::Future,
     net::{
         SocketAddr,
@@ -63,6 +64,7 @@ use std::{
     pin::Pin,
 };
 use tokio_stream::StreamExt;
+use tower::ServiceBuilder;
 use tower_http::{
     set_header::SetResponseHeaderLayer,
     trace::TraceLayer,
@@ -164,7 +166,20 @@ pub fn new_service(
 
     let router = Router::new()
         .route("/playground", get(graphql_playground))
-        .route("/graphql", post(graphql_handler).options(ok))
+        .route(
+            "/graphql",
+            post(graphql_handler)
+                .route_layer({
+                    let num_cpu = num_cpus::get();
+                    // reserve at least one free cpu core to avoid overloading the async runtime
+                    // with blocking work. If there's only 1 core, ensure we don't go below 1.
+                    let concurrency = max(1, num_cpu.checked_sub(1).unwrap_or_default());
+                    ServiceBuilder::new()
+                        .concurrency_limit(concurrency)
+                        .into_inner()
+                })
+                .options(ok),
+        )
         .route(
             "/graphql-sub",
             post(graphql_subscription_handler).options(ok),
