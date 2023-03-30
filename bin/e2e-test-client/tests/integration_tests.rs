@@ -1,34 +1,26 @@
-use assert_cmd::prelude::*;
 use fuel_core::service::{
     Config,
     FuelService,
 };
 // Add methods on commands
-use fuel_core_e2e_client::{
-    config::SuiteConfig,
-    CONFIG_FILE_KEY,
-};
-use std::{
-    fs,
-    io::Write,
-    process::Command,
-};
+use fuel_core_e2e_client::config::SuiteConfig;
+use std::fs;
 use tempfile::TempDir; // Used for writing assertions // Run programs
 
 #[tokio::test(flavor = "multi_thread")]
-async fn works_in_local_env() -> Result<(), Box<dyn std::error::Error>> {
+async fn works_in_local_env() {
     // setup a local node
     let srv = setup_local_node().await;
     // generate a config file
     let config = generate_config_file(srv.bound_address.to_string());
     // execute suite
-    execute_suite(config.path)
+    execute_suite(config.path).await
 }
 
 // Spins up a node for each wallet and verifies that the suite works across multiple nodes
 #[cfg(feature = "p2p")]
 #[tokio::test(flavor = "multi_thread")]
-async fn works_in_multinode_local_env() -> Result<(), Box<dyn std::error::Error>> {
+async fn works_in_multinode_local_env() {
     use fuel_core::p2p_test_helpers::*;
     use fuel_core_types::{
         fuel_crypto::{
@@ -74,19 +66,17 @@ async fn works_in_multinode_local_env() -> Result<(), Box<dyn std::error::Error>
     let config = save_config_file(config);
 
     // execute suite
-    execute_suite(config.path)
+    execute_suite(config.path).await
 }
 
-fn execute_suite(config_path: String) -> Result<(), Box<dyn std::error::Error>> {
-    let mut cmd = Command::cargo_bin("fuel-core-e2e-client")?;
-    let cmd = cmd.env(CONFIG_FILE_KEY, config_path).assert().success();
-    std::io::stdout()
-        .write_all(&cmd.get_output().stdout)
-        .unwrap();
-    std::io::stderr()
-        .write_all(&cmd.get_output().stderr)
-        .unwrap();
-    Ok(())
+async fn execute_suite(config_path: String) {
+    let _ = tokio::task::spawn_blocking(|| {
+        fuel_core_e2e_client::main_body(
+            fuel_core_e2e_client::load_config(config_path),
+            Default::default(),
+        )
+    })
+    .await;
 }
 
 async fn setup_local_node() -> FuelService {
