@@ -346,6 +346,7 @@ async fn can_get_message_proof() {
         let receipts = client
             .receipts(transaction_id.to_string().as_str())
             .await
+            .unwrap()
             .unwrap();
 
         // Get the message id from the receipts.
