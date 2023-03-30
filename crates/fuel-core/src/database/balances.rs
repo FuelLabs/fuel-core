@@ -19,9 +19,12 @@ use fuel_core_storage::{
     StorageMutate,
 };
 use fuel_core_types::{
-    fuel_merkle::sparse::{
-        in_memory,
-        MerkleTree,
+    fuel_merkle::{
+        sparse,
+        sparse::{
+            in_memory,
+            MerkleTree,
+        },
     },
     fuel_types::ContractId,
 };
@@ -70,16 +73,9 @@ impl StorageMutate<ContractsAssets> for Database {
 
         let root = prev_metadata.root;
         let storage = self.borrow_mut();
-        let mut tree: MerkleTree<ContractsAssetsMerkleData, _> = {
-            if root == [0; 32] {
-                // The tree is empty
-                MerkleTree::new(storage)
-            } else {
-                // Load the tree saved in metadata
-                MerkleTree::load(storage, &root)
-                    .map_err(|err| StorageError::Other(err.into()))?
-            }
-        };
+        let mut tree: MerkleTree<ContractsAssetsMerkleData, _> =
+            MerkleTree::load(storage, &root)
+                .map_err(|err| StorageError::Other(err.into()))?;
 
         // Update the contact's key-value dataset. The key is the asset id and the
         // value the Word
@@ -122,7 +118,7 @@ impl StorageMutate<ContractsAssets> for Database {
                 .map_err(|err| StorageError::Other(err.into()))?;
 
             let root = tree.root();
-            if root == in_memory::MerkleTree::new().root() {
+            if root == *sparse::empty_sum() {
                 // The tree is now empty; remove the metadata
                 self.storage::<ContractsAssetsMerkleMetadata>()
                     .remove(key.contract_id())?;

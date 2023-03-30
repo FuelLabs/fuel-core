@@ -1505,6 +1505,7 @@ mod tests {
         entities::message::Message,
         fuel_asm::op,
         fuel_crypto::SecretKey,
+        fuel_merkle::sparse,
         fuel_tx,
         fuel_tx::{
             field::{
@@ -2637,7 +2638,7 @@ mod tests {
             .unwrap();
 
         // Assert the balance and state roots should be the same before and after execution.
-        let empty_state = [0; 32].into();
+        let empty_state = (*sparse::empty_sum()).into();
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
             tx_status[2].result,
@@ -2703,7 +2704,7 @@ mod tests {
             .unwrap();
 
         // Assert the balance and state roots should be the same before and after execution.
-        let empty_state = [0; 32].into();
+        let empty_state = (*sparse::empty_sum()).into();
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
             tx_status[2].result,
@@ -2814,7 +2815,7 @@ mod tests {
             .execute_and_commit(ExecutionBlock::Production(block))
             .unwrap();
 
-        let empty_state = [0; 32].into();
+        let empty_state = (*sparse::empty_sum()).into();
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
             tx_status[2].result,
@@ -2897,7 +2898,7 @@ mod tests {
             .unwrap();
 
         // Assert the balance root should not be affected.
-        let empty_state = [0; 32].into();
+        let empty_state = (*sparse::empty_sum()).into();
         assert_eq!(
             ContractRef::new(db, contract_id).balance_root().unwrap(),
             empty_state

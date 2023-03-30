@@ -21,8 +21,7 @@ hex = "0.4"
 # Included to enable webpki in the eventsource client
 hyper-rustls = { version = "0.22", features = ["webpki-tokio"], optional = true }
 itertools = { workspace = true }
-# enable cookie store to support L7 sticky sessions
-reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "cookie_store"] }
+reqwest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 tai64 = { version = "4.0", features = ["serde"] }
