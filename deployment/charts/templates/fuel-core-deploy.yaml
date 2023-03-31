@@ -123,6 +123,7 @@ spec:
             - "{{ .Values.app.min_gas_price }}"
           {{- if .Values.app.name }}
             - "--service-name"
+            - "{{ .Values.app.name }}"
           {{- end}}
           {{- if .Values.app.utxo_validation }}
             - "--utxo-validation"
