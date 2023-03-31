@@ -41,6 +41,7 @@ app:
     tag: ${fuel_core_image_tag}
     pullPolicy: Always
   volume: 
+    enabled: ${fuel_core_pvc_enabled}
     pvname: ${fuel_core_pv_name}
     mountPath: /mnt/db/
     claimname: ${fuel_core_pvc_name}
