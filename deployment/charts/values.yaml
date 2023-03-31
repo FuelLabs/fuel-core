@@ -4,24 +4,27 @@
 
 app:
   name: ${fuel_core_service_name}
+  selector_name: ${fuel_core_selector_name}
   replicas: ${fuel_core_pod_replicas}
   http_port: 80
   target_port: 4000
   peering_port: 30333
-  network_name: ${fuel_core_network_name}
-  p2p_key: ${fuel_core_p2p_key}
-  allow_private_addresses: ${fuel_core_allow_private_addresses}
   human_logging: ${fuel_core_human_logging}
   rust_log: ${fuel_core_rust_log}
   utxo_validation: ${fuel_core_utxo_validation}
   vm_backtrace: ${fuel_core_vm_backtrace}
-  min_gas_price: ${fuel_core_min_gas_price}
-  reserved_nodes_only_mode: ${fuel_core_reserved_only}
+  min_gas_price: "${fuel_core_min_gas_price}"
+  network_name: ${fuel_core_network_name}
   poa_instant: "${fuel_core_poa_instant}"
-  poa_interval_period: ${fuel_core_poa_interval_period}
-  poa_hybrid_min_time: ${fuel_core_poa_hybrid_min_time}
-  poa_hybrid_idle_time: ${fuel_core_poa_hybrid_idle_time}
-  poa_hybrid_max_time: ${fuel_core_poa_hybrid_max_time}
+  poa_interval_period: "${fuel_core_poa_interval_period}"
+  poa_hybrid_min_time: "${fuel_core_poa_hybrid_min_time}"
+  poa_hybrid_idle_time: "${fuel_core_poa_hybrid_idle_time}"
+  poa_hybrid_max_time: "${fuel_core_poa_hybrid_max_time}"
+  max_block_size: "${fuel_core_max_buffer_size}"
+  max_transmit_size: "${fuel_core_max_buffer_size}"
+  p2p_key: ${fuel_core_p2p_key}
+  allow_private_addresses: ${fuel_core_allow_private_addresses}
+  reserved_nodes_only_mode: ${fuel_core_reserved_only}
   reserved_nodes: ${fuel_core_reserved_nodes}
   bootstrap_nodes: ${fuel_core_bootstrap_nodes}
   honeycomb_api_key: ${fuel_core_honeycomb_api_key}
@@ -50,4 +53,6 @@ app:
     memory_requests: ${fuel_core_memory_requests}
     cpu_limits: ${fuel_core_cpu_limits}
     memory_limits: ${fuel_core_memory_limits}
-    
+  prometheus:
+    enabled: ${fuel_core_prometheus_enabled}
+    helm_release_name: ${fuel_core_prometheus_helm_release_name}
