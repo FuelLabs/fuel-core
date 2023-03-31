@@ -20,11 +20,7 @@ use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
     fuel_asm::Word,
-    fuel_tx::{
-        Receipt,
-        Transaction,
-        TxId,
-    },
+    fuel_tx::TxId,
     fuel_types::BlockHeight,
     services::{
         block_importer::UncommittedResult as UncommittedImporterResult,
@@ -95,17 +91,6 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
     ) -> anyhow::Result<UncommittedResult<StorageTransaction<Database>>> {
         self.block_producer
             .produce_and_execute_block(height, block_time, max_gas)
-            .await
-    }
-
-    async fn dry_run(
-        &self,
-        transaction: Transaction,
-        height: Option<BlockHeight>,
-        utxo_validation: Option<bool>,
-    ) -> anyhow::Result<Vec<Receipt>> {
-        self.block_producer
-            .dry_run(transaction, height, utxo_validation)
             .await
     }
 }
