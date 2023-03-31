@@ -42,10 +42,7 @@ use tokio::{
     },
     task::spawn_blocking,
 };
-use tracing::{
-    debug,
-    instrument,
-};
+use tracing::debug;
 
 #[cfg(test)]
 mod tests;
@@ -126,7 +123,6 @@ where
     /// Simulate a transaction without altering any state. Does not aquire the production lock
     /// since it is basically a "read only" operation and shouldn't get in the way of normal
     /// production.
-    #[instrument(skip(self))]
     pub async fn dry_run(
         &self,
         transaction: Transaction,
