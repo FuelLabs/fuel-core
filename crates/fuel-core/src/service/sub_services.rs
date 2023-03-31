@@ -1,5 +1,7 @@
 #![allow(clippy::let_unit_value)]
+
 use super::adapters::P2PAdapter;
+use std::cmp::max;
 
 use crate::{
     database::Database,
@@ -112,9 +114,11 @@ pub fn init_sub_services(
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 
-    // restrict the max number of concurrent dry runs to the number of CPUs
+    // restrict the max number of concurrent dry runs to the number of CPUs - 1
     // as execution in the worst case will be CPU bound rather than I/O bound.
-    let max_dry_run_concurrency = num_cpus::get();
+    // Reserve an extra CPU to avoid over-pressuring the node.
+    let max_dry_run_concurrency =
+        max(1, num_cpus::get().checked_sub(1).unwrap_or_default());
     let block_producer = fuel_core_producer::Producer {
         config: config.block_producer.clone(),
         db: database.clone(),
