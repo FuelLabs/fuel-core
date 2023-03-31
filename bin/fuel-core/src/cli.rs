@@ -68,7 +68,7 @@ pub async fn init_logging(
 
     let telemetry_layer: Option<Box<dyn Layer<_> + Send + Sync>> =
         honeycomb_key.map(|honeycomb_key| {
-            let service_name = format!("node-{}-{}", service_name, network_name);
+            let service_name = format!("node-{service_name}-{network_name}");
             let honeycomb_config = libhoney::Config {
                 options: libhoney::client::Options {
                     api_key: honeycomb_key,
