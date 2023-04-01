@@ -251,7 +251,7 @@ spec:
             - name: RUST_LOG
               value: {{ .Values.app.rust_log | quote }}
             {{- end }}
-            {{- if .Values.app.bootstrap_nodes }}
+            {{- if .Values.app.honeycomb_api_key }}
             - name: HONEYCOMB_API_KEY
               value: {{ .Values.app.honeycomb_api_key | quote }}
             {{- end }}
