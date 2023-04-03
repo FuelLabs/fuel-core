@@ -4,10 +4,7 @@ use super::adapters::P2PAdapter;
 use crate::{
     database::Database,
     fuel_core_graphql_api::Config as GraphQLConfig,
-    schema::{
-        build_schema,
-        dap,
-    },
+    schema::build_schema,
     service::{
         adapters::{
             BlockImporterAdapter,
@@ -155,7 +152,7 @@ pub fn init_sub_services(
     let schema = {
         #[cfg(feature = "dap")]
         {
-            dap::init(
+            crate::schema::dap::init(
                 build_schema(),
                 config.chain_conf.transaction_parameters,
                 config.chain_conf.gas_costs.clone(),

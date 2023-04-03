@@ -60,7 +60,7 @@ tokio-stream = { workspace = true, features = ["sync"] }
 tower-http = { version = "0.3", features = ["set-header", "trace"] }
 tracing = { workspace = true }
 tracing-honeycomb = { version = "0.4", features = ["use_parking_lot"] }
-uuid = { version = "1.1", features = ["v4"] }
+uuid = { version = "1.1", features = ["v4"], optional = true }
 
 [dev-dependencies]
 assert_matches = "1.5"
@@ -72,7 +72,7 @@ mockall = { workspace = true }
 test-case = { workspace = true }
 
 [features]
-dap = []
+dap = ["dep:uuid"]
 debug = ["fuel-core-types/debug", "dap"]
 default = ["debug", "metrics", "rocksdb"]
 metrics = ["dep:fuel-core-metrics"]

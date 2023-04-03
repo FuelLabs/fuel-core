@@ -49,7 +49,6 @@ pub struct Query(
 );
 
 #[cfg(not(feature = "dap"))]
-#[cfg(feature = "dap")]
 #[derive(MergedObject, Default)]
 pub struct Query(
     balance::BalanceQuery,
