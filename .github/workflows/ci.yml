@@ -93,6 +93,8 @@ jobs:
             args: test --no-default-features
           - command: test
             args: --manifest-path version-compatibility/Cargo.toml --workspace
+          - command: build
+            args: -p fuel-core-bin --no-default-features --features production
     # disallow any job that takes longer than 45 minutes
     timeout-minutes: 45
     continue-on-error: ${{ matrix.skip-error || false }}
