@@ -72,7 +72,8 @@ mockall = { workspace = true }
 test-case = { workspace = true }
 
 [features]
-debug = ["fuel-core-types/debug"]
+dap = []
+debug = ["fuel-core-types/debug", "dap"]
 default = ["debug", "metrics", "rocksdb"]
 metrics = ["dep:fuel-core-metrics"]
 p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
