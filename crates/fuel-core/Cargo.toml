@@ -81,4 +81,4 @@ relayer = ["dep:fuel-core-relayer"]
 rocksdb = ["dep:rocksdb", "dep:tempfile"]
 test-helpers = ["fuel-core-p2p?/test-helpers"]
 # features to enable in production, but increase build times
-rocksdb-production = ["rocksdb", "rocksdb?/jemalloc"]
+rocksdb-production = ["rocksdb", "rocksdb/jemalloc"]
