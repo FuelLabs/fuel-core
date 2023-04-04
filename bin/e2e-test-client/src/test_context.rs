@@ -5,7 +5,7 @@ use anyhow::{
     Context,
 };
 use fuel_core_client::client::{
-    schema::resource::Resource,
+    schema::coins::CoinType,
     types::TransactionStatus,
     FuelClient,
     PageDirection,
@@ -24,6 +24,7 @@ use fuel_core_types::{
         Finalizable,
         Input,
         Output,
+        Transaction,
         TransactionBuilder,
         TxId,
         UniqueIdentifier,
@@ -70,6 +71,7 @@ impl TestContext {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Wallet {
     pub secret: SecretKey,
     pub address: Address,
@@ -130,21 +132,21 @@ impl Wallet {
         Ok(false)
     }
 
-    /// Transfers coins from this wallet to another
-    pub async fn transfer(
+    /// Creates the transfer transaction.
+    pub async fn transfer_tx(
         &self,
         destination: Address,
         transfer_amount: u64,
         asset_id: Option<AssetId>,
-    ) -> anyhow::Result<TransferResult> {
+    ) -> anyhow::Result<Transaction> {
         let asset_id = asset_id.unwrap_or_default();
         let asset_id_string = asset_id.to_string();
         let asset_id_str = asset_id_string.as_str();
         let total_amount = transfer_amount + BASE_AMOUNT;
         // select coins
-        let resources = &self
+        let coins = &self
             .client
-            .resources_to_spend(
+            .coins_to_spend(
                 self.address.to_string().as_str(),
                 vec![(asset_id_str, total_amount, None)],
                 None,
@@ -156,8 +158,8 @@ impl Wallet {
         tx.gas_price(1);
         tx.gas_limit(BASE_AMOUNT);
 
-        for resource in resources {
-            if let Resource::Coin(coin) = resource {
+        for coin in coins {
+            if let CoinType::Coin(coin) = coin {
                 tx.add_unsigned_coin_input(
                     self.secret,
                     coin.utxo_id.clone().into(),
@@ -179,21 +181,31 @@ impl Wallet {
             asset_id,
         });
 
-        let tx = tx.finalize();
+        Ok(tx.finalize_as_transaction())
+    }
 
-        let status = self
-            .client
-            .submit_and_await_commit(&tx.clone().into())
+    /// Transfers coins from this wallet to another
+    pub async fn transfer(
+        &self,
+        destination: Address,
+        transfer_amount: u64,
+        asset_id: Option<AssetId>,
+    ) -> anyhow::Result<TransferResult> {
+        let tx = self
+            .transfer_tx(destination, transfer_amount, asset_id)
             .await?;
+        let tx_id = tx.id();
+        let status = self.client.submit_and_await_commit(&tx).await?;
 
         // we know the transferred coin should be output 0 from above
-        let transferred_utxo = UtxoId::new(tx.id(), 0);
+        let transferred_utxo = UtxoId::new(tx_id, 0);
 
         // get status and return the utxo id of transferred coin
         Ok(TransferResult {
-            tx_id: tx.id(),
+            tx_id,
             transferred_utxo,
             success: matches!(status, TransactionStatus::Success { .. }),
+            status,
         })
     }
 
@@ -204,9 +216,9 @@ impl Wallet {
         let asset_id_str = asset_id_string.as_str();
         let total_amount = BASE_AMOUNT;
         // select coins
-        let resources = &self
+        let coins = &self
             .client
-            .resources_to_spend(
+            .coins_to_spend(
                 self.address.to_string().as_str(),
                 vec![(asset_id_str, total_amount, None)],
                 None,
@@ -222,8 +234,8 @@ impl Wallet {
         tx.gas_price(1);
         tx.gas_limit(BASE_AMOUNT);
 
-        for resource in resources {
-            if let Resource::Coin(coin) = resource {
+        for coin in coins {
+            if let CoinType::Coin(coin) = coin {
                 tx.add_unsigned_coin_input(
                     self.secret,
                     coin.utxo_id.clone().into(),
@@ -267,4 +279,5 @@ pub struct TransferResult {
     pub tx_id: TxId,
     pub transferred_utxo: UtxoId,
     pub success: bool,
+    pub status: TransactionStatus,
 }

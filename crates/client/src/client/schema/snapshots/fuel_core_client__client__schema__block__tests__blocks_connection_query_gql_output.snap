@@ -12,9 +12,9 @@ query($after: String, $before: String, $first: Int, $last: Int) {
           id
           daHeight
           transactionsCount
-          outputMessagesCount
+          messageReceiptCount
           transactionsRoot
-          outputMessagesRoot
+          messageReceiptRoot
           height
           prevRoot
           time

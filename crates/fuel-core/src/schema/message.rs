@@ -7,6 +7,7 @@ use super::{
         Bytes32,
         HexString,
         MessageId,
+        Nonce,
         TransactionId,
         U64,
     },
@@ -24,17 +25,12 @@ use async_graphql::{
     Context,
     Object,
 };
-use fuel_core_storage::iter::IntoBoxedIter;
 use fuel_core_types::entities;
 
 pub struct Message(pub(crate) entities::message::Message);
 
 #[Object]
 impl Message {
-    async fn message_id(&self) -> MessageId {
-        self.0.id().into()
-    }
-
     async fn amount(&self) -> U64 {
         self.0.amount.into()
     }
@@ -47,7 +43,7 @@ impl Message {
         self.0.recipient.into()
     }
 
-    async fn nonce(&self) -> U64 {
+    async fn nonce(&self) -> Nonce {
         self.0.nonce.into()
     }
 
@@ -73,36 +69,44 @@ impl MessageQuery {
         after: Option<String>,
         last: Option<i32>,
         before: Option<String>,
-    ) -> async_graphql::Result<Connection<MessageId, Message, EmptyFields, EmptyFields>>
+    ) -> async_graphql::Result<Connection<HexString, Message, EmptyFields, EmptyFields>>
     {
         let query: &Database = ctx.data_unchecked();
-        crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            let start = *start;
+        crate::schema::query_pagination(
+            after,
+            before,
+            first,
+            last,
+            |start: &Option<HexString>, direction| {
+                let start = if let Some(start) = start.clone() {
+                    Some(start.try_into().map_err(|err| anyhow!("{}", err))?)
+                } else {
+                    None
+                };
 
-            let messages = if let Some(owner) = owner {
-                // Rocksdb doesn't support reverse iteration over a prefix
-                if matches!(last, Some(last) if last > 0) {
-                    return Err(anyhow!(
-                        "reverse pagination isn't supported for this resource"
-                    )
-                    .into())
-                }
+                let messages = if let Some(owner) = owner {
+                    // Rocksdb doesn't support reverse iteration over a prefix
+                    if matches!(last, Some(last) if last > 0) {
+                        return Err(anyhow!(
+                            "reverse pagination isn't supported for this resource"
+                        )
+                        .into())
+                    }
 
-                query.owned_messages(&owner.0, start.map(Into::into), direction)
-            } else {
-                query
-                    .all_messages(start.map(Into::into), direction)
-                    .into_boxed()
-            };
+                    query.owned_messages(&owner.0, start, direction)
+                } else {
+                    query.all_messages(start, direction)
+                };
 
-            let messages = messages.map(|result| {
-                result
-                    .map(|message| (message.id().into(), message.into()))
-                    .map_err(Into::into)
-            });
+                let messages = messages.map(|result| {
+                    result
+                        .map(|message| (message.nonce.into(), message.into()))
+                        .map_err(Into::into)
+                });
 
-            Ok(messages)
-        })
+                Ok(messages)
+            },
+        )
         .await
     }
 
@@ -147,7 +151,7 @@ impl MessageProof {
         self.0.recipient.into()
     }
 
-    async fn nonce(&self) -> Bytes32 {
+    async fn nonce(&self) -> Nonce {
         self.0.nonce.into()
     }
 

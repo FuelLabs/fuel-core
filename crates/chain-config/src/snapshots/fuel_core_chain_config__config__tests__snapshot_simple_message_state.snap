@@ -10,10 +10,10 @@ expression: json
       {
         "sender": "0x61644a25da5ad31754e23bc1eca8c766a61ceaa8c60ddc65f158a30209256e35",
         "recipient": "0xc9fba417a2d8d9ed086c0f3f03f94ec89a67bfdc6a1e22b69d667e5ac8055d00",
-        "nonce": "0xf4c4c9f506cc05a3",
-        "amount": "0x43bd0a27cb68f270",
-        "data": "0xbc",
-        "da_height": "0x6438200d0d1865b1"
+        "nonce": "0xa3f57027bcb10d053242a9719dca480b4f4910fa60671f2068086498c72e30fc",
+        "amount": "0x0e1ef2963832068b",
+        "data": "0x9e",
+        "da_height": "0x7d54e039b04f3c08"
       }
     ]
   },
@@ -61,6 +61,12 @@ expression: json
     "jne": 1,
     "jnei": 1,
     "jnzi": 1,
+    "jmpf": 1,
+    "jmpb": 1,
+    "jnzf": 1,
+    "jnzb": 1,
+    "jnef": 1,
+    "jneb": 1,
     "k256": 19,
     "lb": 1,
     "log": 40,

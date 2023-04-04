@@ -7,6 +7,7 @@ use criterion::{
     Throughput,
 };
 use fuel_core_benches::*;
+use fuel_core_storage::ContractsAssetsStorage;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::{
@@ -424,7 +425,6 @@ pub fn run(c: &mut Criterion) {
     for i in linear.clone() {
         let mut input = VmBench::contract(rng, op::smo(0x15, 0x16, 0x17, 0x18))
             .expect("failed to prepare contract");
-        input.outputs.push(Output::message(Address::zeroed(), 1));
         let index = input.outputs.len() - 1;
         input.post_call.extend(vec![
             op::gtf_args(0x15, 0x00, GTFArgs::ScriptData),

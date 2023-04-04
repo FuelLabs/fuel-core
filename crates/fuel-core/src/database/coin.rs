@@ -8,16 +8,19 @@ use crate::database::{
 use fuel_core_chain_config::CoinConfig;
 use fuel_core_storage::{
     iter::IterDirection,
+    not_found,
     tables::Coins,
     Error as StorageError,
     Mappable,
+    Result as StorageResult,
     StorageAsMut,
+    StorageAsRef,
     StorageInspect,
     StorageMutate,
 };
 use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
-    entities::coin::CompressedCoin,
+    entities::coins::coin::CompressedCoin,
     fuel_tx::{
         Address,
         Bytes32,
@@ -118,11 +121,21 @@ impl Database {
         .map(|res| {
             res.map(|(key, _)| {
                 UtxoId::new(
-                    unsafe { Bytes32::from_slice_unchecked(&key[32..64]) },
+                    TxId::try_from(&key[32..64]).expect("The slice has size 32"),
                     key[64],
                 )
             })
         })
+    }
+
+    pub fn coin(&self, utxo_id: &UtxoId) -> StorageResult<CompressedCoin> {
+        let coin = self
+            .storage_as_ref::<Coins>()
+            .get(utxo_id)?
+            .ok_or(not_found!(Coins))?
+            .into_owned();
+
+        Ok(coin)
     }
 
     pub fn get_coin_config(&self) -> DatabaseResult<Option<Vec<CoinConfig>>> {

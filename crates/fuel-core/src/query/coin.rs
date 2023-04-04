@@ -11,7 +11,7 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 use fuel_core_types::{
-    entities::coin::Coin,
+    entities::coins::coin::Coin,
     fuel_tx::UtxoId,
     fuel_types::Address,
 };

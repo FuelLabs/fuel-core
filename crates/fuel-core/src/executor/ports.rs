@@ -1,7 +1,7 @@
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::message::Message,
-    fuel_types::MessageId,
+    fuel_types::Nonce,
 };
 
 pub trait RelayerPort {
@@ -9,7 +9,7 @@ pub trait RelayerPort {
     /// synced and is <= the given da height.
     fn get_message(
         &self,
-        id: &MessageId,
+        id: &Nonce,
         da_height: &DaBlockHeight,
     ) -> anyhow::Result<Option<Message>>;
 }
@@ -21,7 +21,7 @@ pub trait RelayerPort {
 impl RelayerPort for crate::database::Database {
     fn get_message(
         &self,
-        id: &MessageId,
+        id: &Nonce,
         _da_height: &DaBlockHeight,
     ) -> anyhow::Result<Option<Message>> {
         use fuel_core_storage::{

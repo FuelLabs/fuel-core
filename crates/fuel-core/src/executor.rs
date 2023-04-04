@@ -39,7 +39,7 @@ use fuel_core_types::{
         },
     },
     entities::{
-        coin::CompressedCoin,
+        coins::coin::CompressedCoin,
         contract::ContractUtxoInfo,
     },
     fuel_asm::{
@@ -51,6 +51,19 @@ use fuel_core_types::{
             Inputs,
             Outputs,
             TxPointer as TxPointerField,
+        },
+        input::{
+            coin::{
+                CoinPredicate,
+                CoinSigned,
+            },
+            contract::Contract,
+            message::{
+                MessageCoinPredicate,
+                MessageCoinSigned,
+                MessageDataPredicate,
+                MessageDataSigned,
+            },
         },
         Address,
         AssetId,
@@ -681,7 +694,7 @@ where
         // TODO: Avoid cloning here, we can extract value from result
         let mut tx = vm_result.tx().clone();
         // only commit state changes if execution was a success
-        if !vm_result.should_revert() {
+        if !reverted {
             sub_block_db_commit.commit()?;
         }
 
@@ -705,7 +718,7 @@ where
         }
 
         // change the spent status of the tx inputs
-        self.spend_input_utxos(&tx, tx_db_transaction.deref_mut())?;
+        self.spend_input_utxos(&tx, tx_db_transaction.deref_mut(), reverted)?;
 
         // Persist utxos first and after calculate the not utxo outputs
         self.persist_output_utxos(
@@ -779,10 +792,7 @@ where
         });
         execution_data
             .message_ids
-            .extend(vm_result.receipts().iter().filter_map(|r| match r {
-                Receipt::MessageOut { message_id, .. } => Some(*message_id),
-                _ => None,
-            }));
+            .extend(vm_result.receipts().iter().filter_map(|r| r.message_id()));
 
         Ok(())
     }
@@ -796,8 +806,10 @@ where
     ) -> ExecutorResult<()> {
         for input in transaction.inputs() {
             match input {
-                Input::CoinSigned { utxo_id, .. }
-                | Input::CoinPredicate { utxo_id, .. } => {
+                Input::CoinSigned(CoinSigned { utxo_id, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
+                    // TODO: Check that fields are equal. We already do that check
+                    //  in the `fuel-core-txpool`, so we need to reuse the code here.
                     if let Some(coin) = db.storage::<Coins>().get(utxo_id)? {
                         if block_height
                             < BlockHeight::from(coin.tx_pointer.block_height())
@@ -814,80 +826,93 @@ where
                         )
                     }
                 }
-                Input::Contract { .. } => {}
-                Input::MessageSigned {
-                    message_id,
+                Input::Contract(_) => {}
+                Input::MessageCoinSigned(MessageCoinSigned {
                     sender,
                     recipient,
                     amount,
                     nonce,
-                    data,
                     ..
-                }
-                | Input::MessagePredicate {
-                    message_id,
+                })
+                | Input::MessageCoinPredicate(MessageCoinPredicate {
                     sender,
                     recipient,
                     amount,
                     nonce,
-                    data,
                     ..
-                } => {
+                })
+                | Input::MessageDataSigned(MessageDataSigned {
+                    sender,
+                    recipient,
+                    amount,
+                    nonce,
+                    ..
+                })
+                | Input::MessageDataPredicate(MessageDataPredicate {
+                    sender,
+                    recipient,
+                    amount,
+                    nonce,
+                    ..
+                }) => {
                     // Eagerly return already spent if status is known.
-                    if db.is_message_spent(message_id)? {
-                        return Err(TransactionValidityError::MessageAlreadySpent(
-                            *message_id,
+                    if db.is_message_spent(nonce)? {
+                        return Err(
+                            TransactionValidityError::MessageAlreadySpent(*nonce).into()
                         )
-                        .into())
                     }
                     if let Some(message) = self
                         .relayer
-                        .get_message(message_id, &block_da_height)
+                        .get_message(nonce, &block_da_height)
                         .map_err(|e| ExecutorError::RelayerError(e.into()))?
                     {
                         if message.da_height > block_da_height {
                             return Err(TransactionValidityError::MessageSpendTooEarly(
-                                *message_id,
+                                *nonce,
                             )
                             .into())
                         }
                         if message.sender != *sender {
                             return Err(TransactionValidityError::MessageSenderMismatch(
-                                *message_id,
+                                *nonce,
                             )
                             .into())
                         }
                         if message.recipient != *recipient {
                             return Err(
                                 TransactionValidityError::MessageRecipientMismatch(
-                                    *message_id,
+                                    *nonce,
                                 )
                                 .into(),
                             )
                         }
                         if message.amount != *amount {
                             return Err(TransactionValidityError::MessageAmountMismatch(
-                                *message_id,
+                                *nonce,
                             )
                             .into())
                         }
                         if message.nonce != *nonce {
                             return Err(TransactionValidityError::MessageNonceMismatch(
-                                *message_id,
+                                *nonce,
                             )
                             .into())
                         }
-                        if message.data != *data {
+                        let expected_data = if message.data.is_empty() {
+                            None
+                        } else {
+                            Some(message.data.as_slice())
+                        };
+                        if expected_data != input.input_data() {
                             return Err(TransactionValidityError::MessageDataMismatch(
-                                *message_id,
+                                *nonce,
                             )
                             .into())
                         }
                     } else {
-                        return Err(TransactionValidityError::MessageDoesNotExist(
-                            *message_id,
+                        return Err(
+                            TransactionValidityError::MessageDoesNotExist(*nonce).into()
                         )
-                        .into())
                     }
                 }
             }
@@ -960,28 +985,42 @@ where
     }
 
     /// Mark input utxos as spent
-    fn spend_input_utxos<Tx>(&self, tx: &Tx, db: &mut Database) -> ExecutorResult<()>
+    fn spend_input_utxos<Tx>(
+        &self,
+        tx: &Tx,
+        db: &mut Database,
+        reverted: bool,
+    ) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
     {
         for input in tx.inputs() {
             match input {
-                Input::CoinSigned { utxo_id, .. }
-                | Input::CoinPredicate { utxo_id, .. } => {
+                Input::CoinSigned(CoinSigned { utxo_id, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     // prune utxo from db
                     db.storage::<Coins>().remove(utxo_id)?;
                 }
-                Input::MessageSigned { message_id, .. }
-                | Input::MessagePredicate { message_id, .. } => {
+                Input::MessageDataSigned(_)
+                | Input::MessageDataPredicate(_)
+                    if reverted => {
+                    // Don't spend the retryable messages if transaction is reverted
+                    continue
+                }
+                Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
+                | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
+                | Input::MessageDataSigned(MessageDataSigned { nonce, .. }) // Spend only if tx is not reverted
+                | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) // Spend only if tx is not reverted
+                 => {
                     // mark message id as spent
                     let was_already_spent =
-                        db.storage::<SpentMessages>().insert(message_id, &())?;
+                        db.storage::<SpentMessages>().insert(nonce, &())?;
                     // ensure message wasn't already marked as spent
                     if was_already_spent.is_some() {
-                        return Err(ExecutorError::MessageAlreadySpent(*message_id))
+                        return Err(ExecutorError::MessageAlreadySpent(*nonce))
                     }
                     // cleanup message contents
-                    db.storage::<Messages>().remove(message_id)?;
+                    db.storage::<Messages>().remove(nonce)?;
                 }
                 _ => {}
             }
@@ -1026,7 +1065,7 @@ where
             ExecutionTypes::Production(tx) => {
                 for input in tx.inputs_mut() {
                     match input {
-                        Input::CoinSigned {
+                        Input::CoinSigned(CoinSigned {
                             tx_pointer,
                             utxo_id,
                             owner,
@@ -1034,8 +1073,8 @@ where
                             asset_id,
                             maturity,
                             ..
-                        }
-                        | Input::CoinPredicate {
+                        })
+                        | Input::CoinPredicate(CoinPredicate {
                             tx_pointer,
                             utxo_id,
                             owner,
@@ -1043,7 +1082,7 @@ where
                             asset_id,
                             maturity,
                             ..
-                        } => {
+                        }) => {
                             let coin = self.get_coin_or_default(
                                 db,
                                 *utxo_id,
@@ -1054,14 +1093,14 @@ where
                             )?;
                             *tx_pointer = coin.tx_pointer;
                         }
-                        Input::Contract {
+                        Input::Contract(Contract {
                             ref mut utxo_id,
                             ref mut balance_root,
                             ref mut state_root,
                             ref mut tx_pointer,
                             ref contract_id,
                             ..
-                        } => {
+                        }) => {
                             let mut contract = ContractRef::new(&mut *db, *contract_id);
                             let utxo_info =
                                 contract.validated_utxo(self.config.utxo_validation)?;
@@ -1078,7 +1117,7 @@ where
             ExecutionTypes::Validation(tx) => {
                 for input in tx.inputs() {
                     match input {
-                        Input::CoinSigned {
+                        Input::CoinSigned(CoinSigned {
                             tx_pointer,
                             utxo_id,
                             owner,
@@ -1086,8 +1125,8 @@ where
                             asset_id,
                             maturity,
                             ..
-                        }
-                        | Input::CoinPredicate {
+                        })
+                        | Input::CoinPredicate(CoinPredicate {
                             tx_pointer,
                             utxo_id,
                             owner,
@@ -1095,7 +1134,7 @@ where
                             asset_id,
                             maturity,
                             ..
-                        } => {
+                        }) => {
                             let coin = self.get_coin_or_default(
                                 db,
                                 *utxo_id,
@@ -1110,14 +1149,14 @@ where
                                 })
                             }
                         }
-                        Input::Contract {
+                        Input::Contract(Contract {
                             utxo_id,
                             balance_root,
                             state_root,
                             contract_id,
                             tx_pointer,
                             ..
-                        } => {
+                        }) => {
                             let mut contract = ContractRef::new(&mut *db, *contract_id);
                             let provided_info = ContractUtxoInfo {
                                 utxo_id: *utxo_id,
@@ -1140,7 +1179,6 @@ where
                                     transaction_id: tx.id(),
                                 })
                             }
-                            // TODO: Also check `tx_pointer` based on `utxo_id` pointer.
                         }
                         _ => {}
                     }
@@ -1174,16 +1212,17 @@ where
                         ref input_index,
                     } = output
                     {
-                        let contract_id =
-                            if let Some(Input::Contract { contract_id, .. }) =
-                                tx.inputs().get(*input_index as usize)
-                            {
-                                contract_id
-                            } else {
-                                return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx.id(),
-                                })
-                            };
+                        let contract_id = if let Some(Input::Contract(Contract {
+                            contract_id,
+                            ..
+                        })) = tx.inputs().get(*input_index as usize)
+                        {
+                            contract_id
+                        } else {
+                            return Err(ExecutorError::InvalidTransactionOutcome {
+                                transaction_id: tx.id(),
+                            })
+                        };
 
                         let mut contract = ContractRef::new(&mut *db, *contract_id);
                         *balance_root = contract.balance_root()?;
@@ -1200,16 +1239,17 @@ where
                         input_index,
                     } = output
                     {
-                        let contract_id =
-                            if let Some(Input::Contract { contract_id, .. }) =
-                                tx.inputs().get(*input_index as usize)
-                            {
-                                contract_id
-                            } else {
-                                return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx.id(),
-                                })
-                            };
+                        let contract_id = if let Some(Input::Contract(Contract {
+                            contract_id,
+                            ..
+                        })) = tx.inputs().get(*input_index as usize)
+                        {
+                            contract_id
+                        } else {
+                            return Err(ExecutorError::InvalidTransactionOutcome {
+                                transaction_id: tx.id(),
+                            })
+                        };
 
                         let mut contract = ContractRef::new(&mut *db, *contract_id);
                         if balance_root != &contract.balance_root()? {
@@ -1307,7 +1347,7 @@ where
                     input_index: input_idx,
                     ..
                 } => {
-                    if let Some(Input::Contract { contract_id, .. }) =
+                    if let Some(Input::Contract(Contract { contract_id, .. })) =
                         inputs.get(*input_idx as usize)
                     {
                         db.storage::<ContractsLatestUtxo>().insert(
@@ -1322,9 +1362,6 @@ where
                             TransactionValidityError::InvalidContractInputIndex(utxo_id),
                         ))
                     }
-                }
-                Output::Message { .. } => {
-                    // TODO: Handle message outputs somehow (new field on the block type?)
                 }
                 Output::Change {
                     to,
@@ -1455,8 +1492,8 @@ where
     ) -> ExecutorResult<()> {
         let mut owners = vec![];
         for input in inputs {
-            if let Input::CoinSigned { owner, .. } | Input::CoinPredicate { owner, .. } =
-                input
+            if let Input::CoinSigned(CoinSigned { owner, .. })
+            | Input::CoinPredicate(CoinPredicate { owner, .. }) = input
             {
                 owners.push(owner);
             }
@@ -1465,7 +1502,6 @@ where
         for output in outputs {
             match output {
                 Output::Coin { to, .. }
-                | Output::Message { recipient: to, .. }
                 | Output::Change { to, .. }
                 | Output::Variable { to, .. } => {
                     owners.push(to);
@@ -1558,12 +1594,10 @@ mod tests {
     use fuel_core_storage::tables::Messages;
     use fuel_core_types::{
         blockchain::header::ConsensusHeader,
-        entities::message::{
-            CheckedMessage,
-            Message,
-        },
+        entities::message::Message,
         fuel_asm::op,
         fuel_crypto::SecretKey,
+        fuel_merkle::sparse,
         fuel_tx,
         fuel_tx::{
             field::{
@@ -1677,7 +1711,6 @@ mod tests {
 
     pub(crate) fn test_block(num_txs: usize) -> Block {
         let transactions = (1..num_txs + 1)
-            .into_iter()
             .map(|i| {
                 TxBuilder::new(2322u64)
                     .gas_limit(10)
@@ -1933,7 +1966,7 @@ mod tests {
                         // Store the pointer to the beginning of the free memory into 
                         // register `0x10`. It requires shifting of `RegId::HP` by 1 to point
                         // on the free memory.
-                        op::addi(0x10, RegId::HP, 1),
+                        op::addi(0x10, RegId::HP, 0),
                         // Store `config_coinbase` `Address` into MEM[$0x10; 32].
                         op::cb(0x10),
                         // Store the pointer on the beginning of script data into register `0x12`.
@@ -2693,7 +2726,7 @@ mod tests {
             .unwrap();
 
         // Assert the balance and state roots should be the same before and after execution.
-        let empty_state = [0; 32].into();
+        let empty_state = (*sparse::empty_sum()).into();
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
             tx_status[2].result,
@@ -2759,7 +2792,7 @@ mod tests {
             .unwrap();
 
         // Assert the balance and state roots should be the same before and after execution.
-        let empty_state = [0; 32].into();
+        let empty_state = (*sparse::empty_sum()).into();
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
             tx_status[2].result,
@@ -2870,7 +2903,7 @@ mod tests {
             .execute_and_commit(ExecutionBlock::Production(block))
             .unwrap();
 
-        let empty_state = [0; 32].into();
+        let empty_state = (*sparse::empty_sum()).into();
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
             tx_status[2].result,
@@ -2953,7 +2986,7 @@ mod tests {
             .unwrap();
 
         // Assert the balance root should not be affected.
-        let empty_state = [0; 32].into();
+        let empty_state = (*sparse::empty_sum()).into();
         assert_eq!(
             ContractRef::new(db, contract_id).balance_root().unwrap(),
             empty_state
@@ -2988,20 +3021,13 @@ mod tests {
         let db = &mut Database::default();
 
         // insert coin into state
-        if let Input::CoinSigned {
+        if let Input::CoinSigned(CoinSigned {
             utxo_id,
             owner,
             amount,
             asset_id,
             ..
-        }
-        | Input::CoinPredicate {
-            utxo_id,
-            owner,
-            amount,
-            asset_id,
-            ..
-        } = tx.inputs()[0]
+        }) = tx.inputs()[0]
         {
             db.storage::<Coins>()
                 .insert(
@@ -3171,7 +3197,8 @@ mod tests {
             .unwrap();
         // Corrupt the utxo_id of the contract output
         if let Transaction::Script(script) = &mut second_block.transactions_mut()[1] {
-            if let Input::Contract { utxo_id, .. } = &mut script.inputs_mut()[0] {
+            if let Input::Contract(Contract { utxo_id, .. }) = &mut script.inputs_mut()[0]
+            {
                 // use a previously valid contract id which isn't the correct one for this block
                 *utxo_id = UtxoId::new(tx_id, 0);
             }
@@ -3264,48 +3291,39 @@ mod tests {
         }
     }
 
-    /// Helper to build transactions and a message in it for some of the message tests
-    fn make_tx_and_message(
-        rng: &mut StdRng,
-        da_height: u64,
-    ) -> (Transaction, CheckedMessage) {
-        let mut message = Message {
-            sender: rng.gen(),
-            recipient: rng.gen(),
-            nonce: rng.gen(),
-            amount: 1000,
-            data: vec![],
+    fn message_from_input(input: &Input, da_height: u64) -> Message {
+        Message {
+            sender: *input.sender().unwrap(),
+            recipient: *input.recipient().unwrap(),
+            nonce: *input.nonce().unwrap(),
+            amount: input.amount().unwrap(),
+            data: input
+                .input_data()
+                .map(|data| data.to_vec())
+                .unwrap_or_default(),
             da_height: DaBlockHeight(da_height),
-        };
+        }
+    }
 
+    /// Helper to build transactions and a message in it for some of the message tests
+    fn make_tx_and_message(rng: &mut StdRng, da_height: u64) -> (Transaction, Message) {
         let tx = TransactionBuilder::script(vec![], vec![])
-            .add_unsigned_message_input(
-                rng.gen(),
-                message.sender,
-                message.nonce,
-                message.amount,
-                vec![],
-            )
+            .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), 1000, vec![])
             .finalize();
 
-        if let Input::MessageSigned { recipient, .. } = tx.inputs()[0] {
-            message.recipient = recipient;
-        } else {
-            unreachable!();
-        }
-
-        (tx.into(), message.check())
+        let message = message_from_input(&tx.inputs()[0], da_height);
+        (tx.into(), message)
     }
 
     /// Helper to build database and executor for some of the message tests
-    fn make_executor(messages: &[&CheckedMessage]) -> Executor<Database> {
+    fn make_executor(messages: &[&Message]) -> Executor<Database> {
         let mut database = Database::default();
         let database_ref = &mut database;
 
         for message in messages {
             database_ref
                 .storage::<Messages>()
-                .insert(message.id(), message.as_ref())
+                .insert(message.id(), message)
                 .unwrap();
         }
 
@@ -3336,6 +3354,120 @@ mod tests {
         make_executor(&[&message])
             .execute_and_commit(ExecutionBlock::Validation(block))
             .expect("block validation failed unexpectedly");
+    }
+
+    #[test]
+    fn successful_execution_consume_all_messages() {
+        let mut rng = StdRng::seed_from_u64(2322);
+        let to: Address = rng.gen();
+        let amount = 500;
+
+        let tx = TransactionBuilder::script(vec![], vec![])
+            // Add `Input::MessageCoin`
+            .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), amount, vec![])
+            // Add `Input::MessageData`
+            .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), amount, vec![0xff; 10])
+            .add_output(Output::change(to, amount + amount, AssetId::BASE))
+            .finalize();
+        let tx_id = tx.id();
+
+        let message_coin = message_from_input(&tx.inputs()[0], 0);
+        let message_data = message_from_input(&tx.inputs()[1], 0);
+        let messages = vec![&message_coin, &message_data];
+
+        let mut block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![tx.into()],
+        };
+
+        let exec = make_executor(&messages);
+        let mut block_db_transaction = exec.database.transaction();
+        assert_eq!(block_db_transaction.all_messages(None, None).count(), 2);
+
+        let ExecutionData {
+            skipped_transactions,
+            ..
+        } = exec
+            .execute_transactions(
+                &mut block_db_transaction,
+                ExecutionType::Production(&mut block),
+            )
+            .unwrap();
+        assert_eq!(skipped_transactions.len(), 0);
+
+        // Successful execution consumes `message_coin` and `message_data`.
+        assert_eq!(block_db_transaction.all_messages(None, None).count(), 0);
+        assert!(block_db_transaction
+            .is_message_spent(&message_coin.nonce)
+            .unwrap());
+        assert!(block_db_transaction
+            .is_message_spent(&message_data.nonce)
+            .unwrap());
+        assert_eq!(
+            block_db_transaction
+                .coin(&UtxoId::new(tx_id, 0))
+                .unwrap()
+                .amount,
+            amount + amount
+        );
+    }
+
+    #[test]
+    fn reverted_execution_consume_only_message_coins() {
+        let mut rng = StdRng::seed_from_u64(2322);
+        let to: Address = rng.gen();
+        let amount = 500;
+
+        // Script that return `1` - failed script -> execution result will be reverted.
+        let script = vec![op::ret(1)].into_iter().collect();
+        let tx = TransactionBuilder::script(script, vec![])
+            // Add `Input::MessageCoin`
+            .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), amount, vec![])
+            // Add `Input::MessageData`
+            .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), amount, vec![0xff; 10])
+            .add_output(Output::change(to, amount + amount, AssetId::BASE))
+            .finalize();
+        let tx_id = tx.id();
+
+        let message_coin = message_from_input(&tx.inputs()[0], 0);
+        let message_data = message_from_input(&tx.inputs()[1], 0);
+        let messages = vec![&message_coin, &message_data];
+
+        let mut block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![tx.into()],
+        };
+
+        let exec = make_executor(&messages);
+        let mut block_db_transaction = exec.database.transaction();
+        assert_eq!(block_db_transaction.all_messages(None, None).count(), 2);
+
+        let ExecutionData {
+            skipped_transactions,
+            ..
+        } = exec
+            .execute_transactions(
+                &mut block_db_transaction,
+                ExecutionType::Production(&mut block),
+            )
+            .unwrap();
+        assert_eq!(skipped_transactions.len(), 0);
+
+        // We should spend only `message_coin`. The `message_data` should be unspent.
+        assert_eq!(block_db_transaction.all_messages(None, None).count(), 1);
+        assert!(block_db_transaction
+            .is_message_spent(&message_coin.nonce)
+            .unwrap());
+        assert!(!block_db_transaction
+            .is_message_spent(&message_data.nonce)
+            .unwrap());
+        assert_eq!(
+            block_db_transaction
+                .coin(&UtxoId::new(tx_id, 0))
+                .unwrap()
+                .amount,
+            amount
+        );
     }
 
     #[test]

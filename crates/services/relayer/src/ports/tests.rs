@@ -28,23 +28,19 @@ fn test_insert_messages() {
         ..Default::default()
     };
     let mut m2 = m.clone();
-    m2.amount = 100;
-    m2.da_height = 4u64.into();
+    m2.nonce = 1.into();
     assert_ne!(m.id(), m2.id());
-    let messages = [m.check(), m2.check()];
+    let messages = [m, m2];
     db.insert_messages(&12u64.into(), &messages[..]).unwrap();
 }
 
 #[test]
 fn insert_always_raises_da_height_monotonically() {
     let messages: Vec<_> = (0..10)
-        .map(|i| {
-            Message {
-                amount: i,
-                da_height: i.into(),
-                ..Default::default()
-            }
-            .check()
+        .map(|i| Message {
+            amount: i,
+            da_height: i.into(),
+            ..Default::default()
         })
         .collect();
 

@@ -12,6 +12,7 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use std::{
+    array::TryFromSliceError,
     convert::TryInto,
     fmt::{
         Display,
@@ -161,6 +162,21 @@ impl FromStr for HexString {
     }
 }
 
+impl From<fuel_types::Nonce> for HexString {
+    fn from(n: fuel_types::Nonce) -> Self {
+        HexString(n.to_vec())
+    }
+}
+
+impl TryInto<fuel_types::Nonce> for HexString {
+    type Error = TryFromSliceError;
+
+    fn try_into(self) -> Result<fuel_types::Nonce, Self::Error> {
+        let bytes: [u8; 32] = self.0.as_slice().try_into()?;
+        Ok(fuel_types::Nonce::from(bytes))
+    }
+}
+
 macro_rules! fuel_type_scalar {
     ($name:literal, $id:ident, $ft_id:ident, $len:expr) => {
         #[derive(Copy, Clone, Debug, PartialOrd, Ord, PartialEq, Eq)]
@@ -241,6 +257,7 @@ fuel_type_scalar!("ContractId", ContractId, ContractId, 32);
 fuel_type_scalar!("Salt", Salt, Salt, 32);
 fuel_type_scalar!("TransactionId", TransactionId, Bytes32, 32);
 fuel_type_scalar!("MessageId", MessageId, MessageId, 32);
+fuel_type_scalar!("Nonce", Nonce, Nonce, 32);
 fuel_type_scalar!("Signature", Signature, Bytes64, 64);
 
 impl From<fuel_core_types::fuel_vm::Signature> for Signature {

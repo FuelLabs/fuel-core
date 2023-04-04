@@ -3,6 +3,7 @@ use ethers::{
     types::{
         Log,
         SyncingStatus,
+        U256,
     },
 };
 use fuel_core::{
@@ -35,6 +36,7 @@ use fuel_core_types::{
     fuel_asm::*,
     fuel_crypto::*,
     fuel_tx::*,
+    fuel_types::Nonce,
 };
 use hyper::{
     service::{
@@ -69,7 +71,7 @@ async fn relayer_can_download_logs() {
     let contract_address = config.relayer.eth_v2_listening_contracts[0];
     let message = |nonce, block_number: u64| {
         make_message_event(
-            nonce,
+            Nonce::from(nonce),
             block_number,
             contract_address,
             None,
@@ -106,8 +108,8 @@ async fn relayer_can_download_logs() {
     // check the db for downloaded messages
     for msg in expected_messages {
         assert_eq!(
-            &*db.storage::<Messages>().get(msg.id()).unwrap().unwrap(),
-            &*msg
+            *db.storage::<Messages>().get(msg.id()).unwrap().unwrap(),
+            msg
         );
     }
     srv.stop_and_await().await.unwrap();
@@ -127,7 +129,7 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     let recipient = Input::owner(&pk);
     let sender = Address::zeroed();
     let amount = 100;
-    let nonce = 2;
+    let nonce = Nonce::from(2u64);
     let logs = vec![make_message_event(
         nonce,
         5,
@@ -220,7 +222,7 @@ async fn messages_are_spendable_after_relayer_is_synced() {
 }
 
 fn make_message_event(
-    nonce: u64,
+    nonce: Nonce,
     block_number: u64,
     contract_address: H160,
     sender: Option<[u8; 32]>,
@@ -228,8 +230,8 @@ fn make_message_event(
     amount: Option<u64>,
     data: Option<Vec<u8>>,
 ) -> Log {
-    let message = fuel_core_relayer::bridge::SentMessageFilter {
-        nonce,
+    let message = fuel_core_relayer::bridge::MessageSentFilter {
+        nonce: U256::from_big_endian(nonce.as_ref()),
         sender: sender.unwrap_or_default(),
         recipient: recipient.unwrap_or_default(),
         amount: amount.unwrap_or_default(),

@@ -10,7 +10,7 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
-    schema::resource::Resource,
+    schema::coins::CoinType,
     FuelClient,
     PageDirection,
     PaginationRequest,
@@ -57,7 +57,7 @@ async fn balance() {
                 .map(|(nonce, (owner, amount))| MessageConfig {
                     sender: owner,
                     recipient: owner,
-                    nonce: nonce as u64,
+                    nonce: (nonce as u64).into(),
                     amount,
                     data: vec![],
                     da_height: DaBlockHeight::from(1usize),
@@ -80,9 +80,9 @@ async fn balance() {
         .unwrap();
     assert_eq!(balance, 450);
 
-    // spend some resources and check again
-    let resources_per_asset = client
-        .resources_to_spend(
+    // spend some coins and check again
+    let coins_per_asset = client
+        .coins_to_spend(
             format!("{owner:#x}").as_str(),
             vec![(format!("{asset_id:#x}").as_str(), 1, None)],
             None,
@@ -93,28 +93,28 @@ async fn balance() {
     let mut tx = TransactionBuilder::script(vec![], vec![])
         .gas_limit(1_000_000)
         .to_owned();
-    for resources in resources_per_asset {
-        for resource in resources {
-            match resource {
-                Resource::Coin(coin) => tx.add_input(Input::CoinSigned {
-                    utxo_id: coin.utxo_id.into(),
-                    owner: coin.owner.into(),
-                    amount: coin.amount.into(),
-                    asset_id: coin.asset_id.into(),
-                    maturity: coin.maturity.into(),
-                    witness_index: 0,
-                    tx_pointer: Default::default(),
-                }),
-                Resource::Message(message) => tx.add_input(Input::MessageSigned {
-                    message_id: message.message_id.into(),
-                    sender: message.sender.into(),
-                    amount: message.amount.into(),
-                    witness_index: 0,
-                    recipient: message.recipient.into(),
-                    nonce: message.nonce.into(),
-                    data: Default::default(),
-                }),
-                Resource::Unknown => panic!("Unknown resource"),
+    for coins in coins_per_asset {
+        for coin in coins {
+            match coin {
+                CoinType::Coin(coin) => tx.add_input(Input::coin_signed(
+                    coin.utxo_id.into(),
+                    coin.owner.into(),
+                    coin.amount.into(),
+                    coin.asset_id.into(),
+                    Default::default(),
+                    0,
+                    coin.maturity.into(),
+                )),
+                CoinType::MessageCoin(message) => {
+                    tx.add_input(Input::message_coin_signed(
+                        message.sender.into(),
+                        message.recipient.into(),
+                        message.amount.into(),
+                        message.nonce.into(),
+                        0,
+                    ))
+                }
+                CoinType::Unknown => panic!("Unknown coin"),
             };
         }
     }
@@ -185,15 +185,20 @@ async fn first_5_balances() {
     let messages = {
         // setup all messages for all owners
         let mut messages = vec![];
-        for owner in &all_owners {
-            messages.extend(vec![(owner, 60), (owner, 90)].into_iter().enumerate().map(
-                |(nonce, (owner, amount))| MessageConfig {
-                    sender: *owner,
-                    recipient: *owner,
-                    nonce: nonce as u64,
-                    amount,
-                    data: vec![],
-                    da_height: DaBlockHeight::from(1usize),
+        let mut nonce = 0;
+        for owner in all_owners.iter() {
+            messages.extend(vec![(owner, 60), (owner, 90)].into_iter().map(
+                |(owner, amount)| {
+                    let message = MessageConfig {
+                        sender: *owner,
+                        recipient: *owner,
+                        nonce: (nonce as u64).into(),
+                        amount,
+                        data: vec![],
+                        da_height: DaBlockHeight::from(1usize),
+                    };
+                    nonce += 1;
+                    message
                 },
             ))
         }

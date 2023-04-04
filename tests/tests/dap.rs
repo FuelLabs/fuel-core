@@ -62,7 +62,7 @@ async fn reset() {
     assert!(result);
 
     let result = client
-        .execute(id, &op::addi(0x11, RegId::HP, 1))
+        .execute(id, &op::addi(0x11, RegId::HP, 0))
         .await
         .unwrap();
     assert!(result);

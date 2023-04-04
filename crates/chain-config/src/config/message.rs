@@ -10,18 +10,18 @@ use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::message::Message,
     fuel_asm::Word,
-    fuel_types::Address,
+    fuel_crypto::Hasher,
+    fuel_types::{
+        Address,
+        Nonce,
+    },
 };
 use serde::{
     Deserialize,
     Serialize,
 };
-use serde_with::{
-    serde_as,
-    skip_serializing_none,
-};
+use serde_with::serde_as;
 
-#[skip_serializing_none]
 #[serde_as]
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 pub struct MessageConfig {
@@ -29,8 +29,8 @@ pub struct MessageConfig {
     pub sender: Address,
     #[serde_as(as = "HexType")]
     pub recipient: Address,
-    #[serde_as(as = "HexNumber")]
-    pub nonce: Word,
+    #[serde_as(as = "HexType")]
+    pub nonce: Nonce,
     #[serde_as(as = "HexNumber")]
     pub amount: Word,
     #[serde_as(as = "HexType")]
@@ -55,6 +55,23 @@ impl From<MessageConfig> for Message {
 
 impl GenesisCommitment for Message {
     fn root(&self) -> anyhow::Result<MerkleRoot> {
-        Ok(self.id().into())
+        let Self {
+            sender,
+            recipient,
+            nonce,
+            amount,
+            data,
+            da_height,
+        } = self;
+
+        let message_hash = *Hasher::default()
+            .chain(sender)
+            .chain(recipient)
+            .chain(nonce)
+            .chain(amount.to_be_bytes())
+            .chain(data.as_slice())
+            .chain(da_height.to_be_bytes())
+            .finalize();
+        Ok(message_hash)
     }
 }
