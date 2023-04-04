@@ -1,14 +1,13 @@
 [package]
+name = "fuel-core-graphql"
+version = { workspace = true }
 authors = { workspace = true }
-categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
-description = "Fuel client library is aggregation of all fuels service. It contains the all business logic of the fuel protocol."
 edition = { workspace = true }
 homepage = { workspace = true }
-keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
+keywords = ["blockchain", "fuel", "fuel-vm"]
 license = { workspace = true }
-name = "fuel-core"
 repository = { workspace = true }
-version = { workspace = true }
+description = "Fuel GraphQL"
 
 [dependencies]
 anyhow = { workspace = true }
@@ -21,19 +20,9 @@ clap = { workspace = true, features = ["derive"] }
 derive_more = { version = "0.99" }
 enum-iterator = "1.2"
 fuel-core-chain-config = { workspace = true }
-fuel-core-consensus-module = { workspace = true }
-fuel-core-database = { workspace = true }
-fuel-core-executor = { workspace = true }
-fuel-core-graphql = { workspace = true }
-fuel-core-importer = { workspace = true }
-fuel-core-metrics = { workspace = true, optional = true }
-fuel-core-p2p = { workspace = true, optional = true }
-fuel-core-poa = { workspace = true }
-fuel-core-producer = { workspace = true }
-fuel-core-relayer = { workspace = true, optional = true }
+fuel-core-metrics = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true }
-fuel-core-sync = { workspace = true, optional = true }
 fuel-core-txpool = { workspace = true }
 fuel-core-types = { workspace = true, features = [
     "serde",
@@ -46,10 +35,6 @@ num_cpus = "1.13"
 postcard = { workspace = true, features = ["use-std"] }
 primitive-types = "0.12"
 rand = { workspace = true }
-rocksdb = { version = "0.19", default-features = false, features = [
-    "lz4",
-    "multi-threaded-cf",
-], optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 strum = "0.24"
@@ -64,20 +49,15 @@ uuid = { version = "1.1", features = ["v4"] }
 
 [dev-dependencies]
 assert_matches = "1.5"
-fuel-core-services = { path = "./../services", features = ["test-helpers"] }
-fuel-core-storage = { path = "./../storage", features = ["test-helpers"] }
-fuel-core-trace = { path = "./../trace" }
-fuel-core-types = { path = "./../types", features = ["test-helpers"] }
+fuel-core-services = { path = "./../../services", features = ["test-helpers"] }
+fuel-core-storage = { path = "./../../storage", features = ["test-helpers"] }
+fuel-core-trace = { path = "./../../trace" }
+fuel-core-types = { path = "./../../types", features = ["test-helpers"] }
 mockall = { workspace = true }
 test-case = { workspace = true }
 
 [features]
+test-helpers = []
+metrics = []
 debug = ["fuel-core-types/debug"]
-default = ["debug", "metrics", "rocksdb"]
-metrics = ["dep:fuel-core-metrics"]
-p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
-relayer = ["dep:fuel-core-relayer"]
-rocksdb = ["dep:rocksdb", "dep:tempfile"]
-test-helpers = ["fuel-core-p2p?/test-helpers"]
-# features to enable in production, but increase build times
-rocksdb-production = ["rocksdb?/jemalloc"]
+default = ["debug"]

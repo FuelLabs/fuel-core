@@ -62,6 +62,7 @@ fuel-core-consensus-module = { version = "0.17.6", path = "./crates/services/con
 fuel-core-bft = { version = "0.17.6", path = "./crates/services/consensus_module/bft" }
 fuel-core-poa = { version = "0.17.6", path = "./crates/services/consensus_module/poa" }
 fuel-core-executor = { version = "0.17.6", path = "./crates/services/executor" }
+fuel-core-graphql = { version = "0.17.6", path = "./crates/services/graphql" }
 fuel-core-importer = { version = "0.17.6", path = "./crates/services/importer" }
 fuel-core-p2p = { version = "0.17.6", path = "./crates/services/p2p" }
 fuel-core-producer = { version = "0.17.6", path = "./crates/services/producer" }
