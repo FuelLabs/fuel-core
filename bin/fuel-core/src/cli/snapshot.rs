@@ -21,7 +21,7 @@ pub struct Command {
     pub chain_config: String,
 }
 
-#[cfg(not(feature = "rocksdb"))]
+#[cfg(not(any(feature = "rocksdb", feature = "rocksdb-production")))]
 pub async fn exec(command: Command) -> anyhow::Result<()> {
     Err(anyhow::anyhow!(
         "Rocksdb must be enabled to use the database at {}",
@@ -29,7 +29,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     ))
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
 pub async fn exec(command: Command) -> anyhow::Result<()> {
     use anyhow::Context;
     use fuel_core::{
