@@ -107,3 +107,4 @@ tempfile = "3.4"
 
 [patch.crates-io]
 fuel-vm = { path="../fuel-vm/fuel-vm" }
+fuel-tx = { path="../fuel-vm/fuel-tx" }
