@@ -592,8 +592,8 @@ where
         let min_fee = original_tx.metadata().min_fee();
         let max_fee = original_tx.metadata().max_fee();
 
-        let mut checked_tx : Checked<Tx>;
-        let mut estimated_tx : Estimated<Tx>;
+        let mut checked_tx: Checked<Tx>;
+        let mut estimated_tx: Estimated<Tx>;
 
         match execution_kind {
             ExecutionKind::Estimation => {
@@ -623,7 +623,7 @@ where
                         .check_signatures()
                         .map_err(TransactionValidityError::from)?;
                 }
-            },
+            }
             ExecutionKind::Production | ExecutionKind::Validation => {
                 // Check the transaction against the block height.
                 let checked_tx = original_tx.clone().into_checked_basic(
@@ -651,7 +651,7 @@ where
                         .check_signatures()
                         .map_err(TransactionValidityError::from)?;
                 }
-            },
+            }
         }
 
         // execute transaction
@@ -669,30 +669,28 @@ where
             self.config.chain_conf.transaction_parameters,
             self.config.chain_conf.gas_costs.clone(),
         );
-        let vm_result: StateTransition<_> =
-            match execution_kind {
-                ExecutionKind::Production | ExecutionKind::Validation => {
-                    vm
-                        .transact(checked_tx.clone())
-                        .map_err(|error| ExecutorError::VmExecution {
-                            error,
-                            transaction_id: tx_id,
-                        })?
-                        .into()
-                },
-                ExecutionKind::Estimation => {
-                    vm
-                        .transact(estimated_tx.clone())
-                        .map_err(|error| ExecutorError::VmExecution {
-                            error,
-                            transaction_id: tx_id,
-                        })?
-                        .into()
-                },
-            };
+        let vm_result: StateTransition<_> = match execution_kind {
+            ExecutionKind::Production | ExecutionKind::Validation => vm
+                .transact(checked_tx.clone())
+                .map_err(|error| ExecutorError::VmExecution {
+                    error,
+                    transaction_id: tx_id,
+                })?
+                .into(),
+            ExecutionKind::Estimation => vm
+                .transact(estimated_tx.clone())
+                .map_err(|error| ExecutorError::VmExecution {
+                    error,
+                    transaction_id: tx_id,
+                })?
+                .into(),
+        };
 
         // TODO: Avoid cloning here, we can extract value from result
         let mut tx = vm_result.tx().clone();
+
+        vm_result.receipts().get(0).unwrap().gas_used();
+
         // only commit state changes if execution was a success
         if !reverted {
             sub_block_db_commit.commit()?;
