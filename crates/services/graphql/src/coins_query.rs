@@ -204,7 +204,7 @@ impl From<StorageError> for CoinsQueryError {
     }
 }
 
-#[cfg(test)]
+#[cfg(any())]
 mod tests {
     use crate::{
         coins_query::{

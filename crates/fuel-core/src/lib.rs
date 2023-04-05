@@ -27,7 +27,7 @@ pub mod service;
 pub mod state;
 
 pub mod fuel_core_graphql_api {
-    pub use crate::graphql_api::*;
+    pub use fuel_core_graphql::*;
 }
 
 #[cfg(test)]

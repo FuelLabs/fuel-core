@@ -1,11 +1,5 @@
-use crate::{
-    database::{
-        transaction::DatabaseTransaction,
-        vm_database::VmDatabase,
-        Database,
-    },
-    schema::scalars::U64,
-};
+use crate::schema::scalars::U64;
+
 use async_graphql::{
     Context,
     Object,

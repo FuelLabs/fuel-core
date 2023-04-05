@@ -10,7 +10,6 @@ use crate::{
         CoreSchema,
         CoreSchemaBuilder,
     },
-    service::metrics::metrics,
 };
 use async_graphql::{
     extensions::Tracing,
@@ -169,7 +168,7 @@ pub fn new_service(
             "/graphql-sub",
             post(graphql_subscription_handler).options(ok),
         )
-        .route("/metrics", get(metrics))
+        // .route("/metrics", get(metrics))
         .route("/health", get(health))
         .layer(Extension(schema))
         .layer(TraceLayer::new_for_http())

@@ -5,7 +5,6 @@ use fuel_core::{
         MessageConfig,
         StateConfig,
     },
-    coins_query::CoinsQueryError,
     service::{
         Config,
         FuelService,
@@ -15,6 +14,7 @@ use fuel_core_client::client::{
     schema::coins::CoinType,
     FuelClient,
 };
+use fuel_core_graphql::coins_query::CoinsQueryError;
 use fuel_core_types::fuel_tx::*;
 use rand::{
     prelude::StdRng,

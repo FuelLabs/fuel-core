@@ -19,6 +19,7 @@ axum = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 derive_more = { version = "0.99" }
 enum-iterator = "1.2"
+fuel-core-database = { workspace = true }
 fuel-core-chain-config = { workspace = true }
 fuel-core-metrics = { workspace = true }
 fuel-core-services = { workspace = true }
