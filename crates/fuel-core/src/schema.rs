@@ -56,12 +56,11 @@ pub struct Query(
     chain::ChainQuery,
     tx::TxQuery,
     health::HealthQuery,
-    coin::CoinQuery,
+    coins::CoinQuery,
     contract::ContractQuery,
     contract::ContractBalanceQuery,
     node_info::NodeQuery,
     message::MessageQuery,
-    resource::ResourceQuery,
 );
 
 #[cfg(feature = "dap")]
