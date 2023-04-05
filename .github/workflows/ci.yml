@@ -15,7 +15,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_VERSION: 1.68.1
+  RUST_VERSION: 1.68.2
   NIGHTLY_RUST_VERSION: nightly-2022-12-14
   RUSTFLAGS: -D warnings
   REGISTRY: ghcr.io
@@ -102,6 +102,8 @@ jobs:
             args: test --no-default-features
           - command: test
             args: --manifest-path version-compatibility/Cargo.toml --workspace
+          - command: build
+            args: -p fuel-core-bin --no-default-features --features production
     # disallow any job that takes longer than 45 minutes
     timeout-minutes: 45
     continue-on-error: ${{ matrix.skip-error || false }}
@@ -397,7 +399,7 @@ jobs:
 
       - name: Build fuel-core and fuel-core-keygen
         run: |
-          cross build --profile=release --target ${{ matrix.job.target }} --features "production" -p fuel-core-bin
+          cross build --profile=release --target ${{ matrix.job.target }} --no-default-features --features "production" -p fuel-core-bin
           cross build --profile=release --target ${{ matrix.job.target }} -p fuel-core-keygen
 
       - name: Strip release binary linux x86_64
