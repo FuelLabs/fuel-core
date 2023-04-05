@@ -167,8 +167,6 @@ pub fn init_sub_services(
         }
     };
 
-    let gql_database = Box::new(database.clone());
-
     let graph_ql = crate::fuel_core_graphql_api::service::new_service(
         GraphQLConfig {
             addr: config.addr,
