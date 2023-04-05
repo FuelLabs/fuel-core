@@ -28,7 +28,7 @@ use fuel_core_services::{
     SharedMutex,
     StateWatcher,
 };
-use fuel_core_types::blockchain::primitives::BlockHeight;
+use fuel_core_types::fuel_types::BlockHeight;
 use futures::StreamExt;
 use tokio::sync::Notify;
 

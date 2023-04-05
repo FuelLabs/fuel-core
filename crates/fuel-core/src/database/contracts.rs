@@ -258,7 +258,7 @@ impl Database {
                     balances,
                     tx_id: Some(*utxo_id.tx_id()),
                     output_index: Some(utxo_id.output_index()),
-                    tx_pointer_block_height: Some(tx_pointer.block_height().into()),
+                    tx_pointer_block_height: Some(tx_pointer.block_height()),
                     tx_pointer_tx_idx: Some(tx_pointer.tx_index()),
                 })
             })
@@ -365,7 +365,7 @@ mod tests {
     fn latest_utxo_get() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
-        let tx_pointer = TxPointer::new(1u32, 5);
+        let tx_pointer = TxPointer::new(1.into(), 5);
         let utxo_info = ContractUtxoInfo {
             utxo_id,
             tx_pointer,
@@ -392,7 +392,7 @@ mod tests {
     fn latest_utxo_put() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
-        let tx_pointer = TxPointer::new(1u32, 5);
+        let tx_pointer = TxPointer::new(1.into(), 5);
         let utxo_info = ContractUtxoInfo {
             utxo_id,
             tx_pointer,
@@ -417,7 +417,7 @@ mod tests {
     fn latest_utxo_remove() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
-        let tx_pointer = TxPointer::new(1u32, 5);
+        let tx_pointer = TxPointer::new(1.into(), 5);
 
         let database = &mut Database::default();
         database
@@ -446,7 +446,7 @@ mod tests {
     fn latest_utxo_exists() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
-        let tx_pointer = TxPointer::new(1u32, 5);
+        let tx_pointer = TxPointer::new(1.into(), 5);
 
         let database = &mut Database::default();
         database

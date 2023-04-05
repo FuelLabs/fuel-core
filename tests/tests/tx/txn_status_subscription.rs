@@ -22,7 +22,7 @@ async fn subscribe_txn_status() {
 
     let gas_price = 10;
     let gas_limit = 1_000_000;
-    let maturity = 0;
+    let maturity = Default::default();
 
     let create_script = |i: u8| {
         // The first two scripts will run and the rest will fail.

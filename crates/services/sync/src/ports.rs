@@ -4,7 +4,6 @@ use fuel_core_services::stream::BoxStream;
 use fuel_core_types::{
     blockchain::{
         primitives::{
-            BlockHeight,
             BlockId,
             DaBlockHeight,
         },
@@ -12,6 +11,7 @@ use fuel_core_types::{
         SealedBlockHeader,
     },
     fuel_tx::Transaction,
+    fuel_types::BlockHeight,
     services::p2p::SourcePeer,
 };
 

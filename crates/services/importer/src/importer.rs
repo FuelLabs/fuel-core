@@ -18,12 +18,10 @@ use fuel_core_types::{
             Consensus,
             Sealed,
         },
-        primitives::{
-            BlockHeight,
-            BlockId,
-        },
+        primitives::BlockId,
         SealedBlock,
     },
+    fuel_types::BlockHeight,
     services::{
         block_importer::{
             ImportResult,

@@ -89,7 +89,7 @@ mod tests {
                     1_000_000,
                     Default::default(),
                     Default::default(),
-                    0,
+                    Default::default(),
                 )
                 .add_output(Output::Change {
                     to: Default::default(),
@@ -99,7 +99,7 @@ mod tests {
                 // The block producer assumes transactions are already checked
                 // so it doesn't need to compute valid sigs for tests
                 .finalize_checked_basic(
-                    0,
+                    Default::default(),
                     &ConsensusParameters {
                         gas_price_factor: 1,
                         ..ConsensusParameters::default()

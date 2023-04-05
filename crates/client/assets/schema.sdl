@@ -93,7 +93,7 @@ scalar Bytes32
 type ChainInfo {
 	name: String!
 	latestBlock: Block!
-	baseChainHeight: U64!
+	baseChainHeight: U32!
 	peerCount: Int!
 	consensusParameters: ConsensusParameters!
 }
@@ -109,11 +109,11 @@ type Coin {
 	owner: Address!
 	amount: U64!
 	assetId: AssetId!
-	maturity: U64!
+	maturity: U32!
 	"""
 	TxPointer - the height of the block this coin was created in
 	"""
-	blockCreated: U64!
+	blockCreated: U32!
 	"""
 	TxPointer - the index of the transaction that created this coin
 	"""
@@ -317,7 +317,7 @@ type Header {
 	"""
 	Fuel block height.
 	"""
-	height: U64!
+	height: U32!
 	"""
 	Merkle root of all previous block header hashes.
 	"""
@@ -344,7 +344,7 @@ type InputCoin {
 	assetId: AssetId!
 	txPointer: TxPointer!
 	witnessIndex: Int!
-	maturity: U64!
+	maturity: U32!
 	predicate: HexString!
 	predicateData: HexString!
 }
@@ -368,6 +368,11 @@ type InputMessage {
 	predicateData: HexString!
 }
 
+
+type MerkleProof {
+	proofSet: [Bytes32!]!
+	proofIndex: U64!
+}
 
 type Message {
 	amount: U64!
@@ -419,15 +424,15 @@ type MessageEdge {
 scalar MessageId
 
 type MessageProof {
-	proofSet: [Bytes32!]!
-	proofIndex: U64!
+	messageProof: MerkleProof!
+	blockProof: MerkleProof!
+	messageBlockHeader: Header!
+	commitBlockHeader: Header!
 	sender: Address!
 	recipient: Address!
 	nonce: Nonce!
 	amount: U64!
 	data: HexString!
-	signature: Signature!
-	header: Header!
 }
 
 type Mutation {
@@ -453,7 +458,7 @@ type Mutation {
 	`Trigger::Interval { block_time }`, produces blocks with `block_time ` intervals between
 	them. The `start_timestamp` is the timestamp in seconds.
 	"""
-	produceBlocks(startTimestamp: Tai64Timestamp, blocksToProduce: U64!): U64!
+	produceBlocks(startTimestamp: Tai64Timestamp, blocksToProduce: U64!): U32!
 }
 
 type NodeInfo {
@@ -553,7 +558,7 @@ type Query {
 	contractBalances(filter: ContractBalanceFilterInput!, first: Int, after: String, last: Int, before: String): ContractBalanceConnection!
 	nodeInfo: NodeInfo!
 	messages(owner: Address, first: Int, after: String, last: Int, before: String): MessageConnection!
-	messageProof(transactionId: TransactionId!, messageId: MessageId!): MessageProof
+	messageProof(transactionId: TransactionId!, messageId: MessageId!, commitBlockId: BlockId, commitBlockHeight: U32): MessageProof
 }
 
 type Receipt {
@@ -678,7 +683,7 @@ type Transaction {
 	inputContracts: [Contract!]
 	gasPrice: U64
 	gasLimit: U64
-	maturity: U64
+	maturity: U32
 	txPointer: TxPointer
 	isScript: Boolean!
 	isCreate: Boolean!
@@ -735,6 +740,8 @@ scalar TransactionId
 union TransactionStatus = SubmittedStatus | SuccessStatus | SqueezedOutStatus | FailureStatus
 
 scalar TxPointer
+
+scalar U32
 
 scalar U64
 

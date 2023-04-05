@@ -9,6 +9,7 @@ use crate::{
         DatabaseChain,
         DatabaseCoins,
         DatabaseContracts,
+        DatabaseMessageProof,
         DatabaseMessages,
         DatabasePort,
         DatabaseTransactions,
@@ -38,11 +39,13 @@ use fuel_core_txpool::{
 };
 use fuel_core_types::{
     blockchain::primitives::{
-        BlockHeight,
         BlockId,
         DaBlockHeight,
     },
-    entities::message::Message,
+    entities::message::{
+        MerkleProof,
+        Message,
+    },
     fuel_tx::{
         Address,
         AssetId,
@@ -51,7 +54,10 @@ use fuel_core_types::{
         TxPointer,
         UtxoId,
     },
-    fuel_types::Nonce,
+    fuel_types::{
+        BlockHeight,
+        Nonce,
+    },
     services::{
         graphql_api::ContractBalance,
         txpool::{
@@ -109,7 +115,7 @@ impl DatabaseTransactions for Database {
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<(TxPointer, TxId)>> {
         let start = start.map(|tx_pointer| OwnedTransactionIndexCursor {
-            block_height: tx_pointer.block_height().into(),
+            block_height: tx_pointer.block_height(),
             tx_idx: tx_pointer.tx_index(),
         });
         self.owned_transactions(owner, start, Some(direction))
@@ -220,6 +226,16 @@ impl TxPoolPort for TxPoolAdapter {
         &self,
     ) -> BoxStream<Result<TxUpdate, BroadcastStreamRecvError>> {
         Box::pin(BroadcastStream::new(self.service.tx_update_subscribe()))
+    }
+}
+
+impl DatabaseMessageProof for Database {
+    fn block_history_proof(
+        &self,
+        message_block_height: &BlockHeight,
+        commit_block_height: &BlockHeight,
+    ) -> StorageResult<MerkleProof> {
+        Database::block_history_proof(self, message_block_height, commit_block_height)
     }
 }
 

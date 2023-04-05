@@ -1,12 +1,12 @@
 use super::{
     block::Header,
+    BlockId,
     Bytes32,
     HexString,
     PageDirection,
     PageInfo,
     PaginatedResult,
     PaginationRequest,
-    Signature,
     TransactionId,
 };
 use crate::client::schema::{
@@ -14,6 +14,7 @@ use crate::client::schema::{
     Address,
     MessageId,
     Nonce,
+    U32,
     U64,
 };
 
@@ -75,21 +76,38 @@ pub struct OwnedMessagesConnectionArgs {
     variables = "MessageProofArgs"
 )]
 pub struct MessageProofQuery {
-    #[arguments(transactionId: $transaction_id, messageId: $message_id)]
+    #[arguments(
+        transactionId: $transaction_id,
+        messageId: $message_id,
+        commitBlockId: $commit_block_id,
+        commitBlockHeight: $commit_block_height
+    )]
     pub message_proof: Option<MessageProof>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
-pub struct MessageProof {
+pub struct MerkleProof {
     /// The proof set of the message proof.
     pub proof_set: Vec<Bytes32>,
     /// The index that was used to produce this proof.
     pub proof_index: U64,
-    /// The signature of the fuel block.
-    pub signature: Signature,
-    /// The fuel block that contains the message.
-    pub header: Header,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct MessageProof {
+    /// Proof that message is contained within the provided block header.
+    pub message_proof: MerkleProof,
+    /// Proof that the provided block header is contained within the blockchain history.
+    pub block_proof: MerkleProof,
+    /// The previous fuel block header that contains the message. Message block height <
+    /// commit block height.
+    pub message_block_header: Header,
+    /// The consensus header associated with the finalized commit being used
+    /// as the root of the block proof.
+    pub commit_block_header: Header,
+
     /// The messages sender address.
     pub sender: Address,
     /// The messages recipient address.
@@ -108,6 +126,15 @@ pub struct MessageProofArgs {
     pub transaction_id: TransactionId,
     /// Message id of the output message that requires a proof.
     pub message_id: MessageId,
+
+    /// The query supports either `commit_block_id`, or `commit_block_height` set on, not both.
+
+    /// The block id of the commitment block.
+    /// If it is `None`, the `commit_block_height` should be `Some`.
+    pub commit_block_id: Option<BlockId>,
+    /// The block height of the commitment block.
+    /// If it is `None`, the `commit_block_id` should be `Some`.
+    pub commit_block_height: Option<U32>,
 }
 
 impl From<(Option<Address>, PaginationRequest<String>)> for OwnedMessagesConnectionArgs {

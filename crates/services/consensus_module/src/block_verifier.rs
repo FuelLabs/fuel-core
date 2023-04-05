@@ -17,13 +17,13 @@ use fuel_core_types::{
         block::Block,
         consensus::Consensus,
         header::BlockHeader,
-        primitives::{
-            BlockHeight,
-            DaBlockHeight,
-        },
+        primitives::DaBlockHeight,
         SealedBlockHeader,
     },
-    fuel_types::Bytes32,
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+    },
     tai64::Tai64,
 };
 

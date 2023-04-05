@@ -9,6 +9,7 @@ use crate::schema::{
         Nonce,
         TxPointer,
         UtxoId,
+        U32,
         U64,
     },
 };
@@ -32,7 +33,7 @@ pub struct InputCoin {
     asset_id: AssetId,
     tx_pointer: TxPointer,
     witness_index: u8,
-    maturity: U64,
+    maturity: U32,
     predicate: HexString,
     predicate_data: HexString,
 }
@@ -63,7 +64,7 @@ impl InputCoin {
         self.witness_index
     }
 
-    async fn maturity(&self) -> U64 {
+    async fn maturity(&self) -> U32 {
         self.maturity
     }
 

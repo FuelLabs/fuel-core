@@ -1,10 +1,12 @@
 use crate::{
     fuel_core_graphql_api::{
-        ports::DatabasePort,
+        ports::{
+            DatabaseMessageProof,
+            DatabasePort,
+        },
         IntoApiResult,
     },
     query::{
-        BlockQueryData,
         SimpleBlockData,
         SimpleTransactionData,
         TransactionQueryData,
@@ -25,15 +27,14 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        consensus::Consensus,
         primitives::BlockId,
     },
     entities::message::{
+        MerkleProof,
         Message,
         MessageProof,
     },
-    fuel_crypto::Signature,
-    fuel_merkle,
+    fuel_merkle::binary::in_memory::MerkleTree,
     fuel_tx::{
         Receipt,
         TxId,
@@ -115,17 +116,13 @@ impl<D: DatabasePort + ?Sized> MessageQueryData for D {
 
 /// Trait that specifies all the data required by the output message query.
 pub trait MessageProofData:
-    Send + Sync + SimpleBlockData + SimpleTransactionData
+    Send + Sync + SimpleBlockData + SimpleTransactionData + DatabaseMessageProof
 {
     /// Get the status of a transaction.
     fn transaction_status(
         &self,
         transaction_id: &TxId,
     ) -> StorageResult<TransactionStatus>;
-    /// Get all transactions on a block.
-    fn transactions_on_block(&self, block_id: &BlockId) -> StorageResult<Vec<Bytes32>>;
-    /// Get the signature of a fuel block.
-    fn signature(&self, block_id: &BlockId) -> StorageResult<Signature>;
 }
 
 impl<D: DatabasePort + ?Sized> MessageProofData for D {
@@ -135,30 +132,18 @@ impl<D: DatabasePort + ?Sized> MessageProofData for D {
     ) -> StorageResult<TransactionStatus> {
         self.status(transaction_id)
     }
-
-    fn transactions_on_block(&self, block_id: &BlockId) -> StorageResult<Vec<TxId>> {
-        self.block(block_id).map(|block| block.into_inner().1)
-    }
-
-    fn signature(&self, block_id: &BlockId) -> StorageResult<Signature> {
-        let consensus = self.consensus(block_id)?;
-        match consensus {
-            // TODO: https://github.com/FuelLabs/fuel-core/issues/816
-            Consensus::Genesis(_) => Ok(Default::default()),
-            Consensus::PoA(c) => Ok(c.signature),
-        }
-    }
 }
 
 /// Generate an output proof.
 // TODO: Do we want to return `Option` here?
 pub fn message_proof<T: MessageProofData + ?Sized>(
-    data: &T,
+    database: &T,
     transaction_id: Bytes32,
     message_id: MessageId,
+    commit_block_id: BlockId,
 ) -> StorageResult<Option<MessageProof>> {
     // Check if the receipts for this transaction actually contain this message id or exit.
-    let receipt = data
+    let receipt = database
         .receipts(&transaction_id)?
         .into_iter()
         .find_map(|r| match r {
@@ -167,21 +152,21 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
                 recipient,
                 nonce,
                 amount,
-                data: message_data,
+                data,
                 ..
             } if r.message_id() == Some(message_id) => {
-                Some((sender, recipient, nonce, amount, message_data))
+                Some((sender, recipient, nonce, amount, data))
             }
             _ => None,
         });
 
-    let (sender, recipient, nonce, amount, message_data) = match receipt {
+    let (sender, recipient, nonce, amount, data) = match receipt {
         Some(r) => r,
         None => return Ok(None),
     };
 
     // Get the block id from the transaction status if it's ready.
-    let block_id = match data
+    let message_block_id = match database
         .transaction_status(&transaction_id)
         .into_api_result::<TransactionStatus, StorageError>()?
     {
@@ -189,30 +174,76 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         _ => return Ok(None),
     };
 
-    // Get the message ids in the same order as the transactions.
-    let leaves: Vec<Vec<Receipt>> = data
-        .transactions_on_block(&block_id)?
-        .into_iter()
-        .map(|id| data.receipts(&id))
+    // Get the message fuel block header.
+    let (message_block_header, message_block_txs) = match database
+        .block(&message_block_id)
+        .into_api_result::<CompressedBlock, StorageError>()?
+    {
+        Some(t) => t.into_inner(),
+        None => return Ok(None),
+    };
+
+    let message_proof =
+        match message_receipts_proof(database, message_id, &message_block_txs)? {
+            Some(proof) => proof,
+            None => return Ok(None),
+        };
+
+    // Get the commit fuel block header.
+    let commit_block_header = match database
+        .block(&commit_block_id)
+        .into_api_result::<CompressedBlock, StorageError>()?
+    {
+        Some(t) => t.into_inner().0,
+        None => return Ok(None),
+    };
+
+    let verifiable_commit_block_height = *commit_block_header.height() - 1u32.into();
+    let block_proof = database.block_history_proof(
+        message_block_header.height(),
+        &verifiable_commit_block_height,
+    )?;
+
+    Ok(Some(MessageProof {
+        message_proof,
+        block_proof,
+        message_block_header,
+        commit_block_header,
+        sender,
+        recipient,
+        nonce,
+        amount,
+        data,
+    }))
+}
+
+fn message_receipts_proof<T: MessageProofData + ?Sized>(
+    database: &T,
+    message_id: MessageId,
+    message_block_txs: &[Bytes32],
+) -> StorageResult<Option<MerkleProof>> {
+    // Get the message receipts from the block.
+    let leaves: Vec<Vec<Receipt>> = message_block_txs
+        .iter()
+        .map(|id| database.receipts(id))
         .filter_map(|result| result.into_api_result::<_, StorageError>().transpose())
         .try_collect()?;
-
     let leaves = leaves.into_iter()
         // Flatten the receipts after filtering on output messages
         // and mapping to message ids.
         .flat_map(|receipts|
-            receipts.into_iter().filter_map(|r| r.message_id())).enumerate();
+            receipts.into_iter().filter_map(|r| r.message_id()));
 
     // Build the merkle proof from the above iterator.
-    let mut tree = fuel_merkle::binary::in_memory::MerkleTree::new();
+    let mut tree = MerkleTree::new();
 
     let mut proof_index = None;
 
-    for (index, id) in leaves {
-        // Check id this is the message.
+    for (index, id) in leaves.enumerate() {
+        // Check if this is the message id being proved.
         if message_id == id {
             // Save the index of this message to use as the proof index.
-            proof_index = Some(index);
+            proof_index = Some(index as u64);
         }
 
         // Build the merkle tree.
@@ -223,50 +254,13 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
     match proof_index {
         Some(proof_index) => {
             // Generate the actual merkle proof.
-            let proof = match tree.prove(proof_index as u64) {
-                Some(t) => t,
-                None => return Ok(None),
-            };
-
-            // Get the signature.
-            let signature = match data
-                .signature(&block_id)
-                .into_api_result::<_, StorageError>()?
-            {
-                Some(t) => t,
-                None => return Ok(None),
-            };
-
-            // Get the fuel block.
-            let header = match data
-                .block(&block_id)
-                .into_api_result::<CompressedBlock, StorageError>()?
-            {
-                Some(t) => t.into_inner().0,
-                None => return Ok(None),
-            };
-
-            if *header.message_receipt_root != proof.0 {
-                // This is bad as it means there's a bug in our prove code.
-                tracing::error!(
-                    "block header {:?} root doesn't match generated proof root {:?}",
-                    header,
-                    proof
-                );
-                return Ok(None)
+            match tree.prove(proof_index) {
+                Some((_, proof_set)) => Ok(Some(MerkleProof {
+                    proof_set,
+                    proof_index,
+                })),
+                None => Ok(None),
             }
-
-            Ok(Some(MessageProof {
-                proof_set: proof.1.into_iter().map(Bytes32::from).collect(),
-                proof_index: proof_index as u64,
-                signature,
-                header,
-                sender,
-                recipient,
-                nonce,
-                amount,
-                data: message_data,
-            }))
         }
         None => Ok(None),
     }

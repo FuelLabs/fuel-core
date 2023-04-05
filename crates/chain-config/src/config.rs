@@ -262,7 +262,7 @@ mod tests {
                     balances,
                     tx_id: utxo_id.map(|utxo_id| *utxo_id.tx_id()),
                     output_index: utxo_id.map(|utxo_id| utxo_id.output_index()),
-                    tx_pointer_block_height: tx_pointer.map(|p| p.block_height().into()),
+                    tx_pointer_block_height: tx_pointer.map(|p| p.block_height()),
                     tx_pointer_tx_idx: tx_pointer.map(|p| p.tx_index()),
                 }]),
                 ..Default::default()

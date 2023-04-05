@@ -28,12 +28,12 @@ use fuel_core_types::{
         block::Block,
         consensus::Consensus,
         primitives::{
-            BlockHeight,
             BlockId,
             DaBlockHeight,
         },
         SealedBlock,
     },
+    fuel_types::BlockHeight,
     services::executor::{
         ExecutionBlock,
         Result as ExecutorResult,

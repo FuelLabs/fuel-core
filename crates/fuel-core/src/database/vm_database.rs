@@ -24,6 +24,7 @@ use fuel_core_types::{
     blockchain::header::ConsensusHeader,
     fuel_types::{
         Address,
+        BlockHeight,
         Bytes32,
         ContractId,
         Word,
@@ -37,7 +38,7 @@ use std::borrow::Cow;
 /// Used to store metadata relevant during the execution of a transaction
 #[derive(Clone, Debug)]
 pub struct VmDatabase {
-    current_block_height: u32,
+    current_block_height: BlockHeight,
     current_timestamp: Tai64,
     coinbase: Address,
     database: Database,
@@ -59,7 +60,7 @@ impl IncreaseStorageKey for U256 {
 impl Default for VmDatabase {
     fn default() -> Self {
         Self {
-            current_block_height: 0,
+            current_block_height: Default::default(),
             current_timestamp: Tai64::now(),
             coinbase: Default::default(),
             database: Default::default(),
@@ -74,7 +75,7 @@ impl VmDatabase {
         coinbase: Address,
     ) -> Self {
         Self {
-            current_block_height: header.height.into(),
+            current_block_height: header.height,
             current_timestamp: header.time,
             coinbase,
             database,
@@ -157,31 +158,34 @@ impl ContractsAssetsStorage for VmDatabase {}
 impl InterpreterStorage for VmDatabase {
     type DataError = StorageError;
 
-    fn block_height(&self) -> Result<u32, Self::DataError> {
+    fn block_height(&self) -> Result<BlockHeight, Self::DataError> {
         Ok(self.current_block_height)
     }
 
-    fn timestamp(&self, height: u32) -> Result<Word, Self::DataError> {
+    fn timestamp(&self, height: BlockHeight) -> Result<Word, Self::DataError> {
         let timestamp = match height {
             // panic if $rB is greater than the current block height.
             height if height > self.current_block_height => {
                 return Err(anyhow!("block height too high for timestamp").into())
             }
             height if height == self.current_block_height => self.current_timestamp,
-            height => self.database.block_time(&height.into())?,
+            height => self.database.block_time(&height)?,
         };
         Ok(timestamp.0)
     }
 
     fn block_hash(&self, block_height: u32) -> Result<Bytes32, Self::DataError> {
+        // TODO: https://github.com/FuelLabs/fuel-vm/pull/412
+        let block_height: BlockHeight = block_height.into();
         // Block header hashes for blocks with height greater than or equal to current block height are zero (0x00**32).
         // https://github.com/FuelLabs/fuel-specs/blob/master/specs/vm/instruction_set.md#bhsh-block-hash
-        if block_height >= self.current_block_height || block_height == 0 {
+        if block_height >= self.current_block_height || block_height == Default::default()
+        {
             Ok(Bytes32::zeroed())
         } else {
             // this will return 0x00**32 for block height 0 as well
             self.database
-                .get_block_id(&block_height.into())?
+                .get_block_id(&block_height)?
                 .ok_or(not_found!("BlockId"))
                 .map(Into::into)
         }

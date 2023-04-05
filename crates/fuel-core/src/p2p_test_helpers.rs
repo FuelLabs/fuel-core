@@ -183,7 +183,7 @@ pub async fn make_nodes(
                         initial_coin.amount,
                         initial_coin.asset_id,
                         Default::default(),
-                        0,
+                        Default::default(),
                     )
                     .finalize_as_transaction();
 

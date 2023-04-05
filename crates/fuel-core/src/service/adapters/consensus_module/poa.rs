@@ -19,9 +19,9 @@ use fuel_core_poa::{
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
-    blockchain::primitives::BlockHeight,
     fuel_asm::Word,
     fuel_tx::TxId,
+    fuel_types::BlockHeight,
     services::{
         block_importer::UncommittedResult as UncommittedImporterResult,
         executor::UncommittedResult,
