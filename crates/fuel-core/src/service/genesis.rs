@@ -37,7 +37,10 @@ use fuel_core_types::{
             ConsensusHeader,
             PartialBlockHeader,
         },
-        primitives::Empty,
+        primitives::{
+            BlockHeight,
+            Empty,
+        },
         SealedBlock,
     },
     entities::{
@@ -200,7 +203,7 @@ fn init_coin_state(
 
                 // ensure coin can't point to blocks in the future
                 if coin.tx_pointer.block_height()
-                    > state.height.unwrap_or_default().into()
+                    > <BlockHeight as Into<u32>>::into(state.height.unwrap_or_default())
                 {
                     return Err(anyhow!(
                         "coin tx_pointer height cannot be greater than genesis block"
@@ -263,7 +266,9 @@ fn init_contracts(
                     TxPointer::default()
                 };
 
-                if tx_pointer.block_height() > state.height.unwrap_or_default().into() {
+                if tx_pointer.block_height()
+                    > <BlockHeight as Into<u32>>::into(state.height.unwrap_or_default())
+                {
                     return Err(anyhow!(
                         "contract tx_pointer cannot be greater than genesis block"
                     ))
