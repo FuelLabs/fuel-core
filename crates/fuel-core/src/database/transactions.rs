@@ -10,13 +10,15 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     self,
-    blockchain::primitives::BlockHeight,
     fuel_tx::{
         Bytes32,
         Transaction,
         TxPointer,
     },
-    fuel_types::Address,
+    fuel_types::{
+        Address,
+        BlockHeight,
+    },
     services::txpool::TransactionStatus,
 };
 use std::{
@@ -64,9 +66,7 @@ impl Database {
             direction,
         )
         .map(|res| {
-            res.map(|(key, tx_id)| {
-                (TxPointer::new(key.block_height.into(), key.tx_idx), tx_id)
-            })
+            res.map(|(key, tx_id)| (TxPointer::new(key.block_height, key.tx_idx), tx_id))
         })
     }
 

@@ -32,7 +32,7 @@ async fn transaction_with_valid_predicate_is_executed() {
             amount,
             asset_id,
             Default::default(),
-            0,
+            Default::default(),
             predicate,
             vec![],
         ))
@@ -84,7 +84,7 @@ async fn transaction_with_invalid_predicate_is_rejected() {
             amount,
             asset_id,
             Default::default(),
-            0,
+            Default::default(),
             predicate,
             vec![],
         ))
@@ -119,7 +119,7 @@ async fn transaction_with_predicates_that_exhaust_gas_limit_are_rejected() {
             amount,
             asset_id,
             Default::default(),
-            0,
+            Default::default(),
             predicate,
             vec![],
         ))

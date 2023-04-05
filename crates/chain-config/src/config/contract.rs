@@ -2,13 +2,11 @@ use crate::serialization::{
     HexNumber,
     HexType,
 };
-use fuel_core_types::{
-    blockchain::primitives::BlockHeight,
-    fuel_types::{
-        AssetId,
-        Bytes32,
-        Salt,
-    },
+use fuel_core_types::fuel_types::{
+    AssetId,
+    BlockHeight,
+    Bytes32,
+    Salt,
 };
 use serde::{
     Deserialize,

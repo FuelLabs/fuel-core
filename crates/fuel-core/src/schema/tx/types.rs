@@ -27,6 +27,7 @@ use crate::{
             Tai64Timestamp,
             TransactionId,
             TxPointer,
+            U32,
             U64,
         },
     },
@@ -311,7 +312,7 @@ impl Transaction {
         }
     }
 
-    async fn maturity(&self) -> Option<U64> {
+    async fn maturity(&self) -> Option<U32> {
         match &self.0 {
             fuel_tx::Transaction::Script(script) => Some((*script.maturity()).into()),
             fuel_tx::Transaction::Create(create) => Some((*create.maturity()).into()),

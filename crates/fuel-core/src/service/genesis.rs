@@ -37,10 +37,7 @@ use fuel_core_types::{
             ConsensusHeader,
             PartialBlockHeader,
         },
-        primitives::{
-            BlockHeight,
-            Empty,
-        },
+        primitives::Empty,
         SealedBlock,
     },
     entities::{
@@ -194,17 +191,13 @@ fn init_coin_state(
                     asset_id: coin.asset_id,
                     maturity: coin.maturity.unwrap_or_default(),
                     tx_pointer: TxPointer::new(
-                        coin.tx_pointer_block_height
-                            .map(|b| b.into())
-                            .unwrap_or_default(),
+                        coin.tx_pointer_block_height.unwrap_or_default(),
                         coin.tx_pointer_tx_idx.unwrap_or_default(),
                     ),
                 };
 
                 // ensure coin can't point to blocks in the future
-                if coin.tx_pointer.block_height()
-                    > <BlockHeight as Into<u32>>::into(state.height.unwrap_or_default())
-                {
+                if coin.tx_pointer.block_height() > state.height.unwrap_or_default() {
                     return Err(anyhow!(
                         "coin tx_pointer height cannot be greater than genesis block"
                     ))
@@ -261,14 +254,12 @@ fn init_contracts(
                     contract_config.tx_pointer_block_height,
                     contract_config.tx_pointer_tx_idx,
                 ) {
-                    TxPointer::new(block_height.into(), tx_idx)
+                    TxPointer::new(block_height, tx_idx)
                 } else {
                     TxPointer::default()
                 };
 
-                if tx_pointer.block_height()
-                    > <BlockHeight as Into<u32>>::into(state.height.unwrap_or_default())
-                {
+                if tx_pointer.block_height() > state.height.unwrap_or_default() {
                     return Err(anyhow!(
                         "contract tx_pointer cannot be greater than genesis block"
                     ))
@@ -401,15 +392,13 @@ mod tests {
     };
     use fuel_core_storage::StorageAsRef;
     use fuel_core_types::{
-        blockchain::primitives::{
-            BlockHeight,
-            DaBlockHeight,
-        },
+        blockchain::primitives::DaBlockHeight,
         entities::coins::coin::Coin,
         fuel_asm::op,
         fuel_types::{
             Address,
             AssetId,
+            BlockHeight,
             Salt,
         },
     };
@@ -553,7 +542,7 @@ mod tests {
             && owner == alice
             && amount == alice_value
             && asset_id == asset_id_alice
-            && tx_pointer.block_height() == *alice_block_created.unwrap()
+            && tx_pointer.block_height() == alice_block_created.unwrap()
             && maturity == alice_maturity.unwrap(),
         ));
         assert!(matches!(

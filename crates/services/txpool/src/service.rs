@@ -18,13 +18,15 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_types::{
-    blockchain::primitives::BlockHeight,
     fuel_tx::{
         Transaction,
         TxId,
         UniqueIdentifier,
     },
-    fuel_types::Bytes32,
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+    },
     services::{
         block_importer::ImportResult,
         p2p::{

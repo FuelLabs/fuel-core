@@ -2,7 +2,7 @@
     "Script": {
         "gas_price": 0,
         "gas_limit": 1000000,
-        "maturity": 0,
+        "maturity": "0x00000000",
         "script": [80,64,0,202,80,68,0,186,51,65,16,0,36,4,0,0],
         "script_data": [],
         "inputs": [],

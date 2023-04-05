@@ -90,7 +90,7 @@ where
             tx.deref()
                 .clone()
                 .into_checked(
-                    current_height.into(),
+                    current_height,
                     &self.config.chain_config.transaction_parameters,
                     &self.config.chain_config.gas_costs,
                 )?
@@ -99,7 +99,7 @@ where
             tx.deref()
                 .clone()
                 .into_checked_basic(
-                    current_height.into(),
+                    current_height,
                     &self.config.chain_config.transaction_parameters,
                 )?
                 .into()

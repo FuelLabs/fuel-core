@@ -1,7 +1,6 @@
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
-    blockchain::primitives::BlockHeight,
     entities::{
         coins::coin::CompressedCoin,
         message::Message,
@@ -11,6 +10,7 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
+        BlockHeight,
         ContractId,
         Nonce,
     },

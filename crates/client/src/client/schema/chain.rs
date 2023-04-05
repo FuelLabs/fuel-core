@@ -1,6 +1,7 @@
 use crate::client::schema::{
     block::Block,
     schema,
+    U32,
     U64,
 };
 use fuel_core_types::fuel_tx::ConsensusParameters as TxConsensusParameters;
@@ -52,7 +53,7 @@ pub struct ChainQuery {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ChainInfo {
-    pub base_chain_height: U64,
+    pub base_chain_height: U32,
     pub name: String,
     pub peer_count: i32,
     pub latest_block: Block,

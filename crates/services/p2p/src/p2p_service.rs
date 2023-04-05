@@ -31,7 +31,7 @@ use crate::{
     },
 };
 use fuel_core_metrics::p2p_metrics::P2P_METRICS;
-use fuel_core_types::blockchain::primitives::BlockHeight;
+use fuel_core_types::fuel_types::BlockHeight;
 use futures::prelude::*;
 use libp2p::{
     gossipsub::{
@@ -1403,7 +1403,7 @@ mod tests {
                                             let response_message = rx_orchestrator.await;
 
                                             if let Ok(Some(sealed_block)) = response_message {
-                                                let _ = tx_test_end.send(*sealed_block.entity.header().height() == 0_u64.into()).await;
+                                                let _ = tx_test_end.send(*sealed_block.entity.header().height() == 0.into()).await;
                                             } else {
                                                 tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
                                                 let _ = tx_test_end.send(false).await;
@@ -1498,13 +1498,13 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn request_response_works_with_block() {
-        request_response_works_with(RequestMessage::Block(0_u64.into())).await
+        request_response_works_with(RequestMessage::Block(0.into())).await
     }
 
     #[tokio::test]
     #[instrument]
     async fn request_response_works_with_sealed_header() {
-        request_response_works_with(RequestMessage::SealedHeader(0_u64.into())).await
+        request_response_works_with(RequestMessage::SealedHeader(0.into())).await
     }
 
     #[tokio::test]
@@ -1545,7 +1545,7 @@ mod tests {
                                 assert_eq!(node_a.outbound_requests_table.len(), 0);
 
                                 // Request successfully sent
-                                let requested_block_height = RequestMessage::Block(0_u64.into());
+                                let requested_block_height = RequestMessage::Block(0.into());
                                 assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::Block(tx_orchestrator)).is_ok());
 
                                 // 2b. there should be ONE pending outbound requests in the table

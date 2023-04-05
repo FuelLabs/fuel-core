@@ -22,13 +22,11 @@ use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::Consensus,
-        primitives::{
-            BlockHeight,
-            BlockId,
-        },
+        primitives::BlockId,
         SealedBlock,
     },
     fuel_tx::Transaction,
+    fuel_types::BlockHeight,
     services::{
         block_importer::{
             ImportResult,

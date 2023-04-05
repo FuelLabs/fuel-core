@@ -102,7 +102,7 @@ pub(crate) fn random_predicate(
         amount,
         asset_id,
         Default::default(),
-        0,
+        Default::default(),
         predicate_code,
         vec![],
     )
@@ -122,7 +122,7 @@ pub(crate) fn custom_predicate(
         amount,
         asset_id,
         Default::default(),
-        0,
+        Default::default(),
         code,
         vec![],
     )

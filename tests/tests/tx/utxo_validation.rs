@@ -43,7 +43,7 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
                 1000 + i,
                 Default::default(),
                 Default::default(),
-                0,
+                Default::default(),
             )
             .add_input(Input::contract(
                 Default::default(),
@@ -238,7 +238,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
                 rng.gen_range((100000 + i as u64)..(200000 + i as u64)),
                 Default::default(),
                 Default::default(),
-                0,
+                Default::default(),
             )
             .add_output(Output::change(rng.gen(), 0, Default::default()))
             .finalize()

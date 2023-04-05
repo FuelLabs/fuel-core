@@ -3,6 +3,7 @@ pub use fuel_core::database::Database;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::*,
+    fuel_types::BlockHeight,
     fuel_vm::{
         checked_transaction::builder::TransactionBuilderExt,
         consts::*,
@@ -63,8 +64,8 @@ pub struct VmBench {
     pub params: ConsensusParameters,
     pub gas_price: Word,
     pub gas_limit: Word,
-    pub maturity: Word,
-    pub height: Word,
+    pub maturity: BlockHeight,
+    pub height: BlockHeight,
     pub prepare_script: Vec<Instruction>,
     pub post_call: Vec<Instruction>,
     pub data: Vec<u8>,
@@ -98,8 +99,8 @@ impl VmBench {
             },
             gas_price: 0,
             gas_limit: LARGE_GAS_LIMIT,
-            maturity: 0,
-            height: 0,
+            maturity: Default::default(),
+            height: Default::default(),
             prepare_script: vec![],
             post_call: vec![],
             data: vec![],
@@ -196,12 +197,12 @@ impl VmBench {
         self
     }
 
-    pub fn with_maturity(mut self, maturity: Word) -> Self {
+    pub fn with_maturity(mut self, maturity: BlockHeight) -> Self {
         self.maturity = maturity;
         self
     }
 
-    pub fn with_height(mut self, height: Word) -> Self {
+    pub fn with_height(mut self, height: BlockHeight) -> Self {
         self.height = height;
         self
     }

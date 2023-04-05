@@ -6,11 +6,9 @@ use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::Consensus,
-        primitives::{
-            BlockHeight,
-            BlockId,
-        },
+        primitives::BlockId,
     },
+    fuel_types::BlockHeight,
     services::executor::{
         ExecutionBlock,
         Result as ExecutorResult,

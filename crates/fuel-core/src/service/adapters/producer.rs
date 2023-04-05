@@ -18,13 +18,13 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        primitives::{
-            self,
-            BlockHeight,
-        },
+        primitives::{self,},
     },
     fuel_tx::Receipt,
-    fuel_types::Bytes32,
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+    },
     services::{
         executor::{
             ExecutionBlock,

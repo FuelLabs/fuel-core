@@ -1,7 +1,6 @@
 //! Coin
 
 use crate::{
-    blockchain::primitives::BlockHeight,
     fuel_asm::Word,
     fuel_tx::{
         TxPointer,
@@ -10,6 +9,7 @@ use crate::{
     fuel_types::{
         Address,
         AssetId,
+        BlockHeight,
     },
 };
 

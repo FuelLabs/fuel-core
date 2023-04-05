@@ -9,7 +9,10 @@ use crate::{
     },
     schema::{
         block::Block,
-        scalars::U64,
+        scalars::{
+            U32,
+            U64,
+        },
     },
 };
 use async_graphql::{
@@ -91,7 +94,7 @@ impl ChainInfo {
         Ok(latest_block)
     }
 
-    async fn base_chain_height(&self, ctx: &Context<'_>) -> U64 {
+    async fn base_chain_height(&self, ctx: &Context<'_>) -> U32 {
         let query: &Database = ctx.data_unchecked();
 
         let height = query
