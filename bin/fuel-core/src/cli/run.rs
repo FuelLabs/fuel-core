@@ -1,6 +1,7 @@
 #![allow(unused_variables)]
 use crate::{
     cli::{
+        init_logging,
         run::consensus::PoATriggerArgs,
         DEFAULT_DB_PATH,
     },
@@ -66,6 +67,10 @@ pub struct Command {
 
     #[clap(long = "port", default_value = "4000", env)]
     pub port: u16,
+
+    /// Vanity name for node, used in telemetry
+    #[clap(long = "service-name", default_value = "fuel-core", value_parser, env)]
+    pub service_name: String,
 
     #[clap(
         name = "DB_PATH",
@@ -153,6 +158,9 @@ pub struct Command {
 
     #[clap(long = "tx-pool-ttl", default_value = "5m", env)]
     pub tx_pool_ttl: humantime::Duration,
+
+    #[clap(long = "honeycomb-api-key", env)]
+    pub honeycomb_key: Option<String>,
 }
 
 impl Command {
@@ -160,6 +168,7 @@ impl Command {
         let Command {
             ip,
             port,
+            service_name: name,
             database_path,
             database_type,
             chain_config,
@@ -181,6 +190,7 @@ impl Command {
             max_da_lag,
             max_wait_time,
             tx_pool_ttl,
+            honeycomb_key,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -267,14 +277,30 @@ impl Command {
             #[cfg(feature = "p2p")]
             sync: sync_args.into(),
             consensus_key,
-            name: String::default(),
+            name,
             verifier,
+            honeycomb_api_key: honeycomb_key,
         })
     }
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
     let config = command.get_config()?;
+    let network_name = {
+        #[cfg(feature = "p2p")]
+        {
+            let config = config.p2p.as_ref().unwrap();
+            config.network_name.clone()
+        }
+        #[cfg(not(feature = "p2p"))]
+        "default_network".to_string()
+    };
+    init_logging(
+        config.name.clone(),
+        network_name,
+        config.honeycomb_api_key.clone(),
+    )
+    .await?;
     // log fuel-core version
     info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
     trace!("Initializing in TRACE mode.");

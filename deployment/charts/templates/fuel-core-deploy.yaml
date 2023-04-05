@@ -121,6 +121,10 @@ spec:
             - "/mnt/config/chainspec.json"
             - "--min-gas-price"
             - "{{ .Values.app.min_gas_price }}"
+          {{- if .Values.app.name }}
+            - "--service-name"
+            - "{{ .Values.app.name }}"
+          {{- end}}
           {{- if .Values.app.utxo_validation }}
             - "--utxo-validation"
           {{- end}}
@@ -246,6 +250,10 @@ spec:
             {{- if .Values.app.rust_log }}
             - name: RUST_LOG
               value: {{ .Values.app.rust_log | quote }}
+            {{- end }}
+            {{- if .Values.app.honeycomb_api_key }}
+            - name: HONEYCOMB_KEY
+              value: {{ .Values.app.honeycomb_api_key | quote }}
             {{- end }}
             # TODO: do we need to do anything to make this more optional for non-consensus nodes?
             - name: CONSENSUS_KEY_SECRET
