@@ -23,9 +23,11 @@ dirs = "4.0"
 fuel-core = { workspace = true }
 humantime = "2.1"
 lazy_static = { workspace = true }
+libhoney-rust = { version = "0.1.6" }
 serde_json = { workspace = true, features = ["raw_value"], optional = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing = { workspace = true }
+tracing-honeycomb = { version = "0.4", features = ["use_parking_lot"] }
 tracing-subscriber = { workspace = true, features = [
     "ansi",
     "env-filter",

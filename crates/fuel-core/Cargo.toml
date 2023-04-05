@@ -59,6 +59,7 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tokio-stream = { workspace = true, features = ["sync"] }
 tower-http = { version = "0.3", features = ["set-header", "trace"] }
 tracing = { workspace = true }
+tracing-honeycomb = { version = "0.4", features = ["use_parking_lot"] }
 uuid = { version = "1.1", features = ["v4"] }
 
 [dev-dependencies]
