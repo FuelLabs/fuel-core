@@ -16,6 +16,8 @@ struct Input {
     senders: HashMap<Bytes32, Vec<Sender<(), MockSendStatus>>>,
 }
 
+/// Simply test that for any of these inputs the subscribe function
+/// adds one more subscriber.
 #[proptest]
 fn test_subscriber(input: Input) {
     let Input { tx_id, senders } = input;

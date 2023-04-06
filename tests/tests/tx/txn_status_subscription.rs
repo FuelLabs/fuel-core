@@ -128,7 +128,7 @@ async fn test_regression_in_subscribe() {
         rng.gen(),
         rng.gen(),
         rng.gen(),
-        0,
+        0.into(),
         predicate,
         vec![],
     );
@@ -201,26 +201,17 @@ async fn test_regression_in_subscribe() {
 
 fn submit_and_await_model(tx: &Transaction) -> bool {
     match tx {
-        Transaction::Script(script) => {
-            if script
-                .inputs()
-                .iter()
-                .any(|i| i.is_coin() || i.is_message())
-            {
-                false
-            } else {
-                true
-            }
-        }
+        Transaction::Script(script) => !script
+            .inputs()
+            .iter()
+            .any(|i| i.is_coin() || i.is_message()),
         Transaction::Create(create) => {
             if create.inputs().iter().any(|o| o.is_contract())
                 || create.inputs().is_empty()
             {
                 false
-            } else if create.outputs().iter().any(|o| o.is_contract_created()) {
-                true
             } else {
-                false
+                create.outputs().iter().any(|o| o.is_contract_created())
             }
         }
         _ => true,

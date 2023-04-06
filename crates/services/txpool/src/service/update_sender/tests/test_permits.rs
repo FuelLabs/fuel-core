@@ -46,10 +46,18 @@ fn test_try_subscribe_reg() {
     ]));
 }
 
+/// Test the `try_subscribe` function with given senders.
+///
+/// # Arguments
+///
+/// * `senders` - A HashMap containing a Bytes32 key and a Vec of senders.
 fn test_try_subscribe_inner(senders: HashMap<Bytes32, Vec<Sender<(), MockSendStatus>>>) {
+    // Set max capacity for number of permits.
     let capacity = 10usize;
     let permits = Arc::new(capacity);
     let model = Arc::new(capacity);
+
+    // Transform the senders HashMap into arcs.
     let senders: HashMap<_, Vec<_>> = senders
         .into_iter()
         .map(|(k, v)| {
@@ -65,23 +73,37 @@ fn test_try_subscribe_inner(senders: HashMap<Bytes32, Vec<Sender<(), MockSendSta
             )
         })
         .collect();
+
+    // Calculate the number of closed senders
     let num_closed = senders
         .values()
         .map(|v| v.iter().filter(|v| v.is_closed()).count())
         .sum::<usize>();
+
+    // Clone model Arc pointers to increase the strong count
+    // to match the real permits.
     let _model_permits: Vec<_> = (0..Arc::strong_count(&permits)
+        // Subtract 1 to account for the Arc pointer in the UpdateSender
         .saturating_sub(1)
+        // Subtract the number of closed senders
         .saturating_sub(num_closed))
         .map(|_| Arc::clone(&model))
         .collect();
+
+    // Initialize the UpdateSender.
     let update = UpdateSender {
         senders: Arc::new(Mutex::new(box_senders(senders))),
         permits: Arc::new(permits),
     };
 
+    // Test the try_subscribe function on the UpdateSender
     let stream = update.try_subscribe::<MockCreateChannel>(Bytes32::zeroed());
+
+    // Test the try_acquire function on the model Arc
     let model = Arc::new(model);
     let result = model.clone().try_acquire();
+
+    // Assert the equality of model and stream results
     assert_eq!(
         result.is_some(),
         stream.is_some(),

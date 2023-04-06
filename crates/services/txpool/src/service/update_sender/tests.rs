@@ -1,3 +1,5 @@
+//! Test module for validating TxUpdateStream state transitions.
+
 use test_strategy::{
     proptest,
     Arbitrary,
@@ -15,6 +17,7 @@ mod test_sending;
 mod test_subscribe;
 mod utils;
 
+/// Represents the possible state transitions in TxUpdateStream.
 #[derive(Debug, PartialEq, Eq, Clone, Arbitrary)]
 enum StateTransitions {
     AddMsg(#[strategy(utils::tx_status_message_strategy())] TxStatusMessage),
@@ -23,6 +26,7 @@ enum StateTransitions {
     Next,
 }
 
+/// Returns the new state after applying the given `transition` to the current `state`.
 fn validate_tx_update_stream_state(state: State, transition: StateTransitions) -> State {
     use State::*;
     use StateTransitions::*;
@@ -31,6 +35,7 @@ fn validate_tx_update_stream_state(state: State, transition: StateTransitions) -
             Empty,
             AddMsg(TxStatusMessage::Status(TransactionStatus::Submitted { time })),
         ) => Initial(TransactionStatus::Submitted { time }),
+        // If not Submitted, it's an early success.
         (Empty, AddMsg(TxStatusMessage::Status(s))) => EarlySuccess(s),
         (Empty, AddMsg(TxStatusMessage::FailedStatus)) => Failed,
         (Empty, AddFailure) => Failed,
@@ -52,6 +57,7 @@ fn validate_tx_update_stream_state(state: State, transition: StateTransitions) -
     }
 }
 
+/// Proptest for validating TxUpdateStream state transitions.
 #[proptest]
 fn test_tx_update_stream_state(
     #[strategy(utils::state_strategy())] state: State,
