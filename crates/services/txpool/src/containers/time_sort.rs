@@ -10,6 +10,7 @@ use core::{
     cmp,
     time::Duration,
 };
+use fuel_core_types::fuel_tx::ConsensusParameters;
 
 /// all transactions sorted by min/max time
 pub type TimeSort = Sort<TimeSortKey>;
@@ -30,11 +31,11 @@ impl TimeSortKey {
 impl SortableKey for TimeSortKey {
     type Value = Duration;
 
-    fn new(info: &TxInfo) -> Self {
+    fn new(info: &TxInfo, params: &ConsensusParameters) -> Self {
         Self {
             time: info.submitted_time(),
             created: info.created(),
-            tx_id: info.tx().id(),
+            tx_id: info.tx().id(params),
         }
     }
 

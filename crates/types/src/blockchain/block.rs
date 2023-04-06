@@ -15,6 +15,7 @@ use super::{
 };
 use crate::{
     fuel_tx::{
+        ConsensusParameters,
         Transaction,
         TxId,
         UniqueIdentifier,
@@ -87,10 +88,10 @@ impl Block<Transaction> {
     }
 
     /// Compresses the fuel block and replaces transactions with hashes.
-    pub fn compress(&self) -> CompressedBlock {
+    pub fn compress(&self, params: &ConsensusParameters) -> CompressedBlock {
         Block {
             header: self.header.clone(),
-            transactions: self.transactions.iter().map(|tx| tx.id()).collect(),
+            transactions: self.transactions.iter().map(|tx| tx.id(params)).collect(),
         }
     }
 }

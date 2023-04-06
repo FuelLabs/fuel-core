@@ -10,6 +10,7 @@ use crate::{
         },
         Cacheable,
         Chargeable,
+        ConsensusParameters,
         Create,
         Input,
         Output,
@@ -75,10 +76,10 @@ impl PoolTransaction {
 
 impl PoolTransaction {
     /// Return the unique identifier of the transaction.
-    pub fn id(&self) -> Bytes32 {
+    pub fn id(&self, params: &ConsensusParameters) -> Bytes32 {
         match self {
-            PoolTransaction::Script(script) => script.transaction().id(),
-            PoolTransaction::Create(create) => create.transaction().id(),
+            PoolTransaction::Script(script) => script.transaction().id(params),
+            PoolTransaction::Create(create) => create.transaction().id(params),
         }
     }
 }

@@ -1,6 +1,7 @@
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
     fuel_asm::Word,
+    fuel_tx::ConsensusParameters,
     secrecy::Secret,
 };
 use tokio::time::Duration;
@@ -11,6 +12,7 @@ pub struct Config {
     pub block_gas_limit: Word,
     pub signing_key: Option<Secret<SecretKeyWrapper>>,
     pub metrics: bool,
+    pub consensus_params: ConsensusParameters,
 }
 
 /// Block production trigger for PoA operation

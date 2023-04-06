@@ -2,7 +2,10 @@ use crate::{
     types::*,
     TxInfo,
 };
-use fuel_core_types::services::txpool::ArcPoolTx;
+use fuel_core_types::{
+    fuel_tx::ConsensusParameters,
+    services::txpool::ArcPoolTx,
+};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
@@ -23,8 +26,8 @@ impl<Key> Sort<Key>
 where
     Key: SortableKey,
 {
-    pub fn remove(&mut self, info: &TxInfo) {
-        self.sort.remove(&Key::new(info));
+    pub fn remove(&mut self, info: &TxInfo, params: &ConsensusParameters) {
+        self.sort.remove(&Key::new(info, params));
     }
 
     pub fn lowest_tx(&self) -> Option<ArcPoolTx> {
@@ -39,16 +42,16 @@ where
         self.sort.iter().next()
     }
 
-    pub fn insert(&mut self, info: &TxInfo) {
+    pub fn insert(&mut self, info: &TxInfo, params: &ConsensusParameters) {
         let tx = info.tx().clone();
-        self.sort.insert(Key::new(info), tx);
+        self.sort.insert(Key::new(info, params), tx);
     }
 }
 
 pub trait SortableKey: Ord {
     type Value: Clone;
 
-    fn new(info: &TxInfo) -> Self;
+    fn new(info: &TxInfo, params: &ConsensusParameters) -> Self;
 
     fn value(&self) -> &Self::Value;
 

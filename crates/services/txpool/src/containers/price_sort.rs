@@ -6,6 +6,7 @@ use crate::{
     types::*,
     TxInfo,
 };
+use fuel_core_types::fuel_tx::ConsensusParameters;
 use std::cmp;
 
 /// all transactions sorted by min/max price
@@ -20,10 +21,10 @@ pub struct PriceSortKey {
 impl SortableKey for PriceSortKey {
     type Value = GasPrice;
 
-    fn new(info: &TxInfo) -> Self {
+    fn new(info: &TxInfo, params: &ConsensusParameters) -> Self {
         Self {
             price: info.tx().price(),
-            tx_id: info.tx().id(),
+            tx_id: info.tx().id(params),
         }
     }
 

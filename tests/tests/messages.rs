@@ -293,7 +293,7 @@ async fn can_get_message_proof() {
             .collect();
 
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-        let owner = Input::predicate_owner(&predicate);
+        let owner = Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT);
         let coin_input = Input::coin_predicate(
             Default::default(),
             owner,
@@ -336,7 +336,7 @@ async fn can_get_message_proof() {
             vec![],
         );
 
-        let transaction_id = script.id();
+        let transaction_id = script.id(&ConsensusParameters::DEFAULT);
 
         // setup server & client
         let srv = FuelService::new_node(config).await.unwrap();

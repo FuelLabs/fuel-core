@@ -11,6 +11,7 @@ use crate::{
         },
         IntoApiResult,
     },
+    graphql_api::Config,
     query::{
         SimpleBlockData,
         SimpleTransactionData,
@@ -264,12 +265,12 @@ impl From<TransactionStatus> for TxStatus {
         }
     }
 }
-pub struct Transaction(pub(crate) fuel_tx::Transaction);
+pub struct Transaction(pub(crate) fuel_tx::Transaction, pub(crate) fuel_tx::TxId);
 
 #[Object]
 impl Transaction {
     async fn id(&self) -> TransactionId {
-        TransactionId(self.0.id())
+        TransactionId(self.1)
     }
 
     async fn input_asset_ids(&self) -> Option<Vec<AssetId>> {
@@ -400,7 +401,8 @@ impl Transaction {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<TransactionStatus>> {
-        let id = self.0.id();
+        let config = ctx.data_unchecked::<Config>();
+        let id = self.0.id(&config.transaction_parameters);
         let query: &Database = ctx.data_unchecked();
         let txpool = ctx.data_unchecked::<TxPool>();
         get_tx_status(id, query, txpool).await.map_err(Into::into)
@@ -410,9 +412,10 @@ impl Transaction {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<Vec<Receipt>>> {
+        let config = ctx.data_unchecked::<Config>();
         let query: &Database = ctx.data_unchecked();
         let receipts = query
-            .receipts(&self.0.id())
+            .receipts(&self.0.id(&config.transaction_parameters))
             .into_api_result::<Vec<_>, async_graphql::Error>()?;
         Ok(receipts.map(|receipts| receipts.into_iter().map(Receipt).collect()))
     }
@@ -514,8 +517,8 @@ pub(super) async fn get_tx_status(
     }
 }
 
-impl From<fuel_tx::Transaction> for Transaction {
-    fn from(tx: fuel_tx::Transaction) -> Self {
-        Transaction(tx)
+impl From<(fuel_tx::Transaction, fuel_tx::TxId)> for Transaction {
+    fn from(tx: (fuel_tx::Transaction, fuel_tx::TxId)) -> Self {
+        Transaction(tx.0, tx.1)
     }
 }

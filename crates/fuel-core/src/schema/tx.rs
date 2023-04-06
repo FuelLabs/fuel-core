@@ -7,6 +7,7 @@ use crate::{
         },
         IntoApiResult,
     },
+    graphql_api::Config,
     query::{
         transaction_status_change,
         BlockQueryData,
@@ -40,6 +41,7 @@ use fuel_core_types::{
     fuel_tx::{
         Cacheable,
         Transaction as FuelTx,
+        UniqueIdentifier,
     },
     fuel_types,
     fuel_types::bytes::Deserializable,
@@ -77,9 +79,9 @@ impl TxQuery {
         let txpool = ctx.data_unchecked::<TxPool>();
 
         if let Some(transaction) = txpool.transaction(id) {
-            Ok(Some(Transaction(transaction)))
+            Ok(Some(Transaction(transaction, id)))
         } else {
-            query.transaction(&id).into_api_result()
+            query.transaction(&id).map(|tx| (tx, id)).into_api_result()
         }
     }
 
@@ -135,7 +137,7 @@ impl TxQuery {
                     result.and_then(|sorted| {
                         let tx = tx_query.transaction(&sorted.tx_id.0)?;
 
-                        Ok((sorted, tx.into()))
+                        Ok((sorted, (tx, sorted.tx_id.0).into()))
                     })
                 });
 
@@ -163,6 +165,7 @@ impl TxQuery {
         }
 
         let query: &Database = ctx.data_unchecked();
+        let config = ctx.data_unchecked::<Config>();
         let owner = fuel_types::Address::from(owner);
 
         crate::schema::query_pagination(
@@ -172,9 +175,15 @@ impl TxQuery {
             last,
             |start: &Option<TxPointer>, direction| {
                 let start = (*start).map(Into::into);
-                let txs = query
-                    .owned_transactions(owner, start, direction)
-                    .map(|result| result.map(|(cursor, tx)| (cursor.into(), tx.into())));
+                let txs =
+                    query
+                        .owned_transactions(owner, start, direction)
+                        .map(|result| {
+                            result.map(|(cursor, tx)| {
+                                let tx_id = tx.id(&config.transaction_parameters);
+                                (cursor.into(), (tx, tx_id).into())
+                            })
+                        });
                 Ok(txs)
             },
         )
@@ -198,9 +207,10 @@ impl TxMutation {
         utxo_validation: Option<bool>,
     ) -> async_graphql::Result<Vec<receipt::Receipt>> {
         let block_producer = ctx.data_unchecked::<BlockProducer>();
+        let config = ctx.data_unchecked::<Config>();
 
         let mut tx = FuelTx::from_bytes(&tx.0)?;
-        tx.precompute();
+        tx.precompute(&config.transaction_parameters);
 
         let receipts = block_producer.dry_run_tx(tx, None, utxo_validation).await?;
         Ok(receipts.iter().map(Into::into).collect())
@@ -213,14 +223,16 @@ impl TxMutation {
         tx: HexString,
     ) -> async_graphql::Result<Transaction> {
         let txpool = ctx.data_unchecked::<TxPool>();
+        let config = ctx.data_unchecked::<Config>();
         let mut tx = FuelTx::from_bytes(&tx.0)?;
-        tx.precompute();
+        tx.precompute(&config.transaction_parameters);
         let _: Vec<_> = txpool
             .insert(vec![Arc::new(tx.clone())])
             .into_iter()
             .try_collect()?;
+        let id = tx.id(&config.transaction_parameters);
 
-        let tx = Transaction(tx);
+        let tx = Transaction(tx, id);
         Ok(tx)
     }
 }

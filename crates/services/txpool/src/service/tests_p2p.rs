@@ -31,7 +31,9 @@ async fn can_insert_from_p2p() {
     assert!(res.is_ok());
 
     // fetch tx from pool
-    let out = service.shared.find(vec![tx1.id()]);
+    let out = service
+        .shared
+        .find(vec![tx1.id(&ConsensusParameters::DEFAULT)]);
 
     let got_tx: Transaction = out[0].as_ref().unwrap().tx().clone().deref().into();
     assert_eq!(tx1, got_tx);
@@ -73,7 +75,7 @@ async fn insert_from_local_broadcasts_to_p2p() {
         let update = subscribe_update.try_recv().unwrap();
         assert_eq!(
             *update.tx_id(),
-            result.inserted.id(),
+            result.inserted.id(&ConsensusParameters::DEFAULT),
             "First added should be tx1"
         );
     } else {

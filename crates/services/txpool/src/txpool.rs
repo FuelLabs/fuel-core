@@ -56,7 +56,11 @@ where
             by_hash: HashMap::new(),
             by_gas_price: PriceSort::default(),
             by_time: TimeSort::default(),
-            by_dependency: Dependency::new(max_depth, config.utxo_validation),
+            by_dependency: Dependency::new(
+                max_depth,
+                config.utxo_validation,
+                config.chain_config.transaction_parameters,
+            ),
             config,
             database,
         }
@@ -70,7 +74,7 @@ where
         &self.by_dependency
     }
 
-    #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id()), ret, err)]
+    #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id(&self.config.chain_config.transaction_parameters)), ret, err)]
     // this is atomic operation. Return removed(pushed out/replaced) transactions
     fn insert_inner(
         &mut self,
@@ -124,7 +128,10 @@ where
             .into())
         }
 
-        if self.by_hash.contains_key(&tx.id()) {
+        if self
+            .by_hash
+            .contains_key(&tx.id(&self.config.chain_config.transaction_parameters))
+        {
             return Err(Error::NotInsertedTxKnown.into())
         }
 
@@ -152,9 +159,14 @@ where
             .by_dependency
             .insert(&self.by_hash, &self.database, &tx)?;
         let info = TxInfo::new(tx.clone());
-        self.by_gas_price.insert(&info);
-        self.by_time.insert(&info);
-        self.by_hash.insert(tx.id(), info);
+        self.by_gas_price
+            .insert(&info, &self.config.chain_config.transaction_parameters);
+        self.by_time
+            .insert(&info, &self.config.chain_config.transaction_parameters);
+        self.by_hash.insert(
+            tx.id(&self.config.chain_config.transaction_parameters),
+            info,
+        );
 
         // if some transaction were removed so we don't need to check limit
         let removed = if rem.is_empty() {
@@ -169,7 +181,7 @@ where
         } else {
             // remove ret from by_hash and from by_price
             for rem in rem.iter() {
-                self.remove_tx(&rem.id());
+                self.remove_tx(&rem.id(&self.config.chain_config.transaction_parameters));
             }
 
             rem
@@ -192,7 +204,7 @@ where
     }
 
     pub fn remove_inner(&mut self, tx: &ArcPoolTx) -> Vec<ArcPoolTx> {
-        self.remove_by_tx_id(&tx.id())
+        self.remove_by_tx_id(&tx.id(&self.config.chain_config.transaction_parameters))
     }
 
     /// remove transaction from pool needed on user demand. Low priority
@@ -203,7 +215,9 @@ where
                 .by_dependency
                 .recursively_remove_all_dependencies(&self.by_hash, tx.tx().clone());
             for remove in removed.iter() {
-                self.remove_tx(&remove.id());
+                self.remove_tx(
+                    &remove.id(&self.config.chain_config.transaction_parameters),
+                );
             }
             return removed
         }
@@ -213,8 +227,10 @@ where
     fn remove_tx(&mut self, tx_id: &TxId) -> Option<TxInfo> {
         let info = self.by_hash.remove(tx_id);
         if let Some(info) = &info {
-            self.by_time.remove(info);
-            self.by_gas_price.remove(info);
+            self.by_time
+                .remove(info, &self.config.chain_config.transaction_parameters);
+            self.by_gas_price
+                .remove(info, &self.config.chain_config.transaction_parameters);
         }
 
         info
@@ -267,9 +283,14 @@ where
                     for removed in removed {
                         // small todo there is possibility to have removal reason (ReplacedByHigherGas, DependencyRemoved)
                         // but for now it is okay to just use Error::Removed.
-                        tx_status_sender.send_squeezed_out(removed.id(), Error::Removed);
+                        tx_status_sender.send_squeezed_out(
+                            removed.id(&self.config.chain_config.transaction_parameters),
+                            Error::Removed,
+                        );
                     }
-                    tx_status_sender.send_submitted(inserted.id());
+                    tx_status_sender.send_submitted(
+                        inserted.id(&self.config.chain_config.transaction_parameters),
+                    );
                 }
                 Err(_) => {
                     // @dev should not broadcast tx if error occurred
@@ -337,8 +358,13 @@ where
         // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
         for tx in block.entity.transactions() {
-            tx_status_sender.send_complete(tx.id(), block.entity.header().height());
-            self.remove_committed_tx(&tx.id());
+            tx_status_sender.send_complete(
+                tx.id(&self.config.chain_config.transaction_parameters),
+                block.entity.header().height(),
+            );
+            self.remove_committed_tx(
+                &tx.id(&self.config.chain_config.transaction_parameters),
+            );
         }
     }
 

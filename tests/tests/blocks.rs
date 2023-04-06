@@ -99,7 +99,7 @@ async fn produce_block() {
     client.submit_and_await_commit(&tx).await.unwrap();
 
     let transaction_response = client
-        .transaction(&format!("{:#x}", tx.id()))
+        .transaction(&format!("{:#x}", tx.id(&ConsensusParameters::DEFAULT)))
         .await
         .unwrap();
 
@@ -177,7 +177,7 @@ async fn produce_block_negative() {
     client.submit_and_await_commit(&tx).await.unwrap();
 
     let transaction_response = client
-        .transaction(&format!("{:#x}", tx.id()))
+        .transaction(&format!("{:#x}", tx.id(&ConsensusParameters::DEFAULT)))
         .await
         .unwrap();
 
