@@ -226,6 +226,7 @@ impl TxMutation {
         let config = ctx.data_unchecked::<Config>();
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute(&config.transaction_parameters);
+        // TODO: use spawn_blocking here
         let _: Vec<_> = txpool
             .insert(vec![Arc::new(tx.clone())])
             .into_iter()
