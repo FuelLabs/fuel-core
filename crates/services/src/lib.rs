@@ -18,6 +18,10 @@ pub mod stream {
     pub type BoxStream<T> =
         core::pin::Pin<Box<dyn Stream<Item = T> + Send + Sync + 'static>>;
 
+    /// A Send + Sync BoxFuture
+    pub type BoxFuture<'a, T> =
+        core::pin::Pin<Box<dyn futures::Future<Output = T> + Send + Sync + 'a>>;
+
     /// Helper trait to create a BoxStream from a Stream
     pub trait IntoBoxStream: Stream {
         /// Convert this stream into a BoxStream.

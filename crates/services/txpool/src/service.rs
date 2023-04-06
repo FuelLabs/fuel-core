@@ -39,9 +39,11 @@ use fuel_core_types::{
             ArcPoolTx,
             Error,
             InsertionResult,
+            TransactionStatus,
             TxStatus,
         },
     },
+    tai64::Tai64,
 };
 use parking_lot::Mutex as ParkingMutex;
 use std::sync::Arc;
@@ -50,35 +52,51 @@ use tokio::{
     time::MissedTickBehavior,
 };
 use tokio_stream::StreamExt;
+use update_sender::UpdateSender;
+
+use self::update_sender::{
+    MpscChannel,
+    TxStatusStream,
+};
+
+mod update_sender;
 
 pub type Service<P2P, DB> = ServiceRunner<Task<P2P, DB>>;
 
 #[derive(Clone)]
 pub struct TxStatusChange {
     status_sender: broadcast::Sender<TxStatus>,
-    update_sender: broadcast::Sender<TxUpdate>,
+    update_sender: UpdateSender,
 }
 
 impl TxStatusChange {
     pub fn new(capacity: usize) -> Self {
         let (status_sender, _) = broadcast::channel(capacity);
-        let (update_sender, _) = broadcast::channel(capacity);
+        let update_sender = UpdateSender::new(capacity);
         Self {
             status_sender,
             update_sender,
         }
     }
 
-    pub fn send_complete(&self, id: Bytes32, block_height: &BlockHeight) {
+    pub fn send_complete(
+        &self,
+        id: Bytes32,
+        block_height: &BlockHeight,
+        message: impl Into<TxStatusMessage>,
+    ) {
         tracing::info!("Transaction {id} successfully included in block {block_height}");
         let _ = self.status_sender.send(TxStatus::Completed);
-        self.updated(id);
+        self.update_sender.send(TxUpdate::new(id, message.into()));
     }
 
-    pub fn send_submitted(&self, id: Bytes32) {
+    pub fn send_submitted(&self, id: Bytes32, time: Tai64) {
         tracing::info!("Transaction {id} successfully submitted to the tx pool");
         let _ = self.status_sender.send(TxStatus::Submitted);
-        self.updated(id);
+        self.update_sender.send(TxUpdate::new(
+            id,
+            TxStatusMessage::Status(TransactionStatus::Submitted { time }),
+        ));
     }
 
     pub fn send_squeezed_out(&self, id: Bytes32, reason: TxPoolError) {
@@ -86,11 +104,12 @@ impl TxStatusChange {
         let _ = self.status_sender.send(TxStatus::SqueezedOut {
             reason: reason.clone(),
         });
-        let _ = self.update_sender.send(TxUpdate::squeezed_out(id, reason));
-    }
-
-    fn updated(&self, id: Bytes32) {
-        let _ = self.update_sender.send(TxUpdate::updated(id));
+        self.update_sender.send(TxUpdate::new(
+            id,
+            TxStatusMessage::Status(TransactionStatus::SqueezedOut {
+                reason: reason.to_string(),
+            }),
+        ));
     }
 }
 
@@ -269,8 +288,11 @@ where
         self.tx_status_sender.status_sender.subscribe()
     }
 
-    pub fn tx_update_subscribe(&self) -> broadcast::Receiver<TxUpdate> {
-        self.tx_status_sender.update_sender.subscribe()
+    pub async fn tx_update_subscribe(&self, tx_id: Bytes32) -> TxStatusStream {
+        self.tx_status_sender
+            .update_sender
+            .subscribe::<MpscChannel>(tx_id)
+            .await
     }
 }
 
@@ -305,38 +327,30 @@ where
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct TxUpdate {
     tx_id: Bytes32,
-    squeezed_out: Option<TxPoolError>,
+    message: TxStatusMessage,
 }
 
 impl TxUpdate {
-    pub fn updated(tx_id: Bytes32) -> Self {
-        Self {
-            tx_id,
-            squeezed_out: None,
-        }
-    }
-
-    pub fn squeezed_out(tx_id: Bytes32, reason: TxPoolError) -> Self {
-        Self {
-            tx_id,
-            squeezed_out: Some(reason),
-        }
+    pub fn new(tx_id: Bytes32, message: TxStatusMessage) -> Self {
+        Self { tx_id, message }
     }
 
     pub fn tx_id(&self) -> &Bytes32 {
         &self.tx_id
     }
 
-    pub fn was_squeezed_out(&self) -> bool {
-        self.squeezed_out.is_some()
+    pub fn into_msg(self) -> TxStatusMessage {
+        self.message
     }
+}
 
-    pub fn into_squeezed_out_reason(self) -> Option<TxPoolError> {
-        self.squeezed_out
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TxStatusMessage {
+    Status(TransactionStatus),
+    FailedStatus,
 }
 
 pub fn new_service<P2P, Importer, DB>(
@@ -368,6 +382,24 @@ where
     };
 
     Service::new(task)
+}
+
+impl<E> From<Result<Option<TransactionStatus>, E>> for TxStatusMessage {
+    fn from(result: Result<Option<TransactionStatus>, E>) -> Self {
+        match result {
+            Ok(Some(status)) => TxStatusMessage::Status(status),
+            _ => TxStatusMessage::FailedStatus,
+        }
+    }
+}
+
+impl<E> From<Result<TransactionStatus, E>> for TxStatusMessage {
+    fn from(result: Result<TransactionStatus, E>) -> Self {
+        match result {
+            Ok(status) => TxStatusMessage::Status(status),
+            _ => TxStatusMessage::FailedStatus,
+        }
+    }
 }
 
 #[cfg(test)]

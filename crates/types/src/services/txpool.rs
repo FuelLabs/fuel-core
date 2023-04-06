@@ -29,7 +29,10 @@ use crate::{
         ProgramState,
     },
 };
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::Duration,
+};
 use tai64::Tai64;
 
 /// The alias for transaction pool result.
@@ -145,6 +148,8 @@ impl From<Checked<Create>> for PoolTransaction {
 pub struct InsertionResult {
     /// This was inserted
     pub inserted: ArcPoolTx,
+    /// The time the transaction was inserted.
+    pub submitted_time: Duration,
     /// These were removed during the insertion
     pub removed: Vec<ArcPoolTx>,
 }

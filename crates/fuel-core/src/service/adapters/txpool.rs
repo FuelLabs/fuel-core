@@ -143,4 +143,11 @@ impl fuel_core_txpool::ports::TxPoolDb for Database {
     fn current_block_height(&self) -> StorageResult<BlockHeight> {
         self.latest_height()
     }
+
+    fn transaction_status(
+        &self,
+        tx_id: &fuel_core_types::fuel_types::Bytes32,
+    ) -> StorageResult<Option<fuel_core_types::services::txpool::TransactionStatus>> {
+        Ok(self.get_tx_status(tx_id)?)
+    }
 }
