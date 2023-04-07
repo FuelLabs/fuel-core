@@ -207,10 +207,6 @@ impl NetworkBehaviour for PeerReportBehaviour {
                         .push_back(PeerReportEvent::PeerDisconnected { peer_id })
                 }
             }
-            FromSwarm::AddressChange(e) => {
-                self.heartbeat.on_swarm_event(FromSwarm::AddressChange(e));
-                self.identify.on_swarm_event(FromSwarm::AddressChange(e));
-            }
             FromSwarm::DialFailure(e) => {
                 let (ping_handler, identity_handler) = e.handler.into_inner();
                 let ping_event = DialFailure {
@@ -245,37 +241,9 @@ impl NetworkBehaviour for PeerReportBehaviour {
                 self.identify
                     .on_swarm_event(FromSwarm::ListenFailure(identity_event));
             }
-            FromSwarm::NewListener(e) => {
-                self.heartbeat.on_swarm_event(FromSwarm::NewListener(e));
-                self.identify.on_swarm_event(FromSwarm::NewListener(e));
-            }
-            FromSwarm::ExpiredListenAddr(e) => {
-                self.heartbeat
-                    .on_swarm_event(FromSwarm::ExpiredListenAddr(e));
-                self.identify
-                    .on_swarm_event(FromSwarm::ExpiredListenAddr(e));
-            }
-            FromSwarm::ListenerError(e) => {
-                self.heartbeat.on_swarm_event(FromSwarm::ListenerError(e));
-                self.identify.on_swarm_event(FromSwarm::ListenerError(e));
-            }
-            FromSwarm::ListenerClosed(e) => {
-                self.heartbeat.on_swarm_event(FromSwarm::ListenerClosed(e));
-                self.identify.on_swarm_event(FromSwarm::ListenerClosed(e));
-            }
-            FromSwarm::NewExternalAddr(e) => {
-                self.heartbeat.on_swarm_event(FromSwarm::NewExternalAddr(e));
-                self.identify.on_swarm_event(FromSwarm::NewExternalAddr(e));
-            }
-            FromSwarm::ExpiredExternalAddr(e) => {
-                self.heartbeat
-                    .on_swarm_event(FromSwarm::ExpiredExternalAddr(e));
-                self.identify
-                    .on_swarm_event(FromSwarm::ExpiredExternalAddr(e));
-            }
-            FromSwarm::NewListenAddr(e) => {
-                self.heartbeat.on_swarm_event(FromSwarm::NewListenAddr(e));
-                self.identify.on_swarm_event(FromSwarm::NewListenAddr(e));
+            _ => {
+                self.heartbeat.handle_swarm_event(&event);
+                self.identify.handle_swarm_event(&event);
             }
         }
     }
@@ -474,4 +442,42 @@ trait FromAction<T: NetworkBehaviour>: NetworkBehaviour {
         &mut self,
         action: NetworkBehaviourAction<T::OutEvent, T::ConnectionHandler>,
     ) -> Option<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>>;
+}
+
+impl FromSwarmEvent for Heartbeat {}
+impl FromSwarmEvent for Identify {}
+
+trait FromSwarmEvent: NetworkBehaviour {
+    fn handle_swarm_event(
+        &mut self,
+        event: &FromSwarm<<PeerReportBehaviour as NetworkBehaviour>::ConnectionHandler>,
+    ) {
+        match event {
+            FromSwarm::NewListener(e) => {
+                self.on_swarm_event(FromSwarm::NewListener(*e));
+            }
+            FromSwarm::ExpiredListenAddr(e) => {
+                self.on_swarm_event(FromSwarm::ExpiredListenAddr(*e));
+            }
+            FromSwarm::ListenerError(e) => {
+                self.on_swarm_event(FromSwarm::ListenerError(*e));
+            }
+            FromSwarm::ListenerClosed(e) => {
+                self.on_swarm_event(FromSwarm::ListenerClosed(*e));
+            }
+            FromSwarm::NewExternalAddr(e) => {
+                self.on_swarm_event(FromSwarm::NewExternalAddr(*e));
+            }
+            FromSwarm::ExpiredExternalAddr(e) => {
+                self.on_swarm_event(FromSwarm::ExpiredExternalAddr(*e));
+            }
+            FromSwarm::NewListenAddr(e) => {
+                self.on_swarm_event(FromSwarm::NewListenAddr(*e));
+            }
+            FromSwarm::AddressChange(e) => {
+                self.on_swarm_event(FromSwarm::AddressChange(*e));
+            }
+            _ => {}
+        }
+    }
 }
