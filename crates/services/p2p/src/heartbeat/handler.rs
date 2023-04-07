@@ -1,5 +1,5 @@
 use super::HEARTBEAT_PROTOCOL;
-use fuel_core_types::blockchain::primitives::BlockHeight;
+use fuel_core_types::fuel_types::BlockHeight;
 use futures::{
     future::BoxFuture,
     AsyncRead,

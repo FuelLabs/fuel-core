@@ -4,10 +4,7 @@ use super::adapters::P2PAdapter;
 use crate::{
     database::Database,
     fuel_core_graphql_api::Config as GraphQLConfig,
-    schema::{
-        build_schema,
-        dap,
-    },
+    schema::build_schema,
     service::{
         adapters::{
             BlockImporterAdapter,
@@ -154,12 +151,21 @@ pub fn init_sub_services(
         .transpose()?;
 
     // TODO: Figure out on how to move it into `fuel-core-graphql-api`.
-    let schema = dap::init(
-        build_schema(),
-        config.chain_conf.transaction_parameters,
-        config.chain_conf.gas_costs.clone(),
-    )
-    .data(database.clone());
+    let schema = {
+        #[cfg(feature = "dap")]
+        {
+            crate::schema::dap::init(
+                build_schema(),
+                config.chain_conf.transaction_parameters,
+                config.chain_conf.gas_costs.clone(),
+            )
+            .data(database.clone())
+        }
+        #[cfg(not(feature = "dap"))]
+        {
+            build_schema()
+        }
+    };
 
     let graph_ql = crate::fuel_core_graphql_api::service::new_service(
         GraphQLConfig {
@@ -172,6 +178,7 @@ pub fn init_sub_services(
             max_depth: config.txpool.max_depth,
             transaction_parameters: config.chain_conf.transaction_parameters,
             consensus_key: config.consensus_key.clone(),
+            honeycomb_enabled: config.honeycomb_api_key.is_some(),
         },
         schema,
         Box::new(database.clone()),

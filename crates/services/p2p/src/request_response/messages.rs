@@ -2,14 +2,12 @@ use std::sync::Arc;
 
 use fuel_core_types::{
     blockchain::{
-        primitives::{
-            BlockHeight,
-            BlockId,
-        },
+        primitives::BlockId,
         SealedBlock,
         SealedBlockHeader,
     },
     fuel_tx::Transaction,
+    fuel_types::BlockHeight,
 };
 use libp2p::PeerId;
 use serde::{

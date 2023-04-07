@@ -1,7 +1,6 @@
 use crate::ports::TxPoolDb;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
-    blockchain::primitives::BlockHeight,
     entities::{
         coins::coin::{
             Coin,
@@ -14,7 +13,10 @@ use fuel_core_types::{
         ContractId,
         UtxoId,
     },
-    fuel_types::Nonce,
+    fuel_types::{
+        BlockHeight,
+        Nonce,
+    },
 };
 use std::{
     collections::{

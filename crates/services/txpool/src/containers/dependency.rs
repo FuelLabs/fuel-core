@@ -771,8 +771,8 @@ mod tests {
             10,
             AssetId::default(),
             Default::default(),
-            0,
-            0,
+            Default::default(),
+            Default::default(),
         );
         let out =
             Dependency::check_if_coin_input_can_spend_output(&output, &input, false);

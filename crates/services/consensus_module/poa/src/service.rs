@@ -31,15 +31,13 @@ use fuel_core_types::{
             Consensus,
         },
         header::BlockHeader,
-        primitives::{
-            BlockHeight,
-            SecretKeyWrapper,
-        },
+        primitives::SecretKeyWrapper,
         SealedBlock,
     },
     fuel_asm::Word,
     fuel_crypto::Signature,
     fuel_tx::UniqueIdentifier,
+    fuel_types::BlockHeight,
     secrecy::{
         ExposeSecret,
         Secret,

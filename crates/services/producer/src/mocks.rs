@@ -15,14 +15,12 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        primitives::{
-            BlockHeight,
-            DaBlockHeight,
-        },
+        primitives::DaBlockHeight,
     },
     fuel_tx::Receipt,
     fuel_types::{
         Address,
+        BlockHeight,
         Bytes32,
     },
     services::{

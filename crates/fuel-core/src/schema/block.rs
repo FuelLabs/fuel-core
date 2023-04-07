@@ -20,6 +20,7 @@ use crate::{
         scalars::{
             BlockId,
             Signature,
+            U32,
             U64,
         },
         tx::types::Transaction,
@@ -50,6 +51,7 @@ use fuel_core_types::{
         header::BlockHeader,
     },
     fuel_types,
+    fuel_types::BlockHeight,
 };
 
 pub struct Block(pub(crate) CompressedBlock);
@@ -151,7 +153,7 @@ impl Header {
     }
 
     /// Fuel block height.
-    async fn height(&self) -> U64 {
+    async fn height(&self) -> U32 {
         (*self.0.height()).into()
     }
 
@@ -218,10 +220,10 @@ impl BlockQuery {
         after: Option<String>,
         last: Option<i32>,
         before: Option<String>,
-    ) -> async_graphql::Result<Connection<usize, Block, EmptyFields, EmptyFields>> {
+    ) -> async_graphql::Result<Connection<U32, Block, EmptyFields, EmptyFields>> {
         let db: &Database = ctx.data_unchecked();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            Ok(blocks_query(db, *start, direction))
+            Ok(blocks_query(db, start.map(Into::into), direction))
         })
         .await
     }
@@ -251,10 +253,10 @@ impl HeaderQuery {
         after: Option<String>,
         last: Option<i32>,
         before: Option<String>,
-    ) -> async_graphql::Result<Connection<usize, Header, EmptyFields, EmptyFields>> {
+    ) -> async_graphql::Result<Connection<U32, Header, EmptyFields, EmptyFields>> {
         let db: &Database = ctx.data_unchecked();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            Ok(blocks_query(db, *start, direction))
+            Ok(blocks_query(db, start.map(Into::into), direction))
         })
         .await
     }
@@ -262,18 +264,16 @@ impl HeaderQuery {
 
 fn blocks_query<T>(
     query: &Database,
-    start: Option<usize>,
+    start: Option<BlockHeight>,
     direction: IterDirection,
-) -> BoxedIter<StorageResult<(usize, T)>>
+) -> BoxedIter<StorageResult<(U32, T)>>
 where
     T: async_graphql::OutputType,
     T: From<CompressedBlock>,
 {
-    let blocks = query
-        .compressed_blocks(start.map(Into::into), direction)
-        .map(|result| {
-            result.map(|block| (block.header().height().as_usize(), block.into()))
-        });
+    let blocks = query.compressed_blocks(start, direction).map(|result| {
+        result.map(|block| ((*block.header().height()).into(), block.into()))
+    });
 
     blocks.into_boxed()
 }
@@ -292,7 +292,7 @@ impl BlockMutation {
         ctx: &Context<'_>,
         start_timestamp: Option<Tai64Timestamp>,
         blocks_to_produce: U64,
-    ) -> async_graphql::Result<U64> {
+    ) -> async_graphql::Result<U32> {
         let query: &Database = ctx.data_unchecked();
         let consensus_module = ctx.data_unchecked::<ConsensusModule>();
         let config = ctx.data_unchecked::<GraphQLConfig>().clone();

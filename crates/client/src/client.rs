@@ -30,7 +30,10 @@ use fuel_core_types::{
         Transaction,
     },
     fuel_types,
-    fuel_types::bytes::SerializableVec,
+    fuel_types::{
+        bytes::SerializableVec,
+        BlockHeight,
+    },
 };
 #[cfg(feature = "subscriptions")]
 use futures::StreamExt;
@@ -597,7 +600,7 @@ impl FuelClient {
         &self,
         blocks_to_produce: u64,
         start_timestamp: Option<u64>,
-    ) -> io::Result<u64> {
+    ) -> io::Result<BlockHeight> {
         let query = schema::block::BlockMutation::build(ProduceBlockArgs {
             blocks_to_produce: blocks_to_produce.into(),
             start_timestamp: start_timestamp
@@ -784,12 +787,20 @@ impl FuelClient {
         &self,
         transaction_id: &str,
         message_id: &str,
+        commit_block_id: Option<&str>,
+        commit_block_height: Option<BlockHeight>,
     ) -> io::Result<Option<schema::message::MessageProof>> {
         let transaction_id: schema::TransactionId = transaction_id.parse()?;
         let message_id: schema::MessageId = message_id.parse()?;
+        let commit_block_id: Option<schema::BlockId> = commit_block_id
+            .map(|commit_block_id| commit_block_id.parse())
+            .transpose()?;
+        let commit_block_height = commit_block_height.map(Into::into);
         let query = schema::message::MessageProofQuery::build(MessageProofArgs {
             transaction_id,
             message_id,
+            commit_block_id,
+            commit_block_height,
         });
 
         let proof = self.query(query).await?.message_proof;

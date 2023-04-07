@@ -3,7 +3,6 @@
 use super::{
     consensus::ConsensusType,
     primitives::{
-        BlockHeight,
         BlockId,
         DaBlockHeight,
         Empty,
@@ -14,6 +13,7 @@ use crate::{
     fuel_tx::Transaction,
     fuel_types::{
         bytes::SerializableVec,
+        BlockHeight,
         Bytes32,
         MessageId,
     },

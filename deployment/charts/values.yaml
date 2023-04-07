@@ -27,6 +27,7 @@ app:
   reserved_nodes_only_mode: ${fuel_core_reserved_only}
   reserved_nodes: ${fuel_core_reserved_nodes}
   bootstrap_nodes: ${fuel_core_bootstrap_nodes}
+  honeycomb_api_key: ${fuel_core_honeycomb_api_key}
   relayer: ${fuel_core_relayer}
   relayer_v2_listening_contracts: ${fuel_core_relayer_v2_listening_contracts}
   relayer_da_finalization: "${fuel_core_relayer_da_finalization}"
