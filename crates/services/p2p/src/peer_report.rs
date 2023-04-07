@@ -401,7 +401,7 @@ impl FromAction<Identify> for PeerReportBehaviour {
                         addresses: listen_addrs,
                     };
 
-                    return Some(NetworkBehaviourAction::GenerateEvent(event))
+                    Some(NetworkBehaviourAction::GenerateEvent(event))
                 }
                 IdentifyEvent::Error { peer_id, error } => {
                     debug!(target: "fuel-p2p", "Identification with peer {:?} failed => {}", peer_id, error);
@@ -412,7 +412,7 @@ impl FromAction<Identify> for PeerReportBehaviour {
             NetworkBehaviourAction::Dial { handler, opts } => {
                 let handler =
                     IntoConnectionHandler::select(self.heartbeat.new_handler(), handler);
-                return Some(NetworkBehaviourAction::Dial { handler, opts })
+                Some(NetworkBehaviourAction::Dial { handler, opts })
             }
             NetworkBehaviourAction::NotifyHandler {
                 peer_id,
