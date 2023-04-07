@@ -300,6 +300,7 @@ mod tests {
             },
             primitives::Empty,
         },
+        fuel_tx::ConsensusParameters,
         fuel_vm::crypto::ephemeral_merkle_root,
     };
     use test_case::test_case;
@@ -334,7 +335,7 @@ mod tests {
             StorageMutate::<FuelBlocks>::insert(
                 &mut database,
                 &block.id(),
-                &block.compress(),
+                &block.compress(&ConsensusParameters::DEFAULT),
             )
             .unwrap();
         }
@@ -395,8 +396,12 @@ mod tests {
 
         // Insert the blocks
         for block in &blocks {
-            StorageMutate::<FuelBlocks>::insert(database, &block.id(), &block.compress())
-                .unwrap();
+            StorageMutate::<FuelBlocks>::insert(
+                database,
+                &block.id(),
+                &block.compress(&ConsensusParameters::DEFAULT),
+            )
+            .unwrap();
         }
     }
 

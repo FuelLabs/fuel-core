@@ -187,6 +187,7 @@ type ConsensusParameters {
 	gasPriceFactor: U64!
 	gasPerByte: U64!
 	maxMessageDataLength: U64!
+	chainId: U64!
 }
 
 type Contract {
