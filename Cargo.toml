@@ -75,7 +75,7 @@ fuel-core-tests = { version = "0.0.0", path = "./tests" }
 fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 
 # Fuel dependencies
-fuel-vm-private = { version = "0.29", package = "fuel-vm" }
+fuel-vm-private = { version = "0.30", package = "fuel-vm" }
 
 # Common dependencies
 anyhow = "1.0"
@@ -104,11 +104,3 @@ prometheus-client = "0.18"
 itertools = "0.10"
 insta = "1.8"
 tempfile = "3.4"
-
-[patch.crates-io]
-fuel-types = { git = "https://github.com/FuelLabs/fuel-vm.git", branch = "Voxelot/cached-id" }
-fuel-asm = { git = "https://github.com/FuelLabs/fuel-vm.git", branch = "Voxelot/cached-id" }
-fuel-tx = { git = "https://github.com/FuelLabs/fuel-vm.git", branch = "Voxelot/cached-id" }
-fuel-crypto = { git = "https://github.com/FuelLabs/fuel-vm.git", branch = "Voxelot/cached-id" }
-fuel-merkle = { git = "https://github.com/FuelLabs/fuel-vm.git", branch = "Voxelot/cached-id" }
-fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm.git", branch = "Voxelot/cached-id" }

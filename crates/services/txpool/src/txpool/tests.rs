@@ -295,7 +295,7 @@ fn higher_priced_tx_removes_lower_priced_tx() {
 
     let vec = txpool.insert_inner(tx2).expect("Tx2 should be Ok, got Err");
     assert_eq!(
-        vec.removed[0].id(&fuel_tx::ConsensusParameters::DEFAULT),
+        vec.removed[0].id(),
         tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
         "Tx1 id should be removed"
     );
@@ -491,12 +491,12 @@ fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
         "Tx1 and Tx2 should be removed:{vec:?}",
     );
     assert_eq!(
-        vec.removed[0].id(&fuel_tx::ConsensusParameters::DEFAULT),
+        vec.removed[0].id(),
         tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
         "Tx1 id should be removed"
     );
     assert_eq!(
-        vec.removed[1].id(&fuel_tx::ConsensusParameters::DEFAULT),
+        vec.removed[1].id(),
         tx2.id(&fuel_tx::ConsensusParameters::DEFAULT),
         "Tx2 id should be removed"
     );
@@ -687,17 +687,17 @@ async fn sorted_out_tx1_2_4() {
 
     assert_eq!(txs.len(), 3, "Should have 3 txs");
     assert_eq!(
-        txs[0].id(&fuel_tx::ConsensusParameters::DEFAULT),
+        txs[0].id(),
         tx3.id(&fuel_tx::ConsensusParameters::DEFAULT),
         "First should be tx3"
     );
     assert_eq!(
-        txs[1].id(&fuel_tx::ConsensusParameters::DEFAULT),
+        txs[1].id(),
         tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
         "Second should be tx1"
     );
     assert_eq!(
-        txs[2].id(&fuel_tx::ConsensusParameters::DEFAULT),
+        txs[2].id(),
         tx2.id(&fuel_tx::ConsensusParameters::DEFAULT),
         "Third should be tx2"
     );
@@ -766,17 +766,17 @@ async fn find_dependent_tx1_tx2() {
     list.sort_by_key(|tx| Reverse(tx.price()));
     assert_eq!(list.len(), 3, "We should have three items");
     assert_eq!(
-        list[0].id(&fuel_tx::ConsensusParameters::DEFAULT),
+        list[0].id(),
         tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
         "Tx1 should be first."
     );
     assert_eq!(
-        list[1].id(&fuel_tx::ConsensusParameters::DEFAULT),
+        list[1].id(),
         tx2.id(&fuel_tx::ConsensusParameters::DEFAULT),
         "Tx2 should be second."
     );
     assert_eq!(
-        list[2].id(&fuel_tx::ConsensusParameters::DEFAULT),
+        list[2].id(),
         tx3.id(&fuel_tx::ConsensusParameters::DEFAULT),
         "Tx3 should be third."
     );
@@ -857,7 +857,7 @@ async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
         .find_one(&tx.id(&fuel_tx::ConsensusParameters::DEFAULT))
         .unwrap();
     assert_eq!(
-        tx_info.tx().id(&fuel_tx::ConsensusParameters::DEFAULT),
+        tx_info.tx().id(),
         tx.id(&fuel_tx::ConsensusParameters::DEFAULT)
     );
 }
@@ -999,7 +999,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
 
     assert_eq!(squeezed_out_txs.removed.len(), 1);
     assert_eq!(
-        squeezed_out_txs.removed[0].id(&fuel_tx::ConsensusParameters::DEFAULT),
+        squeezed_out_txs.removed[0].id(),
         tx_low.id(&fuel_tx::ConsensusParameters::DEFAULT)
     );
 }

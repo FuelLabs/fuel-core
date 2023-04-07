@@ -75,7 +75,7 @@ async fn insert_from_local_broadcasts_to_p2p() {
         let update = subscribe_update.try_recv().unwrap();
         assert_eq!(
             *update.tx_id(),
-            result.inserted.id(&ConsensusParameters::DEFAULT),
+            result.inserted.id(),
             "First added should be tx1"
         );
     } else {

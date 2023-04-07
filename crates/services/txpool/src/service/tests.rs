@@ -44,7 +44,7 @@ async fn test_find() {
     ]);
     assert_eq!(out.len(), 2, "Should be len 2:{out:?}");
     assert!(out[0].is_some(), "Tx1 should be some:{out:?}");
-    let id = out[0].as_ref().unwrap().id(&ConsensusParameters::DEFAULT);
+    let id = out[0].as_ref().unwrap().id();
     assert_eq!(
         id,
         tx1.id(&ConsensusParameters::DEFAULT),
@@ -192,7 +192,7 @@ async fn simple_insert_removal_subscription() {
         let update = subscribe_update.try_recv().unwrap();
         assert_eq!(
             *update.tx_id(),
-            tx.inserted.id(&ConsensusParameters::DEFAULT),
+            tx.inserted.id(),
             "First added should be tx1"
         );
     } else {
@@ -208,7 +208,7 @@ async fn simple_insert_removal_subscription() {
         let update = subscribe_update.try_recv().unwrap();
         assert_eq!(
             *update.tx_id(),
-            tx.inserted.id(&ConsensusParameters::DEFAULT),
+            tx.inserted.id(),
             "Second added should be tx2"
         );
     } else {
@@ -234,11 +234,7 @@ async fn simple_insert_removal_subscription() {
             .await
             .unwrap()
             .unwrap();
-    assert_eq!(
-        *update.tx_id(),
-        rem[0].id(&ConsensusParameters::DEFAULT),
-        "First removed should be tx1"
-    );
+    assert_eq!(*update.tx_id(), rem[0].id(), "First removed should be tx1");
 
     assert_eq!(
         tokio::time::timeout(std::time::Duration::from_secs(2), subscribe_status.recv())
@@ -253,11 +249,7 @@ async fn simple_insert_removal_subscription() {
             .await
             .unwrap()
             .unwrap();
-    assert_eq!(
-        *update.tx_id(),
-        rem[1].id(&ConsensusParameters::DEFAULT),
-        "Second removed should be tx2"
-    );
+    assert_eq!(*update.tx_id(), rem[1].id(), "Second removed should be tx2");
 
     service.stop_and_await().await.unwrap();
 }
