@@ -35,11 +35,6 @@ use libp2p::{
     Multiaddr,
     PeerId,
 };
-use tokio::time::{
-    self,
-    Interval,
-};
-
 use std::{
     collections::VecDeque,
     task::{
@@ -47,6 +42,10 @@ use std::{
         Poll,
     },
     time::Duration,
+};
+use tokio::time::{
+    self,
+    Interval,
 };
 
 use tracing::debug;
@@ -292,127 +291,28 @@ impl NetworkBehaviour for PeerReportBehaviour {
 
         match self.heartbeat.poll(cx, params) {
             Poll::Pending => {}
-            Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-                peer_id,
-                handler,
-                event,
-            }) => {
-                return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-                    peer_id,
-                    handler,
-                    event: EitherOutput::First(event),
-                })
-            }
-            Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-                address,
-                score,
-            }) => {
-                return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-                    address,
-                    score,
-                })
-            }
-            Poll::Ready(NetworkBehaviourAction::CloseConnection {
-                peer_id,
-                connection,
-            }) => {
-                return Poll::Ready(NetworkBehaviourAction::CloseConnection {
-                    peer_id,
-                    connection,
-                })
-            }
-            Poll::Ready(NetworkBehaviourAction::Dial { handler, opts }) => {
-                let handler =
-                    IntoConnectionHandler::select(handler, self.identify.new_handler());
-
-                return Poll::Ready(NetworkBehaviourAction::Dial { handler, opts })
-            }
-            Poll::Ready(NetworkBehaviourAction::GenerateEvent(HeartbeatEvent {
-                peer_id,
-                latest_block_height,
-            })) => {
-                let event = PeerReportEvent::PeerInfoUpdated {
-                    peer_id,
-                    block_height: latest_block_height,
-                };
-                return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
+            Poll::Ready(action) => {
+                let action =
+                    <PeerReportBehaviour as FromAction<Heartbeat>>::convert_action(
+                        self, action,
+                    );
+                if let Some(action) = action {
+                    return Poll::Ready(action)
+                }
             }
         }
 
         loop {
+            // poll until we've either exhausted the events or found one of interest
             match self.identify.poll(cx, params) {
                 Poll::Pending => break,
-                Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-                    peer_id,
-                    handler,
-                    event,
-                }) => {
-                    return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-                        peer_id,
-                        handler,
-                        event: EitherOutput::Second(event),
-                    })
-                }
-                Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-                    address,
-                    score,
-                }) => {
-                    return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-                        address,
-                        score,
-                    })
-                }
-                Poll::Ready(NetworkBehaviourAction::CloseConnection {
-                    peer_id,
-                    connection,
-                }) => {
-                    return Poll::Ready(NetworkBehaviourAction::CloseConnection {
-                        peer_id,
-                        connection,
-                    })
-                }
-                Poll::Ready(NetworkBehaviourAction::Dial { handler, opts }) => {
-                    let handler = IntoConnectionHandler::select(
-                        self.heartbeat.new_handler(),
-                        handler,
-                    );
-                    return Poll::Ready(NetworkBehaviourAction::Dial { handler, opts })
-                }
-                Poll::Ready(NetworkBehaviourAction::GenerateEvent(event)) => {
-                    match event {
-                        IdentifyEvent::Received {
-                            peer_id,
-                            info:
-                                IdentifyInfo {
-                                    protocol_version,
-                                    agent_version,
-                                    mut listen_addrs,
-                                    ..
-                                },
-                        } => {
-                            if listen_addrs.len() > MAX_IDENTIFY_ADDRESSES {
-                                debug!(
-                                    target: "fuel-p2p",
-                                    "Node {:?} has reported more than {} addresses; it is identified by {:?} and {:?}",
-                                    peer_id, MAX_IDENTIFY_ADDRESSES, protocol_version, agent_version
-                                );
-                                listen_addrs.truncate(MAX_IDENTIFY_ADDRESSES);
-                            }
-
-                            let event = PeerReportEvent::PeerIdentified {
-                                peer_id,
-                                agent_version,
-                                addresses: listen_addrs,
-                            };
-
-                            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(
-                                event,
-                            ))
-                        }
-                        IdentifyEvent::Error { peer_id, error } => {
-                            debug!(target: "fuel-p2p", "Identification with peer {:?} failed => {}", peer_id, error)
-                        }
-                        _ => {}
+                Poll::Ready(action) => {
+                    if let Some(action) =
+                        <PeerReportBehaviour as FromAction<Identify>>::convert_action(
+                            self, action,
+                        )
+                    {
+                        return Poll::Ready(action)
                     }
                 }
             }
@@ -449,4 +349,129 @@ impl NetworkBehaviour for PeerReportBehaviour {
                 .on_connection_handler_event(peer_id, connection_id, identify_event),
         }
     }
+}
+
+impl FromAction<Heartbeat> for PeerReportBehaviour {
+    fn convert_action(
+        &mut self,
+        action: NetworkBehaviourAction<
+            <Heartbeat as NetworkBehaviour>::OutEvent,
+            <Heartbeat as NetworkBehaviour>::ConnectionHandler,
+        >,
+    ) -> Option<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+        match action {
+            NetworkBehaviourAction::GenerateEvent(HeartbeatEvent {
+                peer_id,
+                latest_block_height,
+            }) => {
+                let event = PeerReportEvent::PeerInfoUpdated {
+                    peer_id,
+                    block_height: latest_block_height,
+                };
+                Some(NetworkBehaviourAction::GenerateEvent(event))
+            }
+            NetworkBehaviourAction::Dial { handler, opts } => {
+                let handler =
+                    IntoConnectionHandler::select(handler, self.identify.new_handler());
+                Some(NetworkBehaviourAction::Dial { handler, opts })
+            }
+            NetworkBehaviourAction::NotifyHandler {
+                peer_id,
+                handler,
+                event,
+            } => Some(NetworkBehaviourAction::NotifyHandler {
+                peer_id,
+                handler,
+                event: EitherOutput::First(event),
+            }),
+            NetworkBehaviourAction::ReportObservedAddr { address, score } => {
+                Some(NetworkBehaviourAction::ReportObservedAddr { address, score })
+            }
+            NetworkBehaviourAction::CloseConnection {
+                peer_id,
+                connection,
+            } => Some(NetworkBehaviourAction::CloseConnection {
+                peer_id,
+                connection,
+            }),
+        }
+    }
+}
+
+impl FromAction<Identify> for PeerReportBehaviour {
+    fn convert_action(
+        &mut self,
+        action: NetworkBehaviourAction<
+            <Identify as NetworkBehaviour>::OutEvent,
+            <Identify as NetworkBehaviour>::ConnectionHandler,
+        >,
+    ) -> Option<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+        match action {
+            NetworkBehaviourAction::GenerateEvent(event) => match event {
+                IdentifyEvent::Received {
+                    peer_id,
+                    info:
+                        IdentifyInfo {
+                            protocol_version,
+                            agent_version,
+                            mut listen_addrs,
+                            ..
+                        },
+                } => {
+                    if listen_addrs.len() > MAX_IDENTIFY_ADDRESSES {
+                        debug!(
+                            target: "fuel-p2p",
+                            "Node {:?} has reported more than {} addresses; it is identified by {:?} and {:?}",
+                            peer_id, MAX_IDENTIFY_ADDRESSES, protocol_version, agent_version
+                        );
+                        listen_addrs.truncate(MAX_IDENTIFY_ADDRESSES);
+                    }
+
+                    let event = PeerReportEvent::PeerIdentified {
+                        peer_id,
+                        agent_version,
+                        addresses: listen_addrs,
+                    };
+
+                    return Some(NetworkBehaviourAction::GenerateEvent(event))
+                }
+                IdentifyEvent::Error { peer_id, error } => {
+                    debug!(target: "fuel-p2p", "Identification with peer {:?} failed => {}", peer_id, error);
+                    None
+                }
+                _ => None,
+            },
+            NetworkBehaviourAction::Dial { handler, opts } => {
+                let handler =
+                    IntoConnectionHandler::select(self.heartbeat.new_handler(), handler);
+                return Some(NetworkBehaviourAction::Dial { handler, opts })
+            }
+            NetworkBehaviourAction::NotifyHandler {
+                peer_id,
+                handler,
+                event,
+            } => Some(NetworkBehaviourAction::NotifyHandler {
+                peer_id,
+                handler,
+                event: EitherOutput::Second(event),
+            }),
+            NetworkBehaviourAction::ReportObservedAddr { address, score } => {
+                Some(NetworkBehaviourAction::ReportObservedAddr { address, score })
+            }
+            NetworkBehaviourAction::CloseConnection {
+                peer_id,
+                connection,
+            } => Some(NetworkBehaviourAction::CloseConnection {
+                peer_id,
+                connection,
+            }),
+        }
+    }
+}
+
+trait FromAction<T: NetworkBehaviour>: NetworkBehaviour {
+    fn convert_action(
+        &mut self,
+        action: NetworkBehaviourAction<T::OutEvent, T::ConnectionHandler>,
+    ) -> Option<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>>;
 }
