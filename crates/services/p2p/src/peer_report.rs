@@ -56,7 +56,7 @@ const MAX_IDENTIFY_ADDRESSES: usize = 10;
 const HEALTH_CHECK_INTERVAL_IN_SECONDS: u64 = 10;
 const REPUTATION_DECAY_INTERVAL_IN_SECONDS: u64 = 1;
 
-/// Events emitted by PeerInfoBehaviour
+/// Events emitted by PeerReportBehavior
 #[derive(Debug, Clone)]
 pub enum PeerReportEvent {
     PeerConnected {
