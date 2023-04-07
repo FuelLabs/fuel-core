@@ -10,18 +10,15 @@ use crate::{
         },
         Cacheable,
         Chargeable,
-        ConsensusParameters,
         Create,
         Input,
         Output,
         Script,
         Transaction,
         TxId,
-        UniqueIdentifier,
         UtxoId,
     },
     fuel_types::{
-        Bytes32,
         ContractId,
         Nonce,
     },
@@ -72,14 +69,12 @@ impl PoolTransaction {
             PoolTransaction::Create(create) => create.transaction().metered_bytes_size(),
         }
     }
-}
 
-impl PoolTransaction {
-    /// Return the unique identifier of the transaction.
-    pub fn id(&self, params: &ConsensusParameters) -> Bytes32 {
+    /// Returns the transaction ID
+    pub fn id(&self) -> TxId {
         match self {
-            PoolTransaction::Script(script) => script.transaction().id(params),
-            PoolTransaction::Create(create) => create.transaction().id(params),
+            PoolTransaction::Script(script) => script.id(),
+            PoolTransaction::Create(create) => create.id(),
         }
     }
 }

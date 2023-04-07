@@ -81,7 +81,10 @@ impl TxQuery {
         if let Some(transaction) = txpool.transaction(id) {
             Ok(Some(Transaction(transaction, id)))
         } else {
-            query.transaction(&id).map(|tx| (tx, id)).into_api_result()
+            query
+                .transaction(&id)
+                .map(|tx| Transaction::from_tx(id, tx))
+                .into_api_result()
         }
     }
 
@@ -137,7 +140,7 @@ impl TxQuery {
                     result.and_then(|sorted| {
                         let tx = tx_query.transaction(&sorted.tx_id.0)?;
 
-                        Ok((sorted, (tx, sorted.tx_id.0).into()))
+                        Ok((sorted, Transaction::from_tx(sorted.tx_id.0, tx)))
                     })
                 });
 
@@ -181,7 +184,7 @@ impl TxQuery {
                         .map(|result| {
                             result.map(|(cursor, tx)| {
                                 let tx_id = tx.id(&config.transaction_parameters);
-                                (cursor.into(), (tx, tx_id).into())
+                                (cursor.into(), Transaction::from_tx(tx_id, tx))
                             })
                         });
                 Ok(txs)

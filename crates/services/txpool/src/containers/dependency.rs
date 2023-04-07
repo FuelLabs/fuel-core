@@ -24,7 +24,6 @@ use fuel_core_types::{
                 MessageDataSigned,
             },
         },
-        ConsensusParameters,
         Input,
         Output,
         UtxoId,
@@ -52,8 +51,6 @@ pub struct Dependency {
     max_depth: usize,
     /// utxo-validation feature flag
     utxo_validation: bool,
-    /// consensus parameters
-    consensus_params: ConsensusParameters,
 }
 
 #[derive(Debug, Clone)]
@@ -99,18 +96,13 @@ pub struct MessageState {
 }
 
 impl Dependency {
-    pub fn new(
-        max_depth: usize,
-        utxo_validation: bool,
-        params: ConsensusParameters,
-    ) -> Self {
+    pub fn new(max_depth: usize, utxo_validation: bool) -> Self {
         Self {
             coins: HashMap::new(),
             contracts: HashMap::new(),
             messages: HashMap::new(),
             max_depth,
             utxo_validation,
-            consensus_params: params,
         }
     }
 
@@ -123,7 +115,7 @@ impl Dependency {
         txs: &HashMap<TxId, TxInfo>,
     ) {
         // for every input aggregate UtxoId and check if it is inside
-        let mut check = vec![tx.id(&self.consensus_params)];
+        let mut check = vec![tx.id()];
         while let Some(parent_txhash) = check.pop() {
             let mut is_new = false;
             let mut parent_tx = None;
@@ -431,7 +423,7 @@ impl Dependency {
                     db_coins.insert(
                         *utxo_id,
                         CoinState {
-                            is_spend_by: Some(tx.id(&self.consensus_params) as TxId),
+                            is_spend_by: Some(tx.id() as TxId),
                             depth: max_depth - 1,
                         },
                     );
@@ -477,7 +469,7 @@ impl Dependency {
                     db_messages.insert(
                         *nonce,
                         MessageState {
-                            spent_by: tx.id(&self.consensus_params),
+                            spent_by: tx.id(),
                             gas_price: tx.price(),
                         },
                     );
@@ -516,7 +508,7 @@ impl Dependency {
                                 gas_price: GasPrice::MAX,
                             })
                             .used_by
-                            .insert(tx.id(&self.consensus_params));
+                            .insert(tx.id());
                     }
 
                     // yey we got our contract
@@ -586,7 +578,7 @@ impl Dependency {
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     // spend coin
                     if let Some(state) = self.coins.get_mut(utxo_id) {
-                        state.is_spend_by = Some(tx.id(&self.consensus_params));
+                        state.is_spend_by = Some(tx.id());
                     }
                 }
                 Input::Contract(Contract { contract_id, .. }) => {
@@ -594,7 +586,7 @@ impl Dependency {
                     // or it will be added when db_contracts extends self.contracts (and it
                     // already contains changed used_by)
                     if let Some(state) = self.contracts.get_mut(contract_id) {
-                        state.used_by.insert(tx.id(&self.consensus_params));
+                        state.used_by.insert(tx.id());
                     }
                 }
                 Input::MessageCoinSigned(_)
@@ -614,7 +606,7 @@ impl Dependency {
 
         // iterate over all outputs and insert them, marking them as available.
         for (index, output) in tx.outputs().iter().enumerate() {
-            let utxo_id = UtxoId::new(tx.id(&self.consensus_params), index as u8);
+            let utxo_id = UtxoId::new(tx.id(), index as u8);
             match output {
                 Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
                     // insert output coin inside by_coin
@@ -664,7 +656,7 @@ impl Dependency {
                 }
                 Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
                     // remove transactions that depend on this coin output
-                    let utxo = UtxoId::new(tx.id(&self.consensus_params), index as u8);
+                    let utxo = UtxoId::new(tx.id(), index as u8);
                     if let Some(state) = self.coins.remove(&utxo).map(|c| c.is_spend_by) {
                         // there may or may not be any dependents for this coin output
                         if let Some(spend_by) = state {
@@ -728,7 +720,7 @@ impl Dependency {
                     // 2.a. contract state can be removed if it's from the database and this is the
                     //      last tx to use it, since no other txs are involved.
                     if let Some(state) = self.contracts.get_mut(contract_id) {
-                        state.used_by.remove(&tx.id(&self.consensus_params));
+                        state.used_by.remove(&tx.id());
                         // if contract list is empty and is in db, flag contract state for removal.
                         if state.used_by.is_empty() && state.is_in_database() {
                             self.contracts.remove(contract_id);

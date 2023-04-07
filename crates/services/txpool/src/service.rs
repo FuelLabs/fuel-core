@@ -160,7 +160,7 @@ where
             _ = self.ttl_timer.tick() => {
                 let removed = self.shared.txpool.lock().prune_old_txs();
                 for tx in removed {
-                    self.shared.tx_status_sender.send_squeezed_out(tx.id(&self.shared.consensus_params), Error::TTLReason);
+                    self.shared.tx_status_sender.send_squeezed_out(tx.id(), Error::TTLReason);
                 }
 
                 should_continue = true
@@ -259,7 +259,7 @@ where
         let sorted_txs = select_transactions(txs, max_gas);
 
         for tx in sorted_txs.iter() {
-            guard.remove_committed_tx(&tx.id(&self.consensus_params));
+            guard.remove_committed_tx(&tx.id());
         }
         sorted_txs
     }

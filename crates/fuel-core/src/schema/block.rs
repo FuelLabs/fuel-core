@@ -113,7 +113,7 @@ impl Block {
             .iter()
             .map(|tx_id| {
                 let tx = query.transaction(tx_id)?;
-                Ok((tx, *tx_id).into())
+                Ok(Transaction::from_tx(*tx_id, tx))
             })
             .collect()
     }

@@ -106,9 +106,9 @@ insta = "1.8"
 tempfile = "3.4"
 
 [patch.crates-io]
-fuel-types = { git = "https://github.com/FuelLabs/fuel-vm.git" }
-fuel-asm = { git = "https://github.com/FuelLabs/fuel-vm.git" }
-fuel-tx = { git = "https://github.com/FuelLabs/fuel-vm.git" }
-fuel-crypto = { git = "https://github.com/FuelLabs/fuel-vm.git" }
-fuel-merkle = { git = "https://github.com/FuelLabs/fuel-vm.git" }
-fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm.git" }
+fuel-types = { git = "https://github.com/FuelLabs/fuel-vm.git", branch = "Voxelot/cached-id" }
+fuel-asm = { git = "https://github.com/FuelLabs/fuel-vm.git", branch = "Voxelot/cached-id" }
+fuel-tx = { git = "https://github.com/FuelLabs/fuel-vm.git", branch = "Voxelot/cached-id" }
+fuel-crypto = { git = "https://github.com/FuelLabs/fuel-vm.git", branch = "Voxelot/cached-id" }
+fuel-merkle = { git = "https://github.com/FuelLabs/fuel-vm.git", branch = "Voxelot/cached-id" }
+fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm.git", branch = "Voxelot/cached-id" }

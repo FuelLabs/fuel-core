@@ -71,6 +71,7 @@ use fuel_core_types::{
         Receipt,
         Transaction,
         TransactionFee,
+        TxId,
         TxPointer,
         UniqueIdentifier,
         UtxoId,
@@ -593,9 +594,7 @@ where
             &self.config.chain_conf.transaction_parameters,
         )?;
 
-        let tx_id = checked_tx
-            .transaction()
-            .id(&self.config.chain_conf.transaction_parameters);
+        let tx_id = checked_tx.id();
         let min_fee = checked_tx.metadata().min_fee();
         let max_fee = checked_tx.metadata().max_fee();
 
@@ -603,7 +602,10 @@ where
 
         if self.config.utxo_validation {
             // validate transaction has at least one coin
-            self.verify_tx_has_at_least_one_coin_or_message(checked_tx.transaction())?;
+            self.verify_tx_has_at_least_one_coin_or_message(
+                checked_tx.transaction(),
+                checked_tx.id(),
+            )?;
             // validate utxos exist and maturity is properly set
             self.verify_input_state(
                 tx_db_transaction.deref(),
@@ -685,6 +687,7 @@ where
                 ExecutionKind::Production => ExecutionTypes::Production(&mut tx),
                 ExecutionKind::Validation => ExecutionTypes::Validation(&tx),
             },
+            tx_id,
             tx_db_transaction.deref_mut(),
         )?;
 
@@ -874,9 +877,7 @@ where
         Tx: ExecutableTransaction,
         <Tx as IntoChecked>::Metadata: CheckedMetadata,
     {
-        let id = tx
-            .transaction()
-            .id(&self.config.chain_conf.transaction_parameters);
+        let id = tx.id();
         if Interpreter::<PredicateStorage>::check_predicates(
             tx,
             self.config.chain_conf.transaction_parameters,
@@ -899,6 +900,7 @@ where
     fn verify_tx_has_at_least_one_coin_or_message<Tx: ExecutableTransaction>(
         &self,
         tx: &Tx,
+        tx_id: TxId,
     ) -> ExecutorResult<()> {
         if tx
             .inputs()
@@ -907,10 +909,7 @@ where
         {
             Ok(())
         } else {
-            Err(TransactionValidityError::NoCoinOrMessageInput(
-                tx.id(&self.config.chain_conf.transaction_parameters),
-            )
-            .into())
+            Err(TransactionValidityError::NoCoinOrMessageInput(tx_id).into())
         }
     }
 
@@ -1127,6 +1126,7 @@ where
     fn compute_not_utxo_outputs<Tx>(
         &self,
         tx: ExecutionTypes<&mut Tx, &Tx>,
+        tx_id: TxId,
         db: &mut Database,
     ) -> ExecutorResult<()>
     where
@@ -1152,8 +1152,7 @@ where
                             contract_id
                         } else {
                             return Err(ExecutorError::InvalidTransactionOutcome {
-                                transaction_id: tx
-                                    .id(&self.config.chain_conf.transaction_parameters),
+                                transaction_id: tx_id,
                             })
                         };
 
@@ -1180,22 +1179,19 @@ where
                             contract_id
                         } else {
                             return Err(ExecutorError::InvalidTransactionOutcome {
-                                transaction_id: tx
-                                    .id(&self.config.chain_conf.transaction_parameters),
+                                transaction_id: tx_id,
                             })
                         };
 
                         let mut contract = ContractRef::new(&mut *db, *contract_id);
                         if balance_root != &contract.balance_root()? {
                             return Err(ExecutorError::InvalidTransactionOutcome {
-                                transaction_id: tx
-                                    .id(&self.config.chain_conf.transaction_parameters),
+                                transaction_id: tx_id,
                             })
                         }
                         if state_root != &contract.state_root()? {
                             return Err(ExecutorError::InvalidTransactionOutcome {
-                                transaction_id: tx
-                                    .id(&self.config.chain_conf.transaction_parameters),
+                                transaction_id: tx_id,
                             })
                         }
                     }

@@ -11,7 +11,6 @@ use crate::{
         },
         IntoApiResult,
     },
-    graphql_api::Config,
     query::{
         SimpleBlockData,
         SimpleTransactionData,
@@ -60,7 +59,6 @@ use fuel_core_types::{
         },
         Chargeable,
         Executable,
-        UniqueIdentifier,
     },
     fuel_types::bytes::SerializableVec,
     fuel_vm::ProgramState as VmProgramState,
@@ -267,6 +265,12 @@ impl From<TransactionStatus> for TxStatus {
 }
 pub struct Transaction(pub(crate) fuel_tx::Transaction, pub(crate) fuel_tx::TxId);
 
+impl Transaction {
+    pub fn from_tx(id: fuel_tx::TxId, tx: fuel_tx::Transaction) -> Self {
+        Self(tx, id)
+    }
+}
+
 #[Object]
 impl Transaction {
     async fn id(&self) -> TransactionId {
@@ -401,8 +405,7 @@ impl Transaction {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<TransactionStatus>> {
-        let config = ctx.data_unchecked::<Config>();
-        let id = self.0.id(&config.transaction_parameters);
+        let id = self.1;
         let query: &Database = ctx.data_unchecked();
         let txpool = ctx.data_unchecked::<TxPool>();
         get_tx_status(id, query, txpool).await.map_err(Into::into)
@@ -412,10 +415,9 @@ impl Transaction {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<Vec<Receipt>>> {
-        let config = ctx.data_unchecked::<Config>();
         let query: &Database = ctx.data_unchecked();
         let receipts = query
-            .receipts(&self.0.id(&config.transaction_parameters))
+            .receipts(&self.1)
             .into_api_result::<Vec<_>, async_graphql::Error>()?;
         Ok(receipts.map(|receipts| receipts.into_iter().map(Receipt).collect()))
     }
@@ -514,11 +516,5 @@ pub(super) async fn get_tx_status(
             ))),
             _ => Ok(None),
         },
-    }
-}
-
-impl From<(fuel_tx::Transaction, fuel_tx::TxId)> for Transaction {
-    fn from(tx: (fuel_tx::Transaction, fuel_tx::TxId)) -> Self {
-        Transaction(tx.0, tx.1)
     }
 }

@@ -56,11 +56,7 @@ where
             by_hash: HashMap::new(),
             by_gas_price: PriceSort::default(),
             by_time: TimeSort::default(),
-            by_dependency: Dependency::new(
-                max_depth,
-                config.utxo_validation,
-                config.chain_config.transaction_parameters,
-            ),
+            by_dependency: Dependency::new(max_depth, config.utxo_validation),
             config,
             database,
         }
@@ -128,10 +124,7 @@ where
             .into())
         }
 
-        if self
-            .by_hash
-            .contains_key(&tx.id(&self.config.chain_config.transaction_parameters))
-        {
+        if self.by_hash.contains_key(&tx.id()) {
             return Err(Error::NotInsertedTxKnown.into())
         }
 
@@ -159,14 +152,9 @@ where
             .by_dependency
             .insert(&self.by_hash, &self.database, &tx)?;
         let info = TxInfo::new(tx.clone());
-        self.by_gas_price
-            .insert(&info, &self.config.chain_config.transaction_parameters);
-        self.by_time
-            .insert(&info, &self.config.chain_config.transaction_parameters);
-        self.by_hash.insert(
-            tx.id(&self.config.chain_config.transaction_parameters),
-            info,
-        );
+        self.by_gas_price.insert(&info);
+        self.by_time.insert(&info);
+        self.by_hash.insert(tx.id(), info);
 
         // if some transaction were removed so we don't need to check limit
         let removed = if rem.is_empty() {
@@ -181,7 +169,7 @@ where
         } else {
             // remove ret from by_hash and from by_price
             for rem in rem.iter() {
-                self.remove_tx(&rem.id(&self.config.chain_config.transaction_parameters));
+                self.remove_tx(&rem.id());
             }
 
             rem
@@ -204,7 +192,7 @@ where
     }
 
     pub fn remove_inner(&mut self, tx: &ArcPoolTx) -> Vec<ArcPoolTx> {
-        self.remove_by_tx_id(&tx.id(&self.config.chain_config.transaction_parameters))
+        self.remove_by_tx_id(&tx.id())
     }
 
     /// remove transaction from pool needed on user demand. Low priority
@@ -215,9 +203,7 @@ where
                 .by_dependency
                 .recursively_remove_all_dependencies(&self.by_hash, tx.tx().clone());
             for remove in removed.iter() {
-                self.remove_tx(
-                    &remove.id(&self.config.chain_config.transaction_parameters),
-                );
+                self.remove_tx(&remove.id());
             }
             return removed
         }
@@ -227,10 +213,8 @@ where
     fn remove_tx(&mut self, tx_id: &TxId) -> Option<TxInfo> {
         let info = self.by_hash.remove(tx_id);
         if let Some(info) = &info {
-            self.by_time
-                .remove(info, &self.config.chain_config.transaction_parameters);
-            self.by_gas_price
-                .remove(info, &self.config.chain_config.transaction_parameters);
+            self.by_time.remove(info);
+            self.by_gas_price.remove(info);
         }
 
         info
@@ -283,14 +267,9 @@ where
                     for removed in removed {
                         // small todo there is possibility to have removal reason (ReplacedByHigherGas, DependencyRemoved)
                         // but for now it is okay to just use Error::Removed.
-                        tx_status_sender.send_squeezed_out(
-                            removed.id(&self.config.chain_config.transaction_parameters),
-                            Error::Removed,
-                        );
+                        tx_status_sender.send_squeezed_out(removed.id(), Error::Removed);
                     }
-                    tx_status_sender.send_submitted(
-                        inserted.id(&self.config.chain_config.transaction_parameters),
-                    );
+                    tx_status_sender.send_submitted(inserted.id());
                 }
                 Err(_) => {
                     // @dev should not broadcast tx if error occurred
