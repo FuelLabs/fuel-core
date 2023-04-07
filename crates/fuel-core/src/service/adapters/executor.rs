@@ -47,18 +47,6 @@ impl ExecutorAdapter {
         };
         executor.dry_run(block, utxo_validation)
     }
-
-    pub(crate) fn _estimate_predicates(
-        &self,
-        block: ExecutionBlock,
-    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
-        let executor = Executor {
-            database: self.relayer.database.clone(),
-            relayer: self.relayer.clone(),
-            config: self.config.clone(),
-        };
-        executor.estimate_predicates(block)
-    }
 }
 
 /// Implemented to satisfy: `GenesisCommitment for ContractRef<&'a mut Database>`

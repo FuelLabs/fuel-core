@@ -37,9 +37,6 @@ use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tracing::debug;
-use fuel_core_types::fuel_tx::{CheckError, ConsensusParameters};
-use fuel_core_types::fuel_vm::checked_transaction::EstimatePredicates;
-use fuel_core_types::fuel_vm::GasCosts;
 
 #[cfg(test)]
 mod tests;
@@ -155,46 +152,6 @@ where
             return Err(anyhow!("Expected at least one set of receipts"))
         }
         Ok(res)
-    }
-
-    // TODO: Support custom `block_time` for `dry_run`.
-    /// Simulate a transaction without altering any state. Does not aquire the production lock
-    /// since it is basically a "read only" operation and shouldn't get in the way of normal
-    /// production.
-    pub async fn estimate_predicates(
-        &self,
-        transaction: Transaction,
-    ) -> anyhow::Result<Transaction> {
-
-        let mut estimation_transaction = transaction.clone();
-
-        if estimation_transaction.is_script() {
-            let script = estimation_transaction.as_script_mut().expect("script");
-            // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
-            let res: bool =
-                tokio_rayon::spawn_fifo(move || -> anyhow::Result<bool, CheckError> {
-                    script
-                        .estimate_predicates(&ConsensusParameters::default(), &GasCosts::default())
-                })
-                    .await?;
-            if !res {
-                return Err(anyhow!("Predicate estimation failed"))
-            }
-        } else if estimation_transaction.is_create() {
-            let create = estimation_transaction.as_create_mut().expect("create");
-            // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
-            let res: bool =
-                tokio_rayon::spawn_fifo(move || -> anyhow::Result<bool, CheckError> {
-                    create
-                        .estimate_predicates(&ConsensusParameters::default(), &GasCosts::default())
-                })
-                    .await?;
-            if !res {
-                return Err(anyhow!("Predicate estimation failed"))
-            }
-        }
-
-        Ok(estimation_transaction.into())
     }
 }
 

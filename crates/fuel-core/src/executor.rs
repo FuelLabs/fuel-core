@@ -353,7 +353,7 @@ where
 
         let mut coinbase_tx: Mint = match execution_kind {
             ExecutionKind::DryRun => Default::default(),
-            ExecutionKind::Estimation | ExecutionKind::Production => {
+            ExecutionKind::Production => {
                 // The coinbase transaction should be the first.
                 // We will add actual amount of `Output::Coin` at the end of transactions execution.
                 Transaction::mint(
@@ -398,7 +398,7 @@ where
 
                     if let Err(err) = result {
                         return match execution_kind {
-                            EstimationKind::Estimation | ExecutionKind::Production => {
+                            ExecutionKind::Production => {
                                 // If, during block production, we get an invalid transaction,
                                 // remove it from the block and continue block creation. An invalid
                                 // transaction means that the caller didn't validate it first, so
@@ -430,7 +430,7 @@ where
             .try_collect()?;
 
         // After the execution of all transactions in production mode, we can set the final fee.
-        if let ExecutionKind::Production | ExecutionKind::Estimation = execution_kind {
+        if execution_kind == ExecutionKind::Production {
             coinbase_tx.outputs_mut().clear();
             coinbase_tx.outputs_mut().push(Output::coin(
                 self.config.block_producer.coinbase_recipient,
@@ -604,26 +604,20 @@ where
                 ExecutionKind::DryRun => ExecutionTypes::DryRun(original_tx),
                 ExecutionKind::Production => ExecutionTypes::Production(original_tx),
                 ExecutionKind::Validation => ExecutionTypes::Validation(original_tx),
-                ExecutionKind::Estimation => ExecutionTypes::Estimation(original_tx),
             },
             tx_db_transaction.deref_mut(),
         )?;
 
-        let tx_id = original_tx.id();
-        let min_fee = original_tx.metadata().min_fee();
-        let max_fee = original_tx.metadata().max_fee();
+        let checked_tx = original_tx.clone().into_checked_basic(
+            block_height,
+            &self.config.chain_conf.transaction_parameters,
+        )?;
 
         let tx_id = checked_tx.id();
         let min_fee = checked_tx.metadata().min_fee();
         let max_fee = checked_tx.metadata().max_fee();
 
-        match execution_kind {
-            ExecutionKind::Estimation => {
-                // Check the transaction against the block height.
-                estimated_tx = original_tx.clone().into_estimated_basic(
-                    block_height as Word,
-                    &self.config.chain_conf.transaction_parameters,
-                )?;
+        self.verify_tx_predicates(checked_tx.clone())?;
 
         if self.config.utxo_validation {
             // validate transaction has at least one coin
@@ -660,28 +654,17 @@ where
             self.config.chain_conf.transaction_parameters,
             self.config.chain_conf.gas_costs.clone(),
         );
-        let vm_result: StateTransition<_> = match execution_kind {
-            ExecutionKind::Production | ExecutionKind::Validation => vm
-                .transact(checked_tx.clone())
-                .map_err(|error| ExecutorError::VmExecution {
-                    error,
-                    transaction_id: tx_id,
-                })?
-                .into(),
-            ExecutionKind::Estimation => vm
-                .transact(estimated_tx.clone())
-                .map_err(|error| ExecutorError::VmExecution {
-                    error,
-                    transaction_id: tx_id,
-                })?
-                .into(),
-        };
+        let vm_result: StateTransition<_> = vm
+            .transact(checked_tx.clone())
+            .map_err(|error| ExecutorError::VmExecution {
+                error,
+                transaction_id: tx_id,
+            })?
+            .into();
+        let reverted = vm_result.should_revert();
 
         // TODO: Avoid cloning here, we can extract value from result
         let mut tx = vm_result.tx().clone();
-
-        vm_result.receipts().get(0).unwrap().gas_used();
-
         // only commit state changes if execution was a success
         if !reverted {
             sub_block_db_commit.commit()?;
@@ -701,7 +684,7 @@ where
                     })
                 }
             }
-            ExecutionKind::DryRun |  ExecutionKind::Estimation | ExecutionKind::Production => {
+            ExecutionKind::DryRun | ExecutionKind::Production => {
                 // malleate the block with the resultant tx from the vm
             }
         }
@@ -723,7 +706,6 @@ where
                 ExecutionKind::DryRun => ExecutionTypes::DryRun(&mut tx),
                 ExecutionKind::Production => ExecutionTypes::Production(&mut tx),
                 ExecutionKind::Validation => ExecutionTypes::Validation(&tx),
-                ExecutionKind::Estimation => ExecutionTypes::Estimation(&mut tx),
             },
             tx_id,
             tx_db_transaction.deref_mut(),
@@ -917,27 +899,6 @@ where
     {
         let id = tx.id();
         if Interpreter::<PredicateStorage>::check_predicates(
-            tx,
-            self.config.chain_conf.transaction_parameters,
-            self.config.chain_conf.gas_costs.clone(),
-        )
-        .is_err()
-        {
-            return Err(ExecutorError::TransactionValidity(
-                TransactionValidityError::InvalidPredicate(id),
-            ))
-        }
-
-        Ok(())
-    }
-
-    /// Estimate all the predicates of a tx.
-    pub fn estimate_predicates<Tx>(&self, mut tx: Tx) -> ExecutorResult<()>
-    where
-        Tx: ExecutableTransaction,
-    {
-        let id = tx.transaction().id();
-        if Interpreter::<PredicateStorage>::estimate_predicates(
             tx,
             self.config.chain_conf.transaction_parameters,
             self.config.chain_conf.gas_costs.clone(),

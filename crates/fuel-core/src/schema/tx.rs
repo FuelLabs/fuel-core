@@ -55,6 +55,10 @@ use std::{
     iter,
     sync::Arc,
 };
+use fuel_core_types::fuel_tx::{CheckError, ConsensusParameters};
+use fuel_core_types::fuel_types::bytes::SerializableVec;
+use fuel_core_types::fuel_vm::checked_transaction::EstimatePredicates;
+use fuel_core_types::fuel_vm::GasCosts;
 use types::Transaction;
 
 use self::types::TransactionStatus;
@@ -216,26 +220,46 @@ impl TxMutation {
         tx.precompute(&config.transaction_parameters);
 
         let receipts = block_producer
-            .dry_run_tx(tx, None, utxo_validation, estimate_predicates)
+            .dry_run_tx(tx, None, utxo_validation)
             .await?;
         Ok(receipts.iter().map(Into::into).collect())
     }
+
     /// Execute a dry-run of the transaction using a fork of current state, no changes are committed.
     async fn estimate_predicates(
         &self,
         ctx: &Context<'_>,
         tx: HexString,
     ) -> async_graphql::Result<HexString> {
-        let block_producer = ctx.data_unchecked::<BlockProducer>();
-        let config = ctx.data_unchecked::<Config>();
-
         let mut tx = FuelTx::from_bytes(&tx.0)?;
-        tx.precompute(&config.transaction_parameters);
 
-        let receipts = block_producer
-            .dry_run_tx(tx, None, utxo_validation, estimate_predicates)
-            .await?;
-        Ok(receipts.iter().map(Into::into).collect())
+        if tx.is_script() {
+            let mut script = tx.as_script().expect("script").clone();
+            // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
+            let res: bool =
+                tokio_rayon::spawn_fifo(move || -> anyhow::Result<bool, CheckError> {
+                    script
+                        .estimate_predicates(&ConsensusParameters::default(), &GasCosts::default())
+                })
+                    .await?;
+
+            tx = script.into();
+        } else if tx.is_create() {
+            let mut create = tx.as_create().expect("create").clone();
+            // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
+            let res: bool =
+                tokio_rayon::spawn_fifo(move || -> anyhow::Result<bool, CheckError> {
+                    create
+                        .estimate_predicates(&ConsensusParameters::default(), &GasCosts::default())
+                })
+                    .await?;
+
+            tx = create.into();
+        }
+
+        Ok(HexString(tx.to_bytes()))
+
+
     }
 
     /// Submits transaction to the txpool
