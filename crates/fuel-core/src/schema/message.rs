@@ -15,6 +15,10 @@ use super::{
 use crate::{
     fuel_core_graphql_api::service::Database,
     query::MessageQueryData,
+    schema::scalars::{
+        BlockId,
+        U32,
+    },
 };
 use anyhow::anyhow;
 use async_graphql::{
@@ -115,14 +119,45 @@ impl MessageQuery {
         ctx: &Context<'_>,
         transaction_id: TransactionId,
         message_id: MessageId,
+        commit_block_id: Option<BlockId>,
+        commit_block_height: Option<U32>,
     ) -> async_graphql::Result<Option<MessageProof>> {
         let data: &Database = ctx.data_unchecked();
+        let block_id = match (commit_block_id, commit_block_height) {
+            (Some(commit_block_id), None) => commit_block_id.0.into(),
+            (None, Some(commit_block_height)) => {
+                let block_height = commit_block_height.0.into();
+                data.block_id(&block_height)?
+            }
+            _ => Err(anyhow::anyhow!(
+                "Either `commit_block_id` or `commit_block_height` must be provided exclusively"
+            ))?,
+        };
+
         Ok(crate::query::message_proof(
             data.deref(),
             transaction_id.into(),
             message_id.into(),
+            block_id,
         )?
         .map(MessageProof))
+    }
+}
+pub struct MerkleProof(pub(crate) entities::message::MerkleProof);
+
+#[Object]
+impl MerkleProof {
+    async fn proof_set(&self) -> Vec<Bytes32> {
+        self.0
+            .proof_set
+            .iter()
+            .cloned()
+            .map(|array| Bytes32::from(fuel_core_types::fuel_types::Bytes32::from(array)))
+            .collect()
+    }
+
+    async fn proof_index(&self) -> U64 {
+        self.0.proof_index.into()
     }
 }
 
@@ -130,17 +165,20 @@ pub struct MessageProof(pub(crate) entities::message::MessageProof);
 
 #[Object]
 impl MessageProof {
-    async fn proof_set(&self) -> Vec<Bytes32> {
-        self.0
-            .proof_set
-            .iter()
-            .cloned()
-            .map(Bytes32::from)
-            .collect()
+    async fn message_proof(&self) -> MerkleProof {
+        self.0.message_proof.clone().into()
     }
 
-    async fn proof_index(&self) -> U64 {
-        self.0.proof_index.into()
+    async fn block_proof(&self) -> MerkleProof {
+        self.0.block_proof.clone().into()
+    }
+
+    async fn message_block_header(&self) -> Header {
+        self.0.message_block_header.clone().into()
+    }
+
+    async fn commit_block_header(&self) -> Header {
+        self.0.commit_block_header.clone().into()
     }
 
     async fn sender(&self) -> Address {
@@ -162,18 +200,16 @@ impl MessageProof {
     async fn data(&self) -> HexString {
         self.0.data.clone().into()
     }
-
-    async fn signature(&self) -> super::scalars::Signature {
-        self.0.signature.into()
-    }
-
-    async fn header(&self) -> Header {
-        Header(self.0.header.clone())
-    }
 }
 
 impl From<entities::message::Message> for Message {
     fn from(message: entities::message::Message) -> Self {
         Message(message)
+    }
+}
+
+impl From<entities::message::MerkleProof> for MerkleProof {
+    fn from(proof: entities::message::MerkleProof) -> Self {
+        MerkleProof(proof)
     }
 }

@@ -13,13 +13,13 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
 };
-use fuel_core_types::blockchain::{
-    block::CompressedBlock,
-    consensus::Consensus,
-    primitives::{
-        BlockHeight,
-        BlockId,
+use fuel_core_types::{
+    blockchain::{
+        block::CompressedBlock,
+        consensus::Consensus,
+        primitives::BlockId,
     },
+    fuel_types::BlockHeight,
 };
 
 pub trait SimpleBlockData: Send + Sync {

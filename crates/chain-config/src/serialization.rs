@@ -1,10 +1,10 @@
 use core::fmt;
 use fuel_core_types::{
-    blockchain::primitives::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_types::{
+        bytes::WORD_SIZE,
         BlockHeight,
-        DaBlockHeight,
     },
-    fuel_types::bytes::WORD_SIZE,
 };
 use serde::{
     de::Error,
@@ -35,7 +35,7 @@ impl<'de> DeserializeAs<'de, BlockHeight> for HexNumber {
     where
         D: Deserializer<'de>,
     {
-        let number: u64 = HexNumber::deserialize_as(deserializer)?;
+        let number: u32 = HexNumber::deserialize_as(deserializer)?;
         Ok(number.into())
     }
 }

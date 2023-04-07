@@ -12,7 +12,6 @@ use fuel_core_sync::ports::{
 use fuel_core_types::{
     blockchain::{
         primitives::{
-            BlockHeight,
             BlockId,
             DaBlockHeight,
         },
@@ -20,6 +19,7 @@ use fuel_core_types::{
         SealedBlockHeader,
     },
     fuel_tx::Transaction,
+    fuel_types::BlockHeight,
     services::p2p::SourcePeer,
 };
 

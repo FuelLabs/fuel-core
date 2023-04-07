@@ -12,11 +12,9 @@ use fuel_core::{
     },
 };
 use fuel_core_types::{
-    blockchain::primitives::{
-        BlockHeight,
-        DaBlockHeight,
-    },
+    blockchain::primitives::DaBlockHeight,
     fuel_types::{
+        BlockHeight,
         Nonce,
         *,
     },
@@ -37,7 +35,7 @@ async fn snapshot_state_config() {
     // setup config
     let mut config = Config::local_node();
     let starting_state = StateConfig {
-        height: Some(BlockHeight::from(10u64)),
+        height: Some(BlockHeight::from(10)),
         contracts: Some(vec![ContractConfig {
             code: vec![8; 32],
             salt: Salt::new([9; 32]),
@@ -51,7 +49,7 @@ async fn snapshot_state_config() {
             ]),
             tx_id: Some(rng.gen()),
             output_index: Some(rng.gen()),
-            tx_pointer_block_height: Some(BlockHeight::from(10u64)),
+            tx_pointer_block_height: Some(BlockHeight::from(10)),
             tx_pointer_tx_idx: Some(rng.gen()),
         }]),
         coins: Some(
@@ -64,9 +62,9 @@ async fn snapshot_state_config() {
             .map(|(owner, amount, asset_id)| CoinConfig {
                 tx_id: None,
                 output_index: None,
-                tx_pointer_block_height: Some(BlockHeight::from(0u64)),
+                tx_pointer_block_height: Some(Default::default()),
                 tx_pointer_tx_idx: Some(0),
-                maturity: Some(BlockHeight::from(0u64)),
+                maturity: Some(Default::default()),
                 owner,
                 amount,
                 asset_id,

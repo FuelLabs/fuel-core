@@ -5,7 +5,10 @@ use crate::client::schema::{
 };
 use core::fmt;
 use cynic::impl_scalar;
-use fuel_core_types::fuel_tx::InstructionResult;
+use fuel_core_types::{
+    fuel_tx::InstructionResult,
+    fuel_types::BlockHeight,
+};
 use serde::{
     de::Error,
     Deserialize,
@@ -232,29 +235,42 @@ impl Deref for Bytes {
     }
 }
 
-#[derive(
-    Debug, Clone, derive_more::Into, derive_more::From, PartialOrd, Eq, PartialEq,
-)]
-pub struct U64(pub u64);
-impl_scalar!(U64, schema::U64);
+macro_rules! number_scalar {
+    ($i:ident, $t:ty) => {
+        #[derive(
+            Debug, Clone, derive_more::Into, derive_more::From, PartialOrd, Eq, PartialEq,
+        )]
+        pub struct $i(pub $t);
+        impl_scalar!($i, schema::$i);
 
-impl Serialize for U64 {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let s = self.0.to_string();
-        serializer.serialize_str(s.as_str())
-    }
+        impl Serialize for $i {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: Serializer,
+            {
+                let s = self.0.to_string();
+                serializer.serialize_str(s.as_str())
+            }
+        }
+
+        impl<'de> Deserialize<'de> for $i {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                let s: String = Deserialize::deserialize(deserializer)?;
+                Ok(Self(s.parse().map_err(D::Error::custom)?))
+            }
+        }
+    };
 }
 
-impl<'de> Deserialize<'de> for U64 {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s: String = Deserialize::deserialize(deserializer)?;
-        Ok(Self(s.parse().map_err(D::Error::custom)?))
+number_scalar!(U64, u64);
+number_scalar!(U32, u32);
+
+impl From<U64> for InstructionResult {
+    fn from(s: U64) -> Self {
+        s.0.into()
     }
 }
 
@@ -264,9 +280,15 @@ impl From<usize> for U64 {
     }
 }
 
-impl From<U64> for InstructionResult {
-    fn from(s: U64) -> Self {
+impl From<U32> for BlockHeight {
+    fn from(s: U32) -> Self {
         s.0.into()
+    }
+}
+
+impl From<BlockHeight> for U32 {
+    fn from(s: BlockHeight) -> U32 {
+        (*s).into()
     }
 }
 

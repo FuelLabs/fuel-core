@@ -18,6 +18,7 @@ use crate::client::schema::{
     TransactionId,
     TxPointer,
     UtxoId,
+    U32,
     U64,
 };
 use core::convert::{
@@ -85,7 +86,7 @@ pub struct Transaction {
     pub is_create: bool,
     pub is_mint: bool,
     pub outputs: Vec<Output>,
-    pub maturity: Option<U64>,
+    pub maturity: Option<U32>,
     pub receipts_root: Option<Bytes32>,
     pub status: Option<TransactionStatus>,
     pub witnesses: Option<Vec<HexString>>,
@@ -260,7 +261,7 @@ pub struct InputCoin {
     pub asset_id: AssetId,
     pub tx_pointer: TxPointer,
     pub witness_index: i32,
-    pub maturity: U64,
+    pub maturity: U32,
     pub predicate: HexString,
     pub predicate_data: HexString,
 }

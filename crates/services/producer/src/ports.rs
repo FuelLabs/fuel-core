@@ -6,15 +6,13 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        primitives::{
-            BlockHeight,
-            DaBlockHeight,
-        },
+        primitives::DaBlockHeight,
     },
     fuel_tx::{
         Bytes32,
         Receipt,
     },
+    fuel_types::BlockHeight,
     services::{
         executor::{
             ExecutionBlock,

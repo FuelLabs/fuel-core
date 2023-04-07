@@ -1,4 +1,4 @@
-use fuel_core_types::blockchain::primitives::BlockHeight;
+use fuel_core_types::fuel_types::BlockHeight;
 pub use handler::HeartbeatConfig;
 use handler::{
     HeartbeatHandler,

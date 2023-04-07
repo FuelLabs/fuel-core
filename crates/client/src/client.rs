@@ -30,11 +30,15 @@ use fuel_core_types::{
         Transaction,
     },
     fuel_types,
-    fuel_types::bytes::SerializableVec,
+    fuel_types::{
+        bytes::SerializableVec,
+        BlockHeight,
+    },
 };
 #[cfg(feature = "subscriptions")]
 use futures::StreamExt;
 use itertools::Itertools;
+use reqwest::cookie::CookieStore;
 use schema::{
     balance::BalanceArgs,
     block::BlockByIdArgs,
@@ -82,10 +86,12 @@ use std::{
         ErrorKind,
     },
     net,
+    ops::Deref,
     str::{
         self,
         FromStr,
     },
+    sync::Arc,
 };
 use tai64::Tai64;
 use tracing as _;
@@ -102,8 +108,10 @@ use self::schema::{
 pub mod schema;
 pub mod types;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct FuelClient {
+    client: reqwest::Client,
+    cookie: Arc<reqwest::cookie::Jar>,
     url: reqwest::Url,
 }
 
@@ -119,7 +127,15 @@ impl FromStr for FuelClient {
         let mut url = reqwest::Url::parse(&raw_url)
             .with_context(|| format!("Invalid fuel-core URL: {str}"))?;
         url.set_path("/graphql");
-        Ok(Self { url })
+        let cookie = Arc::new(reqwest::cookie::Jar::default());
+        let client = reqwest::Client::builder()
+            .cookie_provider(cookie.clone())
+            .build()?;
+        Ok(Self {
+            client,
+            cookie,
+            url,
+        })
     }
 }
 
@@ -159,7 +175,8 @@ impl FuelClient {
         Vars: serde::Serialize,
         ResponseData: serde::de::DeserializeOwned + 'static,
     {
-        let response = reqwest::Client::new()
+        let response = self
+            .client
             .post(self.url.clone())
             .run_graphql(q)
             .await
@@ -196,7 +213,7 @@ impl FuelClient {
         let mut url = self.url.clone();
         url.set_path("/graphql-sub");
         let json_query = serde_json::to_string(&q)?;
-        let client = es::ClientBuilder::for_url(url.as_str())
+        let mut client_builder = es::ClientBuilder::for_url(url.as_str())
             .map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -211,8 +228,27 @@ impl FuelClient {
                     io::ErrorKind::Other,
                     format!("Failed to add header to client {e:?}"),
                 )
-            })?
-            .build_with_conn(es::HttpsConnector::with_webpki_roots());
+            })?;
+
+        if let Some(value) = self.cookie.deref().cookies(&self.url) {
+            let value = value.to_str().map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Unable convert header value to string {e:?}"),
+                )
+            })?;
+            client_builder = client_builder
+                .header(reqwest::header::COOKIE.as_str(), value)
+                .map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Failed to add header from `reqwest` to client {e:?}"),
+                    )
+                })?;
+        }
+
+        let client =
+            client_builder.build_with_conn(es::HttpsConnector::with_webpki_roots());
 
         let mut last = None;
 
@@ -513,7 +549,7 @@ impl FuelClient {
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
-                "Failed to get status for transaction",
+                format!("Failed to get status for transaction {:?}", status_result),
             ))
         }
     }
@@ -541,19 +577,21 @@ impl FuelClient {
         Ok(transactions)
     }
 
-    pub async fn receipts(&self, id: &str) -> io::Result<Vec<Receipt>> {
+    pub async fn receipts(&self, id: &str) -> io::Result<Option<Vec<Receipt>>> {
         let query = schema::tx::TransactionQuery::build(TxIdArgs { id: id.parse()? });
 
         let tx = self.query(query).await?.transaction.ok_or_else(|| {
             io::Error::new(ErrorKind::NotFound, format!("transaction {id} not found"))
         })?;
 
-        let receipts: Result<Vec<Receipt>, ConversionError> = tx
+        let receipts = tx
             .receipts
-            .unwrap_or_default()
-            .into_iter()
-            .map(|r| r.try_into())
-            .collect();
+            .map(|vec| {
+                let vec: Result<Vec<Receipt>, ConversionError> =
+                    vec.into_iter().map(TryInto::<Receipt>::try_into).collect();
+                vec
+            })
+            .transpose();
 
         Ok(receipts?)
     }
@@ -562,7 +600,7 @@ impl FuelClient {
         &self,
         blocks_to_produce: u64,
         start_timestamp: Option<u64>,
-    ) -> io::Result<u64> {
+    ) -> io::Result<BlockHeight> {
         let query = schema::block::BlockMutation::build(ProduceBlockArgs {
             blocks_to_produce: blocks_to_produce.into(),
             start_timestamp: start_timestamp
@@ -749,12 +787,20 @@ impl FuelClient {
         &self,
         transaction_id: &str,
         message_id: &str,
+        commit_block_id: Option<&str>,
+        commit_block_height: Option<BlockHeight>,
     ) -> io::Result<Option<schema::message::MessageProof>> {
         let transaction_id: schema::TransactionId = transaction_id.parse()?;
         let message_id: schema::MessageId = message_id.parse()?;
+        let commit_block_id: Option<schema::BlockId> = commit_block_id
+            .map(|commit_block_id| commit_block_id.parse())
+            .transpose()?;
+        let commit_block_height = commit_block_height.map(Into::into);
         let query = schema::message::MessageProofQuery::build(MessageProofArgs {
             transaction_id,
             message_id,
+            commit_block_id,
+            commit_block_height,
         });
 
         let proof = self.query(query).await?.message_proof;

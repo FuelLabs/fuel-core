@@ -32,17 +32,17 @@ use fuel_core_types::{
             Block,
             CompressedBlock,
         },
-        primitives::{
-            BlockHeight,
-            BlockId,
-        },
+        primitives::BlockId,
     },
+    entities::message::MerkleProof,
     fuel_merkle::binary::MerkleTree,
+    fuel_types::BlockHeight,
     tai64::Tai64,
 };
 use itertools::Itertools;
 use std::{
     borrow::{
+        Borrow,
         BorrowMut,
         Cow,
     },
@@ -171,12 +171,11 @@ impl Database {
         )
         .map(|res| {
             let (height, id) = res?;
-            Ok((
-                height
-                    .try_into()
-                    .expect("block height always has correct number of bytes"),
-                id,
-            ))
+            let block_height_bytes: [u8; 4] = height
+                .as_slice()
+                .try_into()
+                .expect("block height always has correct number of bytes");
+            Ok((block_height_bytes.into(), id))
         })
     }
 
@@ -250,6 +249,45 @@ impl MerkleRootStorage<BlockHeight, FuelBlocks> for Database {
     }
 }
 
+impl Database {
+    pub fn block_history_proof(
+        &self,
+        message_block_height: &BlockHeight,
+        commit_block_height: &BlockHeight,
+    ) -> StorageResult<MerkleProof> {
+        if message_block_height > commit_block_height {
+            Err(anyhow::anyhow!(
+                "The `message_block_height` is higher than `commit_block_height`"
+            ))?;
+        }
+
+        let message_merkle_metadata = self
+            .storage::<FuelBlockMerkleMetadata>()
+            .get(message_block_height)?
+            .ok_or(not_found!(FuelBlockMerkleMetadata))?;
+
+        let commit_merkle_metadata = self
+            .storage::<FuelBlockMerkleMetadata>()
+            .get(commit_block_height)?
+            .ok_or(not_found!(FuelBlockMerkleMetadata))?;
+
+        let storage = self.borrow();
+        let tree: MerkleTree<FuelBlockMerkleData, _> =
+            MerkleTree::load(storage, commit_merkle_metadata.version)
+                .map_err(|err| StorageError::Other(err.into()))?;
+
+        let proof_index = message_merkle_metadata.version - 1;
+        let (_, proof_set) = tree
+            .prove(proof_index)
+            .map_err(|err| StorageError::Other(err.into()))?;
+
+        Ok(MerkleProof {
+            proof_set,
+            proof_index,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -272,7 +310,7 @@ mod tests {
     #[test_case(&[100, 101, 102, 103, 104, 105]; "five sequential blocks starting from height 100")]
     #[test_case(&[0, 2, 5, 7, 11]; "five non-sequential blocks starting from height 0")]
     #[test_case(&[100, 102, 105, 107, 111]; "five non-sequential blocks starting from height 100")]
-    fn can_get_merkle_root_of_inserted_blocks(heights: &[u64]) {
+    fn can_get_merkle_root_of_inserted_blocks(heights: &[u32]) {
         let mut database = Database::default();
         let blocks = heights
             .iter()
@@ -333,17 +371,20 @@ mod tests {
         assert!(matches!(err, fuel_core_storage::Error::NotFound(_, _)));
     }
 
-    #[test]
-    fn get_merkle_root_for_invalid_block_height_returns_not_found_error() {
-        let mut database = Database::default();
+    const TEST_BLOCKS_COUNT: usize = 10;
 
+    fn insert_test_ascending_blocks(
+        database: &mut Database,
+        genesis_height: BlockHeight,
+    ) {
+        let start = genesis_height.as_usize();
         // Generate 10 blocks with ascending heights
-        let blocks = (0u64..10)
+        let blocks = (start..start + TEST_BLOCKS_COUNT)
             .map(|height| {
                 let header = PartialBlockHeader {
                     application: Default::default(),
                     consensus: ConsensusHeader::<Empty> {
-                        height: height.into(),
+                        height: BlockHeight::from(height as u32),
                         ..Default::default()
                     },
                 };
@@ -354,13 +395,16 @@ mod tests {
 
         // Insert the blocks
         for block in &blocks {
-            StorageMutate::<FuelBlocks>::insert(
-                &mut database,
-                &block.id(),
-                &block.compress(),
-            )
-            .unwrap();
+            StorageMutate::<FuelBlocks>::insert(database, &block.id(), &block.compress())
+                .unwrap();
         }
+    }
+
+    #[test]
+    fn get_merkle_root_for_invalid_block_height_returns_not_found_error() {
+        let mut database = Database::default();
+
+        insert_test_ascending_blocks(&mut database, BlockHeight::from(0));
 
         // check that root is not present
         let err = database
@@ -369,5 +413,39 @@ mod tests {
             .expect_err("expected error getting invalid Block Merkle root");
 
         assert!(matches!(err, fuel_core_storage::Error::NotFound(_, _)));
+    }
+
+    #[test_case(0; "genesis block at height 0")]
+    #[test_case(1; "genesis block at height 1")]
+    #[test_case(100; "genesis block at height 100")]
+    fn block_history_proof_works(genesis_height: u32) {
+        let mut database = Database::default();
+
+        insert_test_ascending_blocks(&mut database, BlockHeight::from(genesis_height));
+
+        for l in 0..TEST_BLOCKS_COUNT {
+            for r in l..TEST_BLOCKS_COUNT {
+                let proof = database
+                    .block_history_proof(
+                        &BlockHeight::from(genesis_height + l as u32),
+                        &BlockHeight::from(genesis_height + r as u32),
+                    )
+                    .expect("Should return the merkle proof");
+                assert_eq!(proof.proof_index, l as u64);
+            }
+        }
+    }
+
+    #[test]
+    fn block_history_proof_error_if_message_higher_than_commit() {
+        let mut database = Database::default();
+
+        insert_test_ascending_blocks(&mut database, BlockHeight::from(0));
+
+        let result = database.block_history_proof(
+            &BlockHeight::from(TEST_BLOCKS_COUNT as u32),
+            &BlockHeight::from(TEST_BLOCKS_COUNT as u32 - 1),
+        );
+        assert!(result.is_err());
     }
 }

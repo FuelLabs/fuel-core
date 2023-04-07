@@ -22,10 +22,7 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         header::BlockHeader,
-        primitives::{
-            BlockHeight,
-            SecretKeyWrapper,
-        },
+        primitives::SecretKeyWrapper,
         SealedBlock,
     },
     fuel_asm::*,
@@ -34,6 +31,7 @@ use fuel_core_types::{
         field::GasLimit,
         *,
     },
+    fuel_types::BlockHeight,
     secrecy::Secret,
     services::{
         executor::{
