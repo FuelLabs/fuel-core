@@ -2665,6 +2665,7 @@ dependencies = [
  "fuel-core",
  "fuel-core-client",
  "fuel-core-e2e-client",
+ "fuel-core-trace",
  "fuel-core-types",
  "futures",
  "humantime-serde",
