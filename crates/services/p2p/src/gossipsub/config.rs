@@ -16,7 +16,7 @@ use libp2p::gossipsub::{
     PeerScoreThresholds,
     RawGossipsubMessage,
 };
-use prometheus_client::registry::Registry;
+use libp2p_prom_client::registry::Registry;
 use sha2::{
     Digest,
     Sha256,
