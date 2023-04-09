@@ -14,6 +14,10 @@ use std::{
     time::Duration,
 };
 
+// Use Jemalloc
+#[global_allocator]
+static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
 pub const CONFIG_FILE_KEY: &str = "FUEL_CORE_E2E_CONFIG";
 pub const SYNC_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -66,7 +70,7 @@ pub fn main_body(config: SuiteConfig, mut args: Arguments) {
             with_cloned(&config, |config| {
                 async_execute(async {
                     let ctx = TestContext::new(config).await;
-                    tests::transfers::transfer_back(&ctx).await
+                    tests::script::dry_run(&ctx).await
                 })?;
                 Ok(())
             }),
