@@ -14,10 +14,6 @@ use std::{
     time::Duration,
 };
 
-// Use Jemalloc
-#[global_allocator]
-static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
-
 pub const CONFIG_FILE_KEY: &str = "FUEL_CORE_E2E_CONFIG";
 pub const SYNC_TIMEOUT: Duration = Duration::from_secs(10);
 
