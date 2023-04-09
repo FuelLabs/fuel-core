@@ -1,10 +1,9 @@
 use lazy_static::lazy_static;
-use once_cell::race::OnceBox;
-use prometheus_client::{
+use libp2p_prom_client::{
     metrics::counter::Counter,
     registry::Registry,
 };
-use std::boxed::Box;
+use once_cell::race::OnceBox;
 
 pub struct P2PMetrics {
     pub gossip_sub_registry: OnceBox<Registry>,
