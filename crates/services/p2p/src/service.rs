@@ -97,7 +97,7 @@ enum TaskRequest {
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
     RespondWithPeerReport {
         peer_id: PeerId,
-        peer_score: AppScore,
+        score: AppScore,
         reporting_service: &'static str,
     },
 }
@@ -228,8 +228,8 @@ where
                     Some(TaskRequest::RespondWithGossipsubMessageReport((message, acceptance))) => {
                         report_message(&mut self.p2p_service, message, acceptance);
                     }
-                    Some(TaskRequest::RespondWithPeerReport { peer_id, peer_score, reporting_service }) => {
-                        self.p2p_service.report_peer(peer_id, peer_score, reporting_service)
+                    Some(TaskRequest::RespondWithPeerReport { peer_id, score, reporting_service }) => {
+                        self.p2p_service.report_peer(peer_id, score, reporting_service)
                     }
                     None => {
                         unreachable!("The `Task` is holder of the `Sender`, so it should not be possible");
@@ -445,12 +445,12 @@ impl SharedState {
     ) -> anyhow::Result<()> {
         match Vec::from(peer_id).try_into() {
             Ok(peer_id) => {
-                let peer_score = peer_report.get_score_from_report();
+                let score = peer_report.get_score_from_report();
 
                 self.request_sender
                     .try_send(TaskRequest::RespondWithPeerReport {
                         peer_id,
-                        peer_score,
+                        score,
                         reporting_service,
                     })?;
 

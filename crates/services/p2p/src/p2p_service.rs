@@ -357,7 +357,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         propagation_source: PeerId,
         acceptance: MessageAcceptance,
     ) {
-        if let Some(peer_score) = self
+        if let Some(gossip_score) = self
             .swarm
             .behaviour_mut()
             .report_message_validation_result(msg_id, &propagation_source, acceptance)
@@ -365,7 +365,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             let min_score_allowed =
                 self.network_metadata.gossipsub_data.min_score_allowed;
 
-            if peer_score < min_score_allowed
+            if gossip_score < min_score_allowed
                 && !self.peer_manager.is_reserved_peer(&propagation_source)
             {
                 self.swarm.ban_peer_id(propagation_source);
@@ -383,7 +383,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         reporting_service: &str,
     ) {
         if let Some(PeerScoreUpdated { should_ban, score }) =
-            self.peer_manager.update_peer_score_with(peer_id, app_score)
+            self.peer_manager.update_app_score(peer_id, app_score)
         {
             info!(target: "fuel-p2p", "{reporting_service} updated {peer_id} with new score {score}");
 

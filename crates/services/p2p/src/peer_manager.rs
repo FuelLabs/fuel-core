@@ -62,7 +62,7 @@ enum PeerInfoInsert {
 /// Manages Peers and their events
 #[derive(Debug)]
 pub struct PeerManager {
-    peer_score_config: PeerScoreConfig,
+    score_config: AppScoreConfig,
     non_reserved_connected_peers: HashMap<PeerId, PeerInfo>,
     reserved_connected_peers: HashMap<PeerId, PeerInfo>,
     reserved_peers: HashSet<PeerId>,
@@ -77,7 +77,7 @@ impl PeerManager {
         max_non_reserved_peers: usize,
     ) -> Self {
         Self {
-            peer_score_config: PeerScoreConfig::default(),
+            score_config: AppScoreConfig::default(),
             non_reserved_connected_peers: HashMap::with_capacity(max_non_reserved_peers),
             reserved_connected_peers: HashMap::with_capacity(reserved_peers.len()),
             reserved_peers,
@@ -138,17 +138,17 @@ impl PeerManager {
         }
     }
 
-    pub fn update_peer_score_with(
+    pub fn update_app_score(
         &mut self,
         peer_id: PeerId,
         score: AppScore,
     ) -> Option<PeerScoreUpdated> {
         if let Some(peer) = self.non_reserved_connected_peers.get_mut(&peer_id) {
-            // score should not go over `MAX_PEER_SCORE`
-            let new_score = self.peer_score_config.max_score.min(peer.score + score);
+            // score should not go over `max_score`
+            let new_score = self.score_config.max_score.min(peer.score + score);
             peer.score = new_score;
 
-            let should_ban = new_score < self.peer_score_config.min_score_allowed;
+            let should_ban = new_score < self.score_config.min_score_allowed;
 
             Some(PeerScoreUpdated {
                 should_ban,
@@ -367,18 +367,18 @@ fn log_missing_peer(peer_id: &PeerId) {
 }
 
 #[derive(Clone, Debug, Copy)]
-struct PeerScoreConfig {
+struct AppScoreConfig {
     max_score: AppScore,
     min_score_allowed: AppScore,
 }
 
-impl Default for PeerScoreConfig {
+impl Default for AppScoreConfig {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl PeerScoreConfig {
+impl AppScoreConfig {
     pub fn new() -> Self {
         Self {
             max_score: MAX_APP_SCORE,
