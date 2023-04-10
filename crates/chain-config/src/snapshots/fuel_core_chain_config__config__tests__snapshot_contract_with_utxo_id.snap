@@ -28,7 +28,8 @@ expression: json
     "max_predicate_data_length": 1048576,
     "gas_price_factor": 1000000000,
     "gas_per_byte": 4,
-    "max_message_data_length": 1048576
+    "max_message_data_length": 1048576,
+    "chain_id": 0
   },
   "gas_costs": {
     "add": 1,

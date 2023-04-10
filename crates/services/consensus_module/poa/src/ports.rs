@@ -6,18 +6,14 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         header::BlockHeader,
-        primitives::{
-            BlockHeight,
-            DaBlockHeight,
-        },
+        primitives::DaBlockHeight,
     },
     fuel_asm::Word,
-    fuel_tx::{
-        Receipt,
-        Transaction,
-        TxId,
+    fuel_tx::TxId,
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
     },
-    fuel_types::Bytes32,
     services::{
         block_importer::UncommittedResult as UncommittedImportResult,
         executor::UncommittedResult as UncommittedExecutionResult,
@@ -55,13 +51,6 @@ pub trait BlockProducer: Send + Sync {
         block_time: Tai64,
         max_gas: Word,
     ) -> anyhow::Result<UncommittedExecutionResult<StorageTransaction<Self::Database>>>;
-
-    async fn dry_run(
-        &self,
-        transaction: Transaction,
-        height: Option<BlockHeight>,
-        utxo_validation: Option<bool>,
-    ) -> anyhow::Result<Vec<Receipt>>;
 }
 
 #[cfg_attr(test, mockall::automock(type Database=EmptyStorage;))]

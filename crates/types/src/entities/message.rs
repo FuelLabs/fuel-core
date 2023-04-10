@@ -5,10 +5,10 @@ use crate::{
         header::BlockHeader,
         primitives::DaBlockHeight,
     },
+    fuel_merkle::common::ProofSet,
     fuel_tx::input::message::compute_message_id,
     fuel_types::{
         Address,
-        Bytes32,
         MessageId,
         Nonce,
         Word,
@@ -51,16 +51,28 @@ impl Message {
     }
 }
 
-/// Proves to da layer that this message was included in a Fuel block
-pub struct MessageProof {
-    /// The proof set of the message proof.
-    pub proof_set: Vec<Bytes32>,
-    /// The index used to generate this proof.
+/// Type containing merkle proof data.
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct MerkleProof {
+    /// The proof set.
+    pub proof_set: ProofSet,
+    /// The proof index.
     pub proof_index: u64,
-    /// The signature of the fuel block.
-    pub signature: crate::fuel_crypto::Signature,
-    /// The fuel block header that contains the message.
-    pub header: BlockHeader,
+}
+
+/// Proves to da layer that this message was included in a Fuel block.
+pub struct MessageProof {
+    /// Proof that message is contained within the provided block header.
+    pub message_proof: MerkleProof,
+    /// Proof that the provided block header is contained within the blockchain history.
+    pub block_proof: MerkleProof,
+    /// The previous fuel block header that contains the message. Message block height <
+    /// commit block height.
+    pub message_block_header: BlockHeader,
+    /// The consensus header associated with the finalized commit being used
+    /// as the root of the block proof.
+    pub commit_block_header: BlockHeader,
+
     /// The messages sender address.
     pub sender: Address,
     /// The messages recipient address.

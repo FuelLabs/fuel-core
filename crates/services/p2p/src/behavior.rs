@@ -19,7 +19,7 @@ use crate::{
         RequestMessage,
     },
 };
-use fuel_core_types::blockchain::primitives::BlockHeight;
+use fuel_core_types::fuel_types::BlockHeight;
 use libp2p::{
     gossipsub::{
         error::PublishError,

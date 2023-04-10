@@ -21,9 +21,11 @@ use fuel_core_types::{
         PublicKey,
     },
     fuel_tx::{
+        ConsensusParameters,
         Finalizable,
         Input,
         Output,
+        Transaction,
         TransactionBuilder,
         TxId,
         UniqueIdentifier,
@@ -55,12 +57,12 @@ pub struct TestContext {
 }
 
 impl TestContext {
-    pub fn new(config: SuiteConfig) -> Self {
+    pub async fn new(config: SuiteConfig) -> Self {
         let alice_client = Self::new_client(config.endpoint.clone(), &config.wallet_a);
         let bob_client = Self::new_client(config.endpoint.clone(), &config.wallet_b);
         Self {
-            alice: Wallet::new(config.wallet_a.secret, alice_client),
-            bob: Wallet::new(config.wallet_b.secret, bob_client),
+            alice: Wallet::new(config.wallet_a.secret, alice_client).await,
+            bob: Wallet::new(config.wallet_b.secret, bob_client).await,
             config,
         }
     }
@@ -70,20 +72,31 @@ impl TestContext {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Wallet {
     pub secret: SecretKey,
     pub address: Address,
     pub client: FuelClient,
+    pub consensus_params: ConsensusParameters,
 }
 
 impl Wallet {
-    pub fn new(secret: SecretKey, client: FuelClient) -> Self {
+    pub async fn new(secret: SecretKey, client: FuelClient) -> Self {
         let public_key: PublicKey = (&secret).into();
         let address = Input::owner(&public_key);
+        // get consensus params
+        let consensus_params = client
+            .chain_info()
+            .await
+            .expect("failed to get chain info")
+            .consensus_parameters
+            .into();
+
         Self {
             secret,
             address,
             client,
+            consensus_params,
         }
     }
 
@@ -130,13 +143,13 @@ impl Wallet {
         Ok(false)
     }
 
-    /// Transfers coins from this wallet to another
-    pub async fn transfer(
+    /// Creates the transfer transaction.
+    pub async fn transfer_tx(
         &self,
         destination: Address,
         transfer_amount: u64,
         asset_id: Option<AssetId>,
-    ) -> anyhow::Result<TransferResult> {
+    ) -> anyhow::Result<Transaction> {
         let asset_id = asset_id.unwrap_or_default();
         let asset_id_string = asset_id.to_string();
         let asset_id_str = asset_id_string.as_str();
@@ -178,22 +191,33 @@ impl Wallet {
             amount: 0,
             asset_id,
         });
+        tx.with_params(self.consensus_params);
 
-        let tx = tx.finalize();
+        Ok(tx.finalize_as_transaction())
+    }
 
-        let status = self
-            .client
-            .submit_and_await_commit(&tx.clone().into())
+    /// Transfers coins from this wallet to another
+    pub async fn transfer(
+        &self,
+        destination: Address,
+        transfer_amount: u64,
+        asset_id: Option<AssetId>,
+    ) -> anyhow::Result<TransferResult> {
+        let tx = self
+            .transfer_tx(destination, transfer_amount, asset_id)
             .await?;
+        let tx_id = tx.id(&self.consensus_params);
+        let status = self.client.submit_and_await_commit(&tx).await?;
 
         // we know the transferred coin should be output 0 from above
-        let transferred_utxo = UtxoId::new(tx.id(), 0);
+        let transferred_utxo = UtxoId::new(tx_id, 0);
 
         // get status and return the utxo id of transferred coin
         Ok(TransferResult {
-            tx_id: tx.id(),
+            tx_id,
             transferred_utxo,
             success: matches!(status, TransactionStatus::Success { .. }),
+            status,
         })
     }
 
@@ -267,4 +291,5 @@ pub struct TransferResult {
     pub tx_id: TxId,
     pub transferred_utxo: UtxoId,
     pub success: bool,
+    pub status: TransactionStatus,
 }

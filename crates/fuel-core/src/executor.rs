@@ -33,10 +33,7 @@ use fuel_core_types::{
             PartialFuelBlock,
         },
         header::PartialBlockHeader,
-        primitives::{
-            BlockHeight,
-            DaBlockHeight,
-        },
+        primitives::DaBlockHeight,
     },
     entities::{
         coins::coin::CompressedCoin,
@@ -74,11 +71,15 @@ use fuel_core_types::{
         Receipt,
         Transaction,
         TransactionFee,
+        TxId,
         TxPointer,
         UniqueIdentifier,
         UtxoId,
     },
-    fuel_types::MessageId,
+    fuel_types::{
+        BlockHeight,
+        MessageId,
+    },
     fuel_vm::{
         checked_transaction::{
             Checked,
@@ -225,7 +226,7 @@ where
             .transactions()
             .iter()
             .map(|tx| {
-                let id = tx.id();
+                let id = tx.id(&self.config.chain_conf.transaction_parameters);
                 StorageInspect::<Receipts>::get(temporary_db.as_ref(), &id)
                     .transpose()
                     .unwrap_or_else(|| Ok(Default::default()))
@@ -309,7 +310,12 @@ where
         block_db_transaction
             .deref_mut()
             .storage::<FuelBlocks>()
-            .insert(&finalized_block_id, &result.block.compress())?;
+            .insert(
+                &finalized_block_id,
+                &result
+                    .block
+                    .compress(&self.config.chain_conf.transaction_parameters),
+            )?;
 
         // Get the complete fuel block.
         Ok(UncommittedResult::new(
@@ -336,7 +342,7 @@ where
         // Split out the execution kind and partial block.
         let (execution_kind, block) = block.split();
 
-        let block_height: u32 = (*block.header.height()).into();
+        let block_height = *block.header.height();
 
         // Clean block from transactions and gather them from scratch.
         let mut iter = ::core::mem::take(&mut block.transactions).into_iter();
@@ -346,7 +352,7 @@ where
                 // The coinbase transaction should be the first.
                 // We will add actual amount of `Output::Coin` at the end of transactions execution.
                 Transaction::mint(
-                    TxPointer::new(block_height, 0),
+                    TxPointer::new(block_height, Default::default()),
                     vec![Output::coin(
                         self.config.block_producer.coinbase_recipient,
                         0, // We will set it later
@@ -360,7 +366,7 @@ where
                 } else {
                     return Err(ExecutorError::CoinbaseIsNotFirstTransaction)
                 };
-                self.check_coinbase(block_height as Word, mint, None)?
+                self.check_coinbase(block_height, mint, None)?
             }
         };
 
@@ -425,7 +431,7 @@ where
         block.transactions.append(&mut filtered_transactions);
 
         coinbase_tx = self.check_coinbase(
-            block_height as Word,
+            block_height,
             coinbase_tx,
             Some(execution_data.coinbase),
         )?;
@@ -443,7 +449,7 @@ where
         execution_kind: ExecutionKind,
         tx_db_transaction: &mut DatabaseTransaction,
     ) -> ExecutorResult<()> {
-        let tx_id = tx.id();
+        let tx_id = tx.id(&self.config.chain_conf.transaction_parameters);
         // Throw a clear error if the transaction id is a duplicate
         if tx_db_transaction
             .deref_mut()
@@ -492,7 +498,7 @@ where
         block_db_transaction: &mut DatabaseTransaction,
     ) -> ExecutorResult<()> {
         let block_height = *block.header.height();
-        let coinbase_id = coinbase_tx.id();
+        let coinbase_id = coinbase_tx.id(&self.config.chain_conf.transaction_parameters);
         self.persist_output_utxos(
             block_height,
             0,
@@ -521,7 +527,7 @@ where
 
     fn check_coinbase(
         &self,
-        block_height: Word,
+        block_height: BlockHeight,
         mint: Mint,
         expected_amount: Option<Word>,
     ) -> ExecutorResult<Mint> {
@@ -573,7 +579,7 @@ where
         Tx: ExecutableTransaction + PartialEq,
         <Tx as IntoChecked>::Metadata: Fee + CheckedMetadata + Clone,
     {
-        let block_height: u32 = (*header.height()).into();
+        let block_height = *header.height();
         // Wrap the transaction in the execution kind.
         self.compute_inputs(
             match execution_kind {
@@ -584,11 +590,11 @@ where
         )?;
 
         let checked_tx = original_tx.clone().into_checked_basic(
-            block_height as Word,
+            block_height,
             &self.config.chain_conf.transaction_parameters,
         )?;
 
-        let tx_id = checked_tx.transaction().id();
+        let tx_id = checked_tx.id();
         let min_fee = checked_tx.metadata().min_fee();
         let max_fee = checked_tx.metadata().max_fee();
 
@@ -596,7 +602,10 @@ where
 
         if self.config.utxo_validation {
             // validate transaction has at least one coin
-            self.verify_tx_has_at_least_one_coin_or_message(checked_tx.transaction())?;
+            self.verify_tx_has_at_least_one_coin_or_message(
+                checked_tx.transaction(),
+                checked_tx.id(),
+            )?;
             // validate utxos exist and maturity is properly set
             self.verify_input_state(
                 tx_db_transaction.deref(),
@@ -607,7 +616,7 @@ where
             // validate transaction signature
             checked_tx
                 .transaction()
-                .check_signatures()
+                .check_signatures(&self.config.chain_conf.transaction_parameters)
                 .map_err(TransactionValidityError::from)?;
         }
 
@@ -678,6 +687,7 @@ where
                 ExecutionKind::Production => ExecutionTypes::Production(&mut tx),
                 ExecutionKind::Validation => ExecutionTypes::Validation(&tx),
             },
+            tx_id,
             tx_db_transaction.deref_mut(),
         )?;
 
@@ -754,10 +764,7 @@ where
                     // TODO: Check that fields are equal. We already do that check
                     //  in the `fuel-core-txpool`, so we need to reuse the code here.
                     if let Some(coin) = db.storage::<Coins>().get(utxo_id)? {
-                        if block_height
-                            < BlockHeight::from(coin.tx_pointer.block_height())
-                                + coin.maturity
-                        {
+                        if block_height < coin.tx_pointer.block_height() + coin.maturity {
                             return Err(TransactionValidityError::CoinHasNotMatured(
                                 *utxo_id,
                             )
@@ -870,7 +877,7 @@ where
         Tx: ExecutableTransaction,
         <Tx as IntoChecked>::Metadata: CheckedMetadata,
     {
-        let id = tx.transaction().id();
+        let id = tx.id();
         if Interpreter::<PredicateStorage>::check_predicates(
             tx,
             self.config.chain_conf.transaction_parameters,
@@ -893,6 +900,7 @@ where
     fn verify_tx_has_at_least_one_coin_or_message<Tx: ExecutableTransaction>(
         &self,
         tx: &Tx,
+        tx_id: TxId,
     ) -> ExecutorResult<()> {
         if tx
             .inputs()
@@ -901,7 +909,7 @@ where
         {
             Ok(())
         } else {
-            Err(TransactionValidityError::NoCoinOrMessageInput(tx.id()).into())
+            Err(TransactionValidityError::NoCoinOrMessageInput(tx_id).into())
         }
     }
 
@@ -1005,12 +1013,7 @@ where
                             ..
                         }) => {
                             let coin = self.get_coin_or_default(
-                                db,
-                                *utxo_id,
-                                *owner,
-                                *amount,
-                                *asset_id,
-                                (*maturity).into(),
+                                db, *utxo_id, *owner, *amount, *asset_id, *maturity,
                             )?;
                             *tx_pointer = coin.tx_pointer;
                         }
@@ -1057,16 +1060,14 @@ where
                             ..
                         }) => {
                             let coin = self.get_coin_or_default(
-                                db,
-                                *utxo_id,
-                                *owner,
-                                *amount,
-                                *asset_id,
-                                (*maturity).into(),
+                                db, *utxo_id, *owner, *amount, *asset_id, *maturity,
                             )?;
                             if tx_pointer != &coin.tx_pointer {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx.id(),
+                                    transaction_id: tx.id(&self
+                                        .config
+                                        .chain_conf
+                                        .transaction_parameters),
                                 })
                             }
                         }
@@ -1087,17 +1088,26 @@ where
                                 != contract.validated_utxo(self.config.utxo_validation)?
                             {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx.id(),
+                                    transaction_id: tx.id(&self
+                                        .config
+                                        .chain_conf
+                                        .transaction_parameters),
                                 })
                             }
                             if balance_root != &contract.balance_root()? {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx.id(),
+                                    transaction_id: tx.id(&self
+                                        .config
+                                        .chain_conf
+                                        .transaction_parameters),
                                 })
                             }
                             if state_root != &contract.state_root()? {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx.id(),
+                                    transaction_id: tx.id(&self
+                                        .config
+                                        .chain_conf
+                                        .transaction_parameters),
                                 })
                             }
                         }
@@ -1116,6 +1126,7 @@ where
     fn compute_not_utxo_outputs<Tx>(
         &self,
         tx: ExecutionTypes<&mut Tx, &Tx>,
+        tx_id: TxId,
         db: &mut Database,
     ) -> ExecutorResult<()>
     where
@@ -1141,7 +1152,7 @@ where
                             contract_id
                         } else {
                             return Err(ExecutorError::InvalidTransactionOutcome {
-                                transaction_id: tx.id(),
+                                transaction_id: tx_id,
                             })
                         };
 
@@ -1168,19 +1179,19 @@ where
                             contract_id
                         } else {
                             return Err(ExecutorError::InvalidTransactionOutcome {
-                                transaction_id: tx.id(),
+                                transaction_id: tx_id,
                             })
                         };
 
                         let mut contract = ContractRef::new(&mut *db, *contract_id);
                         if balance_root != &contract.balance_root()? {
                             return Err(ExecutorError::InvalidTransactionOutcome {
-                                transaction_id: tx.id(),
+                                transaction_id: tx_id,
                             })
                         }
                         if state_root != &contract.state_root()? {
                             return Err(ExecutorError::InvalidTransactionOutcome {
-                                transaction_id: tx.id(),
+                                transaction_id: tx_id,
                             })
                         }
                     }
@@ -1275,7 +1286,7 @@ where
                             contract_id,
                             &ContractUtxoInfo {
                                 utxo_id,
-                                tx_pointer: TxPointer::new(block_height.into(), tx_idx),
+                                tx_pointer: TxPointer::new(block_height, tx_idx),
                             },
                         )?;
                     } else {
@@ -1315,7 +1326,7 @@ where
                         contract_id,
                         &ContractUtxoInfo {
                             utxo_id,
-                            tx_pointer: TxPointer::new(block_height.into(), tx_idx),
+                            tx_pointer: TxPointer::new(block_height, tx_idx),
                         },
                     )?;
                 }
@@ -1342,7 +1353,7 @@ where
                 amount: *amount,
                 asset_id: *asset_id,
                 maturity: 0u32.into(),
-                tx_pointer: TxPointer::new(block_height.into(), tx_idx),
+                tx_pointer: TxPointer::new(block_height, tx_idx),
             };
 
             if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
@@ -1375,7 +1386,7 @@ where
             let block_height = *block.header().height();
             let mut inputs = &[][..];
             let outputs;
-            let tx_id = tx.id();
+            let tx_id = tx.id(&self.config.chain_conf.transaction_parameters);
             match tx {
                 Transaction::Script(tx) => {
                     inputs = tx.inputs().as_slice();
@@ -1518,6 +1529,7 @@ mod tests {
         entities::message::Message,
         fuel_asm::op,
         fuel_crypto::SecretKey,
+        fuel_merkle::sparse,
         fuel_tx,
         fuel_tx::{
             field::{
@@ -1631,7 +1643,6 @@ mod tests {
 
     pub(crate) fn test_block(num_txs: usize) -> Block {
         let transactions = (1..num_txs + 1)
-            .into_iter()
             .map(|i| {
                 TxBuilder::new(2322u64)
                     .gas_limit(10)
@@ -1661,10 +1672,10 @@ mod tests {
         let contract_id = contract.id(&salt, &root, &state_root);
 
         let tx = Transaction::create(
-            0,
-            0,
-            0,
-            0,
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
             salt,
             vec![],
             vec![],
@@ -1834,6 +1845,8 @@ mod tests {
                 .transaction_parameters
                 .gas_price_factor = gas_price_factor;
 
+            let params = producer.config.chain_conf.transaction_parameters;
+
             let mut block = Block::default();
             *block.transactions_mut() = vec![script.into()];
 
@@ -1866,7 +1879,7 @@ mod tests {
                 .unwrap()
                 .unwrap();
             // Should own `Mint` transaction
-            assert_eq!(owned_transactions_td_id, produced_txs[0].id());
+            assert_eq!(owned_transactions_td_id, produced_txs[0].id(&params));
         }
 
         #[test]
@@ -1922,7 +1935,7 @@ mod tests {
                 let receipts = producer
                     .database
                     .storage::<Receipts>()
-                    .get(&script.id())
+                    .get(&script.id(&producer.config.chain_conf.transaction_parameters))
                     .unwrap()
                     .unwrap();
 
@@ -1953,7 +1966,7 @@ mod tests {
 
         #[test]
         fn invalidate_is_not_first() {
-            let mint = Transaction::mint(TxPointer::new(0, 1), vec![]);
+            let mint = Transaction::mint(TxPointer::new(Default::default(), 1), vec![]);
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
@@ -1971,7 +1984,8 @@ mod tests {
 
         #[test]
         fn invalidate_block_height() {
-            let mint = Transaction::mint(TxPointer::new(1, 0), vec![]);
+            let mint =
+                Transaction::mint(TxPointer::new(1.into(), Default::default()), vec![]);
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
@@ -1991,7 +2005,10 @@ mod tests {
 
         #[test]
         fn invalidate_zero_outputs() {
-            let mint = Transaction::mint(TxPointer::new(0, 0), vec![]);
+            let mint = Transaction::mint(
+                TxPointer::new(Default::default(), Default::default()),
+                vec![],
+            );
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
@@ -2010,7 +2027,7 @@ mod tests {
         #[test]
         fn invalidate_more_than_one_outputs() {
             let mint = Transaction::mint(
-                TxPointer::new(0, 0),
+                TxPointer::new(Default::default(), Default::default()),
                 vec![
                     Output::coin(Address::from([1u8; 32]), 0, AssetId::from([3u8; 32])),
                     Output::coin(Address::from([2u8; 32]), 0, AssetId::from([4u8; 32])),
@@ -2034,7 +2051,7 @@ mod tests {
         #[test]
         fn invalidate_not_base_asset() {
             let mint = Transaction::mint(
-                TxPointer::new(0, 0),
+                TxPointer::new(Default::default(), Default::default()),
                 vec![Output::coin(
                     Address::from([1u8; 32]),
                     0,
@@ -2059,7 +2076,7 @@ mod tests {
         #[test]
         fn invalidate_mismatch_amount() {
             let mint = Transaction::mint(
-                TxPointer::new(0, 0),
+                TxPointer::new(Default::default(), Default::default()),
                 vec![Output::coin(Address::from([1u8; 32]), 123, AssetId::BASE)],
             );
 
@@ -2082,12 +2099,12 @@ mod tests {
             let mut block = Block::default();
             *block.transactions_mut() = vec![
                 Transaction::mint(
-                    TxPointer::new(0, 0),
+                    TxPointer::new(Default::default(), Default::default()),
                     vec![Output::coin(Address::from([1u8; 32]), 0, AssetId::BASE)],
                 )
                 .into(),
                 Transaction::mint(
-                    TxPointer::new(0, 0),
+                    TxPointer::new(Default::default(), Default::default()),
                     vec![Output::coin(Address::from([2u8; 32]), 0, AssetId::BASE)],
                 )
                 .into(),
@@ -2232,7 +2249,7 @@ mod tests {
             10,
             Default::default(),
             Default::default(),
-            0,
+            Default::default(),
         )
         .add_output(Output::Change {
             to: Default::default(),
@@ -2313,7 +2330,7 @@ mod tests {
             .clone()
             .into();
 
-        let tx_id = tx.id();
+        let tx_id = tx.id(&ConsensusParameters::DEFAULT);
 
         let producer = Executor::test(Default::default(), Config::local_node());
 
@@ -2381,7 +2398,7 @@ mod tests {
     fn executor_invalidates_missing_coin_input() {
         let tx: Transaction =
             TxBuilder::new(2322u64).build().transaction().clone().into();
-        let tx_id = tx.id();
+        let tx_id = tx.id(&ConsensusParameters::DEFAULT);
 
         let executor = Executor::test(
             Database::default(),
@@ -2498,8 +2515,12 @@ mod tests {
         assert_eq!(block.transactions().len(), 2 /* coinbase and `tx1` */);
         assert_eq!(skipped_transactions.len(), 1);
         assert_eq!(
-            skipped_transactions[0].0.as_script().unwrap().id(),
-            tx2.id()
+            skipped_transactions[0]
+                .0
+                .as_script()
+                .unwrap()
+                .id(&ConsensusParameters::DEFAULT),
+            tx2.id(&ConsensusParameters::DEFAULT)
         );
 
         // The first input should be spent by `tx1` after execution.
@@ -2552,8 +2573,14 @@ mod tests {
             block.transactions().len(),
             3 // coinbase, `tx2` and `tx3`
         );
-        assert_eq!(block.transactions()[1].id(), tx2.id());
-        assert_eq!(block.transactions()[2].id(), tx3.id());
+        assert_eq!(
+            block.transactions()[1].id(&ConsensusParameters::DEFAULT),
+            tx2.id(&ConsensusParameters::DEFAULT)
+        );
+        assert_eq!(
+            block.transactions()[2].id(&ConsensusParameters::DEFAULT),
+            tx3.id(&ConsensusParameters::DEFAULT)
+        );
         // `tx1` should be skipped.
         assert_eq!(skipped_transactions.len(), 1);
         assert_eq!(skipped_transactions[0].0.as_script(), Some(&tx1));
@@ -2632,7 +2659,7 @@ mod tests {
         let block = PartialFuelBlock {
             header: PartialBlockHeader {
                 consensus: ConsensusHeader {
-                    height: 1u64.into(),
+                    height: 1.into(),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -2647,7 +2674,7 @@ mod tests {
             .unwrap();
 
         // Assert the balance and state roots should be the same before and after execution.
-        let empty_state = [0; 32].into();
+        let empty_state = (*sparse::empty_sum()).into();
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
             tx_status[2].result,
@@ -2662,7 +2689,7 @@ mod tests {
         let storage_tx = executor
             .database
             .storage::<Transactions>()
-            .get(&executed_tx.id())
+            .get(&executed_tx.id(&ConsensusParameters::DEFAULT))
             .unwrap()
             .unwrap()
             .into_owned();
@@ -2698,7 +2725,7 @@ mod tests {
         let block = PartialFuelBlock {
             header: PartialBlockHeader {
                 consensus: ConsensusHeader {
-                    height: 1u64.into(),
+                    height: 1.into(),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -2713,7 +2740,7 @@ mod tests {
             .unwrap();
 
         // Assert the balance and state roots should be the same before and after execution.
-        let empty_state = [0; 32].into();
+        let empty_state = (*sparse::empty_sum()).into();
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
             tx_status[2].result,
@@ -2734,7 +2761,7 @@ mod tests {
         let storage_tx = executor
             .database
             .storage::<Transactions>()
-            .get(&expected_tx.id())
+            .get(&expected_tx.id(&ConsensusParameters::DEFAULT))
             .unwrap()
             .unwrap()
             .into_owned();
@@ -2810,7 +2837,7 @@ mod tests {
         let block = PartialFuelBlock {
             header: PartialBlockHeader {
                 consensus: ConsensusHeader {
-                    height: 1u64.into(),
+                    height: 1.into(),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -2824,7 +2851,7 @@ mod tests {
             .execute_and_commit(ExecutionBlock::Production(block))
             .unwrap();
 
-        let empty_state = [0; 32].into();
+        let empty_state = (*sparse::empty_sum()).into();
         let executed_tx = block.transactions()[2].as_script().unwrap();
         assert!(matches!(
             tx_status[2].result,
@@ -2846,7 +2873,7 @@ mod tests {
         let storage_tx = executor
             .database
             .storage::<Transactions>()
-            .get(&expected_tx.id())
+            .get(&expected_tx.id(&ConsensusParameters::DEFAULT))
             .unwrap()
             .unwrap()
             .into_owned();
@@ -2894,7 +2921,7 @@ mod tests {
         let block = PartialFuelBlock {
             header: PartialBlockHeader {
                 consensus: ConsensusHeader {
-                    height: 1u64.into(),
+                    height: 1.into(),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -2907,7 +2934,7 @@ mod tests {
             .unwrap();
 
         // Assert the balance root should not be affected.
-        let empty_state = [0; 32].into();
+        let empty_state = (*sparse::empty_sum()).into();
         assert_eq!(
             ContractRef::new(db, contract_id).balance_root().unwrap(),
             empty_state
@@ -2918,7 +2945,7 @@ mod tests {
     fn input_coins_are_marked_as_spent_with_utxo_validation_enabled() {
         // ensure coins are marked as spent after tx is processed
         let mut rng = StdRng::seed_from_u64(2322u64);
-        let starting_block = BlockHeight::from(5u64);
+        let starting_block = BlockHeight::from(5);
         let starting_block_tx_idx = Default::default();
 
         let tx = TransactionBuilder::script(
@@ -2931,7 +2958,7 @@ mod tests {
             100,
             Default::default(),
             Default::default(),
-            0,
+            Default::default(),
         )
         .add_output(Output::Change {
             to: Default::default(),
@@ -2958,10 +2985,7 @@ mod tests {
                         amount,
                         asset_id,
                         maturity: Default::default(),
-                        tx_pointer: TxPointer::new(
-                            starting_block.into(),
-                            starting_block_tx_idx,
-                        ),
+                        tx_pointer: TxPointer::new(starting_block, starting_block_tx_idx),
                     },
                 )
                 .unwrap();
@@ -2978,7 +3002,7 @@ mod tests {
         let block = PartialFuelBlock {
             header: PartialBlockHeader {
                 consensus: ConsensusHeader {
-                    height: 6u64.into(),
+                    height: 6.into(),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -3025,7 +3049,7 @@ mod tests {
         let second_block = PartialFuelBlock {
             header: PartialBlockHeader {
                 consensus: ConsensusHeader {
-                    height: 2u64.into(),
+                    height: 2.into(),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -3086,12 +3110,12 @@ mod tests {
             .transaction()
             .clone()
             .into();
-        let tx_id = tx3.id();
+        let tx_id = tx3.id(&ConsensusParameters::DEFAULT);
 
         let second_block = PartialFuelBlock {
             header: PartialBlockHeader {
                 consensus: ConsensusHeader {
-                    height: 2u64.into(),
+                    height: 2.into(),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -3140,7 +3164,7 @@ mod tests {
     #[test]
     fn outputs_with_amount_are_included_utxo_set() {
         let (deploy, script) = setup_executable_script();
-        let script_id = script.id();
+        let script_id = script.id(&ConsensusParameters::DEFAULT);
 
         let database = &Database::default();
         let executor = Executor::test(database.clone(), Config::local_node());
@@ -3191,7 +3215,7 @@ mod tests {
             .transaction()
             .clone()
             .into();
-        let tx_id = tx.id();
+        let tx_id = tx.id(&ConsensusParameters::DEFAULT);
 
         let database = &Database::default();
         let executor = Executor::test(database.clone(), Config::local_node());
@@ -3290,7 +3314,7 @@ mod tests {
             .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), amount, vec![0xff; 10])
             .add_output(Output::change(to, amount + amount, AssetId::BASE))
             .finalize();
-        let tx_id = tx.id();
+        let tx_id = tx.id(&ConsensusParameters::DEFAULT);
 
         let message_coin = message_from_input(&tx.inputs()[0], 0);
         let message_data = message_from_input(&tx.inputs()[1], 0);
@@ -3348,7 +3372,7 @@ mod tests {
             .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), amount, vec![0xff; 10])
             .add_output(Output::change(to, amount + amount, AssetId::BASE))
             .finalize();
-        let tx_id = tx.id();
+        let tx_id = tx.id(&ConsensusParameters::DEFAULT);
 
         let message_coin = message_from_input(&tx.inputs()[0], 0);
         let message_data = message_from_input(&tx.inputs()[1], 0);
@@ -3548,7 +3572,7 @@ mod tests {
                 1000,
                 AssetId::zeroed(),
                 Default::default(),
-                0,
+                Default::default(),
             )
             .finalize();
 
@@ -3578,8 +3602,8 @@ mod tests {
                     owner: *coin_input.input_owner().unwrap(),
                     amount: coin_input.amount().unwrap(),
                     asset_id: *coin_input.asset_id().unwrap(),
-                    maturity: (coin_input.maturity().unwrap()).into(),
-                    tx_pointer: TxPointer::new(0u32, block_tx_idx),
+                    maturity: coin_input.maturity().unwrap(),
+                    tx_pointer: TxPointer::new(Default::default(), block_tx_idx),
                 },
             )
             .unwrap();
@@ -3599,7 +3623,7 @@ mod tests {
 
         let receipts = database
             .storage::<Receipts>()
-            .get(&tx.id())
+            .get(&tx.id(&ConsensusParameters::DEFAULT))
             .unwrap()
             .unwrap();
         assert_eq!(block_height as u64, receipts[0].val().unwrap());
@@ -3619,7 +3643,7 @@ mod tests {
                 1000,
                 AssetId::zeroed(),
                 Default::default(),
-                0,
+                Default::default(),
             )
             .finalize();
 
@@ -3650,7 +3674,7 @@ mod tests {
                     owner: *coin_input.input_owner().unwrap(),
                     amount: coin_input.amount().unwrap(),
                     asset_id: *coin_input.asset_id().unwrap(),
-                    maturity: (coin_input.maturity().unwrap()).into(),
+                    maturity: coin_input.maturity().unwrap(),
                     tx_pointer: TxPointer::default(),
                 },
             )
@@ -3671,7 +3695,7 @@ mod tests {
 
         let receipts = database
             .storage::<Receipts>()
-            .get(&tx.id())
+            .get(&tx.id(&ConsensusParameters::DEFAULT))
             .unwrap()
             .unwrap();
 

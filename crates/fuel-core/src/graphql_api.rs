@@ -9,6 +9,7 @@ use fuel_core_types::{
 };
 use std::net::SocketAddr;
 
+mod honeycomb;
 pub mod ports;
 pub mod service;
 
@@ -23,6 +24,7 @@ pub struct Config {
     pub max_depth: usize,
     pub transaction_parameters: ConsensusParameters,
     pub consensus_key: Option<Secret<SecretKeyWrapper>>,
+    pub honeycomb_enabled: bool,
 }
 
 pub trait IntoApiResult<T> {

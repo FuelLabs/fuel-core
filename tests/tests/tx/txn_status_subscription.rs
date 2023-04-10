@@ -22,7 +22,7 @@ async fn subscribe_txn_status() {
 
     let gas_price = 10;
     let gas_limit = 1_000_000;
-    let maturity = 0;
+    let maturity = Default::default();
 
     let create_script = |i: u8| {
         // The first two scripts will run and the rest will fail.
@@ -33,7 +33,7 @@ async fn subscribe_txn_status() {
             .collect();
 
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-        let owner = Input::predicate_owner(&predicate);
+        let owner = Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT);
         // The third transaction needs to have a different input.
         let utxo_id = if i == 2 { 2 } else { 1 };
         let utxo_id = UtxoId::new(Bytes32::from([utxo_id; 32]), 1);
@@ -63,7 +63,11 @@ async fn subscribe_txn_status() {
     let txns: Vec<_> = (0..3).map(create_script).collect();
     let mut jhs = vec![];
 
-    for (txn_idx, id) in txns.iter().map(|t| t.id().to_string()).enumerate() {
+    for (txn_idx, id) in txns
+        .iter()
+        .map(|t| t.id(&ConsensusParameters::DEFAULT).to_string())
+        .enumerate()
+    {
         let jh = tokio::spawn({
             let client = client.clone();
             async move {

@@ -30,7 +30,6 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
     let (_, contract_id) = test_builder.setup_contract(vec![], None, None, None);
     // initialize 10 random transactions that transfer coins and call a contract
     let transactions = (1..=10)
-        .into_iter()
         .map(|i| {
             TransactionBuilder::script(
                 op::ret(RegId::ONE).to_bytes().into_iter().collect(),
@@ -44,7 +43,7 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
                 1000 + i,
                 Default::default(),
                 Default::default(),
-                0,
+                Default::default(),
             )
             .add_input(Input::contract(
                 Default::default(),
@@ -75,14 +74,14 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
         client.submit_and_await_commit(&tx).await.unwrap();
         // verify that the tx returned from the api matches the submitted tx
         let ret_tx = client
-            .transaction(&tx.id().to_string())
+            .transaction(&tx.id(&ConsensusParameters::DEFAULT).to_string())
             .await
             .unwrap()
             .unwrap()
             .transaction;
 
         let transaction_result = client
-            .transaction_status(&ret_tx.id().to_string())
+            .transaction_status(&ret_tx.id(&ConsensusParameters::DEFAULT).to_string())
             .await
             .ok()
             .unwrap();
@@ -227,7 +226,6 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
     // generate random txs
     let secret = SecretKey::random(&mut rng);
     let txs = (0..TEST_TXS)
-        .into_iter()
         .map(|i| {
             TransactionBuilder::script(
                 op::ret(RegId::ONE).to_bytes().into_iter().collect(),
@@ -240,7 +238,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
                 rng.gen_range((100000 + i as u64)..(200000 + i as u64)),
                 Default::default(),
                 Default::default(),
-                0,
+                Default::default(),
             )
             .add_output(Output::change(rng.gen(), 0, Default::default()))
             .finalize()
@@ -248,7 +246,10 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
         .collect_vec();
 
     // collect all tx ids
-    let tx_ids: BTreeSet<_> = txs.iter().map(|tx| tx.id()).collect();
+    let tx_ids: BTreeSet<_> = txs
+        .iter()
+        .map(|tx| tx.id(&ConsensusParameters::DEFAULT))
+        .collect();
 
     // setup the genesis coins for spending
     test_builder.config_coin_inputs_from_transactions(&txs.iter().collect_vec());

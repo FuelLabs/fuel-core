@@ -13,13 +13,13 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
 };
-use fuel_core_types::blockchain::{
-    block::CompressedBlock,
-    consensus::Consensus,
-    primitives::{
-        BlockHeight,
-        BlockId,
+use fuel_core_types::{
+    blockchain::{
+        block::CompressedBlock,
+        consensus::Consensus,
+        primitives::BlockId,
     },
+    fuel_types::BlockHeight,
 };
 
 pub trait SimpleBlockData: Send + Sync {
@@ -79,7 +79,6 @@ impl<D: DatabasePort + ?Sized> BlockQueryData for D {
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<CompressedBlock>> {
         self.blocks_ids(start.map(Into::into), direction)
-            .into_iter()
             .map(|result| {
                 result.and_then(|(_, id)| {
                     let block = self.block(&id)?;

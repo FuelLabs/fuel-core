@@ -9,7 +9,10 @@ use crate::{
     },
     schema::{
         block::Block,
-        scalars::U64,
+        scalars::{
+            U32,
+            U64,
+        },
     },
 };
 use async_graphql::{
@@ -75,6 +78,10 @@ impl ConsensusParameters {
     async fn max_message_data_length(&self) -> U64 {
         self.0.max_message_data_length.into()
     }
+
+    async fn chain_id(&self) -> U64 {
+        self.0.chain_id.into()
+    }
 }
 
 #[Object]
@@ -91,7 +98,7 @@ impl ChainInfo {
         Ok(latest_block)
     }
 
-    async fn base_chain_height(&self, ctx: &Context<'_>) -> U64 {
+    async fn base_chain_height(&self, ctx: &Context<'_>) -> U32 {
         let query: &Database = ctx.data_unchecked();
 
         let height = query

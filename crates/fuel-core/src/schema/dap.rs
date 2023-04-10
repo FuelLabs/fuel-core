@@ -98,7 +98,7 @@ impl ConcreteStorage {
         let vm_database = Self::vm_database(&storage)?;
         let tx = Script::default();
         let checked_tx =
-            tx.into_checked_basic(vm_database.block_height()? as Word, &self.params)?;
+            tx.into_checked_basic(vm_database.block_height()?, &self.params)?;
         self.tx
             .get_mut(&id)
             .map(|tx| tx.extend_from_slice(txs))
@@ -131,7 +131,7 @@ impl ConcreteStorage {
             .unwrap_or_default();
 
         let checked_tx =
-            tx.into_checked_basic(vm_database.block_height()? as Word, &self.params)?;
+            tx.into_checked_basic(vm_database.block_height()?, &self.params)?;
 
         let mut vm =
             Interpreter::with_storage(vm_database, self.params, self.gas_costs.clone());
@@ -205,7 +205,7 @@ impl DapQuery {
         ctx.data_unchecked::<GraphStorage>()
             .lock()
             .await
-            .register(&id, register.into())
+            .register(&id, register.0 as RegisterId)
             .ok_or_else(|| async_graphql::Error::new("Invalid register identifier"))
             .map(|val| val.into())
     }
@@ -220,7 +220,7 @@ impl DapQuery {
         ctx.data_unchecked::<GraphStorage>()
             .lock()
             .await
-            .memory(&id, start.into(), size.into())
+            .memory(&id, start.0 as usize, size.0 as usize)
             .ok_or_else(|| async_graphql::Error::new("Invalid memory range"))
             .and_then(|mem| Ok(serde_json::to_string(mem)?))
     }
@@ -363,7 +363,7 @@ impl DapMutation {
         let db = locked.db.get(&id).ok_or("Invalid debugging session ID")?;
 
         let checked_tx = tx
-            .into_checked_basic(db.latest_height()?.into(), &locked.params)?
+            .into_checked_basic(db.latest_height()?, &locked.params)?
             .into();
 
         let vm = locked

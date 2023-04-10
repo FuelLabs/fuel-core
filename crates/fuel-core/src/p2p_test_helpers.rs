@@ -28,6 +28,7 @@ use fuel_core_types::{
     },
     fuel_crypto::SecretKey,
     fuel_tx::{
+        ConsensusParameters,
         Input,
         Transaction,
         TransactionBuilder,
@@ -183,7 +184,7 @@ pub async fn make_nodes(
                         initial_coin.amount,
                         initial_coin.asset_id,
                         Default::default(),
-                        0,
+                        Default::default(),
                     )
                     .finalize_as_transaction();
 
@@ -398,7 +399,7 @@ impl Node {
                 .unwrap();
 
             let tx = Transaction::from(tx_result.inserted.as_ref());
-            expected.insert(tx.id(), tx);
+            expected.insert(tx.id(&ConsensusParameters::DEFAULT), tx);
 
             assert!(tx_result.removed.is_empty());
         }
@@ -426,7 +427,7 @@ fn not_found_txs<'iter>(
 ) -> Vec<TxId> {
     let mut not_found = vec![];
     txs.iter().for_each(|(id, tx)| {
-        assert_eq!(id, &tx.id());
+        assert_eq!(id, &tx.id(&ConsensusParameters::DEFAULT));
         if !db.storage::<Transactions>().contains_key(id).unwrap() {
             not_found.push(*id);
         }

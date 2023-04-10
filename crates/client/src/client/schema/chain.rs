@@ -1,6 +1,7 @@
 use crate::client::schema::{
     block::Block,
     schema,
+    U32,
     U64,
 };
 use fuel_core_types::fuel_tx::ConsensusParameters as TxConsensusParameters;
@@ -21,6 +22,7 @@ pub struct ConsensusParameters {
     pub gas_price_factor: U64,
     pub gas_per_byte: U64,
     pub max_message_data_length: U64,
+    pub chain_id: U64,
 }
 
 impl From<ConsensusParameters> for TxConsensusParameters {
@@ -39,6 +41,7 @@ impl From<ConsensusParameters> for TxConsensusParameters {
             gas_price_factor: params.gas_price_factor.into(),
             gas_per_byte: params.gas_per_byte.into(),
             max_message_data_length: params.max_message_data_length.into(),
+            chain_id: params.chain_id.into(),
         }
     }
 }
@@ -52,7 +55,7 @@ pub struct ChainQuery {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ChainInfo {
-    pub base_chain_height: U64,
+    pub base_chain_height: U32,
     pub name: String,
     pub peer_count: i32,
     pub latest_block: Block,

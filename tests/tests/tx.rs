@@ -23,6 +23,7 @@ use fuel_core_types::{
         },
     },
     fuel_asm::*,
+    fuel_tx,
     fuel_tx::*,
     services::executor::ExecutionBlock,
     tai64::Tai64,
@@ -65,9 +66,9 @@ async fn dry_run_script() {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    let gas_price = 0;
+    let gas_price = Default::default();
     let gas_limit = 1_000_000;
-    let maturity = 0;
+    let maturity = Default::default();
 
     let script = vec![
         op::addi(0x10, RegId::ZERO, 0xca),
@@ -107,7 +108,10 @@ async fn dry_run_script() {
 
     // ensure the tx isn't available in the blockchain history
     let err = client
-        .transaction_status(&format!("{:#x}", tx.id()))
+        .transaction_status(&format!(
+            "{:#x}",
+            tx.id(&fuel_tx::ConsensusParameters::DEFAULT)
+        ))
         .await
         .unwrap_err();
     assert_eq!(err.kind(), NotFound);
@@ -127,10 +131,10 @@ async fn dry_run_create() {
     let contract_id = contract.id(&salt, &root, &state_root);
 
     let tx = Transaction::create(
-        0,
-        0,
-        0,
-        0,
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        Default::default(),
         salt,
         vec![],
         vec![],
@@ -144,7 +148,10 @@ async fn dry_run_create() {
 
     // ensure the tx isn't available in the blockchain history
     let err = client
-        .transaction_status(&format!("{:#x}", tx.id()))
+        .transaction_status(&format!(
+            "{:#x}",
+            tx.id(&fuel_tx::ConsensusParameters::DEFAULT)
+        ))
         .await
         .unwrap_err();
     assert_eq!(err.kind(), NotFound);
@@ -155,9 +162,9 @@ async fn submit() {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    let gas_price = 0;
+    let gas_price = Default::default();
     let gas_limit = 1_000_000;
-    let maturity = 0;
+    let maturity = Default::default();
 
     let script = vec![
         op::addi(0x10, RegId::ZERO, 0xca),
@@ -185,12 +192,15 @@ async fn submit() {
     client.submit_and_await_commit(&tx).await.unwrap();
     // verify that the tx returned from the api matches the submitted tx
     let ret_tx = client
-        .transaction(&tx.id().to_string())
+        .transaction(&tx.id(&ConsensusParameters::DEFAULT).to_string())
         .await
         .unwrap()
         .unwrap()
         .transaction;
-    assert_eq!(tx.id(), ret_tx.id());
+    assert_eq!(
+        tx.id(&ConsensusParameters::DEFAULT),
+        ret_tx.id(&ConsensusParameters::DEFAULT)
+    );
 }
 
 #[ignore]
@@ -207,7 +217,7 @@ async fn transaction_status_submitted() {
 #[tokio::test]
 async fn receipts() {
     let transaction = Transaction::default();
-    let id = transaction.id();
+    let id = transaction.id(&ConsensusParameters::DEFAULT);
     // setup server & client
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -218,14 +228,14 @@ async fn receipts() {
         .expect("transaction should insert");
     // run test
     let receipts = client.receipts(&format!("{id:#x}")).await.unwrap();
-    assert!(!receipts.is_empty());
+    assert!(receipts.is_some());
 }
 
 #[tokio::test]
 async fn get_transaction_by_id() {
     // setup test data in the node
     let transaction = Transaction::default();
-    let id = transaction.id();
+    let id = transaction.id(&ConsensusParameters::DEFAULT);
 
     // setup server & client
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
@@ -247,7 +257,7 @@ async fn get_transaction_by_id() {
 #[tokio::test]
 async fn get_transparent_transaction_by_id() {
     let transaction = Transaction::default();
-    let id = transaction.id();
+    let id = transaction.id(&ConsensusParameters::DEFAULT);
 
     // setup server & client
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
@@ -307,7 +317,7 @@ async fn get_transactions() {
     let transactions = &response
         .results
         .iter()
-        .map(|tx| tx.transaction.id())
+        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT))
         .collect_vec();
     // coinbase_tx1
     assert_eq!(transactions[1], tx1);
@@ -344,7 +354,7 @@ async fn get_transactions() {
     let transactions = &response
         .results
         .iter()
-        .map(|tx| tx.transaction.id())
+        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT))
         .collect_vec();
     // coinbase_tx4
     assert_eq!(transactions[1], tx4);
@@ -359,7 +369,7 @@ async fn get_transactions() {
     let transactions = &response
         .results
         .iter()
-        .map(|tx| tx.transaction.id())
+        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT))
         .collect_vec();
     // transactions[0] - coinbase_tx3
     assert_eq!(transactions[1], tx2);
@@ -374,7 +384,7 @@ async fn get_transactions() {
     let transactions = &response
         .results
         .iter()
-        .map(|tx| tx.transaction.id())
+        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT))
         .collect_vec();
     // coinbase_tx4
     assert_eq!(transactions[1], tx4);
@@ -542,12 +552,12 @@ async fn get_transactions_from_manual_blocks() {
     let transactions = &response
         .results
         .iter()
-        .map(|tx| tx.transaction.id())
+        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT))
         .collect_vec();
     // coinbase_tx1
-    assert_eq!(transactions[1], txs[0].id());
-    assert_eq!(transactions[2], txs[1].id());
-    assert_eq!(transactions[3], txs[2].id());
+    assert_eq!(transactions[1], txs[0].id(&ConsensusParameters::DEFAULT));
+    assert_eq!(transactions[2], txs[1].id(&ConsensusParameters::DEFAULT));
+    assert_eq!(transactions[3], txs[2].id(&ConsensusParameters::DEFAULT));
 
     // Query forwards from last given cursor [2]: [3, 4, coinbase_tx2, 5, 6]
     let next_page_request_forwards = PaginationRequest {
@@ -563,13 +573,13 @@ async fn get_transactions_from_manual_blocks() {
     let transactions = &response
         .results
         .iter()
-        .map(|tx| tx.transaction.id())
+        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT))
         .collect_vec();
-    assert_eq!(transactions[0], txs[3].id());
-    assert_eq!(transactions[1], txs[4].id());
+    assert_eq!(transactions[0], txs[3].id(&ConsensusParameters::DEFAULT));
+    assert_eq!(transactions[1], txs[4].id(&ConsensusParameters::DEFAULT));
     // coinbase_tx2
-    assert_eq!(transactions[3], txs[5].id());
-    assert_eq!(transactions[4], txs[6].id());
+    assert_eq!(transactions[3], txs[5].id(&ConsensusParameters::DEFAULT));
+    assert_eq!(transactions[4], txs[6].id(&ConsensusParameters::DEFAULT));
 
     // Query backwards from last given cursor [8]: [5, coinbase_tx2, 4, 3, 2, 1, 0, coinbase_tx1]
     let page_request_backwards = PaginationRequest {
@@ -585,15 +595,15 @@ async fn get_transactions_from_manual_blocks() {
     let transactions = &response
         .results
         .iter()
-        .map(|tx| tx.transaction.id())
+        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT))
         .collect_vec();
-    assert_eq!(transactions[0], txs[5].id());
+    assert_eq!(transactions[0], txs[5].id(&ConsensusParameters::DEFAULT));
     // transactions[1] coinbase_tx2
-    assert_eq!(transactions[2], txs[4].id());
-    assert_eq!(transactions[3], txs[3].id());
-    assert_eq!(transactions[4], txs[2].id());
-    assert_eq!(transactions[5], txs[1].id());
-    assert_eq!(transactions[6], txs[0].id());
+    assert_eq!(transactions[2], txs[4].id(&ConsensusParameters::DEFAULT));
+    assert_eq!(transactions[3], txs[3].id(&ConsensusParameters::DEFAULT));
+    assert_eq!(transactions[4], txs[2].id(&ConsensusParameters::DEFAULT));
+    assert_eq!(transactions[5], txs[1].id(&ConsensusParameters::DEFAULT));
+    assert_eq!(transactions[6], txs[0].id(&ConsensusParameters::DEFAULT));
     // transactions[7] coinbase_tx1
 }
 
@@ -621,7 +631,7 @@ async fn get_owned_transactions() {
         .unwrap()
         .results
         .iter()
-        .map(|tx| tx.transaction.id())
+        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT))
         .collect_vec();
 
     let bob_txs = client
@@ -630,7 +640,7 @@ async fn get_owned_transactions() {
         .unwrap()
         .results
         .iter()
-        .map(|tx| tx.transaction.id())
+        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT))
         .collect_vec();
 
     let charlie_txs = client
@@ -639,7 +649,7 @@ async fn get_owned_transactions() {
         .unwrap()
         .results
         .iter()
-        .map(|tx| tx.transaction.id())
+        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT))
         .collect_vec();
 
     assert_eq!(&alice_txs, &[tx1]);
@@ -656,9 +666,9 @@ impl TestContext {
     ) -> io::Result<Bytes32> {
         let script = op::ret(0x10).to_bytes().to_vec();
         let tx = Transaction::script(
-            0,
+            Default::default(),
             1_000_000,
-            0,
+            Default::default(),
             script,
             vec![],
             vec![Input::coin_signed(
@@ -667,15 +677,15 @@ impl TestContext {
                 amount,
                 Default::default(),
                 Default::default(),
-                0,
-                0,
+                Default::default(),
+                Default::default(),
             )],
             vec![Output::coin(to, amount, Default::default())],
             vec![vec![].into()],
         )
         .into();
         self.client.submit_and_await_commit(&tx).await?;
-        Ok(tx.id())
+        Ok(tx.id(&fuel_tx::ConsensusParameters::DEFAULT))
     }
 }
 
@@ -711,9 +721,9 @@ async fn initialize_client(db: Database) -> TestContext {
 // add random val for unique tx
 fn create_mock_tx(val: u64) -> Transaction {
     Transaction::script(
-        0,
-        0,
-        0,
+        Default::default(),
+        Default::default(),
+        Default::default(),
         Default::default(),
         val.to_be_bytes().to_vec(),
         Default::default(),

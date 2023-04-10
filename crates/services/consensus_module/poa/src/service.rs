@@ -31,15 +31,16 @@ use fuel_core_types::{
             Consensus,
         },
         header::BlockHeader,
-        primitives::{
-            BlockHeight,
-            SecretKeyWrapper,
-        },
+        primitives::SecretKeyWrapper,
         SealedBlock,
     },
     fuel_asm::Word,
     fuel_crypto::Signature,
-    fuel_tx::UniqueIdentifier,
+    fuel_tx::{
+        ConsensusParameters,
+        UniqueIdentifier,
+    },
+    fuel_types::BlockHeight,
     secrecy::{
         ExposeSecret,
         Secret,
@@ -138,6 +139,7 @@ pub struct Task<T, B, I> {
     //  https://github.com/FuelLabs/fuel-core/issues/918
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
+    consensus_params: ConsensusParameters,
 }
 
 impl<T, B, I> Task<T, B, I>
@@ -171,6 +173,7 @@ where
             last_block_created,
             trigger: config.trigger,
             timer: DeadlineClock::new(),
+            consensus_params: config.consensus_params,
         }
     }
 
@@ -277,7 +280,7 @@ where
                 "During block production got invalid transaction {:?} with error {:?}",
                 tx, err
             );
-            tx_ids_to_remove.push(tx.id());
+            tx_ids_to_remove.push(tx.id(&self.consensus_params));
         }
         self.txpool.remove_txs(tx_ids_to_remove);
 

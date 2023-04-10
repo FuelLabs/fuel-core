@@ -5,7 +5,7 @@ use crate::{
         HeartbeatEvent,
     },
 };
-use fuel_core_types::blockchain::primitives::BlockHeight;
+use fuel_core_types::fuel_types::BlockHeight;
 use libp2p::{
     core::{
         connection::ConnectionId,
@@ -35,11 +35,6 @@ use libp2p::{
     Multiaddr,
     PeerId,
 };
-use tokio::time::{
-    self,
-    Interval,
-};
-
 use std::{
     collections::VecDeque,
     task::{
@@ -47,6 +42,10 @@ use std::{
         Poll,
     },
     time::Duration,
+};
+use tokio::time::{
+    self,
+    Interval,
 };
 
 use tracing::debug;
@@ -56,7 +55,7 @@ const MAX_IDENTIFY_ADDRESSES: usize = 10;
 const HEALTH_CHECK_INTERVAL_IN_SECONDS: u64 = 10;
 const REPUTATION_DECAY_INTERVAL_IN_SECONDS: u64 = 1;
 
-/// Events emitted by PeerInfoBehaviour
+/// Events emitted by PeerReportBehavior
 #[derive(Debug, Clone)]
 pub enum PeerReportEvent {
     PeerConnected {
@@ -208,10 +207,6 @@ impl NetworkBehaviour for PeerReportBehaviour {
                         .push_back(PeerReportEvent::PeerDisconnected { peer_id })
                 }
             }
-            FromSwarm::AddressChange(e) => {
-                self.heartbeat.on_swarm_event(FromSwarm::AddressChange(e));
-                self.identify.on_swarm_event(FromSwarm::AddressChange(e));
-            }
             FromSwarm::DialFailure(e) => {
                 let (ping_handler, identity_handler) = e.handler.into_inner();
                 let ping_event = DialFailure {
@@ -246,37 +241,9 @@ impl NetworkBehaviour for PeerReportBehaviour {
                 self.identify
                     .on_swarm_event(FromSwarm::ListenFailure(identity_event));
             }
-            FromSwarm::NewListener(e) => {
-                self.heartbeat.on_swarm_event(FromSwarm::NewListener(e));
-                self.identify.on_swarm_event(FromSwarm::NewListener(e));
-            }
-            FromSwarm::ExpiredListenAddr(e) => {
-                self.heartbeat
-                    .on_swarm_event(FromSwarm::ExpiredListenAddr(e));
-                self.identify
-                    .on_swarm_event(FromSwarm::ExpiredListenAddr(e));
-            }
-            FromSwarm::ListenerError(e) => {
-                self.heartbeat.on_swarm_event(FromSwarm::ListenerError(e));
-                self.identify.on_swarm_event(FromSwarm::ListenerError(e));
-            }
-            FromSwarm::ListenerClosed(e) => {
-                self.heartbeat.on_swarm_event(FromSwarm::ListenerClosed(e));
-                self.identify.on_swarm_event(FromSwarm::ListenerClosed(e));
-            }
-            FromSwarm::NewExternalAddr(e) => {
-                self.heartbeat.on_swarm_event(FromSwarm::NewExternalAddr(e));
-                self.identify.on_swarm_event(FromSwarm::NewExternalAddr(e));
-            }
-            FromSwarm::ExpiredExternalAddr(e) => {
-                self.heartbeat
-                    .on_swarm_event(FromSwarm::ExpiredExternalAddr(e));
-                self.identify
-                    .on_swarm_event(FromSwarm::ExpiredExternalAddr(e));
-            }
-            FromSwarm::NewListenAddr(e) => {
-                self.heartbeat.on_swarm_event(FromSwarm::NewListenAddr(e));
-                self.identify.on_swarm_event(FromSwarm::NewListenAddr(e));
+            _ => {
+                self.heartbeat.handle_swarm_event(&event);
+                self.identify.handle_swarm_event(&event);
             }
         }
     }
@@ -292,127 +259,28 @@ impl NetworkBehaviour for PeerReportBehaviour {
 
         match self.heartbeat.poll(cx, params) {
             Poll::Pending => {}
-            Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-                peer_id,
-                handler,
-                event,
-            }) => {
-                return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-                    peer_id,
-                    handler,
-                    event: EitherOutput::First(event),
-                })
-            }
-            Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-                address,
-                score,
-            }) => {
-                return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-                    address,
-                    score,
-                })
-            }
-            Poll::Ready(NetworkBehaviourAction::CloseConnection {
-                peer_id,
-                connection,
-            }) => {
-                return Poll::Ready(NetworkBehaviourAction::CloseConnection {
-                    peer_id,
-                    connection,
-                })
-            }
-            Poll::Ready(NetworkBehaviourAction::Dial { handler, opts }) => {
-                let handler =
-                    IntoConnectionHandler::select(handler, self.identify.new_handler());
-
-                return Poll::Ready(NetworkBehaviourAction::Dial { handler, opts })
-            }
-            Poll::Ready(NetworkBehaviourAction::GenerateEvent(HeartbeatEvent {
-                peer_id,
-                latest_block_height,
-            })) => {
-                let event = PeerReportEvent::PeerInfoUpdated {
-                    peer_id,
-                    block_height: latest_block_height,
-                };
-                return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
+            Poll::Ready(action) => {
+                let action =
+                    <PeerReportBehaviour as FromAction<Heartbeat>>::convert_action(
+                        self, action,
+                    );
+                if let Some(action) = action {
+                    return Poll::Ready(action)
+                }
             }
         }
 
         loop {
+            // poll until we've either exhausted the events or found one of interest
             match self.identify.poll(cx, params) {
                 Poll::Pending => break,
-                Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-                    peer_id,
-                    handler,
-                    event,
-                }) => {
-                    return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-                        peer_id,
-                        handler,
-                        event: EitherOutput::Second(event),
-                    })
-                }
-                Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-                    address,
-                    score,
-                }) => {
-                    return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-                        address,
-                        score,
-                    })
-                }
-                Poll::Ready(NetworkBehaviourAction::CloseConnection {
-                    peer_id,
-                    connection,
-                }) => {
-                    return Poll::Ready(NetworkBehaviourAction::CloseConnection {
-                        peer_id,
-                        connection,
-                    })
-                }
-                Poll::Ready(NetworkBehaviourAction::Dial { handler, opts }) => {
-                    let handler = IntoConnectionHandler::select(
-                        self.heartbeat.new_handler(),
-                        handler,
-                    );
-                    return Poll::Ready(NetworkBehaviourAction::Dial { handler, opts })
-                }
-                Poll::Ready(NetworkBehaviourAction::GenerateEvent(event)) => {
-                    match event {
-                        IdentifyEvent::Received {
-                            peer_id,
-                            info:
-                                IdentifyInfo {
-                                    protocol_version,
-                                    agent_version,
-                                    mut listen_addrs,
-                                    ..
-                                },
-                        } => {
-                            if listen_addrs.len() > MAX_IDENTIFY_ADDRESSES {
-                                debug!(
-                                    target: "fuel-p2p",
-                                    "Node {:?} has reported more than {} addresses; it is identified by {:?} and {:?}",
-                                    peer_id, MAX_IDENTIFY_ADDRESSES, protocol_version, agent_version
-                                );
-                                listen_addrs.truncate(MAX_IDENTIFY_ADDRESSES);
-                            }
-
-                            let event = PeerReportEvent::PeerIdentified {
-                                peer_id,
-                                agent_version,
-                                addresses: listen_addrs,
-                            };
-
-                            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(
-                                event,
-                            ))
-                        }
-                        IdentifyEvent::Error { peer_id, error } => {
-                            debug!(target: "fuel-p2p", "Identification with peer {:?} failed => {}", peer_id, error)
-                        }
-                        _ => {}
+                Poll::Ready(action) => {
+                    if let Some(action) =
+                        <PeerReportBehaviour as FromAction<Identify>>::convert_action(
+                            self, action,
+                        )
+                    {
+                        return Poll::Ready(action)
                     }
                 }
             }
@@ -447,6 +315,169 @@ impl NetworkBehaviour for PeerReportBehaviour {
             EitherOutput::Second(identify_event) => self
                 .identify
                 .on_connection_handler_event(peer_id, connection_id, identify_event),
+        }
+    }
+}
+
+impl FromAction<Heartbeat> for PeerReportBehaviour {
+    fn convert_action(
+        &mut self,
+        action: NetworkBehaviourAction<
+            <Heartbeat as NetworkBehaviour>::OutEvent,
+            <Heartbeat as NetworkBehaviour>::ConnectionHandler,
+        >,
+    ) -> Option<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+        match action {
+            NetworkBehaviourAction::GenerateEvent(HeartbeatEvent {
+                peer_id,
+                latest_block_height,
+            }) => {
+                let event = PeerReportEvent::PeerInfoUpdated {
+                    peer_id,
+                    block_height: latest_block_height,
+                };
+                Some(NetworkBehaviourAction::GenerateEvent(event))
+            }
+            NetworkBehaviourAction::Dial { handler, opts } => {
+                let handler =
+                    IntoConnectionHandler::select(handler, self.identify.new_handler());
+                Some(NetworkBehaviourAction::Dial { handler, opts })
+            }
+            NetworkBehaviourAction::NotifyHandler {
+                peer_id,
+                handler,
+                event,
+            } => Some(NetworkBehaviourAction::NotifyHandler {
+                peer_id,
+                handler,
+                event: EitherOutput::First(event),
+            }),
+            NetworkBehaviourAction::ReportObservedAddr { address, score } => {
+                Some(NetworkBehaviourAction::ReportObservedAddr { address, score })
+            }
+            NetworkBehaviourAction::CloseConnection {
+                peer_id,
+                connection,
+            } => Some(NetworkBehaviourAction::CloseConnection {
+                peer_id,
+                connection,
+            }),
+        }
+    }
+}
+
+impl FromAction<Identify> for PeerReportBehaviour {
+    fn convert_action(
+        &mut self,
+        action: NetworkBehaviourAction<
+            <Identify as NetworkBehaviour>::OutEvent,
+            <Identify as NetworkBehaviour>::ConnectionHandler,
+        >,
+    ) -> Option<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+        match action {
+            NetworkBehaviourAction::GenerateEvent(event) => match event {
+                IdentifyEvent::Received {
+                    peer_id,
+                    info:
+                        IdentifyInfo {
+                            protocol_version,
+                            agent_version,
+                            mut listen_addrs,
+                            ..
+                        },
+                } => {
+                    if listen_addrs.len() > MAX_IDENTIFY_ADDRESSES {
+                        debug!(
+                            target: "fuel-p2p",
+                            "Node {:?} has reported more than {} addresses; it is identified by {:?} and {:?}",
+                            peer_id, MAX_IDENTIFY_ADDRESSES, protocol_version, agent_version
+                        );
+                        listen_addrs.truncate(MAX_IDENTIFY_ADDRESSES);
+                    }
+
+                    let event = PeerReportEvent::PeerIdentified {
+                        peer_id,
+                        agent_version,
+                        addresses: listen_addrs,
+                    };
+
+                    Some(NetworkBehaviourAction::GenerateEvent(event))
+                }
+                IdentifyEvent::Error { peer_id, error } => {
+                    debug!(target: "fuel-p2p", "Identification with peer {:?} failed => {}", peer_id, error);
+                    None
+                }
+                _ => None,
+            },
+            NetworkBehaviourAction::Dial { handler, opts } => {
+                let handler =
+                    IntoConnectionHandler::select(self.heartbeat.new_handler(), handler);
+                Some(NetworkBehaviourAction::Dial { handler, opts })
+            }
+            NetworkBehaviourAction::NotifyHandler {
+                peer_id,
+                handler,
+                event,
+            } => Some(NetworkBehaviourAction::NotifyHandler {
+                peer_id,
+                handler,
+                event: EitherOutput::Second(event),
+            }),
+            NetworkBehaviourAction::ReportObservedAddr { address, score } => {
+                Some(NetworkBehaviourAction::ReportObservedAddr { address, score })
+            }
+            NetworkBehaviourAction::CloseConnection {
+                peer_id,
+                connection,
+            } => Some(NetworkBehaviourAction::CloseConnection {
+                peer_id,
+                connection,
+            }),
+        }
+    }
+}
+
+trait FromAction<T: NetworkBehaviour>: NetworkBehaviour {
+    fn convert_action(
+        &mut self,
+        action: NetworkBehaviourAction<T::OutEvent, T::ConnectionHandler>,
+    ) -> Option<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>>;
+}
+
+impl FromSwarmEvent for Heartbeat {}
+impl FromSwarmEvent for Identify {}
+
+trait FromSwarmEvent: NetworkBehaviour {
+    fn handle_swarm_event(
+        &mut self,
+        event: &FromSwarm<<PeerReportBehaviour as NetworkBehaviour>::ConnectionHandler>,
+    ) {
+        match event {
+            FromSwarm::NewListener(e) => {
+                self.on_swarm_event(FromSwarm::NewListener(*e));
+            }
+            FromSwarm::ExpiredListenAddr(e) => {
+                self.on_swarm_event(FromSwarm::ExpiredListenAddr(*e));
+            }
+            FromSwarm::ListenerError(e) => {
+                self.on_swarm_event(FromSwarm::ListenerError(*e));
+            }
+            FromSwarm::ListenerClosed(e) => {
+                self.on_swarm_event(FromSwarm::ListenerClosed(*e));
+            }
+            FromSwarm::NewExternalAddr(e) => {
+                self.on_swarm_event(FromSwarm::NewExternalAddr(*e));
+            }
+            FromSwarm::ExpiredExternalAddr(e) => {
+                self.on_swarm_event(FromSwarm::ExpiredExternalAddr(*e));
+            }
+            FromSwarm::NewListenAddr(e) => {
+                self.on_swarm_event(FromSwarm::NewListenAddr(*e));
+            }
+            FromSwarm::AddressChange(e) => {
+                self.on_swarm_event(FromSwarm::AddressChange(*e));
+            }
+            _ => {}
         }
     }
 }

@@ -6,11 +6,15 @@ use fuel_core_types::{
         ConsensusHeader,
         PartialBlockHeader,
     },
+    entities::message::MerkleProof,
     fuel_tx::{
         Script,
         Transaction,
     },
-    fuel_types::*,
+    fuel_types::{
+        BlockHeight,
+        *,
+    },
     tai64::Tai64,
 };
 
@@ -54,25 +58,33 @@ fn receipt(i: Option<u8>) -> Receipt {
 
 mockall::mock! {
     pub ProofDataStorage {}
-    impl SimpleBlockData for ProofDataStorage{
+    impl SimpleBlockData for ProofDataStorage {
         fn block(&self, block_id: &BlockId) -> StorageResult<CompressedBlock>;
     }
 
-    impl SimpleTransactionData for ProofDataStorage{
+    impl DatabaseMessageProof for ProofDataStorage {
+        fn block_history_proof(
+            &self,
+            message_block_height: &BlockHeight,
+            commit_block_height: &BlockHeight,
+        ) -> StorageResult<MerkleProof>;
+    }
+
+    impl SimpleTransactionData for ProofDataStorage {
         fn transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction>;
         fn receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>>;
     }
 
     impl MessageProofData for ProofDataStorage {
         fn transaction_status(&self, transaction_id: &TxId) -> StorageResult<TransactionStatus>;
-        fn transactions_on_block(&self, block_id: &BlockId) -> StorageResult<Vec<Bytes32>>;
-        fn signature(&self, block_id: &BlockId) -> StorageResult<Signature>;
     }
 }
 
 #[tokio::test]
 async fn can_build_message_proof() {
     use mockall::predicate::*;
+    let commit_block_height = BlockHeight::from(2u32);
+    let message_block_height = BlockHeight::from(1u32);
     let expected_receipt = receipt(Some(11));
     let message_id = expected_receipt.message_id().unwrap();
     let receipts: [Receipt; 4] = [
@@ -104,19 +116,6 @@ async fn can_build_message_proof() {
             Ok(r)
         }
     });
-    data.expect_transaction_status()
-        .with(eq(transaction_id))
-        .returning(|_| {
-            Ok(TransactionStatus::Success {
-                block_id: Default::default(),
-                time: Tai64::UNIX_EPOCH,
-                result: None,
-            })
-        });
-    data.expect_transactions_on_block()
-        .once()
-        .with(eq(BlockId::default()))
-        .returning(|_| Ok(TXNS.to_vec()));
 
     data.expect_transaction().returning(move |txn_id| {
         let tx = TXNS
@@ -128,43 +127,94 @@ async fn can_build_message_proof() {
         Ok(tx)
     });
 
-    data.expect_signature()
-        .once()
-        .with(eq(BlockId::default()))
-        .returning(|_| Ok(Signature::default()));
-
-    let header = PartialBlockHeader {
+    let commit_block_header = PartialBlockHeader {
         application: ApplicationHeader {
             da_height: 0u64.into(),
             generated: Default::default(),
         },
         consensus: ConsensusHeader {
             prev_root: Bytes32::zeroed(),
-            height: 1u64.into(),
+            height: commit_block_height,
             time: Tai64::UNIX_EPOCH,
             generated: Default::default(),
         },
+    }
+    .generate(&[], &[]);
+    let commit_block = CompressedBlock::test(commit_block_header, vec![]);
+    let message_block_header = PartialBlockHeader {
+        application: ApplicationHeader {
+            da_height: 0u64.into(),
+            generated: Default::default(),
+        },
+        consensus: ConsensusHeader {
+            prev_root: Bytes32::zeroed(),
+            height: message_block_height,
+            time: Tai64::UNIX_EPOCH,
+            generated: Default::default(),
+        },
+    }
+    .generate(&[], &message_ids);
+    let message_block = CompressedBlock::test(message_block_header, TXNS.to_vec());
+
+    let block_proof = MerkleProof {
+        proof_set: vec![message_block.id().into(), commit_block.id().into()],
+        proof_index: 2,
     };
-    data.expect_block()
+    data.expect_block_history_proof()
         .once()
-        .with(eq(BlockId::default()))
+        .with(
+            eq(message_block_height),
+            eq(commit_block_height - 1u32.into()),
+        )
         .returning({
-            let header = header.clone();
-            let message_ids = message_ids.clone();
-            move |_| {
-                let header = header.clone().generate(&[], &message_ids);
-                let transactions = TXNS.to_vec();
-                Ok(CompressedBlock::test(header, transactions))
-            }
+            let block_proof = block_proof.clone();
+            move |_, _| Ok(block_proof.clone())
         });
+
+    let message_block_id = message_block.id();
+    data.expect_transaction_status()
+        .with(eq(transaction_id))
+        .returning(move |_| {
+            Ok(TransactionStatus::Success {
+                block_id: message_block_id,
+                time: Tai64::UNIX_EPOCH,
+                result: None,
+            })
+        });
+
+    data.expect_block().times(2).returning({
+        let commit_block = commit_block.clone();
+        let message_block = message_block.clone();
+        move |block_id| {
+            let block = if &commit_block.id() == block_id {
+                commit_block.clone()
+            } else if &message_block.id() == block_id {
+                message_block.clone()
+            } else {
+                panic!("Should request any other block")
+            };
+            Ok(block)
+        }
+    });
 
     let data: Box<dyn MessageProofData> = Box::new(data);
 
-    let p = message_proof(data.deref(), transaction_id, message_id)
-        .unwrap()
-        .unwrap();
-    assert_eq!(p.message_id(), message_id);
-    assert_eq!(p.signature, Signature::default());
-    let header = header.generate(&[], &message_ids);
-    assert_eq!(p.header.message_receipt_root, header.message_receipt_root);
+    let proof =
+        message_proof(data.deref(), transaction_id, message_id, commit_block.id())
+            .unwrap()
+            .unwrap();
+    assert_eq!(proof.message_id(), message_id);
+    assert_eq!(
+        proof.message_block_header.message_receipt_root,
+        message_block.header().message_receipt_root
+    );
+    assert_eq!(
+        proof.message_block_header.height(),
+        message_block.header().height()
+    );
+    assert_eq!(
+        proof.commit_block_header.height(),
+        commit_block.header().height()
+    );
+    assert_eq!(proof.block_proof, block_proof);
 }

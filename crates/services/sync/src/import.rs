@@ -15,13 +15,11 @@ use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::Sealed,
-        primitives::{
-            BlockHeight,
-            BlockId,
-        },
+        primitives::BlockId,
         SealedBlock,
         SealedBlockHeader,
     },
+    fuel_types::BlockHeight,
     services::p2p::SourcePeer,
 };
 use futures::{

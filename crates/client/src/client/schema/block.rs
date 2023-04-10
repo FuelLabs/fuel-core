@@ -6,6 +6,7 @@ use crate::client::{
         PageInfo,
         Signature,
         Tai64Timestamp,
+        U32,
         U64,
     },
     PaginatedResult,
@@ -114,7 +115,7 @@ pub struct ProduceBlockArgs {
 )]
 pub struct BlockMutation {
     #[arguments(blocksToProduce: $blocks_to_produce, startTimestamp: $start_timestamp)]
-    pub produce_blocks: U64,
+    pub produce_blocks: U32,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -126,7 +127,7 @@ pub struct Header {
     pub message_receipt_count: U64,
     pub transactions_root: Bytes32,
     pub message_receipt_root: Bytes32,
-    pub height: U64,
+    pub height: U32,
     pub prev_root: Bytes32,
     pub time: Tai64Timestamp,
     pub application_hash: Bytes32,

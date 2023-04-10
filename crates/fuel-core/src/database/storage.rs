@@ -11,16 +11,14 @@ use fuel_core_storage::{
     StorageMutate,
 };
 use fuel_core_types::{
-    blockchain::primitives::{
-        BlockHeight,
-        BlockId,
-    },
+    blockchain::primitives::BlockId,
     fuel_merkle::{
         binary,
         sparse,
     },
     fuel_tx::TxId,
     fuel_types::{
+        BlockHeight,
         ContractId,
         Nonce,
     },

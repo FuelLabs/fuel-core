@@ -1,5 +1,5 @@
 use fuel_core_types::{
-    blockchain::primitives::BlockHeight,
+    fuel_types::BlockHeight,
     services::p2p::peer_reputation::{
         AppScore,
         DECAY_APP_SCORE,

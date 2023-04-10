@@ -19,14 +19,12 @@ use fuel_core_types::{
             Genesis,
             Sealed,
         },
-        primitives::{
-            BlockHeight,
-            BlockId,
-        },
+        primitives::BlockId,
         SealedBlock,
         SealedBlockHeader,
     },
     fuel_tx::Transaction,
+    fuel_types::BlockHeight,
 };
 
 impl DatabaseColumn for SealedBlockConsensus {

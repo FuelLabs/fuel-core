@@ -5,6 +5,7 @@ use crate::helpers::{
 use fuel_core::chain_config::CoinConfig;
 use fuel_core_types::{
     fuel_crypto::SecretKey,
+    fuel_tx,
     fuel_tx::{
         field::{
             Inputs,
@@ -36,10 +37,10 @@ async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
     let mut rng = StdRng::seed_from_u64(2322);
     let mut test_builder = TestSetupBuilder::new(2322);
 
-    let starting_block: u32 = 10;
+    let starting_block = 10.into();
 
     // setup genesis contract
-    let contract_tx_pointer = TxPointer::new(7, rng.gen());
+    let contract_tx_pointer = TxPointer::new(7.into(), rng.gen());
     let (_, contract_id) =
         test_builder.setup_contract(vec![], None, None, Some(contract_tx_pointer));
 
@@ -54,7 +55,7 @@ async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
     test_builder.initial_coins.push(CoinConfig {
         tx_id: Some(*coin_utxo_id.tx_id()),
         output_index: Some(coin_utxo_id.output_index()),
-        tx_pointer_block_height: Some(coin_tx_pointer.block_height().into()),
+        tx_pointer_block_height: Some(coin_tx_pointer.block_height()),
         tx_pointer_tx_idx: Some(coin_tx_pointer.tx_index()),
         maturity: None,
         owner,
@@ -63,7 +64,7 @@ async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
     });
 
     // set starting block >= tx_pointer.block_height()
-    test_builder.starting_block = Some(starting_block.into());
+    test_builder.starting_block = Some(starting_block);
 
     // construct a transaction that uses both the coin and contract from genesis,
     // with the tx_pointer's left as null
@@ -82,7 +83,7 @@ async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
 
     // verify that the tx returned from the api has tx pointers set matching the genesis config
     let ret_tx = client
-        .transaction(&tx.id().to_string())
+        .transaction(&tx.id(&fuel_tx::ConsensusParameters::DEFAULT).to_string())
         .await
         .unwrap()
         .unwrap()
@@ -106,7 +107,7 @@ async fn tx_pointer_set_from_previous_block() {
     // verify tx_pointers of inputs on second tx correspond to the first transaction
     let mut rng = StdRng::seed_from_u64(2322);
     let mut test_builder = TestSetupBuilder::new(2322);
-    let block_height = 40u32;
+    let block_height = 40;
 
     // setup genesis contract
     let (_, contract_id) = test_builder.setup_contract(vec![], None, None, None);
@@ -136,7 +137,7 @@ async fn tx_pointer_set_from_previous_block() {
     let tx1 = tx1.into();
     client.submit_and_await_commit(&tx1).await.unwrap();
     let ret_tx1 = client
-        .transaction(&tx1.id().to_string())
+        .transaction(&tx1.id(&fuel_tx::ConsensusParameters::DEFAULT).to_string())
         .await
         .unwrap()
         .unwrap()
@@ -147,7 +148,7 @@ async fn tx_pointer_set_from_previous_block() {
     let tx2 = script_tx(
         secret_key,
         ret_tx1.outputs()[0].amount().unwrap(),
-        UtxoId::new(tx1.id(), 0),
+        UtxoId::new(tx1.id(&fuel_tx::ConsensusParameters::DEFAULT), 0),
         contract_id,
         rng.gen(),
     );
@@ -155,7 +156,7 @@ async fn tx_pointer_set_from_previous_block() {
     client.submit_and_await_commit(&tx2).await.unwrap();
 
     let ret_tx2 = client
-        .transaction(&tx2.id().to_string())
+        .transaction(&tx2.id(&fuel_tx::ConsensusParameters::DEFAULT).to_string())
         .await
         .unwrap()
         .unwrap()
@@ -164,14 +165,15 @@ async fn tx_pointer_set_from_previous_block() {
     let ret_tx2 = ret_tx2.as_script().unwrap();
 
     // verify coin tx_pointer is correctly set
+    let expected_tx_pointer = TxPointer::new((block_height + 1u32).into(), 1);
     assert_eq!(
         *ret_tx2.inputs()[0].tx_pointer().unwrap(),
-        TxPointer::new(block_height + 1u32, 1)
+        expected_tx_pointer
     );
     // verify contract tx_pointer is correctly set
     assert_eq!(
         *ret_tx2.inputs()[1].tx_pointer().unwrap(),
-        TxPointer::new(block_height + 1u32, 1)
+        expected_tx_pointer
     )
 }
 
@@ -203,7 +205,7 @@ async fn tx_pointer_unset_when_utxo_validation_disabled() {
     client.submit_and_await_commit(&tx).await.unwrap();
 
     let ret_tx = client
-        .transaction(&tx.id().to_string())
+        .transaction(&tx.id(&fuel_tx::ConsensusParameters::DEFAULT).to_string())
         .await
         .unwrap()
         .unwrap()
@@ -238,7 +240,7 @@ fn script_tx(
             Default::default(),
             // use a zeroed out txpointer
             Default::default(),
-            0,
+            Default::default(),
         )
         .add_input(Input::contract(
             Default::default(),

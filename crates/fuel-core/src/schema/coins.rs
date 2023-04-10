@@ -17,6 +17,7 @@ use crate::{
         AssetId,
         Nonce,
         UtxoId,
+        U32,
         U64,
     },
 };
@@ -60,13 +61,13 @@ impl Coin {
         self.0.asset_id.into()
     }
 
-    async fn maturity(&self) -> U64 {
+    async fn maturity(&self) -> U32 {
         self.0.maturity.into()
     }
 
     /// TxPointer - the height of the block this coin was created in
-    async fn block_created(&self) -> U64 {
-        u64::from(self.0.tx_pointer.block_height()).into()
+    async fn block_created(&self) -> U32 {
+        u32::from(self.0.tx_pointer.block_height()).into()
     }
 
     /// TxPointer - the index of the transaction that created this coin
@@ -174,7 +175,6 @@ impl CoinQuery {
             let owner: fuel_tx::Address = filter.owner.into();
             let coins = query
                 .owned_coins(&owner, (*start).map(Into::into), direction)
-                .into_iter()
                 .filter_map(|result| {
                     if let (Ok(coin), Some(filter_asset_id)) = (&result, &filter.asset_id)
                     {
