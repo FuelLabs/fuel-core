@@ -78,6 +78,10 @@ impl ConsensusParameters {
     async fn max_message_data_length(&self) -> U64 {
         self.0.max_message_data_length.into()
     }
+
+    async fn chain_id(&self) -> U64 {
+        self.0.chain_id.into()
+    }
 }
 
 #[Object]

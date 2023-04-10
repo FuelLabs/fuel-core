@@ -19,6 +19,7 @@ use fuel_core_services::{
 };
 use fuel_core_types::{
     fuel_tx::{
+        ConsensusParameters,
         Transaction,
         TxId,
         UniqueIdentifier,
@@ -98,6 +99,7 @@ pub struct SharedState<P2P, DB> {
     tx_status_sender: TxStatusChange,
     txpool: Arc<ParkingMutex<TxPool<DB>>>,
     p2p: Arc<P2P>,
+    consensus_params: ConsensusParameters,
 }
 
 impl<P2P, DB> Clone for SharedState<P2P, DB> {
@@ -106,6 +108,7 @@ impl<P2P, DB> Clone for SharedState<P2P, DB> {
             tx_status_sender: self.tx_status_sender.clone(),
             txpool: self.txpool.clone(),
             p2p: self.p2p.clone(),
+            consensus_params: self.consensus_params,
         }
     }
 }
@@ -174,7 +177,7 @@ where
 
             new_transaction = self.gossiped_tx_stream.next() => {
                 if let Some(GossipData { data: Some(tx), message_id, peer_id }) = new_transaction {
-                    let id = tx.id();
+                    let id = tx.id(&self.shared.consensus_params);
                     let txs = vec!(Arc::new(tx));
                     let mut result = tracing::info_span!("Received tx via gossip", %id)
                         .in_scope(|| {
@@ -355,6 +358,7 @@ where
     let committed_block_stream = importer.block_events();
     let mut ttl_timer = tokio::time::interval(config.transaction_ttl);
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    let consensus_params = config.chain_config.transaction_parameters;
     let txpool = Arc::new(ParkingMutex::new(TxPool::new(config, db)));
     let task = Task {
         gossiped_tx_stream,
@@ -363,6 +367,7 @@ where
             tx_status_sender: TxStatusChange::new(100),
             txpool,
             p2p,
+            consensus_params,
         },
         ttl_timer,
     };

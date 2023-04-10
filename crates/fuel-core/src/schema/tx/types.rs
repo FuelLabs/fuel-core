@@ -59,7 +59,6 @@ use fuel_core_types::{
         },
         Chargeable,
         Executable,
-        UniqueIdentifier,
     },
     fuel_types::bytes::SerializableVec,
     fuel_vm::ProgramState as VmProgramState,
@@ -264,12 +263,18 @@ impl From<TransactionStatus> for TxStatus {
         }
     }
 }
-pub struct Transaction(pub(crate) fuel_tx::Transaction);
+pub struct Transaction(pub(crate) fuel_tx::Transaction, pub(crate) fuel_tx::TxId);
+
+impl Transaction {
+    pub fn from_tx(id: fuel_tx::TxId, tx: fuel_tx::Transaction) -> Self {
+        Self(tx, id)
+    }
+}
 
 #[Object]
 impl Transaction {
     async fn id(&self) -> TransactionId {
-        TransactionId(self.0.id())
+        TransactionId(self.1)
     }
 
     async fn input_asset_ids(&self) -> Option<Vec<AssetId>> {
@@ -400,7 +405,7 @@ impl Transaction {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<TransactionStatus>> {
-        let id = self.0.id();
+        let id = self.1;
         let query: &Database = ctx.data_unchecked();
         let txpool = ctx.data_unchecked::<TxPool>();
         get_tx_status(id, query, txpool).await.map_err(Into::into)
@@ -412,7 +417,7 @@ impl Transaction {
     ) -> async_graphql::Result<Option<Vec<Receipt>>> {
         let query: &Database = ctx.data_unchecked();
         let receipts = query
-            .receipts(&self.0.id())
+            .receipts(&self.1)
             .into_api_result::<Vec<_>, async_graphql::Error>()?;
         Ok(receipts.map(|receipts| receipts.into_iter().map(Receipt).collect()))
     }
@@ -511,11 +516,5 @@ pub(super) async fn get_tx_status(
             ))),
             _ => Ok(None),
         },
-    }
-}
-
-impl From<fuel_tx::Transaction> for Transaction {
-    fn from(tx: fuel_tx::Transaction) -> Self {
-        Transaction(tx)
     }
 }

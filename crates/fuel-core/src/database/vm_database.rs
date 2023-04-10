@@ -174,9 +174,7 @@ impl InterpreterStorage for VmDatabase {
         Ok(timestamp.0)
     }
 
-    fn block_hash(&self, block_height: u32) -> Result<Bytes32, Self::DataError> {
-        // TODO: https://github.com/FuelLabs/fuel-vm/pull/412
-        let block_height: BlockHeight = block_height.into();
+    fn block_hash(&self, block_height: BlockHeight) -> Result<Bytes32, Self::DataError> {
         // Block header hashes for blocks with height greater than or equal to current block height are zero (0x00**32).
         // https://github.com/FuelLabs/fuel-specs/blob/master/specs/vm/instruction_set.md#bhsh-block-hash
         if block_height >= self.current_block_height || block_height == Default::default()
