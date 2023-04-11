@@ -101,9 +101,12 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 pub use ports::RelayerPort;
-use std::ops::{
-    Deref,
-    DerefMut,
+use std::{
+    ops::{
+        Deref,
+        DerefMut,
+    },
+    sync::Arc,
 };
 use tracing::{
     debug,
@@ -123,7 +126,8 @@ where
 {
     pub database: Database,
     pub relayer: R,
-    pub config: Config,
+    pub config: Arc<Config>,
+    pub(crate) utxo_validation: bool,
 }
 
 /// Data that is generated after executing all transactions.
@@ -138,6 +142,16 @@ impl<R> Executor<R>
 where
     R: RelayerPort + Clone,
 {
+    pub fn new(database: Database, config: Config, relayer: R) -> Self {
+        let utxo_validation = config.utxo_validation;
+        Executor {
+            database,
+            relayer,
+            utxo_validation,
+            config: Arc::new(config),
+        }
+    }
+
     /// Executes the block and commits the result of the execution into the inner `Database`.
     pub fn execute_and_commit(
         &self,
@@ -155,7 +169,8 @@ impl Executor<Database> {
         Self {
             relayer: database.clone(),
             database,
-            config,
+            utxo_validation: config.utxo_validation,
+            config: Arc::new(config),
         }
     }
 }
@@ -184,10 +199,8 @@ where
         // spawn a nested executor instance to override utxo_validation config
         let executor = Self {
             relayer: self.relayer.clone(),
-            config: Config {
-                utxo_validation,
-                ..self.config.clone()
-            },
+            config: self.config.clone(),
+            utxo_validation,
             database,
         };
 
@@ -578,7 +591,7 @@ where
 
         self.verify_tx_predicates(checked_tx.clone())?;
 
-        if self.config.utxo_validation {
+        if self.utxo_validation {
             // validate transaction has at least one coin
             self.verify_tx_has_at_least_one_coin_or_message(checked_tx.transaction())?;
             // validate utxos exist and maturity is properly set
@@ -958,8 +971,7 @@ where
                             ..
                         } => {
                             let mut contract = ContractRef::new(&mut *db, *contract_id);
-                            *utxo_id =
-                                contract.validated_utxo(self.config.utxo_validation)?;
+                            *utxo_id = contract.validated_utxo(self.utxo_validation)?;
                             *balance_root = contract.balance_root()?;
                             *state_root = contract.state_root()?;
                             // TODO: Also calculate `tx_pointer` based on utxo's pointer.
@@ -991,8 +1003,7 @@ where
                         } => {
                             let mut contract = ContractRef::new(&mut *db, *contract_id);
                             if utxo_id
-                                != &contract
-                                    .validated_utxo(self.config.utxo_validation)?
+                                != &contract.validated_utxo(self.utxo_validation)?
                             {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx.id(),
@@ -1631,14 +1642,13 @@ mod tests {
                 .transaction()
                 .clone();
 
-            let mut producer = Executor::test(Default::default(), Config::local_node());
+            let mut config = Config::local_node();
             let recipient = [1u8; 32].into();
-            producer.config.block_producer.coinbase_recipient = recipient;
-            producer
-                .config
-                .chain_conf
-                .transaction_parameters
-                .gas_price_factor = gas_price_factor;
+            config.block_producer.coinbase_recipient = recipient;
+
+            config.chain_conf.transaction_parameters.gas_price_factor = gas_price_factor;
+
+            let producer = Executor::test(Default::default(), config);
 
             let expected_fee_amount = TransactionFee::checked_from_values(
                 &producer.config.chain_conf.transaction_parameters,
@@ -1698,14 +1708,12 @@ mod tests {
                 .transaction()
                 .clone();
 
-            let mut producer = Executor::test(Default::default(), Config::local_node());
+            let mut config = Config::local_node();
             let recipient = [1u8; 32].into();
-            producer.config.block_producer.coinbase_recipient = recipient;
-            producer
-                .config
-                .chain_conf
-                .transaction_parameters
-                .gas_price_factor = gas_price_factor;
+            config.block_producer.coinbase_recipient = recipient;
+            config.chain_conf.transaction_parameters.gas_price_factor = gas_price_factor;
+
+            let producer = Executor::test(Default::default(), config);
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![script.into()];
@@ -1723,7 +1731,7 @@ mod tests {
             let validator = Executor::test(
                 Default::default(),
                 // Use the same config as block producer
-                producer.config,
+                (*producer.config).clone(),
             );
             let ExecutionResult {
                 block: validated_block,
@@ -1782,9 +1790,10 @@ mod tests {
                     .transaction()
                     .clone();
 
-                let mut producer =
-                    Executor::test(Default::default(), Config::local_node());
-                producer.config.block_producer.coinbase_recipient = config_coinbase;
+                let mut config = Config::local_node();
+                config.block_producer.coinbase_recipient = config_coinbase;
+
+                let producer = Executor::test(Default::default(), config);
 
                 let mut block = Block::default();
                 *block.transactions_mut() = vec![script.clone().into()];
