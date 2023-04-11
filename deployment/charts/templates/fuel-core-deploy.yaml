@@ -14,7 +14,6 @@ spec:
     port: http
 {{- end }}
 ---
-{{- if .Values.app.sentry_clone_enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -32,7 +31,6 @@ spec:
   dataSource:
     kind: PersistentVolumeClaim
     name: {{ .Values.app.volume.clone_sentry_pvc_claimname }}  
-{{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap
