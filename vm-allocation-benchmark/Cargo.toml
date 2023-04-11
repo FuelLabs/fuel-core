@@ -1,0 +1,20 @@
+[package]
+name = "vm-bench"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+tikv-jemallocator = "0.5"
+criterion = { version = "0.4", features = ["html_reports"] }
+fuel-vm = "0.30"
+
+
+
+[[bench]]
+name = "mem_only"
+harness = false
+
+[[bench]]
+name = "whole_vm"
+harness = false
