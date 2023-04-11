@@ -31,6 +31,7 @@ impl ExecutorAdapter {
             database: self.relayer.database.clone(),
             relayer: self.relayer.clone(),
             config: self.config.clone(),
+            utxo_validation: self.config.utxo_validation,
         };
         executor.execute_without_commit(block)
     }
@@ -44,6 +45,7 @@ impl ExecutorAdapter {
             database: self.relayer.database.clone(),
             relayer: self.relayer.clone(),
             config: self.config.clone(),
+            utxo_validation: self.config.utxo_validation,
         };
         executor.dry_run(block, utxo_validation)
     }

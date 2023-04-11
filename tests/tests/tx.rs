@@ -698,11 +698,7 @@ fn get_executor_and_db() -> (Executor<MaybeRelayerAdapter>, Database) {
         #[cfg(feature = "relayer")]
         da_deploy_height: 0u64.into(),
     };
-    let executor = Executor {
-        relayer,
-        database: db.clone(),
-        config: Config::local_node(),
-    };
+    let executor = Executor::new(db.clone(), Config::local_node(), relayer);
 
     (executor, db)
 }
