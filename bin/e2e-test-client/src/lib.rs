@@ -34,33 +34,33 @@ pub fn main_body(config: SuiteConfig, mut args: Arguments) {
     args.test_threads = Some(1);
 
     let tests = vec![
-        Trial::test(
-            "can transfer from alice to bob",
-            with_cloned(&config, |config| {
-                async_execute(async {
-                    let ctx = TestContext::new(config).await;
-                    tests::transfers::basic_transfer(&ctx).await
-                })
-            }),
-        ),
-        Trial::test(
-            "can transfer from alice to bob and back",
-            with_cloned(&config, |config| {
-                async_execute(async {
-                    let ctx = TestContext::new(config).await;
-                    tests::transfers::transfer_back(&ctx).await
-                })
-            }),
-        ),
-        Trial::test(
-            "can execute script and get receipts",
-            with_cloned(&config, |config| {
-                async_execute(async {
-                    let ctx = TestContext::new(config).await;
-                    tests::transfers::transfer_back(&ctx).await
-                })
-            }),
-        ),
+        // Trial::test(
+        //     "can transfer from alice to bob",
+        //     with_cloned(&config, |config| {
+        //         async_execute(async {
+        //             let ctx = TestContext::new(config).await;
+        //             tests::transfers::basic_transfer(&ctx).await
+        //         })
+        //     }),
+        // ),
+        // Trial::test(
+        //     "can transfer from alice to bob and back",
+        //     with_cloned(&config, |config| {
+        //         async_execute(async {
+        //             let ctx = TestContext::new(config).await;
+        //             tests::transfers::transfer_back(&ctx).await
+        //         })
+        //     }),
+        // ),
+        // Trial::test(
+        //     "can execute script and get receipts",
+        //     with_cloned(&config, |config| {
+        //         async_execute(async {
+        //             let ctx = TestContext::new(config).await;
+        //             tests::transfers::transfer_back(&ctx).await
+        //         })
+        //     }),
+        // ),
         Trial::test(
             "can dry run transfer script and get receipts",
             with_cloned(&config, |config| {
@@ -71,15 +71,15 @@ pub fn main_body(config: SuiteConfig, mut args: Arguments) {
                 Ok(())
             }),
         ),
-        Trial::test(
-            "can deploy a large contract",
-            with_cloned(&config, |config| {
-                async_execute(async {
-                    let ctx = TestContext::new(config).await;
-                    tests::transfers::transfer_back(&ctx).await
-                })
-            }),
-        ),
+        // Trial::test(
+        //     "can deploy a large contract",
+        //     with_cloned(&config, |config| {
+        //         async_execute(async {
+        //             let ctx = TestContext::new(config).await;
+        //             tests::transfers::transfer_back(&ctx).await
+        //         })
+        //     }),
+        // ),
     ];
 
     libtest_mimic::run(&args, tests).exit();

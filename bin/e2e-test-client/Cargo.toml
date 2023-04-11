@@ -23,6 +23,9 @@ libtest-mimic = "0.6.0"
 serde = { workspace = true }
 tokio = { workspace = true }
 toml = { version = "0.5" }
+hex = "0.4"
+tikv-jemallocator = "0.5.0"
+serde_json = "1.0"
 
 [dev-dependencies]
 assert_cmd = "2.0"

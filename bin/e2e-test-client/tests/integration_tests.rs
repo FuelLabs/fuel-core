@@ -3,9 +3,13 @@ use fuel_core::service::{
     FuelService,
 };
 // Add methods on commands
+use fuel_core::chain_config::ChainConfig;
 use fuel_core_e2e_client::config::SuiteConfig;
 use std::fs;
 use tempfile::TempDir; // Used for writing assertions // Run programs
+
+#[global_allocator]
+static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn works_in_local_env() {
@@ -82,7 +86,16 @@ async fn execute_suite(config_path: String) {
 }
 
 async fn setup_local_node() -> FuelService {
-    FuelService::new_node(Config::local_node()).await.unwrap()
+    // let swayfarm = include_bytes!("swayfarm.bin").to_vec();
+
+    let chain_config: ChainConfig =
+        serde_json::from_str(include_str!("chainconfig.json")).unwrap();
+
+    let mut config = Config::local_node();
+
+    config.chain_conf = chain_config;
+
+    FuelService::new_node(config).await.unwrap()
 }
 
 fn generate_config_file(endpoint: String) -> TestConfig {

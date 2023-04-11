@@ -315,7 +315,7 @@ impl FuelClient {
 
     /// Default dry run, matching the exact configuration as the node
     pub async fn dry_run(&self, tx: &Transaction) -> io::Result<Vec<Receipt>> {
-        self.dry_run_opt(tx, None).await
+        self.dry_run_opt(tx, Some(false)).await
     }
 
     /// Dry run with options to override the node behavior
