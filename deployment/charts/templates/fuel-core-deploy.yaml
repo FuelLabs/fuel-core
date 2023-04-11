@@ -14,6 +14,7 @@ spec:
     port: http
 {{- end }}
 ---
+{{ if eq .Values.app.sentry_clone_enabled "false" }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -28,6 +29,27 @@ spec:
     requests:
       storage: {{ .Values.app.volume.storagerequests }}
   storageClassName: {{ .Values.app.volume.storageclass }}
+{{ end }}
+---
+{{- if .Values.app.sentry_clone_enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.app.volume.claimname }}
+  labels:
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  accessModes:
+    - {{ .Values.app.volume.accessmodes }}
+  resources:
+    requests:
+      storage: {{ .Values.app.volume.storagerequests }}
+  storageClassName: {{ .Values.app.volume.storageclass }}
+  dataSource:
+    kind: PersistentVolumeClaim
+    name: {{ .Values.app.volume.clone_sentry_pvc_claimname }}  
+{{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap
