@@ -4,8 +4,8 @@ metadata:
   name: ${fuel_core_service_name}-ingress
   namespace: ${k8s_namespace}
   annotations:
-    nginx.ingress.kubernetes.io/proxy-body-size: "7m"
-    nginx.org/client-max-body-size: "7m"
+    nginx.ingress.kubernetes.io/proxy-body-size: "18m"
+    nginx.org/client-max-body-size: "18m"
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
     nginx.ingress.kubernetes.io/rewrite-target: /
@@ -30,7 +30,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: ${fuel_core_service_name}-service
+                name: ${fuel_core_ingress_service_name}
                 port:
                   number: ${fuel_core_ingress_http_port}
   tls:
