@@ -58,7 +58,7 @@ pub async fn dry_run(ctx: &TestContext) -> Result<(), Failed> {
                 "Received the response for the query number {i} for {}ms",
                 before.elapsed().as_millis()
             );
-            (query, i)
+            (query, i, before.elapsed().as_secs_f64())
         });
     }
 
@@ -68,8 +68,14 @@ pub async fn dry_run(ctx: &TestContext) -> Result<(), Failed> {
         futures::future::join_all(queries),
     )
     .await?;
+
+    let avg_time =
+        queries.iter().map(|(_, _, time)| time).sum::<f64>() / (queries.len() as f64);
+
+    eprintln!("avg time {}", avg_time);
+
     for query in queries {
-        let (query, query_number) = query;
+        let (query, query_number, _) = query;
         let receipts = query?;
         if receipts.is_empty() {
             return Err(
