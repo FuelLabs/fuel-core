@@ -25,13 +25,10 @@ use std::{
     time::Duration,
 };
 use tokio::time::Instant;
-use tracing::debug;
-
-#[derive(Debug, Clone, Copy)]
-pub struct PeerScoreUpdated {
-    pub should_ban: bool,
-    pub score: AppScore,
-}
+use tracing::{
+    debug,
+    info,
+};
 
 // Info about a single Peer that we're connected to
 #[derive(Debug, Clone)]
@@ -62,7 +59,7 @@ enum PeerInfoInsert {
 /// Manages Peers and their events
 #[derive(Debug)]
 pub struct PeerManager {
-    score_config: AppScoreConfig,
+    score_config: ScoreConfig,
     non_reserved_connected_peers: HashMap<PeerId, PeerInfo>,
     reserved_connected_peers: HashMap<PeerId, PeerInfo>,
     reserved_peers: HashSet<PeerId>,
@@ -77,7 +74,7 @@ impl PeerManager {
         max_non_reserved_peers: usize,
     ) -> Self {
         Self {
-            score_config: AppScoreConfig::default(),
+            score_config: ScoreConfig::default(),
             non_reserved_connected_peers: HashMap::with_capacity(max_non_reserved_peers),
             reserved_connected_peers: HashMap::with_capacity(reserved_peers.len()),
             reserved_peers,
@@ -86,8 +83,17 @@ impl PeerManager {
         }
     }
 
-    pub fn is_reserved_peer(&self, peer_id: &PeerId) -> bool {
-        self.reserved_peers.contains(peer_id)
+    pub fn handle_gossip_score_update<T: Punisher>(
+        &self,
+        peer_id: PeerId,
+        gossip_score: f64,
+        punisher: &mut T,
+    ) {
+        if gossip_score < self.score_config.min_gossip_score_allowed
+            && !self.reserved_peers.contains(&peer_id)
+        {
+            punisher.ban_peer(peer_id);
+        }
     }
 
     pub fn handle_peer_info_updated(
@@ -138,25 +144,25 @@ impl PeerManager {
         }
     }
 
-    pub fn update_app_score(
+    pub fn update_app_score<T: Punisher>(
         &mut self,
         peer_id: PeerId,
         score: AppScore,
-    ) -> Option<PeerScoreUpdated> {
+        reporting_service: &str,
+        punisher: &mut T,
+    ) {
         if let Some(peer) = self.non_reserved_connected_peers.get_mut(&peer_id) {
             // score should not go over `max_score`
-            let new_score = self.score_config.max_score.min(peer.score + score);
+            let new_score = self.score_config.max_app_score.min(peer.score + score);
             peer.score = new_score;
 
-            let should_ban = new_score < self.score_config.min_score_allowed;
+            info!(target: "fuel-p2p", "{reporting_service} updated {peer_id} with new score {score}");
 
-            Some(PeerScoreUpdated {
-                should_ban,
-                score: new_score,
-            })
+            if new_score < self.score_config.min_app_score_allowed {
+                punisher.ban_peer(peer_id);
+            }
         } else {
             log_missing_peer(&peer_id);
-            None
         }
     }
 
@@ -367,24 +373,30 @@ fn log_missing_peer(peer_id: &PeerId) {
 }
 
 #[derive(Clone, Debug, Copy)]
-struct AppScoreConfig {
-    max_score: AppScore,
-    min_score_allowed: AppScore,
+struct ScoreConfig {
+    max_app_score: AppScore,
+    min_app_score_allowed: AppScore,
+    min_gossip_score_allowed: f64,
 }
 
-impl Default for AppScoreConfig {
+impl Default for ScoreConfig {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl AppScoreConfig {
+impl ScoreConfig {
     pub fn new() -> Self {
         Self {
-            max_score: MAX_APP_SCORE,
-            min_score_allowed: MIN_APP_SCORE,
+            max_app_score: MAX_APP_SCORE,
+            min_app_score_allowed: MIN_APP_SCORE,
+            min_gossip_score_allowed: -100.0,
         }
     }
+}
+
+pub trait Punisher {
+    fn ban_peer(&mut self, peer_id: PeerId);
 }
 
 #[cfg(test)]

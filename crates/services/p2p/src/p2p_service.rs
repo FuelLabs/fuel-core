@@ -17,7 +17,7 @@ use crate::{
     },
     peer_manager::{
         PeerManager,
-        PeerScoreUpdated,
+        Punisher,
     },
     peer_report::PeerReportEvent,
     request_response::messages::{
@@ -65,9 +65,14 @@ use rand::seq::IteratorRandom;
 use std::collections::HashMap;
 use tracing::{
     debug,
-    info,
     warn,
 };
+
+impl<Codec: NetworkCodec> Punisher for Swarm<FuelBehaviour<Codec>> {
+    fn ban_peer(&mut self, peer_id: PeerId) {
+        self.ban_peer_id(peer_id)
+    }
+}
 
 /// Listens to the events on the p2p network
 /// And forwards them to the Orchestrator
@@ -110,17 +115,11 @@ pub struct FuelP2PService<Codec: NetworkCodec> {
 #[derive(Debug)]
 struct GossipsubData {
     topics: GossipsubTopics,
-    max_score: f64,
-    min_score_allowed: f64,
 }
 
 impl GossipsubData {
     pub fn with_topics(topics: GossipsubTopics) -> Self {
-        Self {
-            topics,
-            max_score: 150.0,
-            min_score_allowed: -100.0,
-        }
+        Self { topics }
     }
 }
 
@@ -161,11 +160,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 
         // configure and build P2P Service
         let (transport, connection_state) = build_transport(&config);
-        let behaviour = FuelBehaviour::new(
-            &config,
-            codec.clone(),
-            network_metadata.gossipsub_data.max_score,
-        );
+        let behaviour = FuelBehaviour::new(&config, codec.clone());
 
         let total_connections = {
             // Reserved nodes do not count against the configured peer input/output limits.
@@ -362,14 +357,11 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             .behaviour_mut()
             .report_message_validation_result(msg_id, &propagation_source, acceptance)
         {
-            let min_score_allowed =
-                self.network_metadata.gossipsub_data.min_score_allowed;
-
-            if gossip_score < min_score_allowed
-                && !self.peer_manager.is_reserved_peer(&propagation_source)
-            {
-                self.swarm.ban_peer_id(propagation_source);
-            }
+            self.peer_manager.handle_gossip_score_update(
+                propagation_source,
+                gossip_score,
+                &mut self.swarm,
+            );
         }
     }
 
@@ -382,15 +374,12 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         app_score: AppScore,
         reporting_service: &str,
     ) {
-        if let Some(PeerScoreUpdated { should_ban, score }) =
-            self.peer_manager.update_app_score(peer_id, app_score)
-        {
-            info!(target: "fuel-p2p", "{reporting_service} updated {peer_id} with new score {score}");
-
-            if should_ban {
-                self.swarm.ban_peer_id(peer_id);
-            }
-        }
+        self.peer_manager.update_app_score(
+            peer_id,
+            app_score,
+            reporting_service,
+            &mut self.swarm,
+        );
     }
 
     #[tracing::instrument(skip_all,
