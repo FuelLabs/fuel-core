@@ -13,7 +13,7 @@ use std::{
 
 pub type DataSource = Arc<dyn TransactableStorage>;
 pub type ColumnId = u32;
-pub type KVItem = DatabaseResult<(Vec<u8>, Vec<u8>)>;
+pub type KVItem<'a> = DatabaseResult<(&'a [u8], &'a [u8])>;
 
 pub trait KeyValueStore {
     fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>>;

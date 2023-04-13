@@ -22,27 +22,34 @@ use fuel_core_storage::iter::{
 };
 use itertools::Itertools;
 use std::{
-    collections::HashMap,
+    collections::{
+        BTreeMap,
+        HashMap,
+    },
     fmt::Debug,
     mem::size_of,
-    sync::Mutex,
+    sync::{
+        Mutex,
+        MutexGuard,
+        RwLockReadGuard,
+    },
 };
 
 #[derive(Default, Debug)]
 pub struct MemoryStore {
     // TODO: Remove `Mutex` and usage of the `column_key`.
     // TODO: Use `BTreeMap`.
-    inner: Mutex<HashMap<Vec<u8>, Vec<u8>>>,
+    inner: Mutex<BTreeMap<Vec<u8>, Vec<u8>>>,
 }
 
 impl MemoryStore {
-    pub fn iter_all(
+    pub fn iter_all<'a>(
         &self,
         column: Column,
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = KVItem> {
+    ) -> impl Iterator<Item = KVItem> + 'a {
         let lock = self.inner.lock().expect("poisoned");
 
         // clone entire set so we can drop the lock
@@ -50,7 +57,7 @@ impl MemoryStore {
             .iter()
             .filter(|(key, _)| is_column(key, column))
             // strip column
-            .map(|(key, value)| (key[size_of::<ColumnId>()..].to_vec(), value.clone()))
+            .map(|(key, value)| (&key[size_of::<ColumnId>()..], value.as_slice()))
             // filter prefix
             .filter(|(key, _)| {
                 if let Some(prefix) = prefix {
@@ -58,28 +65,49 @@ impl MemoryStore {
                 } else {
                     true
                 }
-            })
-            .sorted();
+            });
 
-        let until_start_reached = |(key, _): &(Vec<u8>, Vec<u8>)| {
-            if let Some(start) = start {
-                match direction {
-                    IterDirection::Forward => key.as_slice() < start,
-                    IterDirection::Reverse => key.as_slice() > start,
+        let iter = if direction == IterDirection::Forward {
+            iter.into_boxed()
+        } else {
+            iter.rev().into_boxed()
+        };
+
+        LockedIter {
+            start: start.map(|b| b.to_vec()),
+            direction,
+            _guard: lock,
+            inner: iter,
+        }
+    }
+}
+
+struct LockedIter<'a, D, I> {
+    start: Option<Vec<u8>>,
+    direction: IterDirection,
+    _guard: MutexGuard<'a, D>,
+    inner: I,
+}
+
+impl<'a, D, I: Iterator<Item = (&'a [u8], &'a [u8])>> Iterator for LockedIter<'a, D, I> {
+    type Item = KVItem<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let until_start_reached = |&(key, _)| {
+            if let Some(start) = &self.start {
+                match self.direction {
+                    IterDirection::Forward => key < start.as_slice(),
+                    IterDirection::Reverse => key > start.as_slice(),
                 }
             } else {
                 false
             }
         };
 
-        let copy: Vec<_> = match direction {
-            IterDirection::Forward => iter.skip_while(until_start_reached).collect(),
-            IterDirection::Reverse => {
-                iter.rev().skip_while(until_start_reached).collect()
-            }
-        };
-
-        copy.into_iter().map(Ok)
+        self.inner
+            .skip_while(until_start_reached)
+            .next()
+            .map(DatabaseResult::Ok)
     }
 }
 
