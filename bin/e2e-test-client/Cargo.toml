@@ -21,6 +21,7 @@ futures = "0.3"
 humantime-serde = "1.1"
 libtest-mimic = "0.6.0"
 serde = { workspace = true }
+tikv-jemallocator = "0.5"
 tokio = { workspace = true }
 toml = { version = "0.5" }
 
