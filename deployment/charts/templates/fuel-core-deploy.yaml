@@ -28,9 +28,10 @@ spec:
     requests:
       storage: {{ .Values.app.volume.storagerequests }}
   storageClassName: {{ .Values.app.volume.storageclass }}
-  dataSourceRef:
-    kind: PersistentVolumeClaim
-    name: {{ .Values.app.volume.clone_sentry_pvc_claimname }}  
+  dataSource:
+    name: imported-aws-snapshot
+    kind: VolumeSnapshot
+    apiGroup: snapshot.storage.k8s.io
 ---
 apiVersion: v1
 kind: ConfigMap
