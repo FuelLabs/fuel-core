@@ -29,7 +29,7 @@ spec:
       storage: {{ .Values.app.volume.storagerequests }}
   storageClassName: {{ .Values.app.volume.storageclass }}
   dataSource:
-    name: imported-aws-snapshot
+    name: imported-aws-snapshot-2
     kind: VolumeSnapshot
     apiGroup: snapshot.storage.k8s.io
 ---
