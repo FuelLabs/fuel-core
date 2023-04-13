@@ -28,6 +28,8 @@ use std::time::Duration;
 
 use super::topics::GossipTopic;
 
+const MAX_GOSSIP_SCORE: f64 = 100.0;
+
 /// Creates `GossipsubConfigBuilder` with few of the Gossipsub values already defined
 pub fn default_gossipsub_builder() -> GossipsubConfigBuilder {
     let gossip_message_id = move |message: &GossipsubMessage| {
@@ -128,14 +130,14 @@ fn initialize_topic_score_params() -> TopicScoreParams {
 /// This function takes in `max_gossipsub_score` and sets it to `topic_score_cap`
 /// The reasoning is because app-specific is set to 0 so the max peer score
 /// can be the score of the topic score cap
-fn initialize_peer_score_params(max_gossipsub_score: f64) -> PeerScoreParams {
+fn initialize_peer_score_params() -> PeerScoreParams {
     PeerScoreParams {
         // topics are added later
         topics: Default::default(),
 
         /// Aggregate topic score cap; this limits the total contribution of topics towards a positive
         /// score. It must be positive (or 0 for no cap).
-        topic_score_cap: max_gossipsub_score,
+        topic_score_cap: MAX_GOSSIP_SCORE,
 
         // Application-specific peer scoring
         // We keep app score separate from gossipsub score
@@ -201,10 +203,7 @@ fn initialize_peer_score_thresholds() -> PeerScoreThresholds {
 }
 
 /// Given a `P2pConfig` containing `GossipsubConfig` creates a Gossipsub Behaviour
-pub(crate) fn build_gossipsub_behaviour(
-    p2p_config: &Config,
-    max_score: f64,
-) -> Gossipsub {
+pub(crate) fn build_gossipsub_behaviour(p2p_config: &Config) -> Gossipsub {
     if p2p_config.metrics {
         // Move to Metrics related feature flag
         let mut p2p_registry = Registry::default();
@@ -225,7 +224,7 @@ pub(crate) fn build_gossipsub_behaviour(
             .set(Box::new(p2p_registry))
             .unwrap_or(());
 
-        initialize_gossipsub(&mut gossipsub, p2p_config, max_score);
+        initialize_gossipsub(&mut gossipsub, p2p_config);
 
         gossipsub
     } else {
@@ -235,14 +234,14 @@ pub(crate) fn build_gossipsub_behaviour(
         )
         .expect("gossipsub initialized");
 
-        initialize_gossipsub(&mut gossipsub, p2p_config, max_score);
+        initialize_gossipsub(&mut gossipsub, p2p_config);
 
         gossipsub
     }
 }
 
-fn initialize_gossipsub(gossipsub: &mut Gossipsub, p2p_config: &Config, max_score: f64) {
-    let peer_score_params = initialize_peer_score_params(max_score);
+fn initialize_gossipsub(gossipsub: &mut Gossipsub, p2p_config: &Config) {
+    let peer_score_params = initialize_peer_score_params();
 
     let peer_score_thresholds = initialize_peer_score_thresholds();
 
