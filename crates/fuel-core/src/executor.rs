@@ -116,6 +116,7 @@ use fuel_core_types::{
 use itertools::Itertools;
 pub use ports::RelayerPort;
 use std::{
+    borrow::Cow,
     ops::{
         Deref,
         DerefMut,
