@@ -2696,6 +2696,7 @@ dependencies = [
  "libtest-mimic",
  "serde",
  "tempfile",
+ "tikv-jemallocator",
  "tokio 1.27.0",
  "toml",
 ]
