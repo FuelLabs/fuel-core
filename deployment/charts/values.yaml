@@ -47,7 +47,6 @@ app:
     claimname: ${fuel_core_pvc_name}
     pvc_clone_enabled: ${fuel_core_pvc_clone_enabled}
     pvc_clone_snapshot_id: ${fuel_core_pvc_snapshot_id}
-    clone_sentry_pvc_claimname: ${fuel_core_clone_sentry_pvc_claimname}
     storageclass: ${pvc_storage_class}
     storagerequests: ${pvc_storage_requests}
     accessmodes: ReadWriteOnce
