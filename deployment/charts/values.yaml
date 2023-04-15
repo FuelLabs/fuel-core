@@ -37,7 +37,6 @@ app:
   relayer_eth_sync_call_freq_s: "${fuel_core_relayer_eth_sync_call_freq_s}"
   relayer_eth_sync_log_freq_s: "${fuel_core_relayer_eth_sync_log_freq_s}"
   sentry_enabled: ${fuel_core_sentry_enabled}
-  sentry_clone_enabled: ${fuel_core_sentry_clone_enabled}
   image:
     repository: ${fuel_core_image_repository}
     tag: ${fuel_core_image_tag}
@@ -46,6 +45,8 @@ app:
     pvname: ${fuel_core_pv_name}
     mountPath: /mnt/db/
     claimname: ${fuel_core_pvc_name}
+    pvc_clone_enabled: ${fuel_core_pvc_clone_enabled}
+    pvc_clone_snapshot_id: ${fuel_core_pvc_snapshot_id}
     clone_sentry_pvc_claimname: ${fuel_core_clone_sentry_pvc_claimname}
     storageclass: ${pvc_storage_class}
     storagerequests: ${pvc_storage_requests}
