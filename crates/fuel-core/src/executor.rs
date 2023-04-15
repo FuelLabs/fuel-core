@@ -972,8 +972,11 @@ where
                         } => {
                             let mut contract = ContractRef::new(&mut *db, *contract_id);
                             *utxo_id = contract.validated_utxo(self.utxo_validation)?;
-                            *balance_root = contract.balance_root()?;
-                            *state_root = contract.state_root()?;
+
+                            if self.utxo_validation {
+                                *balance_root = contract.balance_root()?;
+                                *state_root = contract.state_root()?;
+                            }
                             // TODO: Also calculate `tx_pointer` based on utxo's pointer.
                         }
                         _ => {}
@@ -1009,12 +1012,16 @@ where
                                     transaction_id: tx.id(),
                                 })
                             }
-                            if balance_root != &contract.balance_root()? {
+                            if self.utxo_validation
+                                && balance_root != &contract.balance_root()?
+                            {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx.id(),
                                 })
                             }
-                            if state_root != &contract.state_root()? {
+                            if self.utxo_validation
+                                && state_root != &contract.state_root()?
+                            {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx.id(),
                                 })
@@ -1041,6 +1048,10 @@ where
     where
         Tx: ExecutableTransaction,
     {
+        if !self.utxo_validation {
+            return Ok(())
+        }
+
         match tx {
             ExecutionTypes::Production(tx) => {
                 // TODO: Inputs, in most cases, are heavier than outputs, so cloning them, but we
