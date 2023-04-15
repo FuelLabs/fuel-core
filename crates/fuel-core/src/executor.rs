@@ -577,7 +577,7 @@ where
                 ExecutionKind::Production => ExecutionTypes::Production(original_tx),
                 ExecutionKind::Validation => ExecutionTypes::Validation(original_tx),
             },
-            tx_db_transaction.deref_mut(),
+            tx_db_transaction.deref(),
         )?;
 
         let checked_tx = original_tx.clone().into_checked_basic(
@@ -632,7 +632,7 @@ where
             .into();
 
         // TODO: Avoid cloning here, we can extract value from result
-        let mut tx = vm_result.tx().clone();
+        let tx = vm_result.tx().clone();
         // only commit state changes if execution was a success
         if !vm_result.should_revert() {
             sub_block_db_commit.commit()?;
@@ -667,13 +667,6 @@ where
             tx_db_transaction.deref_mut(),
             tx.inputs(),
             tx.outputs(),
-        )?;
-        self.compute_not_utxo_outputs(
-            match execution_kind {
-                ExecutionKind::Production => ExecutionTypes::Production(&mut tx),
-                ExecutionKind::Validation => ExecutionTypes::Validation(&tx),
-            },
-            tx_db_transaction.deref_mut(),
         )?;
 
         *original_tx = tx;
@@ -948,7 +941,7 @@ where
     fn compute_inputs<Tx>(
         &self,
         tx: ExecutionTypes<&mut Tx, &Tx>,
-        db: &mut Database,
+        db: &Database,
     ) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
@@ -965,18 +958,11 @@ where
                         }
                         Input::Contract {
                             ref mut utxo_id,
-                            ref mut balance_root,
-                            ref mut state_root,
                             ref contract_id,
                             ..
                         } => {
-                            let mut contract = ContractRef::new(&mut *db, *contract_id);
+                            let contract = ContractRef::new(&*db, *contract_id);
                             *utxo_id = contract.validated_utxo(self.utxo_validation)?;
-
-                            if self.utxo_validation {
-                                *balance_root = contract.balance_root()?;
-                                *state_root = contract.state_root()?;
-                            }
                             // TODO: Also calculate `tx_pointer` based on utxo's pointer.
                         }
                         _ => {}
@@ -999,28 +985,12 @@ where
                         }
                         Input::Contract {
                             utxo_id,
-                            balance_root,
-                            state_root,
                             contract_id,
                             ..
                         } => {
-                            let mut contract = ContractRef::new(&mut *db, *contract_id);
+                            let contract = ContractRef::new(&*db, *contract_id);
                             if utxo_id
                                 != &contract.validated_utxo(self.utxo_validation)?
-                            {
-                                return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx.id(),
-                                })
-                            }
-                            if self.utxo_validation
-                                && balance_root != &contract.balance_root()?
-                            {
-                                return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx.id(),
-                                })
-                            }
-                            if self.utxo_validation
-                                && state_root != &contract.state_root()?
                             {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx.id(),
@@ -1029,89 +999,6 @@ where
                             // TODO: Also check `tx_pointer` based on `utxo_id` pointer.
                         }
                         _ => {}
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
-    // TODO: Maybe we need move it to `fuel-vm`? O_o Because other `Outputs` are processed there
-    /// Computes all zeroed or variable outputs.
-    /// In production mode, updates the outputs with computed values.
-    /// In validation mode, compares the outputs with computed inputs.
-    fn compute_not_utxo_outputs<Tx>(
-        &self,
-        tx: ExecutionTypes<&mut Tx, &Tx>,
-        db: &mut Database,
-    ) -> ExecutorResult<()>
-    where
-        Tx: ExecutableTransaction,
-    {
-        if !self.utxo_validation {
-            return Ok(())
-        }
-
-        match tx {
-            ExecutionTypes::Production(tx) => {
-                // TODO: Inputs, in most cases, are heavier than outputs, so cloning them, but we
-                //  to avoid it in the future.
-                let mut outputs = tx.outputs().clone();
-                for output in outputs.iter_mut() {
-                    if let Output::Contract {
-                        ref mut balance_root,
-                        ref mut state_root,
-                        ref input_index,
-                    } = output
-                    {
-                        let contract_id =
-                            if let Some(Input::Contract { contract_id, .. }) =
-                                tx.inputs().get(*input_index as usize)
-                            {
-                                contract_id
-                            } else {
-                                return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx.id(),
-                                })
-                            };
-
-                        let mut contract = ContractRef::new(&mut *db, *contract_id);
-                        *balance_root = contract.balance_root()?;
-                        *state_root = contract.state_root()?;
-                    }
-                }
-                *tx.outputs_mut() = outputs;
-            }
-            ExecutionTypes::Validation(tx) => {
-                for output in tx.outputs() {
-                    if let Output::Contract {
-                        balance_root,
-                        state_root,
-                        input_index,
-                    } = output
-                    {
-                        let contract_id =
-                            if let Some(Input::Contract { contract_id, .. }) =
-                                tx.inputs().get(*input_index as usize)
-                            {
-                                contract_id
-                            } else {
-                                return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx.id(),
-                                })
-                            };
-
-                        let mut contract = ContractRef::new(&mut *db, *contract_id);
-                        if balance_root != &contract.balance_root()? {
-                            return Err(ExecutorError::InvalidTransactionOutcome {
-                                transaction_id: tx.id(),
-                            })
-                        }
-                        if state_root != &contract.state_root()? {
-                            return Err(ExecutorError::InvalidTransactionOutcome {
-                                transaction_id: tx.id(),
-                            })
-                        }
                     }
                 }
             }
@@ -2605,258 +2492,6 @@ mod tests {
             .unwrap();
         // spent coins should be removed
         assert!(coin.is_none());
-    }
-
-    #[test]
-    fn contracts_balance_and_state_roots_no_modifications_updated() {
-        // Values in inputs and outputs are random. If the execution of the transaction successful,
-        // it should actualize them to use a valid the balance and state roots. Because it is not
-        // changes, the balance the root should be default - `fuel_merkle::common::empty_sum_sha256()`.
-        let mut rng = StdRng::seed_from_u64(2322u64);
-
-        let (create, contract_id) = create_contract(vec![], &mut rng);
-        let non_modify_state_tx: Transaction = TxBuilder::new(2322)
-            .gas_limit(10000)
-            .coin_input(AssetId::zeroed(), 10000)
-            .start_script(vec![op::ret(1)], vec![])
-            .contract_input(contract_id)
-            .contract_output(&contract_id)
-            .build()
-            .transaction()
-            .clone()
-            .into();
-        let db = &mut Database::default();
-
-        let executor = Executor::test(
-            db.clone(),
-            Config {
-                utxo_validation: false,
-                ..Config::local_node()
-            },
-        );
-
-        let block = PartialFuelBlock {
-            header: PartialBlockHeader {
-                consensus: ConsensusHeader {
-                    height: 1u64.into(),
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            transactions: vec![create.into(), non_modify_state_tx],
-        };
-
-        let ExecutionResult {
-            block, tx_status, ..
-        } = executor
-            .execute_and_commit(ExecutionBlock::Production(block))
-            .unwrap();
-
-        // Assert the balance and state roots should be the same before and after execution.
-        let empty_state = Bytes32::from(*empty_sum_sha256());
-        let executed_tx = block.transactions()[2].as_script().unwrap();
-        assert!(matches!(
-            tx_status[2].result,
-            TransactionExecutionResult::Success { .. }
-        ));
-        assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
-        assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
-        assert_eq!(executed_tx.outputs()[0].state_root(), Some(&empty_state));
-        assert_eq!(executed_tx.outputs()[0].balance_root(), Some(&empty_state));
-
-        let expected_tx = block.transactions()[2].clone();
-        let storage_tx = executor
-            .database
-            .storage::<Transactions>()
-            .get(&executed_tx.id())
-            .unwrap()
-            .unwrap()
-            .into_owned();
-        assert_eq!(storage_tx, expected_tx);
-    }
-
-    #[test]
-    fn contracts_balance_and_state_roots_updated_no_modifications_on_fail() {
-        // Values in inputs and outputs are random. If the execution of the transaction fails,
-        // it still should actualize them to use the balance and state roots before the execution.
-        let mut rng = StdRng::seed_from_u64(2322u64);
-
-        let (create, contract_id) = create_contract(vec![], &mut rng);
-        // The transaction with invalid script.
-        let non_modify_state_tx: Transaction = TxBuilder::new(2322)
-            .start_script(vec![op::add(RegId::PC, RegId::PC, RegId::PC)], vec![])
-            .contract_input(contract_id)
-            .contract_output(&contract_id)
-            .build()
-            .transaction()
-            .clone()
-            .into();
-        let db = &mut Database::default();
-
-        let executor = Executor::test(
-            db.clone(),
-            Config {
-                utxo_validation: false,
-                ..Config::local_node()
-            },
-        );
-
-        let block = PartialFuelBlock {
-            header: PartialBlockHeader {
-                consensus: ConsensusHeader {
-                    height: 1u64.into(),
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            transactions: vec![create.into(), non_modify_state_tx],
-        };
-
-        let ExecutionResult {
-            block, tx_status, ..
-        } = executor
-            .execute_and_commit(ExecutionBlock::Production(block))
-            .unwrap();
-
-        // Assert the balance and state roots should be the same before and after execution.
-        let empty_state = Bytes32::from(*empty_sum_sha256());
-        let executed_tx = block.transactions()[2].as_script().unwrap();
-        assert!(matches!(
-            tx_status[2].result,
-            TransactionExecutionResult::Failed { .. }
-        ));
-        assert_eq!(
-            executed_tx.inputs()[0].state_root(),
-            executed_tx.outputs()[0].state_root()
-        );
-        assert_eq!(
-            executed_tx.inputs()[0].balance_root(),
-            executed_tx.outputs()[0].balance_root()
-        );
-        assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
-        assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
-
-        let expected_tx = block.transactions()[2].clone();
-        let storage_tx = executor
-            .database
-            .storage::<Transactions>()
-            .get(&expected_tx.id())
-            .unwrap()
-            .unwrap()
-            .into_owned();
-        assert_eq!(storage_tx, expected_tx);
-    }
-
-    #[test]
-    fn contracts_balance_and_state_roots_updated_modifications_updated() {
-        // Values in inputs and outputs are random. If the execution of the transaction that
-        // modifies the state and the balance is successful, it should update roots.
-        let mut rng = StdRng::seed_from_u64(2322u64);
-
-        // Create a contract that modifies the state
-        let (create, contract_id) = create_contract(
-            vec![
-                // Sets the state STATE[0x1; 32] = value of `RegId::PC`;
-                op::sww(0x1, 0x29, RegId::PC),
-                op::ret(1),
-            ]
-            .into_iter()
-            .collect::<Vec<u8>>(),
-            &mut rng,
-        );
-
-        let transfer_amount = 100 as Word;
-        let asset_id = AssetId::from([2; 32]);
-        let (script, data_offset) = script_with_data_offset!(
-            data_offset,
-            vec![
-                // Set register `0x10` to `Call`
-                op::movi(0x10, data_offset + AssetId::LEN as u32),
-                // Set register `0x11` with offset to data that contains `asset_id`
-                op::movi(0x11, data_offset),
-                // Set register `0x12` with `transfer_amount`
-                op::movi(0x12, transfer_amount as u32),
-                op::call(0x10, 0x12, 0x11, RegId::CGAS),
-                op::ret(RegId::ONE),
-            ],
-            ConsensusParameters::DEFAULT.tx_offset()
-        );
-
-        let script_data: Vec<u8> = [
-            asset_id.as_ref(),
-            Call::new(contract_id, transfer_amount, data_offset as Word)
-                .to_bytes()
-                .as_ref(),
-        ]
-        .into_iter()
-        .flatten()
-        .copied()
-        .collect();
-
-        let modify_balance_and_state_tx = TxBuilder::new(2322)
-            .gas_limit(10000)
-            .coin_input(AssetId::zeroed(), 10000)
-            .start_script(script, script_data)
-            .contract_input(contract_id)
-            .coin_input(asset_id, transfer_amount)
-            .contract_output(&contract_id)
-            .build()
-            .transaction()
-            .clone();
-        let db = &mut Database::default();
-
-        let executor = Executor::test(
-            db.clone(),
-            Config {
-                utxo_validation: false,
-                ..Config::local_node()
-            },
-        );
-
-        let block = PartialFuelBlock {
-            header: PartialBlockHeader {
-                consensus: ConsensusHeader {
-                    height: 1u64.into(),
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            transactions: vec![create.into(), modify_balance_and_state_tx.into()],
-        };
-
-        let ExecutionResult {
-            block, tx_status, ..
-        } = executor
-            .execute_and_commit(ExecutionBlock::Production(block))
-            .unwrap();
-
-        let empty_state = Bytes32::from(*empty_sum_sha256());
-        let executed_tx = block.transactions()[2].as_script().unwrap();
-        assert!(matches!(
-            tx_status[2].result,
-            TransactionExecutionResult::Success { .. }
-        ));
-        assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
-        assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
-        // Roots should be different
-        assert_ne!(
-            executed_tx.inputs()[0].state_root(),
-            executed_tx.outputs()[0].state_root()
-        );
-        assert_ne!(
-            executed_tx.inputs()[0].balance_root(),
-            executed_tx.outputs()[0].balance_root()
-        );
-
-        let expected_tx = block.transactions()[2].clone();
-        let storage_tx = executor
-            .database
-            .storage::<Transactions>()
-            .get(&expected_tx.id())
-            .unwrap()
-            .unwrap()
-            .into_owned();
-        assert_eq!(storage_tx, expected_tx);
     }
 
     #[test]
