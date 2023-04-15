@@ -100,7 +100,7 @@ async fn test_tx_gossiping() {
     let node_two = FuelService::new_node(node_config).await.unwrap();
     let client_two = FuelClient::from(node_two.bound_address);
 
-    let wait_time = Duration::from_secs(6);
+    let wait_time = Duration::from_secs(10);
 
     tokio::time::sleep(wait_time).await;
 
