@@ -961,7 +961,7 @@ where
                             ref contract_id,
                             ..
                         } => {
-                            let contract = ContractRef::new(&*db, *contract_id);
+                            let contract = ContractRef::new(db, *contract_id);
                             *utxo_id = contract.validated_utxo(self.utxo_validation)?;
                             // TODO: Also calculate `tx_pointer` based on utxo's pointer.
                         }
@@ -988,7 +988,7 @@ where
                             contract_id,
                             ..
                         } => {
-                            let contract = ContractRef::new(&*db, *contract_id);
+                            let contract = ContractRef::new(db, *contract_id);
                             if utxo_id
                                 != &contract.validated_utxo(self.utxo_validation)?
                             {
