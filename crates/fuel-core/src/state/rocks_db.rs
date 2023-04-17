@@ -90,7 +90,7 @@ impl RocksDb {
     }
 
     fn col_name(column: Column) -> String {
-        format!("column-{}", column as u32)
+        format!("column-{}", column.as_usize())
     }
 
     fn cf_opts(column: Column) -> Options {
@@ -253,16 +253,16 @@ impl KeyValueStore for RocksDb {
 impl BatchOperations for RocksDb {
     fn batch_write(
         &self,
-        entries: &mut dyn Iterator<Item = WriteOperation>,
+        entries: &mut dyn Iterator<Item = (Vec<u8>, Column, WriteOperation)>,
     ) -> DatabaseResult<()> {
         let mut batch = WriteBatch::default();
 
-        for entry in entries {
-            match entry {
-                WriteOperation::Insert(key, column, value) => {
+        for (key, column, op) in entries {
+            match op {
+                WriteOperation::Insert(value) => {
                     batch.put_cf(&self.cf(column), key, value);
                 }
-                WriteOperation::Remove(key, column) => {
+                WriteOperation::Remove => {
                     batch.delete_cf(&self.cf(column), key);
                 }
             }
@@ -355,10 +355,10 @@ mod tests {
         let value = vec![1, 2, 3];
 
         let (db, _tmp) = create_db();
-        let ops = vec![WriteOperation::Insert(
+        let ops = vec![(
             key.clone(),
             Column::Metadata,
-            value.clone(),
+            WriteOperation::Insert(value.clone()),
         )];
 
         db.batch_write(&mut ops.into_iter()).unwrap();
@@ -373,7 +373,7 @@ mod tests {
         let (db, _tmp) = create_db();
         db.put(&key, Column::Metadata, value).unwrap();
 
-        let ops = vec![WriteOperation::Remove(key.clone(), Column::Metadata)];
+        let ops = vec![(key.clone(), Column::Metadata, WriteOperation::Remove)];
         db.batch_write(&mut ops.into_iter()).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap(), None);

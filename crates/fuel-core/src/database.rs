@@ -45,6 +45,7 @@ type DatabaseResult<T> = Result<T>;
 use crate::state::rocks_db::RocksDb;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
+use strum::EnumCount;
 #[cfg(feature = "rocksdb")]
 use tempfile::TempDir;
 
@@ -76,50 +77,60 @@ pub mod vm_database;
 )]
 pub enum Column {
     /// The column id of metadata about the blockchain
-    Metadata = 0,
+    Metadata,
     /// See [`ContractsRawCode`](fuel_core_storage::tables::ContractsRawCode)
-    ContractsRawCode = 1,
+    ContractsRawCode,
     /// See [`ContractsInfo`](fuel_core_storage::tables::ContractsInfo)
-    ContractsInfo = 2,
+    ContractsInfo,
     /// See [`ContractsState`](fuel_core_storage::tables::ContractsState)
-    ContractsState = 3,
+    ContractsState,
     /// See [`ContractsLatestUtxo`](fuel_core_storage::tables::ContractsLatestUtxo)
-    ContractsLatestUtxo = 4,
+    ContractsLatestUtxo,
     /// See [`ContractsAssets`](fuel_core_storage::tables::ContractsAssets)
-    ContractsAssets = 5,
+    ContractsAssets,
     /// See [`Coins`](fuel_core_storage::tables::Coins)
-    Coins = 6,
+    Coins,
     /// The column of the table that stores `true` if `owner` owns `Coin` with `coin_id`
-    OwnedCoins = 7,
+    OwnedCoins,
     /// See [`Transactions`](fuel_core_storage::tables::Transactions)
-    Transactions = 8,
+    Transactions,
     /// Transaction id to current status
-    TransactionStatus = 9,
+    TransactionStatus,
     /// The column of the table of all `owner`'s transactions
-    TransactionsByOwnerBlockIdx = 10,
+    TransactionsByOwnerBlockIdx,
     /// See [`Receipts`](fuel_core_storage::tables::Receipts)
-    Receipts = 11,
+    Receipts,
     /// See [`FuelBlocks`](fuel_core_storage::tables::FuelBlocks)
-    FuelBlocks = 12,
+    FuelBlocks,
     /// See [`FuelBlockSecondaryKeyBlockHeights`](storage::FuelBlockSecondaryKeyBlockHeights)
-    FuelBlockSecondaryKeyBlockHeights = 13,
+    FuelBlockSecondaryKeyBlockHeights,
     /// See [`Messages`](fuel_core_storage::tables::Messages)
-    Messages = 14,
+    Messages,
     /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
-    OwnedMessageIds = 15,
+    OwnedMessageIds,
     /// See [`SealedBlockConsensus`](fuel_core_storage::tables::SealedBlockConsensus)
-    FuelBlockConsensus = 16,
+    FuelBlockConsensus,
     /// See [`FuelBlockMerkleData`](storage::FuelBlockMerkleData)
-    FuelBlockMerkleData = 17,
+    FuelBlockMerkleData,
     /// See [`FuelBlockMerkleMetadata`](storage::FuelBlockMerkleMetadata)
-    FuelBlockMerkleMetadata = 18,
+    FuelBlockMerkleMetadata,
     /// Messages that have been spent.
     /// Existence of a key in this column means that the message has been spent.
     /// See [`SpentMessages`](fuel_core_storage::tables::SpentMessages)
-    SpentMessages = 19,
+    SpentMessages,
     /// Metadata for the relayer
     /// See [`RelayerMetadata`](fuel_core_relayer::ports::RelayerMetadata)
-    RelayerMetadata = 20,
+    RelayerMetadata,
+}
+
+impl Column {
+    /// The total count of variants in the enum.
+    pub const COUNT: usize = <Self as EnumCount>::COUNT;
+
+    /// Returns the `usize` representation of the `Column`.
+    pub fn as_usize(&self) -> usize {
+        *self as usize
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -368,5 +379,13 @@ impl ChainConfigDb for Database {
 
     fn get_block_height(&self) -> StorageResult<BlockHeight> {
         Self::latest_height(self)
+    }
+}
+
+#[test]
+fn column_keys_monotonically_increases() {
+    use enum_iterator::all;
+    for (i, column) in all::<Column>().enumerate() {
+        assert_eq!(column.as_usize(), i);
     }
 }

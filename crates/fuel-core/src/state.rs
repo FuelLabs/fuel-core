@@ -12,7 +12,6 @@ use std::{
 };
 
 pub type DataSource = Arc<dyn TransactableStorage>;
-pub type ColumnId = u32;
 pub type KVItem = DatabaseResult<(Vec<u8>, Vec<u8>)>;
 
 pub trait KeyValueStore {
@@ -49,15 +48,15 @@ impl Default for IterDirection {
 pub trait BatchOperations: KeyValueStore {
     fn batch_write(
         &self,
-        entries: &mut dyn Iterator<Item = WriteOperation>,
+        entries: &mut dyn Iterator<Item = (Vec<u8>, Column, WriteOperation)>,
     ) -> DatabaseResult<()> {
-        for entry in entries {
-            match entry {
+        for (key, column, op) in entries {
+            match op {
                 // TODO: error handling
-                WriteOperation::Insert(key, column, value) => {
+                WriteOperation::Insert(value) => {
                     let _ = self.put(&key, column, value);
                 }
-                WriteOperation::Remove(key, column) => {
+                WriteOperation::Remove => {
                     let _ = self.delete(&key, column);
                 }
             }
@@ -68,8 +67,8 @@ pub trait BatchOperations: KeyValueStore {
 
 #[derive(Debug)]
 pub enum WriteOperation {
-    Insert(Vec<u8>, Column, Vec<u8>),
-    Remove(Vec<u8>, Column),
+    Insert(Vec<u8>),
+    Remove,
 }
 
 pub trait Transaction {

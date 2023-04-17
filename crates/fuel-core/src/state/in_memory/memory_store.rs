@@ -4,12 +4,7 @@ use crate::{
         Result as DatabaseResult,
     },
     state::{
-        in_memory::{
-            column_key,
-            is_column,
-        },
         BatchOperations,
-        ColumnId,
         IterDirection,
         KVItem,
         KeyValueStore,
@@ -24,15 +19,14 @@ use itertools::Itertools;
 use std::{
     collections::HashMap,
     fmt::Debug,
-    mem::size_of,
     sync::Mutex,
 };
 
 #[derive(Default, Debug)]
 pub struct MemoryStore {
-    // TODO: Remove `Mutex` and usage of the `column_key`.
+    // TODO: Remove `Mutex`.
     // TODO: Use `BTreeMap`.
-    inner: Mutex<HashMap<Vec<u8>, Vec<u8>>>,
+    inner: [Mutex<HashMap<Vec<u8>, Vec<u8>>>; Column::COUNT],
 }
 
 impl MemoryStore {
@@ -43,14 +37,12 @@ impl MemoryStore {
         start: Option<&[u8]>,
         direction: IterDirection,
     ) -> impl Iterator<Item = KVItem> {
-        let lock = self.inner.lock().expect("poisoned");
+        let lock = self.inner[column.as_usize()].lock().expect("poisoned");
 
         // clone entire set so we can drop the lock
         let iter = lock
             .iter()
-            .filter(|(key, _)| is_column(key, column))
-            // strip column
-            .map(|(key, value)| (key[size_of::<ColumnId>()..].to_vec(), value.clone()))
+            .map(|(key, value)| (key.clone(), value.clone()))
             // filter prefix
             .filter(|(key, _)| {
                 if let Some(prefix) = prefix {
@@ -85,11 +77,10 @@ impl MemoryStore {
 
 impl KeyValueStore for MemoryStore {
     fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
-        Ok(self
-            .inner
+        Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
-            .get(&column_key(key, column))
+            .get(&key.to_vec())
             .cloned())
     }
 
@@ -99,27 +90,24 @@ impl KeyValueStore for MemoryStore {
         column: Column,
         value: Vec<u8>,
     ) -> DatabaseResult<Option<Vec<u8>>> {
-        Ok(self
-            .inner
+        Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
-            .insert(column_key(key, column), value))
+            .insert(key.to_vec(), value))
     }
 
     fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
-        Ok(self
-            .inner
+        Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
-            .remove(&column_key(key, column)))
+            .remove(&key.to_vec()))
     }
 
     fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
-        Ok(self
-            .inner
+        Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
-            .contains_key(&column_key(key, column)))
+            .contains_key(&key.to_vec()))
     }
 
     fn iter_all(
@@ -146,7 +134,7 @@ mod tests {
         let key = vec![0x00];
 
         let db = MemoryStore::default();
-        db.put(&key, Column::Metadata, vec![]).unwrap();
+        db.put(&key.to_vec(), Column::Metadata, vec![]).unwrap();
 
         assert_eq!(
             db.get(&key, Column::Metadata).unwrap().unwrap(),
