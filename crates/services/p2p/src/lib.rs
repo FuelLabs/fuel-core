@@ -6,6 +6,7 @@ mod gossipsub;
 mod heartbeat;
 mod p2p_service;
 mod peer_manager;
+mod peer_report;
 pub mod ports;
 mod request_response;
 pub mod service;

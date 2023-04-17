@@ -7,6 +7,10 @@ use fuel_core_e2e_client::config::SuiteConfig;
 use std::fs;
 use tempfile::TempDir; // Used for writing assertions // Run programs
 
+// Use Jemalloc
+#[global_allocator]
+static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
 #[tokio::test(flavor = "multi_thread")]
 async fn works_in_local_env() {
     // setup a local node
