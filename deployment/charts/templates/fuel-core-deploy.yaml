@@ -14,6 +14,7 @@ spec:
     port: http
 {{- end }}
 ---
+{{- if .Values.app.volume.pvc_clone_enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -28,6 +29,26 @@ spec:
     requests:
       storage: {{ .Values.app.volume.storagerequests }}
   storageClassName: {{ .Values.app.volume.storageclass }}
+  dataSource:
+    name: {{ .Values.app.volume.pvc_clone_snapshot_id }}
+    kind: VolumeSnapshot
+    apiGroup: snapshot.storage.k8s.io
+{{ else }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.app.volume.claimname }}
+  labels:
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  accessModes:
+    - {{ .Values.app.volume.accessmodes }}
+  resources:
+    requests:
+      storage: {{ .Values.app.volume.storagerequests }}
+  storageClassName: {{ .Values.app.volume.storageclass }}
+{{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap
