@@ -37,6 +37,11 @@ use fuel_core::{
         },
     },
 };
+use pyroscope::PyroscopeAgent;
+use pyroscope_pprofrs::{
+    pprof_backend,
+    PprofConfig,
+};
 use std::{
     env,
     net,
@@ -56,6 +61,7 @@ pub const CONSENSUS_KEY_ENV: &str = "CONSENSUS_KEY_SECRET";
 mod p2p;
 
 mod consensus;
+mod profiling;
 #[cfg(feature = "relayer")]
 mod relayer;
 
@@ -161,6 +167,9 @@ pub struct Command {
 
     #[clap(long = "honeycomb-api-key", env)]
     pub honeycomb_key: Option<String>,
+
+    #[clap(flatten)]
+    pub profiling: profiling::ProfilingArgs,
 }
 
 impl Command {
@@ -191,6 +200,7 @@ impl Command {
             max_wait_time,
             tx_pool_ttl,
             honeycomb_key,
+            profiling: _,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -285,6 +295,7 @@ impl Command {
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
+    let profiling = command.profiling.clone();
     let config = command.get_config()?;
     let network_name = {
         #[cfg(feature = "p2p")]
@@ -300,10 +311,32 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     };
     init_logging(
         config.name.clone(),
-        network_name,
+        network_name.clone(),
         config.honeycomb_api_key.clone(),
     )
     .await?;
+
+    // start profiling agent if url is configured
+    let _profiling_agent = profiling
+        .pyroscope_url
+        .as_ref()
+        .map(|url| -> anyhow::Result<_> {
+            // Configure profiling backend
+            let agent = PyroscopeAgent::builder(url, &"fuel-core".to_string())
+                .tags(vec![
+                    ("service", config.name.as_str()),
+                    ("network", network_name.as_str()),
+                ])
+                .backend(pprof_backend(
+                    PprofConfig::new().sample_rate(profiling.pprof_sample_rate),
+                ))
+                .build()
+                .context("failed to start profiler")?;
+            let agent_running = agent.start().unwrap();
+            Ok(agent_running)
+        })
+        .transpose()?;
+
     // log fuel-core version
     info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
     trace!("Initializing in TRACE mode.");

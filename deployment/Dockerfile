@@ -19,6 +19,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef as builder
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+ENV CARGO_PROFILE_RELEASE_DEBUG=true
 COPY --from=planner /build/recipe.json recipe.json
 # Build our project dependecies, not our application!
 RUN cargo chef cook --release --no-default-features --features "production" -p fuel-core-bin --recipe-path recipe.json
