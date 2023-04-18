@@ -12,6 +12,7 @@ version = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
+array-init = "2"
 async-graphql = { version = "4.0", features = [
     "tracing",
 ], default-features = false }
@@ -41,6 +42,7 @@ futures = { workspace = true }
 hex = { version = "0.4", features = ["serde"] }
 hyper = { version = "0.14" }
 itertools = { workspace = true }
+moka = "0.10"
 num_cpus = "1.13"
 postcard = { workspace = true, features = ["use-std"] }
 primitive-types = "0.12"

@@ -72,6 +72,10 @@ pub struct Command {
     #[clap(long = "service-name", default_value = "fuel-core", value_parser, env)]
     pub service_name: String,
 
+    /// The maximum number of cached entries per each column.
+    #[arg(long = "max-database-capacity", default_value = "10000", env)]
+    pub max_database_capacity: u64,
+
     #[clap(
         name = "DB_PATH",
         long = "db-path",
@@ -169,6 +173,7 @@ impl Command {
             ip,
             port,
             service_name: name,
+            max_database_capacity,
             database_path,
             database_type,
             chain_config,
@@ -247,6 +252,7 @@ impl Command {
 
         Ok(Config {
             addr,
+            max_database_capacity,
             database_path,
             database_type,
             chain_conf: chain_conf.clone(),

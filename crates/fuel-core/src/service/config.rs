@@ -32,6 +32,7 @@ pub use fuel_core_poa::Trigger;
 #[derive(Clone, Debug)]
 pub struct Config {
     pub addr: SocketAddr,
+    pub max_database_capacity: u64,
     pub database_path: PathBuf,
     pub database_type: DbType,
     pub chain_conf: ChainConfig,
@@ -63,6 +64,7 @@ impl Config {
         let min_gas_price = 0;
         Self {
             addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
+            max_database_capacity: 100,
             database_path: Default::default(),
             #[cfg(feature = "rocksdb")]
             database_type: DbType::RocksDb,

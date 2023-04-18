@@ -86,6 +86,7 @@ pub enum TransactionError {
     Aborted,
 }
 
+pub mod caching;
 pub mod in_memory;
 #[cfg(feature = "rocksdb")]
 pub mod rocks_db;
