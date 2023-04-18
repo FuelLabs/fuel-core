@@ -36,6 +36,13 @@ use fuel_core::{
         },
     },
 };
+#[cfg(feature = "profiling")]
+use pyroscope::PyroscopeAgent;
+#[cfg(feature = "profiling")]
+use pyroscope_pprofrs::{
+    pprof_backend,
+    PprofConfig,
+};
 use std::{
     env,
     net,
@@ -57,6 +64,7 @@ const DEFAULT_DATABASE_CACHE_SIZE: usize = 1024 * 1024 * 1024;
 mod p2p;
 
 mod consensus;
+mod profiling;
 #[cfg(feature = "relayer")]
 mod relayer;
 
@@ -193,6 +201,9 @@ pub struct Command {
     /// Time to wait after submitting a query before debug info will be logged about query.
     #[clap(long = "query-log-threshold-time", default_value = "2s", env)]
     pub query_log_threshold_time: humantime::Duration,
+
+    #[clap(flatten)]
+    pub profiling: profiling::ProfilingArgs,
 }
 
 impl Command {
@@ -229,6 +240,7 @@ impl Command {
             min_connected_reserved_peers,
             time_until_synced,
             query_log_threshold_time,
+            profiling: _,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -332,20 +344,48 @@ impl Command {
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
-    let config = command.get_config()?;
     let network_name = {
         #[cfg(feature = "p2p")]
         {
-            config
-                .p2p
-                .as_ref()
-                .map(|config| config.network_name.clone())
+            command
+                .p2p_args
+                .network
+                .clone()
                 .unwrap_or_else(|| "default_network".to_string())
         }
         #[cfg(not(feature = "p2p"))]
         "default_network"
     }
     .to_string();
+        "default_network".to_string()
+    };
+
+    #[cfg(feature = "profiling")]
+    let profiling = command.profiling.clone();
+    let config = command.get_config()?;
+
+    // start profiling agent if url is configured
+    #[cfg(feature = "profiling")]
+    let _profiling_agent = profiling
+        .pyroscope_url
+        .as_ref()
+        .map(|url| -> anyhow::Result<_> {
+            // Configure profiling backend
+            let agent = PyroscopeAgent::builder(url, &"fuel-core".to_string())
+                .tags(vec![
+                    ("service", config.name.as_str()),
+                    ("network", network_name.as_str()),
+                ])
+                .backend(pprof_backend(
+                    PprofConfig::new().sample_rate(profiling.pprof_sample_rate),
+                ))
+                .build()
+                .context("failed to start profiler")?;
+            let agent_running = agent.start().unwrap();
+            Ok(agent_running)
+        })
+        .transpose()?;
+
     // log fuel-core version
     info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
     trace!("Initializing in TRACE mode.");
