@@ -9,8 +9,8 @@ status() {
     printf "\e[32m\e[1m%${WIDTH}s\e[0m %s\n" "$1" "$2"
 }
 
-grep "openssl-sys" Cargo.lock &> /dev/null
-test $? -ne 0
+cargo tree -p fuel-core-bin --invert openssl-sys 2>&1 | grep -i "did not match any packages" &> /dev/null
+test $? -ne 1
 openssl=$?
 
 if [ $openssl != 0 ]; then

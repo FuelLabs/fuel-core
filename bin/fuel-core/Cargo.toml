@@ -23,6 +23,8 @@ fuel-core = { workspace = true }
 humantime = "2.1"
 lazy_static = { workspace = true }
 libhoney-rust = { version = "0.1.6" }
+pyroscope = { version = "0.5.3", optional = true }
+pyroscope_pprofrs = { version = "0.2.3", optional = true }
 serde_json = { workspace = true, features = ["raw_value"], optional = true }
 tikv-jemallocator = "0.5"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
@@ -46,5 +48,6 @@ p2p = ["fuel-core/p2p"]
 relayer = ["fuel-core/relayer", "dep:url", "dep:serde_json"]
 rocksdb = ["fuel-core/rocksdb"]
 rocksdb-production = ["fuel-core/rocksdb-production"]
+profiling = ["dep:pyroscope", "dep:pyroscope_pprofrs"]
 # features to enable in production, but increase build times
-production = ["metrics", "relayer", "rocksdb-production", "p2p"]
+production = ["metrics", "relayer", "rocksdb-production", "p2p", "profiling"]
