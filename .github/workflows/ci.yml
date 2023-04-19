@@ -207,8 +207,6 @@ jobs:
           slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
   publish-docker-image:
-    needs:
-      - verifications-complete
     runs-on: buildjet-4vcpu-ubuntu-2204
     permissions:
       contents: read
