@@ -41,10 +41,15 @@ use fuel_core_types::{
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::p2p::{
+        peer_reputation::{
+            AppScore,
+            PeerReport,
+        },
         BlockHeightHeartbeatData,
         GossipData,
         GossipsubMessageAcceptance,
         GossipsubMessageInfo,
+        PeerId as FuelPeerId,
         TransactionGossipData,
     },
 };
@@ -62,11 +67,7 @@ use tokio::sync::{
     mpsc,
     oneshot,
 };
-use tracing::{
-    debug,
-    error,
-    warn,
-};
+use tracing::warn;
 
 pub type Service<D> = ServiceRunner<Task<D>>;
 
@@ -92,6 +93,11 @@ enum TaskRequest {
     },
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
+    RespondWithPeerReport {
+        peer_id: PeerId,
+        score: AppScore,
+        reporting_service: &'static str,
+    },
 }
 
 impl Debug for TaskRequest {
@@ -219,6 +225,9 @@ where
                     }
                     Some(TaskRequest::RespondWithGossipsubMessageReport((message, acceptance))) => {
                         report_message(&mut self.p2p_service, message, acceptance);
+                    }
+                    Some(TaskRequest::RespondWithPeerReport { peer_id, score, reporting_service }) => {
+                        self.p2p_service.report_peer(peer_id, score, reporting_service)
                     }
                     None => {
                         unreachable!("The `Task` is holder of the `Sender`, so it should not be possible");
@@ -425,6 +434,32 @@ impl SharedState {
     ) -> broadcast::Receiver<BlockHeightHeartbeatData> {
         self.block_height_broadcast.subscribe()
     }
+
+    pub fn report_peer<T: PeerReport>(
+        &self,
+        peer_id: FuelPeerId,
+        peer_report: T,
+        reporting_service: &'static str,
+    ) -> anyhow::Result<()> {
+        match Vec::from(peer_id).try_into() {
+            Ok(peer_id) => {
+                let score = peer_report.get_score_from_report();
+
+                self.request_sender
+                    .try_send(TaskRequest::RespondWithPeerReport {
+                        peer_id,
+                        score,
+                        reporting_service,
+                    })?;
+
+                Ok(())
+            }
+            Err(e) => {
+                warn!(target: "fuel-p2p", "Failed to read PeerId from {e:?}");
+                Err(anyhow::anyhow!("Failed to read PeerId from {e:?}"))
+            }
+        }
+    }
 }
 
 pub fn new_service<D, B>(p2p_config: Config, db: D, block_importer: B) -> Service<D>
@@ -464,21 +499,9 @@ fn report_message<T: NetworkCodec>(
 
     if let Ok(peer_id) = peer_id.try_into() {
         let acceptance = to_message_acceptance(&acceptance);
-
-        match p2p_service.report_message_validation_result(&msg_id, &peer_id, acceptance)
-        {
-            Ok(true) => {
-                debug!(target: "fuel-libp2p", "Sent a report for MessageId: {} from PeerId: {}", msg_id, peer_id);
-            }
-            Ok(false) => {
-                warn!(target: "fuel-libp2p", "Message with MessageId: {} not found in the Gossipsub Message Cache", msg_id);
-            }
-            Err(e) => {
-                error!(target: "fuel-libp2p", "Failed to publish Message with MessageId: {} with Error: {:?}", msg_id, e);
-            }
-        }
+        p2p_service.report_message_validation_result(&msg_id, peer_id, acceptance);
     } else {
-        warn!(target: "fuel-libp2p", "Failed to read PeerId from received GossipsubMessageId: {}", msg_id);
+        warn!(target: "fuel-p2p", "Failed to read PeerId from received GossipsubMessageId: {}", msg_id);
     }
 }
 
