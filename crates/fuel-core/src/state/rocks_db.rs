@@ -10,6 +10,7 @@ use crate::{
         KVItem,
         KeyValueStore,
         TransactableStorage,
+        Value,
         WriteOperation,
     },
 };
@@ -133,7 +134,7 @@ impl RocksDb {
                             .bytes_read
                             .observe((key_as_vec.len() + value_as_vec.len()) as f64);
                     }
-                    (key_as_vec, value_as_vec)
+                    (key_as_vec, Arc::new(value_as_vec))
                 })
                 .map_err(|e| DatabaseError::Other(e.into()))
             })
@@ -141,7 +142,7 @@ impl RocksDb {
 }
 
 impl KeyValueStore for RocksDb {
-    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
+    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
         #[cfg(feature = "metrics")]
         DATABASE_METRICS.read_meter.inc();
         let value = self
@@ -154,15 +155,15 @@ impl KeyValueStore for RocksDb {
                 DATABASE_METRICS.bytes_read.observe(value.len() as f64);
             }
         }
-        value
+        value.map(|value| value.map(Arc::new))
     }
 
     fn put(
         &self,
         key: &[u8],
         column: Column,
-        value: Vec<u8>,
-    ) -> DatabaseResult<Option<Vec<u8>>> {
+        value: Value,
+    ) -> DatabaseResult<Option<Value>> {
         #[cfg(feature = "metrics")]
         {
             DATABASE_METRICS.write_meter.inc();
@@ -170,12 +171,12 @@ impl KeyValueStore for RocksDb {
         }
         let prev = self.get(key, column)?;
         self.db
-            .put_cf(&self.cf(column), key, value)
+            .put_cf(&self.cf(column), key, value.as_ref())
             .map_err(|e| DatabaseError::Other(e.into()))
             .map(|_| prev)
     }
 
-    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
+    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
         let prev = self.get(key, column)?;
         self.db
             .delete_cf(&self.cf(column), key)
@@ -260,7 +261,7 @@ impl BatchOperations for RocksDb {
         for (key, column, op) in entries {
             match op {
                 WriteOperation::Insert(value) => {
-                    batch.put_cf(&self.cf(column), key, value);
+                    batch.put_cf(&self.cf(column), key, value.as_ref());
                 }
                 WriteOperation::Remove => {
                     batch.delete_cf(&self.cf(column), key);
@@ -306,12 +307,10 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
 
         let (db, _tmp) = create_db();
-        db.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+        let expected = Arc::new(vec![1, 2, 3]);
+        db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
-        assert_eq!(
-            db.get(&key, Column::Metadata).unwrap().unwrap(),
-            vec![1, 2, 3]
-        )
+        assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected)
     }
 
     #[test]
@@ -319,10 +318,13 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
 
         let (db, _tmp) = create_db();
-        db.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
-        let prev = db.put(&key, Column::Metadata, vec![2, 4, 6]).unwrap();
+        let expected = Arc::new(vec![1, 2, 3]);
+        db.put(&key, Column::Metadata, expected.clone()).unwrap();
+        let prev = db
+            .put(&key, Column::Metadata, Arc::new(vec![2, 4, 6]))
+            .unwrap();
 
-        assert_eq!(prev, Some(vec![1, 2, 3]));
+        assert_eq!(prev, Some(expected));
     }
 
     #[test]
@@ -330,11 +332,9 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
 
         let (db, _tmp) = create_db();
-        db.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
-        assert_eq!(
-            db.get(&key, Column::Metadata).unwrap().unwrap(),
-            vec![1, 2, 3]
-        );
+        let expected = Arc::new(vec![1, 2, 3]);
+        db.put(&key, Column::Metadata, expected.clone()).unwrap();
+        assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         db.delete(&key, Column::Metadata).unwrap();
         assert_eq!(db.get(&key, Column::Metadata).unwrap(), None);
@@ -345,14 +345,15 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
 
         let (db, _tmp) = create_db();
-        db.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+        let expected = Arc::new(vec![1, 2, 3]);
+        db.put(&key, Column::Metadata, expected).unwrap();
         assert!(db.exists(&key, Column::Metadata).unwrap());
     }
 
     #[test]
     fn batch_write_inserts() {
         let key = vec![0xA, 0xB, 0xC];
-        let value = vec![1, 2, 3];
+        let value = Arc::new(vec![1, 2, 3]);
 
         let (db, _tmp) = create_db();
         let ops = vec![(
@@ -368,7 +369,7 @@ mod tests {
     #[test]
     fn batch_write_removes() {
         let key = vec![0xA, 0xB, 0xC];
-        let value = vec![1, 2, 3];
+        let value = Arc::new(vec![1, 2, 3]);
 
         let (db, _tmp) = create_db();
         db.put(&key, Column::Metadata, value).unwrap();
@@ -384,12 +385,10 @@ mod tests {
         let key = vec![0x00];
 
         let (db, _tmp) = create_db();
-        db.put(&key, Column::Metadata, vec![]).unwrap();
+        let expected = Arc::new(vec![]);
+        db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
-        assert_eq!(
-            db.get(&key, Column::Metadata).unwrap().unwrap(),
-            Vec::<u8>::with_capacity(0)
-        );
+        assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
@@ -397,12 +396,12 @@ mod tests {
             db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()[0],
-            (key.clone(), Vec::<u8>::with_capacity(0))
+            (key.clone(), expected.clone())
         );
 
         assert_eq!(
             db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            Vec::<u8>::with_capacity(0)
+            expected
         );
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
@@ -413,12 +412,10 @@ mod tests {
         let key: Vec<u8> = Vec::with_capacity(0);
 
         let (db, _tmp) = create_db();
-        db.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+        let expected = Arc::new(vec![1, 2, 3]);
+        db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
-        assert_eq!(
-            db.get(&key, Column::Metadata).unwrap().unwrap(),
-            vec![1, 2, 3]
-        );
+        assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
@@ -426,12 +423,12 @@ mod tests {
             db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()[0],
-            (key.clone(), vec![1, 2, 3])
+            (key.clone(), expected.clone())
         );
 
         assert_eq!(
             db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            vec![1, 2, 3]
+            expected
         );
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
@@ -442,12 +439,10 @@ mod tests {
         let key: Vec<u8> = Vec::with_capacity(0);
 
         let (db, _tmp) = create_db();
-        db.put(&key, Column::Metadata, vec![]).unwrap();
+        let expected = Arc::new(vec![]);
+        db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
-        assert_eq!(
-            db.get(&key, Column::Metadata).unwrap().unwrap(),
-            Vec::<u8>::with_capacity(0)
-        );
+        assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
@@ -455,12 +450,12 @@ mod tests {
             db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()[0],
-            (key.clone(), Vec::<u8>::with_capacity(0))
+            (key.clone(), expected.clone())
         );
 
         assert_eq!(
             db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            Vec::<u8>::with_capacity(0)
+            expected
         );
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());

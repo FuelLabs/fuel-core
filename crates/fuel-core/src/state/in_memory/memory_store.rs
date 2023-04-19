@@ -9,6 +9,7 @@ use crate::{
         KVItem,
         KeyValueStore,
         TransactableStorage,
+        Value,
     },
 };
 use fuel_core_storage::iter::{
@@ -26,7 +27,7 @@ use std::{
 pub struct MemoryStore {
     // TODO: Remove `Mutex`.
     // TODO: Use `BTreeMap`.
-    inner: [Mutex<HashMap<Vec<u8>, Vec<u8>>>; Column::COUNT],
+    inner: [Mutex<HashMap<Vec<u8>, Value>>; Column::COUNT],
 }
 
 impl MemoryStore {
@@ -53,7 +54,7 @@ impl MemoryStore {
             })
             .sorted();
 
-        let until_start_reached = |(key, _): &(Vec<u8>, Vec<u8>)| {
+        let until_start_reached = |(key, _): &(Vec<u8>, Value)| {
             if let Some(start) = start {
                 match direction {
                     IterDirection::Forward => key.as_slice() < start,
@@ -76,7 +77,7 @@ impl MemoryStore {
 }
 
 impl KeyValueStore for MemoryStore {
-    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
+    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
         Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
@@ -88,15 +89,15 @@ impl KeyValueStore for MemoryStore {
         &self,
         key: &[u8],
         column: Column,
-        value: Vec<u8>,
-    ) -> DatabaseResult<Option<Vec<u8>>> {
+        value: Value,
+    ) -> DatabaseResult<Option<Value>> {
         Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
             .insert(key.to_vec(), value))
     }
 
-    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
+    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
         Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
@@ -128,18 +129,18 @@ impl TransactableStorage for MemoryStore {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
     #[test]
     fn can_use_unit_value() {
         let key = vec![0x00];
 
         let db = MemoryStore::default();
-        db.put(&key.to_vec(), Column::Metadata, vec![]).unwrap();
+        let expected = Arc::new(vec![]);
+        db.put(&key.to_vec(), Column::Metadata, expected.clone())
+            .unwrap();
 
-        assert_eq!(
-            db.get(&key, Column::Metadata).unwrap().unwrap(),
-            Vec::<u8>::with_capacity(0)
-        );
+        assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
@@ -147,12 +148,12 @@ mod tests {
             db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap(),
-            vec![(key.clone(), Vec::<u8>::with_capacity(0))]
+            vec![(key.clone(), expected.clone())]
         );
 
         assert_eq!(
             db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            Vec::<u8>::with_capacity(0)
+            expected
         );
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
@@ -163,12 +164,10 @@ mod tests {
         let key: Vec<u8> = Vec::with_capacity(0);
 
         let db = MemoryStore::default();
-        db.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+        let expected = Arc::new(vec![1, 2, 3]);
+        db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
-        assert_eq!(
-            db.get(&key, Column::Metadata).unwrap().unwrap(),
-            vec![1, 2, 3]
-        );
+        assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
@@ -176,12 +175,12 @@ mod tests {
             db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap(),
-            vec![(key.clone(), vec![1, 2, 3])]
+            vec![(key.clone(), expected.clone())]
         );
 
         assert_eq!(
             db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            vec![1, 2, 3]
+            expected
         );
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
@@ -192,12 +191,10 @@ mod tests {
         let key: Vec<u8> = Vec::with_capacity(0);
 
         let db = MemoryStore::default();
-        db.put(&key, Column::Metadata, vec![]).unwrap();
+        let expected = Arc::new(vec![]);
+        db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
-        assert_eq!(
-            db.get(&key, Column::Metadata).unwrap().unwrap(),
-            Vec::<u8>::with_capacity(0)
-        );
+        assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
@@ -205,12 +202,12 @@ mod tests {
             db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap(),
-            vec![(key.clone(), Vec::<u8>::with_capacity(0))]
+            vec![(key.clone(), expected.clone())]
         );
 
         assert_eq!(
             db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            Vec::<u8>::with_capacity(0)
+            expected
         );
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());

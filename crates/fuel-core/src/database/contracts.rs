@@ -16,19 +16,114 @@ use fuel_core_storage::{
         ContractsRawCode,
     },
     ContractsAssetKey,
+    Error as StorageError,
+    Mappable,
     Result as StorageResult,
     StorageAsRef,
+    StorageInspect,
+    StorageMutate,
 };
-use fuel_core_types::fuel_types::{
-    AssetId,
-    Bytes32,
-    ContractId,
-    Word,
+use fuel_core_types::{
+    fuel_tx::Contract,
+    fuel_types::{
+        AssetId,
+        Bytes32,
+        ContractId,
+        Word,
+    },
 };
+use serde::Deserializer;
+use std::borrow::Cow;
 
-impl DatabaseColumn for ContractsRawCode {
-    fn column() -> Column {
-        Column::ContractsRawCode
+struct OptimizedContract {
+    bytes: Vec<u8>,
+}
+
+impl From<OptimizedContract> for Contract {
+    fn from(value: OptimizedContract) -> Self {
+        value.bytes.into()
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for OptimizedContract {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct BytesVisitor;
+
+        impl<'a> serde::de::Visitor<'a> for BytesVisitor {
+            type Value = Vec<u8>;
+
+            fn expecting(
+                &self,
+                formatter: &mut core::fmt::Formatter,
+            ) -> core::fmt::Result {
+                formatter.write_str("a borrowed byte array")
+            }
+
+            fn visit_borrowed_bytes<E>(self, v: &'a [u8]) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(v.to_vec())
+            }
+        }
+
+        let bytes = deserializer.deserialize_bytes(BytesVisitor {})?;
+        Ok(Self { bytes })
+    }
+}
+
+impl StorageInspect<ContractsRawCode> for Database {
+    type Error = StorageError;
+
+    fn get(
+        &self,
+        key: &<ContractsRawCode as Mappable>::Key,
+    ) -> Result<Option<Cow<<ContractsRawCode as Mappable>::OwnedValue>>, Self::Error>
+    {
+        self.get::<OptimizedContract>(key.as_ref(), Column::ContractsRawCode)
+            .map(|option| option.map(|contract| Cow::Owned(Contract::from(contract))))
+            .map_err(Into::into)
+    }
+
+    fn contains_key(
+        &self,
+        key: &<ContractsRawCode as Mappable>::Key,
+    ) -> Result<bool, Self::Error> {
+        self.contains_key(key.as_ref(), Column::ContractsRawCode)
+            .map_err(Into::into)
+    }
+}
+
+impl StorageMutate<ContractsRawCode> for Database {
+    fn insert(
+        &mut self,
+        key: &<ContractsRawCode as Mappable>::Key,
+        value: &<ContractsRawCode as Mappable>::Value,
+    ) -> Result<Option<<ContractsRawCode as Mappable>::OwnedValue>, Self::Error> {
+        Database::insert::<_, _, OptimizedContract>(
+            self,
+            key.as_ref(),
+            Column::ContractsRawCode,
+            &value,
+        )
+        .map(|option| option.map(Into::into))
+        .map_err(Into::into)
+    }
+
+    fn remove(
+        &mut self,
+        key: &<ContractsRawCode as Mappable>::Key,
+    ) -> Result<Option<<ContractsRawCode as Mappable>::OwnedValue>, Self::Error> {
+        Database::remove::<OptimizedContract>(
+            self,
+            key.as_ref(),
+            Column::ContractsRawCode,
+        )
+        .map(|option| option.map(Into::into))
+        .map_err(Into::into)
     }
 }
 
@@ -142,6 +237,10 @@ mod tests {
         TxId,
         UtxoId,
     };
+    use rand::{
+        RngCore,
+        SeedableRng,
+    };
 
     #[test]
     fn raw_code_get() {
@@ -170,6 +269,29 @@ mod tests {
     fn raw_code_put() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
+
+        let database = &mut Database::default();
+        database
+            .storage::<ContractsRawCode>()
+            .insert(&contract_id, contract.as_ref())
+            .unwrap();
+
+        let returned: Contract = database
+            .storage::<ContractsRawCode>()
+            .get(&contract_id)
+            .unwrap()
+            .unwrap()
+            .into_owned();
+        assert_eq!(returned, contract);
+    }
+
+    #[test]
+    fn raw_code_put_huge_contract() {
+        let rng = &mut rand::rngs::StdRng::seed_from_u64(2322u64);
+        let contract_id: ContractId = ContractId::from([1u8; 32]);
+        let mut bytes = vec![0; 16 * 1024 * 1024];
+        rng.fill_bytes(bytes.as_mut());
+        let contract: Contract = Contract::from(bytes);
 
         let database = &mut Database::default();
         database

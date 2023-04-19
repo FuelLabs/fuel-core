@@ -215,7 +215,7 @@ impl Database {
         let result = self.data.put(
             key.as_ref(),
             column,
-            postcard::to_stdvec(value).map_err(|_| DatabaseError::Codec)?,
+            Arc::new(postcard::to_stdvec(value).map_err(|_| DatabaseError::Codec)?),
         )?;
         if let Some(previous) = result {
             Ok(Some(

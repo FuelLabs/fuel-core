@@ -7,22 +7,24 @@ use crate::{
         BatchOperations,
         DataSource,
         IterDirection,
+        KVItem,
         KeyValueStore,
         TransactableStorage,
+        Value,
+        WriteOperation,
     },
 };
 use fuel_core_storage::iter::BoxedIter;
-use moka::sync::Cache as MockCache;
 use std::{
     fmt::Debug,
-    ops::Deref,
-    sync::Arc,
     time::Duration,
 };
 
+type MokaCache = moka::sync::Cache<Vec<u8>, Option<Value>>;
+
 #[derive(Debug, Clone)]
 pub struct Cache {
-    inner: [MockCache<Vec<u8>, Option<Arc<Vec<u8>>>>; Column::COUNT],
+    inner: [MokaCache; Column::COUNT],
     data_source: DataSource,
 }
 
@@ -40,14 +42,14 @@ impl Cache {
 }
 
 impl KeyValueStore for Cache {
-    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
+    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
         let vec_key = key.to_vec();
         if let Some(value) = self.inner[column.as_usize()].get(&vec_key) {
-            Ok(value.map(|value| value.deref().clone()))
+            Ok(value)
         } else {
             let value = self.data_source.get(key, column)?;
 
-            self.inner[column.as_usize()].insert(vec_key, value.clone().map(Arc::new));
+            self.inner[column.as_usize()].insert(vec_key, value.clone());
             Ok(value)
         }
     }
@@ -56,14 +58,14 @@ impl KeyValueStore for Cache {
         &self,
         key: &[u8],
         column: Column,
-        value: Vec<u8>,
-    ) -> DatabaseResult<Option<Vec<u8>>> {
+        value: Value,
+    ) -> DatabaseResult<Option<Value>> {
         let vec_key = key.to_vec();
-        self.inner[column.as_usize()].insert(vec_key, Some(Arc::new(value.clone())));
+        self.inner[column.as_usize()].insert(vec_key, Some(value.clone()));
         self.data_source.put(key, column, value)
     }
 
-    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
+    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
         let vec_key = key.to_vec();
         self.inner[column.as_usize()].insert(vec_key, None);
         self.data_source.delete(key, column)
@@ -76,7 +78,7 @@ impl KeyValueStore for Cache {
         } else {
             let value = self.data_source.get(key, column)?;
 
-            self.inner[column.as_usize()].insert(vec_key, value.clone().map(Arc::new));
+            self.inner[column.as_usize()].insert(vec_key, value.clone());
             Ok(value.is_some())
         }
     }
@@ -87,13 +89,34 @@ impl KeyValueStore for Cache {
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<DatabaseResult<(Vec<u8>, Vec<u8>)>> {
+    ) -> BoxedIter<KVItem> {
         // Don't optimize iteration
         self.data_source.iter_all(column, prefix, start, direction)
     }
 }
 
-impl BatchOperations for Cache {}
+impl BatchOperations for Cache {
+    fn batch_write(
+        &self,
+        entries: &mut dyn Iterator<Item = (Vec<u8>, Column, WriteOperation)>,
+    ) -> DatabaseResult<()> {
+        let mut entries = entries.map(|(key, column, op)| {
+            let op = match op {
+                WriteOperation::Insert(value) => {
+                    self.inner[column.as_usize()]
+                        .insert(key.clone(), Some(value.clone()));
+                    WriteOperation::Insert(value)
+                }
+                WriteOperation::Remove => {
+                    self.inner[column.as_usize()].insert(key.clone(), None);
+                    WriteOperation::Remove
+                }
+            };
+            (key, column, op)
+        });
+        self.data_source.batch_write(&mut entries)
+    }
+}
 
 impl TransactableStorage for Cache {}
 
@@ -101,6 +124,7 @@ impl TransactableStorage for Cache {}
 mod tests {
     use super::*;
     use crate::state::in_memory::memory_store::MemoryStore;
+    use std::sync::Arc;
 
     #[test]
     fn get_returns_from_cache() {
@@ -108,11 +132,13 @@ mod tests {
         let store = Arc::new(MemoryStore::default());
         let cache = Cache::new(store, 100);
         let key = vec![0xA, 0xB, 0xC];
-        cache.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+        cache
+            .put(&key, Column::Metadata, Arc::new(vec![1, 2, 3]))
+            .unwrap();
         // test
         let ret = cache.get(&key, Column::Metadata).unwrap();
         // verify
-        assert_eq!(ret, Some(vec![1, 2, 3]))
+        assert_eq!(ret, Some(Arc::new(vec![1, 2, 3])))
     }
 
     #[test]
@@ -120,12 +146,14 @@ mod tests {
         // setup
         let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];
-        store.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+        store
+            .put(&key, Column::Metadata, Arc::new(vec![1, 2, 3]))
+            .unwrap();
         let cache = Cache::new(store, 100);
         // test
         let ret = cache.get(&key, Column::Metadata).unwrap();
         // verify
-        assert_eq!(ret, Some(vec![1, 2, 3]))
+        assert_eq!(ret, Some(Arc::new(vec![1, 2, 3])))
     }
 
     #[test]
@@ -133,7 +161,9 @@ mod tests {
         // setup
         let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];
-        store.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+        store
+            .put(&key, Column::Metadata, Arc::new(vec![1, 2, 3]))
+            .unwrap();
         let cache = Cache::new(store.clone(), 100);
         cache.delete(&key, Column::Metadata).unwrap();
         // test
@@ -150,13 +180,13 @@ mod tests {
         // setup
         let store = Arc::new(MemoryStore::default());
         let cache = Cache::new(store, 100);
-        let _ = cache.put(&[0xA, 0xB, 0xC], Column::Metadata, vec![1, 2, 3]);
+        let _ = cache.put(&[0xA, 0xB, 0xC], Column::Metadata, Arc::new(vec![1, 2, 3]));
         // test
         let ret = cache
-            .put(&[0xA, 0xB, 0xC], Column::Metadata, vec![2, 4, 6])
+            .put(&[0xA, 0xB, 0xC], Column::Metadata, Arc::new(vec![2, 4, 6]))
             .unwrap();
         // verify
-        assert_eq!(ret, Some(vec![1, 2, 3]))
+        assert_eq!(ret, Some(Arc::new(vec![1, 2, 3])))
     }
 
     #[test]
@@ -165,12 +195,14 @@ mod tests {
         let store = Arc::new(MemoryStore::default());
         let cache = Cache::new(store, 100);
         let key = vec![0xA, 0xB, 0xC];
-        cache.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+        cache
+            .put(&key, Column::Metadata, Arc::new(vec![1, 2, 3]))
+            .unwrap();
         // test
         let ret = cache.delete(&key, Column::Metadata).unwrap();
         let get = cache.get(&key, Column::Metadata).unwrap();
         // verify
-        assert_eq!(ret, Some(vec![1, 2, 3]));
+        assert_eq!(ret, Some(Arc::new(vec![1, 2, 3])));
         assert_eq!(get, None)
     }
 
@@ -179,13 +211,15 @@ mod tests {
         // setup
         let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];
-        store.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+        store
+            .put(&key, Column::Metadata, Arc::new(vec![1, 2, 3]))
+            .unwrap();
         let cache = Cache::new(store, 100);
         // test
         let ret = cache.delete(&key, Column::Metadata).unwrap();
         let get = cache.get(&key, Column::Metadata).unwrap();
         // verify
-        assert_eq!(ret, Some(vec![1, 2, 3]));
+        assert_eq!(ret, Some(Arc::new(vec![1, 2, 3])));
         assert_eq!(get, None)
     }
 
@@ -194,13 +228,15 @@ mod tests {
         // setup
         let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];
-        store.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+        store
+            .put(&key, Column::Metadata, Arc::new(vec![1, 2, 3]))
+            .unwrap();
         let cache = Cache::new(store, 100);
         // test
         let ret1 = cache.delete(&key, Column::Metadata).unwrap();
         let ret2 = cache.delete(&key, Column::Metadata).unwrap();
         // verify
-        assert_eq!(ret1, Some(vec![1, 2, 3]));
+        assert_eq!(ret1, Some(Arc::new(vec![1, 2, 3])));
         assert_eq!(ret2, None);
     }
 
@@ -210,7 +246,9 @@ mod tests {
         let store = Arc::new(MemoryStore::default());
         let cache = Cache::new(store, 100);
         let key = vec![0xA, 0xB, 0xC];
-        cache.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+        cache
+            .put(&key, Column::Metadata, Arc::new(vec![1, 2, 3]))
+            .unwrap();
         // test
         let ret = cache.exists(&key, Column::Metadata).unwrap();
         // verify
@@ -222,7 +260,9 @@ mod tests {
         // setup
         let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];
-        store.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+        store
+            .put(&key, Column::Metadata, Arc::new(vec![1, 2, 3]))
+            .unwrap();
         let cache = Cache::new(store, 100);
         // test
         let ret = cache.exists(&key, Column::Metadata).unwrap();
@@ -235,7 +275,9 @@ mod tests {
         // setup
         let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];
-        store.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+        store
+            .put(&key, Column::Metadata, Arc::new(vec![1, 2, 3]))
+            .unwrap();
         let cache = Cache::new(store.clone(), 100);
         cache.delete(&key, Column::Metadata).unwrap();
         // test
@@ -253,12 +295,10 @@ mod tests {
 
         let store = Arc::new(MemoryStore::default());
         let db = Cache::new(store, 100);
-        db.put(&key, Column::Metadata, vec![]).unwrap();
+        let expected = Arc::new(vec![]);
+        db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
-        assert_eq!(
-            db.get(&key, Column::Metadata).unwrap().unwrap(),
-            Vec::<u8>::with_capacity(0)
-        );
+        assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
@@ -266,12 +306,12 @@ mod tests {
             db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap(),
-            vec![(key.clone(), Vec::<u8>::with_capacity(0))]
+            vec![(key.clone(), expected.clone())]
         );
 
         assert_eq!(
             db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            Vec::<u8>::with_capacity(0)
+            expected
         );
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
@@ -283,12 +323,10 @@ mod tests {
 
         let store = Arc::new(MemoryStore::default());
         let db = Cache::new(store, 100);
-        db.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+        let expected = Arc::new(vec![1, 2, 3]);
+        db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
-        assert_eq!(
-            db.get(&key, Column::Metadata).unwrap().unwrap(),
-            vec![1, 2, 3]
-        );
+        assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
@@ -296,12 +334,12 @@ mod tests {
             db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap(),
-            vec![(key.clone(), vec![1, 2, 3])]
+            vec![(key.clone(), expected.clone())]
         );
 
         assert_eq!(
             db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            vec![1, 2, 3]
+            expected
         );
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
@@ -313,12 +351,10 @@ mod tests {
 
         let store = Arc::new(MemoryStore::default());
         let db = Cache::new(store, 100);
-        db.put(&key, Column::Metadata, vec![]).unwrap();
+        let expected = Arc::new(vec![]);
+        db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
-        assert_eq!(
-            db.get(&key, Column::Metadata).unwrap().unwrap(),
-            Vec::<u8>::with_capacity(0)
-        );
+        assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
@@ -326,12 +362,12 @@ mod tests {
             db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap(),
-            vec![(key.clone(), Vec::<u8>::with_capacity(0))]
+            vec![(key.clone(), expected.clone())]
         );
 
         assert_eq!(
             db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            Vec::<u8>::with_capacity(0)
+            expected
         );
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
