@@ -295,26 +295,26 @@ impl Command {
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
-    let profiling = command.profiling.clone();
-    let config = command.get_config()?;
     let network_name = {
         #[cfg(feature = "p2p")]
         {
-            config
-                .p2p
-                .as_ref()
-                .map(|config| config.network_name.clone())
+            command
+                .p2p_args
+                .network
+                .clone()
                 .unwrap_or_else(|| "default_network".to_string())
         }
         #[cfg(not(feature = "p2p"))]
         "default_network".to_string()
     };
     init_logging(
-        config.name.clone(),
+        command.service_name.clone(),
         network_name.clone(),
-        config.honeycomb_api_key.clone(),
+        command.honeycomb_key.clone(),
     )
     .await?;
+    let profiling = command.profiling.clone();
+    let config = command.get_config()?;
 
     // start profiling agent if url is configured
     let _profiling_agent = profiling

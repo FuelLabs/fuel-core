@@ -23,8 +23,8 @@ fuel-core = { workspace = true }
 humantime = "2.1"
 lazy_static = { workspace = true }
 libhoney-rust = { version = "0.1.6" }
-pyroscope = "0.5.3"
-pyroscope_pprofrs = "0.2.3"
+pyroscope = { version = "0.5.3", default-features = false, features = ["webpki-roots"] }
+pyroscope_pprofrs = { version = "0.2.3", default-features = false }
 serde_json = { workspace = true, features = ["raw_value"], optional = true }
 tikv-jemallocator = "0.5"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

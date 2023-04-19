@@ -106,3 +106,9 @@ prometheus-client = "0.20"
 itertools = "0.10"
 insta = "1.8"
 tempfile = "3.3"
+
+[patch.crates-io]
+pyroscope = { git = "https://github.com/Voxelot/pyroscope-rs.git" }
+pyroscope_pprofrs = { git = "https://github.com/Voxelot/pyroscope-rs.git" }
+#pyroscope_pyspy = { git = "https://github.com/Voxelot/pyroscope-rs.git" }
+#pyroscope_rbspy = { git = "https://github.com/Voxelot/pyroscope-rs.git" }
