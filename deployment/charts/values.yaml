@@ -37,6 +37,8 @@ app:
   relayer_eth_sync_call_freq_s: "${fuel_core_relayer_eth_sync_call_freq_s}"
   relayer_eth_sync_log_freq_s: "${fuel_core_relayer_eth_sync_log_freq_s}"
   sentry_enabled: ${fuel_core_sentry_enabled}
+  pyroscope_url: "${fuel_core_pyroscope_url}"
+  pprof_sample_rate: "${fuel_core_pprof_sample_rate}"
   image:
     repository: ${fuel_core_image_repository}
     tag: ${fuel_core_image_tag}
