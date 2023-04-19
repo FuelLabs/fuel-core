@@ -36,7 +36,7 @@ impl TxPoolAdapter {
 #[derive(Clone)]
 pub struct ExecutorAdapter {
     pub relayer: MaybeRelayerAdapter,
-    pub config: Arc<Config>,
+    pub config: Config,
 }
 
 #[derive(Clone)]

@@ -63,7 +63,7 @@ pub fn init_sub_services(
 
     let executor = ExecutorAdapter {
         relayer: relayer_adapter.clone(),
-        config: Arc::new(config.clone()),
+        config: config.clone(),
     };
 
     let verifier =
