@@ -51,6 +51,8 @@ use tracing::{
 };
 
 pub const CONSENSUS_KEY_ENV: &str = "CONSENSUS_KEY_SECRET";
+// Default database cache is 1 GB
+const DEFAULT_DATABASE_CACHE_SIZE: usize = 1024 * 1024 * 1024;
 
 #[cfg(feature = "p2p")]
 mod p2p;
@@ -75,6 +77,12 @@ pub struct Command {
     /// The maximum number of cached entries per each column.
     #[arg(long = "max-database-capacity", default_value = "10000", env)]
     pub max_database_capacity: u64,
+    #[arg(
+        long = "max-database-cache-size",
+        default_value_t = DEFAULT_DATABASE_CACHE_SIZE,
+        env
+    )]
+    pub max_database_cache_size: usize,
 
     #[clap(
         name = "DB_PATH",
@@ -174,6 +182,7 @@ impl Command {
             port,
             service_name: name,
             max_database_capacity,
+            max_database_cache_size,
             database_path,
             database_type,
             chain_config,
@@ -253,6 +262,7 @@ impl Command {
         Ok(Config {
             addr,
             max_database_capacity,
+            max_database_cache_size,
             database_path,
             database_type,
             chain_conf: chain_conf.clone(),

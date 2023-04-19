@@ -40,9 +40,10 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     init_logging("snapshot".to_string(), "local".to_string(), None).await?;
     let path = command.database_path;
     let config: ChainConfig = command.chain_config.parse()?;
-    let data_source = fuel_core::state::rocks_db::RocksDb::default_open(&path).context(
-        format!("failed to open database at path {}", path.display()),
-    )?;
+    let data_source =
+        fuel_core::state::rocks_db::RocksDb::default_open(&path, None).context(
+            format!("failed to open database at path {}", path.display()),
+        )?;
     let db = Database::new(std::sync::Arc::new(data_source));
 
     let state_conf = StateConfig::generate_state_config(db)?;

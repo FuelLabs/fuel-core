@@ -22,6 +22,7 @@ use fuel_core_storage::iter::{
 };
 use rocksdb::{
     BoundColumnFamily,
+    Cache,
     ColumnFamilyDescriptor,
     DBCompressionType,
     DBWithThreadMode,
@@ -41,17 +42,25 @@ use std::{
 type DB = DBWithThreadMode<MultiThreaded>;
 #[derive(Debug)]
 pub struct RocksDb {
-    db: DBWithThreadMode<MultiThreaded>,
+    db: DB,
 }
 
 impl RocksDb {
-    pub fn default_open<P: AsRef<Path>>(path: P) -> DatabaseResult<RocksDb> {
-        Self::open(path, enum_iterator::all::<Column>().collect::<Vec<_>>())
+    pub fn default_open<P: AsRef<Path>>(
+        path: P,
+        capacity: Option<usize>,
+    ) -> DatabaseResult<RocksDb> {
+        Self::open(
+            path,
+            enum_iterator::all::<Column>().collect::<Vec<_>>(),
+            capacity,
+        )
     }
 
     pub fn open<P: AsRef<Path>>(
         path: P,
         columns: Vec<Column>,
+        capacity: Option<usize>,
     ) -> DatabaseResult<RocksDb> {
         let cf_descriptors: Vec<_> = columns
             .clone()
@@ -62,6 +71,11 @@ impl RocksDb {
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.set_compression_type(DBCompressionType::Lz4);
+        if let Some(capacity) = capacity {
+            let cache = Cache::new_lru_cache(capacity).unwrap();
+            opts.set_row_cache(&cache);
+        }
+
         let db = match DB::open_cf_descriptors(&opts, &path, cf_descriptors) {
             Err(_) => {
                 // setup cfs
@@ -299,7 +313,10 @@ mod tests {
 
     fn create_db() -> (RocksDb, TempDir) {
         let tmp_dir = TempDir::new().unwrap();
-        (RocksDb::default_open(tmp_dir.path()).unwrap(), tmp_dir)
+        (
+            RocksDb::default_open(tmp_dir.path(), None).unwrap(),
+            tmp_dir,
+        )
     }
 
     #[test]

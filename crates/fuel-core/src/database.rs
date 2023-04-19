@@ -42,8 +42,6 @@ type DatabaseResult<T> = Result<T>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rocksdb")]
-use crate::state::caching::Cache;
-#[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
@@ -188,10 +186,9 @@ impl Database {
     }
 
     #[cfg(feature = "rocksdb")]
-    pub fn open(path: &Path, max_capacity: u64) -> DatabaseResult<Self> {
+    pub fn open(path: &Path, capacity: Option<usize>) -> DatabaseResult<Self> {
         use anyhow::Context;
-        let rocks_db = RocksDb::default_open(path).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
-        let db = Cache::new(Arc::new(rocks_db), max_capacity);
+        let db = RocksDb::default_open(path, capacity).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
 
         Ok(Database {
             data: Arc::new(db),
@@ -356,8 +353,7 @@ impl Default for Database {
         #[cfg(feature = "rocksdb")]
         {
             let tmp_dir = TempDir::new().unwrap();
-            let rocks_db = RocksDb::default_open(tmp_dir.path()).unwrap();
-            let db = Cache::new(Arc::new(rocks_db), 100);
+            let db = RocksDb::default_open(tmp_dir.path(), None).unwrap();
             Self {
                 data: Arc::new(db),
                 _drop: Arc::new(

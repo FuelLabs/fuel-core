@@ -71,7 +71,6 @@ pub enum WriteOperation {
 
 pub trait TransactableStorage: BatchOperations + Debug + Send + Sync {}
 
-pub mod caching;
 pub mod in_memory;
 #[cfg(feature = "rocksdb")]
 pub mod rocks_db;
