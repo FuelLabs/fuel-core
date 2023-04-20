@@ -265,14 +265,13 @@ impl Database {
         &self,
         column: Column,
         prefix: Option<P>,
-        direction: Option<IterDirection>,
     ) -> impl Iterator<Item = DatabaseResult<(K, V)>> + '_
     where
         K: From<Vec<u8>>,
         V: DeserializeOwned,
         P: AsRef<[u8]>,
     {
-        self.iter_all_filtered::<K, V, P, [u8; 0]>(column, prefix, None, direction)
+        self.iter_all_filtered::<K, V, P, [u8; 0]>(column, prefix, None, None)
     }
 
     fn iter_all_by_start<K, V, S>(

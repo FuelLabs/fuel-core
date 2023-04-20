@@ -72,6 +72,16 @@ pub fn main_body(config: SuiteConfig, mut args: Arguments) {
             }),
         ),
         Trial::test(
+            "dry run script that touches the contract with large state",
+            with_cloned(&config, |config| {
+                async_execute(async {
+                    let ctx = TestContext::new(config).await;
+                    tests::script::run_contract_large_state(&ctx).await
+                })?;
+                Ok(())
+            }),
+        ),
+        Trial::test(
             "can deploy a large contract",
             with_cloned(&config, |config| {
                 async_execute(async {

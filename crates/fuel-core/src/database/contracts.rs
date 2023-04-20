@@ -134,6 +134,68 @@ impl DatabaseColumn for ContractsLatestUtxo {
 }
 
 impl Database {
+    pub fn get_contract_config_by_id(
+        &self,
+        contract_id: ContractId,
+    ) -> StorageResult<ContractConfig> {
+        let code: Vec<u8> = self
+            .storage::<ContractsRawCode>()
+            .get(&contract_id)?
+            .unwrap()
+            .into_owned()
+            .into();
+
+        let (salt, _) = self
+            .storage::<ContractsInfo>()
+            .get(&contract_id)
+            .unwrap()
+            .expect("Contract does not exist")
+            .into_owned();
+
+        let state = Some(
+            self.iter_all_by_prefix::<Vec<u8>, Bytes32, _>(
+                Column::ContractsState,
+                Some(contract_id.as_ref()),
+            )
+            .map(|res| -> DatabaseResult<(Bytes32, Bytes32)> {
+                let safe_res = res?;
+
+                // We don't need to store ContractId which is the first 32 bytes of this
+                // key, as this Vec is already attached to that ContractId
+                let state_key = Bytes32::new(safe_res.0[32..].try_into()?);
+
+                Ok((state_key, safe_res.1))
+            })
+            .filter(|val| val.is_ok())
+            .collect::<DatabaseResult<Vec<(Bytes32, Bytes32)>>>()?,
+        );
+
+        let balances = Some(
+            self.iter_all_by_prefix::<Vec<u8>, u64, _>(
+                Column::ContractsAssets,
+                Some(contract_id.as_ref()),
+            )
+            .map(|res| {
+                let safe_res = res?;
+
+                let asset_id = AssetId::new(
+                    safe_res.0[32..].try_into().map_err(DatabaseError::from)?,
+                );
+
+                Ok((asset_id, safe_res.1))
+            })
+            .filter(|val| val.is_ok())
+            .collect::<StorageResult<Vec<(AssetId, u64)>>>()?,
+        );
+
+        Ok(ContractConfig {
+            code,
+            salt,
+            state,
+            balances,
+        })
+    }
+
     pub fn contract_balances(
         &self,
         contract: ContractId,
@@ -162,65 +224,7 @@ impl Database {
                         .try_into()
                         .map_err(DatabaseError::from)?,
                 );
-
-                let code: Vec<u8> = self
-                    .storage::<ContractsRawCode>()
-                    .get(&contract_id)?
-                    .unwrap()
-                    .into_owned()
-                    .into();
-
-                let (salt, _) = self
-                    .storage::<ContractsInfo>()
-                    .get(&contract_id)
-                    .unwrap()
-                    .expect("Contract does not exist")
-                    .into_owned();
-
-                let state = Some(
-                    self.iter_all_by_prefix::<Vec<u8>, Bytes32, _>(
-                        Column::ContractsState,
-                        Some(contract_id.as_ref()),
-                        None,
-                    )
-                    .map(|res| -> DatabaseResult<(Bytes32, Bytes32)> {
-                        let safe_res = res?;
-
-                        // We don't need to store ContractId which is the first 32 bytes of this
-                        // key, as this Vec is already attached to that ContractId
-                        let state_key = Bytes32::new(safe_res.0[32..].try_into()?);
-
-                        Ok((state_key, safe_res.1))
-                    })
-                    .filter(|val| val.is_ok())
-                    .collect::<DatabaseResult<Vec<(Bytes32, Bytes32)>>>()?,
-                );
-
-                let balances = Some(
-                    self.iter_all_by_prefix::<Vec<u8>, u64, _>(
-                        Column::ContractsAssets,
-                        Some(contract_id.as_ref()),
-                        None,
-                    )
-                    .map(|res| {
-                        let safe_res = res?;
-
-                        let asset_id = AssetId::new(
-                            safe_res.0[32..].try_into().map_err(DatabaseError::from)?,
-                        );
-
-                        Ok((asset_id, safe_res.1))
-                    })
-                    .filter(|val| val.is_ok())
-                    .collect::<StorageResult<Vec<(AssetId, u64)>>>()?,
-                );
-
-                Ok(ContractConfig {
-                    code,
-                    salt,
-                    state,
-                    balances,
-                })
+                self.get_contract_config_by_id(contract_id)
             })
             .collect::<StorageResult<Vec<ContractConfig>>>()?;
 

@@ -16,9 +16,8 @@ use fuel_core_storage::iter::{
     BoxedIter,
     IntoBoxedIter,
 };
-use itertools::Itertools;
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     fmt::Debug,
     sync::Mutex,
 };
@@ -26,8 +25,7 @@ use std::{
 #[derive(Default, Debug)]
 pub struct MemoryStore {
     // TODO: Remove `Mutex`.
-    // TODO: Use `BTreeMap`.
-    inner: [Mutex<HashMap<Vec<u8>, Value>>; Column::COUNT],
+    inner: [Mutex<BTreeMap<Vec<u8>, Value>>; Column::COUNT],
 }
 
 impl MemoryStore {
@@ -40,39 +38,60 @@ impl MemoryStore {
     ) -> impl Iterator<Item = KVItem> {
         let lock = self.inner[column.as_usize()].lock().expect("poisoned");
 
-        // clone entire set so we can drop the lock
-        let iter = lock
-            .iter()
-            .map(|(key, value)| (key.clone(), value.clone()))
-            // filter prefix
-            .filter(|(key, _)| {
-                if let Some(prefix) = prefix {
-                    key.starts_with(prefix)
+        fn clone<K: Clone, V: Clone>(kv: (&K, &V)) -> (K, V) {
+            (kv.0.clone(), kv.1.clone())
+        }
+
+        let collection: Vec<_> = match (prefix, start) {
+            (None, None) => {
+                if direction == IterDirection::Forward {
+                    lock.iter().map(clone).collect()
                 } else {
-                    true
+                    lock.iter().rev().map(clone).collect()
                 }
-            })
-            .sorted();
+            }
+            (Some(prefix), None) => {
+                if direction == IterDirection::Forward {
+                    lock.range(prefix.to_vec()..)
+                        .take_while(|(key, _)| key.starts_with(prefix))
+                        .map(clone)
+                        .collect()
+                } else {
+                    let mut vec: Vec<_> = lock
+                        .range(prefix.to_vec()..)
+                        .into_boxed()
+                        .take_while(|(key, _)| key.starts_with(prefix))
+                        .map(clone)
+                        .collect();
 
-        let until_start_reached = |(key, _): &(Vec<u8>, Value)| {
-            if let Some(start) = start {
-                match direction {
-                    IterDirection::Forward => key.as_slice() < start,
-                    IterDirection::Reverse => key.as_slice() > start,
+                    vec.reverse();
+                    vec
                 }
-            } else {
-                false
+            }
+            (None, Some(start)) => {
+                if direction == IterDirection::Forward {
+                    lock.range(start.to_vec()..).map(clone).collect()
+                } else {
+                    lock.range(..=start.to_vec()).rev().map(clone).collect()
+                }
+            }
+            (Some(prefix), Some(start)) => {
+                if direction == IterDirection::Forward {
+                    lock.range(start.to_vec()..)
+                        .take_while(|(key, _)| key.starts_with(prefix))
+                        .map(clone)
+                        .collect()
+                } else {
+                    lock.range(..=start.to_vec())
+                        .rev()
+                        .take_while(|(key, _)| key.starts_with(prefix))
+                        .map(clone)
+                        .collect()
+                }
             }
         };
 
-        let copy: Vec<_> = match direction {
-            IterDirection::Forward => iter.skip_while(until_start_reached).collect(),
-            IterDirection::Reverse => {
-                iter.rev().skip_while(until_start_reached).collect()
-            }
-        };
-
-        copy.into_iter().map(Ok)
+        collection.into_iter().map(Ok)
     }
 }
 
