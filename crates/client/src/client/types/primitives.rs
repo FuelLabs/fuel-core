@@ -109,6 +109,7 @@ fuel_type_scalar!(Signature, Bytes64);
 fuel_type_scalar!(Nonce, Nonce);
 fuel_type_scalar!(MerkleRoot, Bytes32);
 
+#[derive(Debug)]
 pub struct Tai64Timestamp(pub Tai64);
 
 impl From<Tai64> for Tai64Timestamp {
@@ -121,5 +122,19 @@ impl From<schema::primitives::BlockId> for BlockId {
     fn from(value: schema::BlockId) -> Self {
         let bytes = value.0 .0;
         bytes.into()
+    }
+}
+
+impl BlockId {
+    pub fn into_message(self) -> fuel_core_types::fuel_crypto::Message {
+        let bytes: fuel_core_types::fuel_types::Bytes32 = self.into();
+        fuel_core_types::fuel_crypto::Message::from_bytes(*bytes)
+    }
+}
+
+impl Signature {
+    pub fn into_signature(self) -> fuel_core_types::fuel_crypto::Signature {
+        let bytes: fuel_core_types::fuel_types::Bytes64 = self.into();
+        fuel_core_types::fuel_crypto::Signature::from_bytes(*bytes)
     }
 }

@@ -1,5 +1,10 @@
-mod block;
-mod primitives;
+pub mod block;
+pub mod primitives;
+
+pub use block::{
+    Block,
+    Consensus,
+};
 
 use crate::client::schema::{
     tx::{

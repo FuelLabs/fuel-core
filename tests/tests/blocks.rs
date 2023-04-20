@@ -63,6 +63,7 @@ async fn block() {
         .await
         .unwrap();
     assert!(block.is_some());
+    println!("{:?}", block);
 }
 
 #[tokio::test]
@@ -78,10 +79,10 @@ async fn get_genesis_block() {
     client.submit_and_await_commit(&tx).await.unwrap();
 
     let block = client.block_by_height(13).await.unwrap().unwrap();
-    assert_eq!(block.header.height.0, 13);
+    assert_eq!(block.header.height, 13);
     assert!(matches!(
         block.consensus,
-        fuel_core_client::client::schema::block::Consensus::Genesis(_)
+        fuel_core_client::client::types::Consensus::Genesis(_)
     ));
 }
 
@@ -145,7 +146,7 @@ async fn produce_block_manually() {
 
     assert_eq!(1, *new_height);
     let block = client.block_by_height(1).await.unwrap().unwrap();
-    assert_eq!(block.header.height.0, 1);
+    assert_eq!(block.header.height, 1);
     let actual_pub_key = block.block_producer().unwrap();
     let expected_pub_key = config
         .consensus_key

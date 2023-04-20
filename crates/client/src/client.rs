@@ -612,25 +612,22 @@ impl FuelClient {
         Ok(new_height.into())
     }
 
-    pub async fn block(&self, id: &str) -> io::Result<Option<schema::block::Block>> {
+    pub async fn block(&self, id: &str) -> io::Result<Option<types::Block>> {
         let query = schema::block::BlockByIdQuery::build(BlockByIdArgs {
             id: Some(id.parse()?),
         });
 
-        let block = self.query(query).await?.block;
+        let block = self.query(query).await?.block.map(Into::into);
 
         Ok(block)
     }
 
-    pub async fn block_by_height(
-        &self,
-        height: u64,
-    ) -> io::Result<Option<schema::block::Block>> {
+    pub async fn block_by_height(&self, height: u64) -> io::Result<Option<types::Block>> {
         let query = schema::block::BlockByHeightQuery::build(BlockByHeightArgs {
             height: Some(U64(height)),
         });
 
-        let block = self.query(query).await?.block;
+        let block = self.query(query).await?.block.map(Into::into);
 
         Ok(block)
     }
