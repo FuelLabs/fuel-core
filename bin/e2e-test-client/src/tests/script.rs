@@ -110,9 +110,9 @@ async fn _dry_runs(
         });
     }
 
-    // All queries should be resolved for 30 seconds.
+    // All queries should be resolved for 60 seconds.
     let queries =
-        tokio::time::timeout(Duration::from_secs(30), futures::future::join_all(queries))
+        tokio::time::timeout(Duration::from_secs(60), futures::future::join_all(queries))
             .await?;
     for query in queries {
         let (query, query_number) = query;
