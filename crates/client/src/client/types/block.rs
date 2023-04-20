@@ -68,19 +68,27 @@ impl From<schema::block::Header> for Header {
     }
 }
 
-impl From<schema::block::Consensus> for Consensus {
-    fn from(value: schema::block::Consensus) -> Self {
-        Self {}
-    }
-}
+// impl From<schema::block::Consensus> for Consensus {
+//     fn from(value: schema::block::Consensus) -> Self {
+//         Self {}
+//     }
+// }
 
 impl From<schema::block::Genesis> for Genesis {
     fn from(value: schema::block::Genesis) -> Self {
         Self {
-            chain_config_hash: value.chain_config_hash.into(),
-            coins_root: value.coins_root.into(),
-            contracts_root: value.contracts_root.into(),
-            messages_root: value.messages_root.into(),
+            chain_config_hash: value.chain_config_hash.0 .0.into(),
+            coins_root: value.coins_root.0 .0.into(),
+            contracts_root: value.contracts_root.0 .0.into(),
+            messages_root: value.messages_root.0 .0.into(),
+        }
+    }
+}
+
+impl From<schema::block::PoAConsensus> for PoAConsensus {
+    fn from(value: schema::block::PoAConsensus) -> Self {
+        Self {
+            signature: value.signature.0 .0.into(),
         }
     }
 }
