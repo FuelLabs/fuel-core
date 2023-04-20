@@ -128,6 +128,7 @@ impl Executor<MockDb> for MockExecutor {
         block: ExecutionBlock,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<MockDb>>> {
         let block = match block {
+            ExecutionBlock::DryRun(block) => block.generate(&[]),
             ExecutionBlock::Production(block) => block.generate(&[]),
             ExecutionBlock::Validation(block) => block,
         };
@@ -166,6 +167,7 @@ impl Executor<MockDb> for FailingMockExecutor {
             Err(err)
         } else {
             let block = match block {
+                ExecutionBlock::DryRun(b) => b.generate(&[]),
                 ExecutionBlock::Production(b) => b.generate(&[]),
                 ExecutionBlock::Validation(b) => b,
             };

@@ -148,7 +148,7 @@ where
         // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
         let res: Vec<_> = spawn_blocking(move || -> anyhow::Result<Vec<Receipt>> {
             Ok(executor
-                .dry_run(ExecutionBlock::Production(block), utxo_validation)?
+                .dry_run(ExecutionBlock::DryRun(block), utxo_validation)?
                 .into_iter()
                 .flatten()
                 .collect())
