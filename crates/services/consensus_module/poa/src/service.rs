@@ -70,6 +70,9 @@ use tokio::{
 use tokio_stream::StreamExt;
 use tracing::error;
 
+#[cfg(feature = "p2p")]
+use crate::ports::SyncPort;
+
 pub type Service<T, B, I> = ServiceRunner<Task<T, B, I>>;
 
 #[derive(Clone)]
@@ -140,12 +143,30 @@ pub struct Task<T, B, I> {
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
     consensus_params: ConsensusParameters,
+    #[cfg(feature = "p2p")]
+    sync: Option<Box<dyn SyncPort>>,
 }
 
 impl<T, B, I> Task<T, B, I>
 where
     T: TransactionPool,
 {
+    #[cfg(feature = "p2p")]
+    pub fn new_with_sync(
+        last_block: &BlockHeader,
+        config: Config,
+        txpool: T,
+        block_producer: B,
+        block_importer: I,
+        sync: Option<Box<dyn SyncPort>>,
+    ) -> Self {
+        let mut task =
+            Self::new(last_block, config, txpool, block_producer, block_importer);
+
+        task.sync = sync;
+
+        task
+    }
     pub fn new(
         last_block: &BlockHeader,
         config: Config,
@@ -174,6 +195,8 @@ where
             trigger: config.trigger,
             timer: DeadlineClock::new(),
             consensus_params: config.consensus_params,
+            #[cfg(feature = "p2p")]
+            sync: None,
         }
     }
 
@@ -437,20 +460,28 @@ where
     }
 
     async fn into_task(self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
-        match self.trigger {
+        let mut this = self;
+
+        #[cfg(feature = "p2p")]
+        if let Some(sync) = this.sync.take() {
+            let _ = sync.sync_with_peers().await;
+        }
+
+        match this.trigger {
             Trigger::Never | Trigger::Instant => {}
             Trigger::Interval { block_time } => {
-                self.timer
+                this.timer
                     .set_timeout(block_time, OnConflict::Overwrite)
                     .await;
             }
             Trigger::Hybrid { max_block_time, .. } => {
-                self.timer
+                this.timer
                     .set_timeout(max_block_time, OnConflict::Overwrite)
                     .await;
             }
         };
-        Ok(self)
+
+        Ok(this)
     }
 }
 
@@ -508,7 +539,31 @@ where
         Ok(())
     }
 }
+#[cfg(feature = "p2p")]
+pub fn new_service<D, T, B, I>(
+    last_block: &BlockHeader,
+    config: Config,
+    txpool: T,
+    block_producer: B,
+    block_importer: I,
+    sync: Option<Box<dyn SyncPort>>,
+) -> Service<T, B, I>
+where
+    T: TransactionPool + 'static,
+    B: BlockProducer<Database = D> + 'static,
+    I: BlockImporter<Database = D> + 'static,
+{
+    Service::new(Task::new_with_sync(
+        last_block,
+        config,
+        txpool,
+        block_producer,
+        block_importer,
+        sync,
+    ))
+}
 
+#[cfg(not(feature = "p2p"))]
 pub fn new_service<D, T, B, I>(
     last_block: &BlockHeader,
     config: Config,

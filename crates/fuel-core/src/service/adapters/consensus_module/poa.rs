@@ -12,6 +12,7 @@ use anyhow::anyhow;
 use fuel_core_poa::{
     ports::{
         BlockImporter,
+        SyncPort,
         TransactionPool,
     },
     service::SharedState,
@@ -105,5 +106,15 @@ impl BlockImporter for BlockImporterAdapter {
         self.block_importer
             .commit_result(result)
             .map_err(Into::into)
+    }
+}
+
+#[async_trait::async_trait]
+#[cfg(feature = "p2p")]
+impl SyncPort for crate::service::adapters::SyncAdapter {
+    async fn sync_with_peers(&self) -> anyhow::Result<()> {
+        // todo: check sync state
+        // for PoA if no block has been produced in last ~60s we are already synced
+        Ok(())
     }
 }

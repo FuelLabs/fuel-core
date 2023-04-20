@@ -126,8 +126,10 @@ pub fn init_sub_services(
     let poa_config: fuel_core_poa::Config = config.try_into()?;
     let production_enabled =
         !matches!(poa_config.trigger, Trigger::Never) || config.manual_blocks_enabled;
+
+    #[cfg(not(feature = "p2p"))]
     let poa = (production_enabled).then(|| {
-        fuel_core_poa::new_service(
+        fuel_core_poa::service::new_service(
             last_block.header(),
             poa_config,
             tx_pool_adapter.clone(),
@@ -135,6 +137,21 @@ pub fn init_sub_services(
             importer_adapter.clone(),
         )
     });
+
+    #[cfg(feature = "p2p")]
+    let poa = (production_enabled).then(|| {
+        // let sync_adapter = crate::service::adapters::SyncAdapter {};
+
+        fuel_core_poa::service::new_service(
+            last_block.header(),
+            poa_config,
+            tx_pool_adapter.clone(),
+            producer_adapter.clone(),
+            importer_adapter.clone(),
+            None, // Some(Box::new(sync_adapter)),
+        )
+    });
+
     let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));
 
     #[cfg(feature = "p2p")]

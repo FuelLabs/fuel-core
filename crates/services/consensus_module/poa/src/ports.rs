@@ -86,3 +86,9 @@ pub trait RelayerPort {
         max_da_lag: &DaBlockHeight,
     ) -> anyhow::Result<()>;
 }
+
+#[async_trait::async_trait]
+pub trait SyncPort: Send + Sync {
+    /// await synchronization with the peers
+    async fn sync_with_peers(&self) -> anyhow::Result<()>;
+}

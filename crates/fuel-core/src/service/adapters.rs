@@ -87,3 +87,6 @@ impl P2PAdapter {
         Default::default()
     }
 }
+
+#[cfg(feature = "p2p")]
+pub struct SyncAdapter {}
