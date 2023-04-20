@@ -33,6 +33,6 @@ insta = { workspace = true }
 tempfile = { workspace = true }
 
 [features]
-default = ["fuel-core?/default"]
+default = ["fuel-core?/default", "fuel-core?/metrics"]
 p2p = ["fuel-core?/p2p"]
 dev-deps = ["fuel-core/test-helpers"]

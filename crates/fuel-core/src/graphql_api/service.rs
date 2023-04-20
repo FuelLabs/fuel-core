@@ -1,3 +1,5 @@
+#[cfg(feature = "metrics")]
+use crate::graphql_api::prometheus::PrometheusExtension;
 use crate::{
     fuel_core_graphql_api::ports::{
         BlockProducerPort,
@@ -170,6 +172,10 @@ pub fn new_service(
     } else {
         builder.extension(Tracing)
     };
+
+    #[cfg(feature = "metrics")]
+    let builder = builder.extension(PrometheusExtension {});
+
     let schema = builder.finish();
 
     let router = Router::new()

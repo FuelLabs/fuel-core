@@ -45,32 +45,32 @@ homepage = "https://fuel.network/"
 keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
 license = "BUSL-1.1"
 repository = "https://github.com/FuelLabs/fuel-core"
-version = "0.17.8"
+version = "0.17.9"
 
 [workspace.dependencies]
 # Workspace members
-fuel-core = { version = "0.17.8", path = "./crates/fuel-core", default-features = false }
-fuel-core-client-bin = { version = "0.17.8", path = "./bin/client" }
-fuel-core-bin = { version = "0.17.8", path = "./bin/fuel-core" }
-fuel-core-keygen = { version = "0.17.8", path = "./bin/keygen" }
-fuel-core-chain-config = { version = "0.17.8", path = "./crates/chain-config" }
-fuel-core-client = { version = "0.17.8", path = "./crates/client" }
-fuel-core-database = { version = "0.17.8", path = "./crates/database" }
-fuel-core-metrics = { version = "0.17.8", path = "./crates/metrics" }
-fuel-core-services = { version = "0.17.8", path = "./crates/services" }
-fuel-core-consensus-module = { version = "0.17.8", path = "./crates/services/consensus_module" }
-fuel-core-bft = { version = "0.17.8", path = "./crates/services/consensus_module/bft" }
-fuel-core-poa = { version = "0.17.8", path = "./crates/services/consensus_module/poa" }
-fuel-core-executor = { version = "0.17.8", path = "./crates/services/executor" }
-fuel-core-importer = { version = "0.17.8", path = "./crates/services/importer" }
-fuel-core-p2p = { version = "0.17.8", path = "./crates/services/p2p" }
-fuel-core-producer = { version = "0.17.8", path = "./crates/services/producer" }
-fuel-core-relayer = { version = "0.17.8", path = "./crates/services/relayer" }
-fuel-core-sync = { version = "0.17.8", path = "./crates/services/sync" }
-fuel-core-txpool = { version = "0.17.8", path = "./crates/services/txpool" }
-fuel-core-storage = { version = "0.17.8", path = "./crates/storage" }
-fuel-core-trace = { version = "0.17.8", path = "./crates/trace" }
-fuel-core-types = { version = "0.17.8", path = "./crates/types", default-features = false }
+fuel-core = { version = "0.17.9", path = "./crates/fuel-core", default-features = false }
+fuel-core-client-bin = { version = "0.17.9", path = "./bin/client" }
+fuel-core-bin = { version = "0.17.9", path = "./bin/fuel-core" }
+fuel-core-keygen = { version = "0.17.9", path = "./bin/keygen" }
+fuel-core-chain-config = { version = "0.17.9", path = "./crates/chain-config" }
+fuel-core-client = { version = "0.17.9", path = "./crates/client" }
+fuel-core-database = { version = "0.17.9", path = "./crates/database" }
+fuel-core-metrics = { version = "0.17.9", path = "./crates/metrics" }
+fuel-core-services = { version = "0.17.9", path = "./crates/services" }
+fuel-core-consensus-module = { version = "0.17.9", path = "./crates/services/consensus_module" }
+fuel-core-bft = { version = "0.17.9", path = "./crates/services/consensus_module/bft" }
+fuel-core-poa = { version = "0.17.9", path = "./crates/services/consensus_module/poa" }
+fuel-core-executor = { version = "0.17.9", path = "./crates/services/executor" }
+fuel-core-importer = { version = "0.17.9", path = "./crates/services/importer" }
+fuel-core-p2p = { version = "0.17.9", path = "./crates/services/p2p" }
+fuel-core-producer = { version = "0.17.9", path = "./crates/services/producer" }
+fuel-core-relayer = { version = "0.17.9", path = "./crates/services/relayer" }
+fuel-core-sync = { version = "0.17.9", path = "./crates/services/sync" }
+fuel-core-txpool = { version = "0.17.9", path = "./crates/services/txpool" }
+fuel-core-storage = { version = "0.17.9", path = "./crates/storage" }
+fuel-core-trace = { version = "0.17.9", path = "./crates/trace" }
+fuel-core-types = { version = "0.17.9", path = "./crates/types", default-features = false }
 fuel-core-tests = { version = "0.0.0", path = "./tests" }
 fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 
@@ -99,8 +99,9 @@ mockall = "0.11"
 test-case = "2.2"
 axum = "0.5"
 lazy_static = "1.4"
+libp2p-prom-client = { package = "prometheus-client", version = "0.18" }
 once_cell = "1.16"
-prometheus-client = "0.18"
+prometheus-client = "0.20"
 itertools = "0.10"
 insta = "1.8"
 tempfile = "3.4"

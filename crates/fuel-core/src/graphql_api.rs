@@ -11,6 +11,8 @@ use std::net::SocketAddr;
 
 mod honeycomb;
 pub mod ports;
+#[cfg(feature = "metrics")]
+pub(crate) mod prometheus;
 pub mod service;
 
 #[derive(Clone, Debug)]
