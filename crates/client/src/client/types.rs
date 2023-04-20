@@ -1,3 +1,6 @@
+mod block;
+mod primitives;
+
 use crate::client::schema::{
     tx::{
         OpaqueTransaction,
