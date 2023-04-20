@@ -1,12 +1,13 @@
-// use crate::client::types::primitives::BlockId;
-
-use crate::client::types::primitives::{
-    BlockId,
-    Bytes32,
-    MerkleRoot,
-    Signature,
-    Tai64Timestamp,
-    TransactionId,
+use crate::client::{
+    schema,
+    types::primitives::{
+        BlockId,
+        Bytes32,
+        MerkleRoot,
+        Signature,
+        Tai64Timestamp,
+        TransactionId,
+    },
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -49,3 +50,48 @@ pub struct Genesis {
 pub struct PoAConsensus {
     pub signature: Signature,
 }
+
+impl From<schema::block::Header> for Header {
+    fn from(value: schema::block::Header) -> Self {
+        Self {
+            id: value.id.into(),
+            da_height: value.da_height.0.into(),
+            transactions_count: value.transactions_count.0,
+            message_receipt_count: value.message_receipt_count.0,
+            transactions_root: value.transactions_root.0 .0.into(),
+            message_receipt_root: value.message_receipt_root.0 .0.into(),
+            height: value.height.0.into(),
+            prev_root: value.prev_root.0 .0.into(),
+            time: value.time.0.into(),
+            application_hash: value.application_hash.0 .0.into(),
+        }
+    }
+}
+
+impl From<schema::block::Consensus> for Consensus {
+    fn from(value: schema::block::Consensus) -> Self {
+        Self {}
+    }
+}
+
+impl From<schema::block::Genesis> for Genesis {
+    fn from(value: schema::block::Genesis) -> Self {
+        Self {
+            chain_config_hash: value.chain_config_hash.into(),
+            coins_root: value.coins_root.into(),
+            contracts_root: value.contracts_root.into(),
+            messages_root: value.messages_root.into(),
+        }
+    }
+}
+
+// impl From<schema::block::Block> for Block {
+//     fn from(value: schema::block::Block) -> Self {
+//         Self {
+//             id: value.id.into(),
+//             header: value.header.into(),
+//             consensus: value.consensus,
+//             transactions: value.transactions,
+//         }
+//     }
+// }

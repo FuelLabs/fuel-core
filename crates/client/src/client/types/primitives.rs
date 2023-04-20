@@ -1,4 +1,7 @@
-use crate::client::schema::ConversionError;
+use crate::client::{
+    schema,
+    schema::ConversionError,
+};
 use serde::{
     de::Error,
     Deserialize,
@@ -107,3 +110,16 @@ fuel_type_scalar!(Nonce, Nonce);
 fuel_type_scalar!(MerkleRoot, Bytes32);
 
 pub struct Tai64Timestamp(pub Tai64);
+
+impl From<Tai64> for Tai64Timestamp {
+    fn from(value: Tai64) -> Self {
+        Self(value)
+    }
+}
+
+impl From<schema::primitives::BlockId> for BlockId {
+    fn from(value: schema::BlockId) -> Self {
+        let bytes = value.0 .0;
+        bytes.into()
+    }
+}
