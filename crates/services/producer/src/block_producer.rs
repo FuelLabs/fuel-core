@@ -134,14 +134,15 @@ where
 
         let executor = self.executor.clone();
         // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
-        let res: Vec<_> = tokio_rayon::spawn(move || -> anyhow::Result<Vec<Receipt>> {
-            Ok(executor
-                .dry_run(ExecutionBlock::DryRun(block), utxo_validation)?
-                .into_iter()
-                .flatten()
-                .collect())
-        })
-        .await?;
+        let res: Vec<_> =
+            tokio_rayon::spawn_fifo(move || -> anyhow::Result<Vec<Receipt>> {
+                Ok(executor
+                    .dry_run(ExecutionBlock::DryRun(block), utxo_validation)?
+                    .into_iter()
+                    .flatten()
+                    .collect())
+            })
+            .await?;
         if is_script && res.is_empty() {
             return Err(anyhow!("Expected at least one set of receipts"))
         }
