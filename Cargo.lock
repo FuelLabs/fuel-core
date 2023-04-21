@@ -2514,7 +2514,6 @@ dependencies = [
  "hyper 0.14.25",
  "itertools 0.10.5",
  "mockall",
- "num_cpus",
  "postcard",
  "primitive-types",
  "rand 0.8.5",
@@ -2800,6 +2799,7 @@ dependencies = [
  "rand 0.8.5",
  "thiserror",
  "tokio 1.27.0",
+ "tokio-rayon",
  "tracing",
 ]
 
@@ -7303,6 +7303,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.13",
+]
+
+[[package]]
+name = "tokio-rayon"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cf33a76e0b1dd03b778f83244137bd59887abf25c0e87bc3e7071105f457693"
+dependencies = [
+ "rayon",
+ "tokio 1.27.0",
 ]
 
 [[package]]

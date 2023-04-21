@@ -35,13 +35,7 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 use thiserror::Error;
-use tokio::{
-    sync::{
-        Mutex,
-        Semaphore,
-    },
-    task::spawn_blocking,
-};
+use tokio::sync::Mutex;
 use tracing::debug;
 
 #[cfg(test)]
@@ -71,7 +65,6 @@ pub struct Producer<Database> {
     // use a tokio lock since we want callers to yield until the previous block
     // execution has completed (which may take a while).
     pub lock: Mutex<()>,
-    pub dry_run_semaphore: Semaphore,
 }
 
 impl<Database> Producer<Database>
@@ -129,11 +122,6 @@ where
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
     ) -> anyhow::Result<Vec<Receipt>> {
-        // setup the block with the provided tx and optional height
-        // dry_run execute tx on the executor
-        // return the receipts
-        let _permit = self.dry_run_semaphore.acquire().await;
-
         let height = match height {
             None => self.db.current_block_height()?,
             Some(height) => height,
@@ -146,14 +134,14 @@ where
 
         let executor = self.executor.clone();
         // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
-        let res: Vec<_> = spawn_blocking(move || -> anyhow::Result<Vec<Receipt>> {
+        let res: Vec<_> = tokio_rayon::spawn(move || -> anyhow::Result<Vec<Receipt>> {
             Ok(executor
                 .dry_run(ExecutionBlock::DryRun(block), utxo_validation)?
                 .into_iter()
                 .flatten()
                 .collect())
         })
-        .await??;
+        .await?;
         if is_script && res.is_empty() {
             return Err(anyhow!("Expected at least one set of receipts"))
         }
