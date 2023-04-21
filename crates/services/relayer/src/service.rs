@@ -23,7 +23,6 @@ use ethers_providers::{
 };
 use fuel_core_services::{
     RunnableService,
-    RunnableTask,
     ServiceRunner,
     StateWatcher,
 };
@@ -63,10 +62,6 @@ mod test;
 type Synced = watch::Receiver<Option<DaBlockHeight>>;
 type NotifySynced = watch::Sender<Option<DaBlockHeight>>;
 
-/// The alias of runnable relayer service.
-pub type Service<D> = CustomizableService<Provider<Http>, D>;
-type CustomizableService<P, D> = ServiceRunner<NotInitializedTask<P, D>>;
-
 /// The shared state of the relayer task.
 #[derive(Clone)]
 pub struct SharedState<D> {
@@ -75,20 +70,8 @@ pub struct SharedState<D> {
     database: D,
 }
 
-/// Not initialized version of the [`Task`].
-pub struct NotInitializedTask<P, D> {
-    /// Sends signals when the relayer reaches consistency with the DA layer.
-    synced: NotifySynced,
-    /// The node that communicates with Ethereum.
-    eth_node: P,
-    /// The fuel database.
-    database: D,
-    /// Configuration settings.
-    config: Config,
-}
-
 /// The actual relayer background task that syncs with the DA layer.
-pub struct Task<P, D> {
+pub struct Service<P, D> {
     /// Sends signals when the relayer reaches consistency with the DA layer.
     synced: NotifySynced,
     /// The node that communicates with Ethereum.
@@ -99,23 +82,25 @@ pub struct Task<P, D> {
     config: Config,
     /// The watcher used to track the state of the service. If the service stops,
     /// the task will stop synchronization.
-    shutdown: StateWatcher,
+    shutdown: Option<StateWatcher>,
 }
 
-impl<P, D> NotInitializedTask<P, D> {
+impl<P, D> Service<P, D> {
     /// Create a new relayer task.
     fn new(eth_node: P, database: D, config: Config) -> Self {
         let (synced, _) = watch::channel(None);
+
         Self {
             synced,
             eth_node,
             database,
             config,
+            shutdown: None,
         }
     }
 }
 
-impl<P, D> Task<P, D>
+impl<P, D> Service<P, D>
 where
     D: RelayerDb + 'static,
 {
@@ -127,13 +112,14 @@ where
 }
 
 #[async_trait]
-impl<P, D> RelayerData for Task<P, D>
+impl<P, D> RelayerData for Service<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
     D: RelayerDb + 'static,
 {
     async fn wait_if_eth_syncing(&self) -> anyhow::Result<()> {
-        let mut shutdown = self.shutdown.clone();
+        let mut shutdown = self.shutdown.clone().unwrap();
+
         tokio::select! {
             biased;
             _ = shutdown.while_started() => {
@@ -159,8 +145,12 @@ where
             &self.eth_node,
             self.config.log_page_size,
         );
-        let logs = logs.take_until(self.shutdown.while_started());
-        write_logs(&mut self.database, logs).await
+        if let Some(shutdown) = &mut self.shutdown {
+            let logs = logs.take_until(shutdown.while_started());
+            write_logs(&mut self.database, logs).await
+        } else {
+            Ok(())
+        }
     }
 
     fn update_synced(&self, state: &state::EthState) {
@@ -169,7 +159,7 @@ where
 }
 
 #[async_trait]
-impl<P, D> RunnableService for NotInitializedTask<P, D>
+impl<P, D> RunnableService for Service<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
     D: RelayerDb + Clone + 'static,
@@ -177,7 +167,7 @@ where
     const NAME: &'static str = "Relayer";
 
     type SharedData = SharedState<D>;
-    type Task = Task<P, D>;
+    type Params = ();
 
     fn shared_data(&self) -> Self::SharedData {
         let synced = self.synced.subscribe();
@@ -188,47 +178,33 @@ where
         }
     }
 
-    async fn into_task(mut self, watcher: &StateWatcher) -> anyhow::Result<Self::Task> {
-        let shutdown = watcher.clone();
-        let NotInitializedTask {
-            synced,
-            eth_node,
-            database,
-            config,
-        } = self;
-        let mut task = Task {
-            synced,
-            eth_node,
-            database,
-            config,
-            shutdown,
-        };
-        task.set_deploy_height();
+    async fn start(
+        mut self,
+        watcher: &StateWatcher,
+        _: Self::Params,
+    ) -> anyhow::Result<Self> {
+        self.shutdown = Some(watcher.clone());
+        self.set_deploy_height();
 
-        Ok(task)
+        Ok(self)
     }
-}
 
-#[async_trait]
-impl<P, D> RunnableTask for Task<P, D>
-where
-    P: Middleware<Error = ProviderError> + 'static,
-    D: RelayerDb + 'static,
-{
     async fn run(&mut self, _: &mut StateWatcher) -> anyhow::Result<bool> {
         let now = tokio::time::Instant::now();
         let should_continue = true;
 
         let result = run::run(self).await;
 
-        if self.shutdown.borrow_and_update().started() {
-            // Sleep the loop so the da node is not spammed.
-            tokio::time::sleep(
-                self.config
-                    .sync_minimum_duration
-                    .saturating_sub(now.elapsed()),
-            )
-            .await;
+        if let Some(shutdown) = &mut self.shutdown {
+            if shutdown.borrow_and_update().started() {
+                // Sleep the loop so the da node is not spammed.
+                tokio::time::sleep(
+                    self.config
+                        .sync_minimum_duration
+                        .saturating_sub(now.elapsed()),
+                )
+                .await;
+            }
         }
 
         result.map(|_| should_continue)
@@ -302,13 +278,14 @@ impl<D> SharedState<D> {
 }
 
 #[async_trait]
-impl<P, D> state::EthRemote for Task<P, D>
+impl<P, D> state::EthRemote for Service<P, D>
 where
     P: Middleware<Error = ProviderError>,
     D: RelayerDb + 'static,
 {
     async fn current(&self) -> anyhow::Result<u64> {
-        let mut shutdown = self.shutdown.clone();
+        let mut shutdown = self.shutdown.clone().unwrap();
+
         tokio::select! {
             biased;
             _ = shutdown.while_started() => {
@@ -326,7 +303,7 @@ where
 }
 
 #[async_trait]
-impl<P, D> EthLocal for Task<P, D>
+impl<P, D> EthLocal for Service<P, D>
 where
     P: Middleware<Error = ProviderError>,
     D: RelayerDb + 'static,
@@ -337,7 +314,10 @@ where
 }
 
 /// Creates an instance of runnable relayer service.
-pub fn new_service<D>(database: D, config: Config) -> anyhow::Result<Service<D>>
+pub fn new_service<D>(
+    database: D,
+    config: Config,
+) -> anyhow::Result<ServiceRunner<Service<Provider<Http>, D>>>
 where
     D: RelayerDb + Clone + 'static,
 {
@@ -346,36 +326,21 @@ where
             "Tried to start Relayer without setting an eth_client in the config"
         )
     })?;
+
     // TODO: Does this handle https?
     let http = Http::new(url);
     let eth_node = Provider::new(http);
-    Ok(new_service_internal(eth_node, database, config))
+    let service = Service::new(eth_node, database, config);
+
+    Ok(ServiceRunner::new(service, ()))
 }
 
 #[cfg(any(test, feature = "test-helpers"))]
 /// Start a test relayer.
-pub fn new_service_test<P, D>(
-    eth_node: P,
-    database: D,
-    config: Config,
-) -> CustomizableService<P, D>
+pub fn new_service_test<P, D>(eth_node: P, database: D, config: Config) -> Service<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
     D: RelayerDb + Clone + 'static,
 {
-    new_service_internal(eth_node, database, config)
-}
-
-fn new_service_internal<P, D>(
-    eth_node: P,
-    database: D,
-    config: Config,
-) -> CustomizableService<P, D>
-where
-    P: Middleware<Error = ProviderError> + 'static,
-    D: RelayerDb + Clone + 'static,
-{
-    let task = NotInitializedTask::new(eth_node, database, config);
-
-    CustomizableService::new(task)
+    Service::new(eth_node, database, config)
 }

@@ -53,7 +53,7 @@ async fn deploy_height_does_not_override() {
         ..Default::default()
     };
     let eth_node = MockMiddleware::default();
-    let relayer = NotInitializedTask::new(eth_node, mock_db.clone(), config);
+    let relayer = NotInitializedService::new(eth_node, mock_db.clone(), config);
     let _ = relayer.into_task(&Default::default()).await;
 
     assert_eq!(*mock_db.get_finalized_da_height().unwrap(), 50);
@@ -71,7 +71,7 @@ async fn deploy_height_does_override() {
         ..Default::default()
     };
     let eth_node = MockMiddleware::default();
-    let relayer = NotInitializedTask::new(eth_node, mock_db.clone(), config);
+    let relayer = NotInitializedService::new(eth_node, mock_db.clone(), config);
     let _ = relayer.into_task(&Default::default()).await;
 
     assert_eq!(*mock_db.get_finalized_da_height().unwrap(), 52);

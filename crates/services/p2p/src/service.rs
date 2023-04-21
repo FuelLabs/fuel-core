@@ -26,7 +26,6 @@ use anyhow::anyhow;
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
-    RunnableTask,
     ServiceRunner,
     StateWatcher,
 };
@@ -69,7 +68,16 @@ use tokio::sync::{
 };
 use tracing::warn;
 
-pub type Service<D> = ServiceRunner<Task<D>>;
+/// Orchestrates various p2p-related events between the inner `P2pService`
+/// and the top level `NetworkService`.
+pub struct Service<D> {
+    p2p_service: FuelP2PService<PostcardCodec>,
+    db: Arc<D>,
+    next_block_height: BoxStream<BlockHeight>,
+    /// Receive internal Task Requests
+    request_receiver: mpsc::Receiver<TaskRequest>,
+    shared: SharedState,
+}
 
 enum TaskRequest {
     // Broadcast requests to p2p network
@@ -106,18 +114,7 @@ impl Debug for TaskRequest {
     }
 }
 
-/// Orchestrates various p2p-related events between the inner `P2pService`
-/// and the top level `NetworkService`.
-pub struct Task<D> {
-    p2p_service: FuelP2PService<PostcardCodec>,
-    db: Arc<D>,
-    next_block_height: BoxStream<BlockHeight>,
-    /// Receive internal Task Requests
-    request_receiver: mpsc::Receiver<TaskRequest>,
-    shared: SharedState,
-}
-
-impl<D> Task<D> {
+impl<D> Service<D> {
     pub fn new<B: BlockHeightImporter>(
         config: Config,
         db: Arc<D>,
@@ -145,30 +142,24 @@ impl<D> Task<D> {
 }
 
 #[async_trait::async_trait]
-impl<D> RunnableService for Task<D>
+impl<D> RunnableService for Service<D>
 where
-    Self: RunnableTask,
+    D: P2pDb + 'static,
 {
     const NAME: &'static str = "P2P";
 
     type SharedData = SharedState;
-    type Task = Task<D>;
+    type Params = ();
 
     fn shared_data(&self) -> Self::SharedData {
         self.shared.clone()
     }
 
-    async fn into_task(mut self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
+    async fn start(mut self, _: &StateWatcher, _: Self::Params) -> anyhow::Result<Self> {
         self.p2p_service.start()?;
         Ok(self)
     }
-}
 
-#[async_trait::async_trait]
-impl<D> RunnableTask for Task<D>
-where
-    D: P2pDb + 'static,
-{
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
         tokio::select! {
@@ -462,16 +453,19 @@ impl SharedState {
     }
 }
 
-pub fn new_service<D, B>(p2p_config: Config, db: D, block_importer: B) -> Service<D>
+pub fn new_service<D, B>(
+    p2p_config: Config,
+    db: D,
+    block_importer: B,
+) -> ServiceRunner<Service<D>>
 where
     D: P2pDb + 'static,
     B: BlockHeightImporter,
 {
-    Service::new(Task::new(
-        p2p_config,
-        Arc::new(db),
-        Arc::new(block_importer),
-    ))
+    ServiceRunner::new(
+        Service::new(p2p_config, Arc::new(db), Arc::new(block_importer)),
+        (),
+    )
 }
 
 pub(crate) fn to_message_acceptance(

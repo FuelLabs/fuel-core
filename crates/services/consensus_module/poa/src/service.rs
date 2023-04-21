@@ -18,7 +18,6 @@ use anyhow::{
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
-    RunnableTask,
     ServiceRunner,
     StateWatcher,
 };
@@ -70,8 +69,6 @@ use tokio::{
 use tokio_stream::StreamExt;
 use tracing::error;
 
-pub type Service<T, B, I> = ServiceRunner<Task<T, B, I>>;
-
 #[derive(Clone)]
 pub struct SharedState {
     request_sender: mpsc::Sender<Request>,
@@ -121,7 +118,7 @@ pub(crate) enum RequestType {
     Trigger,
 }
 
-pub struct Task<T, B, I> {
+pub struct Service<T, B, I> {
     block_gas_limit: Word,
     signing_key: Option<Secret<SecretKeyWrapper>>,
     block_producer: B,
@@ -142,7 +139,7 @@ pub struct Task<T, B, I> {
     consensus_params: ConsensusParameters,
 }
 
-impl<T, B, I> Task<T, B, I>
+impl<T, B, I> Service<T, B, I>
 where
     T: TransactionPool,
 {
@@ -207,7 +204,7 @@ where
     }
 }
 
-impl<D, T, B, I> Task<T, B, I>
+impl<D, T, B, I> Service<T, B, I>
 where
     T: TransactionPool,
     B: BlockProducer<Database = D>,
@@ -423,20 +420,23 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T, B, I> RunnableService for Task<T, B, I>
+impl<D, T, B, I> RunnableService for Service<T, B, I>
 where
-    Self: RunnableTask,
+    Self: Send + Sync,
+    T: TransactionPool,
+    B: BlockProducer<Database = D>,
+    I: BlockImporter<Database = D>,
 {
     const NAME: &'static str = "PoA";
 
     type SharedData = SharedState;
-    type Task = Task<T, B, I>;
+    type Params = ();
 
     fn shared_data(&self) -> Self::SharedData {
         self.shared_state.clone()
     }
 
-    async fn into_task(self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
+    async fn start(self, _: &StateWatcher, _: Self::Params) -> anyhow::Result<Self> {
         match self.trigger {
             Trigger::Never | Trigger::Instant => {}
             Trigger::Interval { block_time } => {
@@ -452,15 +452,7 @@ where
         };
         Ok(self)
     }
-}
 
-#[async_trait::async_trait]
-impl<D, T, B, I> RunnableTask for Task<T, B, I>
-where
-    T: TransactionPool,
-    B: BlockProducer<Database = D>,
-    I: BlockImporter<Database = D>,
-{
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
         tokio::select! {
@@ -515,19 +507,16 @@ pub fn new_service<D, T, B, I>(
     txpool: T,
     block_producer: B,
     block_importer: I,
-) -> Service<T, B, I>
+) -> ServiceRunner<Service<T, B, I>>
 where
     T: TransactionPool + 'static,
     B: BlockProducer<Database = D> + 'static,
     I: BlockImporter<Database = D> + 'static,
 {
-    Service::new(Task::new(
-        last_block,
-        config,
-        txpool,
-        block_producer,
-        block_importer,
-    ))
+    let service =
+        Service::new(last_block, config, txpool, block_producer, block_importer);
+
+    ServiceRunner::new(service, ())
 }
 
 fn seal_block(

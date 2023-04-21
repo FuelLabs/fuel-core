@@ -4,7 +4,6 @@ use crate::{
 };
 use fuel_core_services::{
     RunnableService,
-    RunnableTask,
     ServiceRunner,
     State,
     StateWatcher,
@@ -68,7 +67,7 @@ impl FuelService {
         database.init(&config.chain_conf)?;
         Self::make_config_consistent(&mut config);
         let task = Task::new(database, config)?;
-        let runner = ServiceRunner::new(task);
+        let runner = ServiceRunner::new(task, ());
         let shared = runner.shared.clone();
         let bound_address = runner.shared.graph_ql.bound_address;
         Ok(FuelService {
@@ -213,22 +212,19 @@ impl Task {
 impl RunnableService for Task {
     const NAME: &'static str = "FuelService";
     type SharedData = SharedState;
-    type Task = Task;
+    type Params = ();
 
     fn shared_data(&self) -> Self::SharedData {
         self.shared.clone()
     }
 
-    async fn into_task(self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
+    async fn start(self, _: &StateWatcher, _: Self::Params) -> anyhow::Result<Self> {
         for service in &self.services {
             service.start_and_await().await?;
         }
         Ok(self)
     }
-}
 
-#[async_trait::async_trait]
-impl RunnableTask for Task {
     #[tracing::instrument(skip_all)]
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let mut stop_signals = vec![];

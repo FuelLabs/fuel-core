@@ -58,7 +58,7 @@ pub trait Service {
 
 /// Trait used by `ServiceRunner` to encapsulate the business logic tasks for a service.
 #[async_trait::async_trait]
-pub trait RunnableService: Send {
+pub trait RunnableService: Send + Sized {
     /// The name of the runnable service, used for namespacing error messages.
     const NAME: &'static str;
 
@@ -69,7 +69,9 @@ pub trait RunnableService: Send {
     type SharedData: Clone + Send + Sync;
 
     /// The initialized runnable task type.
-    type Task: RunnableTask;
+    // type Task: RunnableTask;
+
+    type Params: Clone + Send + Sync;
 
     /// A cloned instance of the shared data
     fn shared_data(&self) -> Self::SharedData;
@@ -78,13 +80,12 @@ pub trait RunnableService: Send {
     ///
     /// The `state` is a `State` watcher of the service. Some tasks may handle state changes
     /// on their own.
-    async fn into_task(self, state_watcher: &StateWatcher) -> anyhow::Result<Self::Task>;
-}
+    async fn start(
+        self,
+        state_watcher: &StateWatcher,
+        params: Self::Params,
+    ) -> anyhow::Result<Self>;
 
-/// The trait is implemented by the service task and contains a single iteration of the infinity
-/// loop.
-#[async_trait::async_trait]
-pub trait RunnableTask: Send {
     /// This function should contain the main business logic of the service task. It will run until
     /// the service either returns false, panics or a stop signal is received.
     /// If the service returns an error, it will be logged and execution will resume.
@@ -126,9 +127,9 @@ where
     S: RunnableService + 'static,
 {
     /// Initializes a new `ServiceRunner` containing a `RunnableService`
-    pub fn new(service: S) -> Self {
+    pub fn new(service: S, params: S::Params) -> Self {
         let shared = service.shared_data();
-        let state = initialize_loop(service);
+        let state = initialize_loop(service, params);
         Self { shared, state }
     }
 
@@ -225,7 +226,7 @@ where
 
 #[tracing::instrument(skip_all, fields(service = S::NAME))]
 /// Initialize the background loop as a spawned task.
-fn initialize_loop<S>(service: S) -> Shared<watch::Sender<State>>
+fn initialize_loop<S>(service: S, params: S::Params) -> Shared<watch::Sender<State>>
 where
     S: RunnableService + 'static,
 {
@@ -236,7 +237,9 @@ where
     tokio::task::spawn(
         async move {
             tracing::debug!("running");
-            let run = std::panic::AssertUnwindSafe(run(service, stop_sender.clone()));
+            let run =
+                std::panic::AssertUnwindSafe(run(service, stop_sender.clone(), params));
+
             tracing::debug!("awaiting run");
             let result = run.catch_unwind().await;
 
@@ -270,7 +273,7 @@ where
 }
 
 /// Runs the main loop.
-async fn run<S>(service: S, sender: Shared<watch::Sender<State>>)
+async fn run<S>(service: S, sender: Shared<watch::Sender<State>>, params: S::Params)
 where
     S: RunnableService + 'static,
 {
@@ -286,8 +289,8 @@ where
     }
 
     // We can panic here, because it is inside of the task.
-    let mut task = service
-        .into_task(&state)
+    let mut started_service = service
+        .start(&state, params)
         .await
         .expect("The initialization of the service failed.");
 
@@ -303,7 +306,7 @@ where
     let mut got_panic = None;
 
     while state.borrow_and_update().started() {
-        let task = std::panic::AssertUnwindSafe(task.run(&mut state));
+        let task = std::panic::AssertUnwindSafe(started_service.run(&mut state));
         let panic_result = task.catch_unwind().await;
 
         match panic_result {
@@ -326,7 +329,7 @@ where
         }
     }
 
-    let shutdown = std::panic::AssertUnwindSafe(task.shutdown());
+    let shutdown = std::panic::AssertUnwindSafe(started_service.shutdown());
     match shutdown.catch_unwind().await {
         Ok(Ok(_)) => {}
         Ok(Err(e)) => {
@@ -387,19 +390,12 @@ mod tests {
             const NAME: &'static str = "MockService";
 
             type SharedData = EmptyShared;
-            type Task = MockTask;
+            type Params = ();
 
             fn shared_data(&self) -> EmptyShared;
 
-            async fn into_task(self, state: &StateWatcher) -> anyhow::Result<MockTask>;
-        }
-    }
+            async fn start(self, state: &StateWatcher, params: Self::Params) -> anyhow::Result<Self>;
 
-    mockall::mock! {
-        Task {}
-
-        #[async_trait::async_trait]
-        impl RunnableTask for Task {
             fn run<'_self, '_state, 'a>(
                 &'_self mut self,
                 state: &'_state mut StateWatcher

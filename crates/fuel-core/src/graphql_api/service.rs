@@ -54,7 +54,6 @@ use axum::{
 };
 use fuel_core_services::{
     RunnableService,
-    RunnableTask,
     StateWatcher,
 };
 use futures::Stream;
@@ -73,7 +72,7 @@ use tower_http::{
     trace::TraceLayer,
 };
 
-pub type Service = fuel_core_services::ServiceRunner<NotInitializedTask>;
+pub type Service = fuel_core_services::ServiceRunner<InitParams>;
 
 pub type Database = Box<dyn DatabasePort>;
 
@@ -88,7 +87,7 @@ pub struct SharedState {
     pub bound_address: SocketAddr,
 }
 
-pub struct NotInitializedTask {
+pub struct InitParams {
     router: Router,
     listener: TcpListener,
     bound_address: SocketAddr,
@@ -100,11 +99,11 @@ pub struct Task {
 }
 
 #[async_trait::async_trait]
-impl RunnableService for NotInitializedTask {
+impl RunnableService for Task {
     const NAME: &'static str = "GraphQL";
 
     type SharedData = SharedState;
-    type Task = Task;
+    type Params = InitParams;
 
     fn shared_data(&self) -> Self::SharedData {
         SharedState {
@@ -112,11 +111,21 @@ impl RunnableService for NotInitializedTask {
         }
     }
 
-    async fn into_task(self, state: &StateWatcher) -> anyhow::Result<Self::Task> {
+    async fn start(
+        self,
+        state: &StateWatcher,
+        params: Self::Params,
+    ) -> anyhow::Result<Self> {
+        let InitParams {
+            listener,
+            router,
+            bound_address,
+        } = params;
+
         let mut state = state.clone();
-        let server = axum::Server::from_tcp(self.listener)
+        let server = axum::Server::from_tcp(listener)
             .unwrap()
-            .serve(self.router.into_make_service())
+            .serve(router.into_make_service())
             .with_graceful_shutdown(async move {
                 state
                     .while_started()
@@ -128,10 +137,7 @@ impl RunnableService for NotInitializedTask {
             server: Box::pin(server),
         })
     }
-}
 
-#[async_trait::async_trait]
-impl RunnableTask for Task {
     async fn run(&mut self, _: &mut StateWatcher) -> anyhow::Result<bool> {
         self.server.as_mut().await?;
         // The `axum::Server` has its internal loop. If `await` is finished, we get an internal
@@ -208,7 +214,7 @@ pub fn new_service(
 
     tracing::info!("Binding GraphQL provider to {}", bound_address);
 
-    Ok(Service::new(NotInitializedTask {
+    Ok(Service::new(InitParams {
         router,
         listener,
         bound_address,

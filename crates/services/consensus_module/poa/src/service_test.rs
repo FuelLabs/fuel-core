@@ -5,7 +5,7 @@ use crate::{
         MockBlockProducer,
         MockTransactionPool,
     },
-    service::Task,
+    service::Service,
     Config,
     Service,
     Trigger,
@@ -307,7 +307,7 @@ async fn remove_skipped_transactions() {
         metrics: false,
         consensus_params: Default::default(),
     };
-    let mut task = Task::new(
+    let mut task = Service::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
         txpool,
@@ -348,7 +348,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         metrics: false,
         consensus_params: Default::default(),
     };
-    let mut task = Task::new(
+    let mut task = Service::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
         txpool,
@@ -404,7 +404,7 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
         metrics: false,
         consensus_params: Default::default(),
     };
-    let task = Task::new(
+    let task = Service::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
         txpool,

@@ -22,7 +22,6 @@ use fuel_core_services::{
         IntoBoxStream,
     },
     RunnableService,
-    RunnableTask,
     Service,
     ServiceRunner,
     SharedMutex,
@@ -51,15 +50,18 @@ where
     let height_stream = p2p.height_stream();
     let committed_height_stream = executor.committed_height_stream();
     let state = State::new(Some(current_fuel_block_height.into()), None);
-    Ok(ServiceRunner::new(SyncTask::new(
-        height_stream,
-        committed_height_stream,
-        state,
-        params,
-        p2p,
-        executor,
-        consensus,
-    )?))
+    Ok(ServiceRunner::new(
+        SyncTask::new(
+            height_stream,
+            committed_height_stream,
+            state,
+            params,
+            p2p,
+            executor,
+            consensus,
+        )?,
+        (),
+    ))
 }
 
 /// Task for syncing heights.
@@ -103,30 +105,11 @@ where
             notify.clone(),
         );
         let import = Import::new(state, notify, params, p2p, executor, consensus);
-        let import_task_handle = ServiceRunner::new(ImportTask(import));
+        let import_task_handle = ServiceRunner::new(ImportTask(import), ());
         Ok(Self {
             sync_heights,
             import_task_handle,
         })
-    }
-}
-
-#[async_trait::async_trait]
-impl<P, E, C> RunnableTask for SyncTask<P, E, C>
-where
-    P: PeerToPeerPort + Send + Sync + 'static,
-    E: BlockImporterPort + Send + Sync + 'static,
-    C: ConsensusPort + Send + Sync + 'static,
-{
-    #[tracing::instrument(level = "debug", skip_all, err, ret)]
-    async fn run(&mut self, _: &mut StateWatcher) -> anyhow::Result<bool> {
-        Ok(self.sync_heights.sync().await.is_some())
-    }
-
-    async fn shutdown(self) -> anyhow::Result<()> {
-        tracing::info!("Sync task shutting down");
-        self.import_task_handle.stop_and_await().await?;
-        Ok(())
     }
 }
 
@@ -140,12 +123,15 @@ where
     const NAME: &'static str = "fuel-core-sync";
 
     type SharedData = ();
-
-    type Task = SyncTask<P, E, C>;
+    type Params = ();
 
     fn shared_data(&self) -> Self::SharedData {}
 
-    async fn into_task(mut self, watcher: &StateWatcher) -> anyhow::Result<Self::Task> {
+    async fn start(
+        mut self,
+        watcher: &StateWatcher,
+        _: Self::Params,
+    ) -> anyhow::Result<Self> {
         let mut sync_watcher = watcher.clone();
         self.import_task_handle.start_and_await().await?;
         let mut import_watcher = self.import_task_handle.state_watcher();
@@ -162,23 +148,15 @@ where
 
         Ok(self)
     }
-}
 
-#[async_trait::async_trait]
-impl<P, E, C> RunnableTask for ImportTask<P, E, C>
-where
-    P: PeerToPeerPort + Send + Sync + 'static,
-    E: BlockImporterPort + Send + Sync + 'static,
-    C: ConsensusPort + Send + Sync + 'static,
-{
     #[tracing::instrument(level = "debug", skip_all, err, ret)]
-    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
-        self.0.import(watcher).await
+    async fn run(&mut self, _: &mut StateWatcher) -> anyhow::Result<bool> {
+        Ok(self.sync_heights.sync().await.is_some())
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        // Nothing to shut down because we don't have any temporary state that should be dumped,
-        // and we don't spawn any sub-tasks that we need to finish or await.
+        tracing::info!("Sync task shutting down");
+        self.import_task_handle.stop_and_await().await?;
         Ok(())
     }
 }
@@ -193,12 +171,22 @@ where
     const NAME: &'static str = "fuel-core-sync/import-task";
 
     type SharedData = ();
-
-    type Task = ImportTask<P, E, C>;
+    type Params = ();
 
     fn shared_data(&self) -> Self::SharedData {}
 
-    async fn into_task(self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
+    async fn start(self, _: &StateWatcher, _: Self::Params) -> anyhow::Result<Self> {
         Ok(self)
+    }
+
+    #[tracing::instrument(level = "debug", skip_all, err, ret)]
+    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+        self.0.import(watcher).await
+    }
+
+    async fn shutdown(self) -> anyhow::Result<()> {
+        // Nothing to shut down because we don't have any temporary state that should be dumped,
+        // and we don't spawn any sub-tasks that we need to finish or await.
+        Ok(())
     }
 }

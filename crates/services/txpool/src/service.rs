@@ -13,7 +13,6 @@ use crate::{
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
-    RunnableTask,
     ServiceRunner,
     StateWatcher,
 };
@@ -129,24 +128,17 @@ where
     const NAME: &'static str = "TxPool";
 
     type SharedData = SharedState<P2P, DB>;
-    type Task = Task<P2P, DB>;
+    type Params = ();
 
     fn shared_data(&self) -> Self::SharedData {
         self.shared.clone()
     }
 
-    async fn into_task(mut self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
+    async fn start(mut self, _: &StateWatcher, _: Self::Params) -> anyhow::Result<Self> {
         self.ttl_timer.reset();
         Ok(self)
     }
-}
 
-#[async_trait::async_trait]
-impl<P2P, DB> RunnableTask for Task<P2P, DB>
-where
-    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
-    DB: TxPoolDb,
-{
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
 
@@ -372,7 +364,7 @@ where
         ttl_timer,
     };
 
-    Service::new(task)
+    Service::new(task, ())
 }
 
 #[cfg(test)]
