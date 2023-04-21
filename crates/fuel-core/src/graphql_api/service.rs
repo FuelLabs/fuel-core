@@ -72,8 +72,6 @@ use tower_http::{
     trace::TraceLayer,
 };
 
-pub type Service = fuel_core_services::ServiceRunner<InitParams>;
-
 pub type Database = Box<dyn DatabasePort>;
 
 pub type BlockProducer = Box<dyn BlockProducerPort>;
@@ -93,13 +91,13 @@ pub struct InitParams {
     bound_address: SocketAddr,
 }
 
-pub struct Task {
+pub struct Service {
     // Ugly workaround because of https://github.com/hyperium/hyper/issues/2582
     server: Pin<Box<dyn Future<Output = hyper::Result<()>> + Send + 'static>>,
 }
 
 #[async_trait::async_trait]
-impl RunnableService for Task {
+impl RunnableService for Service {
     const NAME: &'static str = "GraphQL";
 
     type SharedData = SharedState;
@@ -133,7 +131,7 @@ impl RunnableService for Task {
                     .expect("The service is destroyed");
             });
 
-        Ok(Task {
+        Ok(Service {
             server: Box::pin(server),
         })
     }
