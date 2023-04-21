@@ -63,7 +63,6 @@ async fn block() {
         .await
         .unwrap();
     assert!(block.is_some());
-    println!("{:?}", block);
 }
 
 #[tokio::test]
