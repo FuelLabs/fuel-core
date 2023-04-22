@@ -7,6 +7,7 @@ use async_graphql::{
         NextResolve,
         ResolveInfo,
     },
+    QueryPathSegment,
     Response,
     ServerResult,
     Value,
@@ -46,14 +47,24 @@ impl Extension for PrometheusExtInner {
         info: ResolveInfo<'_>,
         next: NextResolve<'_>,
     ) -> ServerResult<Option<Value>> {
-        let field_name = info.path_node.field_name();
+        let field_name =
+            if let QueryPathSegment::Name(field_name) = info.path_node.segment {
+                Some(field_name)
+            } else {
+                None
+            };
         let path = info.path_node.to_string();
 
         let start_time = Instant::now();
         let res = next.run(ctx, info).await;
         let seconds = start_time.elapsed().as_secs_f64();
-        GRAPHQL_METRICS.graphql_observe(field_name, seconds);
         GRAPHQL_METRICS.graphql_observe(path.as_str(), seconds);
+
+        if let Some(field_name) = field_name {
+            if field_name != path.as_str() {
+                GRAPHQL_METRICS.graphql_observe(field_name, seconds);
+            }
+        }
 
         res
     }
