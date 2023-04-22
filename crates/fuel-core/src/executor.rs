@@ -204,8 +204,6 @@ where
             database,
         };
 
-        let start = tokio::time::Instant::now();
-
         let (
             ExecutionResult {
                 block,
@@ -214,17 +212,6 @@ where
             },
             temporary_db,
         ) = executor.execute_without_commit(block)?.into();
-        let execution_duration = start.elapsed();
-
-        if execution_duration.as_secs() > 2 {
-            use fuel_core_types::fuel_types::bytes::SerializableVec;
-            if let Some(tx) = block.transactions().last() {
-                tracing::info!(
-                    "Got a long dry transaction: {}",
-                    format!("0x{}", hex::encode(tx.clone().to_bytes()))
-                );
-            }
-        }
 
         // If one of the transactions fails, return an error.
         if let Some((_, err)) = skipped_transactions.into_iter().next() {
