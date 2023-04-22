@@ -53,17 +53,13 @@ impl Extension for PrometheusExtInner {
             } else {
                 None
             };
-        let path = info.path_node.to_string();
 
         let start_time = Instant::now();
         let res = next.run(ctx, info).await;
         let seconds = start_time.elapsed().as_secs_f64();
-        GRAPHQL_METRICS.graphql_observe(path.as_str(), seconds);
 
         if let Some(field_name) = field_name {
-            if field_name != path.as_str() {
-                GRAPHQL_METRICS.graphql_observe(field_name, seconds);
-            }
+            GRAPHQL_METRICS.graphql_observe(field_name, seconds);
         }
 
         res
