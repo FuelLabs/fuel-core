@@ -32,7 +32,7 @@ pub enum SubCommands {
         #[clap(name = "CHAIN_CONFIG", long = "chain", default_value = "local_testnet")]
         chain_config: String,
     },
-    /// Creates a config for teh contract.
+    /// Creates a config for the contract.
     #[command(arg_required_else_help = true)]
     Contract {
         /// The id of the contract to snapshot.
