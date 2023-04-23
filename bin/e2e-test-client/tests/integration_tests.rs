@@ -82,7 +82,9 @@ async fn execute_suite(config_path: String) {
 }
 
 async fn setup_local_node() -> FuelService {
-    FuelService::new_node(Config::local_node()).await.unwrap()
+    let mut config = Config::local_node();
+    config.chain_conf.transaction_parameters.max_storage_slots = 1 << 17; // 131072
+    FuelService::new_node(config).await.unwrap()
 }
 
 fn generate_config_file(endpoint: String) -> TestConfig {

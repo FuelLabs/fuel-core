@@ -119,10 +119,6 @@ impl ChainConfig {
                 coins: Some(initial_coins),
                 ..StateConfig::default()
             }),
-            transaction_parameters: ConsensusParameters {
-                max_storage_slots: 1 << 17, // 131072
-                ..Default::default()
-            },
             ..Default::default()
         }
     }
