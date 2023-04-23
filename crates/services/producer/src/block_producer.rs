@@ -128,7 +128,7 @@ where
         } + 1u64.into();
 
         let is_script = transaction.is_script();
-        let header = self.new_header(height, None).await?;
+        let header = self._new_header(height, None)?;
         let block =
             PartialFuelBlock::new(header, vec![transaction].into_iter().collect());
 
@@ -160,23 +160,12 @@ where
         height: BlockHeight,
         block_time: Option<Tai64>,
     ) -> anyhow::Result<PartialBlockHeader> {
-        let previous_block_info = self.previous_block_info(height)?;
-        let new_da_height = self
-            .select_new_da_height(previous_block_info.da_height)
-            .await?;
+        let mut block_header = self._new_header(height, block_time)?;
+        let new_da_height = self.select_new_da_height(block_header.da_height).await?;
 
-        Ok(PartialBlockHeader {
-            application: ApplicationHeader {
-                da_height: new_da_height,
-                generated: Default::default(),
-            },
-            consensus: ConsensusHeader {
-                prev_root: previous_block_info.prev_root,
-                height,
-                time: block_time.unwrap_or_else(Tai64::now),
-                generated: Default::default(),
-            },
-        })
+        block_header.application.da_height = new_da_height;
+
+        Ok(block_header)
     }
 
     async fn select_new_da_height(
@@ -194,6 +183,27 @@ where
             .into())
         }
         Ok(best_height)
+    }
+
+    fn _new_header(
+        &self,
+        height: BlockHeight,
+        block_time: Option<Tai64>,
+    ) -> anyhow::Result<PartialBlockHeader> {
+        let previous_block_info = self.previous_block_info(height)?;
+
+        Ok(PartialBlockHeader {
+            application: ApplicationHeader {
+                da_height: previous_block_info.da_height,
+                generated: Default::default(),
+            },
+            consensus: ConsensusHeader {
+                prev_root: previous_block_info.prev_root,
+                height,
+                time: block_time.unwrap_or_else(Tai64::now),
+                generated: Default::default(),
+            },
+        })
     }
 
     fn previous_block_info(
