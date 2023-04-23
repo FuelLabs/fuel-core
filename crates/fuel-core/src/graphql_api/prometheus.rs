@@ -47,12 +47,10 @@ impl Extension for PrometheusExtInner {
         info: ResolveInfo<'_>,
         next: NextResolve<'_>,
     ) -> ServerResult<Option<Value>> {
-        let field_name =
-            if let QueryPathSegment::Name(field_name) = info.path_node.segment {
-                Some(field_name)
-            } else {
-                None
-            };
+        let field_name = match (info.path_node.parent, info.path_node.segment) {
+            (None, QueryPathSegment::Name(field_name)) => Some(field_name),
+            _ => None,
+        };
 
         let start_time = Instant::now();
         let res = next.run(ctx, info).await;
