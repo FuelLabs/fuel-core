@@ -1,4 +1,5 @@
 use crate::client::schema::ConversionError;
+
 use serde::{
     de::Error,
     Deserialize,
@@ -206,8 +207,10 @@ fuel_type_scalar!(AssetId, Bytes32);
 fuel_type_scalar!(BlockId, Bytes32);
 fuel_type_scalar!(ContractId, Bytes32);
 fuel_type_scalar!(MerkleRoot, Bytes32);
+fuel_type_scalar!(Message, Bytes32);
 fuel_type_scalar!(MessageId, Bytes32);
 fuel_type_scalar!(Nonce, Bytes32);
+fuel_type_scalar!(PublicKey, Bytes64);
 fuel_type_scalar!(Salt, Bytes32);
 fuel_type_scalar!(Signature, Bytes64);
 fuel_type_scalar!(TransactionId, Bytes32);
@@ -222,15 +225,39 @@ impl From<Tai64> for Tai64Timestamp {
 }
 
 impl BlockId {
-    pub fn into_message(self) -> fuel_core_types::fuel_crypto::Message {
+    pub fn into_message(self) -> Message {
         let bytes: base::Bytes32 = self.into();
-        fuel_core_types::fuel_crypto::Message::from_bytes(bytes.0)
+        Message::from(bytes)
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum MyError {
+    Error,
+}
+
+impl Display for MyError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        todo!()
     }
 }
 
 impl Signature {
-    pub fn into_signature(self) -> fuel_core_types::fuel_crypto::Signature {
+    pub fn into_signature(self) -> Signature {
         let bytes: base::Bytes64 = self.into();
-        fuel_core_types::fuel_crypto::Signature::from_bytes(bytes.0)
+        Signature::from(bytes)
+    }
+
+    pub fn recover(self, message: &Message) -> Result<PublicKey, MyError> {
+        let bytes: base::Bytes64 = self.into();
+        let signature = fuel_core_types::fuel_crypto::Signature::from_bytes(bytes.0);
+        let bytes: base::Bytes32 = (*message).clone().into();
+        let message = fuel_core_types::fuel_crypto::Message::from_bytes(bytes.0);
+        let bytes: base::Bytes64 = signature
+            .recover(&message)
+            .map_err(|_| MyError::Error)?
+            .into();
+        let public_key = PublicKey::from(bytes);
+        Ok(public_key)
     }
 }

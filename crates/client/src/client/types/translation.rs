@@ -89,11 +89,16 @@ impl From<schema::block::Block> for Block {
             .map(Into::<Bytes32>::into)
             .map(Into::into)
             .collect::<Vec<TransactionId>>();
+        let block_producer = value.block_producer().map(|key| {
+            let bytes: Bytes64 = key.into();
+            bytes.into()
+        });
         Self {
             id: id.into(),
             header: value.header.into(),
             consensus: value.consensus.into(),
             transactions,
+            block_producer,
         }
     }
 }

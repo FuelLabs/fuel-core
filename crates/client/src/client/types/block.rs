@@ -2,11 +2,11 @@ use crate::client::types::primitives::{
     base::Bytes32,
     BlockId,
     MerkleRoot,
+    PublicKey,
     Signature,
     Tai64Timestamp,
     TransactionId,
 };
-use fuel_core_types::fuel_crypto;
 
 #[derive(Debug)]
 pub struct Block {
@@ -14,20 +14,12 @@ pub struct Block {
     pub header: Header,
     pub consensus: Consensus,
     pub transactions: Vec<TransactionId>,
+    pub block_producer: Option<PublicKey>,
 }
 
 impl Block {
-    pub fn block_producer(&self) -> Option<fuel_crypto::PublicKey> {
-        let message = self.header.id.clone().into_message();
-        match &self.consensus {
-            Consensus::Genesis(_) => Some(Default::default()),
-            Consensus::PoAConsensus(poa) => {
-                let signature = poa.signature.clone().into_signature();
-                let producer_pub_key = signature.recover(&message);
-                producer_pub_key.ok()
-            }
-            Consensus::Unknown => None,
-        }
+    pub fn block_producer(&self) -> Option<&PublicKey> {
+        self.block_producer.as_ref()
     }
 }
 
