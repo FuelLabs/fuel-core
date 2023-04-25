@@ -73,7 +73,7 @@ use tower_http::{
     trace::TraceLayer,
 };
 
-pub type Service = fuel_core_services::ServiceRunner<NotInitializedTask>;
+pub type Service = fuel_core_services::ServiceRunner<GraphqlService>;
 
 pub type Database = Box<dyn DatabasePort>;
 
@@ -88,10 +88,23 @@ pub struct SharedState {
     pub bound_address: SocketAddr,
 }
 
-pub struct NotInitializedTask {
+pub struct GraphqlService {
+    bound_address: SocketAddr,
+}
+
+pub struct ServerParams {
     router: Router,
     listener: TcpListener,
-    bound_address: SocketAddr,
+}
+
+// just to please the `Default` requirement
+impl Default for ServerParams {
+    fn default() -> Self {
+        Self {
+            listener: TcpListener::bind("127.0.0.1:4000").unwrap(),
+            router: Router::default(),
+        }
+    }
 }
 
 pub struct Task {
@@ -100,11 +113,12 @@ pub struct Task {
 }
 
 #[async_trait::async_trait]
-impl RunnableService for NotInitializedTask {
+impl RunnableService for GraphqlService {
     const NAME: &'static str = "GraphQL";
 
     type SharedData = SharedState;
     type Task = Task;
+    type TaskParams = ServerParams;
 
     fn shared_data(&self) -> Self::SharedData {
         SharedState {
@@ -112,11 +126,17 @@ impl RunnableService for NotInitializedTask {
         }
     }
 
-    async fn into_task(self, state: &StateWatcher) -> anyhow::Result<Self::Task> {
+    async fn into_task(
+        self,
+        state: &StateWatcher,
+        params: Self::TaskParams,
+    ) -> anyhow::Result<Self::Task> {
         let mut state = state.clone();
-        let server = axum::Server::from_tcp(self.listener)
+        let ServerParams { router, listener } = params;
+
+        let server = axum::Server::from_tcp(listener)
             .unwrap()
-            .serve(self.router.into_make_service())
+            .serve(router.into_make_service())
             .with_graceful_shutdown(async move {
                 state
                     .while_started()
@@ -208,11 +228,12 @@ pub fn new_service(
 
     tracing::info!("Binding GraphQL provider to {}", bound_address);
 
-    Ok(Service::new(NotInitializedTask {
-        router,
-        listener,
-        bound_address,
-    }))
+    let s = Service::new_with_params(
+        GraphqlService { bound_address },
+        ServerParams { router, listener },
+    );
+
+    Ok(s)
 }
 
 async fn graphql_playground() -> impl IntoResponse {
