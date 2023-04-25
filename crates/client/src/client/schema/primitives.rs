@@ -1,7 +1,10 @@
 use super::schema;
-use crate::client::schema::{
-    ConversionError,
-    ConversionError::HexStringPrefixError,
+use crate::client::{
+    schema::{
+        ConversionError,
+        ConversionError::HexStringPrefixError,
+    },
+    HexFormatted,
 };
 use core::fmt;
 use cynic::impl_scalar;
@@ -27,48 +30,6 @@ use std::{
     str::FromStr,
 };
 use tai64::Tai64;
-
-#[derive(Debug, Clone, Default)]
-pub struct HexFormatted<T: Debug + Clone + Default>(pub T);
-
-impl<T: LowerHex + Debug + Clone + Default> Serialize for HexFormatted<T> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(format!("{:#x}", self.0).as_str())
-    }
-}
-
-impl<'de, T: FromStr<Err = E> + Debug + Clone + Default, E: Display> Deserialize<'de>
-    for HexFormatted<T>
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s: String = Deserialize::deserialize(deserializer)?;
-        T::from_str(s.as_str()).map_err(D::Error::custom).map(Self)
-    }
-}
-
-impl<T: FromStr<Err = E> + Debug + Clone + Default, E: Display> FromStr
-    for HexFormatted<T>
-{
-    type Err = ConversionError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        T::from_str(s)
-            .map_err(|e| ConversionError::HexError(format!("{e}")))
-            .map(Self)
-    }
-}
-
-impl<T: LowerHex + Debug + Clone + Default> Display for HexFormatted<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "0x{:x}", self.0)
-    }
-}
 
 macro_rules! fuel_type_scalar {
     ($id:ident, $ft_id:ident) => {

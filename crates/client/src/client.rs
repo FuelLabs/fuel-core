@@ -105,6 +105,12 @@ use self::schema::{
     message::MessageProofArgs,
 };
 
+mod hex_formatted;
+use hex_formatted::{
+    HexFormatError,
+    HexFormatted,
+};
+
 pub mod schema;
 pub mod types;
 

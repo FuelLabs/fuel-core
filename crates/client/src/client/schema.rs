@@ -17,6 +17,7 @@ use std::{
 };
 use thiserror::Error;
 
+use crate::client::hex_formatted::HexFormatError;
 pub use primitives::*;
 
 pub mod balance;
@@ -305,8 +306,8 @@ pub enum ConversionError {
     HexString256LengthError(usize),
     #[error("hex parsing error {0}")]
     HexDecodingError(FromHexError),
-    #[error("hex parsing error {0}")]
-    HexError(String),
+    #[error(transparent)]
+    HexError(#[from] HexFormatError),
     #[error("failed integer conversion")]
     IntegerConversion,
     #[error("failed to deserialize transaction from bytes {0}")]
