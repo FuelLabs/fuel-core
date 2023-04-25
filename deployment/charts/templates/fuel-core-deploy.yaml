@@ -220,6 +220,10 @@ spec:
             - "--max_block_size"
             - "{{ .Values.app.max_block_size }}"
           {{- end }}
+          {{- if .Values.app.max_database_cache_size }}
+            - "--max-database-cache-size"
+            - "{{ .Values.app.max_database_cache_size }}"
+          {{- end }}
           {{- if .Values.app.max_transmit_size }}
             - "--max_transmit_size"
             - "{{ .Values.app.max_transmit_size }}"

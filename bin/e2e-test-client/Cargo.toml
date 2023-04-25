@@ -15,13 +15,16 @@ publish = true
 [dependencies]
 anyhow = { workspace = true }
 fuel-core = { workspace = true, default-features = false, optional = true }
+fuel-core-chain-config = { workspace = true }
 fuel-core-client = { workspace = true }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
 futures = "0.3"
+hex = "0.4"
 humantime-serde = "1.1"
 libtest-mimic = "0.6.0"
 serde = { workspace = true }
-tikv-jemallocator = "0.5"
+serde_json = { workspace = true }
+tikv-jemallocator = { workspace = true }
 tokio = { workspace = true }
 toml = { version = "0.5" }
 

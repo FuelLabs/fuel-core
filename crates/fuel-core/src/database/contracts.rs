@@ -15,6 +15,7 @@ use fuel_core_storage::{
     },
     ContractsAssetKey,
     Error as StorageError,
+    Mappable,
     Result as StorageResult,
     StorageAsRef,
     StorageInspect,
@@ -25,15 +26,79 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     entities::contract::ContractUtxoInfo,
+    fuel_tx::Contract,
     fuel_types::{
         AssetId,
         Bytes32,
         ContractId,
         Word,
     },
-    fuel_vm::Contract,
 };
 use std::borrow::Cow;
+
+#[derive(serde::Deserialize, serde::Serialize)]
+struct OptimizedContract {
+    #[serde(with = "serde_bytes")]
+    bytes: Vec<u8>,
+}
+
+impl From<OptimizedContract> for Contract {
+    fn from(value: OptimizedContract) -> Self {
+        value.bytes.into()
+    }
+}
+
+impl StorageInspect<ContractsRawCode> for Database {
+    type Error = StorageError;
+
+    fn get(
+        &self,
+        key: &<ContractsRawCode as Mappable>::Key,
+    ) -> Result<Option<Cow<<ContractsRawCode as Mappable>::OwnedValue>>, Self::Error>
+    {
+        self.get::<OptimizedContract>(key.as_ref(), Column::ContractsRawCode)
+            .map(|option| option.map(|contract| Cow::Owned(Contract::from(contract))))
+            .map_err(Into::into)
+    }
+
+    fn contains_key(
+        &self,
+        key: &<ContractsRawCode as Mappable>::Key,
+    ) -> Result<bool, Self::Error> {
+        self.contains_key(key.as_ref(), Column::ContractsRawCode)
+            .map_err(Into::into)
+    }
+}
+
+impl StorageMutate<ContractsRawCode> for Database {
+    fn insert(
+        &mut self,
+        key: &<ContractsRawCode as Mappable>::Key,
+        value: &<ContractsRawCode as Mappable>::Value,
+    ) -> Result<Option<<ContractsRawCode as Mappable>::OwnedValue>, Self::Error> {
+        Database::insert::<_, _, OptimizedContract>(
+            self,
+            key.as_ref(),
+            Column::ContractsRawCode,
+            &value,
+        )
+        .map(|option| option.map(Into::into))
+        .map_err(Into::into)
+    }
+
+    fn remove(
+        &mut self,
+        key: &<ContractsRawCode as Mappable>::Key,
+    ) -> Result<Option<<ContractsRawCode as Mappable>::OwnedValue>, Self::Error> {
+        Database::remove::<OptimizedContract>(
+            self,
+            key.as_ref(),
+            Column::ContractsRawCode,
+        )
+        .map(|option| option.map(Into::into))
+        .map_err(Into::into)
+    }
+}
 
 impl DatabaseColumn for ContractsLatestUtxo {
     fn column() -> Column {
@@ -160,6 +225,82 @@ impl StorageWrite<ContractsRawCode> for Database {
 }
 
 impl Database {
+    pub fn get_contract_config_by_id(
+        &self,
+        contract_id: ContractId,
+    ) -> StorageResult<ContractConfig> {
+        let code: Vec<u8> = self
+            .storage::<ContractsRawCode>()
+            .get(&contract_id)?
+            .unwrap()
+            .into_owned()
+            .into();
+
+        let (salt, _) = self
+            .storage::<ContractsInfo>()
+            .get(&contract_id)
+            .unwrap()
+            .expect("Contract does not exist")
+            .into_owned();
+
+        let ContractUtxoInfo {
+            utxo_id,
+            tx_pointer,
+        } = self
+            .storage::<ContractsLatestUtxo>()
+            .get(&contract_id)
+            .unwrap()
+            .expect("contract does not exist")
+            .into_owned();
+
+        let state = Some(
+            self.iter_all_by_prefix::<Vec<u8>, Bytes32, _>(
+                Column::ContractsState,
+                Some(contract_id.as_ref()),
+            )
+            .map(|res| -> DatabaseResult<(Bytes32, Bytes32)> {
+                let safe_res = res?;
+
+                // We don't need to store ContractId which is the first 32 bytes of this
+                // key, as this Vec is already attached to that ContractId
+                let state_key = Bytes32::new(safe_res.0[32..].try_into()?);
+
+                Ok((state_key, safe_res.1))
+            })
+            .filter(|val| val.is_ok())
+            .collect::<DatabaseResult<Vec<(Bytes32, Bytes32)>>>()?,
+        );
+
+        let balances = Some(
+            self.iter_all_by_prefix::<Vec<u8>, u64, _>(
+                Column::ContractsAssets,
+                Some(contract_id.as_ref()),
+            )
+            .map(|res| {
+                let safe_res = res?;
+
+                let asset_id = AssetId::new(
+                    safe_res.0[32..].try_into().map_err(DatabaseError::from)?,
+                );
+
+                Ok((asset_id, safe_res.1))
+            })
+            .filter(|val| val.is_ok())
+            .collect::<StorageResult<Vec<(AssetId, u64)>>>()?,
+        );
+
+        Ok(ContractConfig {
+            code,
+            salt,
+            state,
+            balances,
+            tx_id: Some(*utxo_id.tx_id()),
+            output_index: Some(utxo_id.output_index()),
+            tx_pointer_block_height: Some(tx_pointer.block_height()),
+            tx_pointer_tx_idx: Some(tx_pointer.tx_index()),
+        })
+    }
+
     pub fn contract_balances(
         &self,
         contract: ContractId,
@@ -188,79 +329,7 @@ impl Database {
                         .try_into()
                         .map_err(DatabaseError::from)?,
                 );
-
-                let code: Vec<u8> = self
-                    .storage::<ContractsRawCode>()
-                    .get(&contract_id)?
-                    .unwrap()
-                    .into_owned()
-                    .into();
-
-                let (salt, _) = self
-                    .storage::<ContractsInfo>()
-                    .get(&contract_id)
-                    .unwrap()
-                    .expect("Contract does not exist")
-                    .into_owned();
-
-                let ContractUtxoInfo {
-                    utxo_id,
-                    tx_pointer,
-                } = self
-                    .storage::<ContractsLatestUtxo>()
-                    .get(&contract_id)
-                    .unwrap()
-                    .expect("contract does not exist")
-                    .into_owned();
-
-                let state = Some(
-                    self.iter_all_by_prefix::<Vec<u8>, Bytes32, _>(
-                        Column::ContractsState,
-                        Some(contract_id.as_ref()),
-                        None,
-                    )
-                    .map(|res| -> DatabaseResult<(Bytes32, Bytes32)> {
-                        let safe_res = res?;
-
-                        // We don't need to store ContractId which is the first 32 bytes of this
-                        // key, as this Vec is already attached to that ContractId
-                        let state_key = Bytes32::new(safe_res.0[32..].try_into()?);
-
-                        Ok((state_key, safe_res.1))
-                    })
-                    .filter(|val| val.is_ok())
-                    .collect::<DatabaseResult<Vec<(Bytes32, Bytes32)>>>()?,
-                );
-
-                let balances = Some(
-                    self.iter_all_by_prefix::<Vec<u8>, u64, _>(
-                        Column::ContractsAssets,
-                        Some(contract_id.as_ref()),
-                        None,
-                    )
-                    .map(|res| {
-                        let safe_res = res?;
-
-                        let asset_id = AssetId::new(
-                            safe_res.0[32..].try_into().map_err(DatabaseError::from)?,
-                        );
-
-                        Ok((asset_id, safe_res.1))
-                    })
-                    .filter(|val| val.is_ok())
-                    .collect::<StorageResult<Vec<(AssetId, u64)>>>()?,
-                );
-
-                Ok(ContractConfig {
-                    code,
-                    salt,
-                    state,
-                    balances,
-                    tx_id: Some(*utxo_id.tx_id()),
-                    output_index: Some(utxo_id.output_index()),
-                    tx_pointer_block_height: Some(tx_pointer.block_height()),
-                    tx_pointer_tx_idx: Some(tx_pointer.tx_index()),
-                })
+                self.get_contract_config_by_id(contract_id)
             })
             .collect::<StorageResult<Vec<ContractConfig>>>()?;
 
@@ -277,6 +346,10 @@ mod tests {
         TxId,
         TxPointer,
         UtxoId,
+    };
+    use rand::{
+        RngCore,
+        SeedableRng,
     };
 
     #[test]
@@ -306,6 +379,29 @@ mod tests {
     fn raw_code_put() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
+
+        let database = &mut Database::default();
+        database
+            .storage::<ContractsRawCode>()
+            .insert(&contract_id, contract.as_ref())
+            .unwrap();
+
+        let returned: Contract = database
+            .storage::<ContractsRawCode>()
+            .get(&contract_id)
+            .unwrap()
+            .unwrap()
+            .into_owned();
+        assert_eq!(returned, contract);
+    }
+
+    #[test]
+    fn raw_code_put_huge_contract() {
+        let rng = &mut rand::rngs::StdRng::seed_from_u64(2322u64);
+        let contract_id: ContractId = ContractId::from([1u8; 32]);
+        let mut bytes = vec![0; 16 * 1024 * 1024];
+        rng.fill_bytes(bytes.as_mut());
+        let contract: Contract = Contract::from(bytes);
 
         let database = &mut Database::default();
         database
