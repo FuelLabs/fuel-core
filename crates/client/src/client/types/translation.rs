@@ -11,6 +11,7 @@ use crate::client::{
         primitives::{
             Bytes32,
             Bytes64,
+            BytesN,
         },
         scalars::TransactionId,
         Block,
@@ -116,7 +117,18 @@ impl From<schema::block::BlockConnection> for PaginatedResult<Block, String> {
 
 impl From<schema::message::Message> for Message {
     fn from(value: schema::message::Message) -> Self {
-        todo!()
+        let sender: Bytes32 = value.sender.0 .0.into();
+        let recipient: Bytes32 = value.recipient.0 .0.into();
+        let nonce: Bytes32 = value.nonce.0 .0.into();
+        let data: BytesN = value.data.0 .0.into();
+        Self {
+            amount: value.amount.0,
+            sender: sender.into(),
+            recipient: recipient.into(),
+            nonce: nonce.into(),
+            data: data.into(),
+            da_height: value.da_height.0,
+        }
     }
 }
 

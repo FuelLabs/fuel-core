@@ -112,6 +112,16 @@ impl fmt::LowerHex for BytesN {
     }
 }
 
+impl<T> From<T> for BytesN
+where
+    T: Into<Vec<u8>>,
+{
+    fn from(value: T) -> Self {
+        let b: Vec<u8> = value.into();
+        b.into()
+    }
+}
+
 impl FromStr for BytesN {
     type Err = &'static str;
 
