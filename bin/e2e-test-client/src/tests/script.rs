@@ -57,7 +57,7 @@ pub async fn dry_run(ctx: &TestContext) -> Result<(), Failed> {
     _dry_runs(ctx, &transaction, 1000).await
 }
 
-// Maybe deploy a contract with large state and execute teh script
+// Maybe deploy a contract with large state and execute the script
 pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
     let contract_config = include_bytes!("test_data/large_state/contract.json");
     let contract_config: ContractConfig =

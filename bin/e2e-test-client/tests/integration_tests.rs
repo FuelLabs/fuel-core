@@ -83,6 +83,7 @@ async fn execute_suite(config_path: String) {
 
 async fn setup_local_node() -> FuelService {
     let mut config = Config::local_node();
+    // The `run_contract_large_state` test creates a contract with a huge state
     config.chain_conf.transaction_parameters.max_storage_slots = 1 << 17; // 131072
     FuelService::new_node(config).await.unwrap()
 }

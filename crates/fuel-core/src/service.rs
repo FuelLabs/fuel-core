@@ -91,10 +91,7 @@ impl FuelService {
                     );
                     Database::default()
                 } else {
-                    Database::open(
-                        &config.database_path,
-                        Some(config.max_database_cache_size),
-                    )?
+                    Database::open(&config.database_path, config.max_database_cache_size)?
                 }
             }
             DbType::InMemory => Database::in_memory(),

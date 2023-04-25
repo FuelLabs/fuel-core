@@ -32,46 +32,17 @@ use fuel_core_types::{
         Word,
     },
 };
-use serde::Deserializer;
 use std::borrow::Cow;
 
+#[derive(serde::Deserialize, serde::Serialize)]
 struct OptimizedContract {
+    #[serde(with = "serde_bytes")]
     bytes: Vec<u8>,
 }
 
 impl From<OptimizedContract> for Contract {
     fn from(value: OptimizedContract) -> Self {
         value.bytes.into()
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for OptimizedContract {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct BytesVisitor;
-
-        impl<'a> serde::de::Visitor<'a> for BytesVisitor {
-            type Value = Vec<u8>;
-
-            fn expecting(
-                &self,
-                formatter: &mut core::fmt::Formatter,
-            ) -> core::fmt::Result {
-                formatter.write_str("a borrowed byte array")
-            }
-
-            fn visit_borrowed_bytes<E>(self, v: &'a [u8]) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                Ok(v.to_vec())
-            }
-        }
-
-        let bytes = deserializer.deserialize_bytes(BytesVisitor {})?;
-        Ok(Self { bytes })
     }
 }
 

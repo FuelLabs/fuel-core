@@ -50,6 +50,7 @@ rocksdb = { version = "0.20", default-features = false, features = [
     "multi-threaded-cf",
 ], optional = true }
 serde = { workspace = true, features = ["derive"] }
+serde_bytes = { workspace = true }
 serde_json = { workspace = true, features = ["raw_value"] }
 strum = "0.24"
 strum_macros = "0.24"

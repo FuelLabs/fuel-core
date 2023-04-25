@@ -77,50 +77,50 @@ pub mod vm_database;
 )]
 pub enum Column {
     /// The column id of metadata about the blockchain
-    Metadata,
+    Metadata = 0,
     /// See [`ContractsRawCode`](fuel_core_storage::tables::ContractsRawCode)
-    ContractsRawCode,
+    ContractsRawCode = 1,
     /// See [`ContractsInfo`](fuel_core_storage::tables::ContractsInfo)
-    ContractsInfo,
+    ContractsInfo = 2,
     /// See [`ContractsState`](fuel_core_storage::tables::ContractsState)
-    ContractsState,
+    ContractsState = 3,
     /// See [`ContractsLatestUtxo`](fuel_core_storage::tables::ContractsLatestUtxo)
-    ContractsLatestUtxo,
+    ContractsLatestUtxo = 4,
     /// See [`ContractsAssets`](fuel_core_storage::tables::ContractsAssets)
-    ContractsAssets,
+    ContractsAssets = 5,
     /// See [`Coins`](fuel_core_storage::tables::Coins)
-    Coins,
+    Coins = 6,
     /// The column of the table that stores `true` if `owner` owns `Coin` with `coin_id`
-    OwnedCoins,
+    OwnedCoins = 7,
     /// See [`Transactions`](fuel_core_storage::tables::Transactions)
-    Transactions,
+    Transactions = 8,
     /// Transaction id to current status
-    TransactionStatus,
+    TransactionStatus = 9,
     /// The column of the table of all `owner`'s transactions
-    TransactionsByOwnerBlockIdx,
+    TransactionsByOwnerBlockIdx = 10,
     /// See [`Receipts`](fuel_core_storage::tables::Receipts)
-    Receipts,
+    Receipts = 11,
     /// See [`FuelBlocks`](fuel_core_storage::tables::FuelBlocks)
-    FuelBlocks,
+    FuelBlocks = 12,
     /// See [`FuelBlockSecondaryKeyBlockHeights`](storage::FuelBlockSecondaryKeyBlockHeights)
-    FuelBlockSecondaryKeyBlockHeights,
+    FuelBlockSecondaryKeyBlockHeights = 13,
     /// See [`Messages`](fuel_core_storage::tables::Messages)
-    Messages,
+    Messages = 14,
     /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
-    OwnedMessageIds,
+    OwnedMessageIds = 15,
     /// See [`SealedBlockConsensus`](fuel_core_storage::tables::SealedBlockConsensus)
-    FuelBlockConsensus,
+    FuelBlockConsensus = 16,
     /// See [`FuelBlockMerkleData`](storage::FuelBlockMerkleData)
-    FuelBlockMerkleData,
+    FuelBlockMerkleData = 17,
     /// See [`FuelBlockMerkleMetadata`](storage::FuelBlockMerkleMetadata)
-    FuelBlockMerkleMetadata,
+    FuelBlockMerkleMetadata = 18,
     /// Messages that have been spent.
     /// Existence of a key in this column means that the message has been spent.
     /// See [`SpentMessages`](fuel_core_storage::tables::SpentMessages)
-    SpentMessages,
+    SpentMessages = 19,
     /// Metadata for the relayer
     /// See [`RelayerMetadata`](fuel_core_relayer::ports::RelayerMetadata)
-    RelayerMetadata,
+    RelayerMetadata = 20,
 }
 
 impl Column {
@@ -186,9 +186,9 @@ impl Database {
     }
 
     #[cfg(feature = "rocksdb")]
-    pub fn open(path: &Path, capacity: Option<usize>) -> DatabaseResult<Self> {
+    pub fn open(path: &Path, capacity: impl Into<Option<usize>>) -> DatabaseResult<Self> {
         use anyhow::Context;
-        let db = RocksDb::default_open(path, capacity).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
+        let db = RocksDb::default_open(path, capacity.into()).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
 
         Ok(Database {
             data: Arc::new(db),
@@ -390,9 +390,9 @@ impl ChainConfigDb for Database {
 }
 
 #[test]
-fn column_keys_monotonically_increases() {
+fn column_keys_not_exceed_count() {
     use enum_iterator::all;
-    for (i, column) in all::<Column>().enumerate() {
-        assert_eq!(column.as_usize(), i);
+    for column in all::<Column>() {
+        assert!(column.as_usize() < Column::COUNT);
     }
 }
