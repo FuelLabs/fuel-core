@@ -3,10 +3,13 @@ use crate::test_context::{
     BASE_AMOUNT,
 };
 use fuel_core_chain_config::ContractConfig;
-use fuel_core_types::fuel_tx::{
-    Receipt,
-    ScriptExecutionResult,
-    Transaction,
+use fuel_core_types::{
+    fuel_tx::{
+        Receipt,
+        ScriptExecutionResult,
+        Transaction,
+    },
+    fuel_types::bytes::Deserializable,
 };
 use libtest_mimic::Failed;
 use std::time::Duration;
@@ -46,6 +49,12 @@ pub async fn receipts(ctx: &TestContext) -> Result<(), Failed> {
     Ok(())
 }
 
+#[derive(PartialEq, Eq)]
+enum DryRunResult {
+    Successful,
+    MayFail,
+}
+
 // Dry run the transaction.
 pub async fn dry_run(ctx: &TestContext) -> Result<(), Failed> {
     let transaction = tokio::time::timeout(
@@ -54,7 +63,7 @@ pub async fn dry_run(ctx: &TestContext) -> Result<(), Failed> {
     )
     .await??;
 
-    _dry_runs(ctx, &transaction, 1000).await
+    _dry_runs(ctx, &transaction, 1000, DryRunResult::Successful).await
 }
 
 // Maybe deploy a contract with large state and execute the script
@@ -85,13 +94,25 @@ pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
         timeout(Duration::from_secs(120), deployment_request).await??;
     }
 
-    _dry_runs(ctx, &dry_run, 1000).await
+    _dry_runs(ctx, &dry_run, 1000, DryRunResult::Successful).await
+}
+
+// Send non specific transaction from `non_specific_tx.raw` file
+pub async fn non_specific_transaction(ctx: &TestContext) -> Result<(), Failed> {
+    let dry_run = include_str!("test_data/non_specific_tx.raw");
+    let bytes = dry_run.replace("0x", "");
+    let hex_tx = hex::decode(bytes).expect("Expected hex string");
+    let dry_run: Transaction = Transaction::from_bytes(hex_tx.as_ref())
+        .expect("Should be able do decode the Transaction");
+
+    _dry_runs(ctx, &dry_run, 1000, DryRunResult::MayFail).await
 }
 
 async fn _dry_runs(
     ctx: &TestContext,
     transaction: &Transaction,
     count: usize,
+    expect: DryRunResult,
 ) -> Result<(), Failed> {
     println!("\nStarting dry runs");
     let mut queries = vec![];
@@ -124,13 +145,15 @@ async fn _dry_runs(
             )
         }
 
-        assert!(matches!(
-            receipts.last(),
-            Some(Receipt::ScriptResult {
-                result: ScriptExecutionResult::Success,
-                ..
-            })
-        ));
+        if expect == DryRunResult::Successful {
+            assert!(matches!(
+                receipts.last(),
+                Some(Receipt::ScriptResult {
+                    result: ScriptExecutionResult::Success,
+                    ..
+                })
+            ));
+        }
     }
     Ok(())
 }

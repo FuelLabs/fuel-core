@@ -82,6 +82,16 @@ pub fn main_body(config: SuiteConfig, mut args: Arguments) {
             }),
         ),
         Trial::test(
+            "dry run transaction from `non_specific_tx.raw` file",
+            with_cloned(&config, |config| {
+                async_execute(async {
+                    let ctx = TestContext::new(config).await;
+                    tests::script::non_specific_transaction(&ctx).await
+                })?;
+                Ok(())
+            }),
+        ),
+        Trial::test(
             "can deploy a large contract",
             with_cloned(&config, |config| {
                 async_execute(async {

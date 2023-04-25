@@ -35,7 +35,6 @@ use std::sync::{
     Arc,
     Mutex,
 };
-use tokio::sync::Semaphore;
 
 #[tokio::test]
 async fn cant_produce_at_genesis_height() {
@@ -235,7 +234,6 @@ impl TestContext {
             executor: self.executor,
             relayer: Box::new(self.relayer),
             lock: Default::default(),
-            dry_run_semaphore: Semaphore::new(1),
         }
     }
 }
