@@ -228,12 +228,10 @@ pub fn new_service(
 
     tracing::info!("Binding GraphQL provider to {}", bound_address);
 
-    let s = Service::new_with_params(
+    Ok(Service::new_with_params(
         GraphqlService { bound_address },
         ServerParams { router, listener },
-    );
-
-    Ok(s)
+    ))
 }
 
 async fn graphql_playground() -> impl IntoResponse {
