@@ -62,3 +62,12 @@ impl<T: LowerHex + Debug + Clone + Default> Display for HexFormatted<T> {
         write!(f, "0x{:x}", self.0)
     }
 }
+
+pub const fn hex_val(c: u8) -> Option<u8> {
+    match c {
+        b'A'..=b'F' => Some(c - b'A' + 10),
+        b'a'..=b'f' => Some(c - b'a' + 10),
+        b'0'..=b'9' => Some(c - b'0'),
+        _ => None,
+    }
+}

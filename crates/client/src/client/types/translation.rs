@@ -7,12 +7,10 @@ use crate::client::{
             PoAConsensus,
         },
         primitives::{
-            base::{
-                Bytes32,
-                Bytes64,
-            },
-            TransactionId,
+            Bytes32,
+            Bytes64,
         },
+        scalars::TransactionId,
         Block,
         Consensus,
     },

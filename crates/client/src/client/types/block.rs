@@ -1,11 +1,13 @@
-use crate::client::types::primitives::{
-    base::Bytes32,
-    BlockId,
-    MerkleRoot,
-    PublicKey,
-    Signature,
-    Tai64Timestamp,
-    TransactionId,
+use crate::client::types::{
+    primitives::Bytes32,
+    scalars::{
+        BlockId,
+        MerkleRoot,
+        PublicKey,
+        Signature,
+        Tai64Timestamp,
+        TransactionId,
+    },
 };
 
 #[derive(Debug)]

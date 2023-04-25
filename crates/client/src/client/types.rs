@@ -1,5 +1,6 @@
 pub mod block;
 pub mod primitives;
+pub mod scalars;
 pub mod translation;
 
 pub use block::{
