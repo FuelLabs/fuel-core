@@ -5,7 +5,6 @@ use crate::client::{
 use std::{
     fmt,
     slice::Chunks,
-    str::FromStr,
 };
 
 mod bytes;
@@ -63,9 +62,5 @@ where
 }
 
 pub use bytes_n::BytesN;
-
-impl<const N: usize> Primitive for Bytes<N> {}
-impl Primitive for BytesN {}
-
 pub type Bytes32 = Bytes<32>;
 pub type Bytes64 = Bytes<64>;

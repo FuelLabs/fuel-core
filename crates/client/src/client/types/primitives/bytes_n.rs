@@ -39,6 +39,8 @@ where
     }
 }
 
+impl Primitive for BytesN {}
+
 impl FromStr for BytesN {
     type Err = &'static str;
 

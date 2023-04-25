@@ -51,6 +51,8 @@ impl<const N: usize> Len for Bytes<N> {
     }
 }
 
+impl<const N: usize> Primitive for Bytes<N> {}
+
 impl<const N: usize> fmt::LowerHex for Bytes<N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         <Self as Primitive>::fmt(self, f)
