@@ -93,7 +93,6 @@ tracing-attributes = "0.1"
 tracing-subscriber = "0.3"
 serde = "1.0"
 serde_json = "1.0"
-serde_bytes = "0.11"
 # enable cookie store to support L7 sticky sessions
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "cookies"] }
 mockall = "0.11"
@@ -106,3 +105,4 @@ prometheus-client = "0.20"
 itertools = "0.10"
 insta = "1.8"
 tempfile = "3.4"
+tikv-jemallocator = "0.5"

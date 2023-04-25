@@ -23,13 +23,13 @@ pub trait KeyValueStore {
         value: Value,
     ) -> DatabaseResult<Option<Value>>;
 
-    fn write(&self, key: &[u8], column: Column, buf: Vec<u8>) -> DatabaseResult<usize>;
+    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize>;
 
     fn replace(
         &self,
         key: &[u8],
         column: Column,
-        buf: Vec<u8>,
+        buf: &[u8],
     ) -> DatabaseResult<(usize, Option<Value>)>;
 
     fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>>;

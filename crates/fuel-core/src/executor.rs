@@ -699,6 +699,7 @@ where
         )?;
         self.compute_not_utxo_outputs(
             match execution_kind {
+                ExecutionKind::DryRun => ExecutionTypes::DryRun(&mut tx),
                 ExecutionKind::Production => ExecutionTypes::Production(&mut tx),
                 ExecutionKind::Validation => ExecutionTypes::Validation(&tx),
             },
@@ -1148,7 +1149,7 @@ where
         Tx: ExecutableTransaction,
     {
         match tx {
-            ExecutionTypes::Production(tx) => {
+            ExecutionTypes::DryRun(tx) | ExecutionTypes::Production(tx) => {
                 // TODO: Inputs, in most cases, are heavier than outputs, so cloning them, but we
                 //  to avoid it in the future.
                 let mut outputs = tx.outputs().clone();

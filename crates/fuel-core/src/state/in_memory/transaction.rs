@@ -28,7 +28,10 @@ use std::{
     collections::HashMap,
     fmt::Debug,
     ops::DerefMut,
-    sync::Mutex,
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 
 #[derive(Debug)]
@@ -186,11 +189,10 @@ impl KeyValueStore for MemoryTransactionView {
 
     fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
         // try to fetch data from View layer if any changes to the key
-        if self
-            .changes
+        if self.changes[column.as_usize()]
             .lock()
             .expect("poisoned lock")
-            .contains_key(&column_key(key, column))
+            .contains_key(&key.to_vec())
         {
             self.view_layer.size_of_value(key, column)
         } else {
@@ -206,11 +208,10 @@ impl KeyValueStore for MemoryTransactionView {
         buf: &mut [u8],
     ) -> DatabaseResult<Option<usize>> {
         // try to fetch data from View layer if any changes to the key
-        if self
-            .changes
+        if self.changes[column.as_usize()]
             .lock()
             .expect("poisoned lock")
-            .contains_key(&column_key(key, column))
+            .contains_key(&key.to_vec())
         {
             self.view_layer.read(key, column, buf)
         } else {
@@ -219,12 +220,11 @@ impl KeyValueStore for MemoryTransactionView {
         }
     }
 
-    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
-        if self
-            .changes
+    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
+        if self.changes[column.as_usize()]
             .lock()
             .expect("poisoned lock")
-            .contains_key(&column_key(key, column))
+            .contains_key(&key.to_vec())
         {
             self.view_layer.read_alloc(key, column)
         } else {
@@ -233,12 +233,12 @@ impl KeyValueStore for MemoryTransactionView {
         }
     }
 
-    fn write(&self, key: &[u8], column: Column, buf: Vec<u8>) -> DatabaseResult<usize> {
-        let k = column_key(key, column);
-        self.changes
+    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
+        let k = key.to_vec();
+        self.changes[column.as_usize()]
             .lock()
             .expect("poisoned lock")
-            .insert(k, WriteOperation::Insert(key.into(), column, buf.clone()));
+            .insert(k, WriteOperation::Insert(Arc::new(buf.to_vec())));
         self.view_layer.write(key, column, buf)
     }
 
@@ -246,14 +246,15 @@ impl KeyValueStore for MemoryTransactionView {
         &self,
         key: &[u8],
         column: Column,
-        buf: Vec<u8>,
-    ) -> DatabaseResult<(usize, Option<Vec<u8>>)> {
-        let k = column_key(key, column);
+        buf: &[u8],
+    ) -> DatabaseResult<(usize, Option<Value>)> {
+        let k = key.to_vec();
         let contained_key = {
-            let mut lock = self.changes.lock().expect("poisoned lock");
-            let contained_key = lock.contains_key(&k);
-            lock.insert(k, WriteOperation::Insert(key.into(), column, buf.clone()));
-            contained_key
+            let mut lock = self.changes[column.as_usize()]
+                .lock()
+                .expect("poisoned lock");
+            lock.insert(k, WriteOperation::Insert(Arc::new(buf.to_vec())))
+                .is_some()
         };
         let res = self.view_layer.replace(key, column, buf)?;
         let num_written = res.0;
@@ -264,13 +265,13 @@ impl KeyValueStore for MemoryTransactionView {
         }
     }
 
-    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
-        let k = column_key(key, column);
+    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
+        let k = key.to_vec();
         let contained_key = {
-            let mut lock = self.changes.lock().expect("poisoned lock");
-            let contains_key = lock.contains_key(&k);
-            lock.insert(k, WriteOperation::Remove(key.to_vec(), column));
-            contains_key
+            let mut lock = self.changes[column.as_usize()]
+                .lock()
+                .expect("poisoned lock");
+            lock.insert(k, WriteOperation::Remove).is_some()
         };
         let res = self.view_layer.take(key, column);
         if contained_key {

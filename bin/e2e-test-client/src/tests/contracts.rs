@@ -25,6 +25,10 @@ pub async fn deploy_large_contract(ctx: &TestContext) -> Result<(), Failed> {
         salt: rng.gen(),
         state: None,
         balances: None,
+        tx_id: None,
+        output_index: None,
+        tx_pointer_block_height: None,
+        tx_pointer_tx_idx: None,
     };
 
     let deployment_request = ctx.bob.deploy_contract(contract_config);

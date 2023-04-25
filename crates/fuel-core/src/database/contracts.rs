@@ -36,70 +36,6 @@ use fuel_core_types::{
 };
 use std::borrow::Cow;
 
-#[derive(serde::Deserialize, serde::Serialize)]
-struct OptimizedContract {
-    #[serde(with = "serde_bytes")]
-    bytes: Vec<u8>,
-}
-
-impl From<OptimizedContract> for Contract {
-    fn from(value: OptimizedContract) -> Self {
-        value.bytes.into()
-    }
-}
-
-impl StorageInspect<ContractsRawCode> for Database {
-    type Error = StorageError;
-
-    fn get(
-        &self,
-        key: &<ContractsRawCode as Mappable>::Key,
-    ) -> Result<Option<Cow<<ContractsRawCode as Mappable>::OwnedValue>>, Self::Error>
-    {
-        self.get::<OptimizedContract>(key.as_ref(), Column::ContractsRawCode)
-            .map(|option| option.map(|contract| Cow::Owned(Contract::from(contract))))
-            .map_err(Into::into)
-    }
-
-    fn contains_key(
-        &self,
-        key: &<ContractsRawCode as Mappable>::Key,
-    ) -> Result<bool, Self::Error> {
-        self.contains_key(key.as_ref(), Column::ContractsRawCode)
-            .map_err(Into::into)
-    }
-}
-
-impl StorageMutate<ContractsRawCode> for Database {
-    fn insert(
-        &mut self,
-        key: &<ContractsRawCode as Mappable>::Key,
-        value: &<ContractsRawCode as Mappable>::Value,
-    ) -> Result<Option<<ContractsRawCode as Mappable>::OwnedValue>, Self::Error> {
-        Database::insert::<_, _, OptimizedContract>(
-            self,
-            key.as_ref(),
-            Column::ContractsRawCode,
-            &value,
-        )
-        .map(|option| option.map(Into::into))
-        .map_err(Into::into)
-    }
-
-    fn remove(
-        &mut self,
-        key: &<ContractsRawCode as Mappable>::Key,
-    ) -> Result<Option<<ContractsRawCode as Mappable>::OwnedValue>, Self::Error> {
-        Database::remove::<OptimizedContract>(
-            self,
-            key.as_ref(),
-            Column::ContractsRawCode,
-        )
-        .map(|option| option.map(Into::into))
-        .map_err(Into::into)
-    }
-}
-
 impl DatabaseColumn for ContractsLatestUtxo {
     fn column() -> Column {
         Column::ContractsLatestUtxo
@@ -111,15 +47,9 @@ impl StorageInspect<ContractsRawCode> for Database {
 
     fn get(
         &self,
-        key: &<ContractsRawCode as fuel_core_storage::Mappable>::Key,
-    ) -> Result<
-        Option<
-            std::borrow::Cow<
-                <ContractsRawCode as fuel_core_storage::Mappable>::OwnedValue,
-            >,
-        >,
-        Self::Error,
-    > {
+        key: &<ContractsRawCode as Mappable>::Key,
+    ) -> Result<Option<Cow<<ContractsRawCode as Mappable>::OwnedValue>>, Self::Error>
+    {
         Ok(self
             .read_alloc(key.as_ref(), Column::ContractsRawCode)?
             .map(|v| Cow::Owned(Contract::from(v))))
@@ -127,7 +57,7 @@ impl StorageInspect<ContractsRawCode> for Database {
 
     fn contains_key(
         &self,
-        key: &<ContractsRawCode as fuel_core_storage::Mappable>::Key,
+        key: &<ContractsRawCode as Mappable>::Key,
     ) -> Result<bool, Self::Error> {
         self.contains_key(key.as_ref(), Column::ContractsRawCode)
             .map_err(Into::into)
@@ -141,24 +71,18 @@ impl StorageInspect<ContractsRawCode> for Database {
 impl StorageMutate<ContractsRawCode> for Database {
     fn insert(
         &mut self,
-        key: &<ContractsRawCode as fuel_core_storage::Mappable>::Key,
-        value: &<ContractsRawCode as fuel_core_storage::Mappable>::Value,
-    ) -> Result<
-        Option<<ContractsRawCode as fuel_core_storage::Mappable>::OwnedValue>,
-        Self::Error,
-    > {
+        key: &<ContractsRawCode as Mappable>::Key,
+        value: &<ContractsRawCode as Mappable>::Value,
+    ) -> Result<Option<<ContractsRawCode as Mappable>::OwnedValue>, Self::Error> {
         let existing =
-            <Self as StorageWrite<ContractsRawCode>>::replace(self, key, value.to_vec())?;
+            Database::replace(self, key.as_ref(), Column::ContractsRawCode, value)?;
         Ok(existing.1.map(Contract::from))
     }
 
     fn remove(
         &mut self,
-        key: &<ContractsRawCode as fuel_core_storage::Mappable>::Key,
-    ) -> Result<
-        Option<<ContractsRawCode as fuel_core_storage::Mappable>::OwnedValue>,
-        Self::Error,
-    > {
+        key: &<ContractsRawCode as Mappable>::Key,
+    ) -> Result<Option<<ContractsRawCode as Mappable>::OwnedValue>, Self::Error> {
         Ok(
             <Self as StorageWrite<ContractsRawCode>>::take(self, key)?
                 .map(Contract::from),
@@ -192,13 +116,13 @@ impl StorageWrite<ContractsRawCode> for Database {
             self,
             key.as_ref(),
             Column::ContractsRawCode,
-            buf,
+            &buf,
         )?)
     }
 
     fn replace(
         &mut self,
-        key: &<ContractsRawCode as fuel_core_storage::Mappable>::Key,
+        key: &<ContractsRawCode as Mappable>::Key,
         buf: Vec<u8>,
     ) -> Result<(usize, Option<Vec<u8>>), <Self as StorageInspect<ContractsRawCode>>::Error>
     where
@@ -208,13 +132,13 @@ impl StorageWrite<ContractsRawCode> for Database {
             self,
             key.as_ref(),
             Column::ContractsRawCode,
-            buf,
+            &buf,
         )?)
     }
 
     fn take(
         &mut self,
-        key: &<ContractsRawCode as fuel_core_storage::Mappable>::Key,
+        key: &<ContractsRawCode as Mappable>::Key,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(Database::take(
             self,

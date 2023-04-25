@@ -20,7 +20,10 @@ use fuel_core_storage::iter::{
 use std::{
     collections::BTreeMap,
     fmt::Debug,
-    sync::Mutex,
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 
 #[derive(Default, Debug)]
@@ -142,11 +145,10 @@ impl KeyValueStore for MemoryStore {
     }
 
     fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
-        Ok(self
-            .inner
+        Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
-            .get(&column_key(key, column))
+            .get(&key.to_vec())
             .map(|v| v.len()))
     }
 
@@ -156,10 +158,10 @@ impl KeyValueStore for MemoryStore {
         column: Column,
         mut buf: &mut [u8],
     ) -> DatabaseResult<Option<usize>> {
-        self.inner
+        self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
-            .get(&column_key(key, column))
+            .get(&key.to_vec())
             .map(|value| {
                 let read = value.len();
                 std::io::Write::write_all(&mut buf, value.as_ref())
@@ -169,21 +171,20 @@ impl KeyValueStore for MemoryStore {
             .transpose()
     }
 
-    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
-        Ok(self
-            .inner
+    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
+        Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
-            .get(&column_key(key, column))
-            .map(|value| value.to_vec()))
+            .get(&key.to_vec())
+            .cloned())
     }
 
-    fn write(&self, key: &[u8], column: Column, buf: Vec<u8>) -> DatabaseResult<usize> {
+    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
         let len = buf.len();
-        self.inner
+        self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
-            .insert(column_key(key, column), buf);
+            .insert(key.to_vec(), Arc::new(buf.to_vec()));
         Ok(len)
     }
 
@@ -191,23 +192,21 @@ impl KeyValueStore for MemoryStore {
         &self,
         key: &[u8],
         column: Column,
-        buf: Vec<u8>,
-    ) -> DatabaseResult<(usize, Option<Vec<u8>>)> {
+        buf: &[u8],
+    ) -> DatabaseResult<(usize, Option<Value>)> {
         let len = buf.len();
-        let existing = self
-            .inner
+        let existing = self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
-            .insert(column_key(key, column), buf);
+            .insert(key.to_vec(), Arc::new(buf.to_vec()));
         Ok((len, existing))
     }
 
-    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
-        Ok(self
-            .inner
+    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
+        Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
-            .remove(&column_key(key, column)))
+            .remove(&key.to_vec()))
     }
 }
 

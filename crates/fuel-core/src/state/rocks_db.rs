@@ -313,7 +313,7 @@ impl KeyValueStore for RocksDb {
         Ok(r)
     }
 
-    fn write(&self, key: &[u8], column: Column, buf: Vec<u8>) -> DatabaseResult<usize> {
+    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
         #[cfg(feature = "metrics")]
         {
             DATABASE_METRICS.write_meter.inc();
@@ -351,7 +351,7 @@ impl KeyValueStore for RocksDb {
         &self,
         key: &[u8],
         column: Column,
-        buf: Vec<u8>,
+        buf: &[u8],
     ) -> DatabaseResult<(usize, Option<Value>)> {
         // FIXME: This is a race condition. We should use a transaction.
         let existing = self.read_alloc(key, column)?;

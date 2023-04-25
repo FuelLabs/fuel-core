@@ -31,6 +31,7 @@ use std::{
         Formatter,
     },
     marker::Send,
+    ops::Deref,
     sync::Arc,
 };
 
@@ -245,7 +246,7 @@ impl Database {
             .transpose()
     }
 
-    fn write(&self, key: &[u8], column: Column, buf: Vec<u8>) -> DatabaseResult<usize> {
+    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
         self.data.write(key, column, buf)
     }
 
@@ -253,13 +254,17 @@ impl Database {
         &self,
         key: &[u8],
         column: Column,
-        buf: Vec<u8>,
+        buf: &[u8],
     ) -> DatabaseResult<(usize, Option<Vec<u8>>)> {
-        self.data.replace(key, column, buf)
+        self.data
+            .replace(key, column, buf)
+            .map(|(size, value)| (size, value.map(|value| value.deref().clone())))
     }
 
     fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
-        self.data.take(key, column)
+        self.data
+            .take(key, column)
+            .map(|value| value.map(|value| value.deref().clone()))
     }
 }
 
@@ -283,7 +288,9 @@ impl Database {
     }
 
     fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
-        self.data.read_alloc(key, column)
+        self.data
+            .read_alloc(key, column)
+            .map(|value| value.map(|value| value.deref().clone()))
     }
 
     fn get<V: DeserializeOwned>(

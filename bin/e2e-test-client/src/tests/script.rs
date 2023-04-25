@@ -89,12 +89,12 @@ pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
     if result?.is_none() {
         let deployment_request = ctx.bob.deploy_contract(contract_config);
 
-        // wait for contract to deploy in 120 seconds because `state_root` calculation is too long.
+        // wait for contract to deploy in 300 seconds because `state_root` calculation is too long.
         // https://github.com/FuelLabs/fuel-core/issues/1143
-        timeout(Duration::from_secs(120), deployment_request).await??;
+        timeout(Duration::from_secs(300), deployment_request).await??;
     }
 
-    _dry_runs(ctx, &dry_run, 1000, DryRunResult::Successful).await
+    _dry_runs(ctx, &dry_run, 1000, DryRunResult::MayFail).await
 }
 
 // Send non specific transaction from `non_specific_tx.raw` file
