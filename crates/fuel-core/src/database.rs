@@ -45,6 +45,7 @@ type DatabaseResult<T> = Result<T>;
 use crate::state::rocks_db::RocksDb;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
+use strum::EnumCount;
 #[cfg(feature = "rocksdb")]
 use tempfile::TempDir;
 
@@ -122,6 +123,16 @@ pub enum Column {
     RelayerMetadata = 20,
 }
 
+impl Column {
+    /// The total count of variants in the enum.
+    pub const COUNT: usize = <Self as EnumCount>::COUNT;
+
+    /// Returns the `usize` representation of the `Column`.
+    pub fn as_usize(&self) -> usize {
+        *self as usize
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Database {
     data: DataSource,
@@ -167,10 +178,17 @@ unsafe impl Send for Database {}
 unsafe impl Sync for Database {}
 
 impl Database {
+    pub fn new(data_source: DataSource) -> Self {
+        Self {
+            data: data_source,
+            _drop: Default::default(),
+        }
+    }
+
     #[cfg(feature = "rocksdb")]
-    pub fn open(path: &Path) -> DatabaseResult<Self> {
+    pub fn open(path: &Path, capacity: impl Into<Option<usize>>) -> DatabaseResult<Self> {
         use anyhow::Context;
-        let db = RocksDb::default_open(path).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
+        let db = RocksDb::default_open(path, capacity.into()).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
 
         Ok(Database {
             data: Arc::new(db),
@@ -194,7 +212,7 @@ impl Database {
         let result = self.data.put(
             key.as_ref(),
             column,
-            postcard::to_stdvec(value).map_err(|_| DatabaseError::Codec)?,
+            Arc::new(postcard::to_stdvec(value).map_err(|_| DatabaseError::Codec)?),
         )?;
         if let Some(previous) = result {
             Ok(Some(
@@ -247,14 +265,13 @@ impl Database {
         &self,
         column: Column,
         prefix: Option<P>,
-        direction: Option<IterDirection>,
     ) -> impl Iterator<Item = DatabaseResult<(K, V)>> + '_
     where
         K: From<Vec<u8>>,
         V: DeserializeOwned,
         P: AsRef<[u8]>,
     {
-        self.iter_all_filtered::<K, V, P, [u8; 0]>(column, prefix, None, direction)
+        self.iter_all_filtered::<K, V, P, [u8; 0]>(column, prefix, None, None)
     }
 
     fn iter_all_by_start<K, V, S>(
@@ -335,8 +352,9 @@ impl Default for Database {
         #[cfg(feature = "rocksdb")]
         {
             let tmp_dir = TempDir::new().unwrap();
+            let db = RocksDb::default_open(tmp_dir.path(), None).unwrap();
             Self {
-                data: Arc::new(RocksDb::default_open(tmp_dir.path()).unwrap()),
+                data: Arc::new(db),
                 _drop: Arc::new(
                     {
                         move || {
@@ -368,5 +386,13 @@ impl ChainConfigDb for Database {
 
     fn get_block_height(&self) -> StorageResult<BlockHeight> {
         Self::latest_height(self)
+    }
+}
+
+#[test]
+fn column_keys_not_exceed_count() {
+    use enum_iterator::all;
+    for column in all::<Column>() {
+        assert!(column.as_usize() < Column::COUNT);
     }
 }

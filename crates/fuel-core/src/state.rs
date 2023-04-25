@@ -1,9 +1,6 @@
-use crate::{
-    database::{
-        Column,
-        Result as DatabaseResult,
-    },
-    state::in_memory::transaction::MemoryTransactionView,
+use crate::database::{
+    Column,
+    Result as DatabaseResult,
 };
 use fuel_core_storage::iter::BoxedIter;
 use std::{
@@ -12,18 +9,18 @@ use std::{
 };
 
 pub type DataSource = Arc<dyn TransactableStorage>;
-pub type ColumnId = u32;
-pub type KVItem = DatabaseResult<(Vec<u8>, Vec<u8>)>;
+pub type Value = Arc<Vec<u8>>;
+pub type KVItem = DatabaseResult<(Vec<u8>, Value)>;
 
 pub trait KeyValueStore {
-    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>>;
+    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>>;
     fn put(
         &self,
         key: &[u8],
         column: Column,
-        value: Vec<u8>,
-    ) -> DatabaseResult<Option<Vec<u8>>>;
-    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>>;
+        value: Value,
+    ) -> DatabaseResult<Option<Value>>;
+    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>>;
     fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool>;
     fn iter_all(
         &self,
@@ -49,15 +46,15 @@ impl Default for IterDirection {
 pub trait BatchOperations: KeyValueStore {
     fn batch_write(
         &self,
-        entries: &mut dyn Iterator<Item = WriteOperation>,
+        entries: &mut dyn Iterator<Item = (Vec<u8>, Column, WriteOperation)>,
     ) -> DatabaseResult<()> {
-        for entry in entries {
-            match entry {
+        for (key, column, op) in entries {
+            match op {
                 // TODO: error handling
-                WriteOperation::Insert(key, column, value) => {
+                WriteOperation::Insert(value) => {
                     let _ = self.put(&key, column, value);
                 }
-                WriteOperation::Remove(key, column) => {
+                WriteOperation::Remove => {
                     let _ = self.delete(&key, column);
                 }
             }
@@ -68,24 +65,11 @@ pub trait BatchOperations: KeyValueStore {
 
 #[derive(Debug)]
 pub enum WriteOperation {
-    Insert(Vec<u8>, Column, Vec<u8>),
-    Remove(Vec<u8>, Column),
+    Insert(Value),
+    Remove,
 }
-
-pub trait Transaction {
-    fn transaction<F, R>(&mut self, f: F) -> TransactionResult<R>
-    where
-        F: FnOnce(&mut MemoryTransactionView) -> TransactionResult<R> + Copy;
-}
-
-pub type TransactionResult<T> = core::result::Result<T, TransactionError>;
 
 pub trait TransactableStorage: BatchOperations + Debug + Send + Sync {}
-
-#[derive(Clone, Debug)]
-pub enum TransactionError {
-    Aborted,
-}
 
 pub mod in_memory;
 #[cfg(feature = "rocksdb")]

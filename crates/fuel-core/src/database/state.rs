@@ -1,9 +1,6 @@
-use crate::{
-    database::{
-        Column,
-        Database,
-    },
-    state::IterDirection,
+use crate::database::{
+    Column,
+    Database,
 };
 use fuel_core_storage::{
     tables::ContractsState,
@@ -15,13 +12,9 @@ use fuel_core_storage::{
     StorageMutate,
 };
 use fuel_core_types::{
-    fuel_types::{
-        Bytes32,
-        ContractId,
-    },
-    fuel_vm::crypto,
+    fuel_merkle::common::empty_sum_sha256,
+    fuel_types::ContractId,
 };
-use itertools::Itertools;
 use std::borrow::Cow;
 
 impl StorageInspect<ContractsState> for Database {
@@ -63,24 +56,8 @@ impl StorageMutate<ContractsState> for Database {
 }
 
 impl MerkleRootStorage<ContractId, ContractsState> for Database {
-    fn root(&self, parent: &ContractId) -> Result<MerkleRoot, Self::Error> {
-        let items: Vec<_> = Database::iter_all_by_prefix::<Vec<u8>, Bytes32, _>(
-            self,
-            Column::ContractsState,
-            Some(parent),
-            Some(IterDirection::Forward),
-        )
-        .try_collect()?;
-
-        let root = items
-            .iter()
-            .filter_map(|(key, value)| {
-                (&key[..parent.len()] == parent.as_ref()).then_some((key, value))
-            })
-            .sorted_by_key(|t| t.0)
-            .map(|(_, value)| value);
-
-        Ok(crypto::ephemeral_merkle_root(root).into())
+    fn root(&self, _: &ContractId) -> Result<MerkleRoot, Self::Error> {
+        Ok(*empty_sum_sha256())
     }
 }
 
@@ -91,6 +68,7 @@ mod tests {
         StorageAsMut,
         StorageAsRef,
     };
+    use fuel_core_types::fuel_types::Bytes32;
 
     #[test]
     fn get() {

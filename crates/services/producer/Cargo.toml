@@ -16,6 +16,7 @@ fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+tokio-rayon = "2"
 tracing = { workspace = true }
 
 [dev-dependencies]
