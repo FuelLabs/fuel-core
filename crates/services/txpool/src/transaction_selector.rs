@@ -96,15 +96,13 @@ mod tests {
                     amount: 0,
                     asset_id: Default::default(),
                 })
+                .with_params(ConsensusParameters {
+                    gas_price_factor: 1,
+                    ..ConsensusParameters::default()
+                })
                 // The block producer assumes transactions are already checked
                 // so it doesn't need to compute valid sigs for tests
-                .finalize_checked_basic(
-                    Default::default(),
-                    &ConsensusParameters {
-                        gas_price_factor: 1,
-                        ..ConsensusParameters::default()
-                    },
-                ).into()
+                .finalize_checked_basic(Default::default()).into()
             })
             .map(Arc::new)
             .collect();

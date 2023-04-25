@@ -116,6 +116,7 @@ impl TryFrom<&Config> for fuel_core_poa::Config {
             block_gas_limit: config.chain_conf.block_gas_limit,
             signing_key: config.consensus_key.clone(),
             metrics: false,
+            consensus_params: config.chain_conf.transaction_parameters,
         })
     }
 }

@@ -21,6 +21,7 @@ futures = "0.3"
 humantime-serde = "1.1"
 libtest-mimic = "0.6.0"
 serde = { workspace = true }
+tikv-jemallocator = "0.5"
 tokio = { workspace = true }
 toml = { version = "0.5" }
 
@@ -32,6 +33,6 @@ insta = { workspace = true }
 tempfile = { workspace = true }
 
 [features]
-default = ["fuel-core?/default"]
+default = ["fuel-core?/default", "fuel-core?/metrics"]
 p2p = ["fuel-core?/p2p"]
 dev-deps = ["fuel-core/test-helpers"]

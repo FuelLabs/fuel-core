@@ -381,7 +381,8 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             .gas_price(gas_price)
             .gas_limit(gas_limit)
             .maturity(maturity)
-            .finalize_checked(height, &p, &Default::default());
+            .with_params(p)
+            .finalize_checked(height, &Default::default());
 
         let mut txtor = Transactor::new(db, params, GasCosts::free());
 

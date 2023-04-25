@@ -128,9 +128,10 @@ fn import_genesis_block(
     );
 
     let block_id = block.id();
-    database
-        .storage::<FuelBlocks>()
-        .insert(&block_id, &block.compress())?;
+    database.storage::<FuelBlocks>().insert(
+        &block_id,
+        &block.compress(&config.chain_conf.transaction_parameters),
+    )?;
     let consensus = Consensus::Genesis(genesis);
     let block = SealedBlock {
         entity: block,

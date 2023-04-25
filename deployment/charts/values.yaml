@@ -45,6 +45,8 @@ app:
     pvname: ${fuel_core_pv_name}
     mountPath: /mnt/db/
     claimname: ${fuel_core_pvc_name}
+    pvc_clone_enabled: ${fuel_core_pvc_clone_enabled}
+    pvc_clone_snapshot_id: ${fuel_core_pvc_snapshot_id}
     storageclass: ${pvc_storage_class}
     storagerequests: ${pvc_storage_requests}
     accessmodes: ReadWriteOnce

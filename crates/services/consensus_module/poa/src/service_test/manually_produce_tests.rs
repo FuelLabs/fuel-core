@@ -45,6 +45,7 @@ async fn can_manually_produce_block(
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
         metrics: false,
+        consensus_params: Default::default(),
     });
 
     // initialize txpool with some txs

@@ -26,7 +26,7 @@ use super::*;
 impl FuelService {
     /// Submit a transaction to the txpool.
     pub fn submit(&self, mut tx: Transaction) -> anyhow::Result<InsertionResult> {
-        tx.precompute();
+        tx.precompute(&self.shared.config.chain_conf.transaction_parameters);
         let results: Vec<_> = self
             .shared
             .txpool
@@ -44,7 +44,7 @@ impl FuelService {
         &self,
         tx: Transaction,
     ) -> anyhow::Result<impl Stream<Item = anyhow::Result<TransactionStatus>>> {
-        let id = tx.id();
+        let id = tx.id(&self.shared.config.chain_conf.transaction_parameters);
         let stream = self.transaction_status_change(id).await;
         self.submit(tx)?;
         Ok(stream)
@@ -55,7 +55,7 @@ impl FuelService {
         &self,
         tx: Transaction,
     ) -> anyhow::Result<TransactionStatus> {
-        let id = tx.id();
+        let id = tx.id(&self.shared.config.chain_conf.transaction_parameters);
         let stream = self.transaction_status_change(id).await.filter(|status| {
             futures::future::ready(!matches!(status, Ok(TransactionStatus::Submitted(_))))
         });
