@@ -17,7 +17,13 @@ use std::{
 };
 use thiserror::Error;
 
-use crate::client::hex_formatted::HexFormatError;
+use crate::client::{
+    hex_formatted::HexFormatError,
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
+};
 pub use primitives::*;
 
 pub mod balance;
@@ -251,24 +257,6 @@ pub struct PageInfo {
     pub start_cursor: Option<String>,
 }
 
-/// Specifies the direction of a paginated query
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum PageDirection {
-    Forward,
-    Backward,
-}
-
-/// Used to parameterize paginated queries
-#[derive(Clone, Debug)]
-pub struct PaginationRequest<T> {
-    /// The cursor returned from a previous query to indicate an offset
-    pub cursor: Option<T>,
-    /// The number of results to take
-    pub results: usize,
-    /// The direction of the query (e.g. asc, desc order).
-    pub direction: PageDirection,
-}
-
 impl<T: Into<String>> From<PaginationRequest<T>> for ConnectionArgs {
     fn from(req: PaginationRequest<T>) -> Self {
         match req.direction {
@@ -286,13 +274,6 @@ impl<T: Into<String>> From<PaginationRequest<T>> for ConnectionArgs {
             },
         }
     }
-}
-
-pub struct PaginatedResult<T, C> {
-    pub cursor: Option<C>,
-    pub results: Vec<T>,
-    pub has_next_page: bool,
-    pub has_previous_page: bool,
 }
 
 #[derive(Error, Debug)]

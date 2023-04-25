@@ -38,6 +38,11 @@ use fuel_core_types::{
 #[cfg(feature = "subscriptions")]
 use futures::StreamExt;
 use itertools::Itertools;
+pub use pagination::{
+    PageDirection,
+    PaginatedResult,
+    PaginationRequest,
+};
 use reqwest::cookie::CookieStore;
 use schema::{
     balance::BalanceArgs,
@@ -71,11 +76,6 @@ use schema::{
     StartTxArgs,
     TransactionId,
     U64,
-};
-pub use schema::{
-    PageDirection,
-    PaginatedResult,
-    PaginationRequest,
 };
 #[cfg(feature = "subscriptions")]
 use std::future;
@@ -111,6 +111,7 @@ use hex_formatted::{
     HexFormatted,
 };
 
+mod pagination;
 pub mod schema;
 pub mod types;
 
@@ -642,7 +643,7 @@ impl FuelClient {
     pub async fn blocks(
         &self,
         request: PaginationRequest<String>,
-    ) -> io::Result<PaginatedResult<schema::block::Block, String>> {
+    ) -> io::Result<PaginatedResult<types::Block, String>> {
         let query = schema::block::BlocksQuery::build(request.into());
 
         let blocks = self.query(query).await?.blocks.into();
@@ -775,7 +776,7 @@ impl FuelClient {
         &self,
         owner: Option<&str>,
         request: PaginationRequest<String>,
-    ) -> io::Result<PaginatedResult<schema::message::Message, String>> {
+    ) -> io::Result<PaginatedResult<types::Message, String>> {
         let owner: Option<schema::Address> =
             owner.map(|owner| owner.parse()).transpose()?;
         let query = schema::message::OwnedMessageQuery::build((owner, request).into());

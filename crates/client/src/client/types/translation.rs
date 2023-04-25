@@ -1,4 +1,5 @@
 use crate::client::{
+    pagination::PaginatedResult,
     schema,
     types::{
         block::{
@@ -6,6 +7,7 @@ use crate::client::{
             Header,
             PoAConsensus,
         },
+        message::Message,
         primitives::{
             Bytes32,
             Bytes64,
@@ -97,6 +99,34 @@ impl From<schema::block::Block> for Block {
             consensus: value.consensus.into(),
             transactions,
             block_producer,
+        }
+    }
+}
+
+impl From<schema::block::BlockConnection> for PaginatedResult<Block, String> {
+    fn from(conn: schema::block::BlockConnection) -> Self {
+        PaginatedResult {
+            cursor: conn.page_info.end_cursor,
+            has_next_page: conn.page_info.has_next_page,
+            has_previous_page: conn.page_info.has_previous_page,
+            results: conn.edges.into_iter().map(|e| e.node.into()).collect(),
+        }
+    }
+}
+
+impl From<schema::message::Message> for Message {
+    fn from(value: schema::message::Message) -> Self {
+        todo!()
+    }
+}
+
+impl From<schema::message::MessageConnection> for PaginatedResult<Message, String> {
+    fn from(conn: schema::message::MessageConnection) -> Self {
+        PaginatedResult {
+            cursor: conn.page_info.end_cursor,
+            has_next_page: conn.page_info.has_next_page,
+            has_previous_page: conn.page_info.has_previous_page,
+            results: conn.edges.into_iter().map(|e| e.node.into()).collect(),
         }
     }
 }

@@ -1,4 +1,5 @@
 pub mod block;
+pub mod message;
 pub mod primitives;
 pub mod scalars;
 pub mod translation;
@@ -7,6 +8,8 @@ pub use block::{
     Block,
     Consensus,
 };
+
+pub use message::Message;
 
 use crate::client::schema::{
     tx::{

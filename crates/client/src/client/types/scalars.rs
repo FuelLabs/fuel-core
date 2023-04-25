@@ -55,6 +55,7 @@ client_type_scalar!(Address, Bytes32);
 client_type_scalar!(AssetId, Bytes32);
 client_type_scalar!(BlockId, Bytes32);
 client_type_scalar!(ContractId, Bytes32);
+client_type_scalar!(HexString, BytesN);
 client_type_scalar!(MerkleRoot, Bytes32);
 client_type_scalar!(Message, Bytes32);
 client_type_scalar!(MessageId, Bytes32);
