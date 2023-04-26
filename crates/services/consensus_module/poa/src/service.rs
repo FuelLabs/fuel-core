@@ -431,12 +431,17 @@ where
 
     type SharedData = SharedState;
     type Task = Task<T, B, I>;
+    type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
         self.shared_state.clone()
     }
 
-    async fn into_task(self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
+    async fn into_task(
+        self,
+        _: &StateWatcher,
+        _: Self::TaskParams,
+    ) -> anyhow::Result<Self::Task> {
         match self.trigger {
             Trigger::Never | Trigger::Instant => {}
             Trigger::Interval { block_time } => {
