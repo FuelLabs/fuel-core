@@ -7,7 +7,10 @@ use crate::client::{
             Header,
             PoAConsensus,
         },
-        message::Message,
+        message::{
+            Message,
+            MessageProof,
+        },
         primitives::{
             Bytes32,
             Bytes64,
@@ -16,6 +19,7 @@ use crate::client::{
         scalars::TransactionId,
         Block,
         Consensus,
+        MerkleProof,
     },
 };
 
@@ -139,6 +143,49 @@ impl From<schema::message::MessageConnection> for PaginatedResult<Message, Strin
             has_next_page: conn.page_info.has_next_page,
             has_previous_page: conn.page_info.has_previous_page,
             results: conn.edges.into_iter().map(|e| e.node.into()).collect(),
+        }
+    }
+}
+
+impl From<schema::message::MessageProof> for MessageProof {
+    fn from(value: schema::message::MessageProof) -> Self {
+        let message_proof = value.message_proof.into();
+        let block_proof = value.block_proof.into();
+        let message_block_header = value.message_block_header.into();
+        let commit_block_header = value.commit_block_header.into();
+        let sender: Bytes32 = value.sender.0 .0.into();
+        let recipient: Bytes32 = value.recipient.0 .0.into();
+        let nonce: Bytes32 = value.nonce.0 .0.into();
+        let amount = value.amount.0;
+        let data: BytesN = value.data.0 .0.into();
+
+        Self {
+            message_proof,
+            block_proof,
+            message_block_header,
+            commit_block_header,
+            sender: sender.into(),
+            recipient: recipient.into(),
+            nonce: nonce.into(),
+            amount,
+            data: data.into(),
+        }
+    }
+}
+
+impl From<schema::message::MerkleProof> for MerkleProof {
+    fn from(value: schema::message::MerkleProof) -> Self {
+        let proof_set = value
+            .proof_set
+            .iter()
+            .map(|v| v.0 .0)
+            .map(Into::<Bytes32>::into)
+            .map(Into::into)
+            .collect::<Vec<_>>();
+        let proof_index = value.proof_index.into();
+        Self {
+            proof_set,
+            proof_index,
         }
     }
 }

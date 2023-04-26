@@ -793,7 +793,7 @@ impl FuelClient {
         message_id: &str,
         commit_block_id: Option<&str>,
         commit_block_height: Option<BlockHeight>,
-    ) -> io::Result<Option<schema::message::MessageProof>> {
+    ) -> io::Result<Option<types::MessageProof>> {
         let transaction_id: schema::TransactionId = transaction_id.parse()?;
         let message_id: schema::MessageId = message_id.parse()?;
         let commit_block_id: Option<schema::BlockId> = commit_block_id
@@ -807,7 +807,7 @@ impl FuelClient {
             commit_block_height,
         });
 
-        let proof = self.query(query).await?.message_proof;
+        let proof = self.query(query).await?.message_proof.map(Into::into);
 
         Ok(proof)
     }

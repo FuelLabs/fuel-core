@@ -1,4 +1,5 @@
 pub mod block;
+pub mod merkle_proof;
 pub mod message;
 pub mod primitives;
 pub mod scalars;
@@ -9,7 +10,11 @@ pub use block::{
     Consensus,
 };
 
-pub use message::Message;
+pub use merkle_proof::MerkleProof;
+pub use message::{
+    Message,
+    MessageProof,
+};
 
 use crate::client::schema::{
     tx::{
