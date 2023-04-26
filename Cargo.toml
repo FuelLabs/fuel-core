@@ -81,6 +81,7 @@ fuel-vm-private = { version = "0.30", package = "fuel-vm" }
 anyhow = "1.0"
 async-trait = "0.1"
 clap = "4.1"
+hyper = { version = "0.14.26" }
 rand = "0.8"
 parking_lot = "0.12"
 tokio = "1.27"

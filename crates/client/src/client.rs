@@ -250,7 +250,7 @@ impl FuelClient {
         let client = client_builder.build_with_conn(
             hyper_rustls::HttpsConnectorBuilder::new()
                 .with_webpki_roots()
-                .https_only()
+                .https_or_http()
                 .enable_http1()
                 .build(),
         );

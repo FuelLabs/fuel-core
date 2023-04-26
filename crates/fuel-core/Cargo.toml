@@ -39,7 +39,7 @@ fuel-core-types = { workspace = true, features = [
 ] }
 futures = { workspace = true }
 hex = { version = "0.4", features = ["serde"] }
-hyper = { version = "0.14.26" }
+hyper = { workspace = true }
 itertools = { workspace = true }
 num_cpus = "1.13"
 postcard = { workspace = true, features = ["use-std"] }
