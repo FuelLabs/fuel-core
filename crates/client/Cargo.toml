@@ -19,7 +19,7 @@ fuel-core-types = { workspace = true, path = "../types", features = ["serde"] }
 futures = { workspace = true, optional = true }
 hex = "0.4"
 # Included to enable webpki in the eventsource client
-hyper-rustls = { version = "0.22", features = ["webpki-tokio"], optional = true }
+hyper-rustls = { version = "0.24", features = ["webpki-tokio"], optional = true }
 itertools = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

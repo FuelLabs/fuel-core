@@ -178,7 +178,6 @@ pub fn init_sub_services(
             max_depth: config.txpool.max_depth,
             transaction_parameters: config.chain_conf.transaction_parameters,
             consensus_key: config.consensus_key.clone(),
-            honeycomb_enabled: config.honeycomb_api_key.is_some(),
         },
         schema,
         Box::new(database.clone()),
