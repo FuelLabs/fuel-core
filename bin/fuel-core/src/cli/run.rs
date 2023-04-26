@@ -158,9 +158,6 @@ pub struct Command {
 
     #[clap(long = "tx-pool-ttl", default_value = "5m", env)]
     pub tx_pool_ttl: humantime::Duration,
-
-    #[clap(long = "honeycomb-api-key", env)]
-    pub honeycomb_key: Option<String>,
 }
 
 impl Command {
@@ -190,7 +187,6 @@ impl Command {
             max_da_lag,
             max_wait_time,
             tx_pool_ttl,
-            honeycomb_key,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -279,7 +275,6 @@ impl Command {
             consensus_key,
             name,
             verifier,
-            honeycomb_api_key: honeycomb_key,
         })
     }
 }
@@ -298,12 +293,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         #[cfg(not(feature = "p2p"))]
         "default_network".to_string()
     };
-    init_logging(
-        config.name.clone(),
-        network_name,
-        config.honeycomb_api_key.clone(),
-    )
-    .await?;
+    init_logging().await?;
     // log fuel-core version
     info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
     trace!("Initializing in TRACE mode.");

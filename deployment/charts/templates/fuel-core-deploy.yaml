@@ -272,10 +272,6 @@ spec:
             - name: RUST_LOG
               value: {{ .Values.app.rust_log | quote }}
             {{- end }}
-            {{- if .Values.app.honeycomb_api_key }}
-            - name: HONEYCOMB_KEY
-              value: {{ .Values.app.honeycomb_api_key | quote }}
-            {{- end }}
             # TODO: do we need to do anything to make this more optional for non-consensus nodes?
             - name: CONSENSUS_KEY_SECRET
               valueFrom:
