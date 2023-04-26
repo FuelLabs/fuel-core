@@ -42,6 +42,7 @@ use fuel_core_types::{
     fuel_crypto::generate_mnemonic_phrase,
     fuel_tx::{
         Cacheable,
+        ConsensusParameters,
         Executable,
         Finalizable,
         Input,
@@ -64,6 +65,7 @@ use fuel_core_types::{
     },
     fuel_vm::{
         GasCosts,
+        Salt,
         SecretKey,
     },
     services::executor::ExecutionBlock,
@@ -97,10 +99,11 @@ struct SignedMessage {
 #[derive(Default)]
 struct Inputs {
     scripts: Scripts,
+    creates: Creates,
     measure: usize,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone, Debug)]
 struct Scripts {
     coins_per_script: usize,
     messages_per_script: usize,
@@ -109,6 +112,12 @@ struct Scripts {
     message_data_size: usize,
     number_extra_witnesses: usize,
     extra_witnesses_data: usize,
+    num_outputs: usize,
+}
+
+#[derive(Default, Clone, Debug)]
+struct Creates {
+    num_outputs: usize,
 }
 
 fn txn(c: &mut Criterion) {
@@ -150,7 +159,7 @@ fn txn(c: &mut Criterion) {
     if select.is_none() || matches!(select, Some(0)) {
         let mut i = 0;
         for num_inputs in [1, 100, 200] {
-            measure_scripts::<20, 2>(
+            measure::<20, 2, 0>(
                 Inputs {
                     scripts: Scripts {
                         coins_per_script: num_inputs,
@@ -159,6 +168,7 @@ fn txn(c: &mut Criterion) {
                         ..Default::default()
                     },
                     measure: num_inputs,
+                    ..Default::default()
                 },
                 &mut i,
                 "inputs",
@@ -170,7 +180,7 @@ fn txn(c: &mut Criterion) {
     if select.is_none() || matches!(select, Some(1)) {
         let mut i = 0;
         for script_size in [1000, 10_000, 100_000] {
-            measure_scripts::<2, 2>(
+            measure::<2, 2, 0>(
                 Inputs {
                     scripts: Scripts {
                         coins_per_script: 1,
@@ -179,6 +189,7 @@ fn txn(c: &mut Criterion) {
                         ..Default::default()
                     },
                     measure: script_size,
+                    ..Default::default()
                 },
                 &mut i,
                 "script_size",
@@ -190,7 +201,7 @@ fn txn(c: &mut Criterion) {
     if select.is_none() || matches!(select, Some(2)) {
         let mut i = 0;
         for script_data_size in [1000, 10_000, 100_000] {
-            measure_scripts::<2, 2>(
+            measure::<2, 2, 0>(
                 Inputs {
                     scripts: Scripts {
                         coins_per_script: 1,
@@ -199,6 +210,7 @@ fn txn(c: &mut Criterion) {
                         ..Default::default()
                     },
                     measure: script_data_size,
+                    ..Default::default()
                 },
                 &mut i,
                 "script_data_size",
@@ -210,7 +222,7 @@ fn txn(c: &mut Criterion) {
     if select.is_none() || matches!(select, Some(3)) {
         let mut i = 0;
         for extra_witnesses_data in [1000, 10_000, 100_000] {
-            measure_scripts::<2, 2>(
+            measure::<2, 2, 0>(
                 Inputs {
                     scripts: Scripts {
                         coins_per_script: 1,
@@ -221,6 +233,7 @@ fn txn(c: &mut Criterion) {
                         ..Default::default()
                     },
                     measure: extra_witnesses_data,
+                    ..Default::default()
                 },
                 &mut i,
                 "extra_witnesses_data",
@@ -232,7 +245,7 @@ fn txn(c: &mut Criterion) {
     if select.is_none() || matches!(select, Some(4)) {
         let mut i = 0;
         for number_extra_witnesses in [10, 100] {
-            measure_scripts::<2, 2>(
+            measure::<2, 2, 0>(
                 Inputs {
                     scripts: Scripts {
                         coins_per_script: 1,
@@ -243,6 +256,7 @@ fn txn(c: &mut Criterion) {
                         ..Default::default()
                     },
                     measure: number_extra_witnesses,
+                    ..Default::default()
                 },
                 &mut i,
                 "number_extra_witnesses",
@@ -251,11 +265,39 @@ fn txn(c: &mut Criterion) {
             );
         }
     }
+    if select.is_none() || matches!(select, Some(5)) {
+        let mut i = 0;
+        for (coins_per_script, messages_per_script, num_outputs) in
+            [(1, 1, 1)]
+        {
+            measure::<20, 20, 0>(
+                Inputs {
+                    scripts: Scripts {
+                        coins_per_script,
+                        script_size: 100,
+                        script_data_size: 100,
+                        extra_witnesses_data: 32,
+                        number_extra_witnesses: 100,
+                        messages_per_script,
+                        message_data_size: 100,
+                        num_outputs,
+                    },
+                    measure: num_outputs,
+                    ..Default::default()
+                },
+                &mut i,
+                "number_of_outputs",
+                &mut executor,
+                &mut execute,
+            );
+        }
+    }
 }
 
-fn measure_scripts<const DB_COINS: u64, const SCRIPTS: u64>(
+fn measure<const DB_COINS: u64, const SCRIPTS: u64, const CREATES: u64>(
     Inputs {
         scripts: s,
+        creates: c,
         measure,
     }: Inputs,
     i: &mut usize,
@@ -263,6 +305,7 @@ fn measure_scripts<const DB_COINS: u64, const SCRIPTS: u64>(
     executor: &mut Executor<MaybeRelayerAdapter>,
     execute: &mut BenchmarkGroup<WallTime>,
 ) {
+    let mut found_solutions = vec![];
     for (id, coin) in coins::<DB_COINS>(1).map(|c| (c.utxo_id, CompressedCoin::from(c))) {
         executor
             .database
@@ -271,14 +314,63 @@ fn measure_scripts<const DB_COINS: u64, const SCRIPTS: u64>(
             .unwrap();
     }
     for t in scripts::<SCRIPTS>(s) {
+        let param = {
+            let inputs =
+                fuel_core_types::fuel_tx::field::Inputs::inputs(t.as_script().unwrap())
+                    .iter()
+                    .map(|i| i.repr())
+                    .collect::<Vec<_>>();
+            let outputs =
+                fuel_core_types::fuel_tx::field::Outputs::outputs(t.as_script().unwrap())
+                    .iter()
+                    .map(|o| o.repr())
+                    .collect::<Vec<_>>();
+            format!("Inputs: {inputs:?}, Outputs: {outputs:?}")
+        };
+        if find_combinations(executor, vec![t.clone()]) {
+            found_solutions.push(format!("Script {param}"));
+        }
         measure_transactions(
             executor,
             vec![t],
             measure as u64,
             &format!("{name}/{i}"),
             execute,
+            &param,
         );
         *i += 1;
+    }
+    for t in creates::<CREATES>(c) {
+        let param = {
+            let inputs =
+                fuel_core_types::fuel_tx::field::Inputs::inputs(t.as_create().unwrap())
+                    .iter()
+                    .map(|i| i.repr())
+                    .collect::<Vec<_>>();
+            let outputs =
+                fuel_core_types::fuel_tx::field::Outputs::outputs(t.as_create().unwrap())
+                    .iter()
+                    .map(|o| o.repr())
+                    .collect::<Vec<_>>();
+            format!("Inputs: {inputs:?}, Outputs: {outputs:?}")
+        };
+        if find_combinations(executor, vec![t.clone()]) {
+            found_solutions.push(format!("Create {param}"));
+        }
+        measure_transactions(
+            executor,
+            vec![t],
+            measure as u64,
+            &format!("{name}/{i}"),
+            execute,
+            &param,
+        );
+        *i += 1;
+    }
+    if !found_solutions.is_empty() {
+        println!("Found solutions for {name}: {found_solutions:?}");
+    } else {
+        println!("No solutions found for {name}");
     }
 }
 
@@ -342,6 +434,10 @@ fn outputs<const CARDINALITY: u64>() -> impl Iterator<Item = Output> + Clone {
         }
         _ => unreachable!(),
     })
+}
+
+fn all_outputs() -> impl Iterator<Item = Output> + Clone {
+    outputs::<4>()
 }
 
 // Has length CARDINALITY^2
@@ -488,12 +584,14 @@ fn scripts<const CARDINALITY: u64>(
         message_data_size,
         number_extra_witnesses,
         extra_witnesses_data,
+        num_outputs,
     }: Scripts,
 ) -> impl Iterator<Item = Transaction> + Clone {
     let mut coins = coins::<100>(1).cycle();
     let mut messages = messages::<100>(message_data_size).cycle();
     let mut data = bytes::<255>().cycle();
     let mut witnesses_data = bytes::<255>().cycle();
+    let mut outputs = all_outputs().cycle();
     script_code::<CARDINALITY>(script_size).map(move |script| {
         let data = data.by_ref().take(script_data_size).collect();
         let mut script_inputs = ScriptInputs::default();
@@ -505,7 +603,7 @@ fn scripts<const CARDINALITY: u64>(
             messages_per_script,
         );
 
-        let outputs = Vec::new();
+        let outputs = outputs.by_ref().take(num_outputs).collect();
 
         let ScriptInputs {
             inputs,
@@ -524,11 +622,33 @@ fn scripts<const CARDINALITY: u64>(
         script.prepare_init_script();
 
         for secret in secrets {
-            script.sign_inputs(&secret);
+            script.sign_inputs(&secret, &ConsensusParameters::default());
         }
 
-        script.precompute();
+        script.precompute(&ConsensusParameters::default());
         script.into()
+    })
+}
+
+fn creates<const CARDINALITY: u64>(
+    Creates { num_outputs }: Creates,
+) -> impl Iterator<Item = Transaction> + Clone {
+    let mut outputs = all_outputs().cycle();
+    let mut salt = array_32s::<{ u64::MAX }>().map(Salt::new).cycle();
+    (0..CARDINALITY).map(move |_| {
+        let outputs = outputs.by_ref().take(num_outputs).collect();
+        let create = Transaction::create(
+            0,
+            0,
+            0.into(),
+            0,
+            salt.next().unwrap(),
+            vec![],
+            vec![],
+            outputs,
+            vec![],
+        );
+        create.into()
     })
 }
 
@@ -555,22 +675,49 @@ fn measure_transactions(
     inputs: u64,
     name: &str,
     execute: &mut BenchmarkGroup<WallTime>,
+    params: &str,
 ) {
     let header = make_header();
     let block = PartialFuelBlock::new(header, transactions);
     let block = ExecutionBlock::Production(block);
 
+    let result = executor.execute_without_commit(block.clone()).unwrap();
+    if !result.result().skipped_transactions.is_empty() {
+        let status = result.result().tx_status.clone();
+        let errors = result
+            .result()
+            .skipped_transactions
+            .iter()
+            .map(|(_, e)| e)
+            .collect::<Vec<_>>();
+        eprintln!("Transaction failed: {params}, {errors:?}, {status:?}");
+
+        return
+    }
+
     execute.throughput(criterion::Throughput::Elements(inputs));
     execute.bench_with_input(BenchmarkId::new(name, inputs), &inputs, |b, _| {
         b.iter(|| {
             let result = executor.execute_without_commit(block.clone()).unwrap();
-            if !result.result().skipped_transactions.is_empty() {
-                dbg!(&result.result().skipped_transactions);
-                dbg!(&result.result().tx_status);
-            }
             assert!(result.result().skipped_transactions.is_empty());
         })
     });
+}
+
+fn find_combinations(
+    executor: &Executor<MaybeRelayerAdapter>,
+    transactions: Vec<Transaction>,
+) -> bool {
+    let header = make_header();
+    let block = PartialFuelBlock::new(header, transactions);
+    let block = ExecutionBlock::Production(block);
+
+    executor
+        .execute_without_commit(block)
+        .unwrap()
+        .result()
+        .skipped_transactions
+        .is_empty()
 }
 
 fn make_header() -> PartialBlockHeader {
