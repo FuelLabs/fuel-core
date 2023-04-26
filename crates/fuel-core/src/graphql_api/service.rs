@@ -161,7 +161,6 @@ pub fn new_service(
         .data(txpool)
         .data(producer)
         .data(consensus_module);
-    // use honeycomb tracing wrapper if api key is configured
     let builder = builder.extension(Tracing);
 
     #[cfg(feature = "metrics")]
