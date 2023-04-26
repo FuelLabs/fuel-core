@@ -97,16 +97,6 @@ pub struct ServerParams {
     listener: TcpListener,
 }
 
-// just to please the `Default` requirement
-impl Default for ServerParams {
-    fn default() -> Self {
-        Self {
-            listener: TcpListener::bind("127.0.0.1:4000").unwrap(),
-            router: Router::default(),
-        }
-    }
-}
-
 pub struct Task {
     // Ugly workaround because of https://github.com/hyperium/hyper/issues/2582
     server: Pin<Box<dyn Future<Output = hyper::Result<()>> + Send + 'static>>,

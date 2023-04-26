@@ -72,7 +72,7 @@ pub trait RunnableService: Send {
     type Task: RunnableTask;
 
     /// Optional parameters used to when initializing into task.
-    type TaskParams: Send + Default;
+    type TaskParams: Send;
 
     /// A cloned instance of the shared data
     fn shared_data(&self) -> Self::SharedData;
@@ -131,6 +131,7 @@ where
 impl<S> ServiceRunner<S>
 where
     S: RunnableService + 'static,
+    S::TaskParams: Default,
 {
     /// Initializes a new `ServiceRunner` containing a `RunnableService`
     pub fn new(service: S) -> Self {
@@ -138,7 +139,12 @@ where
         let state = initialize_loop(service, S::TaskParams::default());
         Self { shared, state }
     }
+}
 
+impl<S> ServiceRunner<S>
+where
+    S: RunnableService + 'static,
+{
     /// Initializes a new `ServiceRunner` containing a `RunnableService` with parameters for underlying `Task`
     pub fn new_with_params(service: S, params: S::TaskParams) -> Self {
         let shared = service.shared_data();
