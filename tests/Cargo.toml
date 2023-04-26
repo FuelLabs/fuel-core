@@ -38,7 +38,7 @@ fuel-core-trace = { path = "../crates/trace" }
 fuel-core-txpool = { path = "../crates/services/txpool", features = ["test-helpers"] }
 fuel-core-types = { path = "../crates/types", features = ["test-helpers"] }
 futures = "0.3"
-hyper = { version = "0.14", features = ["server"] }
+hyper = { workspace = true, features = ["server"] }
 insta = { workspace = true }
 itertools = { workspace = true }
 rand = { workspace = true }
