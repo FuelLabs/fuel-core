@@ -60,8 +60,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         },
         database::Database,
     };
-    init_logging("snapshot".to_string(), "local".to_string(), None).await?;
-
+    init_logging().await?;
     let path = command.database_path;
     let data_source =
         fuel_core::state::rocks_db::RocksDb::default_open(&path, None).context(

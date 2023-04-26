@@ -160,6 +160,7 @@ pub fn new_service(
         .data(txpool)
         .data(producer)
         .data(consensus_module);
+    let builder = builder.extension(async_graphql::extensions::Tracing);
 
     #[cfg(feature = "metrics")]
     let builder = builder.extension(PrometheusExtension {});

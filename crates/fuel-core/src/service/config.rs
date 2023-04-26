@@ -54,7 +54,6 @@ pub struct Config {
     pub consensus_key: Option<Secret<SecretKeyWrapper>>,
     pub name: String,
     pub verifier: fuel_core_consensus_module::RelayerVerifierConfig,
-    pub honeycomb_api_key: Option<String>,
 }
 
 impl Config {
@@ -95,7 +94,6 @@ impl Config {
             consensus_key: Some(Secret::new(default_consensus_dev_key().into())),
             name: String::default(),
             verifier: Default::default(),
-            honeycomb_api_key: None,
         }
     }
 }
