@@ -329,10 +329,7 @@ mod tests {
     #[tokio::test]
     async fn shutdown_stops_all_services() {
         let task = Task::new(Default::default(), Config::local_node()).unwrap();
-        let mut task = task
-            .into_task(&Default::default(), Default::default())
-            .await
-            .unwrap();
+        let mut task = task.into_task(&Default::default(), ()).await.unwrap();
         let sub_services_watchers: Vec<_> = task
             .sub_services()
             .iter()
