@@ -134,9 +134,6 @@ pub struct Task<T, B, I> {
     last_timestamp: Tai64,
     last_block_created: Instant,
     trigger: Trigger,
-    // TODO: Consider that the creation of the block takes some time, and maybe we need to
-    //  patch the timer to generate the block earlier.
-    //  https://github.com/FuelLabs/fuel-core/issues/918
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
     consensus_params: ConsensusParameters,
@@ -254,7 +251,7 @@ where
         block_time: Tai64,
         request_type: RequestType,
     ) -> anyhow::Result<()> {
-        let produce_block_start = Instant::now();
+        let last_block_created = Instant::now();
         // verify signing key is set
         if self.signing_key.is_none() {
             return Err(anyhow!("unable to produce blocks without a consensus key"))
@@ -302,7 +299,7 @@ where
         // Update last block time
         self.last_height = height;
         self.last_timestamp = block_time;
-        self.last_block_created = Instant::now();
+        self.last_block_created = last_block_created;
 
         // Set timer for the next block
         match (self.trigger, request_type) {
@@ -313,12 +310,12 @@ where
             (Trigger::Instant, _) => {}
             (Trigger::Interval { block_time }, RequestType::Trigger) => {
                 self.timer
-                    .set_deadline(produce_block_start + block_time, OnConflict::Min)
+                    .set_deadline(last_block_created + block_time, OnConflict::Min)
                     .await;
             }
             (Trigger::Interval { block_time }, RequestType::Manual) => {
                 self.timer
-                    .set_deadline(produce_block_start + block_time, OnConflict::Overwrite)
+                    .set_deadline(last_block_created + block_time, OnConflict::Overwrite)
                     .await;
             }
             (
