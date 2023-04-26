@@ -7,10 +7,7 @@ use crate::{
         DatabasePort,
         TxPoolPort,
     },
-    graphql_api::{
-        honeycomb::HoneyTrace,
-        Config,
-    },
+    graphql_api::Config,
     schema::{
         CoreSchema,
         CoreSchemaBuilder,
@@ -158,20 +155,13 @@ pub fn new_service(
 ) -> anyhow::Result<Service> {
     let network_addr = config.addr;
 
-    let honeycomb_enabled = config.honeycomb_enabled;
-
     let builder = schema
         .data(config)
         .data(database)
         .data(txpool)
         .data(producer)
         .data(consensus_module);
-    // use honeycomb tracing wrapper if api key is configured
-    let builder = if honeycomb_enabled {
-        builder.extension(HoneyTrace)
-    } else {
-        builder.extension(Tracing)
-    };
+    let builder = builder.extension(Tracing);
 
     #[cfg(feature = "metrics")]
     let builder = builder.extension(PrometheusExtension {});

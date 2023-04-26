@@ -39,7 +39,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         },
         database::Database,
     };
-    init_logging("snapshot".to_string(), "local".to_string(), None).await?;
+    init_logging().await?;
     let path = command.database_path;
     let config: ChainConfig = command.chain_config.parse()?;
     let db = Database::open(&path).context(format!(
