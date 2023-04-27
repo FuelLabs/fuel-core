@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use criterion::{
     criterion_group,
     criterion_main,
@@ -101,6 +103,25 @@ struct Inputs {
     scripts: Scripts,
     creates: Creates,
     measure: usize,
+}
+
+enum InputToOutput {
+    CoinToVoid(usize),
+    CoinToCoin(usize),
+    CoinToChange(HashSet<[u8; 32]>),
+    CoinToVariable(usize),
+    CoinToContractCreated(usize),
+    MessageToVoid(usize),
+    MessageToCoin(usize),
+    MessageToChange(HashSet<[u8; 32]>),
+    MessageToVariable(usize),
+    MessageToContractCreated(usize),
+    ContractToContract(usize),
+    VoidToMessage(usize),
+    VoidToCoin(usize),
+    VoidToChange(HashSet<[u8; 32]>),
+    VoidToVariable(usize),
+    VoidContractCreated(usize),
 }
 
 #[derive(Default, Clone, Debug)]
@@ -267,9 +288,7 @@ fn txn(c: &mut Criterion) {
     }
     if select.is_none() || matches!(select, Some(5)) {
         let mut i = 0;
-        for (coins_per_script, messages_per_script, num_outputs) in
-            [(1, 1, 1)]
-        {
+        for (coins_per_script, messages_per_script, num_outputs) in [(1, 0, 1)] {
             measure::<20, 20, 0>(
                 Inputs {
                     scripts: Scripts {
@@ -603,13 +622,30 @@ fn scripts<const CARDINALITY: u64>(
             messages_per_script,
         );
 
-        let outputs = outputs.by_ref().take(num_outputs).collect();
-
         let ScriptInputs {
             inputs,
             mut witnesses,
             secrets,
         } = script_inputs;
+
+        let contains_input_contract =
+            inputs.iter().any(|i| matches!(i, Input::Contract(_)));
+
+        let outputs = outputs
+            .by_ref()
+            .filter(|o| {
+                match o {
+                    Output::Coin { to, amount, asset_id } => true,
+                    Output::Contract { input_index, balance_root, state_root } => {
+                        contains_input_contract
+                    },
+                    Output::Change { to, amount, asset_id } => true,
+                    Output::Variable { to, amount, asset_id } => true,
+                    Output::ContractCreated { contract_id, state_root } => true,
+                }
+            })
+            .take(num_outputs)
+            .collect();
 
         witnesses.extend((0..number_extra_witnesses).map(|_| {
             let data: Vec<_> =
