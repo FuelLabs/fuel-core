@@ -155,11 +155,15 @@ impl<R> Executor<R>
 where
     R: RelayerPort + Clone,
 {
+    #[cfg(any(test, feature = "test-helpers"))]
     /// Executes the block and commits the result of the execution into the inner `Database`.
     pub fn execute_and_commit(
         &self,
         block: ExecutionBlock,
     ) -> ExecutorResult<ExecutionResult> {
+        if block.to_kind() == ExecutionKind::DryRun {
+            panic!("It is not possible to commit the dry run result");
+        }
         let (result, db_transaction) = self.execute_without_commit(block)?.into();
         db_transaction.commit()?;
         Ok(result)
@@ -1863,9 +1867,10 @@ mod tests {
             let mut block = Block::default();
             *block.transactions_mut() = vec![script.into()];
 
-            let ExecutionResult { block, .. } = producer
-                .execute_and_commit(ExecutionBlock::DryRun(block.into()))
+            let result = producer
+                .execute_without_commit(ExecutionBlock::DryRun(block.into()))
                 .unwrap();
+            let ExecutionResult { block, .. } = result.into_result();
 
             assert_eq!(block.transactions().len(), 1);
         }

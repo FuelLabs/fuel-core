@@ -128,6 +128,11 @@ where
         } + 1.into();
 
         let is_script = transaction.is_script();
+        // The dry run execution should use the state of the blockchain based on the
+        // last available block, not on the upcoming one. It means that we need to
+        // use the same configuration as the last block -> the same DA height.
+        // It is deterministic from the result perspective, plus it is more performant
+        // because we don't need to wait for the relayer to sync.
         let header = self._new_header(height, Tai64::now())?;
         let block =
             PartialFuelBlock::new(header, vec![transaction].into_iter().collect());
