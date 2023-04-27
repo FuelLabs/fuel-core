@@ -130,12 +130,17 @@ where
 
     type SharedData = SharedState<P2P, DB>;
     type Task = Task<P2P, DB>;
+    type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
         self.shared.clone()
     }
 
-    async fn into_task(mut self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
+    async fn into_task(
+        mut self,
+        _: &StateWatcher,
+        _: Self::TaskParams,
+    ) -> anyhow::Result<Self::Task> {
         self.ttl_timer.reset();
         Ok(self)
     }

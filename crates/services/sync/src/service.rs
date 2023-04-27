@@ -142,10 +142,15 @@ where
     type SharedData = ();
 
     type Task = SyncTask<P, E, C>;
+    type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {}
 
-    async fn into_task(mut self, watcher: &StateWatcher) -> anyhow::Result<Self::Task> {
+    async fn into_task(
+        mut self,
+        watcher: &StateWatcher,
+        _: Self::TaskParams,
+    ) -> anyhow::Result<Self::Task> {
         let mut sync_watcher = watcher.clone();
         self.import_task_handle.start_and_await().await?;
         let mut import_watcher = self.import_task_handle.state_watcher();
@@ -193,12 +198,17 @@ where
     const NAME: &'static str = "fuel-core-sync/import-task";
 
     type SharedData = ();
+    type TaskParams = ();
 
     type Task = ImportTask<P, E, C>;
 
     fn shared_data(&self) -> Self::SharedData {}
 
-    async fn into_task(self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
+    async fn into_task(
+        self,
+        _: &StateWatcher,
+        _: Self::TaskParams,
+    ) -> anyhow::Result<Self::Task> {
         Ok(self)
     }
 }
