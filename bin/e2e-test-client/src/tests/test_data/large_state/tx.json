@@ -2,7 +2,7 @@
   "Script": {
     "gas_price": 0,
     "gas_limit": 100000000,
-    "maturity": "0x00000000",
+    "maturity": 0,
     "script": [
       144,
       0,
@@ -4141,7 +4141,7 @@
           "balance_root": "0000000000000000000000000000000000000000000000000000000000000000",
           "state_root": "0000000000000000000000000000000000000000000000000000000000000000",
           "tx_pointer": {
-            "block_height": "0x00000000",
+            "block_height": 0,
             "tx_index": 0
           },
           "contract_id": "c8ca903bfaba051c55d827c3bd957a325a3f80bceeb87c6e49d308ad39cf48d7"
