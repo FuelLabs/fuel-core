@@ -22,10 +22,7 @@ use crate::{
 };
 use fuel_core_poa::Trigger;
 use std::sync::Arc;
-use tokio::sync::{
-    Mutex,
-    Semaphore,
-};
+use tokio::sync::Mutex;
 
 pub type PoAService =
     fuel_core_poa::Service<TxPoolAdapter, BlockProducerAdapter, BlockImporterAdapter>;
@@ -109,9 +106,6 @@ pub fn init_sub_services(
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 
-    // restrict the max number of concurrent dry runs to the number of CPUs
-    // as execution in the worst case will be CPU bound rather than I/O bound.
-    let max_dry_run_concurrency = num_cpus::get();
     let block_producer = fuel_core_producer::Producer {
         config: config.block_producer.clone(),
         db: database.clone(),
@@ -119,7 +113,6 @@ pub fn init_sub_services(
         executor: Arc::new(executor),
         relayer: Box::new(relayer_adapter),
         lock: Mutex::new(()),
-        dry_run_semaphore: Semaphore::new(max_dry_run_concurrency),
     };
     let producer_adapter = BlockProducerAdapter::new(block_producer);
 

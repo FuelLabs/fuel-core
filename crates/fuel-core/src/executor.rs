@@ -155,11 +155,15 @@ impl<R> Executor<R>
 where
     R: RelayerPort + Clone,
 {
+    #[cfg(any(test, feature = "test-helpers"))]
     /// Executes the block and commits the result of the execution into the inner `Database`.
     pub fn execute_and_commit(
         &self,
         block: ExecutionBlock,
     ) -> ExecutorResult<ExecutionResult> {
+        if block.to_kind() == ExecutionKind::DryRun {
+            panic!("It is not possible to commit the dry run result");
+        }
         let (result, db_transaction) = self.execute_without_commit(block)?.into();
         db_transaction.commit()?;
         Ok(result)
@@ -242,7 +246,7 @@ impl<R> Executor<R>
 where
     R: RelayerPort + Clone,
 {
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip_all)]
     fn execute_inner(
         &self,
         block: ExecutionBlock,
@@ -324,7 +328,7 @@ where
         ))
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip_all)]
     /// Execute all transactions on the fuel block.
     fn execute_transactions(
         &self,
@@ -348,6 +352,7 @@ where
         let mut iter = ::core::mem::take(&mut block.transactions).into_iter();
 
         let mut coinbase_tx: Mint = match execution_kind {
+            ExecutionKind::DryRun => Default::default(),
             ExecutionKind::Production => {
                 // The coinbase transaction should be the first.
                 // We will add actual amount of `Output::Coin` at the end of transactions execution.
@@ -370,9 +375,13 @@ where
             }
         };
 
-        // Skip the coinbase transaction.
-        block.transactions.push(coinbase_tx.clone().into());
-        let mut tx_index = 1;
+        let mut tx_index = if execution_kind != ExecutionKind::DryRun {
+            // Skip the coinbase transaction.
+            block.transactions.push(coinbase_tx.clone().into());
+            1
+        } else {
+            0
+        };
 
         let mut filtered_transactions: Vec<_> = iter
             .filter_map(|transaction| {
@@ -400,7 +409,9 @@ where
                                 execution_data.skipped_transactions.push((tx, err));
                                 None
                             }
-                            ExecutionKind::Validation => Some(Err(err)),
+                            ExecutionKind::DryRun | ExecutionKind::Validation => {
+                                Some(Err(err))
+                            }
                         }
                     }
 
@@ -419,7 +430,7 @@ where
             .try_collect()?;
 
         // After the execution of all transactions in production mode, we can set the final fee.
-        if let ExecutionKind::Production = execution_kind {
+        if execution_kind == ExecutionKind::Production {
             coinbase_tx.outputs_mut().clear();
             coinbase_tx.outputs_mut().push(Output::coin(
                 self.config.block_producer.coinbase_recipient,
@@ -430,12 +441,19 @@ where
         }
         block.transactions.append(&mut filtered_transactions);
 
-        coinbase_tx = self.check_coinbase(
-            block_height,
-            coinbase_tx,
-            Some(execution_data.coinbase),
-        )?;
-        self.apply_coinbase(coinbase_tx, block, execution_data, block_db_transaction)?;
+        if execution_kind != ExecutionKind::DryRun {
+            coinbase_tx = self.check_coinbase(
+                block_height,
+                coinbase_tx,
+                Some(execution_data.coinbase),
+            )?;
+            self.apply_coinbase(
+                coinbase_tx,
+                block,
+                execution_data,
+                block_db_transaction,
+            )?;
+        }
 
         Ok(data)
     }
@@ -583,6 +601,7 @@ where
         // Wrap the transaction in the execution kind.
         self.compute_inputs(
             match execution_kind {
+                ExecutionKind::DryRun => ExecutionTypes::DryRun(original_tx),
                 ExecutionKind::Production => ExecutionTypes::Production(original_tx),
                 ExecutionKind::Validation => ExecutionTypes::Validation(original_tx),
             },
@@ -665,7 +684,7 @@ where
                     })
                 }
             }
-            ExecutionKind::Production => {
+            ExecutionKind::DryRun | ExecutionKind::Production => {
                 // malleate the block with the resultant tx from the vm
             }
         }
@@ -684,6 +703,7 @@ where
         )?;
         self.compute_not_utxo_outputs(
             match execution_kind {
+                ExecutionKind::DryRun => ExecutionTypes::DryRun(&mut tx),
                 ExecutionKind::Production => ExecutionTypes::Production(&mut tx),
                 ExecutionKind::Validation => ExecutionTypes::Validation(&tx),
             },
@@ -991,7 +1011,7 @@ where
         Tx: ExecutableTransaction,
     {
         match tx {
-            ExecutionTypes::Production(tx) => {
+            ExecutionTypes::DryRun(tx) | ExecutionTypes::Production(tx) => {
                 for input in tx.inputs_mut() {
                     match input {
                         Input::CoinSigned(CoinSigned {
@@ -1133,7 +1153,7 @@ where
         Tx: ExecutableTransaction,
     {
         match tx {
-            ExecutionTypes::Production(tx) => {
+            ExecutionTypes::DryRun(tx) | ExecutionTypes::Production(tx) => {
                 // TODO: Inputs, in most cases, are heavier than outputs, so cloning them, but we
                 //  to avoid it in the future.
                 let mut outputs = tx.outputs().clone();
@@ -1819,6 +1839,40 @@ mod tests {
             } else {
                 panic!("Invalid outputs of coinbase");
             }
+        }
+
+        #[test]
+        fn skip_coinbase_during_dry_run() {
+            let price = 1;
+            let limit = 0;
+            let gas_price_factor = 1;
+            let script = TxBuilder::new(2322u64)
+                .gas_limit(limit)
+                // Set a price for the test
+                .gas_price(price)
+                .coin_input(AssetId::BASE, 10000)
+                .change_output(AssetId::BASE)
+                .build()
+                .transaction()
+                .clone();
+
+            let mut config = Config::local_node();
+            let recipient = [1u8; 32].into();
+            config.block_producer.coinbase_recipient = recipient;
+
+            config.chain_conf.transaction_parameters.gas_price_factor = gas_price_factor;
+
+            let producer = Executor::test(Default::default(), config);
+
+            let mut block = Block::default();
+            *block.transactions_mut() = vec![script.into()];
+
+            let result = producer
+                .execute_without_commit(ExecutionBlock::DryRun(block.into()))
+                .unwrap();
+            let ExecutionResult { block, .. } = result.into_result();
+
+            assert_eq!(block.transactions().len(), 1);
         }
 
         #[test]

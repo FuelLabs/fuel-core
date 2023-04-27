@@ -2408,7 +2408,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2439,7 +2439,6 @@ dependencies = [
  "hyper",
  "itertools",
  "mockall",
- "num_cpus",
  "postcard",
  "primitive-types",
  "rand 0.8.5",
@@ -2476,7 +2475,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-bft"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "anyhow",
  "parking_lot 0.12.1",
@@ -2485,7 +2484,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-bin"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "anyhow",
  "clap 4.2.1",
@@ -2505,7 +2504,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-chain-config"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "anyhow",
  "bech32 0.9.1",
@@ -2524,7 +2523,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-client"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "anyhow",
  "cynic",
@@ -2547,7 +2546,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-client-bin"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "clap 4.2.1",
  "fuel-core-client",
@@ -2558,7 +2557,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-consensus-module"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "anyhow",
  "fuel-core-chain-config",
@@ -2570,7 +2569,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-database"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "anyhow",
  "fuel-core-storage",
@@ -2581,20 +2580,23 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-e2e-client"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "anyhow",
  "assert_cmd",
  "fuel-core",
+ "fuel-core-chain-config",
  "fuel-core-client",
  "fuel-core-e2e-client",
  "fuel-core-trace",
  "fuel-core-types",
  "futures",
+ "hex",
  "humantime-serde",
  "insta",
  "libtest-mimic",
  "serde",
+ "serde_json",
  "tempfile",
  "tikv-jemallocator",
  "tokio",
@@ -2603,7 +2605,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-executor"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "anyhow",
  "fuel-core-chain-config",
@@ -2614,7 +2616,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-importer"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "anyhow",
  "fuel-core-storage",
@@ -2629,7 +2631,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-keygen"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "anyhow",
  "clap 4.2.1",
@@ -2640,7 +2642,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-metrics"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "axum",
  "lazy_static",
@@ -2651,7 +2653,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-p2p"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2693,7 +2695,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-poa"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2711,7 +2713,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-producer"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2722,12 +2724,13 @@ dependencies = [
  "rand 0.8.5",
  "thiserror",
  "tokio",
+ "tokio-rayon",
  "tracing",
 ]
 
 [[package]]
 name = "fuel-core-relayer"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2755,7 +2758,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-services"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2768,7 +2771,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-storage"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "anyhow",
  "fuel-core-types",
@@ -2779,7 +2782,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-sync"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2822,7 +2825,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-trace"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "ctor",
  "tracing",
@@ -2832,7 +2835,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-txpool"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2854,7 +2857,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-types"
-version = "0.17.9"
+version = "0.17.11"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -4293,9 +4296,9 @@ dependencies = [
 
 [[package]]
 name = "librocksdb-sys"
-version = "0.8.3+7.4.4"
+version = "0.10.0+7.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "557b255ff04123fcc176162f56ed0c9cd42d8f357cf55b3fabeb60f7413741b3"
+checksum = "0fe4d5874f5ff2bc616e55e8c6086d478fcda13faf9495768a4aa1c22042d30b"
 dependencies = [
  "bindgen",
  "bzip2-sys",
@@ -4303,6 +4306,7 @@ dependencies = [
  "glob",
  "libc",
  "libz-sys",
+ "lz4-sys",
  "tikv-jemalloc-sys",
 ]
 
@@ -4423,6 +4427,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "31e24f1ad8321ca0e8a1e0ac13f23cb668e6f5466c2c57319f6a5cf1cc8e3b1c"
 dependencies = [
  "linked-hash-map",
+]
+
+[[package]]
+name = "lz4-sys"
+version = "1.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57d27b317e207b10f69f5e75494119e391a96f48861ae870d1da6edac98ca900"
+dependencies = [
+ "cc",
+ "libc",
 ]
 
 [[package]]
@@ -5873,9 +5887,9 @@ dependencies = [
 
 [[package]]
 name = "rocksdb"
-version = "0.19.0"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e9562ea1d70c0cc63a34a22d977753b50cca91cc6b6527750463bd5dd8697bc"
+checksum = "015439787fce1e75d55f279078d33ff14b4af5d93d995e8838ee4631301c8a99"
 dependencies = [
  "libc",
  "librocksdb-sys",
@@ -6956,6 +6970,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.13",
+]
+
+[[package]]
+name = "tokio-rayon"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cf33a76e0b1dd03b778f83244137bd59887abf25c0e87bc3e7071105f457693"
+dependencies = [
+ "rayon",
+ "tokio",
 ]
 
 [[package]]

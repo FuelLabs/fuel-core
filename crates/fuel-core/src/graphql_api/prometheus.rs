@@ -3,38 +3,28 @@ use async_graphql::{
         Extension,
         ExtensionContext,
         ExtensionFactory,
-        NextParseQuery,
         NextRequest,
+        NextResolve,
+        ResolveInfo,
     },
-    parser::types::{
-        ExecutableDocument,
-        OperationType,
-        Selection,
-    },
+    QueryPathSegment,
     Response,
     ServerResult,
-    Variables,
+    Value,
 };
 use fuel_core_metrics::graphql_metrics::GRAPHQL_METRICS;
-use std::{
-    sync::Arc,
-    time::Instant,
-};
-use tokio::sync::RwLock;
+use std::sync::Arc;
+use tokio::time::Instant;
 
 pub(crate) struct PrometheusExtension {}
 
 impl ExtensionFactory for PrometheusExtension {
     fn create(&self) -> Arc<dyn Extension> {
-        Arc::new(PrometheusExtInner {
-            operation_name: RwLock::new(None),
-        })
+        Arc::new(PrometheusExtInner {})
     }
 }
 
-pub(crate) struct PrometheusExtInner {
-    operation_name: RwLock<Option<String>>,
-}
+pub(crate) struct PrometheusExtInner;
 
 #[async_trait::async_trait]
 impl Extension for PrometheusExtInner {
@@ -45,41 +35,31 @@ impl Extension for PrometheusExtInner {
     ) -> Response {
         let start_time = Instant::now();
         let result = next.run(ctx).await;
-
-        let op_name = self.operation_name.read().await;
-        if let Some(op) = &*op_name {
-            GRAPHQL_METRICS.graphql_observe(op, start_time.elapsed().as_secs_f64());
-        }
+        let seconds = start_time.elapsed().as_secs_f64();
+        GRAPHQL_METRICS.graphql_observe("request", seconds);
 
         result
     }
 
-    async fn parse_query(
+    async fn resolve(
         &self,
         ctx: &ExtensionContext<'_>,
-        query: &str,
-        variables: &Variables,
-        next: NextParseQuery<'_>,
-    ) -> ServerResult<ExecutableDocument> {
-        let document = next.run(ctx, query, variables).await?;
-        let is_schema = document
-            .operations
-            .iter()
-            .filter(|(_, operation)| operation.node.ty == OperationType::Query)
-            .any(|(_, operation)| operation.node.selection_set.node.items.iter().any(|selection| matches!(&selection.node, Selection::Field(field) if field.node.name.node == "__schema")));
-        if !is_schema {
-            if let Some((_, def)) = document.operations.iter().next() {
-                if let Some(Selection::Field(e)) =
-                    &def.node.selection_set.node.items.get(0).map(|n| &n.node)
-                {
-                    // only track query if there's a single selection set
-                    if def.node.selection_set.node.items.len() == 1 {
-                        *self.operation_name.write().await =
-                            Some(e.node.name.node.to_string());
-                    }
-                }
-            }
+        info: ResolveInfo<'_>,
+        next: NextResolve<'_>,
+    ) -> ServerResult<Option<Value>> {
+        let field_name = match (info.path_node.parent, info.path_node.segment) {
+            (None, QueryPathSegment::Name(field_name)) => Some(field_name),
+            _ => None,
+        };
+
+        let start_time = Instant::now();
+        let res = next.run(ctx, info).await;
+        let seconds = start_time.elapsed().as_secs_f64();
+
+        if let Some(field_name) = field_name {
+            GRAPHQL_METRICS.graphql_observe(field_name, seconds);
         }
-        Ok(document)
+
+        res
     }
 }

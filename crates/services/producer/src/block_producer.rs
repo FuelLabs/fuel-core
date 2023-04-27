@@ -35,13 +35,7 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 use thiserror::Error;
-use tokio::{
-    sync::{
-        Mutex,
-        Semaphore,
-    },
-    task::spawn_blocking,
-};
+use tokio::sync::Mutex;
 use tracing::debug;
 
 #[cfg(test)]
@@ -71,7 +65,6 @@ pub struct Producer<Database> {
     // use a tokio lock since we want callers to yield until the previous block
     // execution has completed (which may take a while).
     pub lock: Mutex<()>,
-    pub dry_run_semaphore: Semaphore,
 }
 
 impl<Database> Producer<Database>
@@ -129,31 +122,32 @@ where
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
     ) -> anyhow::Result<Vec<Receipt>> {
-        // setup the block with the provided tx and optional height
-        // dry_run execute tx on the executor
-        // return the receipts
-        let _permit = self.dry_run_semaphore.acquire().await;
-
         let height = match height {
             None => self.db.current_block_height()?,
             Some(height) => height,
         } + 1.into();
 
         let is_script = transaction.is_script();
-        let header = self.new_header(height, Tai64::now()).await?;
+        // The dry run execution should use the state of the blockchain based on the
+        // last available block, not on the upcoming one. It means that we need to
+        // use the same configuration as the last block -> the same DA height.
+        // It is deterministic from the result perspective, plus it is more performant
+        // because we don't need to wait for the relayer to sync.
+        let header = self._new_header(height, Tai64::now())?;
         let block =
             PartialFuelBlock::new(header, vec![transaction].into_iter().collect());
 
         let executor = self.executor.clone();
         // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
-        let res: Vec<_> = spawn_blocking(move || -> anyhow::Result<Vec<Receipt>> {
-            Ok(executor
-                .dry_run(ExecutionBlock::Production(block), utxo_validation)?
-                .into_iter()
-                .flatten()
-                .collect())
-        })
-        .await??;
+        let res: Vec<_> =
+            tokio_rayon::spawn_fifo(move || -> anyhow::Result<Vec<Receipt>> {
+                Ok(executor
+                    .dry_run(ExecutionBlock::DryRun(block), utxo_validation)?
+                    .into_iter()
+                    .flatten()
+                    .collect())
+            })
+            .await?;
         if is_script && res.is_empty() {
             return Err(anyhow!("Expected at least one set of receipts"))
         }
@@ -171,23 +165,12 @@ where
         height: BlockHeight,
         block_time: Tai64,
     ) -> anyhow::Result<PartialBlockHeader> {
-        let previous_block_info = self.previous_block_info(height)?;
-        let new_da_height = self
-            .select_new_da_height(previous_block_info.da_height)
-            .await?;
+        let mut block_header = self._new_header(height, block_time)?;
+        let new_da_height = self.select_new_da_height(block_header.da_height).await?;
 
-        Ok(PartialBlockHeader {
-            application: ApplicationHeader {
-                da_height: new_da_height,
-                generated: Default::default(),
-            },
-            consensus: ConsensusHeader {
-                prev_root: previous_block_info.prev_root,
-                height,
-                time: block_time,
-                generated: Default::default(),
-            },
-        })
+        block_header.application.da_height = new_da_height;
+
+        Ok(block_header)
     }
 
     async fn select_new_da_height(
@@ -205,6 +188,27 @@ where
             .into())
         }
         Ok(best_height)
+    }
+
+    fn _new_header(
+        &self,
+        height: BlockHeight,
+        block_time: Tai64,
+    ) -> anyhow::Result<PartialBlockHeader> {
+        let previous_block_info = self.previous_block_info(height)?;
+
+        Ok(PartialBlockHeader {
+            application: ApplicationHeader {
+                da_height: previous_block_info.da_height,
+                generated: Default::default(),
+            },
+            consensus: ConsensusHeader {
+                prev_root: previous_block_info.prev_root,
+                height,
+                time: block_time,
+                generated: Default::default(),
+            },
+        })
     }
 
     fn previous_block_info(
