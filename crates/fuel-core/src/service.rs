@@ -214,12 +214,17 @@ impl RunnableService for Task {
     const NAME: &'static str = "FuelService";
     type SharedData = SharedState;
     type Task = Task;
+    type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
         self.shared.clone()
     }
 
-    async fn into_task(self, _: &StateWatcher) -> anyhow::Result<Self::Task> {
+    async fn into_task(
+        self,
+        _: &StateWatcher,
+        _: Self::TaskParams,
+    ) -> anyhow::Result<Self::Task> {
         for service in &self.services {
             service.start_and_await().await?;
         }
@@ -288,7 +293,7 @@ mod tests {
             let task = Task::new(Default::default(), Config::local_node()).unwrap();
             let (_, receiver) = tokio::sync::watch::channel(State::NotStarted);
             let mut watcher = receiver.into();
-            let mut task = task.into_task(&watcher).await.unwrap();
+            let mut task = task.into_task(&watcher, ()).await.unwrap();
             sleep(Duration::from_secs(1));
             for service in task.sub_services() {
                 assert_eq!(service.state(), State::Started);
@@ -324,7 +329,7 @@ mod tests {
     #[tokio::test]
     async fn shutdown_stops_all_services() {
         let task = Task::new(Default::default(), Config::local_node()).unwrap();
-        let mut task = task.into_task(&Default::default()).await.unwrap();
+        let mut task = task.into_task(&Default::default(), ()).await.unwrap();
         let sub_services_watchers: Vec<_> = task
             .sub_services()
             .iter()
