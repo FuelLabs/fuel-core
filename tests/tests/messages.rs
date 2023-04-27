@@ -221,7 +221,7 @@ async fn can_get_message_proof() {
             // of the message recipient.
             op::addi(0x10, 0x10, starting_offset),
         ];
-        contract.extend(args.iter().enumerate().flat_map(|(index, arg)| {
+        contract.extend(args.iter().flat_map(|arg| {
             [
                 // Pointer to the message in memory
                 op::addi(0x11, 0x10, 32),
