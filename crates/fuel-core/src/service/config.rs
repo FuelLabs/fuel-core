@@ -32,6 +32,7 @@ pub use fuel_core_poa::Trigger;
 #[derive(Clone, Debug)]
 pub struct Config {
     pub addr: SocketAddr,
+    pub max_database_cache_size: usize,
     pub database_path: PathBuf,
     pub database_type: DbType,
     pub chain_conf: ChainConfig,
@@ -62,6 +63,8 @@ impl Config {
         let min_gas_price = 0;
         Self {
             addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
+            // Set the cache for tests = 10MB
+            max_database_cache_size: 10 * 1024 * 1024,
             database_path: Default::default(),
             #[cfg(feature = "rocksdb")]
             database_type: DbType::RocksDb,

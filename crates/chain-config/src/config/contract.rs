@@ -2,11 +2,18 @@ use crate::serialization::{
     HexNumber,
     HexType,
 };
-use fuel_core_types::fuel_types::{
-    AssetId,
-    BlockHeight,
-    Bytes32,
-    Salt,
+use fuel_core_types::{
+    fuel_tx::{
+        Contract,
+        ContractId,
+        StorageSlot,
+    },
+    fuel_types::{
+        AssetId,
+        BlockHeight,
+        Bytes32,
+        Salt,
+    },
 };
 use serde::{
     Deserialize,
@@ -51,4 +58,31 @@ pub struct ContractConfig {
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]
     pub tx_pointer_tx_idx: Option<u16>,
+}
+
+impl ContractConfig {
+    pub fn unpack(self) -> (ContractId, Vec<u8>, Salt, Bytes32, Vec<StorageSlot>) {
+        let bytes = self.code;
+        let salt = self.salt;
+        let slots = self.state.map(|slots| {
+            slots
+                .into_iter()
+                .map(|(key, value)| StorageSlot::new(key, value))
+                .collect::<Vec<_>>()
+        });
+        let state_root = slots
+            .as_ref()
+            .map(|slots| Contract::initial_state_root(slots.iter()))
+            .unwrap_or(Contract::default_state_root());
+        let contract = Contract::from(bytes.clone());
+        let root = contract.root();
+        let contract_id = contract.id(&salt, &root, &state_root);
+        (
+            contract_id,
+            bytes,
+            salt,
+            state_root,
+            slots.unwrap_or_default(),
+        )
+    }
 }

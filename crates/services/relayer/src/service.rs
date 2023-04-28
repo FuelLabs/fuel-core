@@ -226,7 +226,7 @@ where
 
         let result = run::run(self).await;
 
-        if self.shutdown.borrow_and_update().started() {
+        if self.shutdown.borrow_and_update().started() && self.synced.borrow().is_some() {
             // Sleep the loop so the da node is not spammed.
             tokio::time::sleep(
                 self.config

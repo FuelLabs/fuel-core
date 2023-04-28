@@ -15,7 +15,6 @@ use crate::{
     service::metrics::metrics,
 };
 use async_graphql::{
-    extensions::Tracing,
     http::{
         playground_source,
         GraphQLPlaygroundConfig,
@@ -171,7 +170,7 @@ pub fn new_service(
         .data(txpool)
         .data(producer)
         .data(consensus_module);
-    let builder = builder.extension(Tracing);
+    let builder = builder.extension(async_graphql::extensions::Tracing);
 
     #[cfg(feature = "metrics")]
     let builder = builder.extension(PrometheusExtension {});
