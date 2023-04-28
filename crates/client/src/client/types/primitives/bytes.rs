@@ -35,12 +35,6 @@ impl<const N: usize> AsMut<[u8]> for Bytes<N> {
     }
 }
 
-impl<const N: usize> fmt::Display for Bytes<N> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        <Self as fmt::LowerHex>::fmt(&self, f)
-    }
-}
-
 impl<const N: usize> Len for Bytes<N> {
     fn len(&self) -> usize {
         N
@@ -55,6 +49,12 @@ impl<const N: usize> Primitive for Bytes<N> {}
 
 impl<const N: usize> fmt::LowerHex for Bytes<N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        <Self as Primitive>::fmt(self, f)
+    }
+}
+
+impl<const N: usize> fmt::Display for Bytes<N> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         <Self as Primitive>::fmt(self, f)
     }
 }

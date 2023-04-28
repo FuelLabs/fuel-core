@@ -1,11 +1,15 @@
-use crate::client::types::{
-    block::Header,
-    scalars::{
-        Address,
-        HexString,
-        Nonce,
+use crate::client::{
+    schema,
+    types::{
+        block::Header,
+        scalars::{
+            Address,
+            HexString,
+            Nonce,
+        },
+        MerkleProof,
     },
-    MerkleProof,
+    PaginatedResult,
 };
 
 #[derive(Debug)]
@@ -40,4 +44,46 @@ pub struct MessageProof {
     pub amount: u64,
     /// The data from the message.
     pub data: HexString,
+}
+
+// GraphQL Translation
+
+impl From<schema::message::Message> for Message {
+    fn from(value: schema::message::Message) -> Self {
+        Self {
+            amount: value.amount.into(),
+            sender: value.sender.into(),
+            recipient: value.recipient.into(),
+            nonce: value.nonce.into(),
+            data: value.data.into(),
+            da_height: value.da_height.into(),
+        }
+    }
+}
+
+impl From<schema::message::MessageConnection> for PaginatedResult<Message, String> {
+    fn from(conn: schema::message::MessageConnection) -> Self {
+        PaginatedResult {
+            cursor: conn.page_info.end_cursor,
+            has_next_page: conn.page_info.has_next_page,
+            has_previous_page: conn.page_info.has_previous_page,
+            results: conn.edges.into_iter().map(|e| e.node.into()).collect(),
+        }
+    }
+}
+
+impl From<schema::message::MessageProof> for MessageProof {
+    fn from(value: schema::message::MessageProof) -> Self {
+        Self {
+            message_proof: value.message_proof.into(),
+            block_proof: value.block_proof.into(),
+            message_block_header: value.message_block_header.into(),
+            commit_block_header: value.commit_block_header.into(),
+            sender: value.sender.into(),
+            recipient: value.recipient.into(),
+            nonce: value.nonce.into(),
+            amount: value.amount.into(),
+            data: value.data.into(),
+        }
+    }
 }

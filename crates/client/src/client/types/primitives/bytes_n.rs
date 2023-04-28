@@ -51,6 +51,12 @@ impl fmt::LowerHex for BytesN {
     }
 }
 
+impl fmt::Display for BytesN {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        <Self as Primitive>::fmt(self, f)
+    }
+}
+
 impl FromStr for BytesN {
     type Err = &'static str;
 

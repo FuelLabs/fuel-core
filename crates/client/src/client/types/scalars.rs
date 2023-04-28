@@ -14,6 +14,10 @@ use std::{
 };
 use tai64::Tai64;
 
+pub trait ClientScalar {
+    type PrimitiveType;
+}
+
 macro_rules! client_type_scalar {
     ($id:ident, $base_id:ident) => {
         #[derive(Debug, Clone, Default)]
@@ -48,6 +52,10 @@ macro_rules! client_type_scalar {
                 Display::fmt(&self.0, f)
             }
         }
+
+        impl ClientScalar for $id {
+            type PrimitiveType = primitives::$base_id;
+        }
     };
 }
 
@@ -55,9 +63,9 @@ client_type_scalar!(Address, Bytes32);
 client_type_scalar!(AssetId, Bytes32);
 client_type_scalar!(BlockId, Bytes32);
 client_type_scalar!(ContractId, Bytes32);
+client_type_scalar!(Hash, Bytes32);
 client_type_scalar!(HexString, BytesN);
 client_type_scalar!(MerkleRoot, Bytes32);
-client_type_scalar!(Message, Bytes32);
 client_type_scalar!(MessageId, Bytes32);
 client_type_scalar!(Nonce, Bytes32);
 client_type_scalar!(PublicKey, Bytes64);

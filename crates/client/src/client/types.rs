@@ -1,4 +1,5 @@
 pub mod block;
+pub mod contract;
 pub mod merkle_proof;
 pub mod message;
 pub mod primitives;
@@ -9,7 +10,7 @@ pub use block::{
     Block,
     Consensus,
 };
-
+pub use contract::ContractBalance;
 pub use merkle_proof::MerkleProof;
 pub use message::{
     Message,

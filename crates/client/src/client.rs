@@ -598,9 +598,9 @@ impl FuelClient {
                     vec.into_iter().map(TryInto::<Receipt>::try_into).collect();
                 vec
             })
-            .transpose();
+            .transpose()?;
 
-        Ok(receipts?)
+        Ok(receipts)
     }
 
     pub async fn produce_blocks(
@@ -762,7 +762,7 @@ impl FuelClient {
         &self,
         contract: &str,
         request: PaginationRequest<String>,
-    ) -> io::Result<PaginatedResult<schema::contract::ContractBalance, String>> {
+    ) -> io::Result<PaginatedResult<types::ContractBalance, String>> {
         let contract_id: schema::ContractId = contract.parse()?;
         let query =
             schema::contract::ContractBalancesQuery::build((contract_id, request).into());
