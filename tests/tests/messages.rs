@@ -221,12 +221,12 @@ async fn can_get_message_proof() {
             // of the message recipient.
             op::addi(0x10, 0x10, starting_offset),
         ];
-        contract.extend(args.iter().enumerate().flat_map(|(index, arg)| {
+        contract.extend(args.iter().flat_map(|arg| {
             [
+                // Pointer to the message in memory
+                op::addi(0x11, 0x10, 32),
                 // The length of the message data in memory.
-                op::movi(0x11, arg.message_data.len() as u32),
-                // The index of the of the output message in the transactions outputs.
-                op::movi(0x12, (index + 1) as u32),
+                op::movi(0x12, arg.message_data.len() as u32),
                 // The amount to send in coins.
                 op::movi(0x13, amount),
                 // Send the message output.

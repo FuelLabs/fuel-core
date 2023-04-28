@@ -162,7 +162,7 @@ async fn can_get_message_proof() {
         // Set the location in memory to write the bytes to.
         op::movi(0x11, 100),
         op::aloc(0x11),
-        op::addi(0x11, RegId::HP, 1),
+        op::move_(0x11, RegId::HP),
         op::movi(0x13, 2),
         // Write read to 0x11.
         // Write status to 0x30.

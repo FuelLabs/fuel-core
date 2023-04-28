@@ -1952,9 +1952,8 @@ mod tests {
                         // Allocate 32 bytes on the heap.
                         op::aloc(0x11),
                         // Store the pointer to the beginning of the free memory into 
-                        // register `0x10`. It requires shifting of `RegId::HP` by 1 to point
-                        // on the free memory.
-                        op::addi(0x10, RegId::HP, 0),
+                        // register `0x10`.
+                        op::move_(0x10, RegId::HP),
                         // Store `config_coinbase` `Address` into MEM[$0x10; 32].
                         op::cb(0x10),
                         // Store the pointer on the beginning of script data into register `0x12`.
