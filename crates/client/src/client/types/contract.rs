@@ -3,9 +3,17 @@ use crate::client::{
     types::scalars::{
         AssetId,
         ContractId,
+        HexString,
+        Salt,
     },
     PaginatedResult,
 };
+
+pub struct Contract {
+    pub id: ContractId,
+    pub bytecode: HexString,
+    pub salt: Salt,
+}
 
 #[derive(Debug)]
 pub struct ContractBalance {
@@ -15,6 +23,16 @@ pub struct ContractBalance {
 }
 
 // GraphQL Translation
+
+impl From<schema::contract::Contract> for Contract {
+    fn from(value: schema::contract::Contract) -> Self {
+        Self {
+            id: value.id.into(),
+            bytecode: value.bytecode.into(),
+            salt: value.salt.into(),
+        }
+    }
+}
 
 impl From<schema::contract::ContractBalance> for ContractBalance {
     fn from(value: schema::contract::ContractBalance) -> Self {

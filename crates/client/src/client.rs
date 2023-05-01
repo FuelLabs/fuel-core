@@ -51,10 +51,7 @@ use schema::{
         Coin,
         CoinByIdArgs,
     },
-    contract::{
-        Contract,
-        ContractByIdArgs,
-    },
+    contract::ContractByIdArgs,
     tx::{
         TxArg,
         TxIdArgs,
@@ -706,11 +703,11 @@ impl FuelClient {
         Ok(coins_per_asset)
     }
 
-    pub async fn contract(&self, id: &str) -> io::Result<Option<Contract>> {
+    pub async fn contract(&self, id: &str) -> io::Result<Option<types::Contract>> {
         let query = schema::contract::ContractByIdQuery::build(ContractByIdArgs {
             id: id.parse()?,
         });
-        let contract = self.query(query).await?.contract;
+        let contract = self.query(query).await?.contract.map(Into::into);
         Ok(contract)
     }
 
@@ -730,8 +727,9 @@ impl FuelClient {
                 asset: asset_id,
             });
 
-        let balance = self.query(query).await.unwrap().contract_balance.amount;
-        Ok(balance.into())
+        let balance: types::ContractBalance =
+            self.query(query).await.unwrap().contract_balance.into();
+        Ok(balance.amount)
     }
 
     pub async fn balance(&self, owner: &str, asset_id: Option<&str>) -> io::Result<u64> {

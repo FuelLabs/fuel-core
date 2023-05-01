@@ -10,7 +10,10 @@ pub use block::{
     Block,
     Consensus,
 };
-pub use contract::ContractBalance;
+pub use contract::{
+    Contract,
+    ContractBalance,
+};
 pub use merkle_proof::MerkleProof;
 pub use message::{
     Message,
