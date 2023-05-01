@@ -739,8 +739,8 @@ impl FuelClient {
             None => schema::AssetId::default(),
         };
         let query = schema::balance::BalanceQuery::build(BalanceArgs { owner, asset_id });
-        let balance = self.query(query).await?.balance;
-        Ok(balance.amount.into())
+        let balance: types::Balance = self.query(query).await?.balance.into();
+        Ok(balance.amount)
     }
 
     // Retrieve a page of balances by their owner
@@ -748,7 +748,7 @@ impl FuelClient {
         &self,
         owner: &str,
         request: PaginationRequest<String>,
-    ) -> io::Result<PaginatedResult<schema::balance::Balance, String>> {
+    ) -> io::Result<PaginatedResult<types::Balance, String>> {
         let owner: schema::Address = owner.parse()?;
         let query = schema::balance::BalancesQuery::build((owner, request).into());
 

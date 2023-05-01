@@ -1,3 +1,4 @@
+pub mod balance;
 pub mod block;
 pub mod contract;
 pub mod merkle_proof;
@@ -6,6 +7,7 @@ pub mod primitives;
 pub mod scalars;
 pub mod translation;
 
+pub use balance::Balance;
 pub use block::{
     Block,
     Consensus,
