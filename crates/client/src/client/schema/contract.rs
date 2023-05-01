@@ -9,7 +9,6 @@ use crate::client::{
         U64,
     },
     PageDirection,
-    PaginatedResult,
     PaginationRequest,
 };
 
