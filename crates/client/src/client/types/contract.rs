@@ -7,6 +7,7 @@ use crate::client::{
         Salt,
     },
     PaginatedResult,
+    PaginationRequest,
 };
 
 pub struct Contract {
