@@ -9,8 +9,6 @@ RUN apt-get update && \
     clang \
     libclang-dev \
     protobuf-compiler \
-    pkg-config \
-    libssl-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -19,12 +17,13 @@ ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
+ARG FEATURES="production"
 FROM chef as builder
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 ENV CARGO_PROFILE_RELEASE_DEBUG=true
 COPY --from=planner /build/recipe.json recipe.json
 # Build our project dependecies, not our application!
-RUN cargo chef cook --release --no-default-features --features "production" -p fuel-core-bin --recipe-path recipe.json
+RUN cargo chef cook --release --no-default-features --features "${FEATURES}" -p fuel-core-bin --recipe-path recipe.json
 # Up to this point, if our dependency tree stays the same,
 # all layers should be cached.
 COPY . .
@@ -45,7 +44,7 @@ ENV DB_PATH="${DB_PATH}"
 WORKDIR /root/
 
 RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends ca-certificates pkg-config libssl-dev \
+    && apt-get install -y --no-install-recommends ca-certificates \
     # Clean up
     && apt-get autoremove -y \
     && apt-get clean -y \
