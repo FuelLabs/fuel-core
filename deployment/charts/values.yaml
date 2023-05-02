@@ -23,6 +23,8 @@ app:
   max_block_size: "${fuel_core_max_buffer_size}"
   max_database_cache_size: "${fuel_core_max_database_cache_size}"
   max_transmit_size: "${fuel_core_max_buffer_size}"
+  sync_max_get_header: "${fuel_core_sync_max_get_header}"
+  sync_max_get_txns: "${fuel_core_sync_max_get_txns}"
   p2p_key: ${fuel_core_p2p_key}
   allow_private_addresses: ${fuel_core_allow_private_addresses}
   reserved_nodes_only_mode: ${fuel_core_reserved_only}

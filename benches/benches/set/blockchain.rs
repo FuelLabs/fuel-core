@@ -6,6 +6,7 @@ use criterion::{
     Criterion,
     Throughput,
 };
+use fuel_core::database::vm_database::VmDatabase;
 use fuel_core_benches::*;
 use fuel_core_storage::ContractsAssetsStorage;
 use fuel_core_types::{
@@ -251,7 +252,7 @@ pub fn run(c: &mut Criterion) {
             op::add(0x15, 0x15, 0x15),
             op::addi(0x15, 0x15, 32),
             op::aloc(0x15),
-            op::addi(0x15, RegId::HP, 1),
+            op::move_(0x15, RegId::HP),
         ];
 
         ccp.throughput(Throughput::Bytes(i));
@@ -308,7 +309,7 @@ pub fn run(c: &mut Criterion) {
         VmBench::new(op::bhsh(0x10, RegId::ZERO)).with_prepare_script(vec![
             op::movi(0x10, Bytes32::LEN.try_into().unwrap()),
             op::aloc(0x10),
-            op::addi(0x10, RegId::HP, 1),
+            op::move_(0x10, RegId::HP),
         ]),
     );
 
@@ -332,7 +333,7 @@ pub fn run(c: &mut Criterion) {
         VmBench::new(op::cb(0x10)).with_prepare_script(vec![
             op::movi(0x10, Bytes32::LEN.try_into().unwrap()),
             op::aloc(0x10),
-            op::addi(0x10, RegId::HP, 1),
+            op::move_(0x10, RegId::HP),
         ]),
     );
 
@@ -404,7 +405,7 @@ pub fn run(c: &mut Criterion) {
             op::gtf_args(0x16, 0x00, GTFArgs::ScriptData),
             op::movi(0x15, 2000),
             op::aloc(0x15),
-            op::addi(0x14, RegId::HP, 1),
+            op::move_(0x14, RegId::HP),
         ]);
         run_group_ref(&mut c.benchmark_group("croo"), "croo", input);
     }
@@ -426,14 +427,21 @@ pub fn run(c: &mut Criterion) {
     for i in linear.clone() {
         let mut input = VmBench::contract(rng, op::smo(0x15, 0x16, 0x17, 0x18))
             .expect("failed to prepare contract");
-        let index = input.outputs.len() - 1;
+        input.prepare_db = Some(Box::new(|mut db: VmDatabase| {
+            db.merkle_contract_asset_id_balance_insert(
+                &ContractId::default(),
+                &AssetId::default(),
+                Word::MAX,
+            )?;
+            Ok(db)
+        }));
         input.post_call.extend(vec![
             op::gtf_args(0x15, 0x00, GTFArgs::ScriptData),
-            // Offset 32 + 8+ 8 + 32
-            op::addi(0x15, 0x15, 32 + 8 + 8 + 32),
-            op::movi(0x16, i.try_into().unwrap()),
-            op::movi(0x17, index.try_into().unwrap()),
-            op::movi(0x18, 10),
+            // Offset 32 + 8 + 8 + 32
+            op::addi(0x15, 0x15, 32 + 8 + 8 + 32), // target address pointer
+            op::addi(0x16, 0x15, 32),              // data ppinter
+            op::movi(0x17, i.try_into().unwrap()), // data length
+            op::movi(0x18, 10),                    // coins to send
         ]);
         input.data.extend(
             Address::new([1u8; 32])
@@ -475,7 +483,7 @@ pub fn run(c: &mut Criterion) {
             op::muli(0x15, 0x15, 32),
             op::addi(0x15, 0x15, 1),
             op::aloc(0x15),
-            op::addi(0x14, RegId::HP, 1),
+            op::move_(0x14, RegId::HP),
         ];
         let mut bench = VmBench::contract(rng, op::srwq(0x14, 0x11, 0x27, 0x16))
             .expect("failed to prepare contract")

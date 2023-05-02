@@ -228,6 +228,14 @@ spec:
             - "--max_transmit_size"
             - "{{ .Values.app.max_transmit_size }}"
           {{- end }}
+          {{- if .Values.app.sync_max_get_header }}
+            - "--sync_max_get_header"
+            - "{{ .Values.app.sync_max_get_header }}"
+          {{- end }}
+          {{- if .Values.app.sync_max_get_txns }}
+            - "--sync_max_get_txns"
+            - "{{ .Values.app.sync_max_get_txns }}"
+          {{- end }}
           {{- if .Values.app.reserved_nodes_only_mode }}
             - "--reserved_nodes_only_mode"
           {{- end}}
