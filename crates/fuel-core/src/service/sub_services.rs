@@ -1,5 +1,8 @@
 #![allow(clippy::let_unit_value)]
-use super::adapters::P2PAdapter;
+use super::adapters::{
+    P2PAdapter,
+    SyncAdapter,
+};
 
 use crate::{
     database::Database,
@@ -119,13 +122,19 @@ pub fn init_sub_services(
     let poa_config: fuel_core_poa::Config = config.try_into()?;
     let production_enabled =
         !matches!(poa_config.trigger, Trigger::Never) || config.manual_blocks_enabled;
+
     let poa = (production_enabled).then(|| {
+        let syncer = Box::new(SyncAdapter::new(
+            importer_adapter.block_importer.subscribe(),
+        ));
+
         fuel_core_poa::new_service(
             last_block.header(),
             poa_config,
             tx_pool_adapter.clone(),
             producer_adapter.clone(),
             importer_adapter.clone(),
+            syncer,
         )
     });
     let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));

@@ -6,6 +6,7 @@ use crate::{
     ports::{
         BlockImporter,
         BlockProducer,
+        SyncPort,
         TransactionPool,
     },
     Config,
@@ -428,7 +429,7 @@ where
 
     type SharedData = SharedState;
     type Task = Task<T, B, I>;
-    type TaskParams = ();
+    type TaskParams = Box<dyn SyncPort>;
 
     fn shared_data(&self) -> Self::SharedData {
         self.shared_state.clone()
@@ -437,8 +438,10 @@ where
     async fn into_task(
         self,
         _: &StateWatcher,
-        _: Self::TaskParams,
+        mut syncer: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
+        let _ = syncer.as_mut().sync_with_peers().await;
+
         match self.trigger {
             Trigger::Never | Trigger::Instant => {}
             Trigger::Interval { block_time } => {
@@ -517,19 +520,17 @@ pub fn new_service<D, T, B, I>(
     txpool: T,
     block_producer: B,
     block_importer: I,
+    sync: Box<dyn SyncPort>,
 ) -> Service<T, B, I>
 where
     T: TransactionPool + 'static,
     B: BlockProducer<Database = D> + 'static,
     I: BlockImporter<Database = D> + 'static,
 {
-    Service::new(Task::new(
-        last_block,
-        config,
-        txpool,
-        block_producer,
-        block_importer,
-    ))
+    Service::new_with_params(
+        Task::new(last_block, config, txpool, block_producer, block_importer),
+        sync,
+    )
 }
 
 fn seal_block(

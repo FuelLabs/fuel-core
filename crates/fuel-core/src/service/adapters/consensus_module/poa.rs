@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::{
     database::Database,
     fuel_core_graphql_api::ports::ConsensusModulePort,
@@ -12,6 +14,7 @@ use anyhow::anyhow;
 use fuel_core_poa::{
     ports::{
         BlockImporter,
+        SyncPort,
         TransactionPool,
     },
     service::SharedState,
@@ -105,5 +108,28 @@ impl BlockImporter for BlockImporterAdapter {
         self.block_importer
             .commit_result(result)
             .map_err(Into::into)
+    }
+}
+
+const TIME_UNTIL_SYNCED: Duration = Duration::from_secs(60);
+
+#[async_trait::async_trait]
+impl SyncPort for crate::service::adapters::SyncAdapter {
+    async fn sync_with_peers(&mut self) -> anyhow::Result<()> {
+        // todo: connect to N amount of peers first!
+
+        'outer: loop {
+            tokio::select! {
+                _ = self.block_rx.recv() => {
+                    // keep receiving them blocks
+                }
+                _ = tokio::time::sleep(TIME_UNTIL_SYNCED) => {
+                    // time expired we are synced!
+                    break 'outer;
+                }
+            }
+        }
+
+        Ok(())
     }
 }
