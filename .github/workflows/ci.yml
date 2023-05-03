@@ -294,7 +294,9 @@ jobs:
         with:
           context: .
           file: deployment/Dockerfile
-          build-args: "FEATURES=production,profiling DEBUG_SYMBOLS=true"
+          build-args: |
+            "FEATURES=production,profiling"
+            "DEBUG_SYMBOLS=true"
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
