@@ -17,7 +17,10 @@ use fuel_core_types::{
         block::CompressedBlock,
         primitives::DaBlockHeight,
     },
-    fuel_tx::Receipt,
+    fuel_tx::{
+        ConsensusParameters,
+        Receipt,
+    },
     fuel_types::{
         Address,
         BlockHeight,
@@ -126,12 +129,16 @@ impl Executor<MockDb> for MockExecutor {
         block: ExecutionBlock,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<MockDb>>> {
         let block = match block {
+            ExecutionBlock::DryRun(block) => block.generate(&[]),
             ExecutionBlock::Production(block) => block.generate(&[]),
             ExecutionBlock::Validation(block) => block,
         };
         // simulate executor inserting a block
         let mut block_db = self.0.blocks.lock().unwrap();
-        block_db.insert(*block.header().height(), block.compress());
+        block_db.insert(
+            *block.header().height(),
+            block.compress(&ConsensusParameters::DEFAULT),
+        );
         Ok(UncommittedResult::new(
             ExecutionResult {
                 block,
@@ -164,6 +171,7 @@ impl Executor<MockDb> for FailingMockExecutor {
             Err(err)
         } else {
             let block = match block {
+                ExecutionBlock::DryRun(b) => b.generate(&[]),
                 ExecutionBlock::Production(b) => b.generate(&[]),
                 ExecutionBlock::Validation(b) => b,
             };

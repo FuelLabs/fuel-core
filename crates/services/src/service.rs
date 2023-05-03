@@ -71,6 +71,9 @@ pub trait RunnableService: Send {
     /// The initialized runnable task type.
     type Task: RunnableTask;
 
+    /// Optional parameters used to when initializing into task.
+    type TaskParams: Send;
+
     /// A cloned instance of the shared data
     fn shared_data(&self) -> Self::SharedData;
 
@@ -78,7 +81,11 @@ pub trait RunnableService: Send {
     ///
     /// The `state` is a `State` watcher of the service. Some tasks may handle state changes
     /// on their own.
-    async fn into_task(self, state_watcher: &StateWatcher) -> anyhow::Result<Self::Task>;
+    async fn into_task(
+        self,
+        state_watcher: &StateWatcher,
+        params: Self::TaskParams,
+    ) -> anyhow::Result<Self::Task>;
 }
 
 /// The trait is implemented by the service task and contains a single iteration of the infinity
@@ -124,11 +131,24 @@ where
 impl<S> ServiceRunner<S>
 where
     S: RunnableService + 'static,
+    S::TaskParams: Default,
 {
     /// Initializes a new `ServiceRunner` containing a `RunnableService`
     pub fn new(service: S) -> Self {
         let shared = service.shared_data();
-        let state = initialize_loop(service);
+        let state = initialize_loop(service, S::TaskParams::default());
+        Self { shared, state }
+    }
+}
+
+impl<S> ServiceRunner<S>
+where
+    S: RunnableService + 'static,
+{
+    /// Initializes a new `ServiceRunner` containing a `RunnableService` with parameters for underlying `Task`
+    pub fn new_with_params(service: S, params: S::TaskParams) -> Self {
+        let shared = service.shared_data();
+        let state = initialize_loop(service, params);
         Self { shared, state }
     }
 
@@ -225,7 +245,7 @@ where
 
 #[tracing::instrument(skip_all, fields(service = S::NAME))]
 /// Initialize the background loop as a spawned task.
-fn initialize_loop<S>(service: S) -> Shared<watch::Sender<State>>
+fn initialize_loop<S>(service: S, params: S::TaskParams) -> Shared<watch::Sender<State>>
 where
     S: RunnableService + 'static,
 {
@@ -236,7 +256,8 @@ where
     tokio::task::spawn(
         async move {
             tracing::debug!("running");
-            let run = std::panic::AssertUnwindSafe(run(service, stop_sender.clone()));
+            let run =
+                std::panic::AssertUnwindSafe(run(service, stop_sender.clone(), params));
             tracing::debug!("awaiting run");
             let result = run.catch_unwind().await;
 
@@ -270,7 +291,7 @@ where
 }
 
 /// Runs the main loop.
-async fn run<S>(service: S, sender: Shared<watch::Sender<State>>)
+async fn run<S>(service: S, sender: Shared<watch::Sender<State>>, params: S::TaskParams)
 where
     S: RunnableService + 'static,
 {
@@ -287,7 +308,7 @@ where
 
     // We can panic here, because it is inside of the task.
     let mut task = service
-        .into_task(&state)
+        .into_task(&state, params)
         .await
         .expect("The initialization of the service failed.");
 
@@ -388,10 +409,11 @@ mod tests {
 
             type SharedData = EmptyShared;
             type Task = MockTask;
+            type TaskParams = ();
 
             fn shared_data(&self) -> EmptyShared;
 
-            async fn into_task(self, state: &StateWatcher) -> anyhow::Result<MockTask>;
+            async fn into_task(self, state: &StateWatcher, params: <MockService as RunnableService>::TaskParams) -> anyhow::Result<MockTask>;
         }
     }
 
@@ -417,7 +439,7 @@ mod tests {
         fn new_empty() -> Self {
             let mut mock = MockService::default();
             mock.expect_shared_data().returning(|| EmptyShared);
-            mock.expect_into_task().returning(|_| {
+            mock.expect_into_task().returning(|_, _| {
                 let mut mock = MockTask::default();
                 mock.expect_run().returning(|watcher| {
                     let mut watcher = watcher.clone();
@@ -468,7 +490,7 @@ mod tests {
     async fn panic_during_run() {
         let mut mock = MockService::default();
         mock.expect_shared_data().returning(|| EmptyShared);
-        mock.expect_into_task().returning(|_| {
+        mock.expect_into_task().returning(|_, _| {
             let mut mock = MockTask::default();
             mock.expect_run().returning(|_| panic!("Should fail"));
             mock.expect_shutdown().times(1).returning(|| Ok(()));
@@ -486,7 +508,7 @@ mod tests {
     async fn panic_during_shutdown() {
         let mut mock = MockService::default();
         mock.expect_shared_data().returning(|| EmptyShared);
-        mock.expect_into_task().returning(|_| {
+        mock.expect_into_task().returning(|_, _| {
             let mut mock = MockTask::default();
             mock.expect_run().returning(|_| {
                 Box::pin(async move {

@@ -162,7 +162,7 @@ async fn can_get_message_proof() {
         // Set the location in memory to write the bytes to.
         op::movi(0x11, 100),
         op::aloc(0x11),
-        op::addi(0x11, RegId::HP, 1),
+        op::move_(0x11, RegId::HP),
         op::movi(0x13, 2),
         // Write read to 0x11.
         // Write status to 0x30.
@@ -233,7 +233,7 @@ async fn can_get_message_proof() {
         .collect();
 
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-    let owner = Input::predicate_owner(&predicate);
+    let owner = Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT);
     let coin_input = Input::coin_predicate(
         Default::default(),
         owner,
@@ -276,7 +276,7 @@ async fn can_get_message_proof() {
         vec![],
     );
 
-    let transaction_id = script.id();
+    let transaction_id = script.id(&ConsensusParameters::DEFAULT);
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();

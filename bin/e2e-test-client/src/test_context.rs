@@ -4,6 +4,7 @@ use anyhow::{
     anyhow,
     Context,
 };
+use fuel_core_chain_config::ContractConfig;
 use fuel_core_client::client::{
     schema::coins::CoinType,
     types::TransactionStatus,
@@ -12,15 +13,9 @@ use fuel_core_client::client::{
     PaginationRequest,
 };
 use fuel_core_types::{
-    fuel_crypto::{
-        rand::{
-            prelude::StdRng,
-            Rng,
-            SeedableRng,
-        },
-        PublicKey,
-    },
+    fuel_crypto::PublicKey,
     fuel_tx::{
+        ConsensusParameters,
         Finalizable,
         Input,
         Output,
@@ -35,10 +30,7 @@ use fuel_core_types::{
         Address,
         AssetId,
     },
-    fuel_vm::{
-        Contract,
-        SecretKey,
-    },
+    fuel_vm::SecretKey,
 };
 
 use crate::config::{
@@ -56,12 +48,12 @@ pub struct TestContext {
 }
 
 impl TestContext {
-    pub fn new(config: SuiteConfig) -> Self {
+    pub async fn new(config: SuiteConfig) -> Self {
         let alice_client = Self::new_client(config.endpoint.clone(), &config.wallet_a);
         let bob_client = Self::new_client(config.endpoint.clone(), &config.wallet_b);
         Self {
-            alice: Wallet::new(config.wallet_a.secret, alice_client),
-            bob: Wallet::new(config.wallet_b.secret, bob_client),
+            alice: Wallet::new(config.wallet_a.secret, alice_client).await,
+            bob: Wallet::new(config.wallet_b.secret, bob_client).await,
             config,
         }
     }
@@ -76,16 +68,26 @@ pub struct Wallet {
     pub secret: SecretKey,
     pub address: Address,
     pub client: FuelClient,
+    pub consensus_params: ConsensusParameters,
 }
 
 impl Wallet {
-    pub fn new(secret: SecretKey, client: FuelClient) -> Self {
+    pub async fn new(secret: SecretKey, client: FuelClient) -> Self {
         let public_key: PublicKey = (&secret).into();
         let address = Input::owner(&public_key);
+        // get consensus params
+        let consensus_params = client
+            .chain_info()
+            .await
+            .expect("failed to get chain info")
+            .consensus_parameters
+            .into();
+
         Self {
             secret,
             address,
             client,
+            consensus_params,
         }
     }
 
@@ -180,6 +182,7 @@ impl Wallet {
             amount: 0,
             asset_id,
         });
+        tx.with_params(self.consensus_params);
 
         Ok(tx.finalize_as_transaction())
     }
@@ -194,7 +197,7 @@ impl Wallet {
         let tx = self
             .transfer_tx(destination, transfer_amount, asset_id)
             .await?;
-        let tx_id = tx.id();
+        let tx_id = tx.id(&self.consensus_params);
         let status = self.client.submit_and_await_commit(&tx).await?;
 
         // we know the transferred coin should be output 0 from above
@@ -209,8 +212,7 @@ impl Wallet {
         })
     }
 
-    pub async fn deploy_contract(&self, bytes: Vec<u8>) -> anyhow::Result<()> {
-        let mut rng = StdRng::seed_from_u64(2222);
+    pub async fn deploy_contract(&self, config: ContractConfig) -> anyhow::Result<()> {
         let asset_id = AssetId::zeroed();
         let asset_id_string = asset_id.to_string();
         let asset_id_str = asset_id_string.as_str();
@@ -225,12 +227,8 @@ impl Wallet {
             )
             .await?[0];
 
-        let salt = rng.gen();
-        let contract = Contract::from(bytes.clone());
-        let root = contract.root();
-        let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
-
-        let mut tx = TransactionBuilder::create(bytes.into(), salt, Default::default());
+        let (contract_id, bytes, salt, state_root, slots) = config.unpack();
+        let mut tx = TransactionBuilder::create(bytes.into(), salt, slots);
         tx.gas_price(1);
         tx.gas_limit(BASE_AMOUNT);
 
@@ -248,7 +246,7 @@ impl Wallet {
         }
         tx.add_output(Output::ContractCreated {
             contract_id,
-            state_root: Contract::default_state_root(),
+            state_root,
         });
         tx.add_output(Output::Change {
             to: self.address,

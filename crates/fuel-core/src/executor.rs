@@ -71,6 +71,7 @@ use fuel_core_types::{
         Receipt,
         Transaction,
         TransactionFee,
+        TxId,
         TxPointer,
         UniqueIdentifier,
         UtxoId,
@@ -158,11 +159,15 @@ impl<R> Executor<R>
 where
     R: RelayerPort + Clone,
 {
+    #[cfg(any(test, feature = "test-helpers"))]
     /// Executes the block and commits the result of the execution into the inner `Database`.
     pub fn execute_and_commit(
         &self,
         block: ExecutionBlock,
     ) -> ExecutorResult<ExecutionResult> {
+        if block.to_kind() == ExecutionKind::DryRun {
+            panic!("It is not possible to commit the dry run result");
+        }
         let (result, db_transaction) = self.execute_without_commit(block)?.into();
         db_transaction.commit()?;
         Ok(result)
@@ -229,7 +234,7 @@ where
             .transactions()
             .iter()
             .map(|tx| {
-                let id = tx.id();
+                let id = tx.id(&self.config.chain_conf.transaction_parameters);
                 StorageInspect::<Receipts>::get(temporary_db.as_ref(), &id)
                     .transpose()
                     .unwrap_or_else(|| Ok(Default::default()))
@@ -245,7 +250,7 @@ impl<R> Executor<R>
 where
     R: RelayerPort + Clone,
 {
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip_all)]
     fn execute_inner(
         &self,
         block: ExecutionBlock,
@@ -313,7 +318,12 @@ where
         block_db_transaction
             .deref_mut()
             .storage::<FuelBlocks>()
-            .insert(&finalized_block_id, &result.block.compress())?;
+            .insert(
+                &finalized_block_id,
+                &result
+                    .block
+                    .compress(&self.config.chain_conf.transaction_parameters),
+            )?;
 
         // Get the complete fuel block.
         Ok(UncommittedResult::new(
@@ -322,7 +332,7 @@ where
         ))
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip_all)]
     /// Execute all transactions on the fuel block.
     fn execute_transactions(
         &self,
@@ -346,7 +356,8 @@ where
         let mut iter = ::core::mem::take(&mut block.transactions).into_iter();
 
         let mut coinbase_tx: Mint = match execution_kind {
-            ExecutionKind::Estimation | EstimationKind::Production => {
+            ExecutionKind::DryRun => Default::default(),
+            ExecutionKind::Estimation | ExecutionKind::Production => {
                 // The coinbase transaction should be the first.
                 // We will add actual amount of `Output::Coin` at the end of transactions execution.
                 Transaction::mint(
@@ -368,9 +379,13 @@ where
             }
         };
 
-        // Skip the coinbase transaction.
-        block.transactions.push(coinbase_tx.clone().into());
-        let mut tx_index = 1;
+        let mut tx_index = if execution_kind != ExecutionKind::DryRun {
+            // Skip the coinbase transaction.
+            block.transactions.push(coinbase_tx.clone().into());
+            1
+        } else {
+            0
+        };
 
         let mut filtered_transactions: Vec<_> = iter
             .filter_map(|transaction| {
@@ -398,7 +413,9 @@ where
                                 execution_data.skipped_transactions.push((tx, err));
                                 None
                             }
-                            ExecutionKind::Validation => Some(Err(err)),
+                            ExecutionKind::DryRun | ExecutionKind::Validation => {
+                                Some(Err(err))
+                            }
                         }
                     }
 
@@ -428,12 +445,19 @@ where
         }
         block.transactions.append(&mut filtered_transactions);
 
-        coinbase_tx = self.check_coinbase(
-            block_height,
-            coinbase_tx,
-            Some(execution_data.coinbase),
-        )?;
-        self.apply_coinbase(coinbase_tx, block, execution_data, block_db_transaction)?;
+        if execution_kind != ExecutionKind::DryRun {
+            coinbase_tx = self.check_coinbase(
+                block_height,
+                coinbase_tx,
+                Some(execution_data.coinbase),
+            )?;
+            self.apply_coinbase(
+                coinbase_tx,
+                block,
+                execution_data,
+                block_db_transaction,
+            )?;
+        }
 
         Ok(data)
     }
@@ -447,7 +471,7 @@ where
         execution_kind: ExecutionKind,
         tx_db_transaction: &mut DatabaseTransaction,
     ) -> ExecutorResult<()> {
-        let tx_id = tx.id();
+        let tx_id = tx.id(&self.config.chain_conf.transaction_parameters);
         // Throw a clear error if the transaction id is a duplicate
         if tx_db_transaction
             .deref_mut()
@@ -496,7 +520,7 @@ where
         block_db_transaction: &mut DatabaseTransaction,
     ) -> ExecutorResult<()> {
         let block_height = *block.header.height();
-        let coinbase_id = coinbase_tx.id();
+        let coinbase_id = coinbase_tx.id(&self.config.chain_conf.transaction_parameters);
         self.persist_output_utxos(
             block_height,
             0,
@@ -581,6 +605,7 @@ where
         // Wrap the transaction in the execution kind.
         self.compute_inputs(
             match execution_kind {
+                ExecutionKind::DryRun => ExecutionTypes::DryRun(original_tx),
                 ExecutionKind::Production => ExecutionTypes::Production(original_tx),
                 ExecutionKind::Validation => ExecutionTypes::Validation(original_tx),
                 ExecutionKind::Estimation => ExecutionTypes::Estimation(original_tx),
@@ -592,8 +617,9 @@ where
         let min_fee = original_tx.metadata().min_fee();
         let max_fee = original_tx.metadata().max_fee();
 
-        let mut checked_tx: Checked<Tx>;
-        let mut estimated_tx: Estimated<Tx>;
+        let tx_id = checked_tx.id();
+        let min_fee = checked_tx.metadata().min_fee();
+        let max_fee = checked_tx.metadata().max_fee();
 
         match execution_kind {
             ExecutionKind::Estimation => {
@@ -603,55 +629,24 @@ where
                     &self.config.chain_conf.transaction_parameters,
                 )?;
 
-                self.estimate_tx_predicates(estimated_tx.clone())?;
-
-                if self.config.utxo_validation {
-                    // validate transaction has at least one coin
-                    self.verify_tx_has_at_least_one_coin_or_message(
-                        estimated_tx.transaction(),
-                    )?;
-                    // validate utxos exist and maturity is properly set
-                    self.verify_input_state(
-                        tx_db_transaction.deref(),
-                        estimated_tx.transaction(),
-                        *header.height(),
-                        header.da_height,
-                    )?;
-                    // validate transaction signature
-                    estimated_tx
-                        .transaction()
-                        .check_signatures()
-                        .map_err(TransactionValidityError::from)?;
-                }
-            }
-            ExecutionKind::Production | ExecutionKind::Validation => {
-                // Check the transaction against the block height.
-                let checked_tx = original_tx.clone().into_checked_basic(
-                    block_height as Word,
-                    &self.config.chain_conf.transaction_parameters,
-                )?;
-
-                self.verify_tx_predicates(checked_tx.clone())?;
-
-                if self.config.utxo_validation {
-                    // validate transaction has at least one coin
-                    self.verify_tx_has_at_least_one_coin_or_message(
-                        checked_tx.transaction(),
-                    )?;
-                    // validate utxos exist and maturity is properly set
-                    self.verify_input_state(
-                        tx_db_transaction.deref(),
-                        checked_tx.transaction(),
-                        *header.height(),
-                        header.da_height,
-                    )?;
-                    // validate transaction signature
-                    checked_tx
-                        .transaction()
-                        .check_signatures()
-                        .map_err(TransactionValidityError::from)?;
-                }
-            }
+        if self.config.utxo_validation {
+            // validate transaction has at least one coin
+            self.verify_tx_has_at_least_one_coin_or_message(
+                checked_tx.transaction(),
+                checked_tx.id(),
+            )?;
+            // validate utxos exist and maturity is properly set
+            self.verify_input_state(
+                tx_db_transaction.deref(),
+                checked_tx.transaction(),
+                *header.height(),
+                header.da_height,
+            )?;
+            // validate transaction signature
+            checked_tx
+                .transaction()
+                .check_signatures(&self.config.chain_conf.transaction_parameters)
+                .map_err(TransactionValidityError::from)?;
         }
 
         // execute transaction
@@ -710,7 +705,7 @@ where
                     })
                 }
             }
-            ExecutionKind::Production | ExecutionKind::Estimation => {
+            ExecutionKind::DryRun |  ExecutionKind::Estimation | ExecutionKind::Production => {
                 // malleate the block with the resultant tx from the vm
             }
         }
@@ -729,10 +724,12 @@ where
         )?;
         self.compute_not_utxo_outputs(
             match execution_kind {
+                ExecutionKind::DryRun => ExecutionTypes::DryRun(&mut tx),
                 ExecutionKind::Production => ExecutionTypes::Production(&mut tx),
                 ExecutionKind::Validation => ExecutionTypes::Validation(&tx),
                 ExecutionKind::Estimation => ExecutionTypes::Estimation(&mut tx),
             },
+            tx_id,
             tx_db_transaction.deref_mut(),
         )?;
 
@@ -922,7 +919,7 @@ where
         Tx: ExecutableTransaction,
         <Tx as IntoChecked>::Metadata: CheckedMetadata,
     {
-        let id = tx.transaction().id();
+        let id = tx.id();
         if Interpreter::<PredicateStorage>::check_predicates(
             tx,
             self.config.chain_conf.transaction_parameters,
@@ -967,6 +964,7 @@ where
     fn verify_tx_has_at_least_one_coin_or_message<Tx: ExecutableTransaction>(
         &self,
         tx: &Tx,
+        tx_id: TxId,
     ) -> ExecutorResult<()> {
         if tx
             .inputs()
@@ -975,7 +973,7 @@ where
         {
             Ok(())
         } else {
-            Err(TransactionValidityError::NoCoinOrMessageInput(tx.id()).into())
+            Err(TransactionValidityError::NoCoinOrMessageInput(tx_id).into())
         }
     }
 
@@ -1057,7 +1055,7 @@ where
         Tx: ExecutableTransaction,
     {
         match tx {
-            ExecutionTypes::Production(tx) => {
+            ExecutionTypes::DryRun(tx) | ExecutionTypes::Production(tx) => {
                 for input in tx.inputs_mut() {
                     match input {
                         Input::CoinSigned(CoinSigned {
@@ -1130,7 +1128,10 @@ where
                             )?;
                             if tx_pointer != &coin.tx_pointer {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx.id(),
+                                    transaction_id: tx.id(&self
+                                        .config
+                                        .chain_conf
+                                        .transaction_parameters),
                                 })
                             }
                         }
@@ -1151,17 +1152,26 @@ where
                                 != contract.validated_utxo(self.config.utxo_validation)?
                             {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx.id(),
+                                    transaction_id: tx.id(&self
+                                        .config
+                                        .chain_conf
+                                        .transaction_parameters),
                                 })
                             }
                             if balance_root != &contract.balance_root()? {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx.id(),
+                                    transaction_id: tx.id(&self
+                                        .config
+                                        .chain_conf
+                                        .transaction_parameters),
                                 })
                             }
                             if state_root != &contract.state_root()? {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx.id(),
+                                    transaction_id: tx.id(&self
+                                        .config
+                                        .chain_conf
+                                        .transaction_parameters),
                                 })
                             }
                         }
@@ -1180,13 +1190,14 @@ where
     fn compute_not_utxo_outputs<Tx>(
         &self,
         tx: ExecutionTypes<&mut Tx, &Tx>,
+        tx_id: TxId,
         db: &mut Database,
     ) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
     {
         match tx {
-            ExecutionTypes::Production(tx) => {
+            ExecutionTypes::DryRun(tx) | ExecutionTypes::Production(tx) => {
                 // TODO: Inputs, in most cases, are heavier than outputs, so cloning them, but we
                 //  to avoid it in the future.
                 let mut outputs = tx.outputs().clone();
@@ -1205,7 +1216,7 @@ where
                             contract_id
                         } else {
                             return Err(ExecutorError::InvalidTransactionOutcome {
-                                transaction_id: tx.id(),
+                                transaction_id: tx_id,
                             })
                         };
 
@@ -1232,19 +1243,19 @@ where
                             contract_id
                         } else {
                             return Err(ExecutorError::InvalidTransactionOutcome {
-                                transaction_id: tx.id(),
+                                transaction_id: tx_id,
                             })
                         };
 
                         let mut contract = ContractRef::new(&mut *db, *contract_id);
                         if balance_root != &contract.balance_root()? {
                             return Err(ExecutorError::InvalidTransactionOutcome {
-                                transaction_id: tx.id(),
+                                transaction_id: tx_id,
                             })
                         }
                         if state_root != &contract.state_root()? {
                             return Err(ExecutorError::InvalidTransactionOutcome {
-                                transaction_id: tx.id(),
+                                transaction_id: tx_id,
                             })
                         }
                     }
@@ -1439,7 +1450,7 @@ where
             let block_height = *block.header().height();
             let mut inputs = &[][..];
             let outputs;
-            let tx_id = tx.id();
+            let tx_id = tx.id(&self.config.chain_conf.transaction_parameters);
             match tx {
                 Transaction::Script(tx) => {
                     inputs = tx.inputs().as_slice();
@@ -1875,6 +1886,40 @@ mod tests {
         }
 
         #[test]
+        fn skip_coinbase_during_dry_run() {
+            let price = 1;
+            let limit = 0;
+            let gas_price_factor = 1;
+            let script = TxBuilder::new(2322u64)
+                .gas_limit(limit)
+                // Set a price for the test
+                .gas_price(price)
+                .coin_input(AssetId::BASE, 10000)
+                .change_output(AssetId::BASE)
+                .build()
+                .transaction()
+                .clone();
+
+            let mut config = Config::local_node();
+            let recipient = [1u8; 32].into();
+            config.block_producer.coinbase_recipient = recipient;
+
+            config.chain_conf.transaction_parameters.gas_price_factor = gas_price_factor;
+
+            let producer = Executor::test(Default::default(), config);
+
+            let mut block = Block::default();
+            *block.transactions_mut() = vec![script.into()];
+
+            let result = producer
+                .execute_without_commit(ExecutionBlock::DryRun(block.into()))
+                .unwrap();
+            let ExecutionResult { block, .. } = result.into_result();
+
+            assert_eq!(block.transactions().len(), 1);
+        }
+
+        #[test]
         fn executor_commits_transactions_with_non_zero_coinbase_validation() {
             let price = 1;
             let limit = 0;
@@ -1897,6 +1942,8 @@ mod tests {
                 .chain_conf
                 .transaction_parameters
                 .gas_price_factor = gas_price_factor;
+
+            let params = producer.config.chain_conf.transaction_parameters;
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![script.into()];
@@ -1930,7 +1977,7 @@ mod tests {
                 .unwrap()
                 .unwrap();
             // Should own `Mint` transaction
-            assert_eq!(owned_transactions_td_id, produced_txs[0].id());
+            assert_eq!(owned_transactions_td_id, produced_txs[0].id(&params));
         }
 
         #[test]
@@ -1949,9 +1996,8 @@ mod tests {
                         // Allocate 32 bytes on the heap.
                         op::aloc(0x11),
                         // Store the pointer to the beginning of the free memory into 
-                        // register `0x10`. It requires shifting of `RegId::HP` by 1 to point
-                        // on the free memory.
-                        op::addi(0x10, RegId::HP, 0),
+                        // register `0x10`.
+                        op::move_(0x10, RegId::HP),
                         // Store `config_coinbase` `Address` into MEM[$0x10; 32].
                         op::cb(0x10),
                         // Store the pointer on the beginning of script data into register `0x12`.
@@ -1986,7 +2032,7 @@ mod tests {
                 let receipts = producer
                     .database
                     .storage::<Receipts>()
-                    .get(&script.id())
+                    .get(&script.id(&producer.config.chain_conf.transaction_parameters))
                     .unwrap()
                     .unwrap();
 
@@ -2381,7 +2427,7 @@ mod tests {
             .clone()
             .into();
 
-        let tx_id = tx.id();
+        let tx_id = tx.id(&ConsensusParameters::DEFAULT);
 
         let producer = Executor::test(Default::default(), Config::local_node());
 
@@ -2449,7 +2495,7 @@ mod tests {
     fn executor_invalidates_missing_coin_input() {
         let tx: Transaction =
             TxBuilder::new(2322u64).build().transaction().clone().into();
-        let tx_id = tx.id();
+        let tx_id = tx.id(&ConsensusParameters::DEFAULT);
 
         let executor = Executor::test(
             Database::default(),
@@ -2566,8 +2612,12 @@ mod tests {
         assert_eq!(block.transactions().len(), 2 /* coinbase and `tx1` */);
         assert_eq!(skipped_transactions.len(), 1);
         assert_eq!(
-            skipped_transactions[0].0.as_script().unwrap().id(),
-            tx2.id()
+            skipped_transactions[0]
+                .0
+                .as_script()
+                .unwrap()
+                .id(&ConsensusParameters::DEFAULT),
+            tx2.id(&ConsensusParameters::DEFAULT)
         );
 
         // The first input should be spent by `tx1` after execution.
@@ -2620,8 +2670,14 @@ mod tests {
             block.transactions().len(),
             3 // coinbase, `tx2` and `tx3`
         );
-        assert_eq!(block.transactions()[1].id(), tx2.id());
-        assert_eq!(block.transactions()[2].id(), tx3.id());
+        assert_eq!(
+            block.transactions()[1].id(&ConsensusParameters::DEFAULT),
+            tx2.id(&ConsensusParameters::DEFAULT)
+        );
+        assert_eq!(
+            block.transactions()[2].id(&ConsensusParameters::DEFAULT),
+            tx3.id(&ConsensusParameters::DEFAULT)
+        );
         // `tx1` should be skipped.
         assert_eq!(skipped_transactions.len(), 1);
         assert_eq!(skipped_transactions[0].0.as_script(), Some(&tx1));
@@ -2730,7 +2786,7 @@ mod tests {
         let storage_tx = executor
             .database
             .storage::<Transactions>()
-            .get(&executed_tx.id())
+            .get(&executed_tx.id(&ConsensusParameters::DEFAULT))
             .unwrap()
             .unwrap()
             .into_owned();
@@ -2802,7 +2858,7 @@ mod tests {
         let storage_tx = executor
             .database
             .storage::<Transactions>()
-            .get(&expected_tx.id())
+            .get(&expected_tx.id(&ConsensusParameters::DEFAULT))
             .unwrap()
             .unwrap()
             .into_owned();
@@ -2914,7 +2970,7 @@ mod tests {
         let storage_tx = executor
             .database
             .storage::<Transactions>()
-            .get(&expected_tx.id())
+            .get(&expected_tx.id(&ConsensusParameters::DEFAULT))
             .unwrap()
             .unwrap()
             .into_owned();
@@ -3151,7 +3207,7 @@ mod tests {
             .transaction()
             .clone()
             .into();
-        let tx_id = tx3.id();
+        let tx_id = tx3.id(&ConsensusParameters::DEFAULT);
 
         let second_block = PartialFuelBlock {
             header: PartialBlockHeader {
@@ -3205,7 +3261,7 @@ mod tests {
     #[test]
     fn outputs_with_amount_are_included_utxo_set() {
         let (deploy, script) = setup_executable_script();
-        let script_id = script.id();
+        let script_id = script.id(&ConsensusParameters::DEFAULT);
 
         let database = &Database::default();
         let executor = Executor::test(database.clone(), Config::local_node());
@@ -3256,7 +3312,7 @@ mod tests {
             .transaction()
             .clone()
             .into();
-        let tx_id = tx.id();
+        let tx_id = tx.id(&ConsensusParameters::DEFAULT);
 
         let database = &Database::default();
         let executor = Executor::test(database.clone(), Config::local_node());
@@ -3355,7 +3411,7 @@ mod tests {
             .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), amount, vec![0xff; 10])
             .add_output(Output::change(to, amount + amount, AssetId::BASE))
             .finalize();
-        let tx_id = tx.id();
+        let tx_id = tx.id(&ConsensusParameters::DEFAULT);
 
         let message_coin = message_from_input(&tx.inputs()[0], 0);
         let message_data = message_from_input(&tx.inputs()[1], 0);
@@ -3413,7 +3469,7 @@ mod tests {
             .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), amount, vec![0xff; 10])
             .add_output(Output::change(to, amount + amount, AssetId::BASE))
             .finalize();
-        let tx_id = tx.id();
+        let tx_id = tx.id(&ConsensusParameters::DEFAULT);
 
         let message_coin = message_from_input(&tx.inputs()[0], 0);
         let message_data = message_from_input(&tx.inputs()[1], 0);
@@ -3664,7 +3720,7 @@ mod tests {
 
         let receipts = database
             .storage::<Receipts>()
-            .get(&tx.id())
+            .get(&tx.id(&ConsensusParameters::DEFAULT))
             .unwrap()
             .unwrap();
         assert_eq!(block_height as u64, receipts[0].val().unwrap());
@@ -3736,7 +3792,7 @@ mod tests {
 
         let receipts = database
             .storage::<Receipts>()
-            .get(&tx.id())
+            .get(&tx.id(&ConsensusParameters::DEFAULT))
             .unwrap()
             .unwrap();
 

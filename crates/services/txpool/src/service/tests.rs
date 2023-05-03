@@ -38,11 +38,18 @@ async fn test_find() {
     assert_eq!(out.len(), 2, "Should be len 2:{out:?}");
     assert!(out[0].is_ok(), "Tx1 should be OK, got err:{out:?}");
     assert!(out[1].is_ok(), "Tx2 should be OK, got err:{out:?}");
-    let out = service.shared.find(vec![tx1.id(), tx3.id()]);
+    let out = service.shared.find(vec![
+        tx1.id(&ConsensusParameters::DEFAULT),
+        tx3.id(&ConsensusParameters::DEFAULT),
+    ]);
     assert_eq!(out.len(), 2, "Should be len 2:{out:?}");
     assert!(out[0].is_some(), "Tx1 should be some:{out:?}");
     let id = out[0].as_ref().unwrap().id();
-    assert_eq!(id, tx1.id(), "Found tx id match{out:?}");
+    assert_eq!(
+        id,
+        tx1.id(&ConsensusParameters::DEFAULT),
+        "Found tx id match{out:?}"
+    );
     assert!(out[1].is_none(), "Tx3 should not be found:{out:?}");
     service.stop_and_await().await.unwrap();
 }
@@ -77,14 +84,22 @@ async fn test_prune_transactions() {
     assert!(out[2].is_ok(), "Tx3 should be OK, got err:{out:?}");
 
     tokio::time::sleep(Duration::from_secs(TIMEOUT / 2)).await;
-    let out = service.shared.find(vec![tx1.id(), tx2.id(), tx3.id()]);
+    let out = service.shared.find(vec![
+        tx1.id(&ConsensusParameters::DEFAULT),
+        tx2.id(&ConsensusParameters::DEFAULT),
+        tx3.id(&ConsensusParameters::DEFAULT),
+    ]);
     assert_eq!(out.len(), 3, "Should be len 3:{out:?}");
     assert!(out[0].is_some(), "Tx1 should exist");
     assert!(out[1].is_some(), "Tx2 should exist");
     assert!(out[2].is_some(), "Tx3 should exist");
 
     tokio::time::sleep(Duration::from_secs(TIMEOUT / 2 + 1)).await;
-    let out = service.shared.find(vec![tx1.id(), tx2.id(), tx3.id()]);
+    let out = service.shared.find(vec![
+        tx1.id(&ConsensusParameters::DEFAULT),
+        tx2.id(&ConsensusParameters::DEFAULT),
+        tx3.id(&ConsensusParameters::DEFAULT),
+    ]);
     assert_eq!(out.len(), 3, "Should be len 3:{out:?}");
     assert!(out[0].is_none(), "Tx1 should be pruned");
     assert!(out[1].is_none(), "Tx2 should be pruned");
@@ -120,7 +135,11 @@ async fn test_prune_transactions_the_oldest() {
     let out = service.shared.insert(vec![tx2.clone()]);
     assert!(out[0].is_ok(), "Tx2 should be OK, got err:{out:?}");
 
-    let out = service.shared.find(vec![tx1.id(), tx2.id(), tx3.id()]);
+    let out = service.shared.find(vec![
+        tx1.id(&ConsensusParameters::DEFAULT),
+        tx2.id(&ConsensusParameters::DEFAULT),
+        tx3.id(&ConsensusParameters::DEFAULT),
+    ]);
     assert!(out[0].is_some(), "Tx1 should exist");
     assert!(out[1].is_some(), "Tx2 should exist");
 
@@ -128,14 +147,22 @@ async fn test_prune_transactions_the_oldest() {
     let out = service.shared.insert(vec![tx3.clone()]);
     assert!(out[0].is_ok(), "Tx3 should be OK, got err:{out:?}");
 
-    let out = service.shared.find(vec![tx1.id(), tx2.id(), tx3.id()]);
+    let out = service.shared.find(vec![
+        tx1.id(&ConsensusParameters::DEFAULT),
+        tx2.id(&ConsensusParameters::DEFAULT),
+        tx3.id(&ConsensusParameters::DEFAULT),
+    ]);
     assert!(out[0].is_none(), "Tx1 should pruned");
     assert!(out[1].is_some(), "Tx2 should exist");
     assert!(out[2].is_some(), "Tx3 should exist");
 
     tokio::time::sleep(Duration::from_secs(TIMEOUT)).await;
 
-    let out = service.shared.find(vec![tx1.id(), tx2.id(), tx3.id()]);
+    let out = service.shared.find(vec![
+        tx1.id(&ConsensusParameters::DEFAULT),
+        tx2.id(&ConsensusParameters::DEFAULT),
+        tx3.id(&ConsensusParameters::DEFAULT),
+    ]);
     assert!(out[0].is_none(), "Tx1 should pruned");
     assert!(out[1].is_none(), "Tx2 should pruned");
     assert!(out[2].is_some(), "Tx3 should exist");
@@ -189,7 +216,10 @@ async fn simple_insert_removal_subscription() {
     }
 
     // remove them
-    let rem = service.shared.remove(vec![tx1.id(), tx2.id()]);
+    let rem = service.shared.remove(vec![
+        tx1.id(&ConsensusParameters::DEFAULT),
+        tx2.id(&ConsensusParameters::DEFAULT),
+    ]);
 
     assert_eq!(
         tokio::time::timeout(std::time::Duration::from_secs(2), subscribe_status.recv())

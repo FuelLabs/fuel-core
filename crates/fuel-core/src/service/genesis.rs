@@ -128,9 +128,10 @@ fn import_genesis_block(
     );
 
     let block_id = block.id();
-    database
-        .storage::<FuelBlocks>()
-        .insert(&block_id, &block.compress())?;
+    database.storage::<FuelBlocks>().insert(
+        &block_id,
+        &block.compress(&config.chain_conf.transaction_parameters),
+    )?;
     let consensus = Consensus::Genesis(genesis);
     let block = SealedBlock {
         entity: block,
@@ -226,6 +227,7 @@ fn init_contracts(
                 let contract = Contract::from(contract_config.code.as_slice());
                 let salt = contract_config.salt;
                 let root = contract.root();
+                // TODO: Save the `contract_id` into the `ContractConfig` and re-use it here.
                 let contract_id =
                     contract.id(&salt, &root, &Contract::default_state_root());
                 let utxo_id = if let (Some(tx_id), Some(output_idx)) =

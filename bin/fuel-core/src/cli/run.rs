@@ -51,6 +51,8 @@ use tracing::{
 };
 
 pub const CONSENSUS_KEY_ENV: &str = "CONSENSUS_KEY_SECRET";
+// Default database cache is 1 GB
+const DEFAULT_DATABASE_CACHE_SIZE: usize = 1024 * 1024 * 1024;
 
 #[cfg(feature = "p2p")]
 mod p2p;
@@ -71,6 +73,14 @@ pub struct Command {
     /// Vanity name for node, used in telemetry
     #[clap(long = "service-name", default_value = "fuel-core", value_parser, env)]
     pub service_name: String,
+
+    /// The maximum database cache size in bytes.
+    #[arg(
+        long = "max-database-cache-size",
+        default_value_t = DEFAULT_DATABASE_CACHE_SIZE,
+        env
+    )]
+    pub max_database_cache_size: usize,
 
     #[clap(
         name = "DB_PATH",
@@ -158,9 +168,6 @@ pub struct Command {
 
     #[clap(long = "tx-pool-ttl", default_value = "5m", env)]
     pub tx_pool_ttl: humantime::Duration,
-
-    #[clap(long = "honeycomb-api-key", env)]
-    pub honeycomb_key: Option<String>,
 }
 
 impl Command {
@@ -169,6 +176,7 @@ impl Command {
             ip,
             port,
             service_name: name,
+            max_database_cache_size,
             database_path,
             database_type,
             chain_config,
@@ -190,7 +198,6 @@ impl Command {
             max_da_lag,
             max_wait_time,
             tx_pool_ttl,
-            honeycomb_key,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -247,6 +254,7 @@ impl Command {
 
         Ok(Config {
             addr,
+            max_database_cache_size,
             database_path,
             database_type,
             chain_conf: chain_conf.clone(),
@@ -279,7 +287,6 @@ impl Command {
             consensus_key,
             name,
             verifier,
-            honeycomb_api_key: honeycomb_key,
         })
     }
 }
@@ -298,12 +305,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         #[cfg(not(feature = "p2p"))]
         "default_network".to_string()
     };
-    init_logging(
-        config.name.clone(),
-        network_name,
-        config.honeycomb_api_key.clone(),
-    )
-    .await?;
+    init_logging().await?;
     // log fuel-core version
     info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
     trace!("Initializing in TRACE mode.");

@@ -31,6 +31,7 @@ use std::{
         Formatter,
     },
     marker::Send,
+    ops::Deref,
     sync::Arc,
 };
 
@@ -45,6 +46,7 @@ type DatabaseResult<T> = Result<T>;
 use crate::state::rocks_db::RocksDb;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
+use strum::EnumCount;
 #[cfg(feature = "rocksdb")]
 use tempfile::TempDir;
 
@@ -130,6 +132,16 @@ pub enum Column {
     ContractsStateMerkleMetadata = 24,
 }
 
+impl Column {
+    /// The total count of variants in the enum.
+    pub const COUNT: usize = <Self as EnumCount>::COUNT;
+
+    /// Returns the `usize` representation of the `Column`.
+    pub fn as_usize(&self) -> usize {
+        *self as usize
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Database {
     data: DataSource,
@@ -170,10 +182,17 @@ impl Drop for DropResources {
 }
 
 impl Database {
+    pub fn new(data_source: DataSource) -> Self {
+        Self {
+            data: data_source,
+            _drop: Default::default(),
+        }
+    }
+
     #[cfg(feature = "rocksdb")]
-    pub fn open(path: &Path) -> DatabaseResult<Self> {
+    pub fn open(path: &Path, capacity: impl Into<Option<usize>>) -> DatabaseResult<Self> {
         use anyhow::Context;
-        let db = RocksDb::default_open(path).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
+        let db = RocksDb::default_open(path, capacity.into()).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
 
         Ok(Database {
             data: Arc::new(db),
@@ -205,7 +224,7 @@ impl Database {
         let result = self.data.put(
             key.as_ref(),
             column,
-            postcard::to_stdvec(value).map_err(|_| DatabaseError::Codec)?,
+            Arc::new(postcard::to_stdvec(value).map_err(|_| DatabaseError::Codec)?),
         )?;
         if let Some(previous) = result {
             Ok(Some(
@@ -227,7 +246,7 @@ impl Database {
             .transpose()
     }
 
-    fn write(&self, key: &[u8], column: Column, buf: Vec<u8>) -> DatabaseResult<usize> {
+    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
         self.data.write(key, column, buf)
     }
 
@@ -235,13 +254,17 @@ impl Database {
         &self,
         key: &[u8],
         column: Column,
-        buf: Vec<u8>,
+        buf: &[u8],
     ) -> DatabaseResult<(usize, Option<Vec<u8>>)> {
-        self.data.replace(key, column, buf)
+        self.data
+            .replace(key, column, buf)
+            .map(|(size, value)| (size, value.map(|value| value.deref().clone())))
     }
 
     fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
-        self.data.take(key, column)
+        self.data
+            .take(key, column)
+            .map(|value| value.map(|value| value.deref().clone()))
     }
 }
 
@@ -265,7 +288,9 @@ impl Database {
     }
 
     fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
-        self.data.read_alloc(key, column)
+        self.data
+            .read_alloc(key, column)
+            .map(|value| value.map(|value| value.deref().clone()))
     }
 
     fn get<V: DeserializeOwned>(
@@ -295,14 +320,13 @@ impl Database {
         &self,
         column: Column,
         prefix: Option<P>,
-        direction: Option<IterDirection>,
     ) -> impl Iterator<Item = DatabaseResult<(K, V)>> + '_
     where
         K: From<Vec<u8>>,
         V: DeserializeOwned,
         P: AsRef<[u8]>,
     {
-        self.iter_all_filtered::<K, V, P, [u8; 0]>(column, prefix, None, direction)
+        self.iter_all_filtered::<K, V, P, [u8; 0]>(column, prefix, None, None)
     }
 
     fn iter_all_by_start<K, V, S>(
@@ -379,8 +403,9 @@ impl Default for Database {
         #[cfg(feature = "rocksdb")]
         {
             let tmp_dir = TempDir::new().unwrap();
+            let db = RocksDb::default_open(tmp_dir.path(), None).unwrap();
             Self {
-                data: Arc::new(RocksDb::default_open(tmp_dir.path()).unwrap()),
+                data: Arc::new(db),
                 _drop: Arc::new(
                     {
                         move || {
@@ -422,5 +447,13 @@ pub fn convert_to_rocksdb_direction(
     match direction {
         IterDirection::Forward => rocksdb::Direction::Forward,
         IterDirection::Reverse => rocksdb::Direction::Reverse,
+    }
+}
+
+#[test]
+fn column_keys_not_exceed_count() {
+    use enum_iterator::all;
+    for column in all::<Column>() {
+        assert!(column.as_usize() < Column::COUNT);
     }
 }

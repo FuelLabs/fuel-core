@@ -14,6 +14,7 @@ spec:
     port: http
 {{- end }}
 ---
+{{- if .Values.app.volume.pvc_clone_enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -28,6 +29,26 @@ spec:
     requests:
       storage: {{ .Values.app.volume.storagerequests }}
   storageClassName: {{ .Values.app.volume.storageclass }}
+  dataSource:
+    name: {{ .Values.app.volume.pvc_clone_snapshot_id }}
+    kind: VolumeSnapshot
+    apiGroup: snapshot.storage.k8s.io
+{{ else }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.app.volume.claimname }}
+  labels:
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  accessModes:
+    - {{ .Values.app.volume.accessmodes }}
+  resources:
+    requests:
+      storage: {{ .Values.app.volume.storagerequests }}
+  storageClassName: {{ .Values.app.volume.storageclass }}
+{{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -199,9 +220,21 @@ spec:
             - "--max_block_size"
             - "{{ .Values.app.max_block_size }}"
           {{- end }}
+          {{- if .Values.app.max_database_cache_size }}
+            - "--max-database-cache-size"
+            - "{{ .Values.app.max_database_cache_size }}"
+          {{- end }}
           {{- if .Values.app.max_transmit_size }}
             - "--max_transmit_size"
             - "{{ .Values.app.max_transmit_size }}"
+          {{- end }}
+          {{- if .Values.app.sync_max_get_header }}
+            - "--sync_max_get_header"
+            - "{{ .Values.app.sync_max_get_header }}"
+          {{- end }}
+          {{- if .Values.app.sync_max_get_txns }}
+            - "--sync_max_get_txns"
+            - "{{ .Values.app.sync_max_get_txns }}"
           {{- end }}
           {{- if .Values.app.reserved_nodes_only_mode }}
             - "--reserved_nodes_only_mode"
@@ -250,10 +283,6 @@ spec:
             {{- if .Values.app.rust_log }}
             - name: RUST_LOG
               value: {{ .Values.app.rust_log | quote }}
-            {{- end }}
-            {{- if .Values.app.honeycomb_api_key }}
-            - name: HONEYCOMB_KEY
-              value: {{ .Values.app.honeycomb_api_key | quote }}
             {{- end }}
             # TODO: do we need to do anything to make this more optional for non-consensus nodes?
             - name: CONSENSUS_KEY_SECRET

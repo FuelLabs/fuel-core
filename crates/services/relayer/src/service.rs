@@ -178,6 +178,7 @@ where
 
     type SharedData = SharedState<D>;
     type Task = Task<P, D>;
+    type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
         let synced = self.synced.subscribe();
@@ -188,7 +189,11 @@ where
         }
     }
 
-    async fn into_task(mut self, watcher: &StateWatcher) -> anyhow::Result<Self::Task> {
+    async fn into_task(
+        mut self,
+        watcher: &StateWatcher,
+        _: Self::TaskParams,
+    ) -> anyhow::Result<Self::Task> {
         let shutdown = watcher.clone();
         let NotInitializedTask {
             synced,
@@ -221,7 +226,7 @@ where
 
         let result = run::run(self).await;
 
-        if self.shutdown.borrow_and_update().started() {
+        if self.shutdown.borrow_and_update().started() && self.synced.borrow().is_some() {
             // Sleep the loop so the da node is not spammed.
             tokio::time::sleep(
                 self.config

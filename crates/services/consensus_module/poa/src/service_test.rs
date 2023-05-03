@@ -221,7 +221,7 @@ impl MockTransactionPool {
             .returning(move |tx_ids: Vec<TxId>| {
                 let mut guard = removed.lock().unwrap();
                 for id in tx_ids {
-                    guard.retain(|tx| tx.id() == id);
+                    guard.retain(|tx| tx.id(&ConsensusParameters::DEFAULT) == id);
                 }
                 vec![]
             });
@@ -283,8 +283,10 @@ async fn remove_skipped_transactions() {
     // Test created for only for this check.
     txpool.expect_remove_txs().returning(move |skipped_ids| {
         // Transform transactions into ids.
-        let skipped_transactions: Vec<_> =
-            skipped_transactions.iter().map(|tx| tx.id()).collect();
+        let skipped_transactions: Vec<_> = skipped_transactions
+            .iter()
+            .map(|tx| tx.id(&ConsensusParameters::DEFAULT))
+            .collect();
 
         // Check that all transactions are unique.
         let expected_skipped_ids_set: HashSet<_> =
@@ -303,6 +305,7 @@ async fn remove_skipped_transactions() {
         block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
         metrics: false,
+        consensus_params: Default::default(),
     };
     let mut task = Task::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
@@ -343,6 +346,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
         metrics: false,
+        consensus_params: Default::default(),
     };
     let mut task = Task::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
@@ -398,6 +402,7 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
         block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
         metrics: false,
+        consensus_params: Default::default(),
     };
     let task = Task::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),

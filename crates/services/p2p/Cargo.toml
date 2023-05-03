@@ -46,6 +46,7 @@ libp2p-kad = "=0.42.0"
 libp2p-mdns = "=0.42.0"
 libp2p-mplex = "=0.38.0"
 libp2p-noise = "=0.41.0"
+libp2p-prom-client = { workspace = true }
 libp2p-request-response = "=0.23.0"
 libp2p-swarm = "=0.41.1"
 libp2p-tcp = "=0.38.0"

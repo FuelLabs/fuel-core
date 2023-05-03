@@ -29,6 +29,7 @@ use fuel_core_types::{
         rngs::StdRng,
         SeedableRng,
     },
+    fuel_tx,
     fuel_tx::{
         input::coin::CoinPredicate,
         Address,
@@ -87,7 +88,10 @@ fn insert_simple_tx_dependency_chain_succeeds() {
     );
 
     let (_, gas_coin) = setup_coin(&mut rng, Some(&txpool.database));
-    let input = unset_input.into_input(UtxoId::new(tx1.id(), 0));
+    let input = unset_input.into_input(UtxoId::new(
+        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        0,
+    ));
     let tx2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(1)
@@ -132,7 +136,10 @@ fn faulty_t2_collided_on_contract_id_from_tx1() {
     );
 
     let (_, gas_coin) = setup_coin(&mut rng, Some(&txpool.database));
-    let input = unset_input.into_input(UtxoId::new(tx.id(), 1));
+    let input = unset_input.into_input(UtxoId::new(
+        tx.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        1,
+    ));
 
     // attempt to insert a different creation tx with a valid dependency on the first tx,
     // but with a conflicting output contract id
@@ -195,7 +202,10 @@ fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
                 &mut rng,
                 AssetId::BASE,
                 TEST_COIN_AMOUNT,
-                Some(UtxoId::new(tx_faulty.id(), 0)),
+                Some(UtxoId::new(
+                    tx_faulty.id(&fuel_tx::ConsensusParameters::DEFAULT),
+                    0,
+                )),
             ))
             .finalize_as_transaction(),
     );
@@ -209,7 +219,7 @@ fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
         .expect_err("Tx2 should be Err, got Ok");
     assert!(matches!(
         err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedInputUtxoIdNotExisting(id)) if id == &UtxoId::new(tx_faulty.id(), 0)
+        Some(Error::NotInsertedInputUtxoIdNotExisting(id)) if id == &UtxoId::new(tx_faulty.id(&fuel_tx::ConsensusParameters::DEFAULT), 0)
     ));
 }
 
@@ -284,7 +294,11 @@ fn higher_priced_tx_removes_lower_priced_tx() {
         .expect("Tx1 should be Ok, got Err");
 
     let vec = txpool.insert_inner(tx2).expect("Tx2 should be Ok, got Err");
-    assert_eq!(vec.removed[0].id(), tx1.id(), "Tx1 id should be removed");
+    assert_eq!(
+        vec.removed[0].id(),
+        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        "Tx1 id should be removed"
+    );
 }
 
 #[test]
@@ -303,7 +317,10 @@ fn underpriced_tx1_not_included_coin_collision() {
             .add_output(output)
             .finalize_as_transaction(),
     );
-    let input = unset_input.into_input(UtxoId::new(tx1.id(), 0));
+    let input = unset_input.into_input(UtxoId::new(
+        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        0,
+    ));
 
     let tx2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
@@ -332,7 +349,7 @@ fn underpriced_tx1_not_included_coin_collision() {
         .expect_err("Tx3 should be Err, got Ok");
     assert!(matches!(
         err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedCollision(id, utxo_id)) if id == &tx2.id() && utxo_id == &UtxoId::new(tx1.id(), 0)
+        Some(Error::NotInsertedCollision(id, utxo_id)) if id == &tx2.id(&fuel_tx::ConsensusParameters::DEFAULT) && utxo_id == &UtxoId::new(tx1.id(&fuel_tx::ConsensusParameters::DEFAULT), 0)
     ));
 }
 
@@ -441,7 +458,10 @@ fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
             .add_output(output)
             .finalize_as_transaction(),
     );
-    let input = unset_input.into_input(UtxoId::new(tx1.id(), 0));
+    let input = unset_input.into_input(UtxoId::new(
+        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        0,
+    ));
 
     let tx2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
@@ -470,8 +490,16 @@ fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
         2,
         "Tx1 and Tx2 should be removed:{vec:?}",
     );
-    assert_eq!(vec.removed[0].id(), tx1.id(), "Tx1 id should be removed");
-    assert_eq!(vec.removed[1].id(), tx2.id(), "Tx2 id should be removed");
+    assert_eq!(
+        vec.removed[0].id(),
+        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        "Tx1 id should be removed"
+    );
+    assert_eq!(
+        vec.removed[1].id(),
+        tx2.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        "Tx2 id should be removed"
+    );
 }
 
 #[test]
@@ -576,7 +604,10 @@ fn tx_depth_hit() {
             .finalize_as_transaction(),
     );
 
-    let input = unset_input.into_input(UtxoId::new(tx1.id(), 0));
+    let input = unset_input.into_input(UtxoId::new(
+        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        0,
+    ));
     let (output, unset_input) = create_output_and_input(&mut rng, 5_000);
     let tx2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
@@ -586,7 +617,10 @@ fn tx_depth_hit() {
             .finalize_as_transaction(),
     );
 
-    let input = unset_input.into_input(UtxoId::new(tx2.id(), 0));
+    let input = unset_input.into_input(UtxoId::new(
+        tx2.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        0,
+    ));
     let tx3 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_limit(GAS_LIMIT)
@@ -652,9 +686,21 @@ async fn sorted_out_tx1_2_4() {
     let txs = txpool.sorted_includable();
 
     assert_eq!(txs.len(), 3, "Should have 3 txs");
-    assert_eq!(txs[0].id(), tx3.id(), "First should be tx3");
-    assert_eq!(txs[1].id(), tx1.id(), "Second should be tx1");
-    assert_eq!(txs[2].id(), tx2.id(), "Third should be tx2");
+    assert_eq!(
+        txs[0].id(),
+        tx3.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        "First should be tx3"
+    );
+    assert_eq!(
+        txs[1].id(),
+        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        "Second should be tx1"
+    );
+    assert_eq!(
+        txs[2].id(),
+        tx2.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        "Third should be tx2"
+    );
 }
 
 #[tokio::test]
@@ -674,7 +720,10 @@ async fn find_dependent_tx1_tx2() {
             .finalize_as_transaction(),
     );
 
-    let input = unset_input.into_input(UtxoId::new(tx1.id(), 0));
+    let input = unset_input.into_input(UtxoId::new(
+        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        0,
+    ));
     let (output, unset_input) = create_output_and_input(&mut rng, 7_500);
     let tx2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
@@ -685,7 +734,10 @@ async fn find_dependent_tx1_tx2() {
             .finalize_as_transaction(),
     );
 
-    let input = unset_input.into_input(UtxoId::new(tx2.id(), 0));
+    let input = unset_input.into_input(UtxoId::new(
+        tx2.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        0,
+    ));
     let tx3 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(9)
@@ -713,9 +765,21 @@ async fn find_dependent_tx1_tx2() {
     // sort from high to low price
     list.sort_by_key(|tx| Reverse(tx.price()));
     assert_eq!(list.len(), 3, "We should have three items");
-    assert_eq!(list[0].id(), tx1.id(), "Tx1 should be first.");
-    assert_eq!(list[1].id(), tx2.id(), "Tx2 should be second.");
-    assert_eq!(list[2].id(), tx3.id(), "Tx3 should be third.");
+    assert_eq!(
+        list[0].id(),
+        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        "Tx1 should be first."
+    );
+    assert_eq!(
+        list[1].id(),
+        tx2.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        "Tx2 should be second."
+    );
+    assert_eq!(
+        list[2].id(),
+        tx3.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        "Tx3 should be third."
+    );
 }
 
 #[tokio::test]
@@ -789,8 +853,13 @@ async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
 
     txpool.insert_inner(tx.clone()).expect("should succeed");
 
-    let tx_info = txpool.find_one(&tx.id()).unwrap();
-    assert_eq!(tx_info.tx().id(), tx.id());
+    let tx_info = txpool
+        .find_one(&tx.id(&fuel_tx::ConsensusParameters::DEFAULT))
+        .unwrap();
+    assert_eq!(
+        tx_info.tx().id(),
+        tx.id(&fuel_tx::ConsensusParameters::DEFAULT)
+    );
 }
 
 #[tokio::test]
@@ -886,7 +955,7 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
     // check error
     assert!(matches!(
         err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedCollisionMessageId(tx_id, msg_id)) if tx_id == &tx_high.id() && msg_id == message.id()
+        Some(Error::NotInsertedCollisionMessageId(tx_id, msg_id)) if tx_id == &tx_high.id(&fuel_tx::ConsensusParameters::DEFAULT) && msg_id == message.id()
     ));
 }
 
@@ -929,7 +998,10 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
     let squeezed_out_txs = txpool.insert_inner(tx_high).expect("should succeed");
 
     assert_eq!(squeezed_out_txs.removed.len(), 1);
-    assert_eq!(squeezed_out_txs.removed[0].id(), tx_low.id());
+    assert_eq!(
+        squeezed_out_txs.removed[0].id(),
+        tx_low.id(&fuel_tx::ConsensusParameters::DEFAULT)
+    );
 }
 
 #[tokio::test]

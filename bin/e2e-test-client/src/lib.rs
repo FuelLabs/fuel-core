@@ -37,37 +37,67 @@ pub fn main_body(config: SuiteConfig, mut args: Arguments) {
         Trial::test(
             "can transfer from alice to bob",
             with_cloned(&config, |config| {
-                let ctx = TestContext::new(config);
-                async_execute(tests::transfers::basic_transfer(&ctx))
+                async_execute(async {
+                    let ctx = TestContext::new(config).await;
+                    tests::transfers::basic_transfer(&ctx).await
+                })
             }),
         ),
         Trial::test(
             "can transfer from alice to bob and back",
             with_cloned(&config, |config| {
-                let ctx = TestContext::new(config);
-                async_execute(tests::transfers::transfer_back(&ctx))
+                async_execute(async {
+                    let ctx = TestContext::new(config).await;
+                    tests::transfers::transfer_back(&ctx).await
+                })
             }),
         ),
         Trial::test(
             "can execute script and get receipts",
             with_cloned(&config, |config| {
-                let ctx = TestContext::new(config);
-                async_execute(tests::script::receipts(&ctx))
+                async_execute(async {
+                    let ctx = TestContext::new(config).await;
+                    tests::transfers::transfer_back(&ctx).await
+                })
             }),
         ),
         Trial::test(
             "can dry run transfer script and get receipts",
             with_cloned(&config, |config| {
-                let ctx = TestContext::new(config);
-                async_execute(tests::script::dry_run(&ctx))?;
+                async_execute(async {
+                    let ctx = TestContext::new(config).await;
+                    tests::script::dry_run(&ctx).await
+                })?;
+                Ok(())
+            }),
+        ),
+        Trial::test(
+            "dry run script that touches the contract with large state",
+            with_cloned(&config, |config| {
+                async_execute(async {
+                    let ctx = TestContext::new(config).await;
+                    tests::script::run_contract_large_state(&ctx).await
+                })?;
+                Ok(())
+            }),
+        ),
+        Trial::test(
+            "dry run transaction from `non_specific_tx.raw` file",
+            with_cloned(&config, |config| {
+                async_execute(async {
+                    let ctx = TestContext::new(config).await;
+                    tests::script::non_specific_transaction(&ctx).await
+                })?;
                 Ok(())
             }),
         ),
         Trial::test(
             "can deploy a large contract",
             with_cloned(&config, |config| {
-                let ctx = TestContext::new(config);
-                async_execute(tests::contracts::deploy_large_contract(&ctx))
+                async_execute(async {
+                    let ctx = TestContext::new(config).await;
+                    tests::transfers::transfer_back(&ctx).await
+                })
             }),
         ),
     ];

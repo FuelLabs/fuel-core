@@ -221,12 +221,12 @@ async fn can_get_message_proof() {
             // of the message recipient.
             op::addi(0x10, 0x10, starting_offset),
         ];
-        contract.extend(args.iter().enumerate().flat_map(|(index, arg)| {
+        contract.extend(args.iter().flat_map(|arg| {
             [
+                // Pointer to the message in memory
+                op::addi(0x11, 0x10, 32),
                 // The length of the message data in memory.
-                op::movi(0x11, arg.message_data.len() as u32),
-                // The index of the of the output message in the transactions outputs.
-                op::movi(0x12, (index + 1) as u32),
+                op::movi(0x12, arg.message_data.len() as u32),
                 // The amount to send in coins.
                 op::movi(0x13, amount),
                 // Send the message output.
@@ -293,7 +293,7 @@ async fn can_get_message_proof() {
             .collect();
 
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-        let owner = Input::predicate_owner(&predicate);
+        let owner = Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT);
         let coin_input = Input::coin_predicate(
             Default::default(),
             owner,
@@ -336,7 +336,7 @@ async fn can_get_message_proof() {
             vec![],
         );
 
-        let transaction_id = script.id();
+        let transaction_id = script.id(&ConsensusParameters::DEFAULT);
 
         // setup server & client
         let srv = FuelService::new_node(config).await.unwrap();

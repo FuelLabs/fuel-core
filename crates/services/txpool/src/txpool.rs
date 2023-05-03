@@ -70,7 +70,7 @@ where
         &self.by_dependency
     }
 
-    #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id()), ret, err)]
+    #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id(&self.config.chain_config.transaction_parameters)), ret, err)]
     // this is atomic operation. Return removed(pushed out/replaced) transactions
     fn insert_inner(
         &mut self,
@@ -337,8 +337,13 @@ where
         // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
         for tx in block.entity.transactions() {
-            tx_status_sender.send_complete(tx.id(), block.entity.header().height());
-            self.remove_committed_tx(&tx.id());
+            tx_status_sender.send_complete(
+                tx.id(&self.config.chain_config.transaction_parameters),
+                block.entity.header().height(),
+            );
+            self.remove_committed_tx(
+                &tx.id(&self.config.chain_config.transaction_parameters),
+            );
         }
     }
 

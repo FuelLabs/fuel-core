@@ -24,6 +24,7 @@ use fuel_core_types::{
             PartialBlockHeader,
         },
     },
+    fuel_tx::ConsensusParameters,
     services::executor::Error as ExecutorError,
     tai64::Tai64,
 };
@@ -36,7 +37,6 @@ use std::sync::{
     Arc,
     Mutex,
 };
-use tokio::sync::Semaphore;
 
 #[tokio::test]
 async fn cant_produce_at_genesis_height() {
@@ -84,7 +84,7 @@ async fn can_produce_next_block() {
         transactions: vec![],
     }
     .generate(&[])
-    .compress();
+    .compress(&ConsensusParameters::DEFAULT);
 
     let db = MockDb {
         blocks: Arc::new(Mutex::new(
@@ -134,7 +134,7 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
         transactions: vec![],
     }
     .generate(&[])
-    .compress();
+    .compress(&ConsensusParameters::DEFAULT);
 
     let db = MockDb {
         blocks: Arc::new(Mutex::new(
@@ -236,7 +236,6 @@ impl TestContext {
             executor: self.executor,
             relayer: Box::new(self.relayer),
             lock: Default::default(),
-            dry_run_semaphore: Semaphore::new(1),
         }
     }
 }
