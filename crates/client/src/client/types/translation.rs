@@ -27,3 +27,4 @@ translate_client_type_scalar!(Nonce, Nonce);
 translate_client_type_scalar!(Salt, Salt);
 translate_client_type_scalar!(Signature, Signature);
 translate_client_type_scalar!(TransactionId, TransactionId);
+translate_client_type_scalar!(UtxoId, UtxoId);

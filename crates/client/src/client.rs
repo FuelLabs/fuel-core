@@ -47,10 +47,7 @@ use reqwest::cookie::CookieStore;
 use schema::{
     balance::BalanceArgs,
     block::BlockByIdArgs,
-    coins::{
-        Coin,
-        CoinByIdArgs,
-    },
+    coins::CoinByIdArgs,
     contract::ContractByIdArgs,
     tx::{
         TxArg,
@@ -71,7 +68,6 @@ use schema::{
     SetSingleSteppingArgs,
     StartTx,
     StartTxArgs,
-    TransactionId,
     U64,
 };
 #[cfg(feature = "subscriptions")]
@@ -344,13 +340,16 @@ impl FuelClient {
             .collect()
     }
 
-    pub async fn submit(&self, tx: &Transaction) -> io::Result<TransactionId> {
+    pub async fn submit(
+        &self,
+        tx: &Transaction,
+    ) -> io::Result<types::scalars::TransactionId> {
         let tx = tx.clone().to_bytes();
         let query = schema::tx::Submit::build(TxArg {
             tx: HexString(Bytes(tx)),
         });
 
-        let id = self.query(query).await.map(|r| r.submit)?.id;
+        let id = self.query(query).await.map(|r| r.submit)?.id.into();
         Ok(id)
     }
 
@@ -648,11 +647,11 @@ impl FuelClient {
         Ok(blocks)
     }
 
-    pub async fn coin(&self, id: &str) -> io::Result<Option<Coin>> {
+    pub async fn coin(&self, id: &str) -> io::Result<Option<types::Coin>> {
         let query = schema::coins::CoinByIdQuery::build(CoinByIdArgs {
             utxo_id: id.parse()?,
         });
-        let coin = self.query(query).await?.coin;
+        let coin = self.query(query).await?.coin.map(Into::into);
         Ok(coin)
     }
 
@@ -662,7 +661,7 @@ impl FuelClient {
         owner: &str,
         asset_id: Option<&str>,
         request: PaginationRequest<String>,
-    ) -> io::Result<PaginatedResult<schema::coins::Coin, String>> {
+    ) -> io::Result<PaginatedResult<types::Coin, String>> {
         let owner: schema::Address = owner.parse()?;
         let asset_id: schema::AssetId = match asset_id {
             Some(asset_id) => asset_id.parse()?,

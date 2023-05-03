@@ -1,5 +1,6 @@
 pub mod balance;
 pub mod block;
+pub mod coins;
 pub mod contract;
 pub mod merkle_proof;
 pub mod message;
@@ -12,6 +13,7 @@ pub use block::{
     Block,
     Consensus,
 };
+pub use coins::Coin;
 pub use contract::{
     Contract,
     ContractBalance,

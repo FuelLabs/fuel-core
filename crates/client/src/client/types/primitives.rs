@@ -64,3 +64,4 @@ where
 pub use bytes_n::BytesN;
 pub type Bytes32 = Bytes<32>;
 pub type Bytes64 = Bytes<64>;
+pub use fuel_core_types::fuel_tx::UtxoId;

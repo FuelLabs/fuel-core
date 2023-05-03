@@ -72,6 +72,7 @@ client_type_scalar!(PublicKey, Bytes64);
 client_type_scalar!(Salt, Bytes32);
 client_type_scalar!(Signature, Bytes64);
 client_type_scalar!(TransactionId, Bytes32);
+client_type_scalar!(UtxoId, UtxoId);
 
 #[derive(Debug)]
 pub struct Tai64Timestamp(pub Tai64);
