@@ -108,7 +108,7 @@ pub struct CoinEdge {
     pub node: Coin,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Debug, Clone)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Coin {
     pub amount: U64,
@@ -154,7 +154,7 @@ pub struct SpendQueryElementInput {
     pub max: Option<U64>,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Debug, Clone)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct MessageCoin {
     pub amount: U64,
@@ -164,7 +164,7 @@ pub struct MessageCoin {
     pub da_height: U64,
 }
 
-#[derive(cynic::InlineFragments, Debug)]
+#[derive(cynic::InlineFragments, Debug, Clone)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum CoinType {
     Coin(Coin),

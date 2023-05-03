@@ -13,7 +13,11 @@ pub use block::{
     Block,
     Consensus,
 };
-pub use coins::Coin;
+pub use coins::{
+    Coin,
+    CoinType,
+    MessageCoin,
+};
 pub use contract::{
     Contract,
     ContractBalance,

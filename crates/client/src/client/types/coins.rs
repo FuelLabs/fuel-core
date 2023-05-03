@@ -3,10 +3,17 @@ use crate::client::{
     types::scalars::{
         Address,
         AssetId,
+        Nonce,
         UtxoId,
     },
     PaginatedResult,
 };
+
+pub enum CoinType {
+    Coin(Coin),
+    MessageCoin(MessageCoin),
+    Unknown,
+}
 
 pub struct Coin {
     pub amount: u64,
@@ -15,6 +22,26 @@ pub struct Coin {
     pub utxo_id: UtxoId,
     pub maturity: u32,
     pub owner: Address,
+}
+
+pub struct MessageCoin {
+    pub amount: u64,
+    pub sender: Address,
+    pub recipient: Address,
+    pub nonce: Nonce,
+    pub da_height: u64,
+}
+
+impl From<schema::coins::CoinType> for CoinType {
+    fn from(value: schema::coins::CoinType) -> Self {
+        match value {
+            schema::coins::CoinType::Coin(coin) => Self::Coin(coin.into()),
+            schema::coins::CoinType::MessageCoin(message_coin) => {
+                Self::MessageCoin(message_coin.into())
+            }
+            schema::coins::CoinType::Unknown => Self::Unknown,
+        }
+    }
 }
 
 impl From<schema::coins::Coin> for Coin {
@@ -26,6 +53,18 @@ impl From<schema::coins::Coin> for Coin {
             utxo_id: value.utxo_id.into(),
             maturity: value.maturity.into(),
             owner: value.owner.into(),
+        }
+    }
+}
+
+impl From<schema::coins::MessageCoin> for MessageCoin {
+    fn from(value: schema::coins::MessageCoin) -> Self {
+        Self {
+            amount: value.amount.into(),
+            sender: value.sender.into(),
+            recipient: value.recipient.into(),
+            nonce: value.nonce.into(),
+            da_height: value.da_height.into(),
         }
     }
 }
