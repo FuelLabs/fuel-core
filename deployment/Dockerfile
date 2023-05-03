@@ -27,7 +27,7 @@ RUN cargo chef cook --release --no-default-features --features "${FEATURES}" -p 
 # Up to this point, if our dependency tree stays the same,
 # all layers should be cached.
 COPY . .
-RUN cargo build --release --no-default-features --features "production" -p fuel-core-bin
+RUN cargo build --release --no-default-features --features "${FEATURES}" -p fuel-core-bin
 
 # Stage 2: Run
 FROM ubuntu:22.04 as run
