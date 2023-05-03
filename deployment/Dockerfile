@@ -17,17 +17,22 @@ ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
-ARG FEATURES="production"
+
 FROM chef as builder
+ARG FEATURES="production"
+ARG DEBUG_SYMBOLS=false
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
-ENV CARGO_PROFILE_RELEASE_DEBUG=true
+ENV CARGO_PROFILE_RELEASE_DEBUG=$DEBUG_SYMBOLS
+ENV BUILD_FEATURES=$FEATURES
 COPY --from=planner /build/recipe.json recipe.json
+RUN echo $CARGO_PROFILE_RELEASE_DEBUG
+RUN echo $BUILD_FEATURES
 # Build our project dependecies, not our application!
 RUN cargo chef cook --release --no-default-features --features "${FEATURES}" -p fuel-core-bin --recipe-path recipe.json
 # Up to this point, if our dependency tree stays the same,
 # all layers should be cached.
 COPY . .
-RUN cargo build --release --no-default-features --features "${FEATURES}" -p fuel-core-bin
+RUN cargo build --release --no-default-features --features "$BUILD_FEATURES" -p fuel-core-bin
 
 # Stage 2: Run
 FROM ubuntu:22.04 as run
