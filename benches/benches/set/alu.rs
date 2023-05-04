@@ -5,7 +5,14 @@ use ethnum::U256;
 use fuel_core_benches::*;
 use fuel_core_types::fuel_asm::*;
 
-use fuel_core_types::fuel_asm::wideint::{CompareMode, CompareArgs, MathOp, MathArgs, MulArgs, DivArgs};
+use fuel_core_types::fuel_asm::wideint::{
+    CompareArgs,
+    CompareMode,
+    DivArgs,
+    MathArgs,
+    MathOp,
+    MulArgs,
+};
 
 /// Allocates a byte array from heap and initializes it. Then points `reg` to it.
 fn aloc_bytearray<const S: usize>(reg: u8, v: [u8; S]) -> Vec<Instruction> {
@@ -260,8 +267,6 @@ pub fn run(c: &mut Criterion) {
             .with_prepare_script(vec![op::movi(0x11, 100000)]),
     );
 
-
-
     // Wideint operations: 128 bit
     let mut wideint_prepare = Vec::new();
     wideint_prepare.extend(make_u128(0x10, 0));
@@ -273,49 +278,70 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("wdcm"),
         "wdcm",
-        VmBench::new(op::wdcm_args(0x10, 0x12, 0x13, CompareArgs {
-            mode: CompareMode::LTE,
-            indirect_rhs: true,
-        }))
-            .with_prepare_script(wideint_prepare.clone()),
+        VmBench::new(op::wdcm_args(
+            0x10,
+            0x12,
+            0x13,
+            CompareArgs {
+                mode: CompareMode::LTE,
+                indirect_rhs: true,
+            },
+        ))
+        .with_prepare_script(wideint_prepare.clone()),
     );
 
     run_group_ref(
         &mut c.benchmark_group("wdop"),
         "wdop",
-        VmBench::new(op::wdop_args(0x10, 0x13, 0x12, MathArgs {
-            op: MathOp::SUB,
-            indirect_rhs: true,
-        }))
-            .with_prepare_script(wideint_prepare.clone()),
+        VmBench::new(op::wdop_args(
+            0x10,
+            0x13,
+            0x12,
+            MathArgs {
+                op: MathOp::SUB,
+                indirect_rhs: true,
+            },
+        ))
+        .with_prepare_script(wideint_prepare.clone()),
     );
 
     run_group_ref(
         &mut c.benchmark_group("wdml"),
         "wdml",
-        VmBench::new(op::wdml_args(0x10, 0x14, 0x14, MulArgs {
-            indirect_lhs: true,
-            indirect_rhs: true,
-        }))
-            .with_prepare_script(wideint_prepare.clone()),
+        VmBench::new(op::wdml_args(
+            0x10,
+            0x14,
+            0x14,
+            MulArgs {
+                indirect_lhs: true,
+                indirect_rhs: true,
+            },
+        ))
+        .with_prepare_script(wideint_prepare.clone()),
     );
 
     run_group_ref(
         &mut c.benchmark_group("wddv"),
         "wddv",
-        VmBench::new(op::wddv_args(0x10, 0x12, 0x13, DivArgs {
-            indirect_rhs: true,
-        }))
-            .with_prepare_script(wideint_prepare.clone()),
+        VmBench::new(op::wddv_args(
+            0x10,
+            0x12,
+            0x13,
+            DivArgs { indirect_rhs: true },
+        ))
+        .with_prepare_script(wideint_prepare.clone()),
     );
 
     run_group_ref(
         &mut c.benchmark_group("wddv"),
         "wddv",
-        VmBench::new(op::wddv_args(0x10, 0x12, 0x13, DivArgs {
-            indirect_rhs: true,
-        }))
-            .with_prepare_script(wideint_prepare.clone()),
+        VmBench::new(op::wddv_args(
+            0x10,
+            0x12,
+            0x13,
+            DivArgs { indirect_rhs: true },
+        ))
+        .with_prepare_script(wideint_prepare.clone()),
     );
 
     run_group_ref(
@@ -350,49 +376,70 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("wqcm"),
         "wqcm",
-        VmBench::new(op::wqcm_args(0x10, 0x12, 0x13, CompareArgs {
-            mode: CompareMode::LTE,
-            indirect_rhs: true,
-        }))
-            .with_prepare_script(wideint_prepare.clone()),
+        VmBench::new(op::wqcm_args(
+            0x10,
+            0x12,
+            0x13,
+            CompareArgs {
+                mode: CompareMode::LTE,
+                indirect_rhs: true,
+            },
+        ))
+        .with_prepare_script(wideint_prepare.clone()),
     );
 
     run_group_ref(
         &mut c.benchmark_group("wqop"),
         "wqop",
-        VmBench::new(op::wqop_args(0x10, 0x13, 0x12, MathArgs {
-            op: MathOp::SUB,
-            indirect_rhs: true,
-        }))
-            .with_prepare_script(wideint_prepare.clone()),
+        VmBench::new(op::wqop_args(
+            0x10,
+            0x13,
+            0x12,
+            MathArgs {
+                op: MathOp::SUB,
+                indirect_rhs: true,
+            },
+        ))
+        .with_prepare_script(wideint_prepare.clone()),
     );
 
     run_group_ref(
         &mut c.benchmark_group("wqml"),
         "wqml",
-        VmBench::new(op::wqml_args(0x10, 0x14, 0x14, MulArgs {
-            indirect_lhs: true,
-            indirect_rhs: true,
-        }))
-            .with_prepare_script(wideint_prepare.clone()),
+        VmBench::new(op::wqml_args(
+            0x10,
+            0x14,
+            0x14,
+            MulArgs {
+                indirect_lhs: true,
+                indirect_rhs: true,
+            },
+        ))
+        .with_prepare_script(wideint_prepare.clone()),
     );
 
     run_group_ref(
         &mut c.benchmark_group("wqdv"),
         "wqdv",
-        VmBench::new(op::wqdv_args(0x10, 0x12, 0x13, DivArgs {
-            indirect_rhs: true,
-        }))
-            .with_prepare_script(wideint_prepare.clone()),
+        VmBench::new(op::wqdv_args(
+            0x10,
+            0x12,
+            0x13,
+            DivArgs { indirect_rhs: true },
+        ))
+        .with_prepare_script(wideint_prepare.clone()),
     );
 
     run_group_ref(
         &mut c.benchmark_group("wqdv"),
         "wqdv",
-        VmBench::new(op::wqdv_args(0x10, 0x12, 0x13, DivArgs {
-            indirect_rhs: true,
-        }))
-            .with_prepare_script(wideint_prepare.clone()),
+        VmBench::new(op::wqdv_args(
+            0x10,
+            0x12,
+            0x13,
+            DivArgs { indirect_rhs: true },
+        ))
+        .with_prepare_script(wideint_prepare.clone()),
     );
 
     run_group_ref(
@@ -415,5 +462,4 @@ pub fn run(c: &mut Criterion) {
         VmBench::new(op::wdmm(0x10, 0x12, 0x13, 0x13))
             .with_prepare_script(wideint_prepare.clone()),
     );
-
 }
