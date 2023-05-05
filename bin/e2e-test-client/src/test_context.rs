@@ -5,8 +5,10 @@ use anyhow::{
     Context,
 };
 use fuel_core_client::client::{
-    schema::coins::CoinType,
-    types::TransactionStatus,
+    types::{
+        CoinType,
+        TransactionStatus,
+    },
     FuelClient,
     PageDirection,
     PaginationRequest,
