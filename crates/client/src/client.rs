@@ -306,14 +306,14 @@ impl FuelClient {
         self.query(query).await.map(|r| r.health)
     }
 
-    pub async fn node_info(&self) -> io::Result<schema::node_info::NodeInfo> {
+    pub async fn node_info(&self) -> io::Result<types::NodeInfo> {
         let query = schema::node_info::QueryNodeInfo::build(());
-        self.query(query).await.map(|r| r.node_info)
+        self.query(query).await.map(|r| r.node_info.into())
     }
 
-    pub async fn chain_info(&self) -> io::Result<schema::chain::ChainInfo> {
+    pub async fn chain_info(&self) -> io::Result<types::ChainInfo> {
         let query = schema::chain::ChainQuery::build(());
-        self.query(query).await.map(|r| r.chain)
+        self.query(query).await.map(|r| r.chain.into())
     }
 
     /// Default dry run, matching the exact configuration as the node

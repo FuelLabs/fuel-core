@@ -1,9 +1,12 @@
 pub mod balance;
 pub mod block;
+pub mod chain;
+pub mod chain_info;
 pub mod coins;
 pub mod contract;
 pub mod merkle_proof;
 pub mod message;
+pub mod node_info;
 pub mod primitives;
 pub mod scalars;
 pub mod translation;
@@ -13,6 +16,8 @@ pub use block::{
     Block,
     Consensus,
 };
+pub use chain::ConsensusParameters;
+pub use chain_info::ChainInfo;
 pub use coins::{
     Coin,
     CoinType,
@@ -27,6 +32,7 @@ pub use message::{
     Message,
     MessageProof,
 };
+pub use node_info::NodeInfo;
 
 use crate::client::schema::{
     tx::{
