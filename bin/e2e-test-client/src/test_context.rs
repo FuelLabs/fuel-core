@@ -173,11 +173,12 @@ impl Wallet {
 
         for coin in coins {
             if let CoinType::Coin(coin) = coin {
+                let asset_id = coin.asset_id.clone().0 .0 .0;
                 tx.add_unsigned_coin_input(
                     self.secret,
                     coin.utxo_id.clone().into(),
                     coin.amount.clone().into(),
-                    coin.asset_id.clone().into(),
+                    asset_id.into(),
                     Default::default(),
                     coin.maturity.clone().into(),
                 );
@@ -193,7 +194,7 @@ impl Wallet {
             amount: 0,
             asset_id,
         });
-        tx.with_params(self.consensus_params);
+        tx.with_params(self.consensus_params.clone().into());
 
         Ok(tx.finalize_as_transaction())
     }
@@ -208,7 +209,7 @@ impl Wallet {
         let tx = self
             .transfer_tx(destination, transfer_amount, asset_id)
             .await?;
-        let tx_id = tx.id(&self.consensus_params);
+        let tx_id = tx.id(&self.consensus_params.clone().into());
         let status = self.client.submit_and_await_commit(&tx).await?;
 
         // we know the transferred coin should be output 0 from above
@@ -250,11 +251,12 @@ impl Wallet {
 
         for coin in coins {
             if let CoinType::Coin(coin) = coin {
+                let asset_id = coin.asset_id.clone().0 .0 .0;
                 tx.add_unsigned_coin_input(
                     self.secret,
                     coin.utxo_id.clone().into(),
                     coin.amount.clone().into(),
-                    coin.asset_id.clone().into(),
+                    asset_id.into(),
                     Default::default(),
                     coin.maturity.clone().into(),
                 );
