@@ -56,6 +56,13 @@ macro_rules! client_type_scalar {
         impl ClientScalar for $id {
             type PrimitiveType = primitives::$base_id;
         }
+
+        impl std::fmt::LowerHex for $id {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                let val = &self.0;
+                std::fmt::LowerHex::fmt(val, f)
+            }
+        }
     };
 }
 

@@ -11,7 +11,10 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_client::client::FuelClient;
+use fuel_core_client::client::{
+    types::CoinType,
+    FuelClient,
+};
 use fuel_core_types::fuel_tx::*;
 use rand::{
     prelude::StdRng,
@@ -308,6 +311,7 @@ mod coin {
 }
 
 mod message_coin {
+    use fuel_core_client::client::types::CoinType;
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         fuel_crypto::SecretKey,
@@ -392,8 +396,8 @@ mod message_coin {
             if let CoinType::MessageCoin(message) = coin {
                 script.add_unsigned_message_input(
                     secret_key,
-                    message.sender.0 .0,
-                    message.nonce.0 .0,
+                    message.sender.0 .0 .0.into(),
+                    message.nonce.0 .0 .0.into(),
                     message.amount.0,
                     vec![],
                 );
@@ -541,6 +545,7 @@ mod message_coin {
 
 // It is combination of coins and deposit coins test cases.
 mod all_coins {
+    use fuel_core_client::client::types::CoinType;
     use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
     use super::*;

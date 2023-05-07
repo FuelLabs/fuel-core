@@ -63,6 +63,12 @@ impl<T: LowerHex + Debug + Clone + Default> Display for HexFormatted<T> {
     }
 }
 
+impl<T: LowerHex + Debug + Clone + Default> LowerHex for HexFormatted<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "0x{:x}", self.0)
+    }
+}
+
 pub const fn hex_val(c: u8) -> Option<u8> {
     match c {
         b'A'..=b'F' => Some(c - b'A' + 10),
