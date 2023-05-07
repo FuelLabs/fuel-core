@@ -10,6 +10,7 @@ use fuel_core_storage::{
         ContractsInfo,
         ContractsRawCode,
     },
+    ContractInfo,
     Result as StorageResult,
     StorageAsRef,
 };
@@ -64,7 +65,7 @@ impl<D: DatabasePort + ?Sized> ContractQueryData for D {
     }
 
     fn contract_salt(&self, id: ContractId) -> StorageResult<Salt> {
-        let (salt, _) = self
+        let ContractInfo { salt, .. } = self
             .storage::<ContractsInfo>()
             .get(&id)?
             .ok_or(not_found!(ContractsInfo))?

@@ -43,16 +43,15 @@ impl StorageInspect<ContractsState> for Database {
         &self,
         key: &<ContractsState as Mappable>::Key,
     ) -> Result<Option<Cow<<ContractsState as Mappable>::OwnedValue>>, Self::Error> {
-        self.get(key.as_ref(), Column::ContractsState)
-            .map_err(Into::into)
+        let value = self.get(key.as_ref(), Column::ContractsState)?;
+        Ok(value.map(|b| Cow::Owned(b.owned())))
     }
 
     fn contains_key(
         &self,
         key: &<ContractsState as Mappable>::Key,
     ) -> Result<bool, Self::Error> {
-        self.contains_key(key.as_ref(), Column::ContractsState)
-            .map_err(Into::into)
+        Ok(self.contains_key(key.as_ref(), Column::ContractsState)?)
     }
 }
 
@@ -62,8 +61,7 @@ impl StorageMutate<ContractsState> for Database {
         key: &<ContractsState as Mappable>::Key,
         value: &<ContractsState as Mappable>::Value,
     ) -> Result<Option<<ContractsState as Mappable>::OwnedValue>, Self::Error> {
-        let prev = Database::insert(self, key.as_ref(), Column::ContractsState, value)
-            .map_err(Into::into);
+        let prev = Database::insert(self, key.as_ref(), Column::ContractsState, value);
 
         // Get latest metadata entry for this contract id
         let prev_metadata = self
@@ -88,7 +86,7 @@ impl StorageMutate<ContractsState> for Database {
         self.storage::<ContractsStateMerkleMetadata>()
             .insert(key.contract_id(), &metadata)?;
 
-        prev
+        Ok(prev?.map(|b| b.owned()))
     }
 
     fn remove(
@@ -96,7 +94,7 @@ impl StorageMutate<ContractsState> for Database {
         key: &<ContractsState as Mappable>::Key,
     ) -> Result<Option<<ContractsState as Mappable>::OwnedValue>, Self::Error> {
         let prev = Database::remove(self, key.as_ref(), Column::ContractsState)
-            .map_err(Into::into);
+            ;
 
         // Get latest metadata entry for this contract id
         let prev_metadata = self
@@ -130,7 +128,7 @@ impl StorageMutate<ContractsState> for Database {
             }
         }
 
-        prev
+        Ok(prev?.map(|b| b.owned()))
     }
 }
 

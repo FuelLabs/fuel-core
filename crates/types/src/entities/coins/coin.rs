@@ -48,6 +48,11 @@ impl Coin {
 /// The compressed version of the `Coin` with minimum fields required for
 /// the proper work of the blockchain.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "rkyv", archive(check_bytes))]
 #[derive(Debug, Clone)]
 pub struct CompressedCoin {
     /// The address with permission to spend this coin

@@ -52,16 +52,25 @@ use std::{
     },
 };
 
+use super::{
+    DbRow,
+    DbValue,
+};
+
 impl StorageInspect<FuelBlocks> for Database {
     type Error = StorageError;
 
     fn get(&self, key: &BlockId) -> Result<Option<Cow<CompressedBlock>>, Self::Error> {
-        Database::get(self, key.as_slice(), Column::FuelBlocks).map_err(Into::into)
+        let value = Database::get(self, key.as_slice(), Column::FuelBlocks)?;
+        Ok(value.map(|b| Cow::Owned(b.owned())))
     }
 
     fn contains_key(&self, key: &BlockId) -> Result<bool, Self::Error> {
-        Database::contains_key(self, key.as_slice(), Column::FuelBlocks)
-            .map_err(Into::into)
+        Ok(Database::contains_key(
+            self,
+            key.as_slice(),
+            Column::FuelBlocks,
+        )?)
     }
 }
 
@@ -85,7 +94,7 @@ impl StorageMutate<FuelBlocks> for Database {
             )
             .next()
             .transpose()?
-            .map(|(_, metadata)| metadata)
+            .map(|row| row.value.owned())
             .unwrap_or_default();
 
         let storage = self.borrow_mut();
@@ -102,14 +111,15 @@ impl StorageMutate<FuelBlocks> for Database {
         self.storage::<FuelBlockMerkleMetadata>()
             .insert(height, &metadata)?;
 
-        Ok(prev)
+        Ok(prev.map(|b| b.owned()))
     }
 
     fn remove(&mut self, key: &BlockId) -> Result<Option<CompressedBlock>, Self::Error> {
-        let prev: Option<CompressedBlock> =
+        let prev: Option<DbValue<CompressedBlock>> =
             Database::remove(self, key.as_slice(), Column::FuelBlocks)?;
 
-        if let Some(block) = &prev {
+        if let Some(block) = prev.clone() {
+            let block = block.owned();
             let height = block.header().height();
             let _ = self
                 .storage::<FuelBlockSecondaryKeyBlockHeights>()
@@ -120,7 +130,7 @@ impl StorageMutate<FuelBlocks> for Database {
             let _ = self.storage::<FuelBlockMerkleMetadata>().remove(height);
         }
 
-        Ok(prev)
+        Ok(prev.map(|b| b.owned()))
     }
 }
 
@@ -155,6 +165,7 @@ impl Database {
             height.database_key().as_ref(),
             Column::FuelBlockSecondaryKeyBlockHeights,
         )
+        .map(|opt| opt.map(|c| c.owned()))
         .map_err(Into::into)
     }
 
@@ -170,12 +181,13 @@ impl Database {
             Some(direction),
         )
         .map(|res| {
-            let (height, id) = res?;
-            let block_height_bytes: [u8; 4] = height
+            let row = res?;
+            let block_height_bytes: [u8; 4] = row
+                .key
                 .as_slice()
                 .try_into()
                 .expect("block height always has correct number of bytes");
-            Ok((block_height_bytes.into(), id))
+            Ok((block_height_bytes.into(), row.value.owned()))
         })
     }
 
@@ -186,10 +198,10 @@ impl Database {
         )
         .next()
         .ok_or(DatabaseError::ChainUninitialized)?
-        .map(|(height, id): (Vec<u8>, BlockId)| {
-            let bytes = <[u8; 4]>::try_from(height.as_slice())
+        .map(|row: DbRow<Vec<u8>, BlockId>| {
+            let bytes = <[u8; 4]>::try_from(row.key.as_slice())
                 .expect("all block heights are stored with the correct amount of bytes");
-            (u32::from_be_bytes(bytes).into(), id)
+            (u32::from_be_bytes(bytes).into(), row.value.owned())
         })
     }
 
@@ -201,10 +213,10 @@ impl Database {
             )
             .next()
             .transpose()?
-            .map(|(height, block)| {
+            .map(|row| {
                 // safety: we know that all block heights are stored with the correct amount of bytes
-                let bytes = <[u8; 4]>::try_from(height.as_slice()).unwrap();
-                (u32::from_be_bytes(bytes).into(), block)
+                let bytes = <[u8; 4]>::try_from(row.key.as_slice()).unwrap();
+                (u32::from_be_bytes(bytes).into(), row.value.owned())
             });
 
         Ok(ids)

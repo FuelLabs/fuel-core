@@ -20,8 +20,11 @@ use fuel_core_storage::{
     Result as StorageResult,
 };
 use fuel_core_types::fuel_types::BlockHeight;
-use serde::{
-    de::DeserializeOwned,
+use rkyv::{
+    de::deserializers::SharedDeserializeMap,
+    validation::validators::DefaultValidator,
+    AlignedVec,
+    Archive,
     Serialize,
 };
 use std::{
@@ -212,38 +215,73 @@ impl Database {
     }
 }
 
+fn serialize<T>(value: &T) -> Result<AlignedVec>
+where
+    T: Serialize<rkyv::ser::serializers::AllocSerializer<4096>>,
+{
+    rkyv::util::to_bytes::<_, 4096>(value).map_err(|_| DatabaseError::Codec)
+}
+
+fn deserialize<'a, T>(bytes: &'a [u8]) -> Result<T>
+where
+    T: Archive,
+    <T as Archive>::Archived: rkyv::CheckBytes<DefaultValidator<'a>>,
+    <T as Archive>::Archived: rkyv::Deserialize<T, SharedDeserializeMap>,
+    <T as Archive>::Archived: 'a,
+{
+    let t: T = rkyv::from_bytes(&bytes).map_err(|_| DatabaseError::Codec)?;
+    Ok(t)
+}
+
 /// Mutable methods.
 // TODO: Add `&mut self` to them.
 impl Database {
-    fn insert<K: AsRef<[u8]>, V: Serialize, R: DeserializeOwned>(
+    fn insert<'a, K, V, R>(
         &self,
         key: K,
         column: Column,
         value: &V,
-    ) -> DatabaseResult<Option<R>> {
+    ) -> DatabaseResult<Option<DbValue<R>>>
+    where
+        K: AsRef<[u8]>,
+        V: Serialize<rkyv::ser::serializers::AllocSerializer<4096>>,
+        <V as Archive>::Archived: rkyv::Deserialize<V, SharedDeserializeMap>,
+        <V as Archive>::Archived: 'a,
+        R: Archive,
+        <R as Archive>::Archived: rkyv::CheckBytes<DefaultValidator<'a>>,
+        <R as Archive>::Archived: rkyv::Deserialize<R, SharedDeserializeMap>,
+        <R as Archive>::Archived: 'a,
+    {
         let result = self.data.put(
             key.as_ref(),
             column,
-            Arc::new(postcard::to_stdvec(value).map_err(|_| DatabaseError::Codec)?),
+            Arc::new(serialize(value)?.into_vec()),
         )?;
         if let Some(previous) = result {
-            Ok(Some(
-                postcard::from_bytes(&previous).map_err(|_| DatabaseError::Codec)?,
-            ))
+            Ok(Some(DbValue {
+                raw: previous,
+                _phantom: std::marker::PhantomData,
+            }))
         } else {
             Ok(None)
         }
     }
 
-    fn remove<V: DeserializeOwned>(
+    fn remove<'a, R>(
         &self,
         key: &[u8],
         column: Column,
-    ) -> DatabaseResult<Option<V>> {
-        self.data
-            .delete(key, column)?
-            .map(|val| postcard::from_bytes(&val).map_err(|_| DatabaseError::Codec))
-            .transpose()
+    ) -> DatabaseResult<Option<DbValue<R>>>
+    where
+        R: Archive,
+        <R as Archive>::Archived: rkyv::CheckBytes<DefaultValidator<'a>>,
+        <R as Archive>::Archived: rkyv::Deserialize<R, SharedDeserializeMap>,
+        <R as Archive>::Archived: 'a,
+    {
+        Ok(self.data.delete(key, column)?.map(|val| DbValue {
+            raw: val,
+            _phantom: std::marker::PhantomData,
+        }))
     }
 
     fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
@@ -293,84 +331,208 @@ impl Database {
             .map(|value| value.map(|value| value.deref().clone()))
     }
 
-    fn get<V: DeserializeOwned>(
-        &self,
-        key: &[u8],
-        column: Column,
-    ) -> DatabaseResult<Option<V>> {
-        self.data
-            .get(key, column)?
-            .map(|val| postcard::from_bytes(&val).map_err(|_| DatabaseError::Codec))
-            .transpose()
+    fn get<'a, V>(&self, key: &[u8], column: Column) -> DatabaseResult<Option<DbValue<V>>>
+    where
+        V: Archive + Clone,
+        <V as Archive>::Archived: rkyv::CheckBytes<DefaultValidator<'a>>,
+        <V as Archive>::Archived: rkyv::Deserialize<V, SharedDeserializeMap>,
+        <V as Archive>::Archived: 'a,
+    {
+        Ok(self.data.get(key, column)?.map(|val| DbValue {
+            raw: val,
+            _phantom: std::marker::PhantomData,
+        }))
     }
 
-    fn iter_all<K, V>(
-        &self,
+    fn iter_all<'a, K, V>(
+        &'a self,
         column: Column,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<(K, V)>> + '_
+    ) -> FilteredDbIter<'a, K, V>
     where
         K: From<Vec<u8>>,
-        V: DeserializeOwned,
+        V: Archive + Clone,
+        <V as Archive>::Archived: rkyv::CheckBytes<DefaultValidator<'a>>,
+        <V as Archive>::Archived: rkyv::Deserialize<V, SharedDeserializeMap>,
+        <V as Archive>::Archived: 'a,
     {
         self.iter_all_filtered::<K, V, Vec<u8>, Vec<u8>>(column, None, None, direction)
     }
 
-    fn iter_all_by_prefix<K, V, P>(
-        &self,
+    fn iter_all_by_prefix<'a, K, V, P>(
+        &'a self,
         column: Column,
         prefix: Option<P>,
-    ) -> impl Iterator<Item = DatabaseResult<(K, V)>> + '_
+    ) -> FilteredDbIter<'a, K, V>
     where
         K: From<Vec<u8>>,
-        V: DeserializeOwned,
+        V: rkyv::Archive + Clone,
+        <V as Archive>::Archived: rkyv::CheckBytes<DefaultValidator<'a>>,
+        <V as Archive>::Archived: rkyv::Deserialize<V, SharedDeserializeMap>,
+        <V as Archive>::Archived: 'a,
         P: AsRef<[u8]>,
     {
         self.iter_all_filtered::<K, V, P, [u8; 0]>(column, prefix, None, None)
     }
 
-    fn iter_all_by_start<K, V, S>(
-        &self,
+    fn iter_all_by_start<'a, K, V, S>(
+        &'a self,
         column: Column,
         start: Option<S>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<(K, V)>> + '_
+    ) -> FilteredDbIter<'a, K, V>
     where
         K: From<Vec<u8>>,
-        V: DeserializeOwned,
+        V: Archive + Clone,
+        <V as Archive>::Archived: rkyv::CheckBytes<DefaultValidator<'a>>,
+        <V as Archive>::Archived: rkyv::Deserialize<V, SharedDeserializeMap>,
+        <V as Archive>::Archived: 'a,
         S: AsRef<[u8]>,
     {
         self.iter_all_filtered::<K, V, [u8; 0], S>(column, None, start, direction)
     }
 
-    fn iter_all_filtered<K, V, P, S>(
-        &self,
+    fn iter_all_filtered<'a, K, V, P, S>(
+        &'a self,
         column: Column,
         prefix: Option<P>,
         start: Option<S>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<(K, V)>> + '_
+    ) -> FilteredDbIter<'a, K, V>
     where
         K: From<Vec<u8>>,
-        V: DeserializeOwned,
+        V: Archive + Clone,
+        <V as Archive>::Archived: rkyv::CheckBytes<DefaultValidator<'a>>,
+        <V as Archive>::Archived: rkyv::Deserialize<V, SharedDeserializeMap>,
+        <V as Archive>::Archived: 'a,
         P: AsRef<[u8]>,
         S: AsRef<[u8]>,
     {
-        self.data
-            .iter_all(
+        FilteredDbIter {
+            inner: self.data.iter_all(
                 column,
                 prefix.as_ref().map(|p| p.as_ref()),
                 start.as_ref().map(|s| s.as_ref()),
                 direction.unwrap_or_default(),
-            )
-            .map(|val| {
-                val.and_then(|(key, value)| {
-                    let key = K::from(key);
-                    let value: V =
-                        postcard::from_bytes(&value).map_err(|_| DatabaseError::Codec)?;
-                    Ok((key, value))
-                })
-            })
+            ),
+            _phantom: core::marker::PhantomData,
+        }
+        // self.data
+        //     .iter_all(
+        //         column,
+        //         prefix.as_ref().map(|p| p.as_ref()),
+        //         start.as_ref().map(|s| s.as_ref()),
+        //         direction.unwrap_or_default(),
+        //     )
+        //     .map(|val| {
+        //         val.and_then(|(key, value)| {
+        //             let key = K::from(key);
+        //             let b =  (&*value).clone();
+        //             let value: V = deserialize(&b)?;
+        //             let v = value.to_owned();
+        //             drop(b);
+        //             Ok((key, v))
+        //         })
+        //     })
+    }
+}
+pub struct DbValue<V: Archive> {
+    raw: Arc<Vec<u8>>,
+    _phantom: core::marker::PhantomData<V>,
+}
+
+impl<V: Archive + Clone> Clone for DbValue<V> {
+    fn clone(&self) -> Self {
+        Self {
+            raw: self.raw.clone(),
+            _phantom: core::marker::PhantomData,
+        }
+    }
+}
+
+impl<'a, V> DbValue<V>
+where
+    V: Archive,
+    <V as Archive>::Archived: rkyv::CheckBytes<DefaultValidator<'a>>,
+    <V as Archive>::Archived: rkyv::Deserialize<V, SharedDeserializeMap>,
+    <V as Archive>::Archived: 'a,
+{
+    /// Archived value for zero-copy access
+    pub fn archived(&'a self) -> &'a V::Archived {
+        rkyv::check_archived_root::<'a, V>(&self.raw)
+            .expect("Deserialization failed after validation")
+    }
+
+    pub fn validate(&'a self) -> Result<()> {
+        if rkyv::check_archived_root::<'a, V>(&self.raw).is_ok() {
+            Ok(())
+        } else {
+            Err(DatabaseError::Codec)
+        }
+    }
+
+    /// Deserialized value
+    pub fn alt_owned(self) -> &'a V {
+        &deserialize(&self.raw).expect("Deserialization failed after validation")
+    }
+}
+
+impl<'a, V> DbValue<V> 
+    where     V: Archive + Clone + 'a,
+    <V as Archive>::Archived: rkyv::CheckBytes<DefaultValidator<'a>>,
+    <V as Archive>::Archived: rkyv::Deserialize<V, SharedDeserializeMap>,
+    <V as Archive>::Archived: 'a,
+{
+    pub fn owned(self) -> V {
+        self.alt_owned().clone()
+    }
+}
+
+
+pub struct DbRow<K, V: Archive> {
+    /// Row key
+    pub key: K,
+    /// Raw value data, checked to be valid
+    pub value: DbValue<V>,
+}
+
+pub struct FilteredDbIter<'a, K, V> {
+    inner: fuel_core_storage::iter::BoxedIter<'a, crate::state::KVItem>,
+    _phantom: core::marker::PhantomData<(K, V)>,
+}
+impl<'a, K, V> Iterator for FilteredDbIter<'a, K, V>
+where
+    K: From<Vec<u8>> + 'a,
+    V: Archive + 'a,
+    <V as Archive>::Archived: rkyv::CheckBytes<DefaultValidator<'a>>,
+    <V as Archive>::Archived: rkyv::Deserialize<V, SharedDeserializeMap>,
+    <V as Archive>::Archived: 'a,
+{
+    // We can refer to this type using Self::Item
+    type Item = Result<DbRow<K, V>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Some(match self.inner.next()? {
+            Ok((key, raw_value)) => {
+                let key: K = K::from(key);
+
+                let row = DbRow {
+                    key,
+                    value: DbValue {
+                        raw: raw_value,
+                        _phantom: core::marker::PhantomData,
+                    },
+                };
+
+                // // Fail-fast validation
+                // if let Err(e) = row.validate() {
+                //     Err(e)
+                // } else {
+                // }
+                Ok(row)
+            }
+            Err(err) => Err(err),
+        })
     }
 }
 

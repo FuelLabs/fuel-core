@@ -35,19 +35,20 @@ fuel-core-storage = { workspace = true }
 fuel-core-sync = { workspace = true, optional = true }
 fuel-core-txpool = { workspace = true }
 fuel-core-types = { workspace = true, features = [
+    "rkyv",
     "serde",
 ] }
 futures = { workspace = true }
 hex = { version = "0.4", features = ["serde"] }
 hyper = { workspace = true }
 itertools = { workspace = true }
-postcard = { workspace = true, features = ["use-std"] }
 primitive-types = "0.12"
 rand = { workspace = true }
 rocksdb = { version = "0.20", default-features = false, features = [
     "lz4",
     "multi-threaded-cf",
 ], optional = true }
+rkyv = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 strum = "0.24"

@@ -219,14 +219,15 @@ impl InterpreterStorage for VmDatabase {
                 break
             }
 
-            let (multikey, value) =
+            let row =
                 entry.expect("We did a check before, so the entry should be `Some`");
-            let actual_key = U256::from_big_endian(&multikey[32..]);
+            let actual_key = U256::from_big_endian(&row.key[32..]);
 
             while (expected_key <= actual_key) && results.len() < range {
                 if expected_key == actual_key {
                     // We found expected key, put value into results
-                    results.push(Some(Cow::Owned(value)));
+                    let v = row.value.owned();
+                    results.push(Some(Cow::Owned(v)));
                 } else {
                     // Iterator moved beyond next expected key, push none until we find the key
                     results.push(None);

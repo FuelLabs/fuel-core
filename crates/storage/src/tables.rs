@@ -65,7 +65,7 @@ impl Mappable for Receipts {
     /// Unique identifier of the transaction.
     type Key = Self::OwnedKey;
     type OwnedKey = Bytes32;
-    type Value = [Receipt];
+    type Value = Self::OwnedValue;
     type OwnedValue = Vec<Receipt>;
 }
 

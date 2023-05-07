@@ -147,6 +147,11 @@ pub struct InsertionResult {
 
 /// The status of the transaction during its life from the tx pool until the block.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "rkyv", archive(check_bytes))]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TransactionStatus {
     /// Transaction was submitted into the txpool

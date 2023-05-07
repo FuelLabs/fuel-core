@@ -43,16 +43,15 @@ impl StorageInspect<ContractsAssets> for Database {
         &self,
         key: &<ContractsAssets as Mappable>::Key,
     ) -> Result<Option<Cow<<ContractsAssets as Mappable>::OwnedValue>>, Self::Error> {
-        self.get(key.as_ref(), Column::ContractsAssets)
-            .map_err(Into::into)
+        let value = self.get(key.as_ref(), Column::ContractsAssets)?;
+        Ok(value.map(|b| Cow::Owned(b.owned())))
     }
 
     fn contains_key(
         &self,
         key: &<ContractsAssets as Mappable>::Key,
     ) -> Result<bool, Self::Error> {
-        self.contains_key(key.as_ref(), Column::ContractsAssets)
-            .map_err(Into::into)
+        Ok(self.contains_key(key.as_ref(), Column::ContractsAssets)?)
     }
 }
 
@@ -62,8 +61,7 @@ impl StorageMutate<ContractsAssets> for Database {
         key: &<ContractsAssets as Mappable>::Key,
         value: &<ContractsAssets as Mappable>::Value,
     ) -> Result<Option<<ContractsAssets as Mappable>::OwnedValue>, Self::Error> {
-        let prev = Database::insert(self, key.as_ref(), Column::ContractsAssets, value)
-            .map_err(Into::into);
+        let prev = Database::insert(self, key.as_ref(), Column::ContractsAssets, value);
 
         // Get latest metadata entry for this contract id
         let prev_metadata = self
@@ -88,7 +86,7 @@ impl StorageMutate<ContractsAssets> for Database {
         self.storage::<ContractsAssetsMerkleMetadata>()
             .insert(key.contract_id(), &metadata)?;
 
-        prev
+        Ok(prev?.map(|b| b.owned()))
     }
 
     fn remove(
@@ -96,7 +94,7 @@ impl StorageMutate<ContractsAssets> for Database {
         key: &<ContractsAssets as Mappable>::Key,
     ) -> Result<Option<<ContractsAssets as Mappable>::OwnedValue>, Self::Error> {
         let prev = Database::remove(self, key.as_ref(), Column::ContractsAssets)
-            .map_err(Into::into);
+;
 
         // Get latest metadata entry for this contract id
         let prev_metadata = self
@@ -130,7 +128,7 @@ impl StorageMutate<ContractsAssets> for Database {
             }
         }
 
-        prev
+        Ok(prev?.map(|b| b.owned()))
     }
 }
 

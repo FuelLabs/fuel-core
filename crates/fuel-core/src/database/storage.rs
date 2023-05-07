@@ -23,8 +23,10 @@ use fuel_core_types::{
         Nonce,
     },
 };
-use serde::{
-    de::DeserializeOwned,
+use rkyv::{
+    de::deserializers::SharedDeserializeMap,
+    validation::validators::DefaultValidator,
+    Archive,
     Serialize,
 };
 use std::{
@@ -33,7 +35,15 @@ use std::{
 };
 
 /// Metadata for dense Merkle trees
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone,
+    serde::Serialize,
+    serde::Deserialize,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[archive(check_bytes)]
 pub struct DenseMerkleMetadata {
     /// The root hash of the dense Merkle tree structure
     pub root: MerkleRoot,
@@ -54,7 +64,15 @@ impl Default for DenseMerkleMetadata {
 }
 
 /// Metadata for sparse Merkle trees
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone,
+    serde::Serialize,
+    serde::Deserialize,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[archive(check_bytes)]
 pub struct SparseMerkleMetadata {
     /// The root hash of the sparse Merkle tree structure
     pub root: MerkleRoot,
@@ -196,44 +214,62 @@ impl DatabaseColumn for ContractsStateMerkleMetadata {
     }
 }
 
-impl<T> StorageInspect<T> for Database
+impl<'a, T> StorageInspect<T> for Database
 where
     T: Mappable + DatabaseColumn,
     T::Key: ToDatabaseKey,
-    T::OwnedValue: DeserializeOwned,
+    T::OwnedValue: Archive,
+    <<T as Mappable>::OwnedValue as Archive>::Archived:
+        rkyv::CheckBytes<DefaultValidator<'a>>,
+    <<T as Mappable>::OwnedValue as Archive>::Archived:
+        rkyv::Deserialize<<T as Mappable>::OwnedValue, SharedDeserializeMap>,
+    <<T as Mappable>::OwnedValue as Archive>::Archived: 'a,
 {
     type Error = StorageError;
 
     fn get(&self, key: &T::Key) -> StorageResult<Option<Cow<T::OwnedValue>>> {
-        self.get(key.database_key().as_ref(), T::column())
-            .map_err(Into::into)
+        let value = self.get(key.database_key().as_ref(), T::column())?;
+        Ok(value.map(|b| Cow::Owned(b.owned())))
     }
 
     fn contains_key(&self, key: &T::Key) -> StorageResult<bool> {
-        self.contains_key(key.database_key().as_ref(), T::column())
-            .map_err(Into::into)
+        Ok(self.contains_key(key.database_key().as_ref(), T::column())?)
     }
 }
 
-impl<T> StorageMutate<T> for Database
+impl<'a, T> StorageMutate<T> for Database
 where
     T: Mappable + DatabaseColumn,
     T::Key: ToDatabaseKey,
-    T::Value: Serialize,
-    T::OwnedValue: DeserializeOwned,
+    <T as Mappable>::Value: Archive,
+    <T as Mappable>::Value: 'a,
+    <T as Mappable>::Value: Serialize<rkyv::ser::serializers::AllocSerializer<4096>>,
+    <T as Mappable>::OwnedValue: Archive,
+    <T as Mappable>::OwnedValue: Serialize<rkyv::ser::serializers::AllocSerializer<4096>>,
+    <<T as Mappable>::OwnedValue as Archive>::Archived:
+        rkyv::CheckBytes<DefaultValidator<'a>>,
+    // <T as Mappable>::OwnedValue: rkyv::CheckBytes<DefaultValidator<'a>>,
+    // <T as Mappable>::OwnedValue: rkyv::Deserialize<<T as Mappable>::OwnedValue, SharedDeserializeMap>,
+    <<T as Mappable>::OwnedValue as Archive>::Archived:
+        rkyv::CheckBytes<DefaultValidator<'a>>,
+    <<T as Mappable>::OwnedValue as Archive>::Archived:
+        rkyv::Deserialize<<T as Mappable>::OwnedValue, SharedDeserializeMap>,
+    <<T as Mappable>::Value as Archive>::Archived:
+        rkyv::Deserialize<<T as Mappable>::Value, SharedDeserializeMap>,
+    <<T as Mappable>::OwnedValue as Archive>::Archived: 'a,
 {
     fn insert(
         &mut self,
         key: &T::Key,
         value: &T::Value,
     ) -> StorageResult<Option<T::OwnedValue>> {
-        Database::insert(self, key.database_key().as_ref(), T::column(), &value)
-            .map_err(Into::into)
+        let v = Database::insert(self, key.database_key().as_ref(), T::column(), value)?;
+        Ok(v.map(|b| b.owned()))
     }
 
     fn remove(&mut self, key: &T::Key) -> StorageResult<Option<T::OwnedValue>> {
-        Database::remove(self, key.database_key().as_ref(), T::column())
-            .map_err(Into::into)
+        let v = Database::remove(self, key.database_key().as_ref(), T::column())?;
+        Ok(v.map(|b| b.owned()))
     }
 }
 

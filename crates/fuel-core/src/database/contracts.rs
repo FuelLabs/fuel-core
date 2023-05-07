@@ -13,6 +13,7 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         ContractsRawCode,
     },
+    ContractInfo,
     ContractsAssetKey,
     Error as StorageError,
     Mappable,
@@ -74,8 +75,12 @@ impl StorageMutate<ContractsRawCode> for Database {
         key: &<ContractsRawCode as Mappable>::Key,
         value: &<ContractsRawCode as Mappable>::Value,
     ) -> Result<Option<<ContractsRawCode as Mappable>::OwnedValue>, Self::Error> {
-        let existing =
-            Database::replace(self, key.as_ref(), Column::ContractsRawCode, value)?;
+        let existing = Database::replace(
+            self,
+            key.as_ref(),
+            Column::ContractsRawCode,
+            value.as_ref(),
+        )?;
         Ok(existing.1.map(Contract::from))
     }
 
@@ -160,7 +165,7 @@ impl Database {
             .into_owned()
             .into();
 
-        let (salt, _) = self
+        let ContractInfo { salt, .. } = self
             .storage::<ContractsInfo>()
             .get(&contract_id)
             .unwrap()
@@ -187,9 +192,9 @@ impl Database {
 
                 // We don't need to store ContractId which is the first 32 bytes of this
                 // key, as this Vec is already attached to that ContractId
-                let state_key = Bytes32::new(safe_res.0[32..].try_into()?);
+                let state_key = Bytes32::new(safe_res.key[32..].try_into()?);
 
-                Ok((state_key, safe_res.1))
+                Ok((state_key, safe_res.value.owned()))
             })
             .filter(|val| val.is_ok())
             .collect::<DatabaseResult<Vec<(Bytes32, Bytes32)>>>()?,
@@ -201,13 +206,12 @@ impl Database {
                 Some(contract_id.as_ref()),
             )
             .map(|res| {
-                let safe_res = res?;
+                let row = res?;
 
-                let asset_id = AssetId::new(
-                    safe_res.0[32..].try_into().map_err(DatabaseError::from)?,
-                );
+                let asset_id =
+                    AssetId::new(row.key[32..].try_into().map_err(DatabaseError::from)?);
 
-                Ok((asset_id, safe_res.1))
+                Ok((asset_id, row.value.owned()))
             })
             .filter(|val| val.is_ok())
             .collect::<StorageResult<Vec<(AssetId, u64)>>>()?,
@@ -238,8 +242,11 @@ impl Database {
             direction,
         )
         .map(|res| {
-            res.map(|(key, balance)| {
-                (AssetId::new(key[32..].try_into().unwrap()), balance)
+            res.map(|row| {
+                (
+                    AssetId::new(row.key[32..].try_into().unwrap()),
+                    row.value.owned(),
+                )
             })
         })
     }
@@ -247,9 +254,9 @@ impl Database {
     pub fn get_contract_config(&self) -> StorageResult<Option<Vec<ContractConfig>>> {
         let configs = self
             .iter_all::<Vec<u8>, Word>(Column::ContractsRawCode, None)
-            .map(|raw_contract_id| -> StorageResult<ContractConfig> {
+            .map(|row| -> StorageResult<ContractConfig> {
                 let contract_id = ContractId::new(
-                    raw_contract_id.unwrap().0[..32]
+                    row.unwrap().key[..32]
                         .try_into()
                         .map_err(DatabaseError::from)?,
                 );

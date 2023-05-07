@@ -1390,7 +1390,11 @@ where
         receipts: &[Receipt],
         db: &mut Database,
     ) -> ExecutorResult<()> {
-        if db.storage::<Receipts>().insert(tx_id, receipts)?.is_some() {
+        if db
+            .storage::<Receipts>()
+            .insert(tx_id, &receipts.to_vec())?
+            .is_some()
+        {
             return Err(ExecutorError::OutputAlreadyExists)
         }
         Ok(())

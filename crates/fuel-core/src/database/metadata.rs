@@ -6,6 +6,8 @@ use crate::database::{
 };
 use fuel_core_chain_config::ChainConfig;
 
+use super::DbValue;
+
 pub(crate) const DB_VERSION_KEY: &[u8] = b"version";
 pub(crate) const CHAIN_NAME_KEY: &[u8] = b"chain_name";
 
@@ -18,7 +20,7 @@ impl Database {
         // initialize chain name if not set
         if self.get_chain_name()?.is_none() {
             self.insert(CHAIN_NAME_KEY, Column::Metadata, &config.chain_name)
-                .and_then(|v: Option<String>| {
+                .and_then(|v: Option<DbValue<String>>| {
                     if v.is_some() {
                         Err(DatabaseError::ChainAlreadyInitialized)
                     } else {
@@ -29,6 +31,7 @@ impl Database {
 
         // Ensure the database version is correct
         if let Some(version) = self.get::<u32>(DB_VERSION_KEY, Column::Metadata)? {
+            let version = version.owned();
             if version != DB_VERSION {
                 return Err(DatabaseError::InvalidDatabaseVersion {
                     found: version,
@@ -36,13 +39,17 @@ impl Database {
                 })?
             }
         } else {
-            let _: Option<u32> =
+            let _: Option<DbValue<u32>> =
                 self.insert(DB_VERSION_KEY, Column::Metadata, &DB_VERSION)?;
         }
         Ok(())
     }
 
     pub fn get_chain_name(&self) -> DatabaseResult<Option<String>> {
-        self.get(CHAIN_NAME_KEY, Column::Metadata)
+        if let Some(name) = self.get(CHAIN_NAME_KEY, Column::Metadata)? {
+            Ok(Some(name.owned()))
+        } else {
+            Ok(None)
+        }
     }
 }

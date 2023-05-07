@@ -29,6 +29,8 @@ use fuel_core_types::{
 };
 use std::borrow::Cow;
 
+use super::DbValue;
+
 // TODO: Reuse `fuel_vm::storage::double_key` macro.
 pub fn owner_coin_id_key(owner: &Address, coin_id: &UtxoId) -> OwnedCoinKey {
     let mut default = [0u8; Address::LEN + TxId::LEN + 1];
@@ -66,12 +68,16 @@ impl StorageInspect<Coins> for Database {
     type Error = StorageError;
 
     fn get(&self, key: &UtxoId) -> Result<Option<Cow<CompressedCoin>>, Self::Error> {
-        Database::get(self, &utxo_id_to_bytes(key), Column::Coins).map_err(Into::into)
+        let value = Database::get(self, &utxo_id_to_bytes(key), Column::Coins)?;
+        Ok(value.map(|b| Cow::Owned(b.owned())))
     }
 
     fn contains_key(&self, key: &UtxoId) -> Result<bool, Self::Error> {
-        Database::contains_key(self, &utxo_id_to_bytes(key), Column::Coins)
-            .map_err(Into::into)
+        Ok(Database::contains_key(
+            self,
+            &utxo_id_to_bytes(key),
+            Column::Coins,
+        )?)
     }
 }
 
@@ -87,12 +93,13 @@ impl StorageMutate<Coins> for Database {
         // insert secondary index by owner
         self.storage_as_mut::<OwnedCoins>()
             .insert(&coin_by_owner, &true)?;
-        Ok(insert)
+        Ok(insert.map(|b| b.owned()))
     }
 
     fn remove(&mut self, key: &UtxoId) -> Result<Option<CompressedCoin>, Self::Error> {
-        let coin: Option<CompressedCoin> =
+        let coin: Option<DbValue<CompressedCoin>> =
             Database::remove(self, &utxo_id_to_bytes(key), Column::Coins)?;
+        let coin = coin.map(|b| b.owned());
 
         // cleanup secondary index
         if let Some(coin) = &coin {
@@ -119,10 +126,10 @@ impl Database {
         )
         // Safety: key is always 64 bytes
         .map(|res| {
-            res.map(|(key, _)| {
+            res.map(|row| {
                 UtxoId::new(
-                    TxId::try_from(&key[32..64]).expect("The slice has size 32"),
-                    key[64],
+                    TxId::try_from(&row.key[32..64]).expect("The slice has size 32"),
+                    row.key[64],
                 )
             })
         })
@@ -142,21 +149,23 @@ impl Database {
         let configs = self
             .iter_all::<Vec<u8>, CompressedCoin>(Column::Coins, None)
             .map(|raw_coin| -> DatabaseResult<CoinConfig> {
-                let coin = raw_coin?;
+                let row = raw_coin?;
 
                 let byte_id =
-                    Bytes32::new(coin.0[..32].try_into().map_err(DatabaseError::from)?);
-                let output_index = coin.0[32];
+                    Bytes32::new(row.key[..32].try_into().map_err(DatabaseError::from)?);
+                let output_index = row.key[32];
+
+                let value = row.value.owned();
 
                 Ok(CoinConfig {
                     tx_id: Some(byte_id),
                     output_index: Some(output_index),
-                    tx_pointer_block_height: Some(coin.1.tx_pointer.block_height()),
-                    tx_pointer_tx_idx: Some(coin.1.tx_pointer.tx_index()),
-                    maturity: Some(coin.1.maturity),
-                    owner: coin.1.owner,
-                    amount: coin.1.amount,
-                    asset_id: coin.1.asset_id,
+                    tx_pointer_block_height: Some(value.tx_pointer.block_height()),
+                    tx_pointer_tx_idx: Some(value.tx_pointer.tx_index()),
+                    maturity: Some(value.maturity),
+                    owner: value.owner,
+                    amount: value.amount,
+                    asset_id: value.asset_id,
                 })
             })
             .collect::<DatabaseResult<Vec<CoinConfig>>>()?;

@@ -4,6 +4,11 @@ use crate::fuel_tx::TxPointer;
 use fuel_vm_private::fuel_tx::UtxoId;
 
 /// Contains information related to the latest contract utxo
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[cfg_attr(feature = "rkyv", archive(check_bytes))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct ContractUtxoInfo {

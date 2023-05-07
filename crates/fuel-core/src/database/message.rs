@@ -28,14 +28,19 @@ use std::{
     ops::Deref,
 };
 
-use super::storage::DatabaseColumn;
+use super::{
+    storage::DatabaseColumn,
+    DbValue,
+};
 
 impl StorageInspect<Messages> for Database {
     type Error = StorageError;
 
     fn get(&self, key: &Nonce) -> Result<Option<Cow<Message>>, Self::Error> {
         let key = key.database_key();
-        Database::get(self, key.as_ref(), Column::Messages).map_err(Into::into)
+        let value: Option<DbValue<Message>> =
+            Database::get(self, key.as_ref(), Column::Messages)?;
+        Ok(value.map(|b| Cow::Owned(b.owned())))
     }
 
     fn contains_key(&self, key: &Nonce) -> Result<bool, Self::Error> {
@@ -55,29 +60,29 @@ impl StorageMutate<Messages> for Database {
             Database::insert(self, key.database_key().as_ref(), Column::Messages, value)?;
 
         // insert secondary record by owner
-        let _: Option<bool> = Database::insert(
+        let _: Option<DbValue<bool>> = Database::insert(
             self,
             owner_msg_id_key(&value.recipient, key),
             Column::OwnedMessageIds,
             &true,
         )?;
 
-        Ok(result)
+        Ok(result.map(|b| b.owned()))
     }
 
     fn remove(&mut self, key: &Nonce) -> Result<Option<Message>, Self::Error> {
-        let result: Option<Message> =
+        let result: Option<DbValue<Message>> =
             Database::remove(self, key.database_key().as_ref(), Column::Messages)?;
 
-        if let Some(message) = &result {
+        if let Some(message) = result.clone() {
             Database::remove::<bool>(
                 self,
-                &owner_msg_id_key(&message.recipient, key),
+                &owner_msg_id_key(&message.owned().recipient, key),
                 Column::OwnedMessageIds,
             )?;
         }
 
-        Ok(result)
+        Ok(result.map(|b| b.owned()))
     }
 }
 
@@ -101,8 +106,8 @@ impl Database {
             direction,
         )
         .map(|res| {
-            res.map(|(key, _)| {
-                Nonce::try_from(&key[Address::LEN..Address::LEN + Nonce::LEN])
+            res.map(|row| {
+                Nonce::try_from(&row.key[Address::LEN..Address::LEN + Nonce::LEN])
                     .expect("key is always {Nonce::LEN} bytes")
             })
         })
@@ -115,7 +120,7 @@ impl Database {
     ) -> impl Iterator<Item = DatabaseResult<Message>> + '_ {
         let start = start.map(|v| v.deref().to_vec());
         self.iter_all_by_start::<Vec<u8>, Message, _>(Column::Messages, start, direction)
-            .map(|res| res.map(|(_, message)| message))
+            .map(|res| res.map(|row| row.value.owned()))
     }
 
     pub fn get_message_config(&self) -> StorageResult<Option<Vec<MessageConfig>>> {

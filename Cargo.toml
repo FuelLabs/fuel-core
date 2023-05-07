@@ -36,6 +36,7 @@ exclude = ["version-compatibility"]
 codegen-units = 1
 lto = "fat"
 panic = "abort"
+debug = true
 
 [workspace.package]
 authors = ["Fuel Labs <contact@fuel.sh>"]
@@ -92,6 +93,7 @@ futures = "0.3"
 postcard = "1.0"
 tracing-attributes = "0.1"
 tracing-subscriber = "0.3"
+rkyv = { version = "0.7", features = ["validation"] }
 serde = "1.0"
 serde_json = "1.0"
 # enable cookie store to support L7 sticky sessions
@@ -107,3 +109,7 @@ itertools = "0.10"
 insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
+
+[patch.crates-io]
+fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "dento/rkyv-db" }
+tai64 = { git = "https://github.com/Dentosal/rustcrypto-formats", branch = "tai64-rkyv-support" }

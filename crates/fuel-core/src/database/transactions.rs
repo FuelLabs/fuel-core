@@ -44,7 +44,7 @@ impl Database {
             start,
             direction,
         )
-        .map(|res| res.map(|(_, tx)| tx))
+        .map(|res| res.map(|row| row.value.owned()))
     }
 
     /// Iterates over a KV mapping of `[address + block height + tx idx] => transaction id`. This
@@ -66,7 +66,12 @@ impl Database {
             direction,
         )
         .map(|res| {
-            res.map(|(key, tx_id)| (TxPointer::new(key.block_height, key.tx_idx), tx_id))
+            res.map(|row| {
+                (
+                    TxPointer::new(row.key.block_height, row.key.tx_idx),
+                    row.value.owned(),
+                )
+            })
         })
     }
 
@@ -77,11 +82,13 @@ impl Database {
         tx_idx: TransactionIndex,
         tx_id: &Bytes32,
     ) -> DatabaseResult<Option<Bytes32>> {
-        self.insert(
-            owned_tx_index_key(owner, block_height, tx_idx),
-            Column::TransactionsByOwnerBlockIdx,
-            tx_id,
-        )
+        Ok(self
+            .insert(
+                owned_tx_index_key(owner, block_height, tx_idx),
+                Column::TransactionsByOwnerBlockIdx,
+                tx_id,
+            )?
+            .map(|b| b.owned()))
     }
 
     pub fn update_tx_status(
@@ -89,14 +96,17 @@ impl Database {
         id: &Bytes32,
         status: TransactionStatus,
     ) -> DatabaseResult<Option<TransactionStatus>> {
-        self.insert(id, Column::TransactionStatus, &status)
+        Ok(self
+            .insert(id, Column::TransactionStatus, &status)?
+            .map(|b| b.owned()))
     }
 
     pub fn get_tx_status(
         &self,
         id: &Bytes32,
     ) -> DatabaseResult<Option<TransactionStatus>> {
-        self.get(&id.deref()[..], Column::TransactionStatus)
+        let txstatus = self.get(&id.deref()[..], Column::TransactionStatus)?;
+        Ok(txstatus.map(|b| b.owned()))
     }
 }
 
