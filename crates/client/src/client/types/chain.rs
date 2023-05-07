@@ -1,5 +1,6 @@
 use crate::client::schema;
 
+#[derive(Clone, Debug)]
 pub struct ConsensusParameters {
     pub contract_max_size: u64,
     pub max_inputs: u64,

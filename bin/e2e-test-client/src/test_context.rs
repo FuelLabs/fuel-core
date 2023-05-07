@@ -7,6 +7,7 @@ use anyhow::{
 use fuel_core_client::client::{
     types::{
         CoinType,
+        ConsensusParameters,
         TransactionStatus,
     },
     FuelClient,
@@ -23,7 +24,6 @@ use fuel_core_types::{
         PublicKey,
     },
     fuel_tx::{
-        ConsensusParameters,
         Finalizable,
         Input,
         Output,
