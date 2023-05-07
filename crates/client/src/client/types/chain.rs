@@ -21,20 +21,20 @@ pub struct ConsensusParameters {
 impl From<ConsensusParameters> for fuel_core_types::fuel_tx::ConsensusParameters {
     fn from(value: ConsensusParameters) -> Self {
         Self {
-            contract_max_size: value.contract_max_size.into(),
-            max_inputs: value.max_inputs.into(),
-            max_outputs: value.max_outputs.into(),
-            max_witnesses: value.max_witnesses.into(),
-            max_gas_per_tx: value.max_gas_per_tx.into(),
-            max_script_length: value.max_script_length.into(),
-            max_script_data_length: value.max_script_data_length.into(),
-            max_storage_slots: value.max_storage_slots.into(),
-            max_predicate_length: value.max_predicate_length.into(),
-            max_predicate_data_length: value.max_predicate_data_length.into(),
-            gas_price_factor: value.gas_price_factor.into(),
-            gas_per_byte: value.gas_per_byte.into(),
-            max_message_data_length: value.max_message_data_length.into(),
-            chain_id: value.chain_id.into(),
+            contract_max_size: value.contract_max_size,
+            max_inputs: value.max_inputs,
+            max_outputs: value.max_outputs,
+            max_witnesses: value.max_witnesses,
+            max_gas_per_tx: value.max_gas_per_tx,
+            max_script_length: value.max_script_length,
+            max_script_data_length: value.max_script_data_length,
+            max_storage_slots: value.max_storage_slots,
+            max_predicate_length: value.max_predicate_length,
+            max_predicate_data_length: value.max_predicate_data_length,
+            gas_price_factor: value.gas_price_factor,
+            gas_per_byte: value.gas_per_byte,
+            max_message_data_length: value.max_message_data_length,
+            chain_id: value.chain_id,
         }
     }
 }
