@@ -11,10 +11,7 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_client::client::{
-    schema::coins::CoinType,
-    FuelClient,
-};
+use fuel_core_client::client::FuelClient;
 use fuel_core_types::fuel_tx::*;
 use rand::{
     prelude::StdRng,
@@ -23,6 +20,7 @@ use rand::{
 
 mod coin {
     use super::*;
+    use fuel_core_client::client::types::CoinType;
     use fuel_core_types::fuel_crypto::SecretKey;
     use rand::Rng;
 
@@ -120,7 +118,7 @@ mod coin {
                         secret_key,
                         coin.utxo_id.0 .0,
                         coin.amount.0,
-                        coin.asset_id.0 .0,
+                        coin.asset_id.0 .0 .0.into(),
                         Default::default(),
                         coin.maturity.into(),
                     );
