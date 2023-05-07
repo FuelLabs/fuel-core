@@ -19,7 +19,7 @@ impl From<schema::chain::ChainInfo> for ChainInfo {
         Self {
             base_chain_height: value.base_chain_height.into(),
             name: value.name,
-            peer_count: value.peer_count.into(),
+            peer_count: value.peer_count,
             latest_block: value.latest_block.into(),
             consensus_parameters: value.consensus_parameters.into(),
         }

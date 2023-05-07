@@ -552,7 +552,7 @@ impl FuelClient {
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
-                format!("Failed to get status for transaction {:?}", status_result),
+                format!("Failed to get status for transaction {status_result:?}"),
             ))
         }
     }
@@ -704,8 +704,7 @@ impl FuelClient {
             .coins_to_spend
             .iter()
             .map(|v| v.iter().cloned().map(Into::into).collect::<Vec<_>>())
-            .collect::<Vec<_>>()
-            .into();
+            .collect::<Vec<_>>();
         Ok(coins_per_asset)
     }
 

@@ -91,8 +91,7 @@ impl Wallet {
             .chain_info()
             .await
             .expect("failed to get chain info")
-            .consensus_parameters
-            .into();
+            .consensus_parameters;
 
         Self {
             secret,
@@ -177,10 +176,10 @@ impl Wallet {
                 tx.add_unsigned_coin_input(
                     self.secret,
                     coin.utxo_id.clone().into(),
-                    coin.amount.clone().into(),
+                    coin.amount,
                     asset_id.into(),
                     Default::default(),
-                    coin.maturity.clone().into(),
+                    coin.maturity.into(),
                 );
             }
         }
@@ -255,10 +254,10 @@ impl Wallet {
                 tx.add_unsigned_coin_input(
                     self.secret,
                     coin.utxo_id.clone().into(),
-                    coin.amount.clone().into(),
+                    coin.amount,
                     asset_id.into(),
                     Default::default(),
-                    coin.maturity.clone().into(),
+                    coin.maturity.into(),
                 );
             }
         }
