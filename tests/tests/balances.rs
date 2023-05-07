@@ -10,7 +10,7 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
-    schema::coins::CoinType,
+    types::CoinType,
     FuelClient,
     PageDirection,
     PaginationRequest,

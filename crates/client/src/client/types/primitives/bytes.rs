@@ -15,6 +15,10 @@ impl<const N: usize> Bytes<N> {
     pub const fn new(bytes: [u8; N]) -> Self {
         Self(bytes)
     }
+
+    pub const fn zeroed() -> Self {
+        Self([0; N])
+    }
 }
 
 impl<const N: usize> Default for Bytes<N> {

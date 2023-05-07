@@ -11,6 +11,12 @@ use std::{
 #[derive(Debug, Clone, Default)]
 pub struct BytesN(pub Vec<u8>);
 
+impl BytesN {
+    pub const fn zeroed() -> Self {
+        Self(vec![])
+    }
+}
+
 impl AsRef<[u8]> for BytesN {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()

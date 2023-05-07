@@ -9,6 +9,7 @@ use std::{
         Debug,
         Display,
         Formatter,
+        LowerHex,
     },
     str::FromStr,
 };
@@ -22,6 +23,12 @@ macro_rules! client_type_scalar {
     ($id:ident, $base_id:ident) => {
         #[derive(Debug, Clone, Default)]
         pub struct $id(pub HexFormatted<primitives::$base_id>);
+
+        impl $id {
+            pub const fn new(primitive: primitives::$base_id) -> Self {
+                Self(HexFormatted::<_>(primitive))
+            }
+        }
 
         impl FromStr for $id {
             type Err = HexFormatError;
@@ -53,15 +60,15 @@ macro_rules! client_type_scalar {
             }
         }
 
-        impl ClientScalar for $id {
-            type PrimitiveType = primitives::$base_id;
-        }
-
-        impl std::fmt::LowerHex for $id {
+        impl LowerHex for $id {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 let val = &self.0;
                 std::fmt::LowerHex::fmt(val, f)
             }
+        }
+
+        impl ClientScalar for $id {
+            type PrimitiveType = primitives::$base_id;
         }
     };
 }
@@ -88,4 +95,17 @@ impl From<Tai64> for Tai64Timestamp {
     fn from(value: Tai64) -> Self {
         Self(value)
     }
+}
+
+impl ContractId {
+    /// Seed for the calculation of the contract id from its code.
+    ///
+    /// <https://github.com/FuelLabs/fuel-specs/blob/master/src/protocol/id/contract.md>
+    pub const SEED: [u8; 4] = 0x4655454C_u32.to_be_bytes();
+}
+
+impl AssetId {
+    /// The base native asset of the Fuel protocol.
+    pub const BASE: AssetId =
+        AssetId::new(<AssetId as ClientScalar>::PrimitiveType::zeroed());
 }
