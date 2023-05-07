@@ -323,7 +323,7 @@ async fn block_connection_5(
                 blocks
                     .results
                     .into_iter()
-                    .map(|b| b.header.height.0)
+                    .map(|b| b.header.height)
                     .collect_vec(),
                 (0..5).collect_vec()
             );
@@ -333,7 +333,7 @@ async fn block_connection_5(
                 blocks
                     .results
                     .into_iter()
-                    .map(|b| b.header.height.0)
+                    .map(|b| b.header.height)
                     .collect_vec(),
                 rev(5..10).collect_vec()
             );

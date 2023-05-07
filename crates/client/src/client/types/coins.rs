@@ -9,12 +9,24 @@ use crate::client::{
     PaginatedResult,
 };
 
+#[derive(Debug)]
 pub enum CoinType {
     Coin(Coin),
     MessageCoin(MessageCoin),
     Unknown,
 }
 
+impl CoinType {
+    pub fn amount(&self) -> u64 {
+        match self {
+            CoinType::Coin(c) => c.amount,
+            CoinType::MessageCoin(m) => m.amount,
+            CoinType::Unknown => 0,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Coin {
     pub amount: u64,
     pub block_created: u32,
@@ -24,6 +36,7 @@ pub struct Coin {
     pub owner: Address,
 }
 
+#[derive(Debug)]
 pub struct MessageCoin {
     pub amount: u64,
     pub sender: Address,
