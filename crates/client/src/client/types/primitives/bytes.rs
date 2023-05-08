@@ -69,7 +69,7 @@ where
 {
     fn from(value: T) -> Self {
         let b: [u8; N] = value.into();
-        b.into()
+        Self(b)
     }
 }
 
