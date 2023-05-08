@@ -4,6 +4,7 @@ use crate::client::{
     HexFormatted,
 };
 
+use crate::client::types::primitives::Bytes32;
 use std::{
     fmt::{
         Debug,
@@ -21,12 +22,24 @@ pub trait ClientScalar {
 
 macro_rules! client_type_scalar {
     ($id:ident, $base_id:ident) => {
-        #[derive(Debug, Clone, Default)]
+        #[derive(Debug, Clone, Default, PartialEq)]
         pub struct $id(pub HexFormatted<primitives::$base_id>);
 
         impl $id {
-            pub const fn new(primitive: primitives::$base_id) -> Self {
+            pub const fn new(
+                raw: <primitives::$base_id as primitives::Primitive>::Raw,
+            ) -> Self {
+                let primitive = primitives::$base_id::new(raw);
                 Self(HexFormatted::<_>(primitive))
+            }
+        }
+
+        impl AsRef<[u8]> for $id {
+            fn as_ref(&self) -> &[u8] {
+                // s     -> $id
+                // s.0   -> HexFormatted<$base_id>
+                // s.0.0 -> $base_id
+                self.0 .0.as_ref()
             }
         }
 
@@ -49,8 +62,8 @@ macro_rules! client_type_scalar {
         }
 
         impl From<primitives::$base_id> for $id {
-            fn from(s: primitives::$base_id) -> Self {
-                $id(HexFormatted::<primitives::$base_id>(s))
+            fn from(primitive: primitives::$base_id) -> Self {
+                $id(HexFormatted::<primitives::$base_id>(primitive))
             }
         }
 
@@ -86,7 +99,21 @@ client_type_scalar!(PublicKey, Bytes64);
 client_type_scalar!(Salt, Bytes32);
 client_type_scalar!(Signature, Bytes64);
 client_type_scalar!(TransactionId, Bytes32);
-client_type_scalar!(UtxoId, UtxoId);
+client_type_scalar!(UtxoId, Bytes33);
+
+impl Copy for Address {}
+impl Copy for AssetId {}
+impl Copy for BlockId {}
+impl Copy for ContractId {}
+impl Copy for Hash {}
+impl Copy for MerkleRoot {}
+impl Copy for MessageId {}
+impl Copy for Nonce {}
+impl Copy for PublicKey {}
+impl Copy for Salt {}
+impl Copy for Signature {}
+impl Copy for TransactionId {}
+impl Copy for UtxoId {}
 
 #[derive(Debug)]
 pub struct Tai64Timestamp(pub Tai64);
@@ -107,5 +134,24 @@ impl ContractId {
 impl AssetId {
     /// The base native asset of the Fuel protocol.
     pub const BASE: AssetId =
-        AssetId::new(<AssetId as ClientScalar>::PrimitiveType::zeroed());
+        AssetId::new(<AssetId as ClientScalar>::PrimitiveType::zeroed().0);
+}
+
+impl UtxoId {
+    pub fn tx_id(&self) -> [u8; 32] {
+        let bytes = &self.0 .0 .0;
+        let mut tx_id = [0; 32];
+        tx_id.copy_from_slice(&bytes[0..32]);
+        tx_id
+    }
+
+    pub fn output_index(&self) -> u8 {
+        self.0 .0 .0[32]
+    }
+}
+
+impl From<UtxoId> for fuel_core_types::fuel_tx::UtxoId {
+    fn from(value: UtxoId) -> Self {
+        Self::new(value.tx_id().into(), value.output_index())
+    }
 }

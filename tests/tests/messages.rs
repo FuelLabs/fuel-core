@@ -131,7 +131,8 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
 
     // verify messages owner matches
     for message in result.results {
-        assert_eq!(message.recipient.0 .0, owner_a)
+        let recipient: Address = message.recipient.into();
+        assert_eq!(recipient, owner_a)
     }
 
     // get the messages from Owner B
@@ -143,7 +144,8 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
     // verify that Owner B has 1 message
     assert_eq!(result.results.len(), 1);
 
-    assert_eq!(result.results[0].recipient.0 .0, owner_b);
+    let recipient: Address = result.results[0].recipient.into();
+    assert_eq!(recipient, owner_b);
 
     // get the messages from Owner C
     let result = client
@@ -390,8 +392,8 @@ async fn can_get_message_proof() {
                 &(result.sender.into()),
                 &(result.recipient.into()),
                 &(result.nonce.into()),
-                result.amount.0,
-                &result.data,
+                result.amount,
+                result.data.as_ref(),
             );
 
             // Check message id is the same as the one passed in.
@@ -399,20 +401,15 @@ async fn can_get_message_proof() {
 
             // 2. Generate the block id. (full header)
             let mut hasher = Hasher::default();
-            hasher.input(Bytes32::from(result.message_block_header.prev_root).as_ref());
-            hasher.input(&result.message_block_header.height.0.to_be_bytes()[..]);
+            hasher.input(result.message_block_header.prev_root.as_ref());
+            hasher.input(&result.message_block_header.height.to_be_bytes()[..]);
             hasher.input(result.message_block_header.time.0 .0.to_be_bytes());
-            hasher.input(
-                Bytes32::from(result.message_block_header.application_hash).as_ref(),
-            );
+            hasher.input(result.message_block_header.application_hash.as_ref());
             let message_block_id = hasher.digest();
-            assert_eq!(
-                message_block_id,
-                Bytes32::from(result.message_block_header.id)
-            );
+            assert_eq!(message_block_id, result.message_block_header.id);
 
             // 3. Verify the message proof. (message receipt root, message id, proof index, proof set, num message receipts in the block)
-            let message_proof_index = result.message_proof.proof_index.0;
+            let message_proof_index = result.message_proof.proof_index;
             let message_proof_set: Vec<_> = result
                 .message_proof
                 .proof_set

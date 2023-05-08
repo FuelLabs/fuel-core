@@ -6,6 +6,13 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    types::{
+        primitives::UtxoId,
+        scalars::{
+            Address,
+            AssetId,
+        },
+    },
     FuelClient,
     PageDirection,
     PaginationRequest,
@@ -17,7 +24,6 @@ use fuel_core_storage::{
 use fuel_core_types::{
     entities::coins::coin::Coin,
     fuel_asm::*,
-    fuel_tx::*,
 };
 use rstest::rstest;
 
@@ -48,8 +54,8 @@ async fn first_5_coins(
     // setup test data in the node
     let coins: Vec<_> = (1..10usize)
         .map(|i| Coin {
-            utxo_id: UtxoId::new(Bytes32::from([i as u8; 32]), 0),
-            owner,
+            utxo_id: UtxoId::new([i as u8; 32].into(), 0),
+            owner: owner.into(),
             amount: i as Word,
             asset_id: Default::default(),
             maturity: Default::default(),
@@ -95,10 +101,14 @@ async fn only_asset_id_filtered_coins() {
     // setup test data in the node
     let coins: Vec<_> = (1..10usize)
         .map(|i| Coin {
-            utxo_id: UtxoId::new(Bytes32::from([i as u8; 32]), 0),
-            owner,
+            utxo_id: UtxoId::new([i as u8; 32].into(), 0),
+            owner: owner.0 .0 .0.into(),
             amount: i as Word,
-            asset_id: if i <= 5 { asset_id } else { Default::default() },
+            asset_id: if i <= 5 {
+                asset_id.0 .0 .0.into()
+            } else {
+                Default::default()
+            },
             maturity: Default::default(),
             tx_pointer: Default::default(),
         })
@@ -141,16 +151,16 @@ async fn only_asset_id_filtered_coins() {
 #[rstest]
 #[tokio::test]
 async fn get_coins_forwards_backwards(
-    #[values(Address::default(), Address::from([16; 32]))] owner: Address,
-    #[values(AssetId::from([1u8; 32]), AssetId::from([32u8; 32]))] asset_id: AssetId,
+    #[values(Address::default(), Address::new([16; 32]))] owner: Address,
+    #[values(AssetId::new([1u8; 32]), AssetId::new([32u8; 32]))] asset_id: AssetId,
 ) {
     // setup test data in the node
     let coins: Vec<Coin> = (1..11usize)
         .map(|i| Coin {
-            utxo_id: UtxoId::new(Bytes32::from([i as u8; 32]), 0),
-            owner,
+            utxo_id: UtxoId::new([i as u8; 32].into(), 0),
+            owner: owner.0 .0 .0.into(),
             amount: i as Word,
-            asset_id,
+            asset_id: asset_id.0 .0 .0.into(),
             maturity: Default::default(),
             tx_pointer: Default::default(),
         })

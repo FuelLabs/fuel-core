@@ -26,7 +26,7 @@ impl CoinType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Coin {
     pub amount: u64,
     pub block_created: u32,
@@ -36,7 +36,7 @@ pub struct Coin {
     pub owner: Address,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct MessageCoin {
     pub amount: u64,
     pub sender: Address,

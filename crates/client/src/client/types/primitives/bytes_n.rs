@@ -8,10 +8,14 @@ use std::{
     str::FromStr,
 };
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct BytesN(pub Vec<u8>);
 
 impl BytesN {
+    pub const fn new(vec: Vec<u8>) -> Self {
+        Self(vec)
+    }
+
     pub const fn zeroed() -> Self {
         Self(vec![])
     }
@@ -49,7 +53,9 @@ impl Len for BytesN {
     }
 }
 
-impl Primitive for BytesN {}
+impl Primitive for BytesN {
+    type Raw = Vec<u8>;
+}
 
 impl fmt::LowerHex for BytesN {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

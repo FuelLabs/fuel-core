@@ -7,7 +7,10 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
-    types::TransactionStatus,
+    types::{
+        scalars::PublicKey,
+        TransactionStatus,
+    },
     FuelClient,
     PageDirection,
     PaginationRequest,
@@ -113,15 +116,16 @@ async fn produce_block() {
             .unwrap();
         let actual_pub_key = block.block_producer().unwrap();
         let block_height: u32 = block.header.height.into();
-        let expected_pub_key = config
+        let expected_pub_key: PublicKey = config
             .consensus_key
             .unwrap()
             .expose_secret()
             .deref()
-            .public_key();
+            .public_key()
+            .into();
 
         assert!(1 == block_height);
-        assert_eq!(actual_pub_key, expected_pub_key);
+        assert_eq!(*actual_pub_key, expected_pub_key);
     } else {
         panic!("Wrong tx status");
     };
@@ -147,13 +151,14 @@ async fn produce_block_manually() {
     let block = client.block_by_height(1).await.unwrap().unwrap();
     assert_eq!(block.header.height, 1);
     let actual_pub_key = block.block_producer().unwrap();
-    let expected_pub_key = config
+    let expected_pub_key: PublicKey = config
         .consensus_key
         .unwrap()
         .expose_secret()
         .deref()
-        .public_key();
-    assert_eq!(actual_pub_key, expected_pub_key);
+        .public_key()
+        .into();
+    assert_eq!(*actual_pub_key, expected_pub_key);
 }
 
 #[tokio::test]

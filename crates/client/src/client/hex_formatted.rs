@@ -21,10 +21,10 @@ pub enum HexFormatError {
     HexError(String),
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct HexFormatted<T: Debug + Clone + Default>(pub T);
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct HexFormatted<T: Debug + Clone + Default + PartialEq>(pub T);
 
-impl<T: LowerHex + Debug + Clone + Default> Serialize for HexFormatted<T> {
+impl<T: LowerHex + Debug + Clone + Default + PartialEq> Serialize for HexFormatted<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -33,8 +33,8 @@ impl<T: LowerHex + Debug + Clone + Default> Serialize for HexFormatted<T> {
     }
 }
 
-impl<'de, T: FromStr<Err = E> + Debug + Clone + Default, E: Display> Deserialize<'de>
-    for HexFormatted<T>
+impl<'de, T: FromStr<Err = E> + Debug + Clone + Default + PartialEq, E: Display>
+    Deserialize<'de> for HexFormatted<T>
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -45,7 +45,7 @@ impl<'de, T: FromStr<Err = E> + Debug + Clone + Default, E: Display> Deserialize
     }
 }
 
-impl<T: FromStr<Err = E> + Debug + Clone + Default, E: Display> FromStr
+impl<T: FromStr<Err = E> + Debug + Clone + Default + PartialEq, E: Display> FromStr
     for HexFormatted<T>
 {
     type Err = HexFormatError;
@@ -57,13 +57,13 @@ impl<T: FromStr<Err = E> + Debug + Clone + Default, E: Display> FromStr
     }
 }
 
-impl<T: LowerHex + Debug + Clone + Default> Display for HexFormatted<T> {
+impl<T: LowerHex + Debug + Clone + Default + PartialEq> Display for HexFormatted<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "0x{:x}", self.0)
     }
 }
 
-impl<T: LowerHex + Debug + Clone + Default> LowerHex for HexFormatted<T> {
+impl<T: LowerHex + Debug + Clone + Default + PartialEq> LowerHex for HexFormatted<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "0x{:x}", self.0)
     }

@@ -10,15 +10,24 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
-    types::CoinType,
+    types::{
+        scalars::{
+            Address,
+            AssetId,
+        },
+        CoinType,
+    },
     FuelClient,
     PageDirection,
     PaginationRequest,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    fuel_tx::*,
-    fuel_types::Address,
+    fuel_tx::{
+        Input,
+        Output,
+        TransactionBuilder,
+    },
 };
 
 #[tokio::test]
@@ -44,9 +53,9 @@ async fn balance() {
                 tx_pointer_block_height: None,
                 tx_pointer_tx_idx: None,
                 maturity: None,
-                owner,
+                owner: owner.0 .0 .0.into(),
                 amount,
-                asset_id,
+                asset_id: asset_id.0 .0 .0.into(),
             })
             .collect(),
         ),
@@ -55,8 +64,8 @@ async fn balance() {
                 .into_iter()
                 .enumerate()
                 .map(|(nonce, (owner, amount))| MessageConfig {
-                    sender: owner,
-                    recipient: owner,
+                    sender: owner.0 .0 .0.into(),
+                    recipient: owner.0 .0 .0.into(),
                     nonce: (nonce as u64).into(),
                     amount,
                     data: vec![],
@@ -98,19 +107,19 @@ async fn balance() {
             match coin {
                 CoinType::Coin(coin) => tx.add_input(Input::coin_signed(
                     coin.utxo_id.into(),
-                    coin.owner.into(),
+                    coin.owner.0 .0 .0.into(),
                     coin.amount.into(),
-                    coin.asset_id.into(),
+                    coin.asset_id.0 .0 .0.into(),
                     Default::default(),
                     0,
                     coin.maturity.into(),
                 )),
                 CoinType::MessageCoin(message) => {
                     tx.add_input(Input::message_coin_signed(
-                        message.sender.into(),
-                        message.recipient.into(),
+                        message.sender.0 .0 .0.into(),
+                        message.recipient.0 .0 .0.into(),
                         message.amount.into(),
-                        message.nonce.into(),
+                        message.nonce.0 .0 .0.into(),
                         0,
                     ))
                 }
@@ -120,14 +129,14 @@ async fn balance() {
     }
     let tx = tx
         .add_output(Output::Coin {
-            to: Address::new([1u8; 32]),
+            to: Address::new([1u8; 32]).into(),
             amount: 1,
-            asset_id,
+            asset_id: asset_id.into(),
         })
         .add_output(Output::Change {
-            to: owner,
+            to: owner.into(),
             amount: 0,
-            asset_id,
+            asset_id: asset_id.into(),
         })
         .add_witness(Default::default())
         .finalize_as_transaction();
@@ -146,16 +155,16 @@ async fn balance() {
 
 #[tokio::test]
 async fn first_5_balances() {
-    let owner = Address::from([10u8; 32]);
+    let owner = Address::new([10u8; 32]);
     let asset_ids = (0..=5u8)
         .map(|i| AssetId::new([i; 32]))
         .collect::<Vec<AssetId>>();
 
-    let all_owners = vec![Address::default(), owner, Address::from([20u8; 32])];
+    let all_owners = vec![Address::default(), owner, Address::new([20u8; 32])];
     let coins = {
         // setup all coins for all owners
         let mut coins = vec![];
-        for owner in &all_owners {
+        for owner in all_owners {
             coins.extend(
                 asset_ids
                     .clone()
@@ -173,9 +182,9 @@ async fn first_5_balances() {
                         tx_pointer_block_height: None,
                         tx_pointer_tx_idx: None,
                         maturity: None,
-                        owner: *owner,
+                        owner: owner.into(),
                         amount,
-                        asset_id,
+                        asset_id: asset_id.into(),
                     }),
             );
         }
@@ -190,8 +199,8 @@ async fn first_5_balances() {
             messages.extend(vec![(owner, 60), (owner, 90)].into_iter().map(
                 |(owner, amount)| {
                     let message = MessageConfig {
-                        sender: *owner,
-                        recipient: *owner,
+                        sender: (*owner).into(),
+                        recipient: (*owner).into(),
                         nonce: (nonce as u64).into(),
                         amount,
                         data: vec![],
@@ -235,12 +244,12 @@ async fn first_5_balances() {
     assert_eq!(balances.len(), 5);
 
     // Base asset is 3 coins and 2 messages = 50 + 100 + 150 + 60 + 90
-    assert_eq!(balances[0].asset_id.0 .0, asset_ids[0]);
-    assert_eq!(balances[0].amount.0, 450);
+    assert_eq!(balances[0].asset_id, asset_ids[0]);
+    assert_eq!(balances[0].amount, 450);
 
     // Other assets are 3 coins = 50 + 100 + 150
     for i in 1..5 {
-        assert_eq!(balances[i].asset_id.0 .0, asset_ids[i]);
-        assert_eq!(balances[i].amount.0, 300);
+        assert_eq!(balances[i].asset_id, asset_ids[i]);
+        assert_eq!(balances[i].amount, 300);
     }
 }

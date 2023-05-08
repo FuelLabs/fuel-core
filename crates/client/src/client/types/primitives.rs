@@ -10,16 +10,18 @@ use std::{
 mod bytes;
 mod bytes_n;
 
-trait Len {
+pub trait Len {
     fn len(&self) -> usize;
 
     fn chunks(&self, chunk_size: usize) -> Chunks<u8>;
 }
 
-trait Primitive
+pub trait Primitive
 where
     Self: Default + AsRef<[u8]> + AsMut<[u8]> + Len,
 {
+    type Raw;
+
     fn from_str(s: &str) -> Result<Self, &'static str> {
         const ERR: &str = "Invalid encoded byte";
 
@@ -63,5 +65,6 @@ where
 
 pub use bytes_n::BytesN;
 pub type Bytes32 = Bytes<32>;
+pub type Bytes33 = Bytes<33>;
 pub type Bytes64 = Bytes<64>;
 pub use fuel_core_types::fuel_tx::UtxoId;
