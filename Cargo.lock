@@ -2930,6 +2930,8 @@ dependencies = [
 name = "fuel-core-tests"
 version = "0.0.0"
 dependencies = [
+ "async-trait",
+ "cynic",
  "ethers",
  "fuel-core",
  "fuel-core-client",

@@ -25,6 +25,8 @@ path = "tests/metrics.rs"
 required-features = ["metrics"]
 
 [dependencies]
+async-trait = { workspace = true }
+cynic = { workspace = true }
 ethers = "1.0.2"
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = ["dap", "test-helpers"] }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }

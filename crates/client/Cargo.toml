@@ -12,7 +12,7 @@ description = "Tx client and schema specification."
 
 [dependencies]
 anyhow = { workspace = true }
-cynic = { version = "2.2.1", features = ["http-reqwest"] }
+cynic = { workspace = true }
 derive_more = { version = "0.99" }
 eventsource-client = { version = "0.10.2", optional = true }
 fuel-core-types = { workspace = true, path = "../types", features = ["serde"] }
