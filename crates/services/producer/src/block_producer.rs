@@ -121,7 +121,6 @@ where
         transaction: Transaction,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
-        estimate_predicates: Option<bool>,
     ) -> anyhow::Result<Vec<Receipt>> {
         let height = match height {
             None => self.db.current_block_height()?,
@@ -139,12 +138,52 @@ where
             PartialFuelBlock::new(header, vec![transaction].into_iter().collect());
 
         let executor = self.executor.clone();
-        let estimate_predicates = estimate_predicates.unwrap_or(false);
         // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
         let res: Vec<_> =
             tokio_rayon::spawn_fifo(move || -> anyhow::Result<Vec<Receipt>> {
                 Ok(executor
                     .dry_run(ExecutionBlock::DryRun(block), utxo_validation)?
+                    .into_iter()
+                    .flatten()
+                    .collect())
+            })
+            .await?;
+        if is_script && res.is_empty() {
+            return Err(anyhow!("Expected at least one set of receipts"))
+        }
+        Ok(res)
+    }
+
+    // TODO: Support custom `block_time` for `dry_run`.
+    /// Simulate a transaction without altering any state. Does not aquire the production lock
+    /// since it is basically a "read only" operation and shouldn't get in the way of normal
+    /// production.
+    pub async fn estimate_predicates(
+        &self,
+        transaction: Transaction,
+        height: Option<BlockHeight>,
+    ) -> anyhow::Result<Vec<Receipt>> {
+        let height = match height {
+            None => self.db.current_block_height()?,
+            Some(height) => height,
+        } + 1.into();
+
+        let is_script = transaction.is_script();
+        // The dry run execution should use the state of the blockchain based on the
+        // last available block, not on the upcoming one. It means that we need to
+        // use the same configuration as the last block -> the same DA height.
+        // It is deterministic from the result perspective, plus it is more performant
+        // because we don't need to wait for the relayer to sync.
+        let header = self._new_header(height, Tai64::now())?;
+        let block =
+            PartialFuelBlock::new(header, vec![transaction].into_iter().collect());
+
+        let executor = self.executor.clone();
+        // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
+        let res: Vec<_> =
+            tokio_rayon::spawn_fifo(move || -> anyhow::Result<Transaction> {
+                Ok(executor
+                    .estimate_predicates(ExecutionBlock::DryRun(block), utxo_validation)?
                     .into_iter()
                     .flatten()
                     .collect())

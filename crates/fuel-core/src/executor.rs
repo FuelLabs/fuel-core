@@ -87,10 +87,6 @@ use fuel_core_types::{
             IntoChecked,
             ScriptCheckedMetadata,
         },
-        estimated_transaction::{
-            Estimated,
-            IntoEstimated,
-        },
         interpreter::{
             CheckedMetadata,
             ExecutableTransaction,
@@ -936,10 +932,9 @@ where
     }
 
     /// Estimate all the predicates of a tx.
-    pub fn estimate_tx_predicates<Tx>(&self, mut tx: Estimated<Tx>) -> ExecutorResult<()>
+    pub fn estimate_predicates<Tx>(&self, mut tx: Tx) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
-        <Tx as IntoChecked>::Metadata: CheckedMetadata,
     {
         let id = tx.transaction().id();
         if Interpreter::<PredicateStorage>::estimate_predicates(

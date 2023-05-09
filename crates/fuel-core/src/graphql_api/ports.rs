@@ -171,8 +171,16 @@ pub trait DryRunExecution {
         transaction: Transaction,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
-        estimate_predicates: Option<bool>,
     ) -> anyhow::Result<Vec<Receipt>>;
+}
+
+#[async_trait]
+pub trait EstimatePredicatesExecution {
+    async fn estimate_predicates(
+        &self,
+        transaction: Transaction,
+        height: Option<BlockHeight>,
+    ) -> anyhow::Result<Transaction>;
 }
 
 pub trait BlockProducerPort: Send + Sync + DryRunExecution {}

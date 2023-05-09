@@ -345,6 +345,20 @@ impl FuelClient {
             .collect()
     }
 
+    /// Default dry run, matching the exact configuration as the node
+    pub async fn estimate(&self, tx: &Transaction) -> io::Result<Transaction> {
+        self.estimate_opt(tx).await
+    }
+
+    /// Dry run with options to override the node behavior
+    pub async fn estimate_opt(&self, tx: &Transaction) -> io::Result<Transaction> {
+        let tx = tx.clone().to_bytes();
+        let query = schema::tx::EstimatePredicates::build(EstimatePredicatesArg {
+            tx: HexString(Bytes(tx)),
+        });
+        // estimate predicates
+    }
+
     pub async fn submit(&self, tx: &Transaction) -> io::Result<TransactionId> {
         let tx = tx.clone().to_bytes();
         let query = schema::tx::Submit::build(TxArg {

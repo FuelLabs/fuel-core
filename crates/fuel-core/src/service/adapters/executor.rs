@@ -39,14 +39,25 @@ impl ExecutorAdapter {
         &self,
         block: ExecutionBlock,
         utxo_validation: Option<bool>,
-        estimate_predicates: Option<bool>,
     ) -> ExecutorResult<Vec<Vec<Receipt>>> {
         let executor = Executor {
             database: self.relayer.database.clone(),
             relayer: self.relayer.clone(),
             config: self.config.clone(),
         };
-        executor.dry_run(block, utxo_validation, estimate_predicates)
+        executor.dry_run(block, utxo_validation)
+    }
+
+    pub(crate) fn _estimate_predicates(
+        &self,
+        block: ExecutionBlock,
+    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
+        let executor = Executor {
+            database: self.relayer.database.clone(),
+            relayer: self.relayer.clone(),
+            config: self.config.clone(),
+        };
+        executor.estimate_predicates(block)
     }
 }
 

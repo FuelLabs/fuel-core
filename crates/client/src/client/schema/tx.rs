@@ -295,10 +295,26 @@ pub struct TxArg {
 }
 
 #[derive(cynic::QueryVariables)]
+pub struct EstimatePredicatesArg {
+    pub tx: HexString,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Mutation",
+    variables = "EstimatePredicatesArg"
+)]
+pub struct EstimatePredicates {
+    #[arguments(tx: $tx)]
+    pub estimated_tx: OpaqueTransaction,
+    // Opaque transaction
+}
+
+#[derive(cynic::QueryVariables)]
 pub struct DryRunArg {
     pub tx: HexString,
     pub utxo_validation: Option<bool>,
-    pub estimate_predicates: Option<bool>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -308,7 +324,7 @@ pub struct DryRunArg {
     variables = "DryRunArg"
 )]
 pub struct DryRun {
-    #[arguments(tx: $tx, utxoValidation: $utxo_validation, estimatePredicates: $estimate_predicates)]
+    #[arguments(tx: $tx, utxoValidation: $utxo_validation)]
     pub dry_run: OpaqueTransactionTransparentReceipts,
     // Opaque transaction
 }
