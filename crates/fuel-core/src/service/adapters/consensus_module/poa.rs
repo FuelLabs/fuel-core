@@ -118,16 +118,11 @@ impl SyncPort for crate::service::adapters::SyncAdapter {
     async fn sync_with_peers(&mut self) -> anyhow::Result<()> {
         // todo: connect to N amount of peers first!
 
-        'outer: loop {
-            tokio::select! {
-                _ = self.block_rx.recv() => {
-                    // keep receiving them blocks
-                }
-                _ = tokio::time::sleep(TIME_UNTIL_SYNCED) => {
-                    // time expired we are synced!
-                    break 'outer;
-                }
-            }
+        while tokio::time::timeout(TIME_UNTIL_SYNCED, self.block_rx.recv())
+            .await
+            .is_ok()
+        {
+            // keep receiving them blocks
         }
 
         Ok(())

@@ -27,8 +27,12 @@ use fuel_core_poa::Trigger;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-pub type PoAService =
-    fuel_core_poa::Service<TxPoolAdapter, BlockProducerAdapter, BlockImporterAdapter>;
+pub type PoAService = fuel_core_poa::Service<
+    TxPoolAdapter,
+    BlockProducerAdapter,
+    BlockImporterAdapter,
+    SyncAdapter,
+>;
 #[cfg(feature = "relayer")]
 pub type RelayerService = fuel_core_relayer::Service<Database>;
 #[cfg(feature = "p2p")]
@@ -124,9 +128,7 @@ pub fn init_sub_services(
         !matches!(poa_config.trigger, Trigger::Never) || config.manual_blocks_enabled;
 
     let poa = (production_enabled).then(|| {
-        let syncer = Box::new(SyncAdapter::new(
-            importer_adapter.block_importer.subscribe(),
-        ));
+        let syncer = SyncAdapter::new(importer_adapter.block_importer.subscribe());
 
         fuel_core_poa::new_service(
             last_block.header(),
@@ -140,17 +142,13 @@ pub fn init_sub_services(
     let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));
 
     #[cfg(feature = "p2p")]
-    let sync = (!production_enabled)
-        .then(|| {
-            fuel_core_sync::service::new_service(
-                *last_block.header().height(),
-                p2p_adapter,
-                importer_adapter.clone(),
-                verifier,
-                config.sync,
-            )
-        })
-        .transpose()?;
+    let sync = fuel_core_sync::service::new_service(
+        *last_block.header().height(),
+        p2p_adapter,
+        importer_adapter.clone(),
+        verifier,
+        config.sync,
+    )?;
 
     // TODO: Figure out on how to move it into `fuel-core-graphql-api`.
     let schema = {
@@ -221,9 +219,7 @@ pub fn init_sub_services(
     {
         if let Some(network) = network.take() {
             services.push(Box::new(network));
-            if let Some(sync) = sync {
-                services.push(Box::new(sync));
-            }
+            services.push(Box::new(sync));
         }
     }
 

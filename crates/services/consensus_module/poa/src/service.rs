@@ -71,7 +71,7 @@ use tokio::{
 use tokio_stream::StreamExt;
 use tracing::error;
 
-pub type Service<T, B, I> = ServiceRunner<Task<T, B, I>>;
+pub type Service<T, B, I, S> = ServiceRunner<Task<T, B, I, S>>;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -122,12 +122,13 @@ pub(crate) enum RequestType {
     Trigger,
 }
 
-pub struct Task<T, B, I> {
+pub struct Task<T, B, I, S> {
     block_gas_limit: Word,
     signing_key: Option<Secret<SecretKeyWrapper>>,
     block_producer: B,
     block_importer: I,
     txpool: T,
+    sync_port: S,
     tx_status_update_stream: BoxStream<TxStatus>,
     request_receiver: mpsc::Receiver<Request>,
     shared_state: SharedState,
@@ -140,7 +141,7 @@ pub struct Task<T, B, I> {
     consensus_params: ConsensusParameters,
 }
 
-impl<T, B, I> Task<T, B, I>
+impl<T, B, I, S> Task<T, B, I, S>
 where
     T: TransactionPool,
 {
@@ -150,6 +151,7 @@ where
         txpool: T,
         block_producer: B,
         block_importer: I,
+        sync_port: S,
     ) -> Self {
         let tx_status_update_stream = txpool.transaction_status_events();
         let (request_sender, request_receiver) = mpsc::channel(100);
@@ -163,6 +165,7 @@ where
             txpool,
             block_producer,
             block_importer,
+            sync_port,
             tx_status_update_stream,
             request_receiver,
             shared_state: SharedState { request_sender },
@@ -205,11 +208,12 @@ where
     }
 }
 
-impl<D, T, B, I> Task<T, B, I>
+impl<D, T, B, I, S> Task<T, B, I, S>
 where
     T: TransactionPool,
     B: BlockProducer<Database = D>,
     I: BlockImporter<Database = D>,
+    S: SyncPort,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(
@@ -421,15 +425,15 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T, B, I> RunnableService for Task<T, B, I>
+impl<T, B, I, S> RunnableService for Task<T, B, I, S>
 where
     Self: RunnableTask,
 {
     const NAME: &'static str = "PoA";
 
     type SharedData = SharedState;
-    type Task = Task<T, B, I>;
-    type TaskParams = Box<dyn SyncPort>;
+    type Task = Task<T, B, I, S>;
+    type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
         self.shared_state.clone()
@@ -438,10 +442,8 @@ where
     async fn into_task(
         self,
         _: &StateWatcher,
-        mut syncer: Self::TaskParams,
+        params: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        let _ = syncer.as_mut().sync_with_peers().await;
-
         match self.trigger {
             Trigger::Never | Trigger::Instant => {}
             Trigger::Interval { block_time } => {
@@ -460,11 +462,12 @@ where
 }
 
 #[async_trait::async_trait]
-impl<D, T, B, I> RunnableTask for Task<T, B, I>
+impl<D, T, B, I, S> RunnableTask for Task<T, B, I, S>
 where
     T: TransactionPool,
     B: BlockProducer<Database = D>,
     I: BlockImporter<Database = D>,
+    S: SyncPort,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
@@ -473,6 +476,7 @@ where
                 should_continue = false;
             }
             request = self.request_receiver.recv() => {
+                // todo read sync before producing a block
                 if let Some(request) = request {
                     match request {
                         Request::ManualBlocks((block, response)) => {
@@ -514,23 +518,28 @@ where
     }
 }
 
-pub fn new_service<D, T, B, I>(
+pub fn new_service<D, T, B, I, S>(
     last_block: &BlockHeader,
     config: Config,
     txpool: T,
     block_producer: B,
     block_importer: I,
-    sync: Box<dyn SyncPort>,
-) -> Service<T, B, I>
+    sync_port: S,
+) -> Service<T, B, I, S>
 where
     T: TransactionPool + 'static,
     B: BlockProducer<Database = D> + 'static,
     I: BlockImporter<Database = D> + 'static,
+    S: SyncPort + 'static,
 {
-    Service::new_with_params(
-        Task::new(last_block, config, txpool, block_producer, block_importer),
-        sync,
-    )
+    Service::new(Task::new(
+        last_block,
+        config,
+        txpool,
+        block_producer,
+        block_importer,
+        sync_port,
+    ))
 }
 
 fn seal_block(
