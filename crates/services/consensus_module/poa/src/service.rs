@@ -442,7 +442,7 @@ where
     async fn into_task(
         self,
         _: &StateWatcher,
-        params: Self::TaskParams,
+        _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
         match self.trigger {
             Trigger::Never | Trigger::Instant => {}
@@ -476,10 +476,10 @@ where
                 should_continue = false;
             }
             request = self.request_receiver.recv() => {
-                // todo read sync before producing a block
                 if let Some(request) = request {
                     match request {
                         Request::ManualBlocks((block, response)) => {
+                            let _ = self.sync_port.sync_with_peers().await;
                             let result = self.produce_manual_blocks(block).await;
                             let _ = response.send(result);
                         }

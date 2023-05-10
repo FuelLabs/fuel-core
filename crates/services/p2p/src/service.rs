@@ -78,6 +78,7 @@ enum TaskRequest {
     BroadcastVote(Arc<ConsensusVote>),
     // Request to get one-off data from p2p network
     GetPeerIds(oneshot::Sender<Vec<PeerId>>),
+    GetConnectedReservedPeersCount(oneshot::Sender<usize>),
     GetBlock {
         height: BlockHeight,
         channel: oneshot::Sender<Option<SealedBlock>>,
@@ -210,6 +211,10 @@ where
                     Some(TaskRequest::GetPeerIds(channel)) => {
                         let peer_ids = self.p2p_service.get_peers_ids().copied().collect();
                         let _ = channel.send(peer_ids);
+                    }
+                    Some(TaskRequest::GetConnectedReservedPeersCount(channel)) => {
+                        let connected_reserved_peers_count = self.p2p_service.peer_manager().connected_reserved_peers();
+                        let _ = channel.send(connected_reserved_peers_count);
                     }
                     Some(TaskRequest::GetBlock { height, channel }) => {
                         let request_msg = RequestMessage::Block(height);
@@ -425,6 +430,16 @@ impl SharedState {
 
         self.request_sender
             .send(TaskRequest::GetPeerIds(sender))
+            .await?;
+
+        receiver.await.map_err(|e| anyhow!("{}", e))
+    }
+
+    pub async fn connected_reserved_peers_count(&self) -> anyhow::Result<usize> {
+        let (sender, receiver) = oneshot::channel();
+
+        self.request_sender
+            .send(TaskRequest::GetConnectedReservedPeersCount(sender))
             .await?;
 
         receiver.await.map_err(|e| anyhow!("{}", e))

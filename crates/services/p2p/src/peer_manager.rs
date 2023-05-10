@@ -83,6 +83,10 @@ impl PeerManager {
         }
     }
 
+    pub fn connected_reserved_peers(&self) -> usize {
+        self.reserved_connected_peers.len()
+    }
+
     pub fn handle_gossip_score_update<T: Punisher>(
         &self,
         peer_id: PeerId,

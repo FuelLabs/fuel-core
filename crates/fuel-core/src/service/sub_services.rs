@@ -31,7 +31,7 @@ pub type PoAService = fuel_core_poa::Service<
     TxPoolAdapter,
     BlockProducerAdapter,
     BlockImporterAdapter,
-    SyncAdapter,
+    SyncAdapter<P2PAdapter>,
 >;
 #[cfg(feature = "relayer")]
 pub type RelayerService = fuel_core_relayer::Service<Database>;
@@ -128,7 +128,11 @@ pub fn init_sub_services(
         !matches!(poa_config.trigger, Trigger::Never) || config.manual_blocks_enabled;
 
     let poa = (production_enabled).then(|| {
-        let syncer = SyncAdapter::new(importer_adapter.block_importer.subscribe());
+        let syncer = SyncAdapter::new(
+            importer_adapter.block_importer.subscribe(),
+            4,
+            p2p_adapter.clone(),
+        );
 
         fuel_core_poa::new_service(
             last_block.header(),

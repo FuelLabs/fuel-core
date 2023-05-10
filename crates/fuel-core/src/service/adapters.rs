@@ -83,6 +83,18 @@ impl P2PAdapter {
     }
 }
 
+#[cfg(feature = "p2p")]
+#[async_trait::async_trait]
+impl NetworkInfo for P2PAdapter {
+    async fn connected_reserved_peers(&self) -> usize {
+        if let Some(service) = self.service.as_ref() {
+            service.connected_reserved_peers_count().await.unwrap_or(0)
+        } else {
+            0
+        }
+    }
+}
+
 #[cfg(not(feature = "p2p"))]
 impl P2PAdapter {
     pub fn new() -> Self {
@@ -90,12 +102,34 @@ impl P2PAdapter {
     }
 }
 
-pub struct SyncAdapter {
-    block_rx: Receiver<Arc<ImportResult>>,
+#[cfg(not(feature = "p2p"))]
+#[async_trait::async_trait]
+impl NetworkInfo for P2PAdapter {
+    async fn connected_reserved_peers(&self) -> usize {
+        0
+    }
 }
 
-impl SyncAdapter {
-    pub fn new(block_rx: Receiver<Arc<ImportResult>>) -> Self {
-        Self { block_rx }
+#[async_trait::async_trait]
+pub trait NetworkInfo {
+    async fn connected_reserved_peers(&self) -> usize;
+}
+pub struct SyncAdapter<T: NetworkInfo> {
+    block_rx: Receiver<Arc<ImportResult>>,
+    min_connected_reserved_peers: usize,
+    network_info: T,
+}
+
+impl<T: NetworkInfo> SyncAdapter<T> {
+    pub fn new(
+        block_rx: Receiver<Arc<ImportResult>>,
+        min_connected_reserved_peers: usize,
+        network_info: T,
+    ) -> Self {
+        Self {
+            block_rx,
+            min_connected_reserved_peers,
+            network_info,
+        }
     }
 }

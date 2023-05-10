@@ -6,6 +6,8 @@ use crate::{
     service::adapters::{
         BlockImporterAdapter,
         BlockProducerAdapter,
+        NetworkInfo,
+        P2PAdapter,
         PoAAdapter,
         TxPoolAdapter,
     },
@@ -114,10 +116,22 @@ impl BlockImporter for BlockImporterAdapter {
 const TIME_UNTIL_SYNCED: Duration = Duration::from_secs(60);
 
 #[async_trait::async_trait]
-impl SyncPort for crate::service::adapters::SyncAdapter {
+impl SyncPort for crate::service::adapters::SyncAdapter<P2PAdapter> {
     async fn sync_with_peers(&mut self) -> anyhow::Result<()> {
-        // todo: connect to N amount of peers first!
+        // todo: check if the next block to be produced equals last previous block + 1
+        // if yes, then we are synced already
 
+        // 1. check count of connected reserved peers
+        // todo: add 'n' tries or a timeout
+        loop {
+            let count = self.network_info.connected_reserved_peers().await;
+            if count >= self.min_connected_reserved_peers {
+                break
+            }
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+
+        // 2. receive all the blocks
         while tokio::time::timeout(TIME_UNTIL_SYNCED, self.block_rx.recv())
             .await
             .is_ok()
