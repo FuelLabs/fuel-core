@@ -426,7 +426,7 @@ async fn can_get_message_proof() {
                 generated_message_id,
                 message_proof_index,
                 &message_proof_set,
-                result.message_block_header.message_receipt_count.0,
+                result.message_block_header.message_receipt_count,
             ));
 
             // Generate a proof to compare
@@ -449,7 +449,7 @@ async fn can_get_message_proof() {
             );
 
             // 4. Verify the block proof. (prev_root, block id, proof index, proof set, block count)
-            let block_proof_index = result.block_proof.proof_index.0;
+            let block_proof_index = result.block_proof.proof_index;
             let block_proof_set: Vec<_> = result
                 .block_proof
                 .proof_set
@@ -457,7 +457,7 @@ async fn can_get_message_proof() {
                 .cloned()
                 .map(Bytes32::from)
                 .collect();
-            let blocks_count = result.commit_block_header.height.0;
+            let blocks_count = result.commit_block_header.height;
             assert!(verify_merkle(
                 result.commit_block_header.prev_root.clone().into(),
                 message_block_id,
