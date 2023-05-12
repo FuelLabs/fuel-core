@@ -37,6 +37,9 @@ use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tracing::debug;
+use fuel_core_types::fuel_tx::{CheckError, ConsensusParameters};
+use fuel_core_types::fuel_vm::checked_transaction::EstimatePredicates;
+use fuel_core_types::fuel_vm::GasCosts;
 
 #[cfg(test)]
 mod tests;
@@ -161,38 +164,37 @@ where
     pub async fn estimate_predicates(
         &self,
         transaction: Transaction,
-        height: Option<BlockHeight>,
-    ) -> anyhow::Result<Vec<Receipt>> {
-        let height = match height {
-            None => self.db.current_block_height()?,
-            Some(height) => height,
-        } + 1.into();
+    ) -> anyhow::Result<Transaction> {
 
-        let is_script = transaction.is_script();
-        // The dry run execution should use the state of the blockchain based on the
-        // last available block, not on the upcoming one. It means that we need to
-        // use the same configuration as the last block -> the same DA height.
-        // It is deterministic from the result perspective, plus it is more performant
-        // because we don't need to wait for the relayer to sync.
-        let header = self._new_header(height, Tai64::now())?;
-        let block =
-            PartialFuelBlock::new(header, vec![transaction].into_iter().collect());
+        let mut estimation_transaction = transaction.clone();
 
-        let executor = self.executor.clone();
-        // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
-        let res: Vec<_> =
-            tokio_rayon::spawn_fifo(move || -> anyhow::Result<Transaction> {
-                Ok(executor
-                    .estimate_predicates(ExecutionBlock::DryRun(block), utxo_validation)?
-                    .into_iter()
-                    .flatten()
-                    .collect())
-            })
-            .await?;
-        if is_script && res.is_empty() {
-            return Err(anyhow!("Expected at least one set of receipts"))
+        if estimation_transaction.is_script() {
+            let script = estimation_transaction.as_script_mut().expect("script");
+            // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
+            let res: bool =
+                tokio_rayon::spawn_fifo(move || -> anyhow::Result<bool, CheckError> {
+                    script
+                        .estimate_predicates(&ConsensusParameters::default(), &GasCosts::default())
+                })
+                    .await?;
+            if !res {
+                return Err(anyhow!("Predicate estimation failed"))
+            }
+        } else if estimation_transaction.is_create() {
+            let create = estimation_transaction.as_create_mut().expect("create");
+            // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
+            let res: bool =
+                tokio_rayon::spawn_fifo(move || -> anyhow::Result<bool, CheckError> {
+                    create
+                        .estimate_predicates(&ConsensusParameters::default(), &GasCosts::default())
+                })
+                    .await?;
+            if !res {
+                return Err(anyhow!("Predicate estimation failed"))
+            }
         }
-        Ok(res)
+
+        Ok(estimation_transaction.into())
     }
 }
 

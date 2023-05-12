@@ -75,6 +75,7 @@ use tokio_stream::wrappers::{
     errors::BroadcastStreamRecvError,
     BroadcastStream,
 };
+use crate::fuel_core_graphql_api::ports::EstimatePredicatesExecution;
 
 impl DatabaseBlocks for Database {
     fn block_id(&self, height: &BlockHeight) -> StorageResult<BlockId> {

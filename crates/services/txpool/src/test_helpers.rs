@@ -106,6 +106,7 @@ pub(crate) fn random_predicate(
         Default::default(),
         predicate_code,
         vec![],
+        0,
     )
 }
 
@@ -126,5 +127,6 @@ pub(crate) fn custom_predicate(
         Default::default(),
         code,
         vec![],
+        0,
     )
 }

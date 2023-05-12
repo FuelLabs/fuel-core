@@ -209,9 +209,9 @@ impl<T> ExecutionType<T> {
     pub fn into_inner(self) -> T {
         match self {
             ExecutionTypes::DryRun(t)
+            | ExecutionTypes::Estimation(t)
             | ExecutionTypes::Production(t)
-            | ExecutionTypes::Validation(t) => t
-            | ExecutionTypes::Estimation(t) => t,
+            | ExecutionTypes::Validation(t) => t,
         }
     }
 
