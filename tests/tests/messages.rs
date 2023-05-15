@@ -131,7 +131,7 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
 
     // verify messages owner matches
     for message in result.results {
-        let recipient: Address = message.recipient.into();
+        let recipient: Address = message.recipient;
         assert_eq!(recipient, owner_a)
     }
 
@@ -144,7 +144,7 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
     // verify that Owner B has 1 message
     assert_eq!(result.results.len(), 1);
 
-    let recipient: Address = result.results[0].recipient.into();
+    let recipient: Address = result.results[0].recipient;
     assert_eq!(recipient, owner_b);
 
     // get the messages from Owner C
@@ -389,9 +389,9 @@ async fn can_get_message_proof() {
             // 1. Generate the message id (message fields)
             // Produce message id.
             let generated_message_id = compute_message_id(
-                &(result.sender.into()),
-                &(result.recipient.into()),
-                &(result.nonce.into()),
+                &result.sender,
+                &result.recipient,
+                &result.nonce,
                 result.amount,
                 result.data.as_ref(),
             );
@@ -420,9 +420,7 @@ async fn can_get_message_proof() {
             assert!(verify_merkle(
                 result
                     .message_block_header
-                    .message_receipt_root
-                    .clone()
-                    .into(),
+                    .message_receipt_root,
                 generated_message_id,
                 message_proof_index,
                 &message_proof_set,
@@ -442,9 +440,7 @@ async fn can_get_message_proof() {
 
             // Check the root matches the proof and the root on the header.
             assert_eq!(
-                <[u8; 32]>::from(Bytes32::from(
-                    result.message_block_header.message_receipt_root
-                )),
+                <[u8; 32]>::from(result.message_block_header.message_receipt_root),
                 expected_root
             );
 
@@ -459,7 +455,7 @@ async fn can_get_message_proof() {
                 .collect();
             let blocks_count = result.commit_block_header.height;
             assert!(verify_merkle(
-                result.commit_block_header.prev_root.clone().into(),
+                result.commit_block_header.prev_root,
                 message_block_id,
                 block_proof_index,
                 &block_proof_set,

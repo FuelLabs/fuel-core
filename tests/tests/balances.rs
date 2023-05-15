@@ -53,9 +53,9 @@ async fn balance() {
                 tx_pointer_block_height: None,
                 tx_pointer_tx_idx: None,
                 maturity: None,
-                owner: owner.into(),
+                owner,
                 amount,
-                asset_id: asset_id.into(),
+                asset_id,
             })
             .collect(),
         ),
@@ -64,8 +64,8 @@ async fn balance() {
                 .into_iter()
                 .enumerate()
                 .map(|(nonce, (owner, amount))| MessageConfig {
-                    sender: owner.into(),
-                    recipient: owner.into(),
+                    sender: owner,
+                    recipient: owner,
                     nonce: (nonce as u64).into(),
                     amount,
                     data: vec![],
@@ -106,20 +106,20 @@ async fn balance() {
         for coin in coins {
             match coin {
                 CoinType::Coin(coin) => tx.add_input(Input::coin_signed(
-                    coin.utxo_id.into(),
-                    coin.owner.into(),
-                    coin.amount.into(),
-                    coin.asset_id.into(),
+                    coin.utxo_id,
+                    coin.owner,
+                    coin.amount,
+                    coin.asset_id,
                     Default::default(),
                     0,
                     coin.maturity.into(),
                 )),
                 CoinType::MessageCoin(message) => {
                     tx.add_input(Input::message_coin_signed(
-                        message.sender.into(),
-                        message.recipient.into(),
-                        message.amount.into(),
-                        message.nonce.into(),
+                        message.sender,
+                        message.recipient,
+                        message.amount,
+                        message.nonce,
                         0,
                     ))
                 }
@@ -129,14 +129,14 @@ async fn balance() {
     }
     let tx = tx
         .add_output(Output::Coin {
-            to: Address::new([1u8; 32]).into(),
+            to: Address::new([1u8; 32]),
             amount: 1,
-            asset_id: asset_id.into(),
+            asset_id,
         })
         .add_output(Output::Change {
-            to: owner.into(),
+            to: owner,
             amount: 0,
-            asset_id: asset_id.into(),
+            asset_id,
         })
         .add_witness(Default::default())
         .finalize_as_transaction();
@@ -182,9 +182,9 @@ async fn first_5_balances() {
                         tx_pointer_block_height: None,
                         tx_pointer_tx_idx: None,
                         maturity: None,
-                        owner: (*owner).into(),
+                        owner: (*owner),
                         amount,
-                        asset_id: asset_id.into(),
+                        asset_id,
                     }),
             );
         }
@@ -199,8 +199,8 @@ async fn first_5_balances() {
             messages.extend(vec![(owner, 60), (owner, 90)].into_iter().map(
                 |(owner, amount)| {
                     let message = MessageConfig {
-                        sender: (*owner).into(),
-                        recipient: (*owner).into(),
+                        sender: (*owner),
+                        recipient: (*owner),
                         nonce: (nonce as u64).into(),
                         amount,
                         data: vec![],

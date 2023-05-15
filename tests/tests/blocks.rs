@@ -115,14 +115,13 @@ async fn produce_block() {
             .unwrap()
             .unwrap();
         let actual_pub_key = block.block_producer().unwrap();
-        let block_height: u32 = block.header.height.into();
+        let block_height: u32 = block.header.height;
         let expected_pub_key: PublicKey = config
             .consensus_key
             .unwrap()
             .expose_secret()
             .deref()
-            .public_key()
-            .into();
+            .public_key();
 
         assert!(1 == block_height);
         assert_eq!(*actual_pub_key, expected_pub_key);
@@ -156,8 +155,7 @@ async fn produce_block_manually() {
         .unwrap()
         .expose_secret()
         .deref()
-        .public_key()
-        .into();
+        .public_key();
     assert_eq!(*actual_pub_key, expected_pub_key);
 }
 
@@ -195,8 +193,7 @@ async fn produce_block_negative() {
             .unwrap()
             .unwrap()
             .header
-            .height
-            .into();
+            .height;
 
         // Block height is now 6 after being advance 5
         assert!(1 == block_height);

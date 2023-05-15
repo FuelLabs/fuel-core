@@ -53,7 +53,7 @@ async fn first_5_coins(
     let coins: Vec<_> = (1..10usize)
         .map(|i| Coin {
             utxo_id: UtxoId::new([i as u8; 32].into(), 0),
-            owner: owner.into(),
+            owner,
             amount: i as Word,
             asset_id: Default::default(),
             maturity: Default::default(),
@@ -100,10 +100,10 @@ async fn only_asset_id_filtered_coins() {
     let coins: Vec<_> = (1..10usize)
         .map(|i| Coin {
             utxo_id: UtxoId::new([i as u8; 32].into(), 0),
-            owner: owner.into(),
+            owner,
             amount: i as Word,
             asset_id: if i <= 5 {
-                asset_id.into()
+                asset_id
             } else {
                 Default::default()
             },
@@ -143,7 +143,7 @@ async fn only_asset_id_filtered_coins() {
     assert!(coins
         .results
         .into_iter()
-        .all(|c| asset_id == c.asset_id.into()));
+        .all(|c| asset_id == c.asset_id));
 }
 
 #[rstest]
@@ -156,9 +156,9 @@ async fn get_coins_forwards_backwards(
     let coins: Vec<Coin> = (1..11usize)
         .map(|i| Coin {
             utxo_id: UtxoId::new([i as u8; 32].into(), 0),
-            owner: owner.into(),
+            owner,
             amount: i as Word,
-            asset_id: asset_id.into(),
+            asset_id,
             maturity: Default::default(),
             tx_pointer: Default::default(),
         })
