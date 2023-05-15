@@ -102,11 +102,7 @@ async fn only_asset_id_filtered_coins() {
             utxo_id: UtxoId::new([i as u8; 32].into(), 0),
             owner,
             amount: i as Word,
-            asset_id: if i <= 5 {
-                asset_id
-            } else {
-                Default::default()
-            },
+            asset_id: if i <= 5 { asset_id } else { Default::default() },
             maturity: Default::default(),
             tx_pointer: Default::default(),
         })
@@ -140,10 +136,7 @@ async fn only_asset_id_filtered_coins() {
         .unwrap();
     assert!(!coins.results.is_empty());
     assert_eq!(coins.results.len(), 5);
-    assert!(coins
-        .results
-        .into_iter()
-        .all(|c| asset_id == c.asset_id));
+    assert!(coins.results.into_iter().all(|c| asset_id == c.asset_id));
 }
 
 #[rstest]

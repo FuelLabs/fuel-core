@@ -418,9 +418,7 @@ async fn can_get_message_proof() {
                 .map(Bytes32::from)
                 .collect();
             assert!(verify_merkle(
-                result
-                    .message_block_header
-                    .message_receipt_root,
+                result.message_block_header.message_receipt_root,
                 generated_message_id,
                 message_proof_index,
                 &message_proof_set,
