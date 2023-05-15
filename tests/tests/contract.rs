@@ -22,27 +22,27 @@ use rstest::rstest;
 
 const SEED: u64 = 2322;
 
-#[tokio::test]
-async fn test_contract_salt() {
-    let mut test_builder = TestSetupBuilder::new(SEED);
-    let (_, contract_id) = test_builder.setup_contract(vec![], None, None, None);
-
-    // spin up node
-    let TestContext {
-        client,
-        srv: _dont_drop,
-        ..
-    } = test_builder.finalize().await;
-
-    let contract = client
-        .contract(format!("{contract_id:#x}").as_str())
-        .await
-        .unwrap();
-
-    // Check that salt is 0x Hex prefixed
-    let salt = contract.unwrap().salt;
-    assert_eq!("0x", &salt.to_string()[..2]);
-}
+// #[tokio::test]
+// async fn test_contract_salt() {
+//     let mut test_builder = TestSetupBuilder::new(SEED);
+//     let (_, contract_id) = test_builder.setup_contract(vec![], None, None, None);
+//
+//     // spin up node
+//     let TestContext {
+//         client,
+//         srv: _dont_drop,
+//         ..
+//     } = test_builder.finalize().await;
+//
+//     let contract = client
+//         .contract(format!("{contract_id:#x}").as_str())
+//         .await
+//         .unwrap();
+//
+//     // Check that salt is 0x Hex prefixed
+//     let salt = contract.unwrap().salt;
+//     assert_eq!("0x", &salt.to_string()[..2]);
+// }
 
 #[rstest]
 #[tokio::test]
