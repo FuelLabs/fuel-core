@@ -184,6 +184,7 @@ type ConsensusParameters {
 	maxStorageSlots: U64!
 	maxPredicateLength: U64!
 	maxPredicateDataLength: U64!
+	maxGasPerPredicate: U64!
 	gasPriceFactor: U64!
 	gasPerByte: U64!
 	maxMessageDataLength: U64!
@@ -349,6 +350,7 @@ type InputCoin {
 	maturity: U32!
 	predicate: HexString!
 	predicateData: HexString!
+	predicateGasUsed: U64!
 }
 
 type InputContract {
@@ -368,6 +370,7 @@ type InputMessage {
 	data: HexString!
 	predicate: HexString!
 	predicateData: HexString!
+	predicateGasUsed: U64!
 }
 
 

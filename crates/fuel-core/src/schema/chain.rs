@@ -67,6 +67,10 @@ impl ConsensusParameters {
         self.0.max_predicate_data_length.into()
     }
 
+    async fn max_gas_per_predicate(&self) -> U64 {
+        self.0.max_gas_per_predicate.into()
+    }
+
     async fn gas_price_factor(&self) -> U64 {
         self.0.gas_price_factor.into()
     }

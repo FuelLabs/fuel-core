@@ -2394,6 +2394,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethnum"
+version = "1.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0198b9d0078e0f30dedc7acbb21c974e838fc8fae3ee170128658a98cb2c1c04"
+
+[[package]]
 name = "event-listener"
 version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2527,8 +2533,6 @@ checksum = "6c2141d6d6c8512188a7891b4b01590a45f6dac67afb4f255c4124dbb86d4eaa"
 [[package]]
 name = "fuel-asm"
 version = "0.31.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ab82fe7cd6c4008dad97ae0f4e5018f2fd7cd70b82878eb001a8e6c0981dfd4"
 dependencies = [
  "bitflags",
  "fuel-types",
@@ -3004,8 +3008,6 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.31.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ba2c72dc6c2866e54ff432689cbf0db2ad74eca321a9b690fb839643ec68073"
 dependencies = [
  "borrown",
  "coins-bip32 0.8.3",
@@ -3022,8 +3024,6 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.31.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8391a9062bcfb2023a1c981c044c799452a8a55a325e6fee3c45e546ada48243"
 dependencies = [
  "digest 0.10.6",
  "fuel-storage",
@@ -3036,14 +3036,10 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.31.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "abd745e7f5197685f16fa66d6151417c630aa72e321642f71bd3c02dbc7ebffb"
 
 [[package]]
 name = "fuel-tx"
 version = "0.31.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d57a658b9158fb5d47b9817e599d62f332365eb350719617d3ccac0c1bcfb2d"
 dependencies = [
  "derivative",
  "fuel-asm",
@@ -3062,8 +3058,6 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.31.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3cbc33734564576d06d4dc5b2c59b07dfa7afe1aeb2df5b98b066c5520bd4c24"
 dependencies = [
  "hex",
  "rand 0.8.5",
@@ -3073,12 +3067,11 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.31.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd04f5e6b539d473891cfd492956879bb9922cc2427516e5207f6b813a386051"
 dependencies = [
  "anyhow",
  "bitflags",
  "derivative",
+ "ethnum",
  "fuel-asm",
  "fuel-crypto",
  "fuel-merkle",
@@ -3086,6 +3079,8 @@ dependencies = [
  "fuel-tx",
  "fuel-types",
  "itertools",
+ "paste",
+ "primitive-types",
  "rand 0.8.5",
  "serde",
  "sha3",

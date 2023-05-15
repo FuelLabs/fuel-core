@@ -36,6 +36,7 @@ pub struct InputCoin {
     maturity: U32,
     predicate: HexString,
     predicate_data: HexString,
+    predicate_gas_used: U64,
 }
 
 #[Object]
@@ -74,6 +75,10 @@ impl InputCoin {
 
     async fn predicate_data(&self) -> HexString {
         self.predicate_data.clone()
+    }
+
+    async fn predicate_gas_used(&self) -> U64 {
+        self.predicate_gas_used
     }
 }
 
@@ -117,6 +122,7 @@ pub struct InputMessage {
     data: HexString,
     predicate: HexString,
     predicate_data: HexString,
+    predicate_gas_used: U64,
 }
 
 #[Object]
@@ -152,6 +158,10 @@ impl InputMessage {
     async fn predicate_data(&self) -> &HexString {
         &self.predicate_data
     }
+
+    async fn predicate_gas_used(&self) -> U64 {
+        self.predicate_gas_used
+    }
 }
 
 impl From<&fuel_tx::Input> for Input {
@@ -176,6 +186,7 @@ impl From<&fuel_tx::Input> for Input {
                 maturity: (*maturity).into(),
                 predicate: HexString(Default::default()),
                 predicate_data: HexString(Default::default()),
+                predicate_gas_used: 0.into(),
             }),
             fuel_tx::Input::CoinPredicate(fuel_tx::input::coin::CoinPredicate {
                 utxo_id,
@@ -186,6 +197,7 @@ impl From<&fuel_tx::Input> for Input {
                 maturity,
                 predicate,
                 predicate_data,
+                predicate_gas_used,
                 ..
             }) => Input::Coin(InputCoin {
                 utxo_id: UtxoId(*utxo_id),
@@ -197,6 +209,7 @@ impl From<&fuel_tx::Input> for Input {
                 maturity: (*maturity).into(),
                 predicate: HexString(predicate.clone()),
                 predicate_data: HexString(predicate_data.clone()),
+                predicate_gas_used: (*predicate_gas_used).into(),
             }),
             fuel_tx::Input::Contract(fuel_tx::input::contract::Contract {
                 utxo_id,
@@ -229,6 +242,7 @@ impl From<&fuel_tx::Input> for Input {
                 data: HexString(Default::default()),
                 predicate: HexString(Default::default()),
                 predicate_data: HexString(Default::default()),
+                predicate_gas_used: 0.into(),
             }),
             fuel_tx::Input::MessageCoinPredicate(
                 fuel_tx::input::message::MessageCoinPredicate {
@@ -238,6 +252,7 @@ impl From<&fuel_tx::Input> for Input {
                     nonce,
                     predicate,
                     predicate_data,
+                    predicate_gas_used,
                     ..
                 },
             ) => Input::Message(InputMessage {
@@ -249,6 +264,7 @@ impl From<&fuel_tx::Input> for Input {
                 data: HexString(Default::default()),
                 predicate: HexString(predicate.clone()),
                 predicate_data: HexString(predicate_data.clone()),
+                predicate_gas_used: (*predicate_gas_used).into(),
             }),
             fuel_tx::Input::MessageDataSigned(
                 fuel_tx::input::message::MessageDataSigned {
@@ -269,6 +285,7 @@ impl From<&fuel_tx::Input> for Input {
                 data: HexString(data.clone()),
                 predicate: HexString(Default::default()),
                 predicate_data: HexString(Default::default()),
+                predicate_gas_used: 0.into(),
             }),
             fuel_tx::Input::MessageDataPredicate(
                 fuel_tx::input::message::MessageDataPredicate {
@@ -279,6 +296,7 @@ impl From<&fuel_tx::Input> for Input {
                     data,
                     predicate,
                     predicate_data,
+                    predicate_gas_used,
                     ..
                 },
             ) => Input::Message(InputMessage {
@@ -290,6 +308,7 @@ impl From<&fuel_tx::Input> for Input {
                 data: HexString(data.clone()),
                 predicate: HexString(predicate.clone()),
                 predicate_data: HexString(predicate_data.clone()),
+                predicate_gas_used: (*predicate_gas_used).into(),
             }),
         }
     }

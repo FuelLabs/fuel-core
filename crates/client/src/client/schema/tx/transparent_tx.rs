@@ -347,6 +347,7 @@ impl TryFrom<Input> for fuel_tx::Input {
                         message.nonce.into(),
                         message.predicate.into(),
                         message.predicate_data.into(),
+                        message.predicate_gas_used.into(),
                     ),
                     (false, true) => Self::message_data_signed(
                         message.sender.into(),
