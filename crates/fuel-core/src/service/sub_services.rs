@@ -73,7 +73,7 @@ pub fn init_sub_services(
         config.block_importer.clone(),
         database.clone(),
         executor.clone(),
-        verifier,
+        verifier.clone(),
     );
 
     #[cfg(feature = "p2p")]
@@ -105,7 +105,7 @@ pub fn init_sub_services(
         config.txpool.clone(),
         database.clone(),
         importer_adapter.clone(),
-        p2p_adapter,
+        p2p_adapter.clone(),
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 
