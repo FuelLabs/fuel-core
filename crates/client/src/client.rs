@@ -99,10 +99,7 @@ use self::schema::{
 };
 
 mod hex_formatted;
-use hex_formatted::{
-    HexFormatError,
-    HexFormatted,
-};
+use hex_formatted::HexFormatted;
 
 mod pagination;
 pub mod schema;

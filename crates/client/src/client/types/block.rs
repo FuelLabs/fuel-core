@@ -2,7 +2,6 @@ use crate::client::{
     schema,
     types::scalars::{
         BlockId,
-        Bytes64,
         Hash,
         MerkleRoot,
         PublicKey,

@@ -133,10 +133,7 @@ impl Wallet {
                 .await?
                 .results;
             // check if page has the utxos we're looking for
-            if results
-                .iter()
-                .any(|coin| UtxoId::from(coin.utxo_id.clone()) == utxo_id)
-            {
+            if results.iter().any(|coin| coin.utxo_id == utxo_id) {
                 return Ok(true)
             }
         }
@@ -172,10 +169,10 @@ impl Wallet {
 
         for coin in coins {
             if let CoinType::Coin(coin) = coin {
-                let asset_id = coin.asset_id.clone();
+                let asset_id = coin.asset_id;
                 tx.add_unsigned_coin_input(
                     self.secret,
-                    coin.utxo_id.clone().into(),
+                    coin.utxo_id,
                     coin.amount,
                     asset_id,
                     Default::default(),
@@ -250,12 +247,12 @@ impl Wallet {
 
         for coin in coins {
             if let CoinType::Coin(coin) = coin {
-                let asset_id = coin.asset_id.clone();
+                let asset_id = coin.asset_id;
                 tx.add_unsigned_coin_input(
                     self.secret,
-                    coin.utxo_id.clone().into(),
+                    coin.utxo_id,
                     coin.amount,
-                    asset_id.into(),
+                    asset_id,
                     Default::default(),
                     coin.maturity.into(),
                 );
