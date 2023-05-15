@@ -172,12 +172,12 @@ impl Wallet {
 
         for coin in coins {
             if let CoinType::Coin(coin) = coin {
-                let asset_id = coin.asset_id.clone().0 .0 .0;
+                let asset_id = coin.asset_id.clone();
                 tx.add_unsigned_coin_input(
                     self.secret,
                     coin.utxo_id.clone().into(),
                     coin.amount,
-                    asset_id.into(),
+                    asset_id,
                     Default::default(),
                     coin.maturity.into(),
                 );
@@ -250,7 +250,7 @@ impl Wallet {
 
         for coin in coins {
             if let CoinType::Coin(coin) = coin {
-                let asset_id = coin.asset_id.clone().0 .0 .0;
+                let asset_id = coin.asset_id.clone();
                 tx.add_unsigned_coin_input(
                     self.secret,
                     coin.utxo_id.clone().into(),

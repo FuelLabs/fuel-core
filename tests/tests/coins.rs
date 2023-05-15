@@ -121,7 +121,7 @@ mod coin {
                         secret_key,
                         coin.utxo_id.into(),
                         coin.amount,
-                        coin.asset_id.0 .0 .0.into(),
+                        coin.asset_id.into(),
                         Default::default(),
                         coin.maturity.into(),
                     );
@@ -396,8 +396,8 @@ mod message_coin {
             if let CoinType::MessageCoin(message) = coin {
                 script.add_unsigned_message_input(
                     secret_key,
-                    message.sender.0 .0 .0.into(),
-                    message.nonce.0 .0 .0.into(),
+                    message.sender.into(),
+                    message.nonce.into(),
                     message.amount,
                     vec![],
                 );

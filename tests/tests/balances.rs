@@ -53,9 +53,9 @@ async fn balance() {
                 tx_pointer_block_height: None,
                 tx_pointer_tx_idx: None,
                 maturity: None,
-                owner: owner.0 .0 .0.into(),
+                owner: owner.into(),
                 amount,
-                asset_id: asset_id.0 .0 .0.into(),
+                asset_id: asset_id.into(),
             })
             .collect(),
         ),
@@ -64,8 +64,8 @@ async fn balance() {
                 .into_iter()
                 .enumerate()
                 .map(|(nonce, (owner, amount))| MessageConfig {
-                    sender: owner.0 .0 .0.into(),
-                    recipient: owner.0 .0 .0.into(),
+                    sender: owner.into(),
+                    recipient: owner.into(),
                     nonce: (nonce as u64).into(),
                     amount,
                     data: vec![],
@@ -107,19 +107,19 @@ async fn balance() {
             match coin {
                 CoinType::Coin(coin) => tx.add_input(Input::coin_signed(
                     coin.utxo_id.into(),
-                    coin.owner.0 .0 .0.into(),
+                    coin.owner.into(),
                     coin.amount.into(),
-                    coin.asset_id.0 .0 .0.into(),
+                    coin.asset_id.into(),
                     Default::default(),
                     0,
                     coin.maturity.into(),
                 )),
                 CoinType::MessageCoin(message) => {
                     tx.add_input(Input::message_coin_signed(
-                        message.sender.0 .0 .0.into(),
-                        message.recipient.0 .0 .0.into(),
+                        message.sender.into(),
+                        message.recipient.into(),
                         message.amount.into(),
-                        message.nonce.0 .0 .0.into(),
+                        message.nonce.into(),
                         0,
                     ))
                 }
@@ -164,7 +164,7 @@ async fn first_5_balances() {
     let coins = {
         // setup all coins for all owners
         let mut coins = vec![];
-        for owner in all_owners {
+        for owner in &all_owners {
             coins.extend(
                 asset_ids
                     .clone()
@@ -182,7 +182,7 @@ async fn first_5_balances() {
                         tx_pointer_block_height: None,
                         tx_pointer_tx_idx: None,
                         maturity: None,
-                        owner: owner.into(),
+                        owner: (*owner).into(),
                         amount,
                         asset_id: asset_id.into(),
                     }),
@@ -195,7 +195,7 @@ async fn first_5_balances() {
         // setup all messages for all owners
         let mut messages = vec![];
         let mut nonce = 0;
-        for owner in all_owners.iter() {
+        for owner in &all_owners {
             messages.extend(vec![(owner, 60), (owner, 90)].into_iter().map(
                 |(owner, amount)| {
                     let message = MessageConfig {

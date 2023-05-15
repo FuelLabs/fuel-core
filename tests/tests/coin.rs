@@ -6,12 +6,10 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
-    types::{
-        primitives::UtxoId,
-        scalars::{
-            Address,
-            AssetId,
-        },
+    types::scalars::{
+        Address,
+        AssetId,
+        UtxoId,
     },
     FuelClient,
     PageDirection,
@@ -102,10 +100,10 @@ async fn only_asset_id_filtered_coins() {
     let coins: Vec<_> = (1..10usize)
         .map(|i| Coin {
             utxo_id: UtxoId::new([i as u8; 32].into(), 0),
-            owner: owner.0 .0 .0.into(),
+            owner: owner.into(),
             amount: i as Word,
             asset_id: if i <= 5 {
-                asset_id.0 .0 .0.into()
+                asset_id.into()
             } else {
                 Default::default()
             },
@@ -158,9 +156,9 @@ async fn get_coins_forwards_backwards(
     let coins: Vec<Coin> = (1..11usize)
         .map(|i| Coin {
             utxo_id: UtxoId::new([i as u8; 32].into(), 0),
-            owner: owner.0 .0 .0.into(),
+            owner: owner.into(),
             amount: i as Word,
-            asset_id: asset_id.0 .0 .0.into(),
+            asset_id: asset_id.into(),
             maturity: Default::default(),
             tx_pointer: Default::default(),
         })

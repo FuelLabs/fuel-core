@@ -3,7 +3,7 @@ use fuel_core::service::{
     FuelService,
 };
 use fuel_core_client::client::{
-    schema::node_info::NodeInfo,
+    types::NodeInfo,
     FuelClient,
 };
 
@@ -24,7 +24,7 @@ async fn node_info() {
 
     assert_eq!(utxo_validation, node_config.utxo_validation);
     assert_eq!(vm_backtrace, node_config.vm.backtrace);
-    assert_eq!(min_gas_price, node_config.txpool.min_gas_price.into());
-    assert_eq!(max_depth, node_config.txpool.max_depth.into());
-    assert_eq!(max_tx, node_config.txpool.max_tx.into());
+    assert_eq!(min_gas_price, node_config.txpool.min_gas_price);
+    assert_eq!(max_depth, node_config.txpool.max_depth as u64);
+    assert_eq!(max_tx, node_config.txpool.max_tx as u64);
 }

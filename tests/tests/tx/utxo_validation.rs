@@ -290,7 +290,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
     let deduped = total_blocks
         .results
         .iter()
-        .map(|b| b.header.height.0)
+        .map(|b| b.header.height)
         .dedup()
         .collect_vec();
 
@@ -302,7 +302,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
             b.transactions
                 .iter()
                 .skip(1 /* coinbase */)
-                .map(|t| t.id.clone().into())
+                .map(|t| t.clone().into())
         })
         .dedup_with_count()
         .map(|(count, id)| {

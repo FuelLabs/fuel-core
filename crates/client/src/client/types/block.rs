@@ -1,19 +1,18 @@
 use crate::client::{
     schema,
-    types::{
-        primitives,
-        scalars::{
-            BlockId,
-            Hash,
-            MerkleRoot,
-            PublicKey,
-            Signature,
-            Tai64Timestamp,
-            TransactionId,
-        },
+    types::scalars::{
+        BlockId,
+        Bytes64,
+        Hash,
+        MerkleRoot,
+        PublicKey,
+        Signature,
+        Tai64Timestamp,
+        TransactionId,
     },
     PaginatedResult,
 };
+// use crate::client::schema::TransactionId;
 
 #[derive(Debug)]
 pub struct Block {
@@ -110,8 +109,9 @@ impl From<schema::block::Genesis> for Genesis {
 
 impl From<schema::block::PoAConsensus> for PoAConsensus {
     fn from(value: schema::block::PoAConsensus) -> Self {
+        let bytes: [u8; 64] = value.signature.0 .0.into();
         Self {
-            signature: value.signature.into(),
+            signature: Signature::from_bytes(bytes),
         }
     }
 }
@@ -124,10 +124,7 @@ impl From<schema::block::Block> for Block {
             .map(|tx| tx.id.clone())
             .map(Into::into)
             .collect::<Vec<TransactionId>>();
-        let block_producer = value
-            .block_producer()
-            .map(Into::<primitives::Bytes64>::into)
-            .map(Into::into);
+        let block_producer = value.block_producer();
         Self {
             id: value.id.into(),
             header: value.header.into(),
