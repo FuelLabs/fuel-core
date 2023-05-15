@@ -94,9 +94,11 @@ where
     }
 
     fn get_finalized_da_height(&self) -> StorageResult<DaBlockHeight> {
-        Ok(*StorageAsRef::storage::<RelayerMetadata>(&self)
-            .get(&METADATA_KEY)?
-            .ok_or(not_found!("DaBlockHeight missing for relayer"))?)
+        Ok(DaBlockHeight(
+            *StorageAsRef::storage::<RelayerMetadata>(&self)
+                .get(&METADATA_KEY)?
+                .ok_or(not_found!("DaBlockHeight missing for relayer"))?,
+        ))
     }
 }
 

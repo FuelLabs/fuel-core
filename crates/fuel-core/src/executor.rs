@@ -115,12 +115,9 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 pub use ports::RelayerPort;
-use std::{
-    borrow::Cow,
-    ops::{
-        Deref,
-        DerefMut,
-    },
+use std::ops::{
+    Deref,
+    DerefMut,
 };
 use tracing::{
     debug,
@@ -234,7 +231,6 @@ where
                 StorageInspect::<Receipts>::get(temporary_db.as_ref(), &id)
                     .transpose()
                     .unwrap_or_else(|| Ok(Default::default()))
-                    .map(|v| v.into_owned())
             })
             .collect::<Result<Vec<Vec<Receipt>>, _>>()
             .map_err(Into::into)
@@ -1231,12 +1227,11 @@ where
         maturity: BlockHeight,
     ) -> ExecutorResult<CompressedCoin> {
         if self.config.utxo_validation {
-            db.storage::<Coins>()
-                .get(&utxo_id)?
-                .ok_or(ExecutorError::TransactionValidity(
+            db.storage::<Coins>().get(&utxo_id)?.ok_or(
+                ExecutorError::TransactionValidity(
                     TransactionValidityError::CoinDoesNotExist(utxo_id),
-                ))
-                .map(Cow::into_owned)
+                ),
+            )
         } else {
             // if utxo validation is disabled, just assign this new input to the original block
             Ok(CompressedCoin {
@@ -2748,8 +2743,7 @@ mod tests {
             .storage::<Transactions>()
             .get(&executed_tx.id(&ConsensusParameters::DEFAULT))
             .unwrap()
-            .unwrap()
-            .into_owned();
+            .unwrap();
         assert_eq!(storage_tx, expected_tx);
     }
 
@@ -2820,8 +2814,7 @@ mod tests {
             .storage::<Transactions>()
             .get(&expected_tx.id(&ConsensusParameters::DEFAULT))
             .unwrap()
-            .unwrap()
-            .into_owned();
+            .unwrap();
         assert_eq!(storage_tx, expected_tx);
     }
 
@@ -2932,8 +2925,7 @@ mod tests {
             .storage::<Transactions>()
             .get(&expected_tx.id(&ConsensusParameters::DEFAULT))
             .unwrap()
-            .unwrap()
-            .into_owned();
+            .unwrap();
         assert_eq!(storage_tx, expected_tx);
     }
 

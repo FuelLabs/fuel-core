@@ -58,9 +58,7 @@ impl<D: DatabasePort + ?Sized> ContractQueryData for D {
         let contract = self
             .storage::<ContractsRawCode>()
             .get(&id)?
-            .ok_or(not_found!(ContractsRawCode))?
-            .into_owned();
-
+            .ok_or(not_found!(ContractsRawCode))?;
         Ok(contract.into())
     }
 
@@ -68,8 +66,7 @@ impl<D: DatabasePort + ?Sized> ContractQueryData for D {
         let ContractInfo { salt, .. } = self
             .storage::<ContractsInfo>()
             .get(&id)?
-            .ok_or(not_found!(ContractsInfo))?
-            .into_owned();
+            .ok_or(not_found!(ContractsInfo))?;
 
         Ok(salt)
     }
@@ -82,8 +79,7 @@ impl<D: DatabasePort + ?Sized> ContractQueryData for D {
         let amount = self
             .storage::<ContractsAssets>()
             .get(&(&contract_id, &asset_id).into())?
-            .ok_or(not_found!(ContractsAssets))?
-            .into_owned();
+            .ok_or(not_found!(ContractsAssets))?;
 
         Ok(ContractBalance {
             owner: contract_id,

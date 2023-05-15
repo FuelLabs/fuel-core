@@ -52,7 +52,7 @@ pub trait MockStorageMethods {
     fn get<M: Mappable + 'static>(
         &self,
         key: &M::Key,
-    ) -> StorageResult<Option<std::borrow::Cow<'_, M::OwnedValue>>>;
+    ) -> StorageResult<Option<M::OwnedValue>>;
 
     /// The mocked implementation fot the `StorageInspect<M>::contains_key` method.
     fn contains_key<M: Mappable + 'static>(&self, key: &M::Key) -> StorageResult<bool>;
@@ -86,7 +86,7 @@ mockall::mock! {
         fn get<M: Mappable + 'static>(
             &self,
             key: &M::Key,
-        ) -> StorageResult<Option<std::borrow::Cow<'static, M::OwnedValue>>>;
+        ) -> StorageResult<Option<M::OwnedValue>>;
 
         fn contains_key<M: Mappable + 'static>(&self, key: &M::Key) -> StorageResult<bool>;
 
@@ -143,10 +143,7 @@ where
 {
     type Error = StorageError;
 
-    fn get(
-        &self,
-        key: &M::Key,
-    ) -> StorageResult<Option<std::borrow::Cow<M::OwnedValue>>> {
+    fn get(&self, key: &M::Key) -> StorageResult<Option<M::OwnedValue>> {
         MockStorageMethods::get::<M>(self, key)
     }
 

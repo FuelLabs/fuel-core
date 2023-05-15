@@ -44,7 +44,6 @@ use std::{
     borrow::{
         Borrow,
         BorrowMut,
-        Cow,
     },
     convert::{
         TryFrom,
@@ -60,9 +59,9 @@ use super::{
 impl StorageInspect<FuelBlocks> for Database {
     type Error = StorageError;
 
-    fn get(&self, key: &BlockId) -> Result<Option<Cow<CompressedBlock>>, Self::Error> {
+    fn get(&self, key: &BlockId) -> Result<Option<CompressedBlock>, Self::Error> {
         let value = Database::get(self, key.as_slice(), Column::FuelBlocks)?;
-        Ok(value.map(|b| Cow::Owned(b.owned())))
+        Ok(value.map(|b| b.owned()))
     }
 
     fn contains_key(&self, key: &BlockId) -> Result<bool, Self::Error> {
@@ -142,7 +141,7 @@ impl Database {
     }
 
     /// Get the current block at the head of the chain.
-    pub fn get_current_block(&self) -> StorageResult<Option<Cow<CompressedBlock>>> {
+    pub fn get_current_block(&self) -> StorageResult<Option<CompressedBlock>> {
         let block_ids = self.ids_of_latest_block()?;
         match block_ids {
             Some((_, id)) => Ok(StorageAsRef::storage::<FuelBlocks>(self).get(&id)?),
@@ -238,10 +237,9 @@ impl Database {
                     self.storage::<Transactions>()
                         .get(tx_id)
                         .and_then(|tx| tx.ok_or(not_found!(Transactions)))
-                        .map(Cow::into_owned)
                 })
                 .try_collect()?;
-            Ok(Some(block.into_owned().uncompress(txs)))
+            Ok(Some(block.uncompress(txs)))
         } else {
             Ok(None)
         }

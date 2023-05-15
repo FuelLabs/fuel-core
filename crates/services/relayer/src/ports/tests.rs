@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use fuel_core_storage::test_helpers::MockStorage;
 use fuel_core_types::entities::message::Message;
 use test_case::test_case;
@@ -19,7 +17,7 @@ fn test_insert_messages() {
     db.expect_commit().returning(|| Ok(()));
     db.expect_get::<RelayerMetadata>()
         .once()
-        .returning(|_| Ok(Some(std::borrow::Cow::Owned(9u64.into()))));
+        .returning(|_| Ok(Some(9u64.into())));
     let mut db = db.into_transactional();
 
     let m = Message {
@@ -63,7 +61,7 @@ fn insert_always_raises_da_height_monotonically() {
     db.expect_commit().returning(|| Ok(()));
     db.expect_get::<RelayerMetadata>()
         .once()
-        .returning(|_| Ok(Some(std::borrow::Cow::Owned(9u64.into()))));
+        .returning(|_| Ok(Some(9u64.into())));
 
     let mut db = db.into_transactional();
     db.insert_messages(&5u64.into(), &messages[..5]).unwrap();
@@ -88,10 +86,10 @@ fn set_raises_da_height_monotonically(
             .withf(move |_, v| **v == h)
             .returning(|_, _| Ok(None));
     }
-    let get = get.into().map(|g| Cow::Owned(g.into()));
+    let get = get.into();
     db.expect_get::<RelayerMetadata>()
         .once()
-        .returning(move |_| Ok(get.clone()));
+        .returning(move |_| Ok(get.map(|d| DaBlockHeight(d))));
     db.expect_commit().returning(|| Ok(()));
 
     let mut db = db.into_transactional();

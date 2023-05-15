@@ -39,7 +39,6 @@ use fuel_core_types::{
 };
 use futures::StreamExt;
 use std::{
-    borrow::Cow,
     convert::TryInto,
     ops::Deref,
 };
@@ -292,7 +291,6 @@ impl<D> SharedState<D> {
             .database
             .storage::<Messages>()
             .get(id)?
-            .map(Cow::into_owned)
             .filter(|message| message.da_height <= *da_height))
     }
 

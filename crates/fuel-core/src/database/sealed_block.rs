@@ -46,7 +46,7 @@ impl Database {
         if let (Some(block), Some(consensus)) = (block, consensus) {
             let sealed_block = SealedBlock {
                 entity: block,
-                consensus: consensus.into_owned(),
+                consensus,
             };
 
             Ok(Some(sealed_block))
@@ -72,8 +72,7 @@ impl Database {
         let (_, genesis_block_id) = self.ids_of_genesis_block()?;
         let consensus = self
             .storage::<SealedBlockConsensus>()
-            .get(&genesis_block_id)?
-            .map(|c| c.into_owned());
+            .get(&genesis_block_id)?;
 
         if let Some(Consensus::Genesis(genesis)) = consensus {
             Ok(genesis)
@@ -102,8 +101,8 @@ impl Database {
 
         if let (Some(header), Some(consensus)) = (header, consensus) {
             let sealed_block = SealedBlockHeader {
-                entity: header.into_owned().header().clone(),
-                consensus: consensus.into_owned(),
+                entity: header.header().clone(),
+                consensus,
             };
 
             Ok(Some(sealed_block))

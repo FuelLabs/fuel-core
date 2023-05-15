@@ -33,7 +33,6 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use primitive_types::U256;
-use std::borrow::Cow;
 
 /// Used to store metadata relevant during the execution of a transaction
 #[derive(Clone, Debug)]
@@ -93,7 +92,7 @@ where
 {
     type Error = StorageError;
 
-    fn get(&self, key: &M::Key) -> Result<Option<Cow<M::OwnedValue>>, Self::Error> {
+    fn get(&self, key: &M::Key) -> Result<Option<M::OwnedValue>, Self::Error> {
         StorageInspect::<M>::get(&self.database, key)
     }
 
@@ -198,7 +197,7 @@ impl InterpreterStorage for VmDatabase {
         contract_id: &ContractId,
         start_key: &Bytes32,
         range: Word,
-    ) -> Result<Vec<Option<Cow<Bytes32>>>, Self::DataError> {
+    ) -> Result<Vec<Option<Bytes32>>, Self::DataError> {
         // TODO: Optimization: Iterate only over `range` elements.
         let mut iterator = self.database.iter_all_filtered::<Vec<u8>, Bytes32, _, _>(
             Column::ContractsState,
@@ -226,8 +225,8 @@ impl InterpreterStorage for VmDatabase {
             while (expected_key <= actual_key) && results.len() < range {
                 if expected_key == actual_key {
                     // We found expected key, put value into results
-                    let v = row.value.owned();
-                    results.push(Some(Cow::Owned(v)));
+                    let v = row.value.clone().owned();
+                    results.push(Some(v));
                 } else {
                     // Iterator moved beyond next expected key, push none until we find the key
                     results.push(None);
@@ -410,7 +409,7 @@ mod tests {
             .merkle_contract_state_range(&contract_id, &Bytes32::new(start_key), range)
             .map_err(|_| ())?
             .into_iter()
-            .map(|v| v.map(Cow::into_owned).map(|v| *v))
+            .map(|v| v.map(|v| v.into()))
             .collect())
     }
 
@@ -500,7 +499,6 @@ mod tests {
                 let result = db
                     .merkle_contract_state(&contract_id, &current_key)
                     .unwrap()
-                    .map(Cow::into_owned)
                     .map(|b| *b);
                 result
             })
@@ -589,7 +587,6 @@ mod tests {
                 let result = db
                     .merkle_contract_state(&contract_id, &current_key)
                     .unwrap()
-                    .map(Cow::into_owned)
                     .map(|b| *b);
                 result
             })

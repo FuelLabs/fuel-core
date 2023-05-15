@@ -19,11 +19,7 @@ mod tests {
         StorageAsMut,
     };
     use fuel_core_types::{
-        fuel_types::{
-            Bytes32,
-            ContractId,
-            Salt,
-        },
+        fuel_types::ContractId,
         fuel_vm::Contract,
     };
     use rand::{
@@ -45,7 +41,7 @@ mod tests {
         let database = &mut Database::default();
         database
             .storage::<ContractsInfo>()
-            .insert(&contract_id, &IngestExternalFileOptions)
+            .insert(&contract_id, &info)
             .unwrap();
 
         assert_eq!(
@@ -53,8 +49,7 @@ mod tests {
                 .storage::<ContractsInfo>()
                 .get(&contract_id)
                 .unwrap()
-                .unwrap()
-                .into_owned(),
+                .unwrap(),
             info
         );
     }
@@ -75,7 +70,7 @@ mod tests {
             .insert(&contract_id, &info)
             .unwrap();
 
-        let returned: ContractInfo = *database
+        let returned: ContractInfo = database
             .storage::<ContractsInfo>()
             .get(&contract_id)
             .unwrap()

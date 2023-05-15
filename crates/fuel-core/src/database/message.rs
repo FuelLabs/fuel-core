@@ -23,10 +23,7 @@ use fuel_core_types::{
         Nonce,
     },
 };
-use std::{
-    borrow::Cow,
-    ops::Deref,
-};
+use std::ops::Deref;
 
 use super::{
     storage::DatabaseColumn,
@@ -36,11 +33,11 @@ use super::{
 impl StorageInspect<Messages> for Database {
     type Error = StorageError;
 
-    fn get(&self, key: &Nonce) -> Result<Option<Cow<Message>>, Self::Error> {
+    fn get(&self, key: &Nonce) -> Result<Option<Message>, Self::Error> {
         let key = key.database_key();
         let value: Option<DbValue<Message>> =
             Database::get(self, key.as_ref(), Column::Messages)?;
-        Ok(value.map(|b| Cow::Owned(b.owned())))
+        Ok(value.map(|b| b.owned()))
     }
 
     fn contains_key(&self, key: &Nonce) -> Result<bool, Self::Error> {

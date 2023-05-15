@@ -222,12 +222,11 @@ where
     rkyv::util::to_bytes::<_, 4096>(value).map_err(|_| DatabaseError::Codec)
 }
 
-fn deserialize<'a, T>(bytes: &'a [u8]) -> Result<T>
+fn deserialize<T>(bytes: &[u8]) -> Result<T>
 where
     T: Archive,
-    <T as Archive>::Archived: rkyv::CheckBytes<DefaultValidator<'a>>,
+    <T as Archive>::Archived: for<'a> rkyv::CheckBytes<DefaultValidator<'a>>,
     <T as Archive>::Archived: rkyv::Deserialize<T, SharedDeserializeMap>,
-    <T as Archive>::Archived: 'a,
 {
     let t: T = rkyv::from_bytes(&bytes).map_err(|_| DatabaseError::Codec)?;
     Ok(t)
@@ -267,16 +266,11 @@ impl Database {
         }
     }
 
-    fn remove<'a, R>(
-        &self,
-        key: &[u8],
-        column: Column,
-    ) -> DatabaseResult<Option<DbValue<R>>>
+    fn remove<R>(&self, key: &[u8], column: Column) -> DatabaseResult<Option<DbValue<R>>>
     where
         R: Archive,
-        <R as Archive>::Archived: rkyv::CheckBytes<DefaultValidator<'a>>,
+        <R as Archive>::Archived: for<'a> rkyv::CheckBytes<DefaultValidator<'a>>,
         <R as Archive>::Archived: rkyv::Deserialize<R, SharedDeserializeMap>,
-        <R as Archive>::Archived: 'a,
     {
         Ok(self.data.delete(key, column)?.map(|val| DbValue {
             raw: val,
@@ -437,7 +431,7 @@ impl Database {
     }
 }
 pub struct DbValue<V: Archive> {
-    raw: Arc<Vec<u8>>,
+    pub(crate) raw: Arc<Vec<u8>>,
     _phantom: core::marker::PhantomData<V>,
 }
 
@@ -450,21 +444,20 @@ impl<V: Archive + Clone> Clone for DbValue<V> {
     }
 }
 
-impl<'a, V> DbValue<V>
+impl<V> DbValue<V>
 where
     V: Archive,
-    <V as Archive>::Archived: rkyv::CheckBytes<DefaultValidator<'a>>,
+    <V as Archive>::Archived: for<'a> rkyv::CheckBytes<DefaultValidator<'a>>,
     <V as Archive>::Archived: rkyv::Deserialize<V, SharedDeserializeMap>,
-    <V as Archive>::Archived: 'a,
 {
     /// Archived value for zero-copy access
-    pub fn archived(&'a self) -> &'a V::Archived {
-        rkyv::check_archived_root::<'a, V>(&self.raw)
+    pub fn archived(&self) -> &V::Archived {
+        rkyv::check_archived_root::<'_, V>(&self.raw)
             .expect("Deserialization failed after validation")
     }
 
-    pub fn validate(&'a self) -> Result<()> {
-        if rkyv::check_archived_root::<'a, V>(&self.raw).is_ok() {
+    pub fn validate(&self) -> Result<()> {
+        if rkyv::check_archived_root::<'_, V>(&self.raw).is_ok() {
             Ok(())
         } else {
             Err(DatabaseError::Codec)
@@ -472,22 +465,10 @@ where
     }
 
     /// Deserialized value
-    pub fn alt_owned(self) -> &'a V {
-        &deserialize(&self.raw).expect("Deserialization failed after validation")
-    }
-}
-
-impl<'a, V> DbValue<V> 
-    where     V: Archive + Clone + 'a,
-    <V as Archive>::Archived: rkyv::CheckBytes<DefaultValidator<'a>>,
-    <V as Archive>::Archived: rkyv::Deserialize<V, SharedDeserializeMap>,
-    <V as Archive>::Archived: 'a,
-{
     pub fn owned(self) -> V {
-        self.alt_owned().clone()
+        deserialize(&self.raw).expect("Deserialization failed after validation")
     }
 }
-
 
 pub struct DbRow<K, V: Archive> {
     /// Row key

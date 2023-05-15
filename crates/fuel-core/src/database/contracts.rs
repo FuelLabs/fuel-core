@@ -35,7 +35,6 @@ use fuel_core_types::{
         Word,
     },
 };
-use std::borrow::Cow;
 
 impl DatabaseColumn for ContractsLatestUtxo {
     fn column() -> Column {
@@ -49,11 +48,10 @@ impl StorageInspect<ContractsRawCode> for Database {
     fn get(
         &self,
         key: &<ContractsRawCode as Mappable>::Key,
-    ) -> Result<Option<Cow<<ContractsRawCode as Mappable>::OwnedValue>>, Self::Error>
-    {
+    ) -> Result<Option<<ContractsRawCode as Mappable>::OwnedValue>, Self::Error> {
         Ok(self
             .read_alloc(key.as_ref(), Column::ContractsRawCode)?
-            .map(|v| Cow::Owned(Contract::from(v))))
+            .map(|v| Contract::from(v)))
     }
 
     fn contains_key(
@@ -162,15 +160,13 @@ impl Database {
             .storage::<ContractsRawCode>()
             .get(&contract_id)?
             .unwrap()
-            .into_owned()
             .into();
 
         let ContractInfo { salt, .. } = self
             .storage::<ContractsInfo>()
             .get(&contract_id)
             .unwrap()
-            .expect("Contract does not exist")
-            .into_owned();
+            .expect("Contract does not exist");
 
         let ContractUtxoInfo {
             utxo_id,
@@ -179,8 +175,7 @@ impl Database {
             .storage::<ContractsLatestUtxo>()
             .get(&contract_id)
             .unwrap()
-            .expect("contract does not exist")
-            .into_owned();
+            .expect("contract does not exist");
 
         let state = Some(
             self.iter_all_by_prefix::<Vec<u8>, Bytes32, _>(
@@ -292,7 +287,7 @@ mod tests {
 
         database
             .storage::<ContractsRawCode>()
-            .insert(&contract_id, contract.as_ref())
+            .insert(&contract_id, &contract)
             .unwrap();
 
         assert_eq!(
@@ -300,8 +295,7 @@ mod tests {
                 .storage::<ContractsRawCode>()
                 .get(&contract_id)
                 .unwrap()
-                .unwrap()
-                .into_owned(),
+                .unwrap(),
             contract
         );
     }
@@ -314,15 +308,14 @@ mod tests {
         let database = &mut Database::default();
         database
             .storage::<ContractsRawCode>()
-            .insert(&contract_id, contract.as_ref())
+            .insert(&contract_id, &contract)
             .unwrap();
 
         let returned: Contract = database
             .storage::<ContractsRawCode>()
             .get(&contract_id)
             .unwrap()
-            .unwrap()
-            .into_owned();
+            .unwrap();
         assert_eq!(returned, contract);
     }
 
@@ -337,15 +330,14 @@ mod tests {
         let database = &mut Database::default();
         database
             .storage::<ContractsRawCode>()
-            .insert(&contract_id, contract.as_ref())
+            .insert(&contract_id, &contract)
             .unwrap();
 
         let returned: Contract = database
             .storage::<ContractsRawCode>()
             .get(&contract_id)
             .unwrap()
-            .unwrap()
-            .into_owned();
+            .unwrap();
         assert_eq!(returned, contract);
     }
 
@@ -357,7 +349,7 @@ mod tests {
         let database = &mut Database::default();
         database
             .storage::<ContractsRawCode>()
-            .insert(&contract_id, contract.as_ref())
+            .insert(&contract_id, &contract)
             .unwrap();
 
         database
@@ -379,7 +371,7 @@ mod tests {
         let database = &mut Database::default();
         database
             .storage::<ContractsRawCode>()
-            .insert(&contract_id, contract.as_ref())
+            .insert(&contract_id, &contract)
             .unwrap();
 
         assert!(database
@@ -409,8 +401,7 @@ mod tests {
                 .storage::<ContractsLatestUtxo>()
                 .get(&contract_id)
                 .unwrap()
-                .unwrap()
-                .into_owned(),
+                .unwrap(),
             utxo_info
         );
     }
@@ -435,8 +426,7 @@ mod tests {
             .storage::<ContractsLatestUtxo>()
             .get(&contract_id)
             .unwrap()
-            .unwrap()
-            .into_owned();
+            .unwrap();
         assert_eq!(returned, utxo_info);
     }
 

@@ -48,7 +48,6 @@ use fuel_core_types::{
     services::txpool::TransactionStatus,
 };
 use itertools::Itertools;
-use std::borrow::Cow;
 
 #[cfg(test)]
 mod test;
@@ -82,7 +81,6 @@ impl<D: DatabasePort + ?Sized> MessageQueryData for D {
         self.storage::<Messages>()
             .get(id)?
             .ok_or(not_found!(Messages))
-            .map(Cow::into_owned)
     }
 
     fn owned_message_ids(

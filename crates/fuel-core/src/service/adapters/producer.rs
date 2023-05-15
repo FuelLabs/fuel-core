@@ -34,10 +34,7 @@ use fuel_core_types::{
         txpool::ArcPoolTx,
     },
 };
-use std::{
-    borrow::Cow,
-    sync::Arc,
-};
+use std::sync::Arc;
 
 impl BlockProducerAdapter {
     pub fn new(block_producer: fuel_core_producer::Producer<Database>) -> Self {
@@ -104,7 +101,7 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
 }
 
 impl fuel_core_producer::ports::BlockProducerDatabase for Database {
-    fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>> {
+    fn get_block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
         let id = self.get_block_id(height)?.ok_or(not_found!("BlockId"))?;
         self.storage::<FuelBlocks>()
             .get(&id)?

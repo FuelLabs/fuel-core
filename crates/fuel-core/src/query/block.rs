@@ -31,8 +31,7 @@ impl<D: DatabasePort + ?Sized> SimpleBlockData for D {
         let block = self
             .storage::<FuelBlocks>()
             .get(id)?
-            .ok_or_else(|| not_found!(FuelBlocks))?
-            .into_owned();
+            .ok_or_else(|| not_found!(FuelBlocks))?;
 
         Ok(block)
     }
@@ -91,8 +90,7 @@ impl<D: DatabasePort + ?Sized> BlockQueryData for D {
 
     fn consensus(&self, id: &BlockId) -> StorageResult<Consensus> {
         self.storage::<SealedBlockConsensus>()
-            .get(id)
-            .map(|c| c.map(|c| c.into_owned()))?
+            .get(id)?
             .ok_or(not_found!(SealedBlockConsensus))
     }
 }

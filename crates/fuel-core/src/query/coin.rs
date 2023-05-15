@@ -39,8 +39,7 @@ impl<D: DatabasePort + ?Sized> CoinQueryData for D {
         let coin = self
             .storage::<Coins>()
             .get(&utxo_id)?
-            .ok_or(not_found!(Coins))?
-            .into_owned();
+            .ok_or(not_found!(Coins))?;
 
         Ok(coin.uncompress(utxo_id))
     }

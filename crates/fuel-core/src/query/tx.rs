@@ -36,13 +36,13 @@ impl<D: DatabasePort + ?Sized> SimpleTransactionData for D {
     fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
         self.storage::<Transactions>()
             .get(tx_id)
-            .and_then(|v| v.ok_or(not_found!(Transactions)).map(|tx| tx.into_owned()))
+            .and_then(|v| v.ok_or(not_found!(Transactions)))
     }
 
     fn receipts(&self, tx_id: &TxId) -> StorageResult<Vec<Receipt>> {
         self.storage::<Receipts>()
             .get(tx_id)
-            .and_then(|v| v.ok_or(not_found!(Transactions)).map(|tx| tx.into_owned()))
+            .and_then(|v| v.ok_or(not_found!(Transactions)))
     }
 }
 

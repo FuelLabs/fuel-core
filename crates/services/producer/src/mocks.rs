@@ -38,7 +38,6 @@ use fuel_core_types::{
     },
 };
 use std::{
-    borrow::Cow,
     collections::HashMap,
     sync::{
         Arc,
@@ -206,12 +205,11 @@ pub struct MockDb {
 }
 
 impl BlockProducerDatabase for MockDb {
-    fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>> {
+    fn get_block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock> {
         let blocks = self.blocks.lock().unwrap();
         blocks
             .get(height)
             .cloned()
-            .map(Cow::Owned)
             .ok_or(not_found!("Didn't find block for test"))
     }
 

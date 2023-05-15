@@ -29,10 +29,7 @@ use rkyv::{
     Archive,
     Serialize,
 };
-use std::{
-    borrow::Cow,
-    ops::Deref,
-};
+use std::ops::Deref;
 
 /// Metadata for dense Merkle trees
 #[derive(
@@ -214,22 +211,29 @@ impl DatabaseColumn for ContractsStateMerkleMetadata {
     }
 }
 
-impl<'a, T> StorageInspect<T> for Database
+impl<T> StorageInspect<T> for Database
 where
     T: Mappable + DatabaseColumn,
     T::Key: ToDatabaseKey,
     T::OwnedValue: Archive,
     <<T as Mappable>::OwnedValue as Archive>::Archived:
-        rkyv::CheckBytes<DefaultValidator<'a>>,
+        for<'a> rkyv::CheckBytes<DefaultValidator<'a>>,
     <<T as Mappable>::OwnedValue as Archive>::Archived:
         rkyv::Deserialize<<T as Mappable>::OwnedValue, SharedDeserializeMap>,
-    <<T as Mappable>::OwnedValue as Archive>::Archived: 'a,
 {
     type Error = StorageError;
 
-    fn get(&self, key: &T::Key) -> StorageResult<Option<Cow<T::OwnedValue>>> {
-        let value = self.get(key.database_key().as_ref(), T::column())?;
-        Ok(value.map(|b| Cow::Owned(b.owned())))
+    fn get(&self, key: &T::Key) -> StorageResult<Option<T::OwnedValue>> {
+        let value =
+            self.get::<T::OwnedValue>(key.database_key().as_ref(), T::column())?;
+
+        if let Some(value) = value {
+            let x: T::OwnedValue =
+                rkyv::from_bytes(&value.raw).map_err(|_| StorageError::Codec)?;
+            Ok(Some(x.clone()))
+        } else {
+            Ok(None)
+        }
     }
 
     fn contains_key(&self, key: &T::Key) -> StorageResult<bool> {
@@ -237,26 +241,18 @@ where
     }
 }
 
-impl<'a, T> StorageMutate<T> for Database
+impl<T> StorageMutate<T> for Database
 where
     T: Mappable + DatabaseColumn,
     T::Key: ToDatabaseKey,
-    <T as Mappable>::Value: Archive,
-    <T as Mappable>::Value: 'a,
-    <T as Mappable>::Value: Serialize<rkyv::ser::serializers::AllocSerializer<4096>>,
     <T as Mappable>::OwnedValue: Archive,
-    <T as Mappable>::OwnedValue: Serialize<rkyv::ser::serializers::AllocSerializer<4096>>,
     <<T as Mappable>::OwnedValue as Archive>::Archived:
-        rkyv::CheckBytes<DefaultValidator<'a>>,
-    // <T as Mappable>::OwnedValue: rkyv::CheckBytes<DefaultValidator<'a>>,
-    // <T as Mappable>::OwnedValue: rkyv::Deserialize<<T as Mappable>::OwnedValue, SharedDeserializeMap>,
-    <<T as Mappable>::OwnedValue as Archive>::Archived:
-        rkyv::CheckBytes<DefaultValidator<'a>>,
+        for<'a> rkyv::CheckBytes<DefaultValidator<'a>>,
     <<T as Mappable>::OwnedValue as Archive>::Archived:
         rkyv::Deserialize<<T as Mappable>::OwnedValue, SharedDeserializeMap>,
+    <T as Mappable>::Value: Serialize<rkyv::ser::serializers::AllocSerializer<4096>>,
     <<T as Mappable>::Value as Archive>::Archived:
         rkyv::Deserialize<<T as Mappable>::Value, SharedDeserializeMap>,
-    <<T as Mappable>::OwnedValue as Archive>::Archived: 'a,
 {
     fn insert(
         &mut self,

@@ -29,10 +29,7 @@ use fuel_core_types::{
     fuel_types::ContractId,
 };
 use std::{
-    borrow::{
-        BorrowMut,
-        Cow,
-    },
+    borrow::BorrowMut,
     ops::Deref,
 };
 
@@ -42,9 +39,9 @@ impl StorageInspect<ContractsAssets> for Database {
     fn get(
         &self,
         key: &<ContractsAssets as Mappable>::Key,
-    ) -> Result<Option<Cow<<ContractsAssets as Mappable>::OwnedValue>>, Self::Error> {
+    ) -> Result<Option<<ContractsAssets as Mappable>::OwnedValue>, Self::Error> {
         let value = self.get(key.as_ref(), Column::ContractsAssets)?;
-        Ok(value.map(|b| Cow::Owned(b.owned())))
+        Ok(value.map(|b| b.owned()))
     }
 
     fn contains_key(
@@ -93,8 +90,7 @@ impl StorageMutate<ContractsAssets> for Database {
         &mut self,
         key: &<ContractsAssets as Mappable>::Key,
     ) -> Result<Option<<ContractsAssets as Mappable>::OwnedValue>, Self::Error> {
-        let prev = Database::remove(self, key.as_ref(), Column::ContractsAssets)
-;
+        let prev = Database::remove(self, key.as_ref(), Column::ContractsAssets);
 
         // Get latest metadata entry for this contract id
         let prev_metadata = self
@@ -172,8 +168,7 @@ mod tests {
                 .storage::<ContractsAssets>()
                 .get(&key)
                 .unwrap()
-                .unwrap()
-                .into_owned(),
+                .unwrap(),
             balance
         );
     }
@@ -194,7 +189,7 @@ mod tests {
             .get(&key)
             .unwrap()
             .unwrap();
-        assert_eq!(*returned, balance);
+        assert_eq!(returned, balance);
     }
 
     #[test]

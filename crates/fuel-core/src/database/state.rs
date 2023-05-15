@@ -29,10 +29,7 @@ use fuel_core_types::{
     fuel_types::ContractId,
 };
 use std::{
-    borrow::{
-        BorrowMut,
-        Cow,
-    },
+    borrow::BorrowMut,
     ops::Deref,
 };
 
@@ -42,9 +39,9 @@ impl StorageInspect<ContractsState> for Database {
     fn get(
         &self,
         key: &<ContractsState as Mappable>::Key,
-    ) -> Result<Option<Cow<<ContractsState as Mappable>::OwnedValue>>, Self::Error> {
+    ) -> Result<Option<<ContractsState as Mappable>::OwnedValue>, Self::Error> {
         let value = self.get(key.as_ref(), Column::ContractsState)?;
-        Ok(value.map(|b| Cow::Owned(b.owned())))
+        Ok(value.map(|b| (b.owned())))
     }
 
     fn contains_key(
@@ -93,8 +90,7 @@ impl StorageMutate<ContractsState> for Database {
         &mut self,
         key: &<ContractsState as Mappable>::Key,
     ) -> Result<Option<<ContractsState as Mappable>::OwnedValue>, Self::Error> {
-        let prev = Database::remove(self, key.as_ref(), Column::ContractsState)
-            ;
+        let prev = Database::remove(self, key.as_ref(), Column::ContractsState);
 
         // Get latest metadata entry for this contract id
         let prev_metadata = self
@@ -163,7 +159,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            *database
+            database
                 .storage::<ContractsState>()
                 .get(&key)
                 .unwrap()
@@ -183,7 +179,7 @@ mod tests {
             .insert(&key, &stored_value)
             .unwrap();
 
-        let returned: Bytes32 = *database
+        let returned: Bytes32 = database
             .storage::<ContractsState>()
             .get(&key)
             .unwrap()

@@ -602,8 +602,7 @@ mod tests {
             .storage::<ContractsState>()
             .get(&(&id, &test_key).into())
             .unwrap()
-            .expect("Expect a state entry to exist with test_key")
-            .into_owned();
+            .expect("Expect a state entry to exist with test_key");
 
         assert_eq!(test_value, ret)
     }
@@ -637,8 +636,7 @@ mod tests {
             .storage::<Messages>()
             .get(expected_msg.id())
             .unwrap()
-            .unwrap()
-            .into_owned();
+            .unwrap();
 
         assert_eq!(expected_msg, ret_msg);
     }
@@ -684,8 +682,7 @@ mod tests {
             .storage::<ContractsAssets>()
             .get(&(&id, &test_asset_id).into())
             .unwrap()
-            .expect("Expected a balance to be present")
-            .into_owned();
+            .expect("Expected a balance to be present");
 
         assert_eq!(test_balance, ret)
     }
@@ -764,7 +761,7 @@ mod tests {
                 let coin_id = r.unwrap();
                 db.storage::<Coins>()
                     .get(&coin_id)
-                    .map(|v| v.unwrap().into_owned().uncompress(coin_id))
+                    .map(|v| v.unwrap().uncompress(coin_id))
                     .unwrap()
             })
             .collect()

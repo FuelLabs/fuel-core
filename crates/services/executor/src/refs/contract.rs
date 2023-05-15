@@ -23,10 +23,7 @@ use fuel_core_types::{
         Result as ExecutorResult,
     },
 };
-use std::{
-    borrow::Cow,
-    error::Error as StdError,
-};
+use std::error::Error as StdError;
 
 /// The wrapper around `contract_id` to simplify work with `Contract` in the database.
 pub struct ContractRef<Database> {
@@ -62,10 +59,8 @@ where
 {
     pub fn utxo(
         &self,
-    ) -> Result<
-        Option<Cow<'_, <ContractsLatestUtxo as Mappable>::OwnedValue>>,
-        Database::Error,
-    > {
+    ) -> Result<Option<<ContractsLatestUtxo as Mappable>::OwnedValue>, Database::Error>
+    {
         self.database.storage().get(&self.contract_id)
     }
 }
@@ -79,7 +74,7 @@ where
         &self,
         utxo_validation: bool,
     ) -> ExecutorResult<<ContractsLatestUtxo as Mappable>::OwnedValue> {
-        let maybe_utxo_id = self.utxo()?.map(|utxo| utxo.into_owned());
+        let maybe_utxo_id = self.utxo()?;
         let expected_utxo_id = if utxo_validation {
             maybe_utxo_id.ok_or(ExecutorError::ContractUtxoMissing(self.contract_id))?
         } else {
@@ -130,7 +125,6 @@ where
             .storage::<ContractsLatestUtxo>()
             .get(&contract_id)?
             .ok_or(not_found!(ContractsLatestUtxo))?
-            .into_owned()
             .utxo_id;
 
         let state_root = self

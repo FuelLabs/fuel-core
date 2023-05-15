@@ -69,8 +69,7 @@ impl crate::executor::RelayerPort for MaybeRelayerAdapter {
                         Ok(fuel_core_storage::StorageAsRef::storage::<
                             fuel_core_storage::tables::Messages,
                         >(&self.database)
-                        .get(id)?
-                        .map(std::borrow::Cow::into_owned))
+                        .get(id)?)
                     } else {
                         Ok(None)
                     }

@@ -27,7 +27,6 @@ use fuel_core_types::{
         UtxoId,
     },
 };
-use std::borrow::Cow;
 
 use super::DbValue;
 
@@ -67,9 +66,9 @@ impl DatabaseColumn for OwnedCoins {
 impl StorageInspect<Coins> for Database {
     type Error = StorageError;
 
-    fn get(&self, key: &UtxoId) -> Result<Option<Cow<CompressedCoin>>, Self::Error> {
+    fn get(&self, key: &UtxoId) -> Result<Option<CompressedCoin>, Self::Error> {
         let value = Database::get(self, &utxo_id_to_bytes(key), Column::Coins)?;
-        Ok(value.map(|b| Cow::Owned(b.owned())))
+        Ok(value.map(|b| b.owned()))
     }
 
     fn contains_key(&self, key: &UtxoId) -> Result<bool, Self::Error> {
@@ -136,13 +135,9 @@ impl Database {
     }
 
     pub fn coin(&self, utxo_id: &UtxoId) -> StorageResult<CompressedCoin> {
-        let coin = self
-            .storage_as_ref::<Coins>()
+        self.storage_as_ref::<Coins>()
             .get(utxo_id)?
-            .ok_or(not_found!(Coins))?
-            .into_owned();
-
-        Ok(coin)
+            .ok_or(not_found!(Coins))
     }
 
     pub fn get_coin_config(&self) -> DatabaseResult<Option<Vec<CoinConfig>>> {

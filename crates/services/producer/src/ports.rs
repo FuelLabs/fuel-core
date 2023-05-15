@@ -22,11 +22,10 @@ use fuel_core_types::{
         txpool::ArcPoolTx,
     },
 };
-use std::borrow::Cow;
 
 pub trait BlockProducerDatabase: Send + Sync {
     /// Gets the committed block at the `height`.
-    fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>>;
+    fn get_block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock>;
 
     /// Gets the block header BMT MMR root at `height`.
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32>;
