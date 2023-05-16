@@ -348,13 +348,8 @@ impl FuelClient {
             .collect()
     }
 
-    /// Default dry run, matching the exact configuration as the node
+    /// Estimate predicates for the transaction
     pub async fn estimate(&self, tx: &Transaction) -> io::Result<HexString> {
-        self.estimate_opt(tx).await
-    }
-
-    /// Dry run with options to override the node behavior
-    pub async fn estimate_opt(&self, tx: &Transaction) -> io::Result<HexString> {
         let serialized_tx = tx.clone().to_bytes();
         let query = schema::tx::EstimatePredicates::build(EstimatePredicatesArg {
             tx: HexString(Bytes(serialized_tx)),

@@ -46,6 +46,7 @@ async fn subscribe_txn_status() {
             Default::default(),
             predicate,
             vec![],
+            0,
         );
         let tx: Transaction = Transaction::script(
             gas_price + (i as u64),

@@ -36,6 +36,7 @@ pub(crate) fn create_message_predicate_from_message(
             message.nonce,
             predicate,
             Default::default(),
+            0,
         ),
     )
 }

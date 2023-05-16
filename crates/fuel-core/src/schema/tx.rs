@@ -228,7 +228,7 @@ impl TxMutation {
         Ok(receipts.iter().map(Into::into).collect())
     }
 
-    /// Execute a dry-run of the transaction using a fork of current state, no changes are committed.
+    /// Estimate the predicate gas for the provided transaction
     async fn estimate_predicates(
         &self,
         tx: HexString,

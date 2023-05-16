@@ -380,6 +380,7 @@ pub fn run(c: &mut Criterion) {
             Default::default(),
             predicate,
             vec![],
+            0,
         );
         input.inputs.push(coin_input);
 
@@ -460,6 +461,7 @@ pub fn run(c: &mut Criterion) {
             Default::default(),
             predicate,
             vec![],
+            0,
         );
         input.inputs.push(coin_input);
         smo.throughput(Throughput::Bytes(i));

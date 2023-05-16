@@ -35,6 +35,7 @@ async fn transaction_with_valid_predicate_is_executed() {
             Default::default(),
             predicate,
             vec![],
+            0,
         ))
         .add_output(Output::change(rng.gen(), 0, asset_id))
         .gas_limit(limit)
@@ -87,6 +88,7 @@ async fn transaction_with_invalid_predicate_is_rejected() {
             Default::default(),
             predicate,
             vec![],
+            0,
         ))
         .add_output(Output::change(rng.gen(), 0, asset_id))
         .finalize();
@@ -122,6 +124,7 @@ async fn transaction_with_predicates_that_exhaust_gas_limit_are_rejected() {
             Default::default(),
             predicate,
             vec![],
+            0,
         ))
         .add_output(Output::change(rng.gen(), 0, asset_id))
         .finalize();

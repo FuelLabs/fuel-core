@@ -303,6 +303,7 @@ async fn can_get_message_proof() {
             Default::default(),
             predicate,
             vec![],
+            0,
         );
 
         // Set the contract input because we are calling a contract.
