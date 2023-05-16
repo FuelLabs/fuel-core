@@ -99,6 +99,7 @@ use types::{
     TransactionResponse,
     TransactionStatus,
 };
+use crate::client::schema::tx::EstimatePredicatesArg;
 
 use self::schema::{
     block::ProduceBlockArgs,
@@ -346,17 +347,17 @@ impl FuelClient {
     }
 
     /// Default dry run, matching the exact configuration as the node
-    pub async fn estimate(&self, tx: &Transaction) -> io::Result<Transaction> {
+    pub async fn estimate(&self, tx: &Transaction) -> io::Result<HexString> {
         self.estimate_opt(tx).await
     }
 
     /// Dry run with options to override the node behavior
-    pub async fn estimate_opt(&self, tx: &Transaction) -> io::Result<Transaction> {
-        let tx = tx.clone().to_bytes();
+    pub async fn estimate_opt(&self, tx: &Transaction) -> io::Result<HexString> {
+        let serialized_tx = tx.clone().to_bytes();
         let query = schema::tx::EstimatePredicates::build(EstimatePredicatesArg {
-            tx: HexString(Bytes(tx)),
+            tx: HexString(Bytes(serialized_tx)),
         });
-        // estimate predicates
+        self.query(query).await.map(|r| r.estimate_predicates)
     }
 
     pub async fn submit(&self, tx: &Transaction) -> io::Result<TransactionId> {

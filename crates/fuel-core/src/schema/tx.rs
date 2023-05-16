@@ -228,38 +228,43 @@ impl TxMutation {
     /// Execute a dry-run of the transaction using a fork of current state, no changes are committed.
     async fn estimate_predicates(
         &self,
-        ctx: &Context<'_>,
         tx: HexString,
     ) -> async_graphql::Result<HexString> {
-        let mut tx = FuelTx::from_bytes(&tx.0)?;
+        let tx = FuelTx::from_bytes(&tx.0)?;
 
         if tx.is_script() {
-            let mut script = tx.as_script().expect("script").clone();
+            let mut script_tx = tx.clone();
+            let script = script_tx.as_script_mut().ok_or(CheckError::PredicateVerificationFailed)?;
             // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
             let res: bool =
-                tokio_rayon::spawn_fifo(move || -> anyhow::Result<bool, CheckError> {
+            //     tokio_rayon::spawn_fifo(|| -> anyhow::Result<bool, CheckError> {
                     script
-                        .estimate_predicates(&ConsensusParameters::default(), &GasCosts::default())
-                })
-                    .await?;
-
-            tx = script.into();
+                        .estimate_predicates(&ConsensusParameters::default(), &GasCosts::default())?;
+                // })
+                //     .await?;
+            if res {
+                Ok(HexString(script_tx.to_bytes()))
+            } else {
+                Err(CheckError::PredicateVerificationFailed.into())
+            }
         } else if tx.is_create() {
-            let mut create = tx.as_create().expect("create").clone();
+            let mut create_tx = tx.clone();
+            let create = create_tx.as_create_mut().ok_or(CheckError::PredicateVerificationFailed)?;
             // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
             let res: bool =
-                tokio_rayon::spawn_fifo(move || -> anyhow::Result<bool, CheckError> {
+            //     tokio_rayon::spawn_fifo(|| -> anyhow::Result<bool, CheckError> {
                     create
-                        .estimate_predicates(&ConsensusParameters::default(), &GasCosts::default())
-                })
-                    .await?;
-
-            tx = create.into();
+                        .estimate_predicates(&ConsensusParameters::default(), &GasCosts::default())?;
+                // })
+                //     .await?;
+            if res {
+                Ok(HexString(create_tx.to_bytes()))
+            } else {
+                Err(CheckError::PredicateVerificationFailed.into())
+            }
+        } else {
+            Err(CheckError::PredicateVerificationFailed.into())
         }
-
-        Ok(HexString(tx.to_bytes()))
-
-
     }
 
     /// Submits transaction to the txpool

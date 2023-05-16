@@ -17,7 +17,6 @@ use crate::{
         TxPoolPort,
     },
     service::adapters::TxPoolAdapter,
-    state::IterDirection,
 };
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
@@ -75,7 +74,7 @@ use tokio_stream::wrappers::{
     errors::BroadcastStreamRecvError,
     BroadcastStream,
 };
-use crate::fuel_core_graphql_api::ports::EstimatePredicatesExecution;
+use fuel_core_storage::iter::IterDirection;
 
 impl DatabaseBlocks for Database {
     fn block_id(&self, height: &BlockHeight) -> StorageResult<BlockId> {
@@ -250,19 +249,6 @@ impl DryRunExecution for BlockProducerAdapter {
     ) -> anyhow::Result<Vec<TxReceipt>> {
         self.block_producer
             .dry_run(transaction, height, utxo_validation)
-            .await
-    }
-}
-
-#[async_trait]
-impl EstimatePredicatesExecution for BlockProducerAdapter {
-    async fn estimate_predicates(
-        &self,
-        transaction: Transaction,
-        height: Option<BlockHeight>,
-    ) -> anyhow::Result<Transaction> {
-        self.block_producer
-            .estimate_predicates(transaction, height)
             .await
     }
 }

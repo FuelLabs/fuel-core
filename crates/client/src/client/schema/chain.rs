@@ -24,7 +24,6 @@ pub struct ConsensusParameters {
     pub gas_per_byte: U64,
     pub max_message_data_length: U64,
     pub chain_id: U64,
-    pub max_gas_per_predicate: U64,
 }
 
 impl From<ConsensusParameters> for TxConsensusParameters {
@@ -44,7 +43,6 @@ impl From<ConsensusParameters> for TxConsensusParameters {
             gas_price_factor: params.gas_price_factor.into(),
             gas_per_byte: params.gas_per_byte.into(),
             max_message_data_length: params.max_message_data_length.into(),
-            max_gas_per_predicate: params.max_gas_per_predicate.into(),
             chain_id: params.chain_id.into(),
         }
     }

@@ -189,7 +189,6 @@ type ConsensusParameters {
 	gasPerByte: U64!
 	maxMessageDataLength: U64!
 	chainId: U64!
-	maxGasPerPredicate: U64!
 }
 
 type Contract {
@@ -453,6 +452,10 @@ type Mutation {
 	Execute a dry-run of the transaction using a fork of current state, no changes are committed.
 	"""
 	dryRun(tx: HexString!, utxoValidation: Boolean): [Receipt!]!
+	"""
+	Execute a dry-run of the transaction using a fork of current state, no changes are committed.
+	"""
+	estimatePredicates(tx: HexString!): HexString!
 	"""
 	Submits transaction to the txpool
 	"""

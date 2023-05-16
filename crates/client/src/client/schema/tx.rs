@@ -307,7 +307,7 @@ pub struct EstimatePredicatesArg {
 )]
 pub struct EstimatePredicates {
     #[arguments(tx: $tx)]
-    pub estimated_tx: OpaqueTransaction,
+    pub estimate_predicates: HexString,
     // Opaque transaction
 }
 
@@ -325,7 +325,7 @@ pub struct DryRunArg {
 )]
 pub struct DryRun {
     #[arguments(tx: $tx, utxoValidation: $utxo_validation)]
-    pub dry_run: OpaqueTransactionTransparentReceipts,
+    pub dry_run: Vec<transparent_receipt::Receipt>,
     // Opaque transaction
 }
 
