@@ -89,7 +89,7 @@ fn set_raises_da_height_monotonically(
     let get = get.into();
     db.expect_get::<RelayerMetadata>()
         .once()
-        .returning(move |_| Ok(get.map(|d| DaBlockHeight(d))));
+        .returning(move |_| Ok(get.map(DaBlockHeight)));
     db.expect_commit().returning(|| Ok(()));
 
     let mut db = db.into_transactional();

@@ -228,7 +228,7 @@ where
     <T as Archive>::Archived: for<'a> rkyv::CheckBytes<DefaultValidator<'a>>,
     <T as Archive>::Archived: rkyv::Deserialize<T, SharedDeserializeMap>,
 {
-    let t: T = rkyv::from_bytes(&bytes).map_err(|_| DatabaseError::Codec)?;
+    let t: T = rkyv::from_bytes(bytes).map_err(|_| DatabaseError::Codec)?;
     Ok(t)
 }
 

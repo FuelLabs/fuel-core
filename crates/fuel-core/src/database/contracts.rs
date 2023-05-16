@@ -51,7 +51,7 @@ impl StorageInspect<ContractsRawCode> for Database {
     ) -> Result<Option<<ContractsRawCode as Mappable>::OwnedValue>, Self::Error> {
         Ok(self
             .read_alloc(key.as_ref(), Column::ContractsRawCode)?
-            .map(|v| Contract::from(v)))
+            .map(Contract::from))
     }
 
     fn contains_key(

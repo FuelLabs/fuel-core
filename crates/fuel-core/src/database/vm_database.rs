@@ -496,11 +496,10 @@ mod tests {
                 let current_key =
                     U256::from_big_endian(&start_key).checked_add(i.into())?;
                 let current_key = u256_to_bytes32(current_key);
-                let result = db
+                db
                     .merkle_contract_state(&contract_id, &current_key)
                     .unwrap()
-                    .map(|b| *b);
-                result
+                    .map(|b| *b)
             })
             .collect();
 
@@ -584,11 +583,10 @@ mod tests {
             .filter_map(|i| {
                 let current_key = U256::from_big_endian(&start_key) + i;
                 let current_key = u256_to_bytes32(current_key);
-                let result = db
+                db
                     .merkle_contract_state(&contract_id, &current_key)
                     .unwrap()
-                    .map(|b| *b);
-                result
+                    .map(|b| *b)
             })
             .collect();
 

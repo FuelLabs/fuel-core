@@ -228,9 +228,7 @@ where
             self.get::<T::OwnedValue>(key.database_key().as_ref(), T::column())?;
 
         if let Some(value) = value {
-            let x: T::OwnedValue =
-                rkyv::from_bytes(&value.raw).map_err(|_| StorageError::Codec)?;
-            Ok(Some(x.clone()))
+            Ok(Some(value.owned()))
         } else {
             Ok(None)
         }
