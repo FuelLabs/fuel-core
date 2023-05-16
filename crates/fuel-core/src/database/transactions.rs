@@ -44,7 +44,7 @@ impl Database {
             start,
             direction,
         )
-        .map(|res| res.map(|row| row.value.owned()))
+        .map(|res| res.map(|(_, value)| value.owned()))
     }
 
     /// Iterates over a KV mapping of `[address + block height + tx idx] => transaction id`. This
@@ -66,11 +66,8 @@ impl Database {
             direction,
         )
         .map(|res| {
-            res.map(|row| {
-                (
-                    TxPointer::new(row.key.block_height, row.key.tx_idx),
-                    row.value.owned(),
-                )
+            res.map(|(key, value)| {
+                (TxPointer::new(key.block_height, key.tx_idx), value.owned())
             })
         })
     }

@@ -51,10 +51,7 @@ use std::{
     },
 };
 
-use super::{
-    DbRow,
-    DbValue,
-};
+use super::DbValue;
 
 impl StorageInspect<FuelBlocks> for Database {
     type Error = StorageError;
@@ -93,7 +90,7 @@ impl StorageMutate<FuelBlocks> for Database {
             )
             .next()
             .transpose()?
-            .map(|row| row.value.owned())
+            .map(|(_, value)| value.owned())
             .unwrap_or_default();
 
         let storage = self.borrow_mut();
@@ -180,13 +177,12 @@ impl Database {
             Some(direction),
         )
         .map(|res| {
-            let row = res?;
-            let block_height_bytes: [u8; 4] = row
-                .key
+            let (key, value) = res?;
+            let block_height_bytes: [u8; 4] = key
                 .as_slice()
                 .try_into()
                 .expect("block height always has correct number of bytes");
-            Ok((block_height_bytes.into(), row.value.owned()))
+            Ok((block_height_bytes.into(), value.owned()))
         })
     }
 
@@ -197,10 +193,10 @@ impl Database {
         )
         .next()
         .ok_or(DatabaseError::ChainUninitialized)?
-        .map(|row: DbRow<Vec<u8>, BlockId>| {
-            let bytes = <[u8; 4]>::try_from(row.key.as_slice())
+        .map(|(key, value): (Vec<u8>, DbValue<BlockId>)| {
+            let bytes = <[u8; 4]>::try_from(key.as_slice())
                 .expect("all block heights are stored with the correct amount of bytes");
-            (u32::from_be_bytes(bytes).into(), row.value.owned())
+            (u32::from_be_bytes(bytes).into(), value.owned())
         })
     }
 
@@ -212,10 +208,10 @@ impl Database {
             )
             .next()
             .transpose()?
-            .map(|row| {
+            .map(|(key, value)| {
                 // safety: we know that all block heights are stored with the correct amount of bytes
-                let bytes = <[u8; 4]>::try_from(row.key.as_slice()).unwrap();
-                (u32::from_be_bytes(bytes).into(), row.value.owned())
+                let bytes = <[u8; 4]>::try_from(key.as_slice()).unwrap();
+                (u32::from_be_bytes(bytes).into(), value.owned())
             });
 
         Ok(ids)

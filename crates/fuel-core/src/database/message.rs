@@ -103,8 +103,8 @@ impl Database {
             direction,
         )
         .map(|res| {
-            res.map(|row| {
-                Nonce::try_from(&row.key[Address::LEN..Address::LEN + Nonce::LEN])
+            res.map(|(key, _)| {
+                Nonce::try_from(&key[Address::LEN..Address::LEN + Nonce::LEN])
                     .expect("key is always {Nonce::LEN} bytes")
             })
         })
@@ -117,7 +117,7 @@ impl Database {
     ) -> impl Iterator<Item = DatabaseResult<Message>> + '_ {
         let start = start.map(|v| v.deref().to_vec());
         self.iter_all_by_start::<Vec<u8>, Message, _>(Column::Messages, start, direction)
-            .map(|res| res.map(|row| row.value.owned()))
+            .map(|res| res.map(|(_, value)| value.owned()))
     }
 
     pub fn get_message_config(&self) -> StorageResult<Option<Vec<MessageConfig>>> {

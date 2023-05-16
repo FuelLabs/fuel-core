@@ -218,14 +218,14 @@ impl InterpreterStorage for VmDatabase {
                 break
             }
 
-            let row =
+            let (key, value) =
                 entry.expect("We did a check before, so the entry should be `Some`");
-            let actual_key = U256::from_big_endian(&row.key[32..]);
+            let actual_key = U256::from_big_endian(&key[32..]);
 
             while (expected_key <= actual_key) && results.len() < range {
                 if expected_key == actual_key {
                     // We found expected key, put value into results
-                    let v = row.value.clone().owned();
+                    let v = value.clone().owned();
                     results.push(Some(v));
                 } else {
                     // Iterator moved beyond next expected key, push none until we find the key
@@ -496,8 +496,7 @@ mod tests {
                 let current_key =
                     U256::from_big_endian(&start_key).checked_add(i.into())?;
                 let current_key = u256_to_bytes32(current_key);
-                db
-                    .merkle_contract_state(&contract_id, &current_key)
+                db.merkle_contract_state(&contract_id, &current_key)
                     .unwrap()
                     .map(|b| *b)
             })
@@ -583,8 +582,7 @@ mod tests {
             .filter_map(|i| {
                 let current_key = U256::from_big_endian(&start_key) + i;
                 let current_key = u256_to_bytes32(current_key);
-                db
-                    .merkle_contract_state(&contract_id, &current_key)
+                db.merkle_contract_state(&contract_id, &current_key)
                     .unwrap()
                     .map(|b| *b)
             })

@@ -125,10 +125,10 @@ impl Database {
         )
         // Safety: key is always 64 bytes
         .map(|res| {
-            res.map(|row| {
+            res.map(|(key, _)| {
                 UtxoId::new(
-                    TxId::try_from(&row.key[32..64]).expect("The slice has size 32"),
-                    row.key[64],
+                    TxId::try_from(&key[32..64]).expect("The slice has size 32"),
+                    key[64],
                 )
             })
         })
@@ -144,13 +144,13 @@ impl Database {
         let configs = self
             .iter_all::<Vec<u8>, CompressedCoin>(Column::Coins, None)
             .map(|raw_coin| -> DatabaseResult<CoinConfig> {
-                let row = raw_coin?;
+                let (key, value) = raw_coin?;
 
                 let byte_id =
-                    Bytes32::new(row.key[..32].try_into().map_err(DatabaseError::from)?);
-                let output_index = row.key[32];
+                    Bytes32::new(key[..32].try_into().map_err(DatabaseError::from)?);
+                let output_index = key[32];
 
-                let value = row.value.owned();
+                let value = value.owned();
 
                 Ok(CoinConfig {
                     tx_id: Some(byte_id),

@@ -183,13 +183,13 @@ impl Database {
                 Some(contract_id.as_ref()),
             )
             .map(|res| -> DatabaseResult<(Bytes32, Bytes32)> {
-                let safe_res = res?;
+                let (key, safe_res) = res?;
 
                 // We don't need to store ContractId which is the first 32 bytes of this
                 // key, as this Vec is already attached to that ContractId
-                let state_key = Bytes32::new(safe_res.key[32..].try_into()?);
+                let state_key = Bytes32::new(key[32..].try_into()?);
 
-                Ok((state_key, safe_res.value.owned()))
+                Ok((state_key, safe_res.owned()))
             })
             .filter(|val| val.is_ok())
             .collect::<DatabaseResult<Vec<(Bytes32, Bytes32)>>>()?,
@@ -201,12 +201,12 @@ impl Database {
                 Some(contract_id.as_ref()),
             )
             .map(|res| {
-                let row = res?;
+                let (key, value) = res?;
 
                 let asset_id =
-                    AssetId::new(row.key[32..].try_into().map_err(DatabaseError::from)?);
+                    AssetId::new(key[32..].try_into().map_err(DatabaseError::from)?);
 
-                Ok((asset_id, row.value.owned()))
+                Ok((asset_id, value.owned()))
             })
             .filter(|val| val.is_ok())
             .collect::<StorageResult<Vec<(AssetId, u64)>>>()?,
@@ -237,11 +237,8 @@ impl Database {
             direction,
         )
         .map(|res| {
-            res.map(|row| {
-                (
-                    AssetId::new(row.key[32..].try_into().unwrap()),
-                    row.value.owned(),
-                )
+            res.map(|(key, value)| {
+                (AssetId::new(key[32..].try_into().unwrap()), value.owned())
             })
         })
     }
@@ -250,11 +247,9 @@ impl Database {
         let configs = self
             .iter_all::<Vec<u8>, Word>(Column::ContractsRawCode, None)
             .map(|row| -> StorageResult<ContractConfig> {
-                let contract_id = ContractId::new(
-                    row.unwrap().key[..32]
-                        .try_into()
-                        .map_err(DatabaseError::from)?,
-                );
+                let (key, _) = row.unwrap();
+                let contract_id =
+                    ContractId::new(key[..32].try_into().map_err(DatabaseError::from)?);
                 self.get_contract_config_by_id(contract_id)
             })
             .collect::<StorageResult<Vec<ContractConfig>>>()?;
