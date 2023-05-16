@@ -40,11 +40,20 @@ use fuel_core_storage::{
 use fuel_core_types::{
     fuel_tx::{
         Cacheable,
+        CheckError,
+        ConsensusParameters,
         Transaction as FuelTx,
         UniqueIdentifier,
     },
     fuel_types,
-    fuel_types::bytes::Deserializable,
+    fuel_types::bytes::{
+        Deserializable,
+        SerializableVec,
+    },
+    fuel_vm::{
+        checked_transaction::EstimatePredicates,
+        GasCosts,
+    },
 };
 use futures::{
     Stream,
@@ -55,10 +64,6 @@ use std::{
     iter,
     sync::Arc,
 };
-use fuel_core_types::fuel_tx::{CheckError, ConsensusParameters};
-use fuel_core_types::fuel_types::bytes::SerializableVec;
-use fuel_core_types::fuel_vm::checked_transaction::EstimatePredicates;
-use fuel_core_types::fuel_vm::GasCosts;
 use types::Transaction;
 
 use self::types::TransactionStatus;
@@ -219,9 +224,7 @@ impl TxMutation {
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute(&config.transaction_parameters);
 
-        let receipts = block_producer
-            .dry_run_tx(tx, None, utxo_validation)
-            .await?;
+        let receipts = block_producer.dry_run_tx(tx, None, utxo_validation).await?;
         Ok(receipts.iter().map(Into::into).collect())
     }
 
@@ -234,14 +237,16 @@ impl TxMutation {
 
         if tx.is_script() {
             let mut script_tx = tx.clone();
-            let script = script_tx.as_script_mut().ok_or(CheckError::PredicateVerificationFailed)?;
+            let script = script_tx
+                .as_script_mut()
+                .ok_or(CheckError::PredicateVerificationFailed)?;
             // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
             let res: bool =
             //     tokio_rayon::spawn_fifo(|| -> anyhow::Result<bool, CheckError> {
                     script
                         .estimate_predicates(&ConsensusParameters::default(), &GasCosts::default())?;
-                // })
-                //     .await?;
+            // })
+            //     .await?;
             if res {
                 Ok(HexString(script_tx.to_bytes()))
             } else {
@@ -249,14 +254,16 @@ impl TxMutation {
             }
         } else if tx.is_create() {
             let mut create_tx = tx.clone();
-            let create = create_tx.as_create_mut().ok_or(CheckError::PredicateVerificationFailed)?;
+            let create = create_tx
+                .as_create_mut()
+                .ok_or(CheckError::PredicateVerificationFailed)?;
             // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
             let res: bool =
             //     tokio_rayon::spawn_fifo(|| -> anyhow::Result<bool, CheckError> {
                     create
                         .estimate_predicates(&ConsensusParameters::default(), &GasCosts::default())?;
-                // })
-                //     .await?;
+            // })
+            //     .await?;
             if res {
                 Ok(HexString(create_tx.to_bytes()))
             } else {

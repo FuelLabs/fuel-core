@@ -5,7 +5,10 @@ use crate::client::schema::{
         SpendQueryElementInput,
     },
     contract::ContractBalanceQueryArgs,
-    tx::DryRunArg,
+    tx::{
+        DryRunArg,
+        EstimatePredicatesArg,
+    },
     Tai64Timestamp,
 };
 use anyhow::Context;
@@ -99,7 +102,6 @@ use types::{
     TransactionResponse,
     TransactionStatus,
 };
-use crate::client::schema::tx::EstimatePredicatesArg;
 
 use self::schema::{
     block::ProduceBlockArgs,

@@ -24,6 +24,7 @@ use fuel_core_storage::{
     iter::{
         BoxedIter,
         IntoBoxedIter,
+        IterDirection,
     },
     not_found,
     Error as StorageError,
@@ -74,7 +75,6 @@ use tokio_stream::wrappers::{
     errors::BroadcastStreamRecvError,
     BroadcastStream,
 };
-use fuel_core_storage::iter::IterDirection;
 
 impl DatabaseBlocks for Database {
     fn block_id(&self, height: &BlockHeight) -> StorageResult<BlockId> {

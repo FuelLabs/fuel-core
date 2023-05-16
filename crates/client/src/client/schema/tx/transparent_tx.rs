@@ -317,7 +317,7 @@ impl TryFrom<Input> for fuel_tx::Input {
                         coin.maturity.into(),
                         coin.predicate.into(),
                         coin.predicate_data.into(),
-						coin.predicate_gas_used.into(),
+                        coin.predicate_gas_used.into(),
                     )
                 }
             }
@@ -365,7 +365,7 @@ impl TryFrom<Input> for fuel_tx::Input {
                         message.data.into(),
                         message.predicate.into(),
                         message.predicate_data.into(),
-						message.predicate_gas_used.into(),
+                        message.predicate_gas_used.into(),
                     ),
                 }
             }
