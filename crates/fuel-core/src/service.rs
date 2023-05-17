@@ -308,6 +308,7 @@ mod tests {
             i += 1;
         }
 
+        // current services: graphql, txpool, PoA
         #[allow(unused_mut)]
         let mut expected_services = 3;
 
@@ -318,8 +319,8 @@ mod tests {
         // }
         #[cfg(feature = "p2p")]
         {
-            // p2p
-            expected_services += 1;
+            // p2p & sync
+            expected_services += 2;
         }
 
         // # Dev-note: Update the `expected_services` when we add/remove a new/old service.
