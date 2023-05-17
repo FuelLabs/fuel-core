@@ -142,8 +142,8 @@ async fn only_asset_id_filtered_coins() {
 #[rstest]
 #[tokio::test]
 async fn get_coins_forwards_backwards(
-    #[values(Address::default(), Address::new([16; 32]))] owner: Address,
-    #[values(AssetId::new([1u8; 32]), AssetId::new([32u8; 32]))] asset_id: AssetId,
+    #[values(Address::default(), Address::from([16; 32]))] owner: Address,
+    #[values(AssetId::from([1u8; 32]), AssetId::from([32u8; 32]))] asset_id: AssetId,
 ) {
     // setup test data in the node
     let coins: Vec<Coin> = (1..11usize)

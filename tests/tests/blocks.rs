@@ -7,10 +7,7 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
-    types::{
-        scalars::PublicKey,
-        TransactionStatus,
-    },
+    types::TransactionStatus,
     FuelClient,
     PageDirection,
     PaginationRequest,
