@@ -155,16 +155,16 @@ async fn balance() {
 
 #[tokio::test]
 async fn first_5_balances() {
-    let owner = Address::new([10u8; 32]);
+    let owner = Address::from([10u8; 32]);
     let asset_ids = (0..=5u8)
         .map(|i| AssetId::new([i; 32]))
         .collect::<Vec<AssetId>>();
 
-    let all_owners = vec![Address::default(), owner, Address::new([20u8; 32])];
+    let all_owners = vec![Address::default(), owner, Address::from([20u8; 32])];
     let coins = {
         // setup all coins for all owners
         let mut coins = vec![];
-        for owner in &all_owners {
+        for owner in all_owners.iter() {
             coins.extend(
                 asset_ids
                     .clone()
@@ -182,7 +182,7 @@ async fn first_5_balances() {
                         tx_pointer_block_height: None,
                         tx_pointer_tx_idx: None,
                         maturity: None,
-                        owner: (*owner),
+                        owner: *owner,
                         amount,
                         asset_id,
                     }),
@@ -195,12 +195,12 @@ async fn first_5_balances() {
         // setup all messages for all owners
         let mut messages = vec![];
         let mut nonce = 0;
-        for owner in &all_owners {
+        for owner in all_owners.iter() {
             messages.extend(vec![(owner, 60), (owner, 90)].into_iter().map(
                 |(owner, amount)| {
                     let message = MessageConfig {
-                        sender: (*owner),
-                        recipient: (*owner),
+                        sender: *owner,
+                        recipient: *owner,
                         nonce: (nonce as u64).into(),
                         amount,
                         data: vec![],
