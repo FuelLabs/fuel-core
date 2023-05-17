@@ -142,9 +142,9 @@ pub fn init_sub_services(
         .then(|| {
             fuel_core_sync::service::new_service(
                 *last_block.header().height(),
-                p2p_adapter.clone(),
+                p2p_adapter,
                 importer_adapter.clone(),
-                verifier.clone(),
+                verifier,
                 config.sync,
             )
         })
