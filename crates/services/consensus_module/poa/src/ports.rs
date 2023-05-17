@@ -88,6 +88,7 @@ pub trait RelayerPort {
 }
 
 #[async_trait::async_trait]
+#[cfg_attr(test, mockall::automock)]
 pub trait SyncPort: Send + Sync {
     /// await synchronization with the peers
     async fn sync_with_peers(&mut self) -> anyhow::Result<()>;

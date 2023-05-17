@@ -3,6 +3,7 @@ use crate::{
     ports::{
         MockBlockImporter,
         MockBlockProducer,
+        MockSyncPort,
         MockTransactionPool,
     },
     service::Task,
@@ -78,6 +79,16 @@ struct TestContextBuilder {
     producer: Option<MockBlockProducer>,
 }
 
+fn generate_sync_port() -> MockSyncPort {
+    let mut syncer = MockSyncPort::default();
+
+    syncer
+        .expect_sync_with_peers()
+        .return_once(move || Box::pin(async { Ok(()) }));
+
+    syncer
+}
+
 impl TestContextBuilder {
     fn new() -> Self {
         Self {
@@ -137,12 +148,15 @@ impl TestContextBuilder {
             .txpool
             .unwrap_or_else(MockTransactionPool::no_tx_updates);
 
+        let syncer = generate_sync_port();
+
         let service = new_service(
             &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
             config,
             txpool,
             producer,
             importer,
+            syncer,
         );
         service.start().unwrap();
         TestContext { service }
@@ -150,7 +164,8 @@ impl TestContextBuilder {
 }
 
 struct TestContext {
-    service: Service<MockTransactionPool, MockBlockProducer, MockBlockImporter>,
+    service:
+        Service<MockTransactionPool, MockBlockProducer, MockBlockImporter, MockSyncPort>,
 }
 
 impl TestContext {
@@ -307,12 +322,16 @@ async fn remove_skipped_transactions() {
         metrics: false,
         consensus_params: Default::default(),
     };
+
+    let syncer = generate_sync_port();
+
     let mut task = Task::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
         txpool,
         block_producer,
         block_importer,
+        syncer,
     );
 
     assert!(task.produce_next_block().await.is_ok());
@@ -348,12 +367,16 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         metrics: false,
         consensus_params: Default::default(),
     };
+
+    let syncer = generate_sync_port();
+
     let mut task = Task::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
         txpool,
         block_producer,
         block_importer,
+        syncer,
     );
 
     // simulate some txpool events to see if any block production is erroneously triggered
@@ -404,12 +427,16 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
         metrics: false,
         consensus_params: Default::default(),
     };
+
+    let syncer = generate_sync_port();
+
     let task = Task::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
         txpool,
         block_producer,
         block_importer,
+        syncer,
     );
 
     let service = Service::new(task);
