@@ -13,6 +13,7 @@ use rand::{
     Rng,
     SeedableRng,
 };
+use fuel_core_types::fuel_tx::field::Inputs;
 use fuel_core_types::fuel_vm::checked_transaction::EstimatePredicates;
 use fuel_core_types::fuel_vm::GasCosts;
 
@@ -43,9 +44,13 @@ async fn transaction_with_valid_predicate_is_executed() {
         .gas_limit(limit)
         .finalize();
 
+    assert_eq!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);
+
     predicate_tx
         .estimate_predicates(&ConsensusParameters::DEFAULT, &GasCosts::default())
         .expect("Predicate check failed");
+
+    assert_ne!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);
 
     // create test context with predicates disabled
     let context = TestSetupBuilder::default()
