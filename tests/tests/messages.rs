@@ -131,8 +131,7 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
 
     // verify messages owner matches
     for message in result.results {
-        let recipient: Address = message.recipient;
-        assert_eq!(recipient, owner_a)
+        assert_eq!(message.recipient, owner_a)
     }
 
     // get the messages from Owner B
@@ -393,7 +392,7 @@ async fn can_get_message_proof() {
                 &result.recipient,
                 &result.nonce,
                 result.amount,
-                result.data.as_ref(),
+                &result.data,
             );
 
             // Check message id is the same as the one passed in.
