@@ -14,6 +14,8 @@ pub struct ChainInfo {
     pub consensus_parameters: ConsensusParameters,
 }
 
+// GraphQL Translation
+
 impl From<schema::chain::ChainInfo> for ChainInfo {
     fn from(value: schema::chain::ChainInfo) -> Self {
         Self {

@@ -18,6 +18,8 @@ pub struct ConsensusParameters {
     pub chain_id: u64,
 }
 
+// GraphQL Translation
+
 impl From<ConsensusParameters> for fuel_core_types::fuel_tx::ConsensusParameters {
     fn from(value: ConsensusParameters) -> Self {
         Self {

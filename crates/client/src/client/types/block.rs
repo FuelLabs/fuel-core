@@ -11,7 +11,6 @@ use crate::client::{
     },
     PaginatedResult,
 };
-// use crate::client::schema::TransactionId;
 
 #[derive(Debug)]
 pub struct Block {
@@ -62,7 +61,7 @@ pub struct PoAConsensus {
     pub signature: Signature,
 }
 
-// GraphQL translation
+// GraphQL Translation
 
 impl From<schema::block::Header> for Header {
     fn from(value: schema::block::Header) -> Self {

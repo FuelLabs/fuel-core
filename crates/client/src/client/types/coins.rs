@@ -45,6 +45,8 @@ pub struct MessageCoin {
     pub da_height: u64,
 }
 
+// GraphQL Translation
+
 impl From<schema::coins::CoinType> for CoinType {
     fn from(value: schema::coins::CoinType) -> Self {
         match value {

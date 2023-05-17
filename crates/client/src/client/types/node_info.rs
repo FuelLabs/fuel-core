@@ -9,6 +9,8 @@ pub struct NodeInfo {
     pub node_version: String,
 }
 
+// GraphQL Translation
+
 impl From<schema::node_info::NodeInfo> for NodeInfo {
     fn from(value: schema::node_info::NodeInfo) -> Self {
         Self {

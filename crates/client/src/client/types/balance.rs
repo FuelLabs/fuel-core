@@ -13,6 +13,8 @@ pub struct Balance {
     pub asset_id: AssetId,
 }
 
+// GraphQL Translation
+
 impl From<schema::balance::Balance> for Balance {
     fn from(value: schema::balance::Balance) -> Self {
         Balance {
