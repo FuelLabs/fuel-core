@@ -7,7 +7,6 @@ use anyhow::{
 use fuel_core_client::client::{
     types::{
         CoinType,
-        ConsensusParameters,
         TransactionStatus,
     },
     FuelClient,
@@ -24,6 +23,7 @@ use fuel_core_types::{
         PublicKey,
     },
     fuel_tx::{
+        ConsensusParameters,
         Finalizable,
         Input,
         Output,
@@ -91,7 +91,8 @@ impl Wallet {
             .chain_info()
             .await
             .expect("failed to get chain info")
-            .consensus_parameters;
+            .consensus_parameters
+            .into();
 
         Self {
             secret,
@@ -189,7 +190,7 @@ impl Wallet {
             amount: 0,
             asset_id,
         });
-        tx.with_params(self.consensus_params.clone().into());
+        tx.with_params(self.consensus_params);
 
         Ok(tx.finalize_as_transaction())
     }
