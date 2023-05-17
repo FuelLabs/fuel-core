@@ -98,9 +98,6 @@ use self::schema::{
     message::MessageProofArgs,
 };
 
-mod hex_formatted;
-use hex_formatted::HexFormatted;
-
 mod pagination;
 pub mod schema;
 pub mod types;

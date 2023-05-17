@@ -17,12 +17,9 @@ use std::{
 };
 use thiserror::Error;
 
-use crate::client::{
-    hex_formatted::HexFormatError,
-    pagination::{
-        PageDirection,
-        PaginationRequest,
-    },
+use crate::client::pagination::{
+    PageDirection,
+    PaginationRequest,
 };
 pub use primitives::*;
 
@@ -287,8 +284,8 @@ pub enum ConversionError {
     HexString256LengthError(usize),
     #[error("hex parsing error {0}")]
     HexDecodingError(FromHexError),
-    #[error(transparent)]
-    HexError(#[from] HexFormatError),
+    #[error("hex parsing error {0}")]
+    HexError(String),
     #[error("failed integer conversion")]
     IntegerConversion,
     #[error("failed to deserialize transaction from bytes {0}")]

@@ -7,15 +7,11 @@ pub mod contract;
 pub mod merkle_proof;
 pub mod message;
 pub mod node_info;
-// pub mod primitives;
-// pub mod scalars;
-// pub mod translation;
 
 pub mod scalars {
     use tai64::Tai64;
 
     pub use fuel_core_types::{
-        // blockchain::primitives::BlockId,
         fuel_crypto::{
             PublicKey,
             Signature,
