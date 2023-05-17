@@ -116,7 +116,7 @@ async fn produce_block() {
             .unwrap();
         let actual_pub_key = block.block_producer().unwrap();
         let block_height: u32 = block.header.height;
-        let expected_pub_key: PublicKey = config
+        let expected_pub_key = config
             .consensus_key
             .unwrap()
             .expose_secret()
@@ -150,7 +150,7 @@ async fn produce_block_manually() {
     let block = client.block_by_height(1).await.unwrap().unwrap();
     assert_eq!(block.header.height, 1);
     let actual_pub_key = block.block_producer().unwrap();
-    let expected_pub_key: PublicKey = config
+    let expected_pub_key = config
         .consensus_key
         .unwrap()
         .expose_secret()
