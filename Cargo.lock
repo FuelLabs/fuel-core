@@ -2585,6 +2585,7 @@ dependencies = [
  "test-case",
  "thiserror",
  "tokio",
+ "tokio-rayon",
  "tokio-stream",
  "tower-http",
  "tracing",

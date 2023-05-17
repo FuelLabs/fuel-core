@@ -453,7 +453,7 @@ type Mutation {
 	"""
 	dryRun(tx: HexString!, utxoValidation: Boolean): [Receipt!]!
 	"""
-	Execute a dry-run of the transaction using a fork of current state, no changes are committed.
+	Estimate the predicate gas for the provided transaction
 	"""
 	estimatePredicates(tx: HexString!): HexString!
 	"""

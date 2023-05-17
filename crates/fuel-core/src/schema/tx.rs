@@ -236,39 +236,33 @@ impl TxMutation {
         let tx = FuelTx::from_bytes(&tx.0)?;
 
         if tx.is_script() {
-            let mut script_tx = tx.clone();
-            let script = script_tx
-                .as_script_mut()
-                .ok_or(CheckError::PredicateVerificationFailed)?;
             // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
-            let res: bool =
-            //     tokio_rayon::spawn_fifo(|| -> anyhow::Result<bool, CheckError> {
+            let res =
+                tokio_rayon::spawn_fifo(move || -> anyhow::Result<HexString> {
+                    let mut script_tx = tx.clone();
+                    let script = script_tx
+                        .as_script_mut()
+                        .ok_or(CheckError::PredicateVerificationFailed)?;
                     script
                         .estimate_predicates(&ConsensusParameters::default(), &GasCosts::default())?;
-            // })
-            //     .await?;
-            if res {
-                Ok(HexString(script_tx.to_bytes()))
-            } else {
-                Err(CheckError::PredicateVerificationFailed.into())
-            }
+                    Ok(HexString(script_tx.to_bytes()))
+                }).await?;
+
+            Ok(res)
         } else if tx.is_create() {
-            let mut create_tx = tx.clone();
-            let create = create_tx
-                .as_create_mut()
-                .ok_or(CheckError::PredicateVerificationFailed)?;
             // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
-            let res: bool =
-            //     tokio_rayon::spawn_fifo(|| -> anyhow::Result<bool, CheckError> {
+            let res =
+                tokio_rayon::spawn_fifo(move || -> anyhow::Result<HexString> {
+                    let mut create_tx = tx.clone();
+                    let create = create_tx
+                        .as_create_mut()
+                        .ok_or(CheckError::PredicateVerificationFailed)?;
                     create
                         .estimate_predicates(&ConsensusParameters::default(), &GasCosts::default())?;
-            // })
-            //     .await?;
-            if res {
-                Ok(HexString(create_tx.to_bytes()))
-            } else {
-                Err(CheckError::PredicateVerificationFailed.into())
-            }
+                    Ok(HexString(create_tx.to_bytes()))
+                })
+                    .await?;
+            Ok(res)
         } else {
             Err(CheckError::PredicateVerificationFailed.into())
         }
