@@ -1,5 +1,6 @@
 ---
 source: crates/client/src/client/schema/tx.rs
+assertion_line: 355
 expression: operation.query
 ---
 query($id: TransactionId!) {
@@ -24,6 +25,7 @@ query($id: TransactionId!) {
         maturity
         predicate
         predicateData
+        predicateGasUsed
       }
       ... on InputContract {
         utxoId
@@ -43,6 +45,7 @@ query($id: TransactionId!) {
         data
         predicate
         predicateData
+        predicateGasUsed
       }
     }
     isScript
