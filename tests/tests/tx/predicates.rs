@@ -13,19 +13,21 @@ use rand::{
     Rng,
     SeedableRng,
 };
+use fuel_core_types::fuel_vm::checked_transaction::EstimatePredicates;
+use fuel_core_types::fuel_vm::GasCosts;
 
 #[tokio::test]
 async fn transaction_with_valid_predicate_is_executed() {
     let mut rng = StdRng::seed_from_u64(2322);
 
     // setup tx with a predicate input
-    let amount = 500;
+    let amount = 5000;
     let limit = 1000;
     let asset_id = rng.gen();
     // make predicate return 1 which mean valid
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
     let owner = Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT);
-    let predicate_tx = TransactionBuilder::script(Default::default(), Default::default())
+    let mut predicate_tx = TransactionBuilder::script(Default::default(), Default::default())
         .add_input(Input::coin_predicate(
             rng.gen(),
             owner,
@@ -40,6 +42,10 @@ async fn transaction_with_valid_predicate_is_executed() {
         .add_output(Output::change(rng.gen(), 0, asset_id))
         .gas_limit(limit)
         .finalize();
+
+    predicate_tx
+        .estimate_predicates(&ConsensusParameters::DEFAULT, &GasCosts::default())
+        .expect("Predicate check failed");
 
     // create test context with predicates disabled
     let context = TestSetupBuilder::default()
