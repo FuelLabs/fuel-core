@@ -167,7 +167,7 @@ impl FuelClient {
         Self::from_str(url.as_ref())
     }
 
-    async fn query<ResponseData, Vars>(
+    pub async fn query<ResponseData, Vars>(
         &self,
         q: Operation<ResponseData, Vars>,
     ) -> io::Result<ResponseData>

@@ -340,3 +340,84 @@ async fn block_connection_5(
         }
     };
 }
+
+mod full_block {
+    use super::*;
+    use cynic::QueryBuilder;
+    use fuel_core_client::client::{
+        schema::{
+            block::{
+                BlockByHeightArgs,
+                Consensus,
+                Header,
+            },
+            schema,
+            tx::OpaqueTransaction,
+            BlockId,
+            U64,
+        },
+        FuelClient,
+    };
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(
+        schema_path = "../crates/client/assets/schema.sdl",
+        graphql_type = "Query",
+        variables = "BlockByHeightArgs"
+    )]
+    pub struct FullBlockByHeightQuery {
+        #[arguments(height: $height)]
+        pub block: Option<FullBlock>,
+    }
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(
+        schema_path = "../crates/client/assets/schema.sdl",
+        graphql_type = "Block"
+    )]
+    pub struct FullBlock {
+        pub id: BlockId,
+        pub header: Header,
+        pub consensus: Consensus,
+        pub transactions: Vec<OpaqueTransaction>,
+    }
+
+    #[async_trait::async_trait]
+    pub trait ClientExt {
+        async fn full_block_by_height(
+            &self,
+            height: u64,
+        ) -> std::io::Result<Option<FullBlock>>;
+    }
+
+    #[async_trait::async_trait]
+    impl ClientExt for FuelClient {
+        async fn full_block_by_height(
+            &self,
+            height: u64,
+        ) -> std::io::Result<Option<FullBlock>> {
+            let query = FullBlockByHeightQuery::build(BlockByHeightArgs {
+                height: Some(U64(height)),
+            });
+
+            let block = self.query(query).await?.block;
+
+            Ok(block)
+        }
+    }
+
+    #[tokio::test]
+    async fn get_full_block_with_tx() {
+        let srv = FuelService::from_database(Database::default(), Config::local_node())
+            .await
+            .unwrap();
+
+        let client = FuelClient::from(srv.bound_address);
+        let tx = Transaction::default();
+        client.submit_and_await_commit(&tx).await.unwrap();
+
+        let block = client.full_block_by_height(1).await.unwrap().unwrap();
+        assert_eq!(block.header.height.0, 1);
+        assert_eq!(block.transactions.len(), 2 /* mint + our tx */);
+    }
+}
