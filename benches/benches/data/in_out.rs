@@ -2,7 +2,9 @@ use std::collections::HashSet;
 
 use fuel_core_benches::Database;
 use fuel_core_types::{
+    fuel_asm::op,
     fuel_tx::{
+        input::contract::Contract,
         Input,
         Output,
         TxPointer,
@@ -29,25 +31,88 @@ use super::Data;
 #[cfg(test)]
 mod tests;
 
-#[derive(Default, Debug, Clone)]
-struct InputToOutput {
-    coins_to_void: usize,
-    coins_to_coin: usize,
-    coins_to_change: usize,
-    coins_to_variable: usize,
-    coins_to_contract_created: usize,
-    messages_to_void: usize,
-    messages_to_coin: usize,
-    messages_to_change: usize,
-    messages_to_variable: usize,
-    messages_to_contract_created: usize,
-    contracts_to_contract: usize,
-    void_to_message: usize,
-    // void_to_coin: usize,
-    void_to_change: HashSet<AssetId>,
-    void_to_variable: usize,
-    void_contract_created: usize,
+// #[derive(Default, Debug, Clone)]
+// struct InputToOutput {
+//     coins_to_void: usize,
+//     coins_to_coin: usize,
+//     coins_to_change: usize,
+//     coins_to_variable: usize,
+//     coins_to_contract_created: usize,
+//     messages_to_void: usize,
+//     messages_to_coin: usize,
+//     messages_to_change: usize,
+//     messages_to_variable: usize,
+//     messages_to_contract_created: usize,
+//     contracts_to_contract: usize,
+//     void_to_coin: usize,
+//     void_to_message: usize,
+//     void_to_change: HashSet<AssetId>,
+//     void_to_variable: usize,
+//     void_contract_created: usize,
+// }
+
+mod in_ty {
+    #[derive(Default, Debug, Clone, Copy)]
+    pub struct CoinSigned;
+    #[derive(Default, Debug, Clone, Copy)]
+    pub struct CoinPredicate;
+    #[derive(Default, Debug, Clone, Copy)]
+    pub struct MessageCoinSigned;
+    #[derive(Default, Debug, Clone, Copy)]
+    pub struct MessageCoinPredicate;
+    #[derive(Default, Debug, Clone, Copy)]
+    pub struct MessageData;
+    #[derive(Default, Debug, Clone, Copy)]
+    pub struct Contract;
 }
+
+mod out_ty {
+    #[derive(Default, Debug, Clone, Copy)]
+    pub struct Coin;
+    #[derive(Default, Debug, Clone, Copy)]
+    pub struct Contract;
+    #[derive(Default, Debug, Clone, Copy)]
+    pub struct Message;
+    #[derive(Default, Debug, Clone, Copy)]
+    pub struct Change;
+    #[derive(Default, Debug, Clone, Copy)]
+    pub struct Variable;
+    #[derive(Default, Debug, Clone, Copy)]
+    pub struct ContractCreated;
+    #[derive(Default, Debug, Clone, Copy)]
+    pub struct Void;
+}
+
+trait ValidTx<I> {
+    fn fill(from: &mut Data, to: &mut InputOutputData, num: usize);
+}
+
+impl ValidTx<in_ty::CoinSigned> for out_ty::Void {
+    fn fill(from: &mut Data, to: &mut InputOutputData, num: usize) {
+        for (coin, secret) in coins_signed_to_void(from, to.witness_index()).take(num) {
+            to.insert_input(coin, secret);
+        }
+    }
+}
+
+impl ValidTx<(in_ty::MessageData, in_ty::Contract)> for (out_ty::Coin, out_ty::Contract) {
+    fn fill(from: &mut Data, to: &mut InputOutputData, num: usize) {
+        let mut data_iter = from.data_range(100..(100 + num));
+        let mut predicate_data = from.data_range(100..(100 + num));
+        for _ in 0..num {
+            let msg = message_data(from, data_iter.by_ref(), predicate_data.by_ref());
+            to.inputs.push(msg);
+            to.inputs.push(input_contract(from));
+            to.outputs
+                .push(output_contract(from, (to.inputs.len() - 1) as u8));
+        }
+    }
+}
+
+fn owner(secret: &SecretKey) -> Address {
+    Input::owner(&secret.public_key())
+}
+// impl ValidTx<in_ty::CoinSigned> for out_ty::Coin {}
 
 #[derive(Default)]
 struct InputOutputData {
@@ -68,105 +133,64 @@ struct SignedCoin {
 }
 
 #[derive(Default, Debug, Clone)]
-struct SignedMessage {
-    secret: SecretKey,
+struct MessageInner {
     sender: Address,
     recipient: Address,
     nonce: Nonce,
     amount: Word,
+}
+
+#[derive(Default, Debug, Clone)]
+struct SignedMessageCoin {
+    secret: SecretKey,
+    inner: MessageInner,
+}
+
+#[derive(Default, Debug, Clone)]
+struct PredicateMessageCoin {
+    inner: MessageInner,
+}
+
+#[derive(Default, Debug, Clone)]
+struct MessageData {
+    inner: MessageInner,
     data: Vec<u8>,
+    predicate_data: Vec<u8>,
 }
 
 impl InputOutputData {
-    fn extend(&mut self, data: &mut Data, params: &InputToOutput) {
-        for coin in coins_to_void(data).take(params.coins_to_void) {
-            self.insert_coin(coin);
-        }
-        for (coin, output) in coins_to_coin(data).take(params.coins_to_coin) {
-            self.insert_coin(coin);
-            self.outputs.push(output);
-        }
-        for (coin, output) in coins_to_change(data).take(params.coins_to_change) {
-            self.insert_coin(coin);
-            self.outputs.push(output);
-        }
-        for (coin, output) in coins_to_variable(data).take(params.coins_to_variable) {
-            self.insert_coin(coin);
-            self.outputs.push(output);
-        }
-        for msg in messages_to_void(data).take(params.messages_to_void) {
-            self.insert_message(msg);
-        }
-        for (msg, output) in messages_to_coin(data).take(params.messages_to_coin) {
-            self.insert_message(msg);
-            self.outputs.push(output);
-        }
-        for (msg, output) in messages_to_change(data).take(params.messages_to_change) {
-            self.insert_message(msg);
-            self.outputs.push(output);
-        }
-        for (msg, output) in messages_to_variable(data).take(params.messages_to_variable)
-        {
-            self.insert_message(msg);
-            self.outputs.push(output);
-        }
-    }
-
-    fn insert_coin(&mut self, coin: SignedCoin) {
-        let owner = Input::owner(&coin.secret.public_key());
-        let witness_idx = self.witnesses.len() as u8;
-        let input = Input::coin_signed(
-            coin.utxo_id,
-            owner,
-            coin.amount,
-            coin.asset_id,
-            coin.tx_pointer,
-            witness_idx,
-            coin.maturity,
-        );
+    fn insert_input(&mut self, input: Input, secret: SecretKey) {
         self.inputs.push(input);
         self.witnesses.push(Witness::default());
-        self.secrets.push(coin.secret);
+        self.secrets.push(secret);
     }
 
-    fn insert_message(&mut self, message: SignedMessage) {
-        let witness_idx = self.witnesses.len() as u8;
-        let input = if !message.data.is_empty() {
-            Input::message_data_signed(
-                message.sender,
-                message.recipient,
-                message.amount,
-                message.nonce,
-                witness_idx,
-                message.data,
-            )
-        } else {
-            Input::message_coin_signed(
-                message.sender,
-                message.recipient,
-                message.amount,
-                message.nonce,
-                witness_idx,
-            )
-        };
-        self.inputs.push(input);
-        self.witnesses.push(Witness::default());
-        self.secrets.push(message.secret);
+    fn witness_index(&self) -> u8 {
+        self.witnesses.len() as u8
     }
 }
 
-// fn void_to_coin(data: &mut Data) -> impl Iterator<Item = Output> + '_ {
-//     std::iter::repeat_with(|| Output::coin(data.address(), data.word(), data.asset_id()))
-// }
+fn void_to_coin(data: &mut Data) -> impl Iterator<Item = Output> + '_ {
+    std::iter::repeat_with(|| Output::coin(data.address(), data.word(), data.asset_id()))
+}
 
-fn coins_to_void(data: &mut Data) -> impl Iterator<Item = SignedCoin> + '_ {
-    std::iter::repeat_with(|| SignedCoin {
-        secret: data.secret_key(),
-        utxo_id: data.utxo_id(),
-        amount: data.word(),
-        asset_id: data.asset_id(),
-        tx_pointer: Default::default(),
-        maturity: Default::default(),
+fn coins_signed_to_void(
+    data: &mut Data,
+    mut witness_index: u8,
+) -> impl Iterator<Item = (Input, SecretKey)> + '_ {
+    std::iter::repeat_with(move || {
+        let secret = data.secret_key();
+        let input = Input::coin_signed(
+            data.utxo_id(),
+            owner(&secret),
+            data.word(),
+            data.asset_id(),
+            Default::default(),
+            witness_index,
+            Default::default(),
+        );
+        witness_index += 1;
+        (input, secret)
     })
 }
 
@@ -208,49 +232,84 @@ fn coins_to_variable(data: &mut Data) -> impl Iterator<Item = (SignedCoin, Outpu
     })
 }
 
-fn message(data: &mut Data) -> (AssetId, Word, SignedMessage) {
+fn signed_message_coin(data: &mut Data) -> (AssetId, Word, SignedMessageCoin) {
     let amount = data.word();
-    let message = SignedMessage {
-        secret: data.secret_key(),
-        amount,
-        sender: data.address(),
-        recipient: data.address(),
-        nonce: data.nonce(),
-        data: Vec::with_capacity(0),
+    let secret = data.secret_key();
+    let recipient = Input::owner(&secret.public_key());
+    let message = SignedMessageCoin {
+        secret,
+        inner: MessageInner {
+            amount,
+            sender: data.address(),
+            recipient,
+            nonce: data.nonce(),
+        },
     };
     (AssetId::BASE, amount, message)
 }
 
-fn messages_to_void(data: &mut Data) -> impl Iterator<Item = SignedMessage> + '_ {
-    std::iter::repeat_with(|| message(data).2)
+fn message_data(
+    data: &mut Data,
+    msg_data: &mut impl Iterator<Item = Vec<u8>>,
+    predicate_data: &mut impl Iterator<Item = Vec<u8>>,
+) -> Input {
+    let (_, _, msg) = signed_message_coin(data);
+    let predicate: Vec<u8> = [op::ret(1)].into_iter().collect();
+    Input::message_data_predicate(
+        msg.inner.sender,
+        Input::predicate_owner(&predicate, &Default::default()),
+        msg.inner.amount,
+        msg.inner.nonce,
+        msg_data.next().unwrap(),
+        predicate,
+        predicate_data.next().unwrap(),
+    )
 }
 
-fn messages_to_coin(
-    data: &mut Data,
-) -> impl Iterator<Item = (SignedMessage, Output)> + '_ {
-    std::iter::repeat_with(|| {
-        let (asset_id, amount, message) = message(data);
-        let output = Output::coin(data.address(), amount, asset_id);
-        (message, output)
-    })
+fn input_contract(data: &mut Data) -> Input {
+    Input::contract(
+        data.utxo_id(),
+        data.bytes32(),
+        data.bytes32(),
+        Default::default(),
+        data.contract_id(),
+    )
 }
 
-fn messages_to_change(
-    data: &mut Data,
-) -> impl Iterator<Item = (SignedMessage, Output)> + '_ {
-    std::iter::repeat_with(|| {
-        let (asset_id, amount, message) = message(data);
-        let output = Output::change(data.address(), amount, asset_id);
-        (message, output)
-    })
+fn output_contract(data: &mut Data, input_idx: u8) -> Output {
+    Output::contract(input_idx, data.bytes32(), data.bytes32())
 }
 
-fn messages_to_variable(
-    data: &mut Data,
-) -> impl Iterator<Item = (SignedMessage, Output)> + '_ {
-    std::iter::repeat_with(|| {
-        let (asset_id, amount, message) = message(data);
-        let output = Output::variable(data.address(), amount, asset_id);
-        (message, output)
-    })
-}
+// fn messages_to_void(data: &mut Data) -> impl Iterator<Item = SignedMessage> + '_ {
+//     std::iter::repeat_with(|| message(data).2)
+// }
+
+// fn messages_to_coin(
+//     data: &mut Data,
+// ) -> impl Iterator<Item = (SignedMessage, Output)> + '_ {
+//     std::iter::repeat_with(|| {
+//         let (asset_id, amount, message) = message(data);
+//         let output = Output::coin(data.address(), amount, asset_id);
+//         (message, output)
+//     })
+// }
+
+// fn messages_to_change(
+//     data: &mut Data,
+// ) -> impl Iterator<Item = (SignedMessage, Output)> + '_ {
+//     std::iter::repeat_with(|| {
+//         let (_, amount, message) = message(data);
+//         let output = Output::change(data.address(), amount, data.asset_id());
+//         (message, output)
+//     })
+// }
+
+// fn messages_to_variable(
+//     data: &mut Data,
+// ) -> impl Iterator<Item = (SignedMessage, Output)> + '_ {
+//     std::iter::repeat_with(|| {
+//         let (asset_id, amount, message) = message(data);
+//         let output = Output::variable(data.address(), amount, asset_id);
+//         (message, output)
+//     })
+// }

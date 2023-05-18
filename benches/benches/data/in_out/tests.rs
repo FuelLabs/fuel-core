@@ -7,12 +7,19 @@ use fuel_core::{
 };
 use fuel_core_benches::Database;
 use fuel_core_storage::{
-    tables::{Coins, Messages},
+    tables::{
+        Coins,
+        ContractsLatestUtxo,
+        Messages,
+    },
     StorageAsMut,
 };
 use fuel_core_types::{
     blockchain::block::PartialFuelBlock,
-    entities::coins::coin::CompressedCoin,
+    entities::{
+        coins::coin::CompressedCoin,
+        contract::ContractUtxoInfo,
+    },
     fuel_asm::op,
     fuel_tx::{
         field::Inputs,
@@ -46,17 +53,16 @@ fn test_in_out() {
         relayer,
         config,
     };
-    let t = into_txn(InputToOutput {
-        coins_to_void: 5,
-        coins_to_coin: 5,
-        coins_to_change: 5,
-        coins_to_variable: 5,
-        messages_to_void: 5,
-        // messages_to_coin: 5,
-        // messages_to_change: 5,
-        // messages_to_variable: 5,
-        ..Default::default()
-    });
+    let mut test_data = InputOutputData::default();
+    let mut data = Data::default();
+
+    <out_ty::Void as ValidTx<in_ty::CoinSigned>>::fill(&mut data, &mut test_data, 5);
+    <(out_ty::Coin, out_ty::Contract) as ValidTx<(
+        in_ty::MessageData,
+        in_ty::Contract,
+    )>>::fill(&mut data, &mut test_data, 5);
+
+    let t = into_txn(test_data);
     insert_into_db(&mut executor.database, &t);
     test_transaction(&executor, t);
 }
@@ -98,7 +104,28 @@ fn insert_into_db(db: &mut Database, transaction: &Transaction) {
                             da_height: 0u64.into(),
                         };
                         db.storage::<Messages>().insert(&m.nonce, &m).unwrap();
-                        
+                    }
+                    Input::MessageDataPredicate(m) => {
+                        let m = fuel_core_types::entities::message::Message {
+                            sender: m.sender,
+                            recipient: m.recipient,
+                            nonce: m.nonce,
+                            amount: m.amount,
+                            data: m.data.clone(), 
+                            da_height: 0u64.into(),
+                        };
+                        db.storage::<Messages>().insert(&m.nonce, &m).unwrap();
+                    }
+                    Input::Contract(c) => {
+                        db.storage::<ContractsLatestUtxo>()
+                            .insert(
+                                &c.contract_id,
+                                &ContractUtxoInfo {
+                                    utxo_id: c.utxo_id,
+                                    tx_pointer: c.tx_pointer,
+                                },
+                            )
+                            .unwrap();
                     }
                     _ => (),
                 }
@@ -109,9 +136,7 @@ fn insert_into_db(db: &mut Database, transaction: &Transaction) {
     }
 }
 
-fn into_txn(params: InputToOutput) -> Transaction {
-    let mut data = InputOutputData::default();
-    data.extend(&mut Data::default(), &params);
+fn into_txn(data: InputOutputData) -> Transaction {
     let InputOutputData {
         inputs,
         outputs,

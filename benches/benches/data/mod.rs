@@ -1,7 +1,4 @@
-use enum_iterator::{
-    all,
-    Sequence,
-};
+use enum_iterator::all;
 use fuel_core_types::{
     blockchain::header::{
         ApplicationHeader,
@@ -14,7 +11,8 @@ use fuel_core_types::{
         Address,
         AssetId,
         Bytes32,
-        Word, Nonce,
+        Nonce,
+        Word, ContractId,
     },
     fuel_vm::SecretKey,
 };
@@ -32,6 +30,9 @@ pub struct Data {
     secret_key: Box<dyn Iterator<Item = SecretKey>>,
     utxo_id: Box<dyn Iterator<Item = UtxoId>>,
     nonce: Box<dyn Iterator<Item = Nonce>>,
+    data: Box<dyn Iterator<Item = u8>>,
+    bytes32: Box<dyn Iterator<Item = Bytes32>>,
+    contract_id: Box<dyn Iterator<Item = ContractId>>,
 }
 
 impl Data {
@@ -40,6 +41,7 @@ impl Data {
         let asset_id = Box::new(all::<[u8; 32]>().cycle().map(AssetId::from));
         let word = Box::new(all::<u16>().cycle().map(Word::from));
         let secret_key = Box::new(all::<[u8; 32]>().cycle().map(secret_key));
+        let data = Box::new(all::<u8>().cycle());
         let utxo_id = Box::new(
             all::<[u8; 32]>()
                 .cycle()
@@ -47,6 +49,8 @@ impl Data {
                 .map(|(a, o)| UtxoId::new(Bytes32::from(a), o)),
         );
         let nonce = Box::new(all::<[u8; 32]>().cycle().map(Nonce::from));
+        let bytes32 = Box::new(all::<[u8; 32]>().cycle().map(Bytes32::from));
+        let contract_id = Box::new(all::<[u8; 32]>().cycle().map(ContractId::from));
         Self {
             address,
             asset_id,
@@ -54,6 +58,9 @@ impl Data {
             secret_key,
             utxo_id,
             nonce,
+            data,
+            bytes32,
+            contract_id,
         }
     }
 
@@ -80,6 +87,26 @@ impl Data {
     pub fn nonce(&mut self) -> Nonce {
         self.nonce.next().unwrap()
     }
+
+    pub fn data(&mut self, size: usize) -> Vec<u8> {
+        self.data.by_ref().take(size).collect()
+    }
+
+    pub fn data_range(
+        &mut self,
+        range: std::ops::Range<usize>,
+    ) -> impl Iterator<Item = Vec<u8>> {
+        let mut data = Box::new(all::<u8>().cycle());
+        range.map(move |i| data.by_ref().take(i).collect())
+    }
+
+    pub fn bytes32(&mut self) -> Bytes32 {
+        self.bytes32.next().unwrap()
+    }
+
+    pub fn contract_id(&mut self) -> ContractId {
+        self.contract_id.next().unwrap()
+    }
 }
 
 impl Default for Data {
@@ -96,7 +123,7 @@ fn secret_key(seed: [u8; 32]) -> SecretKey {
 pub fn make_header() -> PartialBlockHeader {
     PartialBlockHeader {
         application: ApplicationHeader {
-            da_height: 1u64.into(),
+            da_height: 0u64.into(),
             generated: Default::default(),
         },
         consensus: ConsensusHeader {
