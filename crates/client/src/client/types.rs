@@ -1,8 +1,8 @@
 pub mod balance;
 pub mod block;
-pub mod chain;
 pub mod chain_info;
 pub mod coins;
+pub mod consensus_parameters;
 pub mod contract;
 pub mod merkle_proof;
 pub mod message;
@@ -50,13 +50,13 @@ pub use block::{
     Block,
     Consensus,
 };
-pub use chain::ConsensusParameters;
 pub use chain_info::ChainInfo;
 pub use coins::{
     Coin,
     CoinType,
     MessageCoin,
 };
+pub use consensus_parameters::ConsensusParameters;
 pub use contract::{
     Contract,
     ContractBalance,
