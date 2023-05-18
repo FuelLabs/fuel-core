@@ -84,7 +84,7 @@ fn generate_sync_port() -> MockSyncPort {
 
     syncer
         .expect_sync_with_peers()
-        .return_once(move || Box::pin(async { Ok(()) }));
+        .returning(move || Box::pin(async { Ok(()) }));
 
     syncer
 }

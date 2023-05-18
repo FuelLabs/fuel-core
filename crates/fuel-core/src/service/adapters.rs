@@ -106,7 +106,8 @@ impl P2PAdapter {
 #[async_trait::async_trait]
 impl NetworkInfo for P2PAdapter {
     async fn connected_reserved_peers(&self) -> usize {
-        0
+        /// returns fake number of connected peers - since p2p is not enabled at all
+        usize::MAX
     }
 }
 
