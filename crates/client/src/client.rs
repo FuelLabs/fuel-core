@@ -161,7 +161,7 @@ impl FuelClient {
         Self::from_str(url.as_ref())
     }
 
-    async fn query<ResponseData, Vars>(
+    pub async fn query<ResponseData, Vars>(
         &self,
         q: Operation<ResponseData, Vars>,
     ) -> io::Result<ResponseData>
@@ -241,8 +241,13 @@ impl FuelClient {
                 })?;
         }
 
-        let client =
-            client_builder.build_with_conn(es::HttpsConnector::with_webpki_roots());
+        let client = client_builder.build_with_conn(
+            hyper_rustls::HttpsConnectorBuilder::new()
+                .with_webpki_roots()
+                .https_or_http()
+                .enable_http1()
+                .build(),
+        );
 
         let mut last = None;
 

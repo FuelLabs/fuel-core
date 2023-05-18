@@ -3,10 +3,7 @@ use prometheus_client::{
     metrics::histogram::Histogram,
     registry::Registry,
 };
-use std::{
-    boxed::Box,
-    default::Default,
-};
+use std::default::Default;
 
 pub struct TxPoolMetrics {
     // Attaches each Metric to the Registry
@@ -36,13 +33,13 @@ impl Default for TxPoolMetrics {
         metrics.registry.register(
             "Tx_Gas_Price_Histogram",
             "A Histogram keeping track of all gas prices for each tx in the mempool",
-            Box::new(metrics.gas_price_histogram.clone()),
+            metrics.gas_price_histogram.clone(),
         );
 
         metrics.registry.register(
             "Tx_Size_Histogram",
             "A Histogram keeping track of the size of txs",
-            Box::new(metrics.tx_size_histogram.clone()),
+            metrics.tx_size_histogram.clone(),
         );
 
         metrics

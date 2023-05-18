@@ -5,35 +5,31 @@ use crate::{
         Result as DatabaseResult,
     },
     state::{
-        in_memory::{
-            column_key,
-            is_column,
-        },
         BatchOperations,
-        ColumnId,
         IterDirection,
         KVItem,
         KeyValueStore,
         TransactableStorage,
+        Value,
     },
 };
 use fuel_core_storage::iter::{
     BoxedIter,
     IntoBoxedIter,
 };
-use itertools::Itertools;
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     fmt::Debug,
-    mem::size_of,
-    sync::Mutex,
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 
 #[derive(Default, Debug)]
 pub struct MemoryStore {
-    // TODO: Remove `Mutex` and usage of the `column_key`.
-    // TODO: Use `BTreeMap`.
-    inner: Mutex<HashMap<Vec<u8>, Vec<u8>>>,
+    // TODO: Remove `Mutex`.
+    inner: [Mutex<BTreeMap<Vec<u8>, Value>>; Column::COUNT],
 }
 
 impl MemoryStore {
@@ -44,53 +40,71 @@ impl MemoryStore {
         start: Option<&[u8]>,
         direction: IterDirection,
     ) -> impl Iterator<Item = KVItem> {
-        let lock = self.inner.lock().expect("poisoned");
+        let lock = self.inner[column.as_usize()].lock().expect("poisoned");
 
-        // clone entire set so we can drop the lock
-        let iter = lock
-            .iter()
-            .filter(|(key, _)| is_column(key, column))
-            // strip column
-            .map(|(key, value)| (key[size_of::<ColumnId>()..].to_vec(), value.clone()))
-            // filter prefix
-            .filter(|(key, _)| {
-                if let Some(prefix) = prefix {
-                    key.starts_with(prefix)
+        fn clone<K: Clone, V: Clone>(kv: (&K, &V)) -> (K, V) {
+            (kv.0.clone(), kv.1.clone())
+        }
+
+        let collection: Vec<_> = match (prefix, start) {
+            (None, None) => {
+                if direction == IterDirection::Forward {
+                    lock.iter().map(clone).collect()
                 } else {
-                    true
+                    lock.iter().rev().map(clone).collect()
                 }
-            })
-            .sorted();
+            }
+            (Some(prefix), None) => {
+                if direction == IterDirection::Forward {
+                    lock.range(prefix.to_vec()..)
+                        .take_while(|(key, _)| key.starts_with(prefix))
+                        .map(clone)
+                        .collect()
+                } else {
+                    let mut vec: Vec<_> = lock
+                        .range(prefix.to_vec()..)
+                        .into_boxed()
+                        .take_while(|(key, _)| key.starts_with(prefix))
+                        .map(clone)
+                        .collect();
 
-        let until_start_reached = |(key, _): &(Vec<u8>, Vec<u8>)| {
-            if let Some(start) = start {
-                match direction {
-                    IterDirection::Forward => key.as_slice() < start,
-                    IterDirection::Reverse => key.as_slice() > start,
+                    vec.reverse();
+                    vec
                 }
-            } else {
-                false
+            }
+            (None, Some(start)) => {
+                if direction == IterDirection::Forward {
+                    lock.range(start.to_vec()..).map(clone).collect()
+                } else {
+                    lock.range(..=start.to_vec()).rev().map(clone).collect()
+                }
+            }
+            (Some(prefix), Some(start)) => {
+                if direction == IterDirection::Forward {
+                    lock.range(start.to_vec()..)
+                        .take_while(|(key, _)| key.starts_with(prefix))
+                        .map(clone)
+                        .collect()
+                } else {
+                    lock.range(..=start.to_vec())
+                        .rev()
+                        .take_while(|(key, _)| key.starts_with(prefix))
+                        .map(clone)
+                        .collect()
+                }
             }
         };
 
-        let copy: Vec<_> = match direction {
-            IterDirection::Forward => iter.skip_while(until_start_reached).collect(),
-            IterDirection::Reverse => {
-                iter.rev().skip_while(until_start_reached).collect()
-            }
-        };
-
-        copy.into_iter().map(Ok)
+        collection.into_iter().map(Ok)
     }
 }
 
 impl KeyValueStore for MemoryStore {
-    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
-        Ok(self
-            .inner
+    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
+        Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
-            .get(&column_key(key, column))
+            .get(&key.to_vec())
             .cloned())
     }
 
@@ -98,29 +112,26 @@ impl KeyValueStore for MemoryStore {
         &self,
         key: &[u8],
         column: Column,
-        value: Vec<u8>,
-    ) -> DatabaseResult<Option<Vec<u8>>> {
-        Ok(self
-            .inner
+        value: Value,
+    ) -> DatabaseResult<Option<Value>> {
+        Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
-            .insert(column_key(key, column), value))
+            .insert(key.to_vec(), value))
     }
 
-    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
-        Ok(self
-            .inner
+    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
+        Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
-            .remove(&column_key(key, column)))
+            .remove(&key.to_vec()))
     }
 
     fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
-        Ok(self
-            .inner
+        Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
-            .contains_key(&column_key(key, column)))
+            .contains_key(&key.to_vec()))
     }
 
     fn iter_all(
@@ -134,11 +145,10 @@ impl KeyValueStore for MemoryStore {
     }
 
     fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
-        Ok(self
-            .inner
+        Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
-            .get(&column_key(key, column))
+            .get(&key.to_vec())
             .map(|v| v.len()))
     }
 
@@ -148,10 +158,10 @@ impl KeyValueStore for MemoryStore {
         column: Column,
         mut buf: &mut [u8],
     ) -> DatabaseResult<Option<usize>> {
-        self.inner
+        self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
-            .get(&column_key(key, column))
+            .get(&key.to_vec())
             .map(|value| {
                 let read = value.len();
                 std::io::Write::write_all(&mut buf, value.as_ref())
@@ -161,21 +171,20 @@ impl KeyValueStore for MemoryStore {
             .transpose()
     }
 
-    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
-        Ok(self
-            .inner
+    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
+        Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
-            .get(&column_key(key, column))
-            .map(|value| value.to_vec()))
+            .get(&key.to_vec())
+            .cloned())
     }
 
-    fn write(&self, key: &[u8], column: Column, buf: Vec<u8>) -> DatabaseResult<usize> {
+    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
         let len = buf.len();
-        self.inner
+        self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
-            .insert(column_key(key, column), buf);
+            .insert(key.to_vec(), Arc::new(buf.to_vec()));
         Ok(len)
     }
 
@@ -183,23 +192,21 @@ impl KeyValueStore for MemoryStore {
         &self,
         key: &[u8],
         column: Column,
-        buf: Vec<u8>,
-    ) -> DatabaseResult<(usize, Option<Vec<u8>>)> {
+        buf: &[u8],
+    ) -> DatabaseResult<(usize, Option<Value>)> {
         let len = buf.len();
-        let existing = self
-            .inner
+        let existing = self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
-            .insert(column_key(key, column), buf);
+            .insert(key.to_vec(), Arc::new(buf.to_vec()));
         Ok((len, existing))
     }
 
-    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
-        Ok(self
-            .inner
+    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
+        Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
-            .remove(&column_key(key, column)))
+            .remove(&key.to_vec()))
     }
 }
 
@@ -210,18 +217,18 @@ impl TransactableStorage for MemoryStore {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
     #[test]
     fn can_use_unit_value() {
         let key = vec![0x00];
 
         let db = MemoryStore::default();
-        db.put(&key, Column::Metadata, vec![]).unwrap();
+        let expected = Arc::new(vec![]);
+        db.put(&key.to_vec(), Column::Metadata, expected.clone())
+            .unwrap();
 
-        assert_eq!(
-            db.get(&key, Column::Metadata).unwrap().unwrap(),
-            Vec::<u8>::with_capacity(0)
-        );
+        assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
@@ -229,12 +236,12 @@ mod tests {
             db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap(),
-            vec![(key.clone(), Vec::<u8>::with_capacity(0))]
+            vec![(key.clone(), expected.clone())]
         );
 
         assert_eq!(
             db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            Vec::<u8>::with_capacity(0)
+            expected
         );
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
@@ -245,12 +252,10 @@ mod tests {
         let key: Vec<u8> = Vec::with_capacity(0);
 
         let db = MemoryStore::default();
-        db.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+        let expected = Arc::new(vec![1, 2, 3]);
+        db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
-        assert_eq!(
-            db.get(&key, Column::Metadata).unwrap().unwrap(),
-            vec![1, 2, 3]
-        );
+        assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
@@ -258,12 +263,12 @@ mod tests {
             db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap(),
-            vec![(key.clone(), vec![1, 2, 3])]
+            vec![(key.clone(), expected.clone())]
         );
 
         assert_eq!(
             db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            vec![1, 2, 3]
+            expected
         );
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
@@ -274,12 +279,10 @@ mod tests {
         let key: Vec<u8> = Vec::with_capacity(0);
 
         let db = MemoryStore::default();
-        db.put(&key, Column::Metadata, vec![]).unwrap();
+        let expected = Arc::new(vec![]);
+        db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
-        assert_eq!(
-            db.get(&key, Column::Metadata).unwrap().unwrap(),
-            Vec::<u8>::with_capacity(0)
-        );
+        assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
@@ -287,12 +290,12 @@ mod tests {
             db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap(),
-            vec![(key.clone(), Vec::<u8>::with_capacity(0))]
+            vec![(key.clone(), expected.clone())]
         );
 
         assert_eq!(
             db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            Vec::<u8>::with_capacity(0)
+            expected
         );
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());

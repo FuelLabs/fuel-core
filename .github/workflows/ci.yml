@@ -274,7 +274,7 @@ jobs:
   publish-e2e-client-docker-image:
     needs:
       - verifications-complete
-    runs-on: ubuntu-latest
+    runs-on: buildjet-4vcpu-ubuntu-2204
     permissions:
       contents: read
       packages: write
@@ -518,3 +518,12 @@ jobs:
           CONFIG: 'fuel-dev1'
           ENV: 'fueldevsway.env'
           DELETE_INFRA: true
+
+  cargo-audit:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

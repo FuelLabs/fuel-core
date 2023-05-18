@@ -29,7 +29,7 @@ pub fn run(c: &mut Criterion) {
                 op::addi(0x22, 0x21, message.as_ref().len().try_into().unwrap()),
                 op::movi(0x10, PublicKey::LEN.try_into().unwrap()),
                 op::aloc(0x10),
-                op::addi(0x11, RegId::HP, 1),
+                op::move_(0x11, RegId::HP),
             ])
             .with_data(signature.iter().chain(message.iter()).copied().collect()),
     );
@@ -41,7 +41,7 @@ pub fn run(c: &mut Criterion) {
             .with_prepare_script(vec![
                 op::movi(0x10, Bytes32::LEN.try_into().unwrap()),
                 op::aloc(0x10),
-                op::addi(0x10, RegId::HP, 1),
+                op::move_(0x10, RegId::HP),
                 op::movi(0x11, 32),
             ])
             .with_data(signature.iter().chain(message.iter()).copied().collect()),
@@ -54,7 +54,7 @@ pub fn run(c: &mut Criterion) {
             .with_prepare_script(vec![
                 op::movi(0x10, Bytes32::LEN.try_into().unwrap()),
                 op::aloc(0x10),
-                op::addi(0x10, RegId::HP, 1),
+                op::move_(0x10, RegId::HP),
                 op::movi(0x11, 32),
             ])
             .with_data(signature.iter().chain(message.iter()).copied().collect()),
