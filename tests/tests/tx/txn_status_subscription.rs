@@ -64,9 +64,7 @@ async fn subscribe_txn_status() {
         )
         .into();
         // estimate predicate gas for coin_input predicate
-        tx.as_script_mut()
-            .unwrap()
-            .estimate_predicates(&ConsensusParameters::DEFAULT, &GasCosts::default())
+        tx.estimate_predicates(&ConsensusParameters::DEFAULT, &GasCosts::default())
             .expect("should estimate predicate");
 
         tx

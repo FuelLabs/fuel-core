@@ -34,9 +34,9 @@ pub struct InputCoin {
     tx_pointer: TxPointer,
     witness_index: u8,
     maturity: U32,
+    predicate_gas_used: U64,
     predicate: HexString,
     predicate_data: HexString,
-    predicate_gas_used: U64,
 }
 
 #[Object]
@@ -69,16 +69,16 @@ impl InputCoin {
         self.maturity
     }
 
+    async fn predicate_gas_used(&self) -> U64 {
+        self.predicate_gas_used
+    }
+
     async fn predicate(&self) -> HexString {
         self.predicate.clone()
     }
 
     async fn predicate_data(&self) -> HexString {
         self.predicate_data.clone()
-    }
-
-    async fn predicate_gas_used(&self) -> U64 {
-        self.predicate_gas_used
     }
 }
 
@@ -119,10 +119,10 @@ pub struct InputMessage {
     amount: U64,
     nonce: Nonce,
     witness_index: u8,
+    predicate_gas_used: U64,
     data: HexString,
     predicate: HexString,
     predicate_data: HexString,
-    predicate_gas_used: U64,
 }
 
 #[Object]
@@ -147,6 +147,10 @@ impl InputMessage {
         self.witness_index
     }
 
+    async fn predicate_gas_used(&self) -> U64 {
+        self.predicate_gas_used
+    }
+
     async fn data(&self) -> &HexString {
         &self.data
     }
@@ -157,10 +161,6 @@ impl InputMessage {
 
     async fn predicate_data(&self) -> &HexString {
         &self.predicate_data
-    }
-
-    async fn predicate_gas_used(&self) -> U64 {
-        self.predicate_gas_used
     }
 }
 
@@ -184,9 +184,9 @@ impl From<&fuel_tx::Input> for Input {
                 tx_pointer: TxPointer(*tx_pointer),
                 witness_index: *witness_index,
                 maturity: (*maturity).into(),
+                predicate_gas_used: 0.into(),
                 predicate: HexString(Default::default()),
                 predicate_data: HexString(Default::default()),
-                predicate_gas_used: 0.into(),
             }),
             fuel_tx::Input::CoinPredicate(fuel_tx::input::coin::CoinPredicate {
                 utxo_id,
@@ -207,9 +207,9 @@ impl From<&fuel_tx::Input> for Input {
                 tx_pointer: TxPointer(*tx_pointer),
                 witness_index: Default::default(),
                 maturity: (*maturity).into(),
+                predicate_gas_used: (*predicate_gas_used).into(),
                 predicate: HexString(predicate.clone()),
                 predicate_data: HexString(predicate_data.clone()),
-                predicate_gas_used: (*predicate_gas_used).into(),
             }),
             fuel_tx::Input::Contract(fuel_tx::input::contract::Contract {
                 utxo_id,
@@ -240,9 +240,9 @@ impl From<&fuel_tx::Input> for Input {
                 nonce: Nonce(*nonce),
                 witness_index: *witness_index,
                 data: HexString(Default::default()),
+                predicate_gas_used: 0.into(),
                 predicate: HexString(Default::default()),
                 predicate_data: HexString(Default::default()),
-                predicate_gas_used: 0.into(),
             }),
             fuel_tx::Input::MessageCoinPredicate(
                 fuel_tx::input::message::MessageCoinPredicate {
@@ -261,10 +261,10 @@ impl From<&fuel_tx::Input> for Input {
                 amount: (*amount).into(),
                 nonce: Nonce(*nonce),
                 witness_index: Default::default(),
+                predicate_gas_used: (*predicate_gas_used).into(),
                 data: HexString(Default::default()),
                 predicate: HexString(predicate.clone()),
                 predicate_data: HexString(predicate_data.clone()),
-                predicate_gas_used: (*predicate_gas_used).into(),
             }),
             fuel_tx::Input::MessageDataSigned(
                 fuel_tx::input::message::MessageDataSigned {
@@ -282,10 +282,10 @@ impl From<&fuel_tx::Input> for Input {
                 amount: (*amount).into(),
                 nonce: Nonce(*nonce),
                 witness_index: *witness_index,
+                predicate_gas_used: 0.into(),
                 data: HexString(data.clone()),
                 predicate: HexString(Default::default()),
                 predicate_data: HexString(Default::default()),
-                predicate_gas_used: 0.into(),
             }),
             fuel_tx::Input::MessageDataPredicate(
                 fuel_tx::input::message::MessageDataPredicate {
@@ -305,10 +305,10 @@ impl From<&fuel_tx::Input> for Input {
                 amount: (*amount).into(),
                 nonce: Nonce(*nonce),
                 witness_index: Default::default(),
+                predicate_gas_used: (*predicate_gas_used).into(),
                 data: HexString(data.clone()),
                 predicate: HexString(predicate.clone()),
                 predicate_data: HexString(predicate_data.clone()),
-                predicate_gas_used: (*predicate_gas_used).into(),
             }),
         }
     }

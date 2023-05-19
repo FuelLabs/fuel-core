@@ -26,7 +26,7 @@ async fn transaction_with_valid_predicate_is_executed() {
     let mut rng = StdRng::seed_from_u64(2322);
 
     // setup tx with a predicate input
-    let amount = 5000;
+    let amount = 500;
     let limit = 1000;
     let asset_id = rng.gen();
     // make predicate return 1 which mean valid

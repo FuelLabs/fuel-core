@@ -2599,6 +2599,7 @@ dependencies = [
  "clap 4.2.7",
  "criterion",
  "ctrlc",
+ "ethnum",
  "fuel-core",
  "fuel-core-storage",
  "fuel-core-types",

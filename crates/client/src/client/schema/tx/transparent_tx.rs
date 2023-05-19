@@ -262,9 +262,9 @@ pub struct InputCoin {
     pub tx_pointer: TxPointer,
     pub witness_index: i32,
     pub maturity: U32,
+    pub predicate_gas_used: U64,
     pub predicate: HexString,
     pub predicate_data: HexString,
-    pub predicate_gas_used: U64,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -285,10 +285,10 @@ pub struct InputMessage {
     amount: U64,
     nonce: Nonce,
     witness_index: i32,
+    predicate_gas_used: U64,
     data: HexString,
     predicate: HexString,
     predicate_data: HexString,
-    predicate_gas_used: U64,
 }
 
 impl TryFrom<Input> for fuel_tx::Input {
