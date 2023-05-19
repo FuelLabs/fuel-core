@@ -5,6 +5,7 @@ use crate::{
         custom_predicate,
         random_predicate,
         setup_coin,
+        IntoEstimated,
         TEST_COIN_AMOUNT,
     },
     txpool::test_helpers::{
@@ -1084,7 +1085,13 @@ fn predicates_with_incorrect_owner_fails() {
 fn predicate_without_enough_gas_returns_out_of_gas() {
     let mut rng = StdRng::seed_from_u64(0);
     let db = MockDb::default();
-    let mut txpool = TxPool::new(Default::default(), db.clone());
+    let mut config = Config::default();
+    config
+        .chain_config
+        .transaction_parameters
+        .max_gas_per_predicate = 10000;
+    config.chain_config.transaction_parameters.max_gas_per_tx = 10000;
+    let mut txpool = TxPool::new(config.clone(), db.clone());
     let coin = custom_predicate(
         &mut rng,
         AssetId::BASE,
@@ -1092,6 +1099,10 @@ fn predicate_without_enough_gas_returns_out_of_gas() {
         // forever loop
         vec![op::jmp(RegId::ZERO)].into_iter().collect(),
         None,
+    )
+    .into_estimated(
+        &config.chain_config.transaction_parameters,
+        &config.chain_config.gas_costs,
     );
 
     let (_, gas_coin) = add_coin_to_state(coin, Some(&db));
@@ -1123,7 +1134,8 @@ fn predicate_that_returns_false_is_invalid() {
         // forever loop
         vec![op::ret(RegId::ZERO)].into_iter().collect(),
         None,
-    );
+    )
+    .into_default_estimated();
 
     let (_, gas_coin) = add_coin_to_state(coin, Some(&db));
     let tx = Arc::new(

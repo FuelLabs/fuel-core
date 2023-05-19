@@ -4,8 +4,15 @@ use crate::helpers::TestSetupBuilder;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::{
-        field::Outputs,
+        field::{
+            Inputs,
+            Outputs,
+        },
         *,
+    },
+    fuel_vm::{
+        checked_transaction::EstimatePredicates,
+        GasCosts,
     },
 };
 use rand::{
@@ -13,9 +20,6 @@ use rand::{
     Rng,
     SeedableRng,
 };
-use fuel_core_types::fuel_tx::field::Inputs;
-use fuel_core_types::fuel_vm::checked_transaction::EstimatePredicates;
-use fuel_core_types::fuel_vm::GasCosts;
 
 #[tokio::test]
 async fn transaction_with_valid_predicate_is_executed() {
@@ -28,21 +32,22 @@ async fn transaction_with_valid_predicate_is_executed() {
     // make predicate return 1 which mean valid
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
     let owner = Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT);
-    let mut predicate_tx = TransactionBuilder::script(Default::default(), Default::default())
-        .add_input(Input::coin_predicate(
-            rng.gen(),
-            owner,
-            amount,
-            asset_id,
-            Default::default(),
-            Default::default(),
-            predicate,
-            vec![],
-            0,
-        ))
-        .add_output(Output::change(rng.gen(), 0, asset_id))
-        .gas_limit(limit)
-        .finalize();
+    let mut predicate_tx =
+        TransactionBuilder::script(Default::default(), Default::default())
+            .add_input(Input::coin_predicate(
+                rng.gen(),
+                owner,
+                amount,
+                asset_id,
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                predicate,
+                vec![],
+            ))
+            .add_output(Output::change(rng.gen(), 0, asset_id))
+            .gas_limit(limit)
+            .finalize();
 
     assert_eq!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);
 
@@ -97,9 +102,9 @@ async fn transaction_with_invalid_predicate_is_rejected() {
             asset_id,
             Default::default(),
             Default::default(),
+            Default::default(),
             predicate,
             vec![],
-            0,
         ))
         .add_output(Output::change(rng.gen(), 0, asset_id))
         .finalize();
@@ -133,9 +138,9 @@ async fn transaction_with_predicates_that_exhaust_gas_limit_are_rejected() {
             asset_id,
             Default::default(),
             Default::default(),
+            Default::default(),
             predicate,
             vec![],
-            0,
         ))
         .add_output(Output::change(rng.gen(), 0, asset_id))
         .finalize();

@@ -315,9 +315,9 @@ impl TryFrom<Input> for fuel_tx::Input {
                         coin.asset_id.into(),
                         coin.tx_pointer.into(),
                         coin.maturity.into(),
+                        coin.predicate_gas_used.into(),
                         coin.predicate.into(),
                         coin.predicate_data.into(),
-                        coin.predicate_gas_used.into(),
                     )
                 }
             }
@@ -345,9 +345,9 @@ impl TryFrom<Input> for fuel_tx::Input {
                         message.recipient.into(),
                         message.amount.into(),
                         message.nonce.into(),
+                        message.predicate_gas_used.into(),
                         message.predicate.into(),
                         message.predicate_data.into(),
-                        message.predicate_gas_used.into(),
                     ),
                     (false, true) => Self::message_data_signed(
                         message.sender.into(),
@@ -362,10 +362,10 @@ impl TryFrom<Input> for fuel_tx::Input {
                         message.recipient.into(),
                         message.amount.into(),
                         message.nonce.into(),
+                        message.predicate_gas_used.into(),
                         message.data.into(),
                         message.predicate.into(),
                         message.predicate_data.into(),
-                        message.predicate_gas_used.into(),
                     ),
                 }
             }

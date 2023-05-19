@@ -8,10 +8,12 @@ use fuel_core_client::client::FuelClient;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::*,
+    fuel_vm::{
+        checked_transaction::EstimatePredicates,
+        GasCosts,
+    },
 };
 use futures::StreamExt;
-use fuel_core_types::fuel_vm::checked_transaction::EstimatePredicates;
-use fuel_core_types::fuel_vm::GasCosts;
 
 #[tokio::test]
 async fn subscribe_txn_status() {
@@ -46,9 +48,9 @@ async fn subscribe_txn_status() {
             AssetId::zeroed(),
             TxPointer::default(),
             Default::default(),
+            Default::default(),
             predicate,
             vec![],
-            0,
         );
         let mut tx: Transaction = Transaction::script(
             gas_price + (i as u64),
@@ -61,11 +63,11 @@ async fn subscribe_txn_status() {
             vec![],
         )
         .into();
-        //estimate predicate gas for coin_input predicate
-        tx.as_script_mut().unwrap().estimate_predicates(
-            &ConsensusParameters::DEFAULT,
-            &GasCosts::default(),
-        ).expect("should estimate predicate");
+        // estimate predicate gas for coin_input predicate
+        tx.as_script_mut()
+            .unwrap()
+            .estimate_predicates(&ConsensusParameters::DEFAULT, &GasCosts::default())
+            .expect("should estimate predicate");
 
         tx
     };

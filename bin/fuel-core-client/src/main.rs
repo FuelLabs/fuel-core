@@ -48,11 +48,14 @@ impl CliArgs {
                     println!("{}", result.unwrap());
                 }
                 TransactionCommands::Estimate { tx } => {
-                    let tx: Transaction =
+                    let mut tx: Transaction =
                         serde_json::from_str(tx).expect("invalid transaction json");
 
-                    let result = client.estimate(&tx).await;
-                    println!("{:?}", result.unwrap());
+                    client
+                        .estimate_predicates(&mut tx)
+                        .await
+                        .expect("Should be able to estimate predicates");
+                    println!("{:?}", tx);
                 }
                 TransactionCommands::DryRun { tx } => {
                     let tx: Transaction =

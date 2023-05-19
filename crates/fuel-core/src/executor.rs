@@ -617,7 +617,7 @@ where
         let min_fee = checked_tx.metadata().min_fee();
         let max_fee = checked_tx.metadata().max_fee();
 
-        self.verify_tx_predicates(checked_tx.clone())?;
+        self.verify_tx_predicates(&checked_tx)?;
 
         if self.config.utxo_validation {
             // validate transaction has at least one coin
@@ -892,7 +892,7 @@ where
     }
 
     /// Verify all the predicates of a tx.
-    pub fn verify_tx_predicates<Tx>(&self, tx: Checked<Tx>) -> ExecutorResult<()>
+    pub fn verify_tx_predicates<Tx>(&self, tx: &Checked<Tx>) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
         <Tx as IntoChecked>::Metadata: CheckedMetadata,

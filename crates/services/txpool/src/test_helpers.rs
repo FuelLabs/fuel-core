@@ -13,6 +13,7 @@ use fuel_core_types::{
         Rng,
     },
     fuel_tx::{
+        field::Inputs,
         input::{
             coin::{
                 CoinPredicate,
@@ -21,13 +22,19 @@ use fuel_core_types::{
             contract::Contract,
         },
         ConsensusParameters,
+        Finalizable,
         Input,
         Output,
+        TransactionBuilder,
         UtxoId,
     },
     fuel_types::{
         AssetId,
         Word,
+    },
+    fuel_vm::{
+        checked_transaction::EstimatePredicates,
+        GasCosts,
     },
 };
 
@@ -104,10 +111,11 @@ pub(crate) fn random_predicate(
         asset_id,
         Default::default(),
         Default::default(),
+        Default::default(),
         predicate_code,
         vec![],
-        0,
     )
+    .into_default_estimated()
 }
 
 pub(crate) fn custom_predicate(
@@ -125,8 +133,27 @@ pub(crate) fn custom_predicate(
         asset_id,
         Default::default(),
         Default::default(),
+        Default::default(),
         code,
         vec![],
-        0,
     )
+}
+
+pub trait IntoEstimated {
+    fn into_default_estimated(self) -> Self;
+    fn into_estimated(self, params: &ConsensusParameters, gas_costs: &GasCosts) -> Self;
+}
+
+impl IntoEstimated for Input {
+    fn into_default_estimated(self) -> Self {
+        self.into_estimated(&Default::default(), &Default::default())
+    }
+
+    fn into_estimated(self, params: &ConsensusParameters, gas_costs: &GasCosts) -> Self {
+        let mut tx = TransactionBuilder::script(vec![], vec![])
+            .add_input(self)
+            .finalize();
+        let _ = tx.estimate_predicates(params, gas_costs);
+        tx.inputs()[0].clone()
+    }
 }

@@ -317,6 +317,8 @@ pub enum ConversionError {
     BytesLength,
     #[error("Unknown variant of the {0} enum")]
     UnknownVariant(&'static str),
+    #[error("Got error during conversion {0}")]
+    OtherError(std::io::Error),
 }
 
 impl From<FromHexError> for ConversionError {
@@ -340,5 +342,11 @@ impl From<TryFromIntError> for ConversionError {
 impl From<TryFromSliceError> for ConversionError {
     fn from(_: TryFromSliceError) -> Self {
         ConversionError::BytesLength
+    }
+}
+
+impl From<std::io::Error> for ConversionError {
+    fn from(err: std::io::Error) -> Self {
+        ConversionError::OtherError(err)
     }
 }

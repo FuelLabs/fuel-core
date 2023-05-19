@@ -40,20 +40,12 @@ use fuel_core_storage::{
 use fuel_core_types::{
     fuel_tx::{
         Cacheable,
-        CheckError,
-        ConsensusParameters,
         Transaction as FuelTx,
         UniqueIdentifier,
     },
     fuel_types,
-    fuel_types::bytes::{
-        Deserializable,
-        SerializableVec,
-    },
-    fuel_vm::{
-        checked_transaction::EstimatePredicates,
-        GasCosts,
-    },
+    fuel_types::bytes::Deserializable,
+    fuel_vm::checked_transaction::EstimatePredicates,
 };
 use futures::{
     Stream,
@@ -201,6 +193,23 @@ impl TxQuery {
         )
         .await
     }
+
+    /// Estimate the predicate gas for the provided transaction
+    async fn estimate_predicates(
+        &self,
+        ctx: &Context<'_>,
+        tx: HexString,
+    ) -> async_graphql::Result<Transaction> {
+        let mut tx = FuelTx::from_bytes(&tx.0)?;
+        let config = ctx.data_unchecked::<Config>();
+
+        tx.estimate_predicates(&config.transaction_parameters, &config.gas_costs)?;
+
+        Ok(Transaction::from_tx(
+            tx.id(&config.transaction_parameters),
+            tx,
+        ))
+    }
 }
 
 #[derive(Default)]
@@ -226,46 +235,6 @@ impl TxMutation {
 
         let receipts = block_producer.dry_run_tx(tx, None, utxo_validation).await?;
         Ok(receipts.iter().map(Into::into).collect())
-    }
-
-    /// Estimate the predicate gas for the provided transaction
-    async fn estimate_predicates(
-        &self,
-        tx: HexString,
-    ) -> async_graphql::Result<HexString> {
-        let tx = FuelTx::from_bytes(&tx.0)?;
-
-        if tx.is_script() {
-            // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
-            let res =
-                tokio_rayon::spawn_fifo(move || -> anyhow::Result<HexString> {
-                    let mut script_tx = tx.clone();
-                    let script = script_tx
-                        .as_script_mut()
-                        .ok_or(CheckError::PredicateVerificationFailed)?;
-                    script
-                        .estimate_predicates(&ConsensusParameters::default(), &GasCosts::default())?;
-                    Ok(HexString(script_tx.to_bytes()))
-                }).await?;
-
-            Ok(res)
-        } else if tx.is_create() {
-            // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
-            let res =
-                tokio_rayon::spawn_fifo(move || -> anyhow::Result<HexString> {
-                    let mut create_tx = tx.clone();
-                    let create = create_tx
-                        .as_create_mut()
-                        .ok_or(CheckError::PredicateVerificationFailed)?;
-                    create
-                        .estimate_predicates(&ConsensusParameters::default(), &GasCosts::default())?;
-                    Ok(HexString(create_tx.to_bytes()))
-                })
-                    .await?;
-            Ok(res)
-        } else {
-            Err(CheckError::PredicateVerificationFailed.into())
-        }
     }
 
     /// Submits transaction to the txpool

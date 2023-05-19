@@ -174,15 +174,6 @@ pub trait DryRunExecution {
     ) -> anyhow::Result<Vec<Receipt>>;
 }
 
-#[async_trait]
-pub trait EstimatePredicatesExecution {
-    async fn estimate_predicates(
-        &self,
-        transaction: Transaction,
-        height: Option<BlockHeight>,
-    ) -> anyhow::Result<Transaction>;
-}
-
 pub trait BlockProducerPort: Send + Sync + DryRunExecution {}
 
 #[async_trait::async_trait]

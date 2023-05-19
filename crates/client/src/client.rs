@@ -5,10 +5,7 @@ use crate::client::schema::{
         SpendQueryElementInput,
     },
     contract::ContractBalanceQueryArgs,
-    tx::{
-        DryRunArg,
-        EstimatePredicatesArg,
-    },
+    tx::DryRunArg,
     Tai64Timestamp,
 };
 use anyhow::Context;
@@ -349,12 +346,15 @@ impl FuelClient {
     }
 
     /// Estimate predicates for the transaction
-    pub async fn estimate(&self, tx: &Transaction) -> io::Result<HexString> {
-        let serialized_tx = tx.clone().to_bytes();
-        let query = schema::tx::EstimatePredicates::build(EstimatePredicatesArg {
+    pub async fn estimate_predicates(&self, tx: &mut Transaction) -> io::Result<()> {
+        let serialized_tx = tx.to_bytes();
+        let query = schema::tx::EstimatePredicates::build(TxArg {
             tx: HexString(Bytes(serialized_tx)),
         });
-        self.query(query).await.map(|r| r.estimate_predicates)
+        let tx_with_predicate = self.query(query).await.map(|r| r.estimate_predicates)?;
+        let tx_with_predicate: Transaction = tx_with_predicate.try_into()?;
+        *tx = tx_with_predicate;
+        Ok(())
     }
 
     pub async fn submit(&self, tx: &Transaction) -> io::Result<TransactionId> {

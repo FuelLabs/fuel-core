@@ -1,3 +1,4 @@
+use crate::test_helpers::IntoEstimated;
 use fuel_core_types::{
     entities::message::Message,
     fuel_asm::op,
@@ -34,10 +35,11 @@ pub(crate) fn create_message_predicate_from_message(
             Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT),
             message.amount,
             message.nonce,
+            Default::default(),
             predicate,
             Default::default(),
-            0,
-        ),
+        )
+        .into_default_estimated(),
     )
 }
 

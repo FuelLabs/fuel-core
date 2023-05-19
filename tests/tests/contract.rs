@@ -197,7 +197,7 @@ async fn can_get_message_proof() {
     let output = Output::contract_created(id, state_root);
 
     // Create the contract deploy transaction.
-    let contract_deploy = TransactionBuilder::create(bytecode, salt, vec![])
+    let mut contract_deploy = TransactionBuilder::create(bytecode, salt, vec![])
         .add_output(output)
         .finalize_as_transaction();
 
@@ -241,9 +241,9 @@ async fn can_get_message_proof() {
         coin.asset_id,
         TxPointer::default(),
         Default::default(),
+        Default::default(),
         predicate,
         vec![],
-        0,
     );
 
     // Set the contract input because we are calling a contract.
@@ -283,15 +283,25 @@ async fn can_get_message_proof() {
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
+    client
+        .estimate_predicates(&mut contract_deploy)
+        .await
+        .expect("Should be able to estimate deploy tx");
+
     // Deploy the contract.
     matches!(
         client.submit_and_await_commit(&contract_deploy).await,
         Ok(TransactionStatus::Success { .. })
     );
 
+    let mut script = script.into();
+    client
+        .estimate_predicates(&mut script)
+        .await
+        .expect("Should be able to estimate deploy tx");
     // Call the contract.
     matches!(
-        client.submit_and_await_commit(&script.into()).await,
+        client.submit_and_await_commit(&script).await,
         Ok(TransactionStatus::Success { .. })
     );
 

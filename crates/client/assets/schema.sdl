@@ -453,10 +453,6 @@ type Mutation {
 	"""
 	dryRun(tx: HexString!, utxoValidation: Boolean): [Receipt!]!
 	"""
-	Estimate the predicate gas for the provided transaction
-	"""
-	estimatePredicates(tx: HexString!): HexString!
-	"""
 	Submits transaction to the txpool
 	"""
 	submit(tx: HexString!): Transaction!
@@ -536,6 +532,10 @@ type Query {
 	transaction(id: TransactionId!): Transaction
 	transactions(first: Int, after: String, last: Int, before: String): TransactionConnection!
 	transactionsByOwner(owner: Address!, first: Int, after: String, last: Int, before: String): TransactionConnection!
+	"""
+	Estimate the predicate gas for the provided transaction
+	"""
+	estimatePredicates(tx: HexString!): Transaction!
 	"""
 	Returns true when the GraphQL API is serving requests.
 	"""
