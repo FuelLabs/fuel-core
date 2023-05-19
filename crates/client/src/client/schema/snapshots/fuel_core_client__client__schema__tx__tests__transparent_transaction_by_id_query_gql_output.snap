@@ -1,6 +1,5 @@
 ---
 source: crates/client/src/client/schema/tx.rs
-assertion_line: 355
 expression: operation.query
 ---
 query($id: TransactionId!) {
@@ -23,9 +22,9 @@ query($id: TransactionId!) {
         txPointer
         witnessIndex
         maturity
+        predicateGasUsed
         predicate
         predicateData
-        predicateGasUsed
       }
       ... on InputContract {
         utxoId
@@ -42,10 +41,10 @@ query($id: TransactionId!) {
         amount
         nonce
         witnessIndex
+        predicateGasUsed
         data
         predicate
         predicateData
-        predicateGasUsed
       }
     }
     isScript
