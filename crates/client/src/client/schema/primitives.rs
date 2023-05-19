@@ -269,10 +269,11 @@ number_scalar!(U64, u64);
 number_scalar!(U32, u32);
 
 impl TryFrom<U64> for PanicInstruction {
-    type Error = std::io::Error;
+    type Error = ConversionError;
 
     fn try_from(s: U64) -> Result<Self, Self::Error> {
-        s.0.try_into().map_err(Into::into)
+        s.0.try_into()
+            .map_err(|_| ConversionError::IntegerConversion)
     }
 }
 
