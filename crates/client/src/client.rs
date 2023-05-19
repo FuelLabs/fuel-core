@@ -38,7 +38,7 @@ use fuel_core_types::{
 #[cfg(feature = "subscriptions")]
 use futures::StreamExt;
 use itertools::Itertools;
-pub use pagination::{
+use pagination::{
     PageDirection,
     PaginatedResult,
     PaginationRequest,
@@ -98,7 +98,7 @@ use self::schema::{
     message::MessageProofArgs,
 };
 
-mod pagination;
+pub mod pagination;
 pub mod schema;
 pub mod types;
 
@@ -701,8 +701,8 @@ impl FuelClient {
             .query(query)
             .await?
             .coins_to_spend
-            .iter()
-            .map(|v| v.iter().cloned().map(Into::into).collect::<Vec<_>>())
+            .into_iter()
+            .map(|v| v.into_iter().map(Into::into).collect::<Vec<_>>())
             .collect::<Vec<_>>();
         Ok(coins_per_asset)
     }
@@ -732,7 +732,7 @@ impl FuelClient {
             });
 
         let balance: types::ContractBalance =
-            self.query(query).await.unwrap().contract_balance.into();
+            self.query(query).await?.contract_balance.into();
         Ok(balance.amount)
     }
 

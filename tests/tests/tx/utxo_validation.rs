@@ -5,9 +5,11 @@ use crate::helpers::{
     TestSetupBuilder,
 };
 use fuel_core_client::client::{
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
     types::TransactionStatus,
-    PageDirection,
-    PaginationRequest,
 };
 use fuel_core_types::{
     fuel_asm::*,

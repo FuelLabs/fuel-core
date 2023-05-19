@@ -6,14 +6,16 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
     types::scalars::{
         Address,
         AssetId,
         UtxoId,
     },
     FuelClient,
-    PageDirection,
-    PaginationRequest,
 };
 use fuel_core_storage::{
     tables::Coins,

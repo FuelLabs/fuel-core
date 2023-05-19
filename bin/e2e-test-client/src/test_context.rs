@@ -6,13 +6,15 @@ use anyhow::{
 };
 use fuel_core_chain_config::ContractConfig;
 use fuel_core_client::client::{
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
     types::{
         CoinType,
         TransactionStatus,
     },
     FuelClient,
-    PageDirection,
-    PaginationRequest,
 };
 use fuel_core_types::{
     fuel_crypto::PublicKey,

@@ -6,11 +6,11 @@ use crate::client::{
         MerkleRoot,
         PublicKey,
         Signature,
-        Tai64Timestamp,
         TransactionId,
     },
     PaginatedResult,
 };
+use tai64::Tai64;
 
 #[derive(Debug)]
 pub struct Block {
@@ -37,7 +37,7 @@ pub struct Header {
     pub message_receipt_root: MerkleRoot,
     pub height: u32,
     pub prev_root: MerkleRoot,
-    pub time: Tai64Timestamp,
+    pub time: Tai64,
     pub application_hash: Hash,
 }
 

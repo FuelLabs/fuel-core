@@ -7,10 +7,12 @@ use fuel_core::service::{
     FuelService,
 };
 use fuel_core_client::client::{
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
     types::TransactionStatus,
     FuelClient,
-    PageDirection,
-    PaginationRequest,
 };
 use fuel_core_types::{
     fuel_asm::*,

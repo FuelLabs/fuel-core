@@ -8,43 +8,6 @@ pub mod merkle_proof;
 pub mod message;
 pub mod node_info;
 
-pub mod scalars {
-    use tai64::Tai64;
-
-    pub use fuel_core_types::{
-        fuel_crypto::{
-            PublicKey,
-            Signature,
-        },
-        fuel_tx::UtxoId,
-        fuel_types::{
-            Address,
-            AssetId,
-            Bytes32,
-            Bytes64,
-            ContractId,
-            MessageId,
-            Nonce,
-            Salt,
-        },
-    };
-
-    pub type BlockId = Bytes32;
-    pub type Hash = Bytes32;
-    pub type HexString = Vec<u8>;
-    pub type MerkleRoot = Bytes32;
-    pub type TransactionId = Bytes32;
-
-    #[derive(Debug)]
-    pub struct Tai64Timestamp(pub Tai64);
-
-    impl From<Tai64> for Tai64Timestamp {
-        fn from(value: Tai64) -> Self {
-            Self(value)
-        }
-    }
-}
-
 pub use balance::Balance;
 pub use block::{
     Block,
@@ -85,6 +48,32 @@ use serde::{
     Serialize,
 };
 use tai64::Tai64;
+
+pub mod scalars {
+    pub use fuel_core_types::{
+        fuel_crypto::{
+            PublicKey,
+            Signature,
+        },
+        fuel_tx::UtxoId,
+        fuel_types::{
+            Address,
+            AssetId,
+            Bytes32,
+            Bytes64,
+            ContractId,
+            MessageId,
+            Nonce,
+            Salt,
+        },
+    };
+
+    pub type BlockId = Bytes32;
+    pub type Hash = Bytes32;
+    pub type HexString = Vec<u8>;
+    pub type MerkleRoot = Bytes32;
+    pub type TransactionId = Bytes32;
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionResponse {

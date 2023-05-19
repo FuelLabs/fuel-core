@@ -9,10 +9,12 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
     types::TransactionStatus,
     FuelClient,
-    PageDirection,
-    PaginationRequest,
 };
 use fuel_core_types::{
     fuel_asm::*,
@@ -402,7 +404,7 @@ async fn can_get_message_proof() {
             let mut hasher = Hasher::default();
             hasher.input(result.message_block_header.prev_root.as_ref());
             hasher.input(&result.message_block_header.height.to_be_bytes()[..]);
-            hasher.input(result.message_block_header.time.0 .0.to_be_bytes());
+            hasher.input(result.message_block_header.time.0.to_be_bytes());
             hasher.input(result.message_block_header.application_hash.as_ref());
             let message_block_id = hasher.digest();
             assert_eq!(message_block_id, result.message_block_header.id);
