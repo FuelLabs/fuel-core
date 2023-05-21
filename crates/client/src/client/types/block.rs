@@ -74,7 +74,7 @@ impl From<schema::block::Header> for Header {
             message_receipt_root: value.message_receipt_root.into(),
             height: value.height.into(),
             prev_root: value.prev_root.into(),
-            time: value.time.0.into(),
+            time: value.time.0,
             application_hash: value.application_hash.into(),
         }
     }
