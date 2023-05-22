@@ -14,12 +14,16 @@ impl DatabaseColumn for ContractsInfo {
 mod tests {
     use super::*;
     use crate::database::Database;
-    use fuel_core_storage::{
-        StorageAsMut,
-    };
+    use fuel_core_storage::StorageAsMut;
     use fuel_core_types::{
-        fuel_types::{ContractId, Bytes32},
-        fuel_vm::{Contract, Salt},
+        fuel_types::{
+            Bytes32,
+            ContractId,
+        },
+        fuel_vm::{
+            Contract,
+            Salt,
+        },
     };
     use rand::{
         rngs::StdRng,
@@ -55,10 +59,7 @@ mod tests {
         let rng = &mut StdRng::seed_from_u64(2322u64);
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
-        let info = (
-            rng.gen(),
-            contract.root(),
-        );
+        let info = (rng.gen(), contract.root());
 
         let database = &mut Database::default();
         database
@@ -79,10 +80,7 @@ mod tests {
         let rng = &mut StdRng::seed_from_u64(2322u64);
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
-        let info = (
-            rng.gen(),
-            contract.root(),
-        );
+        let info = (rng.gen(), contract.root());
 
         let database = &mut Database::default();
         database
@@ -105,10 +103,7 @@ mod tests {
         let rng = &mut StdRng::seed_from_u64(2322u64);
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
-        let info = (
-            rng.gen(),
-            contract.root(),
-        );
+        let info = (rng.gen(), contract.root());
 
         let database = &mut Database::default();
         database
