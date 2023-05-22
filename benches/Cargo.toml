@@ -27,7 +27,7 @@ harness = false
 name = "vm"
 
 [[bench]]
-# harness = false
+harness = false
 name = "transaction"
 
 [features]

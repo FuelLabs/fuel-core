@@ -17,6 +17,8 @@ use std::{
     iter,
 };
 
+pub mod data;
+
 const LARGE_GAS_LIMIT: u64 = u64::MAX - 1001;
 
 fn new_db() -> VmDatabase {

@@ -1,26 +1,18 @@
-use fuel_core::{
-    executor::Executor,
-    service::{
-        adapters::MaybeRelayerAdapter,
-        Config,
-    },
-};
-use fuel_core_benches::Database;
 use fuel_core_storage::{
     tables::{
         Coins,
+        ContractsInfo,
         ContractsLatestUtxo,
+        ContractsRawCode,
         Messages,
     },
     StorageAsMut,
 };
 use fuel_core_types::{
-    blockchain::block::PartialFuelBlock,
     entities::{
         coins::coin::CompressedCoin,
         contract::ContractUtxoInfo,
     },
-    fuel_asm::op,
     fuel_tx::{
         field::Inputs,
         Cacheable,
@@ -29,45 +21,11 @@ use fuel_core_types::{
         Signable,
         Transaction,
     },
-    fuel_vm::GasCosts,
-    services::executor::ExecutionBlock,
 };
-
-use crate::data::make_header;
 
 use super::*;
 
-#[test]
-fn test_in_out() {
-    let database = Database::default();
-    let relayer = MaybeRelayerAdapter {
-        database: database.clone(),
-        relayer_synced: None,
-        da_deploy_height: 0u64.into(),
-    };
-    let mut config = Config::local_node();
-    config.chain_conf.gas_costs = GasCosts::free();
-    config.utxo_validation = true;
-    let mut executor = Executor {
-        database,
-        relayer,
-        config,
-    };
-    let mut test_data = InputOutputData::default();
-    let mut data = Data::default();
-
-    <out_ty::Void as ValidTx<in_ty::CoinSigned>>::fill(&mut data, &mut test_data, 5);
-    <(out_ty::Coin, out_ty::Contract) as ValidTx<(
-        in_ty::MessageData,
-        in_ty::Contract,
-    )>>::fill(&mut data, &mut test_data, 5);
-
-    let t = into_txn(test_data);
-    insert_into_db(&mut executor.database, &t);
-    test_transaction(&executor, t);
-}
-
-fn insert_into_db(db: &mut Database, transaction: &Transaction) {
+pub fn insert_into_db(db: &mut Database, transaction: &Transaction, data: &mut Data) {
     match transaction {
         Transaction::Script(s) => {
             for input in s.inputs() {
@@ -111,12 +69,13 @@ fn insert_into_db(db: &mut Database, transaction: &Transaction) {
                             recipient: m.recipient,
                             nonce: m.nonce,
                             amount: m.amount,
-                            data: m.data.clone(), 
+                            data: m.data.clone(),
                             da_height: 0u64.into(),
                         };
                         db.storage::<Messages>().insert(&m.nonce, &m).unwrap();
                     }
                     Input::Contract(c) => {
+                        let contract = data.contract();
                         db.storage::<ContractsLatestUtxo>()
                             .insert(
                                 &c.contract_id,
@@ -125,6 +84,12 @@ fn insert_into_db(db: &mut Database, transaction: &Transaction) {
                                     tx_pointer: c.tx_pointer,
                                 },
                             )
+                            .unwrap();
+                        db.storage::<ContractsInfo>()
+                            .insert(&c.contract_id, &(data.salt(), contract.root()))
+                            .unwrap();
+                        db.storage::<ContractsRawCode>()
+                            .insert(&c.contract_id, contract.as_ref())
                             .unwrap();
                     }
                     _ => (),
@@ -136,7 +101,7 @@ fn insert_into_db(db: &mut Database, transaction: &Transaction) {
     }
 }
 
-fn into_txn(data: InputOutputData) -> Transaction {
+pub fn into_script_txn(data: InputOutputData) -> Transaction {
     let InputOutputData {
         inputs,
         outputs,
@@ -161,25 +126,4 @@ fn into_txn(data: InputOutputData) -> Transaction {
 
     script.precompute(&ConsensusParameters::default());
     script.into()
-}
-
-fn test_transaction(executor: &Executor<MaybeRelayerAdapter>, transaction: Transaction) {
-    let header = make_header();
-    let block = PartialFuelBlock::new(header, vec![transaction]);
-    let block = ExecutionBlock::Production(block);
-
-    let result = executor.execute_without_commit(block).unwrap();
-    let status = result.result().tx_status.clone();
-    let errors = result
-        .result()
-        .skipped_transactions
-        .iter()
-        .map(|(_, e)| e)
-        .collect::<Vec<_>>();
-    //         eprintln!("Transaction failed: {params}, {errors:?}, {status:?}");
-
-    assert!(
-        result.result().skipped_transactions.is_empty(),
-        "Skipped transactions: {errors:?}, {status:?}"
-    );
 }

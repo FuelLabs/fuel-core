@@ -1,4 +1,3 @@
-
 use criterion::{
     black_box,
     criterion_group,
@@ -7,8 +6,7 @@ use criterion::{
     Criterion,
 };
 
-fn rocks(c: &mut Criterion) {
-}
+fn rocks(c: &mut Criterion) {}
 
 criterion_group!(benches, rocks);
 criterion_main!(benches);

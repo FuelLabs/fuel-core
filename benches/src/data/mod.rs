@@ -11,17 +11,22 @@ use fuel_core_types::{
         Address,
         AssetId,
         Bytes32,
+        ContractId,
         Nonce,
-        Word, ContractId,
+        Word,
     },
-    fuel_vm::SecretKey,
+    fuel_vm::{
+        Contract,
+        Salt,
+        SecretKey,
+    },
 };
 use rand::{
     rngs::StdRng,
     SeedableRng,
 };
 
-mod in_out;
+pub mod in_out;
 
 pub struct Data {
     address: Box<dyn Iterator<Item = Address>>,
@@ -33,6 +38,8 @@ pub struct Data {
     data: Box<dyn Iterator<Item = u8>>,
     bytes32: Box<dyn Iterator<Item = Bytes32>>,
     contract_id: Box<dyn Iterator<Item = ContractId>>,
+    salt: Box<dyn Iterator<Item = Salt>>,
+    contract: Box<dyn Iterator<Item = Contract>>,
 }
 
 impl Data {
@@ -51,6 +58,11 @@ impl Data {
         let nonce = Box::new(all::<[u8; 32]>().cycle().map(Nonce::from));
         let bytes32 = Box::new(all::<[u8; 32]>().cycle().map(Bytes32::from));
         let contract_id = Box::new(all::<[u8; 32]>().cycle().map(ContractId::from));
+        let salt = Box::new(all::<[u8; 32]>().cycle().map(Salt::from));
+        let contract = Box::new(
+            std::iter::repeat_with(|| all::<u8>().cycle().take(1000).collect::<Vec<_>>())
+                .map(Contract::from),
+        );
         Self {
             address,
             asset_id,
@@ -61,6 +73,8 @@ impl Data {
             data,
             bytes32,
             contract_id,
+            salt,
+            contract,
         }
     }
 
@@ -106,6 +120,14 @@ impl Data {
 
     pub fn contract_id(&mut self) -> ContractId {
         self.contract_id.next().unwrap()
+    }
+
+    pub fn salt(&mut self) -> Salt {
+        self.salt.next().unwrap()
+    }
+
+    pub fn contract(&mut self) -> Contract {
+        self.contract.next().unwrap()
     }
 }
 
