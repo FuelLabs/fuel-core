@@ -14,7 +14,7 @@ description = "Fuel Chain config types"
 anyhow = { workspace = true }
 bech32 = "0.9.0"
 fuel-core-storage = { workspace = true }
-fuel-core-types = { path = "../types", workspace = true, features = [
+fuel-core-types = { workspace = true, features = [
     "serde",
     "random",
 ] }
