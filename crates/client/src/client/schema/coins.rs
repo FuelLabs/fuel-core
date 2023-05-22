@@ -11,7 +11,6 @@ use crate::client::{
         U64,
     },
     PageDirection,
-    PaginatedResult,
     PaginationRequest,
 };
 use itertools::Itertools;
@@ -102,17 +101,6 @@ pub struct CoinConnection {
     pub page_info: PageInfo,
 }
 
-impl From<CoinConnection> for PaginatedResult<Coin, String> {
-    fn from(conn: CoinConnection) -> Self {
-        PaginatedResult {
-            cursor: conn.page_info.end_cursor,
-            has_next_page: conn.page_info.has_next_page,
-            has_previous_page: conn.page_info.has_previous_page,
-            results: conn.edges.into_iter().map(|e| e.node).collect(),
-        }
-    }
-}
-
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinEdge {
@@ -120,7 +108,7 @@ pub struct CoinEdge {
     pub node: Coin,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Debug, Clone)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Coin {
     pub amount: U64,
@@ -166,7 +154,7 @@ pub struct SpendQueryElementInput {
     pub max: Option<U64>,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Debug, Clone)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct MessageCoin {
     pub amount: U64,
@@ -176,7 +164,7 @@ pub struct MessageCoin {
     pub da_height: U64,
 }
 
-#[derive(cynic::InlineFragments, Debug)]
+#[derive(cynic::InlineFragments, Debug, Clone)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum CoinType {
     Coin(Coin),

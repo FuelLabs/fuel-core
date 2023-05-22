@@ -6,11 +6,15 @@ use anyhow::{
 };
 use fuel_core_chain_config::ContractConfig;
 use fuel_core_client::client::{
-    schema::coins::CoinType,
-    types::TransactionStatus,
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
+    types::{
+        CoinType,
+        TransactionStatus,
+    },
     FuelClient,
-    PageDirection,
-    PaginationRequest,
 };
 use fuel_core_types::{
     fuel_crypto::PublicKey,
@@ -123,10 +127,7 @@ impl Wallet {
                 .await?
                 .results;
             // check if page has the utxos we're looking for
-            if results
-                .iter()
-                .any(|coin| UtxoId::from(coin.utxo_id.clone()) == utxo_id)
-            {
+            if results.iter().any(|coin| coin.utxo_id == utxo_id) {
                 return Ok(true)
             }
         }
@@ -164,11 +165,11 @@ impl Wallet {
             if let CoinType::Coin(coin) = coin {
                 tx.add_unsigned_coin_input(
                     self.secret,
-                    coin.utxo_id.clone().into(),
-                    coin.amount.clone().into(),
-                    coin.asset_id.clone().into(),
+                    coin.utxo_id,
+                    coin.amount,
+                    coin.asset_id,
                     Default::default(),
-                    coin.maturity.clone().into(),
+                    coin.maturity.into(),
                 );
             }
         }
@@ -236,11 +237,11 @@ impl Wallet {
             if let CoinType::Coin(coin) = coin {
                 tx.add_unsigned_coin_input(
                     self.secret,
-                    coin.utxo_id.clone().into(),
-                    coin.amount.clone().into(),
-                    coin.asset_id.clone().into(),
+                    coin.utxo_id,
+                    coin.amount,
+                    coin.asset_id,
                     Default::default(),
-                    coin.maturity.clone().into(),
+                    coin.maturity.into(),
                 );
             }
         }
