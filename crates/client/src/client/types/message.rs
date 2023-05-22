@@ -4,7 +4,7 @@ use crate::client::{
         block::Header,
         scalars::{
             Address,
-            HexString,
+            Bytes,
             Nonce,
         },
         MerkleProof,
@@ -18,7 +18,7 @@ pub struct Message {
     pub sender: Address,
     pub recipient: Address,
     pub nonce: Nonce,
-    pub data: HexString,
+    pub data: Bytes,
     pub da_height: u64,
 }
 
@@ -43,7 +43,7 @@ pub struct MessageProof {
     /// The amount from the message.
     pub amount: u64,
     /// The data from the message.
-    pub data: HexString,
+    pub data: Bytes,
 }
 
 // GraphQL Translation

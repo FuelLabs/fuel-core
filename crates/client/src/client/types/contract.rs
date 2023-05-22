@@ -2,8 +2,8 @@ use crate::client::{
     schema,
     types::scalars::{
         AssetId,
+        Bytes,
         ContractId,
-        HexString,
         Salt,
     },
     PaginatedResult,
@@ -11,7 +11,7 @@ use crate::client::{
 
 pub struct Contract {
     pub id: ContractId,
-    pub bytecode: HexString,
+    pub bytecode: Bytes,
     pub salt: Salt,
 }
 

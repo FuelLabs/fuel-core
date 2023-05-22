@@ -70,7 +70,7 @@ pub mod scalars {
 
     pub type BlockId = Bytes32;
     pub type Hash = Bytes32;
-    pub type HexString = Vec<u8>;
+    pub type Bytes = Vec<u8>;
     pub type MerkleRoot = Bytes32;
     pub type TransactionId = Bytes32;
 }
