@@ -13,7 +13,6 @@ use std::io::ErrorKind;
 pub use fuel_vm_private::{
     fuel_storage::*,
     storage::{
-        ContractInfo,
         ContractsAssetsStorage,
         InterpreterStorage,
     },

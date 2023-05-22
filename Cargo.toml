@@ -113,4 +113,3 @@ tikv-jemallocator = "0.5"
 
 [patch.crates-io]
 fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "dento/rkyv-db" }
-tai64 = { git = "https://github.com/Dentosal/rustcrypto-formats", branch = "tai64-rkyv-support" }

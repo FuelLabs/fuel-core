@@ -22,7 +22,6 @@ use fuel_core_storage::{
         Messages,
     },
     transactional::Transactional,
-    ContractInfo,
     MerkleRoot,
     StorageAsMut,
 };
@@ -280,7 +279,7 @@ fn init_contracts(
                 // insert contract root
                 if db
                     .storage::<ContractsInfo>()
-                    .insert(&contract_id, &ContractInfo { salt, root })?
+                    .insert(&contract_id, &(salt, root))?
                     .is_some()
                 {
                     return Err(anyhow!("Contract info should not exist"))

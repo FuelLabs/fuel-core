@@ -15,12 +15,11 @@ mod tests {
     use super::*;
     use crate::database::Database;
     use fuel_core_storage::{
-        ContractInfo,
         StorageAsMut,
     };
     use fuel_core_types::{
-        fuel_types::ContractId,
-        fuel_vm::Contract,
+        fuel_types::{ContractId, Bytes32},
+        fuel_vm::{Contract, Salt},
     };
     use rand::{
         rngs::StdRng,
@@ -33,10 +32,7 @@ mod tests {
         let rng = &mut StdRng::seed_from_u64(2322u64);
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
-        let info = ContractInfo {
-            salt: rng.gen(),
-            root: contract.root(),
-        };
+        let info = (rng.gen(), contract.root());
 
         let database = &mut Database::default();
         database
@@ -59,10 +55,10 @@ mod tests {
         let rng = &mut StdRng::seed_from_u64(2322u64);
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
-        let info = ContractInfo {
-            salt: rng.gen(),
-            root: contract.root(),
-        };
+        let info = (
+            rng.gen(),
+            contract.root(),
+        );
 
         let database = &mut Database::default();
         database
@@ -70,7 +66,7 @@ mod tests {
             .insert(&contract_id, &info)
             .unwrap();
 
-        let returned: ContractInfo = database
+        let returned: (Salt, Bytes32) = database
             .storage::<ContractsInfo>()
             .get(&contract_id)
             .unwrap()
@@ -83,10 +79,10 @@ mod tests {
         let rng = &mut StdRng::seed_from_u64(2322u64);
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
-        let info = ContractInfo {
-            salt: rng.gen(),
-            root: contract.root(),
-        };
+        let info = (
+            rng.gen(),
+            contract.root(),
+        );
 
         let database = &mut Database::default();
         database
@@ -109,10 +105,10 @@ mod tests {
         let rng = &mut StdRng::seed_from_u64(2322u64);
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
-        let info = ContractInfo {
-            salt: rng.gen(),
-            root: contract.root(),
-        };
+        let info = (
+            rng.gen(),
+            contract.root(),
+        );
 
         let database = &mut Database::default();
         database

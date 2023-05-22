@@ -13,7 +13,6 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         ContractsRawCode,
     },
-    ContractInfo,
     ContractsAssetKey,
     Error as StorageError,
     Mappable,
@@ -162,7 +161,7 @@ impl Database {
             .unwrap()
             .into();
 
-        let ContractInfo { salt, .. } = self
+        let (salt, _) = self
             .storage::<ContractsInfo>()
             .get(&contract_id)
             .unwrap()

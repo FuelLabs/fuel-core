@@ -2556,7 +2556,7 @@ checksum = "6c2141d6d6c8512188a7891b4b01590a45f6dac67afb4f255c4124dbb86d4eaa"
 [[package]]
 name = "fuel-asm"
 version = "0.32.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/rkyv-db#8fdc1d37f1da016cc7047ae4f23034f8192f05c4"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/rkyv-db#7584d7da33bd6ed50d06cd8c6cd51f1a1afd40d5"
 dependencies = [
  "bitflags",
  "fuel-types",
@@ -2699,7 +2699,7 @@ dependencies = [
  "schemafy_lib",
  "serde",
  "serde_json",
- "tai64",
+ "tai64 4.2.0",
  "thiserror",
  "tracing",
 ]
@@ -3027,7 +3027,7 @@ dependencies = [
  "rkyv",
  "secrecy",
  "serde",
- "tai64",
+ "tai64 4.2.0",
  "thiserror",
  "zeroize",
 ]
@@ -3035,7 +3035,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.32.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/rkyv-db#8fdc1d37f1da016cc7047ae4f23034f8192f05c4"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/rkyv-db#7584d7da33bd6ed50d06cd8c6cd51f1a1afd40d5"
 dependencies = [
  "borrown",
  "coins-bip32 0.8.3",
@@ -3053,7 +3053,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.32.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/rkyv-db#8fdc1d37f1da016cc7047ae4f23034f8192f05c4"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/rkyv-db#7584d7da33bd6ed50d06cd8c6cd51f1a1afd40d5"
 dependencies = [
  "digest 0.10.7",
  "fuel-storage",
@@ -3066,12 +3066,12 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.32.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/rkyv-db#8fdc1d37f1da016cc7047ae4f23034f8192f05c4"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/rkyv-db#7584d7da33bd6ed50d06cd8c6cd51f1a1afd40d5"
 
 [[package]]
 name = "fuel-tx"
 version = "0.32.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/rkyv-db#8fdc1d37f1da016cc7047ae4f23034f8192f05c4"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/rkyv-db#7584d7da33bd6ed50d06cd8c6cd51f1a1afd40d5"
 dependencies = [
  "derivative",
  "fuel-asm",
@@ -3091,7 +3091,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.32.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/rkyv-db#8fdc1d37f1da016cc7047ae4f23034f8192f05c4"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/rkyv-db#7584d7da33bd6ed50d06cd8c6cd51f1a1afd40d5"
 dependencies = [
  "hex",
  "rand 0.8.5",
@@ -3102,7 +3102,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.32.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/rkyv-db#8fdc1d37f1da016cc7047ae4f23034f8192f05c4"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/rkyv-db#7584d7da33bd6ed50d06cd8c6cd51f1a1afd40d5"
 dependencies = [
  "anyhow",
  "bitflags",
@@ -3121,7 +3121,7 @@ dependencies = [
  "rkyv",
  "serde",
  "sha3",
- "tai64",
+ "tai64 4.0.0",
  "thiserror",
 ]
 
@@ -7059,7 +7059,13 @@ dependencies = [
 [[package]]
 name = "tai64"
 version = "4.0.0"
-source = "git+https://github.com/Dentosal/rustcrypto-formats?branch=tai64-rkyv-support#e4c24d1d9cc64f8c268f43367e5b03c21e0717d3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed7401421025f4132e6c1f7af5e7f8287383969f36e6628016cd509b8d3da9dc"
+
+[[package]]
+name = "tai64"
+version = "4.2.0"
+source = "git+https://github.com/Dentosal/rustcrypto-formats?branch=tai64-rkyv-support#61e9097202d7340942ed432703cf6d149c6482ee"
 dependencies = [
  "rkyv",
  "serde",
