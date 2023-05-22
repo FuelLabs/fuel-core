@@ -44,11 +44,11 @@ hyper = { workspace = true }
 itertools = { workspace = true }
 primitive-types = "0.12"
 rand = { workspace = true }
+rkyv = { workspace = true }
 rocksdb = { version = "0.20", default-features = false, features = [
     "lz4",
     "multi-threaded-cf",
 ], optional = true }
-rkyv = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 strum = "0.24"
