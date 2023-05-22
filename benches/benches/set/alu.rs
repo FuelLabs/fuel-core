@@ -1,8 +1,39 @@
 use super::run_group_ref;
 
 use criterion::Criterion;
+use ethnum::U256;
 use fuel_core_benches::*;
 use fuel_core_types::fuel_asm::*;
+
+use fuel_core_types::fuel_asm::wideint::{
+    CompareArgs,
+    CompareMode,
+    DivArgs,
+    MathArgs,
+    MathOp,
+    MulArgs,
+};
+
+/// Allocates a byte array from heap and initializes it. Then points `reg` to it.
+fn aloc_bytearray<const S: usize>(reg: u8, v: [u8; S]) -> Vec<Instruction> {
+    let mut ops = vec![op::movi(reg, S as u32), op::aloc(reg)];
+    for (i, b) in v.iter().enumerate() {
+        if *b != 0 {
+            ops.push(op::movi(reg, *b as u32));
+            ops.push(op::sb(RegId::HP, reg, i as u16));
+        }
+    }
+    ops.push(op::move_(reg, RegId::HP));
+    ops
+}
+
+fn make_u128(reg: u8, v: u128) -> Vec<Instruction> {
+    aloc_bytearray(reg, v.to_be_bytes())
+}
+
+fn make_u256(reg: u8, v: U256) -> Vec<Instruction> {
+    aloc_bytearray(reg, v.to_be_bytes())
+}
 
 pub fn run(c: &mut Criterion) {
     run_group_ref(
@@ -234,5 +265,201 @@ pub fn run(c: &mut Criterion) {
         "xori",
         VmBench::new(op::xori(0x10, 0x11, 27))
             .with_prepare_script(vec![op::movi(0x11, 100000)]),
+    );
+
+    // Wideint operations: 128 bit
+    let mut wideint_prepare = Vec::new();
+    wideint_prepare.extend(make_u128(0x10, 0));
+    wideint_prepare.extend(make_u128(0x11, u128::MAX));
+    wideint_prepare.extend(make_u128(0x12, u128::MAX / 2 + 1));
+    wideint_prepare.extend(make_u128(0x13, u128::MAX - 158)); // prime
+    wideint_prepare.extend(make_u128(0x14, u64::MAX.into()));
+
+    run_group_ref(
+        &mut c.benchmark_group("wdcm"),
+        "wdcm",
+        VmBench::new(op::wdcm_args(
+            0x10,
+            0x12,
+            0x13,
+            CompareArgs {
+                mode: CompareMode::LTE,
+                indirect_rhs: true,
+            },
+        ))
+        .with_prepare_script(wideint_prepare.clone()),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("wdop"),
+        "wdop",
+        VmBench::new(op::wdop_args(
+            0x10,
+            0x13,
+            0x12,
+            MathArgs {
+                op: MathOp::SUB,
+                indirect_rhs: true,
+            },
+        ))
+        .with_prepare_script(wideint_prepare.clone()),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("wdml"),
+        "wdml",
+        VmBench::new(op::wdml_args(
+            0x10,
+            0x14,
+            0x14,
+            MulArgs {
+                indirect_lhs: true,
+                indirect_rhs: true,
+            },
+        ))
+        .with_prepare_script(wideint_prepare.clone()),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("wddv"),
+        "wddv",
+        VmBench::new(op::wddv_args(
+            0x10,
+            0x12,
+            0x13,
+            DivArgs { indirect_rhs: true },
+        ))
+        .with_prepare_script(wideint_prepare.clone()),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("wddv"),
+        "wddv",
+        VmBench::new(op::wddv_args(
+            0x10,
+            0x12,
+            0x13,
+            DivArgs { indirect_rhs: true },
+        ))
+        .with_prepare_script(wideint_prepare.clone()),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("wdmd"),
+        "wdmd",
+        VmBench::new(op::wdmd(0x10, 0x12, 0x13, 0x13))
+            .with_prepare_script(wideint_prepare.clone()),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("wdam"),
+        "wdam",
+        VmBench::new(op::wdam(0x10, 0x12, 0x13, 0x13))
+            .with_prepare_script(wideint_prepare.clone()),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("wdmm"),
+        "wdmm",
+        VmBench::new(op::wdmm(0x10, 0x12, 0x13, 0x13))
+            .with_prepare_script(wideint_prepare.clone()),
+    );
+
+    // Wideint operations: 256 bit
+    let mut wideint_prepare = Vec::new();
+    wideint_prepare.extend(make_u256(0x10, U256::ZERO));
+    wideint_prepare.extend(make_u256(0x11, U256::MAX));
+    wideint_prepare.extend(make_u256(0x12, U256::MAX / 2 + 1));
+    wideint_prepare.extend(make_u256(0x13, U256::MAX - 188)); // prime
+    wideint_prepare.extend(make_u256(0x14, u128::MAX.into()));
+
+    run_group_ref(
+        &mut c.benchmark_group("wqcm"),
+        "wqcm",
+        VmBench::new(op::wqcm_args(
+            0x10,
+            0x12,
+            0x13,
+            CompareArgs {
+                mode: CompareMode::LTE,
+                indirect_rhs: true,
+            },
+        ))
+        .with_prepare_script(wideint_prepare.clone()),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("wqop"),
+        "wqop",
+        VmBench::new(op::wqop_args(
+            0x10,
+            0x13,
+            0x12,
+            MathArgs {
+                op: MathOp::SUB,
+                indirect_rhs: true,
+            },
+        ))
+        .with_prepare_script(wideint_prepare.clone()),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("wqml"),
+        "wqml",
+        VmBench::new(op::wqml_args(
+            0x10,
+            0x14,
+            0x14,
+            MulArgs {
+                indirect_lhs: true,
+                indirect_rhs: true,
+            },
+        ))
+        .with_prepare_script(wideint_prepare.clone()),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("wqdv"),
+        "wqdv",
+        VmBench::new(op::wqdv_args(
+            0x10,
+            0x12,
+            0x13,
+            DivArgs { indirect_rhs: true },
+        ))
+        .with_prepare_script(wideint_prepare.clone()),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("wqdv"),
+        "wqdv",
+        VmBench::new(op::wqdv_args(
+            0x10,
+            0x12,
+            0x13,
+            DivArgs { indirect_rhs: true },
+        ))
+        .with_prepare_script(wideint_prepare.clone()),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("wqmd"),
+        "wqmd",
+        VmBench::new(op::wqmd(0x10, 0x12, 0x13, 0x13))
+            .with_prepare_script(wideint_prepare.clone()),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("wqam"),
+        "wqam",
+        VmBench::new(op::wqam(0x10, 0x12, 0x13, 0x13))
+            .with_prepare_script(wideint_prepare.clone()),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("wqmm"),
+        "wqmm",
+        VmBench::new(op::wdmm(0x10, 0x12, 0x13, 0x13))
+            .with_prepare_script(wideint_prepare.clone()),
     );
 }
