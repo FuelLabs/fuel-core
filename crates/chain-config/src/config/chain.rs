@@ -7,7 +7,6 @@ use fuel_core_types::{
     fuel_crypto::Hasher,
     fuel_tx::{
         ConsensusParameters,
-        Input,
         UtxoId,
     },
     fuel_types::{
@@ -46,7 +45,6 @@ use crate::{
         coin::CoinConfig,
         state::StateConfig,
     },
-    default_consensus_dev_key,
     genesis::GenesisCommitment,
     ConsensusConfig,
 };
@@ -81,9 +79,7 @@ impl Default for ChainConfig {
             transaction_parameters: ConsensusParameters::DEFAULT,
             initial_state: None,
             gas_costs: GasCosts::default(),
-            consensus: ConsensusConfig::PoA {
-                signing_key: Input::owner(&default_consensus_dev_key().public_key()),
-            },
+            consensus: ConsensusConfig::default_poa(),
         }
     }
 }

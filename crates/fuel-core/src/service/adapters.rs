@@ -5,7 +5,10 @@ use crate::{
 use fuel_core_consensus_module::block_verifier::Verifier;
 use fuel_core_txpool::service::SharedState as TxPoolSharedState;
 use fuel_core_types::services::block_importer::ImportResult;
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::Duration,
+};
 use tokio::sync::broadcast::Receiver;
 
 pub mod block_importer;
@@ -118,6 +121,7 @@ pub trait NetworkInfo {
 pub struct SyncAdapter<T: NetworkInfo> {
     block_rx: Receiver<Arc<ImportResult>>,
     min_connected_reserved_peers: usize,
+    time_until_synced: Duration,
     network_info: T,
 }
 
@@ -125,11 +129,13 @@ impl<T: NetworkInfo> SyncAdapter<T> {
     pub fn new(
         block_rx: Receiver<Arc<ImportResult>>,
         min_connected_reserved_peers: usize,
+        time_until_synced: Duration,
         network_info: T,
     ) -> Self {
         Self {
             block_rx,
             min_connected_reserved_peers,
+            time_until_synced,
             network_info,
         }
     }

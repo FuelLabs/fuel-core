@@ -113,8 +113,6 @@ impl BlockImporter for BlockImporterAdapter {
     }
 }
 
-const TIME_UNTIL_SYNCED: Duration = Duration::from_secs(60);
-
 #[async_trait::async_trait]
 impl SyncPort for crate::service::adapters::SyncAdapter<P2PAdapter> {
     async fn sync_with_peers(&mut self) -> anyhow::Result<()> {
@@ -132,7 +130,7 @@ impl SyncPort for crate::service::adapters::SyncAdapter<P2PAdapter> {
         }
 
         // 2. receive all the blocks
-        while tokio::time::timeout(TIME_UNTIL_SYNCED, self.block_rx.recv())
+        while tokio::time::timeout(self.time_until_synced, self.block_rx.recv())
             .await
             .is_ok()
         {

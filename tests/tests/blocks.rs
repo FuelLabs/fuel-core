@@ -1,4 +1,5 @@
 use fuel_core::{
+    chain_config::ConsensusConfig,
     database::Database,
     schema::scalars::BlockId,
     service::{
@@ -238,6 +239,16 @@ async fn produce_block_bad_start_time() {
     let mut config = Config::local_node();
 
     config.manual_blocks_enabled = true;
+
+    match config.chain_conf.consensus {
+        ConsensusConfig::PoA { signing_key, .. } => {
+            config.chain_conf.consensus = ConsensusConfig::PoA {
+                signing_key,
+                time_until_synced: Duration::from_secs(1),
+                min_connected_resereved_peers: 0,
+            }
+        }
+    }
 
     let srv = FuelService::from_database(db.clone(), config)
         .await

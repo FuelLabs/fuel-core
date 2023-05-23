@@ -237,7 +237,10 @@ pub async fn make_nodes(
                     );
                     if let Some(BootstrapSetup { pub_key, .. }) = boot {
                         match &mut node_config.chain_conf.consensus {
-                            crate::chain_config::ConsensusConfig::PoA { signing_key } => {
+                            crate::chain_config::ConsensusConfig::PoA {
+                                signing_key,
+                                ..
+                            } => {
                                 *signing_key = pub_key;
                             }
                         }
@@ -268,7 +271,7 @@ pub async fn make_nodes(
         if let Some((ProducerSetup { secret, .. }, txs)) = s {
             let pub_key = secret.public_key();
             match &mut node_config.chain_conf.consensus {
-                crate::chain_config::ConsensusConfig::PoA { signing_key } => {
+                crate::chain_config::ConsensusConfig::PoA { signing_key, .. } => {
                     *signing_key = Input::owner(&pub_key);
                 }
             }
@@ -297,7 +300,7 @@ pub async fn make_nodes(
 
         if let Some(ValidatorSetup { pub_key, .. }) = s {
             match &mut node_config.chain_conf.consensus {
-                crate::chain_config::ConsensusConfig::PoA { signing_key } => {
+                crate::chain_config::ConsensusConfig::PoA { signing_key, .. } => {
                     *signing_key = pub_key;
                 }
             }
