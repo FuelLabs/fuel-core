@@ -534,10 +534,16 @@ async fn get_transactions_from_manual_blocks() {
 
     // process blocks and save block height
     executor
-        .execute_and_commit(ExecutionBlock::Production(first_test_block))
+        .execute_and_commit(
+            ExecutionBlock::Production(first_test_block),
+            Default::default(),
+        )
         .unwrap();
     executor
-        .execute_and_commit(ExecutionBlock::Production(second_test_block))
+        .execute_and_commit(
+            ExecutionBlock::Production(second_test_block),
+            Default::default(),
+        )
         .unwrap();
 
     // Query for first 4: [coinbase_tx1, 0, 1, 2]
@@ -703,7 +709,7 @@ fn get_executor_and_db() -> (Executor<MaybeRelayerAdapter>, Database) {
     let executor = Executor {
         relayer,
         database: db.clone(),
-        config: Config::local_node(),
+        config: Default::default(),
     };
 
     (executor, db)

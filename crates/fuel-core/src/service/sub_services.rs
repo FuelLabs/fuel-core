@@ -60,7 +60,13 @@ pub fn init_sub_services(
 
     let executor = ExecutorAdapter {
         relayer: relayer_adapter.clone(),
-        config: config.clone(),
+        config: Arc::new(fuel_core_executor::Config {
+            transaction_parameters: config.chain_conf.transaction_parameters,
+            coinbase_recipient: config.block_producer.coinbase_recipient,
+            gas_costs: config.chain_conf.gas_costs.clone(),
+            backtrace: config.vm.backtrace,
+            utxo_validation_default: config.utxo_validation,
+        }),
     };
 
     let verifier =
