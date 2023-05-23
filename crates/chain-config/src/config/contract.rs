@@ -29,7 +29,6 @@ use serde_with::{
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct ContractConfig {
     #[serde_as(as = "HexType")]
-    #[serde(default)]
     pub contract_id: ContractId,
     #[serde_as(as = "HexType")]
     pub code: Vec<u8>,
