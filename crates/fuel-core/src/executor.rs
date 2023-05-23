@@ -480,6 +480,7 @@ where
         Ok(data)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn execute_transaction(
         &self,
         idx: u16,
@@ -609,6 +610,7 @@ where
         Ok(mint)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn execute_create_or_script<Tx>(
         &self,
         idx: u16,
@@ -1242,6 +1244,7 @@ where
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn get_coin_or_default(
         &self,
         db: &mut Database,
