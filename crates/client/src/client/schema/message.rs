@@ -3,19 +3,22 @@ use super::{
     BlockId,
     Bytes32,
     HexString,
-    PageDirection,
     PageInfo,
-    PaginatedResult,
-    PaginationRequest,
     TransactionId,
 };
-use crate::client::schema::{
-    schema,
-    Address,
-    MessageId,
-    Nonce,
-    U32,
-    U64,
+use crate::client::{
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
+    schema::{
+        schema,
+        Address,
+        MessageId,
+        Nonce,
+        U32,
+        U64,
+    },
 };
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -154,17 +157,6 @@ impl From<(Option<Address>, PaginationRequest<String>)> for OwnedMessagesConnect
                 first: None,
                 last: Some(r.1.results as i32),
             },
-        }
-    }
-}
-
-impl From<MessageConnection> for PaginatedResult<Message, String> {
-    fn from(conn: MessageConnection) -> Self {
-        PaginatedResult {
-            cursor: conn.page_info.end_cursor,
-            has_next_page: conn.page_info.has_next_page,
-            has_previous_page: conn.page_info.has_previous_page,
-            results: conn.edges.into_iter().map(|e| e.node).collect(),
         }
     }
 }

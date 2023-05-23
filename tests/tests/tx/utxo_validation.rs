@@ -5,9 +5,11 @@ use crate::helpers::{
     TestSetupBuilder,
 };
 use fuel_core_client::client::{
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
     types::TransactionStatus,
-    PageDirection,
-    PaginationRequest,
 };
 use fuel_core_types::{
     fuel_asm::*,
@@ -290,7 +292,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
     let deduped = total_blocks
         .results
         .iter()
-        .map(|b| b.header.height.0)
+        .map(|b| b.header.height)
         .dedup()
         .collect_vec();
 
@@ -299,10 +301,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
         .results
         .iter()
         .flat_map(|b| {
-            b.transactions
-                .iter()
-                .skip(1 /* coinbase */)
-                .map(|t| t.id.clone().into())
+            b.transactions.iter().skip(1 /* coinbase */).copied()
         })
         .dedup_with_count()
         .map(|(count, id)| {
