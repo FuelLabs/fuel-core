@@ -20,7 +20,8 @@ pub async fn deploy_large_contract(ctx: &TestContext) -> Result<(), Failed> {
         vec![0u8; 1024 * 1024]
     };
     let mut rng = StdRng::seed_from_u64(2222);
-    let contract_config = ContractConfig {
+    let mut contract_config = ContractConfig {
+        contract_id: Default::default(),
         code: bytecode,
         salt: rng.gen(),
         state: None,
@@ -30,6 +31,7 @@ pub async fn deploy_large_contract(ctx: &TestContext) -> Result<(), Failed> {
         tx_pointer_block_height: None,
         tx_pointer_tx_idx: None,
     };
+    contract_config.calculate_contract_id();
 
     let deployment_request = ctx.bob.deploy_contract(contract_config);
 

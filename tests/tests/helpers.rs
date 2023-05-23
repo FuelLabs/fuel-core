@@ -81,6 +81,7 @@ impl TestSetupBuilder {
         self.contracts.insert(
             contract_id,
             ContractConfig {
+                contract_id,
                 code,
                 salt,
                 state: None,

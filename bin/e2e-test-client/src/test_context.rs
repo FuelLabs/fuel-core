@@ -20,9 +20,11 @@ use fuel_core_types::{
     fuel_crypto::PublicKey,
     fuel_tx::{
         ConsensusParameters,
+        Contract,
         Finalizable,
         Input,
         Output,
+        StorageSlot,
         Transaction,
         TransactionBuilder,
         TxId,
@@ -228,7 +230,19 @@ impl Wallet {
             )
             .await?[0];
 
-        let (contract_id, bytes, salt, state_root, slots) = config.unpack();
+        let ContractConfig {
+            contract_id,
+            code: bytes,
+            salt,
+            state,
+            ..
+        } = config;
+        let slots = state
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(key, value)| StorageSlot::new(key, value))
+            .collect::<Vec<_>>();
+        let state_root = Contract::initial_state_root(slots.iter());
         let mut tx = TransactionBuilder::create(bytes.into(), salt, slots);
         tx.gas_price(1);
         tx.gas_limit(BASE_AMOUNT);
