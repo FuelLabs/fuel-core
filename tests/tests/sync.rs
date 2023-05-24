@@ -118,6 +118,61 @@ async fn test_partition_single(num_txs: usize) {
     validators["Carol"].consistency_20s(&expected).await;
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_late_producer() {
+    // Create a random seed based on the test parameters.
+    let mut hasher = DefaultHasher::new();
+    line!().hash(&mut hasher);
+    let mut rng = StdRng::seed_from_u64(hasher.finish());
+
+    // Create a producer and two validators that share the same key pair.
+    let secret = SecretKey::random(&mut rng);
+    let pub_key = Input::owner(&secret.public_key());
+    let Nodes {
+        mut producers,
+        validators,
+        bootstrap_nodes: _dont_drop,
+    } = make_nodes(
+        [Some(BootstrapSetup::new(pub_key))],
+        [Some(
+            ProducerSetup::new(secret).with_txs(10).with_name("Alice"),
+        )],
+        [
+            Some(ValidatorSetup::new(pub_key).with_name("Bob")),
+            Some(ValidatorSetup::new(pub_key).with_name("Carol")),
+        ],
+    )
+    .await;
+
+    // Convert to named nodes.
+    let mut validators: NamedNodes = validators.into();
+
+    let mut producer = producers.pop().unwrap();
+
+    // Shutdown the producer.
+    producer.shutdown().await;
+
+    validators["Bob"].test_txs = producer.test_txs.clone();
+
+    // Insert the transactions into Bob's tx pool.
+    let expected = validators["Bob"].insert_txs();
+
+    // Wait up to 20 seconds for Bob to validate their own tx pool.
+    validators["Bob"].tx_pool_consistency_20s(&expected).await;
+
+    // Wait up to 20 seconds for Carol to sync with the Bob.
+    validators["Carol"].tx_pool_consistency(&expected).await;
+
+    // Wait enough time for gossipsub to remove msgs.
+    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+
+    // Start the producer.
+    producer.start().await;
+
+    // Wait up to 20 seconds for the producer to sync with Bob and Carol.
+    producer.tx_pool_consistency_20s(&expected).await;
+}
+
 #[test_case(1, 3, 3)]
 #[test_case(10, 3, 3)]
 #[test_case(100, 3, 3)]
