@@ -27,8 +27,8 @@ impl ConsensusConfig {
     pub fn default_poa() -> Self {
         ConsensusConfig::PoA {
             signing_key: Input::owner(&default_consensus_dev_key().public_key()),
-            min_connected_resereved_peers: 4,
-            time_until_synced: Duration::from_secs(60),
+            min_connected_resereved_peers: 0,
+            time_until_synced: Duration::from_secs(6),
             timeout_between_checking_peers: Duration::from_millis(500),
         }
     }
