@@ -7,10 +7,12 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
     types::TransactionStatus,
     FuelClient,
-    PageDirection,
-    PaginationRequest,
 };
 use fuel_core_poa::Trigger;
 use fuel_core_storage::{
@@ -78,10 +80,10 @@ async fn get_genesis_block() {
     client.submit_and_await_commit(&tx).await.unwrap();
 
     let block = client.block_by_height(13).await.unwrap().unwrap();
-    assert_eq!(block.header.height.0, 13);
+    assert_eq!(block.header.height, 13);
     assert!(matches!(
         block.consensus,
-        fuel_core_client::client::schema::block::Consensus::Genesis(_)
+        fuel_core_client::client::types::Consensus::Genesis(_)
     ));
 }
 
@@ -112,7 +114,7 @@ async fn produce_block() {
             .unwrap()
             .unwrap();
         let actual_pub_key = block.block_producer().unwrap();
-        let block_height: u32 = block.header.height.into();
+        let block_height: u32 = block.header.height;
         let expected_pub_key = config
             .consensus_key
             .unwrap()
@@ -121,7 +123,7 @@ async fn produce_block() {
             .public_key();
 
         assert!(1 == block_height);
-        assert_eq!(actual_pub_key, expected_pub_key);
+        assert_eq!(*actual_pub_key, expected_pub_key);
     } else {
         panic!("Wrong tx status");
     };
@@ -145,7 +147,7 @@ async fn produce_block_manually() {
 
     assert_eq!(1, *new_height);
     let block = client.block_by_height(1).await.unwrap().unwrap();
-    assert_eq!(block.header.height.0, 1);
+    assert_eq!(block.header.height, 1);
     let actual_pub_key = block.block_producer().unwrap();
     let expected_pub_key = config
         .consensus_key
@@ -153,7 +155,7 @@ async fn produce_block_manually() {
         .expose_secret()
         .deref()
         .public_key();
-    assert_eq!(actual_pub_key, expected_pub_key);
+    assert_eq!(*actual_pub_key, expected_pub_key);
 }
 
 #[tokio::test]
@@ -190,8 +192,7 @@ async fn produce_block_negative() {
             .unwrap()
             .unwrap()
             .header
-            .height
-            .into();
+            .height;
 
         // Block height is now 6 after being advance 5
         assert!(1 == block_height);
@@ -323,7 +324,7 @@ async fn block_connection_5(
                 blocks
                     .results
                     .into_iter()
-                    .map(|b| b.header.height.0)
+                    .map(|b| b.header.height)
                     .collect_vec(),
                 (0..5).collect_vec()
             );
@@ -333,10 +334,91 @@ async fn block_connection_5(
                 blocks
                     .results
                     .into_iter()
-                    .map(|b| b.header.height.0)
+                    .map(|b| b.header.height)
                     .collect_vec(),
                 rev(5..10).collect_vec()
             );
         }
     };
+}
+
+mod full_block {
+    use super::*;
+    use cynic::QueryBuilder;
+    use fuel_core_client::client::{
+        schema::{
+            block::{
+                BlockByHeightArgs,
+                Consensus,
+                Header,
+            },
+            schema,
+            tx::OpaqueTransaction,
+            BlockId,
+            U64,
+        },
+        FuelClient,
+    };
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(
+        schema_path = "../crates/client/assets/schema.sdl",
+        graphql_type = "Query",
+        variables = "BlockByHeightArgs"
+    )]
+    pub struct FullBlockByHeightQuery {
+        #[arguments(height: $height)]
+        pub block: Option<FullBlock>,
+    }
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(
+        schema_path = "../crates/client/assets/schema.sdl",
+        graphql_type = "Block"
+    )]
+    pub struct FullBlock {
+        pub id: BlockId,
+        pub header: Header,
+        pub consensus: Consensus,
+        pub transactions: Vec<OpaqueTransaction>,
+    }
+
+    #[async_trait::async_trait]
+    pub trait ClientExt {
+        async fn full_block_by_height(
+            &self,
+            height: u64,
+        ) -> std::io::Result<Option<FullBlock>>;
+    }
+
+    #[async_trait::async_trait]
+    impl ClientExt for FuelClient {
+        async fn full_block_by_height(
+            &self,
+            height: u64,
+        ) -> std::io::Result<Option<FullBlock>> {
+            let query = FullBlockByHeightQuery::build(BlockByHeightArgs {
+                height: Some(U64(height)),
+            });
+
+            let block = self.query(query).await?.block;
+
+            Ok(block)
+        }
+    }
+
+    #[tokio::test]
+    async fn get_full_block_with_tx() {
+        let srv = FuelService::from_database(Database::default(), Config::local_node())
+            .await
+            .unwrap();
+
+        let client = FuelClient::from(srv.bound_address);
+        let tx = Transaction::default();
+        client.submit_and_await_commit(&tx).await.unwrap();
+
+        let block = client.full_block_by_height(1).await.unwrap().unwrap();
+        assert_eq!(block.header.height.0, 1);
+        assert_eq!(block.transactions.len(), 2 /* mint + our tx */);
+    }
 }

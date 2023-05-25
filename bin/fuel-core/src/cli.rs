@@ -5,10 +5,6 @@ use std::{
     str::FromStr,
 };
 use tracing::log::warn;
-use tracing_honeycomb::{
-    self,
-    new_honeycomb_telemetry_layer,
-};
 use tracing_subscriber::{
     filter::EnvFilter,
     layer::SubscriberExt,
@@ -45,11 +41,7 @@ pub enum Fuel {
 pub const LOG_FILTER: &str = "RUST_LOG";
 pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
 
-pub async fn init_logging(
-    service_name: String,
-    network_name: String,
-    honeycomb_key: Option<String>,
-) -> anyhow::Result<()> {
+pub async fn init_logging() -> anyhow::Result<()> {
     let filter = match env::var_os(LOG_FILTER) {
         Some(_) => {
             EnvFilter::try_from_default_env().expect("Invalid `RUST_LOG` provided")
@@ -65,20 +57,6 @@ pub async fn init_logging(
         .unwrap_or(true);
 
     let layer = tracing_subscriber::fmt::Layer::default().with_writer(std::io::stderr);
-
-    let telemetry_layer: Option<Box<dyn Layer<_> + Send + Sync>> =
-        honeycomb_key.map(|honeycomb_key| {
-            let service_name = format!("node-{}-{}", service_name, network_name);
-            let honeycomb_config = libhoney::Config {
-                options: libhoney::client::Options {
-                    api_key: honeycomb_key,
-                    dataset: service_name,
-                    ..libhoney::client::Options::default()
-                },
-                transmission_options: libhoney::transmission::Options::default(),
-            };
-            new_honeycomb_telemetry_layer("fuel-core", honeycomb_config).boxed()
-        });
 
     let fmt = if human_logging {
         // use pretty logs
@@ -101,8 +79,7 @@ pub async fn init_logging(
 
     let subscriber = registry::Registry::default() // provide underlying span data store
         .with(filter) // filter out low-level debug tracing (eg tokio executor)
-        .with(fmt) // log to stdout
-        .with(telemetry_layer); // publish to honeycomb backend
+        .with(fmt); // log to stdout
 
     tracing::subscriber::set_global_default(subscriber)
         .expect("setting global default failed");

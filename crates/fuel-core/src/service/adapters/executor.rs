@@ -32,7 +32,7 @@ impl ExecutorAdapter {
             relayer: self.relayer.clone(),
             config: self.config.clone(),
         };
-        executor.execute_without_commit(block)
+        executor.execute_without_commit(block, self.config.as_ref().into())
     }
 
     pub(crate) fn _dry_run(

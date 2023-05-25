@@ -9,6 +9,18 @@ use criterion::{
 use fuel_core_benches::*;
 use fuel_core_types::fuel_asm::*;
 
+/// Set a register `r` to a Word-sized number value using left-shifts
+fn set_full_word(r: RegisterId, v: Word) -> Vec<Instruction> {
+    let r = u8::try_from(r).unwrap();
+    let mut ops = vec![op::movi(r, 0)];
+    for byte in v.to_be_bytes() {
+        ops.push(op::ori(r, r, byte as u16));
+        ops.push(op::slli(r, r, 8));
+    }
+    ops.pop().unwrap(); // Remove last shift
+    ops
+}
+
 pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("lb"),
@@ -27,7 +39,7 @@ pub fn run(c: &mut Criterion) {
         "sb",
         VmBench::new(op::sb(0x10, 0x11, 0)).with_prepare_script(vec![
             op::aloc(RegId::ONE),
-            op::addi(0x10, RegId::HP, 1),
+            op::move_(0x10, RegId::HP),
             op::movi(0x11, 50),
         ]),
     );
@@ -38,7 +50,7 @@ pub fn run(c: &mut Criterion) {
         VmBench::new(op::sw(0x10, 0x11, 0)).with_prepare_script(vec![
             op::movi(0x10, 8),
             op::aloc(0x10),
-            op::addi(0x10, RegId::HP, 1),
+            op::move_(0x10, RegId::HP),
             op::movi(0x11, 50),
         ]),
     );
@@ -66,7 +78,7 @@ pub fn run(c: &mut Criterion) {
             VmBench::new(op::mcl(0x10, 0x11)).with_prepare_script(vec![
                 op::movi(0x11, *i),
                 op::aloc(0x11),
-                op::addi(0x10, RegId::HP, 1),
+                op::move_(0x10, RegId::HP),
             ]),
         );
     }
@@ -81,7 +93,7 @@ pub fn run(c: &mut Criterion) {
             VmBench::new(op::mcli(0x10, *i)).with_prepare_script(vec![
                 op::movi(0x11, *i),
                 op::aloc(0x11),
-                op::addi(0x10, RegId::HP, 1),
+                op::move_(0x10, RegId::HP),
             ]),
         );
     }
@@ -96,7 +108,7 @@ pub fn run(c: &mut Criterion) {
             VmBench::new(op::mcp(0x10, RegId::ZERO, 0x11)).with_prepare_script(vec![
                 op::movi(0x11, *i),
                 op::aloc(0x11),
-                op::addi(0x10, RegId::HP, 1),
+                op::move_(0x10, RegId::HP),
             ]),
         );
     }
@@ -108,21 +120,23 @@ pub fn run(c: &mut Criterion) {
         VmBench::new(op::mcpi(0x10, RegId::ZERO, 4000)).with_prepare_script(vec![
             op::movi(0x11, 4000),
             op::aloc(0x11),
-            op::addi(0x10, RegId::HP, 1),
+            op::move_(0x10, RegId::HP),
         ]),
     );
 
     let mut mem_meq = c.benchmark_group("meq");
     for i in &linear {
         mem_meq.throughput(Throughput::Bytes(*i as u64));
+
+        let mut prepare_script = vec![op::movi(0x11, 0)];
+        prepare_script.extend(set_full_word(0x12, (i * 3) as u64));
+        prepare_script.extend(set_full_word(0x13, (*i) as u64));
+
         run_group_ref(
             &mut mem_meq,
             format!("{i}"),
-            VmBench::new(op::meq(0x10, 0x11, 0x12, 0x13)).with_prepare_script(vec![
-                op::movi(0x11, 0),
-                op::movi(0x12, i * 3),
-                op::movi(0x13, *i),
-            ]),
+            VmBench::new(op::meq(0x10, 0x11, 0x12, 0x13))
+                .with_prepare_script(prepare_script),
         );
     }
     mem_meq.finish();

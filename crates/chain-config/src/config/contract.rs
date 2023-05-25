@@ -2,11 +2,18 @@ use crate::serialization::{
     HexNumber,
     HexType,
 };
-use fuel_core_types::fuel_types::{
-    AssetId,
-    BlockHeight,
-    Bytes32,
-    Salt,
+use fuel_core_types::{
+    fuel_tx::{
+        Contract,
+        ContractId,
+        StorageSlot,
+    },
+    fuel_types::{
+        AssetId,
+        BlockHeight,
+        Bytes32,
+        Salt,
+    },
 };
 use serde::{
     Deserialize,
@@ -21,6 +28,8 @@ use serde_with::{
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct ContractConfig {
+    #[serde_as(as = "HexType")]
+    pub contract_id: ContractId,
     #[serde_as(as = "HexType")]
     pub code: Vec<u8>,
     #[serde_as(as = "HexType")]
@@ -51,4 +60,25 @@ pub struct ContractConfig {
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]
     pub tx_pointer_tx_idx: Option<u16>,
+}
+
+impl ContractConfig {
+    pub fn calculate_contract_id(&mut self) {
+        let bytes = &self.code;
+        let salt = self.salt;
+        let slots = self.state.clone().map(|slots| {
+            slots
+                .into_iter()
+                .map(|(key, value)| StorageSlot::new(key, value))
+                .collect::<Vec<_>>()
+        });
+        let state_root = slots
+            .as_ref()
+            .map(|slots| Contract::initial_state_root(slots.iter()))
+            .unwrap_or(Contract::default_state_root());
+        let contract = Contract::from(bytes.clone());
+        let root = contract.root();
+        let contract_id = contract.id(&salt, &root, &state_root);
+        self.contract_id = contract_id;
+    }
 }

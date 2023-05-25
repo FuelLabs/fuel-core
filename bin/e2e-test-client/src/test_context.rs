@@ -4,27 +4,27 @@ use anyhow::{
     anyhow,
     Context,
 };
+use fuel_core_chain_config::ContractConfig;
 use fuel_core_client::client::{
-    schema::coins::CoinType,
-    types::TransactionStatus,
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
+    types::{
+        CoinType,
+        TransactionStatus,
+    },
     FuelClient,
-    PageDirection,
-    PaginationRequest,
 };
 use fuel_core_types::{
-    fuel_crypto::{
-        rand::{
-            prelude::StdRng,
-            Rng,
-            SeedableRng,
-        },
-        PublicKey,
-    },
+    fuel_crypto::PublicKey,
     fuel_tx::{
         ConsensusParameters,
+        Contract,
         Finalizable,
         Input,
         Output,
+        StorageSlot,
         Transaction,
         TransactionBuilder,
         TxId,
@@ -36,10 +36,7 @@ use fuel_core_types::{
         Address,
         AssetId,
     },
-    fuel_vm::{
-        Contract,
-        SecretKey,
-    },
+    fuel_vm::SecretKey,
 };
 
 use crate::config::{
@@ -132,10 +129,7 @@ impl Wallet {
                 .await?
                 .results;
             // check if page has the utxos we're looking for
-            if results
-                .iter()
-                .any(|coin| UtxoId::from(coin.utxo_id.clone()) == utxo_id)
-            {
+            if results.iter().any(|coin| coin.utxo_id == utxo_id) {
                 return Ok(true)
             }
         }
@@ -173,11 +167,11 @@ impl Wallet {
             if let CoinType::Coin(coin) = coin {
                 tx.add_unsigned_coin_input(
                     self.secret,
-                    coin.utxo_id.clone().into(),
-                    coin.amount.clone().into(),
-                    coin.asset_id.clone().into(),
+                    coin.utxo_id,
+                    coin.amount,
+                    coin.asset_id,
                     Default::default(),
-                    coin.maturity.clone().into(),
+                    coin.maturity.into(),
                 );
             }
         }
@@ -221,8 +215,7 @@ impl Wallet {
         })
     }
 
-    pub async fn deploy_contract(&self, bytes: Vec<u8>) -> anyhow::Result<()> {
-        let mut rng = StdRng::seed_from_u64(2222);
+    pub async fn deploy_contract(&self, config: ContractConfig) -> anyhow::Result<()> {
         let asset_id = AssetId::zeroed();
         let asset_id_string = asset_id.to_string();
         let asset_id_str = asset_id_string.as_str();
@@ -237,12 +230,20 @@ impl Wallet {
             )
             .await?[0];
 
-        let salt = rng.gen();
-        let contract = Contract::from(bytes.clone());
-        let root = contract.root();
-        let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
-
-        let mut tx = TransactionBuilder::create(bytes.into(), salt, Default::default());
+        let ContractConfig {
+            contract_id,
+            code: bytes,
+            salt,
+            state,
+            ..
+        } = config;
+        let slots = state
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(key, value)| StorageSlot::new(key, value))
+            .collect::<Vec<_>>();
+        let state_root = Contract::initial_state_root(slots.iter());
+        let mut tx = TransactionBuilder::create(bytes.into(), salt, slots);
         tx.gas_price(1);
         tx.gas_limit(BASE_AMOUNT);
 
@@ -250,17 +251,17 @@ impl Wallet {
             if let CoinType::Coin(coin) = coin {
                 tx.add_unsigned_coin_input(
                     self.secret,
-                    coin.utxo_id.clone().into(),
-                    coin.amount.clone().into(),
-                    coin.asset_id.clone().into(),
+                    coin.utxo_id,
+                    coin.amount,
+                    coin.asset_id,
                     Default::default(),
-                    coin.maturity.clone().into(),
+                    coin.maturity.into(),
                 );
             }
         }
         tx.add_output(Output::ContractCreated {
             contract_id,
-            state_root: Contract::default_state_root(),
+            state_root,
         });
         tx.add_output(Output::Change {
             to: self.address,

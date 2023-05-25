@@ -325,6 +325,7 @@ impl Transaction {
         }
     }
 
+    // TODO: Maybe we need to do the same `Script` and `Create`
     async fn tx_pointer(&self) -> Option<TxPointer> {
         match &self.0 {
             fuel_tx::Transaction::Script(_) => None,

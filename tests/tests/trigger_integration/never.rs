@@ -6,9 +6,11 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
     FuelClient,
-    PageDirection,
-    PaginationRequest,
 };
 use fuel_core_poa::Trigger;
 use fuel_core_types::{

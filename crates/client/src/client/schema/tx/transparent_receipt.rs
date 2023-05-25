@@ -152,7 +152,7 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                 reason: schema
                     .reason
                     .ok_or_else(|| MissingField("reason".to_string()))?
-                    .into(),
+                    .try_into()?,
                 pc: schema
                     .pc
                     .ok_or_else(|| MissingField("pc".to_string()))?

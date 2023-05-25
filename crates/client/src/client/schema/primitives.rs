@@ -6,7 +6,7 @@ use crate::client::schema::{
 use core::fmt;
 use cynic::impl_scalar;
 use fuel_core_types::{
-    fuel_tx::InstructionResult,
+    fuel_tx::PanicInstruction,
     fuel_types::BlockHeight,
 };
 use serde::{
@@ -268,9 +268,12 @@ macro_rules! number_scalar {
 number_scalar!(U64, u64);
 number_scalar!(U32, u32);
 
-impl From<U64> for InstructionResult {
-    fn from(s: U64) -> Self {
-        s.0.into()
+impl TryFrom<U64> for PanicInstruction {
+    type Error = ConversionError;
+
+    fn try_from(s: U64) -> Result<Self, Self::Error> {
+        s.0.try_into()
+            .map_err(|_| ConversionError::IntegerConversion)
     }
 }
 

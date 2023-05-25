@@ -1,3 +1,36 @@
+pub mod balance;
+pub mod block;
+pub mod chain_info;
+pub mod coins;
+pub mod consensus_parameters;
+pub mod contract;
+pub mod merkle_proof;
+pub mod message;
+pub mod node_info;
+
+pub use balance::Balance;
+pub use block::{
+    Block,
+    Consensus,
+};
+pub use chain_info::ChainInfo;
+pub use coins::{
+    Coin,
+    CoinType,
+    MessageCoin,
+};
+pub use consensus_parameters::ConsensusParameters;
+pub use contract::{
+    Contract,
+    ContractBalance,
+};
+pub use merkle_proof::MerkleProof;
+pub use message::{
+    Message,
+    MessageProof,
+};
+pub use node_info::NodeInfo;
+
 use crate::client::schema::{
     tx::{
         OpaqueTransaction,
@@ -15,6 +48,32 @@ use serde::{
     Serialize,
 };
 use tai64::Tai64;
+
+pub mod scalars {
+    pub use fuel_core_types::{
+        fuel_crypto::{
+            PublicKey,
+            Signature,
+        },
+        fuel_tx::UtxoId,
+        fuel_types::{
+            Address,
+            AssetId,
+            Bytes32,
+            Bytes64,
+            ContractId,
+            MessageId,
+            Nonce,
+            Salt,
+        },
+    };
+
+    pub type BlockId = Bytes32;
+    pub type Hash = Bytes32;
+    pub type Bytes = Vec<u8>;
+    pub type MerkleRoot = Bytes32;
+    pub type TransactionId = Bytes32;
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionResponse {

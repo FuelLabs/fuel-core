@@ -1,7 +1,4 @@
-use crate::{
-    database::Database,
-    service::Config,
-};
+use crate::database::Database;
 use fuel_core_consensus_module::block_verifier::Verifier;
 use fuel_core_txpool::service::SharedState as TxPoolSharedState;
 use std::sync::Arc;
@@ -36,7 +33,7 @@ impl TxPoolAdapter {
 #[derive(Clone)]
 pub struct ExecutorAdapter {
     pub relayer: MaybeRelayerAdapter,
-    pub config: Config,
+    pub config: Arc<fuel_core_executor::Config>,
 }
 
 #[derive(Clone)]
