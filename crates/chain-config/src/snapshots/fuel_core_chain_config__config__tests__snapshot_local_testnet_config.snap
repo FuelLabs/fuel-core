@@ -175,7 +175,16 @@ expression: json
   },
   "consensus": {
     "PoA": {
-      "signing_key": "22ec92c3105c942a6640bdc4e4907286ec4728e8cfc0d8ac59aad4d8e1ccaefb"
+      "signing_key": "22ec92c3105c942a6640bdc4e4907286ec4728e8cfc0d8ac59aad4d8e1ccaefb",
+      "time_until_synced": {
+        "secs": 60,
+        "nanos": 0
+      },
+      "min_connected_resereved_peers": 4,
+      "timeout_between_checking_peers": {
+        "secs": 0,
+        "nanos": 500000000
+      }
     }
   }
 }
