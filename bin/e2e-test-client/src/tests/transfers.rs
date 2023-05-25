@@ -18,9 +18,7 @@ pub async fn basic_transfer(ctx: &TestContext) -> Result<(), Failed> {
     // wait until bob sees the transaction
     timeout(
         ctx.config.sync_timeout(),
-        ctx.bob
-            .client
-            .await_transaction_commit(&result.tx_id.to_string()),
+        ctx.bob.client.await_transaction_commit(&result.tx_id),
     )
     .await??;
     println!("\nThe tx id of the transfer: {}", result.tx_id);
@@ -52,9 +50,7 @@ pub async fn transfer_back(ctx: &TestContext) -> Result<(), Failed> {
     // wait until alice sees the transaction
     timeout(
         ctx.config.sync_timeout(),
-        ctx.alice
-            .client
-            .await_transaction_commit(&result.tx_id.to_string()),
+        ctx.alice.client.await_transaction_commit(&result.tx_id),
     )
     .await??;
 

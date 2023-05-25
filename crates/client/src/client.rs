@@ -1,12 +1,16 @@
-use crate::client::schema::{
-    block::BlockByHeightArgs,
-    coins::{
-        ExcludeInput,
-        SpendQueryElementInput,
+use crate::client::{
+    schema::{
+        block::BlockByHeightArgs,
+        coins::{
+            ExcludeInput,
+            SpendQueryElementInput,
+        },
+        contract::ContractBalanceQueryArgs,
+        tx::DryRunArg,
+        Tai64Timestamp,
+        TransactionId,
     },
-    contract::ContractBalanceQueryArgs,
-    tx::DryRunArg,
-    Tai64Timestamp,
+    types::scalars::Address,
 };
 use anyhow::Context;
 #[cfg(feature = "subscriptions")]
@@ -363,7 +367,7 @@ impl FuelClient {
         tx: &Transaction,
     ) -> io::Result<TransactionStatus> {
         let tx_id = self.submit(tx).await?;
-        self.await_transaction_commit(&tx_id.to_string()).await
+        self.await_transaction_commit(&tx_id).await
     }
 
     pub async fn start_session(&self) -> io::Result<String> {
@@ -514,10 +518,11 @@ impl FuelClient {
     /// Subscribe to the status of a transaction
     pub async fn subscribe_transaction_status(
         &self,
-        id: &str,
+        id: &TxId,
     ) -> io::Result<impl futures::Stream<Item = io::Result<TransactionStatus>>> {
         use cynic::SubscriptionBuilder;
-        let s = schema::tx::StatusChangeSubscription::build(TxIdArgs { id: id.parse()? });
+        let tx_id: TransactionId = (*id).into();
+        let s = schema::tx::StatusChangeSubscription::build(TxIdArgs { id: tx_id });
 
         tracing::debug!("subscribing");
         let stream = self.subscribe(s).await?.map(|tx| {
@@ -537,7 +542,7 @@ impl FuelClient {
     /// with a `tokio::time::timeout`.
     pub async fn await_transaction_commit(
         &self,
-        id: &str,
+        id: &TxId,
     ) -> io::Result<TransactionStatus> {
         // skip until we've reached a final status and then stop consuming the stream
         // to avoid an EOF which the eventsource client considers as an error.
@@ -573,10 +578,10 @@ impl FuelClient {
     /// Returns a paginated set of transactions associated with a txo owner address.
     pub async fn transactions_by_owner(
         &self,
-        owner: &str,
+        owner: &Address,
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<TransactionResponse, String>> {
-        let owner: schema::Address = owner.parse()?;
+        let owner: schema::Address = (*owner).into();
         let query = schema::tx::TransactionsByOwnerQuery::build((owner, request).into());
 
         let transactions = self.query(query).await?.transactions_by_owner.try_into()?;

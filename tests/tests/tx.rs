@@ -413,7 +413,7 @@ async fn get_transactions_by_owner_forward_and_backward_iterations() {
         direction: PageDirection::Forward,
     };
     let response = client
-        .transactions_by_owner(bob.to_string().as_str(), all_transactions_forward)
+        .transactions_by_owner(&bob, all_transactions_forward)
         .await
         .unwrap();
     let transactions_forward = response
@@ -432,7 +432,7 @@ async fn get_transactions_by_owner_forward_and_backward_iterations() {
         direction: PageDirection::Backward,
     };
     let response = client
-        .transactions_by_owner(bob.to_string().as_str(), all_transactions_backward)
+        .transactions_by_owner(&bob, all_transactions_backward)
         .await;
     // Backward request is not supported right now.
     assert!(response.is_err());
@@ -445,7 +445,7 @@ async fn get_transactions_by_owner_forward_and_backward_iterations() {
         direction: PageDirection::Forward,
     };
     let response_after_iter_three = client
-        .transactions_by_owner(bob.to_string().as_str(), forward_iter_three)
+        .transactions_by_owner(&bob, forward_iter_three)
         .await
         .unwrap();
     let transactions_forward_iter_three = response_after_iter_three
@@ -467,7 +467,7 @@ async fn get_transactions_by_owner_forward_and_backward_iterations() {
         direction: PageDirection::Forward,
     };
     let response = client
-        .transactions_by_owner(bob.to_string().as_str(), forward_iter_next_two)
+        .transactions_by_owner(&bob, forward_iter_next_two)
         .await
         .unwrap();
     let transactions_forward_iter_next_two = response
@@ -628,7 +628,7 @@ async fn get_owned_transactions() {
         direction: PageDirection::Forward,
     };
     let alice_txs = client
-        .transactions_by_owner(&format!("{alice:#x}"), page_request.clone())
+        .transactions_by_owner(&alice, page_request.clone())
         .await
         .unwrap()
         .results
@@ -637,7 +637,7 @@ async fn get_owned_transactions() {
         .collect_vec();
 
     let bob_txs = client
-        .transactions_by_owner(&format!("{bob:#x}"), page_request.clone())
+        .transactions_by_owner(&bob, page_request.clone())
         .await
         .unwrap()
         .results
@@ -646,7 +646,7 @@ async fn get_owned_transactions() {
         .collect_vec();
 
     let charlie_txs = client
-        .transactions_by_owner(&format!("{charlie:#x}"), page_request.clone())
+        .transactions_by_owner(&charlie, page_request.clone())
         .await
         .unwrap()
         .results
