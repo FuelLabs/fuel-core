@@ -2,13 +2,10 @@ use fuel_core::service::{
     Config,
     FuelService,
 };
-use fuel_core_chain_config::ConsensusConfig;
+
 // Add methods on commands
 use fuel_core_e2e_client::config::SuiteConfig;
-use std::{
-    fs,
-    time::Duration,
-};
+use std::fs;
 use tempfile::TempDir; // Used for writing assertions // Run programs
 
 // Use Jemalloc
