@@ -470,6 +470,9 @@ where
     S: SyncPort,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+        // make sure we're synced first
+        self.sync_port.sync_with_peers().await?;
+
         let should_continue;
         tokio::select! {
             _ = watcher.while_started() => {
@@ -479,7 +482,6 @@ where
                 if let Some(request) = request {
                     match request {
                         Request::ManualBlocks((block, response)) => {
-                            let _ = self.sync_port.sync_with_peers().await;
                             let result = self.produce_manual_blocks(block).await;
                             let _ = response.send(result);
                         }

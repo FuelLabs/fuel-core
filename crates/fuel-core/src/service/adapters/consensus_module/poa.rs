@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use crate::{
     database::Database,
     fuel_core_graphql_api::ports::ConsensusModulePort,
@@ -116,17 +114,22 @@ impl BlockImporter for BlockImporterAdapter {
 #[async_trait::async_trait]
 impl SyncPort for crate::service::adapters::SyncAdapter<P2PAdapter> {
     async fn sync_with_peers(&mut self) -> anyhow::Result<()> {
+        // if not enabled - we are considered to be synced
+        if !is_p2p_enabled() {
+            return Ok(())
+        }
+
         // todo: check if the next block to be produced equals last previous block + 1
         // if yes, then we are synced already
 
         // 1. check count of connected reserved peers
         // todo: add 'n' tries or a timeout
         loop {
-            let count = self.network_info.connected_reserved_peers().await;
+            let count = self.network_info.connected_reserved_peers().await?;
             if count >= self.min_connected_reserved_peers {
                 break
             }
-            tokio::time::sleep(Duration::from_millis(500)).await;
+            tokio::time::sleep(self.timeout_between_checking_peers).await;
         }
 
         // 2. receive all the blocks
@@ -139,4 +142,8 @@ impl SyncPort for crate::service::adapters::SyncAdapter<P2PAdapter> {
 
         Ok(())
     }
+}
+
+fn is_p2p_enabled() -> bool {
+    cfg!(feature = "p2p")
 }

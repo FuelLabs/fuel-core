@@ -2,6 +2,7 @@ use crate::{
     database::Database,
     service::Config,
 };
+use anyhow::Result;
 use fuel_core_consensus_module::block_verifier::Verifier;
 use fuel_core_txpool::service::SharedState as TxPoolSharedState;
 use fuel_core_types::services::block_importer::ImportResult;
@@ -89,11 +90,11 @@ impl P2PAdapter {
 #[cfg(feature = "p2p")]
 #[async_trait::async_trait]
 impl NetworkInfo for P2PAdapter {
-    async fn connected_reserved_peers(&self) -> usize {
+    async fn connected_reserved_peers(&self) -> anyhow::Result<usize> {
         if let Some(service) = self.service.as_ref() {
-            service.connected_reserved_peers_count().await.unwrap_or(0)
+            service.connected_reserved_peers_count().await
         } else {
-            0
+            anyhow::bail!("P2P is not enabled")
         }
     }
 }
@@ -108,20 +109,20 @@ impl P2PAdapter {
 #[cfg(not(feature = "p2p"))]
 #[async_trait::async_trait]
 impl NetworkInfo for P2PAdapter {
-    async fn connected_reserved_peers(&self) -> usize {
-        // returns fake number of connected peers - since p2p is not enabled at all
-        usize::MAX
+    async fn connected_reserved_peers(&self) -> Result<usize> {
+        Ok(0)
     }
 }
 
 #[async_trait::async_trait]
 pub trait NetworkInfo {
-    async fn connected_reserved_peers(&self) -> usize;
+    async fn connected_reserved_peers(&self) -> Result<usize>;
 }
 pub struct SyncAdapter<T: NetworkInfo> {
     block_rx: Receiver<Arc<ImportResult>>,
     min_connected_reserved_peers: usize,
     time_until_synced: Duration,
+    timeout_between_checking_peers: Duration,
     network_info: T,
 }
 
@@ -130,12 +131,14 @@ impl<T: NetworkInfo> SyncAdapter<T> {
         block_rx: Receiver<Arc<ImportResult>>,
         min_connected_reserved_peers: usize,
         time_until_synced: Duration,
+        timeout_between_checking_peers: Duration,
         network_info: T,
     ) -> Self {
         Self {
             block_rx,
             min_connected_reserved_peers,
             time_until_synced,
+            timeout_between_checking_peers,
             network_info,
         }
     }

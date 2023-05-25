@@ -213,11 +213,16 @@ async fn produce_block_custom_time() {
     };
 
     match config.chain_conf.consensus {
-        ConsensusConfig::PoA { signing_key, .. } => {
+        ConsensusConfig::PoA {
+            signing_key,
+            timeout_between_checking_peers,
+            ..
+        } => {
             config.chain_conf.consensus = ConsensusConfig::PoA {
                 signing_key,
                 time_until_synced: Duration::from_secs(0),
                 min_connected_resereved_peers: 0,
+                timeout_between_checking_peers,
             }
         }
     }

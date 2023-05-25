@@ -132,11 +132,13 @@ pub fn init_sub_services(
             fuel_core_chain_config::ConsensusConfig::PoA {
                 time_until_synced,
                 min_connected_resereved_peers,
+                timeout_between_checking_peers,
                 ..
             } => SyncAdapter::new(
                 importer_adapter.block_importer.subscribe(),
                 min_connected_resereved_peers,
                 time_until_synced,
+                timeout_between_checking_peers,
                 p2p_adapter.clone(),
             ),
         };

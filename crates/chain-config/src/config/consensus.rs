@@ -19,6 +19,7 @@ pub enum ConsensusConfig {
         time_until_synced: Duration,
         /// Minimum number of connected reserved peers to start block production
         min_connected_resereved_peers: usize,
+        timeout_between_checking_peers: Duration,
     },
 }
 
@@ -28,6 +29,7 @@ impl ConsensusConfig {
             signing_key: Input::owner(&default_consensus_dev_key().public_key()),
             min_connected_resereved_peers: 4,
             time_until_synced: Duration::from_secs(60),
+            timeout_between_checking_peers: Duration::from_millis(500),
         }
     }
 }
