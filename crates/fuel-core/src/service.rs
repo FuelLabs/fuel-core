@@ -46,7 +46,6 @@ pub struct SharedState {
     pub database: Database,
     /// Subscribe to new block production.
     pub block_importer: BlockImporterAdapter,
-    #[cfg(feature = "test-helpers")]
     /// The config of the service.
     pub config: Config,
 }

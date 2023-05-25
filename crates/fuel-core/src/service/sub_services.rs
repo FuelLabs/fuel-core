@@ -194,7 +194,6 @@ pub fn init_sub_services(
         graph_ql: graph_ql.shared.clone(),
         database: database.clone(),
         block_importer: importer_adapter,
-        #[cfg(feature = "test-helpers")]
         config: config.clone(),
     };
 
