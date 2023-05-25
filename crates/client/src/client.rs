@@ -28,6 +28,7 @@ use fuel_core_types::{
     fuel_tx::{
         Receipt,
         Transaction,
+        TxId,
     },
     fuel_types,
     fuel_types::{
@@ -477,8 +478,11 @@ impl FuelClient {
         Ok(response)
     }
 
-    pub async fn transaction(&self, id: &str) -> io::Result<Option<TransactionResponse>> {
-        let query = schema::tx::TransactionQuery::build(TxIdArgs { id: id.parse()? });
+    pub async fn transaction(
+        &self,
+        id: &TxId,
+    ) -> io::Result<Option<TransactionResponse>> {
+        let query = schema::tx::TransactionQuery::build(TxIdArgs { id: (*id).into() });
 
         let transaction = self.query(query).await?.transaction;
 
@@ -486,8 +490,8 @@ impl FuelClient {
     }
 
     /// Get the status of a transaction
-    pub async fn transaction_status(&self, id: &str) -> io::Result<TransactionStatus> {
-        let query = schema::tx::TransactionQuery::build(TxIdArgs { id: id.parse()? });
+    pub async fn transaction_status(&self, id: &TxId) -> io::Result<TransactionStatus> {
+        let query = schema::tx::TransactionQuery::build(TxIdArgs { id: (*id).into() });
 
         let tx = self.query(query).await?.transaction.ok_or_else(|| {
             io::Error::new(

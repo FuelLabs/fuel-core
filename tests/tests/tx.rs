@@ -108,10 +108,7 @@ async fn dry_run_script() {
 
     // ensure the tx isn't available in the blockchain history
     let err = client
-        .transaction_status(&format!(
-            "{:#x}",
-            tx.id(&fuel_tx::ConsensusParameters::DEFAULT)
-        ))
+        .transaction_status(&tx.id(&fuel_tx::ConsensusParameters::DEFAULT))
         .await
         .unwrap_err();
     assert_eq!(err.kind(), NotFound);
@@ -148,10 +145,7 @@ async fn dry_run_create() {
 
     // ensure the tx isn't available in the blockchain history
     let err = client
-        .transaction_status(&format!(
-            "{:#x}",
-            tx.id(&fuel_tx::ConsensusParameters::DEFAULT)
-        ))
+        .transaction_status(&tx.id(&fuel_tx::ConsensusParameters::DEFAULT))
         .await
         .unwrap_err();
     assert_eq!(err.kind(), NotFound);
@@ -192,7 +186,7 @@ async fn submit() {
     client.submit_and_await_commit(&tx).await.unwrap();
     // verify that the tx returned from the api matches the submitted tx
     let ret_tx = client
-        .transaction(&tx.id(&ConsensusParameters::DEFAULT).to_string())
+        .transaction(&tx.id(&ConsensusParameters::DEFAULT))
         .await
         .unwrap()
         .unwrap()
@@ -244,7 +238,7 @@ async fn get_transaction_by_id() {
     client.submit_and_await_commit(&transaction).await.unwrap();
 
     // run test
-    let transaction_response = client.transaction(&format!("{id:#x}")).await.unwrap();
+    let transaction_response = client.transaction(&id).await.unwrap();
     assert!(transaction_response.is_some());
     if let Some(transaction_response) = transaction_response {
         assert!(matches!(
@@ -268,7 +262,7 @@ async fn get_transparent_transaction_by_id() {
     assert!(result.is_ok());
 
     let opaque_tx = client
-        .transaction(&format!("{id:#x}"))
+        .transaction(&id)
         .await
         .unwrap()
         .expect("expected some result")

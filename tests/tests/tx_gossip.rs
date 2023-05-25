@@ -107,17 +107,11 @@ async fn test_tx_gossiping() {
     let tx = tx.into();
     client_one.submit_and_await_commit(&tx).await.unwrap();
 
-    let response = client_one
-        .transaction(&tx.id(&params).to_string())
-        .await
-        .unwrap();
+    let response = client_one.transaction(&tx.id(&params)).await.unwrap();
     assert!(response.is_some());
 
     tokio::time::sleep(wait_time).await;
 
-    let response = client_two
-        .transaction(&tx.id(&params).to_string())
-        .await
-        .unwrap();
+    let response = client_two.transaction(&tx.id(&params)).await.unwrap();
     assert!(response.is_some());
 }
