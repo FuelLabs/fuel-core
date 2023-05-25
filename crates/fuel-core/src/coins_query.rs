@@ -29,7 +29,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum CoinsQueryError {
-    #[error("store error occurred")]
+    #[error("store error occurred: {0}")]
     StorageError(StorageError),
     #[error("not enough coins to fit the target")]
     InsufficientCoins {

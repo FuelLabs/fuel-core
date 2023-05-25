@@ -39,18 +39,17 @@ use fuel_core_types::{
 #[cfg(feature = "subscriptions")]
 use futures::StreamExt;
 use itertools::Itertools;
+use pagination::{
+    PageDirection,
+    PaginatedResult,
+    PaginationRequest,
+};
 use reqwest::cookie::CookieStore;
 use schema::{
     balance::BalanceArgs,
     block::BlockByIdArgs,
-    coins::{
-        Coin,
-        CoinByIdArgs,
-    },
-    contract::{
-        Contract,
-        ContractByIdArgs,
-    },
+    coins::CoinByIdArgs,
+    contract::ContractByIdArgs,
     tx::{
         TxArg,
         TxIdArgs,
@@ -70,13 +69,7 @@ use schema::{
     SetSingleSteppingArgs,
     StartTx,
     StartTxArgs,
-    TransactionId,
     U64,
-};
-pub use schema::{
-    PageDirection,
-    PaginatedResult,
-    PaginationRequest,
 };
 #[cfg(feature = "subscriptions")]
 use std::future;
@@ -106,6 +99,7 @@ use self::schema::{
     message::MessageProofArgs,
 };
 
+pub mod pagination;
 pub mod schema;
 pub mod types;
 
@@ -312,14 +306,14 @@ impl FuelClient {
         self.query(query).await.map(|r| r.health)
     }
 
-    pub async fn node_info(&self) -> io::Result<schema::node_info::NodeInfo> {
+    pub async fn node_info(&self) -> io::Result<types::NodeInfo> {
         let query = schema::node_info::QueryNodeInfo::build(());
-        self.query(query).await.map(|r| r.node_info)
+        self.query(query).await.map(|r| r.node_info.into())
     }
 
-    pub async fn chain_info(&self) -> io::Result<schema::chain::ChainInfo> {
+    pub async fn chain_info(&self) -> io::Result<types::ChainInfo> {
         let query = schema::chain::ChainQuery::build(());
-        self.query(query).await.map(|r| r.chain)
+        self.query(query).await.map(|r| r.chain.into())
     }
 
     /// Default dry run, matching the exact configuration as the node
@@ -346,13 +340,16 @@ impl FuelClient {
             .collect()
     }
 
-    pub async fn submit(&self, tx: &Transaction) -> io::Result<TransactionId> {
+    pub async fn submit(
+        &self,
+        tx: &Transaction,
+    ) -> io::Result<types::scalars::TransactionId> {
         let tx = tx.clone().to_bytes();
         let query = schema::tx::Submit::build(TxArg {
             tx: HexString(Bytes(tx)),
         });
 
-        let id = self.query(query).await.map(|r| r.submit)?.id;
+        let id = self.query(query).await.map(|r| r.submit)?.id.into();
         Ok(id)
     }
 
@@ -558,7 +555,7 @@ impl FuelClient {
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
-                format!("Failed to get status for transaction {:?}", status_result),
+                format!("Failed to get status for transaction {status_result:?}"),
             ))
         }
     }
@@ -600,9 +597,9 @@ impl FuelClient {
                     vec.into_iter().map(TryInto::<Receipt>::try_into).collect();
                 vec
             })
-            .transpose();
+            .transpose()?;
 
-        Ok(receipts?)
+        Ok(receipts)
     }
 
     pub async fn produce_blocks(
@@ -621,25 +618,22 @@ impl FuelClient {
         Ok(new_height.into())
     }
 
-    pub async fn block(&self, id: &str) -> io::Result<Option<schema::block::Block>> {
+    pub async fn block(&self, id: &str) -> io::Result<Option<types::Block>> {
         let query = schema::block::BlockByIdQuery::build(BlockByIdArgs {
             id: Some(id.parse()?),
         });
 
-        let block = self.query(query).await?.block;
+        let block = self.query(query).await?.block.map(Into::into);
 
         Ok(block)
     }
 
-    pub async fn block_by_height(
-        &self,
-        height: u64,
-    ) -> io::Result<Option<schema::block::Block>> {
+    pub async fn block_by_height(&self, height: u64) -> io::Result<Option<types::Block>> {
         let query = schema::block::BlockByHeightQuery::build(BlockByHeightArgs {
             height: Some(U64(height)),
         });
 
-        let block = self.query(query).await?.block;
+        let block = self.query(query).await?.block.map(Into::into);
 
         Ok(block)
     }
@@ -648,7 +642,7 @@ impl FuelClient {
     pub async fn blocks(
         &self,
         request: PaginationRequest<String>,
-    ) -> io::Result<PaginatedResult<schema::block::Block, String>> {
+    ) -> io::Result<PaginatedResult<types::Block, String>> {
         let query = schema::block::BlocksQuery::build(request.into());
 
         let blocks = self.query(query).await?.blocks.into();
@@ -656,11 +650,11 @@ impl FuelClient {
         Ok(blocks)
     }
 
-    pub async fn coin(&self, id: &str) -> io::Result<Option<Coin>> {
+    pub async fn coin(&self, id: &str) -> io::Result<Option<types::Coin>> {
         let query = schema::coins::CoinByIdQuery::build(CoinByIdArgs {
             utxo_id: id.parse()?,
         });
-        let coin = self.query(query).await?.coin;
+        let coin = self.query(query).await?.coin.map(Into::into);
         Ok(coin)
     }
 
@@ -670,7 +664,7 @@ impl FuelClient {
         owner: &str,
         asset_id: Option<&str>,
         request: PaginationRequest<String>,
-    ) -> io::Result<PaginatedResult<schema::coins::Coin, String>> {
+    ) -> io::Result<PaginatedResult<types::Coin, String>> {
         let owner: schema::Address = owner.parse()?;
         let asset_id: schema::AssetId = match asset_id {
             Some(asset_id) => asset_id.parse()?,
@@ -689,7 +683,7 @@ impl FuelClient {
         spend_query: Vec<(&str, u64, Option<u64>)>,
         // (Utxos, Messages Nonce)
         excluded_ids: Option<(Vec<&str>, Vec<&str>)>,
-    ) -> io::Result<Vec<Vec<schema::coins::CoinType>>> {
+    ) -> io::Result<Vec<Vec<types::CoinType>>> {
         let owner: schema::Address = owner.parse()?;
         let spend_query: Vec<SpendQueryElementInput> = spend_query
             .iter()
@@ -707,15 +701,21 @@ impl FuelClient {
             (owner, spend_query, excluded_ids).into(),
         );
 
-        let coins_per_asset = self.query(query).await?.coins_to_spend;
+        let coins_per_asset = self
+            .query(query)
+            .await?
+            .coins_to_spend
+            .into_iter()
+            .map(|v| v.into_iter().map(Into::into).collect::<Vec<_>>())
+            .collect::<Vec<_>>();
         Ok(coins_per_asset)
     }
 
-    pub async fn contract(&self, id: &str) -> io::Result<Option<Contract>> {
+    pub async fn contract(&self, id: &str) -> io::Result<Option<types::Contract>> {
         let query = schema::contract::ContractByIdQuery::build(ContractByIdArgs {
             id: id.parse()?,
         });
-        let contract = self.query(query).await?.contract;
+        let contract = self.query(query).await?.contract.map(Into::into);
         Ok(contract)
     }
 
@@ -735,8 +735,9 @@ impl FuelClient {
                 asset: asset_id,
             });
 
-        let balance = self.query(query).await.unwrap().contract_balance.amount;
-        Ok(balance.into())
+        let balance: types::ContractBalance =
+            self.query(query).await?.contract_balance.into();
+        Ok(balance.amount)
     }
 
     pub async fn balance(&self, owner: &str, asset_id: Option<&str>) -> io::Result<u64> {
@@ -746,8 +747,8 @@ impl FuelClient {
             None => schema::AssetId::default(),
         };
         let query = schema::balance::BalanceQuery::build(BalanceArgs { owner, asset_id });
-        let balance = self.query(query).await?.balance;
-        Ok(balance.amount.into())
+        let balance: types::Balance = self.query(query).await?.balance.into();
+        Ok(balance.amount)
     }
 
     // Retrieve a page of balances by their owner
@@ -755,7 +756,7 @@ impl FuelClient {
         &self,
         owner: &str,
         request: PaginationRequest<String>,
-    ) -> io::Result<PaginatedResult<schema::balance::Balance, String>> {
+    ) -> io::Result<PaginatedResult<types::Balance, String>> {
         let owner: schema::Address = owner.parse()?;
         let query = schema::balance::BalancesQuery::build((owner, request).into());
 
@@ -767,7 +768,7 @@ impl FuelClient {
         &self,
         contract: &str,
         request: PaginationRequest<String>,
-    ) -> io::Result<PaginatedResult<schema::contract::ContractBalance, String>> {
+    ) -> io::Result<PaginatedResult<types::ContractBalance, String>> {
         let contract_id: schema::ContractId = contract.parse()?;
         let query =
             schema::contract::ContractBalancesQuery::build((contract_id, request).into());
@@ -781,7 +782,7 @@ impl FuelClient {
         &self,
         owner: Option<&str>,
         request: PaginationRequest<String>,
-    ) -> io::Result<PaginatedResult<schema::message::Message, String>> {
+    ) -> io::Result<PaginatedResult<types::Message, String>> {
         let owner: Option<schema::Address> =
             owner.map(|owner| owner.parse()).transpose()?;
         let query = schema::message::OwnedMessageQuery::build((owner, request).into());
@@ -798,7 +799,7 @@ impl FuelClient {
         message_id: &str,
         commit_block_id: Option<&str>,
         commit_block_height: Option<BlockHeight>,
-    ) -> io::Result<Option<schema::message::MessageProof>> {
+    ) -> io::Result<Option<types::MessageProof>> {
         let transaction_id: schema::TransactionId = transaction_id.parse()?;
         let message_id: schema::MessageId = message_id.parse()?;
         let commit_block_id: Option<schema::BlockId> = commit_block_id
@@ -812,7 +813,7 @@ impl FuelClient {
             commit_block_height,
         });
 
-        let proof = self.query(query).await?.message_proof;
+        let proof = self.query(query).await?.message_proof.map(Into::into);
 
         Ok(proof)
     }

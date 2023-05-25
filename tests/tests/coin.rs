@@ -6,9 +6,16 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
+    types::scalars::{
+        Address,
+        AssetId,
+        UtxoId,
+    },
     FuelClient,
-    PageDirection,
-    PaginationRequest,
 };
 use fuel_core_storage::{
     tables::Coins,
@@ -17,7 +24,6 @@ use fuel_core_storage::{
 use fuel_core_types::{
     entities::coins::coin::Coin,
     fuel_asm::*,
-    fuel_tx::*,
 };
 use rstest::rstest;
 
@@ -48,7 +54,7 @@ async fn first_5_coins(
     // setup test data in the node
     let coins: Vec<_> = (1..10usize)
         .map(|i| Coin {
-            utxo_id: UtxoId::new(Bytes32::from([i as u8; 32]), 0),
+            utxo_id: UtxoId::new([i as u8; 32].into(), 0),
             owner,
             amount: i as Word,
             asset_id: Default::default(),
@@ -95,7 +101,7 @@ async fn only_asset_id_filtered_coins() {
     // setup test data in the node
     let coins: Vec<_> = (1..10usize)
         .map(|i| Coin {
-            utxo_id: UtxoId::new(Bytes32::from([i as u8; 32]), 0),
+            utxo_id: UtxoId::new([i as u8; 32].into(), 0),
             owner,
             amount: i as Word,
             asset_id: if i <= 5 { asset_id } else { Default::default() },
@@ -132,10 +138,7 @@ async fn only_asset_id_filtered_coins() {
         .unwrap();
     assert!(!coins.results.is_empty());
     assert_eq!(coins.results.len(), 5);
-    assert!(coins
-        .results
-        .into_iter()
-        .all(|c| asset_id == c.asset_id.into()));
+    assert!(coins.results.into_iter().all(|c| asset_id == c.asset_id));
 }
 
 #[rstest]
@@ -147,7 +150,7 @@ async fn get_coins_forwards_backwards(
     // setup test data in the node
     let coins: Vec<Coin> = (1..11usize)
         .map(|i| Coin {
-            utxo_id: UtxoId::new(Bytes32::from([i as u8; 32]), 0),
+            utxo_id: UtxoId::new([i as u8; 32].into(), 0),
             owner,
             amount: i as Word,
             asset_id,
