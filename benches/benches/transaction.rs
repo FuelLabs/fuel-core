@@ -43,7 +43,7 @@ fn txn(c: &mut Criterion) {
         relayer,
         config,
     };
-    let mut test_data = InputOutputData::default();
+
     let mut data = Data::default();
 
     let mut execute = c.benchmark_group("transaction");
@@ -52,13 +52,22 @@ fn txn(c: &mut Criterion) {
         .map(|s| s.to_string_lossy().parse::<usize>().unwrap());
 
     if select.is_none() || matches!(select, Some(0)) {
+        let mut test_data = InputOutputData::default();
+        <out_ty::Void as ValidTx<in_ty::CoinSigned>>::fill(&mut data, &mut test_data, 1);
+        let t = into_script_txn(test_data);
+        insert_into_db(&mut executor.database, &t, &mut data);
+        measure_transaction(&executor, t, 1, "coin signed baseline", &mut execute);
+    }
+
+    if select.is_none() || matches!(select, Some(1)) {
+        let mut test_data = InputOutputData::default();
         <out_ty::Void as ValidTx<in_ty::CoinSigned>>::fill(&mut data, &mut test_data, 5);
         let t = into_script_txn(test_data);
         insert_into_db(&mut executor.database, &t, &mut data);
         measure_transaction(&executor, t, 5, "coin signed to void", &mut execute);
     }
 
-    if select.is_none() || matches!(select, Some(1)) {
+    if select.is_none() || matches!(select, Some(2)) {
         let mut test_data = InputOutputData::default();
         <out_ty::Coin as ValidTx<in_ty::CoinSigned>>::fill(&mut data, &mut test_data, 5);
         let t = into_script_txn(test_data);
@@ -66,7 +75,7 @@ fn txn(c: &mut Criterion) {
         measure_transaction(&executor, t, 5, "coin signed to coin", &mut execute);
     }
 
-    if select.is_none() || matches!(select, Some(2)) {
+    if select.is_none() || matches!(select, Some(3)) {
         let mut test_data = InputOutputData::default();
         <out_ty::Variable as ValidTx<in_ty::CoinSigned>>::fill(
             &mut data,
@@ -78,7 +87,7 @@ fn txn(c: &mut Criterion) {
         measure_transaction(&executor, t, 5, "coin signed to variable", &mut execute);
     }
 
-    if select.is_none() || matches!(select, Some(3)) {
+    if select.is_none() || matches!(select, Some(4)) {
         let mut test_data = InputOutputData::default();
         <out_ty::Change as ValidTx<in_ty::CoinSigned>>::fill(
             &mut data,
@@ -90,7 +99,7 @@ fn txn(c: &mut Criterion) {
         measure_transaction(&executor, t, 5, "coin signed to change", &mut execute);
     }
 
-    if select.is_none() || matches!(select, Some(4)) {
+    if select.is_none() || matches!(select, Some(5)) {
         let mut test_data = InputOutputData::default();
         <(out_ty::Coin, out_ty::Contract) as ValidTx<(
             in_ty::MessageData,

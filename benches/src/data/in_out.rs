@@ -101,6 +101,16 @@ impl ValidTx<in_ty::CoinSigned> for out_ty::Void {
     }
 }
 
+impl ValidTx<in_ty::CoinPredicate> for out_ty::Void {
+    fn fill(from: &mut Data, to: &mut InputOutputData, num: usize) {
+        let mut predicate_data = from.data_range(100..(100 + num));
+        for _ in 0..num {
+            let coin = coin_predicate(from, predicate_data.by_ref());
+            to.inputs.push(coin);
+        }
+    }
+}
+
 impl ValidTx<(in_ty::MessageData, in_ty::Contract)> for (out_ty::Coin, out_ty::Contract) {
     fn fill(from: &mut Data, to: &mut InputOutputData, num: usize) {
         let mut data_iter = from.data_range(100..(100 + num));
@@ -225,6 +235,23 @@ fn message_data(
         msg.inner.amount,
         msg.inner.nonce,
         msg_data.next().unwrap(),
+        predicate,
+        predicate_data.next().unwrap(),
+    )
+}
+
+fn coin_predicate(
+    data: &mut Data,
+    predicate_data: &mut impl Iterator<Item = Vec<u8>>,
+) -> Input {
+    let predicate: Vec<u8> = [op::ret(1)].into_iter().collect();
+    Input::coin_predicate(
+        data.utxo_id(),
+        Input::predicate_owner(&predicate, &Default::default()),
+        data.word(),
+        data.asset_id(),
+        Default::default(),
+        Default::default(),
         predicate,
         predicate_data.next().unwrap(),
     )
