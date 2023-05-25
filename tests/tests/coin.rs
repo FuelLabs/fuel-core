@@ -79,7 +79,7 @@ async fn first_5_coins(
     // run test
     let coins = client
         .coins(
-            format!("{owner:#x}").as_str(),
+            &owner,
             None,
             PaginationRequest {
                 cursor: None,
@@ -126,8 +126,8 @@ async fn only_asset_id_filtered_coins() {
     // run test
     let coins = client
         .coins(
-            format!("{owner:#x}").as_str(),
-            Some(format!("{asset_id:#x}").as_str()),
+            &owner,
+            Some(&asset_id),
             PaginationRequest {
                 cursor: None,
                 results: 10,
@@ -175,8 +175,8 @@ async fn get_coins_forwards_backwards(
     // run test
     let coins = client
         .coins(
-            format!("{owner:#x}").as_str(),
-            Some(format!("{asset_id:#x}").as_str()),
+            &owner,
+            Some(&asset_id),
             PaginationRequest {
                 cursor: None,
                 results: 10,

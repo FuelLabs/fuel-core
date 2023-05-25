@@ -118,7 +118,7 @@ impl Wallet {
             results = self
                 .client
                 .coins(
-                    &self.address.to_string(),
+                    &self.address,
                     None,
                     PaginationRequest {
                         cursor: None,

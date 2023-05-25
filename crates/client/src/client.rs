@@ -12,6 +12,7 @@ use crate::client::{
     },
     types::scalars::{
         Address,
+        AssetId,
         BlockId,
         UtxoId,
     },
@@ -670,13 +671,13 @@ impl FuelClient {
     /// Retrieve a page of coins by their owner
     pub async fn coins(
         &self,
-        owner: &str,
-        asset_id: Option<&str>,
+        owner: &Address,
+        asset_id: Option<&AssetId>,
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<types::Coin, String>> {
-        let owner: schema::Address = owner.parse()?;
+        let owner: schema::Address = (*owner).into();
         let asset_id: schema::AssetId = match asset_id {
-            Some(asset_id) => asset_id.parse()?,
+            Some(asset_id) => (*asset_id).into(),
             None => schema::AssetId::default(),
         };
         let query = schema::coins::CoinsQuery::build((owner, asset_id, request).into());
