@@ -471,7 +471,12 @@ where
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         // make sure we're synced first
-        self.sync_port.sync_with_peers().await?;
+        tokio::select! {
+            _ = self.sync_port.sync_with_peers() => {},
+            _ = watcher.while_started() => {
+                return Ok(false);
+            }
+        }
 
         let should_continue;
         tokio::select! {
