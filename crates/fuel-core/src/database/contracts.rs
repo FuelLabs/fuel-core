@@ -214,6 +214,7 @@ impl Database {
         );
 
         Ok(ContractConfig {
+            contract_id,
             code,
             salt,
             state,

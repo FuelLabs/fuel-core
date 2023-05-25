@@ -29,6 +29,8 @@ use serde_with::{
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct ContractConfig {
     #[serde_as(as = "HexType")]
+    pub contract_id: ContractId,
+    #[serde_as(as = "HexType")]
     pub code: Vec<u8>,
     #[serde_as(as = "HexType")]
     pub salt: Salt,
@@ -61,10 +63,10 @@ pub struct ContractConfig {
 }
 
 impl ContractConfig {
-    pub fn unpack(self) -> (ContractId, Vec<u8>, Salt, Bytes32, Vec<StorageSlot>) {
-        let bytes = self.code;
+    pub fn calculate_contract_id(&mut self) {
+        let bytes = &self.code;
         let salt = self.salt;
-        let slots = self.state.map(|slots| {
+        let slots = self.state.clone().map(|slots| {
             slots
                 .into_iter()
                 .map(|(key, value)| StorageSlot::new(key, value))
@@ -77,12 +79,6 @@ impl ContractConfig {
         let contract = Contract::from(bytes.clone());
         let root = contract.root();
         let contract_id = contract.id(&salt, &root, &state_root);
-        (
-            contract_id,
-            bytes,
-            salt,
-            state_root,
-            slots.unwrap_or_default(),
-        )
+        self.contract_id = contract_id;
     }
 }

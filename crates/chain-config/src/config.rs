@@ -256,6 +256,7 @@ mod tests {
         ChainConfig {
             initial_state: Some(StateConfig {
                 contracts: Some(vec![ContractConfig {
+                    contract_id: Default::default(),
                     code: contract.into(),
                     salt: Default::default(),
                     state,
