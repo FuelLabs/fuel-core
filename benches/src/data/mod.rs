@@ -28,6 +28,10 @@ use rand::{
 
 pub mod in_out;
 
+/// Deterministic data generator.
+///
+/// This type aims to create predictable data for benchmarks
+/// without repeating the same data.
 pub struct Data {
     address: Box<dyn Iterator<Item = Address>>,
     asset_id: Box<dyn Iterator<Item = AssetId>>,
@@ -137,11 +141,13 @@ impl Default for Data {
     }
 }
 
+/// Create a valid secret key from a seed.
 fn secret_key(seed: [u8; 32]) -> SecretKey {
     let phrase = generate_mnemonic_phrase(&mut StdRng::from_seed(seed), 24).unwrap();
     SecretKey::new_from_mnemonic_phrase_with_path(&phrase, "m/44'/60'/0'/0/0").unwrap()
 }
 
+/// Make a generic header for testing.
 pub fn make_header() -> PartialBlockHeader {
     PartialBlockHeader {
         application: ApplicationHeader {

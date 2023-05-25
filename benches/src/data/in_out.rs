@@ -23,6 +23,7 @@ mod tests;
 
 mod helpers;
 
+/// All possible input types.
 pub mod in_ty {
     #[derive(Default, Debug, Clone, Copy)]
     pub struct CoinSigned;
@@ -38,6 +39,7 @@ pub mod in_ty {
     pub struct Contract;
 }
 
+/// All possible output types.
 pub mod out_ty {
     #[derive(Default, Debug, Clone, Copy)]
     pub struct Void;
@@ -56,6 +58,8 @@ pub mod out_ty {
 }
 
 #[derive(Default)]
+/// Holds the input and output data for a transaction.
+/// Also holds the witnesses and secrets for signing the inputs.
 pub struct InputOutputData {
     pub inputs: Vec<Input>,
     pub outputs: Vec<Output>,
@@ -64,6 +68,7 @@ pub struct InputOutputData {
 }
 
 #[derive(Default, Debug, Clone)]
+/// Common data for all input message types.
 struct MessageInner {
     sender: Address,
     recipient: Address,
@@ -72,24 +77,15 @@ struct MessageInner {
 }
 
 #[derive(Default, Debug, Clone)]
+/// A signed message coin.
 struct SignedMessageCoin {
     secret: SecretKey,
     inner: MessageInner,
 }
 
-#[derive(Default, Debug, Clone)]
-struct PredicateMessageCoin {
-    inner: MessageInner,
-}
-
-#[derive(Default, Debug, Clone)]
-struct MessageData {
-    inner: MessageInner,
-    data: Vec<u8>,
-    predicate_data: Vec<u8>,
-}
-
+/// A valid set of inputs and outputs for a transaction.
 pub trait ValidTx<I> {
+    /// Fill the input and output data with the given number of inputs and outputs.
     fn fill(from: &mut Data, to: &mut InputOutputData, num: usize);
 }
 
@@ -170,17 +166,28 @@ impl ValidTx<in_ty::CoinSigned> for out_ty::Change {
     }
 }
 
+impl ValidTx<in_ty::MessageCoinSigned> for out_ty::Void {
+    fn fill(from: &mut Data, to: &mut InputOutputData, num: usize) {
+        for (coin, secret) in message_coins_signed(from, to.witness_index()).take(num) {
+            to.insert_input(coin, secret);
+        }
+    }
+}
+
+/// Helper function to get the owner of a secret key.
 fn owner(secret: &SecretKey) -> Address {
     Input::owner(&secret.public_key())
 }
 
 impl InputOutputData {
+    /// Insert and sign an input.
     fn insert_input(&mut self, input: Input, secret: SecretKey) {
         self.inputs.push(input);
         self.witnesses.push(Witness::default());
         self.secrets.push(secret);
     }
 
+    /// Get the next witness index.
     fn witness_index(&self) -> u8 {
         self.witnesses.len() as u8
     }
@@ -206,11 +213,30 @@ fn coins_signed(
     })
 }
 
-fn signed_message_coin(data: &mut Data) -> (AssetId, Word, SignedMessageCoin) {
+fn message_coins_signed(
+    data: &mut Data,
+    mut witness_index: u8,
+) -> impl Iterator<Item = (Input, SecretKey)> + '_ {
+    std::iter::repeat_with(move || {
+        let message = signed_message_coin(data);
+
+        let input = Input::message_coin_signed(
+            message.inner.sender,
+            message.inner.recipient,
+            message.inner.amount,
+            message.inner.nonce,
+            witness_index,
+        );
+        witness_index += 1;
+        (input, message.secret)
+    })
+}
+
+fn signed_message_coin(data: &mut Data) -> SignedMessageCoin {
     let amount = data.word();
     let secret = data.secret_key();
     let recipient = Input::owner(&secret.public_key());
-    let message = SignedMessageCoin {
+    SignedMessageCoin {
         secret,
         inner: MessageInner {
             amount,
@@ -218,8 +244,7 @@ fn signed_message_coin(data: &mut Data) -> (AssetId, Word, SignedMessageCoin) {
             recipient,
             nonce: data.nonce(),
         },
-    };
-    (AssetId::BASE, amount, message)
+    }
 }
 
 fn message_data(
@@ -227,7 +252,7 @@ fn message_data(
     msg_data: &mut impl Iterator<Item = Vec<u8>>,
     predicate_data: &mut impl Iterator<Item = Vec<u8>>,
 ) -> Input {
-    let (_, _, msg) = signed_message_coin(data);
+    let msg = signed_message_coin(data);
     let predicate: Vec<u8> = [op::ret(1)].into_iter().collect();
     Input::message_data_predicate(
         msg.inner.sender,

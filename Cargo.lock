@@ -2629,13 +2629,10 @@ dependencies = [
  "fuel-core",
  "fuel-core-storage",
  "fuel-core-types",
- "itertools",
- "proptest",
  "rand 0.8.5",
  "serde",
  "serde_json",
  "serde_yaml",
- "test-strategy",
 ]
 
 [[package]]

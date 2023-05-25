@@ -1,6 +1,11 @@
+use std::sync::Arc;
+
 use crate::Database;
 use fuel_core::{
-    executor::Executor,
+    executor::{
+        ExecutionOptions,
+        Executor,
+    },
     service::{
         adapters::MaybeRelayerAdapter,
         Config,
@@ -23,6 +28,8 @@ use super::{
     *,
 };
 
+/// Test the benches are valid.
+/// This is way faster then running the benches.
 #[test]
 fn test_in_out() {
     let database = Database::default();
@@ -37,7 +44,7 @@ fn test_in_out() {
     let mut executor = Executor {
         database,
         relayer,
-        config,
+        config: Arc::new(config.block_executor),
     };
     let mut test_data = InputOutputData::default();
     let mut data = Data::default();
@@ -61,7 +68,14 @@ fn test_transaction(executor: &Executor<MaybeRelayerAdapter>, transaction: Trans
     let block = PartialFuelBlock::new(header, vec![transaction]);
     let block = ExecutionBlock::Production(block);
 
-    let result = executor.execute_without_commit(block).unwrap();
+    let result = executor
+        .execute_without_commit(
+            block,
+            ExecutionOptions {
+                utxo_validation: true,
+            },
+        )
+        .unwrap();
     let status = result.result().tx_status.clone();
     let errors = result
         .result()
