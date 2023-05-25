@@ -10,7 +10,10 @@ use crate::client::{
         Tai64Timestamp,
         TransactionId,
     },
-    types::scalars::Address,
+    types::scalars::{
+        Address,
+        BlockId,
+    },
 };
 use anyhow::Context;
 #[cfg(feature = "subscriptions")]
@@ -623,9 +626,9 @@ impl FuelClient {
         Ok(new_height.into())
     }
 
-    pub async fn block(&self, id: &str) -> io::Result<Option<types::Block>> {
+    pub async fn block(&self, id: &BlockId) -> io::Result<Option<types::Block>> {
         let query = schema::block::BlockByIdQuery::build(BlockByIdArgs {
-            id: Some(id.parse()?),
+            id: Some((*id).into()),
         });
 
         let block = self.query(query).await?.block.map(Into::into);
