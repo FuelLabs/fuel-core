@@ -13,6 +13,7 @@ use crate::client::{
     types::scalars::{
         Address,
         BlockId,
+        UtxoId,
     },
 };
 use anyhow::Context;
@@ -658,9 +659,9 @@ impl FuelClient {
         Ok(blocks)
     }
 
-    pub async fn coin(&self, id: &str) -> io::Result<Option<types::Coin>> {
+    pub async fn coin(&self, id: &UtxoId) -> io::Result<Option<types::Coin>> {
         let query = schema::coins::CoinByIdQuery::build(CoinByIdArgs {
-            utxo_id: id.parse()?,
+            utxo_id: (*id).into(),
         });
         let coin = self.query(query).await?.coin.map(Into::into);
         Ok(coin)
