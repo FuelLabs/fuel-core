@@ -361,11 +361,7 @@ async fn can_get_message_proof() {
         let last_height = client.produce_blocks(1, None).await.unwrap();
 
         // Get the receipts from the contract call.
-        let receipts = client
-            .receipts(transaction_id.to_string().as_str())
-            .await
-            .unwrap()
-            .unwrap();
+        let receipts = client.receipts(&transaction_id).await.unwrap().unwrap();
 
         // Get the message id from the receipts.
         let message_ids: Vec<_> =

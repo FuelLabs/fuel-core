@@ -31,8 +31,8 @@ pub async fn receipts(ctx: &TestContext) -> Result<(), Failed> {
 
     let mut queries = vec![];
     for i in 0..100 {
-        let tx_id = result.tx_id.to_string();
-        queries.push(async move { (ctx.alice.client.receipts(tx_id.as_str()).await, i) });
+        let tx_id = result.tx_id;
+        queries.push(async move { (ctx.alice.client.receipts(&tx_id).await, i) });
     }
 
     let queries = futures::future::join_all(queries).await;

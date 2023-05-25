@@ -223,7 +223,7 @@ async fn receipts() {
         .await
         .expect("transaction should insert");
     // run test
-    let receipts = client.receipts(&format!("{id:#x}")).await.unwrap();
+    let receipts = client.receipts(&id).await.unwrap();
     assert!(receipts.is_some());
 }
 

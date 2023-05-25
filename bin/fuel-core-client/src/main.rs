@@ -56,12 +56,13 @@ impl CliArgs {
                     println!("{:?}", result.unwrap());
                 }
                 TransactionCommands::Get { id } => {
-                    let tx_id = id.parse::<TxId>().unwrap();
+                    let tx_id = id.parse::<TxId>().expect("invalid transaction id");
                     let tx = client.transaction(&tx_id).await.unwrap();
                     println!("{:?}", json!(tx).to_string())
                 }
                 TransactionCommands::Receipts { id } => {
-                    let receipts = client.receipts(id.as_str()).await.unwrap().unwrap();
+                    let tx_id = id.parse::<TxId>().expect("invalid transaction id");
+                    let receipts = client.receipts(&tx_id).await.unwrap().unwrap();
                     println!("{:?}", json!(receipts).to_string())
                 }
             },

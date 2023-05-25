@@ -275,11 +275,7 @@ async fn can_get_message_proof() {
     );
 
     // Get the receipts from the contract call.
-    let receipts = client
-        .receipts(transaction_id.to_string().as_str())
-        .await
-        .unwrap()
-        .unwrap();
+    let receipts = client.receipts(&transaction_id).await.unwrap().unwrap();
     let logd = receipts
         .iter()
         .find(|f| matches!(f, Receipt::LogData { .. }))

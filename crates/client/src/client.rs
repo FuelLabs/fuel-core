@@ -588,8 +588,8 @@ impl FuelClient {
         Ok(transactions)
     }
 
-    pub async fn receipts(&self, id: &str) -> io::Result<Option<Vec<Receipt>>> {
-        let query = schema::tx::TransactionQuery::build(TxIdArgs { id: id.parse()? });
+    pub async fn receipts(&self, id: &TxId) -> io::Result<Option<Vec<Receipt>>> {
+        let query = schema::tx::TransactionQuery::build(TxIdArgs { id: (*id).into() });
 
         let tx = self.query(query).await?.transaction.ok_or_else(|| {
             io::Error::new(ErrorKind::NotFound, format!("transaction {id} not found"))
