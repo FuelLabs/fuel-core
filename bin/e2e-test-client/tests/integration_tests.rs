@@ -2,9 +2,13 @@ use fuel_core::service::{
     Config,
     FuelService,
 };
+use fuel_core_chain_config::ConsensusConfig;
 // Add methods on commands
 use fuel_core_e2e_client::config::SuiteConfig;
-use std::fs;
+use std::{
+    fs,
+    time::Duration,
+};
 use tempfile::TempDir; // Used for writing assertions // Run programs
 
 // Use Jemalloc
@@ -87,6 +91,20 @@ async fn setup_local_node() -> FuelService {
     let mut config = Config::local_node();
     // The `run_contract_large_state` test creates a contract with a huge state
     config.chain_conf.transaction_parameters.max_storage_slots = 1 << 17; // 131072
+    match config.chain_conf.consensus {
+        ConsensusConfig::PoA {
+            signing_key,
+            timeout_between_checking_peers,
+            ..
+        } => {
+            config.chain_conf.consensus = ConsensusConfig::PoA {
+                signing_key,
+                time_until_synced: Duration::from_secs(0),
+                min_connected_resereved_peers: 0,
+                timeout_between_checking_peers,
+            }
+        }
+    }
     FuelService::new_node(config).await.unwrap()
 }
 
