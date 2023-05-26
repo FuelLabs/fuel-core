@@ -64,10 +64,10 @@ async fn insert_from_local_broadcasts_to_p2p() {
     let ctx = ctx_builder.build_and_start().await;
 
     let service = ctx.service();
-    let mut subscribe_status = service.shared.tx_status_subscribe();
+    let mut new_tx_notification = service.shared.new_tx_notification_subscribe();
     let mut subscribe_update = service
         .shared
-        .tx_update_subscribe(tx1.id(&ConsensusParameters::default()))
+        .tx_update_subscribe(tx1.cached_id().unwrap())
         .await;
 
     let out = service.shared.insert(vec![Arc::new(tx1.clone())]);
@@ -77,8 +77,8 @@ async fn insert_from_local_broadcasts_to_p2p() {
 
         // verify status updates
         assert_eq!(
-            subscribe_status.try_recv(),
-            Ok(TxStatus::Submitted),
+            new_tx_notification.try_recv(),
+            Ok(tx1.cached_id().unwrap()),
             "First added should be tx1"
         );
         let update = subscribe_update.next().await;

@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use fuel_core_types::{
     fuel_tx::{
-        Cacheable,
         Transaction,
         UniqueIdentifier,
     },
@@ -25,8 +24,7 @@ use super::*;
 
 impl FuelService {
     /// Submit a transaction to the txpool.
-    pub fn submit(&self, mut tx: Transaction) -> anyhow::Result<InsertionResult> {
-        tx.precompute(&self.shared.config.chain_conf.transaction_parameters);
+    pub fn submit(&self, tx: Transaction) -> anyhow::Result<InsertionResult> {
         let results: Vec<_> = self
             .shared
             .txpool

@@ -41,7 +41,6 @@ use fuel_core_types::{
             Error,
             InsertionResult,
             TransactionStatus,
-            TxStatus,
         },
     },
     tai64::Tai64,
@@ -66,16 +65,16 @@ pub type Service<P2P, DB> = ServiceRunner<Task<P2P, DB>>;
 
 #[derive(Clone)]
 pub struct TxStatusChange {
-    status_sender: broadcast::Sender<TxStatus>,
+    new_tx_notification_sender: broadcast::Sender<TxId>,
     update_sender: UpdateSender,
 }
 
 impl TxStatusChange {
     pub fn new(capacity: usize) -> Self {
-        let (status_sender, _) = broadcast::channel(capacity);
+        let (new_tx_notification_sender, _) = broadcast::channel(capacity);
         let update_sender = UpdateSender::new(capacity);
         Self {
-            status_sender,
+            new_tx_notification_sender,
             update_sender,
         }
     }
@@ -87,13 +86,12 @@ impl TxStatusChange {
         message: impl Into<TxStatusMessage>,
     ) {
         tracing::info!("Transaction {id} successfully included in block {block_height}");
-        let _ = self.status_sender.send(TxStatus::Completed);
         self.update_sender.send(TxUpdate::new(id, message.into()));
     }
 
     pub fn send_submitted(&self, id: Bytes32, time: Tai64) {
         tracing::info!("Transaction {id} successfully submitted to the tx pool");
-        let _ = self.status_sender.send(TxStatus::Submitted);
+        let _ = self.new_tx_notification_sender.send(id);
         self.update_sender.send(TxUpdate::new(
             id,
             TxStatusMessage::Status(TransactionStatus::Submitted { time }),
@@ -102,9 +100,6 @@ impl TxStatusChange {
 
     pub fn send_squeezed_out(&self, id: Bytes32, reason: TxPoolError) {
         tracing::info!("Transaction {id} squeezed out because {reason}");
-        let _ = self.status_sender.send(TxStatus::SqueezedOut {
-            reason: reason.clone(),
-        });
         self.update_sender.send(TxUpdate::new(
             id,
             TxStatusMessage::Status(TransactionStatus::SqueezedOut {
@@ -292,8 +287,8 @@ where
         self.txpool.lock().remove(&self.tx_status_sender, &ids)
     }
 
-    pub fn tx_status_subscribe(&self) -> broadcast::Receiver<TxStatus> {
-        self.tx_status_sender.status_sender.subscribe()
+    pub fn new_tx_notification_subscribe(&self) -> broadcast::Receiver<TxId> {
+        self.tx_status_sender.new_tx_notification_sender.subscribe()
     }
 
     pub async fn tx_update_subscribe(&self, tx_id: Bytes32) -> TxStatusStream {

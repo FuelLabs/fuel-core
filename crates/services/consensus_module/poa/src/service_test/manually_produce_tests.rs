@@ -40,22 +40,22 @@ async fn can_manually_produce_block(
 ) {
     let mut rng = StdRng::seed_from_u64(1234u64);
     let mut ctx_builder = TestContextBuilder::new();
+    let consensus_params = Default::default();
     ctx_builder.with_config(Config {
         trigger,
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
         metrics: false,
-        consensus_params: Default::default(),
+        consensus_params,
     });
 
     // initialize txpool with some txs
+    let txs = (0..num_txns).map(|_| make_tx(&mut rng)).collect::<Vec<_>>();
     let TxPoolContext {
         txpool,
         status_sender,
         ..
-    } = MockTransactionPool::new_with_txs(
-        (0..num_txns).map(|_| make_tx(&mut rng)).collect(),
-    );
+    } = MockTransactionPool::new_with_txs(txs.clone());
     ctx_builder.with_txpool(txpool);
 
     let mut importer = MockBlockImporter::default();
@@ -90,8 +90,8 @@ async fn can_manually_produce_block(
         .manually_produce_block(Some(start_time), number_of_blocks)
         .await
         .unwrap();
-    for _ in 0..num_txns {
-        status_sender.send_replace(Some(TxStatus::Submitted));
+    for tx in txs {
+        status_sender.send_replace(Some(tx.id(&consensus_params)));
     }
 
     for t in times.into_iter() {

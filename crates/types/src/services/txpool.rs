@@ -186,19 +186,6 @@ pub enum TransactionStatus {
     },
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-#[allow(missing_docs)] // TODO: This type is likely removed soon
-pub enum TxStatus {
-    /// Submitted into txpool.
-    Submitted,
-    /// Transaction has either been:
-    /// - successfully executed and included in a block.
-    /// - failed to execute and state changes reverted
-    Completed,
-    /// removed from txpool.
-    SqueezedOut { reason: Error },
-}
-
 #[allow(missing_docs)]
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 #[non_exhaustive]

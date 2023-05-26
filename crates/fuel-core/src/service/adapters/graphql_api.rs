@@ -19,7 +19,10 @@ use crate::{
     service::adapters::TxPoolAdapter,
 };
 use async_trait::async_trait;
-use fuel_core_services::stream::BoxStream;
+use fuel_core_services::stream::{
+    BoxFuture,
+    BoxStream,
+};
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -67,10 +70,8 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use futures::Future;
 use std::{
     ops::Deref,
-    pin::Pin,
     sync::Arc,
 };
 
@@ -220,11 +221,7 @@ impl TxPoolPort for TxPoolAdapter {
         self.service.insert(txs)
     }
 
-    fn tx_update_subscribe(
-        &self,
-        id: TxId,
-    ) -> Pin<Box<dyn Future<Output = BoxStream<TxStatusMessage>> + Send + Sync + '_>>
-    {
+    fn tx_update_subscribe(&self, id: TxId) -> BoxFuture<BoxStream<TxStatusMessage>> {
         Box::pin(self.service.tx_update_subscribe(id))
     }
 }

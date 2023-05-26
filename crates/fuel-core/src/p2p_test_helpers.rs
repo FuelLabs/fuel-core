@@ -349,10 +349,11 @@ impl Node {
     /// Wait for the node to reach consistency with the given transactions.
     pub async fn consistency(&mut self, txs: &HashMap<Bytes32, Transaction>) {
         let Self { db, .. } = self;
-        let mut tx_status = self.node.shared.txpool.tx_status_subscribe();
+        let mut new_tx_notification =
+            self.node.shared.txpool.new_tx_notification_subscribe();
         while !not_found_txs(db, txs).is_empty() {
             tokio::select! {
-                result = tx_status.recv() => {
+                result = new_tx_notification.recv() => {
                     result.unwrap();
                 }
                 _ = self.node.await_stop() => {
