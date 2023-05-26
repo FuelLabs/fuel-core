@@ -21,6 +21,7 @@ use fuel_core_storage::{
     tables::Transactions,
     StorageAsRef,
 };
+use fuel_core_txpool::ports::BlockImporter;
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -349,11 +350,10 @@ impl Node {
     /// Wait for the node to reach consistency with the given transactions.
     pub async fn consistency(&mut self, txs: &HashMap<Bytes32, Transaction>) {
         let Self { db, .. } = self;
-        let mut new_tx_notification =
-            self.node.shared.txpool.new_tx_notification_subscribe();
+        let mut blocks = self.node.shared.block_importer.block_events();
         while !not_found_txs(db, txs).is_empty() {
             tokio::select! {
-                result = new_tx_notification.recv() => {
+                result = blocks.next() => {
                     result.unwrap();
                 }
                 _ = self.node.await_stop() => {
