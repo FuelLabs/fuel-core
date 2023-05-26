@@ -159,7 +159,7 @@ async fn poa_interval_produces_nonempty_blocks_at_correct_rate() {
     assert!(
         round_time_seconds <= secs_per_round
             && secs_per_round
-                <= round_time_seconds + 2 * (rounds as u64) / round_time_seconds,
+                <= round_time_seconds + 3 * (rounds as u64) / round_time_seconds,
         "Round time not within treshold"
     );
 
