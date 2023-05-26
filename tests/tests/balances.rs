@@ -93,11 +93,7 @@ async fn balance() {
 
     // spend some coins and check again
     let coins_per_asset = client
-        .coins_to_spend(
-            format!("{owner:#x}").as_str(),
-            vec![(format!("{asset_id:#x}").as_str(), 1, None)],
-            None,
-        )
+        .coins_to_spend(&owner, vec![(asset_id, 1, None)], None)
         .await
         .unwrap();
 

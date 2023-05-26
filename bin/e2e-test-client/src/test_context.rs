@@ -145,17 +145,11 @@ impl Wallet {
         asset_id: Option<AssetId>,
     ) -> anyhow::Result<Transaction> {
         let asset_id = asset_id.unwrap_or_default();
-        let asset_id_string = asset_id.to_string();
-        let asset_id_str = asset_id_string.as_str();
         let total_amount = transfer_amount + BASE_AMOUNT;
         // select coins
         let coins = &self
             .client
-            .coins_to_spend(
-                self.address.to_string().as_str(),
-                vec![(asset_id_str, total_amount, None)],
-                None,
-            )
+            .coins_to_spend(&self.address, vec![(asset_id, total_amount, None)], None)
             .await?[0];
 
         // build transaction
@@ -217,17 +211,11 @@ impl Wallet {
 
     pub async fn deploy_contract(&self, config: ContractConfig) -> anyhow::Result<()> {
         let asset_id = AssetId::zeroed();
-        let asset_id_string = asset_id.to_string();
-        let asset_id_str = asset_id_string.as_str();
         let total_amount = BASE_AMOUNT;
         // select coins
         let coins = &self
             .client
-            .coins_to_spend(
-                self.address.to_string().as_str(),
-                vec![(asset_id_str, total_amount, None)],
-                None,
-            )
+            .coins_to_spend(&self.address, vec![(asset_id, total_amount, None)], None)
             .await?[0];
 
         let ContractConfig {

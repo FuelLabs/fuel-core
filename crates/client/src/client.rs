@@ -689,17 +689,17 @@ impl FuelClient {
     /// Retrieve coins to spend in a transaction
     pub async fn coins_to_spend(
         &self,
-        owner: &str,
-        spend_query: Vec<(&str, u64, Option<u64>)>,
+        owner: &Address,
+        spend_query: Vec<(AssetId, u64, Option<u64>)>,
         // (Utxos, Messages Nonce)
         excluded_ids: Option<(Vec<&str>, Vec<&str>)>,
     ) -> io::Result<Vec<Vec<types::CoinType>>> {
-        let owner: schema::Address = owner.parse()?;
+        let owner: schema::Address = (*owner).into();
         let spend_query: Vec<SpendQueryElementInput> = spend_query
             .iter()
             .map(|(asset_id, amount, max)| -> Result<_, ConversionError> {
                 Ok(SpendQueryElementInput {
-                    asset_id: asset_id.parse()?,
+                    asset_id: (*asset_id).into(),
                     amount: (*amount).into(),
                     max: (*max).map(|max| max.into()),
                 })

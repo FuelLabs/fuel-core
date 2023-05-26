@@ -101,11 +101,8 @@ mod coin {
         let coins_per_asset = context
             .client
             .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![
-                    (format!("{asset_id_a:#x}").as_str(), 300, None),
-                    (format!("{asset_id_b:#x}").as_str(), 300, None),
-                ],
+                &owner,
+                vec![(asset_id_a, 300, None), (asset_id_b, 300, None)],
                 None,
             )
             .await
@@ -138,11 +135,7 @@ mod coin {
         // select all available asset a coins to spend
         let remaining_coins_a = context
             .client
-            .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![(format!("{asset_id_a:#x}").as_str(), 1, None)],
-                None,
-            )
+            .coins_to_spend(&owner, vec![(asset_id_a, 1, None)], None)
             .await;
         // there should be none left
         assert!(remaining_coins_a.is_err());
@@ -150,11 +143,7 @@ mod coin {
         // select all available asset a coins to spend
         let remaining_coins_b = context
             .client
-            .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![(format!("{asset_id_b:#x}").as_str(), 1, None)],
-                None,
-            )
+            .coins_to_spend(&owner, vec![(asset_id_b, 1, None)], None)
             .await;
         // there should be none left
         assert!(remaining_coins_b.is_err())
@@ -167,11 +156,8 @@ mod coin {
         let coins_per_asset = context
             .client
             .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![
-                    (format!("{asset_id_a:#x}").as_str(), 1, None),
-                    (format!("{asset_id_b:#x}").as_str(), 1, None),
-                ],
+                &owner,
+                vec![(asset_id_a, 1, None), (asset_id_b, 1, None)],
                 None,
             )
             .await
@@ -190,11 +176,8 @@ mod coin {
         let coins_per_asset = context
             .client
             .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![
-                    (format!("{asset_id_a:#x}").as_str(), 300, None),
-                    (format!("{asset_id_b:#x}").as_str(), 300, None),
-                ],
+                &owner,
+                vec![(asset_id_a, 300, None), (asset_id_b, 300, None)],
                 None,
             )
             .await
@@ -213,11 +196,8 @@ mod coin {
         let coins_per_asset = context
             .client
             .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![
-                    (format!("{asset_id_a:#x}").as_str(), 300, None),
-                    (format!("{asset_id_b:#x}").as_str(), 300, None),
-                ],
+                &owner,
+                vec![(asset_id_a, 300, None), (asset_id_b, 300, None)],
                 None,
             )
             .await
@@ -238,11 +218,8 @@ mod coin {
         let coins_per_asset = context
             .client
             .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![
-                    (format!("{asset_id_a:#x}").as_str(), 1, None),
-                    (format!("{asset_id_b:#x}").as_str(), 1, None),
-                ],
+                &owner,
+                vec![(asset_id_a, 1, None), (asset_id_b, 1, None)],
                 Some((all_utxo_ids, vec![])),
             )
             .await;
@@ -268,11 +245,8 @@ mod coin {
         let coins_per_asset = context
             .client
             .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![
-                    (format!("{asset_id_a:#x}").as_str(), 301, None),
-                    (format!("{asset_id_b:#x}").as_str(), 301, None),
-                ],
+                &owner,
+                vec![(asset_id_a, 301, None), (asset_id_b, 301, None)],
                 None,
             )
             .await;
@@ -294,11 +268,8 @@ mod coin {
         let coins_per_asset = context
             .client
             .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![
-                    (format!("{asset_id_a:#x}").as_str(), 300, Some(2)),
-                    (format!("{asset_id_b:#x}").as_str(), 300, Some(2)),
-                ],
+                &owner,
+                vec![(asset_id_a, 300, Some(2)), (asset_id_b, 300, Some(2))],
                 None,
             )
             .await;
@@ -381,11 +352,7 @@ mod message_coin {
         // select all available coins to spend
         let coins_per_asset = context
             .client
-            .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![(format!("{base_asset_id:#x}").as_str(), 300, None)],
-                None,
-            )
+            .coins_to_spend(&owner, vec![(base_asset_id, 300, None)], None)
             .await
             .unwrap();
 
@@ -412,11 +379,7 @@ mod message_coin {
         // select all available coins to spend
         let remaining_coins = context
             .client
-            .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![(format!("{base_asset_id:#x}").as_str(), 1, None)],
-                None,
-            )
+            .coins_to_spend(&owner, vec![(base_asset_id, 1, None)], None)
             .await;
         // there should be none left
         assert!(remaining_coins.is_err())
@@ -428,11 +391,7 @@ mod message_coin {
         // query coins for `base_asset_id` and target 1
         let coins_per_asset = context
             .client
-            .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![(format!("{base_asset_id:#x}").as_str(), 1, None)],
-                None,
-            )
+            .coins_to_spend(&owner, vec![(base_asset_id, 1, None)], None)
             .await
             .unwrap();
         assert_eq!(coins_per_asset.len(), 1);
@@ -444,11 +403,7 @@ mod message_coin {
         // query for 300 base assets
         let coins_per_asset = context
             .client
-            .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![(format!("{base_asset_id:#x}").as_str(), 300, None)],
-                None,
-            )
+            .coins_to_spend(&owner, vec![(base_asset_id, 300, None)], None)
             .await
             .unwrap();
         assert_eq!(coins_per_asset.len(), 1);
@@ -461,11 +416,7 @@ mod message_coin {
         // query for 300 base assets
         let coins_per_asset = context
             .client
-            .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![(format!("{base_asset_id:#x}").as_str(), 300, None)],
-                None,
-            )
+            .coins_to_spend(&owner, vec![(base_asset_id, 300, None)], None)
             .await
             .unwrap();
 
@@ -484,8 +435,8 @@ mod message_coin {
         let coins_per_asset = context
             .client
             .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![(format!("{base_asset_id:#x}").as_str(), 1, None)],
+                &owner,
+                vec![(base_asset_id, 1, None)],
                 Some((vec![], all_message_ids)),
             )
             .await;
@@ -506,11 +457,7 @@ mod message_coin {
         // max coins reached
         let coins_per_asset = context
             .client
-            .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![(format!("{base_asset_id:#x}").as_str(), 301, None)],
-                None,
-            )
+            .coins_to_spend(&owner, vec![(base_asset_id, 301, None)], None)
             .await;
         assert!(coins_per_asset.is_err());
         assert_eq!(
@@ -529,11 +476,7 @@ mod message_coin {
         // not enough inputs
         let coins_per_asset = context
             .client
-            .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![(format!("{base_asset_id:#x}").as_str(), 300, Some(2))],
-                None,
-            )
+            .coins_to_spend(&owner, vec![(base_asset_id, 300, Some(2))], None)
             .await;
         assert!(coins_per_asset.is_err());
         assert_eq!(
@@ -627,11 +570,8 @@ mod all_coins {
         let coins_per_asset = context
             .client
             .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![
-                    (format!("{asset_id_a:#x}").as_str(), 1, None),
-                    (format!("{asset_id_b:#x}").as_str(), 1, None),
-                ],
+                &owner,
+                vec![(asset_id_a, 1, None), (asset_id_b, 1, None)],
                 None,
             )
             .await
@@ -650,11 +590,8 @@ mod all_coins {
         let coins_per_asset = context
             .client
             .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![
-                    (format!("{asset_id_a:#x}").as_str(), 300, None),
-                    (format!("{asset_id_b:#x}").as_str(), 300, None),
-                ],
+                &owner,
+                vec![(asset_id_a, 300, None), (asset_id_b, 300, None)],
                 None,
             )
             .await
@@ -673,11 +610,8 @@ mod all_coins {
         let coins_per_asset = context
             .client
             .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![
-                    (format!("{asset_id_a:#x}").as_str(), 300, None),
-                    (format!("{asset_id_b:#x}").as_str(), 300, None),
-                ],
+                &owner,
+                vec![(asset_id_a, 300, None), (asset_id_b, 300, None)],
                 None,
             )
             .await
@@ -716,11 +650,8 @@ mod all_coins {
         let coins_per_asset = context
             .client
             .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![
-                    (format!("{asset_id_a:#x}").as_str(), 1, None),
-                    (format!("{asset_id_b:#x}").as_str(), 1, None),
-                ],
+                &owner,
+                vec![(asset_id_a, 1, None), (asset_id_b, 1, None)],
                 Some((all_utxo_ids, all_message_ids)),
             )
             .await;
@@ -742,11 +673,8 @@ mod all_coins {
         let coins_per_asset = context
             .client
             .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![
-                    (format!("{asset_id_a:#x}").as_str(), 301, None),
-                    (format!("{asset_id_b:#x}").as_str(), 301, None),
-                ],
+                &owner,
+                vec![(asset_id_a, 301, None), (asset_id_b, 301, None)],
                 None,
             )
             .await;
@@ -768,11 +696,8 @@ mod all_coins {
         let coins_per_asset = context
             .client
             .coins_to_spend(
-                format!("{owner:#x}").as_str(),
-                vec![
-                    (format!("{asset_id_a:#x}").as_str(), 300, Some(2)),
-                    (format!("{asset_id_b:#x}").as_str(), 300, Some(2)),
-                ],
+                &owner,
+                vec![(asset_id_a, 300, Some(2)), (asset_id_b, 300, Some(2))],
                 None,
             )
             .await;
@@ -816,7 +741,7 @@ async fn coins_to_spend_empty(
     // empty spend_query
     let coins_per_asset = context
         .client
-        .coins_to_spend(format!("{owner:#x}").as_str(), vec![], None)
+        .coins_to_spend(&owner, vec![], None)
         .await
         .unwrap();
     assert!(coins_per_asset.is_empty());
@@ -835,11 +760,11 @@ async fn coins_to_spend_error_duplicate_asset_query(
     let coins_per_asset = context
         .client
         .coins_to_spend(
-            format!("{owner:#x}").as_str(),
+            &owner,
             vec![
-                (format!("{asset_id:#x}").as_str(), 1, None),
-                (format!("{asset_id:#x}").as_str(), 2, None),
-                (format!("{asset_id:#x}").as_str(), 3, None),
+                (asset_id, 1, None),
+                (asset_id, 2, None),
+                (asset_id, 3, None),
             ],
             None,
         )
