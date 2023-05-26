@@ -60,8 +60,5 @@ pub trait TxPoolDb: Send + Sync {
 
     fn current_block_height(&self) -> StorageResult<BlockHeight>;
 
-    fn transaction_status(
-        &self,
-        tx_id: &Bytes32,
-    ) -> StorageResult<Option<TransactionStatus>>;
+    fn transaction_status(&self, tx_id: &Bytes32) -> StorageResult<TransactionStatus>;
 }

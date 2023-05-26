@@ -389,15 +389,6 @@ where
     Service::new(task)
 }
 
-impl<E> From<Result<Option<TransactionStatus>, E>> for TxStatusMessage {
-    fn from(result: Result<Option<TransactionStatus>, E>) -> Self {
-        match result {
-            Ok(Some(status)) => TxStatusMessage::Status(status),
-            _ => TxStatusMessage::FailedStatus,
-        }
-    }
-}
-
 impl<E> From<Result<TransactionStatus, E>> for TxStatusMessage {
     fn from(result: Result<TransactionStatus, E>) -> Self {
         match result {

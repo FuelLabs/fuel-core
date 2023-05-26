@@ -7,6 +7,7 @@ use crate::{
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
+    not_found,
     tables::{
         Coins,
         ContractsRawCode,
@@ -147,7 +148,10 @@ impl fuel_core_txpool::ports::TxPoolDb for Database {
     fn transaction_status(
         &self,
         tx_id: &fuel_core_types::fuel_types::Bytes32,
-    ) -> StorageResult<Option<fuel_core_types::services::txpool::TransactionStatus>> {
-        Ok(self.get_tx_status(tx_id)?)
+    ) -> StorageResult<fuel_core_types::services::txpool::TransactionStatus> {
+        Ok(self
+            .get_tx_status(tx_id)
+            .transpose()
+            .ok_or(not_found!("TransactionId"))??)
     }
 }

@@ -99,7 +99,7 @@ impl TxPoolDb for MockDb {
     fn transaction_status(
         &self,
         _tx_id: &fuel_core_types::fuel_types::Bytes32,
-    ) -> StorageResult<Option<fuel_core_types::services::txpool::TransactionStatus>> {
+    ) -> StorageResult<fuel_core_types::services::txpool::TransactionStatus> {
         unimplemented!()
     }
 }
