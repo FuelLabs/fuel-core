@@ -373,12 +373,13 @@ where
     let mut ttl_timer = tokio::time::interval(config.transaction_ttl);
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let consensus_params = config.chain_config.transaction_parameters;
+    let number_of_active_subscription = config.number_of_active_subscription;
     let txpool = Arc::new(ParkingMutex::new(TxPool::new(config, db)));
     let task = Task {
         gossiped_tx_stream,
         committed_block_stream,
         shared: SharedState {
-            tx_status_sender: TxStatusChange::new(100),
+            tx_status_sender: TxStatusChange::new(number_of_active_subscription),
             txpool,
             p2p,
             consensus_params,
