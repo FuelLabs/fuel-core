@@ -352,17 +352,35 @@ impl FuelClient {
         Ok(id)
     }
 
-    #[cfg(feature = "subscriptions")]
-    /// Submit the transaction and wait for it to be included into a block.
+    /// Submit the transaction and wait for it either to be included in
+    /// a block or removed from `TxPool`.
     ///
     /// This will wait forever if needed, so consider wrapping this call
     /// with a `tokio::time::timeout`.
+    #[cfg(feature = "subscriptions")]
     pub async fn submit_and_await_commit(
         &self,
         tx: &Transaction,
     ) -> io::Result<TransactionStatus> {
-        let tx_id = self.submit(tx).await?;
-        self.await_transaction_commit(&tx_id.to_string()).await
+        use cynic::SubscriptionBuilder;
+        let tx = tx.clone().to_bytes();
+        let s = schema::tx::SubmitAndAwaitSubscription::build(TxArg {
+            tx: HexString(Bytes(tx)),
+        });
+
+        let mut stream = self.subscribe(s).await?.map(
+            |r: io::Result<schema::tx::SubmitAndAwaitSubscription>| {
+                let status: TransactionStatus = r?.submit_and_await.try_into()?;
+                Result::<_, io::Error>::Ok(status)
+            },
+        );
+
+        let status = stream.next().await.ok_or(io::Error::new(
+            io::ErrorKind::Other,
+            "Failed to get status from the submission",
+        ))??;
+
+        Ok(status)
     }
 
     pub async fn start_session(&self) -> io::Result<String> {

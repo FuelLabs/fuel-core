@@ -69,8 +69,9 @@ fn create_node_config_from_inputs(inputs: &[Input]) -> Config {
     node_config
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_tx_gossiping() {
+    use futures::StreamExt;
     let mut rng = StdRng::seed_from_u64(2322);
 
     let tx = TransactionBuilder::script(vec![], vec![])
@@ -101,23 +102,24 @@ async fn test_tx_gossiping() {
     let client_two = FuelClient::from(node_two.bound_address);
 
     let wait_time = Duration::from_secs(10);
-
     tokio::time::sleep(wait_time).await;
+
+    let tx_id = tx.id(&params).to_string();
 
     let tx = tx.into();
     client_one.submit_and_await_commit(&tx).await.unwrap();
 
-    let response = client_one
-        .transaction(&tx.id(&params).to_string())
-        .await
-        .unwrap();
+    let response = client_one.transaction(&tx_id).await.unwrap();
     assert!(response.is_some());
 
-    tokio::time::sleep(wait_time).await;
-
-    let response = client_two
-        .transaction(&tx.id(&params).to_string())
+    let mut client_two_subscription = client_two
+        .subscribe_transaction_status(&tx_id)
         .await
-        .unwrap();
+        .expect("Should be able to subscribe for events");
+    tokio::time::timeout(wait_time, client_two_subscription.next())
+        .await
+        .expect("Should await transaction notification in time");
+
+    let response = client_two.transaction(&tx_id).await.unwrap();
     assert!(response.is_some());
 }

@@ -450,7 +450,9 @@ type Mutation {
 	"""
 	dryRun(tx: HexString!, utxoValidation: Boolean): [Receipt!]!
 	"""
-	Submits transaction to the txpool
+	Submits transaction to the `TxPool`.
+	
+	Returns submitted transaction if the transaction is included in the `TxPool` without problems.
 	"""
 	submit(tx: HexString!): Transaction!
 	"""
@@ -668,6 +670,10 @@ type Subscription {
 	the latest status.
 	"""
 	statusChange(id: TransactionId!): TransactionStatus!
+	"""
+	Submits transaction to the `TxPool` and await either confirmation or failure.
+	"""
+	submitAndAwait(tx: HexString!): TransactionStatus!
 }
 
 type SuccessStatus {
