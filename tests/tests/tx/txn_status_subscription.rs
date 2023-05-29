@@ -141,7 +141,8 @@ async fn test_regression_in_subscribe() {
         rng.gen(),
         rng.gen(),
         rng.gen(),
-        0.into(),
+        Default::default(),
+        Default::default(),
         predicate,
         vec![],
     );
