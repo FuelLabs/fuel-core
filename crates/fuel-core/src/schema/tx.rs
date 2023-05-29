@@ -243,39 +243,6 @@ impl TxMutation {
         let tx = Transaction(tx, id);
         Ok(tx)
     }
-
-    /// Submits transaction to the `TxPool` and await either confirmation or failure.
-    async fn submit_and_await(
-        &self,
-        ctx: &Context<'_>,
-        tx: HexString,
-    ) -> async_graphql::Result<TransactionStatus> {
-        let txpool = ctx.data_unchecked::<TxPool>();
-        let config = ctx.data_unchecked::<Config>();
-        let tx = FuelTx::from_bytes(&tx.0)?;
-        let tx_id = tx.id(&config.transaction_parameters);
-        let subscription = txpool.tx_update_subscribe(tx_id).await;
-        // TODO: use spawn_blocking here
-        let _: Vec<_> = txpool
-            .insert(vec![Arc::new(tx)])
-            .into_iter()
-            .try_collect()?;
-
-        let event = subscription
-            .skip_while(|event| {
-                matches!(
-                    event,
-                    TxStatusMessage::Status(txpool::TransactionStatus::Submitted { .. })
-                )
-            })
-            .next()
-            .await;
-
-        match event {
-            Some(TxStatusMessage::Status(s)) => Ok(s.into()),
-            _ => Err(anyhow::anyhow!("Failed to get transaction status").into()),
-        }
-    }
 }
 
 #[derive(Default)]
@@ -321,5 +288,40 @@ impl TxStatusSubscription {
         )
         .await
         .map_err(async_graphql::Error::from)
+    }
+
+    /// Submits transaction to the `TxPool` and await either confirmation or failure.
+    async fn submit_and_await<'a>(
+        &self,
+        ctx: &Context<'a>,
+        tx: HexString,
+    ) -> async_graphql::Result<
+        impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
+    > {
+        let txpool = ctx.data_unchecked::<TxPool>();
+        let config = ctx.data_unchecked::<Config>();
+        let tx = FuelTx::from_bytes(&tx.0)?;
+        let tx_id = tx.id(&config.transaction_parameters);
+        let subscription = txpool.tx_update_subscribe(tx_id).await;
+        // TODO: use spawn_blocking here
+        let _: Vec<_> = txpool
+            .insert(vec![Arc::new(tx)])
+            .into_iter()
+            .try_collect()?;
+
+        Ok(subscription
+            .skip_while(|event| {
+                matches!(
+                    event,
+                    TxStatusMessage::Status(txpool::TransactionStatus::Submitted { .. })
+                )
+            })
+            .map(|event| match event {
+                TxStatusMessage::Status(status) => Ok(status.into()),
+                TxStatusMessage::FailedStatus => {
+                    Err(anyhow::anyhow!("Failed to get transaction status").into())
+                }
+            })
+            .take(1))
     }
 }

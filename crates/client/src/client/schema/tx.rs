@@ -305,10 +305,10 @@ pub struct Submit {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
-    graphql_type = "Mutation",
+    graphql_type = "Subscription",
     variables = "TxArg"
 )]
-pub struct SubmitAndAwait {
+pub struct SubmitAndAwaitSubscription {
     #[arguments(tx: $tx)]
     pub submit_and_await: TransactionStatus,
 }
