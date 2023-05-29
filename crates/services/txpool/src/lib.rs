@@ -1,6 +1,12 @@
 #![deny(unused_crate_dependencies)]
 
-use fuel_core_types::services::txpool::ArcPoolTx;
+use fuel_core_types::{
+    services::txpool::{
+        ArcPoolTx,
+        TransactionStatus,
+    },
+    tai64::Tai64,
+};
 use std::{
     ops::Deref,
     time::Duration,
@@ -72,5 +78,13 @@ impl Deref for TxInfo {
     type Target = ArcPoolTx;
     fn deref(&self) -> &Self::Target {
         &self.tx
+    }
+}
+
+impl From<TxInfo> for TransactionStatus {
+    fn from(tx_info: TxInfo) -> Self {
+        Self::Submitted {
+            time: Tai64::from_unix(tx_info.submitted_time.as_secs() as i64),
+        }
     }
 }

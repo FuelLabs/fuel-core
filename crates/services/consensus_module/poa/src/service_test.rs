@@ -33,16 +33,10 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
     secrecy::Secret,
-    services::{
-        executor::{
-            Error as ExecutorError,
-            ExecutionResult,
-            UncommittedResult,
-        },
-        txpool::{
-            Error as TxPoolError,
-            TxStatus,
-        },
+    services::executor::{
+        Error as ExecutorError,
+        ExecutionResult,
+        UncommittedResult,
     },
     tai64::Tai64,
 };
@@ -162,7 +156,7 @@ impl TestContext {
 pub struct TxPoolContext {
     pub txpool: MockTransactionPool,
     pub txs: Arc<Mutex<Vec<Script>>>,
-    pub status_sender: Arc<watch::Sender<Option<TxStatus>>>,
+    pub status_sender: Arc<watch::Sender<Option<TxId>>>,
 }
 
 impl MockTransactionPool {
@@ -190,7 +184,7 @@ impl MockTransactionPool {
                     status_channel,
                     |(sender, mut receiver)| async {
                         loop {
-                            let status = receiver.borrow_and_update().clone();
+                            let status = *receiver.borrow_and_update();
                             if let Some(status) = status {
                                 sender.send_replace(None);
                                 return Some((status, (sender, receiver)))
@@ -356,14 +350,8 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         block_importer,
     );
 
-    // simulate some txpool events to see if any block production is erroneously triggered
-    task.on_txpool_event(TxStatus::Submitted).await.unwrap();
-    task.on_txpool_event(TxStatus::Completed).await.unwrap();
-    task.on_txpool_event(TxStatus::SqueezedOut {
-        reason: TxPoolError::NoMetadata,
-    })
-    .await
-    .unwrap();
+    // simulate some txpool event to see if any block production is erroneously triggered
+    task.on_txpool_event().await.unwrap();
 }
 
 #[tokio::test(start_paused = true)]
@@ -374,8 +362,6 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
     let secret_key = SecretKey::random(&mut rng);
 
     const TX_IDLE_TIME_MS: u64 = 50u64;
-
-    let (txpool_tx, _txpool_broadcast) = broadcast::channel(10);
 
     let mut block_producer = MockBlockProducer::default();
 
@@ -414,15 +400,6 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
 
     let service = Service::new(task);
     service.start_and_await().await.unwrap();
-
-    // simulate some txpool events to see if any block production is erroneously triggered
-    txpool_tx.send(TxStatus::Submitted).unwrap();
-    txpool_tx.send(TxStatus::Completed).unwrap();
-    txpool_tx
-        .send(TxStatus::SqueezedOut {
-            reason: TxPoolError::NoMetadata,
-        })
-        .unwrap();
 
     // wait max_tx_idle_time - causes block production to occur if
     // pending txs > 0 is not checked.

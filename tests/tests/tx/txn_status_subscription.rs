@@ -1,15 +1,30 @@
 use std::time::Duration;
 
-use fuel_core::service::{
-    Config,
-    FuelService,
+use fuel_core::{
+    self,
+    schema::tx::types::TransactionStatus,
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_types::{
     fuel_asm::*,
-    fuel_tx::*,
+    fuel_tx::{
+        field::{
+            Inputs,
+            Outputs,
+        },
+        *,
+    },
 };
 use futures::StreamExt;
+use rand::{
+    rngs::StdRng,
+    Rng,
+    SeedableRng,
+};
 
 #[tokio::test]
 async fn subscribe_txn_status() {
@@ -100,5 +115,109 @@ async fn subscribe_txn_status() {
 
     for jh in jhs {
         jh.await.unwrap();
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_regression_in_subscribe() {
+    let mut rng = StdRng::seed_from_u64(11);
+    let mut config = Config::local_node();
+    config.utxo_validation = true;
+    let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
+    let owner = Input::predicate_owner(&predicate, &ConsensusParameters::default());
+    let node = FuelService::new_node(config).await.unwrap();
+    let coin_pred = Input::coin_predicate(
+        rng.gen(),
+        owner,
+        rng.gen(),
+        rng.gen(),
+        rng.gen(),
+        0.into(),
+        predicate,
+        vec![],
+    );
+    let contract = Input::contract(rng.gen(), rng.gen(), rng.gen(), rng.gen(), rng.gen());
+    let contract_created = Output::contract_created(
+        *contract.contract_id().unwrap(),
+        *contract.state_root().unwrap(),
+    );
+
+    let mut empty_script =
+        TransactionBuilder::script(vec![op::ret(0)].into_iter().collect(), vec![]);
+    empty_script.gas_limit(100000);
+
+    let mut empty_create = TransactionBuilder::create(rng.gen(), rng.gen(), vec![]);
+    empty_create.gas_limit(100000);
+    let txs = [
+        empty_script.clone().add_input(coin_pred).finalize().into(),
+        empty_create
+            .clone()
+            .add_input(contract.clone())
+            .finalize()
+            .into(),
+        empty_create
+            .clone()
+            .add_input(contract.clone())
+            .add_output(contract_created)
+            .finalize()
+            .into(),
+        empty_create
+            .clone()
+            .add_output(contract_created)
+            .finalize()
+            .into(),
+    ];
+    for tx in txs {
+        let model_result = submit_and_await_model(&tx);
+        let r = node.submit_and_status_change(tx).await;
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let r = match r {
+            Ok(stream) => {
+                let stream = stream
+                    .filter(|status| {
+                        futures::future::ready(!matches!(
+                            status,
+                            Ok(TransactionStatus::Submitted(_))
+                        ))
+                    })
+                    .collect::<Vec<_>>();
+                let mut r = tokio::time::timeout(Duration::from_secs(5), stream)
+                    .await
+                    .unwrap();
+                r.pop().unwrap()
+            }
+            Err(e) => {
+                assert!(!model_result, "{:?}", e);
+                continue
+            }
+        };
+        match r {
+            Ok(s) => assert_eq!(
+                matches!(s, TransactionStatus::Success(_)),
+                model_result,
+                "{:?}",
+                s
+            ),
+            Err(e) => assert!(!model_result, "{:?}", e),
+        }
+    }
+}
+
+fn submit_and_await_model(tx: &Transaction) -> bool {
+    match tx {
+        Transaction::Script(script) => !script
+            .inputs()
+            .iter()
+            .any(|i| i.is_coin() || i.is_message()),
+        Transaction::Create(create) => {
+            if create.inputs().iter().any(|o| o.is_contract())
+                || create.inputs().is_empty()
+            {
+                false
+            } else {
+                create.outputs().iter().any(|o| o.is_contract_created())
+            }
+        }
+        _ => true,
     }
 }

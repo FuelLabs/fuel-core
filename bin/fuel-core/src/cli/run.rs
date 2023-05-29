@@ -163,11 +163,25 @@ pub struct Command {
 
     #[clap(long = "verify_max_da_lag", default_value = "10", env)]
     pub max_da_lag: u64,
+
     #[clap(long = "verify_max_relayer_wait", default_value = "30s", env)]
     pub max_wait_time: humantime::Duration,
 
+    /// The max time to live of the transaction inside of the `TxPool`.
     #[clap(long = "tx-pool-ttl", default_value = "5m", env)]
     pub tx_pool_ttl: humantime::Duration,
+
+    /// The max number of transactions that the `TxPool` can simultaneously store.
+    #[clap(long = "tx-max-number", default_value = "4064", env)]
+    pub tx_max_number: usize,
+
+    /// The max depth of the dependent transactions that supported by the `TxPool`.
+    #[clap(long = "tx-max-depth", default_value = "10", env)]
+    pub tx_max_depth: usize,
+
+    /// The maximum number of active subscriptions that supported by the `TxPool`.
+    #[clap(long = "tx-number-active-subscriptions", default_value = "4064", env)]
+    pub tx_number_active_subscriptions: usize,
 }
 
 impl Command {
@@ -198,6 +212,9 @@ impl Command {
             max_da_lag,
             max_wait_time,
             tx_pool_ttl,
+            tx_max_number,
+            tx_max_depth,
+            tx_number_active_subscriptions,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -265,11 +282,14 @@ impl Command {
                 backtrace: vm_backtrace,
             },
             txpool: TxPoolConfig::new(
+                tx_max_number,
+                tx_max_depth,
                 chain_conf,
                 min_gas_price,
                 utxo_validation,
                 metrics,
                 tx_pool_ttl.into(),
+                tx_number_active_subscriptions,
             ),
             block_producer: ProducerConfig {
                 utxo_validation,

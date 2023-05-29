@@ -13,7 +13,6 @@ use crate::{
         BlockQueryData,
         SimpleTransactionData,
         TransactionQueryData,
-        TxnStatusChangeState,
     },
     schema::scalars::{
         Address,
@@ -35,6 +34,7 @@ use async_graphql::{
 };
 use fuel_core_storage::{
     iter::IterDirection,
+    Error as StorageError,
     Result as StorageResult,
 };
 use fuel_core_types::{
@@ -244,11 +244,6 @@ impl TxMutation {
 #[derive(Default)]
 pub struct TxStatusSubscription;
 
-struct StreamState<'a> {
-    txpool: &'a TxPool,
-    db: &'a Database,
-}
-
 #[Subscription]
 impl TxStatusSubscription {
     /// Returns a stream of status updates for the given transaction id.
@@ -270,21 +265,24 @@ impl TxStatusSubscription {
     ) -> impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a {
         let txpool = ctx.data_unchecked::<TxPool>();
         let db = ctx.data_unchecked::<Database>();
-        let rx = txpool.tx_update_subscribe();
-        let state = StreamState { txpool, db };
+        let rx = txpool.tx_update_subscribe(id.into()).await;
 
-        transaction_status_change(state, rx, id.into())
-            .await
-            .map_err(async_graphql::Error::from)
-    }
-}
-
-#[async_trait::async_trait]
-impl<'a> TxnStatusChangeState for StreamState<'a> {
-    async fn get_tx_status(
-        &self,
-        id: fuel_types::Bytes32,
-    ) -> StorageResult<Option<TransactionStatus>> {
-        types::get_tx_status(id, self.db, self.txpool).await
+        transaction_status_change(
+            move |id| match db.tx_status(&id) {
+                Ok(status) => Ok(Some(status)),
+                Err(StorageError::NotFound(_, _)) => {
+                    Ok(txpool.submission_time(id).map(|time| {
+                        fuel_core_types::services::txpool::TransactionStatus::Submitted {
+                            time,
+                        }
+                    }))
+                }
+                Err(err) => Err(err),
+            },
+            rx,
+            id.into(),
+        )
+        .await
+        .map_err(async_graphql::Error::from)
     }
 }

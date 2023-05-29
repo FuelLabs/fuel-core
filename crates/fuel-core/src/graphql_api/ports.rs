@@ -1,5 +1,8 @@
 use async_trait::async_trait;
-use fuel_core_services::stream::BoxStream;
+use fuel_core_services::stream::{
+    BoxFuture,
+    BoxStream,
+};
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -21,7 +24,7 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageInspect,
 };
-use fuel_core_txpool::service::TxUpdate;
+use fuel_core_txpool::service::TxStatusMessage;
 use fuel_core_types::{
     blockchain::primitives::{
         BlockId,
@@ -55,7 +58,6 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use std::sync::Arc;
-use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
 /// The database port expected by GraphQL API service.
 pub trait DatabasePort:
@@ -161,7 +163,8 @@ pub trait TxPoolPort: Send + Sync {
 
     fn tx_update_subscribe(
         &self,
-    ) -> BoxStream<anyhow::Result<TxUpdate, BroadcastStreamRecvError>>;
+        tx_id: TxId,
+    ) -> BoxFuture<'_, BoxStream<TxStatusMessage>>;
 }
 
 #[async_trait]

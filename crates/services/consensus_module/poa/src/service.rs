@@ -38,6 +38,7 @@ use fuel_core_types::{
     fuel_crypto::Signature,
     fuel_tx::{
         ConsensusParameters,
+        TxId,
         UniqueIdentifier,
     },
     fuel_types::BlockHeight,
@@ -51,7 +52,6 @@ use fuel_core_types::{
             ExecutionResult,
             UncommittedResult as UncommittedExecutionResult,
         },
-        txpool::TxStatus,
         Uncommitted,
     },
     tai64::Tai64,
@@ -127,7 +127,7 @@ pub struct Task<T, B, I> {
     block_producer: B,
     block_importer: I,
     txpool: T,
-    tx_status_update_stream: BoxStream<TxStatus>,
+    tx_status_update_stream: BoxStream<TxId>,
     request_receiver: mpsc::Receiver<Request>,
     shared_state: SharedState,
     last_height: BlockHeight,
@@ -353,47 +353,37 @@ where
         Ok(())
     }
 
-    pub(crate) async fn on_txpool_event(
-        &mut self,
-        txpool_event: TxStatus,
-    ) -> anyhow::Result<()> {
-        match txpool_event {
-            TxStatus::Submitted => match self.trigger {
-                Trigger::Instant => {
-                    let pending_number = self.txpool.pending_number();
-                    // skip production if there are no pending transactions
-                    if pending_number > 0 {
-                        self.produce_next_block().await?;
-                    }
-                    Ok(())
+    pub(crate) async fn on_txpool_event(&mut self) -> anyhow::Result<()> {
+        match self.trigger {
+            Trigger::Instant => {
+                let pending_number = self.txpool.pending_number();
+                // skip production if there are no pending transactions
+                if pending_number > 0 {
+                    self.produce_next_block().await?;
                 }
-                Trigger::Never | Trigger::Interval { .. } => Ok(()),
-                Trigger::Hybrid {
-                    max_tx_idle_time,
-                    min_block_time,
-                    ..
-                } => {
-                    let consumable_gas = self.txpool.total_consumable_gas();
+                Ok(())
+            }
+            Trigger::Never | Trigger::Interval { .. } => Ok(()),
+            Trigger::Hybrid {
+                max_tx_idle_time,
+                min_block_time,
+                ..
+            } => {
+                let consumable_gas = self.txpool.total_consumable_gas();
 
-                    // If we have over one full block of transactions and min_block_time
-                    // has expired, start block production immediately
-                    if consumable_gas > self.block_gas_limit
-                        && self.last_block_created + min_block_time < Instant::now()
-                    {
-                        self.produce_next_block().await?;
-                    } else if self.txpool.pending_number() > 0 {
-                        // We have at least one transaction, so tx_max_idle_time is the limit
-                        self.timer
-                            .set_timeout(max_tx_idle_time, OnConflict::Min)
-                            .await;
-                    }
-
-                    Ok(())
+                // If we have over one full block of transactions and min_block_time
+                // has expired, start block production immediately
+                if consumable_gas > self.block_gas_limit
+                    && self.last_block_created + min_block_time < Instant::now()
+                {
+                    self.produce_next_block().await?;
+                } else if self.txpool.pending_number() > 0 {
+                    // We have at least one transaction, so tx_max_idle_time is the limit
+                    self.timer
+                        .set_timeout(max_tx_idle_time, OnConflict::Min)
+                        .await;
                 }
-            },
-            TxStatus::Completed => Ok(()), // This has been processed already
-            TxStatus::SqueezedOut { .. } => {
-                // TODO: If this is the only tx, set timer deadline to last_block_time + max_block_time
+
                 Ok(())
             }
         }
@@ -489,8 +479,8 @@ where
             //       The poa service also doesn't care about events unrelated to new tx submissions,
             //       and shouldn't be awoken when txs are completed or squeezed out of the pool.
             txpool_event = self.tx_status_update_stream.next() => {
-                if let Some(txpool_event) = txpool_event {
-                    self.on_txpool_event(txpool_event).await.context("While processing txpool event")?;
+                if txpool_event.is_some()  {
+                    self.on_txpool_event().await.context("While processing txpool event")?;
                     should_continue = true;
                 } else {
                     should_continue = false;
