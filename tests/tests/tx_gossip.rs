@@ -94,9 +94,10 @@ async fn test_tx_gossiping() {
 
     let node_config = create_node_config_from_inputs(tx.inputs());
     let params = node_config.chain_conf.transaction_parameters;
-    let node_one = FuelService::new_node(node_config.clone()).await.unwrap();
+    let node_one = FuelService::new_node(node_config).await.unwrap();
     let client_one = FuelClient::from(node_one.bound_address);
 
+    let node_config = create_node_config_from_inputs(tx.inputs());
     let node_two = FuelService::new_node(node_config).await.unwrap();
     let client_two = FuelClient::from(node_two.bound_address);
 
