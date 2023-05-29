@@ -272,7 +272,7 @@ async fn get_transparent_transaction_by_id() {
 
     // run test
     let transparent_transaction = client
-        .transparent_transaction(&format!("{id:#x}"))
+        .transparent_transaction(&id)
         .await
         .unwrap()
         .expect("expected some value");

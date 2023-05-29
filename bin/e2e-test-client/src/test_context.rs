@@ -100,10 +100,7 @@ impl Wallet {
     /// returns the balance associated with a wallet
     pub async fn balance(&self, asset_id: Option<AssetId>) -> anyhow::Result<u64> {
         self.client
-            .balance(
-                &self.address.to_string(),
-                Some(asset_id.unwrap_or_default().to_string().as_str()),
-            )
+            .balance(&self.address, Some(&asset_id.unwrap_or_default()))
             .await
             .context("failed to retrieve balance")
     }

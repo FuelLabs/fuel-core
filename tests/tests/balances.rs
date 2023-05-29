@@ -82,13 +82,7 @@ async fn balance() {
     let client = FuelClient::from(srv.bound_address);
 
     // run test
-    let balance = client
-        .balance(
-            format!("{owner:#x}").as_str(),
-            Some(format!("{asset_id:#x}").as_str()),
-        )
-        .await
-        .unwrap();
+    let balance = client.balance(&owner, Some(&asset_id)).await.unwrap();
     assert_eq!(balance, 450);
 
     // spend some coins and check again
@@ -141,13 +135,7 @@ async fn balance() {
 
     client.submit_and_await_commit(&tx).await.unwrap();
 
-    let balance = client
-        .balance(
-            format!("{owner:#x}").as_str(),
-            Some(format!("{asset_id:#x}").as_str()),
-        )
-        .await
-        .unwrap();
+    let balance = client.balance(&owner, Some(&asset_id)).await.unwrap();
     assert_eq!(balance, 449);
 }
 
@@ -228,7 +216,7 @@ async fn first_5_balances() {
     // run test
     let balances = client
         .balances(
-            format!("{owner:#x}").as_str(),
+            &owner,
             PaginationRequest {
                 cursor: None,
                 results: 5,

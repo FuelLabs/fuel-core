@@ -80,11 +80,11 @@ pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
     // `0xc8ca903bfaba051c55d827c3bd957a325a3f80bceeb87c6e49d308ad39cf48d7` in the
     // `test_data/large_state/contract.json`.
     // contract_config.calculate_contract_id();
-    let contract_id = contract_config.contract_id.to_string();
+    let contract_id = contract_config.contract_id;
     println!("\nThe `contract_id` of the contract with large state: {contract_id}");
 
     // if the contract is not deployed yet, let's deploy it
-    let result = ctx.bob.client.contract(contract_id.as_str()).await;
+    let result = ctx.bob.client.contract(&contract_id).await;
     if result?.is_none() {
         let deployment_request = ctx.bob.deploy_contract(contract_config);
 
