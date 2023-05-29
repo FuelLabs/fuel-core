@@ -192,8 +192,8 @@ pub fn init_sub_services(
         #[cfg(feature = "relayer")]
         relayer: relayer_service.as_ref().map(|r| r.shared.clone()),
         graph_ql: graph_ql.shared.clone(),
+        database: database.clone(),
         block_importer: importer_adapter,
-        #[cfg(feature = "test-helpers")]
         config: config.clone(),
     };
 

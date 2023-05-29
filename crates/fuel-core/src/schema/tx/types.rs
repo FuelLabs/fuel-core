@@ -409,7 +409,7 @@ impl Transaction {
         let id = self.1;
         let query: &Database = ctx.data_unchecked();
         let txpool = ctx.data_unchecked::<TxPool>();
-        get_tx_status(id, query, txpool).await.map_err(Into::into)
+        get_tx_status(id, query, txpool).map_err(Into::into)
     }
 
     async fn receipts(
@@ -501,7 +501,7 @@ impl Transaction {
 }
 
 #[tracing::instrument(level = "debug", skip(query, txpool), ret, err)]
-pub(super) async fn get_tx_status(
+pub(crate) fn get_tx_status(
     id: fuel_core_types::fuel_types::Bytes32,
     query: &Database,
     txpool: &TxPool,

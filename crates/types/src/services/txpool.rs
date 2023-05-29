@@ -27,7 +27,10 @@ use crate::{
         ProgramState,
     },
 };
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::Duration,
+};
 use tai64::Tai64;
 
 /// The alias for transaction pool result.
@@ -141,6 +144,8 @@ impl From<Checked<Create>> for PoolTransaction {
 pub struct InsertionResult {
     /// This was inserted
     pub inserted: ArcPoolTx,
+    /// The time the transaction was inserted.
+    pub submitted_time: Duration,
     /// These were removed during the insertion
     pub removed: Vec<ArcPoolTx>,
 }
@@ -179,19 +184,6 @@ pub enum TransactionStatus {
         /// Result of executing the transaction for scripts
         result: Option<ProgramState>,
     },
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-#[allow(missing_docs)] // TODO: This type is likely removed soon
-pub enum TxStatus {
-    /// Submitted into txpool.
-    Submitted,
-    /// Transaction has either been:
-    /// - successfully executed and included in a block.
-    /// - failed to execute and state changes reverted
-    Completed,
-    /// removed from txpool.
-    SqueezedOut { reason: Error },
 }
 
 #[allow(missing_docs)]

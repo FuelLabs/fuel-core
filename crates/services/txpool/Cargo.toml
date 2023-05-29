@@ -28,7 +28,9 @@ fuel-core-trace = { path = "./../../trace" }
 fuel-core-txpool = { path = "", features = ["test-helpers"] }
 itertools = { workspace = true }
 mockall = { workspace = true }
+proptest = { workspace = true }
 rstest = "0.15"
+test-strategy = { workspace = true }
 tokio = { workspace = true, features = [
     "sync",
     "test-util",

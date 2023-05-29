@@ -11,6 +11,7 @@ use fuel_core_types::{
     },
     fuel_types::{
         BlockHeight,
+        Bytes32,
         ContractId,
         Nonce,
     },
@@ -21,6 +22,7 @@ use fuel_core_types::{
             GossipsubMessageInfo,
             NetworkData,
         },
+        txpool::TransactionStatus,
     },
 };
 use std::sync::Arc;
@@ -57,4 +59,6 @@ pub trait TxPoolDb: Send + Sync {
     fn is_message_spent(&self, message_id: &Nonce) -> StorageResult<bool>;
 
     fn current_block_height(&self) -> StorageResult<BlockHeight>;
+
+    fn transaction_status(&self, tx_id: &Bytes32) -> StorageResult<TransactionStatus>;
 }
