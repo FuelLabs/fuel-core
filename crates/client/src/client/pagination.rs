@@ -14,7 +14,7 @@ pub struct PaginationRequest<T> {
     pub results: usize,
     /// The direction of the query (e.g. asc, desc order).
     pub direction: PageDirection,
-}E
+}
 
 pub struct PaginatedResult<T, C> {
     pub cursor: Option<C>,
