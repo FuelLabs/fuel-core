@@ -1,15 +1,12 @@
-use crate::client::{
-    schema::{
-        schema,
-        BlockId,
-        ConnectionArgs,
-        PageInfo,
-        Signature,
-        Tai64Timestamp,
-        U32,
-        U64,
-    },
-    PaginatedResult,
+use crate::client::schema::{
+    schema,
+    BlockId,
+    ConnectionArgs,
+    PageInfo,
+    Signature,
+    Tai64Timestamp,
+    U32,
+    U64,
 };
 use fuel_core_types::fuel_crypto;
 
@@ -66,17 +63,6 @@ pub struct BlocksQuery {
 pub struct BlockConnection {
     pub edges: Vec<BlockEdge>,
     pub page_info: PageInfo,
-}
-
-impl From<BlockConnection> for PaginatedResult<Block, String> {
-    fn from(conn: BlockConnection) -> Self {
-        PaginatedResult {
-            cursor: conn.page_info.end_cursor,
-            has_next_page: conn.page_info.has_next_page,
-            has_previous_page: conn.page_info.has_previous_page,
-            results: conn.edges.into_iter().map(|e| e.node).collect(),
-        }
-    }
 }
 
 #[derive(cynic::QueryFragment, Debug)]

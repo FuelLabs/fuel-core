@@ -19,7 +19,10 @@ use crate::{
     service::adapters::TxPoolAdapter,
 };
 use async_trait::async_trait;
-use fuel_core_services::stream::BoxStream;
+use fuel_core_services::stream::{
+    BoxFuture,
+    BoxStream,
+};
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -31,7 +34,7 @@ use fuel_core_storage::{
     Result as StorageResult,
 };
 use fuel_core_txpool::{
-    service::TxUpdate,
+    service::TxStatusMessage,
     types::{
         ContractId,
         TxId,
@@ -70,10 +73,6 @@ use fuel_core_types::{
 use std::{
     ops::Deref,
     sync::Arc,
-};
-use tokio_stream::wrappers::{
-    errors::BroadcastStreamRecvError,
-    BroadcastStream,
 };
 
 impl DatabaseBlocks for Database {
@@ -222,10 +221,8 @@ impl TxPoolPort for TxPoolAdapter {
         self.service.insert(txs)
     }
 
-    fn tx_update_subscribe(
-        &self,
-    ) -> BoxStream<Result<TxUpdate, BroadcastStreamRecvError>> {
-        Box::pin(BroadcastStream::new(self.service.tx_update_subscribe()))
+    fn tx_update_subscribe(&self, id: TxId) -> BoxFuture<BoxStream<TxStatusMessage>> {
+        Box::pin(self.service.tx_update_subscribe(id))
     }
 }
 

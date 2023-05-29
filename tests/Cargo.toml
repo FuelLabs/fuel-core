@@ -25,6 +25,7 @@ path = "tests/metrics.rs"
 required-features = ["metrics"]
 
 [dependencies]
+anyhow = { workspace = true }
 async-trait = { workspace = true }
 cynic = { workspace = true }
 ethers = "1.0.2"

@@ -227,9 +227,7 @@ fn init_contracts(
                 let contract = Contract::from(contract_config.code.as_slice());
                 let salt = contract_config.salt;
                 let root = contract.root();
-                // TODO: Save the `contract_id` into the `ContractConfig` and re-use it here.
-                let contract_id =
-                    contract.id(&salt, &root, &Contract::default_state_root());
+                let contract_id = contract_config.contract_id;
                 let utxo_id = if let (Some(tx_id), Some(output_idx)) =
                     (contract_config.tx_id, contract_config.output_index)
                 {
@@ -570,12 +568,13 @@ mod tests {
         let salt: Salt = rng.gen();
         let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
         let root = contract.root();
-        let id = contract.id(&salt, &root, &Contract::default_state_root());
+        let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
 
         let service_config = Config {
             chain_conf: ChainConfig {
                 initial_state: Some(StateConfig {
                     contracts: Some(vec![ContractConfig {
+                        contract_id,
                         code: contract.into(),
                         salt,
                         state: Some(state),
@@ -599,7 +598,7 @@ mod tests {
 
         let ret = db
             .storage::<ContractsState>()
-            .get(&(&id, &test_key).into())
+            .get(&(&contract_id, &test_key).into())
             .unwrap()
             .expect("Expect a state entry to exist with test_key")
             .into_owned();
@@ -652,12 +651,13 @@ mod tests {
         let salt: Salt = rng.gen();
         let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
         let root = contract.root();
-        let id = contract.id(&salt, &root, &Contract::default_state_root());
+        let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
 
         let service_config = Config {
             chain_conf: ChainConfig {
                 initial_state: Some(StateConfig {
                     contracts: Some(vec![ContractConfig {
+                        contract_id,
                         code: contract.into(),
                         salt,
                         state: None,
@@ -681,7 +681,7 @@ mod tests {
 
         let ret = db
             .storage::<ContractsAssets>()
-            .get(&(&id, &test_asset_id).into())
+            .get(&(&contract_id, &test_asset_id).into())
             .unwrap()
             .expect("Expected a balance to be present")
             .into_owned();
@@ -734,6 +734,7 @@ mod tests {
                 initial_state: Some(StateConfig {
                     height: Some(BlockHeight::from(10u32)),
                     contracts: Some(vec![ContractConfig {
+                        contract_id: Default::default(),
                         code: contract.into(),
                         salt,
                         state: None,

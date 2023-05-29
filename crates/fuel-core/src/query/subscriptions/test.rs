@@ -1,80 +1,52 @@
-use std::sync::{
-    atomic,
-    atomic::AtomicBool,
-    Arc,
-};
-
-use super::*;
+//! This module provides functions and data structures for
+//! testing and modeling transaction status changes. Property-based
+//! testing techniques to generate different
+//! transaction status scenarios and validate the behavior of the
+//! tested functions.
+//!
+//! The search space is kept small using strategies to constrain the inputs.
+//!
+//! The module defines several types, including:
+//! - `TxStatus`: Represents the possible transaction status values, including Submitted and Final statuses
+//! - `FinalTxStatus`: Represents the final transaction status values (Success, Squeezed, and Failed)
+//!
+//! The module also provides strategies for generating test data values:
+//! - `state()`: Generates an Option<TransactionStatus>
+//! - `state_result()`: Generates a Result<Option<TransactionStatus>, Error>
+//! - `tx_status_message()`: Generates a TxStatusMessage
+//! - `transaction_status()`: Generates a TransactionStatus
+//! - `input_stream()`: Generates a Vec<TxStatusMessage> of length 0 to 5
+use fuel_core_txpool::service::TxStatusMessage;
 use fuel_core_types::{
+    fuel_types::Bytes32,
     services::txpool::TransactionStatus,
     tai64::Tai64,
 };
-use test_case::test_case;
+use futures::StreamExt;
+use std::ops::ControlFlow;
 
-struct Input<I>
-where
-    I: Iterator<Item = StorageResult<Option<TransactionStatus>>> + Send + 'static,
-{
-    requested_id: Bytes32,
-    status_updates: Vec<Result<TxUpdate, BroadcastStreamRecvError>>,
-    db_statuses: I,
-}
+use fuel_core_storage::Error as StorageError;
+use proptest::{
+    prelude::prop,
+    prop_oneof,
+    strategy::{
+        Just,
+        Strategy,
+    },
+};
+use test_strategy::*;
 
-#[derive(Debug, PartialEq, Eq)]
-enum Expected {
-    Received(Vec<TransactionStatus>),
-    TimedOut(Vec<TransactionStatus>),
-    Error,
-}
-
+/// Returns a Transaction ID value from a u8
 fn txn_id(i: u8) -> Bytes32 {
     [i; 32].into()
 }
 
-fn txn_updated(tx_id: Bytes32) -> TxUpdate {
-    TxUpdate::updated(tx_id)
-}
-
-fn txn_squeezed(tx_id: Bytes32) -> TxUpdate {
-    TxUpdate::squeezed_out(tx_id, fuel_core_txpool::Error::SqueezedOut(String::new()))
-}
-
-fn db_always_some(
-    mut f: impl FnMut() -> TransactionStatus,
-) -> impl Iterator<Item = StorageResult<Option<TransactionStatus>>> {
-    std::iter::repeat_with(move || Ok(Some(f())))
-}
-
-fn db_always_none() -> impl Iterator<Item = StorageResult<Option<TransactionStatus>>> {
-    std::iter::repeat_with(|| Ok(None))
-}
-
-fn db_always_error(
-    mut f: impl FnMut() -> anyhow::Error,
-) -> impl Iterator<Item = StorageResult<Option<TransactionStatus>>> {
-    std::iter::repeat_with(move || Err(f().into()))
-}
-
-fn db_some(
-    f: Vec<TransactionStatus>,
-) -> impl Iterator<Item = StorageResult<Option<TransactionStatus>>> {
-    f.into_iter().map(|t| Ok(Some(t)))
-}
-
-fn db_none(n: usize) -> impl Iterator<Item = StorageResult<Option<TransactionStatus>>> {
-    (0..n).map(|_| Ok(None))
-}
-
-fn db_error(
-    f: Vec<anyhow::Error>,
-) -> impl Iterator<Item = StorageResult<Option<TransactionStatus>>> {
-    f.into_iter().map(|e| Err(e.into()))
-}
-
+/// Returns a TransactionStatus with Submitted status and time set to 0
 fn submitted() -> TransactionStatus {
     TransactionStatus::Submitted { time: Tai64(0) }
 }
 
+/// Returns a TransactionStatus with Success status, time set to 0, and result set to None
 fn success() -> TransactionStatus {
     TransactionStatus::Success {
         block_id: Default::default(),
@@ -83,6 +55,7 @@ fn success() -> TransactionStatus {
     }
 }
 
+/// Returns a TransactionStatus with Failed status, time set to 0, result set to None, and empty reason
 fn failed() -> TransactionStatus {
     TransactionStatus::Failed {
         block_id: Default::default(),
@@ -92,174 +65,211 @@ fn failed() -> TransactionStatus {
     }
 }
 
+/// Returns a TransactionStatus with SqueezedOut status and an empty error message
 fn squeezed() -> TransactionStatus {
     TransactionStatus::SqueezedOut {
         reason: fuel_core_txpool::Error::SqueezedOut(String::new()).to_string(),
     }
 }
 
-#[test_case(
-    Input {
-        requested_id: txn_id(2),
-        status_updates: vec![],
-        db_statuses: db_always_none(),
-    }
-    => Expected::TimedOut(vec![])
-    ; "no status update, no db status, times out"
-)]
-#[test_case(
-    Input {
-        requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_updated(txn_id(3)))],
-        db_statuses: db_always_none(),
-    }
-    => Expected::TimedOut(vec![])
-    ; "unrelated status update, no db status, times out"
-)]
-#[test_case(
-    Input {
-        requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_updated(txn_id(2)))],
-        db_statuses: db_always_none(),
-    }
-    => Expected::Received(vec![])
-    ; "status update, no db status, receives no status"
-)]
-#[test_case(
-    Input {
-        requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_updated(txn_id(2)))],
-        db_statuses: db_none(1).chain(db_always_some(submitted)),
-    }
-    => Expected::TimedOut(vec![submitted()])
-    ; "submitted update, submitted db status, times out with one submitted status"
-)]
-#[test_case(
-    Input {
-        requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_updated(txn_id(2)))],
-        db_statuses: db_none(1).chain(db_always_error(|| anyhow::anyhow!("db failed"))),
-    }
-    => Expected::Error
-    ; "status update, none then error db status, gets error"
-)]
-#[test_case(
-    Input {
-        requested_id: txn_id(2),
-        status_updates: vec![],
-        db_statuses: db_error(vec![anyhow::anyhow!("db failed")]),
-    }
-    => Expected::Error
-    ; "no status update, error db status, gets error"
-)]
-#[test_case(
-    Input {
-        requested_id: txn_id(2),
-        status_updates: vec![Err(BroadcastStreamRecvError::Lagged(1))],
-        db_statuses: db_always_none(),
-    }
-    => Expected::TimedOut(vec![])
-    ; "lagged status update, no db status, times out with no results"
-)]
-#[test_case(
-    Input {
-        requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_updated(txn_id(2))), Ok(txn_updated(txn_id(2)))],
-        db_statuses: db_none(1).chain(db_some(vec![submitted()])).chain(db_always_some(success)),
-    }
-    => Expected::Received(vec![submitted(), success()])
-    ; "updated then updated status, submitted then success db status, received submitted then success status"
-)]
-#[test_case(
-    Input {
-        requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_updated(txn_id(20))), Ok(txn_updated(txn_id(8)))],
-        db_statuses: db_none(1),
-    }
-    => Expected::TimedOut(vec![])
-    ; "unrelated status updates, no db status, times out with no status"
-)]
-#[test_case(
-    Input {
-        requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_updated(txn_id(2))), Ok(txn_updated(txn_id(2)))],
-        db_statuses: db_none(1).chain(db_some(vec![submitted()])).chain(db_always_some(failed)),
-    }
-    => Expected::Received(vec![submitted(), failed()])
-    ; "updated then updated status, submitted then failed db status, received submitted then failed status"
-)]
-#[test_case(
-    Input {
-        requested_id: txn_id(2),
-        status_updates: vec![],
-        db_statuses: db_some(vec![success()]),
-    }
-    => Expected::Received(vec![success()])
-    ; "no status update, success db status, received success status"
-)]
-#[test_case(
-    Input {
-        requested_id: txn_id(2),
-        status_updates: vec![],
-        db_statuses: db_some(vec![failed()]),
-    }
-    => Expected::Received(vec![failed()])
-    ; "no status update, failed db status, received failed status"
-)]
-#[test_case(
-    Input {
-        requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_squeezed(txn_id(2)))],
-        db_statuses: db_none(1),
-    }
-    => Expected::Received(vec![squeezed()])
-    ; "squeezed status updates, no db status, received squeezed status"
-)]
-#[test_case(
-    Input {
-        requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_updated(txn_id(2))), Ok(txn_squeezed(txn_id(2)))],
-        db_statuses: db_none(1).chain(db_some(vec![submitted()])).chain(db_none(1)),
-    }
-    => Expected::Received(vec![submitted(), squeezed()])
-    ; "updated then squeezed status, db is set to submitted then nothing, received submitted squeezed"
-)]
-#[tokio::test]
-async fn create_tx_status_change_stream<I>(input: Input<I>) -> Expected
-where
-    I: Iterator<Item = StorageResult<Option<TransactionStatus>>> + Send + 'static,
-{
-    let Input {
-        requested_id: transaction_id,
-        status_updates,
-        mut db_statuses,
-    } = input;
-    let mut state = MockTxnStatusChangeState::new();
-    state
-        .expect_get_tx_status()
-        .returning(move |_| db_statuses.next().unwrap().map(|t| t.map(|t| t.into())));
-    let ids = status_updates.to_vec();
-    let reached_end = Arc::new(AtomicBool::new(false));
-    let re = reached_end.clone();
-    let stream = futures::stream::iter(ids)
-        .chain(futures::stream::once(async move {
-            re.store(true, atomic::Ordering::SeqCst);
-            Ok(txn_updated(txn_id(255)))
-        }))
-        .boxed();
+/// Represents the different status that a transaction can have.
+/// Submitted represents the initial status of the transaction,
+/// in which it has been sent to the txpool but has not yet been included into a block.
+/// Final indicates that the transaction has reached one of the final statuses (Success, Squeezed, or Failed).
+#[derive(Debug, Clone, PartialEq, Eq, Arbitrary)]
+enum TxStatus {
+    /// The transaction has been submitted
+    Submitted,
+    /// The transaction has reached a final status
+    Final(FinalTxStatus),
+}
 
-    let stream = transaction_status_change(state, stream, transaction_id).await;
-    let r: Result<Vec<_>, _> = stream.try_collect().await;
-    let timeout = reached_end.load(atomic::Ordering::SeqCst);
-    match r {
-        Ok(r) => {
-            let r = r.into_iter().map(|t| t.into()).collect();
-            if timeout {
-                Expected::TimedOut(r)
-            } else {
-                Expected::Received(r)
+/// Represents the final transaction statuses (Success, Squeezed, Failed).
+#[derive(Debug, Clone, PartialEq, Eq, Arbitrary)]
+enum FinalTxStatus {
+    /// The transaction was successfully included in a block.
+    Success,
+    /// The transaction was squeezed out of the txpool (or block)
+    /// because it was not valid to include in the block.
+    Squeezed,
+    /// The transaction failed to execute and was included in a block.
+    Failed,
+}
+
+/// Strategy to generate an Option<TransactionStatus>
+fn state() -> impl Strategy<Value = Option<TransactionStatus>> {
+    prop::option::of(transaction_status())
+}
+
+/// Strategy to generate a Result<Option<TransactionStatus>, Error>
+fn state_result() -> impl Strategy<Value = Result<Option<TransactionStatus>, Error>> {
+    prop::result::maybe_ok(state(), Just(Error))
+}
+
+/// Strategy to generate a TxStatusMessage
+fn tx_status_message() -> impl Strategy<Value = TxStatusMessage> {
+    prop_oneof![
+        Just(TxStatusMessage::FailedStatus),
+        transaction_status().prop_map(TxStatusMessage::Status),
+    ]
+}
+
+/// Strategy to generate a TransactionStatus
+fn transaction_status() -> impl Strategy<Value = TransactionStatus> {
+    prop_oneof![
+        Just(submitted()),
+        Just(success()),
+        Just(failed()),
+        Just(squeezed()),
+    ]
+}
+
+/// Strategy to generate a Vec<TxStatusMessage> of length 0 to 5
+fn input_stream() -> impl Strategy<Value = Vec<TxStatusMessage>> {
+    prop::collection::vec(tx_status_message(), 0..=5)
+}
+
+/// Represents all errors the transaction_status_change function can return.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Arbitrary)]
+struct Error;
+
+/// Struct representing a submitted transaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Arbitrary)]
+struct Submitted;
+
+/// A model of the transaction status change functions control flow.
+type Flow = ControlFlow<FinalTxStatus, Submitted>;
+
+/// The `transaction_status_change_model` function is a simplified version of the real
+/// `transaction_status_change` function. It takes an `Option` and an `Iterator` as input
+/// and returns an `Iterator`. It models the behavior of the real function by simulating
+/// how the status of a transaction changes when it's processed.
+///
+/// # Arguments
+///
+/// * `state` - An `Option` representing the initial state of the transaction, which can be either `None` or a `TxStatusMessage`.
+/// * `stream` - An `Iterator` that represents the incoming stream of events (`TxStatusMessage`), simulating the real-time status changes of a transaction.
+///
+/// # Returns
+///
+/// This function returns an `Iterator` that yields a `Result` containing either a `TxStatus` or an `Error`.
+/// `TxStatus` is a model of the real `TransactionStatus` type, which is used to represent the status of a transaction.
+fn transaction_status_change_model(
+    state: Option<TxStatusMessage>,
+    stream: impl Iterator<Item = TxStatusMessage>,
+) -> impl Iterator<Item = Result<TxStatus, Error>> {
+    // Combine the initial state with the stream of incoming status messages.
+    // Note that this option will turn into a empty iterator if the initial state is `None`.
+    let out = state
+        .into_iter()
+        .chain(stream)
+        .try_fold(Vec::new(), |mut out, state| match state {
+            TxStatusMessage::Status(status) => match next_state(status) {
+                // If the next state is "Continue" with "Submitted" status, push it to the output vector
+                Flow::Continue(Submitted) => {
+                    out.push(Ok(TxStatus::Submitted));
+                    ControlFlow::Continue(out)
+                }
+                // If the next state is "Break" with a final status, push it to the output vector
+                Flow::Break(r) => {
+                    out.push(Ok(TxStatus::Final(r)));
+                    ControlFlow::Break(out)
+                }
+            },
+            // In case of a failed status, push the error to the output vector and break
+            TxStatusMessage::FailedStatus => {
+                out.push(Err(Error));
+                ControlFlow::Break(out)
+            }
+        });
+
+    // Convert the output into an iterator and return it
+    match out {
+        ControlFlow::Continue(out) | ControlFlow::Break(out) => out.into_iter(),
+    }
+}
+
+/// This function models the behavior of the real function by determining the next transaction status.
+/// Takes a `TransactionStatus` and returns a `Flow` value based on the given status.
+/// If the status is `Submitted`, the function returns a `Flow::Continue` with `Submitted`.
+/// If the status is `Success`, `SqueezedOut`, or `Failed`, the function returns a `Flow::Break` with the corresponding `FinalTxStatus`.
+fn next_state(state: TransactionStatus) -> Flow {
+    match state {
+        TransactionStatus::Submitted { .. } => Flow::Continue(Submitted),
+        TransactionStatus::Success { .. } => Flow::Break(FinalTxStatus::Success),
+        TransactionStatus::Failed { .. } => Flow::Break(FinalTxStatus::Failed),
+        TransactionStatus::SqueezedOut { .. } => Flow::Break(FinalTxStatus::Squeezed),
+    }
+}
+
+// Thread-local to reuse a tokio Runtime
+thread_local!(static RT: tokio::runtime::Runtime =
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+);
+
+/// Property-based test for transaction_status_change
+#[proptest]
+fn test_tsc(
+    #[strategy(state_result())] state: Result<Option<TransactionStatus>, Error>,
+    #[strategy(input_stream())] stream: Vec<TxStatusMessage>,
+) {
+    test_tsc_inner(state, stream)
+}
+
+/// Helper function called by test_tsc to actually run the tests
+fn test_tsc_inner(
+    state: Result<Option<TransactionStatus>, Error>,
+    stream: Vec<TxStatusMessage>,
+) {
+    let model_out: Vec<_> = transaction_status_change_model(
+        state.clone().transpose().map(TxStatusMessage::from),
+        stream.clone().into_iter(),
+    )
+    .collect();
+
+    let out = RT.with(|rt| {
+        rt.block_on(async {
+            let mut mock_state = super::MockTxnStatusChangeState::new();
+            mock_state
+                .expect_get_tx_status()
+                .returning(move |_| match state.clone() {
+                    Ok(Some(t)) => Ok(Some(t)),
+                    Ok(None) => Ok(None),
+                    Err(_) => Err(StorageError::NotFound("", "")),
+                });
+
+            let stream = futures::stream::iter(stream.into_iter()).boxed();
+            super::transaction_status_change(mock_state, stream, txn_id(0))
+                .await
+                .collect::<Vec<_>>()
+                .await
+        })
+    });
+    let out: Vec<_> = out
+        .into_iter()
+        .map(|r| r.map(|s| s.into()).map_err(|_| Error))
+        .collect();
+    assert_eq!(model_out, out);
+}
+
+impl From<crate::schema::tx::types::TransactionStatus> for TxStatus {
+    fn from(status: crate::schema::tx::types::TransactionStatus) -> Self {
+        match status {
+            crate::schema::tx::types::TransactionStatus::Submitted(_) => {
+                TxStatus::Submitted
+            }
+            crate::schema::tx::types::TransactionStatus::Success(_) => {
+                TxStatus::Final(FinalTxStatus::Success)
+            }
+            crate::schema::tx::types::TransactionStatus::SqueezedOut(_) => {
+                TxStatus::Final(FinalTxStatus::Squeezed)
+            }
+            crate::schema::tx::types::TransactionStatus::Failed(_) => {
+                TxStatus::Final(FinalTxStatus::Failed)
             }
         }
-        Err(_) => Expected::Error,
     }
 }

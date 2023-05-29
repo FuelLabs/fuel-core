@@ -7,6 +7,6 @@ members = [
 
 # exclude previous versions no longer maintained
 exclude = [
-    "0.14.1-0.15.0/fuel-core:0.14.1-client:0.15.0",
-    "0.14.1-0.15.0/fuel-core:0.15.0-client:0.14.1"
+    "0.14.1-0.15.0/fuel-core-0.14.1-client-0.15.0",
+    "0.14.1-0.15.0/fuel-core-0.15.0-client-0.14.1"
 ]

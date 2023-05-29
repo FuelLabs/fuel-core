@@ -67,7 +67,9 @@ fuel-core-storage = { path = "./../storage", features = ["test-helpers"] }
 fuel-core-trace = { path = "./../trace" }
 fuel-core-types = { path = "./../types", features = ["test-helpers"] }
 mockall = { workspace = true }
+proptest = { workspace = true }
 test-case = { workspace = true }
+test-strategy = { workspace = true }
 
 [features]
 dap = ["dep:uuid"]

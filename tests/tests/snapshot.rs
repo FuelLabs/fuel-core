@@ -37,6 +37,7 @@ async fn snapshot_state_config() {
     let starting_state = StateConfig {
         height: Some(BlockHeight::from(10)),
         contracts: Some(vec![ContractConfig {
+            contract_id: [11; 32].into(),
             code: vec![8; 32],
             salt: Salt::new([9; 32]),
             state: Some(vec![

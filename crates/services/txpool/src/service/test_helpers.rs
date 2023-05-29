@@ -15,6 +15,7 @@ use fuel_core_types::{
         SeedableRng,
     },
     fuel_tx::{
+        Cacheable,
         Input,
         Transaction,
         TransactionBuilder,
@@ -43,11 +44,14 @@ impl TestContext {
 
     pub fn setup_script_tx(&self, gas_price: Word) -> Transaction {
         let (_, gas_coin) = self.setup_coin();
-        TransactionBuilder::script(vec![], vec![])
+        let mut tx = TransactionBuilder::script(vec![], vec![])
             .gas_price(gas_price)
             .gas_limit(1000)
             .add_input(gas_coin)
-            .finalize_as_transaction()
+            .finalize_as_transaction();
+
+        tx.precompute(&ConsensusParameters::DEFAULT);
+        tx
     }
 
     pub fn setup_coin(&self) -> (Coin, Input) {

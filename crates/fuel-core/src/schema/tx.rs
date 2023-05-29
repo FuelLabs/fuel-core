@@ -13,7 +13,6 @@ use crate::{
         BlockQueryData,
         SimpleTransactionData,
         TransactionQueryData,
-        TxnStatusChangeState,
     },
     schema::scalars::{
         Address,
@@ -35,8 +34,10 @@ use async_graphql::{
 };
 use fuel_core_storage::{
     iter::IterDirection,
+    Error as StorageError,
     Result as StorageResult,
 };
+use fuel_core_txpool::service::TxStatusMessage;
 use fuel_core_types::{
     fuel_tx::{
         Cacheable,
@@ -46,6 +47,7 @@ use fuel_core_types::{
     fuel_types,
     fuel_types::bytes::Deserializable,
     fuel_vm::checked_transaction::EstimatePredicates,
+    services::txpool,
 };
 use futures::{
     Stream,
@@ -56,6 +58,7 @@ use std::{
     iter,
     sync::Arc,
 };
+use tokio_stream::StreamExt;
 use types::Transaction;
 
 use self::types::TransactionStatus;
@@ -237,7 +240,9 @@ impl TxMutation {
         Ok(receipts.iter().map(Into::into).collect())
     }
 
-    /// Submits transaction to the txpool
+    /// Submits transaction to the `TxPool`.
+    ///
+    /// Returns submitted transaction if the transaction is included in the `TxPool` without problems.
     async fn submit(
         &self,
         ctx: &Context<'_>,
@@ -245,8 +250,7 @@ impl TxMutation {
     ) -> async_graphql::Result<Transaction> {
         let txpool = ctx.data_unchecked::<TxPool>();
         let config = ctx.data_unchecked::<Config>();
-        let mut tx = FuelTx::from_bytes(&tx.0)?;
-        tx.precompute(&config.transaction_parameters);
+        let tx = FuelTx::from_bytes(&tx.0)?;
         // TODO: use spawn_blocking here
         let _: Vec<_> = txpool
             .insert(vec![Arc::new(tx.clone())])
@@ -261,11 +265,6 @@ impl TxMutation {
 
 #[derive(Default)]
 pub struct TxStatusSubscription;
-
-struct StreamState<'a> {
-    txpool: &'a TxPool,
-    db: &'a Database,
-}
 
 #[Subscription]
 impl TxStatusSubscription {
@@ -288,21 +287,59 @@ impl TxStatusSubscription {
     ) -> impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a {
         let txpool = ctx.data_unchecked::<TxPool>();
         let db = ctx.data_unchecked::<Database>();
-        let rx = txpool.tx_update_subscribe();
-        let state = StreamState { txpool, db };
+        let rx = txpool.tx_update_subscribe(id.into()).await;
 
-        transaction_status_change(state, rx, id.into())
-            .await
-            .map_err(async_graphql::Error::from)
+        transaction_status_change(
+            move |id| match db.tx_status(&id) {
+                Ok(status) => Ok(Some(status)),
+                Err(StorageError::NotFound(_, _)) => {
+                    Ok(txpool.submission_time(id).map(|time| {
+                        fuel_core_types::services::txpool::TransactionStatus::Submitted {
+                            time,
+                        }
+                    }))
+                }
+                Err(err) => Err(err),
+            },
+            rx,
+            id.into(),
+        )
+        .await
+        .map_err(async_graphql::Error::from)
     }
-}
 
-#[async_trait::async_trait]
-impl<'a> TxnStatusChangeState for StreamState<'a> {
-    async fn get_tx_status(
+    /// Submits transaction to the `TxPool` and await either confirmation or failure.
+    async fn submit_and_await<'a>(
         &self,
-        id: fuel_types::Bytes32,
-    ) -> StorageResult<Option<TransactionStatus>> {
-        types::get_tx_status(id, self.db, self.txpool).await
+        ctx: &Context<'a>,
+        tx: HexString,
+    ) -> async_graphql::Result<
+        impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
+    > {
+        let txpool = ctx.data_unchecked::<TxPool>();
+        let config = ctx.data_unchecked::<Config>();
+        let tx = FuelTx::from_bytes(&tx.0)?;
+        let tx_id = tx.id(&config.transaction_parameters);
+        let subscription = txpool.tx_update_subscribe(tx_id).await;
+        // TODO: use spawn_blocking here
+        let _: Vec<_> = txpool
+            .insert(vec![Arc::new(tx)])
+            .into_iter()
+            .try_collect()?;
+
+        Ok(subscription
+            .skip_while(|event| {
+                matches!(
+                    event,
+                    TxStatusMessage::Status(txpool::TransactionStatus::Submitted { .. })
+                )
+            })
+            .map(|event| match event {
+                TxStatusMessage::Status(status) => Ok(status.into()),
+                TxStatusMessage::FailedStatus => {
+                    Err(anyhow::anyhow!("Failed to get transaction status").into())
+                }
+            })
+            .take(1))
     }
 }
