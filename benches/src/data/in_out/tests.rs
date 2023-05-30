@@ -33,10 +33,15 @@ use super::{
 #[test]
 fn test_in_out() {
     let database = Database::default();
+    #[cfg(feature = "default")]
     let relayer = MaybeRelayerAdapter {
         database: database.clone(),
         relayer_synced: None,
         da_deploy_height: 0u64.into(),
+    };
+    #[cfg(not(feature = "default"))]
+    let relayer = MaybeRelayerAdapter {
+        database: database.clone(),
     };
     let mut config = Config::local_node();
     config.chain_conf.gas_costs = GasCosts::free();
