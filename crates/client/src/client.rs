@@ -45,6 +45,7 @@ use fuel_core_types::{
         bytes::SerializableVec,
         BlockHeight,
         MessageId,
+        Nonce,
     },
 };
 #[cfg(feature = "subscriptions")]
@@ -694,7 +695,7 @@ impl FuelClient {
         owner: &Address,
         spend_query: Vec<(AssetId, u64, Option<u64>)>,
         // (Utxos, Messages Nonce)
-        excluded_ids: Option<(Vec<&str>, Vec<&str>)>,
+        excluded_ids: Option<(Vec<&UtxoId>, Vec<&Nonce>)>,
     ) -> io::Result<Vec<Vec<types::CoinType>>> {
         let owner: schema::Address = (*owner).into();
         let spend_query: Vec<SpendQueryElementInput> = spend_query
@@ -707,8 +708,16 @@ impl FuelClient {
                 })
             })
             .try_collect()?;
-        let excluded_ids: Option<ExcludeInput> =
-            excluded_ids.map(ExcludeInput::from_tuple).transpose()?;
+        let excluded_ids: Option<ExcludeInput> = excluded_ids
+            .map(
+                |(utxos, nonces)| -> (Vec<schema::UtxoId>, Vec<schema::Nonce>) {
+                    (
+                        utxos.into_iter().cloned().map(Into::into).collect(),
+                        nonces.into_iter().cloned().map(Into::into).collect(),
+                    )
+                },
+            )
+            .map(Into::into);
         let query = schema::coins::CoinsToSpendQuery::build(
             (owner, spend_query, excluded_ids).into(),
         );

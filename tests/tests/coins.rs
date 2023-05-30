@@ -204,23 +204,22 @@ mod coin {
             .unwrap();
 
         // spend_query for 1 a and 1 b, but with all coins excluded
-        let all_utxos: Vec<String> = coins_per_asset
+        let all_utxos = coins_per_asset
             .iter()
             .flat_map(|coins| {
                 coins.iter().filter_map(|b| match b {
-                    CoinType::Coin(c) => Some(format!("{:#x}", c.utxo_id)),
+                    CoinType::Coin(c) => Some(&c.utxo_id),
                     CoinType::MessageCoin(_) => None,
                     CoinType::Unknown => None,
                 })
             })
             .collect();
-        let all_utxo_ids = all_utxos.iter().map(String::as_str).collect();
         let coins_per_asset = context
             .client
             .coins_to_spend(
                 &owner,
                 vec![(asset_id_a, 1, None), (asset_id_b, 1, None)],
-                Some((all_utxo_ids, vec![])),
+                Some((all_utxos, vec![])),
             )
             .await;
         assert!(coins_per_asset.is_err());
@@ -421,17 +420,16 @@ mod message_coin {
             .unwrap();
 
         // query base assets, but with all coins excluded
-        let all_message_ids: Vec<String> = coins_per_asset
+        let all_message_ids = coins_per_asset
             .iter()
             .flat_map(|coins| {
                 coins.iter().filter_map(|b| match b {
                     CoinType::Coin(_) => None,
-                    CoinType::MessageCoin(m) => Some(format!("{:#x}", m.nonce)),
+                    CoinType::MessageCoin(m) => Some(&m.nonce),
                     CoinType::Unknown => None,
                 })
             })
             .collect();
-        let all_message_ids = all_message_ids.iter().map(String::as_str).collect();
         let coins_per_asset = context
             .client
             .coins_to_spend(
@@ -618,30 +616,26 @@ mod all_coins {
             .unwrap();
 
         // query base assets, but with all coins excluded
-        let all_message_ids: Vec<String> = coins_per_asset
+        let all_message_ids: Vec<_> = coins_per_asset
             .iter()
             .flat_map(|coins| {
                 coins.iter().filter_map(|b| match b {
                     CoinType::Coin(_) => None,
-                    CoinType::MessageCoin(m) => Some(format!("{:#x}", m.nonce)),
+                    CoinType::MessageCoin(m) => Some(&m.nonce),
                     CoinType::Unknown => None,
                 })
             })
             .collect();
-        let all_utxo_ids: Vec<String> = coins_per_asset
+        let all_utxo_ids: Vec<_> = coins_per_asset
             .iter()
             .flat_map(|coins| {
                 coins.iter().filter_map(|b| match b {
-                    CoinType::Coin(c) => Some(format!("{:#x}", c.utxo_id)),
+                    CoinType::Coin(c) => Some(&c.utxo_id),
                     CoinType::MessageCoin(_) => None,
                     CoinType::Unknown => None,
                 })
             })
             .collect();
-
-        let all_message_ids: Vec<_> =
-            all_message_ids.iter().map(String::as_str).collect();
-        let all_utxo_ids: Vec<_> = all_utxo_ids.iter().map(String::as_str).collect();
 
         // After setup we have 4 `Coin`s and 2 `Message`s
         assert_eq!(all_utxo_ids.len(), 4);
