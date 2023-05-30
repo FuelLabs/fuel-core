@@ -35,6 +35,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
+use tokio::time::Instant;
 
 impl PoAAdapter {
     pub fn new(shared_state: Option<SharedState>) -> Self {
@@ -111,6 +112,35 @@ impl BlockImporter for BlockImporterAdapter {
     }
 }
 
+enum State {
+    /// We are not connected at least to `min_connected_reserved_peers` peers.
+    ///
+    /// InsufficientPeers -> SufficientPeers
+    InsufficientPeers(BlockHeight),
+    /// We are connected to at least `min_connected_reserved_peers` peers.
+    ///
+    /// SufficientPeers -> Synced(...)
+    SufficientPeers(BlockHeight, Instant),
+    /// We can go into this state if we didn't receive any notification
+    /// about new block height from the network for `time_until_synced` timeout.
+    ///
+    /// We can leave this state only in the case, if we received a valid block
+    /// from the network with higher block height.
+    ///
+    /// Synced -> either InsufficientPeers(...) or SufficientPeers(...)
+    Synced(BlockHeight),
+}
+
+// `ImportResult` add new field to identify is the block produce by ourself or from the network
+// P2P provides subscription to the "current number of connected reserved peers".
+//
+// With next statements all unit test should continue to work as before:
+// If `min_connected_reserved_peers` is zero, then the initial `State` is `SufficientPeers`.
+// If `time_until_synced` and `min_connected_reserved_peers` are, then the initial `State` is `Synced`.
+// For the `Config::local_testnet` `min_connected_reserved_peers` and `time_until_synced` are zero.
+//
+// Not to forget to add a new integration test where we start teh second block producer.
+
 #[async_trait::async_trait]
 impl SyncPort for crate::service::adapters::SyncAdapter<P2PAdapter> {
     async fn sync_with_peers(&mut self) -> anyhow::Result<()> {
@@ -120,7 +150,7 @@ impl SyncPort for crate::service::adapters::SyncAdapter<P2PAdapter> {
         }
 
         // todo: check if the next block to be produced equals last previous block + 1
-        // if yes, then we are synced already
+        //  if yes, then we are synced already
 
         // 1. check count of connected reserved peers
         // todo: add 'n' tries or a timeout
