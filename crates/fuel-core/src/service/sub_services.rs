@@ -1,8 +1,5 @@
 #![allow(clippy::let_unit_value)]
-use super::adapters::{
-    P2PAdapter,
-    SyncAdapter,
-};
+use super::adapters::P2PAdapter;
 
 use crate::{
     database::Database,
@@ -27,12 +24,8 @@ use fuel_core_poa::Trigger;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-pub type PoAService = fuel_core_poa::Service<
-    TxPoolAdapter,
-    BlockProducerAdapter,
-    BlockImporterAdapter,
-    SyncAdapter<P2PAdapter>,
->;
+pub type PoAService =
+    fuel_core_poa::Service<TxPoolAdapter, BlockProducerAdapter, BlockImporterAdapter>;
 #[cfg(feature = "relayer")]
 pub type RelayerService = fuel_core_relayer::Service<Database>;
 #[cfg(feature = "p2p")]
@@ -128,20 +121,20 @@ pub fn init_sub_services(
         !matches!(poa_config.trigger, Trigger::Never) || config.manual_blocks_enabled;
 
     let poa = (production_enabled).then(|| {
-        let syncer = match config.chain_conf.consensus {
-            fuel_core_chain_config::ConsensusConfig::PoA {
-                time_until_synced,
-                min_connected_resereved_peers,
-                timeout_between_checking_peers,
-                ..
-            } => SyncAdapter::new(
-                importer_adapter.block_importer.subscribe(),
-                min_connected_resereved_peers,
-                time_until_synced,
-                timeout_between_checking_peers,
-                p2p_adapter.clone(),
-            ),
-        };
+        // let syncer = match config.chain_conf.consensus {
+        //     fuel_core_chain_config::ConsensusConfig::PoA {
+        //         time_until_synced,
+        //         min_connected_resereved_peers,
+        //         timeout_between_checking_peers,
+        //         ..
+        //     } => SyncAdapter::new(
+        //         importer_adapter.block_importer.subscribe(),
+        //         min_connected_resereved_peers,
+        //         time_until_synced,
+        //         timeout_between_checking_peers,
+        //         p2p_adapter.clone(),
+        //     ),
+        // };
 
         fuel_core_poa::new_service(
             last_block.header(),
@@ -149,7 +142,6 @@ pub fn init_sub_services(
             tx_pool_adapter.clone(),
             producer_adapter.clone(),
             importer_adapter.clone(),
-            syncer,
         )
     });
     let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));

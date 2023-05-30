@@ -6,8 +6,12 @@ use crate::{
     ports::{
         BlockImporter,
         BlockProducer,
-        SyncPort,
+        P2pPort,
         TransactionPool,
+    },
+    sync::{
+        SyncState,
+        SyncTask,
     },
     Config,
     Trigger,
@@ -59,10 +63,12 @@ use fuel_core_types::{
 };
 use std::{
     ops::Deref,
+    sync::Arc,
     time::Duration,
 };
 use tokio::{
     sync::{
+        broadcast,
         mpsc,
         oneshot,
     },
@@ -71,7 +77,7 @@ use tokio::{
 use tokio_stream::StreamExt;
 use tracing::error;
 
-pub type Service<T, B, I, S> = ServiceRunner<Task<T, B, I, S>>;
+pub type Service<T, B, I> = ServiceRunner<MainTask<T, B, I>>;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -122,13 +128,14 @@ pub(crate) enum RequestType {
     Trigger,
 }
 
-pub struct Task<T, B, I, S> {
+pub struct MainTask<T, B, I> {
     block_gas_limit: Word,
     signing_key: Option<Secret<SecretKeyWrapper>>,
     block_producer: B,
     block_importer: I,
     txpool: T,
-    sync_port: S,
+    sync_state: tokio::sync::watch::Receiver<SyncState>,
+    sync_notify: Arc<tokio::sync::Notify>,
     tx_status_update_stream: BoxStream<TxStatus>,
     request_receiver: mpsc::Receiver<Request>,
     shared_state: SharedState,
@@ -141,17 +148,18 @@ pub struct Task<T, B, I, S> {
     consensus_params: ConsensusParameters,
 }
 
-impl<T, B, I, S> Task<T, B, I, S>
+impl<T, B, I> MainTask<T, B, I>
 where
     T: TransactionPool,
 {
-    pub fn new(
+    pub fn new<P: P2pPort>(
         last_block: &BlockHeader,
         config: Config,
         txpool: T,
         block_producer: B,
         block_importer: I,
-        sync_port: S,
+        p2p_port: P,
+        block_rx: broadcast::Receiver<Arc<ImportResult>>,
     ) -> Self {
         let tx_status_update_stream = txpool.transaction_status_events();
         let (request_sender, request_receiver) = mpsc::channel(100);
@@ -159,13 +167,46 @@ where
         let duration =
             Duration::from_secs(Tai64::now().0.saturating_sub(last_timestamp.0));
         let last_block_created = Instant::now() - duration;
+
+        // todo get from config
+        let min_conneected_reserved_peers = 0;
+        let time_until_sync = Duration::ZERO;
+
+        let initial_sync_state = {
+            if min_conneected_reserved_peers == 0 && time_until_sync == Duration::ZERO {
+                SyncState::Synced
+            } else {
+                SyncState::NotSynced
+            }
+        };
+
+        let (state_sender, sync_state) = tokio::sync::watch::channel(initial_sync_state);
+        let sync_notify = Arc::new(tokio::sync::Notify::new());
+
+        let mut sync_task = SyncTask::new(
+            p2p_port,
+            min_conneected_reserved_peers,
+            time_until_sync,
+            block_rx,
+            sync_notify.clone(),
+            state_sender,
+            *last_block.height(),
+        );
+
+        tokio::spawn(async move {
+            loop {
+                let _ = sync_task.run().await;
+            }
+        });
+
         Self {
             block_gas_limit: config.block_gas_limit,
             signing_key: config.signing_key,
             txpool,
             block_producer,
             block_importer,
-            sync_port,
+            sync_state,
+            sync_notify,
             tx_status_update_stream,
             request_receiver,
             shared_state: SharedState { request_sender },
@@ -208,12 +249,11 @@ where
     }
 }
 
-impl<D, T, B, I, S> Task<T, B, I, S>
+impl<D, T, B, I> MainTask<T, B, I>
 where
     T: TransactionPool,
     B: BlockProducer<Database = D>,
     I: BlockImporter<Database = D>,
-    S: SyncPort,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(
@@ -425,14 +465,14 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T, B, I, S> RunnableService for Task<T, B, I, S>
+impl<T, B, I> RunnableService for MainTask<T, B, I>
 where
     Self: RunnableTask,
 {
     const NAME: &'static str = "PoA";
 
     type SharedData = SharedState;
-    type Task = Task<T, B, I, S>;
+    type Task = MainTask<T, B, I>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -462,20 +502,16 @@ where
 }
 
 #[async_trait::async_trait]
-impl<D, T, B, I, S> RunnableTask for Task<T, B, I, S>
+impl<D, T, B, I> RunnableTask for MainTask<T, B, I>
 where
     T: TransactionPool,
     B: BlockProducer<Database = D>,
     I: BlockImporter<Database = D>,
-    S: SyncPort,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         // make sure we're synced first
-        tokio::select! {
-            _ = self.sync_port.sync_with_peers() => {},
-            _ = watcher.while_started() => {
-                return Ok(false);
-            }
+        if *self.sync_state.borrow() == SyncState::NotSynced {
+            self.sync_notify.notified().await;
         }
 
         let should_continue;
@@ -525,27 +561,29 @@ where
     }
 }
 
-pub fn new_service<D, T, B, I, S>(
+pub fn new_service<D, T, B, I, P>(
     last_block: &BlockHeader,
     config: Config,
     txpool: T,
     block_producer: B,
     block_importer: I,
-    sync_port: S,
-) -> Service<T, B, I, S>
+    p2p_port: P,
+    block_rx: broadcast::Receiver<Arc<ImportResult>>,
+) -> Service<T, B, I>
 where
     T: TransactionPool + 'static,
     B: BlockProducer<Database = D> + 'static,
     I: BlockImporter<Database = D> + 'static,
-    S: SyncPort + 'static,
+    P: P2pPort,
 {
-    Service::new(Task::new(
+    Service::new(MainTask::new(
         last_block,
         config,
         txpool,
         block_producer,
         block_importer,
-        sync_port,
+        p2p_port,
+        block_rx,
     ))
 }
 

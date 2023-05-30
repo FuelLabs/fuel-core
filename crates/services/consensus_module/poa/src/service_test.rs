@@ -6,7 +6,7 @@ use crate::{
         MockSyncPort,
         MockTransactionPool,
     },
-    service::Task,
+    service::MainTask,
     Config,
     Service,
     Trigger,
@@ -325,7 +325,7 @@ async fn remove_skipped_transactions() {
 
     let syncer = generate_sync_port();
 
-    let mut task = Task::new(
+    let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
         txpool,
@@ -370,7 +370,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
 
     let syncer = generate_sync_port();
 
-    let mut task = Task::new(
+    let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
         txpool,
@@ -430,7 +430,7 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
 
     let syncer = generate_sync_port();
 
-    let task = Task::new(
+    let task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
         txpool,

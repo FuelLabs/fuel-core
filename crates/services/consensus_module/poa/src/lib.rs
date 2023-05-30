@@ -2,6 +2,7 @@
 #![deny(unused_must_use)]
 
 mod deadline_clock;
+mod sync;
 
 #[cfg(test)]
 mod service_test;
