@@ -2079,9 +2079,9 @@ dependencies = [
 
 [[package]]
 name = "enum-as-inner"
-version = "0.5.2"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "356538125fac8ab67d41d09b010daa294659f0b6279a175a947ad5c254b6114c"
+checksum = "c9720bba047d567ffc8a3cba48bf19126600e249ab7f128e9233e6376976a116"
 dependencies = [
  "heck",
  "proc-macro2",
