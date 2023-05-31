@@ -1,4 +1,7 @@
-use crate::client::schema;
+use crate::client::{
+    schema,
+    types::scalars::ChainId,
+};
 
 #[derive(Clone, Debug)]
 pub struct ConsensusParameters {
@@ -16,7 +19,7 @@ pub struct ConsensusParameters {
     pub gas_price_factor: u64,
     pub gas_per_byte: u64,
     pub max_message_data_length: u64,
-    pub chain_id: u64,
+    pub chain_id: ChainId,
 }
 
 // GraphQL Translation
@@ -60,7 +63,7 @@ impl From<schema::chain::ConsensusParameters> for ConsensusParameters {
             gas_price_factor: value.gas_price_factor.into(),
             gas_per_byte: value.gas_per_byte.into(),
             max_message_data_length: value.max_message_data_length.into(),
-            chain_id: value.chain_id.into(),
+            chain_id: value.chain_id.0.into(),
         }
     }
 }

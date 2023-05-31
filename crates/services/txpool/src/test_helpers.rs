@@ -103,7 +103,8 @@ pub(crate) fn random_predicate(
     let mut predicate_code: Vec<u8> = vec![op::ret(1)].into_iter().collect();
     // append some randomizing bytes after the predicate has already returned.
     predicate_code.push(rng.gen());
-    let owner = Input::predicate_owner(&predicate_code, &ConsensusParameters::DEFAULT);
+    let owner =
+        Input::predicate_owner(&predicate_code, &ConsensusParameters::DEFAULT.chain_id);
     Input::coin_predicate(
         utxo_id.unwrap_or_else(|| rng.gen()),
         owner,
@@ -125,7 +126,7 @@ pub(crate) fn custom_predicate(
     code: Vec<u8>,
     utxo_id: Option<UtxoId>,
 ) -> Input {
-    let owner = Input::predicate_owner(&code, &ConsensusParameters::DEFAULT);
+    let owner = Input::predicate_owner(&code, &ConsensusParameters::DEFAULT.chain_id);
     Input::coin_predicate(
         utxo_id.unwrap_or_else(|| rng.gen()),
         owner,

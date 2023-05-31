@@ -84,7 +84,7 @@ impl ConsensusParameters {
     }
 
     async fn chain_id(&self) -> U64 {
-        self.0.chain_id.into()
+        (*self.0.chain_id).into()
     }
 }
 

@@ -137,7 +137,7 @@ impl Executor<MockDb> for MockExecutor {
         let mut block_db = self.0.blocks.lock().unwrap();
         block_db.insert(
             *block.header().height(),
-            block.compress(&ConsensusParameters::DEFAULT),
+            block.compress(&ConsensusParameters::DEFAULT.chain_id),
         );
         Ok(UncommittedResult::new(
             ExecutionResult {

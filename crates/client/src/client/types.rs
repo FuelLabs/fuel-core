@@ -61,6 +61,7 @@ pub mod scalars {
             AssetId,
             Bytes32,
             Bytes64,
+            ChainId,
             ContractId,
             MessageId,
             Nonce,

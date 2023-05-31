@@ -60,7 +60,7 @@ async fn never_trigger_never_produces_blocks() {
     ctx_builder.with_importer(importer);
     let ctx = ctx_builder.build();
     for tx in txs {
-        status_sender.send_replace(Some(tx.id(&consensus_params)));
+        status_sender.send_replace(Some(tx.id(&consensus_params.chain_id)));
     }
 
     // Make sure enough time passes for the block to be produced

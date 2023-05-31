@@ -377,7 +377,7 @@ pub mod tests {
     #[test]
     fn dry_run_tx_gql_output() {
         use cynic::MutationBuilder;
-        let mut tx = fuel_tx::Transaction::default();
+        let mut tx = fuel_tx::Transaction::default_test_tx();
         let query = DryRun::build(DryRunArg {
             tx: HexString(Bytes(tx.to_bytes())),
             utxo_validation: None,
@@ -388,7 +388,7 @@ pub mod tests {
     #[test]
     fn submit_tx_gql_output() {
         use cynic::MutationBuilder;
-        let mut tx = fuel_tx::Transaction::default();
+        let mut tx = fuel_tx::Transaction::default_test_tx();
         let query = Submit::build(TxArg {
             tx: HexString(Bytes(tx.to_bytes())),
         });

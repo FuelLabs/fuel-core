@@ -43,7 +43,7 @@ impl From<ConsensusParameters> for TxConsensusParameters {
             gas_price_factor: params.gas_price_factor.into(),
             gas_per_byte: params.gas_per_byte.into(),
             max_message_data_length: params.max_message_data_length.into(),
-            chain_id: params.chain_id.into(),
+            chain_id: params.chain_id.0.into(),
         }
     }
 }

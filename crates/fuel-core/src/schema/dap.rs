@@ -23,7 +23,9 @@ use fuel_core_types::{
         Word,
     },
     fuel_tx::{
+        Buildable,
         ConsensusParameters,
+        Executable,
         Script,
         Transaction,
     },
@@ -96,7 +98,7 @@ impl ConcreteStorage {
         let id = ID::from(id);
 
         let vm_database = Self::vm_database(&storage)?;
-        let tx = Script::default();
+        let tx = Self::dummy_tx();
         let checked_tx =
             tx.into_checked_basic(vm_database.block_height()?, &self.params)?;
         self.tx
@@ -128,7 +130,7 @@ impl ConcreteStorage {
             .get(id)
             .and_then(|tx| tx.first())
             .cloned()
-            .unwrap_or_default();
+            .unwrap_or(Self::dummy_tx());
 
         let checked_tx =
             tx.into_checked_basic(vm_database.block_height()?, &self.params)?;
@@ -174,6 +176,22 @@ impl ConcreteStorage {
         );
 
         Ok(vm_database)
+    }
+
+    fn dummy_tx() -> Script {
+        // Create `Script` transaction with dummy coin
+        let mut tx = Script::default();
+        tx.add_unsigned_coin_input(
+            Default::default(),
+            &Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        );
+        tx.add_witness(vec![].into());
+        tx
     }
 }
 

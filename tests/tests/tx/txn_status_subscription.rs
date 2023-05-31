@@ -52,7 +52,8 @@ async fn subscribe_txn_status() {
             .collect();
 
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-        let owner = Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT);
+        let owner =
+            Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT.chain_id);
         // The third transaction needs to have a different input.
         let utxo_id = if i == 2 { 2 } else { 1 };
         let utxo_id = UtxoId::new(Bytes32::from([utxo_id; 32]), 1);
@@ -89,7 +90,7 @@ async fn subscribe_txn_status() {
 
     for (txn_idx, id) in txns
         .iter()
-        .map(|t| t.id(&ConsensusParameters::DEFAULT).to_string())
+        .map(|t| t.id(&ConsensusParameters::DEFAULT.chain_id).to_string())
         .enumerate()
     {
         let jh = tokio::spawn({
@@ -133,7 +134,8 @@ async fn test_regression_in_subscribe() {
     let mut config = Config::local_node();
     config.utxo_validation = true;
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-    let owner = Input::predicate_owner(&predicate, &ConsensusParameters::default());
+    let owner =
+        Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT.chain_id);
     let node = FuelService::new_node(config).await.unwrap();
     let coin_pred = Input::coin_predicate(
         rng.gen(),

@@ -178,7 +178,12 @@ where
         .return_once(move |_| {
             let mock_result = result()?;
             let skipped_transactions: Vec<_> = (0..mock_result.skipped_transactions)
-                .map(|_| (Transaction::default(), ExecutorError::InvalidBlockId))
+                .map(|_| {
+                    (
+                        Transaction::default_test_tx(),
+                        ExecutorError::InvalidBlockId,
+                    )
+                })
                 .collect();
             Ok(Uncommitted::new(
                 ExecutionResult {

@@ -83,17 +83,12 @@ async fn dry_run_script() {
         .flat_map(|op| u32::from(*op).to_be_bytes())
         .collect();
 
-    let tx = Transaction::script(
-        gas_price,
-        gas_limit,
-        maturity,
-        script,
-        vec![],
-        vec![],
-        vec![],
-        vec![],
-    )
-    .into();
+    let tx = TransactionBuilder::script(script, vec![])
+        .gas_limit(gas_limit)
+        .gas_price(gas_price)
+        .maturity(maturity)
+        .add_random_fee_input()
+        .finalize_as_transaction();
 
     let log = client.dry_run(&tx).await.unwrap();
     assert_eq!(3, log.len());
@@ -112,7 +107,7 @@ async fn dry_run_script() {
     let err = client
         .transaction_status(&format!(
             "{:#x}",
-            tx.id(&fuel_tx::ConsensusParameters::DEFAULT)
+            tx.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id)
         ))
         .await
         .unwrap_err();
@@ -132,18 +127,10 @@ async fn dry_run_create() {
     let state_root = Contract::default_state_root();
     let contract_id = contract.id(&salt, &root, &state_root);
 
-    let tx = Transaction::create(
-        Default::default(),
-        Default::default(),
-        Default::default(),
-        Default::default(),
-        salt,
-        vec![],
-        vec![],
-        vec![Output::contract_created(contract_id, state_root)],
-        vec![contract_code.into()],
-    )
-    .into();
+    let tx = TransactionBuilder::create(contract_code.into(), salt, vec![])
+        .add_random_fee_input()
+        .add_output(Output::contract_created(contract_id, state_root))
+        .finalize_as_transaction();
 
     let receipts = client.dry_run(&tx).await.unwrap();
     assert_eq!(0, receipts.len());
@@ -152,7 +139,7 @@ async fn dry_run_create() {
     let err = client
         .transaction_status(&format!(
             "{:#x}",
-            tx.id(&fuel_tx::ConsensusParameters::DEFAULT)
+            tx.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id)
         ))
         .await
         .unwrap_err();
@@ -179,29 +166,24 @@ async fn submit() {
         .flat_map(|op| u32::from(*op).to_be_bytes())
         .collect();
 
-    let tx = Transaction::script(
-        gas_price,
-        gas_limit,
-        maturity,
-        script,
-        vec![],
-        vec![],
-        vec![],
-        vec![],
-    )
-    .into();
+    let tx = TransactionBuilder::script(script, vec![])
+        .gas_limit(gas_limit)
+        .gas_price(gas_price)
+        .maturity(maturity)
+        .add_random_fee_input()
+        .finalize_as_transaction();
 
     client.submit_and_await_commit(&tx).await.unwrap();
     // verify that the tx returned from the api matches the submitted tx
     let ret_tx = client
-        .transaction(&tx.id(&ConsensusParameters::DEFAULT).to_string())
+        .transaction(&tx.id(&ConsensusParameters::DEFAULT.chain_id).to_string())
         .await
         .unwrap()
         .unwrap()
         .transaction;
     assert_eq!(
-        tx.id(&ConsensusParameters::DEFAULT),
-        ret_tx.id(&ConsensusParameters::DEFAULT)
+        tx.id(&ConsensusParameters::DEFAULT.chain_id),
+        ret_tx.id(&ConsensusParameters::DEFAULT.chain_id)
     );
 }
 
@@ -218,8 +200,8 @@ async fn transaction_status_submitted() {
 
 #[tokio::test]
 async fn receipts() {
-    let transaction = Transaction::default();
-    let id = transaction.id(&ConsensusParameters::DEFAULT);
+    let transaction = Transaction::default_test_tx();
+    let id = transaction.id(&ConsensusParameters::DEFAULT.chain_id);
     // setup server & client
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -236,8 +218,8 @@ async fn receipts() {
 #[tokio::test]
 async fn get_transaction_by_id() {
     // setup test data in the node
-    let transaction = Transaction::default();
-    let id = transaction.id(&ConsensusParameters::DEFAULT);
+    let transaction = Transaction::default_test_tx();
+    let id = transaction.id(&ConsensusParameters::DEFAULT.chain_id);
 
     // setup server & client
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
@@ -258,8 +240,8 @@ async fn get_transaction_by_id() {
 
 #[tokio::test]
 async fn get_transparent_transaction_by_id() {
-    let transaction = Transaction::default();
-    let id = transaction.id(&ConsensusParameters::DEFAULT);
+    let transaction = Transaction::default_test_tx();
+    let id = transaction.id(&ConsensusParameters::DEFAULT.chain_id);
 
     // setup server & client
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
@@ -319,7 +301,7 @@ async fn get_transactions() {
     let transactions = &response
         .results
         .iter()
-        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT))
+        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT.chain_id))
         .collect_vec();
     // coinbase_tx1
     assert_eq!(transactions[1], tx1);
@@ -356,7 +338,7 @@ async fn get_transactions() {
     let transactions = &response
         .results
         .iter()
-        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT))
+        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT.chain_id))
         .collect_vec();
     // coinbase_tx4
     assert_eq!(transactions[1], tx4);
@@ -371,7 +353,7 @@ async fn get_transactions() {
     let transactions = &response
         .results
         .iter()
-        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT))
+        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT.chain_id))
         .collect_vec();
     // transactions[0] - coinbase_tx3
     assert_eq!(transactions[1], tx2);
@@ -386,7 +368,7 @@ async fn get_transactions() {
     let transactions = &response
         .results
         .iter()
-        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT))
+        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT.chain_id))
         .collect_vec();
     // coinbase_tx4
     assert_eq!(transactions[1], tx4);
@@ -560,12 +542,21 @@ async fn get_transactions_from_manual_blocks() {
     let transactions = &response
         .results
         .iter()
-        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT))
+        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT.chain_id))
         .collect_vec();
     // coinbase_tx1
-    assert_eq!(transactions[1], txs[0].id(&ConsensusParameters::DEFAULT));
-    assert_eq!(transactions[2], txs[1].id(&ConsensusParameters::DEFAULT));
-    assert_eq!(transactions[3], txs[2].id(&ConsensusParameters::DEFAULT));
+    assert_eq!(
+        transactions[1],
+        txs[0].id(&ConsensusParameters::DEFAULT.chain_id)
+    );
+    assert_eq!(
+        transactions[2],
+        txs[1].id(&ConsensusParameters::DEFAULT.chain_id)
+    );
+    assert_eq!(
+        transactions[3],
+        txs[2].id(&ConsensusParameters::DEFAULT.chain_id)
+    );
 
     // Query forwards from last given cursor [2]: [3, 4, coinbase_tx2, 5, 6]
     let next_page_request_forwards = PaginationRequest {
@@ -581,13 +572,25 @@ async fn get_transactions_from_manual_blocks() {
     let transactions = &response
         .results
         .iter()
-        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT))
+        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT.chain_id))
         .collect_vec();
-    assert_eq!(transactions[0], txs[3].id(&ConsensusParameters::DEFAULT));
-    assert_eq!(transactions[1], txs[4].id(&ConsensusParameters::DEFAULT));
+    assert_eq!(
+        transactions[0],
+        txs[3].id(&ConsensusParameters::DEFAULT.chain_id)
+    );
+    assert_eq!(
+        transactions[1],
+        txs[4].id(&ConsensusParameters::DEFAULT.chain_id)
+    );
     // coinbase_tx2
-    assert_eq!(transactions[3], txs[5].id(&ConsensusParameters::DEFAULT));
-    assert_eq!(transactions[4], txs[6].id(&ConsensusParameters::DEFAULT));
+    assert_eq!(
+        transactions[3],
+        txs[5].id(&ConsensusParameters::DEFAULT.chain_id)
+    );
+    assert_eq!(
+        transactions[4],
+        txs[6].id(&ConsensusParameters::DEFAULT.chain_id)
+    );
 
     // Query backwards from last given cursor [8]: [5, coinbase_tx2, 4, 3, 2, 1, 0, coinbase_tx1]
     let page_request_backwards = PaginationRequest {
@@ -603,15 +606,33 @@ async fn get_transactions_from_manual_blocks() {
     let transactions = &response
         .results
         .iter()
-        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT))
+        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT.chain_id))
         .collect_vec();
-    assert_eq!(transactions[0], txs[5].id(&ConsensusParameters::DEFAULT));
+    assert_eq!(
+        transactions[0],
+        txs[5].id(&ConsensusParameters::DEFAULT.chain_id)
+    );
     // transactions[1] coinbase_tx2
-    assert_eq!(transactions[2], txs[4].id(&ConsensusParameters::DEFAULT));
-    assert_eq!(transactions[3], txs[3].id(&ConsensusParameters::DEFAULT));
-    assert_eq!(transactions[4], txs[2].id(&ConsensusParameters::DEFAULT));
-    assert_eq!(transactions[5], txs[1].id(&ConsensusParameters::DEFAULT));
-    assert_eq!(transactions[6], txs[0].id(&ConsensusParameters::DEFAULT));
+    assert_eq!(
+        transactions[2],
+        txs[4].id(&ConsensusParameters::DEFAULT.chain_id)
+    );
+    assert_eq!(
+        transactions[3],
+        txs[3].id(&ConsensusParameters::DEFAULT.chain_id)
+    );
+    assert_eq!(
+        transactions[4],
+        txs[2].id(&ConsensusParameters::DEFAULT.chain_id)
+    );
+    assert_eq!(
+        transactions[5],
+        txs[1].id(&ConsensusParameters::DEFAULT.chain_id)
+    );
+    assert_eq!(
+        transactions[6],
+        txs[0].id(&ConsensusParameters::DEFAULT.chain_id)
+    );
     // transactions[7] coinbase_tx1
 }
 
@@ -639,7 +660,7 @@ async fn get_owned_transactions() {
         .unwrap()
         .results
         .iter()
-        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT))
+        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT.chain_id))
         .collect_vec();
 
     let bob_txs = client
@@ -648,7 +669,7 @@ async fn get_owned_transactions() {
         .unwrap()
         .results
         .iter()
-        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT))
+        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT.chain_id))
         .collect_vec();
 
     let charlie_txs = client
@@ -657,7 +678,7 @@ async fn get_owned_transactions() {
         .unwrap()
         .results
         .iter()
-        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT))
+        .map(|tx| tx.transaction.id(&ConsensusParameters::DEFAULT.chain_id))
         .collect_vec();
 
     assert_eq!(&alice_txs, &[tx1]);
@@ -693,7 +714,7 @@ impl TestContext {
         )
         .into();
         self.client.submit_and_await_commit(&tx).await?;
-        Ok(tx.id(&fuel_tx::ConsensusParameters::DEFAULT))
+        Ok(tx.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id))
     }
 }
 
@@ -728,15 +749,7 @@ async fn initialize_client(db: Database) -> TestContext {
 
 // add random val for unique tx
 fn create_mock_tx(val: u64) -> Transaction {
-    Transaction::script(
-        Default::default(),
-        Default::default(),
-        Default::default(),
-        Default::default(),
-        val.to_be_bytes().to_vec(),
-        Default::default(),
-        Default::default(),
-        Default::default(),
-    )
-    .into()
+    TransactionBuilder::script(val.to_be_bytes().to_vec(), Default::default())
+        .add_random_fee_input()
+        .finalize_as_transaction()
 }

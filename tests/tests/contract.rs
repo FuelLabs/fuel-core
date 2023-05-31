@@ -178,6 +178,7 @@ async fn can_get_message_proof() {
 
     // Create the contract deploy transaction.
     let mut contract_deploy = TransactionBuilder::create(bytecode, salt, vec![])
+        .add_random_fee_input()
         .add_output(output)
         .finalize_as_transaction();
 
@@ -213,7 +214,8 @@ async fn can_get_message_proof() {
         .collect();
 
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-    let owner = Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT);
+    let owner =
+        Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT.chain_id);
     let coin_input = Input::coin_predicate(
         Default::default(),
         owner,
@@ -257,7 +259,7 @@ async fn can_get_message_proof() {
         vec![],
     );
 
-    let transaction_id = script.id(&ConsensusParameters::DEFAULT);
+    let transaction_id = script.id(&ConsensusParameters::DEFAULT.chain_id);
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();

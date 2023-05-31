@@ -329,8 +329,6 @@ pub enum TransactionValidityError {
     MessageDataMismatch(Nonce),
     #[error("Contract output index isn't valid: {0:#x}")]
     InvalidContractInputIndex(UtxoId),
-    #[error("The transaction must have at least one coin or message input type: {0:#x}")]
-    NoCoinOrMessageInput(TxId),
     #[error("The transaction contains predicate inputs which aren't enabled: {0:#x}")]
     PredicateExecutionDisabled(TxId),
     #[error(

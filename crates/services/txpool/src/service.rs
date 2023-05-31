@@ -196,7 +196,7 @@ where
 
             new_transaction = self.gossiped_tx_stream.next() => {
                 if let Some(GossipData { data: Some(tx), message_id, peer_id }) = new_transaction {
-                    let id = tx.id(&self.shared.consensus_params);
+                    let id = tx.id(&self.shared.consensus_params.chain_id);
                     let txs = vec!(Arc::new(tx));
                     let mut result = tracing::info_span!("Received tx via gossip", %id)
                         .in_scope(|| {

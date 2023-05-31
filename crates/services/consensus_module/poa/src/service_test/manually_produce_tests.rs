@@ -91,7 +91,7 @@ async fn can_manually_produce_block(
         .await
         .unwrap();
     for tx in txs {
-        status_sender.send_replace(Some(tx.id(&consensus_params)));
+        status_sender.send_replace(Some(tx.id(&consensus_params.chain_id)));
     }
 
     for t in times.into_iter() {
