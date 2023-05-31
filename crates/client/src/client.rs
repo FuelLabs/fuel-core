@@ -43,7 +43,6 @@ use pagination::{
     PaginatedResult,
     PaginationRequest,
 };
-use reqwest::cookie::CookieStore;
 use schema::{
     balance::BalanceArgs,
     block::BlockByIdArgs,
@@ -79,7 +78,6 @@ use std::{
         ErrorKind,
     },
     net,
-    ops::Deref,
     str::{
         self,
         FromStr,
@@ -105,6 +103,7 @@ pub mod types;
 #[derive(Debug, Clone)]
 pub struct FuelClient {
     client: reqwest::Client,
+    #[cfg(feature = "subscriptions")]
     cookie: Arc<reqwest::cookie::Jar>,
     url: reqwest::Url,
 }
@@ -127,6 +126,7 @@ impl FromStr for FuelClient {
             .build()?;
         Ok(Self {
             client,
+            #[cfg(feature = "subscriptions")]
             cookie,
             url,
         })
@@ -202,8 +202,10 @@ impl FuelClient {
         Vars: serde::Serialize,
         ResponseData: serde::de::DeserializeOwned + 'static,
     {
+        use core::ops::Deref;
         use eventsource_client as es;
         use hyper_rustls as _;
+        use reqwest::cookie::CookieStore;
         let mut url = self.url.clone();
         url.set_path("/graphql-sub");
         let json_query = serde_json::to_string(&q)?;
