@@ -69,7 +69,7 @@ fn txn(c: &mut Criterion) {
             &mut execute,
             &mut data,
             "baseline",
-            1,
+            None,
             |data, io_data, num_inputs| {
                 <out_ty::Void as ValidTx<in_ty::CoinSigned>>::fill(
                     data, io_data, num_inputs,
@@ -79,79 +79,89 @@ fn txn(c: &mut Criterion) {
     }
 
     if select.is_none() || matches!(select, Some(1)) {
-        setup_and_measure(
-            &mut executor,
-            &mut execute,
-            &mut data,
-            "coin signed to void",
-            5,
-            |data, io_data, num_inputs| {
-                <out_ty::Void as ValidTx<in_ty::CoinSigned>>::fill(
-                    data, io_data, num_inputs,
-                );
-            },
-        )
+        for i in [1, 5, 10] {
+            setup_and_measure(
+                &mut executor,
+                &mut execute,
+                &mut data,
+                "coin signed to void",
+                i,
+                |data, io_data, num_inputs| {
+                    <out_ty::Void as ValidTx<in_ty::CoinSigned>>::fill(
+                        data, io_data, num_inputs,
+                    );
+                },
+            )
+        }
     }
 
     if select.is_none() || matches!(select, Some(2)) {
-        setup_and_measure(
-            &mut executor,
-            &mut execute,
-            &mut data,
-            "coin signed to coin",
-            5,
-            |data, io_data, num_inputs| {
-                <out_ty::Coin as ValidTx<in_ty::CoinSigned>>::fill(
-                    data, io_data, num_inputs,
-                );
-            },
-        )
+        for i in [1, 5, 10] {
+            setup_and_measure(
+                &mut executor,
+                &mut execute,
+                &mut data,
+                "coin signed to coin",
+                i,
+                |data, io_data, num_inputs| {
+                    <out_ty::Coin as ValidTx<in_ty::CoinSigned>>::fill(
+                        data, io_data, num_inputs,
+                    );
+                },
+            )
+        }
     }
 
     if select.is_none() || matches!(select, Some(3)) {
-        setup_and_measure(
-            &mut executor,
-            &mut execute,
-            &mut data,
-            "coin signed to variable",
-            5,
-            |data, io_data, num_inputs| {
-                <out_ty::Variable as ValidTx<in_ty::CoinSigned>>::fill(
-                    data, io_data, num_inputs,
-                );
-            },
-        )
+        for i in [1, 5, 10] {
+            setup_and_measure(
+                &mut executor,
+                &mut execute,
+                &mut data,
+                "coin signed to variable",
+                i,
+                |data, io_data, num_inputs| {
+                    <out_ty::Variable as ValidTx<in_ty::CoinSigned>>::fill(
+                        data, io_data, num_inputs,
+                    );
+                },
+            )
+        }
     }
 
     if select.is_none() || matches!(select, Some(4)) {
-        setup_and_measure(
-            &mut executor,
-            &mut execute,
-            &mut data,
-            "coin signed to change",
-            5,
-            |data, io_data, num_inputs| {
-                <out_ty::Change as ValidTx<in_ty::CoinSigned>>::fill(
-                    data, io_data, num_inputs,
-                );
-            },
-        )
+        for i in [1, 5, 10] {
+            setup_and_measure(
+                &mut executor,
+                &mut execute,
+                &mut data,
+                "coin signed to change",
+                i,
+                |data, io_data, num_inputs| {
+                    <out_ty::Change as ValidTx<in_ty::CoinSigned>>::fill(
+                        data, io_data, num_inputs,
+                    );
+                },
+            )
+        }
     }
 
     if select.is_none() || matches!(select, Some(5)) {
-        setup_and_measure(
-            &mut executor,
-            &mut execute,
-            &mut data,
-            "message data and coin signed to coin and contract",
-            5,
-            |data, io_data, num_inputs| {
-                <(out_ty::Coin, out_ty::Contract) as ValidTx<(
-                    in_ty::MessageData,
-                    in_ty::Contract,
-                )>>::fill(data, io_data, num_inputs);
-            },
-        )
+        for i in [1, 5, 10] {
+            setup_and_measure(
+                &mut executor,
+                &mut execute,
+                &mut data,
+                "message data and coin signed to coin and contract",
+                i,
+                |data, io_data, num_inputs| {
+                    <(out_ty::Coin, out_ty::Contract) as ValidTx<(
+                        in_ty::MessageData,
+                        in_ty::Contract,
+                    )>>::fill(data, io_data, num_inputs);
+                },
+            )
+        }
     }
 }
 
@@ -161,12 +171,13 @@ fn setup_and_measure(
     execute: &mut BenchmarkGroup<WallTime>,
     data: &mut Data,
     name: &str,
-    num_inputs: usize,
+    num_inputs: impl Into<Option<usize>>,
     fill: impl FnOnce(&mut Data, &mut InputOutputData, usize),
 ) {
+    let num_inputs = num_inputs.into();
     // Fill in the input and output data.
     let mut io_data = InputOutputData::default();
-    fill(data, &mut io_data, num_inputs);
+    fill(data, &mut io_data, num_inputs.unwrap_or(1));
 
     // Create a script transaction from the input and output data.
     // TODO: Also test create.
@@ -176,14 +187,14 @@ fn setup_and_measure(
     insert_into_db(&mut executor.database, &t, data);
 
     // Measure the transaction.
-    measure_transaction(executor, t, num_inputs as u64, name, execute);
+    measure_transaction(executor, t, num_inputs.map(|i| i as u64), name, execute);
 }
 
 // Helper function to measure a single transaction type.
 fn measure_transaction(
     executor: &Executor<MaybeRelayerAdapter>,
     transaction: Transaction,
-    inputs: u64,
+    inputs: impl Into<Option<u64>>,
     name: &str,
     execute: &mut BenchmarkGroup<WallTime>,
 ) {
@@ -215,26 +226,34 @@ fn measure_transaction(
 
         return
     }
+    let f = || {
+        // Execute the transaction without committing it.
+        // Assert there is never any errors.
+        let result = executor
+            .execute_without_commit(
+                block.clone(),
+                ExecutionOptions {
+                    utxo_validation: true,
+                },
+            )
+            .unwrap();
+        assert!(result.result().skipped_transactions.is_empty());
+    };
+    match inputs.into() {
+        Some(inputs) => {
+            // Set the throughput metric for the current benchmark.
+            execute.throughput(criterion::Throughput::Elements(inputs));
 
-    // Set the throughput metric for the current benchmark.
-    execute.throughput(criterion::Throughput::Elements(inputs));
-
-    // Run the benchmark with the given name and input count.
-    execute.bench_with_input(BenchmarkId::new(name, inputs), &inputs, |b, _| {
-        b.iter(|| {
-            // Execute the transaction without committing it.
-            // Assert there is never any errors.
-            let result = executor
-                .execute_without_commit(
-                    block.clone(),
-                    ExecutionOptions {
-                        utxo_validation: true,
-                    },
-                )
-                .unwrap();
-            assert!(result.result().skipped_transactions.is_empty());
-        })
-    });
+            // Run the benchmark with the given name and input count.
+            execute.bench_with_input(BenchmarkId::new(name, inputs), &inputs, |b, _| {
+                b.iter(f)
+            });
+        }
+        None => {
+            // Run the benchmark with the given name and input count.
+            execute.bench_function(name, |b| b.iter(f));
+        }
+    }
 }
 
 criterion_group!(benches, txn);

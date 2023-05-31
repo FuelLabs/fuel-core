@@ -51,6 +51,10 @@ struct Args {
     /// The format the output should be written to.
     #[arg(short, long, value_enum, default_value_t = OutputFormat::Yaml)]
     format: OutputFormat,
+
+    /// The style of benchmark.
+    #[arg(long, value_enum, default_value_t = BenchType::GroupPerBench)]
+    bench_type: BenchType,
 }
 
 #[derive(clap::ValueEnum, Debug, Clone, Copy)]
@@ -59,6 +63,13 @@ enum OutputFormat {
     Yaml,
     Json,
     Rust,
+}
+
+#[derive(clap::ValueEnum, Debug, Clone, Copy)]
+/// The style of benchmark.
+enum BenchType {
+    GroupPerBench,
+    SingleGroup,
 }
 
 #[derive(Debug)]
@@ -104,12 +115,14 @@ struct State {
     throughput: HashMap<String, u64>,
     /// Map of groups to their ids.
     groups: HashMap<String, Vec<String>>,
+    /// Type of benchmark.
+    bench_type: BenchType,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct Costs(HashMap<String, Cost>);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
 enum Cost {
     Relative(u64),
@@ -123,7 +136,7 @@ enum Cost {
     },
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 struct Sample {
     throughput: u64,
     time: u64,
@@ -137,6 +150,7 @@ fn main() {
         debug,
         format,
         all,
+        bench_type,
     } = Args::parse();
     if all && matches!(format, OutputFormat::Rust) {
         panic!("The flag `all` cannot be used with {format:?}");
@@ -180,6 +194,7 @@ fn main() {
         throughput: HashMap::new(),
         groups: HashMap::new(),
         baseline: baseline.unwrap_or_else(|| "noop/noop".to_string()),
+        bench_type,
     };
     let mut readers = readers.into_iter();
     let mut reader = readers.next().unwrap();
@@ -482,8 +497,8 @@ impl State {
             .copied()
             .unwrap_or_else(|| {
                 panic!(
-                    "Could not produce output as baseline {} was not found in recording",
-                    self.baseline
+                    "Could not produce output as baseline {} was not found in recording.\n{:?}",
+                    self.baseline, self.ids
                 )
             })
             .as_nanos()
@@ -499,54 +514,48 @@ impl State {
             mut groups,
             throughput,
             baseline: baseline_name,
+            bench_type,
         } = self;
-
-        let mut costs = Costs::with_capacity(groups.len());
-        let dependant_groups = groups
-            .iter()
-            .filter(|(_, samples)| {
-                samples.iter().any(|sample| throughput.contains_key(sample))
-            })
-            .map(|(name, samples)| {
-                let mut samples = samples
-                    .iter()
-                    .filter_map(|sample| {
-                        Some((ids.remove(sample)?, throughput.get(sample).copied()?))
-                    })
-                    .map(|(mean, t)| (t, map_to_ratio(baseline, mean)))
-                    .collect::<Vec<_>>();
-                samples.sort_unstable_by_key(|(_, mean)| *mean);
-                (name.clone(), samples)
-            })
-            .collect::<Vec<_>>();
+        let dependant_groups = dependant_groups(baseline, &groups, &throughput, &mut ids);
+        let mut costs = Costs::with_capacity(dependant_groups.len());
 
         if all {
-            let iter = dependant_groups.into_iter().map(|(name, x_y)| {
-                groups.remove(&name);
-                let samples = x_y
-                    .iter()
-                    .map(|(x, y)| Sample {
-                        throughput: *x,
-                        time: *y,
-                    })
-                    .collect();
-                let dep_per_unit = (1.0 / slope(x_y)) as u64;
-                (
-                    name,
-                    Cost::DependentAll {
-                        samples,
-                        dep_per_unit,
-                    },
-                )
-            });
+            let iter = dependant_groups.into_iter().map(
+                |DependentGroup {
+                     group: name,
+                     points,
+                 }| {
+                    groups.remove(&name.0);
+                    let samples = points
+                        .iter()
+                        .map(|Point { throughput, ratio }| Sample {
+                            throughput: *throughput,
+                            time: *ratio,
+                        })
+                        .collect();
+                    let dep_per_unit = (1.0 / slope(points)) as u64;
+                    (
+                        name.0,
+                        Cost::DependentAll {
+                            samples,
+                            dep_per_unit,
+                        },
+                    )
+                },
+            );
             costs.0.extend(iter);
         } else {
-            let iter = dependant_groups.into_iter().map(|(name, x_y)| {
-                groups.remove(&name);
-                let base = x_y.first().unwrap().1;
-                let dep_per_unit = (1.0 / slope(x_y)) as u64;
-                (name, Cost::Dependent { base, dep_per_unit })
-            });
+            let iter = dependant_groups.into_iter().map(
+                |DependentGroup {
+                     group: name,
+                     points,
+                 }| {
+                    groups.remove(&name.0);
+                    let base = points.first().unwrap().ratio;
+                    let dep_per_unit = (1.0 / slope(points)) as u64;
+                    (name.0, Cost::Dependent { base, dep_per_unit })
+                },
+            );
             costs.0.extend(iter);
         }
         (
@@ -556,6 +565,7 @@ impl State {
                 ids,
                 throughput,
                 groups,
+                bench_type,
             },
             costs,
         )
@@ -586,22 +596,344 @@ impl Costs {
     }
 }
 
-fn slope(x_y: Vec<(u64, u64)>) -> f64 {
-    let avg_x =
-        x_y.iter().map(|(x, _)| x).copied().sum::<u64>() as f64 / x_y.len() as f64;
-    let avg_y =
-        x_y.iter().map(|(_, y)| y).copied().sum::<u64>() as f64 / x_y.len() as f64;
+fn slope(x_y: Vec<Point>) -> f64 {
+    let avg_x = x_y
+        .iter()
+        .map(|Point { throughput: x, .. }| x)
+        .copied()
+        .sum::<u64>() as f64
+        / x_y.len() as f64;
+    let avg_y = x_y
+        .iter()
+        .map(|Point { ratio: y, .. }| y)
+        .copied()
+        .sum::<u64>() as f64
+        / x_y.len() as f64;
     let sum_x_y: f64 = x_y
         .iter()
-        .map(|(x, y)| (*x as f64 - avg_x) * (*y as f64 - avg_y))
+        .map(
+            |Point {
+                 throughput: x,
+                 ratio: y,
+             }| (*x as f64 - avg_x) * (*y as f64 - avg_y),
+        )
         .sum();
-    let sq_x: f64 = x_y.iter().map(|(x, _)| (*x as f64 - avg_x).powi(2)).sum();
+    let sq_x: f64 = x_y
+        .iter()
+        .map(|Point { throughput: x, .. }| (*x as f64 - avg_x).powi(2))
+        .sum();
     sum_x_y / sq_x
+}
+
+fn dependant_groups(
+    baseline: u64,
+    groups: &HashMap<String, Vec<String>>,
+    throughput: &HashMap<String, u64>,
+    ids: &mut HashMap<String, Duration>,
+) -> Vec<DependentGroup> {
+    let groups = groups
+        .iter()
+        .map(|(name, points)| {
+            (
+                GroupName(name.clone()),
+                points.iter().cloned().map(Id::from).collect(),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+    let throughput = throughput
+        .iter()
+        .map(|(id, throughput)| (Id::from(id.clone()), *throughput))
+        .collect();
+    let ids_inner = ids
+        .iter()
+        .map(|(id, mean)| (Id::from(id.clone()), *mean))
+        .collect();
+    let r = if groups.len() == 1 {
+        let (name, points) = groups.into_iter().next().unwrap();
+        let r =
+            dependant_groups_single_group(baseline, name, points, throughput, ids_inner);
+        DependentGroups {
+            groups: vec![r.groups],
+            to_remove: r.to_remove,
+        }
+    } else {
+        dependant_groups_per_bench(baseline, groups, throughput, ids_inner)
+    };
+    ids.retain(|id, _| !r.to_remove.contains(id));
+    r.groups
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct GroupName(String);
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct BenchName(String);
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct GroupBenchAmount {
+    name: GroupName,
+    bench: BenchName,
+    amount: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct BenchAmount {
+    bench: BenchName,
+    amount: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum Id {
+    GroupBenchAmount(GroupBenchAmount),
+    BenchAmount(BenchAmount),
+    Unknown(String),
+}
+
+impl From<String> for Id {
+    fn from(value: String) -> Self {
+        let mut split = value.split('/');
+        let first = split.next();
+        let second = split.next();
+        let third = split.next();
+        match (first, second, third) {
+            (Some(_), None, _) | (None, _, _) => Self::Unknown(value),
+            (Some(bench), Some(amount), None) => match amount.parse::<usize>() {
+                Ok(amount) => Self::BenchAmount(BenchAmount {
+                    bench: BenchName(bench.to_string()),
+                    amount,
+                }),
+                Err(_) => Self::Unknown(value),
+            },
+            (Some(group), Some(bench), Some(amount)) => match amount.parse::<usize>() {
+                Ok(amount) => Self::GroupBenchAmount(GroupBenchAmount {
+                    name: GroupName(group.to_string()),
+                    bench: BenchName(bench.to_string()),
+                    amount,
+                }),
+                Err(_) => Self::Unknown(value),
+            },
+        }
+    }
+}
+
+impl From<Id> for String {
+    fn from(value: Id) -> Self {
+        match value {
+            Id::GroupBenchAmount(GroupBenchAmount {
+                name,
+                bench,
+                amount,
+            }) => format!("{}/{}/{}", name.0, bench.0, amount),
+            Id::BenchAmount(BenchAmount { bench, amount }) => {
+                format!("{}/{}", bench.0, amount)
+            }
+            Id::Unknown(s) => s,
+        }
+    }
+}
+
+struct DependentGroups<T> {
+    groups: T,
+    to_remove: HashSet<String>,
+}
+struct DependentGroup {
+    group: GroupName,
+    points: Vec<Point>,
+}
+
+struct Point {
+    throughput: u64,
+    ratio: u64,
+}
+
+fn dependant_groups_per_bench(
+    baseline: u64,
+    groups: HashMap<GroupName, Vec<Id>>,
+    throughput: HashMap<Id, u64>,
+    mut ids: HashMap<Id, Duration>,
+) -> DependentGroups<Vec<DependentGroup>> {
+    let mut to_remove = HashSet::new();
+    let groups = groups
+        .iter()
+        .filter(|(_, samples)| {
+            samples.iter().any(|sample| throughput.contains_key(sample))
+        })
+        .map(|(name, samples)| {
+            let mut samples = samples
+                .iter()
+                .filter_map(|sample| {
+                    let (k, v) = ids.remove_entry(sample)?;
+                    to_remove.insert(String::from(k));
+                    Some((v, throughput.get(sample).copied()?))
+                })
+                .map(|(mean, t)| Point {
+                    throughput: t,
+                    ratio: map_to_ratio(baseline, mean),
+                })
+                .collect::<Vec<_>>();
+            samples.sort_unstable_by_key(|point| point.ratio);
+            DependentGroup {
+                group: name.clone(),
+                points: samples,
+            }
+        })
+        .collect::<Vec<_>>();
+    DependentGroups { groups, to_remove }
+}
+
+fn dependant_groups_single_group(
+    baseline: u64,
+    group: GroupName,
+    points: Vec<Id>,
+    mut throughput: HashMap<Id, u64>,
+    mut ids: HashMap<Id, Duration>,
+) -> DependentGroups<DependentGroup> {
+    let mut to_remove = HashSet::new();
+    let mut points = points
+        .iter()
+        .filter_map(|id| {
+            let t = throughput.remove(id)?;
+            let (k, v) = ids.remove_entry(id)?;
+            to_remove.insert(String::from(k));
+            Some(Point {
+                throughput: t,
+                ratio: map_to_ratio(baseline, v),
+            })
+        })
+        .collect::<Vec<_>>();
+    points.sort_unstable_by_key(|point| point.ratio);
+    DependentGroups {
+        groups: DependentGroup { group, points },
+        to_remove,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_dependant_groups_per_bench() {
+        let groups = [
+            ("a", vec!["a/1", "a/2", "a/3"]),
+            ("b", vec!["b/1", "b/2", "b/3"]),
+            ("c", vec!["c/1", "c/2", "c/3"]),
+            ("d", vec!["d"]),
+        ]
+        .into_iter()
+        .map(|(k, v)| {
+            (
+                k.to_string(),
+                v.iter().map(|v| v.to_string()).collect::<Vec<_>>(),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+
+        let throughput = [
+            ("a/1", 1),
+            ("a/2", 2),
+            ("a/3", 3),
+            ("b/1", 4),
+            ("b/2", 5),
+            ("b/3", 6),
+            ("c/1", 7),
+            ("c/2", 8),
+            ("c/3", 9),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect::<HashMap<_, _>>();
+
+        let mut ids = [
+            ("a/1", Duration::from_nanos(1)),
+            ("a/2", Duration::from_nanos(2)),
+            ("a/3", Duration::from_nanos(3)),
+            ("b/1", Duration::from_nanos(4)),
+            ("b/2", Duration::from_nanos(5)),
+            ("b/3", Duration::from_nanos(6)),
+            ("c/1", Duration::from_nanos(7)),
+            ("c/2", Duration::from_nanos(8)),
+            ("c/3", Duration::from_nanos(9)),
+            ("d", Duration::from_nanos(10)),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect::<HashMap<_, _>>();
+        let mut r = dependant_groups_per_bench(100, &groups, &throughput, &mut ids);
+        r.sort_by_key(|(k, _)| k.clone());
+
+        let expected = vec![
+            ("a".to_string(), vec![(1, 1), (2, 1), (3, 1)]),
+            ("b".to_string(), vec![(4, 1), (5, 1), (6, 1)]),
+            ("c".to_string(), vec![(7, 1), (8, 1), (9, 1)]),
+        ];
+        assert_eq!(expected, r);
+
+        assert_eq!(ids.len(), 1);
+        assert!(ids.contains_key("d"));
+    }
+
+    #[test]
+    fn test_dependant_groups_single_group() {
+        let groups = [(
+            "a",
+            vec![
+                "a/a/1", "a/a/2", "a/a/3", "a/b/1", "a/b/2", "a/b/3", "a/c/1", "a/c/2",
+                "a/c/3", "a/d",
+            ],
+        )]
+        .into_iter()
+        .map(|(k, v)| {
+            (
+                k.to_string(),
+                v.iter().map(|v| v.to_string()).collect::<Vec<_>>(),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+
+        let throughput = [
+            ("a/a/1", 1),
+            ("a/a/2", 2),
+            ("a/a/3", 3),
+            ("a/b/1", 4),
+            ("a/b/2", 5),
+            ("a/b/3", 6),
+            ("a/c/1", 7),
+            ("a/c/2", 8),
+            ("a/c/3", 9),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect::<HashMap<_, _>>();
+
+        let mut ids = [
+            ("a/a/1", Duration::from_nanos(1)),
+            ("a/a/2", Duration::from_nanos(2)),
+            ("a/a/3", Duration::from_nanos(3)),
+            ("a/b/1", Duration::from_nanos(4)),
+            ("a/b/2", Duration::from_nanos(5)),
+            ("a/b/3", Duration::from_nanos(6)),
+            ("a/c/1", Duration::from_nanos(7)),
+            ("a/c/2", Duration::from_nanos(8)),
+            ("a/c/3", Duration::from_nanos(9)),
+            ("a/d", Duration::from_nanos(10)),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect::<HashMap<_, _>>();
+        let mut r = dependant_groups_single_group(100, &groups, &throughput, &mut ids);
+        r.sort_by_key(|(k, _)| k.clone());
+
+        let expected = vec![
+            ("a".to_string(), vec![(1, 1), (2, 1), (3, 1)]),
+            ("b".to_string(), vec![(4, 1), (5, 1), (6, 1)]),
+            ("c".to_string(), vec![(7, 1), (8, 1), (9, 1)]),
+        ];
+        assert_eq!(expected, r);
+
+        assert_eq!(ids.len(), 1);
+        assert!(ids.contains_key("a/d"));
+    }
 
     #[test]
     fn handles_json() {
@@ -636,6 +968,7 @@ mod tests {
             ids: Default::default(),
             throughput: Default::default(),
             groups: Default::default(),
+            bench_type: BenchType::GroupPerBench,
         };
         for line in input.lines() {
             extract_state(line, &mut state, false);
@@ -654,6 +987,125 @@ mod tests {
         assert!(state.ids.contains_key("mcp/10000"));
         assert!(state.ids.contains_key("mcp/100000"));
         assert!(state.ids.contains_key("mcpi/10000"));
+    }
+
+    #[test]
+    fn handles_single_group() {
+        let input = r#"
+        {"reason":"benchmark-complete","id":"transaction/baseline","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[],"typical":{"estimate":1889882.1811999998,"lower_bound":1818207.9852500001,"upper_bound":1959960.6525499995,"unit":"ns"},"mean":{"estimate":1889882.1811999998,"lower_bound":1818207.9852500001,"upper_bound":1959960.6525499995,"unit":"ns"},"median":{"estimate":2066936.6800000002,"lower_bound":1921769.18,"upper_bound":2129712.48,"unit":"ns"},"median_abs_dev":{"estimate":268832.4105752703,"lower_bound":148023.99710404882,"upper_bound":490886.3605170251,"unit":"ns"},"slope":null,"change":null}
+        {"reason":"benchmark-complete","id":"transaction/coin signed to void/1","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":1,"unit":"elements"}],"typical":{"estimate":1815368.467300133,"lower_bound":1740368.7886516275,"upper_bound":1884789.912018716,"unit":"ns"},"mean":{"estimate":1788408.4250238338,"lower_bound":1721285.165525651,"upper_bound":1855536.4136125282,"unit":"ns"},"median":{"estimate":1789624.7424242424,"lower_bound":1626135.7962962964,"upper_bound":1924139.7551177638,"unit":"ns"},"median_abs_dev":{"estimate":493475.1727353033,"lower_bound":358187.4059985071,"upper_bound":552965.3663889918,"unit":"ns"},"slope":{"estimate":1815368.467300133,"lower_bound":1740368.7886516275,"upper_bound":1884789.912018716,"unit":"ns"},"change":null}
+        {"reason":"benchmark-complete","id":"transaction/coin signed to void/5","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":5,"unit":"elements"}],"typical":{"estimate":1945030.0660000006,"lower_bound":1870768.0224399988,"upper_bound":2020571.2344,"unit":"ns"},"mean":{"estimate":1945030.0660000006,"lower_bound":1870768.0224399988,"upper_bound":2020571.2344,"unit":"ns"},"median":{"estimate":1912134.18,"lower_bound":1702750.0,"upper_bound":2112053.34,"unit":"ns"},"median_abs_dev":{"estimate":586745.1665031909,"lower_bound":317708.77982354147,"upper_bound":613535.6887235641,"unit":"ns"},"slope":null,"change":{"mean":{"estimate":-0.11130252605452717,"lower_bound":-0.15345271554152712,"upper_bound":-0.06627552411181012,"unit":"%"},"median":{"estimate":-0.17885249664369063,"lower_bound":-0.26979844063444025,"upper_bound":-0.06516287176747959,"unit":"%"},"change":"Improved"}}
+        {"reason":"benchmark-complete","id":"transaction/coin signed to void/10","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":10,"unit":"elements"}],"typical":{"estimate":2078746.3885714284,"lower_bound":2008188.1525833332,"upper_bound":2150255.779511904,"unit":"ns"},"mean":{"estimate":2078746.3885714284,"lower_bound":2008188.1525833332,"upper_bound":2150255.779511904,"unit":"ns"},"median":{"estimate":1933027.7619047621,"lower_bound":1892492.0476190476,"upper_bound":1994475.1904761903,"unit":"ns"},"median_abs_dev":{"estimate":340981.82654636283,"lower_bound":250126.93525935948,"upper_bound":439032.6500631122,"unit":"ns"},"slope":null,"change":null}
+        {"reason":"benchmark-complete","id":"transaction/coin signed to coin/1","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":1,"unit":"elements"}],"typical":{"estimate":1715275.5789655682,"lower_bound":1630389.4998739497,"upper_bound":1803179.2416809876,"unit":"ns"},"mean":{"estimate":1822676.2677465812,"lower_bound":1754526.5679907592,"upper_bound":1891016.9501783117,"unit":"ns"},"median":{"estimate":1861245.7530364373,"lower_bound":1687251.4808006536,"upper_bound":1934184.401010101,"unit":"ns"},"median_abs_dev":{"estimate":459261.88326260424,"lower_bound":375964.2268631938,"upper_bound":547895.8363325717,"unit":"ns"},"slope":{"estimate":1715275.5789655682,"lower_bound":1630389.4998739497,"upper_bound":1803179.2416809876,"unit":"ns"},"change":null}
+        {"reason":"benchmark-complete","id":"transaction/coin signed to coin/5","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":5,"unit":"elements"}],"typical":{"estimate":2112173.198374464,"lower_bound":2025266.614548286,"upper_bound":2194655.319425682,"unit":"ns"},"mean":{"estimate":2047806.468793442,"lower_bound":1992160.1500447006,"upper_bound":2103341.206058957,"unit":"ns"},"median":{"estimate":2070557.5576923077,"lower_bound":1899493.2432432433,"upper_bound":2158100.286989796,"unit":"ns"},"median_abs_dev":{"estimate":394637.9425061692,"lower_bound":292749.4158759545,"upper_bound":456072.6309018425,"unit":"ns"},"slope":{"estimate":2112173.198374464,"lower_bound":2025266.614548286,"upper_bound":2194655.319425682,"unit":"ns"},"change":{"mean":{"estimate":0.0038542126696146095,"lower_bound":-0.03832507669133906,"upper_bound":0.050946665147317965,"unit":"%"},"median":{"estimate":-0.06560498662418723,"lower_bound":-0.15186094251108695,"upper_bound":0.07417369706093924,"unit":"%"},"change":"NoChange"}}
+        {"reason":"benchmark-complete","id":"transaction/coin signed to coin/10","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":10,"unit":"elements"}],"typical":{"estimate":2268644.436500001,"lower_bound":2199260.4559625,"upper_bound":2337557.3593749995,"unit":"ns"},"mean":{"estimate":2268644.436500001,"lower_bound":2199260.4559625,"upper_bound":2337557.3593749995,"unit":"ns"},"median":{"estimate":2389008.325,"lower_bound":2045390.65,"upper_bound":2534425.0,"unit":"ns"},"median_abs_dev":{"estimate":444798.52460324764,"lower_bound":211916.4548648561,"upper_bound":543187.565356493,"unit":"ns"},"slope":null,"change":null}
+        {"reason":"benchmark-complete","id":"transaction/coin signed to variable/1","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":1,"unit":"elements"}],"typical":{"estimate":1827290.8180789123,"lower_bound":1737261.718098797,"upper_bound":1919613.5518274526,"unit":"ns"},"mean":{"estimate":1835533.6676709047,"lower_bound":1762910.7480887289,"upper_bound":1907239.9732616614,"unit":"ns"},"median":{"estimate":1898789.15390788,"lower_bound":1710463.7352941176,"upper_bound":2057497.423076923,"unit":"ns"},"median_abs_dev":{"estimate":500956.2864531229,"lower_bound":318430.9275211464,"upper_bound":600240.4658365166,"unit":"ns"},"slope":{"estimate":1827290.8180789123,"lower_bound":1737261.718098797,"upper_bound":1919613.5518274526,"unit":"ns"},"change":null}
+        {"reason":"benchmark-complete","id":"transaction/coin signed to variable/5","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":5,"unit":"elements"}],"typical":{"estimate":2230432.666000001,"lower_bound":2161926.8147399994,"upper_bound":2294048.26688,"unit":"ns"},"mean":{"estimate":2230432.666000001,"lower_bound":2161926.8147399994,"upper_bound":2294048.26688,"unit":"ns"},"median":{"estimate":2380120.82,"lower_bound":2353895.02,"upper_bound":2399023.32,"unit":"ns"},"median_abs_dev":{"estimate":114422.14373660112,"lower_bound":76964.25540161158,"upper_bound":146538.93601441337,"unit":"ns"},"slope":null,"change":{"mean":{"estimate":0.09202742140418252,"lower_bound":0.047145999823460356,"upper_bound":0.14263077425730597,"unit":"%"},"median":{"estimate":0.0880668413623209,"lower_bound":0.05185550935699168,"upper_bound":0.15976667110378706,"unit":"%"},"change":"Regressed"}}
+        {"reason":"benchmark-complete","id":"transaction/coin signed to variable/10","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":10,"unit":"elements"}],"typical":{"estimate":2251959.3466666667,"lower_bound":2179328.338428572,"upper_bound":2323748.72520238,"unit":"ns"},"mean":{"estimate":2251959.3466666667,"lower_bound":2179328.338428572,"upper_bound":2323748.72520238,"unit":"ns"},"median":{"estimate":2424176.595238095,"lower_bound":2100154.761904762,"upper_bound":2508753.9523809524,"unit":"ns"},"median_abs_dev":{"estimate":347228.4438354627,"lower_bound":214612.27658987045,"upper_bound":554929.2629480363,"unit":"ns"},"slope":null,"change":null}
+        {"reason":"benchmark-complete","id":"transaction/coin signed to change/1","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":1,"unit":"elements"}],"typical":{"estimate":1890630.3881483672,"lower_bound":1801184.4360116583,"upper_bound":1979463.850204347,"unit":"ns"},"mean":{"estimate":1833890.9853527676,"lower_bound":1767215.9022395543,"upper_bound":1899715.8732464188,"unit":"ns"},"median":{"estimate":1991915.0875129714,"lower_bound":1727566.5747126436,"upper_bound":2085342.5434362935,"unit":"ns"},"median_abs_dev":{"estimate":317634.5534822032,"lower_bound":166552.23858016325,"upper_bound":525027.1081551042,"unit":"ns"},"slope":{"estimate":1890630.3881483672,"lower_bound":1801184.4360116583,"upper_bound":1979463.850204347,"unit":"ns"},"change":null}
+        {"reason":"benchmark-complete","id":"transaction/coin signed to change/5","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":5,"unit":"elements"}],"typical":{"estimate":2140521.3000886654,"lower_bound":2056204.7793729955,"upper_bound":2218018.0995483277,"unit":"ns"},"mean":{"estimate":1984522.8747400963,"lower_bound":1912220.0898092734,"upper_bound":2055971.3315018201,"unit":"ns"},"median":{"estimate":1972176.2434017595,"lower_bound":1816333.5224358975,"upper_bound":2187047.097826087,"unit":"ns"},"median_abs_dev":{"estimate":585768.5758240585,"lower_bound":354195.39814420295,"upper_bound":604825.9826807033,"unit":"ns"},"slope":{"estimate":2140521.3000886654,"lower_bound":2056204.7793729955,"upper_bound":2218018.0995483277,"unit":"ns"},"change":{"mean":{"estimate":-0.04412969729330696,"lower_bound":-0.08991868471407319,"upper_bound":0.0017407129383119422,"unit":"%"},"median":{"estimate":-0.12408269135778993,"lower_bound":-0.1929563985537539,"upper_bound":-0.0066164051749735735,"unit":"%"},"change":"NoChange"}}
+        {"reason":"benchmark-complete","id":"transaction/coin signed to change/10","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":10,"unit":"elements"}],"typical":{"estimate":2291747.2304999996,"lower_bound":2213472.13595,"upper_bound":2370334.831225,"unit":"ns"},"mean":{"estimate":2291747.2304999996,"lower_bound":2213472.13595,"upper_bound":2370334.831225,"unit":"ns"},"median":{"estimate":2330570.85,"lower_bound":2017628.125,"upper_bound":2590872.9,"unit":"ns"},"median_abs_dev":{"estimate":598587.3967279493,"lower_bound":270542.06332191825,"upper_bound":621084.3316635486,"unit":"ns"},"slope":null,"change":null}
+        {"reason":"group-complete","group_name":"transaction","benchmarks":["transaction/baseline","transaction/coin signed to void/1","transaction/coin signed to void/5","transaction/coin signed to void/10","transaction/coin signed to coin/1","transaction/coin signed to coin/5","transaction/coin signed to coin/10","transaction/coin signed to variable/1","transaction/coin signed to variable/5","transaction/coin signed to variable/10","transaction/coin signed to change/1","transaction/coin signed to change/5","transaction/coin signed to change/10"],"report_directory":"/Users/freesig/fuel/fuel-core/target/criterion/reports/transaction"}
+        "#;
+
+        let mut state = State {
+            all: true,
+            baseline: "transaction/baseline".into(),
+            ids: Default::default(),
+            throughput: Default::default(),
+            groups: Default::default(),
+            bench_type: BenchType::SingleGroup,
+        };
+        for line in input.lines() {
+            extract_state(line, &mut state, false);
+        }
+
+        assert_eq!(state.groups.len(), 1);
+        assert_eq!(
+            state.groups.get("transaction").unwrap(),
+            &[
+                "transaction/baseline",
+                "transaction/coin signed to void/1",
+                "transaction/coin signed to void/5",
+                "transaction/coin signed to void/10",
+                "transaction/coin signed to coin/1",
+                "transaction/coin signed to coin/5",
+                "transaction/coin signed to coin/10",
+                "transaction/coin signed to variable/1",
+                "transaction/coin signed to variable/5",
+                "transaction/coin signed to variable/10",
+                "transaction/coin signed to change/1",
+                "transaction/coin signed to change/5",
+                "transaction/coin signed to change/10",
+            ]
+        );
+        assert_eq!(state.ids.len(), 13);
+        assert!(state.ids.contains_key("transaction/baseline"));
+        assert!(state.ids.contains_key("transaction/coin signed to void/1"));
+        assert!(state.ids.contains_key("transaction/coin signed to void/5"));
+        assert!(state.ids.contains_key("transaction/coin signed to void/10"));
+        assert!(state.ids.contains_key("transaction/coin signed to coin/1"));
+        assert!(state.ids.contains_key("transaction/coin signed to coin/5"));
+        assert!(state.ids.contains_key("transaction/coin signed to coin/10"));
+        assert!(state
+            .ids
+            .contains_key("transaction/coin signed to variable/1"));
+        assert!(state
+            .ids
+            .contains_key("transaction/coin signed to variable/5"));
+        assert!(state
+            .ids
+            .contains_key("transaction/coin signed to variable/10"));
+        assert!(state
+            .ids
+            .contains_key("transaction/coin signed to change/1"));
+        assert!(state
+            .ids
+            .contains_key("transaction/coin signed to change/5"));
+        assert!(state
+            .ids
+            .contains_key("transaction/coin signed to change/10"));
+
+        assert_eq!(state.throughput.len(), 12);
+        assert!(state
+            .throughput
+            .contains_key("transaction/coin signed to void/1"));
+        assert!(state
+            .throughput
+            .contains_key("transaction/coin signed to void/5"));
+        assert!(state
+            .throughput
+            .contains_key("transaction/coin signed to void/10"));
+        assert!(state
+            .throughput
+            .contains_key("transaction/coin signed to coin/1"));
+        assert!(state
+            .throughput
+            .contains_key("transaction/coin signed to coin/5"));
+        assert!(state
+            .throughput
+            .contains_key("transaction/coin signed to coin/10"));
+        assert!(state
+            .throughput
+            .contains_key("transaction/coin signed to variable/1"));
+        assert!(state
+            .throughput
+            .contains_key("transaction/coin signed to variable/5"));
+        assert!(state
+            .throughput
+            .contains_key("transaction/coin signed to variable/10"));
+        assert!(state
+            .throughput
+            .contains_key("transaction/coin signed to change/1"));
+        assert!(state
+            .throughput
+            .contains_key("transaction/coin signed to change/5"));
+        assert!(state
+            .throughput
+            .contains_key("transaction/coin signed to change/10"));
+
+        let (state, costs) = state.into_dependant_costs();
+        assert_eq!(costs.0.len(), 4);
     }
 
     #[test]
@@ -676,6 +1128,7 @@ mod tests {
             ids: Default::default(),
             throughput: Default::default(),
             groups: Default::default(),
+            bench_type: BenchType::GroupPerBench,
         };
         for line in input.lines() {
             extract_state(line, &mut state, false);
