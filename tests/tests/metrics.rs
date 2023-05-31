@@ -24,13 +24,7 @@ async fn test_metrics_endpoint() {
     let owner = Address::default();
     let asset_id = AssetId::new([1u8; 32]);
     // Should generate some database reads
-    client
-        .balance(
-            format!("{owner:#x}").as_str(),
-            Some(format!("{asset_id:#x}").as_str()),
-        )
-        .await
-        .unwrap();
+    client.balance(&owner, Some(&asset_id)).await.unwrap();
 
     let script = vec![
         op::addi(0x10, RegId::ZERO, 0xca),

@@ -49,7 +49,7 @@ use serde::{
 };
 use tai64::Tai64;
 
-pub mod scalars {
+pub mod primitives {
     pub use fuel_core_types::{
         fuel_crypto::{
             PublicKey,

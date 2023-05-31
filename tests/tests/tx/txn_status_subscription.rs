@@ -90,7 +90,7 @@ async fn subscribe_txn_status() {
 
     for (txn_idx, id) in txns
         .iter()
-        .map(|t| t.id(&ConsensusParameters::DEFAULT.chain_id).to_string())
+        .map(|t| t.id(&ConsensusParameters::DEFAULT.chain_id))
         .enumerate()
     {
         let jh = tokio::spawn({

@@ -10,7 +10,7 @@ use fuel_core_client::client::{
         PageDirection,
         PaginationRequest,
     },
-    types::scalars::{
+    types::primitives::{
         Address,
         AssetId,
         UtxoId,
@@ -39,7 +39,7 @@ async fn coin() {
     let client = FuelClient::from(srv.bound_address);
 
     // run test
-    let coin = client.coin(format!("{utxo_id:#x}").as_str()).await.unwrap();
+    let coin = client.coin(&utxo_id).await.unwrap();
     assert!(coin.is_some());
 }
 
@@ -79,7 +79,7 @@ async fn first_5_coins(
     // run test
     let coins = client
         .coins(
-            format!("{owner:#x}").as_str(),
+            &owner,
             None,
             PaginationRequest {
                 cursor: None,
@@ -126,8 +126,8 @@ async fn only_asset_id_filtered_coins() {
     // run test
     let coins = client
         .coins(
-            format!("{owner:#x}").as_str(),
-            Some(format!("{asset_id:#x}").as_str()),
+            &owner,
+            Some(&asset_id),
             PaginationRequest {
                 cursor: None,
                 results: 10,
@@ -175,8 +175,8 @@ async fn get_coins_forwards_backwards(
     // run test
     let coins = client
         .coins(
-            format!("{owner:#x}").as_str(),
-            Some(format!("{asset_id:#x}").as_str()),
+            &owner,
+            Some(&asset_id),
             PaginationRequest {
                 cursor: None,
                 results: 10,

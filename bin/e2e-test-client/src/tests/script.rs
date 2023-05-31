@@ -31,8 +31,8 @@ pub async fn receipts(ctx: &TestContext) -> Result<(), Failed> {
 
     let mut queries = vec![];
     for i in 0..100 {
-        let tx_id = result.tx_id.to_string();
-        queries.push(async move { (ctx.alice.client.receipts(tx_id.as_str()).await, i) });
+        let tx_id = result.tx_id;
+        queries.push(async move { (ctx.alice.client.receipts(&tx_id).await, i) });
     }
 
     let queries = futures::future::join_all(queries).await;
@@ -80,11 +80,11 @@ pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
     // `1bfd51cb31b8d0bc7d93d38f97ab771267d8786ab87073e0c2b8f9ddc44b274e` in the
     // `test_data/large_state/contract.json`.
     // contract_config.calculate_contract_id();
-    let contract_id = contract_config.contract_id.to_string();
+    let contract_id = contract_config.contract_id;
     println!("\nThe `contract_id` of the contract with large state: {contract_id}");
 
     // if the contract is not deployed yet, let's deploy it
-    let result = ctx.bob.client.contract(contract_id.as_str()).await;
+    let result = ctx.bob.client.contract(&contract_id).await;
     if result?.is_none() {
         let deployment_request = ctx.bob.deploy_contract(contract_config);
 
