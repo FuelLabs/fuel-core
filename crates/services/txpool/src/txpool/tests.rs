@@ -228,8 +228,10 @@ fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
 
 #[test]
 fn not_inserted_known_tx() {
-    let mut config = Config::default();
-    config.utxo_validation = false;
+    let config = Config {
+        utxo_validation: false,
+        ..Default::default()
+    };
     let mut txpool = TxPool::new(config, MockDb::default());
 
     let tx = Arc::new(Transaction::default_test_tx());
