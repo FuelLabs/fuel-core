@@ -639,7 +639,7 @@ where
             options,
         )?;
 
-        let checked_tx = original_tx
+        let mut checked_tx = original_tx
             .clone()
             .into_checked_basic(block_height, &self.config.transaction_parameters)?;
 
@@ -658,8 +658,7 @@ where
                 header.da_height,
             )?;
             // validate transaction signature
-            checked_tx
-                .transaction()
+            checked_tx = checked_tx
                 .check_signatures(&self.config.transaction_parameters.chain_id)
                 .map_err(TransactionValidityError::from)?;
         }

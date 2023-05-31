@@ -14,7 +14,6 @@ use crate::{
         create_contract_output,
         create_message_predicate_from_message,
     },
-    types::ContractId,
     Config,
     Error,
     MockDb,
@@ -35,6 +34,7 @@ use fuel_core_types::{
         input::coin::CoinPredicate,
         Address,
         AssetId,
+        Contract,
         Input,
         Output,
         Transaction,
@@ -46,19 +46,11 @@ use fuel_core_types::{
 use std::{
     cmp::Reverse,
     collections::HashMap,
-    str::FromStr,
     sync::Arc,
     vec,
 };
 
 const GAS_LIMIT: Word = 1000;
-
-fn empty_contract_id() -> ContractId {
-    ContractId::from_str(
-        "0x37bb0d6ca5333ae64a6dd7e52145527851045536ac1e5473e2a4006367bd9af3",
-    )
-    .expect("Should decode contract id")
-}
 
 #[test]
 fn insert_simple_tx_succeeds() {
@@ -122,7 +114,7 @@ fn faulty_t2_collided_on_contract_id_from_tx1() {
     let db = MockDb::default();
     let mut txpool = TxPool::new(Default::default(), db);
 
-    let contract_id = empty_contract_id();
+    let contract_id = Contract::EMPTY_CONTRACT_ID;
 
     // contract creation tx
     let (_, gas_coin) = setup_coin(&mut rng, Some(&txpool.database));
@@ -181,7 +173,7 @@ fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
     let db = MockDb::default();
     let mut txpool = TxPool::new(Default::default(), db);
 
-    let contract_id = empty_contract_id();
+    let contract_id = Contract::EMPTY_CONTRACT_ID;
     let (_, gas_coin) = setup_coin(&mut rng, Some(&txpool.database));
     let tx_faulty = Arc::new(
         TransactionBuilder::create(
@@ -365,7 +357,7 @@ fn overpriced_tx_contract_input_not_inserted() {
     let db = MockDb::default();
     let mut txpool = TxPool::new(Default::default(), db);
 
-    let contract_id = empty_contract_id();
+    let contract_id = Contract::EMPTY_CONTRACT_ID;
     let (_, gas_funds) = setup_coin(&mut rng, Some(&txpool.database));
     let tx1 = Arc::new(
         TransactionBuilder::create(
@@ -415,7 +407,7 @@ fn dependent_contract_input_inserted() {
     let db = MockDb::default();
     let mut txpool = TxPool::new(Default::default(), db);
 
-    let contract_id = empty_contract_id();
+    let contract_id = Contract::EMPTY_CONTRACT_ID;
     let (_, gas_funds) = setup_coin(&mut rng, Some(&txpool.database));
     let tx1 = Arc::new(
         TransactionBuilder::create(
