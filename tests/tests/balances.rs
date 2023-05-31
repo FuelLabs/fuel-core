@@ -15,7 +15,7 @@ use fuel_core_client::client::{
         PaginationRequest,
     },
     types::{
-        scalars::{
+        primitives::{
             Address,
             AssetId,
         },

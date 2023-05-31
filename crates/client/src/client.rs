@@ -10,7 +10,7 @@ use crate::client::{
         Tai64Timestamp,
         TransactionId,
     },
-    types::scalars::{
+    types::primitives::{
         Address,
         AssetId,
         BlockId,
@@ -355,7 +355,7 @@ impl FuelClient {
     pub async fn submit(
         &self,
         tx: &Transaction,
-    ) -> io::Result<types::scalars::TransactionId> {
+    ) -> io::Result<types::primitives::TransactionId> {
         let tx = tx.clone().to_bytes();
         let query = schema::tx::Submit::build(TxArg {
             tx: HexString(Bytes(tx)),

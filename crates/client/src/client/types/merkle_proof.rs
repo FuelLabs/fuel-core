@@ -1,6 +1,6 @@
 use crate::client::{
     schema,
-    types::scalars::MerkleRoot,
+    types::primitives::MerkleRoot,
 };
 
 #[derive(Debug)]

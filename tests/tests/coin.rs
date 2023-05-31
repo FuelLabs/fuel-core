@@ -10,7 +10,7 @@ use fuel_core_client::client::{
         PageDirection,
         PaginationRequest,
     },
-    types::scalars::{
+    types::primitives::{
         Address,
         AssetId,
         UtxoId,
