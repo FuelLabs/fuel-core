@@ -208,7 +208,7 @@ mod coin {
             .iter()
             .flat_map(|coins| {
                 coins.iter().filter_map(|b| match b {
-                    CoinType::Coin(c) => Some(&c.utxo_id),
+                    CoinType::Coin(c) => Some(c.utxo_id),
                     CoinType::MessageCoin(_) => None,
                     CoinType::Unknown => None,
                 })
@@ -425,7 +425,7 @@ mod message_coin {
             .flat_map(|coins| {
                 coins.iter().filter_map(|b| match b {
                     CoinType::Coin(_) => None,
-                    CoinType::MessageCoin(m) => Some(&m.nonce),
+                    CoinType::MessageCoin(m) => Some(m.nonce),
                     CoinType::Unknown => None,
                 })
             })
@@ -621,7 +621,7 @@ mod all_coins {
             .flat_map(|coins| {
                 coins.iter().filter_map(|b| match b {
                     CoinType::Coin(_) => None,
-                    CoinType::MessageCoin(m) => Some(&m.nonce),
+                    CoinType::MessageCoin(m) => Some(m.nonce),
                     CoinType::Unknown => None,
                 })
             })
@@ -630,7 +630,7 @@ mod all_coins {
             .iter()
             .flat_map(|coins| {
                 coins.iter().filter_map(|b| match b {
-                    CoinType::Coin(c) => Some(&c.utxo_id),
+                    CoinType::Coin(c) => Some(c.utxo_id),
                     CoinType::MessageCoin(_) => None,
                     CoinType::Unknown => None,
                 })

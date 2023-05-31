@@ -713,7 +713,7 @@ impl FuelClient {
         owner: &Address,
         spend_query: Vec<(AssetId, u64, Option<u64>)>,
         // (Utxos, Messages Nonce)
-        excluded_ids: Option<(Vec<&UtxoId>, Vec<&Nonce>)>,
+        excluded_ids: Option<(Vec<UtxoId>, Vec<Nonce>)>,
     ) -> io::Result<Vec<Vec<types::CoinType>>> {
         let owner: schema::Address = (*owner).into();
         let spend_query: Vec<SpendQueryElementInput> = spend_query
@@ -730,8 +730,8 @@ impl FuelClient {
             .map(
                 |(utxos, nonces)| -> (Vec<schema::UtxoId>, Vec<schema::Nonce>) {
                     (
-                        utxos.into_iter().cloned().map(Into::into).collect(),
-                        nonces.into_iter().cloned().map(Into::into).collect(),
+                        utxos.into_iter().map(Into::into).collect(),
+                        nonces.into_iter().map(Into::into).collect(),
                     )
                 },
             )
