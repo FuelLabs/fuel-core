@@ -104,8 +104,7 @@ async fn test_tx_gossiping() {
     let wait_time = Duration::from_secs(10);
     tokio::time::sleep(wait_time).await;
 
-    let tx_id = tx.id(&params).to_string();
-
+    let tx_id = tx.id(&params);
     let tx = tx.into();
     client_one.submit_and_await_commit(&tx).await.unwrap();
 
