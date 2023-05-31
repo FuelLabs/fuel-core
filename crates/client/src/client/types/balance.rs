@@ -1,6 +1,6 @@
 use crate::client::{
     schema,
-    types::scalars::{
+    types::primitives::{
         Address,
         AssetId,
     },

@@ -124,7 +124,7 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
 
     // get the messages from Owner A
     let result = client
-        .messages(Some(&owner_a.to_string()), request.clone())
+        .messages(Some(&owner_a), request.clone())
         .await
         .unwrap();
 
@@ -138,7 +138,7 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
 
     // get the messages from Owner B
     let result = client
-        .messages(Some(&owner_b.to_string()), request.clone())
+        .messages(Some(&owner_b), request.clone())
         .await
         .unwrap();
 
@@ -150,7 +150,7 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
 
     // get the messages from Owner C
     let result = client
-        .messages(Some(&owner_c.to_string()), request.clone())
+        .messages(Some(&owner_c), request.clone())
         .await
         .unwrap();
 
@@ -175,10 +175,7 @@ async fn messages_empty_results_for_owner_with_no_messages(
         direction,
     };
 
-    let result = client
-        .messages(Some(&owner.to_string()), request)
-        .await
-        .unwrap();
+    let result = client.messages(Some(&owner), request).await.unwrap();
 
     assert_eq!(result.results.len(), 0);
 }
@@ -361,11 +358,7 @@ async fn can_get_message_proof() {
         let last_height = client.produce_blocks(1, None).await.unwrap();
 
         // Get the receipts from the contract call.
-        let receipts = client
-            .receipts(transaction_id.to_string().as_str())
-            .await
-            .unwrap()
-            .unwrap();
+        let receipts = client.receipts(&transaction_id).await.unwrap().unwrap();
 
         // Get the message id from the receipts.
         let message_ids: Vec<_> =
@@ -377,12 +370,7 @@ async fn can_get_message_proof() {
         for message_id in message_ids.clone() {
             // Request the proof.
             let result = client
-                .message_proof(
-                    transaction_id.to_string().as_str(),
-                    message_id.to_string().as_str(),
-                    None,
-                    Some(last_height),
-                )
+                .message_proof(&transaction_id, &message_id, None, Some(last_height))
                 .await
                 .unwrap()
                 .unwrap();

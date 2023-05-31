@@ -80,7 +80,7 @@ async fn subscribe_txn_status() {
 
     for (txn_idx, id) in txns
         .iter()
-        .map(|t| t.id(&ConsensusParameters::DEFAULT).to_string())
+        .map(|t| t.id(&ConsensusParameters::DEFAULT))
         .enumerate()
     {
         let jh = tokio::spawn({

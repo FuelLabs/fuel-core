@@ -1,6 +1,5 @@
 use fuel_core::{
     database::Database,
-    schema::scalars::BlockId,
     service::{
         Config,
         FuelService,
@@ -59,11 +58,7 @@ async fn block() {
         .unwrap();
 
     // run test
-    let id_bytes: Bytes32 = id.into();
-    let block = client
-        .block(BlockId::from(id_bytes).to_string().as_str())
-        .await
-        .unwrap();
+    let block = client.block(&id.into()).await.unwrap();
     assert!(block.is_some());
 }
 
@@ -101,18 +96,15 @@ async fn produce_block() {
     client.submit_and_await_commit(&tx).await.unwrap();
 
     let transaction_response = client
-        .transaction(&format!("{:#x}", tx.id(&ConsensusParameters::DEFAULT)))
+        .transaction(&tx.id(&ConsensusParameters::DEFAULT))
         .await
         .unwrap();
 
     if let TransactionStatus::Success { block_id, .. } =
         transaction_response.unwrap().status
     {
-        let block = client
-            .block(block_id.to_string().as_str())
-            .await
-            .unwrap()
-            .unwrap();
+        let block_id = block_id.parse().unwrap();
+        let block = client.block(&block_id).await.unwrap().unwrap();
         let actual_pub_key = block.block_producer().unwrap();
         let block_height: u32 = block.header.height;
         let expected_pub_key = config
@@ -179,15 +171,16 @@ async fn produce_block_negative() {
     client.submit_and_await_commit(&tx).await.unwrap();
 
     let transaction_response = client
-        .transaction(&format!("{:#x}", tx.id(&ConsensusParameters::DEFAULT)))
+        .transaction(&tx.id(&ConsensusParameters::DEFAULT))
         .await
         .unwrap();
 
     if let TransactionStatus::Success { block_id, .. } =
         transaction_response.unwrap().status
     {
+        let block_id = block_id.parse().unwrap();
         let block_height: u32 = client
-            .block(block_id.to_string().as_str())
+            .block(&block_id)
             .await
             .unwrap()
             .unwrap()

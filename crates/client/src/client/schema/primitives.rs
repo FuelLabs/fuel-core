@@ -140,6 +140,12 @@ impl From<UtxoId> for ::fuel_core_types::fuel_tx::UtxoId {
     }
 }
 
+impl From<fuel_core_types::fuel_tx::UtxoId> for UtxoId {
+    fn from(value: fuel_core_types::fuel_tx::UtxoId) -> Self {
+        Self(HexFormatted(value))
+    }
+}
+
 impl LowerHex for UtxoId {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         LowerHex::fmt(&self.0 .0, f)

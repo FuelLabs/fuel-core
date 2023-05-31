@@ -3,7 +3,6 @@ use crate::client::{
         schema,
         Address,
         AssetId,
-        ConversionError,
         Nonce,
         PageInfo,
         UtxoId,
@@ -13,8 +12,6 @@ use crate::client::{
     PageDirection,
     PaginationRequest,
 };
-use itertools::Itertools;
-use std::str::FromStr;
 
 #[derive(cynic::QueryVariables, Debug)]
 pub struct CoinByIdArgs {
@@ -134,12 +131,10 @@ pub struct ExcludeInput {
     messages: Vec<Nonce>,
 }
 
-impl ExcludeInput {
-    pub fn from_tuple(tuple: (Vec<&str>, Vec<&str>)) -> Result<Self, ConversionError> {
-        let utxos = tuple.0.into_iter().map(UtxoId::from_str).try_collect()?;
-        let messages = tuple.1.into_iter().map(Nonce::from_str).try_collect()?;
-
-        Ok(Self { utxos, messages })
+impl From<(Vec<UtxoId>, Vec<Nonce>)> for ExcludeInput {
+    fn from(value: (Vec<UtxoId>, Vec<Nonce>)) -> Self {
+        let (utxos, messages) = value;
+        Self { utxos, messages }
     }
 }
 

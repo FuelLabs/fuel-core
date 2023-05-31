@@ -2,7 +2,7 @@ use crate::client::{
     schema,
     types::{
         block::Header,
-        scalars::{
+        primitives::{
             Address,
             Bytes,
             Nonce,

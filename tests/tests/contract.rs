@@ -47,10 +47,7 @@ async fn test_contract_balance(
     } = test_builder.finalize().await;
 
     let balance = client
-        .contract_balance(
-            format!("{contract_id:#x}").as_str(),
-            Some(format!("{asset:#x}").as_str()),
-        )
+        .contract_balance(&contract_id, Some(&asset))
         .await
         .unwrap();
 
@@ -87,7 +84,7 @@ async fn test_5_contract_balances(
 
     let contract_balances = client
         .contract_balances(
-            format!("{contract_id:#x}").as_str(),
+            &contract_id,
             PaginationRequest {
                 cursor: None,
                 results: 3,
@@ -275,11 +272,7 @@ async fn can_get_message_proof() {
     );
 
     // Get the receipts from the contract call.
-    let receipts = client
-        .receipts(transaction_id.to_string().as_str())
-        .await
-        .unwrap()
-        .unwrap();
+    let receipts = client.receipts(&transaction_id).await.unwrap().unwrap();
     let logd = receipts
         .iter()
         .find(|f| matches!(f, Receipt::LogData { .. }))
