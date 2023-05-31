@@ -1,6 +1,6 @@
 use crate::client::{
     schema,
-    types::scalars::ChainId,
+    types::primitives::ChainId,
 };
 
 #[derive(Clone, Debug)]
