@@ -34,7 +34,10 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use tokio::sync::broadcast::Receiver;
+use tokio_stream::{
+    wrappers::BroadcastStream,
+    StreamExt,
+};
 
 impl PoAAdapter {
     pub fn new(shared_state: Option<SharedState>) -> Self {
@@ -71,10 +74,6 @@ impl TransactionPool for TxPoolAdapter {
     }
 
     fn transaction_status_events(&self) -> BoxStream<TxStatus> {
-        use tokio_stream::{
-            wrappers::BroadcastStream,
-            StreamExt,
-        };
         Box::pin(
             BroadcastStream::new(self.service.tx_status_subscribe())
                 .filter_map(|result| result.ok()),
@@ -109,27 +108,34 @@ impl BlockImporter for BlockImporterAdapter {
             .commit_result(result)
             .map_err(Into::into)
     }
+
+    fn block_stream(&self) -> BoxStream<BlockHeight> {
+        Box::pin(
+            BroadcastStream::new(self.block_importer.subscribe())
+                .filter_map(|result| result.ok())
+                .map(|r| *r.sealed_block.entity.header().height()),
+        )
+    }
 }
 
 #[cfg(feature = "p2p")]
 impl P2pPort for P2PAdapter {
-    fn reserved_peers_count(&self) -> Receiver<usize> {
+    fn reserved_peers_count(&self) -> BoxStream<usize> {
         if let Some(service) = &self.service {
-            service.subscribe_reserved_peers_count()
+            Box::pin(
+                BroadcastStream::new(service.subscribe_reserved_peers_count())
+                    .filter_map(|result| result.ok()),
+            )
         } else {
-            let (tx, rx) = tokio::sync::broadcast::channel(0);
-            drop(tx);
-            rx
+            Box::pin(tokio_stream::pending())
         }
     }
 }
 
 #[cfg(not(feature = "p2p"))]
 impl P2pPort for P2PAdapter {
-    fn reserved_peers_count(&self) -> Receiver<usize> {
-        let (tx, rx) = tokio::sync::broadcast::channel(0);
-        drop(tx);
-        rx
+    fn reserved_peers_count(&self) -> BoxStream<usize> {
+        Box::pin(tokio_stream::pending())
     }
 }
 

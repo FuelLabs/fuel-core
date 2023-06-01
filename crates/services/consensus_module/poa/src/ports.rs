@@ -39,7 +39,6 @@ pub trait TransactionPool: Send + Sync {
 
 #[cfg(test)]
 use fuel_core_storage::test_helpers::EmptyStorage;
-use tokio::sync::broadcast::Receiver;
 
 #[cfg_attr(test, mockall::automock(type Database=EmptyStorage;))]
 #[async_trait::async_trait]
@@ -62,6 +61,8 @@ pub trait BlockImporter: Send + Sync {
         &self,
         result: UncommittedImportResult<StorageTransaction<Self::Database>>,
     ) -> anyhow::Result<()>;
+
+    fn block_stream(&self) -> BoxStream<BlockHeight>;
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -88,9 +89,10 @@ pub trait RelayerPort {
     ) -> anyhow::Result<()>;
 }
 
+#[cfg_attr(test, mockall::automock)]
 pub trait P2pPort: Send + Sync + 'static {
     /// Subscribe to reserved peers connection updates.
-    fn reserved_peers_count(&self) -> Receiver<usize>;
+    fn reserved_peers_count(&self) -> BoxStream<usize>;
 }
 
 #[async_trait::async_trait]

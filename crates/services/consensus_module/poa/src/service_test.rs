@@ -3,7 +3,7 @@ use crate::{
     ports::{
         MockBlockImporter,
         MockBlockProducer,
-        MockSyncPort,
+        MockP2pPort,
         MockTransactionPool,
     },
     service::MainTask,
@@ -79,14 +79,14 @@ struct TestContextBuilder {
     producer: Option<MockBlockProducer>,
 }
 
-fn generate_sync_port() -> MockSyncPort {
-    let mut syncer = MockSyncPort::default();
+fn generate_p2p_port() -> MockP2pPort {
+    let mut p2p_port = MockP2pPort::default();
 
-    syncer
-        .expect_sync_with_peers()
-        .returning(move || Box::pin(async { Ok(()) }));
+    p2p_port
+        .expect_reserved_peers_count()
+        .returning(move || Box::pin(tokio_stream::pending()));
 
-    syncer
+    p2p_port
 }
 
 impl TestContextBuilder {
@@ -148,7 +148,7 @@ impl TestContextBuilder {
             .txpool
             .unwrap_or_else(MockTransactionPool::no_tx_updates);
 
-        let syncer = generate_sync_port();
+        let p2p_port = generate_p2p_port();
 
         let service = new_service(
             &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
@@ -156,7 +156,7 @@ impl TestContextBuilder {
             txpool,
             producer,
             importer,
-            syncer,
+            p2p_port,
         );
         service.start().unwrap();
         TestContext { service }
@@ -164,8 +164,7 @@ impl TestContextBuilder {
 }
 
 struct TestContext {
-    service:
-        Service<MockTransactionPool, MockBlockProducer, MockBlockImporter, MockSyncPort>,
+    service: Service<MockTransactionPool, MockBlockProducer, MockBlockImporter>,
 }
 
 impl TestContext {
@@ -323,7 +322,7 @@ async fn remove_skipped_transactions() {
         consensus_params: Default::default(),
     };
 
-    let syncer = generate_sync_port();
+    let p2p_port = generate_p2p_port();
 
     let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
@@ -331,7 +330,7 @@ async fn remove_skipped_transactions() {
         txpool,
         block_producer,
         block_importer,
-        syncer,
+        p2p_port,
     );
 
     assert!(task.produce_next_block().await.is_ok());
@@ -368,7 +367,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         consensus_params: Default::default(),
     };
 
-    let syncer = generate_sync_port();
+    let p2p_port = generate_p2p_port();
 
     let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
@@ -376,7 +375,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         txpool,
         block_producer,
         block_importer,
-        syncer,
+        p2p_port,
     );
 
     // simulate some txpool events to see if any block production is erroneously triggered
@@ -428,7 +427,7 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
         consensus_params: Default::default(),
     };
 
-    let syncer = generate_sync_port();
+    let p2p_port = generate_p2p_port();
 
     let task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
@@ -436,7 +435,7 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
         txpool,
         block_producer,
         block_importer,
-        syncer,
+        p2p_port,
     );
 
     let service = Service::new(task);

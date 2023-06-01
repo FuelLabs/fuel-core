@@ -121,27 +121,13 @@ pub fn init_sub_services(
         !matches!(poa_config.trigger, Trigger::Never) || config.manual_blocks_enabled;
 
     let poa = (production_enabled).then(|| {
-        // let syncer = match config.chain_conf.consensus {
-        //     fuel_core_chain_config::ConsensusConfig::PoA {
-        //         time_until_synced,
-        //         min_connected_resereved_peers,
-        //         timeout_between_checking_peers,
-        //         ..
-        //     } => SyncAdapter::new(
-        //         importer_adapter.block_importer.subscribe(),
-        //         min_connected_resereved_peers,
-        //         time_until_synced,
-        //         timeout_between_checking_peers,
-        //         p2p_adapter.clone(),
-        //     ),
-        // };
-
         fuel_core_poa::new_service(
             last_block.header(),
             poa_config,
             tx_pool_adapter.clone(),
             producer_adapter.clone(),
             importer_adapter.clone(),
+            p2p_adapter.clone(),
         )
     });
     let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));

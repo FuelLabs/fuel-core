@@ -63,12 +63,10 @@ use fuel_core_types::{
 };
 use std::{
     ops::Deref,
-    sync::Arc,
     time::Duration,
 };
 use tokio::{
     sync::{
-        broadcast,
         mpsc,
         oneshot,
     },
@@ -135,7 +133,6 @@ pub struct MainTask<T, B, I> {
     block_importer: I,
     txpool: T,
     sync_state: tokio::sync::watch::Receiver<SyncState>,
-    sync_notify: Arc<tokio::sync::Notify>,
     tx_status_update_stream: BoxStream<TxStatus>,
     request_receiver: mpsc::Receiver<Request>,
     shared_state: SharedState,
@@ -151,6 +148,7 @@ pub struct MainTask<T, B, I> {
 impl<T, B, I> MainTask<T, B, I>
 where
     T: TransactionPool,
+    I: BlockImporter,
 {
     pub fn new<P: P2pPort>(
         last_block: &BlockHeader,
@@ -159,7 +157,6 @@ where
         block_producer: B,
         block_importer: I,
         p2p_port: P,
-        block_rx: broadcast::Receiver<Arc<ImportResult>>,
     ) -> Self {
         let tx_status_update_stream = txpool.transaction_status_events();
         let (request_sender, request_receiver) = mpsc::channel(100);
@@ -169,26 +166,22 @@ where
         let last_block_created = Instant::now() - duration;
 
         // todo get from config
-        let min_conneected_reserved_peers = 0;
-        let time_until_sync = Duration::ZERO;
+        let min_connected_reserved_peers = 0;
+        let time_until_synced = Duration::ZERO;
 
-        let initial_sync_state = {
-            if min_conneected_reserved_peers == 0 && time_until_sync == Duration::ZERO {
-                SyncState::Synced
-            } else {
-                SyncState::NotSynced
-            }
-        };
+        let initial_sync_state =
+            SyncState::from_config(min_connected_reserved_peers, time_until_synced);
 
         let (state_sender, sync_state) = tokio::sync::watch::channel(initial_sync_state);
-        let sync_notify = Arc::new(tokio::sync::Notify::new());
+        let block_stream = block_importer.block_stream();
+
+        let peer_connections_stream = p2p_port.reserved_peers_count();
 
         let mut sync_task = SyncTask::new(
-            p2p_port,
-            min_conneected_reserved_peers,
-            time_until_sync,
-            block_rx,
-            sync_notify.clone(),
+            peer_connections_stream,
+            min_connected_reserved_peers,
+            time_until_synced,
+            block_stream,
             state_sender,
             *last_block.height(),
         );
@@ -206,7 +199,6 @@ where
             block_producer,
             block_importer,
             sync_state,
-            sync_notify,
             tx_status_update_stream,
             request_receiver,
             shared_state: SharedState { request_sender },
@@ -511,7 +503,7 @@ where
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         // make sure we're synced first
         if *self.sync_state.borrow() == SyncState::NotSynced {
-            self.sync_notify.notified().await;
+            self.sync_state.changed().await?;
         }
 
         let should_continue;
@@ -568,7 +560,6 @@ pub fn new_service<D, T, B, I, P>(
     block_producer: B,
     block_importer: I,
     p2p_port: P,
-    block_rx: broadcast::Receiver<Arc<ImportResult>>,
 ) -> Service<T, B, I>
 where
     T: TransactionPool + 'static,
@@ -583,7 +574,6 @@ where
         block_producer,
         block_importer,
         p2p_port,
-        block_rx,
     ))
 }
 
