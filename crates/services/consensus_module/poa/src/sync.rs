@@ -208,7 +208,7 @@ impl InnerSyncState {
         match self {
             InnerSyncState::InsufficientPeers(block_height)
             | InnerSyncState::SufficientPeers(block_height)
-            | InnerSyncState::Synced(block_height) => &block_height,
+            | InnerSyncState::Synced(block_height) => block_height,
         }
     }
 
