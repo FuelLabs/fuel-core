@@ -65,6 +65,10 @@ async fn can_manually_produce_block(
             .unwrap();
         Ok(())
     });
+    importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
+
     let mut producer = MockBlockProducer::default();
     producer
         .expect_produce_and_execute_block()

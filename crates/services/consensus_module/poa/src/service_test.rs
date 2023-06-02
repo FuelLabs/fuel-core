@@ -296,6 +296,10 @@ async fn remove_skipped_transactions() {
         .times(1)
         .returning(|_| Ok(()));
 
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
+
     let mut txpool = MockTransactionPool::no_tx_updates();
     // Test created for only for this check.
     txpool.expect_remove_txs().returning(move |skipped_ids| {
@@ -357,6 +361,9 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
     block_importer
         .expect_commit_result()
         .returning(|_| panic!("Block importer should not be called"));
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
 
     let mut txpool = MockTransactionPool::no_tx_updates();
     txpool.expect_total_consumable_gas().returning(|| 0);
@@ -413,6 +420,10 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
     block_importer
         .expect_commit_result()
         .returning(|_| panic!("Block importer should not be called"));
+
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
 
     let mut txpool = MockTransactionPool::no_tx_updates();
     txpool.expect_total_consumable_gas().returning(|| 0);
