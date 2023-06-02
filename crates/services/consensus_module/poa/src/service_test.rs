@@ -142,6 +142,9 @@ impl TestContextBuilder {
             let mut importer = MockBlockImporter::default();
             importer.expect_commit_result().returning(|_| Ok(()));
             importer
+                .expect_block_stream()
+                .returning(|| Box::pin(tokio_stream::pending()));
+            importer
         });
 
         let txpool = self
@@ -319,7 +322,7 @@ async fn remove_skipped_transactions() {
         block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
         metrics: false,
-        consensus_params: Default::default(),
+        ..Default::default()
     };
 
     let p2p_port = generate_p2p_port();
@@ -364,7 +367,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
         metrics: false,
-        consensus_params: Default::default(),
+        ..Default::default()
     };
 
     let p2p_port = generate_p2p_port();
@@ -424,7 +427,7 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
         block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
         metrics: false,
-        consensus_params: Default::default(),
+        ..Default::default()
     };
 
     let p2p_port = generate_p2p_port();

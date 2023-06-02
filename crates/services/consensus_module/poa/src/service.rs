@@ -132,7 +132,6 @@ pub struct MainTask<T, B, I> {
     block_producer: B,
     block_importer: I,
     txpool: T,
-    sync_state: tokio::sync::watch::Receiver<SyncState>,
     tx_status_update_stream: BoxStream<TxStatus>,
     request_receiver: mpsc::Receiver<Request>,
     shared_state: SharedState,
@@ -143,6 +142,7 @@ pub struct MainTask<T, B, I> {
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
     consensus_params: ConsensusParameters,
+    sync_state: tokio::sync::watch::Receiver<SyncState>,
     sync_task_handle: ServiceRunner<SyncTask>,
 }
 
@@ -166,9 +166,8 @@ where
             Duration::from_secs(Tai64::now().0.saturating_sub(last_timestamp.0));
         let last_block_created = Instant::now() - duration;
 
-        // todo get from config
-        let min_connected_reserved_peers = 0;
-        let time_until_synced = Duration::ZERO;
+        let min_connected_reserved_peers = config.min_connected_reserved_peers;
+        let time_until_synced = config.time_until_synced;
 
         let initial_sync_state =
             SyncState::from_config(min_connected_reserved_peers, time_until_synced);

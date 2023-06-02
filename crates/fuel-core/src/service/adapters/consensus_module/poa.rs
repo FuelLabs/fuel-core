@@ -138,13 +138,3 @@ impl P2pPort for P2PAdapter {
         Box::pin(tokio_stream::pending())
     }
 }
-
-// `ImportResult` add new field to identify is the block produce by ourself or from the network
-// P2P provides subscription to the "current number of connected reserved peers".
-//
-// With next statements all unit test should continue to work as before:
-// If `min_connected_reserved_peers` is zero, then the initial `State` is `SufficientPeers`.
-// If `time_until_synced` and `min_connected_reserved_peers` are, then the initial `State` is `Synced`.
-// For the `Config::local_testnet` `min_connected_reserved_peers` and `time_until_synced` are zero.
-//
-// Not to forget to add a new integration test where we start teh second block producer.

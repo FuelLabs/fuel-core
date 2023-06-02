@@ -18,8 +18,7 @@ pub enum ConsensusConfig {
         /// If this time expires before receving new block - we consider to be synced with the chain
         time_until_synced: Duration,
         /// Minimum number of connected reserved peers to start block production
-        min_connected_resereved_peers: usize,
-        timeout_between_checking_peers: Duration,
+        min_connected_reserved_peers: usize,
     },
 }
 
@@ -27,9 +26,8 @@ impl ConsensusConfig {
     pub fn default_poa() -> Self {
         ConsensusConfig::PoA {
             signing_key: Input::owner(&default_consensus_dev_key().public_key()),
-            min_connected_resereved_peers: 0,
-            time_until_synced: Duration::from_secs(6),
-            timeout_between_checking_peers: Duration::from_millis(500),
+            min_connected_reserved_peers: 0,
+            time_until_synced: Duration::ZERO,
         }
     }
 }

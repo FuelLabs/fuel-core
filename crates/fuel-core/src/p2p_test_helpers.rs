@@ -11,7 +11,6 @@ use crate::{
         ServiceTrait,
     },
 };
-use fuel_core_chain_config::ConsensusConfig;
 use fuel_core_p2p::{
     codecs::postcard::PostcardCodec,
     network_service::FuelP2PService,
@@ -199,21 +198,6 @@ pub async fn make_nodes(
     let mut producers_with_txs = Vec::with_capacity(producers.len());
     let mut chain_config = ChainConfig::local_testnet();
     chain_config.transaction_parameters.max_storage_slots = 1 << 17; // 131072
-
-    match chain_config.consensus {
-        ConsensusConfig::PoA {
-            signing_key,
-            timeout_between_checking_peers,
-            ..
-        } => {
-            chain_config.consensus = ConsensusConfig::PoA {
-                signing_key,
-                time_until_synced: Duration::from_secs(0),
-                min_connected_resereved_peers: 0,
-                timeout_between_checking_peers,
-            }
-        }
-    }
 
     for (all, producer) in txs_coins.into_iter().zip(producers.into_iter()) {
         match all {

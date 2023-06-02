@@ -1,5 +1,4 @@
 use fuel_core::{
-    chain_config::ConsensusConfig,
     database::Database,
     schema::scalars::BlockId,
     service::{
@@ -211,21 +210,6 @@ async fn produce_block_custom_time() {
     config.block_production = Trigger::Interval {
         block_time: Duration::from_secs(10),
     };
-
-    match config.chain_conf.consensus {
-        ConsensusConfig::PoA {
-            signing_key,
-            timeout_between_checking_peers,
-            ..
-        } => {
-            config.chain_conf.consensus = ConsensusConfig::PoA {
-                signing_key,
-                time_until_synced: Duration::from_secs(0),
-                min_connected_resereved_peers: 0,
-                timeout_between_checking_peers,
-            }
-        }
-    }
 
     let srv = FuelService::from_database(db.clone(), config)
         .await
