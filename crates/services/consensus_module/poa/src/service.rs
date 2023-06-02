@@ -143,6 +143,7 @@ pub struct MainTask<T, B, I> {
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
     consensus_params: ConsensusParameters,
+    sync_task_handle: ServiceRunner<SyncTask>,
 }
 
 impl<T, B, I> MainTask<T, B, I>
@@ -174,23 +175,19 @@ where
 
         let (state_sender, sync_state) = tokio::sync::watch::channel(initial_sync_state);
         let block_stream = block_importer.block_stream();
-
         let peer_connections_stream = p2p_port.reserved_peers_count();
+        let last_block_height = *last_block.height();
 
-        let mut sync_task = SyncTask::new(
+        let sync_task = SyncTask::new(
             peer_connections_stream,
             min_connected_reserved_peers,
             time_until_synced,
             block_stream,
             state_sender,
-            *last_block.height(),
+            last_block_height,
         );
 
-        tokio::spawn(async move {
-            loop {
-                let _ = sync_task.run().await;
-            }
-        });
+        let sync_task_handle = ServiceRunner::new(sync_task);
 
         Self {
             block_gas_limit: config.block_gas_limit,
@@ -202,12 +199,13 @@ where
             tx_status_update_stream,
             request_receiver,
             shared_state: SharedState { request_sender },
-            last_height: *last_block.height(),
+            last_height: last_block_height,
             last_timestamp,
             last_block_created,
             trigger: config.trigger,
             timer: DeadlineClock::new(),
             consensus_params: config.consensus_params,
+            sync_task_handle,
         }
     }
 
@@ -547,8 +545,9 @@ where
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        // Nothing to shut down because we don't have any temporary state that should be dumped,
-        // and we don't spawn any sub-tasks that we need to finish or await.
+        use fuel_core_services::Service;
+        tracing::info!("PoA MainTask shutting down");
+        self.sync_task_handle.stop_and_await().await?;
         Ok(())
     }
 }

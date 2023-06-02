@@ -1,6 +1,11 @@
 use std::time::Duration;
 
-use fuel_core_services::stream::BoxStream;
+use fuel_core_services::{
+    stream::BoxStream,
+    RunnableService,
+    RunnableTask,
+    StateWatcher,
+};
 use fuel_core_types::fuel_types::BlockHeight;
 use tokio::sync::watch;
 use tokio_stream::StreamExt;
@@ -66,8 +71,12 @@ impl SyncTask {
         }
     }
 
-    pub async fn run(&mut self) -> anyhow::Result<()> {
+    pub async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+        let mut should_continue = true;
         tokio::select! {
+            _ = watcher.while_started() => {
+                should_continue = false;
+            }
             latest_count = self.peer_connections_stream.next() => {
                 if let Some(latest_count) = latest_count {
                     if self.inner_state.change_state_on_peers_update(latest_count, self.min_connected_reserved_peers) {
@@ -92,7 +101,7 @@ impl SyncTask {
             }
         }
 
-        Ok(())
+        Ok(should_continue)
     }
 
     async fn set_timeout_on_state_change(&mut self) {
@@ -103,6 +112,40 @@ impl SyncTask {
         } else {
             self.timer.clear().await;
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl RunnableService for SyncTask {
+    const NAME: &'static str = "fuel-core-consensus/poa/sync-task";
+
+    type SharedData = ();
+    type TaskParams = ();
+
+    type Task = SyncTask;
+
+    fn shared_data(&self) -> Self::SharedData {}
+
+    async fn into_task(
+        self,
+        _: &StateWatcher,
+        _: Self::TaskParams,
+    ) -> anyhow::Result<Self::Task> {
+        Ok(self)
+    }
+}
+
+#[async_trait::async_trait]
+impl RunnableTask for SyncTask {
+    #[tracing::instrument(level = "debug", skip_all, err, ret)]
+    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+        self.run(watcher).await
+    }
+
+    async fn shutdown(self) -> anyhow::Result<()> {
+        // Nothing to shut down because we don't have any temporary state that should be dumped,
+        // and we don't spawn any sub-tasks that we need to finish or await.
+        Ok(())
     }
 }
 
@@ -475,10 +518,14 @@ mod tests {
             InnerSyncState::InsufficientPeers(_)
         ));
 
+        let (_tx, shutdown) =
+            tokio::sync::watch::channel(fuel_core_services::State::Started);
+        let mut watcher = shutdown.into();
+
         // given that we've performed a `run()` `amount_of_updates_from_stream + biggest_block` times
         let run_times = amount_of_updates_from_stream + biggest_block as usize;
         for _ in 0..run_times {
-            let _ = sync_task.run().await;
+            let _ = sync_task.run(&mut watcher).await;
         }
 
         // the state should still be NotSynced
@@ -499,7 +546,7 @@ mod tests {
         // given that we now run the task again
         // both block stream and p2p connected peers updates stream would be empty
         // hence the timeout should activate and expire
-        let _ = sync_task.run().await;
+        let _ = sync_task.run(&mut watcher).await;
 
         // at that point we should be in Synced state
         assert_eq!(SyncState::Synced, *state_receiver.borrow());
