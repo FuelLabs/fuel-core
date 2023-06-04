@@ -126,6 +126,8 @@ impl<D> Task<D> {
         let (request_sender, request_receiver) = mpsc::channel(100);
         let (tx_broadcast, _) = broadcast::channel(100);
         let (block_height_broadcast, _) = broadcast::channel(100);
+        let (reserved_peers_broadcast, _) = broadcast::channel(100);
+
         let next_block_height = block_importer.next_block_height();
         let max_block_size = config.max_block_size;
         let p2p_service = FuelP2PService::new(config, PostcardCodec::new(max_block_size));
@@ -138,6 +140,7 @@ impl<D> Task<D> {
             shared: SharedState {
                 request_sender,
                 tx_broadcast,
+                reserved_peers_broadcast,
                 block_height_broadcast,
             },
         }
@@ -291,6 +294,10 @@ where
                             }
                         }
                     },
+                    Some(FuelP2PEvent::PeerConnected { reserved_peers_connected_count: Some(reserved_peers_count), .. })
+                    | Some(FuelP2PEvent::PeerDisconnected { reserved_peers_connected_count: Some(reserved_peers_count), .. }) => {
+                        let _ = self.shared.reserved_peers_broadcast.send(reserved_peers_count);
+                    },
                     _ => (),
                 }
             },
@@ -323,6 +330,8 @@ where
 pub struct SharedState {
     /// Sender of p2p transaction used for subscribing.
     tx_broadcast: broadcast::Sender<TransactionGossipData>,
+    /// Sender of reserved peers connection updates.
+    reserved_peers_broadcast: broadcast::Sender<usize>,
     /// Used for communicating with the `Task`.
     request_sender: mpsc::Sender<TaskRequest>,
     /// Sender of p2p blopck height data
@@ -438,6 +447,10 @@ impl SharedState {
         &self,
     ) -> broadcast::Receiver<BlockHeightHeartbeatData> {
         self.block_height_broadcast.subscribe()
+    }
+
+    pub fn subscribe_reserved_peers_count(&self) -> broadcast::Receiver<usize> {
+        self.reserved_peers_broadcast.subscribe()
     }
 
     pub fn report_peer<T: PeerReport>(

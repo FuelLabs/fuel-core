@@ -2,11 +2,10 @@ use crate::{
     database::Database,
     service::Config,
 };
+
 use fuel_core_consensus_module::block_verifier::Verifier;
 use fuel_core_txpool::service::SharedState as TxPoolSharedState;
-use fuel_core_types::services::block_importer::ImportResult;
 use std::sync::Arc;
-use tokio::sync::broadcast::Receiver;
 
 pub mod block_importer;
 pub mod consensus_module;
@@ -87,15 +86,5 @@ impl P2PAdapter {
 impl P2PAdapter {
     pub fn new() -> Self {
         Default::default()
-    }
-}
-
-pub struct SyncAdapter {
-    block_rx: Receiver<Arc<ImportResult>>,
-}
-
-impl SyncAdapter {
-    pub fn new(block_rx: Receiver<Arc<ImportResult>>) -> Self {
-        Self { block_rx }
     }
 }

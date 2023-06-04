@@ -3,9 +3,10 @@ use crate::{
     ports::{
         MockBlockImporter,
         MockBlockProducer,
+        MockP2pPort,
         MockTransactionPool,
     },
-    service::Task,
+    service::MainTask,
     Config,
     Service,
     Trigger,
@@ -78,6 +79,16 @@ struct TestContextBuilder {
     producer: Option<MockBlockProducer>,
 }
 
+fn generate_p2p_port() -> MockP2pPort {
+    let mut p2p_port = MockP2pPort::default();
+
+    p2p_port
+        .expect_reserved_peers_count()
+        .returning(move || Box::pin(tokio_stream::pending()));
+
+    p2p_port
+}
+
 impl TestContextBuilder {
     fn new() -> Self {
         Self {
@@ -131,11 +142,16 @@ impl TestContextBuilder {
             let mut importer = MockBlockImporter::default();
             importer.expect_commit_result().returning(|_| Ok(()));
             importer
+                .expect_block_stream()
+                .returning(|| Box::pin(tokio_stream::pending()));
+            importer
         });
 
         let txpool = self
             .txpool
             .unwrap_or_else(MockTransactionPool::no_tx_updates);
+
+        let p2p_port = generate_p2p_port();
 
         let service = new_service(
             &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
@@ -143,6 +159,7 @@ impl TestContextBuilder {
             txpool,
             producer,
             importer,
+            p2p_port,
         );
         service.start().unwrap();
         TestContext { service }
@@ -279,6 +296,10 @@ async fn remove_skipped_transactions() {
         .times(1)
         .returning(|_| Ok(()));
 
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
+
     let mut txpool = MockTransactionPool::no_tx_updates();
     // Test created for only for this check.
     txpool.expect_remove_txs().returning(move |skipped_ids| {
@@ -305,14 +326,18 @@ async fn remove_skipped_transactions() {
         block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
         metrics: false,
-        consensus_params: Default::default(),
+        ..Default::default()
     };
-    let mut task = Task::new(
+
+    let p2p_port = generate_p2p_port();
+
+    let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
         txpool,
         block_producer,
         block_importer,
+        p2p_port,
     );
 
     assert!(task.produce_next_block().await.is_ok());
@@ -336,6 +361,9 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
     block_importer
         .expect_commit_result()
         .returning(|_| panic!("Block importer should not be called"));
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
 
     let mut txpool = MockTransactionPool::no_tx_updates();
     txpool.expect_total_consumable_gas().returning(|| 0);
@@ -346,14 +374,18 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
         metrics: false,
-        consensus_params: Default::default(),
+        ..Default::default()
     };
-    let mut task = Task::new(
+
+    let p2p_port = generate_p2p_port();
+
+    let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
         txpool,
         block_producer,
         block_importer,
+        p2p_port,
     );
 
     // simulate some txpool events to see if any block production is erroneously triggered
@@ -389,6 +421,10 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
         .expect_commit_result()
         .returning(|_| panic!("Block importer should not be called"));
 
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
+
     let mut txpool = MockTransactionPool::no_tx_updates();
     txpool.expect_total_consumable_gas().returning(|| 0);
     txpool.expect_pending_number().returning(|| 0);
@@ -402,14 +438,18 @@ async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
         block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
         metrics: false,
-        consensus_params: Default::default(),
+        ..Default::default()
     };
-    let task = Task::new(
+
+    let p2p_port = generate_p2p_port();
+
+    let task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
         txpool,
         block_producer,
         block_importer,
+        p2p_port,
     );
 
     let service = Service::new(task);

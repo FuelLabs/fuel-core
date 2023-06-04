@@ -1,11 +1,10 @@
-use std::time::Duration;
-
 use crate::{
     database::Database,
     fuel_core_graphql_api::ports::ConsensusModulePort,
     service::adapters::{
         BlockImporterAdapter,
         BlockProducerAdapter,
+        P2PAdapter,
         PoAAdapter,
         TxPoolAdapter,
     },
@@ -14,7 +13,7 @@ use anyhow::anyhow;
 use fuel_core_poa::{
     ports::{
         BlockImporter,
-        SyncPort,
+        P2pPort,
         TransactionPool,
     },
     service::SharedState,
@@ -34,6 +33,10 @@ use fuel_core_types::{
         },
     },
     tai64::Tai64,
+};
+use tokio_stream::{
+    wrappers::BroadcastStream,
+    StreamExt,
 };
 
 impl PoAAdapter {
@@ -71,10 +74,6 @@ impl TransactionPool for TxPoolAdapter {
     }
 
     fn transaction_status_events(&self) -> BoxStream<TxStatus> {
-        use tokio_stream::{
-            wrappers::BroadcastStream,
-            StreamExt,
-        };
         Box::pin(
             BroadcastStream::new(self.service.tx_status_subscribe())
                 .filter_map(|result| result.ok()),
@@ -109,27 +108,33 @@ impl BlockImporter for BlockImporterAdapter {
             .commit_result(result)
             .map_err(Into::into)
     }
+
+    fn block_stream(&self) -> BoxStream<BlockHeight> {
+        Box::pin(
+            BroadcastStream::new(self.block_importer.subscribe())
+                .filter_map(|result| result.ok())
+                .map(|r| *r.sealed_block.entity.header().height()),
+        )
+    }
 }
 
-const TIME_UNTIL_SYNCED: Duration = Duration::from_secs(60);
-
-#[async_trait::async_trait]
-impl SyncPort for crate::service::adapters::SyncAdapter {
-    async fn sync_with_peers(&mut self) -> anyhow::Result<()> {
-        // todo: connect to N amount of peers first!
-
-        'outer: loop {
-            tokio::select! {
-                _ = self.block_rx.recv() => {
-                    // keep receiving them blocks
-                }
-                _ = tokio::time::sleep(TIME_UNTIL_SYNCED) => {
-                    // time expired we are synced!
-                    break 'outer;
-                }
-            }
+#[cfg(feature = "p2p")]
+impl P2pPort for P2PAdapter {
+    fn reserved_peers_count(&self) -> BoxStream<usize> {
+        if let Some(service) = &self.service {
+            Box::pin(
+                BroadcastStream::new(service.subscribe_reserved_peers_count())
+                    .filter_map(|result| result.ok()),
+            )
+        } else {
+            Box::pin(tokio_stream::pending())
         }
+    }
+}
 
-        Ok(())
+#[cfg(not(feature = "p2p"))]
+impl P2pPort for P2PAdapter {
+    fn reserved_peers_count(&self) -> BoxStream<usize> {
+        Box::pin(tokio_stream::pending())
     }
 }

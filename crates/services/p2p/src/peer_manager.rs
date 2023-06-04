@@ -83,6 +83,15 @@ impl PeerManager {
         }
     }
 
+    /// Returns `count` if the peer was just added or removed from the reserved connected peers.
+    pub fn connected_reserved_peers(&self, peer_id: &PeerId) -> Option<usize> {
+        if self.reserved_peers.contains(peer_id) {
+            Some(self.reserved_connected_peers.len())
+        } else {
+            None
+        }
+    }
+
     pub fn handle_gossip_score_update<T: Punisher>(
         &self,
         peer_id: PeerId,

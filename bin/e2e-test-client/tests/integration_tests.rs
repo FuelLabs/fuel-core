@@ -2,6 +2,7 @@ use fuel_core::service::{
     Config,
     FuelService,
 };
+
 // Add methods on commands
 use fuel_core_e2e_client::config::SuiteConfig;
 use std::fs;

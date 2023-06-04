@@ -13,6 +13,8 @@ pub struct Config {
     pub signing_key: Option<Secret<SecretKeyWrapper>>,
     pub metrics: bool,
     pub consensus_params: ConsensusParameters,
+    pub min_connected_reserved_peers: usize,
+    pub time_until_synced: Duration,
 }
 
 /// Block production trigger for PoA operation

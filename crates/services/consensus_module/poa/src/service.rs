@@ -6,8 +6,12 @@ use crate::{
     ports::{
         BlockImporter,
         BlockProducer,
-        SyncPort,
+        P2pPort,
         TransactionPool,
+    },
+    sync::{
+        SyncState,
+        SyncTask,
     },
     Config,
     Trigger,
@@ -71,7 +75,7 @@ use tokio::{
 use tokio_stream::StreamExt;
 use tracing::error;
 
-pub type Service<T, B, I> = ServiceRunner<Task<T, B, I>>;
+pub type Service<T, B, I> = ServiceRunner<MainTask<T, B, I>>;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -122,7 +126,7 @@ pub(crate) enum RequestType {
     Trigger,
 }
 
-pub struct Task<T, B, I> {
+pub struct MainTask<T, B, I> {
     block_gas_limit: Word,
     signing_key: Option<Secret<SecretKeyWrapper>>,
     block_producer: B,
@@ -138,18 +142,22 @@ pub struct Task<T, B, I> {
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
     consensus_params: ConsensusParameters,
+    sync_state: tokio::sync::watch::Receiver<SyncState>,
+    sync_task_handle: ServiceRunner<SyncTask>,
 }
 
-impl<T, B, I> Task<T, B, I>
+impl<T, B, I> MainTask<T, B, I>
 where
     T: TransactionPool,
+    I: BlockImporter,
 {
-    pub fn new(
+    pub fn new<P: P2pPort>(
         last_block: &BlockHeader,
         config: Config,
         txpool: T,
         block_producer: B,
         block_importer: I,
+        p2p_port: P,
     ) -> Self {
         let tx_status_update_stream = txpool.transaction_status_events();
         let (request_sender, request_receiver) = mpsc::channel(100);
@@ -157,21 +165,46 @@ where
         let duration =
             Duration::from_secs(Tai64::now().0.saturating_sub(last_timestamp.0));
         let last_block_created = Instant::now() - duration;
+
+        let min_connected_reserved_peers = config.min_connected_reserved_peers;
+        let time_until_synced = config.time_until_synced;
+
+        let initial_sync_state =
+            SyncState::from_config(min_connected_reserved_peers, time_until_synced);
+
+        let (state_sender, sync_state) = tokio::sync::watch::channel(initial_sync_state);
+        let block_stream = block_importer.block_stream();
+        let peer_connections_stream = p2p_port.reserved_peers_count();
+        let last_block_height = *last_block.height();
+
+        let sync_task = SyncTask::new(
+            peer_connections_stream,
+            min_connected_reserved_peers,
+            time_until_synced,
+            block_stream,
+            state_sender,
+            last_block_height,
+        );
+
+        let sync_task_handle = ServiceRunner::new(sync_task);
+
         Self {
             block_gas_limit: config.block_gas_limit,
             signing_key: config.signing_key,
             txpool,
             block_producer,
             block_importer,
+            sync_state,
             tx_status_update_stream,
             request_receiver,
             shared_state: SharedState { request_sender },
-            last_height: *last_block.height(),
+            last_height: last_block_height,
             last_timestamp,
             last_block_created,
             trigger: config.trigger,
             timer: DeadlineClock::new(),
             consensus_params: config.consensus_params,
+            sync_task_handle,
         }
     }
 
@@ -205,7 +238,7 @@ where
     }
 }
 
-impl<D, T, B, I> Task<T, B, I>
+impl<D, T, B, I> MainTask<T, B, I>
 where
     T: TransactionPool,
     B: BlockProducer<Database = D>,
@@ -421,15 +454,15 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T, B, I> RunnableService for Task<T, B, I>
+impl<T, B, I> RunnableService for MainTask<T, B, I>
 where
     Self: RunnableTask,
 {
     const NAME: &'static str = "PoA";
 
     type SharedData = SharedState;
-    type Task = Task<T, B, I>;
-    type TaskParams = Box<dyn SyncPort>;
+    type Task = MainTask<T, B, I>;
+    type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
         self.shared_state.clone()
@@ -438,10 +471,8 @@ where
     async fn into_task(
         self,
         _: &StateWatcher,
-        mut syncer: Self::TaskParams,
+        _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        let _ = syncer.as_mut().sync_with_peers().await;
-
         match self.trigger {
             Trigger::Never | Trigger::Instant => {}
             Trigger::Interval { block_time } => {
@@ -460,13 +491,18 @@ where
 }
 
 #[async_trait::async_trait]
-impl<D, T, B, I> RunnableTask for Task<T, B, I>
+impl<D, T, B, I> RunnableTask for MainTask<T, B, I>
 where
     T: TransactionPool,
     B: BlockProducer<Database = D>,
     I: BlockImporter<Database = D>,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+        // make sure we're synced first
+        if *self.sync_state.borrow() == SyncState::NotSynced {
+            self.sync_state.changed().await?;
+        }
+
         let should_continue;
         tokio::select! {
             _ = watcher.while_started() => {
@@ -508,29 +544,35 @@ where
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        // Nothing to shut down because we don't have any temporary state that should be dumped,
-        // and we don't spawn any sub-tasks that we need to finish or await.
+        use fuel_core_services::Service;
+        tracing::info!("PoA MainTask shutting down");
+        self.sync_task_handle.stop_and_await().await?;
         Ok(())
     }
 }
 
-pub fn new_service<D, T, B, I>(
+pub fn new_service<D, T, B, I, P>(
     last_block: &BlockHeader,
     config: Config,
     txpool: T,
     block_producer: B,
     block_importer: I,
-    sync: Box<dyn SyncPort>,
+    p2p_port: P,
 ) -> Service<T, B, I>
 where
     T: TransactionPool + 'static,
     B: BlockProducer<Database = D> + 'static,
     I: BlockImporter<Database = D> + 'static,
+    P: P2pPort,
 {
-    Service::new_with_params(
-        Task::new(last_block, config, txpool, block_producer, block_importer),
-        sync,
-    )
+    Service::new(MainTask::new(
+        last_block,
+        config,
+        txpool,
+        block_producer,
+        block_importer,
+        p2p_port,
+    ))
 }
 
 fn seal_block(
