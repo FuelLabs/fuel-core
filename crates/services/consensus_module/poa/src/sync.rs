@@ -40,6 +40,8 @@ pub struct SyncTask {
     peer_connections_stream: BoxStream<usize>,
     block_stream: BoxStream<BlockHeight>,
     state_sender: watch::Sender<SyncState>,
+    // shared with `MainTask` via SyncTask::SharedState
+    state_receiver: watch::Receiver<SyncState>,
     inner_state: InnerSyncState,
     timer: DeadlineClock,
 }
@@ -50,7 +52,6 @@ impl SyncTask {
         min_connected_reserved_peers: usize,
         time_until_synced: Duration,
         block_stream: BoxStream<BlockHeight>,
-        state_sender: watch::Sender<SyncState>,
         block_height: BlockHeight,
     ) -> Self {
         let inner_state = InnerSyncState::from_config(
@@ -60,12 +61,19 @@ impl SyncTask {
         );
         let timer = DeadlineClock::new();
 
+        let initial_sync_state =
+            SyncState::from_config(min_connected_reserved_peers, time_until_synced);
+
+        let (state_sender, state_receiver) =
+            tokio::sync::watch::channel(initial_sync_state);
+
         Self {
             peer_connections_stream,
             min_connected_reserved_peers,
             time_until_synced,
             block_stream,
             state_sender,
+            state_receiver,
             inner_state,
             timer,
         }
@@ -119,12 +127,14 @@ impl SyncTask {
 impl RunnableService for SyncTask {
     const NAME: &'static str = "fuel-core-consensus/poa/sync-task";
 
-    type SharedData = ();
+    type SharedData = watch::Receiver<SyncState>;
     type TaskParams = ();
 
     type Task = SyncTask;
 
-    fn shared_data(&self) -> Self::SharedData {}
+    fn shared_data(&self) -> Self::SharedData {
+        self.state_receiver.clone()
+    }
 
     async fn into_task(
         self,
@@ -493,7 +503,7 @@ mod tests {
         let sync_state =
             SyncState::from_config(min_connected_reserved_peers, time_until_synced);
 
-        let (state_sender, state_receiver) = watch::channel(sync_state);
+        // let (state_sender, state_receiver) = watch::channel(sync_state);
         let connections_stream =
             MockStream::new(vec![connected_peers_report; amount_of_updates_from_stream])
                 .into_boxed();
@@ -506,12 +516,11 @@ mod tests {
             min_connected_reserved_peers,
             time_until_synced,
             block_stream,
-            state_sender,
             BlockHeight::default(),
         );
 
         // sync state should be NotSynced at the beginning
-        assert_eq!(SyncState::NotSynced, *state_receiver.borrow());
+        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
         // we should have insufficient peers
         assert!(matches!(
             sync_task.inner_state,
@@ -529,7 +538,7 @@ mod tests {
         }
 
         // the state should still be NotSynced
-        assert_eq!(SyncState::NotSynced, *state_receiver.borrow());
+        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
 
         // but we should have sufficient peers
         assert!(matches!(
@@ -549,7 +558,7 @@ mod tests {
         let _ = sync_task.run(&mut watcher).await;
 
         // at that point we should be in Synced state
-        assert_eq!(SyncState::Synced, *state_receiver.borrow());
+        assert_eq!(SyncState::Synced, *sync_task.state_receiver.borrow());
 
         // synced should reflect here as well
         assert!(matches!(sync_task.inner_state, InnerSyncState::Synced(_)));

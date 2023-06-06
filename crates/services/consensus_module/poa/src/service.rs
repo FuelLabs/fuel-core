@@ -169,10 +169,6 @@ where
         let min_connected_reserved_peers = config.min_connected_reserved_peers;
         let time_until_synced = config.time_until_synced;
 
-        let initial_sync_state =
-            SyncState::from_config(min_connected_reserved_peers, time_until_synced);
-
-        let (state_sender, sync_state) = tokio::sync::watch::channel(initial_sync_state);
         let block_stream = block_importer.block_stream();
         let peer_connections_stream = p2p_port.reserved_peers_count();
         let last_block_height = *last_block.height();
@@ -182,11 +178,11 @@ where
             min_connected_reserved_peers,
             time_until_synced,
             block_stream,
-            state_sender,
             last_block_height,
         );
 
         let sync_task_handle = ServiceRunner::new(sync_task);
+        let sync_state = sync_task_handle.shared.clone();
 
         Self {
             block_gas_limit: config.block_gas_limit,
