@@ -496,7 +496,10 @@ where
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         // make sure we're synced first
         if *self.sync_state.borrow() == SyncState::NotSynced {
-            self.sync_state.changed().await?;
+            tokio::select! {
+                _ = watcher.while_started() => {}
+                _ = self.sync_state.changed() => {}
+            }
         }
 
         let should_continue;
