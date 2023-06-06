@@ -6,7 +6,7 @@ use fuel_core_types::{
 };
 use tokio::time::Duration;
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct Config {
     pub trigger: Trigger,
     pub block_gas_limit: Word,
@@ -15,6 +15,20 @@ pub struct Config {
     pub consensus_params: ConsensusParameters,
     pub min_connected_reserved_peers: usize,
     pub time_until_synced: Duration,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            trigger: Trigger::default(),
+            block_gas_limit: 0,
+            signing_key: None,
+            metrics: false,
+            consensus_params: ConsensusParameters::default(),
+            min_connected_reserved_peers: 0,
+            time_until_synced: Duration::ZERO,
+        }
+    }
 }
 
 /// Block production trigger for PoA operation

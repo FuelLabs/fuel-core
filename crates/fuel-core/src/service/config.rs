@@ -2,7 +2,6 @@ use clap::ValueEnum;
 use fuel_core_chain_config::{
     default_consensus_dev_key,
     ChainConfig,
-    ConsensusConfig,
 };
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
@@ -113,23 +112,13 @@ impl TryFrom<&Config> for fuel_core_poa::Config {
             "Cannot use manual block production unless trigger mode is never, instant or interval."
         );
 
-        let (min_connected_reserved_peers, time_until_synced) =
-            match config.chain_conf.consensus {
-                ConsensusConfig::PoA {
-                    min_connected_reserved_peers,
-                    time_until_synced,
-                    ..
-                } => (min_connected_reserved_peers, time_until_synced),
-            };
-
         Ok(fuel_core_poa::Config {
             trigger: config.block_production,
             block_gas_limit: config.chain_conf.block_gas_limit,
             signing_key: config.consensus_key.clone(),
             metrics: false,
             consensus_params: config.chain_conf.transaction_parameters,
-            min_connected_reserved_peers,
-            time_until_synced,
+            ..Default::default()
         })
     }
 }
