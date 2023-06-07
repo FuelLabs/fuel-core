@@ -88,8 +88,13 @@ impl SyncTask {
             }
             latest_count = self.peer_connections_stream.next() => {
                 if let Some(latest_count) = latest_count {
-                    if self.state_sender.send_if_modified(|_| {
-                        self.inner_state.change_state_on_peers_update(latest_count, self.min_connected_reserved_peers)
+                    if self.state_sender.send_if_modified(|sync_state: &mut SyncState| {
+                        if self.inner_state.change_state_on_peers_update(latest_count, self.min_connected_reserved_peers) {
+                            *sync_state = self.inner_state.sync_state();
+                            true
+                        } else {
+                            false
+                        }
                     }) {
                         self.update_timeout().await;
                     }
@@ -98,17 +103,28 @@ impl SyncTask {
             }
             block = self.block_stream.next() => {
                 if let Some(new_block_height) = block {
-                    self.state_sender.send_if_modified(|_| {
-                        self.inner_state.change_state_on_block(new_block_height)
+                    self.state_sender.send_if_modified(|sync_state: &mut SyncState| {
+                        if self.inner_state.change_state_on_block(new_block_height) {
+                            *sync_state = self.inner_state.sync_state();
+                            true
+                        } else {
+                            false
+                        }
                     });
+
                     // update timeout on each received block
                     self.update_timeout().await;
 
                 }
             }
             _ = self.timer.wait() => {
-                self.state_sender.send_if_modified(|_| {
-                    self.inner_state.change_on_sync_timeout()
+                self.state_sender.send_if_modified(|sync_state: &mut SyncState| {
+                    if self.inner_state.change_on_sync_timeout() {
+                        *sync_state = self.inner_state.sync_state();
+                        true
+                    } else {
+                        false
+                    }
                 });
             }
         }
@@ -266,6 +282,15 @@ impl InnerSyncState {
             InnerSyncState::SufficientPeers(_) => true,
         }
     }
+
+    fn sync_state(&self) -> SyncState {
+        match self {
+            InnerSyncState::InsufficientPeers(_) | InnerSyncState::SufficientPeers(_) => {
+                SyncState::NotSynced
+            }
+            InnerSyncState::Synced(_) => SyncState::Synced,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -280,16 +305,6 @@ mod tests {
         },
         time::Duration,
     };
-
-    impl InnerSyncState {
-        fn sync_state(&self) -> SyncState {
-            match self {
-                InnerSyncState::InsufficientPeers(_)
-                | InnerSyncState::SufficientPeers(_) => SyncState::NotSynced,
-                InnerSyncState::Synced(_) => SyncState::Synced,
-            }
-        }
-    }
 
     #[test]
     fn test_inner_sync_state() {
@@ -505,7 +520,6 @@ mod tests {
         let biggest_block = 5;
         let time_until_synced = Duration::from_secs(5);
 
-        // let (state_sender, state_receiver) = watch::channel(sync_state);
         let connections_stream =
             MockStream::new(vec![connected_peers_report; amount_of_updates_from_stream])
                 .into_boxed();
