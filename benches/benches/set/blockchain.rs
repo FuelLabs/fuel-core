@@ -370,12 +370,14 @@ pub fn run(c: &mut Criterion) {
         let coin_output = Output::variable(Address::zeroed(), 100, AssetId::zeroed());
         input.outputs.push(coin_output);
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-        let owner = Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT);
+        let owner =
+            Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT.chain_id);
         let coin_input = Input::coin_predicate(
             Default::default(),
             owner,
             1000,
             AssetId::zeroed(),
+            Default::default(),
             Default::default(),
             Default::default(),
             predicate,
@@ -450,12 +452,14 @@ pub fn run(c: &mut Criterion) {
                 .chain(vec![2u8; i as usize]),
         );
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-        let owner = Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT);
+        let owner =
+            Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT.chain_id);
         let coin_input = Input::coin_predicate(
             Default::default(),
             owner,
             Word::MAX,
             AssetId::zeroed(),
+            Default::default(),
             Default::default(),
             Default::default(),
             predicate,

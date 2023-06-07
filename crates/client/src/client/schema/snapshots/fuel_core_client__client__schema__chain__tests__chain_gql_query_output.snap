@@ -1,5 +1,6 @@
 ---
 source: crates/client/src/client/schema/chain.rs
+assertion_line: 75
 expression: operation.query
 ---
 query {
@@ -48,6 +49,7 @@ query {
       maxStorageSlots
       maxPredicateLength
       maxPredicateDataLength
+      maxGasPerPredicate
       gasPriceFactor
       gasPerByte
       maxMessageDataLength

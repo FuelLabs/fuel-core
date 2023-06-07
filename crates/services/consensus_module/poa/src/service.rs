@@ -277,7 +277,7 @@ where
                 "During block production got invalid transaction {:?} with error {:?}",
                 tx, err
             );
-            tx_ids_to_remove.push(tx.id(&self.consensus_params));
+            tx_ids_to_remove.push(tx.id(&self.consensus_params.chain_id));
         }
         self.txpool.remove_txs(tx_ids_to_remove);
 

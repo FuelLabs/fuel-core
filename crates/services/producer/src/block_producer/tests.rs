@@ -84,7 +84,7 @@ async fn can_produce_next_block() {
         transactions: vec![],
     }
     .generate(&[])
-    .compress(&ConsensusParameters::DEFAULT);
+    .compress(&ConsensusParameters::DEFAULT.chain_id);
 
     let db = MockDb {
         blocks: Arc::new(Mutex::new(
@@ -134,7 +134,7 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
         transactions: vec![],
     }
     .generate(&[])
-    .compress(&ConsensusParameters::DEFAULT);
+    .compress(&ConsensusParameters::DEFAULT.chain_id);
 
     let db = MockDb {
         blocks: Arc::new(Mutex::new(

@@ -3,17 +3,12 @@ use fuel_core::service::{
     FuelService,
 };
 use fuel_core_client::client::FuelClient;
-use fuel_core_types::fuel_tx::Transaction;
 
 #[tokio::test]
 async fn chain_info() {
     let node_config = Config::local_node();
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
-    client
-        .submit_and_await_commit(&Transaction::default())
-        .await
-        .unwrap();
 
     let chain_info = client.chain_info().await.unwrap();
 

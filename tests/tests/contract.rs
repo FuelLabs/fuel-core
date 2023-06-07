@@ -174,7 +174,8 @@ async fn can_get_message_proof() {
     let output = Output::contract_created(id, state_root);
 
     // Create the contract deploy transaction.
-    let contract_deploy = TransactionBuilder::create(bytecode, salt, vec![])
+    let mut contract_deploy = TransactionBuilder::create(bytecode, salt, vec![])
+        .add_random_fee_input()
         .add_output(output)
         .finalize_as_transaction();
 
@@ -210,13 +211,15 @@ async fn can_get_message_proof() {
         .collect();
 
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-    let owner = Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT);
+    let owner =
+        Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT.chain_id);
     let coin_input = Input::coin_predicate(
         Default::default(),
         owner,
         1000,
         coin.asset_id,
         TxPointer::default(),
+        Default::default(),
         Default::default(),
         predicate,
         vec![],
@@ -253,11 +256,16 @@ async fn can_get_message_proof() {
         vec![],
     );
 
-    let transaction_id = script.id(&ConsensusParameters::DEFAULT);
+    let transaction_id = script.id(&ConsensusParameters::DEFAULT.chain_id);
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
+
+    client
+        .estimate_predicates(&mut contract_deploy)
+        .await
+        .expect("Should be able to estimate deploy tx");
 
     // Deploy the contract.
     matches!(
@@ -265,9 +273,14 @@ async fn can_get_message_proof() {
         Ok(TransactionStatus::Success { .. })
     );
 
+    let mut script = script.into();
+    client
+        .estimate_predicates(&mut script)
+        .await
+        .expect("Should be able to estimate deploy tx");
     // Call the contract.
     matches!(
-        client.submit_and_await_commit(&script.into()).await,
+        client.submit_and_await_commit(&script).await,
         Ok(TransactionStatus::Success { .. })
     );
 

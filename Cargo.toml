@@ -75,7 +75,7 @@ fuel-core-tests = { version = "0.0.0", path = "./tests" }
 fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 
 # Fuel dependencies
-fuel-vm-private = { version = "0.32", package = "fuel-vm" }
+fuel-vm-private = { version = "0.33", package = "fuel-vm" }
 
 # Common dependencies
 anyhow = "1.0"
@@ -85,7 +85,7 @@ clap = "4.1"
 hyper = { version = "0.14.26" }
 rand = "0.8"
 parking_lot = "0.12"
-tokio = "1.27"
+tokio = { version = "1.27", default-features = false }
 tokio-stream = "0.1"
 tracing = "0.1"
 thiserror = "1.0"

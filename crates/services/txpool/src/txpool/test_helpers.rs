@@ -1,3 +1,4 @@
+use crate::test_helpers::IntoEstimated;
 use fuel_core_types::{
     entities::message::Message,
     fuel_asm::op,
@@ -20,7 +21,10 @@ pub(crate) fn create_message_predicate_from_message(
     let predicate = vec![op::ret(1)].into_iter().collect::<Vec<u8>>();
     let message = Message {
         sender: Default::default(),
-        recipient: Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT),
+        recipient: Input::predicate_owner(
+            &predicate,
+            &ConsensusParameters::DEFAULT.chain_id,
+        ),
         nonce: nonce.into(),
         amount,
         data: vec![],
@@ -31,12 +35,14 @@ pub(crate) fn create_message_predicate_from_message(
         message.clone(),
         Input::message_coin_predicate(
             message.sender,
-            Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT),
+            Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT.chain_id),
             message.amount,
             message.nonce,
+            Default::default(),
             predicate,
             Default::default(),
-        ),
+        )
+        .into_default_estimated(),
     )
 }
 
@@ -44,13 +50,17 @@ pub(crate) fn create_coin_output() -> Output {
     Output::coin(Default::default(), Default::default(), Default::default())
 }
 
-pub(crate) fn create_contract_input(tx_id: TxId, output_index: u8) -> Input {
+pub(crate) fn create_contract_input(
+    tx_id: TxId,
+    output_index: u8,
+    contract_id: ContractId,
+) -> Input {
     Input::contract(
         UtxoId::new(tx_id, output_index),
         Default::default(),
         Default::default(),
         Default::default(),
-        Default::default(),
+        contract_id,
     )
 }
 

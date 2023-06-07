@@ -19,6 +19,7 @@ pub struct ConsensusParameters {
     pub max_storage_slots: U64,
     pub max_predicate_length: U64,
     pub max_predicate_data_length: U64,
+    pub max_gas_per_predicate: U64,
     pub gas_price_factor: U64,
     pub gas_per_byte: U64,
     pub max_message_data_length: U64,
@@ -38,10 +39,11 @@ impl From<ConsensusParameters> for TxConsensusParameters {
             max_storage_slots: params.max_storage_slots.into(),
             max_predicate_length: params.max_predicate_length.into(),
             max_predicate_data_length: params.max_predicate_data_length.into(),
+            max_gas_per_predicate: params.max_gas_per_predicate.into(),
             gas_price_factor: params.gas_price_factor.into(),
             gas_per_byte: params.gas_per_byte.into(),
             max_message_data_length: params.max_message_data_length.into(),
-            chain_id: params.chain_id.into(),
+            chain_id: params.chain_id.0.into(),
         }
     }
 }

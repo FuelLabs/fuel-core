@@ -139,7 +139,7 @@ mod tests {
         );
 
         let broadcast_req =
-            GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default()));
+            GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default_test_tx()));
         assert_eq!(
             gossipsub_topics.get_gossipsub_topic(&broadcast_req).hash(),
             new_tx_topic.hash()
