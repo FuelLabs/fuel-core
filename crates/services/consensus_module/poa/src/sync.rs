@@ -79,7 +79,43 @@ impl SyncTask {
         }
     }
 
-    pub async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+    async fn update_timeout(&mut self) {
+        if self.inner_state.is_sufficient() {
+            self.timer
+                .set_timeout(self.time_until_synced, OnConflict::Overwrite)
+                .await;
+        } else {
+            self.timer.clear().await;
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl RunnableService for SyncTask {
+    const NAME: &'static str = "fuel-core-consensus/poa/sync-task";
+
+    type SharedData = watch::Receiver<SyncState>;
+    type TaskParams = ();
+
+    type Task = SyncTask;
+
+    fn shared_data(&self) -> Self::SharedData {
+        self.state_receiver.clone()
+    }
+
+    async fn into_task(
+        self,
+        _: &StateWatcher,
+        _: Self::TaskParams,
+    ) -> anyhow::Result<Self::Task> {
+        Ok(self)
+    }
+}
+
+#[async_trait::async_trait]
+impl RunnableTask for SyncTask {
+    #[tracing::instrument(level = "debug", skip_all, err, ret)]
+    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let mut should_continue = true;
 
         tokio::select! {
@@ -130,46 +166,6 @@ impl SyncTask {
         }
 
         Ok(should_continue)
-    }
-
-    async fn update_timeout(&mut self) {
-        if self.inner_state.is_sufficient() {
-            self.timer
-                .set_timeout(self.time_until_synced, OnConflict::Overwrite)
-                .await;
-        } else {
-            self.timer.clear().await;
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl RunnableService for SyncTask {
-    const NAME: &'static str = "fuel-core-consensus/poa/sync-task";
-
-    type SharedData = watch::Receiver<SyncState>;
-    type TaskParams = ();
-
-    type Task = SyncTask;
-
-    fn shared_data(&self) -> Self::SharedData {
-        self.state_receiver.clone()
-    }
-
-    async fn into_task(
-        self,
-        _: &StateWatcher,
-        _: Self::TaskParams,
-    ) -> anyhow::Result<Self::Task> {
-        Ok(self)
-    }
-}
-
-#[async_trait::async_trait]
-impl RunnableTask for SyncTask {
-    #[tracing::instrument(level = "debug", skip_all, err, ret)]
-    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
-        self.run(watcher).await
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
