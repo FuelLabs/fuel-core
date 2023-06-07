@@ -280,6 +280,16 @@ mod tests {
         time::Duration,
     };
 
+    impl InnerSyncState {
+        fn sync_state(&self) -> SyncState {
+            match self {
+                InnerSyncState::InsufficientPeers(_)
+                | InnerSyncState::SufficientPeers(_) => SyncState::NotSynced,
+                InnerSyncState::Synced(_) => SyncState::Synced,
+            }
+        }
+    }
+
     #[test]
     fn test_inner_sync_state() {
         // given that we set `min_connected_reserved_peers` to be 0
@@ -493,9 +503,6 @@ mod tests {
         let min_connected_reserved_peers = 5;
         let biggest_block = 5;
         let time_until_synced = Duration::from_secs(5);
-
-        let sync_state =
-            SyncState::from_config(min_connected_reserved_peers, time_until_synced);
 
         // let (state_sender, state_receiver) = watch::channel(sync_state);
         let connections_stream =
