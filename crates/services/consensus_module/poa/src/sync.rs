@@ -81,31 +81,34 @@ impl SyncTask {
 
     pub async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let mut should_continue = true;
+
         tokio::select! {
             _ = watcher.while_started() => {
                 should_continue = false;
             }
             latest_count = self.peer_connections_stream.next() => {
                 if let Some(latest_count) = latest_count {
-                    if self.inner_state.change_state_on_peers_update(latest_count, self.min_connected_reserved_peers) {
+                    if self.state_sender.send_if_modified(|_| {
+                        self.inner_state.change_state_on_peers_update(latest_count, self.min_connected_reserved_peers)
+                    }) {
                         self.set_timeout_on_state_change().await;
-                        self.state_sender.send(self.inner_state.sync_state())?;
                     }
                 }
 
             }
             block = self.block_stream.next() => {
                 if let Some(new_block_height) = block {
-                    if self.inner_state.change_state_on_block(new_block_height) {
+                    if self.state_sender.send_if_modified(|_| {
+                        self.inner_state.change_state_on_block(new_block_height)
+                    }) {
                         self.set_timeout_on_state_change().await;
-                        self.state_sender.send(self.inner_state.sync_state())?;
                     }
                 }
             }
             _ = self.timer.wait() => {
-                if self.inner_state.change_on_sync_timeout() {
-                    self.state_sender.send(self.inner_state.sync_state())?;
-                }
+                self.state_sender.send_if_modified(|_| {
+                    self.inner_state.change_on_sync_timeout()
+                });
             }
         }
 
