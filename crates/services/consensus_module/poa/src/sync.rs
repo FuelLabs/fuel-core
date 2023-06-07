@@ -251,15 +251,6 @@ impl InnerSyncState {
         }
     }
 
-    fn sync_state(&self) -> SyncState {
-        match self {
-            InnerSyncState::InsufficientPeers(_) | InnerSyncState::SufficientPeers(_) => {
-                SyncState::NotSynced
-            }
-            InnerSyncState::Synced(_) => SyncState::Synced,
-        }
-    }
-
     fn block_height(&self) -> &BlockHeight {
         match self {
             InnerSyncState::InsufficientPeers(block_height)
