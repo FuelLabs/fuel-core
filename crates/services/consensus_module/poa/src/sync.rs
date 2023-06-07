@@ -91,18 +91,19 @@ impl SyncTask {
                     if self.state_sender.send_if_modified(|_| {
                         self.inner_state.change_state_on_peers_update(latest_count, self.min_connected_reserved_peers)
                     }) {
-                        self.set_timeout_on_state_change().await;
+                        self.update_timeout().await;
                     }
                 }
 
             }
             block = self.block_stream.next() => {
                 if let Some(new_block_height) = block {
-                    if self.state_sender.send_if_modified(|_| {
+                    self.state_sender.send_if_modified(|_| {
                         self.inner_state.change_state_on_block(new_block_height)
-                    }) {
-                        self.set_timeout_on_state_change().await;
-                    }
+                    });
+                    // update timeout on each received block
+                    self.update_timeout().await;
+
                 }
             }
             _ = self.timer.wait() => {
@@ -115,7 +116,7 @@ impl SyncTask {
         Ok(should_continue)
     }
 
-    async fn set_timeout_on_state_change(&mut self) {
+    async fn update_timeout(&mut self) {
         if self.inner_state.is_sufficient() {
             self.timer
                 .set_timeout(self.time_until_synced, OnConflict::Overwrite)
