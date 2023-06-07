@@ -15,7 +15,7 @@ pub type UncommittedResult<DatabaseTransaction> =
     Uncommitted<ImportResult, DatabaseTransaction>;
 
 /// The result of the block import.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ImportResult {
     /// Imported sealed block.
     pub sealed_block: SealedBlock,
