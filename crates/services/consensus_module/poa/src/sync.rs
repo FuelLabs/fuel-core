@@ -221,7 +221,7 @@ impl InnerSyncState {
                     *self = InnerSyncState::SufficientPeers(new_block_height);
                 }
                 InnerSyncState::Synced(_) => {
-                    // we considered to be synced but we're obiously not!
+                    // we considered to be synced but we're obviously not!
                     *self = InnerSyncState::SufficientPeers(new_block_height);
                     state_changed = true;
                 }
