@@ -469,6 +469,9 @@ where
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
+        use fuel_core_services::Service;
+        self.sync_task_handle.start_and_await().await?;
+
         match self.trigger {
             Trigger::Never | Trigger::Instant => {}
             Trigger::Interval { block_time } => {
@@ -482,6 +485,7 @@ where
                     .await;
             }
         };
+
         Ok(self)
     }
 }

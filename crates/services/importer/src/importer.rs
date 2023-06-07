@@ -140,7 +140,7 @@ where
     ///
     /// # Concurrency
     ///
-    /// Only one commit may be in progress at the time. All other calls will be fail.
+    /// Only one commit may be in progress at the time. All other calls will fail.
     /// Returns an error if called while another call is in progress.
     pub fn commit_result<ExecutorDatabase>(
         &self,
