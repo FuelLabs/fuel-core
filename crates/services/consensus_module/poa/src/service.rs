@@ -319,10 +319,7 @@ where
         };
         // Import the sealed block
         self.block_importer.commit_result(Uncommitted::new(
-            ImportResult {
-                sealed_block: block,
-                tx_status,
-            },
+            ImportResult::new_from_local(block, tx_status),
             db_transaction,
         ))?;
 

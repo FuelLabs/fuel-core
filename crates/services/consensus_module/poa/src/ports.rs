@@ -15,7 +15,10 @@ use fuel_core_types::{
         Bytes32,
     },
     services::{
-        block_importer::UncommittedResult as UncommittedImportResult,
+        block_importer::{
+            BlockImportInfo,
+            UncommittedResult as UncommittedImportResult,
+        },
         executor::UncommittedResult as UncommittedExecutionResult,
         txpool::{
             ArcPoolTx,
@@ -62,7 +65,7 @@ pub trait BlockImporter: Send + Sync {
         result: UncommittedImportResult<StorageTransaction<Self::Database>>,
     ) -> anyhow::Result<()>;
 
-    fn block_stream(&self) -> BoxStream<BlockHeight>;
+    fn block_stream(&self) -> BoxStream<BlockImportInfo>;
 }
 
 #[cfg_attr(test, mockall::automock)]

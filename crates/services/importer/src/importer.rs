@@ -297,13 +297,11 @@ where
             return Err(Error::BlockIdMismatch(sealed_block_id, actual_block_id))
         }
 
-        let import_result = ImportResult {
-            sealed_block: Sealed {
-                entity: block,
-                consensus,
-            },
-            tx_status,
+        let sealed_block = Sealed {
+            entity: block,
+            consensus,
         };
+        let import_result = ImportResult::new_from_network(sealed_block, tx_status);
 
         Ok(Uncommitted::new(import_result, db_tx))
     }

@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use crate::{
     database::Database,
     fuel_core_graphql_api::ports::ConsensusModulePort,
@@ -25,7 +27,10 @@ use fuel_core_types::{
     fuel_tx::TxId,
     fuel_types::BlockHeight,
     services::{
-        block_importer::UncommittedResult as UncommittedImporterResult,
+        block_importer::{
+            BlockImportInfo,
+            UncommittedResult as UncommittedImporterResult,
+        },
         executor::UncommittedResult,
         txpool::{
             ArcPoolTx,
@@ -109,11 +114,11 @@ impl BlockImporter for BlockImporterAdapter {
             .map_err(Into::into)
     }
 
-    fn block_stream(&self) -> BoxStream<BlockHeight> {
+    fn block_stream(&self) -> BoxStream<BlockImportInfo> {
         Box::pin(
             BroadcastStream::new(self.block_importer.subscribe())
                 .filter_map(|result| result.ok())
-                .map(|r| *r.sealed_block.entity.header().height()),
+                .map(|r| r.deref().into()),
         )
     }
 }

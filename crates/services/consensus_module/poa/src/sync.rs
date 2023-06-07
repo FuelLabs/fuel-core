@@ -6,7 +6,10 @@ use fuel_core_services::{
     RunnableTask,
     StateWatcher,
 };
-use fuel_core_types::fuel_types::BlockHeight;
+use fuel_core_types::{
+    fuel_types::BlockHeight,
+    services::block_importer::BlockImportInfo,
+};
 use tokio::sync::watch;
 use tokio_stream::StreamExt;
 
@@ -38,7 +41,7 @@ pub struct SyncTask {
     min_connected_reserved_peers: usize,
     time_until_synced: Duration,
     peer_connections_stream: BoxStream<usize>,
-    block_stream: BoxStream<BlockHeight>,
+    block_stream: BoxStream<BlockImportInfo>,
     state_sender: watch::Sender<SyncState>,
     // shared with `MainTask` via SyncTask::SharedState
     state_receiver: watch::Receiver<SyncState>,
@@ -51,7 +54,7 @@ impl SyncTask {
         peer_connections_stream: BoxStream<usize>,
         min_connected_reserved_peers: usize,
         time_until_synced: Duration,
-        block_stream: BoxStream<BlockHeight>,
+        block_stream: BoxStream<BlockImportInfo>,
         block_height: BlockHeight,
     ) -> Self {
         let inner_state = InnerSyncState::from_config(
@@ -138,9 +141,9 @@ impl RunnableTask for SyncTask {
 
             }
             block = self.block_stream.next() => {
-                if let Some(new_block_height) = block {
+                if let Some(block_info) = block {
                     self.state_sender.send_if_modified(|sync_state: &mut SyncState| {
-                        if self.inner_state.change_state_on_block(new_block_height) {
+                        if self.inner_state.change_state_on_block(block_info) {
                             *sync_state = self.inner_state.sync_state();
                             true
                         } else {
@@ -208,7 +211,9 @@ impl InnerSyncState {
         }
     }
 
-    fn change_state_on_block(&mut self, new_block_height: BlockHeight) -> bool {
+    fn change_state_on_block(&mut self, block_info: BlockImportInfo) -> bool {
+        let new_block_height = block_info.height;
+
         let mut state_changed = false;
         let current_block_height = self.block_height();
 
@@ -221,9 +226,13 @@ impl InnerSyncState {
                     *self = InnerSyncState::SufficientPeers(new_block_height);
                 }
                 InnerSyncState::Synced(_) => {
-                    // we considered to be synced but we're obviously not!
-                    *self = InnerSyncState::SufficientPeers(new_block_height);
-                    state_changed = true;
+                    if block_info.is_locally_produced() {
+                        *self = InnerSyncState::Synced(new_block_height);
+                    } else {
+                        // we considered to be synced but we're obviously not!
+                        *self = InnerSyncState::SufficientPeers(new_block_height);
+                        state_changed = true;
+                    }
                 }
             }
         }
@@ -401,9 +410,10 @@ mod tests {
 
         // and that we receive a new, bigger block height
         let new_block_height = BlockHeight::from(10);
+        let block_import_info = BlockImportInfo::from(new_block_height);
 
         // the state should remain the same
-        assert!(!inner_sync_state.change_state_on_block(new_block_height));
+        assert!(!inner_sync_state.change_state_on_block(block_import_info));
         assert!(matches!(
             inner_sync_state,
             InnerSyncState::InsufficientPeers(_)
@@ -416,9 +426,10 @@ mod tests {
 
         // and that we receive a new, bigger block height
         let new_block_height = BlockHeight::from(11);
+        let block_import_info = BlockImportInfo::from(new_block_height);
 
         // the state should remain the same
-        assert!(!inner_sync_state.change_state_on_block(new_block_height));
+        assert!(!inner_sync_state.change_state_on_block(block_import_info));
         assert!(matches!(
             inner_sync_state,
             InnerSyncState::SufficientPeers(_)
@@ -429,12 +440,13 @@ mod tests {
         // given that we moved to Synced state
         let mut inner_sync_state = InnerSyncState::Synced(new_block_height);
 
-        // and that we receive a new, bigger block height
+        // and that we receive a new, bigger block height from the network
         let new_block_height = BlockHeight::from(12);
+        let block_import_info = BlockImportInfo::new_from_network(new_block_height);
 
         // the state should change
         // since this would mean we're not synced with other peers
-        assert!(inner_sync_state.change_state_on_block(new_block_height));
+        assert!(inner_sync_state.change_state_on_block(block_import_info));
         assert!(matches!(
             inner_sync_state,
             InnerSyncState::SufficientPeers(_)
@@ -516,8 +528,9 @@ mod tests {
         let connections_stream =
             MockStream::new(vec![connected_peers_report; amount_of_updates_from_stream])
                 .into_boxed();
-        let block_stream =
-            MockStream::new((1..biggest_block + 1).map(BlockHeight::from)).into_boxed();
+        let block_stream = MockStream::new((1..biggest_block + 1).map(BlockHeight::from))
+            .map(BlockImportInfo::from)
+            .into_boxed();
 
         // and the SyncTask
         let mut sync_task = SyncTask::new(
