@@ -126,11 +126,13 @@ impl<D> Task<D> {
         let (request_sender, request_receiver) = mpsc::channel(100);
         let (tx_broadcast, _) = broadcast::channel(100);
         let (block_height_broadcast, _) = broadcast::channel(100);
-        let (reserved_peers_broadcast, _) = broadcast::channel(100);
 
         let next_block_height = block_importer.next_block_height();
         let max_block_size = config.max_block_size;
         let p2p_service = FuelP2PService::new(config, PostcardCodec::new(max_block_size));
+
+        let reserved_peers_broadcast =
+            p2p_service.peer_manager().reserved_peers_updates();
 
         Self {
             p2p_service,
@@ -293,10 +295,6 @@ where
                                 let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeader(response));
                             }
                         }
-                    },
-                    Some(FuelP2PEvent::PeerConnected { reserved_peers_connected_count: Some(reserved_peers_count), .. })
-                    | Some(FuelP2PEvent::PeerDisconnected { reserved_peers_connected_count: Some(reserved_peers_count), .. }) => {
-                        let _ = self.shared.reserved_peers_broadcast.send(reserved_peers_count);
                     },
                     _ => (),
                 }

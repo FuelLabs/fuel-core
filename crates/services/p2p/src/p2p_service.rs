@@ -144,11 +144,9 @@ pub enum FuelP2PEvent {
     },
     PeerConnected {
         peer_id: PeerId,
-        reserved_peers_connected_count: Option<usize>,
     },
     PeerDisconnected {
         peer_id: PeerId,
-        reserved_peers_connected_count: Option<usize>,
     },
     PeerInfoUpdated {
         peer_id: PeerId,
@@ -528,24 +526,14 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                         ) {
                             let _ = self.swarm.disconnect_peer_id(peer_id);
                         } else if initial_connection {
-                            return Some(FuelP2PEvent::PeerConnected {
-                                peer_id,
-                                reserved_peers_connected_count: self
-                                    .peer_manager
-                                    .connected_reserved_peers(&peer_id),
-                            })
+                            return Some(FuelP2PEvent::PeerConnected { peer_id })
                         }
                     }
                     PeerReportEvent::PeerDisconnected { peer_id } => {
                         if self.peer_manager.handle_peer_disconnect(peer_id) {
                             let _ = self.swarm.dial(peer_id);
                         }
-                        return Some(FuelP2PEvent::PeerDisconnected {
-                            peer_id,
-                            reserved_peers_connected_count: self
-                                .peer_manager
-                                .connected_reserved_peers(&peer_id),
-                        })
+                        return Some(FuelP2PEvent::PeerDisconnected { peer_id })
                     }
                 }
             }
