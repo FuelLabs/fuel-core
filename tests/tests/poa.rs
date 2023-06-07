@@ -39,7 +39,7 @@ async fn can_get_sealed_block_from_poa_produced_block() {
     let client = FuelClient::from(srv.bound_address);
 
     let status = client
-        .submit_and_await_commit(&Transaction::default())
+        .submit_and_await_commit(&Transaction::default_test_tx())
         .await
         .unwrap();
     let block_id = match status {

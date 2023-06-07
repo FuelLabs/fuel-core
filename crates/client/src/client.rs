@@ -56,7 +56,6 @@ use pagination::{
     PaginatedResult,
     PaginationRequest,
 };
-use reqwest::cookie::CookieStore;
 use schema::{
     balance::BalanceArgs,
     block::BlockByIdArgs,
@@ -92,7 +91,6 @@ use std::{
         ErrorKind,
     },
     net,
-    ops::Deref,
     str::{
         self,
         FromStr,
@@ -118,6 +116,7 @@ pub mod types;
 #[derive(Debug, Clone)]
 pub struct FuelClient {
     client: reqwest::Client,
+    #[cfg(feature = "subscriptions")]
     cookie: Arc<reqwest::cookie::Jar>,
     url: reqwest::Url,
 }
@@ -140,6 +139,7 @@ impl FromStr for FuelClient {
             .build()?;
         Ok(Self {
             client,
+            #[cfg(feature = "subscriptions")]
             cookie,
             url,
         })
@@ -215,8 +215,10 @@ impl FuelClient {
         Vars: serde::Serialize,
         ResponseData: serde::de::DeserializeOwned + 'static,
     {
+        use core::ops::Deref;
         use eventsource_client as es;
         use hyper_rustls as _;
+        use reqwest::cookie::CookieStore;
         let mut url = self.url.clone();
         url.set_path("/graphql-sub");
         let json_query = serde_json::to_string(&q)?;
@@ -350,6 +352,18 @@ impl FuelClient {
             .into_iter()
             .map(|receipt| receipt.try_into().map_err(Into::into))
             .collect()
+    }
+
+    /// Estimate predicates for the transaction
+    pub async fn estimate_predicates(&self, tx: &mut Transaction) -> io::Result<()> {
+        let serialized_tx = tx.to_bytes();
+        let query = schema::tx::EstimatePredicates::build(TxArg {
+            tx: HexString(Bytes(serialized_tx)),
+        });
+        let tx_with_predicate = self.query(query).await.map(|r| r.estimate_predicates)?;
+        let tx_with_predicate: Transaction = tx_with_predicate.try_into()?;
+        *tx = tx_with_predicate;
+        Ok(())
     }
 
     pub async fn submit(

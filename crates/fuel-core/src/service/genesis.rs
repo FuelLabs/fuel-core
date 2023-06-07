@@ -130,7 +130,7 @@ fn import_genesis_block(
     let block_id = block.id();
     database.storage::<FuelBlocks>().insert(
         &block_id,
-        &block.compress(&config.chain_conf.transaction_parameters),
+        &block.compress(&config.chain_conf.transaction_parameters.chain_id),
     )?;
     let consensus = Consensus::Genesis(genesis);
     let block = SealedBlock {

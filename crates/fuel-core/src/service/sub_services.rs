@@ -176,6 +176,7 @@ pub fn init_sub_services(
             max_tx: config.txpool.max_tx,
             max_depth: config.txpool.max_depth,
             transaction_parameters: config.chain_conf.transaction_parameters,
+            gas_costs: config.chain_conf.gas_costs.clone(),
             consensus_key: config.consensus_key.clone(),
         },
         schema,

@@ -22,6 +22,7 @@ query($id: TransactionId!) {
         txPointer
         witnessIndex
         maturity
+        predicateGasUsed
         predicate
         predicateData
       }
@@ -40,6 +41,7 @@ query($id: TransactionId!) {
         amount
         nonce
         witnessIndex
+        predicateGasUsed
         data
         predicate
         predicateData

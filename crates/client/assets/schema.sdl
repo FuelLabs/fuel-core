@@ -184,6 +184,7 @@ type ConsensusParameters {
 	maxStorageSlots: U64!
 	maxPredicateLength: U64!
 	maxPredicateDataLength: U64!
+	maxGasPerPredicate: U64!
 	gasPriceFactor: U64!
 	gasPerByte: U64!
 	maxMessageDataLength: U64!
@@ -346,6 +347,7 @@ type InputCoin {
 	txPointer: TxPointer!
 	witnessIndex: Int!
 	maturity: U32!
+	predicateGasUsed: U64!
 	predicate: HexString!
 	predicateData: HexString!
 }
@@ -364,6 +366,7 @@ type InputMessage {
 	amount: U64!
 	nonce: Nonce!
 	witnessIndex: Int!
+	predicateGasUsed: U64!
 	data: HexString!
 	predicate: HexString!
 	predicateData: HexString!
@@ -531,6 +534,10 @@ type Query {
 	transaction(id: TransactionId!): Transaction
 	transactions(first: Int, after: String, last: Int, before: String): TransactionConnection!
 	transactionsByOwner(owner: Address!, first: Int, after: String, last: Int, before: String): TransactionConnection!
+	"""
+	Estimate the predicate gas for the provided transaction
+	"""
+	estimatePredicates(tx: HexString!): Transaction!
 	"""
 	Returns true when the GraphQL API is serving requests.
 	"""

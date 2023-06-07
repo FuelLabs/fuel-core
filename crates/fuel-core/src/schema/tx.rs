@@ -46,6 +46,7 @@ use fuel_core_types::{
     },
     fuel_types,
     fuel_types::bytes::Deserializable,
+    fuel_vm::checked_transaction::EstimatePredicates,
     services::txpool,
 };
 use futures::{
@@ -186,7 +187,8 @@ impl TxQuery {
                         .owned_transactions(owner, start, direction)
                         .map(|result| {
                             result.map(|(cursor, tx)| {
-                                let tx_id = tx.id(&config.transaction_parameters);
+                                let tx_id =
+                                    tx.id(&config.transaction_parameters.chain_id);
                                 (cursor.into(), Transaction::from_tx(tx_id, tx))
                             })
                         });
@@ -194,6 +196,23 @@ impl TxQuery {
             },
         )
         .await
+    }
+
+    /// Estimate the predicate gas for the provided transaction
+    async fn estimate_predicates(
+        &self,
+        ctx: &Context<'_>,
+        tx: HexString,
+    ) -> async_graphql::Result<Transaction> {
+        let mut tx = FuelTx::from_bytes(&tx.0)?;
+        let config = ctx.data_unchecked::<Config>();
+
+        tx.estimate_predicates(&config.transaction_parameters, &config.gas_costs)?;
+
+        Ok(Transaction::from_tx(
+            tx.id(&config.transaction_parameters.chain_id),
+            tx,
+        ))
     }
 }
 
@@ -216,7 +235,7 @@ impl TxMutation {
         let config = ctx.data_unchecked::<Config>();
 
         let mut tx = FuelTx::from_bytes(&tx.0)?;
-        tx.precompute(&config.transaction_parameters);
+        tx.precompute(&config.transaction_parameters.chain_id)?;
 
         let receipts = block_producer.dry_run_tx(tx, None, utxo_validation).await?;
         Ok(receipts.iter().map(Into::into).collect())
@@ -238,7 +257,7 @@ impl TxMutation {
             .insert(vec![Arc::new(tx.clone())])
             .into_iter()
             .try_collect()?;
-        let id = tx.id(&config.transaction_parameters);
+        let id = tx.id(&config.transaction_parameters.chain_id);
 
         let tx = Transaction(tx, id);
         Ok(tx)
@@ -301,7 +320,7 @@ impl TxStatusSubscription {
         let txpool = ctx.data_unchecked::<TxPool>();
         let config = ctx.data_unchecked::<Config>();
         let tx = FuelTx::from_bytes(&tx.0)?;
-        let tx_id = tx.id(&config.transaction_parameters);
+        let tx_id = tx.id(&config.transaction_parameters.chain_id);
         let subscription = txpool.tx_update_subscribe(tx_id).await;
         // TODO: use spawn_blocking here
         let _: Vec<_> = txpool

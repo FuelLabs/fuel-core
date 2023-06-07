@@ -18,7 +18,7 @@ async fn can_submit_genesis_message() {
         recipient: Input::owner(&pk),
         nonce: rng.gen(),
         amount: rng.gen(),
-        data: vec![rng.gen()],
+        data: vec![],
         da_height: DaBlockHeight(0),
     };
     let tx1 = TransactionBuilder::script(vec![op::ret(0)].into_iter().collect(), vec![])

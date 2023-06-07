@@ -71,7 +71,7 @@ async fn get_genesis_block() {
         .unwrap();
 
     let client = FuelClient::from(srv.bound_address);
-    let tx = Transaction::default();
+    let tx = Transaction::default_test_tx();
     client.submit_and_await_commit(&tx).await.unwrap();
 
     let block = client.block_by_height(13).await.unwrap().unwrap();
@@ -92,11 +92,11 @@ async fn produce_block() {
 
     let client = FuelClient::from(srv.bound_address);
 
-    let tx = Transaction::default();
+    let tx = Transaction::default_test_tx();
     client.submit_and_await_commit(&tx).await.unwrap();
 
     let transaction_response = client
-        .transaction(&tx.id(&ConsensusParameters::DEFAULT))
+        .transaction(&tx.id(&ConsensusParameters::DEFAULT.chain_id))
         .await
         .unwrap();
 
@@ -167,11 +167,11 @@ async fn produce_block_negative() {
         new_height.err().unwrap().to_string()
     );
 
-    let tx = Transaction::default();
+    let tx = Transaction::default_test_tx();
     client.submit_and_await_commit(&tx).await.unwrap();
 
     let transaction_response = client
-        .transaction(&tx.id(&ConsensusParameters::DEFAULT))
+        .transaction(&tx.id(&ConsensusParameters::DEFAULT.chain_id))
         .await
         .unwrap();
 
@@ -407,7 +407,7 @@ mod full_block {
             .unwrap();
 
         let client = FuelClient::from(srv.bound_address);
-        let tx = Transaction::default();
+        let tx = Transaction::default_test_tx();
         client.submit_and_await_commit(&tx).await.unwrap();
 
         let block = client.full_block_by_height(1).await.unwrap().unwrap();
