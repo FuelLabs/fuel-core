@@ -247,10 +247,7 @@ impl InnerSyncState {
                 *self = InnerSyncState::SufficientPeers(*block_height);
                 true
             }
-            InnerSyncState::SufficientPeers(block_height)
-            | InnerSyncState::Synced(block_height)
-                if !sufficient_peers =>
-            {
+            InnerSyncState::SufficientPeers(block_height) if !sufficient_peers => {
                 *self = InnerSyncState::InsufficientPeers(*block_height);
                 true
             }
