@@ -35,22 +35,23 @@ async fn never_trigger_never_produces_blocks() {
     const TX_COUNT: usize = 10;
     let mut rng = StdRng::seed_from_u64(1234u64);
     let mut ctx_builder = TestContextBuilder::new();
+    let consensus_params = Default::default();
     ctx_builder.with_config(Config {
         trigger: Trigger::Never,
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
         metrics: false,
+        consensus_params,
         ..Default::default()
     });
 
     // initialize txpool with some txs
+    let txs = (0..TX_COUNT).map(|_| make_tx(&mut rng)).collect::<Vec<_>>();
     let TxPoolContext {
         txpool,
         status_sender,
         ..
-    } = MockTransactionPool::new_with_txs(
-        (0..TX_COUNT).map(|_| make_tx(&mut rng)).collect(),
-    );
+    } = MockTransactionPool::new_with_txs(txs.clone());
     ctx_builder.with_txpool(txpool);
 
     let mut importer = MockBlockImporter::default();
@@ -62,8 +63,8 @@ async fn never_trigger_never_produces_blocks() {
         .returning(|| Box::pin(tokio_stream::pending()));
     ctx_builder.with_importer(importer);
     let ctx = ctx_builder.build();
-    for _ in 0..TX_COUNT {
-        status_sender.send_replace(Some(TxStatus::Submitted));
+    for tx in txs {
+        status_sender.send_replace(Some(tx.id(&consensus_params)));
     }
 
     // Make sure enough time passes for the block to be produced
@@ -77,7 +78,7 @@ struct DefaultContext {
     rng: StdRng,
     test_ctx: TestContext,
     block_import: broadcast::Receiver<SealedBlock>,
-    status_sender: Arc<watch::Sender<Option<TxStatus>>>,
+    status_sender: Arc<watch::Sender<Option<TxId>>>,
     txs: Arc<StdMutex<Vec<Script>>>,
 }
 
@@ -129,7 +130,7 @@ async fn instant_trigger_produces_block_instantly() {
         metrics: false,
         ..Default::default()
     });
-    ctx.status_sender.send_replace(Some(TxStatus::Submitted));
+    ctx.status_sender.send_replace(Some(TxId::zeroed()));
 
     // Make sure it's produced
     assert!(ctx.block_import.recv().await.is_ok());
@@ -149,7 +150,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
         metrics: false,
         ..Default::default()
     });
-    ctx.status_sender.send_replace(Some(TxStatus::Submitted));
+    ctx.status_sender.send_replace(Some(TxId::zeroed()));
 
     // Make sure no blocks are produced yet
     assert!(matches!(
@@ -163,7 +164,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     // Make sure the empty block is actually produced
     assert!(matches!(ctx.block_import.try_recv(), Ok(_)));
     // Emulate tx status update to trigger the execution
-    ctx.status_sender.send_replace(Some(TxStatus::Submitted));
+    ctx.status_sender.send_replace(Some(TxId::zeroed()));
 
     // Make sure no blocks are produced before next interval
     assert!(matches!(
@@ -178,7 +179,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     assert!(matches!(ctx.block_import.try_recv(), Ok(_)));
 
     // Emulate tx status update to trigger the execution
-    ctx.status_sender.send_replace(Some(TxStatus::Submitted));
+    ctx.status_sender.send_replace(Some(TxId::zeroed()));
 
     time::sleep(Duration::from_millis(1)).await;
 
@@ -223,7 +224,7 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
         for _ in 0..1_000 {
             guard.push(make_tx(&mut ctx.rng));
         }
-        ctx.status_sender.send_replace(Some(TxStatus::Submitted));
+        ctx.status_sender.send_replace(Some(TxId::zeroed()));
     }
 
     // Make sure blocks are not produced before the block time has elapsed
@@ -319,7 +320,7 @@ async fn hybrid_trigger_produces_blocks_correctly_max_block_time_not_overrides_m
 
     // Emulate tx status update to trigger the execution. It should produce the block after
     // `MAX_TX_IDLE_TIME`.
-    ctx.status_sender.send_replace(Some(TxStatus::Submitted));
+    ctx.status_sender.send_replace(Some(TxId::zeroed()));
     assert!(matches!(
         ctx.block_import.try_recv(),
         Err(broadcast::error::TryRecvError::Empty)
@@ -359,7 +360,7 @@ async fn hybrid_trigger_produces_blocks_correctly_max_tx_idle_time() -> anyhow::
     ));
 
     // Emulate tx status update to trigger the execution.
-    ctx.status_sender.send_replace(Some(TxStatus::Submitted));
+    ctx.status_sender.send_replace(Some(TxId::zeroed()));
     assert!(matches!(
         ctx.block_import.try_recv(),
         Err(broadcast::error::TryRecvError::Empty)
@@ -406,7 +407,7 @@ async fn hybrid_trigger_produces_blocks_correctly_min_block_time_min_block_gas_l
     });
 
     // Emulate tx status update to trigger the execution.
-    ctx.status_sender.send_replace(Some(TxStatus::Submitted));
+    ctx.status_sender.send_replace(Some(TxId::zeroed()));
 
     time::sleep(Duration::new(MIN_BLOCK_TIME - 1, 0)).await;
     assert!(matches!(
@@ -417,7 +418,7 @@ async fn hybrid_trigger_produces_blocks_correctly_min_block_time_min_block_gas_l
     time::sleep(Duration::new(2, 0)).await;
 
     // Trigger the `produce_block` if `min_block_time` passed and block is full.
-    ctx.status_sender.send_replace(Some(TxStatus::Submitted));
+    ctx.status_sender.send_replace(Some(TxId::zeroed()));
     tokio::task::yield_now().await;
     assert!(matches!(ctx.block_import.try_recv(), Ok(_)));
 
@@ -464,7 +465,7 @@ async fn hybrid_trigger_produces_blocks_correctly_min_block_time_max_block_gas_l
     });
 
     // Emulate tx status update to trigger the execution.
-    ctx.status_sender.send_replace(Some(TxStatus::Submitted));
+    ctx.status_sender.send_replace(Some(TxId::zeroed()));
 
     time::sleep(Duration::new(2, 0)).await;
     assert!(matches!(ctx.block_import.try_recv(), Ok(_)));
@@ -474,7 +475,7 @@ async fn hybrid_trigger_produces_blocks_correctly_min_block_time_max_block_gas_l
     ));
 
     // Emulate tx status update to trigger the execution.
-    ctx.status_sender.send_replace(Some(TxStatus::Submitted));
+    ctx.status_sender.send_replace(Some(TxId::zeroed()));
 
     time::sleep(Duration::new(2, 0)).await;
     assert!(matches!(

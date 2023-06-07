@@ -9,10 +9,12 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
     types::TransactionStatus,
     FuelClient,
-    PageDirection,
-    PaginationRequest,
 };
 use fuel_core_types::{
     blockchain::{
@@ -108,10 +110,7 @@ async fn dry_run_script() {
 
     // ensure the tx isn't available in the blockchain history
     let err = client
-        .transaction_status(&format!(
-            "{:#x}",
-            tx.id(&fuel_tx::ConsensusParameters::DEFAULT)
-        ))
+        .transaction_status(&tx.id(&fuel_tx::ConsensusParameters::DEFAULT))
         .await
         .unwrap_err();
     assert_eq!(err.kind(), NotFound);
@@ -148,10 +147,7 @@ async fn dry_run_create() {
 
     // ensure the tx isn't available in the blockchain history
     let err = client
-        .transaction_status(&format!(
-            "{:#x}",
-            tx.id(&fuel_tx::ConsensusParameters::DEFAULT)
-        ))
+        .transaction_status(&tx.id(&fuel_tx::ConsensusParameters::DEFAULT))
         .await
         .unwrap_err();
     assert_eq!(err.kind(), NotFound);
@@ -192,7 +188,7 @@ async fn submit() {
     client.submit_and_await_commit(&tx).await.unwrap();
     // verify that the tx returned from the api matches the submitted tx
     let ret_tx = client
-        .transaction(&tx.id(&ConsensusParameters::DEFAULT).to_string())
+        .transaction(&tx.id(&ConsensusParameters::DEFAULT))
         .await
         .unwrap()
         .unwrap()
@@ -227,7 +223,7 @@ async fn receipts() {
         .await
         .expect("transaction should insert");
     // run test
-    let receipts = client.receipts(&format!("{id:#x}")).await.unwrap();
+    let receipts = client.receipts(&id).await.unwrap();
     assert!(receipts.is_some());
 }
 
@@ -244,7 +240,7 @@ async fn get_transaction_by_id() {
     client.submit_and_await_commit(&transaction).await.unwrap();
 
     // run test
-    let transaction_response = client.transaction(&format!("{id:#x}")).await.unwrap();
+    let transaction_response = client.transaction(&id).await.unwrap();
     assert!(transaction_response.is_some());
     if let Some(transaction_response) = transaction_response {
         assert!(matches!(
@@ -268,7 +264,7 @@ async fn get_transparent_transaction_by_id() {
     assert!(result.is_ok());
 
     let opaque_tx = client
-        .transaction(&format!("{id:#x}"))
+        .transaction(&id)
         .await
         .unwrap()
         .expect("expected some result")
@@ -276,7 +272,7 @@ async fn get_transparent_transaction_by_id() {
 
     // run test
     let transparent_transaction = client
-        .transparent_transaction(&format!("{id:#x}"))
+        .transparent_transaction(&id)
         .await
         .unwrap()
         .expect("expected some value");
@@ -417,7 +413,7 @@ async fn get_transactions_by_owner_forward_and_backward_iterations() {
         direction: PageDirection::Forward,
     };
     let response = client
-        .transactions_by_owner(bob.to_string().as_str(), all_transactions_forward)
+        .transactions_by_owner(&bob, all_transactions_forward)
         .await
         .unwrap();
     let transactions_forward = response
@@ -436,7 +432,7 @@ async fn get_transactions_by_owner_forward_and_backward_iterations() {
         direction: PageDirection::Backward,
     };
     let response = client
-        .transactions_by_owner(bob.to_string().as_str(), all_transactions_backward)
+        .transactions_by_owner(&bob, all_transactions_backward)
         .await;
     // Backward request is not supported right now.
     assert!(response.is_err());
@@ -449,7 +445,7 @@ async fn get_transactions_by_owner_forward_and_backward_iterations() {
         direction: PageDirection::Forward,
     };
     let response_after_iter_three = client
-        .transactions_by_owner(bob.to_string().as_str(), forward_iter_three)
+        .transactions_by_owner(&bob, forward_iter_three)
         .await
         .unwrap();
     let transactions_forward_iter_three = response_after_iter_three
@@ -471,7 +467,7 @@ async fn get_transactions_by_owner_forward_and_backward_iterations() {
         direction: PageDirection::Forward,
     };
     let response = client
-        .transactions_by_owner(bob.to_string().as_str(), forward_iter_next_two)
+        .transactions_by_owner(&bob, forward_iter_next_two)
         .await
         .unwrap();
     let transactions_forward_iter_next_two = response
@@ -532,10 +528,16 @@ async fn get_transactions_from_manual_blocks() {
 
     // process blocks and save block height
     executor
-        .execute_and_commit(ExecutionBlock::Production(first_test_block))
+        .execute_and_commit(
+            ExecutionBlock::Production(first_test_block),
+            Default::default(),
+        )
         .unwrap();
     executor
-        .execute_and_commit(ExecutionBlock::Production(second_test_block))
+        .execute_and_commit(
+            ExecutionBlock::Production(second_test_block),
+            Default::default(),
+        )
         .unwrap();
 
     // Query for first 4: [coinbase_tx1, 0, 1, 2]
@@ -626,7 +628,7 @@ async fn get_owned_transactions() {
         direction: PageDirection::Forward,
     };
     let alice_txs = client
-        .transactions_by_owner(&format!("{alice:#x}"), page_request.clone())
+        .transactions_by_owner(&alice, page_request.clone())
         .await
         .unwrap()
         .results
@@ -635,7 +637,7 @@ async fn get_owned_transactions() {
         .collect_vec();
 
     let bob_txs = client
-        .transactions_by_owner(&format!("{bob:#x}"), page_request.clone())
+        .transactions_by_owner(&bob, page_request.clone())
         .await
         .unwrap()
         .results
@@ -644,7 +646,7 @@ async fn get_owned_transactions() {
         .collect_vec();
 
     let charlie_txs = client
-        .transactions_by_owner(&format!("{charlie:#x}"), page_request.clone())
+        .transactions_by_owner(&charlie, page_request.clone())
         .await
         .unwrap()
         .results
@@ -701,7 +703,7 @@ fn get_executor_and_db() -> (Executor<MaybeRelayerAdapter>, Database) {
     let executor = Executor {
         relayer,
         database: db.clone(),
-        config: Config::local_node(),
+        config: Default::default(),
     };
 
     (executor, db)

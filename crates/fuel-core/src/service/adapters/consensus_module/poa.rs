@@ -32,10 +32,7 @@ use fuel_core_types::{
             UncommittedResult as UncommittedImporterResult,
         },
         executor::UncommittedResult,
-        txpool::{
-            ArcPoolTx,
-            TxStatus,
-        },
+        txpool::ArcPoolTx,
     },
     tai64::Tai64,
 };
@@ -78,9 +75,9 @@ impl TransactionPool for TxPoolAdapter {
         self.service.remove_txs(ids)
     }
 
-    fn transaction_status_events(&self) -> BoxStream<TxStatus> {
+    fn transaction_status_events(&self) -> BoxStream<TxId> {
         Box::pin(
-            BroadcastStream::new(self.service.tx_status_subscribe())
+            BroadcastStream::new(self.service.new_tx_notification_subscribe())
                 .filter_map(|result| result.ok()),
         )
     }

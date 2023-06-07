@@ -20,10 +20,7 @@ use fuel_core_types::{
             UncommittedResult as UncommittedImportResult,
         },
         executor::UncommittedResult as UncommittedExecutionResult,
-        txpool::{
-            ArcPoolTx,
-            TxStatus,
-        },
+        txpool::ArcPoolTx,
     },
     tai64::Tai64,
 };
@@ -37,7 +34,7 @@ pub trait TransactionPool: Send + Sync {
 
     fn remove_txs(&self, tx_ids: Vec<TxId>) -> Vec<ArcPoolTx>;
 
-    fn transaction_status_events(&self) -> BoxStream<TxStatus>;
+    fn transaction_status_events(&self) -> BoxStream<TxId>;
 }
 
 #[cfg(test)]

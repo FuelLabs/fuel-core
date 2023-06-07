@@ -3,7 +3,6 @@ use crate::client::{
         schema,
         Address,
         AssetId,
-        ConversionError,
         Nonce,
         PageInfo,
         UtxoId,
@@ -11,11 +10,8 @@ use crate::client::{
         U64,
     },
     PageDirection,
-    PaginatedResult,
     PaginationRequest,
 };
-use itertools::Itertools;
-use std::str::FromStr;
 
 #[derive(cynic::QueryVariables, Debug)]
 pub struct CoinByIdArgs {
@@ -102,17 +98,6 @@ pub struct CoinConnection {
     pub page_info: PageInfo,
 }
 
-impl From<CoinConnection> for PaginatedResult<Coin, String> {
-    fn from(conn: CoinConnection) -> Self {
-        PaginatedResult {
-            cursor: conn.page_info.end_cursor,
-            has_next_page: conn.page_info.has_next_page,
-            has_previous_page: conn.page_info.has_previous_page,
-            results: conn.edges.into_iter().map(|e| e.node).collect(),
-        }
-    }
-}
-
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinEdge {
@@ -120,7 +105,7 @@ pub struct CoinEdge {
     pub node: Coin,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Debug, Clone)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Coin {
     pub amount: U64,
@@ -146,12 +131,10 @@ pub struct ExcludeInput {
     messages: Vec<Nonce>,
 }
 
-impl ExcludeInput {
-    pub fn from_tuple(tuple: (Vec<&str>, Vec<&str>)) -> Result<Self, ConversionError> {
-        let utxos = tuple.0.into_iter().map(UtxoId::from_str).try_collect()?;
-        let messages = tuple.1.into_iter().map(Nonce::from_str).try_collect()?;
-
-        Ok(Self { utxos, messages })
+impl From<(Vec<UtxoId>, Vec<Nonce>)> for ExcludeInput {
+    fn from(value: (Vec<UtxoId>, Vec<Nonce>)) -> Self {
+        let (utxos, messages) = value;
+        Self { utxos, messages }
     }
 }
 
@@ -166,7 +149,7 @@ pub struct SpendQueryElementInput {
     pub max: Option<U64>,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Debug, Clone)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct MessageCoin {
     pub amount: U64,
@@ -176,7 +159,7 @@ pub struct MessageCoin {
     pub da_height: U64,
 }
 
-#[derive(cynic::InlineFragments, Debug)]
+#[derive(cynic::InlineFragments, Debug, Clone)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum CoinType {
     Coin(Coin),

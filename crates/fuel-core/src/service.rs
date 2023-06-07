@@ -27,6 +27,7 @@ pub mod adapters;
 pub mod config;
 pub mod genesis;
 pub mod metrics;
+mod query;
 pub mod sub_services;
 
 #[derive(Clone)]
@@ -41,9 +42,10 @@ pub struct SharedState {
     pub relayer: Option<fuel_core_relayer::SharedState<Database>>,
     /// The GraphQL shared state.
     pub graph_ql: crate::fuel_core_graphql_api::service::SharedState,
+    /// The underlying database.
+    pub database: Database,
     /// Subscribe to new block production.
     pub block_importer: BlockImporterAdapter,
-    #[cfg(feature = "test-helpers")]
     /// The config of the service.
     pub config: Config,
 }

@@ -56,7 +56,7 @@ async fn transaction_with_valid_predicate_is_executed() {
     // check transaction change amount to see if predicate was spent
     let transaction = context
         .client
-        .transaction(&predicate_tx.id(&ConsensusParameters::DEFAULT).to_string())
+        .transaction(&predicate_tx.id(&ConsensusParameters::DEFAULT))
         .await
         .unwrap()
         .unwrap()

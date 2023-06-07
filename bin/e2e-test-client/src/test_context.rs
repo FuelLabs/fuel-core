@@ -6,19 +6,25 @@ use anyhow::{
 };
 use fuel_core_chain_config::ContractConfig;
 use fuel_core_client::client::{
-    schema::coins::CoinType,
-    types::TransactionStatus,
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
+    types::{
+        CoinType,
+        TransactionStatus,
+    },
     FuelClient,
-    PageDirection,
-    PaginationRequest,
 };
 use fuel_core_types::{
     fuel_crypto::PublicKey,
     fuel_tx::{
         ConsensusParameters,
+        Contract,
         Finalizable,
         Input,
         Output,
+        StorageSlot,
         Transaction,
         TransactionBuilder,
         TxId,
@@ -94,10 +100,7 @@ impl Wallet {
     /// returns the balance associated with a wallet
     pub async fn balance(&self, asset_id: Option<AssetId>) -> anyhow::Result<u64> {
         self.client
-            .balance(
-                &self.address.to_string(),
-                Some(asset_id.unwrap_or_default().to_string().as_str()),
-            )
+            .balance(&self.address, Some(&asset_id.unwrap_or_default()))
             .await
             .context("failed to retrieve balance")
     }
@@ -112,7 +115,7 @@ impl Wallet {
             results = self
                 .client
                 .coins(
-                    &self.address.to_string(),
+                    &self.address,
                     None,
                     PaginationRequest {
                         cursor: None,
@@ -123,10 +126,7 @@ impl Wallet {
                 .await?
                 .results;
             // check if page has the utxos we're looking for
-            if results
-                .iter()
-                .any(|coin| UtxoId::from(coin.utxo_id.clone()) == utxo_id)
-            {
+            if results.iter().any(|coin| coin.utxo_id == utxo_id) {
                 return Ok(true)
             }
         }
@@ -142,17 +142,11 @@ impl Wallet {
         asset_id: Option<AssetId>,
     ) -> anyhow::Result<Transaction> {
         let asset_id = asset_id.unwrap_or_default();
-        let asset_id_string = asset_id.to_string();
-        let asset_id_str = asset_id_string.as_str();
         let total_amount = transfer_amount + BASE_AMOUNT;
         // select coins
         let coins = &self
             .client
-            .coins_to_spend(
-                self.address.to_string().as_str(),
-                vec![(asset_id_str, total_amount, None)],
-                None,
-            )
+            .coins_to_spend(&self.address, vec![(asset_id, total_amount, None)], None)
             .await?[0];
 
         // build transaction
@@ -164,11 +158,11 @@ impl Wallet {
             if let CoinType::Coin(coin) = coin {
                 tx.add_unsigned_coin_input(
                     self.secret,
-                    coin.utxo_id.clone().into(),
-                    coin.amount.clone().into(),
-                    coin.asset_id.clone().into(),
+                    coin.utxo_id,
+                    coin.amount,
+                    coin.asset_id,
                     Default::default(),
-                    coin.maturity.clone().into(),
+                    coin.maturity.into(),
                 );
             }
         }
@@ -214,20 +208,26 @@ impl Wallet {
 
     pub async fn deploy_contract(&self, config: ContractConfig) -> anyhow::Result<()> {
         let asset_id = AssetId::zeroed();
-        let asset_id_string = asset_id.to_string();
-        let asset_id_str = asset_id_string.as_str();
         let total_amount = BASE_AMOUNT;
         // select coins
         let coins = &self
             .client
-            .coins_to_spend(
-                self.address.to_string().as_str(),
-                vec![(asset_id_str, total_amount, None)],
-                None,
-            )
+            .coins_to_spend(&self.address, vec![(asset_id, total_amount, None)], None)
             .await?[0];
 
-        let (contract_id, bytes, salt, state_root, slots) = config.unpack();
+        let ContractConfig {
+            contract_id,
+            code: bytes,
+            salt,
+            state,
+            ..
+        } = config;
+        let slots = state
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(key, value)| StorageSlot::new(key, value))
+            .collect::<Vec<_>>();
+        let state_root = Contract::initial_state_root(slots.iter());
         let mut tx = TransactionBuilder::create(bytes.into(), salt, slots);
         tx.gas_price(1);
         tx.gas_limit(BASE_AMOUNT);
@@ -236,11 +236,11 @@ impl Wallet {
             if let CoinType::Coin(coin) = coin {
                 tx.add_unsigned_coin_input(
                     self.secret,
-                    coin.utxo_id.clone().into(),
-                    coin.amount.clone().into(),
-                    coin.asset_id.clone().into(),
+                    coin.utxo_id,
+                    coin.amount,
+                    coin.asset_id,
                     Default::default(),
-                    coin.maturity.clone().into(),
+                    coin.maturity.into(),
                 );
             }
         }

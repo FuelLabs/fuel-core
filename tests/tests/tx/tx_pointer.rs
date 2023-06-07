@@ -83,7 +83,7 @@ async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
 
     // verify that the tx returned from the api has tx pointers set matching the genesis config
     let ret_tx = client
-        .transaction(&tx.id(&fuel_tx::ConsensusParameters::DEFAULT).to_string())
+        .transaction(&tx.id(&fuel_tx::ConsensusParameters::DEFAULT))
         .await
         .unwrap()
         .unwrap()
@@ -137,7 +137,7 @@ async fn tx_pointer_set_from_previous_block() {
     let tx1 = tx1.into();
     client.submit_and_await_commit(&tx1).await.unwrap();
     let ret_tx1 = client
-        .transaction(&tx1.id(&fuel_tx::ConsensusParameters::DEFAULT).to_string())
+        .transaction(&tx1.id(&fuel_tx::ConsensusParameters::DEFAULT))
         .await
         .unwrap()
         .unwrap()
@@ -156,7 +156,7 @@ async fn tx_pointer_set_from_previous_block() {
     client.submit_and_await_commit(&tx2).await.unwrap();
 
     let ret_tx2 = client
-        .transaction(&tx2.id(&fuel_tx::ConsensusParameters::DEFAULT).to_string())
+        .transaction(&tx2.id(&fuel_tx::ConsensusParameters::DEFAULT))
         .await
         .unwrap()
         .unwrap()
@@ -205,7 +205,7 @@ async fn tx_pointer_unset_when_utxo_validation_disabled() {
     client.submit_and_await_commit(&tx).await.unwrap();
 
     let ret_tx = client
-        .transaction(&tx.id(&fuel_tx::ConsensusParameters::DEFAULT).to_string())
+        .transaction(&tx.id(&fuel_tx::ConsensusParameters::DEFAULT))
         .await
         .unwrap()
         .unwrap()

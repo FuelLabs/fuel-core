@@ -7,10 +7,12 @@ use fuel_core::service::{
     FuelService,
 };
 use fuel_core_client::client::{
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
     types::TransactionStatus,
     FuelClient,
-    PageDirection,
-    PaginationRequest,
 };
 use fuel_core_types::{
     fuel_asm::*,
@@ -21,28 +23,6 @@ use fuel_core_types::{
 use rstest::rstest;
 
 const SEED: u64 = 2322;
-
-#[tokio::test]
-async fn test_contract_salt() {
-    let mut test_builder = TestSetupBuilder::new(SEED);
-    let (_, contract_id) = test_builder.setup_contract(vec![], None, None, None);
-
-    // spin up node
-    let TestContext {
-        client,
-        srv: _dont_drop,
-        ..
-    } = test_builder.finalize().await;
-
-    let contract = client
-        .contract(format!("{contract_id:#x}").as_str())
-        .await
-        .unwrap();
-
-    // Check that salt is 0x Hex prefixed
-    let salt = contract.unwrap().salt;
-    assert_eq!("0x", &salt.to_string()[..2]);
-}
 
 #[rstest]
 #[tokio::test]
@@ -67,10 +47,7 @@ async fn test_contract_balance(
     } = test_builder.finalize().await;
 
     let balance = client
-        .contract_balance(
-            format!("{contract_id:#x}").as_str(),
-            Some(format!("{asset:#x}").as_str()),
-        )
+        .contract_balance(&contract_id, Some(&asset))
         .await
         .unwrap();
 
@@ -107,7 +84,7 @@ async fn test_5_contract_balances(
 
     let contract_balances = client
         .contract_balances(
-            format!("{contract_id:#x}").as_str(),
+            &contract_id,
             PaginationRequest {
                 cursor: None,
                 results: 3,
@@ -119,13 +96,13 @@ async fn test_5_contract_balances(
 
     assert!(!contract_balances.results.is_empty());
     if direction == PageDirection::Forward {
-        assert_eq!(contract_balances.results[0].amount.0, 1000);
-        assert_eq!(contract_balances.results[1].amount.0, 400);
-        assert_eq!(contract_balances.results[2].amount.0, 700);
+        assert_eq!(contract_balances.results[0].amount, 1000);
+        assert_eq!(contract_balances.results[1].amount, 400);
+        assert_eq!(contract_balances.results[2].amount, 700);
     } else {
-        assert_eq!(contract_balances.results[2].amount.0, 1000);
-        assert_eq!(contract_balances.results[1].amount.0, 400);
-        assert_eq!(contract_balances.results[0].amount.0, 700);
+        assert_eq!(contract_balances.results[2].amount, 1000);
+        assert_eq!(contract_balances.results[1].amount, 400);
+        assert_eq!(contract_balances.results[0].amount, 700);
     }
 }
 
@@ -295,11 +272,7 @@ async fn can_get_message_proof() {
     );
 
     // Get the receipts from the contract call.
-    let receipts = client
-        .receipts(transaction_id.to_string().as_str())
-        .await
-        .unwrap()
-        .unwrap();
+    let receipts = client.receipts(&transaction_id).await.unwrap().unwrap();
     let logd = receipts
         .iter()
         .find(|f| matches!(f, Receipt::LogData { .. }))

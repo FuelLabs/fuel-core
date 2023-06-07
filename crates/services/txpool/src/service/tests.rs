@@ -4,10 +4,7 @@ use crate::service::test_helpers::{
     TestContextBuilder,
 };
 use fuel_core_services::Service as ServiceTrait;
-use fuel_core_types::{
-    fuel_tx::UniqueIdentifier,
-    services::txpool::Error as TxpoolError,
-};
+use fuel_core_types::fuel_tx::UniqueIdentifier;
 use std::time::Duration;
 
 #[tokio::test]
@@ -178,78 +175,76 @@ async fn simple_insert_removal_subscription() {
     let tx2 = Arc::new(ctx.setup_script_tx(20));
     let service = ctx.service();
 
-    let mut subscribe_status = service.shared.tx_status_subscribe();
-    let mut subscribe_update = service.shared.tx_update_subscribe();
+    let mut new_tx_notification = service.shared.new_tx_notification_subscribe();
+    let mut tx1_subscribe_updates = service
+        .shared
+        .tx_update_subscribe(tx1.cached_id().unwrap())
+        .await;
+    let mut tx2_subscribe_updates = service
+        .shared
+        .tx_update_subscribe(tx2.cached_id().unwrap())
+        .await;
 
     let out = service.shared.insert(vec![tx1.clone(), tx2.clone()]);
 
-    if let Ok(tx) = &out[0] {
+    if out[0].is_ok() {
         assert_eq!(
-            subscribe_status.try_recv(),
-            Ok(TxStatus::Submitted),
+            new_tx_notification.try_recv(),
+            Ok(tx1.cached_id().unwrap()),
             "First added should be tx1"
         );
-        let update = subscribe_update.try_recv().unwrap();
-        assert_eq!(
-            *update.tx_id(),
-            tx.inserted.id(),
-            "First added should be tx1"
+        let update = tx1_subscribe_updates.next().await.unwrap();
+        assert!(
+            matches!(
+                update,
+                TxStatusMessage::Status(TransactionStatus::Submitted { .. })
+            ),
+            "First message in tx1 stream should be Submitted"
         );
     } else {
         panic!("Tx1 should be OK, got err");
     }
 
-    if let Ok(tx) = &out[1] {
+    if out[1].is_ok() {
         assert_eq!(
-            subscribe_status.try_recv(),
-            Ok(TxStatus::Submitted),
+            new_tx_notification.try_recv(),
+            Ok(tx2.cached_id().unwrap()),
             "Second added should be tx2"
         );
-        let update = subscribe_update.try_recv().unwrap();
-        assert_eq!(
-            *update.tx_id(),
-            tx.inserted.id(),
-            "Second added should be tx2"
+        let update = tx2_subscribe_updates.next().await.unwrap();
+        assert!(
+            matches!(
+                update,
+                TxStatusMessage::Status(TransactionStatus::Submitted { .. })
+            ),
+            "First message in tx2 stream should be Submitted"
         );
     } else {
         panic!("Tx2 should be OK, got err");
     }
 
     // remove them
-    let rem = service.shared.remove(vec![
-        tx1.id(&ConsensusParameters::DEFAULT),
-        tx2.id(&ConsensusParameters::DEFAULT),
-    ]);
+    service
+        .shared
+        .remove(vec![tx1.cached_id().unwrap(), tx2.cached_id().unwrap()]);
 
+    let update = tx1_subscribe_updates.next().await.unwrap();
     assert_eq!(
-        tokio::time::timeout(std::time::Duration::from_secs(2), subscribe_status.recv())
-            .await,
-        Ok(Ok(TxStatus::SqueezedOut {
-            reason: TxpoolError::Removed
-        })),
-        "First removed should be tx1"
+        update,
+        TxStatusMessage::Status(TransactionStatus::SqueezedOut {
+            reason: "Transaction removed.".to_string()
+        }),
+        "Second message in tx1 stream should be squeezed out"
     );
-    let update =
-        tokio::time::timeout(std::time::Duration::from_secs(2), subscribe_update.recv())
-            .await
-            .unwrap()
-            .unwrap();
-    assert_eq!(*update.tx_id(), rem[0].id(), "First removed should be tx1");
 
+    let update = tx2_subscribe_updates.next().await.unwrap();
     assert_eq!(
-        tokio::time::timeout(std::time::Duration::from_secs(2), subscribe_status.recv())
-            .await,
-        Ok(Ok(TxStatus::SqueezedOut {
-            reason: TxpoolError::Removed
-        })),
-        "Second removed should be tx2"
+        update,
+        TxStatusMessage::Status(TransactionStatus::SqueezedOut {
+            reason: "Transaction removed.".to_string()
+        }),
+        "Second message in tx2 stream should be squeezed out"
     );
-    let update =
-        tokio::time::timeout(std::time::Duration::from_secs(2), subscribe_update.recv())
-            .await
-            .unwrap()
-            .unwrap();
-    assert_eq!(*update.tx_id(), rem[1].id(), "Second removed should be tx2");
 
     service.stop_and_await().await.unwrap();
 }

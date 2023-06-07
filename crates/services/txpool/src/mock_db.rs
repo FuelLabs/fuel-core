@@ -95,4 +95,11 @@ impl TxPoolDb for MockDb {
     fn current_block_height(&self) -> StorageResult<BlockHeight> {
         Ok(Default::default())
     }
+
+    fn transaction_status(
+        &self,
+        _tx_id: &fuel_core_types::fuel_types::Bytes32,
+    ) -> StorageResult<fuel_core_types::services::txpool::TransactionStatus> {
+        unimplemented!()
+    }
 }

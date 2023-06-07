@@ -302,6 +302,17 @@ pub struct Submit {
     pub submit: TransactionIdFragment,
 }
 
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Subscription",
+    variables = "TxArg"
+)]
+pub struct SubmitAndAwaitSubscription {
+    #[arguments(tx: $tx)]
+    pub submit_and_await: TransactionStatus,
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;

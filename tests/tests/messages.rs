@@ -9,10 +9,12 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
     types::TransactionStatus,
     FuelClient,
-    PageDirection,
-    PaginationRequest,
 };
 use fuel_core_types::{
     fuel_asm::*,
@@ -122,7 +124,7 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
 
     // get the messages from Owner A
     let result = client
-        .messages(Some(&owner_a.to_string()), request.clone())
+        .messages(Some(&owner_a), request.clone())
         .await
         .unwrap();
 
@@ -131,23 +133,24 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
 
     // verify messages owner matches
     for message in result.results {
-        assert_eq!(message.recipient.0 .0, owner_a)
+        assert_eq!(message.recipient, owner_a)
     }
 
     // get the messages from Owner B
     let result = client
-        .messages(Some(&owner_b.to_string()), request.clone())
+        .messages(Some(&owner_b), request.clone())
         .await
         .unwrap();
 
     // verify that Owner B has 1 message
     assert_eq!(result.results.len(), 1);
 
-    assert_eq!(result.results[0].recipient.0 .0, owner_b);
+    let recipient: Address = result.results[0].recipient;
+    assert_eq!(recipient, owner_b);
 
     // get the messages from Owner C
     let result = client
-        .messages(Some(&owner_c.to_string()), request.clone())
+        .messages(Some(&owner_c), request.clone())
         .await
         .unwrap();
 
@@ -172,10 +175,7 @@ async fn messages_empty_results_for_owner_with_no_messages(
         direction,
     };
 
-    let result = client
-        .messages(Some(&owner.to_string()), request)
-        .await
-        .unwrap();
+    let result = client.messages(Some(&owner), request).await.unwrap();
 
     assert_eq!(result.results.len(), 0);
 }
@@ -358,11 +358,7 @@ async fn can_get_message_proof() {
         let last_height = client.produce_blocks(1, None).await.unwrap();
 
         // Get the receipts from the contract call.
-        let receipts = client
-            .receipts(transaction_id.to_string().as_str())
-            .await
-            .unwrap()
-            .unwrap();
+        let receipts = client.receipts(&transaction_id).await.unwrap().unwrap();
 
         // Get the message id from the receipts.
         let message_ids: Vec<_> =
@@ -374,12 +370,7 @@ async fn can_get_message_proof() {
         for message_id in message_ids.clone() {
             // Request the proof.
             let result = client
-                .message_proof(
-                    transaction_id.to_string().as_str(),
-                    message_id.to_string().as_str(),
-                    None,
-                    Some(last_height),
-                )
+                .message_proof(&transaction_id, &message_id, None, Some(last_height))
                 .await
                 .unwrap()
                 .unwrap();
@@ -387,10 +378,10 @@ async fn can_get_message_proof() {
             // 1. Generate the message id (message fields)
             // Produce message id.
             let generated_message_id = compute_message_id(
-                &(result.sender.into()),
-                &(result.recipient.into()),
-                &(result.nonce.into()),
-                result.amount.0,
+                &result.sender,
+                &result.recipient,
+                &result.nonce,
+                result.amount,
                 &result.data,
             );
 
@@ -399,20 +390,15 @@ async fn can_get_message_proof() {
 
             // 2. Generate the block id. (full header)
             let mut hasher = Hasher::default();
-            hasher.input(Bytes32::from(result.message_block_header.prev_root).as_ref());
-            hasher.input(&result.message_block_header.height.0.to_be_bytes()[..]);
-            hasher.input(result.message_block_header.time.0 .0.to_be_bytes());
-            hasher.input(
-                Bytes32::from(result.message_block_header.application_hash).as_ref(),
-            );
+            hasher.input(result.message_block_header.prev_root.as_ref());
+            hasher.input(&result.message_block_header.height.to_be_bytes()[..]);
+            hasher.input(result.message_block_header.time.0.to_be_bytes());
+            hasher.input(result.message_block_header.application_hash.as_ref());
             let message_block_id = hasher.digest();
-            assert_eq!(
-                message_block_id,
-                Bytes32::from(result.message_block_header.id)
-            );
+            assert_eq!(message_block_id, result.message_block_header.id);
 
             // 3. Verify the message proof. (message receipt root, message id, proof index, proof set, num message receipts in the block)
-            let message_proof_index = result.message_proof.proof_index.0;
+            let message_proof_index = result.message_proof.proof_index;
             let message_proof_set: Vec<_> = result
                 .message_proof
                 .proof_set
@@ -421,15 +407,11 @@ async fn can_get_message_proof() {
                 .map(Bytes32::from)
                 .collect();
             assert!(verify_merkle(
-                result
-                    .message_block_header
-                    .message_receipt_root
-                    .clone()
-                    .into(),
+                result.message_block_header.message_receipt_root,
                 generated_message_id,
                 message_proof_index,
                 &message_proof_set,
-                result.message_block_header.message_receipt_count.0,
+                result.message_block_header.message_receipt_count,
             ));
 
             // Generate a proof to compare
@@ -445,14 +427,12 @@ async fn can_get_message_proof() {
 
             // Check the root matches the proof and the root on the header.
             assert_eq!(
-                <[u8; 32]>::from(Bytes32::from(
-                    result.message_block_header.message_receipt_root
-                )),
+                <[u8; 32]>::from(result.message_block_header.message_receipt_root),
                 expected_root
             );
 
             // 4. Verify the block proof. (prev_root, block id, proof index, proof set, block count)
-            let block_proof_index = result.block_proof.proof_index.0;
+            let block_proof_index = result.block_proof.proof_index;
             let block_proof_set: Vec<_> = result
                 .block_proof
                 .proof_set
@@ -460,9 +440,9 @@ async fn can_get_message_proof() {
                 .cloned()
                 .map(Bytes32::from)
                 .collect();
-            let blocks_count = result.commit_block_header.height.0;
+            let blocks_count = result.commit_block_header.height;
             assert!(verify_merkle(
-                result.commit_block_header.prev_root.clone().into(),
+                result.commit_block_header.prev_root,
                 message_block_id,
                 block_proof_index,
                 &block_proof_set,

@@ -27,6 +27,7 @@ use fuel_core_types::{
         ArcPoolTx,
         InsertionResult,
     },
+    tai64::Tai64,
 };
 use std::{
     cmp::Reverse,
@@ -152,6 +153,7 @@ where
             .by_dependency
             .insert(&self.by_hash, &self.database, &tx)?;
         let info = TxInfo::new(tx.clone());
+        let submitted_time = info.submitted_time();
         self.by_gas_price.insert(&info);
         self.by_time.insert(&info);
         self.by_hash.insert(tx.id(), info);
@@ -177,6 +179,7 @@ where
 
         Ok(InsertionResult {
             inserted: tx,
+            submitted_time,
             removed,
         })
     }
@@ -263,13 +266,20 @@ where
         // announce to subscribers
         for ret in res.iter() {
             match ret {
-                Ok(InsertionResult { removed, inserted }) => {
+                Ok(InsertionResult {
+                    removed,
+                    inserted,
+                    submitted_time,
+                }) => {
                     for removed in removed {
                         // small todo there is possibility to have removal reason (ReplacedByHigherGas, DependencyRemoved)
                         // but for now it is okay to just use Error::Removed.
                         tx_status_sender.send_squeezed_out(removed.id(), Error::Removed);
                     }
-                    tx_status_sender.send_submitted(inserted.id());
+                    tx_status_sender.send_submitted(
+                        inserted.id(),
+                        Tai64::from_unix(submitted_time.as_secs() as i64),
+                    );
                 }
                 Err(_) => {
                     // @dev should not broadcast tx if error occurred
@@ -337,13 +347,10 @@ where
         // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
         for tx in block.entity.transactions() {
-            tx_status_sender.send_complete(
-                tx.id(&self.config.chain_config.transaction_parameters),
-                block.entity.header().height(),
-            );
-            self.remove_committed_tx(
-                &tx.id(&self.config.chain_config.transaction_parameters),
-            );
+            let tx_id = tx.id(&self.config.chain_config.transaction_parameters);
+            let result = self.database.transaction_status(&tx_id);
+            tx_status_sender.send_complete(tx_id, block.entity.header().height(), result);
+            self.remove_committed_tx(&tx_id);
         }
     }
 
