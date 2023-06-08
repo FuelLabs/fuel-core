@@ -111,10 +111,6 @@ pub struct P2PArgs {
     #[clap(long = "identify_interval", default_value = "5", env)]
     pub identify_interval: u64,
 
-    /// Choose which topics to subscribe to via gossipsub protocol
-    #[clap(long = "topics", value_delimiter = ',', default_values = &["new_tx", "new_block", "consensus_vote"], env)]
-    pub topics: Vec<String>,
-
     /// Choose max mesh size for gossipsub protocol
     #[clap(long = "max_mesh_size", default_value = "12", env)]
     pub max_mesh_size: usize,
@@ -284,7 +280,6 @@ impl P2PArgs {
                 connection_idle_timeout: Some(Duration::from_secs(
                     self.connection_idle_timeout,
                 )),
-                topics: self.topics,
                 gossipsub_config,
                 heartbeat_config,
                 set_request_timeout: Duration::from_secs(self.request_timeout),
