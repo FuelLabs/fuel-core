@@ -17,6 +17,8 @@ enum Command {
 enum TransactionCommands {
     /// Submit a JSON encoded transaction for inclusion in a block
     Submit { tx: String },
+    /// Submit a JSON encoded transaction for predicate estimation.
+    EstimatePredicates { tx: String },
     /// Submit a JSON encoded transaction for a dry-run execution
     DryRun { tx: String },
     /// Get the transactions associated with a particular transaction id
@@ -47,6 +49,16 @@ impl CliArgs {
 
                     let result = client.submit(&tx).await;
                     println!("{}", result.unwrap());
+                }
+                TransactionCommands::EstimatePredicates { tx } => {
+                    let mut tx: Transaction =
+                        serde_json::from_str(tx).expect("invalid transaction json");
+
+                    client
+                        .estimate_predicates(&mut tx)
+                        .await
+                        .expect("Should be able to estimate predicates");
+                    println!("{:?}", tx);
                 }
                 TransactionCommands::DryRun { tx } => {
                     let tx: Transaction =

@@ -401,7 +401,7 @@ impl Node {
                 .unwrap();
 
             let tx = Transaction::from(tx_result.inserted.as_ref());
-            expected.insert(tx.id(&ConsensusParameters::DEFAULT), tx);
+            expected.insert(tx.id(&ConsensusParameters::DEFAULT.chain_id), tx);
 
             assert!(tx_result.removed.is_empty());
         }
@@ -429,7 +429,7 @@ fn not_found_txs<'iter>(
 ) -> Vec<TxId> {
     let mut not_found = vec![];
     txs.iter().for_each(|(id, tx)| {
-        assert_eq!(id, &tx.id(&ConsensusParameters::DEFAULT));
+        assert_eq!(id, &tx.id(&ConsensusParameters::DEFAULT.chain_id));
         if !db.storage::<Transactions>().contains_key(id).unwrap() {
             not_found.push(*id);
         }

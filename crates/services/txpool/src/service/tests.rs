@@ -36,15 +36,15 @@ async fn test_find() {
     assert!(out[0].is_ok(), "Tx1 should be OK, got err:{out:?}");
     assert!(out[1].is_ok(), "Tx2 should be OK, got err:{out:?}");
     let out = service.shared.find(vec![
-        tx1.id(&ConsensusParameters::DEFAULT),
-        tx3.id(&ConsensusParameters::DEFAULT),
+        tx1.id(&ConsensusParameters::DEFAULT.chain_id),
+        tx3.id(&ConsensusParameters::DEFAULT.chain_id),
     ]);
     assert_eq!(out.len(), 2, "Should be len 2:{out:?}");
     assert!(out[0].is_some(), "Tx1 should be some:{out:?}");
     let id = out[0].as_ref().unwrap().id();
     assert_eq!(
         id,
-        tx1.id(&ConsensusParameters::DEFAULT),
+        tx1.id(&ConsensusParameters::DEFAULT.chain_id),
         "Found tx id match{out:?}"
     );
     assert!(out[1].is_none(), "Tx3 should not be found:{out:?}");
@@ -82,9 +82,9 @@ async fn test_prune_transactions() {
 
     tokio::time::sleep(Duration::from_secs(TIMEOUT / 2)).await;
     let out = service.shared.find(vec![
-        tx1.id(&ConsensusParameters::DEFAULT),
-        tx2.id(&ConsensusParameters::DEFAULT),
-        tx3.id(&ConsensusParameters::DEFAULT),
+        tx1.id(&ConsensusParameters::DEFAULT.chain_id),
+        tx2.id(&ConsensusParameters::DEFAULT.chain_id),
+        tx3.id(&ConsensusParameters::DEFAULT.chain_id),
     ]);
     assert_eq!(out.len(), 3, "Should be len 3:{out:?}");
     assert!(out[0].is_some(), "Tx1 should exist");
@@ -93,9 +93,9 @@ async fn test_prune_transactions() {
 
     tokio::time::sleep(Duration::from_secs(TIMEOUT / 2 + 1)).await;
     let out = service.shared.find(vec![
-        tx1.id(&ConsensusParameters::DEFAULT),
-        tx2.id(&ConsensusParameters::DEFAULT),
-        tx3.id(&ConsensusParameters::DEFAULT),
+        tx1.id(&ConsensusParameters::DEFAULT.chain_id),
+        tx2.id(&ConsensusParameters::DEFAULT.chain_id),
+        tx3.id(&ConsensusParameters::DEFAULT.chain_id),
     ]);
     assert_eq!(out.len(), 3, "Should be len 3:{out:?}");
     assert!(out[0].is_none(), "Tx1 should be pruned");
@@ -133,9 +133,9 @@ async fn test_prune_transactions_the_oldest() {
     assert!(out[0].is_ok(), "Tx2 should be OK, got err:{out:?}");
 
     let out = service.shared.find(vec![
-        tx1.id(&ConsensusParameters::DEFAULT),
-        tx2.id(&ConsensusParameters::DEFAULT),
-        tx3.id(&ConsensusParameters::DEFAULT),
+        tx1.id(&ConsensusParameters::DEFAULT.chain_id),
+        tx2.id(&ConsensusParameters::DEFAULT.chain_id),
+        tx3.id(&ConsensusParameters::DEFAULT.chain_id),
     ]);
     assert!(out[0].is_some(), "Tx1 should exist");
     assert!(out[1].is_some(), "Tx2 should exist");
@@ -145,9 +145,9 @@ async fn test_prune_transactions_the_oldest() {
     assert!(out[0].is_ok(), "Tx3 should be OK, got err:{out:?}");
 
     let out = service.shared.find(vec![
-        tx1.id(&ConsensusParameters::DEFAULT),
-        tx2.id(&ConsensusParameters::DEFAULT),
-        tx3.id(&ConsensusParameters::DEFAULT),
+        tx1.id(&ConsensusParameters::DEFAULT.chain_id),
+        tx2.id(&ConsensusParameters::DEFAULT.chain_id),
+        tx3.id(&ConsensusParameters::DEFAULT.chain_id),
     ]);
     assert!(out[0].is_none(), "Tx1 should pruned");
     assert!(out[1].is_some(), "Tx2 should exist");
@@ -156,9 +156,9 @@ async fn test_prune_transactions_the_oldest() {
     tokio::time::sleep(Duration::from_secs(TIMEOUT)).await;
 
     let out = service.shared.find(vec![
-        tx1.id(&ConsensusParameters::DEFAULT),
-        tx2.id(&ConsensusParameters::DEFAULT),
-        tx3.id(&ConsensusParameters::DEFAULT),
+        tx1.id(&ConsensusParameters::DEFAULT.chain_id),
+        tx2.id(&ConsensusParameters::DEFAULT.chain_id),
+        tx3.id(&ConsensusParameters::DEFAULT.chain_id),
     ]);
     assert!(out[0].is_none(), "Tx1 should pruned");
     assert!(out[1].is_none(), "Tx2 should pruned");

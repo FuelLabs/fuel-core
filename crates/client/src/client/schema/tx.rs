@@ -274,6 +274,17 @@ pub struct TxArg {
     pub tx: HexString,
 }
 
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    variables = "TxArg"
+)]
+pub struct EstimatePredicates {
+    #[arguments(tx: $tx)]
+    pub estimate_predicates: OpaqueTransaction,
+}
+
 #[derive(cynic::QueryVariables)]
 pub struct DryRunArg {
     pub tx: HexString,
@@ -366,7 +377,7 @@ pub mod tests {
     #[test]
     fn dry_run_tx_gql_output() {
         use cynic::MutationBuilder;
-        let mut tx = fuel_tx::Transaction::default();
+        let mut tx = fuel_tx::Transaction::default_test_tx();
         let query = DryRun::build(DryRunArg {
             tx: HexString(Bytes(tx.to_bytes())),
             utxo_validation: None,
@@ -377,7 +388,7 @@ pub mod tests {
     #[test]
     fn submit_tx_gql_output() {
         use cynic::MutationBuilder;
-        let mut tx = fuel_tx::Transaction::default();
+        let mut tx = fuel_tx::Transaction::default_test_tx();
         let query = Submit::build(TxArg {
             tx: HexString(Bytes(tx.to_bytes())),
         });

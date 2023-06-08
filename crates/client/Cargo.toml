@@ -29,6 +29,7 @@ thiserror = "1.0"
 tracing = "0.1"
 
 [dev-dependencies]
+fuel-core-types = { workspace = true, features = ["serde", "test-helpers"] }
 insta = { workspace = true }
 
 [build-dependencies]

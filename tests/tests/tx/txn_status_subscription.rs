@@ -18,6 +18,10 @@ use fuel_core_types::{
         },
         *,
     },
+    fuel_vm::{
+        checked_transaction::EstimatePredicates,
+        GasCosts,
+    },
 };
 use futures::StreamExt;
 use rand::{
@@ -48,7 +52,8 @@ async fn subscribe_txn_status() {
             .collect();
 
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-        let owner = Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT);
+        let owner =
+            Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT.chain_id);
         // The third transaction needs to have a different input.
         let utxo_id = if i == 2 { 2 } else { 1 };
         let utxo_id = UtxoId::new(Bytes32::from([utxo_id; 32]), 1);
@@ -59,10 +64,11 @@ async fn subscribe_txn_status() {
             AssetId::zeroed(),
             TxPointer::default(),
             Default::default(),
+            Default::default(),
             predicate,
             vec![],
         );
-        let tx: Transaction = Transaction::script(
+        let mut tx: Transaction = Transaction::script(
             gas_price + (i as u64),
             gas_limit,
             maturity,
@@ -73,6 +79,10 @@ async fn subscribe_txn_status() {
             vec![],
         )
         .into();
+        // estimate predicate gas for coin_input predicate
+        tx.estimate_predicates(&ConsensusParameters::DEFAULT, &GasCosts::default())
+            .expect("should estimate predicate");
+
         tx
     };
     let txns: Vec<_> = (0..3).map(create_script).collect();
@@ -80,7 +90,7 @@ async fn subscribe_txn_status() {
 
     for (txn_idx, id) in txns
         .iter()
-        .map(|t| t.id(&ConsensusParameters::DEFAULT))
+        .map(|t| t.id(&ConsensusParameters::DEFAULT.chain_id))
         .enumerate()
     {
         let jh = tokio::spawn({
@@ -124,7 +134,8 @@ async fn test_regression_in_subscribe() {
     let mut config = Config::local_node();
     config.utxo_validation = true;
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-    let owner = Input::predicate_owner(&predicate, &ConsensusParameters::default());
+    let owner =
+        Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT.chain_id);
     let node = FuelService::new_node(config).await.unwrap();
     let coin_pred = Input::coin_predicate(
         rng.gen(),
@@ -132,7 +143,8 @@ async fn test_regression_in_subscribe() {
         rng.gen(),
         rng.gen(),
         rng.gen(),
-        0.into(),
+        Default::default(),
+        Default::default(),
         predicate,
         vec![],
     );

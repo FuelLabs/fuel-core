@@ -191,7 +191,7 @@ impl Wallet {
         let tx = self
             .transfer_tx(destination, transfer_amount, asset_id)
             .await?;
-        let tx_id = tx.id(&self.consensus_params);
+        let tx_id = tx.id(&self.consensus_params.chain_id);
         let status = self.client.submit_and_await_commit(&tx).await?;
 
         // we know the transferred coin should be output 0 from above

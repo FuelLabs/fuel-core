@@ -5,6 +5,7 @@ use crate::{
         custom_predicate,
         random_predicate,
         setup_coin,
+        IntoEstimated,
         TEST_COIN_AMOUNT,
     },
     txpool::test_helpers::{
@@ -13,7 +14,6 @@ use crate::{
         create_contract_output,
         create_message_predicate_from_message,
     },
-    types::ContractId,
     Config,
     Error,
     MockDb,
@@ -34,8 +34,10 @@ use fuel_core_types::{
         input::coin::CoinPredicate,
         Address,
         AssetId,
+        Contract,
         Input,
         Output,
+        Transaction,
         TransactionBuilder,
         UniqueIdentifier,
         UtxoId,
@@ -44,7 +46,6 @@ use fuel_core_types::{
 use std::{
     cmp::Reverse,
     collections::HashMap,
-    str::FromStr,
     sync::Arc,
     vec,
 };
@@ -89,7 +90,7 @@ fn insert_simple_tx_dependency_chain_succeeds() {
 
     let (_, gas_coin) = setup_coin(&mut rng, Some(&txpool.database));
     let input = unset_input.into_input(UtxoId::new(
-        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
         0,
     ));
     let tx2 = Arc::new(
@@ -113,10 +114,7 @@ fn faulty_t2_collided_on_contract_id_from_tx1() {
     let db = MockDb::default();
     let mut txpool = TxPool::new(Default::default(), db);
 
-    let contract_id = ContractId::from_str(
-        "0x0000000000000000000000000000000000000000000000000000000000000100",
-    )
-    .unwrap();
+    let contract_id = Contract::EMPTY_CONTRACT_ID;
 
     // contract creation tx
     let (_, gas_coin) = setup_coin(&mut rng, Some(&txpool.database));
@@ -137,7 +135,7 @@ fn faulty_t2_collided_on_contract_id_from_tx1() {
 
     let (_, gas_coin) = setup_coin(&mut rng, Some(&txpool.database));
     let input = unset_input.into_input(UtxoId::new(
-        tx.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        tx.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
         1,
     ));
 
@@ -175,10 +173,7 @@ fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
     let db = MockDb::default();
     let mut txpool = TxPool::new(Default::default(), db);
 
-    let contract_id = ContractId::from_str(
-        "0x0000000000000000000000000000000000000000000000000000000000000100",
-    )
-    .unwrap();
+    let contract_id = Contract::EMPTY_CONTRACT_ID;
     let (_, gas_coin) = setup_coin(&mut rng, Some(&txpool.database));
     let tx_faulty = Arc::new(
         TransactionBuilder::create(
@@ -203,7 +198,7 @@ fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
                 AssetId::BASE,
                 TEST_COIN_AMOUNT,
                 Some(UtxoId::new(
-                    tx_faulty.id(&fuel_tx::ConsensusParameters::DEFAULT),
+                    tx_faulty.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
                     0,
                 )),
             ))
@@ -219,16 +214,19 @@ fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
         .expect_err("Tx2 should be Err, got Ok");
     assert!(matches!(
         err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedInputUtxoIdNotExisting(id)) if id == &UtxoId::new(tx_faulty.id(&fuel_tx::ConsensusParameters::DEFAULT), 0)
+        Some(Error::NotInsertedInputUtxoIdNotExisting(id)) if id == &UtxoId::new(tx_faulty.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id), 0)
     ));
 }
 
 #[test]
 fn not_inserted_known_tx() {
-    let mut txpool = TxPool::new(Default::default(), MockDb::default());
+    let config = Config {
+        utxo_validation: false,
+        ..Default::default()
+    };
+    let mut txpool = TxPool::new(config, MockDb::default());
 
-    let tx =
-        Arc::new(TransactionBuilder::script(vec![], vec![]).finalize_as_transaction());
+    let tx = Arc::new(Transaction::default_test_tx());
 
     txpool
         .insert_inner(tx.clone())
@@ -296,7 +294,7 @@ fn higher_priced_tx_removes_lower_priced_tx() {
     let vec = txpool.insert_inner(tx2).expect("Tx2 should be Ok, got Err");
     assert_eq!(
         vec.removed[0].id(),
-        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
         "Tx1 id should be removed"
     );
 }
@@ -318,7 +316,7 @@ fn underpriced_tx1_not_included_coin_collision() {
             .finalize_as_transaction(),
     );
     let input = unset_input.into_input(UtxoId::new(
-        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
         0,
     ));
 
@@ -349,7 +347,7 @@ fn underpriced_tx1_not_included_coin_collision() {
         .expect_err("Tx3 should be Err, got Ok");
     assert!(matches!(
         err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedCollision(id, utxo_id)) if id == &tx2.id(&fuel_tx::ConsensusParameters::DEFAULT) && utxo_id == &UtxoId::new(tx1.id(&fuel_tx::ConsensusParameters::DEFAULT), 0)
+        Some(Error::NotInsertedCollision(id, utxo_id)) if id == &tx2.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id) && utxo_id == &UtxoId::new(tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id), 0)
     ));
 }
 
@@ -359,8 +357,8 @@ fn overpriced_tx_contract_input_not_inserted() {
     let db = MockDb::default();
     let mut txpool = TxPool::new(Default::default(), db);
 
+    let contract_id = Contract::EMPTY_CONTRACT_ID;
     let (_, gas_funds) = setup_coin(&mut rng, Some(&txpool.database));
-    let contract_id = ContractId::default();
     let tx1 = Arc::new(
         TransactionBuilder::create(
             Default::default(),
@@ -383,6 +381,7 @@ fn overpriced_tx_contract_input_not_inserted() {
             .add_input(create_contract_input(
                 Default::default(),
                 Default::default(),
+                contract_id,
             ))
             .add_output(Output::contract(1, Default::default(), Default::default()))
             .finalize_as_transaction(),
@@ -408,7 +407,7 @@ fn dependent_contract_input_inserted() {
     let db = MockDb::default();
     let mut txpool = TxPool::new(Default::default(), db);
 
-    let contract_id = ContractId::default();
+    let contract_id = Contract::EMPTY_CONTRACT_ID;
     let (_, gas_funds) = setup_coin(&mut rng, Some(&txpool.database));
     let tx1 = Arc::new(
         TransactionBuilder::create(
@@ -432,6 +431,7 @@ fn dependent_contract_input_inserted() {
             .add_input(create_contract_input(
                 Default::default(),
                 Default::default(),
+                contract_id,
             ))
             .add_output(Output::contract(1, Default::default(), Default::default()))
             .finalize_as_transaction(),
@@ -459,7 +459,7 @@ fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
             .finalize_as_transaction(),
     );
     let input = unset_input.into_input(UtxoId::new(
-        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
         0,
     ));
 
@@ -492,12 +492,12 @@ fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
     );
     assert_eq!(
         vec.removed[0].id(),
-        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
         "Tx1 id should be removed"
     );
     assert_eq!(
         vec.removed[1].id(),
-        tx2.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        tx2.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
         "Tx2 id should be removed"
     );
 }
@@ -605,7 +605,7 @@ fn tx_depth_hit() {
     );
 
     let input = unset_input.into_input(UtxoId::new(
-        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
         0,
     ));
     let (output, unset_input) = create_output_and_input(&mut rng, 5_000);
@@ -618,7 +618,7 @@ fn tx_depth_hit() {
     );
 
     let input = unset_input.into_input(UtxoId::new(
-        tx2.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        tx2.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
         0,
     ));
     let tx3 = Arc::new(
@@ -688,17 +688,17 @@ async fn sorted_out_tx1_2_4() {
     assert_eq!(txs.len(), 3, "Should have 3 txs");
     assert_eq!(
         txs[0].id(),
-        tx3.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        tx3.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
         "First should be tx3"
     );
     assert_eq!(
         txs[1].id(),
-        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
         "Second should be tx1"
     );
     assert_eq!(
         txs[2].id(),
-        tx2.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        tx2.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
         "Third should be tx2"
     );
 }
@@ -721,7 +721,7 @@ async fn find_dependent_tx1_tx2() {
     );
 
     let input = unset_input.into_input(UtxoId::new(
-        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
         0,
     ));
     let (output, unset_input) = create_output_and_input(&mut rng, 7_500);
@@ -735,7 +735,7 @@ async fn find_dependent_tx1_tx2() {
     );
 
     let input = unset_input.into_input(UtxoId::new(
-        tx2.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        tx2.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
         0,
     ));
     let tx3 = Arc::new(
@@ -767,17 +767,17 @@ async fn find_dependent_tx1_tx2() {
     assert_eq!(list.len(), 3, "We should have three items");
     assert_eq!(
         list[0].id(),
-        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
         "Tx1 should be first."
     );
     assert_eq!(
         list[1].id(),
-        tx2.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        tx2.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
         "Tx2 should be second."
     );
     assert_eq!(
         list[2].id(),
-        tx3.id(&fuel_tx::ConsensusParameters::DEFAULT),
+        tx3.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
         "Tx3 should be third."
     );
 }
@@ -854,11 +854,11 @@ async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
     txpool.insert_inner(tx.clone()).expect("should succeed");
 
     let tx_info = txpool
-        .find_one(&tx.id(&fuel_tx::ConsensusParameters::DEFAULT))
+        .find_one(&tx.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id))
         .unwrap();
     assert_eq!(
         tx_info.tx().id(),
-        tx.id(&fuel_tx::ConsensusParameters::DEFAULT)
+        tx.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id)
     );
 }
 
@@ -955,7 +955,7 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
     // check error
     assert!(matches!(
         err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedCollisionMessageId(tx_id, msg_id)) if tx_id == &tx_high.id(&fuel_tx::ConsensusParameters::DEFAULT) && msg_id == message.id()
+        Some(Error::NotInsertedCollisionMessageId(tx_id, msg_id)) if tx_id == &tx_high.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id) && msg_id == message.id()
     ));
 }
 
@@ -1000,7 +1000,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
     assert_eq!(squeezed_out_txs.removed.len(), 1);
     assert_eq!(
         squeezed_out_txs.removed[0].id(),
-        tx_low.id(&fuel_tx::ConsensusParameters::DEFAULT)
+        tx_low.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id)
     );
 }
 
@@ -1084,7 +1084,13 @@ fn predicates_with_incorrect_owner_fails() {
 fn predicate_without_enough_gas_returns_out_of_gas() {
     let mut rng = StdRng::seed_from_u64(0);
     let db = MockDb::default();
-    let mut txpool = TxPool::new(Default::default(), db.clone());
+    let mut config = Config::default();
+    config
+        .chain_config
+        .transaction_parameters
+        .max_gas_per_predicate = 10000;
+    config.chain_config.transaction_parameters.max_gas_per_tx = 10000;
+    let mut txpool = TxPool::new(config.clone(), db.clone());
     let coin = custom_predicate(
         &mut rng,
         AssetId::BASE,
@@ -1092,6 +1098,10 @@ fn predicate_without_enough_gas_returns_out_of_gas() {
         // forever loop
         vec![op::jmp(RegId::ZERO)].into_iter().collect(),
         None,
+    )
+    .into_estimated(
+        &config.chain_config.transaction_parameters,
+        &config.chain_config.gas_costs,
     );
 
     let (_, gas_coin) = add_coin_to_state(coin, Some(&db));
@@ -1123,7 +1133,8 @@ fn predicate_that_returns_false_is_invalid() {
         // forever loop
         vec![op::ret(RegId::ZERO)].into_iter().collect(),
         None,
-    );
+    )
+    .into_default_estimated();
 
     let (_, gas_coin) = add_coin_to_state(coin, Some(&db));
     let tx = Arc::new(
