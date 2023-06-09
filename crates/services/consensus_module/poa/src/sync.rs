@@ -10,6 +10,7 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
     services::block_importer::BlockImportInfo,
 };
+
 use tokio::sync::watch;
 use tokio_stream::StreamExt;
 
@@ -82,14 +83,16 @@ impl SyncTask {
         }
     }
 
-    async fn update_timeout(&mut self) {
-        if self.inner_state.is_sufficient() {
-            self.timer
-                .set_timeout(self.time_until_synced, OnConflict::Overwrite)
-                .await;
-        } else {
-            self.timer.clear().await;
-        }
+    fn update_sync_state(&mut self, new_state: SyncState) {
+        self.state_sender
+            .send_if_modified(|sync_state: &mut SyncState| {
+                if new_state == *sync_state {
+                    false
+                } else {
+                    *sync_state = new_state;
+                    true
+                }
+            });
     }
 }
 
@@ -125,46 +128,57 @@ impl RunnableTask for SyncTask {
             _ = watcher.while_started() => {
                 should_continue = false;
             }
-            latest_count = self.peer_connections_stream.next() => {
-                if let Some(latest_count) = latest_count {
-                    if self.state_sender.send_if_modified(|sync_state: &mut SyncState| {
-                        if self.inner_state.change_state_on_peers_update(latest_count, self.min_connected_reserved_peers) {
-                            *sync_state = self.inner_state.sync_state();
-                            true
-                        } else {
-                            false
-                        }
-                    }) {
-                        self.update_timeout().await;
+            Some(latest_peer_count) = self.peer_connections_stream.next() => {
+                let sufficient_peers = latest_peer_count >= self.min_connected_reserved_peers;
+
+                match self.inner_state {
+                    InnerSyncState::InsufficientPeers(block_height) if sufficient_peers => {
+                        self.inner_state = InnerSyncState::SufficientPeers(block_height);
+                        self.timer.set_timeout(self.time_until_synced, OnConflict::Overwrite).await;
                     }
+                    InnerSyncState::SufficientPeers(block_height) if !sufficient_peers => {
+                        self.inner_state = InnerSyncState::InsufficientPeers(block_height);
+                        self.timer.clear().await;
+                    }
+                    InnerSyncState::Synced { block_height, .. } => {
+                        self.inner_state = InnerSyncState::Synced { block_height, has_sufficient_peers: sufficient_peers };
+                    }
+                    _ => {},
                 }
-
             }
-            block = self.block_stream.next() => {
-                if let Some(block_info) = block {
-                    self.state_sender.send_if_modified(|sync_state: &mut SyncState| {
-                        if self.inner_state.change_state_on_block(block_info) {
-                            *sync_state = self.inner_state.sync_state();
-                            true
+            Some(block_info) = self.block_stream.next() => {
+                let new_block_height = block_info.height;
+
+                match self.inner_state {
+                    InnerSyncState::InsufficientPeers(block_height) if new_block_height > block_height => {
+                        self.inner_state = InnerSyncState::InsufficientPeers(new_block_height);
+                    }
+                    InnerSyncState::SufficientPeers(block_height) if new_block_height > block_height => {
+                        self.inner_state = InnerSyncState::SufficientPeers(new_block_height);
+                    }
+                    InnerSyncState::Synced { block_height, has_sufficient_peers } if new_block_height > block_height => {
+                        if block_info.is_locally_produced() {
+                            self.inner_state = InnerSyncState::Synced { block_height: new_block_height, has_sufficient_peers };
                         } else {
-                            false
+                            // we considered to be synced but we're obviously not!
+                            if has_sufficient_peers {
+                                self.inner_state = InnerSyncState::SufficientPeers(new_block_height);
+                                self.timer.set_timeout(self.time_until_synced, OnConflict::Overwrite).await;
+                            } else {
+                                self.inner_state = InnerSyncState::InsufficientPeers(new_block_height);
+                            }
+
+                            self.update_sync_state(SyncState::NotSynced);
                         }
-                    });
-
-                    // update timeout on each received block
-                    self.update_timeout().await;
-
+                    }
+                    _ => {}
                 }
             }
             _ = self.timer.wait() => {
-                self.state_sender.send_if_modified(|sync_state: &mut SyncState| {
-                    if self.inner_state.change_on_sync_timeout() {
-                        *sync_state = self.inner_state.sync_state();
-                        true
-                    } else {
-                        false
-                    }
-                });
+                if let InnerSyncState::SufficientPeers(block_height) = self.inner_state {
+                    self.inner_state = InnerSyncState::Synced { block_height, has_sufficient_peers: true };
+                    self.update_sync_state(SyncState::Synced);
+                }
             }
         }
 
@@ -195,7 +209,10 @@ enum InnerSyncState {
     /// from the network with higher block height.
     ///
     /// Synced -> either InsufficientPeers(...) or SufficientPeers(...)
-    Synced(BlockHeight),
+    Synced {
+        block_height: BlockHeight,
+        has_sufficient_peers: bool,
+    },
 }
 
 impl InnerSyncState {
@@ -205,92 +222,21 @@ impl InnerSyncState {
         block_height: BlockHeight,
     ) -> Self {
         match (min_connected_reserved_peers, time_until_synced) {
-            (0, Duration::ZERO) => InnerSyncState::Synced(block_height),
+            (0, Duration::ZERO) => InnerSyncState::Synced {
+                block_height,
+                has_sufficient_peers: true,
+            },
             (0, _) => InnerSyncState::SufficientPeers(block_height),
             _ => InnerSyncState::InsufficientPeers(block_height),
         }
     }
 
-    fn change_state_on_block(&mut self, block_info: BlockImportInfo) -> bool {
-        let new_block_height = block_info.height;
-
-        let mut state_changed = false;
-        let current_block_height = self.block_height();
-
-        if &new_block_height > current_block_height {
-            match self {
-                InnerSyncState::InsufficientPeers(_) => {
-                    *self = InnerSyncState::InsufficientPeers(new_block_height);
-                }
-                InnerSyncState::SufficientPeers(_) => {
-                    *self = InnerSyncState::SufficientPeers(new_block_height);
-                }
-                InnerSyncState::Synced(_) => {
-                    if block_info.is_locally_produced() {
-                        *self = InnerSyncState::Synced(new_block_height);
-                    } else {
-                        // we considered to be synced but we're obviously not!
-                        *self = InnerSyncState::SufficientPeers(new_block_height);
-                        state_changed = true;
-                    }
-                }
-            }
-        }
-
-        state_changed
-    }
-
-    fn change_state_on_peers_update(
-        &mut self,
-        currently_connected_peers: usize,
-        min_connected_reserved_peers: usize,
-    ) -> bool {
-        let sufficient_peers = currently_connected_peers >= min_connected_reserved_peers;
-
-        match self {
-            InnerSyncState::InsufficientPeers(block_height) if sufficient_peers => {
-                *self = InnerSyncState::SufficientPeers(*block_height);
-                true
-            }
-            InnerSyncState::SufficientPeers(block_height) if !sufficient_peers => {
-                *self = InnerSyncState::InsufficientPeers(*block_height);
-                true
-            }
-            _ => false,
-        }
-    }
-
-    fn change_on_sync_timeout(&mut self) -> bool {
-        match self {
-            InnerSyncState::SufficientPeers(block_height) => {
-                *self = InnerSyncState::Synced(*block_height);
-                true
-            }
-            _ => false,
-        }
-    }
-
+    #[cfg(test)]
     fn block_height(&self) -> &BlockHeight {
         match self {
-            InnerSyncState::InsufficientPeers(block_height)
-            | InnerSyncState::SufficientPeers(block_height)
-            | InnerSyncState::Synced(block_height) => block_height,
-        }
-    }
-
-    fn is_sufficient(&self) -> bool {
-        match self {
-            InnerSyncState::InsufficientPeers(_) | InnerSyncState::Synced(_) => false,
-            InnerSyncState::SufficientPeers(_) => true,
-        }
-    }
-
-    fn sync_state(&self) -> SyncState {
-        match self {
-            InnerSyncState::InsufficientPeers(_) | InnerSyncState::SufficientPeers(_) => {
-                SyncState::NotSynced
-            }
-            InnerSyncState::Synced(_) => SyncState::Synced,
+            InnerSyncState::InsufficientPeers(block_height) => block_height,
+            InnerSyncState::SufficientPeers(block_height) => block_height,
+            InnerSyncState::Synced { block_height, .. } => block_height,
         }
     }
 }
@@ -307,180 +253,6 @@ mod tests {
         },
         time::Duration,
     };
-
-    #[test]
-    fn test_inner_sync_state() {
-        // given that we set `min_connected_reserved_peers` to be 0
-        // and `time_until_synced` to finish immediately
-        let min_connected_reserved_peers = 0;
-        let time_until_synced = Duration::ZERO;
-        let block_height = BlockHeight::default();
-
-        let inner_sync_state = InnerSyncState::from_config(
-            min_connected_reserved_peers,
-            time_until_synced,
-            block_height,
-        );
-
-        // inner state should be synced
-        assert!(matches!(inner_sync_state, InnerSyncState::Synced(_)));
-        assert_eq!(*inner_sync_state.block_height(), block_height);
-        assert_eq!(inner_sync_state.sync_state(), SyncState::Synced);
-
-        // given that `time_until_synced` has been increased
-        // yet `min_connected_reserved_peers` is still 0
-        let time_until_synced = Duration::from_secs(10);
-
-        let inner_sync_state = InnerSyncState::from_config(
-            min_connected_reserved_peers,
-            time_until_synced,
-            block_height,
-        );
-
-        // we should have sufficient number of peers but not synced yet,
-        // ie `time_until_synced` has not completed yet
-        assert!(inner_sync_state.is_sufficient());
-        assert_eq!(inner_sync_state.sync_state(), SyncState::NotSynced);
-
-        // given that we now increased `min_connected_reserved_peers`
-        // `time_until_synced` is still 10 seconds
-        let min_connected_reserved_peers = 10;
-        let inner_sync_state = InnerSyncState::from_config(
-            min_connected_reserved_peers,
-            time_until_synced,
-            block_height,
-        );
-
-        // we should be in InsufficientPeers state
-        // since we neither have enough peers nor `time_until_synced` has completed
-        assert!(matches!(
-            inner_sync_state,
-            InnerSyncState::InsufficientPeers(_)
-        ));
-        assert_eq!(inner_sync_state.sync_state(), SyncState::NotSynced);
-    }
-
-    #[test]
-    fn test_inner_sync_state_change_state_on_peers_update() {
-        // given that we start from InssuficientPeers state
-        let block_height = BlockHeight::default();
-        let mut inner_sync_state = InnerSyncState::InsufficientPeers(block_height);
-
-        let min_connected_reserved_peers = 10;
-        let connected_peers = 0;
-
-        // and that we still don't have enough peers connected
-        assert!(!inner_sync_state
-            .change_state_on_peers_update(connected_peers, min_connected_reserved_peers));
-
-        // we should be still at insufficient peers
-        assert!(matches!(
-            inner_sync_state,
-            InnerSyncState::InsufficientPeers(_)
-        ));
-
-        // given that now our peer count has increased
-        let connected_peers = 10;
-        assert!(inner_sync_state
-            .change_state_on_peers_update(connected_peers, min_connected_reserved_peers));
-
-        // we should move to SufficientPeers state
-        assert!(matches!(
-            inner_sync_state,
-            InnerSyncState::SufficientPeers(_)
-        ));
-
-        // given that our peer count has decreased
-        let connected_peers = 9;
-        assert!(inner_sync_state
-            .change_state_on_peers_update(connected_peers, min_connected_reserved_peers));
-
-        // we should move back to InsufficientPeers state
-        assert!(matches!(
-            inner_sync_state,
-            InnerSyncState::InsufficientPeers(_)
-        ));
-    }
-
-    #[test]
-    fn test_inner_sync_state_change_state_on_block() {
-        // given that we start from InssuficientPeers state
-        let block_height = BlockHeight::default();
-        let mut inner_sync_state = InnerSyncState::InsufficientPeers(block_height);
-
-        // and that we receive a new, bigger block height
-        let new_block_height = BlockHeight::from(10);
-        let block_import_info = BlockImportInfo::from(new_block_height);
-
-        // the state should remain the same
-        assert!(!inner_sync_state.change_state_on_block(block_import_info));
-        assert!(matches!(
-            inner_sync_state,
-            InnerSyncState::InsufficientPeers(_)
-        ));
-        // but the block height should be updated
-        assert_eq!(&new_block_height, inner_sync_state.block_height());
-
-        // given that we moved to SufficientPeers state
-        let mut inner_sync_state = InnerSyncState::SufficientPeers(new_block_height);
-
-        // and that we receive a new, bigger block height
-        let new_block_height = BlockHeight::from(11);
-        let block_import_info = BlockImportInfo::from(new_block_height);
-
-        // the state should remain the same
-        assert!(!inner_sync_state.change_state_on_block(block_import_info));
-        assert!(matches!(
-            inner_sync_state,
-            InnerSyncState::SufficientPeers(_)
-        ));
-        // but the block height should be updated
-        assert_eq!(&new_block_height, inner_sync_state.block_height());
-
-        // given that we moved to Synced state
-        let mut inner_sync_state = InnerSyncState::Synced(new_block_height);
-
-        // and that we receive a new, bigger block height from the network
-        let new_block_height = BlockHeight::from(12);
-        let block_import_info = BlockImportInfo::new_from_network(new_block_height);
-
-        // the state should change
-        // since this would mean we're not synced with other peers
-        assert!(inner_sync_state.change_state_on_block(block_import_info));
-        assert!(matches!(
-            inner_sync_state,
-            InnerSyncState::SufficientPeers(_)
-        ));
-        // the block height should be updated
-        assert_eq!(&new_block_height, inner_sync_state.block_height());
-    }
-
-    #[test]
-    fn test_inner_sync_state_change_on_timeout() {
-        // given that we start from InssuficientPeers state
-        let block_height = BlockHeight::default();
-        let mut inner_sync_state = InnerSyncState::InsufficientPeers(block_height);
-
-        // the state should remain the same if sync_timeout happened
-        assert!(!inner_sync_state.change_on_sync_timeout());
-        assert!(matches!(
-            inner_sync_state,
-            InnerSyncState::InsufficientPeers(_)
-        ));
-
-        // given that we moved to SufficientPeers state
-        let mut inner_sync_state = InnerSyncState::SufficientPeers(block_height);
-
-        // the state should move to Synced
-        // since the timeout is used to go from Syncing -> Synced
-        assert!(inner_sync_state.change_on_sync_timeout());
-        assert!(matches!(inner_sync_state, InnerSyncState::Synced(_)));
-
-        // given that we're now in Synced state
-        // the state should remain the same if sync_timeout happened
-        assert!(!inner_sync_state.change_on_sync_timeout());
-        assert!(matches!(inner_sync_state, InnerSyncState::Synced(_)));
-    }
 
     use fuel_core_services::stream::IntoBoxStream;
 
@@ -583,7 +355,10 @@ mod tests {
         assert_eq!(SyncState::Synced, *sync_task.state_receiver.borrow());
 
         // synced should reflect here as well
-        assert!(matches!(sync_task.inner_state, InnerSyncState::Synced(_)));
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::Synced { .. }
+        ));
 
         // and the block should be still the latest one
         assert_eq!(
