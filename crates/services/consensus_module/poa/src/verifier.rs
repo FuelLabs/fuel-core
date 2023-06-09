@@ -26,7 +26,7 @@ pub fn verify_consensus(
     consensus: &PoAConsensus,
 ) -> bool {
     match consensus_config {
-        ConsensusConfig::PoA { signing_key, .. } => {
+        ConsensusConfig::PoA { signing_key } => {
             let id = header.id();
             let m = id.as_message();
             consensus
