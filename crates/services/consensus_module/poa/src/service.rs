@@ -142,7 +142,6 @@ pub struct MainTask<T, B, I> {
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
     consensus_params: ConsensusParameters,
-    sync_state: tokio::sync::watch::Receiver<SyncState>,
     sync_task_handle: ServiceRunner<SyncTask>,
 }
 
@@ -189,7 +188,6 @@ where
         );
 
         let sync_task_handle = ServiceRunner::new(sync_task);
-        let sync_state = sync_task_handle.shared.clone();
 
         Self {
             block_gas_limit,
@@ -197,7 +195,6 @@ where
             txpool,
             block_producer,
             block_importer,
-            sync_state,
             tx_status_update_stream,
             request_receiver,
             shared_state: SharedState { request_sender },
@@ -492,11 +489,11 @@ where
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         // make sure we're synced first
-        if *self.sync_state.borrow() == SyncState::NotSynced {
+        if *self.sync_task_handle.shared.borrow() == SyncState::NotSynced {
             tokio::select! {
                 biased;
                 _ = watcher.while_started() => {}
-                _ = self.sync_state.changed() => {}
+                _ = self.sync_task_handle.shared.changed() => {}
             }
         }
 
