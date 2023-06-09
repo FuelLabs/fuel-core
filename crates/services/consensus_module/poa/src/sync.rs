@@ -201,6 +201,7 @@ enum InnerSyncState {
     /// We are connected to at least `min_connected_reserved_peers` peers.
     ///
     /// SufficientPeers -> Synced(...)
+    /// SufficientPeers -> InsufficientPeers(...)
     SufficientPeers(BlockHeight),
     /// We can go into this state if we didn't receive any notification
     /// about new block height from the network for `time_until_synced` timeout.
