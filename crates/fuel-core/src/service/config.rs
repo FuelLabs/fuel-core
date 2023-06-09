@@ -118,6 +118,7 @@ impl TryFrom<&Config> for fuel_core_poa::Config {
             signing_key: config.consensus_key.clone(),
             metrics: false,
             consensus_params: config.chain_conf.transaction_parameters,
+            ..Default::default()
         })
     }
 }

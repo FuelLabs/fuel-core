@@ -1,9 +1,12 @@
+use std::ops::Deref;
+
 use crate::{
     database::Database,
     fuel_core_graphql_api::ports::ConsensusModulePort,
     service::adapters::{
         BlockImporterAdapter,
         BlockProducerAdapter,
+        P2PAdapter,
         PoAAdapter,
         TxPoolAdapter,
     },
@@ -12,6 +15,7 @@ use anyhow::anyhow;
 use fuel_core_poa::{
     ports::{
         BlockImporter,
+        P2pPort,
         TransactionPool,
     },
     service::SharedState,
@@ -23,11 +27,18 @@ use fuel_core_types::{
     fuel_tx::TxId,
     fuel_types::BlockHeight,
     services::{
-        block_importer::UncommittedResult as UncommittedImporterResult,
+        block_importer::{
+            BlockImportInfo,
+            UncommittedResult as UncommittedImporterResult,
+        },
         executor::UncommittedResult,
         txpool::ArcPoolTx,
     },
     tai64::Tai64,
+};
+use tokio_stream::{
+    wrappers::BroadcastStream,
+    StreamExt,
 };
 
 impl PoAAdapter {
@@ -65,10 +76,6 @@ impl TransactionPool for TxPoolAdapter {
     }
 
     fn transaction_status_events(&self) -> BoxStream<TxId> {
-        use tokio_stream::{
-            wrappers::BroadcastStream,
-            StreamExt,
-        };
         Box::pin(
             BroadcastStream::new(self.service.new_tx_notification_subscribe())
                 .filter_map(|result| result.ok()),
@@ -102,5 +109,34 @@ impl BlockImporter for BlockImporterAdapter {
         self.block_importer
             .commit_result(result)
             .map_err(Into::into)
+    }
+
+    fn block_stream(&self) -> BoxStream<BlockImportInfo> {
+        Box::pin(
+            BroadcastStream::new(self.block_importer.subscribe())
+                .filter_map(|result| result.ok())
+                .map(|r| r.deref().into()),
+        )
+    }
+}
+
+#[cfg(feature = "p2p")]
+impl P2pPort for P2PAdapter {
+    fn reserved_peers_count(&self) -> BoxStream<usize> {
+        if let Some(service) = &self.service {
+            Box::pin(
+                BroadcastStream::new(service.subscribe_reserved_peers_count())
+                    .filter_map(|result| result.ok()),
+            )
+        } else {
+            Box::pin(tokio_stream::pending())
+        }
+    }
+}
+
+#[cfg(not(feature = "p2p"))]
+impl P2pPort for P2PAdapter {
+    fn reserved_peers_count(&self) -> BoxStream<usize> {
+        Box::pin(tokio_stream::pending())
     }
 }
