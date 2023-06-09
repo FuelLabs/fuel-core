@@ -142,12 +142,8 @@ pub enum FuelP2PEvent {
         request_id: RequestId,
         request_message: RequestMessage,
     },
-    PeerConnected {
-        peer_id: PeerId,
-    },
-    PeerDisconnected {
-        peer_id: PeerId,
-    },
+    PeerConnected(PeerId),
+    PeerDisconnected(PeerId),
     PeerInfoUpdated {
         peer_id: PeerId,
         block_height: BlockHeight,
@@ -526,14 +522,14 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                         ) {
                             let _ = self.swarm.disconnect_peer_id(peer_id);
                         } else if initial_connection {
-                            return Some(FuelP2PEvent::PeerConnected { peer_id })
+                            return Some(FuelP2PEvent::PeerConnected(peer_id))
                         }
                     }
                     PeerReportEvent::PeerDisconnected { peer_id } => {
                         if self.peer_manager.handle_peer_disconnect(peer_id) {
                             let _ = self.swarm.dial(peer_id);
                         }
-                        return Some(FuelP2PEvent::PeerDisconnected { peer_id })
+                        return Some(FuelP2PEvent::PeerDisconnected(peer_id))
                     }
                 }
             }
@@ -884,7 +880,7 @@ mod tests {
                             spawn(&stop_sender, node);
                         }
                     }
-                    if let Some(FuelP2PEvent::PeerConnected { peer_id, ..}) = sentry_node_event {
+                    if let Some(FuelP2PEvent::PeerConnected(peer_id)) = sentry_node_event {
                         // we connected to the desired reserved node
                         if peer_id == reserved_node_peer_id {
                             break
@@ -1060,7 +1056,7 @@ mod tests {
         loop {
             tokio::select! {
                 event_from_first_guarded = first_guarded_node.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected { peer_id, .. }) = event_from_first_guarded {
+                    if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_first_guarded {
                         if !first_sentry_set.remove(&peer_id) {
                             panic!("The node should only connect to the specified reserved nodes!");
                         }
@@ -1068,7 +1064,7 @@ mod tests {
                     tracing::info!("Event from the first guarded node: {:?}", event_from_first_guarded);
                 },
                 event_from_second_guarded = second_guarded_node.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected { peer_id, .. }) = event_from_second_guarded {
+                    if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_second_guarded {
                         if !second_sentry_set.remove(&peer_id) {
                             panic!("The node should only connect to the specified reserved nodes!");
                         }
@@ -1077,7 +1073,7 @@ mod tests {
                 },
                 // Poll one of the reserved, sentry nodes
                 sentry_node_event = single_sentry_node.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected { peer_id, .. }) = sentry_node_event {
+                    if let Some(FuelP2PEvent::PeerConnected(peer_id)) = sentry_node_event {
                         sentry_node_connections.insert(peer_id);
                     }
                     // This reserved node has connected to more than the number of reserved nodes it is part of.
@@ -1195,7 +1191,7 @@ mod tests {
                 },
 
                 node_c_event = node_c.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected { peer_id, .. }) = node_c_event {
+                    if let Some(FuelP2PEvent::PeerConnected(peer_id)) = node_c_event {
                         // we have connected to Node B!
                         if peer_id == node_b.local_peer_id {
                             break
