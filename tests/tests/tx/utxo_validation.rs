@@ -76,14 +76,14 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
         client.submit_and_await_commit(&tx).await.unwrap();
         // verify that the tx returned from the api matches the submitted tx
         let ret_tx = client
-            .transaction(&tx.id(&ConsensusParameters::DEFAULT))
+            .transaction(&tx.id(&ConsensusParameters::DEFAULT.chain_id))
             .await
             .unwrap()
             .unwrap()
             .transaction;
 
         let transaction_result = client
-            .transaction_status(&ret_tx.id(&ConsensusParameters::DEFAULT))
+            .transaction_status(&ret_tx.id(&ConsensusParameters::DEFAULT.chain_id))
             .await
             .ok()
             .unwrap();
@@ -251,7 +251,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
     // collect all tx ids
     let tx_ids: BTreeSet<_> = txs
         .iter()
-        .map(|tx| tx.id(&ConsensusParameters::DEFAULT))
+        .map(|tx| tx.id(&ConsensusParameters::DEFAULT.chain_id))
         .collect();
 
     // setup the genesis coins for spending

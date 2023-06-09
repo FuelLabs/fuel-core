@@ -77,7 +77,7 @@ pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
         .expect("Should be able do decode the Transaction");
 
     // Optimization to run test fastly. If the contract changed, you need to update the
-    // `0xc8ca903bfaba051c55d827c3bd957a325a3f80bceeb87c6e49d308ad39cf48d7` in the
+    // `1bfd51cb31b8d0bc7d93d38f97ab771267d8786ab87073e0c2b8f9ddc44b274e` in the
     // `test_data/large_state/contract.json`.
     // contract_config.calculate_contract_id();
     let contract_id = contract_config.contract_id;

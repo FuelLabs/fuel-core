@@ -232,7 +232,8 @@ impl MockTransactionPool {
             .returning(move |tx_ids: Vec<TxId>| {
                 let mut guard = removed.lock().unwrap();
                 for id in tx_ids {
-                    guard.retain(|tx| tx.id(&ConsensusParameters::DEFAULT) == id);
+                    guard
+                        .retain(|tx| tx.id(&ConsensusParameters::DEFAULT.chain_id) == id);
                 }
                 vec![]
             });
@@ -300,7 +301,7 @@ async fn remove_skipped_transactions() {
         // Transform transactions into ids.
         let skipped_transactions: Vec<_> = skipped_transactions
             .iter()
-            .map(|tx| tx.id(&ConsensusParameters::DEFAULT))
+            .map(|tx| tx.id(&ConsensusParameters::DEFAULT.chain_id))
             .collect();
 
         // Check that all transactions are unique.

@@ -335,7 +335,7 @@ mod tests {
             StorageMutate::<FuelBlocks>::insert(
                 &mut database,
                 &block.id(),
-                &block.compress(&ConsensusParameters::DEFAULT),
+                &block.compress(&ConsensusParameters::DEFAULT.chain_id),
             )
             .unwrap();
         }
@@ -399,7 +399,7 @@ mod tests {
             StorageMutate::<FuelBlocks>::insert(
                 database,
                 &block.id(),
-                &block.compress(&ConsensusParameters::DEFAULT),
+                &block.compress(&ConsensusParameters::DEFAULT.chain_id),
             )
             .unwrap();
         }

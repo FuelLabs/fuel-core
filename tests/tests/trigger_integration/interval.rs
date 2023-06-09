@@ -16,10 +16,7 @@ use fuel_core_poa::Trigger;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_crypto::SecretKey,
-    fuel_tx::{
-        Finalizable,
-        TransactionBuilder,
-    },
+    fuel_tx::TransactionBuilder,
     secrecy::Secret,
 };
 use rand::{
@@ -112,13 +109,22 @@ async fn poa_interval_produces_nonempty_blocks_at_correct_rate() {
     let client = FuelClient::from(srv.bound_address);
 
     for i in 0..tx_count {
-        let mut tx = TransactionBuilder::script(
+        let tx = TransactionBuilder::script(
             [op::movi(0x10, i.try_into().unwrap())]
                 .into_iter()
                 .collect(),
             vec![],
-        );
-        let _tx_id = client.submit(&tx.finalize().into()).await.unwrap();
+        )
+        .add_unsigned_coin_input(
+            rng.gen(),
+            rng.gen(),
+            rng.gen(),
+            rng.gen(),
+            Default::default(),
+            Default::default(),
+        )
+        .finalize_as_transaction();
+        let _tx_id = client.submit(&tx).await.unwrap();
     }
 
     let time_start = tokio::time::Instant::now();

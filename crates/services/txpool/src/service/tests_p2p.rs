@@ -25,7 +25,7 @@ async fn can_insert_from_p2p() {
     let service = ctx.service();
     let mut receiver = service
         .shared
-        .tx_update_subscribe(tx1.id(&ConsensusParameters::default()))
+        .tx_update_subscribe(tx1.id(&ConsensusParameters::DEFAULT.chain_id))
         .await;
 
     service.start_and_await().await.unwrap();
@@ -39,7 +39,7 @@ async fn can_insert_from_p2p() {
     // fetch tx from pool
     let out = service
         .shared
-        .find(vec![tx1.id(&ConsensusParameters::DEFAULT)]);
+        .find(vec![tx1.id(&ConsensusParameters::DEFAULT.chain_id)]);
 
     let got_tx: Transaction = out[0].as_ref().unwrap().tx().clone().deref().into();
     assert_eq!(tx1, got_tx);
@@ -116,7 +116,7 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
     // verify tx status update from p2p injected tx is successful
     let mut receiver = service
         .shared
-        .tx_update_subscribe(tx1.id(&ConsensusParameters::default()))
+        .tx_update_subscribe(tx1.id(&ConsensusParameters::DEFAULT.chain_id))
         .await;
 
     service.start_and_await().await.unwrap();

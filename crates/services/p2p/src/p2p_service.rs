@@ -1255,7 +1255,7 @@ mod tests {
     #[instrument]
     async fn gossipsub_broadcast_tx_with_accept() {
         gossipsub_broadcast(
-            GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default())),
+            GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default_test_tx())),
             GossipsubMessageAcceptance::Accept,
         )
         .await;
@@ -1265,7 +1265,7 @@ mod tests {
     #[instrument]
     async fn gossipsub_broadcast_tx_with_reject() {
         gossipsub_broadcast(
-            GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default())),
+            GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default_test_tx())),
             GossipsubMessageAcceptance::Reject,
         )
         .await;
@@ -1378,7 +1378,7 @@ mod tests {
                         // received value should match sent value
                         match &message {
                             GossipsubMessage::NewTx(tx) => {
-                                if tx != &Transaction::default() {
+                                if tx != &Transaction::default_test_tx() {
                                     tracing::error!("Wrong p2p message {:?}", message);
                                     panic!("Wrong GossipsubMessage")
                                 }
@@ -1525,7 +1525,7 @@ mod tests {
                     if let Some(FuelP2PEvent::RequestMessage{ request_id, request_message: received_request_message }) = node_b_event {
                         match received_request_message {
                             RequestMessage::Block(_) => {
-                                let block = Block::new(PartialBlockHeader::default(), vec![Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default()], &[]);
+                                let block = Block::new(PartialBlockHeader::default(), (0..5).map(|_| Transaction::default_test_tx()).collect(), &[]);
 
                                 let sealed_block = SealedBlock {
                                     entity: block,
@@ -1545,7 +1545,7 @@ mod tests {
                                 let _ = node_b.send_response_msg(request_id, OutboundResponse::SealedHeader(Some(Arc::new(sealed_header))));
                             }
                             RequestMessage::Transactions(_) => {
-                                let transactions = vec![Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default()];
+                                let transactions = (0..5).map(|_| Transaction::default_test_tx()).collect();
                                 let _ = node_b.send_response_msg(request_id, OutboundResponse::Transactions(Some(Arc::new(transactions))));
                             }
                         }

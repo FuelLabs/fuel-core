@@ -388,7 +388,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
         txtor.transact(tx);
 
-        let mut vm = txtor.interpreter();
+        let mut vm: Interpreter<_, _> = txtor.into();
 
         if let Some(p) = prepare_call {
             let PrepareCall { ra, rb, rc, rd } = p;

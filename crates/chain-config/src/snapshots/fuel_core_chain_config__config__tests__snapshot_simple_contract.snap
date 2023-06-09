@@ -1,5 +1,6 @@
 ---
 source: crates/chain-config/src/config.rs
+assertion_line: 114
 expression: json
 ---
 {
@@ -25,6 +26,7 @@ expression: json
     "max_storage_slots": 255,
     "max_predicate_length": 1048576,
     "max_predicate_data_length": 1048576,
+    "max_gas_per_predicate": 100000000,
     "gas_price_factor": 1000000000,
     "gas_per_byte": 4,
     "max_message_data_length": 1048576,
