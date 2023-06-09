@@ -495,6 +495,7 @@ where
         // make sure we're synced first
         if *self.sync_state.borrow() == SyncState::NotSynced {
             tokio::select! {
+                biased;
                 _ = watcher.while_started() => {}
                 _ = self.sync_state.changed() => {}
             }
@@ -502,6 +503,7 @@ where
 
         let should_continue;
         tokio::select! {
+            biased;
             _ = watcher.while_started() => {
                 should_continue = false;
             }
