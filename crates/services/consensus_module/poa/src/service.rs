@@ -166,12 +166,19 @@ where
             Duration::from_secs(Tai64::now().0.saturating_sub(last_timestamp.0));
         let last_block_created = Instant::now() - duration;
 
-        let min_connected_reserved_peers = config.min_connected_reserved_peers;
-        let time_until_synced = config.time_until_synced;
-
         let block_stream = block_importer.block_stream();
         let peer_connections_stream = p2p_port.reserved_peers_count();
         let last_block_height = *last_block.height();
+
+        let Config {
+            block_gas_limit,
+            signing_key,
+            consensus_params,
+            min_connected_reserved_peers,
+            time_until_synced,
+            trigger,
+            ..
+        } = config;
 
         let sync_task = SyncTask::new(
             peer_connections_stream,
@@ -185,8 +192,8 @@ where
         let sync_state = sync_task_handle.shared.clone();
 
         Self {
-            block_gas_limit: config.block_gas_limit,
-            signing_key: config.signing_key,
+            block_gas_limit,
+            signing_key,
             txpool,
             block_producer,
             block_importer,
@@ -197,9 +204,9 @@ where
             last_height: last_block_height,
             last_timestamp,
             last_block_created,
-            trigger: config.trigger,
+            trigger,
             timer: DeadlineClock::new(),
-            consensus_params: config.consensus_params,
+            consensus_params,
             sync_task_handle,
         }
     }
