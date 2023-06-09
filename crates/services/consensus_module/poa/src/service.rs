@@ -24,6 +24,7 @@ use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
     RunnableTask,
+    Service as _,
     ServiceRunner,
     StateWatcher,
 };
@@ -76,7 +77,6 @@ use tokio_stream::StreamExt;
 use tracing::error;
 
 pub type Service<T, B, I> = ServiceRunner<MainTask<T, B, I>>;
-
 #[derive(Clone)]
 pub struct SharedState {
     request_sender: mpsc::Sender<Request>,
@@ -463,7 +463,6 @@ where
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        use fuel_core_services::Service;
         self.sync_task_handle.start_and_await().await?;
 
         match self.trigger {
@@ -543,7 +542,6 @@ where
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        use fuel_core_services::Service;
         tracing::info!("PoA MainTask shutting down");
         self.sync_task_handle.stop_and_await().await?;
         Ok(())
