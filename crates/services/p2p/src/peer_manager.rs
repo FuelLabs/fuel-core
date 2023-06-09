@@ -75,7 +75,7 @@ impl PeerManager {
         max_non_reserved_peers: usize,
     ) -> Self {
         let (reserved_peers_updates, _) =
-            tokio::sync::broadcast::channel(reserved_peers.len() * 2);
+            tokio::sync::broadcast::channel(1 + reserved_peers.len() * 2);
 
         Self {
             score_config: ScoreConfig::default(),

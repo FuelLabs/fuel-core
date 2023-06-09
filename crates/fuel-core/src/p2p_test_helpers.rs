@@ -238,10 +238,7 @@ pub async fn make_nodes(
                     );
                     if let Some(BootstrapSetup { pub_key, .. }) = boot {
                         match &mut node_config.chain_conf.consensus {
-                            crate::chain_config::ConsensusConfig::PoA {
-                                signing_key,
-                                ..
-                            } => {
+                            crate::chain_config::ConsensusConfig::PoA { signing_key } => {
                                 *signing_key = pub_key;
                             }
                         }

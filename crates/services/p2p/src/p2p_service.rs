@@ -955,7 +955,7 @@ mod tests {
         loop {
             tokio::select! {
                 event_from_node_a = node_a.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected { .. }) = event_from_node_a {
+                    if let Some(FuelP2PEvent::PeerConnected(_)) = event_from_node_a {
                         if node_a.peer_manager().total_peers_connected() > node_a_max_peers_allowed as usize {
                             panic!("The node should only connect to max {node_a_max_peers_allowed} peers");
                         }
@@ -963,7 +963,7 @@ mod tests {
                     tracing::info!("Event from the node_a: {:?}", event_from_node_a);
                 },
                 event_from_node_b = node_b.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected { .. }) = event_from_node_b {
+                    if let Some(FuelP2PEvent::PeerConnected(_)) = event_from_node_b {
                         if node_b.peer_manager().total_peers_connected() > node_b_max_peers_allowed as usize {
                             panic!("The node should only connect to max {node_b_max_peers_allowed} peers");
                         }
@@ -971,7 +971,7 @@ mod tests {
                     tracing::info!("Event from the node_b: {:?}", event_from_node_b);
                 },
                 event_from_bootstrapped_node = bootstrapped_node.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected { .. }) = event_from_bootstrapped_node {
+                    if let Some(FuelP2PEvent::PeerConnected(_)) = event_from_bootstrapped_node {
                         // if the test was broken, it would panic! by the time this node discovers more peers
                         // and connects to them
                         if bootstrapped_node.peer_manager().total_peers_connected() > bootstrap_nodes_count / 2 {
@@ -1107,7 +1107,7 @@ mod tests {
         loop {
             tokio::select! {
                 node_b_event = node_b.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected { .. }) = node_b_event {
+                    if let Some(FuelP2PEvent::PeerConnected(_)) = node_b_event {
                         // successfully connected to Node B
                         break
                     }
@@ -1153,7 +1153,7 @@ mod tests {
                     }
                 },
                 node_b_event = node_b.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected { .. }) = node_b_event {
+                    if let Some(FuelP2PEvent::PeerConnected(_)) = node_b_event {
                         panic!("Node B should not connect to Node A!")
                     }
                     tracing::info!("Node B Event: {:?}", node_b_event);
@@ -1240,7 +1240,7 @@ mod tests {
                     tracing::info!("Node A Event: {:?}", node_a_event);
                 },
                 node_b_event = node_b.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected { .. }) = node_b_event {
+                    if let Some(FuelP2PEvent::PeerConnected(_)) = node_b_event {
                         // we've connected to Peer A
                         // let's update our BlockHeight
                         node_b.update_block_height(latest_block_height);

@@ -94,6 +94,12 @@ impl SyncTask {
                 }
             });
     }
+
+    async fn restart_timer(&mut self) {
+        self.timer
+            .set_timeout(self.time_until_synced, OnConflict::Overwrite)
+            .await;
+    }
 }
 
 #[async_trait::async_trait]
@@ -134,7 +140,7 @@ impl RunnableTask for SyncTask {
                 match self.inner_state {
                     InnerSyncState::InsufficientPeers(block_height) if sufficient_peers => {
                         self.inner_state = InnerSyncState::SufficientPeers(block_height);
-                        self.timer.set_timeout(self.time_until_synced, OnConflict::Overwrite).await;
+                        self.restart_timer().await;
                     }
                     InnerSyncState::SufficientPeers(block_height) if !sufficient_peers => {
                         self.inner_state = InnerSyncState::InsufficientPeers(block_height);
@@ -155,6 +161,7 @@ impl RunnableTask for SyncTask {
                     }
                     InnerSyncState::SufficientPeers(block_height) if new_block_height > block_height => {
                         self.inner_state = InnerSyncState::SufficientPeers(new_block_height);
+                        self.restart_timer().await;
                     }
                     InnerSyncState::Synced { block_height, has_sufficient_peers } if new_block_height > block_height => {
                         if block_info.is_locally_produced() {
@@ -163,7 +170,7 @@ impl RunnableTask for SyncTask {
                             // we considered to be synced but we're obviously not!
                             if has_sufficient_peers {
                                 self.inner_state = InnerSyncState::SufficientPeers(new_block_height);
-                                self.timer.set_timeout(self.time_until_synced, OnConflict::Overwrite).await;
+                                self.restart_timer().await;
                             } else {
                                 self.inner_state = InnerSyncState::InsufficientPeers(new_block_height);
                             }
