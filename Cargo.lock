@@ -3030,7 +3030,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.33.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/smt-structure-manipulations#17a4156b8cec4eec5f4b16522f136c42a4445103"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/smt-structure-manipulations#4a92d0cb9ad495e61d1c20858ebed170fae6cc94"
 dependencies = [
  "borrown",
  "coins-bip32 0.8.3",
@@ -3047,7 +3047,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.33.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/smt-structure-manipulations#17a4156b8cec4eec5f4b16522f136c42a4445103"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/smt-structure-manipulations#4a92d0cb9ad495e61d1c20858ebed170fae6cc94"
 dependencies = [
  "digest 0.10.6",
  "fuel-storage",
@@ -3060,12 +3060,12 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.33.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/smt-structure-manipulations#17a4156b8cec4eec5f4b16522f136c42a4445103"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/smt-structure-manipulations#4a92d0cb9ad495e61d1c20858ebed170fae6cc94"
 
 [[package]]
 name = "fuel-tx"
 version = "0.33.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/smt-structure-manipulations#17a4156b8cec4eec5f4b16522f136c42a4445103"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/smt-structure-manipulations#4a92d0cb9ad495e61d1c20858ebed170fae6cc94"
 dependencies = [
  "derivative",
  "fuel-asm",
@@ -3084,7 +3084,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.33.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/smt-structure-manipulations#17a4156b8cec4eec5f4b16522f136c42a4445103"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/smt-structure-manipulations#4a92d0cb9ad495e61d1c20858ebed170fae6cc94"
 dependencies = [
  "hex",
  "rand 0.8.5",
@@ -3094,7 +3094,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.33.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/smt-structure-manipulations#17a4156b8cec4eec5f4b16522f136c42a4445103"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/smt-structure-manipulations#4a92d0cb9ad495e61d1c20858ebed170fae6cc94"
 dependencies = [
  "anyhow",
  "bitflags",

@@ -378,7 +378,10 @@ mod tests {
         CoinConfig,
         MessageConfig,
     };
-    use fuel_core_storage::StorageAsRef;
+    use fuel_core_storage::{
+        tables::ContractsState,
+        StorageAsRef,
+    };
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         entities::coins::coin::Coin,
