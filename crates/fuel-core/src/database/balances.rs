@@ -24,6 +24,7 @@ use fuel_core_types::{
         sparse::{
             in_memory,
             MerkleTree,
+            MerkleTreeKey,
         },
     },
     fuel_types::ContractId,
@@ -77,9 +78,10 @@ impl StorageMutate<ContractsAssets> for Database {
             MerkleTree::load(storage, &root)
                 .map_err(|err| StorageError::Other(err.into()))?;
 
+        let asset_id = *key.asset_id().deref();
         // Update the contact's key-value dataset. The key is the asset id and the
         // value the Word
-        tree.update(key.asset_id().deref(), value.to_be_bytes().as_slice())
+        tree.update(MerkleTreeKey::new(asset_id), value.to_be_bytes().as_slice())
             .map_err(|err| StorageError::Other(err.into()))?;
 
         // Generate new metadata for the updated tree
@@ -112,9 +114,10 @@ impl StorageMutate<ContractsAssets> for Database {
                 MerkleTree::load(storage, &root)
                     .map_err(|err| StorageError::Other(err.into()))?;
 
+            let asset_id = *key.asset_id().deref();
             // Update the contract's key-value dataset. The key is the asset id and
             // the value is the Word
-            tree.delete(key.asset_id().deref())
+            tree.delete(MerkleTreeKey::new(asset_id))
                 .map_err(|err| StorageError::Other(err.into()))?;
 
             let root = tree.root();

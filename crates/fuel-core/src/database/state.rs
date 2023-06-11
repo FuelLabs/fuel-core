@@ -2,6 +2,7 @@ use crate::database::{
     storage::{
         ContractsStateMerkleData,
         ContractsStateMerkleMetadata,
+        DatabaseColumn,
         SparseMerkleMetadata,
     },
     Column,
@@ -24,10 +25,12 @@ use fuel_core_types::{
         sparse::{
             in_memory,
             MerkleTree,
+            MerkleTreeKey,
         },
     },
     fuel_types::ContractId,
 };
+use itertools::Itertools;
 use std::{
     borrow::{
         BorrowMut,
@@ -77,9 +80,10 @@ impl StorageMutate<ContractsState> for Database {
             MerkleTree::load(storage, &root)
                 .map_err(|err| StorageError::Other(err.into()))?;
 
+        let state_key = *key.state_key().deref();
         // Update the contract's key-value dataset. The key is the state key and
         // the value is the 32 bytes
-        tree.update(key.state_key().deref(), value.as_slice())
+        tree.update(MerkleTreeKey::new(state_key), value.as_slice())
             .map_err(|err| StorageError::Other(err.into()))?;
 
         // Generate new metadata for the updated tree
@@ -112,9 +116,10 @@ impl StorageMutate<ContractsState> for Database {
                 MerkleTree::load(storage, &root)
                     .map_err(|err| StorageError::Other(err.into()))?;
 
+            let state_key = *key.state_key().deref();
             // Update the contract's key-value dataset. The key is the state key and
             // the value is the 32 bytes
-            tree.delete(key.state_key().deref())
+            tree.delete(MerkleTreeKey::new(state_key))
                 .map_err(|err| StorageError::Other(err.into()))?;
 
             let root = tree.root();
@@ -141,6 +146,47 @@ impl MerkleRootStorage<ContractId, ContractsState> for Database {
             .map(|metadata| metadata.root)
             .unwrap_or_else(|| in_memory::MerkleTree::new().root());
         Ok(root)
+    }
+}
+
+impl Database {
+    pub fn init_contract_state<K, V, S>(
+        &mut self,
+        contract_id: &ContractId,
+        slots: S,
+    ) -> Result<(), StorageError>
+    where
+        S: Iterator<Item = (K, V)>,
+        K: Into<[u8; 32]>,
+        V: Into<[u8; 32]>,
+    {
+        if self
+            .storage::<ContractsStateMerkleMetadata>()
+            .contains_key(contract_id)?
+        {
+            Err(anyhow::anyhow!("The contract is already initialized"))?;
+        }
+
+        let slots = slots
+            .map(|(key, value)| (key.into(), value.into()))
+            .collect_vec();
+
+        // Keys and values should be original without any modifications.
+        self.batch_insert(Column::ContractsState, slots.clone().into_iter())?;
+
+        // Merkle data:
+        // - State key should be converted into `MerkleTreeKey` by `new` function that hashes them.
+        // - The state value are original.
+        let slots = slots
+            .into_iter()
+            .map(|(key, value)| (MerkleTreeKey::new(key), value));
+        let (root, nodes) = in_memory::MerkleTree::nodes_from_set(slots);
+        self.batch_insert(ContractsStateMerkleData::column(), nodes.into_iter())?;
+        let metadata = SparseMerkleMetadata { root };
+        self.storage::<ContractsStateMerkleMetadata>()
+            .insert(contract_id, &metadata)?;
+
+        Ok(())
     }
 }
 

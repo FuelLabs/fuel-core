@@ -2548,8 +2548,7 @@ checksum = "6c2141d6d6c8512188a7891b4b01590a45f6dac67afb4f255c4124dbb86d4eaa"
 [[package]]
 name = "fuel-asm"
 version = "0.33.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24e6a796cc2486bb87bd632fad24d27cc1469b7dea9947744c1eb7e954e7e484"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/smt-structure-manipulations#29b9df7524a955e55a03c7bd2825d5a7d348de22"
 dependencies = [
  "bitflags",
  "fuel-types",
@@ -3031,8 +3030,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.33.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76fa186cd81bf59c4eba39d29b7243b346840774b6e148614508744a82a14538"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/smt-structure-manipulations#17a4156b8cec4eec5f4b16522f136c42a4445103"
 dependencies = [
  "borrown",
  "coins-bip32 0.8.3",
@@ -3049,8 +3047,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.33.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69243d1f4b60b3077cadca5474f5c019b1aa6d34e66e07b497b04ca2a3f15cf8"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/smt-structure-manipulations#17a4156b8cec4eec5f4b16522f136c42a4445103"
 dependencies = [
  "digest 0.10.6",
  "fuel-storage",
@@ -3063,14 +3060,12 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.33.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f0480dc192e3735de1a8bb0ddaff0bacf20af785529bc585b26e7ac1434e0ba"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/smt-structure-manipulations#17a4156b8cec4eec5f4b16522f136c42a4445103"
 
 [[package]]
 name = "fuel-tx"
 version = "0.33.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87ec7ed95923d1d3249c83c30cd07a209696cc9b8c17a9f337375e284579cd18"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/smt-structure-manipulations#17a4156b8cec4eec5f4b16522f136c42a4445103"
 dependencies = [
  "derivative",
  "fuel-asm",
@@ -3089,8 +3084,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.33.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f738d8373eb7a5e83cf5660bd7bbb7e772a36f6b7d7fff0294fdb229ca9ac02e"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/smt-structure-manipulations#17a4156b8cec4eec5f4b16522f136c42a4445103"
 dependencies = [
  "hex",
  "rand 0.8.5",
@@ -3100,8 +3094,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.33.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7e2072fc5f958166cbebb8ae5f2ba5ac65ae671b6a3ec9a7c0328ea7cc5257b"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/smt-structure-manipulations#17a4156b8cec4eec5f4b16522f136c42a4445103"
 dependencies = [
  "anyhow",
  "bitflags",

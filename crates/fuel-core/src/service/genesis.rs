@@ -17,7 +17,6 @@ use fuel_core_storage::{
         ContractsInfo,
         ContractsLatestUtxo,
         ContractsRawCode,
-        ContractsState,
         FuelBlocks,
         Messages,
     },
@@ -309,15 +308,7 @@ fn init_contract_state(
 ) -> anyhow::Result<()> {
     // insert state related to contract
     if let Some(contract_state) = &contract.state {
-        for (key, value) in contract_state {
-            if db
-                .storage::<ContractsState>()
-                .insert(&(contract_id, key).into(), value)?
-                .is_some()
-            {
-                return Err(anyhow!("Contract state should not exist"))
-            }
-        }
+        db.init_contract_state(contract_id, contract_state.iter().map(Clone::clone))?;
     }
     Ok(())
 }
