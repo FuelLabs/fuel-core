@@ -13,7 +13,6 @@ use fuel_core_importer::Importer;
 use fuel_core_storage::{
     tables::{
         Coins,
-        ContractsAssets,
         ContractsInfo,
         ContractsLatestUtxo,
         ContractsRawCode,
@@ -352,15 +351,7 @@ fn init_contract_balance(
 ) -> anyhow::Result<()> {
     // insert balances related to contract
     if let Some(balances) = &contract.balances {
-        for (key, value) in balances {
-            if db
-                .storage::<ContractsAssets>()
-                .insert(&(contract_id, key).into(), value)?
-                .is_some()
-            {
-                return Err(anyhow!("Contract balance should not exist"))
-            }
-        }
+        db.init_contract_balances(contract_id, balances.clone().into_iter())?;
     }
     Ok(())
 }
@@ -379,7 +370,10 @@ mod tests {
         MessageConfig,
     };
     use fuel_core_storage::{
-        tables::ContractsState,
+        tables::{
+            ContractsAssets,
+            ContractsState,
+        },
         StorageAsRef,
     };
     use fuel_core_types::{
