@@ -9,10 +9,6 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
-use fuel_core_p2p::{
-    Multiaddr,
-    PeerId,
-};
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
     blockchain::{
@@ -93,89 +89,89 @@ async fn can_get_sealed_block_from_poa_produced_block() {
         .expect("failed to verify signature");
 }
 
-// Starts first_producer which creates some blocks
-// Then starts second_producer that uses the first one as a reserved peer.
-// second_producer should not produce blocks while the first one is producing
-// after the first_producer stops, second_producer should start producing blocks
-#[tokio::test]
-async fn test_poa_multiple_producers() {
-    use fuel_core_p2p::config::convert_to_libp2p_keypair;
-    use fuel_core_poa::ports::BlockImporter;
-    use futures::StreamExt;
-
-    // given the first producer
-    let mut rng = StdRng::seed_from_u64(10);
-    let poa_secret = SecretKey::random(&mut rng);
-
-    let db = Database::default();
-    let mut config = Config::local_node();
-    let p2p_keypair = convert_to_libp2p_keypair(&mut poa_secret.to_vec()).unwrap();
-    config.consensus_key = Some(Secret::new(poa_secret.into()));
-    config.block_production = Trigger::Interval {
-        block_time: Duration::from_secs(3),
+#[cfg(feature = "p2p")]
+mod p2p {
+    use super::*;
+    use fuel_core::{
+        chain_config::{
+            ChainConfig,
+            ConsensusConfig,
+        },
+        p2p_test_helpers::{
+            make_config,
+            make_node,
+            Bootstrap,
+        },
+        service::ServiceTrait,
     };
-    match config.p2p {
-        Some(ref mut p2p) => {
-            p2p.keypair = p2p_keypair.clone();
-            p2p.enable_mdns = true;
-        }
-        None => panic!("expected p2p config"),
-    }
+    use fuel_core_types::fuel_tx::Input;
 
-    let first_producer = FuelService::from_database(db.clone(), config.clone())
-        .await
-        .unwrap();
+    // Starts first_producer which creates some blocks
+    // Then starts second_producer that uses the first one as a reserved peer.
+    // second_producer should not produce blocks while the first one is producing
+    // after the first_producer stops, second_producer should start producing blocks
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_poa_multiple_producers() {
+        const INTERVAL: u64 = 3;
 
-    // assert that we are producing blocks
-    let mut first_five = first_producer.shared.block_importer.block_stream().take(5);
-    while let Some(_) = first_five.next().await {}
+        let mut rng = StdRng::from_entropy();
 
-    // using its Multiaddr to setup the second producer
-    let first_producer_multi_addr: Multiaddr = {
-        let ip_addr = first_producer.bound_address.ip();
-        let port: u16 = first_producer.bound_address.port();
-        let peer_id = PeerId::from_public_key(&p2p_keypair.public());
-        Multiaddr::from_str(&format!("/ip4/{}/tcp/{}/p2p/{peer_id}", ip_addr, port))
-            .unwrap()
-    };
+        // Create a producer and a validator that share the same key pair.
+        let secret = SecretKey::random(&mut rng);
+        let pub_key = Input::owner(&secret.public_key());
 
-    // given that we setup second producer
-    let poa_secret = SecretKey::random(&mut rng);
-    let mut config = config.clone();
-    let p2p_keypair = convert_to_libp2p_keypair(&mut poa_secret.to_vec()).unwrap();
-    config.consensus_key = Some(Secret::new(poa_secret.into()));
-    config.block_production = Trigger::Interval {
-        block_time: Duration::from_secs(2),
-    };
-    match config.p2p {
-        Some(ref mut p2p) => {
-            p2p.keypair = p2p_keypair.clone();
-        }
-        None => panic!("expected p2p config"),
-    }
+        let mut chain_config = ChainConfig::local_testnet();
+        chain_config.consensus = ConsensusConfig::PoA {
+            signing_key: pub_key,
+        };
 
-    // with configured `min_connected_reserved_peers` and `time_until_synced`
-    config.min_connected_reserved_peers = 1;
-    config.time_until_synced = Duration::from_secs(5);
-    if let Some(p2p) = config.p2p.as_mut() {
-        p2p.reserved_nodes = vec![first_producer_multi_addr.clone()];
-    }
+        let bootstrap_config = make_config("Bootstrap".to_string(), chain_config.clone());
+        let bootstrap = Bootstrap::new(&bootstrap_config).await;
 
-    let second_producer = FuelService::from_database(db.clone(), config.clone())
-        .await
-        .unwrap();
+        let make_node_config = |name: &str| {
+            let mut config = make_config(name.to_string(), chain_config.clone());
+            config.block_production = Trigger::Interval {
+                block_time: Duration::from_secs(INTERVAL),
+            };
+            config.consensus_key = Some(Secret::new(secret.into()));
+            config.p2p.as_mut().unwrap().bootstrap_nodes = bootstrap.listeners();
+            config.p2p.as_mut().unwrap().reserved_nodes = bootstrap.listeners();
+            config.min_connected_reserved_peers = 1;
+            config.time_until_synced = Duration::from_secs(2 * INTERVAL);
+            config
+        };
 
-    let mut first_stream = first_producer.shared.block_importer.block_stream();
-    let mut second_stream = second_producer.shared.block_importer.block_stream();
+        let first_producer_config = make_node_config("First Producer");
+        let second_producer_config = make_node_config("Second Producer");
 
-    loop {
-        tokio::select! {
-            Some(block_info) = first_stream.next() => {
-                eprintln!("first producer produced a block {:?}", block_info);
-            }
-            Some(block_info) = second_stream.next() => {
-                eprintln!("second producer got the block {:?}", block_info);
-            }
-        }
+        let first_producer = make_node(first_producer_config.clone(), vec![]).await;
+
+        // The first producer should produce 2 blocks.
+        first_producer.wait_for_blocks(2, true /* is_local */).await;
+
+        // Start the second producer after 2 blocks.
+        // The second producer should synchronize 3 blocks produced by the first producer.
+        let second_producer = make_node(second_producer_config, vec![]).await;
+        second_producer
+            .wait_for_blocks(3, false /* is_local */)
+            .await;
+
+        // Stop the first producer.
+        // The second should start produce new blocks after 2 * `INTERVAL`
+        first_producer
+            .node
+            .stop_and_await()
+            .await
+            .expect("Should stop without any error");
+        second_producer
+            .wait_for_blocks(1, true /* is_local */)
+            .await;
+
+        // Restart fresh first producer.
+        // it should sync remotely 5 blocks.
+        let first_producer = make_node(first_producer_config.clone(), vec![]).await;
+        first_producer
+            .wait_for_blocks(5, false /* is_local */)
+            .await;
     }
 }
