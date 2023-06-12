@@ -9,7 +9,6 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
-use fuel_core_poa::Trigger;
 use fuel_core_types::{
     blockchain::{
         consensus::Consensus,
@@ -23,10 +22,7 @@ use rand::{
     rngs::StdRng,
     SeedableRng,
 };
-use std::{
-    str::FromStr,
-    time::Duration,
-};
+use std::str::FromStr;
 
 #[tokio::test]
 async fn can_get_sealed_block_from_poa_produced_block() {
@@ -104,7 +100,9 @@ mod p2p {
         },
         service::ServiceTrait,
     };
+    use fuel_core_poa::Trigger;
     use fuel_core_types::fuel_tx::Input;
+    use std::time::Duration;
 
     // Starts first_producer which creates some blocks
     // Then starts second_producer that uses the first one as a reserved peer.
