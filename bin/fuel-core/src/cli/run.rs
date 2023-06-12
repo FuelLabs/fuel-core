@@ -182,6 +182,14 @@ pub struct Command {
     /// The maximum number of active subscriptions that supported by the `TxPool`.
     #[clap(long = "tx-number-active-subscriptions", default_value = "4064", env)]
     pub tx_number_active_subscriptions: usize,
+
+    /// The number of reserved peers to connect to before starting to sync.
+    #[clap(long = "min_connected_reserved_peers", default_value = "0", env)]
+    pub min_connected_reserved_peers: usize,
+
+    /// Time to wait after receiving the latest block before considered to be Synced.
+    #[clap(long = "time_until_synced", default_value = "0s", env)]
+    pub time_until_synced: humantime::Duration,
 }
 
 impl Command {
@@ -215,6 +223,8 @@ impl Command {
             tx_max_number,
             tx_max_depth,
             tx_number_active_subscriptions,
+            min_connected_reserved_peers,
+            time_until_synced,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -307,6 +317,8 @@ impl Command {
             consensus_key,
             name,
             verifier,
+            min_connected_reserved_peers,
+            time_until_synced: time_until_synced.into(),
         })
     }
 }

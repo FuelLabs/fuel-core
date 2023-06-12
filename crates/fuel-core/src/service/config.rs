@@ -54,6 +54,10 @@ pub struct Config {
     pub consensus_key: Option<Secret<SecretKeyWrapper>>,
     pub name: String,
     pub verifier: fuel_core_consensus_module::RelayerVerifierConfig,
+    /// The number of reserved peers to connect to before starting to sync.
+    pub min_connected_reserved_peers: usize,
+    /// Time to wait after receiving the latest block before considered to be Synced.
+    pub time_until_synced: Duration,
 }
 
 impl Config {
@@ -94,6 +98,8 @@ impl Config {
             consensus_key: Some(Secret::new(default_consensus_dev_key().into())),
             name: String::default(),
             verifier: Default::default(),
+            min_connected_reserved_peers: 0,
+            time_until_synced: Duration::ZERO,
         }
     }
 }
@@ -118,7 +124,8 @@ impl TryFrom<&Config> for fuel_core_poa::Config {
             signing_key: config.consensus_key.clone(),
             metrics: false,
             consensus_params: config.chain_conf.transaction_parameters,
-            ..Default::default()
+            min_connected_reserved_peers: config.min_connected_reserved_peers,
+            time_until_synced: config.time_until_synced,
         })
     }
 }
