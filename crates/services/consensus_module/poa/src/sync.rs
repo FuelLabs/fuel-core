@@ -296,6 +296,38 @@ mod tests {
         }
     }
 
+    /// Helper function that creates a `SyncTask` with a given configuration    
+    fn configure_sync_task(
+        min_connected_reserved_peers: usize,
+        connections_stream: impl IntoIterator<Item = usize>,
+        time_until_synced: Duration,
+        biggest_block: u32,
+    ) -> (
+        SyncTask,
+        StateWatcher,
+        tokio::sync::watch::Sender<fuel_core_services::State>,
+    ) {
+        let connections_stream = MockStream::new(connections_stream).into_boxed();
+
+        let block_stream = MockStream::new((1..biggest_block + 1).map(BlockHeight::from))
+            .map(BlockImportInfo::from)
+            .into_boxed();
+
+        let (tx, shutdown) =
+            tokio::sync::watch::channel(fuel_core_services::State::Started);
+        let watcher = shutdown.into();
+
+        let sync_task = SyncTask::new(
+            connections_stream,
+            min_connected_reserved_peers,
+            time_until_synced,
+            block_stream,
+            BlockHeight::default(),
+        );
+
+        (sync_task, watcher, tx)
+    }
+
     #[tokio::test]
     async fn test_sync_task() {
         // given the following config
@@ -303,22 +335,14 @@ mod tests {
         let amount_of_updates_from_stream = 1;
         let min_connected_reserved_peers = 5;
         let biggest_block = 5;
-        let time_until_synced = Duration::from_secs(5);
-
-        let connections_stream =
-            MockStream::new(vec![connected_peers_report; amount_of_updates_from_stream])
-                .into_boxed();
-        let block_stream = MockStream::new((1..biggest_block + 1).map(BlockHeight::from))
-            .map(BlockImportInfo::from)
-            .into_boxed();
+        let time_until_synced = Duration::from_secs(3);
 
         // and the SyncTask
-        let mut sync_task = SyncTask::new(
-            connections_stream,
+        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
             min_connected_reserved_peers,
+            vec![connected_peers_report; amount_of_updates_from_stream],
             time_until_synced,
-            block_stream,
-            BlockHeight::default(),
+            biggest_block,
         );
 
         // sync state should be NotSynced at the beginning
@@ -328,10 +352,6 @@ mod tests {
             sync_task.inner_state,
             InnerSyncState::InsufficientPeers(_)
         ));
-
-        let (_tx, shutdown) =
-            tokio::sync::watch::channel(fuel_core_services::State::Started);
-        let mut watcher = shutdown.into();
 
         // given that we've performed a `run()` `amount_of_updates_from_stream + biggest_block` times
         let run_times = amount_of_updates_from_stream + biggest_block as usize;
@@ -373,5 +393,169 @@ mod tests {
             sync_task.inner_state.block_height(),
             &BlockHeight::from(biggest_block)
         );
+    }
+
+    // SyncTask starts with SufficientPeers and transitions back to InsufficientPeers when the peer count drops.
+    #[tokio::test]
+    async fn sync_task_sufficient_to_insufficient() {
+        // given the following config
+        let min_connected_reserved_peers = 5;
+        let biggest_block = 0;
+        let time_until_synced = Duration::from_secs(2);
+        let connections_stream = vec![10, 4];
+
+        // and the SyncTask
+        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
+            min_connected_reserved_peers,
+            connections_stream,
+            time_until_synced,
+            biggest_block,
+        );
+
+        // sync state should be NotSynced at the beginning
+        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
+        // we should have insufficient peers
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::InsufficientPeers(_)
+        ));
+
+        // given that we've performed a `run()` once the state should be SufficientPeers
+        // since the peer count was 10
+        let _ = sync_task.run(&mut watcher).await;
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::SufficientPeers(_)
+        ));
+
+        // given that we've performed a `run()` again the state should be InsufficientPeers
+        // since the peer count was 4
+        let _ = sync_task.run(&mut watcher).await;
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::InsufficientPeers(_)
+        ));
+    }
+
+    // SyncTask is in Synced state and receives a block with a height greater than its current block height from the network.
+    #[tokio::test]
+    async fn sync_task_synced_to_greater_block_height_from_network() {
+        // given the following config
+        let min_connected_reserved_peers = 5;
+        let biggest_block = 5;
+        let time_until_synced = Duration::from_secs(2);
+        let connections_stream = vec![10];
+
+        // and the SyncTask
+        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
+            min_connected_reserved_peers,
+            connections_stream.clone(),
+            time_until_synced,
+            biggest_block,
+        );
+
+        // given that we received all the blocks initially and peer connection updates
+        for _ in 0..biggest_block as usize + connections_stream.len() {
+            let _ = sync_task.run(&mut watcher).await;
+        }
+
+        // after running one more time
+        let _ = sync_task.run(&mut watcher).await;
+
+        // the state should be Synced and should also hold sufficient number of peers
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::Synced {
+                has_sufficient_peers: true,
+                ..
+            }
+        ));
+
+        // given that we now added a new stream with a block height greater than the current block height
+        // and the source of the new block is produced by us
+        let latest_block_height = biggest_block + 1;
+        let new_block_stream = MockStream::new(vec![latest_block_height])
+            .map(BlockHeight::from)
+            .map(BlockImportInfo::from)
+            .into_boxed();
+        sync_task.block_stream = new_block_stream;
+
+        // when we run the task again
+        let _ = sync_task.run(&mut watcher).await;
+
+        // then the state should be still be Synced
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::Synced {
+                has_sufficient_peers: true,
+                ..
+            }
+        ));
+        // with latest block height
+        assert_eq!(
+            sync_task.inner_state.block_height(),
+            &BlockHeight::from(latest_block_height)
+        );
+        assert_eq!(SyncState::Synced, *sync_task.state_receiver.borrow());
+
+        // given that we now added a new stream with a block height greater than the current block height
+        // and the source of the new block height is from the network
+        let latest_block_height = latest_block_height + 1;
+        let new_block_stream = MockStream::new(vec![latest_block_height])
+            .map(BlockHeight::from)
+            .map(BlockImportInfo::new_from_network)
+            .into_boxed();
+        sync_task.block_stream = new_block_stream;
+
+        // when we run the task again
+        let _ = sync_task.run(&mut watcher).await;
+
+        // then the state should be SufficientPeers
+        // since we have sufficient peers and the block height is greater than the current one
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::SufficientPeers(_)
+        ));
+        // with latest block height
+        assert_eq!(
+            sync_task.inner_state.block_height(),
+            &BlockHeight::from(latest_block_height)
+        );
+        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
+
+        // given now that we run the task again
+        let _ = sync_task.run(&mut watcher).await;
+
+        // we should be in Synced state again
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::Synced {
+                has_sufficient_peers: true,
+                ..
+            }
+        ));
+        // with latest block height
+        assert_eq!(
+            sync_task.inner_state.block_height(),
+            &BlockHeight::from(latest_block_height)
+        );
+        assert_eq!(SyncState::Synced, *sync_task.state_receiver.borrow());
+
+        // given new stream of peer connection updates
+        let new_connections_stream = MockStream::new(vec![1]).into_boxed();
+        sync_task.peer_connections_stream = new_connections_stream;
+
+        // when we run the task again
+        let _ = sync_task.run(&mut watcher).await;
+
+        // then the state should be still Synced but it should hold insufficient number of peers
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::Synced {
+                has_sufficient_peers: false,
+                ..
+            }
+        ));
+        assert_eq!(SyncState::Synced, *sync_task.state_receiver.borrow());
     }
 }
