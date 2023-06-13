@@ -397,7 +397,7 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("cfsi"),
         "cfsi",
-        VmBench::new(op::cfsi(1)),
+        VmBench::new(op::cfsi(0)),
     );
 
     {

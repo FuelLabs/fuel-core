@@ -6,7 +6,6 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
     fuel_vm::{
         checked_transaction::{
-            builder::TransactionBuilderExt,
             EstimatePredicates,
             IntoChecked,
         },
