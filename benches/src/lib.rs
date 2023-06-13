@@ -5,7 +5,11 @@ use fuel_core_types::{
     fuel_tx::*,
     fuel_types::BlockHeight,
     fuel_vm::{
-        checked_transaction::builder::TransactionBuilderExt,
+        checked_transaction::{
+            builder::TransactionBuilderExt,
+            EstimatePredicates,
+            IntoChecked,
+        },
         consts::*,
         interpreter::diff,
         *,
@@ -380,12 +384,14 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
         let mut p = params;
         p.gas_per_byte = 0;
-        let tx = tx
+        let mut tx = tx
             .gas_price(gas_price)
             .gas_limit(gas_limit)
             .maturity(maturity)
             .with_params(p)
-            .finalize_checked(height, &Default::default());
+            .finalize();
+        tx.estimate_predicates(&p, &GasCosts::free()).unwrap();
+        let tx = tx.into_checked(height, &p, &GasCosts::free()).unwrap();
 
         let mut txtor = Transactor::new(db, params, GasCosts::free());
 
