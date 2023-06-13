@@ -29,8 +29,6 @@ See the [README.md](README.md#system-requirements) for platform specific setup s
 
 ```sh
 git clone https://github.com/FuelLabs/fuel-core
-cd fuel-core
-## Future instructions assume you are in this repository
 ```
 
 ### Configuring your Rust toolchain
@@ -55,12 +53,12 @@ You can build Fuel Core:
 cargo xtask build
 ```
 
-This command will run `cargo build` and also dump the latest schema into `/assets/` folder.
+This command will run `cargo build` and also dump the latest schema into `crates/client/assets/schema.sdl` folder.
 
 Linting is done using rustfmt and clippy, which are each separate commands:
 
 ```sh
-cargo +nightly fmt --all --check
+cargo +nightly fmt --all
 ```
 
 ```sh
@@ -81,7 +79,7 @@ cargo test --all-targets
 For optimal performance, we recommend using native builds. The generated binary will be optimized for your CPU and may contain specific instructions supported only in your hardware.
 
 To build, run:
-`$ RUSTFLAGS="-C target-cpu=native" cargo build --release --bin fuel-core`
+`$ RUSTFLAGS="-C target-cpu=native" cargo build --release --bin fuel-core-bin`
 
 The generated binary will be located in `./target/release/fuel-core`
 
@@ -92,7 +90,7 @@ Using an in-memory (hashmap) based database is supported for testing purposes, s
 default features.
 
 ```sh
-cargo build -p fuel-core --no-default-features
+cargo build -p fuel-core-bin --no-default-features
 ```
 
 ## Contribution flow
@@ -130,7 +128,7 @@ The Client team actively develops and maintains several dependencies used in Fue
 -   [fuel-merkle](https://github.com/FuelLabs/fuel-vm/tree/master/fuel-merkle)
 -   [fuel-tx](https://github.com/FuelLabs/fuel-vm/tree/master/fuel-tx)
 -   [fuel-asm](https://github.com/FuelLabs/fuel-vm/tree/master/fuel-asm)
--   [fuel-vm](https://github.com/FuelLabs/fuel-vm)
+-   [fuel-vm](https://github.com/FuelLabs/fuel-vm/master/fuel-vm)
 
 ### Linking issues
 

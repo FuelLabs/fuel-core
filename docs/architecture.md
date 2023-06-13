@@ -94,7 +94,7 @@ flowchart TB
             APID{{Domain}}
         end
         BID & BPD --> ES & RS & TXS
-        SSD --> POAS & P2PS & BIS
+        SSD --> P2PS & BIS
         TXD --> P2PS
         POAD --> P2PS & RS & BPS & BIS
         APID --> BPS
@@ -263,11 +263,9 @@ pub enum GossipValidity {
 trait BlockImporter {
     // commit a sealed block to the chain
     async fn commit(block: SealedBlock) -> Result<()>;
-}
-
-trait Consensus {
-    // check with the consensus layer whether a block header passes consensus rules
-    async fn validate_sealed_block_header(block: SealedBlockHeader) -> Result<()>;
+   
+   // check with the block importer whether a block header passes consensus rules
+   async fn validate_sealed_block_header(block: SealedBlockHeader) -> Result<()>;
 }
 
 trait Database {
