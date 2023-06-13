@@ -1,67 +1,41 @@
 use crate::{
-    ports::{
-        BlockImporter,
-        PeerToPeer,
-        TxPoolDb,
-    },
+    ports::{BlockImporter, PeerToPeer, TxPoolDb, TxPoolSyncPort},
     transaction_selector::select_transactions,
-    Config,
-    Error as TxPoolError,
-    TxInfo,
-    TxPool,
+    Config, Error as TxPoolError, TxInfo, TxPool,
+};
+
+use fuel_core_p2p::{
+    codecs::postcard::PostcardCodec, network_service::FuelP2PEvent,
+    network_service::FuelP2PService, PeerId,
 };
 use fuel_core_services::{
-    stream::BoxStream,
-    RunnableService,
-    RunnableTask,
-    ServiceRunner,
-    StateWatcher,
+    stream::BoxStream, RunnableService, RunnableTask, ServiceRunner, StateWatcher,
 };
 use fuel_core_types::{
-    fuel_tx::{
-        ConsensusParameters,
-        Transaction,
-        TxId,
-        UniqueIdentifier,
-    },
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-    },
+    fuel_tx::{ConsensusParameters, Transaction, TxId, UniqueIdentifier},
+    fuel_types::{BlockHeight, Bytes32},
     services::{
         block_importer::ImportResult,
         p2p::{
-            GossipData,
-            GossipsubMessageAcceptance,
-            GossipsubMessageInfo,
+            GossipData, GossipsubMessageAcceptance, GossipsubMessageInfo,
             TransactionGossipData,
         },
-        txpool::{
-            ArcPoolTx,
-            Error,
-            InsertionResult,
-            TransactionStatus,
-        },
+        txpool::{ArcPoolTx, Error, InsertionResult, TransactionStatus},
     },
     tai64::Tai64,
 };
 use parking_lot::Mutex as ParkingMutex;
 use std::sync::Arc;
-use tokio::{
-    sync::broadcast,
-    time::MissedTickBehavior,
-};
+use tokio::{sync::broadcast, time::MissedTickBehavior};
 use tokio_stream::StreamExt;
 use update_sender::UpdateSender;
 
-use self::update_sender::{
-    MpscChannel,
-    TxStatusStream,
-};
+use self::update_sender::{MpscChannel, TxStatusStream};
 
 mod update_sender;
 
 pub type Service<P2P, DB> = ServiceRunner<Task<P2P, DB>>;
+pub type TxPoolSyncService<P2P> = ServiceRunner<TxPoolSyncTask<P2P>>;
 
 #[derive(Clone)]
 pub struct TxStatusChange {
@@ -124,6 +98,90 @@ impl<P2P, DB> Clone for SharedState<P2P, DB> {
             p2p: self.p2p.clone(),
             consensus_params: self.consensus_params,
         }
+    }
+}
+
+pub struct TxPoolSyncSharedState<P2P> {
+    p2p: Arc<P2P>,
+}
+
+impl<P2P> Clone for TxPoolSyncSharedState<P2P> {
+    fn clone(&self) -> Self {
+        Self {
+            p2p: self.p2p.clone(),
+        }
+    }
+}
+
+pub struct TxPoolSyncTask<P2P> {
+    shared: TxPoolSyncSharedState<P2P>,
+    ttl_timer: tokio::time::Interval,
+}
+
+#[async_trait::async_trait]
+impl<P2P> RunnableService for TxPoolSyncTask<P2P>
+where
+    P2P: TxPoolSyncPort + Send + Sync,
+{
+    const NAME: &'static str = "TxPoolSync";
+
+    type SharedData = TxPoolSyncSharedState<P2P>;
+    type Task = TxPoolSyncTask<P2P>;
+    type TaskParams = ();
+
+    fn shared_data(&self) -> Self::SharedData {
+        self.shared.clone()
+    }
+
+    async fn into_task(
+        mut self,
+        _: &StateWatcher,
+        _: Self::TaskParams,
+    ) -> anyhow::Result<Self::Task> {
+        self.ttl_timer.reset();
+        Ok(self)
+    }
+}
+
+#[async_trait::async_trait]
+impl<P2P> RunnableTask for TxPoolSyncTask<P2P>
+where
+    P2P: TxPoolSyncPort + Send + Sync,
+{
+    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+        let should_continue;
+
+        dbg!("Inside TxPoolSyncTask::run");
+
+        let mut stream = self.shared.p2p.new_connection();
+
+        tokio::select! {
+            biased;
+
+            _ = watcher.while_started() => {
+                should_continue = false;
+            }
+
+            new_connection = stream.next() => {
+                should_continue = true;
+                if let Some(peer_id) = new_connection {
+                    dbg!("Peer connected, inside TxPoolSyncTask: {:?}", peer_id);
+                } else {
+                    dbg!(&new_connection);
+                }
+            }
+        }
+
+        Ok(should_continue)
+    }
+
+    async fn shutdown(self) -> anyhow::Result<()> {
+        // Nothing to shut down because we don't have any temporary state that should be dumped,
+        // and we don't spawn any sub-tasks that we need to finish or await.
+        // Maybe we will save and load the previous list of transactions in the future to
+        // avoid losing them.
+
+        Ok(())
     }
 }
 
@@ -354,6 +412,26 @@ impl TxUpdate {
 pub enum TxStatusMessage {
     Status(TransactionStatus),
     FailedStatus,
+}
+
+// wip
+pub fn new_txpool_syncing_service<PoolSync>(
+    config: Config,
+    p2p_config: fuel_core_p2p::config::Config,
+    p2p: PoolSync,
+) -> TxPoolSyncService<PoolSync>
+where
+    PoolSync: TxPoolSyncPort + 'static,
+{
+    let p2p = Arc::new(p2p);
+    let mut ttl_timer = tokio::time::interval(config.transaction_ttl);
+    ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    let tx_sync_task = TxPoolSyncTask {
+        shared: TxPoolSyncSharedState { p2p },
+        ttl_timer,
+    };
+
+    TxPoolSyncService::new(tx_sync_task)
 }
 
 pub fn new_service<P2P, Importer, DB>(

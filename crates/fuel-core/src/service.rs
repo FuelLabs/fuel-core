@@ -1,22 +1,11 @@
-use crate::{
-    database::Database,
-    service::adapters::P2PAdapter,
-};
+use crate::{database::Database, service::adapters::P2PAdapter};
 use fuel_core_services::{
-    RunnableService,
-    RunnableTask,
-    ServiceRunner,
-    State,
-    StateWatcher,
+    RunnableService, RunnableTask, ServiceRunner, State, StateWatcher,
 };
 use std::net::SocketAddr;
 use tracing::log::warn;
 
-pub use config::{
-    Config,
-    DbType,
-    VMConfig,
-};
+pub use config::{Config, DbType, VMConfig};
 pub use fuel_core_services::Service as ServiceTrait;
 
 pub use fuel_core_consensus_module::RelayerVerifierConfig;
@@ -273,19 +262,9 @@ impl RunnableTask for Task {
 
 #[cfg(test)]
 mod tests {
-    use crate::service::{
-        Config,
-        Task,
-    };
-    use fuel_core_services::{
-        RunnableService,
-        RunnableTask,
-        State,
-    };
-    use std::{
-        thread::sleep,
-        time::Duration,
-    };
+    use crate::service::{Config, Task};
+    use fuel_core_services::{RunnableService, RunnableTask, State};
+    use std::{thread::sleep, time::Duration};
 
     #[tokio::test]
     async fn run_start_and_stop() {
@@ -305,7 +284,7 @@ mod tests {
                 task.sub_services()[i].stop_and_await().await.unwrap();
                 assert!(!task.run(&mut watcher).await.unwrap());
             } else {
-                break
+                break;
             }
             i += 1;
         }

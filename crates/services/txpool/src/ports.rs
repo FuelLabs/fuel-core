@@ -1,27 +1,13 @@
+use fuel_core_p2p::PeerId;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
-    entities::{
-        coins::coin::CompressedCoin,
-        message::Message,
-    },
-    fuel_tx::{
-        Transaction,
-        UtxoId,
-    },
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-        ContractId,
-        Nonce,
-    },
+    entities::{coins::coin::CompressedCoin, message::Message},
+    fuel_tx::{Transaction, UtxoId},
+    fuel_types::{BlockHeight, Bytes32, ContractId, Nonce},
     services::{
         block_importer::ImportResult,
-        p2p::{
-            GossipsubMessageAcceptance,
-            GossipsubMessageInfo,
-            NetworkData,
-        },
+        p2p::{GossipsubMessageAcceptance, GossipsubMessageInfo, NetworkData},
         txpool::TransactionStatus,
     },
 };
@@ -61,4 +47,9 @@ pub trait TxPoolDb: Send + Sync {
     fn current_block_height(&self) -> StorageResult<BlockHeight>;
 
     fn transaction_status(&self, tx_id: &Bytes32) -> StorageResult<TransactionStatus>;
+}
+
+pub trait TxPoolSyncPort: Send + Sync {
+    /// Streams new connections to the node.
+    fn new_connection(&self) -> BoxStream<PeerId>;
 }

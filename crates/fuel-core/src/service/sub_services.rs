@@ -1,23 +1,17 @@
 #![allow(clippy::let_unit_value)]
 use super::adapters::P2PAdapter;
 
+use crate::txpool::service::new_txpool_syncing_service;
 use crate::{
     database::Database,
     fuel_core_graphql_api::Config as GraphQLConfig,
     schema::build_schema,
     service::{
         adapters::{
-            BlockImporterAdapter,
-            BlockProducerAdapter,
-            ExecutorAdapter,
-            MaybeRelayerAdapter,
-            PoAAdapter,
-            TxPoolAdapter,
-            VerifierAdapter,
+            BlockImporterAdapter, BlockProducerAdapter, ExecutorAdapter,
+            MaybeRelayerAdapter, PoAAdapter, TxPoolAdapter, VerifierAdapter,
         },
-        Config,
-        SharedState,
-        SubServices,
+        Config, SharedState, SubServices,
     },
 };
 use fuel_core_poa::Trigger;
@@ -111,6 +105,15 @@ pub fn init_sub_services(
         p2p_adapter.clone(),
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
+
+    let genesis = database.get_genesis()?;
+    let p2p_config = config.p2p.clone().expect("p2p config is required");
+    let p2p_config = p2p_config.init(genesis)?;
+    let tx_pool_sync = new_txpool_syncing_service(
+        config.txpool.clone(),
+        p2p_config,
+        p2p_adapter.clone(),
+    );
 
     let block_producer = fuel_core_producer::Producer {
         config: config.block_producer.clone(),
@@ -218,6 +221,7 @@ pub fn init_sub_services(
         if let Some(network) = network.take() {
             services.push(Box::new(network));
             services.push(Box::new(sync));
+            services.push(Box::new(tx_pool_sync));
         }
     }
 
