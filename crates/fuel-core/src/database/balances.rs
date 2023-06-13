@@ -158,7 +158,7 @@ impl MerkleRootStorage<ContractId, ContractsAssets> for Database {
 
 impl Database {
     /// Initialize the balances of the contract from the all leafs.
-    /// This method is more perform than insert balances one by one.
+    /// This method is more performant than inserting balances one by one.
     pub fn init_contract_balances<S>(
         &mut self,
         contract_id: &ContractId,

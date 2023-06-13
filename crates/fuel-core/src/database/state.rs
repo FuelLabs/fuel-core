@@ -154,8 +154,8 @@ impl MerkleRootStorage<ContractId, ContractsState> for Database {
 }
 
 impl Database {
-    /// Initialize the state of the contract from the all leafs.
-    /// This method is more perform than insert state one by one.
+    /// Initialize the state of the contract from all leaves.
+    /// This method is more performant than inserting state one by one.
     pub fn init_contract_state<S>(
         &mut self,
         contract_id: &ContractId,
