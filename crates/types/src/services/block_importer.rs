@@ -1,9 +1,10 @@
 //! Types related to block importer service.
 
-use fuel_vm_private::fuel_types::BlockHeight;
-
 use crate::{
-    blockchain::SealedBlock,
+    blockchain::{
+        header::BlockHeader,
+        SealedBlock,
+    },
     services::{
         executor::TransactionExecutionStatus,
         Uncommitted,
@@ -63,10 +64,10 @@ impl ImportResult {
 }
 
 /// The block import info.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BlockImportInfo {
-    /// The height of the imported block.
-    pub height: BlockHeight,
+    /// The header of the imported block.
+    pub block_header: BlockHeader,
     /// The producer of the block.
     source: Source,
 }
@@ -78,9 +79,9 @@ impl BlockImportInfo {
     }
 
     /// Creates a new `BlockImportInfo` with source from the network.
-    pub fn new_from_network(height: BlockHeight) -> Self {
+    pub fn new_from_network(block_header: BlockHeader) -> Self {
         Self {
-            height,
+            block_header,
             source: Source::Network,
         }
     }
@@ -89,16 +90,16 @@ impl BlockImportInfo {
 impl From<&ImportResult> for BlockImportInfo {
     fn from(result: &ImportResult) -> Self {
         Self {
-            height: *result.sealed_block.entity.header().height(),
+            block_header: result.sealed_block.entity.header().clone(),
             source: result.source,
         }
     }
 }
 
-impl From<BlockHeight> for BlockImportInfo {
-    fn from(height: BlockHeight) -> Self {
+impl From<BlockHeader> for BlockImportInfo {
+    fn from(block_header: BlockHeader) -> Self {
         Self {
-            height,
+            block_header,
             source: Default::default(),
         }
     }

@@ -13,11 +13,9 @@ use fuel_core_importer::Importer;
 use fuel_core_storage::{
     tables::{
         Coins,
-        ContractsAssets,
         ContractsInfo,
         ContractsLatestUtxo,
         ContractsRawCode,
-        ContractsState,
         FuelBlocks,
         Messages,
     },
@@ -309,15 +307,7 @@ fn init_contract_state(
 ) -> anyhow::Result<()> {
     // insert state related to contract
     if let Some(contract_state) = &contract.state {
-        for (key, value) in contract_state {
-            if db
-                .storage::<ContractsState>()
-                .insert(&(contract_id, key).into(), value)?
-                .is_some()
-            {
-                return Err(anyhow!("Contract state should not exist"))
-            }
-        }
+        db.init_contract_state(contract_id, contract_state.iter().map(Clone::clone))?;
     }
     Ok(())
 }
@@ -361,15 +351,7 @@ fn init_contract_balance(
 ) -> anyhow::Result<()> {
     // insert balances related to contract
     if let Some(balances) = &contract.balances {
-        for (key, value) in balances {
-            if db
-                .storage::<ContractsAssets>()
-                .insert(&(contract_id, key).into(), value)?
-                .is_some()
-            {
-                return Err(anyhow!("Contract balance should not exist"))
-            }
-        }
+        db.init_contract_balances(contract_id, balances.clone().into_iter())?;
     }
     Ok(())
 }
@@ -387,7 +369,13 @@ mod tests {
         CoinConfig,
         MessageConfig,
     };
-    use fuel_core_storage::StorageAsRef;
+    use fuel_core_storage::{
+        tables::{
+            ContractsAssets,
+            ContractsState,
+        },
+        StorageAsRef,
+    };
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         entities::coins::coin::Coin,
