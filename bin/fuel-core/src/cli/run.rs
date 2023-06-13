@@ -324,6 +324,7 @@ impl Command {
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
+    init_logging().await?;
     let config = command.get_config()?;
     let network_name = {
         #[cfg(feature = "p2p")]
@@ -337,7 +338,6 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         #[cfg(not(feature = "p2p"))]
         "default_network".to_string()
     };
-    init_logging().await?;
     // log fuel-core version
     info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
     trace!("Initializing in TRACE mode.");

@@ -94,7 +94,7 @@ flowchart TB
             APID{{Domain}}
         end
         BID & BPD --> ES & RS & TXS
-        SSD --> POAS & P2PS & BIS
+        SSD --> P2PS & BIS
         TXD --> P2PS
         POAD --> P2PS & RS & BPS & BIS
         APID --> BPS
@@ -104,13 +104,13 @@ flowchart TB
         %% Pink color - Block Producer
         linkStyle 3,4,5 fill:none,stroke-width:4px,stroke:pink
         %% Green color - Synchronizer
-        linkStyle 6,7,8 fill:none,stroke-width:4px,stroke:green
+        linkStyle 6,7 fill:none,stroke-width:4px,stroke:green
         %% Blue color - Transaction pool
-        linkStyle 9 fill:none,stroke-width:4px,stroke:blue
+        linkStyle 8 fill:none,stroke-width:4px,stroke:blue
         %% Orange color - PoA
-        linkStyle 10,11,12,13 fill:none,stroke-width:4px,stroke:orange
+        linkStyle 10,11,12,9 fill:none,stroke-width:4px,stroke:orange
         %% Purple color - API
-        linkStyle 14 fill:none,stroke-width:4px,stroke:purple
+        linkStyle 13 fill:none,stroke-width:4px,stroke:purple
     end
 ```
 
@@ -263,11 +263,9 @@ pub enum GossipValidity {
 trait BlockImporter {
     // commit a sealed block to the chain
     async fn commit(block: SealedBlock) -> Result<()>;
-}
-
-trait Consensus {
-    // check with the consensus layer whether a block header passes consensus rules
-    async fn validate_sealed_block_header(block: SealedBlockHeader) -> Result<()>;
+   
+   // check with the block importer whether a block header passes consensus rules
+   async fn validate_sealed_block_header(block: SealedBlockHeader) -> Result<()>;
 }
 
 trait Database {

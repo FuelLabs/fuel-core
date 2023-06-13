@@ -22,11 +22,16 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::header::ConsensusHeader,
+    fuel_tx::{
+        Contract,
+        StorageSlot,
+    },
     fuel_types::{
         Address,
         BlockHeight,
         Bytes32,
         ContractId,
+        Salt,
         Word,
     },
     fuel_vm::InterpreterStorage,
@@ -191,6 +196,23 @@ impl InterpreterStorage for VmDatabase {
 
     fn coinbase(&self) -> Result<Address, Self::DataError> {
         Ok(self.coinbase)
+    }
+
+    fn deploy_contract_with_id(
+        &mut self,
+        salt: &Salt,
+        slots: &[StorageSlot],
+        contract: &Contract,
+        root: &Bytes32,
+        id: &ContractId,
+    ) -> Result<(), Self::DataError> {
+        self.storage_contract_insert(id, contract)?;
+        self.storage_contract_root_insert(id, salt, root)?;
+
+        self.database.init_contract_state(
+            id,
+            slots.iter().map(|slot| (*slot.key(), *slot.value())),
+        )
     }
 
     fn merkle_contract_state_range(
