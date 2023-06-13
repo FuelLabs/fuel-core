@@ -171,9 +171,9 @@ impl Database {
             .storage::<ContractsAssetsMerkleMetadata>()
             .contains_key(contract_id)?
         {
-            Err(anyhow::anyhow!(
-                "The contract balances is already initialized"
-            ))?;
+            return Err(
+                anyhow::anyhow!("The contract balances is already initialized").into(),
+            )
         }
 
         let balances = balances.collect_vec();
