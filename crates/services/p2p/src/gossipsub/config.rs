@@ -32,21 +32,48 @@ use super::topics::{
     NEW_TX_GOSSIP_TOPIC,
 };
 
+// The number of slots in each epoch.
 const SLOTS_PER_EPOCH: u64 = 32;
+
+// The duration of each slot in seconds. This is the amount of time allotted for each opportunity to create a block.
 const SLOT: Duration = Duration::from_secs(6);
+
+// The total duration of an epoch in seconds, calculated as the number of slots per epoch times the duration of each slot.
 const EPOCH: Duration = Duration::from_secs(SLOTS_PER_EPOCH * SLOT.as_secs());
+
+// The factor by which scores decay towards zero in the scoring mechanism. Scores are reduced by this factor at each decay interval.
 const DECAY_TO_ZERO: f64 = 0.01;
+
+// The time interval at which scores decay, set equal to the duration of one slot.
 const DECAY_INTERVAL: Duration = SLOT;
+
+// The target number of peers in each gossip mesh.
 const MESH_SIZE: usize = 8;
 
-const MAX_IN_MESH_SCORE: f64 = 10.0;
-const MAX_FIRST_MESSAGE_DELIVERIES_SCORE: f64 = 40.0;
+// The maximum score that a peer can receive for being in the mesh.
+const MAX_IN_MESH_SCORE: f64 = 5.0;
+
+// The maximum score that a peer can receive for first delivery of a message.
+const MAX_FIRST_MESSAGE_DELIVERIES_SCORE: f64 = 20.0;
+
+// The weight applied to the score for delivering new transactions.
 const NEW_TX_GOSSIP_WEIGHT: f64 = 0.05;
+
+// The weight applied to the score for delivering new blocks.
 const NEW_BLOCK_GOSSIP_WEIGHT: f64 = 0.05;
+
+// The weight applied to the score for delivering consensus votes.
 const CON_VOTE_GOSSIP_WEIGHT: f64 = 0.05;
 
+// The threshold for a peer's score to be considered for greylisting.
+// If a peer's score falls below this value, they will be greylisted.
+// Greylisting is a lighter form of banning, where the peer's messages might be ignored or given lower priority,
+// but the peer is not completely banned from the network.
 pub const GREYLIST_THRESHOLD: f64 = -16000.0;
 
+// The maximum positive score a peer can achieve, determined by the maximum scores for
+// being in the mesh and for first message deliveries, weighted by the relevance of the
+// different types of gossip topics.
 const MAX_POSITIVE_SCORE: f64 = (MAX_IN_MESH_SCORE + MAX_FIRST_MESSAGE_DELIVERIES_SCORE)
     * (NEW_TX_GOSSIP_WEIGHT + NEW_BLOCK_GOSSIP_WEIGHT + CON_VOTE_GOSSIP_WEIGHT);
 
@@ -88,15 +115,23 @@ pub(crate) fn default_gossipsub_config() -> GossipsubConfig {
         .expect("valid gossipsub configuration")
 }
 
-fn initialize_topic_score_params(topic_weight: f64) -> TopicScoreParams {
-    let expected_message_rate = 1.0 / 5.0 / SLOTS_PER_EPOCH as f64;
+fn initialize_topic_score_params(
+    topic_weight: f64,
+    // The expected rate of message propagation.
+    expected_message_rate: f64,
+) -> TopicScoreParams {
+    // The decay time for the first message delivered score, set to 100 times the epoch duration.
+    // This means that the score given for first message deliveries will decay over this time period.
     let first_message_decay_time = EPOCH * 100;
 
     let mut params = TopicScoreParams::default();
 
     params.topic_weight = topic_weight;
 
+    // The "quantum" of time spent in the mesh, set to the duration of a slot.
+    // This is the smallest unit of time for which we track a peer's presence in the mesh.
     params.time_in_mesh_quantum = SLOT;
+
     params.time_in_mesh_cap = 3600.0 / params.time_in_mesh_quantum.as_secs_f64();
     params.time_in_mesh_weight = 10.0 / params.time_in_mesh_cap;
 
@@ -206,6 +241,8 @@ pub(crate) fn build_gossipsub_behaviour(p2p_config: &Config) -> Gossipsub {
     }
 }
 
+const EXPECTED_TXS_PER_SLOT: f64 = 20.0;
+
 fn initialize_gossipsub(gossipsub: &mut Gossipsub, p2p_config: &Config) {
     let peer_score_thresholds = initialize_peer_score_thresholds();
     let peer_score_params = initialize_peer_score_params(&peer_score_thresholds);
@@ -215,17 +252,32 @@ fn initialize_gossipsub(gossipsub: &mut Gossipsub, p2p_config: &Config) {
         .expect("gossipsub initialized with peer score");
 
     let topics = vec![
-        (NEW_TX_GOSSIP_TOPIC, NEW_TX_GOSSIP_WEIGHT),
-        (NEW_BLOCK_GOSSIP_TOPIC, NEW_BLOCK_GOSSIP_WEIGHT),
-        (CON_VOTE_GOSSIP_TOPIC, CON_VOTE_GOSSIP_WEIGHT),
+        (
+            NEW_TX_GOSSIP_TOPIC,
+            NEW_TX_GOSSIP_WEIGHT,
+            EXPECTED_TXS_PER_SLOT / SLOTS_PER_EPOCH as f64,
+        ),
+        (
+            NEW_BLOCK_GOSSIP_TOPIC,
+            NEW_BLOCK_GOSSIP_WEIGHT,
+            1.0 / SLOTS_PER_EPOCH as f64,
+        ),
+        (
+            CON_VOTE_GOSSIP_TOPIC,
+            CON_VOTE_GOSSIP_WEIGHT,
+            1.0 / SLOTS_PER_EPOCH as f64,
+        ),
     ];
 
     // subscribe to gossipsub topics with the network name suffix
-    for (topic, weight) in topics {
+    for (topic, weight, expected_message_rate) in topics {
         let t: GossipTopic = Topic::new(format!("{}/{}", topic, p2p_config.network_name));
 
         gossipsub
-            .set_topic_params(t.clone(), initialize_topic_score_params(weight))
+            .set_topic_params(
+                t.clone(),
+                initialize_topic_score_params(weight, expected_message_rate),
+            )
             .expect("First time initializing Topic Score");
 
         gossipsub
