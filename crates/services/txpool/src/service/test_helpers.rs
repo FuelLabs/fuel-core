@@ -115,11 +115,9 @@ impl MockImporter {
             let stream = fuel_core_services::stream::unfold(blocks, |mut blocks| async {
                 let block = blocks.pop();
                 if let Some(sealed_block) = block {
-                    let result = ImportResult {
-                        sealed_block,
-                        tx_status: vec![],
-                    };
-                    let result = Arc::new(result);
+                    let result =
+                        Arc::new(ImportResult::new_from_local(sealed_block, vec![]));
+
                     Some((result, blocks))
                 } else {
                     core::future::pending().await

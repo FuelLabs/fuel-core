@@ -65,6 +65,7 @@ pub struct PeerManager {
     reserved_peers: HashSet<PeerId>,
     connection_state: Arc<RwLock<ConnectionState>>,
     max_non_reserved_peers: usize,
+    reserved_peers_updates: tokio::sync::broadcast::Sender<usize>,
 }
 
 impl PeerManager {
@@ -73,6 +74,9 @@ impl PeerManager {
         connection_state: Arc<RwLock<ConnectionState>>,
         max_non_reserved_peers: usize,
     ) -> Self {
+        let (reserved_peers_updates, _) =
+            tokio::sync::broadcast::channel(1 + reserved_peers.len() * 2);
+
         Self {
             score_config: ScoreConfig::default(),
             non_reserved_connected_peers: HashMap::with_capacity(max_non_reserved_peers),
@@ -80,7 +84,12 @@ impl PeerManager {
             reserved_peers,
             connection_state,
             max_non_reserved_peers,
+            reserved_peers_updates,
         }
+    }
+
+    pub fn reserved_peers_updates(&self) -> tokio::sync::broadcast::Sender<usize> {
+        self.reserved_peers_updates.clone()
     }
 
     pub fn handle_gossip_score_update<T: Punisher>(
@@ -211,8 +220,11 @@ impl PeerManager {
             }
 
             false
+        } else if self.reserved_connected_peers.remove(&peer_id).is_some() {
+            self.send_reserved_peers_update();
+            true
         } else {
-            self.reserved_connected_peers.remove(&peer_id).is_some()
+            false
         }
     }
 
@@ -259,11 +271,19 @@ impl PeerManager {
         } else {
             self.reserved_connected_peers
                 .insert(*peer_id, PeerInfo::default());
+
+            self.send_reserved_peers_update();
         }
 
         self.insert_peer_info(peer_id, PeerInfoInsert::Addresses(addresses));
 
         false
+    }
+
+    fn send_reserved_peers_update(&self) {
+        let _ = self
+            .reserved_peers_updates
+            .send(self.reserved_connected_peers.len());
     }
 
     fn insert_peer_info(&mut self, peer_id: &PeerId, data: PeerInfoInsert) {

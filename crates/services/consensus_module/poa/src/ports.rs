@@ -15,7 +15,10 @@ use fuel_core_types::{
         Bytes32,
     },
     services::{
-        block_importer::UncommittedResult as UncommittedImportResult,
+        block_importer::{
+            BlockImportInfo,
+            UncommittedResult as UncommittedImportResult,
+        },
         executor::UncommittedResult as UncommittedExecutionResult,
         txpool::ArcPoolTx,
     },
@@ -58,6 +61,8 @@ pub trait BlockImporter: Send + Sync {
         &self,
         result: UncommittedImportResult<StorageTransaction<Self::Database>>,
     ) -> anyhow::Result<()>;
+
+    fn block_stream(&self) -> BoxStream<BlockImportInfo>;
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -82,4 +87,17 @@ pub trait RelayerPort {
         da_height: &DaBlockHeight,
         max_da_lag: &DaBlockHeight,
     ) -> anyhow::Result<()>;
+}
+
+#[cfg_attr(test, mockall::automock)]
+pub trait P2pPort: Send + Sync + 'static {
+    /// Subscribe to reserved peers connection updates.
+    fn reserved_peers_count(&self) -> BoxStream<usize>;
+}
+
+#[async_trait::async_trait]
+#[cfg_attr(test, mockall::automock)]
+pub trait SyncPort: Send + Sync {
+    /// await synchronization with the peers
+    async fn sync_with_peers(&mut self) -> anyhow::Result<()>;
 }

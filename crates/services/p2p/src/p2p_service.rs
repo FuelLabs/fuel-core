@@ -1057,7 +1057,7 @@ mod tests {
             tokio::select! {
                 event_from_first_guarded = first_guarded_node.next_event() => {
                     if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_first_guarded {
-                        if !first_sentry_set.remove(&peer_id)            {
+                        if !first_sentry_set.remove(&peer_id) {
                             panic!("The node should only connect to the specified reserved nodes!");
                         }
                     }
@@ -1065,7 +1065,7 @@ mod tests {
                 },
                 event_from_second_guarded = second_guarded_node.next_event() => {
                     if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_second_guarded {
-                        if !second_sentry_set.remove(&peer_id)            {
+                        if !second_sentry_set.remove(&peer_id) {
                             panic!("The node should only connect to the specified reserved nodes!");
                         }
                     }

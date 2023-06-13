@@ -145,10 +145,7 @@ fn import_genesis_block(
         (),
     );
     importer.commit_result(UncommittedImportResult::new(
-        ImportResult {
-            sealed_block: block,
-            tx_status: vec![],
-        },
+        ImportResult::new_from_local(block, vec![]),
         database_transaction,
     ))?;
     Ok(())

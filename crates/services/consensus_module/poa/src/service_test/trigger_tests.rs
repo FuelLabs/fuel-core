@@ -20,7 +20,7 @@ async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
             block_gas_limit: 100_000,
             signing_key: Some(test_signing_key()),
             metrics: false,
-            consensus_params: Default::default(),
+            ..Default::default()
         });
         let ctx = ctx_builder.build();
 
@@ -42,6 +42,7 @@ async fn never_trigger_never_produces_blocks() {
         signing_key: Some(test_signing_key()),
         metrics: false,
         consensus_params,
+        ..Default::default()
     });
 
     // initialize txpool with some txs
@@ -57,6 +58,9 @@ async fn never_trigger_never_produces_blocks() {
     importer
         .expect_commit_result()
         .returning(|_| panic!("Should not commit result"));
+    importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
     ctx_builder.with_importer(importer);
     let ctx = ctx_builder.build();
     for tx in txs {
@@ -100,6 +104,9 @@ impl DefaultContext {
             block_import_sender.send(sealed_block)?;
             Ok(())
         });
+        importer
+            .expect_block_stream()
+            .returning(|| Box::pin(tokio_stream::pending()));
         ctx_builder.with_importer(importer);
 
         let test_ctx = ctx_builder.build();
@@ -121,7 +128,7 @@ async fn instant_trigger_produces_block_instantly() {
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
         metrics: false,
-        consensus_params: Default::default(),
+        ..Default::default()
     });
     ctx.status_sender.send_replace(Some(TxId::zeroed()));
 
@@ -141,7 +148,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
         metrics: false,
-        consensus_params: Default::default(),
+        ..Default::default()
     });
     ctx.status_sender.send_replace(Some(TxId::zeroed()));
 
@@ -207,7 +214,7 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
         metrics: false,
-        consensus_params: Default::default(),
+        ..Default::default()
     });
 
     // Brackets to release the lock.
@@ -254,7 +261,7 @@ async fn hybrid_trigger_produces_blocks_correctly_max_block_time() -> anyhow::Re
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
         metrics: false,
-        consensus_params: Default::default(),
+        ..Default::default()
     });
 
     // Make sure no blocks are produced yet
@@ -301,7 +308,7 @@ async fn hybrid_trigger_produces_blocks_correctly_max_block_time_not_overrides_m
         block_gas_limit: Word::MAX,
         signing_key: Some(test_signing_key()),
         metrics: false,
-        consensus_params: Default::default(),
+        ..Default::default()
     });
 
     // Make sure no blocks are produced when txpool is empty and `MAX_BLOCK_TIME` is not exceeded
@@ -344,7 +351,7 @@ async fn hybrid_trigger_produces_blocks_correctly_max_tx_idle_time() -> anyhow::
         block_gas_limit: Word::MAX,
         signing_key: Some(test_signing_key()),
         metrics: false,
-        consensus_params: Default::default(),
+        ..Default::default()
     });
 
     assert!(matches!(
@@ -396,7 +403,7 @@ async fn hybrid_trigger_produces_blocks_correctly_min_block_time_min_block_gas_l
         block_gas_limit: Word::MIN,
         signing_key: Some(test_signing_key()),
         metrics: false,
-        consensus_params: Default::default(),
+        ..Default::default()
     });
 
     // Emulate tx status update to trigger the execution.
@@ -454,7 +461,7 @@ async fn hybrid_trigger_produces_blocks_correctly_min_block_time_max_block_gas_l
         block_gas_limit: Word::MAX,
         signing_key: Some(test_signing_key()),
         metrics: false,
-        consensus_params: Default::default(),
+        ..Default::default()
     });
 
     // Emulate tx status update to trigger the execution.

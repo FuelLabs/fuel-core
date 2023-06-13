@@ -347,10 +347,7 @@ fn commit_result_assert(
     let expected_to_broadcast = sealed_block.clone();
     let importer = Importer::new(Default::default(), underlying_db, (), ());
     let uncommitted_result = UncommittedResult::new(
-        ImportResult {
-            sealed_block,
-            tx_status: vec![],
-        },
+        ImportResult::new_from_local(sealed_block, vec![]),
         StorageTransaction::new(executor_db),
     );
 
@@ -401,10 +398,7 @@ fn execute_and_commit_assert(
 fn commit_result_fail_when_locked() {
     let importer = Importer::new(Default::default(), MockDatabase::default(), (), ());
     let uncommitted_result = UncommittedResult::new(
-        ImportResult {
-            sealed_block: Default::default(),
-            tx_status: vec![],
-        },
+        ImportResult::default(),
         StorageTransaction::new(MockDatabase::default()),
     );
 
