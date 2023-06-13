@@ -147,7 +147,7 @@ fn initialize_topic_score_params(
     params.mesh_message_deliveries_weight = 0.5;
     params.mesh_message_deliveries_threshold = 3.0;
     params.mesh_message_deliveries_decay = 0.1;
-    params.mesh_message_deliveries_cap = 500.0;
+    params.mesh_message_deliveries_cap = MAX_POSITIVE_SCORE * 0.5;
     params.mesh_message_deliveries_window = Duration::from_secs(60);
     params.mesh_message_deliveries_activation = Duration::from_secs(120);
     params.mesh_failure_penalty_decay = 0.1;
