@@ -160,14 +160,11 @@ where
     ) -> Self {
         let tx_status_update_stream = txpool.transaction_status_events();
         let (request_sender, request_receiver) = mpsc::channel(100);
-        let last_timestamp = last_block.time();
-        let duration =
-            Duration::from_secs(Tai64::now().0.saturating_sub(last_timestamp.0));
-        let last_block_created = Instant::now() - duration;
+        let (last_height, last_timestamp, last_block_created) =
+            Self::extract_block_info(last_block);
 
         let block_stream = block_importer.block_stream();
         let peer_connections_stream = p2p_port.reserved_peers_count();
-        let last_block_height = *last_block.height();
 
         let Config {
             block_gas_limit,
@@ -184,7 +181,7 @@ where
             min_connected_reserved_peers,
             time_until_synced,
             block_stream,
-            last_block_height,
+            last_block,
         );
 
         let sync_task_handle = ServiceRunner::new(sync_task);
@@ -198,7 +195,7 @@ where
             tx_status_update_stream,
             request_receiver,
             shared_state: SharedState { request_sender },
-            last_height: last_block_height,
+            last_height,
             last_timestamp,
             last_block_created,
             trigger,
@@ -206,6 +203,15 @@ where
             consensus_params,
             sync_task_handle,
         }
+    }
+
+    fn extract_block_info(last_block: &BlockHeader) -> (BlockHeight, Tai64, Instant) {
+        let last_timestamp = last_block.time();
+        let duration =
+            Duration::from_secs(Tai64::now().0.saturating_sub(last_timestamp.0));
+        let last_block_created = Instant::now() - duration;
+        let last_height = *last_block.height();
+        (last_height, last_timestamp, last_block_created)
     }
 
     fn next_height(&self) -> BlockHeight {
@@ -491,11 +497,19 @@ where
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         // make sure we're synced first
-        if *self.sync_task_handle.shared.borrow() == SyncState::NotSynced {
+        while *self.sync_task_handle.shared.borrow() == SyncState::NotSynced {
             tokio::select! {
                 biased;
                 _ = watcher.while_started() => {}
-                _ = self.sync_task_handle.shared.changed() => {}
+                _ = self.sync_task_handle.shared.changed() => {
+                    if let SyncState::Synced(block_header) = &*self.sync_task_handle.shared.borrow() {
+                        let (last_height, last_timestamp, last_block_created) =
+                            Self::extract_block_info(block_header);
+                        self.last_height = last_height;
+                        self.last_timestamp = last_timestamp;
+                        self.last_block_created = last_block_created;
+                    }
+                }
             }
         }
 
