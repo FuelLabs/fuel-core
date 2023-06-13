@@ -2,6 +2,7 @@ use crate::database::{
     storage::{
         ContractsAssetsMerkleData,
         ContractsAssetsMerkleMetadata,
+        DatabaseColumn,
         SparseMerkleMetadata,
     },
     Column,
@@ -9,6 +10,7 @@ use crate::database::{
 };
 use fuel_core_storage::{
     tables::ContractsAssets,
+    ContractsAssetKey,
     Error as StorageError,
     Mappable,
     MerkleRoot,
@@ -19,15 +21,21 @@ use fuel_core_storage::{
     StorageMutate,
 };
 use fuel_core_types::{
+    fuel_asm::Word,
     fuel_merkle::{
         sparse,
         sparse::{
             in_memory,
             MerkleTree,
+            MerkleTreeKey,
         },
     },
-    fuel_types::ContractId,
+    fuel_types::{
+        AssetId,
+        ContractId,
+    },
 };
+use itertools::Itertools;
 use std::{
     borrow::{
         BorrowMut,
@@ -77,9 +85,10 @@ impl StorageMutate<ContractsAssets> for Database {
             MerkleTree::load(storage, &root)
                 .map_err(|err| StorageError::Other(err.into()))?;
 
+        let asset_id = *key.asset_id().deref();
         // Update the contact's key-value dataset. The key is the asset id and the
         // value the Word
-        tree.update(key.asset_id().deref(), value.to_be_bytes().as_slice())
+        tree.update(MerkleTreeKey::new(asset_id), value.to_be_bytes().as_slice())
             .map_err(|err| StorageError::Other(err.into()))?;
 
         // Generate new metadata for the updated tree
@@ -112,9 +121,10 @@ impl StorageMutate<ContractsAssets> for Database {
                 MerkleTree::load(storage, &root)
                     .map_err(|err| StorageError::Other(err.into()))?;
 
+            let asset_id = *key.asset_id().deref();
             // Update the contract's key-value dataset. The key is the asset id and
             // the value is the Word
-            tree.delete(key.asset_id().deref())
+            tree.delete(MerkleTreeKey::new(asset_id))
                 .map_err(|err| StorageError::Other(err.into()))?;
 
             let root = tree.root();
@@ -146,6 +156,53 @@ impl MerkleRootStorage<ContractId, ContractsAssets> for Database {
     }
 }
 
+impl Database {
+    /// Initialize the balances of the contract from the all leafs.
+    /// This method is more performant than inserting balances one by one.
+    pub fn init_contract_balances<S>(
+        &mut self,
+        contract_id: &ContractId,
+        balances: S,
+    ) -> Result<(), StorageError>
+    where
+        S: Iterator<Item = (AssetId, Word)>,
+    {
+        if self
+            .storage::<ContractsAssetsMerkleMetadata>()
+            .contains_key(contract_id)?
+        {
+            return Err(
+                anyhow::anyhow!("The contract balances is already initialized").into(),
+            )
+        }
+
+        let balances = balances.collect_vec();
+
+        // Keys and values should be original without any modifications.
+        // Key is `ContractId` ++ `AssetId`
+        self.batch_insert(
+            Column::ContractsAssets,
+            balances.clone().into_iter().map(|(asset, value)| {
+                (ContractsAssetKey::new(contract_id, &asset), value)
+            }),
+        )?;
+
+        // Merkle data:
+        // - Asset key should be converted into `MerkleTreeKey` by `new` function that hashes them.
+        // - The balance value are original.
+        let balances = balances
+            .into_iter()
+            .map(|(asset, value)| (MerkleTreeKey::new(asset), value.to_be_bytes()));
+        let (root, nodes) = in_memory::MerkleTree::nodes_from_set(balances);
+        self.batch_insert(ContractsAssetsMerkleData::column(), nodes.into_iter())?;
+        let metadata = SparseMerkleMetadata { root };
+        self.storage::<ContractsAssetsMerkleMetadata>()
+            .insert(contract_id, &metadata)?;
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -157,6 +214,16 @@ mod tests {
         AssetId,
         Word,
     };
+    use rand::Rng;
+
+    fn random_asset_id<R>(rng: &mut R) -> AssetId
+    where
+        R: Rng + ?Sized,
+    {
+        let mut bytes = [0u8; 32];
+        rng.fill(bytes.as_mut());
+        bytes.into()
+    }
 
     #[test]
     fn get() {
@@ -369,6 +436,61 @@ mod tests {
 
         assert_ne!(root_1, root_2);
         assert_eq!(root_0, root_2);
+    }
+
+    #[test]
+    fn init_contract_balances_works() {
+        use rand::{
+            rngs::StdRng,
+            RngCore,
+            SeedableRng,
+        };
+
+        let rng = &mut StdRng::seed_from_u64(1234);
+        let gen = || Some((random_asset_id(rng), rng.next_u64()));
+        let data = core::iter::from_fn(gen).take(5_000).collect::<Vec<_>>();
+
+        let contract_id = ContractId::from([1u8; 32]);
+        let init_database = &mut Database::default();
+
+        init_database
+            .init_contract_balances(&contract_id, data.clone().into_iter())
+            .expect("Should init contract");
+        let init_root = init_database
+            .storage::<ContractsAssets>()
+            .root(&contract_id)
+            .expect("Should get root");
+
+        let seq_database = &mut Database::default();
+        for (asset, value) in data.iter() {
+            seq_database
+                .storage::<ContractsAssets>()
+                .insert(&ContractsAssetKey::new(&contract_id, asset), value)
+                .expect("Should insert a state");
+        }
+        let seq_root = seq_database
+            .storage::<ContractsAssets>()
+            .root(&contract_id)
+            .expect("Should get root");
+
+        assert_eq!(init_root, seq_root);
+
+        for (asset, value) in data.into_iter() {
+            let init_value = init_database
+                .storage::<ContractsAssets>()
+                .get(&ContractsAssetKey::new(&contract_id, &asset))
+                .expect("Should get a state from init database")
+                .unwrap()
+                .into_owned();
+            let seq_value = seq_database
+                .storage::<ContractsAssets>()
+                .get(&ContractsAssetKey::new(&contract_id, &asset))
+                .expect("Should get a state from seq database")
+                .unwrap()
+                .into_owned();
+            assert_eq!(init_value, value);
+            assert_eq!(seq_value, value);
+        }
     }
 
     #[test]

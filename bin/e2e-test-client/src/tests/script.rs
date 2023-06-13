@@ -69,17 +69,18 @@ pub async fn dry_run(ctx: &TestContext) -> Result<(), Failed> {
 // Maybe deploy a contract with large state and execute the script
 pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
     let contract_config = include_bytes!("test_data/large_state/contract.json");
-    let contract_config: ContractConfig =
+    let mut contract_config: ContractConfig =
         serde_json::from_slice(contract_config.as_ref())
             .expect("Should be able do decode the ContractConfig");
     let dry_run = include_bytes!("test_data/large_state/tx.json");
     let dry_run: Transaction = serde_json::from_slice(dry_run.as_ref())
         .expect("Should be able do decode the Transaction");
 
-    // Optimization to run test fastly. If the contract changed, you need to update the
-    // `1bfd51cb31b8d0bc7d93d38f97ab771267d8786ab87073e0c2b8f9ddc44b274e` in the
-    // `test_data/large_state/contract.json`.
-    // contract_config.calculate_contract_id();
+    // If the contract changed, you need to update the
+    // `f4292fe50d21668e140636ab69c7d4b3d069f66eb9ef3da4b0a324409cc36b8c` in the
+    // `test_data/large_state/contract.json` together with:
+    // 244, 41, 47, 229, 13, 33, 102, 142, 20, 6, 54, 171, 105, 199, 212, 179, 208, 105, 246, 110, 185, 239, 61, 164, 176, 163, 36, 64, 156, 195, 107, 140,
+    contract_config.calculate_contract_id();
     let contract_id = contract_config.contract_id;
     println!("\nThe `contract_id` of the contract with large state: {contract_id}");
 

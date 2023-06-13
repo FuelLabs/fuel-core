@@ -268,9 +268,11 @@ where
         &mut self,
         block_production: ManualProduction,
     ) -> anyhow::Result<()> {
-        let mut block_time = block_production
-            .start_time
-            .unwrap_or(self.next_time(RequestType::Manual)?);
+        let mut block_time = if let Some(time) = block_production.start_time {
+            time
+        } else {
+            self.next_time(RequestType::Manual)?
+        };
         for _ in 0..block_production.number_of_blocks {
             self.produce_block(self.next_height(), block_time, RequestType::Manual)
                 .await?;
