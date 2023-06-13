@@ -375,6 +375,9 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             tx.add_witness(w);
         });
 
+        // add at least one coin input
+        tx.add_random_fee_input();
+
         let mut p = params;
         p.gas_per_byte = 0;
         let tx = tx
