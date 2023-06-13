@@ -3,6 +3,7 @@ use crate::{
     state::{
         in_memory::memory_store::MemoryStore,
         DataSource,
+        WriteOperation,
     },
 };
 use fuel_core_chain_config::{
@@ -20,6 +21,7 @@ use fuel_core_storage::{
     Result as StorageResult,
 };
 use fuel_core_types::fuel_types::BlockHeight;
+use itertools::Itertools;
 use serde::{
     de::DeserializeOwned,
     Serialize,
@@ -233,6 +235,32 @@ impl Database {
         } else {
             Ok(None)
         }
+    }
+
+    fn batch_insert<K: AsRef<[u8]>, V: Serialize, S>(
+        &self,
+        column: Column,
+        set: S,
+    ) -> DatabaseResult<()>
+    where
+        S: Iterator<Item = (K, V)>,
+    {
+        let set: Vec<_> = set
+            .map(|(key, value)| {
+                let value =
+                    postcard::to_stdvec(&value).map_err(|_| DatabaseError::Codec)?;
+
+                let tuple = (
+                    key.as_ref().to_vec(),
+                    column,
+                    WriteOperation::Insert(Arc::new(value)),
+                );
+
+                Ok::<_, DatabaseError>(tuple)
+            })
+            .try_collect()?;
+
+        self.data.batch_write(&mut set.into_iter())
     }
 
     fn remove<V: DeserializeOwned>(
