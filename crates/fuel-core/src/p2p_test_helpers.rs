@@ -16,12 +16,14 @@ use fuel_core_p2p::{
     network_service::FuelP2PService,
     PeerId,
 };
-use fuel_core_poa::Trigger;
+use fuel_core_poa::{
+    ports::BlockImporter,
+    Trigger,
+};
 use fuel_core_storage::{
     tables::Transactions,
     StorageAsRef,
 };
-use fuel_core_txpool::ports::BlockImporter;
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -313,7 +315,7 @@ pub async fn make_nodes(
     }
 }
 
-fn make_config(name: String, chain_config: ChainConfig) -> Config {
+pub fn make_config(name: String, chain_config: ChainConfig) -> Config {
     let mut node_config = Config::local_node();
     node_config.chain_conf = chain_config;
     node_config.utxo_validation = true;
@@ -321,7 +323,7 @@ fn make_config(name: String, chain_config: ChainConfig) -> Config {
     node_config
 }
 
-async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node {
+pub async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node {
     let db = Database::in_memory();
     let node = FuelService::from_database(db.clone(), node_config)
         .await
@@ -347,10 +349,23 @@ fn extract_p2p_config(node_config: &Config) -> fuel_core_p2p::config::Config {
 }
 
 impl Node {
+    /// Waits for `number_of_blocks` and each block should be `is_local`
+    pub async fn wait_for_blocks(&self, number_of_blocks: usize, is_local: bool) {
+        let mut stream = self
+            .node
+            .shared
+            .block_importer
+            .block_stream()
+            .take(number_of_blocks);
+        while let Some(block) = stream.next().await {
+            assert_eq!(block.is_locally_produced(), is_local);
+        }
+    }
+
     /// Wait for the node to reach consistency with the given transactions.
     pub async fn consistency(&mut self, txs: &HashMap<Bytes32, Transaction>) {
         let Self { db, .. } = self;
-        let mut blocks = self.node.shared.block_importer.block_events();
+        let mut blocks = self.node.shared.block_importer.block_stream();
         while !not_found_txs(db, txs).is_empty() {
             tokio::select! {
                 result = blocks.next() => {

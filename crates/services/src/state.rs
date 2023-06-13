@@ -90,7 +90,6 @@ impl StateWatcher {
             if !state.started() {
                 return Ok(state)
             }
-            tracing::debug!("Service is started, waiting for the next state...");
 
             self.changed().await?;
         }
