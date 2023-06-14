@@ -69,7 +69,7 @@ const CON_VOTE_GOSSIP_WEIGHT: f64 = 0.05;
 // If a peer's score falls below this value, they will be greylisted.
 // Greylisting is a lighter form of banning, where the peer's messages might be ignored or given lower priority,
 // but the peer is not completely banned from the network.
-pub const GREYLIST_THRESHOLD: f64 = -16000.0;
+pub const GRAYLIST_THRESHOLD: f64 = -16000.0;
 
 // The maximum positive score a peer can achieve, determined by the maximum scores for
 // being in the mesh and for first message deliveries, weighted by the relevance of the
@@ -197,7 +197,7 @@ fn initialize_peer_score_thresholds() -> PeerScoreThresholds {
     PeerScoreThresholds {
         gossip_threshold: -4000.0,
         publish_threshold: -8000.0,
-        graylist_threshold: GREYLIST_THRESHOLD,
+        graylist_threshold: GRAYLIST_THRESHOLD,
         accept_px_threshold: 100.0,
         opportunistic_graft_threshold: 5.0,
     }
