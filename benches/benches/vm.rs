@@ -14,6 +14,10 @@ use fuel_core_storage::transactional::Transaction;
 use fuel_core_types::fuel_asm::Instruction;
 use set::*;
 
+// Use Jemalloc during benchmarks
+#[global_allocator]
+static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
 pub fn run_group_ref<I>(group: &mut BenchmarkGroup<WallTime>, id: I, bench: VmBench)
 where
     I: AsRef<str>,

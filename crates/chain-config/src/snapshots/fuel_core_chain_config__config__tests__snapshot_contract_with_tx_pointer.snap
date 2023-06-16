@@ -1,6 +1,5 @@
 ---
 source: crates/chain-config/src/config.rs
-assertion_line: 178
 expression: json
 ---
 {
@@ -40,17 +39,17 @@ expression: json
     "aloc": 1,
     "and": 1,
     "andi": 1,
-    "bal": 21,
+    "bal": 22,
     "bhei": 1,
     "bhsh": 1,
-    "burn": 35,
-    "cb": 2,
+    "burn": 126,
+    "cb": 1,
     "cfei": 1,
     "cfsi": 1,
-    "croo": 28,
+    "croo": 20,
     "div": 1,
     "divi": 1,
-    "ecr": 1703,
+    "ecr": 1592,
     "eq": 1,
     "exp": 1,
     "expi": 1,
@@ -69,13 +68,13 @@ expression: json
     "jnzb": 1,
     "jnef": 1,
     "jneb": 1,
-    "k256": 19,
+    "k256": 16,
     "lb": 1,
-    "log": 40,
+    "log": 43,
     "lt": 1,
     "lw": 1,
     "mcpi": 3,
-    "mint": 35,
+    "mint": 127,
     "mlog": 1,
     "mod": 1,
     "modi": 1,
@@ -84,92 +83,92 @@ expression: json
     "mroo": 2,
     "mul": 1,
     "muli": 1,
-    "mldv": 2,
+    "mldv": 1,
     "noop": 1,
     "not": 1,
     "or": 1,
     "ori": 1,
-    "ret_contract": 61,
-    "rvrt_contract": 61,
-    "s256": 5,
+    "ret_contract": 63,
+    "rvrt_contract": 65,
+    "s256": 4,
     "sb": 1,
-    "scwq": 11,
+    "scwq": 23,
     "sll": 1,
     "slli": 1,
     "srl": 1,
     "srli": 1,
-    "srw": 23,
+    "srw": 21,
     "sub": 1,
     "subi": 1,
     "sw": 1,
-    "sww": 79,
-    "swwq": 72,
+    "sww": 67,
+    "swwq": 68,
     "time": 1,
-    "tr": 120,
-    "tro": 99,
-    "wdcm": 2,
-    "wqcm": 4,
-    "wdop": 2,
-    "wqop": 4,
-    "wdml": 2,
-    "wqml": 4,
-    "wddv": 4,
-    "wqdv": 8,
-    "wdmd": 5,
-    "wqmd": 10,
-    "wdam": 2,
+    "tr": 255,
+    "tro": 196,
+    "wdcm": 1,
+    "wqcm": 1,
+    "wdop": 1,
+    "wqop": 1,
+    "wdml": 1,
+    "wqml": 2,
+    "wddv": 2,
+    "wqdv": 3,
+    "wdmd": 4,
+    "wqmd": 7,
+    "wdam": 3,
     "wqam": 4,
     "wdmm": 4,
-    "wqmm": 8,
+    "wqmm": 4,
     "xor": 1,
     "xori": 1,
     "call": {
-      "base": 116,
-      "dep_per_unit": 14
+      "base": 173,
+      "dep_per_unit": 180
     },
     "ccp": {
-      "base": 24,
-      "dep_per_unit": 13
+      "base": 22,
+      "dep_per_unit": 152
     },
     "csiz": {
-      "base": 17,
-      "dep_per_unit": 15
+      "base": 16,
+      "dep_per_unit": 868
     },
     "ldc": {
-      "base": 23,
-      "dep_per_unit": 14
+      "base": 22,
+      "dep_per_unit": 150
     },
     "logd": {
-      "base": 46,
-      "dep_per_unit": 19
+      "base": 48,
+      "dep_per_unit": 18
     },
     "mcl": {
       "base": 1,
-      "dep_per_unit": 2359
+      "dep_per_unit": 2503
     },
     "mcli": {
       "base": 1,
-      "dep_per_unit": 2322
+      "dep_per_unit": 2559
     },
     "mcp": {
       "base": 1,
-      "dep_per_unit": 1235
+      "dep_per_unit": 1301
     },
     "meq": {
       "base": 1,
-      "dep_per_unit": 2343
+      "dep_per_unit": 1747
     },
     "retd_contract": {
-      "base": 65,
-      "dep_per_unit": 19
+      "base": 71,
+      "dep_per_unit": 18
     },
     "smo": {
-      "base": 84,
-      "dep_per_unit": 13
+      "base": 207,
+      "dep_per_unit": 18
     },
     "srwq": {
-      "base": 54,
-      "dep_per_unit": 2
+      "base": 44,
+      "dep_per_unit": 5
     }
   },
   "consensus": {
