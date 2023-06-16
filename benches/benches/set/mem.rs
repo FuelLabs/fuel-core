@@ -117,20 +117,22 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("mcpi"),
         "mcpi",
-        VmBench::new(op::mcpi(0x10, RegId::ZERO, 4000)).with_prepare_script(vec![
-            op::movi(0x11, 4000),
-            op::aloc(0x11),
-            op::move_(0x10, RegId::HP),
-        ]),
+        VmBench::new(op::mcpi(0x10, RegId::ZERO, Imm12::MAX.to_u16()))
+            .with_prepare_script(vec![
+                op::movi(0x11, Imm12::MAX.to_u16() as u32),
+                op::aloc(0x11),
+                op::move_(0x10, RegId::HP),
+            ]),
     );
 
     let mut mem_meq = c.benchmark_group("meq");
     for i in &linear {
-        mem_meq.throughput(Throughput::Bytes(*i as u64));
+        let i = *i as u64;
+        mem_meq.throughput(Throughput::Bytes(i));
 
-        let mut prepare_script = vec![op::movi(0x11, 0)];
-        prepare_script.extend(set_full_word(0x12, (i * 3) as u64));
-        prepare_script.extend(set_full_word(0x13, (*i) as u64));
+        let mut prepare_script =
+            vec![op::move_(0x11, RegId::SP), op::move_(0x12, RegId::SP)];
+        prepare_script.extend(set_full_word(0x13, i));
 
         run_group_ref(
             &mut mem_meq,
