@@ -174,6 +174,7 @@ impl FuelClient {
         Self::from_str(url.as_ref())
     }
 
+    /// Send the GraphQL query to the client.
     pub async fn query<ResponseData, Vars>(
         &self,
         q: Operation<ResponseData, Vars>,

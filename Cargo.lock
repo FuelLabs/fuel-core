@@ -1072,9 +1072,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.3.3"
+version = "4.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca8f255e4b8027970e78db75e78831229c9815fdbfa67eb1a1b777a62e24b4a0"
+checksum = "80672091db20273a15cf9fdd4e47ed43b5091ec9841bf4c6145c9dfbbcae09ed"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -1083,9 +1083,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.3.3"
+version = "4.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "acd4f3c17c83b0ba34ffbc4f8bbd74f079413f747f84a6f89292f138057e36ab"
+checksum = "c1458a1df40e1e2afebb7ab60ce55c1fa8f431146205aa5f4887e0b111c27636"
 dependencies = [
  "anstream",
  "anstyle",
@@ -1142,7 +1142,7 @@ dependencies = [
  "k256 0.11.6",
  "lazy_static",
  "serde",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "thiserror",
 ]
 
@@ -1161,7 +1161,7 @@ dependencies = [
  "k256 0.13.1",
  "lazy_static",
  "serde",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "thiserror",
 ]
 
@@ -1178,7 +1178,7 @@ dependencies = [
  "hmac 0.12.1",
  "pbkdf2 0.11.0",
  "rand 0.8.5",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "thiserror",
 ]
 
@@ -1195,7 +1195,7 @@ dependencies = [
  "once_cell",
  "pbkdf2 0.12.1",
  "rand 0.8.5",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "thiserror",
 ]
 
@@ -1215,7 +1215,7 @@ dependencies = [
  "ripemd",
  "serde",
  "serde_derive",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "sha3",
  "thiserror",
 ]
@@ -1235,7 +1235,7 @@ dependencies = [
  "ripemd",
  "serde",
  "serde_derive",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "sha3",
  "thiserror",
 ]
@@ -1384,9 +1384,9 @@ dependencies = [
 
 [[package]]
 name = "cpufeatures"
-version = "0.2.7"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e4c1eaa2012c47becbbad2ab175484c2a84d1185b566fb2cc5b8707343dfe58"
+checksum = "03e69e28e9f7f77debdedbaafa2866e1de9ba56df55a8bd7cfc724c25a09987c"
 dependencies = [
  "libc",
 ]
@@ -2146,7 +2146,7 @@ dependencies = [
  "scrypt",
  "serde",
  "serde_json",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "sha3",
  "thiserror",
  "uuid 0.8.2",
@@ -2411,7 +2411,7 @@ dependencies = [
  "ethers-core",
  "hex",
  "rand 0.8.5",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "thiserror",
 ]
 
@@ -2566,14 +2566,14 @@ dependencies = [
 
 [[package]]
 name = "fuel-core"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "assert_matches",
  "async-graphql",
  "async-trait",
  "axum",
- "clap 4.3.3",
+ "clap 4.3.4",
  "derive_more",
  "enum-iterator",
  "fuel-core-chain-config",
@@ -2621,7 +2621,7 @@ dependencies = [
 name = "fuel-core-benches"
 version = "0.0.0"
 dependencies = [
- "clap 4.3.3",
+ "clap 4.3.4",
  "criterion",
  "ctrlc",
  "ethnum",
@@ -2637,7 +2637,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-bft"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "parking_lot 0.12.1",
@@ -2646,10 +2646,10 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-bin"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
- "clap 4.3.3",
+ "clap 4.3.4",
  "const_format",
  "dirs",
  "fuel-core",
@@ -2666,7 +2666,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-chain-config"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "bech32 0.9.1",
@@ -2685,7 +2685,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-client"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "cynic",
@@ -2708,9 +2708,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-client-bin"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
- "clap 4.3.3",
+ "clap 4.3.4",
  "fuel-core-client",
  "fuel-core-types",
  "serde_json",
@@ -2719,7 +2719,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-consensus-module"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "fuel-core-chain-config",
@@ -2731,7 +2731,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-database"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "fuel-core-storage",
@@ -2742,7 +2742,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-e2e-client"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2767,7 +2767,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-executor"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "fuel-core-chain-config",
@@ -2778,7 +2778,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-importer"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "fuel-core-storage",
@@ -2793,10 +2793,10 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-keygen"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
- "clap 4.3.3",
+ "clap 4.3.4",
  "fuel-core-types",
  "libp2p-core 0.38.0",
  "serde_json",
@@ -2804,7 +2804,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-metrics"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "axum",
  "lazy_static",
@@ -2815,7 +2815,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-p2p"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2848,7 +2848,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_with",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "tokio",
  "tracing",
  "tracing-attributes",
@@ -2857,7 +2857,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-poa"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2875,7 +2875,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-producer"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2892,7 +2892,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-relayer"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2920,7 +2920,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-services"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2933,7 +2933,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-storage"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "fuel-core-types",
@@ -2944,7 +2944,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-sync"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2990,7 +2990,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-trace"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "ctor",
  "tracing",
@@ -3000,7 +3000,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-txpool"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3024,7 +3024,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-types"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -3050,7 +3050,7 @@ dependencies = [
  "rand 0.8.5",
  "secp256k1",
  "serde",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "zeroize",
 ]
 
@@ -3064,7 +3064,7 @@ dependencies = [
  "fuel-storage",
  "hashbrown 0.13.2",
  "hex",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "thiserror",
 ]
 
@@ -3666,8 +3666,8 @@ dependencies = [
  "http",
  "hyper",
  "log",
- "rustls 0.21.1",
- "rustls-native-certs 0.6.2",
+ "rustls 0.21.2",
+ "rustls-native-certs 0.6.3",
  "tokio",
  "tokio-rustls 0.24.1",
  "webpki-roots 0.23.1",
@@ -3948,7 +3948,7 @@ dependencies = [
  "cfg-if",
  "ecdsa 0.14.8",
  "elliptic-curve 0.12.3",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "sha3",
 ]
 
@@ -3962,7 +3962,7 @@ dependencies = [
  "ecdsa 0.16.7",
  "elliptic-curve 0.13.5",
  "once_cell",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "signature 2.1.0",
 ]
 
@@ -4075,7 +4075,7 @@ dependencies = [
  "rand 0.8.5",
  "rw-stream-sink",
  "sec1 0.3.0",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "smallvec",
  "thiserror",
  "unsigned-varint",
@@ -4148,7 +4148,7 @@ dependencies = [
  "prost-codec",
  "rand 0.8.5",
  "regex",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "smallvec",
  "thiserror",
  "unsigned-varint",
@@ -4189,7 +4189,7 @@ dependencies = [
  "multihash 0.17.0",
  "quick-protobuf",
  "rand 0.8.5",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "thiserror",
  "zeroize",
 ]
@@ -4214,7 +4214,7 @@ dependencies = [
  "prost",
  "prost-build",
  "rand 0.8.5",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "smallvec",
  "thiserror",
  "uint",
@@ -4289,7 +4289,7 @@ dependencies = [
  "prost",
  "prost-build",
  "rand 0.8.5",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "snow",
  "static_assertions",
  "thiserror",
@@ -4312,7 +4312,7 @@ dependencies = [
  "once_cell",
  "quick-protobuf",
  "rand 0.8.5",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "snow",
  "static_assertions",
  "thiserror",
@@ -4562,7 +4562,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7b603516767d1ab23d0de09d023e62966c3322f7148297c35cf3d97aa8b37fa"
 dependencies = [
- "clap 4.3.3",
+ "clap 4.3.4",
  "termcolor",
  "threadpool",
 ]
@@ -4828,7 +4828,7 @@ dependencies = [
  "core2",
  "digest 0.10.7",
  "multihash-derive",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "unsigned-varint",
 ]
 
@@ -4841,7 +4841,7 @@ dependencies = [
  "core2",
  "digest 0.10.7",
  "multihash-derive",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "unsigned-varint",
 ]
 
@@ -5135,7 +5135,7 @@ checksum = "51f44edd08f51e2ade572f141051021c5af22677e42b7dd28a88155151c33594"
 dependencies = [
  "ecdsa 0.14.8",
  "elliptic-curve 0.12.3",
- "sha2 0.10.6",
+ "sha2 0.10.7",
 ]
 
 [[package]]
@@ -5146,7 +5146,7 @@ checksum = "dfc8c5bf642dde52bb9e87c0ecd8ca5a76faac2eeed98dedb7c717997e1080aa"
 dependencies = [
  "ecdsa 0.14.8",
  "elliptic-curve 0.12.3",
- "sha2 0.10.6",
+ "sha2 0.10.7",
 ]
 
 [[package]]
@@ -5161,9 +5161,9 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec"
-version = "3.5.0"
+version = "3.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ddb756ca205bd108aee3c62c6d3c994e1df84a59b9d6d4a5ea42ee1fd5a9a28"
+checksum = "430d26d62e66cbff6ae144e8eebd43c0235922dec7e3aa0d2016c32d4575bf45"
 dependencies = [
  "arrayvec",
  "bitvec 1.0.1",
@@ -5175,9 +5175,9 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec-derive"
-version = "3.1.4"
+version = "3.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86b26a931f824dd4eca30b3e43bb4f31cd5f0d3a403c5f5ff27106b805bfde7b"
+checksum = "a1620b1e3fc72ebaee01ff56fca838bab537c5d093a18b3549c3bbea374aa0b6"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -5265,7 +5265,7 @@ dependencies = [
  "digest 0.10.7",
  "hmac 0.12.1",
  "password-hash",
- "sha2 0.10.6",
+ "sha2 0.10.7",
 ]
 
 [[package]]
@@ -6053,7 +6053,7 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "pin-project-lite 0.2.9",
- "rustls 0.21.1",
+ "rustls 0.21.2",
  "rustls-pemfile",
  "serde",
  "serde_json",
@@ -6291,9 +6291,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.21.1"
+version = "0.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c911ba11bc8433e811ce56fde130ccf32f5127cab0e0194e9c68c5a5b671791e"
+checksum = "e32ca28af694bc1bbf399c33a516dbdf1c90090b8ab23c2bc24f834aa2247f5f"
 dependencies = [
  "log",
  "ring",
@@ -6315,9 +6315,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-native-certs"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0167bac7a9f490495f3c33013e7722b53cb087ecbe082fb0c6387c96f634ea50"
+checksum = "a9aace74cb666635c918e9c12bc0d348266037aa8eb599b5cba565709a8dff00"
 dependencies = [
  "openssl-probe",
  "rustls-pemfile",
@@ -6471,7 +6471,7 @@ dependencies = [
  "hmac 0.12.1",
  "pbkdf2 0.11.0",
  "salsa20",
- "sha2 0.10.6",
+ "sha2 0.10.7",
 ]
 
 [[package]]
@@ -6632,9 +6632,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.96"
+version = "1.0.97"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "057d394a50403bcac12672b2b18fb387ab6d289d957dab67dd201875391e52f1"
+checksum = "bdf3bf93142acad5821c99197022e170842cdbc1c30482b98750c688c640842a"
 dependencies = [
  "itoa",
  "ryu",
@@ -6750,9 +6750,9 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.10.6"
+version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82e6b795fe2e3b1e845bafcb27aa35405c4d47cdfc92af5fc8d3002f76cebdc0"
+checksum = "479fb9d862239e610720565ca91403019f2f00410f1864c5aa7479b950a76ed8"
 dependencies = [
  "cfg-if",
  "cpufeatures",
@@ -6847,7 +6847,7 @@ dependencies = [
  "rand_core 0.6.4",
  "ring",
  "rustc_version",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "subtle",
 ]
 
@@ -7362,7 +7362,7 @@ version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c28327cf380ac148141087fbfb9de9d7bd4e84ab5d2c28fbc911d753de8a7081"
 dependencies = [
- "rustls 0.21.1",
+ "rustls 0.21.2",
  "tokio",
 ]
 
@@ -7875,11 +7875,10 @@ dependencies = [
 
 [[package]]
 name = "want"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ce8a968cb1cd110d136ff8b819a556d6fb6d919363c61534f6860c7eb172ba0"
+checksum = "bfa7760aed19e106de2c7c0b581b509f2f25d3dacaf737cb82ac61bc6d760b0e"
 dependencies = [
- "log",
  "try-lock",
 ]
 
@@ -8047,7 +8046,7 @@ dependencies = [
  "sdp",
  "serde",
  "serde_json",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "stun",
  "thiserror",
  "time",
@@ -8110,7 +8109,7 @@ dependencies = [
  "sec1 0.3.0",
  "serde",
  "sha1",
- "sha2 0.10.6",
+ "sha2 0.10.7",
  "signature 1.6.4",
  "subtle",
  "thiserror",
@@ -8581,7 +8580,7 @@ dependencies = [
 name = "xtask"
 version = "0.0.0"
 dependencies = [
- "clap 4.3.3",
+ "clap 4.3.4",
  "fuel-core",
 ]
 
