@@ -31,6 +31,11 @@ pub type RelayerService = fuel_core_relayer::Service<Database>;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database>;
 pub type TxPoolService = fuel_core_txpool::Service<P2PAdapter, Database>;
+pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
+    Database,
+    TxPoolAdapter,
+    ExecutorAdapter,
+>;
 pub type GraphQL = crate::fuel_core_graphql_api::service::Service;
 
 pub fn init_sub_services(
@@ -115,7 +120,7 @@ pub fn init_sub_services(
     let block_producer = fuel_core_producer::Producer {
         config: config.block_producer.clone(),
         db: database.clone(),
-        txpool: Box::new(tx_pool_adapter.clone()),
+        txpool: tx_pool_adapter.clone(),
         executor: Arc::new(executor),
         relayer: Box::new(relayer_adapter),
         lock: Mutex::new(()),

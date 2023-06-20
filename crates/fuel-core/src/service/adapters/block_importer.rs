@@ -35,7 +35,7 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
     services::executor::{
-        ExecutionBlock,
+        ExecutionTypes,
         Result as ExecutorResult,
         UncommittedResult as UncommittedExecutionResult,
     },
@@ -133,9 +133,9 @@ impl Executor for ExecutorAdapter {
 
     fn execute_without_commit(
         &self,
-        block: ExecutionBlock,
+        block: Block,
     ) -> ExecutorResult<UncommittedExecutionResult<StorageTransaction<Self::Database>>>
     {
-        self._execute_without_commit(block)
+        self._execute_without_commit(ExecutionTypes::Validation(block))
     }
 }

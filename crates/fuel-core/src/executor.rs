@@ -97,6 +97,7 @@ use fuel_core_types::{
         PredicateStorage,
     },
     services::{
+        block_producer::Components,
         executor::{
             Error as ExecutorError,
             ExecutionBlock,
@@ -113,8 +114,7 @@ use fuel_core_types::{
         txpool::TransactionStatus,
     },
 };
-use itertools::Itertools;
-pub use ports::RelayerPort;
+use parking_lot::Mutex as ParkingMutex;
 use std::{
     borrow::Cow,
     ops::{
@@ -128,7 +128,33 @@ use tracing::{
     warn,
 };
 
+pub use ports::{
+    RelayerPort,
+    TransactionsSource,
+};
+
 mod ports;
+
+pub type ExecutionBlockWithSource<TxSource> = ExecutionTypes<Components<TxSource>, Block>;
+
+pub struct OnceTransactionsSource {
+    transactions: ParkingMutex<Vec<Transaction>>,
+}
+
+impl OnceTransactionsSource {
+    pub fn new(transactions: Vec<Transaction>) -> Self {
+        Self {
+            transactions: ParkingMutex::new(transactions),
+        }
+    }
+}
+
+impl TransactionsSource for OnceTransactionsSource {
+    fn next(&self, _: u64) -> Vec<Transaction> {
+        let mut lock = self.transactions.lock();
+        core::mem::take(lock.as_mut())
+    }
+}
 
 /// ! The executor is used for block production and validation. Given a block, it will execute all
 /// the transactions contained in the block and persist changes to the underlying database as needed.
@@ -147,6 +173,7 @@ where
 /// Data that is generated after executing all transactions.
 struct ExecutionData {
     coinbase: u64,
+    used_gas: u64,
     message_ids: Vec<MessageId>,
     tx_status: Vec<TransactionExecutionStatus>,
     skipped_transactions: Vec<(Transaction, ExecutorError)>,
@@ -186,11 +213,20 @@ where
         block: ExecutionBlock,
         options: ExecutionOptions,
     ) -> ExecutorResult<ExecutionResult> {
-        if block.to_kind() == ExecutionKind::DryRun {
-            panic!("It is not possible to commit the dry run result");
-        }
+        let component = match block {
+            ExecutionBlock::DryRun(block) => {
+                panic!("It is not possible to commit the dry run result");
+            }
+            ExecutionBlock::Production(block) => ExecutionTypes::Production(Components {
+                header_to_produce: block.header,
+                transactions_source: OnceTransactionsSource::new(block.transactions),
+                gas_limit: u64::MAX,
+            }),
+            ExecutionBlock::Validation(block) => ExecutionTypes::Validation(block),
+        };
+
         let (result, db_transaction) =
-            self.execute_without_commit(block, options)?.into();
+            self.execute_without_commit(component, options)?.into();
         db_transaction.commit()?;
         Ok(result)
     }
@@ -211,17 +247,20 @@ impl<R> Executor<R>
 where
     R: RelayerPort + Clone,
 {
-    pub fn execute_without_commit(
+    pub fn execute_without_commit<TxSource>(
         &self,
-        block: ExecutionBlock,
+        block: ExecutionBlockWithSource<TxSource>,
         options: ExecutionOptions,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>>
+    where
+        TxSource: TransactionsSource,
+    {
         self.execute_inner(block, &self.database, options)
     }
 
     pub fn dry_run(
         &self,
-        block: ExecutionBlock,
+        component: Components<Transaction>,
         utxo_validation: Option<bool>,
     ) -> ExecutorResult<Vec<Vec<Receipt>>> {
         // fallback to service config value if no utxo_validation override is provided
@@ -230,6 +269,14 @@ where
 
         let options = ExecutionOptions { utxo_validation };
 
+        let component = Components {
+            header_to_produce: component.header_to_produce,
+            transactions_source: OnceTransactionsSource::new(vec![
+                component.transactions_source,
+            ]),
+            gas_limit: component.gas_limit,
+        };
+
         let (
             ExecutionResult {
                 block,
@@ -237,7 +284,9 @@ where
                 ..
             },
             temporary_db,
-        ) = self.execute_without_commit(block, options)?.into();
+        ) = executor
+            .execute_without_commit(ExecutionTypes::DryRun(component), options)?
+            .into();
 
         // If one of the transactions fails, return an error.
         if let Some((_, err)) = skipped_transactions.into_iter().next() {
@@ -260,52 +309,134 @@ where
     }
 }
 
+mod private {
+    use super::*;
+
+    pub struct PartialBlockComponent<'a, TxSource> {
+        pub empty_block: &'a mut PartialFuelBlock,
+        pub transactions_source: TxSource,
+        pub gas_limit: u64,
+        /// The private marker to allow creation of the type only by constructor.
+        _marker: core::marker::PhantomData<()>,
+    }
+
+    impl<'a> PartialBlockComponent<'a, OnceTransactionsSource> {
+        pub fn from_partial_block(block: &'a mut PartialFuelBlock) -> Self {
+            let transaction = core::mem::take(&mut block.transactions);
+            Self {
+                empty_block: block,
+                transactions_source: OnceTransactionsSource::new(transaction),
+                gas_limit: u64::MAX,
+                _marker: Default::default(),
+            }
+        }
+    }
+
+    impl<'a, TxSource> PartialBlockComponent<'a, TxSource> {
+        pub fn from_component(
+            block: &'a mut PartialFuelBlock,
+            transactions_source: TxSource,
+            gas_limit: u64,
+        ) -> Self {
+            debug_assert!(block.transactions.is_empty());
+            PartialBlockComponent {
+                empty_block: block,
+                transactions_source,
+                gas_limit,
+                _marker: Default::default(),
+            }
+        }
+    }
+}
+use private::*;
+
 impl<R> Executor<R>
 where
     R: RelayerPort + Clone,
 {
     #[tracing::instrument(skip_all)]
-    fn execute_inner(
+    fn execute_inner<TxSource>(
         &self,
-        block: ExecutionBlock,
+        block: ExecutionBlockWithSource<TxSource>,
         database: &Database,
         options: ExecutionOptions,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>>
+    where
+        TxSource: TransactionsSource,
+    {
         // Compute the block id before execution if there is one.
         let pre_exec_block_id = block.id();
 
         // If there is full fuel block for validation then map it into
         // a partial header.
-        let mut block = block.map_v(PartialFuelBlock::from);
+        let block = block.map_v(PartialFuelBlock::from);
 
         // Create a new database transaction.
         let mut block_db_transaction = database.transaction();
 
-        // Execute all transactions.
-        let execution_data = self.execute_transactions(
-            &mut block_db_transaction,
-            block.as_mut(),
-            options,
-        )?;
+        let (block, execution_data) = match block {
+            ExecutionTypes::DryRun(component) => {
+                let mut block =
+                    PartialFuelBlock::new(component.header_to_produce, vec![]);
+                let component = PartialBlockComponent::from_component(
+                    &mut block,
+                    component.transactions_source,
+                    component.gas_limit,
+                );
+
+                let execution_data = self.execute_transactions(
+                    &mut block_db_transaction,
+                    ExecutionType::DryRun(component),
+                    options,
+                )?;
+                (block, execution_data)
+            }
+            ExecutionTypes::Production(component) => {
+                let mut block =
+                    PartialFuelBlock::new(component.header_to_produce, vec![]);
+                let component = PartialBlockComponent::from_component(
+                    &mut block,
+                    component.transactions_source,
+                    component.gas_limit,
+                );
+
+                let execution_data = self.execute_transactions(
+                    &mut block_db_transaction,
+                    ExecutionType::Production(component),
+                    options,
+                )?;
+                (block, execution_data)
+            }
+            ExecutionTypes::Validation(mut block) => {
+                let component = PartialBlockComponent::from_partial_block(&mut block);
+                let execution_data = self.execute_transactions(
+                    &mut block_db_transaction,
+                    ExecutionType::Validation(component),
+                    options,
+                )?;
+                (block, execution_data)
+            }
+        };
 
         let ExecutionData {
             coinbase,
+            used_gas,
             message_ids,
             tx_status,
             skipped_transactions,
         } = execution_data;
 
         // Now that the transactions have been executed, generate the full header.
-        let block = block
-            .map(|b: PartialFuelBlock| b.generate(&message_ids[..]))
-            .into_inner();
+
+        let block = block.generate(&message_ids[..]);
 
         let finalized_block_id = block.id();
 
         debug!(
-            "Block {:#x} fees: {}",
+            "Block {:#x} fees: {} gas: {}",
             pre_exec_block_id.unwrap_or(finalized_block_id),
-            coinbase
+            coinbase,
+            used_gas
         );
 
         // check if block id doesn't match proposed block id
@@ -352,14 +483,18 @@ where
 
     #[tracing::instrument(skip_all)]
     /// Execute all transactions on the fuel block.
-    fn execute_transactions(
+    fn execute_transactions<TxSource>(
         &self,
         block_db_transaction: &mut DatabaseTransaction,
-        block: ExecutionType<&mut PartialFuelBlock>,
+        block: ExecutionType<PartialBlockComponent<TxSource>>,
         options: ExecutionOptions,
-    ) -> ExecutorResult<ExecutionData> {
+    ) -> ExecutorResult<ExecutionData>
+    where
+        TxSource: TransactionsSource,
+    {
         let mut data = ExecutionData {
             coinbase: 0,
+            used_gas: 0,
             message_ids: Vec::new(),
             tx_status: Vec::new(),
             skipped_transactions: Vec::new(),
@@ -367,12 +502,17 @@ where
         let execution_data = &mut data;
 
         // Split out the execution kind and partial block.
-        let (execution_kind, block) = block.split();
+        let (execution_kind, component) = block.split();
+        let block = component.empty_block;
+        let source = component.transactions_source;
+        let mut remaining_gas_limit = component.gas_limit;
 
         let block_height = *block.header.height();
 
-        // Clean block from transactions and gather them from scratch.
-        let mut iter = ::core::mem::take(&mut block.transactions).into_iter();
+        // ALl transactions should be in the `TxSource`.
+        // We use `block.transactions` to store executed transactions.
+        debug_assert!(block.transactions.is_empty());
+        let mut iter = source.next(remaining_gas_limit).into_iter().peekable();
 
         let mut coinbase_tx: Mint = match execution_kind {
             ExecutionKind::DryRun => Default::default(),
@@ -406,8 +546,8 @@ where
             0
         };
 
-        let mut filtered_transactions: Vec<_> = iter
-            .filter_map(|transaction| {
+        while iter.peek().is_some() {
+            for transaction in iter {
                 let mut filter_tx = |mut tx, idx| {
                     let mut tx_db_transaction = block_db_transaction.transaction();
                     let result = self.execute_transaction(
@@ -446,12 +586,18 @@ where
                 };
 
                 let filtered_tx = filter_tx(transaction, tx_index);
-                if filtered_tx.is_some() {
+                if let Some(result) = filtered_tx {
+                    let tx = result?;
                     tx_index += 1;
+                    block.transactions.push(tx);
                 }
-                filtered_tx
-            })
-            .try_collect()?;
+            }
+
+            remaining_gas_limit =
+                component.gas_limit.saturating_sub(execution_data.used_gas);
+
+            iter = source.next(remaining_gas_limit).into_iter().peekable();
+        }
 
         // After the execution of all transactions in production mode, we can set the final fee.
         if execution_kind == ExecutionKind::Production {
@@ -463,7 +609,6 @@ where
             ));
             block.transactions[0] = coinbase_tx.clone().into();
         }
-        block.transactions.append(&mut filtered_transactions);
 
         if execution_kind != ExecutionKind::DryRun {
             coinbase_tx = self.check_coinbase(
@@ -695,7 +840,7 @@ where
         }
 
         // update block commitment
-        let tx_fee =
+        let (used_gas, tx_fee) =
             self.total_fee_paid(min_fee, max_fee, tx.price(), vm_result.receipts())?;
 
         // Check or set the executed transaction.
@@ -782,6 +927,7 @@ where
             .coinbase
             .checked_add(tx_fee)
             .ok_or(ExecutorError::FeeOverflow)?;
+        execution_data.used_gas = execution_data.used_gas.saturating_add(used_gas);
         // queue up status for this tx to be stored once block id is finalized.
         execution_data.tx_status.push(TransactionExecutionStatus {
             id: tx_id,
@@ -987,20 +1133,24 @@ where
         max_fee: u64,
         gas_price: u64,
         receipts: &[Receipt],
-    ) -> ExecutorResult<Word> {
+    ) -> ExecutorResult<(Word, Word)> {
+        let mut used_gas = 0;
         for r in receipts {
             if let Receipt::ScriptResult { gas_used, .. } = r {
-                return TransactionFee::gas_refund_value(
+                used_gas = *gas_used;
+                let fee = TransactionFee::gas_refund_value(
                     &self.config.transaction_parameters,
-                    *gas_used,
+                    used_gas,
                     gas_price,
                 )
                 .and_then(|refund| max_fee.checked_sub(refund))
-                .ok_or(ExecutorError::FeeOverflow)
+                .ok_or(ExecutorError::FeeOverflow)?;
+
+                return Ok((used_gas, fee))
             }
         }
         // if there's no script result (i.e. create) then fee == base amount
-        Ok(min_fee)
+        Ok((used_gas, min_fee))
     }
 
     /// Computes all zeroed or variable inputs.
@@ -2235,7 +2385,9 @@ mod tests {
         } = producer
             .execute_transactions(
                 &mut block_db_transaction,
-                ExecutionType::Production(&mut block),
+                ExecutionType::Production(PartialBlockComponent::from_partial_block(
+                    &mut block,
+                )),
                 Default::default(),
             )
             .unwrap();
@@ -2250,7 +2402,9 @@ mod tests {
         verifier
             .execute_transactions(
                 &mut block_db_transaction,
-                ExecutionType::Validation(&mut block),
+                ExecutionType::Validation(PartialBlockComponent::from_partial_block(
+                    &mut block,
+                )),
                 Default::default(),
             )
             .unwrap();
@@ -2260,7 +2414,9 @@ mod tests {
         let mut block_db_transaction = verifier.database.transaction();
         let verify_result = verifier.execute_transactions(
             &mut block_db_transaction,
-            ExecutionType::Validation(&mut block),
+            ExecutionType::Validation(PartialBlockComponent::from_partial_block(
+                &mut block,
+            )),
             Default::default(),
         );
         assert!(matches!(
@@ -2290,7 +2446,9 @@ mod tests {
         } = producer
             .execute_transactions(
                 &mut block_db_transaction,
-                ExecutionType::Production(&mut block),
+                ExecutionType::Production(PartialBlockComponent::from_partial_block(
+                    &mut block,
+                )),
                 Default::default(),
             )
             .unwrap();
@@ -2305,7 +2463,9 @@ mod tests {
         verifier
             .execute_transactions(
                 &mut block_db_transaction,
-                ExecutionType::Validation(&mut block),
+                ExecutionType::Validation(PartialBlockComponent::from_partial_block(
+                    &mut block,
+                )),
                 Default::default(),
             )
             .unwrap();
@@ -2315,7 +2475,9 @@ mod tests {
         let mut block_db_transaction = verifier.database.transaction();
         let verify_result = verifier.execute_transactions(
             &mut block_db_transaction,
-            ExecutionType::Validation(&mut block.clone()),
+            ExecutionType::Validation(PartialBlockComponent::from_partial_block(
+                &mut block,
+            )),
             Default::default(),
         );
         assert!(matches!(
@@ -2370,10 +2532,10 @@ mod tests {
         } = producer
             .execute_transactions(
                 &mut block_db_transaction,
-                ExecutionType::Production(&mut block),
-                ExecutionOptions {
-                    utxo_validation: true,
-                },
+                ExecutionType::Production(PartialBlockComponent::from_partial_block(
+                    &mut block,
+                )),
+                Default::default(),
             )
             .unwrap();
         let produce_result = &skipped_transactions[0].1;
@@ -2389,10 +2551,10 @@ mod tests {
         verifier
             .execute_transactions(
                 &mut block_db_transaction,
-                ExecutionType::Validation(&mut block),
-                ExecutionOptions {
-                    utxo_validation: true,
-                },
+                ExecutionType::Validation(PartialBlockComponent::from_partial_block(
+                    &mut block,
+                )),
+                Default::default(),
             )
             .unwrap();
 
@@ -2401,10 +2563,10 @@ mod tests {
         let mut block_db_transaction = verifier.database.transaction();
         let verify_result = verifier.execute_transactions(
             &mut block_db_transaction,
-            ExecutionType::Validation(&mut block),
-            ExecutionOptions {
-                utxo_validation: true,
-            },
+            ExecutionType::Validation(PartialBlockComponent::from_partial_block(
+                &mut block,
+            )),
+            Default::default(),
         );
         assert!(matches!(
             verify_result,
@@ -3698,7 +3860,9 @@ mod tests {
         } = exec
             .execute_transactions(
                 &mut block_db_transaction,
-                ExecutionType::Production(&mut block),
+                ExecutionType::Production(PartialBlockComponent::from_partial_block(
+                    &mut block,
+                )),
                 ExecutionOptions {
                     utxo_validation: true,
                 },
@@ -3719,7 +3883,9 @@ mod tests {
         let mut block_db_transaction = exec.database.transaction();
         exec.execute_transactions(
             &mut block_db_transaction,
-            ExecutionType::Validation(&mut block),
+            ExecutionType::Validation(PartialBlockComponent::from_partial_block(
+                &mut block,
+            )),
             ExecutionOptions {
                 utxo_validation: true,
             },
@@ -3732,7 +3898,9 @@ mod tests {
         let mut block_db_transaction = exec.database.transaction();
         let res = exec.execute_transactions(
             &mut block_db_transaction,
-            ExecutionType::Validation(&mut block),
+            ExecutionType::Validation(PartialBlockComponent::from_partial_block(
+                &mut block,
+            )),
             ExecutionOptions {
                 utxo_validation: true,
             },

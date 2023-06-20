@@ -683,7 +683,7 @@ async fn sorted_out_tx1_2_4() {
         .insert_inner(tx3.clone())
         .expect("Tx4 should be Ok, got Err");
 
-    let txs = txpool.sorted_includable();
+    let txs = txpool.sorted_includable().collect::<Vec<_>>();
 
     assert_eq!(txs.len(), 3, "Should have 3 txs");
     assert_eq!(

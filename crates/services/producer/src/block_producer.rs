@@ -1,6 +1,5 @@
 use crate::{
     ports,
-    ports::BlockProducerDatabase,
     Config,
 };
 use anyhow::{
@@ -10,7 +9,6 @@ use anyhow::{
 use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
     blockchain::{
-        block::PartialFuelBlock,
         header::{
             ApplicationHeader,
             ConsensusHeader,
@@ -27,9 +25,9 @@ use fuel_core_types::{
         BlockHeight,
         Bytes32,
     },
-    services::executor::{
-        ExecutionBlock,
-        UncommittedResult,
+    services::{
+        block_producer::Components,
+        executor::UncommittedResult,
     },
     tai64::Tai64,
 };
@@ -56,20 +54,23 @@ pub enum Error {
     },
 }
 
-pub struct Producer<Database> {
+pub struct Producer<Database, TxPool, Executor> {
     pub config: Config,
     pub db: Database,
-    pub txpool: Box<dyn ports::TxPool>,
-    pub executor: Arc<dyn ports::Executor<Database>>,
+    pub txpool: TxPool,
+    pub executor: Arc<Executor>,
     pub relayer: Box<dyn ports::Relayer>,
     // use a tokio lock since we want callers to yield until the previous block
     // execution has completed (which may take a while).
     pub lock: Mutex<()>,
 }
 
-impl<Database> Producer<Database>
+impl<Database, TxPool, Executor, ExecutorDB, TxSource>
+    Producer<Database, TxPool, Executor>
 where
-    Database: BlockProducerDatabase + 'static,
+    Database: ports::BlockProducerDatabase + 'static,
+    TxPool: ports::TxPool<TxSource = TxSource> + 'static,
+    Executor: ports::Executor<Database = ExecutorDB, TxSource = TxSource> + 'static,
 {
     /// Produces and execute block for the specified height
     pub async fn produce_and_execute_block(
@@ -77,7 +78,7 @@ where
         height: BlockHeight,
         block_time: Tai64,
         max_gas: Word,
-    ) -> anyhow::Result<UncommittedResult<StorageTransaction<Database>>> {
+    ) -> anyhow::Result<UncommittedResult<StorageTransaction<ExecutorDB>>> {
         //  - get previous block info (hash, root, etc)
         //  - select best da_height from relayer
         //  - get available txs from txpool
@@ -89,23 +90,22 @@ where
         // prevent simultaneous block production calls, the guard will drop at the end of this fn.
         let _production_guard = self.lock.lock().await;
 
-        let best_transactions = self.txpool.get_includable_txs(height, max_gas);
+        let source = self.txpool.get_source(height);
 
         let header = self.new_header(height, block_time).await?;
-        let block = PartialFuelBlock::new(
-            header,
-            best_transactions
-                .into_iter()
-                .map(|tx| tx.as_ref().into())
-                .collect(),
-        );
+
+        let component = Components {
+            header_to_produce: header,
+            transactions_source: source,
+            gas_limit: max_gas,
+        };
 
         // Store the context string incase we error.
         let context_string =
-            format!("Failed to produce block {block:?} due to execution failure");
+            format!("Failed to produce block {height:?} due to execution failure");
         let result = self
             .executor
-            .execute_without_commit(ExecutionBlock::Production(block))
+            .execute_without_commit(component)
             .context(context_string)?;
 
         debug!("Produced block with result: {:?}", result.result());
@@ -134,15 +134,18 @@ where
         // It is deterministic from the result perspective, plus it is more performant
         // because we don't need to wait for the relayer to sync.
         let header = self._new_header(height, Tai64::now())?;
-        let block =
-            PartialFuelBlock::new(header, vec![transaction].into_iter().collect());
+        let component = Components {
+            header_to_produce: header,
+            transactions_source: transaction,
+            gas_limit: u64::MAX,
+        };
 
         let executor = self.executor.clone();
         // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
         let res: Vec<_> =
             tokio_rayon::spawn_fifo(move || -> anyhow::Result<Vec<Receipt>> {
                 Ok(executor
-                    .dry_run(ExecutionBlock::DryRun(block), utxo_validation)?
+                    .dry_run(component, utxo_validation)?
                     .into_iter()
                     .flatten()
                     .collect())
@@ -155,9 +158,9 @@ where
     }
 }
 
-impl<Database> Producer<Database>
+impl<Database, TxPool, Executor> Producer<Database, TxPool, Executor>
 where
-    Database: BlockProducerDatabase,
+    Database: ports::BlockProducerDatabase,
 {
     /// Create the header for a new block at the provided height
     async fn new_header(

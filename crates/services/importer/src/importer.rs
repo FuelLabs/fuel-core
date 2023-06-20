@@ -28,10 +28,7 @@ use fuel_core_types::{
             UncommittedResult,
         },
         executor,
-        executor::{
-            ExecutionBlock,
-            ExecutionResult,
-        },
+        executor::ExecutionResult,
         Uncommitted,
     },
 };
@@ -281,7 +278,7 @@ where
             db_tx,
         ) = self
             .executor
-            .execute_without_commit(ExecutionBlock::Validation(block))
+            .execute_without_commit(block)
             .map_err(Error::FailedExecution)?
             .into();
 
