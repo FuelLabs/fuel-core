@@ -162,7 +162,11 @@ where
 
             result = self.committed_block_stream.next() => {
                 if let Some(result) = result {
-                    self.shared.txpool.lock().block_update(&self.shared.tx_status_sender, &result.sealed_block);
+                    let block = result.sealed_block.entity.compress();
+                    self.shared.txpool.lock().block_update(
+                        &self.shared.tx_status_sender,
+                        block.transactions()
+                    );
                     should_continue = true;
                 } else {
                     should_continue = false;

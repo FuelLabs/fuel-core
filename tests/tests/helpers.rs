@@ -45,6 +45,7 @@ pub struct TestSetupBuilder {
     pub contracts: HashMap<ContractId, ContractConfig>,
     pub initial_coins: Vec<CoinConfig>,
     pub min_gas_price: u64,
+    pub gas_limit: u64,
 }
 
 impl TestSetupBuilder {
@@ -125,7 +126,7 @@ impl TestSetupBuilder {
 
     // setup chainspec and spin up a fuel-node
     pub async fn finalize(&mut self) -> TestContext {
-        let chain_config = ChainConfig {
+        let mut chain_config = ChainConfig {
             initial_state: Some(StateConfig {
                 coins: Some(self.initial_coins.clone()),
                 contracts: Some(self.contracts.values().cloned().collect_vec()),
@@ -133,6 +134,8 @@ impl TestSetupBuilder {
             }),
             ..ChainConfig::local_testnet()
         };
+        chain_config.transaction_parameters.max_gas_per_tx = self.gas_limit;
+        chain_config.block_gas_limit = self.gas_limit;
         let utxo_validation = true;
         let config = Config {
             utxo_validation,
@@ -164,6 +167,7 @@ impl Default for TestSetupBuilder {
             contracts: Default::default(),
             initial_coins: vec![],
             min_gas_price: 0,
+            gas_limit: u64::MAX,
         }
     }
 }
