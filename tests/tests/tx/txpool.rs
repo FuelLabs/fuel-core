@@ -29,7 +29,6 @@ async fn txs_max_gas_limit() {
     test_builder.gas_limit = MAX_GAS_LIMIT;
     // initialize 10 random transactions that transfer coins
     let transactions = (1..=10)
-        .into_iter()
         .map(|i| {
             TransactionBuilder::script(
                 op::ret(RegId::ONE).to_bytes().into_iter().collect(),

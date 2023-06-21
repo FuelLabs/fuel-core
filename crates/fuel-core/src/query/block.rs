@@ -59,7 +59,6 @@ impl BlockQueryContext<'_> {
     ) -> impl Iterator<Item = StorageResult<CompressedBlock>> + '_ {
         let db = self.0;
         db.blocks_ids(start.map(Into::into), direction)
-            .into_iter()
             .map(|result| {
                 result.and_then(|(_, id)| {
                     let block = self.block(&id)?;
