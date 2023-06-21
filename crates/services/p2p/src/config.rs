@@ -1,12 +1,5 @@
 use crate::{
-    gossipsub::{
-        config::default_gossipsub_config,
-        topics::{
-            CON_VOTE_GOSSIP_TOPIC,
-            NEW_BLOCK_GOSSIP_TOPIC,
-            NEW_TX_GOSSIP_TOPIC,
-        },
-    },
+    gossipsub::config::default_gossipsub_config,
     heartbeat::HeartbeatConfig,
     peer_manager::ConnectionState,
 };
@@ -123,9 +116,8 @@ pub struct Config<State = Initialized> {
     /// and the next outbound ping
     pub info_interval: Option<Duration>,
 
-    // `Gossipsub` config and topics
+    // `Gossipsub` config
     pub gossipsub_config: GossipsubConfig,
-    pub topics: Vec<String>,
 
     pub heartbeat_config: HeartbeatConfig,
 
@@ -176,7 +168,6 @@ impl Config<NotInitialized> {
             identify_interval: self.identify_interval,
             info_interval: self.info_interval,
             gossipsub_config: self.gossipsub_config,
-            topics: self.topics,
             heartbeat_config: self.heartbeat_config,
             set_request_timeout: self.set_request_timeout,
             set_connection_keep_alive: self.set_connection_keep_alive,
@@ -217,11 +208,6 @@ impl Config<NotInitialized> {
             connection_idle_timeout: Some(Duration::from_secs(120)),
             reserved_nodes: vec![],
             reserved_nodes_only_mode: false,
-            topics: vec![
-                NEW_TX_GOSSIP_TOPIC.into(),
-                NEW_BLOCK_GOSSIP_TOPIC.into(),
-                CON_VOTE_GOSSIP_TOPIC.into(),
-            ],
             gossipsub_config: default_gossipsub_config(),
             heartbeat_config: HeartbeatConfig::default(),
             set_request_timeout: REQ_RES_TIMEOUT,
