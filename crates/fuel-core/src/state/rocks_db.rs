@@ -73,7 +73,7 @@ impl RocksDb {
         opts.create_if_missing(true);
         opts.set_compression_type(DBCompressionType::Lz4);
         if let Some(capacity) = capacity {
-            let cache = Cache::new_lru_cache(capacity).unwrap();
+            let cache = Cache::new_lru_cache(capacity);
             opts.set_row_cache(&cache);
         }
 
