@@ -149,7 +149,7 @@ async fn test_partitions_larger_groups(
                 .with_txs(num_txs)
                 .with_name(format!("{pub_key}:producer")),
         )],
-        (0..num_validators).into_iter().map(|i| {
+        (0..num_validators).map(|i| {
             Some(ValidatorSetup::new(pub_key).with_name(format!("{pub_key}:{i}")))
         }),
     )
