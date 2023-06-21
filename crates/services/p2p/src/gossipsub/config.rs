@@ -42,7 +42,7 @@ const SLOT: Duration = Duration::from_secs(6);
 const EPOCH: Duration = Duration::from_secs(SLOTS_PER_EPOCH * SLOT.as_secs());
 
 // The factor by which scores decay towards zero in the scoring mechanism. Scores are reduced by this factor at each decay interval.
-const DECAY_TO_ZERO: f64 = 0.01;
+const DECAY_TO_ZERO: f64 = 0.8;
 
 // The time interval at which scores decay, set equal to the duration of one slot.
 const DECAY_INTERVAL: Duration = SLOT;
