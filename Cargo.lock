@@ -2483,7 +2483,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2553,7 +2553,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-bft"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "anyhow",
  "parking_lot 0.12.1",
@@ -2562,7 +2562,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-bin"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "anyhow",
  "clap 4.2.4",
@@ -2583,7 +2583,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-chain-config"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "anyhow",
  "bech32 0.9.1",
@@ -2602,7 +2602,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-client"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "anyhow",
  "cynic",
@@ -2625,7 +2625,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-client-bin"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "clap 4.2.4",
  "fuel-core-client",
@@ -2636,7 +2636,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-consensus-module"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "anyhow",
  "fuel-core-chain-config",
@@ -2648,7 +2648,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-database"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "anyhow",
  "fuel-core-storage",
@@ -2659,7 +2659,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-e2e-client"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2683,7 +2683,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-executor"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "anyhow",
  "fuel-core-chain-config",
@@ -2694,7 +2694,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-importer"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "anyhow",
  "fuel-core-storage",
@@ -2709,7 +2709,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-keygen"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "anyhow",
  "clap 4.2.4",
@@ -2720,7 +2720,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-metrics"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "axum",
  "lazy_static",
@@ -2731,7 +2731,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-p2p"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2773,7 +2773,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-poa"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2791,7 +2791,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-producer"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2808,7 +2808,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-relayer"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2836,7 +2836,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-services"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2849,7 +2849,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-storage"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "anyhow",
  "fuel-core-types",
@@ -2860,7 +2860,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-sync"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2903,7 +2903,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-trace"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "ctor",
  "tracing",
@@ -2913,7 +2913,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-txpool"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2935,7 +2935,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-types"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "anyhow",
  "derive_more",
