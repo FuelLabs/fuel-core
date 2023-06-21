@@ -199,7 +199,7 @@ where
                         }
                     }
                     Some(TaskRequest::GetPeerIds(channel)) => {
-                        let peer_ids = self.p2p_service.get_peers_ids().into_iter().copied().collect();
+                        let peer_ids = self.p2p_service.get_peers_ids().copied().collect();
                         let _ = channel.send(peer_ids);
                     }
                     Some(TaskRequest::GetBlock { height, channel }) => {

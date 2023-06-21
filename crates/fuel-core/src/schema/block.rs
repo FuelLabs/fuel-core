@@ -326,7 +326,6 @@ fn get_time_closure(
         let interval: u64 = params.block_time_interval.into();
 
         let vec = (0..blocks_to_produce)
-            .into_iter()
             .map(|idx| {
                 let (timestamp, _) = params
                     .start_time
