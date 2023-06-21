@@ -39,7 +39,7 @@ pub trait BlockProducerDatabase: Send + Sync {
 
 #[async_trait]
 pub trait TxPool: Send + Sync {
-    /// The source of the transactions used by hte executor.
+    /// The source of the transactions used by the executor.
     type TxSource;
 
     /// Returns teh source of includable transactions.
