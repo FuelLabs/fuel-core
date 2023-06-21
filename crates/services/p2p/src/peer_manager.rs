@@ -32,8 +32,8 @@ use tracing::{
 
 use crate::gossipsub_config::GRAYLIST_THRESHOLD;
 
-/// 50% more than the `GREYLIST_THRESHOLD`
-const MIN_GOSSIPSUB_SCORE_BEFORE_BAN: AppScore = GRAYLIST_THRESHOLD * 1.5;
+/// At this point we better just ban the peer
+const MIN_GOSSIPSUB_SCORE_BEFORE_BAN: AppScore = GRAYLIST_THRESHOLD;
 
 // Info about a single Peer that we're connected to
 #[derive(Debug, Clone)]

@@ -50,12 +50,6 @@ const DECAY_INTERVAL: Duration = SLOT;
 // The target number of peers in each gossip mesh.
 const MESH_SIZE: usize = 8;
 
-// The maximum score that a peer can receive for being in the mesh.
-const MAX_IN_MESH_SCORE: f64 = 5.0;
-
-// The maximum score that a peer can receive for first delivery of a message.
-const MAX_FIRST_MESSAGE_DELIVERIES_SCORE: f64 = 20.0;
-
 // The weight applied to the score for delivering new transactions.
 const NEW_TX_GOSSIP_WEIGHT: f64 = 0.05;
 
@@ -70,12 +64,6 @@ const CON_VOTE_GOSSIP_WEIGHT: f64 = 0.05;
 // Greylisting is a lighter form of banning, where the peer's messages might be ignored or given lower priority,
 // but the peer is not completely banned from the network.
 pub const GRAYLIST_THRESHOLD: f64 = -16000.0;
-
-// The maximum positive score a peer can achieve, determined by the maximum scores for
-// being in the mesh and for first message deliveries, weighted by the relevance of the
-// different types of gossip topics.
-const MAX_POSITIVE_SCORE: f64 = (MAX_IN_MESH_SCORE + MAX_FIRST_MESSAGE_DELIVERIES_SCORE)
-    * (NEW_TX_GOSSIP_WEIGHT + NEW_BLOCK_GOSSIP_WEIGHT + CON_VOTE_GOSSIP_WEIGHT);
 
 /// Creates `GossipsubConfigBuilder` with few of the Gossipsub values already defined
 pub fn default_gossipsub_builder() -> GossipsubConfigBuilder {
@@ -115,15 +103,7 @@ pub(crate) fn default_gossipsub_config() -> GossipsubConfig {
         .expect("valid gossipsub configuration")
 }
 
-fn initialize_topic_score_params(
-    topic_weight: f64,
-    // The expected rate of message propagation.
-    expected_message_rate: f64,
-) -> TopicScoreParams {
-    // The decay time for the first message delivered score, set to 100 times the epoch duration.
-    // This means that the score given for first message deliveries will decay over this time period.
-    let first_message_decay_time = EPOCH * 100;
-
+fn initialize_topic_score_params(topic_weight: f64) -> TopicScoreParams {
     let mut params = TopicScoreParams::default();
 
     params.topic_weight = topic_weight;
@@ -131,29 +111,25 @@ fn initialize_topic_score_params(
     // The "quantum" of time spent in the mesh, set to the duration of a slot.
     // This is the smallest unit of time for which we track a peer's presence in the mesh.
     params.time_in_mesh_quantum = SLOT;
-
     params.time_in_mesh_cap = 3600.0 / params.time_in_mesh_quantum.as_secs_f64();
-    params.time_in_mesh_weight = 10.0 / params.time_in_mesh_cap;
+    params.time_in_mesh_weight = 0.5;
 
-    params.first_message_deliveries_decay =
-        score_parameter_decay(first_message_decay_time);
+    // The decay time for the first message delivered score, set to 100 times the epoch duration.
+    // This means that the score given for first message deliveries will decay over this time period.
+    params.first_message_deliveries_decay = score_parameter_decay(EPOCH * 100);
+    params.first_message_deliveries_cap = 1000.0;
+    params.first_message_deliveries_weight = 0.5;
 
-    params.first_message_deliveries_cap = decay_convergence(
-        params.first_message_deliveries_decay,
-        2.0 * expected_message_rate / MESH_SIZE as f64,
-    );
-    params.first_message_deliveries_weight = 40.0 / params.first_message_deliveries_cap;
+    params.mesh_message_deliveries_weight = 0.0;
+    params.mesh_message_deliveries_threshold = 0.0;
+    params.mesh_message_deliveries_decay = 0.0;
+    params.mesh_message_deliveries_cap = 0.0;
+    params.mesh_message_deliveries_window = Duration::from_secs(0);
+    params.mesh_message_deliveries_activation = Duration::from_secs(0);
+    params.mesh_failure_penalty_decay = 0.0;
+    params.mesh_failure_penalty_weight = 0.0;
 
-    params.mesh_message_deliveries_weight = 0.5;
-    params.mesh_message_deliveries_threshold = expected_message_rate * 0.1; // at least 10% of expected message rate
-    params.mesh_message_deliveries_decay = 0.1;
-    params.mesh_message_deliveries_cap = MAX_POSITIVE_SCORE * 0.5;
-    params.mesh_message_deliveries_window = Duration::from_secs(60);
-    params.mesh_message_deliveries_activation = Duration::from_secs(120);
-    params.mesh_failure_penalty_decay = 0.1;
-    params.mesh_failure_penalty_weight = -0.05;
-
-    params.invalid_message_deliveries_weight = -MAX_POSITIVE_SCORE / params.topic_weight;
+    params.invalid_message_deliveries_weight = -10.0 / params.topic_weight; // -200 per invalid message
     params.invalid_message_deliveries_decay = score_parameter_decay(EPOCH * 50);
 
     params
@@ -162,10 +138,6 @@ fn initialize_topic_score_params(
 fn score_parameter_decay(decay_time: Duration) -> f64 {
     let ticks = decay_time.as_secs_f64() / DECAY_INTERVAL.as_secs_f64();
     DECAY_TO_ZERO.powf(1.0 / ticks)
-}
-
-fn decay_convergence(decay: f64, rate: f64) -> f64 {
-    rate / (1.0 - decay)
 }
 
 fn initialize_peer_score_params(thresholds: &PeerScoreThresholds) -> PeerScoreParams {
@@ -180,14 +152,12 @@ fn initialize_peer_score_params(thresholds: &PeerScoreThresholds) -> PeerScorePa
         ..Default::default()
     };
 
-    let target_value = decay_convergence(
-        params.behaviour_penalty_decay,
-        10.0 / SLOTS_PER_EPOCH as f64,
-    ) - params.behaviour_penalty_threshold;
+    let target_value =
+        params.behaviour_penalty_decay - params.behaviour_penalty_threshold;
 
     params.behaviour_penalty_weight = thresholds.gossip_threshold / target_value.powi(2);
 
-    params.topic_score_cap = MAX_POSITIVE_SCORE * 0.5;
+    params.topic_score_cap = 400.0;
     params.ip_colocation_factor_weight = -params.topic_score_cap;
 
     params
@@ -198,7 +168,7 @@ fn initialize_peer_score_thresholds() -> PeerScoreThresholds {
         gossip_threshold: -4000.0,
         publish_threshold: -8000.0,
         graylist_threshold: GRAYLIST_THRESHOLD,
-        accept_px_threshold: 100.0,
+        accept_px_threshold: 40.0,
         opportunistic_graft_threshold: 5.0,
     }
 }
@@ -241,8 +211,6 @@ pub(crate) fn build_gossipsub_behaviour(p2p_config: &Config) -> Gossipsub {
     }
 }
 
-const EXPECTED_TXS_PER_SLOT: f64 = 20.0;
-
 fn initialize_gossipsub(gossipsub: &mut Gossipsub, p2p_config: &Config) {
     let peer_score_thresholds = initialize_peer_score_thresholds();
     let peer_score_params = initialize_peer_score_params(&peer_score_thresholds);
@@ -252,32 +220,17 @@ fn initialize_gossipsub(gossipsub: &mut Gossipsub, p2p_config: &Config) {
         .expect("gossipsub initialized with peer score");
 
     let topics = vec![
-        (
-            NEW_TX_GOSSIP_TOPIC,
-            NEW_TX_GOSSIP_WEIGHT,
-            EXPECTED_TXS_PER_SLOT / SLOTS_PER_EPOCH as f64,
-        ),
-        (
-            NEW_BLOCK_GOSSIP_TOPIC,
-            NEW_BLOCK_GOSSIP_WEIGHT,
-            1.0 / SLOTS_PER_EPOCH as f64,
-        ),
-        (
-            CON_VOTE_GOSSIP_TOPIC,
-            CON_VOTE_GOSSIP_WEIGHT,
-            1.0 / SLOTS_PER_EPOCH as f64,
-        ),
+        (NEW_TX_GOSSIP_TOPIC, NEW_TX_GOSSIP_WEIGHT),
+        (NEW_BLOCK_GOSSIP_TOPIC, NEW_BLOCK_GOSSIP_WEIGHT),
+        (CON_VOTE_GOSSIP_TOPIC, CON_VOTE_GOSSIP_WEIGHT),
     ];
 
     // subscribe to gossipsub topics with the network name suffix
-    for (topic, weight, expected_message_rate) in topics {
+    for (topic, weight) in topics {
         let t: GossipTopic = Topic::new(format!("{}/{}", topic, p2p_config.network_name));
 
         gossipsub
-            .set_topic_params(
-                t.clone(),
-                initialize_topic_score_params(weight, expected_message_rate),
-            )
+            .set_topic_params(t.clone(), initialize_topic_score_params(weight))
             .expect("First time initializing Topic Score");
 
         gossipsub

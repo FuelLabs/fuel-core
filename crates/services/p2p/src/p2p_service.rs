@@ -365,6 +365,11 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         }
     }
 
+    #[cfg(test)]
+    pub fn get_peer_score(&self, peer_id: &PeerId) -> Option<f64> {
+        self.swarm.behaviour().get_peer_score(peer_id)
+    }
+
     /// Report application score
     /// If application peer score is below allowed threshold
     /// the peer is banend
@@ -665,7 +670,10 @@ mod tests {
             SealedBlock,
             SealedBlockHeader,
         },
-        fuel_tx::Transaction,
+        fuel_tx::{
+            Transaction,
+            TransactionBuilder,
+        },
         services::p2p::GossipsubMessageAcceptance,
     };
     use futures::StreamExt;
@@ -680,6 +688,7 @@ mod tests {
         Multiaddr,
         PeerId,
     };
+    use rand::Rng;
     use std::{
         collections::HashSet,
         net::{
@@ -1309,6 +1318,148 @@ mod tests {
             GossipsubMessageAcceptance::Ignore,
         )
         .await;
+    }
+
+    #[tokio::test]
+    #[instrument]
+    #[ignore]
+    async fn gossipsub_scoring_with_accapted_messages() {
+        gossipsub_scoring_tester(
+            "gossipsub_scoring_with_accapted_messages",
+            100,
+            GossipsubMessageAcceptance::Accept,
+        )
+        .await;
+    }
+
+    /// At `GRAYLIST_THRESHOLD` the node will ignore all messages from the peer
+    /// And our PeerManager will ban the peer at that point - leading to disconnect
+    #[tokio::test]
+    #[instrument]
+    #[ignore]
+    async fn gossipsub_scoring_with_rejected_messages() {
+        gossipsub_scoring_tester(
+            "gossipsub_scoring_with_rejected_messages",
+            100,
+            GossipsubMessageAcceptance::Reject,
+        )
+        .await;
+    }
+
+    /// Helper function for testing gossipsub scoring
+    /// ! Dev Note: this function runs forever, its purpose is to show the scoring in action with passage of time
+    async fn gossipsub_scoring_tester(
+        test_name: &str,
+        amount_of_msgs_per_second: usize,
+        acceptance: GossipsubMessageAcceptance,
+    ) {
+        let mut p2p_config = Config::default_initialized(test_name);
+
+        // Node A
+        let node_a_data = NodeData::random();
+        let mut node_a = node_a_data.create_service(p2p_config.clone());
+
+        // Node B
+        let node_b_data = NodeData::random();
+        p2p_config.bootstrap_nodes = vec![node_a_data.multiaddr];
+        let mut node_b = node_b_data.create_service(p2p_config.clone());
+
+        // Node C
+        p2p_config.bootstrap_nodes = vec![node_b_data.multiaddr];
+        let mut node_c = build_service_from_config(p2p_config.clone());
+
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
+
+        loop {
+            tokio::select! {
+                node_a_event = node_a.next_event() => {
+                    if let Some(FuelP2PEvent::GossipsubMessage { message_id, peer_id, .. }) = node_a_event {
+                        let msg_acceptance = to_message_acceptance(&acceptance);
+                        node_a.report_message_validation_result(&message_id, peer_id, msg_acceptance);
+                    }
+                }
+                node_b_event = node_b.next_event() => {
+                    if let Some(FuelP2PEvent::GossipsubMessage { message_id, peer_id, .. }) = node_b_event {
+                        let msg_acceptance = to_message_acceptance(&acceptance);
+                        node_b.report_message_validation_result(&message_id, peer_id, msg_acceptance);
+                    }
+                },
+                node_c_event = node_c.next_event() => {
+                    if let Some(FuelP2PEvent::GossipsubMessage { message_id, peer_id, .. }) = node_c_event {
+                        let msg_acceptance = to_message_acceptance(&acceptance);
+                        node_c.report_message_validation_result(&message_id, peer_id, msg_acceptance);
+                    }
+                },
+                _ = interval.tick() => {
+                    let mut transactions = vec![];
+                    for _ in 0..amount_of_msgs_per_second {
+                        let random_tx =
+                            TransactionBuilder::script(rand::thread_rng().gen::<[u8; 32]>().to_vec(), rand::thread_rng().gen::<[u8; 32]>().to_vec()).finalize_as_transaction();
+
+                        transactions.push(random_tx.clone());
+                        let random_tx = GossipsubBroadcastRequest::NewTx(Arc::new(random_tx));
+
+                        match rand::thread_rng().gen_range(1..=3) {
+                            1 => {
+                                // Node A sends a Transaction
+                                let _ = node_a.publish_message(random_tx);
+
+                            },
+                            2 => {
+                                // Node B sends a Transaction
+                                let _ = node_b.publish_message(random_tx);
+
+                            },
+                            3 => {
+                                // Node C sends a Transaction
+                                let _ = node_c.publish_message(random_tx);
+                            },
+                            _ => unreachable!("Random number generator is broken")
+                        }
+                    }
+
+                    let mut new_block = Block::default();
+                    *new_block.transactions_mut() = transactions;
+                    let new_block = GossipsubBroadcastRequest::NewBlock(Arc::new(new_block));
+
+                    match rand::thread_rng().gen_range(1..=3) {
+                        1 => {
+                            // Node A sends a Block
+                            let _ = node_a.publish_message(new_block);
+
+                        },
+                        2 => {
+                            // Node B sends a Block
+                            let _ = node_b.publish_message(new_block);
+
+                        },
+                        3 => {
+                            // Node C sends a Block
+                            let _ = node_c.publish_message(new_block);
+                        },
+                        _ => unreachable!("Random number generator is broken")
+                    }
+
+                    eprintln!("Node A WORLD VIEW");
+                    eprintln!("B score: {:?}", node_a.get_peer_score(&node_b.local_peer_id).unwrap());
+                    eprintln!("C score: {:?}", node_a.get_peer_score(&node_c.local_peer_id).unwrap());
+                    eprintln!();
+
+                    eprintln!("Node B WORLD VIEW");
+                    eprintln!("A score: {:?}", node_b.get_peer_score(&node_a.local_peer_id).unwrap());
+                    eprintln!("C score: {:?}", node_b.get_peer_score(&node_c.local_peer_id).unwrap());
+                    eprintln!();
+
+                    eprintln!("Node C WORLD VIEW");
+                    eprintln!("A score: {:?}", node_c.get_peer_score(&node_a.local_peer_id).unwrap());
+                    eprintln!("B score: {:?}", node_c.get_peer_score(&node_b.local_peer_id).unwrap());
+                    eprintln!();
+
+                    // never ending loop
+                    // break;
+                }
+            }
+        }
     }
 
     /// Reusable helper function for Broadcasting Gossipsub requests

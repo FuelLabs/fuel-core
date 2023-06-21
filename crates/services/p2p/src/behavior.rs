@@ -188,6 +188,11 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
     pub fn update_block_height(&mut self, block_height: BlockHeight) {
         self.peer_report.update_block_height(block_height);
     }
+
+    #[cfg(test)]
+    pub fn get_peer_score(&self, peer_id: &PeerId) -> Option<f64> {
+        self.gossipsub.peer_score(peer_id)
+    }
 }
 
 impl From<DiscoveryEvent> for FuelBehaviourEvent {
