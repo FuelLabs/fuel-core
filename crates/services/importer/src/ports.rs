@@ -12,7 +12,6 @@ use fuel_core_types::{
         },
     },
     services::executor::{
-        ExecutionBlock,
         Result as ExecutorResult,
         UncommittedResult,
     },
@@ -28,7 +27,7 @@ pub trait Executor: Send + Sync {
     /// transaction.
     fn execute_without_commit(
         &self,
-        block: ExecutionBlock,
+        block: Block,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<Self::Database>>>;
 }
 

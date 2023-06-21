@@ -14,21 +14,25 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::CompressedBlock,
+        block::{
+            Block,
+            CompressedBlock,
+        },
         primitives::{
             BlockHeight,
             DaBlockHeight,
         },
     },
+    fuel_tx,
     fuel_tx::Receipt,
     fuel_types::{
         Address,
         Bytes32,
     },
     services::{
+        block_producer::Components,
         executor::{
             Error as ExecutorError,
-            ExecutionBlock,
             ExecutionResult,
             Result as ExecutorResult,
             UncommittedResult,
@@ -69,12 +73,10 @@ pub struct MockTxPool(pub Vec<ArcPoolTx>);
 
 #[async_trait::async_trait]
 impl TxPool for MockTxPool {
-    fn get_includable_txs(
-        &self,
-        _block_height: BlockHeight,
-        _max_gas: u64,
-    ) -> Vec<ArcPoolTx> {
-        self.0.clone().into_iter().collect()
+    type TxSource = Vec<ArcPoolTx>;
+
+    fn get_source(&self, _: BlockHeight) -> Self::TxSource {
+        self.0.clone()
     }
 }
 
@@ -122,16 +124,25 @@ impl AsRef<MockDb> for MockDb {
     }
 }
 
-impl Executor<MockDb> for MockExecutor {
+fn to_block(component: Components<Vec<ArcPoolTx>>) -> Block {
+    let transactions = component
+        .transactions_source
+        .into_iter()
+        .map(|tx| tx.as_ref().into())
+        .collect();
+    Block::new(component.header_to_produce, transactions, &[])
+}
+
+impl Executor for MockExecutor {
+    type Database = MockDb;
+    /// The source of transaction used by the executor.
+    type TxSource = Vec<ArcPoolTx>;
+
     fn execute_without_commit(
         &self,
-        block: ExecutionBlock,
+        component: Components<Self::TxSource>,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<MockDb>>> {
-        let block = match block {
-            ExecutionBlock::DryRun(block) => block.generate(&[]),
-            ExecutionBlock::Production(block) => block.generate(&[]),
-            ExecutionBlock::Validation(block) => block,
-        };
+        let block = to_block(component);
         // simulate executor inserting a block
         let mut block_db = self.0.blocks.lock().unwrap();
         block_db.insert(*block.header().height(), block.compress());
@@ -147,7 +158,7 @@ impl Executor<MockDb> for MockExecutor {
 
     fn dry_run(
         &self,
-        _block: ExecutionBlock,
+        _block: Components<fuel_tx::Transaction>,
         _utxo_validation: Option<bool>,
     ) -> ExecutorResult<Vec<Vec<Receipt>>> {
         Ok(Default::default())
@@ -156,21 +167,21 @@ impl Executor<MockDb> for MockExecutor {
 
 pub struct FailingMockExecutor(pub Mutex<Option<ExecutorError>>);
 
-impl Executor<MockDb> for FailingMockExecutor {
+impl Executor for FailingMockExecutor {
+    type Database = MockDb;
+    /// The source of transaction used by the executor.
+    type TxSource = Vec<ArcPoolTx>;
+
     fn execute_without_commit(
         &self,
-        block: ExecutionBlock,
+        component: Components<Self::TxSource>,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<MockDb>>> {
         // simulate an execution failure
         let mut err = self.0.lock().unwrap();
         if let Some(err) = err.take() {
             Err(err)
         } else {
-            let block = match block {
-                ExecutionBlock::DryRun(b) => b.generate(&[]),
-                ExecutionBlock::Production(b) => b.generate(&[]),
-                ExecutionBlock::Validation(b) => b,
-            };
+            let block = to_block(component);
             Ok(UncommittedResult::new(
                 ExecutionResult {
                     block,
@@ -184,7 +195,7 @@ impl Executor<MockDb> for FailingMockExecutor {
 
     fn dry_run(
         &self,
-        _block: ExecutionBlock,
+        _block: Components<fuel_tx::Transaction>,
         _utxo_validation: Option<bool>,
     ) -> ExecutorResult<Vec<Vec<Receipt>>> {
         let mut err = self.0.lock().unwrap();

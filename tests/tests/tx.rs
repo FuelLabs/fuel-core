@@ -40,6 +40,7 @@ use std::{
 
 mod predicates;
 mod txn_status_subscription;
+mod txpool;
 mod utxo_validation;
 
 #[test]
