@@ -21,6 +21,7 @@ use fuel_core_types::{
     },
     fuel_asm::Word,
     fuel_tx::{
+        field::GasLimit,
         Receipt,
         Transaction,
     },
@@ -129,11 +130,16 @@ where
 
         let is_script = transaction.is_script();
         let header = self._new_header(height, None)?;
+        let gas_limit = match &transaction {
+            Transaction::Script(script) => *script.gas_limit(),
+            Transaction::Create(create) => *create.gas_limit(),
+            Transaction::Mint(_) => 0,
+        };
 
         let component = Components {
             header_to_produce: header,
             transactions_source: transaction,
-            gas_limit: u64::MAX,
+            gas_limit,
         };
 
         let executor = self.executor.clone();

@@ -70,7 +70,7 @@ pub trait Executor: Send + Sync {
     /// transaction.
     fn execute_without_commit(
         &self,
-        block: Components<Self::TxSource>,
+        component: Components<Self::TxSource>,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<Self::Database>>>;
 
     /// Executes the block without committing it to the database. During execution collects the
