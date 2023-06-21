@@ -18,6 +18,7 @@ use fuel_core_types::{
         Transaction,
         UniqueIdentifier,
     },
+    fuel_types::BlockHeight,
     fuel_vm::checked_transaction::{
         CheckedTransaction,
         IntoChecked,
@@ -341,13 +342,14 @@ where
     pub fn block_update(
         &mut self,
         tx_status_sender: &TxStatusChange,
+        height: &BlockHeight,
         transactions: &[TxId],
         // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
         for tx_id in transactions {
             let tx_id = *tx_id;
             let result = self.database.transaction_status(&tx_id);
-            tx_status_sender.send_complete(tx_id, block.entity.header().height(), result);
+            tx_status_sender.send_complete(tx_id, height, result);
             self.remove_committed_tx(&tx_id);
         }
     }

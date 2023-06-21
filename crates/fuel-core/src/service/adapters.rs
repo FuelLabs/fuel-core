@@ -1,13 +1,10 @@
 use crate::{
     database::Database,
-    service::{
-        sub_services::BlockProducerService,
-        Config,
-    },
+    service::sub_services::BlockProducerService,
 };
 use fuel_core_consensus_module::block_verifier::Verifier;
 use fuel_core_txpool::service::SharedState as TxPoolSharedState;
-use fuel_core_types::blockchain::primitives::BlockHeight;
+use fuel_core_types::fuel_types::BlockHeight;
 use std::sync::Arc;
 
 pub mod block_importer;

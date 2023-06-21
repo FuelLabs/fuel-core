@@ -43,7 +43,7 @@ async fn txs_max_gas_limit() {
                 1000 + i,
                 Default::default(),
                 Default::default(),
-                0,
+                Default::default(),
             )
             .add_output(Output::Change {
                 amount: 0,

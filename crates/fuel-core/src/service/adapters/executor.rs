@@ -18,6 +18,7 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::message::Message,
+    fuel_tx,
     fuel_tx::Receipt,
     fuel_types::Nonce,
     services::{
@@ -30,7 +31,7 @@ use fuel_core_types::{
 };
 
 impl crate::executor::TransactionsSource for TransactionsSource {
-    fn next(&self, gas_limit: u64) -> Vec<Transaction> {
+    fn next(&self, gas_limit: u64) -> Vec<fuel_tx::Transaction> {
         self.txpool
             .select_transactions(gas_limit)
             .iter()

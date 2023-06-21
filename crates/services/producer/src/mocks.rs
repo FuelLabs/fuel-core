@@ -14,7 +14,10 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::CompressedBlock,
+        block::{
+            Block,
+            CompressedBlock,
+        },
         primitives::DaBlockHeight,
     },
     fuel_tx,

@@ -214,7 +214,7 @@ where
         options: ExecutionOptions,
     ) -> ExecutorResult<ExecutionResult> {
         let component = match block {
-            ExecutionBlock::DryRun(block) => {
+            ExecutionBlock::DryRun(_) => {
                 panic!("It is not possible to commit the dry run result");
             }
             ExecutionBlock::Production(block) => ExecutionTypes::Production(Components {
@@ -284,7 +284,7 @@ where
                 ..
             },
             temporary_db,
-        ) = executor
+        ) = self
             .execute_without_commit(ExecutionTypes::DryRun(component), options)?
             .into();
 
@@ -2019,12 +2019,15 @@ mod tests {
 
             let producer = Executor::test(Default::default(), config);
 
-            let mut block = Block::default();
-            *block.transactions_mut() = vec![script.into()];
-
             let result = producer
                 .execute_without_commit(
-                    ExecutionBlock::DryRun(block.into()),
+                    ExecutionTypes::DryRun(Components {
+                        header_to_produce: Default::default(),
+                        transactions_source: OnceTransactionsSource::new(vec![
+                            script.into()
+                        ]),
+                        gas_limit: u64::MAX,
+                    }),
                     Default::default(),
                 )
                 .unwrap();
@@ -3640,7 +3643,9 @@ mod tests {
         } = exec
             .execute_transactions(
                 &mut block_db_transaction,
-                ExecutionType::Production(&mut block),
+                ExecutionType::Production(PartialBlockComponent::from_partial_block(
+                    &mut block,
+                )),
                 ExecutionOptions {
                     utxo_validation: true,
                 },
@@ -3701,7 +3706,9 @@ mod tests {
         } = exec
             .execute_transactions(
                 &mut block_db_transaction,
-                ExecutionType::Production(&mut block),
+                ExecutionType::Production(PartialBlockComponent::from_partial_block(
+                    &mut block,
+                )),
                 ExecutionOptions {
                     utxo_validation: true,
                 },
