@@ -4,111 +4,115 @@ use criterion::{
     criterion_main,
     Criterion,
 };
-use fuel_core::database::storage::{
-    ContractsAssetsMerkleMetadata,
-    SparseMerkleMetadata,
-};
-use fuel_core_benches::{
-    VmBench,
-    VmBenchPrepared,
+use fuel_core::database::{
+    storage::{
+        ContractsStateMerkleData,
+        ContractsStateMerkleMetadata,
+        SparseMerkleMetadata,
+    },
+    vm_database::VmDatabase,
 };
 use fuel_core_storage::{
-    transactional::Transaction,
-    ContractsAssetKey,
+    ContractsStateKey,
+    InterpreterStorage,
     StorageAsMut,
-    StorageAsRef,
-    StorageMutate,
 };
 use fuel_core_types::{
-    fuel_asm::{
-        op,
-        Instruction,
-    },
     fuel_merkle::sparse::MerkleTree,
     fuel_tx::Bytes32,
-    fuel_types::{
-        AssetId,
-        ContractId,
-    },
+    fuel_types::ContractId,
+};
+use rand::{
+    rngs::StdRng,
+    Rng,
+    SeedableRng,
 };
 use std::iter;
 
-impl From<ContractsAssetKey> for [u8; 32] {
-    fn from(value: ContractsAssetKey) -> Self {
-        value.asset_id
-    }
+fn setup(rng: &mut StdRng, db: &mut VmDatabase, contract: &ContractId, n: usize) {
+    let gen = || -> Bytes32 rng.gen();
+    let state_keys = iter::repeat_with(gen).take(n);
+    let state_values = iter::repeat_with(gen).take(n);
+    let state_key_values = state_keys.zip(state_values).into_iter();
+
+    // Insert the key-values into the database while building the Merkle tree
+    let tree: MerkleTree<ContractsStateMerkleData, _> =
+        MerkleTree::from_set(db, state_key_values).expect("Failed to setup DB");
+
+    // Create the relevant Merkle metadata generated for the key values
+    let root = tree.root();
+    let metadata = SparseMerkleMetadata { root };
+
+    let db = tree.into_storage();
+    db.storage_as_mut::<ContractsStateMerkleMetadata>()
+        .insert(&contract, &metadata)
+        .expect("Failed to create Merkle metadata");
 }
 
 fn state(c: &mut Criterion) {
-    use rand::{
-        rngs::StdRng,
-        Rng,
-        SeedableRng,
-    };
+    let mut rng = StdRng::seed_from_u64(0xF00DF00D);
+
+    let state: Bytes32 = rng.gen();
+    let value: Bytes32 = rng.gen();
 
     let mut group = c.benchmark_group("state");
 
-    let rng = &mut StdRng::seed_from_u64(0xF00DF00D);
-    let contract: ContractId = rng.gen();
-
-    let op = op::bal(0x10, 0x10, 0x11);
-
-    let input = VmBench::new(op).with_prepare_db(move |mut db| {
-        let gen = || {
-            // Generate new assets for the existing contract
-            let asset_id: AssetId = rng.gen();
-            asset_id
-        };
-
-        let n = 1_000;
-        let asset_keys = iter::repeat_with(gen).take(n);
-        let asset_values = iter::repeat(100_u32.to_be_bytes()).take(n);
-        let mut asset_key_values = asset_keys.zip(asset_values).into_iter();
-
-        // Insert the key values into the database while building the Merkle tree
-        let tree = MerkleTree::from_set(&mut db, asset_key_values)?;
-
-        // Create the relevant Merkle metadata generated for the key values
-        let root = tree.root();
-        let metadata = SparseMerkleMetadata { root };
-        db.storage_as_mut::<ContractsAssetsMerkleMetadata>()
-            .insert(&contract, &metadata)?;
-
-        Ok(db)
-    });
-
-    let mut i = input.prepare().expect("failed to prepare bench");
-
-    group.bench_function("state", move |b| {
+    group.bench_function("insert state with 0 preexisting entries", |b| {
+        let mut db = VmDatabase::default();
+        let contract: ContractId = rng.gen();
+        setup(&mut rng, &mut db, &contract, 0);
         b.iter_custom(|iters| {
-            let VmBenchPrepared {
-                vm,
-                instruction,
-                diff,
-            } = &mut i;
-            let original_db = vm.as_mut().database_mut().clone();
-            let mut db_txn = {
-                let db = vm.as_mut().database_mut();
-                let db_txn = db.transaction();
-                *db = db_txn.as_ref().clone();
-                db_txn
-            };
-
             let start = std::time::Instant::now();
             for _ in 0..iters {
-                match instruction {
-                    Instruction::CALL(call) => {
-                        let (ra, rb, rc, rd) = call.unpack();
-                        vm.prepare_call(ra, rb, rc, rd).unwrap();
-                    }
-                    _ => {
-                        black_box(vm.instruction(*instruction).unwrap());
-                    }
-                }
-                vm.reset_vm_state(diff);
+                db.merkle_contract_state_insert(&contract, &state, &value)
+                    .expect("failed to insert asset");
             }
-            db_txn.commit().unwrap();
-            *vm.as_mut().database_mut() = original_db;
+
+            start.elapsed()
+        })
+    });
+
+    group.bench_function("insert state with 1,000 preexisting entries", |b| {
+        let mut db = VmDatabase::default();
+        let contract: ContractId = rng.gen();
+        setup(&mut rng, &mut db, &contract, 1_000);
+        b.iter_custom(|iters| {
+            let start = std::time::Instant::now();
+            for _ in 0..iters {
+                db.merkle_contract_state_insert(&contract, &state, &value)
+                    .expect("failed to insert asset");
+            }
+
+            start.elapsed()
+        })
+    });
+
+    group.bench_function("insert state with 100,000 preexisting entries", |b| {
+        let mut db = VmDatabase::default();
+        let contract: ContractId = rng.gen();
+        setup(&mut rng, &mut db, &contract, 100_000);
+        b.iter_custom(|iters| {
+            let start = std::time::Instant::now();
+            for _ in 0..iters {
+                db.merkle_contract_state_insert(&contract, &state, &value)
+                    .expect("failed to insert asset");
+            }
+
+            start.elapsed()
+        })
+    });
+
+    group.bench_function("insert state with 10,000,000 preexisting entries", |b| {
+        let mut db = VmDatabase::default();
+        let contract: ContractId = rng.gen();
+        setup(&mut rng, &mut db, &contract, 10_000_000);
+        b.iter_custom(|iters| {
+            let start = std::time::Instant::now();
+            for _ in 0..iters {
+                db.merkle_contract_state_insert(&contract, &state, &value)
+                    .expect("failed to insert asset");
+            }
+
             start.elapsed()
         })
     });
