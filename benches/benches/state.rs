@@ -54,12 +54,12 @@ fn setup(db: &mut VmDatabase, contract: &ContractId, n: usize) {
         .expect("Failed to create Merkle metadata");
 }
 
-fn state(c: &mut Criterion) {
+fn state_single_contract(c: &mut Criterion) {
     let mut rng = StdRng::seed_from_u64(0xF00DF00D);
     let state: Bytes32 = rng.gen();
     let value: Bytes32 = rng.gen();
 
-    let mut group = c.benchmark_group("state");
+    let mut group = c.benchmark_group("state single contract");
 
     group.bench_function("insert state with 0 preexisting entries", |b| {
         let mut db = VmDatabase::default();
@@ -120,5 +120,83 @@ fn state(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, state);
+fn state_multiple_contracts(c: &mut Criterion) {
+    let mut rng = StdRng::seed_from_u64(0xF00DF00D);
+    let state: Bytes32 = rng.gen();
+    let value: Bytes32 = rng.gen();
+
+    let mut group = c.benchmark_group("state multiple contracts");
+
+    group.bench_function("insert state with 0 preexisting entries", |b| {
+        let mut db = VmDatabase::default();
+        for _ in 0..0 {
+            let contract: ContractId = rng.gen();
+            setup(&mut db, &contract, 1);
+        }
+        b.iter_custom(|iters| {
+            let contract: ContractId = rng.gen();
+            let start = std::time::Instant::now();
+            for _ in 0..iters {
+                db.merkle_contract_state_insert(&contract, &state, &value)
+                    .expect("failed to insert state");
+            }
+            start.elapsed()
+        })
+    });
+
+    group.bench_function("insert state with 1,000 preexisting entries", |b| {
+        let mut db = VmDatabase::default();
+        for _ in 0..1_000 {
+            let contract: ContractId = rng.gen();
+            setup(&mut db, &contract, 1);
+        }
+        b.iter_custom(|iters| {
+            let contract: ContractId = rng.gen();
+            let start = std::time::Instant::now();
+            for _ in 0..iters {
+                db.merkle_contract_state_insert(&contract, &state, &value)
+                    .expect("failed to insert state");
+            }
+            start.elapsed()
+        })
+    });
+
+    group.bench_function("insert state with 100,000 preexisting entries", |b| {
+        let mut db = VmDatabase::default();
+        for _ in 0..100_000 {
+            let contract: ContractId = rng.gen();
+            setup(&mut db, &contract, 1);
+        }
+        b.iter_custom(|iters| {
+            let contract: ContractId = rng.gen();
+            let start = std::time::Instant::now();
+            for _ in 0..iters {
+                db.merkle_contract_state_insert(&contract, &state, &value)
+                    .expect("failed to insert state");
+            }
+            start.elapsed()
+        })
+    });
+
+    group.bench_function("insert state with 10,000,000 preexisting entries", |b| {
+        let mut db = VmDatabase::default();
+        for _ in 0..10_000_000 {
+            let contract: ContractId = rng.gen();
+            setup(&mut db, &contract, 1);
+        }
+        b.iter_custom(|iters| {
+            let contract: ContractId = rng.gen();
+            let start = std::time::Instant::now();
+            for _ in 0..iters {
+                db.merkle_contract_state_insert(&contract, &state, &value)
+                    .expect("failed to insert state");
+            }
+            start.elapsed()
+        })
+    });
+
+    group.finish();
+}
+
+criterion_group!(benches, state_single_contract, state_multiple_contracts);
 criterion_main!(benches);
