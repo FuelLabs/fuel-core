@@ -13,7 +13,6 @@ use fuel_core::database::{
     vm_database::VmDatabase,
 };
 use fuel_core_storage::{
-    ContractsStateKey,
     InterpreterStorage,
     StorageAsMut,
 };
@@ -29,10 +28,16 @@ use rand::{
 };
 use std::iter;
 
-fn setup(rng: &mut StdRng, db: &mut VmDatabase, contract: &ContractId, n: usize) {
-    let gen = || -> Bytes32 rng.gen();
-    let state_keys = iter::repeat_with(gen).take(n);
-    let state_values = iter::repeat_with(gen).take(n);
+fn setup(db: &mut VmDatabase, contract: &ContractId, n: usize) {
+    let mut rng_keys = StdRng::seed_from_u64(0xF00DF00D);
+    let gen_keys = || -> Bytes32 { rng_keys.gen() };
+    let state_keys = iter::repeat_with(gen_keys).take(n);
+
+    let mut rng_values = StdRng::seed_from_u64(0xF00DF00D);
+    let gen_values = || -> Bytes32 { rng_values.gen() };
+    let state_values = iter::repeat_with(gen_values).take(n);
+
+    // State key-values
     let state_key_values = state_keys.zip(state_values).into_iter();
 
     // Insert the key-values into the database while building the Merkle tree
@@ -51,7 +56,6 @@ fn setup(rng: &mut StdRng, db: &mut VmDatabase, contract: &ContractId, n: usize)
 
 fn state(c: &mut Criterion) {
     let mut rng = StdRng::seed_from_u64(0xF00DF00D);
-
     let state: Bytes32 = rng.gen();
     let value: Bytes32 = rng.gen();
 
@@ -60,14 +64,13 @@ fn state(c: &mut Criterion) {
     group.bench_function("insert state with 0 preexisting entries", |b| {
         let mut db = VmDatabase::default();
         let contract: ContractId = rng.gen();
-        setup(&mut rng, &mut db, &contract, 0);
+        setup(&mut db, &contract, 0);
         b.iter_custom(|iters| {
             let start = std::time::Instant::now();
             for _ in 0..iters {
                 db.merkle_contract_state_insert(&contract, &state, &value)
-                    .expect("failed to insert asset");
+                    .expect("failed to insert state");
             }
-
             start.elapsed()
         })
     });
@@ -75,14 +78,13 @@ fn state(c: &mut Criterion) {
     group.bench_function("insert state with 1,000 preexisting entries", |b| {
         let mut db = VmDatabase::default();
         let contract: ContractId = rng.gen();
-        setup(&mut rng, &mut db, &contract, 1_000);
+        setup(&mut db, &contract, 1_000);
         b.iter_custom(|iters| {
             let start = std::time::Instant::now();
             for _ in 0..iters {
                 db.merkle_contract_state_insert(&contract, &state, &value)
-                    .expect("failed to insert asset");
+                    .expect("failed to insert state");
             }
-
             start.elapsed()
         })
     });
@@ -90,14 +92,13 @@ fn state(c: &mut Criterion) {
     group.bench_function("insert state with 100,000 preexisting entries", |b| {
         let mut db = VmDatabase::default();
         let contract: ContractId = rng.gen();
-        setup(&mut rng, &mut db, &contract, 100_000);
+        setup(&mut db, &contract, 100_000);
         b.iter_custom(|iters| {
             let start = std::time::Instant::now();
             for _ in 0..iters {
                 db.merkle_contract_state_insert(&contract, &state, &value)
-                    .expect("failed to insert asset");
+                    .expect("failed to insert state");
             }
-
             start.elapsed()
         })
     });
@@ -105,14 +106,13 @@ fn state(c: &mut Criterion) {
     group.bench_function("insert state with 10,000,000 preexisting entries", |b| {
         let mut db = VmDatabase::default();
         let contract: ContractId = rng.gen();
-        setup(&mut rng, &mut db, &contract, 10_000_000);
+        setup(&mut db, &contract, 10_000_000);
         b.iter_custom(|iters| {
             let start = std::time::Instant::now();
             for _ in 0..iters {
                 db.merkle_contract_state_insert(&contract, &state, &value)
-                    .expect("failed to insert asset");
+                    .expect("failed to insert state");
             }
-
             start.elapsed()
         })
     });
