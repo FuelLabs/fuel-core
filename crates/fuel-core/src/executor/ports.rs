@@ -1,8 +1,14 @@
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::message::Message,
+    fuel_tx,
     fuel_types::Nonce,
 };
+
+pub trait TransactionsSource {
+    /// Returns the next batch of transactions to satisfy the `gas_limit`.
+    fn next(&self, gas_limit: u64) -> Vec<fuel_tx::Transaction>;
+}
 
 pub trait RelayerPort {
     /// Get a message from the relayer if it has been

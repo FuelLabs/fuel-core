@@ -1,6 +1,10 @@
-use crate::database::Database;
+use crate::{
+    database::Database,
+    service::sub_services::BlockProducerService,
+};
 use fuel_core_consensus_module::block_verifier::Verifier;
 use fuel_core_txpool::service::SharedState as TxPoolSharedState;
+use fuel_core_types::fuel_types::BlockHeight;
 use std::sync::Arc;
 
 pub mod block_importer;
@@ -31,6 +35,24 @@ impl TxPoolAdapter {
 }
 
 #[derive(Clone)]
+pub struct TransactionsSource {
+    txpool: TxPoolSharedState<P2PAdapter, Database>,
+    _block_height: BlockHeight,
+}
+
+impl TransactionsSource {
+    pub fn new(
+        txpool: TxPoolSharedState<P2PAdapter, Database>,
+        block_height: BlockHeight,
+    ) -> Self {
+        Self {
+            txpool,
+            _block_height: block_height,
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct ExecutorAdapter {
     pub relayer: MaybeRelayerAdapter,
     pub config: Arc<fuel_core_executor::Config>,
@@ -52,7 +74,7 @@ pub struct MaybeRelayerAdapter {
 
 #[derive(Clone)]
 pub struct BlockProducerAdapter {
-    pub block_producer: Arc<fuel_core_producer::Producer<Database>>,
+    pub block_producer: Arc<BlockProducerService>,
 }
 
 #[derive(Clone)]

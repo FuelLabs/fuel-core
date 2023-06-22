@@ -41,6 +41,7 @@ futures = { workspace = true }
 hex = { version = "0.4", features = ["serde"] }
 hyper = { workspace = true }
 itertools = { workspace = true }
+parking_lot = { workspace = true }
 postcard = { workspace = true, features = ["use-std"] }
 primitive-types = "0.12"
 rand = { workspace = true }

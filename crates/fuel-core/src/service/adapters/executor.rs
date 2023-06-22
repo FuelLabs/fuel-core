@@ -1,7 +1,14 @@
+use super::MaybeRelayerAdapter;
 use crate::{
     database::Database,
-    executor::Executor,
-    service::adapters::ExecutorAdapter,
+    executor::{
+        ExecutionBlockWithSource,
+        Executor,
+    },
+    service::adapters::{
+        ExecutorAdapter,
+        TransactionsSource,
+    },
 };
 use fuel_core_executor::refs::ContractStorageTrait;
 use fuel_core_storage::{
@@ -11,21 +18,32 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::message::Message,
+    fuel_tx,
     fuel_tx::Receipt,
     fuel_types::Nonce,
-    services::executor::{
-        ExecutionBlock,
-        Result as ExecutorResult,
-        UncommittedResult,
+    services::{
+        block_producer::Components,
+        executor::{
+            Result as ExecutorResult,
+            UncommittedResult,
+        },
     },
 };
 
-use super::MaybeRelayerAdapter;
+impl crate::executor::TransactionsSource for TransactionsSource {
+    fn next(&self, gas_limit: u64) -> Vec<fuel_tx::Transaction> {
+        self.txpool
+            .select_transactions(gas_limit)
+            .iter()
+            .map(|tx| tx.as_ref().into())
+            .collect()
+    }
+}
 
 impl ExecutorAdapter {
     pub(crate) fn _execute_without_commit(
         &self,
-        block: ExecutionBlock,
+        block: ExecutionBlockWithSource<TransactionsSource>,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
         let executor = Executor {
             database: self.relayer.database.clone(),
@@ -37,7 +55,7 @@ impl ExecutorAdapter {
 
     pub(crate) fn _dry_run(
         &self,
-        block: ExecutionBlock,
+        block: Components<fuel_tx::Transaction>,
         utxo_validation: Option<bool>,
     ) -> ExecutorResult<Vec<Vec<Receipt>>> {
         let executor = Executor {

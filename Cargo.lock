@@ -2598,6 +2598,7 @@ dependencies = [
  "hyper",
  "itertools",
  "mockall",
+ "parking_lot 0.12.1",
  "postcard",
  "primitive-types",
  "proptest",
