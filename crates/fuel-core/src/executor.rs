@@ -2538,7 +2538,9 @@ mod tests {
                 ExecutionType::Production(PartialBlockComponent::from_partial_block(
                     &mut block,
                 )),
-                Default::default(),
+                ExecutionOptions {
+                    utxo_validation: true,
+                },
             )
             .unwrap();
         let produce_result = &skipped_transactions[0].1;
@@ -2557,7 +2559,9 @@ mod tests {
                 ExecutionType::Validation(PartialBlockComponent::from_partial_block(
                     &mut block,
                 )),
-                Default::default(),
+                ExecutionOptions {
+                    utxo_validation: true,
+                },
             )
             .unwrap();
 
@@ -2569,7 +2573,9 @@ mod tests {
             ExecutionType::Validation(PartialBlockComponent::from_partial_block(
                 &mut block,
             )),
-            Default::default(),
+            ExecutionOptions {
+                utxo_validation: true,
+            },
         );
         assert!(matches!(
             verify_result,
