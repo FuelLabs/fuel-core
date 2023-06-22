@@ -2,13 +2,13 @@ use fuel_core_types::{
     fuel_types::Word,
     services::txpool::ArcPoolTx,
 };
-use std::cmp::Reverse;
 
 // transaction selection could use a plugin based approach in the
 // future for block producers to customize block building (e.g. alternative priorities besides gas fees)
 
+// Expects sorted by gas price transactions, highest first
 pub fn select_transactions(
-    mut includable_txs: Vec<ArcPoolTx>,
+    includable_txs: impl Iterator<Item = ArcPoolTx>,
     max_gas: u64,
 ) -> Vec<ArcPoolTx> {
     // Select all txs that fit into the block, preferring ones with higher gas price.
@@ -17,12 +17,8 @@ pub fn select_transactions(
     // transactions to maximize throughput.
     let mut used_block_space: Word = 0;
 
-    // Sort transactions by gas price, highest first
-    includable_txs.sort_by_key(|a| Reverse(a.price()));
-
     // Pick as many transactions as we can fit into the block (greedy)
     includable_txs
-        .into_iter()
         .filter(|tx| {
             let tx_block_space = tx.max_gas();
             if let Some(new_used_space) = used_block_space.checked_add(tx_block_space) {
@@ -74,7 +70,7 @@ mod tests {
     fn make_txs_and_select(txs: &[TxGas], block_gas_limit: Word) -> Vec<TxGas> {
         let mut rng = thread_rng();
 
-        let txs = txs
+        let mut txs = txs
             .iter()
             .map(|tx_gas| {
                 TransactionBuilder::script(
@@ -105,9 +101,10 @@ mod tests {
                 .finalize_checked_basic(Default::default()).into()
             })
             .map(Arc::new)
-            .collect();
+            .collect::<Vec<ArcPoolTx>>();
+        txs.sort_by_key(|a| core::cmp::Reverse(a.price()));
 
-        select_transactions(txs, block_gas_limit)
+        select_transactions(txs.into_iter(), block_gas_limit)
             .into_iter()
             .map(|tx| TxGas {
                 limit: tx.limit(),

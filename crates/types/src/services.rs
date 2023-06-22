@@ -1,6 +1,7 @@
 //! Types for specific services
 
 pub mod block_importer;
+pub mod block_producer;
 pub mod executor;
 pub mod graphql_api;
 pub mod p2p;

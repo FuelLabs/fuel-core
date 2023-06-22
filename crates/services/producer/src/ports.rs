@@ -11,15 +11,15 @@ use fuel_core_types::{
     fuel_tx::{
         Bytes32,
         Receipt,
+        Transaction,
     },
     fuel_types::BlockHeight,
     services::{
+        block_producer::Components,
         executor::{
-            ExecutionBlock,
             Result as ExecutorResult,
             UncommittedResult,
         },
-        txpool::ArcPoolTx,
     },
 };
 use std::borrow::Cow;
@@ -37,13 +37,15 @@ pub trait BlockProducerDatabase: Send + Sync {
 
 #[async_trait]
 pub trait TxPool: Send + Sync {
-    fn get_includable_txs(
+    /// The source of the transactions used by the executor.
+    type TxSource;
+
+    /// Returns the source of includable transactions.
+    fn get_source(
         &self,
         // could be used by the txpool to filter txs based on maturity
         block_height: BlockHeight,
-        // The upper limit for the total amount of gas of these txs
-        max_gas: u64,
-    ) -> Vec<ArcPoolTx>;
+    ) -> Self::TxSource;
 }
 
 #[async_trait::async_trait]
@@ -56,20 +58,25 @@ pub trait Relayer: Send + Sync {
     ) -> anyhow::Result<DaBlockHeight>;
 }
 
-pub trait Executor<Database>: Send + Sync {
+pub trait Executor: Send + Sync {
+    /// The database used by the executor.
+    type Database;
+    /// The source of transaction used by the executor.
+    type TxSource;
+
     /// Executes the block and returns the result of execution with uncommitted database
     /// transaction.
     fn execute_without_commit(
         &self,
-        block: ExecutionBlock,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>>;
+        component: Components<Self::TxSource>,
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Self::Database>>>;
 
     /// Executes the block without committing it to the database. During execution collects the
     /// receipts to return them. The `utxo_validation` field can be used to disable the validation
     /// of utxos during execution.
     fn dry_run(
         &self,
-        block: ExecutionBlock,
+        block: Components<Transaction>,
         utxo_validation: Option<bool>,
     ) -> ExecutorResult<Vec<Vec<Receipt>>>;
 }

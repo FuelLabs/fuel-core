@@ -7,7 +7,6 @@ use crate::{
         MockRelayer,
         MockTxPool,
     },
-    ports::Executor,
     Config,
     Producer,
 };
@@ -170,12 +169,9 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
 
 #[tokio::test]
 async fn production_fails_on_execution_error() {
-    let ctx = TestContext {
-        executor: Arc::new(FailingMockExecutor(Mutex::new(Some(
-            ExecutorError::TransactionIdCollision(Default::default()),
-        )))),
-        ..TestContext::default()
-    };
+    let ctx = TestContext::default_from_executor(FailingMockExecutor(Mutex::new(Some(
+        ExecutorError::TransactionIdCollision(Default::default()),
+    ))));
 
     let producer = ctx.producer();
 
@@ -193,30 +189,43 @@ async fn production_fails_on_execution_error() {
     );
 }
 
-struct TestContext {
+struct TestContext<Executor> {
     config: Config,
     db: MockDb,
     relayer: MockRelayer,
-    executor: Arc<dyn Executor<MockDb>>,
+    executor: Arc<Executor>,
     txpool: MockTxPool,
 }
 
-impl TestContext {
+impl TestContext<MockExecutor> {
     pub fn default() -> Self {
-        let genesis_height = 0u32.into();
-        let genesis_block = CompressedBlock::default();
-
-        let db = MockDb {
-            blocks: Arc::new(Mutex::new(
-                vec![(genesis_height, genesis_block)].into_iter().collect(),
-            )),
-        };
-        Self::default_from_db(db)
+        Self::default_from_db(Self::default_db())
     }
 
     pub fn default_from_db(db: MockDb) -> Self {
-        let txpool = MockTxPool::default();
         let executor = MockExecutor(db.clone());
+        Self::default_from_db_and_executor(db, executor)
+    }
+}
+
+impl<Executor> TestContext<Executor> {
+    fn default_db() -> MockDb {
+        let genesis_height = 0u32.into();
+        let genesis_block = CompressedBlock::default();
+
+        MockDb {
+            blocks: Arc::new(Mutex::new(
+                vec![(genesis_height, genesis_block)].into_iter().collect(),
+            )),
+        }
+    }
+
+    pub fn default_from_executor(executor: Executor) -> Self {
+        Self::default_from_db_and_executor(Self::default_db(), executor)
+    }
+
+    pub fn default_from_db_and_executor(db: MockDb, executor: Executor) -> Self {
+        let txpool = MockTxPool::default();
         let relayer = MockRelayer::default();
         let config = Config::default();
         Self {
@@ -228,11 +237,11 @@ impl TestContext {
         }
     }
 
-    pub fn producer(self) -> Producer<MockDb> {
+    pub fn producer(self) -> Producer<MockDb, MockTxPool, Executor> {
         Producer {
             config: self.config,
             db: self.db,
-            txpool: Box::new(self.txpool),
+            txpool: self.txpool,
             executor: self.executor,
             relayer: Box::new(self.relayer),
             lock: Default::default(),
