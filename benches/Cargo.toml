@@ -21,12 +21,11 @@ tikv-jemallocator = { workspace = true }
 
 [[bench]]
 harness = false
-name = "vm"
+name = "state"
 
 [[bench]]
 harness = false
-name = "state"
-
+name = "vm"
 
 [features]
 default = ["fuel-core/rocksdb"]
