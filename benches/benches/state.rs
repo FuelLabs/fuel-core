@@ -4,26 +4,40 @@ use criterion::{
     criterion_main,
     Criterion,
 };
+use fuel_core::database::storage::{
+    ContractsAssetsMerkleMetadata,
+    SparseMerkleMetadata,
+};
 use fuel_core_benches::{
     VmBench,
     VmBenchPrepared,
 };
 use fuel_core_storage::{
     transactional::Transaction,
-    ContractsAssetsStorage,
+    ContractsAssetKey,
+    StorageAsMut,
+    StorageAsRef,
+    StorageMutate,
 };
 use fuel_core_types::{
     fuel_asm::{
         op,
-        GTFArgs,
         Instruction,
-        RegId,
     },
+    fuel_merkle::sparse::MerkleTree,
+    fuel_tx::Bytes32,
     fuel_types::{
         AssetId,
         ContractId,
     },
 };
+use std::iter;
+
+impl From<ContractsAssetKey> for [u8; 32] {
+    fn from(value: ContractsAssetKey) -> Self {
+        value.asset_id
+    }
+}
 
 fn state(c: &mut Criterion) {
     use rand::{
@@ -35,64 +49,69 @@ fn state(c: &mut Criterion) {
     let mut group = c.benchmark_group("state");
 
     let rng = &mut StdRng::seed_from_u64(0xF00DF00D);
-    let asset: AssetId = rng.gen();
     let contract: ContractId = rng.gen();
 
-    // let op = op::bal(0x10, 0x10, 0x11);
-    // let input = VmBench::new(op)
-    //     .with_data(asset.iter().chain(contract.iter()).copied().collect())
-    //     .with_prepare_script(vec![
-    //         op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
-    //         op::addi(0x11, 0x10, asset.len().try_into().unwrap()),
-    //     ])
-    //     .with_dummy_contract(contract)
-    //     .with_prepare_db(move |mut db| {
-    //         // let mut asset_inc = AssetId::zeroed();
-    //         //
-    //         // asset_inc.as_mut()[..8].copy_from_slice(&1_u64.to_be_bytes());
-    //         //
-    //         // db.merkle_contract_asset_id_balance_insert(&contract, &asset_inc, 1)?;
-    //         //
-    //         // db.merkle_contract_asset_id_balance_insert(&contract, &asset, 100)?;
-    //
-    //         Ok(db)
-    //     });
+    let op = op::bal(0x10, 0x10, 0x11);
 
-    // let mut i = input.prepare().expect("failed to prepare bench");
+    let input = VmBench::new(op).with_prepare_db(move |mut db| {
+        let gen = || {
+            // Generate new assets for the existing contract
+            let asset_id: AssetId = rng.gen();
+            asset_id
+        };
 
-    // group.bench_function("state", move |b| {
-    //     b.iter_custom(|iters| {
-    //         let VmBenchPrepared {
-    //             vm,
-    //             instruction,
-    //             diff,
-    //         } = &mut i;
-    //         let original_db = vm.as_mut().database_mut().clone();
-    //         let mut db_txn = {
-    //             let db = vm.as_mut().database_mut();
-    //             let db_txn = db.transaction();
-    //             *db = db_txn.as_ref().clone();
-    //             db_txn
-    //         };
-    //
-    //         let start = std::time::Instant::now();
-    //         for _ in 0..iters {
-    //             match instruction {
-    //                 Instruction::CALL(call) => {
-    //                     let (ra, rb, rc, rd) = call.unpack();
-    //                     vm.prepare_call(ra, rb, rc, rd).unwrap();
-    //                 }
-    //                 _ => {
-    //                     black_box(vm.instruction(*instruction).unwrap());
-    //                 }
-    //             }
-    //             vm.reset_vm_state(diff);
-    //         }
-    //         db_txn.commit().unwrap();
-    //         *vm.as_mut().database_mut() = original_db;
-    //         start.elapsed()
-    //     })
-    // });
+        let n = 1_000;
+        let asset_keys = iter::repeat_with(gen).take(n);
+        let asset_values = iter::repeat(100_u32.to_be_bytes()).take(n);
+        let mut asset_key_values = asset_keys.zip(asset_values).into_iter();
+
+        // Insert the key values into the database while building the Merkle tree
+        let tree = MerkleTree::from_set(&mut db, asset_key_values)?;
+
+        // Create the relevant Merkle metadata generated for the key values
+        let root = tree.root();
+        let metadata = SparseMerkleMetadata { root };
+        db.storage_as_mut::<ContractsAssetsMerkleMetadata>()
+            .insert(&contract, &metadata)?;
+
+        Ok(db)
+    });
+
+    let mut i = input.prepare().expect("failed to prepare bench");
+
+    group.bench_function("state", move |b| {
+        b.iter_custom(|iters| {
+            let VmBenchPrepared {
+                vm,
+                instruction,
+                diff,
+            } = &mut i;
+            let original_db = vm.as_mut().database_mut().clone();
+            let mut db_txn = {
+                let db = vm.as_mut().database_mut();
+                let db_txn = db.transaction();
+                *db = db_txn.as_ref().clone();
+                db_txn
+            };
+
+            let start = std::time::Instant::now();
+            for _ in 0..iters {
+                match instruction {
+                    Instruction::CALL(call) => {
+                        let (ra, rb, rc, rd) = call.unpack();
+                        vm.prepare_call(ra, rb, rc, rd).unwrap();
+                    }
+                    _ => {
+                        black_box(vm.instruction(*instruction).unwrap());
+                    }
+                }
+                vm.reset_vm_state(diff);
+            }
+            db_txn.commit().unwrap();
+            *vm.as_mut().database_mut() = original_db;
+            start.elapsed()
+        })
+    });
 
     group.finish();
 }
