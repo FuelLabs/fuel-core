@@ -100,7 +100,6 @@ use fuel_core_types::{
         block_producer::Components,
         executor::{
             Error as ExecutorError,
-            ExecutionBlock,
             ExecutionKind,
             ExecutionResult,
             ExecutionType,
@@ -128,12 +127,12 @@ use tracing::{
     warn,
 };
 
+mod ports;
+
 pub use ports::{
     RelayerPort,
     TransactionsSource,
 };
-
-mod ports;
 
 pub type ExecutionBlockWithSource<TxSource> = ExecutionTypes<Components<TxSource>, Block>;
 
@@ -210,19 +209,19 @@ where
     /// Executes the block and commits the result of the execution into the inner `Database`.
     pub fn execute_and_commit(
         &self,
-        block: ExecutionBlock,
+        block: fuel_core_types::services::executor::ExecutionBlock,
         options: ExecutionOptions,
     ) -> ExecutorResult<ExecutionResult> {
         let component = match block {
-            ExecutionBlock::DryRun(_) => {
+            ExecutionTypes::DryRun(_) => {
                 panic!("It is not possible to commit the dry run result");
             }
-            ExecutionBlock::Production(block) => ExecutionTypes::Production(Components {
+            ExecutionTypes::Production(block) => ExecutionTypes::Production(Components {
                 header_to_produce: block.header,
                 transactions_source: OnceTransactionsSource::new(block.transactions),
                 gas_limit: u64::MAX,
             }),
-            ExecutionBlock::Validation(block) => ExecutionTypes::Validation(block),
+            ExecutionTypes::Validation(block) => ExecutionTypes::Validation(block),
         };
 
         let (result, db_transaction) =
@@ -1727,6 +1726,7 @@ mod tests {
             Call,
             CallFrame,
         },
+        services::executor::ExecutionBlock,
         tai64::Tai64,
     };
     use itertools::Itertools;
