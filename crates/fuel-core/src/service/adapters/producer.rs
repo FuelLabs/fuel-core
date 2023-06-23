@@ -1,10 +1,14 @@
 use crate::{
     database::Database,
-    service::adapters::{
-        BlockProducerAdapter,
-        ExecutorAdapter,
-        MaybeRelayerAdapter,
-        TxPoolAdapter,
+    service::{
+        adapters::{
+            BlockProducerAdapter,
+            ExecutorAdapter,
+            MaybeRelayerAdapter,
+            TransactionsSource,
+            TxPoolAdapter,
+        },
+        sub_services::BlockProducerService,
     },
 };
 use fuel_core_producer::ports::TxPool;
@@ -20,18 +24,19 @@ use fuel_core_types::{
         block::CompressedBlock,
         primitives::{self,},
     },
+    fuel_tx,
     fuel_tx::Receipt,
     fuel_types::{
         BlockHeight,
         Bytes32,
     },
     services::{
+        block_producer::Components,
         executor::{
-            ExecutionBlock,
+            ExecutionTypes,
             Result as ExecutorResult,
             UncommittedResult,
         },
-        txpool::ArcPoolTx,
     },
 };
 use std::{
@@ -40,7 +45,7 @@ use std::{
 };
 
 impl BlockProducerAdapter {
-    pub fn new(block_producer: fuel_core_producer::Producer<Database>) -> Self {
+    pub fn new(block_producer: BlockProducerService) -> Self {
         Self {
             block_producer: Arc::new(block_producer),
         }
@@ -49,27 +54,28 @@ impl BlockProducerAdapter {
 
 #[async_trait::async_trait]
 impl TxPool for TxPoolAdapter {
-    fn get_includable_txs(
-        &self,
-        _block_height: BlockHeight,
-        max_gas: u64,
-    ) -> Vec<ArcPoolTx> {
-        self.service.select_transactions(max_gas)
+    type TxSource = TransactionsSource;
+
+    fn get_source(&self, block_height: BlockHeight) -> Self::TxSource {
+        TransactionsSource::new(self.service.clone(), block_height)
     }
 }
 
 #[async_trait::async_trait]
-impl fuel_core_producer::ports::Executor<Database> for ExecutorAdapter {
+impl fuel_core_producer::ports::Executor for ExecutorAdapter {
+    type Database = Database;
+    type TxSource = TransactionsSource;
+
     fn execute_without_commit(
         &self,
-        block: ExecutionBlock,
+        component: Components<Self::TxSource>,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
-        self._execute_without_commit(block)
+        self._execute_without_commit(ExecutionTypes::Production(component))
     }
 
     fn dry_run(
         &self,
-        block: ExecutionBlock,
+        block: Components<fuel_tx::Transaction>,
         utxo_validation: Option<bool>,
     ) -> ExecutorResult<Vec<Vec<Receipt>>> {
         self._dry_run(block, utxo_validation)

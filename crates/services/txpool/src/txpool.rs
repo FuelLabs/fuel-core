@@ -7,8 +7,8 @@ use crate::{
 };
 use fuel_core_metrics::txpool_metrics::TXPOOL_METRICS;
 use fuel_core_types::{
-    blockchain::SealedBlock,
     fuel_tx::{Chargeable, Transaction, UniqueIdentifier},
+    fuel_types::BlockHeight,
     fuel_vm::checked_transaction::{CheckedTransaction, IntoChecked},
     services::txpool::{ArcPoolTx, InsertionResult},
     tai64::Tai64,
@@ -164,13 +164,12 @@ where
     }
 
     /// Return all sorted transactions that are includable in next block.
-    pub fn sorted_includable(&self) -> Vec<ArcPoolTx> {
+    pub fn sorted_includable(&self) -> impl Iterator<Item = ArcPoolTx> + '_ {
         self.by_gas_price
             .sort
             .iter()
             .rev()
             .map(|(_, tx)| tx.clone())
-            .collect()
     }
 
     pub fn remove_inner(&mut self, tx: &ArcPoolTx) -> Vec<ArcPoolTx> {
@@ -314,7 +313,7 @@ where
 
     /// Return all sorted transactions that are includable in next block.
     /// This is going to be heavy operation, use it only when needed.
-    pub fn includable(&mut self) -> Vec<ArcPoolTx> {
+    pub fn includable(&mut self) -> impl Iterator<Item = ArcPoolTx> + '_ {
         self.sorted_includable()
     }
 
@@ -322,13 +321,14 @@ where
     pub fn block_update(
         &mut self,
         tx_status_sender: &TxStatusChange,
-        block: &SealedBlock,
+        height: &BlockHeight,
+        transactions: &[TxId],
         // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
-        for tx in block.entity.transactions() {
-            let tx_id = tx.id(&self.config.chain_config.transaction_parameters.chain_id);
+        for tx_id in transactions {
+            let tx_id = *tx_id;
             let result = self.database.transaction_status(&tx_id);
-            tx_status_sender.send_complete(tx_id, block.entity.header().height(), result);
+            tx_status_sender.send_complete(tx_id, height, result);
             self.remove_committed_tx(&tx_id);
         }
     }

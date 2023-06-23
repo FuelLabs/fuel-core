@@ -41,10 +41,11 @@ futures = { workspace = true }
 hex = { version = "0.4", features = ["serde"] }
 hyper = { workspace = true }
 itertools = { workspace = true }
+parking_lot = { workspace = true }
 postcard = { workspace = true, features = ["use-std"] }
 primitive-types = "0.12"
 rand = { workspace = true }
-rocksdb = { version = "0.20", default-features = false, features = [
+rocksdb = { version = "0.21", default-features = false, features = [
     "lz4",
     "multi-threaded-cf",
 ], optional = true }

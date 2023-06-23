@@ -25,9 +25,45 @@ use sha2::{
 };
 use std::time::Duration;
 
-use super::topics::GossipTopic;
+use super::topics::{
+    GossipTopic,
+    CON_VOTE_GOSSIP_TOPIC,
+    NEW_BLOCK_GOSSIP_TOPIC,
+    NEW_TX_GOSSIP_TOPIC,
+};
 
-const MAX_GOSSIP_SCORE: f64 = 100.0;
+// The number of slots in each epoch.
+const SLOTS_PER_EPOCH: u64 = 32;
+
+// The duration of each slot in seconds. This is the amount of time allotted for each opportunity to create a block.
+const SLOT: Duration = Duration::from_secs(6);
+
+// The total duration of an epoch in seconds, calculated as the number of slots per epoch times the duration of each slot.
+const EPOCH: Duration = Duration::from_secs(SLOTS_PER_EPOCH * SLOT.as_secs());
+
+// The factor by which scores decay towards zero in the scoring mechanism. Scores are reduced by this factor at each decay interval.
+const DECAY_TO_ZERO: f64 = 0.8;
+
+// The time interval at which scores decay, set equal to the duration of one slot.
+const DECAY_INTERVAL: Duration = SLOT;
+
+// The target number of peers in each gossip mesh.
+const MESH_SIZE: usize = 8;
+
+// The weight applied to the score for delivering new transactions.
+const NEW_TX_GOSSIP_WEIGHT: f64 = 0.05;
+
+// The weight applied to the score for delivering new blocks.
+const NEW_BLOCK_GOSSIP_WEIGHT: f64 = 0.05;
+
+// The weight applied to the score for delivering consensus votes.
+const CON_VOTE_GOSSIP_WEIGHT: f64 = 0.05;
+
+// The threshold for a peer's score to be considered for greylisting.
+// If a peer's score falls below this value, they will be greylisted.
+// Greylisting is a lighter form of banning, where the peer's messages might be ignored or given lower priority,
+// but the peer is not completely banned from the network.
+pub const GRAYLIST_THRESHOLD: f64 = -16000.0;
 
 /// Creates `GossipsubConfigBuilder` with few of the Gossipsub values already defined
 pub fn default_gossipsub_builder() -> GossipsubConfigBuilder {
@@ -54,150 +90,86 @@ pub fn default_gossipsub_builder() -> GossipsubConfigBuilder {
 /// Used in testing.
 pub(crate) fn default_gossipsub_config() -> GossipsubConfig {
     default_gossipsub_builder()
-        .mesh_n(6)
-        .mesh_n_low(4)
+        .mesh_n(MESH_SIZE)
+        .mesh_n_low(6)
         .mesh_n_high(12)
+        .gossip_lazy(6)
+        .history_length(5)
+        .history_gossip(3)
         .max_transmit_size(MAX_RESPONSE_SIZE)
-        .heartbeat_interval(Duration::from_secs(1))
+        .heartbeat_interval(Duration::from_millis(700))
+        .fanout_ttl(Duration::from_secs(60))
         .build()
         .expect("valid gossipsub configuration")
 }
 
-fn initialize_topic_score_params() -> TopicScoreParams {
-    TopicScoreParams {
-        /// Each topic will weigh this much
-        topic_weight: 0.5,
+fn initialize_topic_score_params(topic_weight: f64) -> TopicScoreParams {
+    let mut params = TopicScoreParams::default();
 
-        // Reflects positive on the Score
+    params.topic_weight = topic_weight;
 
-        //  Time in the mesh
-        //  This is the time the peer has been grafted in the mesh.
-        //  The value of of the parameter is the `time/time_in_mesh_quantum`, capped by `time_in_mesh_cap`
-        //  The weight of the parameter must be positive (or zero to disable).
-        time_in_mesh_weight: 1.0,
-        time_in_mesh_quantum: Duration::from_millis(1),
-        time_in_mesh_cap: 50.0,
+    // The "quantum" of time spent in the mesh, set to the duration of a slot.
+    // This is the smallest unit of time for which we track a peer's presence in the mesh.
+    params.time_in_mesh_quantum = SLOT;
+    params.time_in_mesh_cap = 3600.0 / params.time_in_mesh_quantum.as_secs_f64();
+    params.time_in_mesh_weight = 0.5;
 
-        ///  First message deliveries
-        ///  This is the number of message deliveries in the topic.
-        ///  The value of the parameter is a counter, decaying with `first_message_deliveries_decay`, and capped
-        ///  by `first_message_deliveries_cap`.
-        ///  The weight of the parameter MUST be positive (or zero to disable).
-        first_message_deliveries_weight: 1.0,
-        first_message_deliveries_decay: 0.5,
-        first_message_deliveries_cap: 50.0,
+    // The decay time for the first message delivered score, set to 100 times the epoch duration.
+    // This means that the score given for first message deliveries will decay over this time period.
+    params.first_message_deliveries_decay = score_parameter_decay(EPOCH * 100);
+    params.first_message_deliveries_cap = 1000.0;
+    params.first_message_deliveries_weight = 0.5;
 
-        // Reflects negative on the Score
-        ///  Mesh message deliveries
-        ///  This is the number of message deliveries in the mesh, within the
-        ///  `mesh_message_deliveries_window` of message validation; deliveries during validation also
-        ///  count and are retroactively applied when validation succeeds.
-        ///  This window accounts for the minimum time before a hostile mesh peer trying to game the
-        ///  score could replay back a valid message we just sent them.
-        ///  It effectively tracks first and near-first deliveries, ie a message seen from a mesh peer
-        ///  before we have forwarded it to them.
-        ///  The parameter has an associated counter, decaying with `mesh_message_deliveries_decay`.
-        ///  If the counter exceeds the threshold, its value is 0.
-        ///  If the counter is below the `mesh_message_deliveries_threshold`, the value is the square of
-        ///  the deficit, ie (`message_deliveries_threshold - counter)^2`
-        ///  The penalty is only activated after `mesh_message_deliveries_activation` time in the mesh.
-        ///  The weight of the parameter MUST be negative (or zero to disable).
-        mesh_message_deliveries_weight: -1.0,
-        mesh_message_deliveries_decay: 0.5,
-        mesh_message_deliveries_cap: 10.0,
-        mesh_message_deliveries_threshold: 20.0,
-        mesh_message_deliveries_window: Duration::from_millis(10),
-        mesh_message_deliveries_activation: Duration::from_secs(5),
+    params.mesh_message_deliveries_weight = 0.0;
+    params.mesh_message_deliveries_threshold = 0.0;
+    params.mesh_message_deliveries_decay = 0.0;
+    params.mesh_message_deliveries_cap = 0.0;
+    params.mesh_message_deliveries_window = Duration::from_secs(0);
+    params.mesh_message_deliveries_activation = Duration::from_secs(0);
+    params.mesh_failure_penalty_decay = 0.0;
+    params.mesh_failure_penalty_weight = 0.0;
 
-        ///  Sticky mesh propagation failures
-        ///  This is a sticky penalty that applies when a peer gets pruned from the mesh with an active
-        ///  mesh message delivery penalty.
-        ///  The weight of the parameter MUST be negative (or zero to disable)
-        mesh_failure_penalty_weight: -1.0,
-        mesh_failure_penalty_decay: 0.5,
+    params.invalid_message_deliveries_weight = -10.0 / params.topic_weight; // -200 per invalid message
+    params.invalid_message_deliveries_decay = score_parameter_decay(EPOCH * 50);
 
-        ///  Invalid messages
-        ///  This is the number of invalid messages in the topic.
-        ///  The value of the parameter is the square of the counter, decaying with
-        ///  `invalid_message_deliveries_decay`.
-        ///  The weight of the parameter MUST be negative (or zero to disable).
-        invalid_message_deliveries_weight: -1.0,
-        invalid_message_deliveries_decay: 0.3,
-    }
+    params
 }
 
-/// This function takes in `max_gossipsub_score` and sets it to `topic_score_cap`
-/// The reasoning is because app-specific is set to 0 so the max peer score
-/// can be the score of the topic score cap
-fn initialize_peer_score_params() -> PeerScoreParams {
-    PeerScoreParams {
-        // topics are added later
-        topics: Default::default(),
+fn score_parameter_decay(decay_time: Duration) -> f64 {
+    let ticks = decay_time.as_secs_f64() / DECAY_INTERVAL.as_secs_f64();
+    DECAY_TO_ZERO.powf(1.0 / ticks)
+}
 
-        /// Aggregate topic score cap; this limits the total contribution of topics towards a positive
-        /// score. It must be positive (or 0 for no cap).
-        topic_score_cap: MAX_GOSSIP_SCORE,
-
-        // Application-specific peer scoring
-        // We keep app score separate from gossipsub score
+fn initialize_peer_score_params(thresholds: &PeerScoreThresholds) -> PeerScoreParams {
+    let mut params = PeerScoreParams {
+        decay_interval: DECAY_INTERVAL,
+        decay_to_zero: DECAY_TO_ZERO,
+        retain_score: EPOCH * 100,
         app_specific_weight: 0.0,
+        ip_colocation_factor_threshold: 8.0, // Allow up to 8 nodes per IP
+        behaviour_penalty_threshold: 6.0,
+        behaviour_penalty_decay: score_parameter_decay(EPOCH * 10),
+        ..Default::default()
+    };
 
-        ///  IP-colocation factor.
-        ///  The parameter has an associated counter which counts the number of peers with the same IP.
-        ///  If the number of peers in the same IP exceeds `ip_colocation_factor_threshold, then the value
-        ///  is the square of the difference, ie `(peers_in_same_ip - ip_colocation_threshold)^2`.
-        ///  If the number of peers in the same IP is less than the threshold, then the value is 0.
-        ///  The weight of the parameter MUST be negative, unless you want to disable for testing.            
-        ip_colocation_factor_weight: -5.0,
-        ip_colocation_factor_threshold: 10.0,
-        ip_colocation_factor_whitelist: Default::default(),
+    let target_value =
+        params.behaviour_penalty_decay - params.behaviour_penalty_threshold;
 
-        ///  Behavioural pattern penalties.
-        ///  This parameter has an associated counter which tracks misbehaviour as detected by the
-        ///  router. The router currently applies penalties for the following behaviors:
-        ///  - attempting to re-graft before the prune backoff time has elapsed.
-        ///  - not following up in IWANT requests for messages advertised with IHAVE.
-        ///
-        ///  The value of the parameter is the square of the counter over the threshold, which decays
-        ///  with BehaviourPenaltyDecay.
-        ///  The weight of the parameter MUST be negative (or zero to disable).
-        behaviour_penalty_weight: -10.0,
-        behaviour_penalty_threshold: 0.0,
-        behaviour_penalty_decay: 0.2,
+    params.behaviour_penalty_weight = thresholds.gossip_threshold / target_value.powi(2);
 
-        /// The decay interval for parameter counters.
-        decay_interval: Duration::from_secs(1),
+    params.topic_score_cap = 400.0;
+    params.ip_colocation_factor_weight = -params.topic_score_cap;
 
-        /// Counter value below which it is considered 0.
-        decay_to_zero: 0.1,
-
-        /// Time to remember counters for a disconnected peer.
-        retain_score: Duration::from_secs(3600),
-    }
+    params
 }
 
 fn initialize_peer_score_thresholds() -> PeerScoreThresholds {
     PeerScoreThresholds {
-        /// The score threshold below which gossip propagation is suppressed;
-        /// should be negative.
-        gossip_threshold: -10.0,
-
-        /// The score threshold below which we shouldn't publish when using flood
-        /// publishing (also applies to fanout peers); should be negative and <= `gossip_threshold`.
-        publish_threshold: -50.0,
-
-        /// The score threshold below which message processing is suppressed altogether,
-        /// implementing an effective graylist according to peer score; should be negative and
-        /// <= `publish_threshold`.
-        graylist_threshold: -80.0,
-
-        /// The score threshold below which px will be ignored; this should be positive
-        /// and limited to scores attainable by bootstrappers and other trusted nodes.
-        accept_px_threshold: 10.0,
-
-        /// The median mesh score threshold before triggering opportunistic
-        /// grafting; this should have a small positive value.
-        opportunistic_graft_threshold: 20.0,
+        gossip_threshold: -4000.0,
+        publish_threshold: -8000.0,
+        graylist_threshold: GRAYLIST_THRESHOLD,
+        accept_px_threshold: 40.0,
+        opportunistic_graft_threshold: 5.0,
     }
 }
 
@@ -240,22 +212,25 @@ pub(crate) fn build_gossipsub_behaviour(p2p_config: &Config) -> Gossipsub {
 }
 
 fn initialize_gossipsub(gossipsub: &mut Gossipsub, p2p_config: &Config) {
-    let peer_score_params = initialize_peer_score_params();
-
     let peer_score_thresholds = initialize_peer_score_thresholds();
-
-    let topic_score_params = initialize_topic_score_params();
+    let peer_score_params = initialize_peer_score_params(&peer_score_thresholds);
 
     gossipsub
         .with_peer_score(peer_score_params, peer_score_thresholds)
         .expect("gossipsub initialized with peer score");
 
+    let topics = vec![
+        (NEW_TX_GOSSIP_TOPIC, NEW_TX_GOSSIP_WEIGHT),
+        (NEW_BLOCK_GOSSIP_TOPIC, NEW_BLOCK_GOSSIP_WEIGHT),
+        (CON_VOTE_GOSSIP_TOPIC, CON_VOTE_GOSSIP_WEIGHT),
+    ];
+
     // subscribe to gossipsub topics with the network name suffix
-    for topic in &p2p_config.topics {
+    for (topic, weight) in topics {
         let t: GossipTopic = Topic::new(format!("{}/{}", topic, p2p_config.network_name));
 
         gossipsub
-            .set_topic_params(t.clone(), topic_score_params.clone())
+            .set_topic_params(t.clone(), initialize_topic_score_params(weight))
             .expect("First time initializing Topic Score");
 
         gossipsub

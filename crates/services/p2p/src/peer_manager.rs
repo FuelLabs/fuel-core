@@ -30,6 +30,11 @@ use tracing::{
     info,
 };
 
+use crate::gossipsub_config::GRAYLIST_THRESHOLD;
+
+/// At this point we better just ban the peer
+const MIN_GOSSIPSUB_SCORE_BEFORE_BAN: AppScore = GRAYLIST_THRESHOLD;
+
 // Info about a single Peer that we're connected to
 #[derive(Debug, Clone)]
 pub struct PeerInfo {
@@ -410,7 +415,7 @@ impl ScoreConfig {
         Self {
             max_app_score: MAX_APP_SCORE,
             min_app_score_allowed: MIN_APP_SCORE,
-            min_gossip_score_allowed: -100.0,
+            min_gossip_score_allowed: MIN_GOSSIPSUB_SCORE_BEFORE_BAN,
         }
     }
 }
