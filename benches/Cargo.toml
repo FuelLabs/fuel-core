@@ -10,7 +10,7 @@ clap = { workspace = true, features = ["derive"] }
 criterion = { version = "0.4", features = ["html_reports"] }
 ctrlc = "3.2.3"
 ethnum = "1.3"
-fuel-core = { path = "../crates/fuel-core", default-features = false }
+fuel-core = { path = "../crates/fuel-core", default-features = false, features = ["metrics", "rocksdb-production"] }
 fuel-core-storage = { path = "./../crates/storage" }
 fuel-core-types = { path = "./../crates/types", features = ["test-helpers"] }
 rand = { workspace = true }
@@ -22,6 +22,3 @@ tikv-jemallocator = { workspace = true }
 [[bench]]
 harness = false
 name = "vm"
-
-[features]
-default = ["fuel-core/rocksdb"]
