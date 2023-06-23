@@ -22,22 +22,23 @@ use fuel_core_types::{
 };
 use rand::{
     rngs::StdRng,
+    thread_rng,
     Rng,
     SeedableRng,
 };
 use std::iter;
 
 fn setup(db: &mut VmDatabase, contract: &ContractId, n: usize) {
-    let mut rng_keys = StdRng::seed_from_u64(0xF00DF00D);
+    let mut rng_keys = thread_rng();
     let gen_keys = || -> Bytes32 { rng_keys.gen() };
     let state_keys = iter::repeat_with(gen_keys).take(n);
 
-    let mut rng_values = StdRng::seed_from_u64(0xF00DF00D);
+    let mut rng_values = thread_rng();
     let gen_values = || -> Bytes32 { rng_values.gen() };
     let state_values = iter::repeat_with(gen_values).take(n);
 
     // State key-values
-    let state_key_values = state_keys.zip(state_values).into_iter();
+    let state_key_values = state_keys.zip(state_values);
 
     // Insert the key-values into the database while building the Merkle tree
     let tree: MerkleTree<ContractsStateMerkleData, _> =
@@ -49,7 +50,7 @@ fn setup(db: &mut VmDatabase, contract: &ContractId, n: usize) {
 
     let db = tree.into_storage();
     db.storage_as_mut::<ContractsStateMerkleMetadata>()
-        .insert(&contract, &metadata)
+        .insert(contract, &metadata)
         .expect("Failed to create Merkle metadata");
 }
 
@@ -128,10 +129,6 @@ fn state_multiple_contracts(c: &mut Criterion) {
 
     group.bench_function("insert state with 0 preexisting entries", |b| {
         let mut db = VmDatabase::default();
-        for _ in 0..0 {
-            let contract: ContractId = rng.gen();
-            setup(&mut db, &contract, 1);
-        }
         b.iter_custom(|iters| {
             let contract: ContractId = rng.gen();
             let start = std::time::Instant::now();
