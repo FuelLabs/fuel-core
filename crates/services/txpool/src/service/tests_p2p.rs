@@ -1,17 +1,8 @@
 use super::*;
-use crate::service::test_helpers::{
-    MockP2P,
-    TestContextBuilder,
-};
+use crate::service::test_helpers::{MockP2P, TestContextBuilder};
 use fuel_core_services::Service;
-use fuel_core_types::fuel_tx::{
-    Transaction,
-    UniqueIdentifier,
-};
-use std::{
-    ops::Deref,
-    time::Duration,
-};
+use fuel_core_types::fuel_tx::{Transaction, UniqueIdentifier};
+use std::{ops::Deref, time::Duration};
 
 #[tokio::test]
 async fn can_insert_from_p2p() {

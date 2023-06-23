@@ -14,11 +14,7 @@ pub mod service;
 pub use gossipsub::config as gossipsub_config;
 pub use heartbeat::HeartbeatConfig;
 
-pub use libp2p::{
-    multiaddr::Protocol,
-    Multiaddr,
-    PeerId,
-};
+pub use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
 
 #[cfg(feature = "test-helpers")]
 pub mod network_service {

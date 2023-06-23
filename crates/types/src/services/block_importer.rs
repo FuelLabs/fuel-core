@@ -1,14 +1,8 @@
 //! Types related to block importer service.
 
 use crate::{
-    blockchain::{
-        header::BlockHeader,
-        SealedBlock,
-    },
-    services::{
-        executor::TransactionExecutionStatus,
-        Uncommitted,
-    },
+    blockchain::{header::BlockHeader, SealedBlock},
+    services::{executor::TransactionExecutionStatus, Uncommitted},
 };
 
 /// The uncommitted result of the block importing.

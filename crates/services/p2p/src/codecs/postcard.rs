@@ -1,42 +1,21 @@
-use super::{
-    GossipsubCodec,
-    NetworkCodec,
-    RequestResponseConverter,
-};
+use super::{GossipsubCodec, NetworkCodec, RequestResponseConverter};
 use crate::{
-    gossipsub::messages::{
-        GossipTopicTag,
-        GossipsubBroadcastRequest,
-        GossipsubMessage,
-    },
+    gossipsub::messages::{GossipTopicTag, GossipsubBroadcastRequest, GossipsubMessage},
     request_response::messages::{
-        NetworkResponse,
-        OutboundResponse,
-        RequestMessage,
-        ResponseMessage,
-        MAX_REQUEST_SIZE,
-        REQUEST_RESPONSE_PROTOCOL_ID,
+        NetworkResponse, OutboundResponse, RequestMessage, ResponseMessage,
+        MAX_REQUEST_SIZE, REQUEST_RESPONSE_PROTOCOL_ID,
     },
 };
 use async_trait::async_trait;
-use futures::{
-    AsyncRead,
-    AsyncWriteExt,
-};
+use futures::{AsyncRead, AsyncWriteExt};
 use libp2p::{
     core::{
-        upgrade::{
-            read_length_prefixed,
-            write_length_prefixed,
-        },
+        upgrade::{read_length_prefixed, write_length_prefixed},
         ProtocolName,
     },
     request_response::RequestResponseCodec,
 };
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 use std::io;
 
 #[derive(Debug, Clone)]
@@ -222,6 +201,15 @@ impl RequestResponseConverter for PostcardCodec {
 
                 Ok(ResponseMessage::Transactions(response))
             }
+            NetworkResponse::PooledTransactions(tx_bytes) => {
+                let response = if let Some(tx_bytes) = tx_bytes {
+                    Some(self.deserialize(tx_bytes)?)
+                } else {
+                    None
+                };
+
+                Ok(ResponseMessage::PooledTransactions(response))
+            }
         }
     }
 
@@ -256,6 +244,15 @@ impl RequestResponseConverter for PostcardCodec {
                 };
 
                 Ok(NetworkResponse::Transactions(response))
+            }
+            OutboundResponse::PooledTransactions(transactions) => {
+                let response = if let Some(transactions) = transactions {
+                    Some(self.serialize(transactions.as_ref())?)
+                } else {
+                    None
+                };
+
+                Ok(NetworkResponse::PooledTransactions(response))
             }
         }
     }

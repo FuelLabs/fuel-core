@@ -106,15 +106,6 @@ pub fn init_sub_services(
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 
-    let genesis = database.get_genesis()?;
-    let p2p_config = config.p2p.clone().expect("p2p config is required");
-    let p2p_config = p2p_config.init(genesis)?;
-    let tx_pool_sync = new_txpool_syncing_service(
-        config.txpool.clone(),
-        p2p_config,
-        p2p_adapter.clone(),
-    );
-
     let block_producer = fuel_core_producer::Producer {
         config: config.block_producer.clone(),
         db: database.clone(),
@@ -221,7 +212,6 @@ pub fn init_sub_services(
         if let Some(network) = network.take() {
             services.push(Box::new(network));
             services.push(Box::new(sync));
-            services.push(Box::new(tx_pool_sync));
         }
     }
 

@@ -13,6 +13,7 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
+#[async_trait::async_trait]
 pub trait PeerToPeer: Send + Sync {
     type GossipedTransaction: NetworkData<Transaction>;
 
@@ -28,6 +29,15 @@ pub trait PeerToPeer: Send + Sync {
         message_info: GossipsubMessageInfo,
         validity: GossipsubMessageAcceptance,
     ) -> anyhow::Result<()>;
+
+    /// Streams new connections to the node.
+    fn new_connection(&self) -> BoxStream<PeerId>;
+
+    /// Request pooled transactions from a peer.
+    async fn request_pooled_transactions(
+        &self,
+        peer_id: PeerId,
+    ) -> anyhow::Result<Option<Vec<String>>>;
 }
 
 pub trait BlockImporter: Send + Sync {
@@ -47,9 +57,4 @@ pub trait TxPoolDb: Send + Sync {
     fn current_block_height(&self) -> StorageResult<BlockHeight>;
 
     fn transaction_status(&self, tx_id: &Bytes32) -> StorageResult<TransactionStatus>;
-}
-
-pub trait TxPoolSyncPort: Send + Sync {
-    /// Streams new connections to the node.
-    fn new_connection(&self) -> BoxStream<PeerId>;
 }

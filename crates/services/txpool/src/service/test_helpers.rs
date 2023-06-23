@@ -1,26 +1,11 @@
 use super::*;
-use crate::{
-    ports::BlockImporter,
-    MockDb,
-};
-use fuel_core_services::{
-    stream::BoxStream,
-    Service as ServiceTrait,
-};
+use crate::{ports::BlockImporter, MockDb};
+use fuel_core_services::{stream::BoxStream, Service as ServiceTrait};
 use fuel_core_types::{
     blockchain::SealedBlock,
     entities::coins::coin::Coin,
-    fuel_crypto::rand::{
-        rngs::StdRng,
-        SeedableRng,
-    },
-    fuel_tx::{
-        Cacheable,
-        Input,
-        Transaction,
-        TransactionBuilder,
-        Word,
-    },
+    fuel_crypto::rand::{rngs::StdRng, SeedableRng},
+    fuel_tx::{Cacheable, Input, Transaction, TransactionBuilder, Word},
     services::p2p::GossipsubMessageAcceptance,
 };
 use std::cell::RefCell;
@@ -63,12 +48,17 @@ impl TestContext {
 mockall::mock! {
     pub P2P {}
 
+    #[async_trait::async_trait]
     impl PeerToPeer for P2P {
         type GossipedTransaction = GossipedTransaction;
 
         fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()>;
 
         fn gossiped_transaction_events(&self) -> BoxStream<GossipedTransaction>;
+
+        fn new_connection(&self) -> BoxStream<PeerId>;
+
+        async fn request_pooled_transactions(&self, peer_id: PeerId) -> anyhow::Result<Option<Vec<String>>>;
 
         fn notify_gossip_transaction_validity(
             &self,
@@ -95,6 +85,12 @@ impl MockP2P {
         });
         p2p.expect_broadcast_transaction()
             .returning(move |_| Ok(()));
+        p2p.expect_notify_gossip_transaction_validity()
+            .returning(move |_, _| Ok(()));
+        p2p.expect_new_connection().returning(move || {
+            let stream = fuel_core_services::stream::empty::<PeerId>();
+            Box::pin(stream)
+        });
         p2p
     }
 }

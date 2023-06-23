@@ -46,6 +46,11 @@ enum TaskRequest {
         height: BlockHeight,
         channel: oneshot::Sender<Option<(PeerId, SealedBlockHeader)>>,
     },
+    // Request get current pooled transactions
+    GetPooledTransactions {
+        from_peer: PeerId,
+        channel: oneshot::Sender<Option<Vec<String>>>, // temp string
+    },
     GetTransactions {
         block_id: BlockId,
         from_peer: PeerId,
@@ -86,6 +91,7 @@ impl<D> Task<D> {
         let (request_sender, request_receiver) = mpsc::channel(100);
         let (tx_broadcast, _) = broadcast::channel(100);
         let (block_height_broadcast, _) = broadcast::channel(100);
+        let (connection_broadcast, _) = broadcast::channel(100);
 
         let next_block_height = block_importer.next_block_height();
         let max_block_size = config.max_block_size;
@@ -104,6 +110,7 @@ impl<D> Task<D> {
                 tx_broadcast,
                 reserved_peers_broadcast,
                 block_height_broadcast,
+                connection_broadcast,
             },
         }
     }
@@ -172,6 +179,12 @@ where
                             tracing::error!("Got an error during vote broadcasting {}", e);
                         }
                     }
+                    Some(TaskRequest::GetPooledTransactions{ channel, from_peer }) => {
+                        dbg!("### Task::RequestGetPooledTransactions ###");
+                        let request_msg = RequestMessage::PooledTransactions;
+                        let channel_item = ResponseChannelItem::PooledTransactions(channel);
+                        let _ = self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item);
+                    }
                     Some(TaskRequest::GetPeerIds(channel)) => {
                         let peer_ids = self.p2p_service.get_peers_ids().copied().collect();
                         let _ = channel.send(peer_ids);
@@ -207,6 +220,13 @@ where
             p2p_event = self.p2p_service.next_event() => {
                 should_continue = true;
                 match p2p_event {
+                    Some(FuelP2PEvent::PeerConnected (peer_id) ) => {
+                        // Send the peer ID that connected to this node to a
+                        // channel that the TxPoolSync service is listening to.
+                        // This is the first step of the protocol for the initial
+                        // pool sync between two nodes.
+                        let _ = self.shared.connection_broadcast.send(peer_id);
+                    }
                     Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height }) => {
                         let peer_id: Vec<u8> = peer_id.into();
                         let block_height_data = BlockHeightHeartbeatData {
@@ -247,6 +267,9 @@ where
                                     .map(Arc::new);
 
                                 let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(transactions_response));
+                            }
+                            RequestMessage::PooledTransactions => {
+                                todo!("Implement `RequestMessage::PooledTransactions`");
                             }
                             RequestMessage::SealedHeader(block_height) => {
                                 let response = self.db.get_sealed_header(&block_height)?
@@ -294,6 +317,8 @@ pub struct SharedState {
     request_sender: mpsc::Sender<TaskRequest>,
     /// Sender of p2p blopck height data
     block_height_broadcast: broadcast::Sender<BlockHeightHeartbeatData>,
+    /// Sender of new incoming connections
+    connection_broadcast: broadcast::Sender<PeerId>,
 }
 
 impl SharedState {
@@ -364,6 +389,24 @@ impl SharedState {
         receiver.await.map_err(|e| anyhow!("{}", e))
     }
 
+    pub async fn get_pooled_transactions_from_peer(
+        &self,
+        peer_id: Vec<u8>,
+    ) -> anyhow::Result<Option<Vec<String>>> {
+        // temp string
+        let (sender, receiver) = oneshot::channel();
+        let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
+
+        self.request_sender
+            .send(TaskRequest::GetPooledTransactions {
+                from_peer,
+                channel: sender,
+            })
+            .await?;
+
+        receiver.await.map_err(|e| anyhow!("{}", e))
+    }
+
     pub fn broadcast_vote(&self, vote: Arc<ConsensusVote>) -> anyhow::Result<()> {
         self.request_sender
             .try_send(TaskRequest::BroadcastVote(vote))?;
@@ -412,7 +455,7 @@ impl SharedState {
     }
 
     pub fn subscribe_to_connections(&self) -> broadcast::Receiver<PeerId> {
-        todo!("Implement subscribe_to_connections")
+        self.connection_broadcast.subscribe()
     }
 
     pub fn report_peer<T: PeerReport>(

@@ -12,7 +12,7 @@ use fuel_core_storage::{
     tables::{Coins, ContractsRawCode, Messages, SpentMessages},
     Result as StorageResult, StorageAsRef,
 };
-use fuel_core_txpool::ports::{BlockImporter, TxPoolSyncPort};
+use fuel_core_txpool::ports::BlockImporter;
 use fuel_core_types::{
     entities::{coins::coin::CompressedCoin, message::Message},
     fuel_tx::{Transaction, UtxoId},
@@ -35,21 +35,7 @@ impl BlockImporter for BlockImporterAdapter {
 }
 
 #[cfg(feature = "p2p")]
-impl TxPoolSyncPort for P2PAdapter {
-    fn new_connection(&self) -> BoxStream<PeerId> {
-        use tokio_stream::{wrappers::BroadcastStream, StreamExt};
-        if let Some(service) = &self.service {
-            Box::pin(
-                BroadcastStream::new(service.subscribe_to_connections())
-                    .filter_map(|result| result.ok()),
-            )
-        } else {
-            fuel_core_services::stream::IntoBoxStream::into_boxed(tokio_stream::pending())
-        }
-    }
-}
-
-#[cfg(feature = "p2p")]
+#[async_trait::async_trait]
 impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 
@@ -58,6 +44,20 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
             service.broadcast_transaction(transaction)
         } else {
             Ok(())
+        }
+    }
+
+    async fn request_pooled_transactions(
+        &self,
+        peer_id: PeerId,
+    ) -> anyhow::Result<Option<Vec<String>>> {
+        // temp string
+        if let Some(service) = &self.service {
+            service
+                .get_pooled_transactions_from_peer(peer_id.to_bytes())
+                .await
+        } else {
+            Ok(None)
         }
     }
 
@@ -82,6 +82,18 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
             service.notify_gossip_transaction_validity(message_info, validity)
         } else {
             Ok(())
+        }
+    }
+
+    fn new_connection(&self) -> BoxStream<PeerId> {
+        use tokio_stream::{wrappers::BroadcastStream, StreamExt};
+        if let Some(service) = &self.service {
+            Box::pin(
+                BroadcastStream::new(service.subscribe_to_connections())
+                    .filter_map(|result| result.ok()),
+            )
+        } else {
+            fuel_core_services::stream::IntoBoxStream::into_boxed(tokio_stream::pending())
         }
     }
 }

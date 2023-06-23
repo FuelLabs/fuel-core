@@ -22,5 +22,7 @@ mod trigger_integration;
 mod tx;
 #[cfg(feature = "p2p")]
 mod tx_gossip;
+#[cfg(feature = "p2p")]
+mod tx_request_response;
 
 fuel_core_trace::enable_tracing!();

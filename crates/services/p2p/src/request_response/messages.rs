@@ -1,23 +1,13 @@
 use std::sync::Arc;
 
 use fuel_core_types::{
-    blockchain::{
-        primitives::BlockId,
-        SealedBlock,
-        SealedBlockHeader,
-    },
+    blockchain::{primitives::BlockId, SealedBlock, SealedBlockHeader},
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
 };
 use libp2p::PeerId;
-use serde::{
-    Deserialize,
-    Serialize,
-};
-use serde_with::{
-    serde_as,
-    FromInto,
-};
+use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, FromInto};
 use tokio::sync::oneshot;
 
 pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &[u8] = b"/fuel/req_res/0.0.1";
@@ -32,7 +22,7 @@ pub type ChannelItem<T> = oneshot::Sender<Option<T>>;
 // This `OutboundResponse` gets prepared to be sent over the wire in `NetworkResponse` format.
 // The Peer that requested the message receives the response over the wire in `NetworkResponse` format.
 // It then unpacks it into `ResponseMessage`.
-// `ResponseChannelItem` is used to forward the data within `ResponseMessage` to the receving channel.
+// `ResponseChannelItem` is used to forward the data within `ResponseMessage` to the receiving channel.
 // Client Peer: `RequestMessage` (send request)
 // Server Peer: `RequestMessage` (receive request) -> `OutboundResponse` -> `NetworkResponse` (send response)
 // Client Peer: `NetworkResponse` (receive response) -> `ResponseMessage(data)` -> `ResponseChannelItem(channel, data)` (handle response)
@@ -43,6 +33,7 @@ pub enum RequestMessage {
     Block(BlockHeight),
     SealedHeader(BlockHeight),
     Transactions(#[serde_as(as = "FromInto<[u8; 32]>")] BlockId),
+    PooledTransactions,
 }
 
 /// Final Response Message that p2p service sends to the Orchestrator
@@ -51,6 +42,7 @@ pub enum ResponseMessage {
     SealedBlock(Option<SealedBlock>),
     SealedHeader(Option<SealedBlockHeader>),
     Transactions(Option<Vec<Transaction>>),
+    PooledTransactions(Option<Vec<String>>), // temp as string
 }
 
 /// Holds oneshot channels for specific responses
@@ -59,6 +51,7 @@ pub enum ResponseChannelItem {
     Block(ChannelItem<SealedBlock>),
     SealedHeader(ChannelItem<(PeerId, SealedBlockHeader)>),
     Transactions(ChannelItem<Vec<Transaction>>),
+    PooledTransactions(ChannelItem<Vec<String>>), // temp as string
 }
 
 /// Response that is sent over the wire
@@ -68,6 +61,7 @@ pub enum NetworkResponse {
     Block(Option<Vec<u8>>),
     Header(Option<Vec<u8>>),
     Transactions(Option<Vec<u8>>),
+    PooledTransactions(Option<Vec<u8>>),
 }
 
 /// Initial state of the `ResponseMessage` prior to having its inner value serialized
@@ -77,6 +71,7 @@ pub enum OutboundResponse {
     Block(Option<Arc<SealedBlock>>),
     SealedHeader(Option<Arc<SealedBlockHeader>>),
     Transactions(Option<Arc<Vec<Transaction>>>),
+    PooledTransactions(Option<Arc<Vec<String>>>), // temp as string
 }
 
 #[derive(Debug)]

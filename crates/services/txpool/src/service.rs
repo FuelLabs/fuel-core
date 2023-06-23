@@ -1,15 +1,15 @@
 use crate::{
-    ports::{BlockImporter, PeerToPeer, TxPoolDb, TxPoolSyncPort},
+    ports::{BlockImporter, PeerToPeer, TxPoolDb},
     transaction_selector::select_transactions,
-    Config, Error as TxPoolError, TxInfo, TxPool,
+    txpool, Config, Error as TxPoolError, TxInfo, TxPool,
 };
 
 use fuel_core_p2p::{
-    codecs::postcard::PostcardCodec, network_service::FuelP2PEvent,
-    network_service::FuelP2PService, PeerId,
+    codecs::postcard::PostcardCodec, network_service::FuelP2PService, PeerId,
 };
 use fuel_core_services::{
-    stream::BoxStream, RunnableService, RunnableTask, ServiceRunner, StateWatcher,
+    stream::BoxStream, RunnableService, RunnableTask, Service as _, ServiceRunner,
+    StateWatcher,
 };
 use fuel_core_types::{
     fuel_tx::{ConsensusParameters, Transaction, TxId, UniqueIdentifier},
@@ -25,17 +25,24 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use parking_lot::Mutex as ParkingMutex;
-use std::sync::Arc;
+use std::{pin::Pin, sync::Arc};
 use tokio::{sync::broadcast, time::MissedTickBehavior};
-use tokio_stream::StreamExt;
+use tokio_stream::{Stream, StreamExt};
 use update_sender::UpdateSender;
 
 use self::update_sender::{MpscChannel, TxStatusStream};
 
 mod update_sender;
 
+// Main transaction pool service. It is mainly responsible for
+// listening for new transactions being gossiped through the network and
+// adding those to its own pool.
 pub type Service<P2P, DB> = ServiceRunner<Task<P2P, DB>>;
-pub type TxPoolSyncService<P2P> = ServiceRunner<TxPoolSyncTask<P2P>>;
+// Sidecar service that is responsible for a request-response style of syncing
+// pending transactions with other peers upon connection. In other words,
+// when a new connection between peers happen, they will compare their
+// pending transactions and sync them with each other.
+pub type TxPoolSyncService<P2P, DB> = ServiceRunner<TxPoolSyncTask<P2P, DB>>;
 
 #[derive(Clone)]
 pub struct TxStatusChange {
@@ -101,37 +108,26 @@ impl<P2P, DB> Clone for SharedState<P2P, DB> {
     }
 }
 
-pub struct TxPoolSyncSharedState<P2P> {
+pub struct TxPoolSyncTask<P2P, DB> {
+    ttl_timer: tokio::time::Interval,
+    peer_connections: BoxStream<PeerId>,
+    txpool: Arc<ParkingMutex<TxPool<DB>>>,
     p2p: Arc<P2P>,
 }
 
-impl<P2P> Clone for TxPoolSyncSharedState<P2P> {
-    fn clone(&self) -> Self {
-        Self {
-            p2p: self.p2p.clone(),
-        }
-    }
-}
-
-pub struct TxPoolSyncTask<P2P> {
-    shared: TxPoolSyncSharedState<P2P>,
-    ttl_timer: tokio::time::Interval,
-}
-
 #[async_trait::async_trait]
-impl<P2P> RunnableService for TxPoolSyncTask<P2P>
+impl<P2P, DB> RunnableService for TxPoolSyncTask<P2P, DB>
 where
-    P2P: TxPoolSyncPort + Send + Sync,
+    DB: TxPoolDb,
+    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
 {
     const NAME: &'static str = "TxPoolSync";
 
-    type SharedData = TxPoolSyncSharedState<P2P>;
-    type Task = TxPoolSyncTask<P2P>;
+    type SharedData = ();
+    type Task = TxPoolSyncTask<P2P, DB>;
     type TaskParams = ();
 
-    fn shared_data(&self) -> Self::SharedData {
-        self.shared.clone()
-    }
+    fn shared_data(&self) -> Self::SharedData {}
 
     async fn into_task(
         mut self,
@@ -144,16 +140,13 @@ where
 }
 
 #[async_trait::async_trait]
-impl<P2P> RunnableTask for TxPoolSyncTask<P2P>
+impl<P2P, DB> RunnableTask for TxPoolSyncTask<P2P, DB>
 where
-    P2P: TxPoolSyncPort + Send + Sync,
+    DB: TxPoolDb,
+    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
-
-        dbg!("Inside TxPoolSyncTask::run");
-
-        let mut stream = self.shared.p2p.new_connection();
 
         tokio::select! {
             biased;
@@ -162,11 +155,26 @@ where
                 should_continue = false;
             }
 
-            new_connection = stream.next() => {
-                should_continue = true;
+            new_connection = self.peer_connections.next() => {
+                dbg!("New connection: {:?}", new_connection);
                 if let Some(peer_id) = new_connection {
+                    should_continue = true;
                     dbg!("Peer connected, inside TxPoolSyncTask: {:?}", peer_id);
+
+                    // New connection just happened, request the list of
+                    // pooled transactions from the peer.
+                    let peer_txs = self.p2p.request_pooled_transactions(peer_id).await;
+                    dbg!(&peer_txs);
+
+                    // TODO: Once the above is implemented, we compare this node's list of
+                    // transactions with the peer's list of transactions, and request the
+                    // transactions that are missing from this node's list.
+
+                    for tx in self.txpool.lock().txs() {
+                        dbg!(&tx.0);
+                    }
                 } else {
+                    should_continue = false;
                     dbg!(&new_connection);
                 }
             }
@@ -185,10 +193,15 @@ where
     }
 }
 
-pub struct Task<P2P, DB> {
+pub struct Task<P2P, DB>
+where
+    DB: TxPoolDb + 'static,
+    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync + 'static,
+{
     gossiped_tx_stream: BoxStream<TransactionGossipData>,
     committed_block_stream: BoxStream<Arc<ImportResult>>,
     shared: SharedState<P2P, DB>,
+    txpool_sync_task: ServiceRunner<TxPoolSyncTask<P2P, DB>>,
     ttl_timer: tokio::time::Interval,
 }
 
@@ -213,6 +226,9 @@ where
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
+        // Transaction pool sync task work as a sub service to the transaction pool task.
+        // So we start it here and shut it down when this task is shut down.
+        self.txpool_sync_task.start()?;
         self.ttl_timer.reset();
         Ok(self)
     }
@@ -290,10 +306,12 @@ where
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        // Nothing to shut down because we don't have any temporary state that should be dumped,
+        // Nothing other than the txpool sync task to shut down
+        // because we don't have any temporary state that should be dumped,
         // and we don't spawn any sub-tasks that we need to finish or await.
         // Maybe we will save and load the previous list of transactions in the future to
         // avoid losing them.
+        self.txpool_sync_task.stop_and_await().await?;
         Ok(())
     }
 }
@@ -414,20 +432,21 @@ pub enum TxStatusMessage {
     FailedStatus,
 }
 
-// wip
-pub fn new_txpool_syncing_service<PoolSync>(
+pub fn new_txpool_syncing_service<P2P, DB>(
     config: Config,
-    p2p_config: fuel_core_p2p::config::Config,
-    p2p: PoolSync,
-) -> TxPoolSyncService<PoolSync>
+    txpool: Arc<ParkingMutex<TxPool<DB>>>,
+    p2p: Arc<P2P>,
+) -> TxPoolSyncService<P2P, DB>
 where
-    PoolSync: TxPoolSyncPort + 'static,
+    DB: TxPoolDb + 'static,
+    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + 'static,
 {
-    let p2p = Arc::new(p2p);
     let mut ttl_timer = tokio::time::interval(config.transaction_ttl);
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let tx_sync_task = TxPoolSyncTask {
-        shared: TxPoolSyncSharedState { p2p },
+        peer_connections: p2p.new_connection(),
+        txpool,
+        p2p,
         ttl_timer,
     };
 
@@ -452,10 +471,15 @@ where
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let consensus_params = config.chain_config.transaction_parameters;
     let number_of_active_subscription = config.number_of_active_subscription;
-    let txpool = Arc::new(ParkingMutex::new(TxPool::new(config, db)));
+    let txpool = Arc::new(ParkingMutex::new(TxPool::new(config.clone(), db)));
+
+    let txpool_sync_task =
+        new_txpool_syncing_service(config, txpool.clone(), p2p.clone());
+
     let task = Task {
         gossiped_tx_stream,
         committed_block_stream,
+        txpool_sync_task,
         shared: SharedState {
             tx_status_sender: TxStatusChange::new(number_of_active_subscription),
             txpool,

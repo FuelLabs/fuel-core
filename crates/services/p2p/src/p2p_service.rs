@@ -1390,7 +1390,7 @@ mod tests {
             tokio::select! {
                 message_sent = rx_test_end.recv() => {
                     // we received a signal to end the test
-                    assert_eq!(message_sent, Some(true), "Receuved incorrect or missing missing messsage");
+                    assert_eq!(message_sent, Some(true), "Received incorrect or missing missing message");
                     break;
                 }
                 node_a_event = node_a.next_event() => {
@@ -1401,6 +1401,9 @@ mod tests {
                                 request_sent = true;
 
                                 match request_msg {
+                                    RequestMessage::PooledTransactions => {
+                                        todo!("PooledTransactions not implemented yet")
+                                    }
                                     RequestMessage::Block(_) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
                                         assert!(node_a.send_request_msg(None, request_msg, ResponseChannelItem::Block(tx_orchestrator)).is_ok());
@@ -1461,6 +1464,9 @@ mod tests {
                     // 2. Node B receives the RequestMessage from Node A initiated by the NetworkOrchestrator
                     if let Some(FuelP2PEvent::RequestMessage{ request_id, request_message: received_request_message }) = node_b_event {
                         match received_request_message {
+                            RequestMessage::PooledTransactions => {
+                                todo!("PooledTransactions not implemented yet")
+                            }
                             RequestMessage::Block(_) => {
                                 let block = Block::new(PartialBlockHeader::default(), (0..5).map(|_| Transaction::default_test_tx()).collect(), &[]);
 

@@ -1,40 +1,19 @@
 use crate::{
-    containers::{
-        dependency::Dependency,
-        price_sort::PriceSort,
-        time_sort::TimeSort,
-    },
+    containers::{dependency::Dependency, price_sort::PriceSort, time_sort::TimeSort},
     ports::TxPoolDb,
     service::TxStatusChange,
     types::*,
-    Config,
-    Error,
-    TxInfo,
+    Config, Error, TxInfo,
 };
 use fuel_core_metrics::txpool_metrics::TXPOOL_METRICS;
 use fuel_core_types::{
     blockchain::SealedBlock,
-    fuel_tx::{
-        Chargeable,
-        Transaction,
-        UniqueIdentifier,
-    },
-    fuel_vm::checked_transaction::{
-        CheckedTransaction,
-        IntoChecked,
-    },
-    services::txpool::{
-        ArcPoolTx,
-        InsertionResult,
-    },
+    fuel_tx::{Chargeable, Transaction, UniqueIdentifier},
+    fuel_vm::checked_transaction::{CheckedTransaction, IntoChecked},
+    services::txpool::{ArcPoolTx, InsertionResult},
     tai64::Tai64,
 };
-use std::{
-    cmp::Reverse,
-    collections::HashMap,
-    ops::Deref,
-    sync::Arc,
-};
+use std::{cmp::Reverse, collections::HashMap, ops::Deref, sync::Arc};
 
 #[derive(Debug, Clone)]
 pub struct TxPool<DB> {
@@ -81,7 +60,7 @@ where
         let current_height = self.database.current_block_height()?;
 
         if tx.is_mint() {
-            return Err(Error::NotSupportedTransactionType.into())
+            return Err(Error::NotSupportedTransactionType.into());
         }
 
         // verify gas price is at least the minimum
@@ -113,7 +92,7 @@ where
         });
 
         if !tx.is_computed() {
-            return Err(Error::NoMetadata.into())
+            return Err(Error::NoMetadata.into());
         }
 
         // verify max gas is less than block limit
@@ -122,11 +101,11 @@ where
                 tx_gas: tx.max_gas(),
                 block_limit: self.config.chain_config.block_gas_limit,
             }
-            .into())
+            .into());
         }
 
         if self.by_hash.contains_key(&tx.id()) {
-            return Err(Error::NotInsertedTxKnown.into())
+            return Err(Error::NotInsertedTxKnown.into());
         }
 
         let mut max_limit_hit = false;
@@ -136,7 +115,7 @@ where
             // limit is hit, check if we can push out lowest priced tx
             let lowest_price = self.by_gas_price.lowest_value().unwrap_or_default();
             if lowest_price >= tx.price() {
-                return Err(Error::NotInsertedLimitHit.into())
+                return Err(Error::NotInsertedLimitHit.into());
             }
         }
         if self.config.metrics {
@@ -208,7 +187,7 @@ where
             for remove in removed.iter() {
                 self.remove_tx(&remove.id());
             }
-            return removed
+            return removed;
         }
         Vec::new()
     }
@@ -245,7 +224,7 @@ where
             TXPOOL_METRICS.gas_price_histogram.observe(price as f64);
         }
         if price < self.config.min_gas_price {
-            return Err(Error::NotInsertedGasPriceTooLow)
+            return Err(Error::NotInsertedGasPriceTooLow);
         }
         Ok(())
     }
@@ -381,7 +360,7 @@ where
                 let removed = self.remove_inner(&oldest_tx);
                 result.extend(removed.into_iter());
             } else {
-                break
+                break;
             }
         }
 
