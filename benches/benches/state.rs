@@ -74,7 +74,7 @@ fn state_single_contract(c: &mut Criterion) {
     let mut group = c.benchmark_group("state single contract");
 
     bench_state(&mut group, "insert state with 0 preexisting entries", 0);
-    bench_state(&mut group, "insert state with 1 preexisting entries", 1);
+    bench_state(&mut group, "insert state with 1 preexisting entry", 1);
     bench_state(&mut group, "insert state with 10 preexisting entries", 10);
     bench_state(&mut group, "insert state with 100 preexisting entries", 100);
     bench_state(
@@ -138,7 +138,7 @@ fn state_multiple_contracts(c: &mut Criterion) {
     let mut group = c.benchmark_group("state multiple contracts");
 
     bench_state(&mut group, "insert state with 0 preexisting entries", 0);
-    bench_state(&mut group, "insert state with 1 preexisting entries", 1);
+    bench_state(&mut group, "insert state with 1 preexisting entry", 1);
     bench_state(&mut group, "insert state with 10 preexisting entries", 10);
     bench_state(&mut group, "insert state with 100 preexisting entries", 100);
     bench_state(
