@@ -1,22 +1,14 @@
 use criterion::{
     criterion_group,
     criterion_main,
+    measurement::WallTime,
+    BenchmarkGroup,
     Criterion,
 };
-use fuel_core::database::{
-    storage::{
-        ContractsStateMerkleData,
-        ContractsStateMerkleMetadata,
-        SparseMerkleMetadata,
-    },
-    vm_database::VmDatabase,
-};
-use fuel_core_storage::{
-    InterpreterStorage,
-    StorageAsMut,
-};
+use fuel_core::database::vm_database::VmDatabase;
+use fuel_core_storage::InterpreterStorage;
 use fuel_core_types::{
-    fuel_merkle::sparse::MerkleTree,
+    blockchain::header::GeneratedConsensusFields,
     fuel_tx::Bytes32,
     fuel_types::ContractId,
 };
@@ -26,7 +18,10 @@ use rand::{
     Rng,
     SeedableRng,
 };
-use std::iter;
+use std::{
+    iter,
+    time::Duration,
+};
 
 fn setup(db: &mut VmDatabase, contract: &ContractId, n: usize) {
     let mut rng_keys = thread_rng();
@@ -40,18 +35,9 @@ fn setup(db: &mut VmDatabase, contract: &ContractId, n: usize) {
     // State key-values
     let state_key_values = state_keys.zip(state_values);
 
-    // Insert the key-values into the database while building the Merkle tree
-    let tree: MerkleTree<ContractsStateMerkleData, _> =
-        MerkleTree::from_set(db, state_key_values).expect("Failed to setup DB");
-
-    // Create the relevant Merkle metadata generated for the key values
-    let root = tree.root();
-    let metadata = SparseMerkleMetadata { root };
-
-    let db = tree.into_storage();
-    db.storage_as_mut::<ContractsStateMerkleMetadata>()
-        .insert(contract, &metadata)
-        .expect("Failed to create Merkle metadata");
+    db.database_mut()
+        .init_contract_state(contract, state_key_values)
+        .expect("Failed to initialize contract state");
 }
 
 fn state_single_contract(c: &mut Criterion) {
@@ -59,119 +45,58 @@ fn state_single_contract(c: &mut Criterion) {
     let state: Bytes32 = rng.gen();
     let value: Bytes32 = rng.gen();
 
+    let mut bench_state = |group: &mut BenchmarkGroup<WallTime>, name: &str, n: usize| {
+        group.bench_function(name, |b| {
+            let mut db = VmDatabase::default();
+            let contract: ContractId = rng.gen();
+            setup(&mut db, &contract, n);
+            let outer = db.database_mut().transaction();
+            b.iter_custom(|iters| {
+                let mut elapsed_time = Duration::default();
+                for _ in 0..iters {
+                    let mut inner = outer.transaction();
+                    let mut inner_db = VmDatabase::new::<GeneratedConsensusFields>(
+                        inner.as_mut().clone(),
+                        &Default::default(),
+                        Default::default(),
+                    );
+                    let start = std::time::Instant::now();
+                    inner_db
+                        .merkle_contract_state_insert(&contract, &state, &value)
+                        .expect("failed to insert state into transaction");
+                    elapsed_time += start.elapsed();
+                }
+                elapsed_time
+            });
+        });
+    };
+
     let mut group = c.benchmark_group("state single contract");
 
-    group.bench_function("insert state with 0 preexisting entries", |b| {
-        let mut db = VmDatabase::default();
-        let contract: ContractId = rng.gen();
-        setup(&mut db, &contract, 0);
-        b.iter_custom(|iters| {
-            let start = std::time::Instant::now();
-            for _ in 0..iters {
-                db.merkle_contract_state_insert(&contract, &state, &value)
-                    .expect("failed to insert state");
-            }
-            start.elapsed()
-        })
-    });
-
-    group.bench_function("insert state with 1 preexisting entries", |b| {
-        let mut db = VmDatabase::default();
-        let contract: ContractId = rng.gen();
-        setup(&mut db, &contract, 1);
-        b.iter_custom(|iters| {
-            let start = std::time::Instant::now();
-            for _ in 0..iters {
-                db.merkle_contract_state_insert(&contract, &state, &value)
-                    .expect("failed to insert state");
-            }
-            start.elapsed()
-        })
-    });
-
-    group.bench_function("insert state with 10 preexisting entries", |b| {
-        let mut db = VmDatabase::default();
-        let contract: ContractId = rng.gen();
-        setup(&mut db, &contract, 10);
-        b.iter_custom(|iters| {
-            let start = std::time::Instant::now();
-            for _ in 0..iters {
-                db.merkle_contract_state_insert(&contract, &state, &value)
-                    .expect("failed to insert state");
-            }
-            start.elapsed()
-        })
-    });
-
-    group.bench_function("insert state with 100 preexisting entries", |b| {
-        let mut db = VmDatabase::default();
-        let contract: ContractId = rng.gen();
-        setup(&mut db, &contract, 100);
-        b.iter_custom(|iters| {
-            let start = std::time::Instant::now();
-            for _ in 0..iters {
-                db.merkle_contract_state_insert(&contract, &state, &value)
-                    .expect("failed to insert state");
-            }
-            start.elapsed()
-        })
-    });
-
-    group.bench_function("insert state with 1,000 preexisting entries", |b| {
-        let mut db = VmDatabase::default();
-        let contract: ContractId = rng.gen();
-        setup(&mut db, &contract, 1_000);
-        b.iter_custom(|iters| {
-            let start = std::time::Instant::now();
-            for _ in 0..iters {
-                db.merkle_contract_state_insert(&contract, &state, &value)
-                    .expect("failed to insert state");
-            }
-            start.elapsed()
-        })
-    });
-
-    group.bench_function("insert state with 10,000 preexisting entries", |b| {
-        let mut db = VmDatabase::default();
-        let contract: ContractId = rng.gen();
-        setup(&mut db, &contract, 10_000);
-        b.iter_custom(|iters| {
-            let start = std::time::Instant::now();
-            for _ in 0..iters {
-                db.merkle_contract_state_insert(&contract, &state, &value)
-                    .expect("failed to insert state");
-            }
-            start.elapsed()
-        })
-    });
-
-    group.bench_function("insert state with 100,000 preexisting entries", |b| {
-        let mut db = VmDatabase::default();
-        let contract: ContractId = rng.gen();
-        setup(&mut db, &contract, 100_000);
-        b.iter_custom(|iters| {
-            let start = std::time::Instant::now();
-            for _ in 0..iters {
-                db.merkle_contract_state_insert(&contract, &state, &value)
-                    .expect("failed to insert state");
-            }
-            start.elapsed()
-        })
-    });
-
-    group.bench_function("insert state with 1,000,000 preexisting entries", |b| {
-        let mut db = VmDatabase::default();
-        let contract: ContractId = rng.gen();
-        setup(&mut db, &contract, 1_000_000);
-        b.iter_custom(|iters| {
-            let start = std::time::Instant::now();
-            for _ in 0..iters {
-                db.merkle_contract_state_insert(&contract, &state, &value)
-                    .expect("failed to insert state");
-            }
-            start.elapsed()
-        })
-    });
+    bench_state(&mut group, "insert state with 0 preexisting entries", 0);
+    bench_state(&mut group, "insert state with 1 preexisting entries", 1);
+    bench_state(&mut group, "insert state with 10 preexisting entries", 10);
+    bench_state(&mut group, "insert state with 100 preexisting entries", 100);
+    bench_state(
+        &mut group,
+        "insert state with 1,000 preexisting entries",
+        1_000,
+    );
+    bench_state(
+        &mut group,
+        "insert state with 10,000 preexisting entries",
+        10_000,
+    );
+    bench_state(
+        &mut group,
+        "insert state with 100,000 preexisting entries",
+        100_000,
+    );
+    bench_state(
+        &mut group,
+        "insert state with 1,000,000 preexisting entries",
+        1_000_000,
+    );
 
     group.finish();
 }
@@ -181,139 +106,61 @@ fn state_multiple_contracts(c: &mut Criterion) {
     let state: Bytes32 = rng.gen();
     let value: Bytes32 = rng.gen();
 
+    let mut bench_state = |group: &mut BenchmarkGroup<WallTime>, name: &str, n: usize| {
+        group.bench_function(name, |b| {
+            let mut db = VmDatabase::default();
+            for _ in 0..n {
+                let contract: ContractId = rng.gen();
+                setup(&mut db, &contract, 1);
+            }
+            let outer = db.database_mut().transaction();
+            b.iter_custom(|iters| {
+                let mut elapsed_time = Duration::default();
+                let contract: ContractId = rng.gen();
+                for _ in 0..iters {
+                    let mut inner = outer.transaction();
+                    let mut inner_db = VmDatabase::new::<GeneratedConsensusFields>(
+                        inner.as_mut().clone(),
+                        &Default::default(),
+                        Default::default(),
+                    );
+                    let start = std::time::Instant::now();
+                    inner_db
+                        .merkle_contract_state_insert(&contract, &state, &value)
+                        .expect("failed to insert state into transaction");
+                    elapsed_time += start.elapsed();
+                }
+                elapsed_time
+            })
+        });
+    };
+
     let mut group = c.benchmark_group("state multiple contracts");
 
-    group.bench_function("insert state with 0 preexisting entries", |b| {
-        let mut db = VmDatabase::default();
-        b.iter_custom(|iters| {
-            let contract: ContractId = rng.gen();
-            let start = std::time::Instant::now();
-            for _ in 0..iters {
-                db.merkle_contract_state_insert(&contract, &state, &value)
-                    .expect("failed to insert state");
-            }
-            start.elapsed()
-        })
-    });
-
-    group.bench_function("insert state with 1 preexisting entries", |b| {
-        let mut db = VmDatabase::default();
-        for _ in 0..1 {
-            let contract: ContractId = rng.gen();
-            setup(&mut db, &contract, 1);
-        }
-        b.iter_custom(|iters| {
-            let contract: ContractId = rng.gen();
-            let start = std::time::Instant::now();
-            for _ in 0..iters {
-                db.merkle_contract_state_insert(&contract, &state, &value)
-                    .expect("failed to insert state");
-            }
-            start.elapsed()
-        })
-    });
-
-    group.bench_function("insert state with 10 preexisting entries", |b| {
-        let mut db = VmDatabase::default();
-        for _ in 0..10 {
-            let contract: ContractId = rng.gen();
-            setup(&mut db, &contract, 1);
-        }
-        b.iter_custom(|iters| {
-            let contract: ContractId = rng.gen();
-            let start = std::time::Instant::now();
-            for _ in 0..iters {
-                db.merkle_contract_state_insert(&contract, &state, &value)
-                    .expect("failed to insert state");
-            }
-            start.elapsed()
-        })
-    });
-
-    group.bench_function("insert state with 100 preexisting entries", |b| {
-        let mut db = VmDatabase::default();
-        for _ in 0..100 {
-            let contract: ContractId = rng.gen();
-            setup(&mut db, &contract, 1);
-        }
-        b.iter_custom(|iters| {
-            let contract: ContractId = rng.gen();
-            let start = std::time::Instant::now();
-            for _ in 0..iters {
-                db.merkle_contract_state_insert(&contract, &state, &value)
-                    .expect("failed to insert state");
-            }
-            start.elapsed()
-        })
-    });
-
-    group.bench_function("insert state with 1,000 preexisting entries", |b| {
-        let mut db = VmDatabase::default();
-        for _ in 0..1_000 {
-            let contract: ContractId = rng.gen();
-            setup(&mut db, &contract, 1);
-        }
-        b.iter_custom(|iters| {
-            let contract: ContractId = rng.gen();
-            let start = std::time::Instant::now();
-            for _ in 0..iters {
-                db.merkle_contract_state_insert(&contract, &state, &value)
-                    .expect("failed to insert state");
-            }
-            start.elapsed()
-        })
-    });
-
-    group.bench_function("insert state with 10,000 preexisting entries", |b| {
-        let mut db = VmDatabase::default();
-        for _ in 0..10_000 {
-            let contract: ContractId = rng.gen();
-            setup(&mut db, &contract, 1);
-        }
-        b.iter_custom(|iters| {
-            let contract: ContractId = rng.gen();
-            let start = std::time::Instant::now();
-            for _ in 0..iters {
-                db.merkle_contract_state_insert(&contract, &state, &value)
-                    .expect("failed to insert state");
-            }
-            start.elapsed()
-        })
-    });
-
-    group.bench_function("insert state with 100,000 preexisting entries", |b| {
-        let mut db = VmDatabase::default();
-        for _ in 0..100_000 {
-            let contract: ContractId = rng.gen();
-            setup(&mut db, &contract, 1);
-        }
-        b.iter_custom(|iters| {
-            let contract: ContractId = rng.gen();
-            let start = std::time::Instant::now();
-            for _ in 0..iters {
-                db.merkle_contract_state_insert(&contract, &state, &value)
-                    .expect("failed to insert state");
-            }
-            start.elapsed()
-        })
-    });
-
-    group.bench_function("insert state with 1,000,000 preexisting entries", |b| {
-        let mut db = VmDatabase::default();
-        for _ in 0..1_000_000 {
-            let contract: ContractId = rng.gen();
-            setup(&mut db, &contract, 1);
-        }
-        b.iter_custom(|iters| {
-            let contract: ContractId = rng.gen();
-            let start = std::time::Instant::now();
-            for _ in 0..iters {
-                db.merkle_contract_state_insert(&contract, &state, &value)
-                    .expect("failed to insert state");
-            }
-            start.elapsed()
-        })
-    });
+    bench_state(&mut group, "insert state with 0 preexisting entries", 0);
+    bench_state(&mut group, "insert state with 1 preexisting entries", 1);
+    bench_state(&mut group, "insert state with 10 preexisting entries", 10);
+    bench_state(&mut group, "insert state with 100 preexisting entries", 100);
+    bench_state(
+        &mut group,
+        "insert state with 1,000 preexisting entries",
+        1_000,
+    );
+    bench_state(
+        &mut group,
+        "insert state with 10,000 preexisting entries",
+        10_000,
+    );
+    bench_state(
+        &mut group,
+        "insert state with 100,000 preexisting entries",
+        100_000,
+    );
+    bench_state(
+        &mut group,
+        "insert state with 1,000,000 preexisting entries",
+        1_000_000,
+    );
 
     group.finish();
 }
