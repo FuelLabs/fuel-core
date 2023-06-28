@@ -262,6 +262,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         }
     }
 
+    #[cfg(feature = "test-helpers")]
     pub fn multiaddrs(&self) -> Vec<Multiaddr> {
         let local_peer = self.local_peer_id;
         self.swarm
