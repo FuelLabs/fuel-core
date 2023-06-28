@@ -1090,11 +1090,8 @@ mod tests {
             tokio::select! {
                 node_a_event = node_a.swarm.select_next_some() => {
                     tracing::info!("Node A Event: {:?}", node_a_event);
-                    if let SwarmEvent::IncomingConnectionError { error: PendingInboundConnectionError::Transport(error), .. } = node_a_event {
-                        if let TransportError::Other(_) = error {
-                            // Custom error confirmed
-                            break
-                        }
+                    if let SwarmEvent::IncomingConnectionError { error: PendingInboundConnectionError::Transport(TransportError::Other(_)), .. } = node_a_event {
+                        break
                     }
                 },
                 node_b_event = node_b.next_event() => {
