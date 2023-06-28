@@ -228,9 +228,6 @@ where
                 Trigger::Interval { block_time } => {
                     increase_time(self.last_timestamp, block_time)
                 }
-                Trigger::Hybrid { min_block_time, .. } => {
-                    increase_time(self.last_timestamp, min_block_time)
-                }
             },
             RequestType::Trigger => {
                 let now = Tai64::now();
@@ -357,36 +354,6 @@ where
                     .set_deadline(last_block_created + block_time, OnConflict::Overwrite)
                     .await;
             }
-            (
-                Trigger::Hybrid {
-                    max_block_time,
-                    min_block_time,
-                    max_tx_idle_time,
-                },
-                RequestType::Trigger,
-            ) => {
-                let consumable_gas = self.txpool.total_consumable_gas();
-
-                // If txpool still has more than a full block of transactions available,
-                // produce new block in min_block_time.
-                if consumable_gas > self.block_gas_limit {
-                    self.timer
-                        .set_timeout(min_block_time, OnConflict::Max)
-                        .await;
-                } else if self.txpool.pending_number() > 0 {
-                    // If we still have available txs, reduce the timeout to max idle time
-                    self.timer
-                        .set_timeout(max_tx_idle_time, OnConflict::Max)
-                        .await;
-                } else {
-                    self.timer
-                        .set_timeout(max_block_time, OnConflict::Max)
-                        .await;
-                }
-            }
-            (Trigger::Hybrid { .. }, RequestType::Manual) => {
-                unreachable!("Trigger types hybrid cannot be used with manual. This is enforced during config validation")
-            }
         }
 
         Ok(())
@@ -403,28 +370,6 @@ where
                 Ok(())
             }
             Trigger::Never | Trigger::Interval { .. } => Ok(()),
-            Trigger::Hybrid {
-                max_tx_idle_time,
-                min_block_time,
-                ..
-            } => {
-                let consumable_gas = self.txpool.total_consumable_gas();
-
-                // If we have over one full block of transactions and min_block_time
-                // has expired, start block production immediately
-                if consumable_gas > self.block_gas_limit
-                    && self.last_block_created + min_block_time < Instant::now()
-                {
-                    self.produce_next_block().await?;
-                } else if self.txpool.pending_number() > 0 {
-                    // We have at least one transaction, so tx_max_idle_time is the limit
-                    self.timer
-                        .set_timeout(max_tx_idle_time, OnConflict::Min)
-                        .await;
-                }
-
-                Ok(())
-            }
         }
     }
 
@@ -434,13 +379,7 @@ where
                 unreachable!("Timer is never set in this mode");
             }
             // In the Interval mode the timer expires only when a new block should be created.
-            // In the Hybrid mode the timer can be either:
-            // 1. min_block_time expired after it was set when a block
-            //    would have been produced too soon
-            // 2. max_tx_idle_time expired after a tx has arrived
-            // 3. max_block_time expired
-            // => we produce a new block in any case
-            Trigger::Interval { .. } | Trigger::Hybrid { .. } => {
+            Trigger::Interval { .. } => {
                 self.produce_next_block().await?;
                 Ok(())
             }
@@ -475,11 +414,6 @@ where
             Trigger::Interval { block_time } => {
                 self.timer
                     .set_timeout(block_time, OnConflict::Overwrite)
-                    .await;
-            }
-            Trigger::Hybrid { max_block_time, .. } => {
-                self.timer
-                    .set_timeout(max_block_time, OnConflict::Overwrite)
                     .await;
             }
         };
