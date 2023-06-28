@@ -11,6 +11,7 @@ use fuel_core::database::{
 };
 use fuel_core_storage::InterpreterStorage;
 use fuel_core_types::{
+    blockchain::header::GeneratedConsensusFields,
     fuel_tx::Bytes32,
     fuel_types::ContractId,
 };
@@ -55,8 +56,12 @@ fn insert_state_single_contract_database(c: &mut Criterion) {
             b.iter_custom(|iters| {
                 let mut elapsed_time = Duration::default();
                 for _ in 0..iters {
-                    let inner = outer.transaction();
-                    let mut inner_db: VmDatabase = inner.into();
+                    let mut inner = outer.transaction();
+                    let mut inner_db = VmDatabase::new::<GeneratedConsensusFields>(
+                        inner.as_mut().clone(),
+                        &Default::default(),
+                        Default::default(),
+                    );
                     let start = std::time::Instant::now();
                     inner_db
                         .merkle_contract_state_insert(&contract, &state, &value)
@@ -112,8 +117,12 @@ fn insert_state_single_contract_transaction(c: &mut Criterion) {
             b.iter_custom(|iters| {
                 let mut elapsed_time = Duration::default();
                 for _ in 0..iters {
-                    let inner = outer.transaction();
-                    let mut inner_db: VmDatabase = inner.into();
+                    let mut inner = outer.transaction();
+                    let mut inner_db = VmDatabase::new::<GeneratedConsensusFields>(
+                        inner.as_mut().clone(),
+                        &Default::default(),
+                        Default::default(),
+                    );
                     let start = std::time::Instant::now();
                     inner_db
                         .merkle_contract_state_insert(&contract, &state, &value)
@@ -172,8 +181,12 @@ fn insert_state_multiple_contracts_database(c: &mut Criterion) {
                 let mut elapsed_time = Duration::default();
                 let contract: ContractId = rng.gen();
                 for _ in 0..iters {
-                    let inner = outer.transaction();
-                    let mut inner_db: VmDatabase = inner.into();
+                    let mut inner = outer.transaction();
+                    let mut inner_db = VmDatabase::new::<GeneratedConsensusFields>(
+                        inner.as_mut().clone(),
+                        &Default::default(),
+                        Default::default(),
+                    );
                     let start = std::time::Instant::now();
                     inner_db
                         .merkle_contract_state_insert(&contract, &state, &value)
@@ -232,8 +245,12 @@ fn insert_state_multiple_contracts_transaction(c: &mut Criterion) {
                 let mut elapsed_time = Duration::default();
                 let contract: ContractId = rng.gen();
                 for _ in 0..iters {
-                    let inner = outer.transaction();
-                    let mut inner_db: VmDatabase = inner.into();
+                    let mut inner = outer.transaction();
+                    let mut inner_db = VmDatabase::new::<GeneratedConsensusFields>(
+                        inner.as_mut().clone(),
+                        &Default::default(),
+                        Default::default(),
+                    );
                     let start = std::time::Instant::now();
                     inner_db
                         .merkle_contract_state_insert(&contract, &state, &value)

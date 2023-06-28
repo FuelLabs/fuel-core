@@ -1,5 +1,4 @@
 use crate::database::{
-    transaction::DatabaseTransaction,
     Column,
     Database,
     Error as DatabaseError,
@@ -22,10 +21,7 @@ use fuel_core_storage::{
     StorageSize,
 };
 use fuel_core_types::{
-    blockchain::header::{
-        ConsensusHeader,
-        GeneratedConsensusFields,
-    },
+    blockchain::header::ConsensusHeader,
     fuel_tx::{
         Contract,
         StorageSlot,
@@ -335,18 +331,6 @@ impl InterpreterStorage for VmDatabase {
         } else {
             Ok(Some(()))
         }
-    }
-}
-
-#[cfg_attr(any(test, feature = "test-helpers"))]
-impl From<DatabaseTransaction> for VmDatabase {
-    fn from(mut transaction: DatabaseTransaction) -> Self {
-        let database = transaction.as_mut().clone();
-        VmDatabase::new::<GeneratedConsensusFields>(
-            database,
-            &Default::default(),
-            Default::default(),
-        )
     }
 }
 
