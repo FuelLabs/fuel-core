@@ -338,7 +338,7 @@ impl InterpreterStorage for VmDatabase {
     }
 }
 
-#[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
+#[cfg_attr(any(test, feature = "test-helpers"))]
 impl From<DatabaseTransaction> for VmDatabase {
     fn from(mut transaction: DatabaseTransaction) -> Self {
         let database = transaction.as_mut().clone();
