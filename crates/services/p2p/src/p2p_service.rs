@@ -753,11 +753,11 @@ mod tests {
                 .map(|_| build_service_from_config(p2p_config.clone())),
         )
         .await;
-        let bootstarp_multiaddrs = nodes
+        let bootstrap_multiaddrs = nodes
             .iter()
             .flat_map(|b| b.multiaddrs())
             .collect::<Vec<_>>();
-        (nodes, bootstarp_multiaddrs)
+        (nodes, bootstrap_multiaddrs)
     }
 
     fn spawn(stop: &watch::Sender<()>, mut node: P2PService) {
@@ -794,7 +794,7 @@ mod tests {
         // total amount will be `max_peers_allowed` + `reserved_nodes.len()`
         let max_peers_allowed = 3;
 
-        let (bootstrap_nodes, bootstarp_multiaddrs) =
+        let (bootstrap_nodes, bootstrap_multiaddrs) =
             setup_bootstrap_nodes(&p2p_config, max_peers_allowed * 5).await;
         let (mut reserved_nodes, reserved_multiaddrs) =
             setup_bootstrap_nodes(&p2p_config, max_peers_allowed).await;
@@ -803,7 +803,7 @@ mod tests {
             let mut p2p_config = p2p_config.clone();
             p2p_config.max_peers_connected = max_peers_allowed as u32;
 
-            p2p_config.bootstrap_nodes = bootstarp_multiaddrs;
+            p2p_config.bootstrap_nodes = bootstrap_multiaddrs;
 
             p2p_config.reserved_nodes = reserved_multiaddrs;
 
