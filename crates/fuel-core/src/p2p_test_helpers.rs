@@ -14,7 +14,6 @@ use crate::{
 use fuel_core_p2p::{
     codecs::postcard::PostcardCodec,
     network_service::FuelP2PService,
-    PeerId,
 };
 use fuel_core_poa::{
     ports::BlockImporter,
@@ -110,27 +109,15 @@ pub struct Nodes {
 /// Nodes accessible by their name.
 pub struct NamedNodes(pub HashMap<String, Node>);
 
-fn map_listener_address(bootstrap_id: &PeerId, addr: &Multiaddr) -> Multiaddr {
-    format!("{addr}/p2p/{bootstrap_id}").parse().unwrap()
-}
-
 impl Bootstrap {
     /// Spawn a bootstrap node.
     pub async fn new(node_config: &Config) -> Self {
         let bootstrap_config = extract_p2p_config(node_config);
         let codec = PostcardCodec::new(bootstrap_config.max_block_size);
         let mut bootstrap = FuelP2PService::new(bootstrap_config, codec);
-        bootstrap.start().unwrap();
+        bootstrap.start().await.unwrap();
 
-        // Wait for listener addresses.
-        while bootstrap.listeners().next().is_none() {
-            bootstrap.next_event().await;
-        }
-
-        let listeners: Vec<_> = bootstrap
-            .listeners()
-            .map(|addr| map_listener_address(&bootstrap.local_peer_id, addr))
-            .collect();
+        let listeners = bootstrap.multiaddrs();
         let (kill, mut shutdown) = broadcast::channel(1);
         tokio::spawn(async move {
             loop {
@@ -325,9 +312,13 @@ pub fn make_config(name: String, chain_config: ChainConfig) -> Config {
 
 pub async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node {
     let db = Database::in_memory();
-    let node = FuelService::from_database(db.clone(), node_config)
-        .await
-        .unwrap();
+    let node = tokio::time::timeout(
+        Duration::from_secs(1),
+        FuelService::from_database(db.clone(), node_config),
+    )
+    .await
+    .expect("All services should start in less than 1 second")
+    .expect("The `FuelService should start without error");
 
     let config = node.shared.config.clone();
     Node {
