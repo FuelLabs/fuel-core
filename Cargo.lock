@@ -2824,6 +2824,7 @@ dependencies = [
  "ctor",
  "fuel-core-chain-config",
  "fuel-core-metrics",
+ "fuel-core-p2p",
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-trace",

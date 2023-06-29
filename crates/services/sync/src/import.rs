@@ -212,7 +212,7 @@ where
         .take_until({
             let mut s = shutdown.clone();
             async move {
-                let _ =s.while_started().await;
+                let _ = s.while_started().await;
                 tracing::info!("In progress import stream shutting down");
             }
         })

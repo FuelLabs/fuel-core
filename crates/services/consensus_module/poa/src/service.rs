@@ -496,11 +496,15 @@ where
     I: BlockImporter<Database = D>,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+        let should_continue;
         // make sure we're synced first
         while *self.sync_task_handle.shared.borrow() == SyncState::NotSynced {
             tokio::select! {
                 biased;
-                _ = watcher.while_started() => {}
+                result = watcher.while_started() => {
+                    should_continue = result?.started();
+                    return Ok(should_continue);
+                }
                 _ = self.sync_task_handle.shared.changed() => {
                     if let SyncState::Synced(block_header) = &*self.sync_task_handle.shared.borrow() {
                         let (last_height, last_timestamp, last_block_created) =
@@ -513,7 +517,6 @@ where
             }
         }
 
-        let should_continue;
         tokio::select! {
             biased;
             _ = watcher.while_started() => {

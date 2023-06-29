@@ -29,7 +29,7 @@ use std::time::Duration;
 #[tokio::test(start_paused = true)]
 async fn poa_interval_produces_empty_blocks_at_correct_rate() {
     let rounds = 64;
-    let round_time_seconds = 30;
+    let round_time_seconds = 2;
 
     let mut rng = StdRng::seed_from_u64(10);
 
@@ -90,7 +90,7 @@ async fn poa_interval_produces_empty_blocks_at_correct_rate() {
 #[tokio::test(start_paused = true)]
 async fn poa_interval_produces_nonempty_blocks_at_correct_rate() {
     let rounds = 64;
-    let round_time_seconds = 30;
+    let round_time_seconds = 2;
     let tx_count = 100;
 
     let mut rng = StdRng::seed_from_u64(10);
