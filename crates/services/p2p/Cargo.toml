@@ -63,6 +63,7 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 ctor = "0.1"
+fuel-core-p2p = { path = ".", features = ["test-helpers"] }
 fuel-core-trace = { path = "../../trace" }
 fuel-core-types = { path = "../../types", features = [
     "serde",
