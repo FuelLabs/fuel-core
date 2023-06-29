@@ -21,4 +21,8 @@ tikv-jemallocator = { workspace = true }
 
 [[bench]]
 harness = false
+name = "state"
+
+[[bench]]
+harness = false
 name = "vm"
