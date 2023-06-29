@@ -110,9 +110,10 @@ mod p2p {
     // after the first_producer stops, second_producer should start producing blocks
     #[tokio::test(flavor = "multi_thread")]
     async fn test_poa_multiple_producers() {
-        const INTERVAL: u64 = 3;
+        const INTERVAL: u64 = 1;
+        const TIMEOUT: u64 = 5 * INTERVAL;
 
-        let mut rng = StdRng::from_entropy();
+        let mut rng = StdRng::seed_from_u64(2222);
 
         // Create a producer and a validator that share the same key pair.
         let secret = SecretKey::random(&mut rng);
@@ -142,34 +143,51 @@ mod p2p {
         let first_producer_config = make_node_config("First Producer");
         let second_producer_config = make_node_config("Second Producer");
 
-        let first_producer = make_node(first_producer_config.clone(), vec![]).await;
+        let first_producer = make_node(first_producer_config, vec![]).await;
 
         // The first producer should produce 2 blocks.
-        first_producer.wait_for_blocks(2, true /* is_local */).await;
+        tokio::time::timeout(
+            Duration::from_secs(TIMEOUT),
+            first_producer.wait_for_blocks(2, true /* is_local */),
+        )
+        .await
+        .expect("The first should produce 2 blocks");
 
         // Start the second producer after 2 blocks.
         // The second producer should synchronize 3 blocks produced by the first producer.
         let second_producer = make_node(second_producer_config, vec![]).await;
-        second_producer
-            .wait_for_blocks(3, false /* is_local */)
-            .await;
+        tokio::time::timeout(
+            Duration::from_secs(TIMEOUT),
+            second_producer.wait_for_blocks(3, false /* is_local */),
+        )
+        .await
+        .expect("The second should sync with the first");
 
         // Stop the first producer.
         // The second should start produce new blocks after 2 * `INTERVAL`
-        first_producer
-            .node
-            .stop_and_await()
-            .await
-            .expect("Should stop without any error");
-        second_producer
-            .wait_for_blocks(1, true /* is_local */)
-            .await;
+        tokio::time::timeout(
+            Duration::from_secs(TIMEOUT),
+            first_producer.node.stop_and_await(),
+        )
+        .await
+        .expect("Should stop services before timeout")
+        .expect("Should stop without any error");
+        tokio::time::timeout(
+            Duration::from_secs(TIMEOUT),
+            second_producer.wait_for_blocks(1, true /* is_local */),
+        )
+        .await
+        .expect("The second should produce one block after the first stopped");
 
         // Restart fresh first producer.
         // it should sync remotely 5 blocks.
-        let first_producer = make_node(first_producer_config.clone(), vec![]).await;
-        first_producer
-            .wait_for_blocks(5, false /* is_local */)
-            .await;
+        let first_producer =
+            make_node(make_node_config("First Producer reborn"), vec![]).await;
+        tokio::time::timeout(
+            Duration::from_secs(TIMEOUT),
+            first_producer.wait_for_blocks(5, false /* is_local */),
+        )
+        .await
+        .expect("The first should reborn and sync with the second");
     }
 }
