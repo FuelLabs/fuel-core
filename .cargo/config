@@ -3,3 +3,8 @@ xtask = "run --package xtask --"
 
 [registries.crates-io]
 protocol = "sparse"
+
+# This is needed to enable cross-platform docker builds, as cargo doesn't use the correct linker sometimes:
+# https://github.com/rust-lang/cargo/issues/4133
+[target.aarch64-unknown-linux-gnu]
+linker = "aarch64-linux-gnu-gcc"
