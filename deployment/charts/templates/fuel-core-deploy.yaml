@@ -160,18 +160,6 @@ spec:
             - "--poa-interval-period"
             - "{{ .Values.app.poa_interval_period }}"
           {{- end}}
-          {{- if .Values.app.poa_hybrid_min_time }}
-            - "--poa-hybrid-min-time"
-            - "{{ .Values.app.poa_hybrid_min_time }}"
-          {{- end}}
-          {{- if .Values.app.poa_hybrid_idle_time }}
-            - "--poa-hybrid-idle-time"
-            - "{{ .Values.app.poa_hybrid_idle_time }}"
-          {{- end}}
-          {{- if .Values.app.poa_hybrid_max_time }}
-            - "--poa-hybrid-max-time"
-            - "{{ .Values.app.poa_hybrid_max_time }}"
-          {{- end}}
           {{- if .Values.app.relayer }}
             - "--relayer"
             - "{{ .Values.app.relayer }}"

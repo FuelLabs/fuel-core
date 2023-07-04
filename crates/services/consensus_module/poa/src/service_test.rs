@@ -26,7 +26,6 @@ use fuel_core_types::{
         primitives::SecretKeyWrapper,
         SealedBlock,
     },
-    fuel_asm::*,
     fuel_crypto::SecretKey,
     fuel_tx::{
         field::GasLimit,
@@ -385,69 +384,6 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
 
     // simulate some txpool event to see if any block production is erroneously triggered
     task.on_txpool_event().await.unwrap();
-}
-
-#[tokio::test(start_paused = true)]
-async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
-    // verify the PoA service doesn't alter the hybrid block timing when
-    // receiving txpool events if txpool is actually empty
-    let mut rng = StdRng::seed_from_u64(2322);
-    let secret_key = SecretKey::random(&mut rng);
-
-    const TX_IDLE_TIME_MS: u64 = 50u64;
-
-    let mut block_producer = MockBlockProducer::default();
-
-    block_producer
-        .expect_produce_and_execute_block()
-        .returning(|_, _, _| panic!("Block production should not be called"));
-
-    let mut block_importer = MockBlockImporter::default();
-
-    block_importer
-        .expect_commit_result()
-        .returning(|_| panic!("Block importer should not be called"));
-
-    block_importer
-        .expect_block_stream()
-        .returning(|| Box::pin(tokio_stream::pending()));
-
-    let mut txpool = MockTransactionPool::no_tx_updates();
-    txpool.expect_total_consumable_gas().returning(|| 0);
-    txpool.expect_pending_number().returning(|| 0);
-
-    let config = Config {
-        trigger: Trigger::Hybrid {
-            min_block_time: Duration::from_millis(100),
-            max_tx_idle_time: Duration::from_millis(TX_IDLE_TIME_MS),
-            max_block_time: Duration::from_millis(1000),
-        },
-        block_gas_limit: 1000000,
-        signing_key: Some(Secret::new(secret_key.into())),
-        metrics: false,
-        ..Default::default()
-    };
-
-    let p2p_port = generate_p2p_port();
-
-    let task = MainTask::new(
-        &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
-        config,
-        txpool,
-        block_producer,
-        block_importer,
-        p2p_port,
-    );
-
-    let service = Service::new(task);
-    service.start_and_await().await.unwrap();
-
-    // wait max_tx_idle_time - causes block production to occur if
-    // pending txs > 0 is not checked.
-    time::sleep(Duration::from_millis(TX_IDLE_TIME_MS)).await;
-
-    service.stop_and_await().await.unwrap();
-    assert!(service.state().stopped());
 }
 
 fn test_signing_key() -> Secret<SecretKeyWrapper> {
