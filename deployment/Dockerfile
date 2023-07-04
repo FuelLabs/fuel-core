@@ -5,6 +5,9 @@ FROM --platform=$BUILDPLATFORM rust:1.69.0 AS chef
 ARG TARGETPLATFORM
 RUN cargo install cargo-chef
 WORKDIR /build/
+
+COPY --from=xx / /
+
 # hadolint ignore=DL3008
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -12,10 +15,11 @@ RUN apt-get update && \
     clang \
     libclang-dev \
     protobuf-compiler \
+    && xx-apt-get update  \
+    && xx-apt-get install -y libc6-dev g++ binutils \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=xx / /
 
 FROM chef as planner
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
@@ -25,13 +29,16 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef as builder
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 COPY --from=planner /build/recipe.json recipe.json
+
 # Build our project dependecies, not our application!
 RUN xx-cargo chef cook --release --no-default-features --features "production" -p fuel-core-bin --recipe-path recipe.json
 # Up to this point, if our dependency tree stays the same,
 # all layers should be cached.
 COPY . .
-RUN xx-cargo build --release --no-default-features --features "production" -p fuel-core-bin && \
-    xx-verify ./build/$(xx-cargo --print-target-triple)/release/fuel-core
+RUN xx-cargo build --release --no-default-features --features "production" -p fuel-core-bin \
+    && xx-verify ./target/$(xx-cargo --print-target-triple)/release/fuel-core \
+    && mv ./target/$(xx-cargo --print-target-triple)/release/fuel-core ./target/release/fuel-core \
+    && mv ./target/$(xx-cargo --print-target-triple)/release/fuel-core.d ./target/release/fuel-core.d
 
 # Stage 2: Run
 FROM --platform=$BUILDPLATFORM ubuntu:22.04 as run
