@@ -374,7 +374,7 @@ impl transaction_pool::ports::BlockImporter for Service<BlockImporter> {
 ```rust
 trait Database: IntepreterStorage 
   + StorageMut<Coins, Error = StorageError>
-  + StorageMut<Messages, Erorr = StorageError>
+  + StorageMut<Messages, Error = StorageError>
   + StorageMut<Contracts, Error = StorageError>
   + StorageMut<Blocks, Error = StorageError>
   + StorageMut<ContractUtxos, Error = StorageError>
