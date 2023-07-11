@@ -104,17 +104,112 @@ pub struct GasCosts {
     pub srwq: DependentCost,
 }
 
-pub struct DependentCost {
-    pub base: u64,
-    pub dep_per_unit: u64,
-}
+impl From<GasCosts> for fuel_core_types::fuel_vm::GasCosts {
+    fn from(value: GasCosts) -> Self {
+        let values = fuel_core_types::fuel_vm::GasCostsValues {
+            add: value.add,
+            addi: value.addi,
+            aloc: value.aloc,
+            and: value.and,
+            andi: value.andi,
+            bal: value.bal,
+            bhei: value.bhei,
+            bhsh: value.bhsh,
+            burn: value.burn,
+            cb: value.cb,
+            cfei: value.cfei,
+            cfsi: value.cfsi,
+            croo: value.croo,
+            div: value.div,
+            divi: value.divi,
+            ecr: value.ecr,
+            eq: value.eq,
+            exp: value.exp,
+            expi: value.expi,
+            flag: value.flag,
+            gm: value.gm,
+            gt: value.gt,
+            gtf: value.gtf,
+            ji: value.ji,
+            jmp: value.jmp,
+            jne: value.jne,
+            jnei: value.jnei,
+            jnzi: value.jnzi,
+            jmpf: value.jmpf,
+            jmpb: value.jmpb,
+            jnzf: value.jnzf,
+            jnzb: value.jnzb,
+            jnef: value.jnef,
+            jneb: value.jneb,
+            k256: value.k256,
+            lb: value.lb,
+            log: value.log,
+            lt: value.lt,
+            lw: value.lw,
+            mcpi: value.mcpi,
+            mint: value.mint,
+            mlog: value.mlog,
+            mod_op: value.mod_op,
+            modi: value.modi,
+            move_op: value.move_op,
+            movi: value.movi,
+            mroo: value.mroo,
+            mul: value.mul,
+            muli: value.muli,
+            mldv: value.mldv,
+            noop: value.noop,
+            not: value.not,
+            or: value.or,
+            ori: value.ori,
+            ret: value.ret,
+            rvrt: value.rvrt,
+            s256: value.s256,
+            sb: value.sb,
+            scwq: value.scwq,
+            sll: value.sll,
+            slli: value.slli,
+            srl: value.srl,
+            srli: value.srli,
+            srw: value.srw,
+            sub: value.sub,
+            subi: value.subi,
+            sw: value.sw,
+            sww: value.sww,
+            swwq: value.swwq,
+            time: value.time,
+            tr: value.tr,
+            tro: value.tro,
+            wdcm: value.wdcm,
+            wqcm: value.wqcm,
+            wdop: value.wdop,
+            wqop: value.wqop,
+            wdml: value.wdml,
+            wqml: value.wqml,
+            wddv: value.wddv,
+            wqdv: value.wqdv,
+            wdmd: value.wdmd,
+            wqmd: value.wqmd,
+            wdam: value.wdam,
+            wqam: value.wqam,
+            wdmm: value.wdmm,
+            wqmm: value.wqmm,
+            xor: value.xor,
+            xori: value.xori,
 
-impl From<schema::chain::DependentCost> for DependentCost {
-    fn from(value: schema::chain::DependentCost) -> Self {
-        Self {
-            base: value.base.into(),
-            dep_per_unit: value.dep_per_unit.into(),
-        }
+            call: value.call.into(),
+            ccp: value.ccp.into(),
+            csiz: value.csiz.into(),
+            ldc: value.ldc.into(),
+            logd: value.logd.into(),
+            mcl: value.mcl.into(),
+            mcli: value.mcli.into(),
+            mcp: value.mcp.into(),
+            meq: value.meq.into(),
+            retd: value.retd.into(),
+            smo: value.smo.into(),
+            srwq: value.srwq.into(),
+        };
+        Self::new(values)
     }
 }
 
@@ -222,6 +317,29 @@ impl From<schema::chain::GasCosts> for GasCosts {
             retd: value.retd.into(),
             smo: value.smo.into(),
             srwq: value.srwq.into(),
+        }
+    }
+}
+
+pub struct DependentCost {
+    pub base: u64,
+    pub dep_per_unit: u64,
+}
+
+impl From<DependentCost> for fuel_core_types::fuel_vm::DependentCost {
+    fn from(value: DependentCost) -> Self {
+        Self {
+            base: value.base,
+            dep_per_unit: value.dep_per_unit,
+        }
+    }
+}
+
+impl From<schema::chain::DependentCost> for DependentCost {
+    fn from(value: schema::chain::DependentCost) -> Self {
+        Self {
+            base: value.base.into(),
+            dep_per_unit: value.dep_per_unit.into(),
         }
     }
 }

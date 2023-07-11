@@ -1,7 +1,4 @@
-use fuel_core::service::{
-    Config,
-    FuelService,
-};
+use fuel_core::service::{Config, FuelService};
 use fuel_core_client::client::FuelClient;
 
 #[tokio::test]
@@ -16,5 +13,10 @@ async fn chain_info() {
     assert_eq!(
         node_config.chain_conf.transaction_parameters,
         chain_info.consensus_parameters.into()
+    );
+
+    assert_eq!(
+        node_config.chain_conf.gas_costs,
+        chain_info.gas_costs.into()
     );
 }
