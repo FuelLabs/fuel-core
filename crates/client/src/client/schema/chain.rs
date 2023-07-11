@@ -1,4 +1,9 @@
-use crate::client::schema::{block::Block, schema, U32, U64};
+use crate::client::schema::{
+    block::Block,
+    schema,
+    U32,
+    U64,
+};
 use fuel_core_types::fuel_tx::ConsensusParameters as TxConsensusParameters;
 
 #[derive(cynic::QueryFragment, Debug)]

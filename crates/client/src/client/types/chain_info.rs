@@ -1,6 +1,10 @@
 use crate::client::{
     schema,
-    types::{Block, ConsensusParameters, GasCosts},
+    types::{
+        Block,
+        ConsensusParameters,
+        GasCosts,
+    },
 };
 
 pub struct ChainInfo {
