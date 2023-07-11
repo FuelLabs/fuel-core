@@ -537,7 +537,7 @@ impl ChainInfo {
         Ok(ConsensusParameters(config.transaction_parameters))
     }
 
-    async fn chain_info(&self, ctx: &Context<'_>) -> async_graphql::Result<GasCosts> {
+    async fn gas_costs(&self, ctx: &Context<'_>) -> async_graphql::Result<GasCosts> {
         let config = ctx.data_unchecked::<GraphQLConfig>();
 
         Ok(GasCosts(config.gas_costs.clone()))

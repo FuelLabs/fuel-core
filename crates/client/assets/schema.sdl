@@ -96,7 +96,7 @@ type ChainInfo {
 	baseChainHeight: U32!
 	peerCount: Int!
 	consensusParameters: ConsensusParameters!
-	chainInfo: GasCosts!
+	gasCosts: GasCosts!
 }
 
 type ChangeOutput {
