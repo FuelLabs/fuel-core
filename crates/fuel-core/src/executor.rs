@@ -834,8 +834,7 @@ where
             .into();
         let reverted = vm_result.should_revert();
 
-        // TODO: Avoid cloning here, we can extract value from result
-        let mut tx = vm_result.tx().clone();
+        let (state, mut tx, receipts) = vm_result.into_inner();
         #[cfg(debug_assertions)]
         {
             tx.precompute(&self.config.transaction_parameters.chain_id)?;
@@ -849,7 +848,7 @@ where
 
         // update block commitment
         let (used_gas, tx_fee) =
-            self.total_fee_paid(min_fee, max_fee, tx.price(), vm_result.receipts())?;
+            self.total_fee_paid(min_fee, max_fee, tx.price(), &receipts)?;
 
         // Check or set the executed transaction.
         match execution_kind {
@@ -898,17 +897,12 @@ where
             .insert(&tx_id, &original_tx.clone().into())?;
 
         // persist receipts
-        self.persist_receipts(
-            &tx_id,
-            vm_result.receipts(),
-            tx_db_transaction.deref_mut(),
-        )?;
+        self.persist_receipts(&tx_id, &receipts, tx_db_transaction.deref_mut())?;
 
-        let status = if vm_result.should_revert() {
-            self.log_backtrace(&vm, vm_result.receipts());
+        let status = if reverted {
+            self.log_backtrace(&vm, &receipts);
             // get reason for revert
-            let reason = vm_result
-                .receipts()
+            let reason = receipts
                 .iter()
                 .find_map(|receipt| match receipt {
                     // Format as `Revert($rA)`
@@ -917,16 +911,16 @@ where
                     Receipt::Panic { reason, .. } => Some(format!("{}", reason.reason())),
                     _ => None,
                 })
-                .unwrap_or_else(|| format!("{:?}", vm_result.state()));
+                .unwrap_or_else(|| format!("{:?}", &state));
 
             TransactionExecutionResult::Failed {
                 reason,
-                result: Some(*vm_result.state()),
+                result: Some(state),
             }
         } else {
             // else tx was a success
             TransactionExecutionResult::Success {
-                result: Some(*vm_result.state()),
+                result: Some(state),
             }
         };
 
@@ -943,7 +937,7 @@ where
         });
         execution_data
             .message_ids
-            .extend(vm_result.receipts().iter().filter_map(|r| r.message_id()));
+            .extend(receipts.iter().filter_map(|r| r.message_id()));
 
         Ok(())
     }
