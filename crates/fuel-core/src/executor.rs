@@ -1,114 +1,52 @@
 use crate::database::{
-    transaction::DatabaseTransaction,
-    transactions::TransactionIndex,
-    vm_database::VmDatabase,
-    Database,
+    transaction::DatabaseTransaction, transactions::TransactionIndex,
+    vm_database::VmDatabase, Database,
 };
-use fuel_core_executor::{
-    refs::ContractRef,
-    Config,
-};
+use fuel_core_executor::{refs::ContractRef, Config};
 use fuel_core_storage::{
     tables::{
-        Coins,
-        ContractsLatestUtxo,
-        FuelBlocks,
-        Messages,
-        Receipts,
-        SpentMessages,
+        Coins, ContractsLatestUtxo, FuelBlocks, Messages, Receipts, SpentMessages,
         Transactions,
     },
-    transactional::{
-        StorageTransaction,
-        Transaction as StorageTransactionTrait,
-    },
-    StorageAsMut,
-    StorageAsRef,
-    StorageInspect,
+    transactional::{StorageTransaction, Transaction as StorageTransactionTrait},
+    StorageAsMut, StorageAsRef, StorageInspect,
 };
 use fuel_core_types::{
     blockchain::{
-        block::{
-            Block,
-            PartialFuelBlock,
-        },
+        block::{Block, PartialFuelBlock},
         header::PartialBlockHeader,
         primitives::DaBlockHeight,
     },
-    entities::{
-        coins::coin::CompressedCoin,
-        contract::ContractUtxoInfo,
-    },
-    fuel_asm::{
-        RegId,
-        Word,
-    },
+    entities::{coins::coin::CompressedCoin, contract::ContractUtxoInfo},
+    fuel_asm::{RegId, Word},
     fuel_tx::{
-        field::{
-            Inputs,
-            Outputs,
-            TxPointer as TxPointerField,
-        },
+        field::{Inputs, Outputs, TxPointer as TxPointerField},
         input::{
-            coin::{
-                CoinPredicate,
-                CoinSigned,
-            },
+            coin::{CoinPredicate, CoinSigned},
             contract::Contract,
             message::{
-                MessageCoinPredicate,
-                MessageCoinSigned,
-                MessageDataPredicate,
+                MessageCoinPredicate, MessageCoinSigned, MessageDataPredicate,
                 MessageDataSigned,
             },
         },
-        Address,
-        AssetId,
-        Bytes32,
-        Input,
-        Mint,
-        Output,
-        Receipt,
-        Transaction,
-        TransactionFee,
-        TxId,
-        TxPointer,
-        UniqueIdentifier,
-        UtxoId,
+        Address, AssetId, Bytes32, Input, Mint, Output, Receipt, Transaction,
+        TransactionFee, TxId, TxPointer, UniqueIdentifier, UtxoId,
     },
-    fuel_types::{
-        BlockHeight,
-        MessageId,
-    },
+    fuel_types::{BlockHeight, MessageId},
     fuel_vm::{
         checked_transaction::{
-            Checked,
-            CreateCheckedMetadata,
-            IntoChecked,
-            ScriptCheckedMetadata,
+            Checked, CreateCheckedMetadata, IntoChecked, ScriptCheckedMetadata,
         },
-        interpreter::{
-            CheckedMetadata,
-            ExecutableTransaction,
-        },
+        interpreter::{CheckedMetadata, ExecutableTransaction},
         state::StateTransition,
-        Backtrace as FuelBacktrace,
-        Interpreter,
-        PredicateStorage,
+        Backtrace as FuelBacktrace, Interpreter, PredicateStorage,
     },
     services::{
         block_producer::Components,
         executor::{
-            Error as ExecutorError,
-            ExecutionKind,
-            ExecutionResult,
-            ExecutionType,
-            ExecutionTypes,
-            Result as ExecutorResult,
-            TransactionExecutionResult,
-            TransactionExecutionStatus,
-            TransactionValidityError,
-            UncommittedResult,
+            Error as ExecutorError, ExecutionKind, ExecutionResult, ExecutionType,
+            ExecutionTypes, Result as ExecutorResult, TransactionExecutionResult,
+            TransactionExecutionStatus, TransactionValidityError, UncommittedResult,
         },
         txpool::TransactionStatus,
     },
@@ -116,23 +54,14 @@ use fuel_core_types::{
 use parking_lot::Mutex as ParkingMutex;
 use std::{
     borrow::Cow,
-    ops::{
-        Deref,
-        DerefMut,
-    },
+    ops::{Deref, DerefMut},
     sync::Arc,
 };
-use tracing::{
-    debug,
-    warn,
-};
+use tracing::{debug, warn};
 
 mod ports;
 
-pub use ports::{
-    RelayerPort,
-    TransactionsSource,
-};
+pub use ports::{RelayerPort, TransactionsSource};
 
 pub type ExecutionBlockWithSource<TxSource> = ExecutionTypes<Components<TxSource>, Block>;
 
@@ -289,7 +218,7 @@ where
 
         // If one of the transactions fails, return an error.
         if let Some((_, err)) = skipped_transactions.into_iter().next() {
-            return Err(err)
+            return Err(err);
         }
 
         block
@@ -442,7 +371,7 @@ where
         if let Some(pre_exec_block_id) = pre_exec_block_id {
             // The block id comparison compares the whole blocks including all fields.
             if pre_exec_block_id != finalized_block_id {
-                return Err(ExecutorError::InvalidBlockId)
+                return Err(ExecutorError::InvalidBlockId);
             }
         }
 
@@ -531,7 +460,7 @@ where
                 let mint = if let Some(Transaction::Mint(mint)) = iter.next() {
                     mint
                 } else {
-                    return Err(ExecutorError::CoinbaseIsNotFirstTransaction)
+                    return Err(ExecutorError::CoinbaseIsNotFirstTransaction);
                 };
                 self.check_coinbase(block_height, mint, None)?
             }
@@ -575,11 +504,11 @@ where
                             ExecutionKind::DryRun | ExecutionKind::Validation => {
                                 Some(Err(err))
                             }
-                        }
+                        };
                     }
 
                     if let Err(err) = tx_db_transaction.commit() {
-                        return Some(Err(err.into()))
+                        return Some(Err(err.into()));
                     }
                     Some(Ok(tx))
                 };
@@ -644,7 +573,7 @@ where
             .storage::<Transactions>()
             .contains_key(&tx_id)?
         {
-            return Err(ExecutorError::TransactionIdCollision(tx_id))
+            return Err(ExecutorError::TransactionIdCollision(tx_id));
         }
 
         match tx {
@@ -673,7 +602,7 @@ where
                 // All other `Mint` transactions are not allowed.
                 return Err(ExecutorError::NotSupportedTransaction(Box::new(
                     mint.clone().into(),
-                )))
+                )));
             }
         };
 
@@ -710,7 +639,7 @@ where
             .insert(&coinbase_id, &coinbase_tx.into())?
             .is_some()
         {
-            return Err(ExecutorError::TransactionIdCollision(coinbase_id))
+            return Err(ExecutorError::TransactionIdCollision(coinbase_id));
         }
         Ok(())
     }
@@ -728,11 +657,11 @@ where
         )?;
 
         if checked_mint.transaction().tx_pointer().tx_index() != 0 {
-            return Err(ExecutorError::CoinbaseIsNotFirstTransaction)
+            return Err(ExecutorError::CoinbaseIsNotFirstTransaction);
         }
 
         if checked_mint.transaction().outputs().len() > 1 {
-            return Err(ExecutorError::CoinbaseSeveralOutputs)
+            return Err(ExecutorError::CoinbaseSeveralOutputs);
         }
 
         if let Some(Output::Coin {
@@ -740,16 +669,16 @@ where
         }) = checked_mint.transaction().outputs().first()
         {
             if asset_id != &AssetId::BASE {
-                return Err(ExecutorError::CoinbaseOutputIsInvalid)
+                return Err(ExecutorError::CoinbaseOutputIsInvalid);
             }
 
             if let Some(expected_amount) = expected_amount {
                 if expected_amount != *amount {
-                    return Err(ExecutorError::CoinbaseAmountMismatch)
+                    return Err(ExecutorError::CoinbaseAmountMismatch);
                 }
             }
         } else {
-            return Err(ExecutorError::CoinbaseOutputIsInvalid)
+            return Err(ExecutorError::CoinbaseOutputIsInvalid);
         }
 
         let (mint, _) = checked_mint.into();
@@ -791,7 +720,7 @@ where
         let min_fee = checked_tx.metadata().min_fee();
         let max_fee = checked_tx.metadata().max_fee();
 
-        self.verify_tx_predicates(&checked_tx)?;
+        self.verify_tx_predicates(&checked_tx, tx_id)?;
 
         if options.utxo_validation {
             // validate utxos exist and maturity is properly set
@@ -849,7 +778,7 @@ where
                 if &tx != checked_tx.transaction() {
                     return Err(ExecutorError::InvalidTransactionOutcome {
                         transaction_id: tx_id,
-                    })
+                    });
                 }
             }
             ExecutionKind::DryRun | ExecutionKind::Production => {
@@ -957,12 +886,12 @@ where
                             return Err(TransactionValidityError::CoinHasNotMatured(
                                 *utxo_id,
                             )
-                            .into())
+                            .into());
                         }
                     } else {
                         return Err(
                             TransactionValidityError::CoinDoesNotExist(*utxo_id).into()
-                        )
+                        );
                     }
                 }
                 Input::Contract(_) => {}
@@ -996,9 +925,10 @@ where
                 }) => {
                     // Eagerly return already spent if status is known.
                     if db.is_message_spent(nonce)? {
-                        return Err(
-                            TransactionValidityError::MessageAlreadySpent(*nonce).into()
+                        return Err(TransactionValidityError::MessageAlreadySpent(
+                            *nonce,
                         )
+                        .into());
                     }
                     if let Some(message) = self
                         .relayer
@@ -1009,13 +939,13 @@ where
                             return Err(TransactionValidityError::MessageSpendTooEarly(
                                 *nonce,
                             )
-                            .into())
+                            .into());
                         }
                         if message.sender != *sender {
                             return Err(TransactionValidityError::MessageSenderMismatch(
                                 *nonce,
                             )
-                            .into())
+                            .into());
                         }
                         if message.recipient != *recipient {
                             return Err(
@@ -1023,19 +953,19 @@ where
                                     *nonce,
                                 )
                                 .into(),
-                            )
+                            );
                         }
                         if message.amount != *amount {
                             return Err(TransactionValidityError::MessageAmountMismatch(
                                 *nonce,
                             )
-                            .into())
+                            .into());
                         }
                         if message.nonce != *nonce {
                             return Err(TransactionValidityError::MessageNonceMismatch(
                                 *nonce,
                             )
-                            .into())
+                            .into());
                         }
                         let expected_data = if message.data.is_empty() {
                             None
@@ -1046,12 +976,13 @@ where
                             return Err(TransactionValidityError::MessageDataMismatch(
                                 *nonce,
                             )
-                            .into())
+                            .into());
                         }
                     } else {
-                        return Err(
-                            TransactionValidityError::MessageDoesNotExist(*nonce).into()
+                        return Err(TransactionValidityError::MessageDoesNotExist(
+                            *nonce,
                         )
+                        .into());
                     }
                 }
             }
@@ -1061,12 +992,15 @@ where
     }
 
     /// Verify all the predicates of a tx.
-    pub fn verify_tx_predicates<Tx>(&self, tx: &Checked<Tx>) -> ExecutorResult<()>
+    pub fn verify_tx_predicates<Tx>(
+        &self,
+        tx: &Checked<Tx>,
+        id: TxId,
+    ) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
         <Tx as IntoChecked>::Metadata: CheckedMetadata,
     {
-        let id = tx.id();
         if Interpreter::<PredicateStorage>::check_predicates(
             tx,
             self.config.transaction_parameters,
@@ -1076,7 +1010,7 @@ where
         {
             return Err(ExecutorError::TransactionValidity(
                 TransactionValidityError::InvalidPredicate(id),
-            ))
+            ));
         }
 
         Ok(())
@@ -1145,7 +1079,7 @@ where
                 .and_then(|refund| max_fee.checked_sub(refund))
                 .ok_or(ExecutorError::FeeOverflow)?;
 
-                return Ok((used_gas, fee))
+                return Ok((used_gas, fee));
             }
         }
         // if there's no script result (i.e. create) then fee == base amount
@@ -1242,7 +1176,7 @@ where
                                 return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx
                                         .id(&self.config.transaction_parameters.chain_id),
-                                })
+                                });
                             }
                         }
                         Input::Contract(Contract {
@@ -1264,19 +1198,19 @@ where
                                 return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx
                                         .id(&self.config.transaction_parameters.chain_id),
-                                })
+                                });
                             }
                             if balance_root != &contract.balance_root()? {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx
                                         .id(&self.config.transaction_parameters.chain_id),
-                                })
+                                });
                             }
                             if state_root != &contract.state_root()? {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx
                                         .id(&self.config.transaction_parameters.chain_id),
-                                })
+                                });
                             }
                         }
                         _ => {}
@@ -1321,7 +1255,7 @@ where
                         } else {
                             return Err(ExecutorError::InvalidTransactionOutcome {
                                 transaction_id: tx_id,
-                            })
+                            });
                         };
 
                         let mut contract = ContractRef::new(&mut *db, *contract_id);
@@ -1348,19 +1282,19 @@ where
                         } else {
                             return Err(ExecutorError::InvalidTransactionOutcome {
                                 transaction_id: tx_id,
-                            })
+                            });
                         };
 
                         let mut contract = ContractRef::new(&mut *db, *contract_id);
                         if balance_root != &contract.balance_root()? {
                             return Err(ExecutorError::InvalidTransactionOutcome {
                                 transaction_id: tx_id,
-                            })
+                            });
                         }
                         if state_root != &contract.state_root()? {
                             return Err(ExecutorError::InvalidTransactionOutcome {
                                 transaction_id: tx_id,
-                            })
+                            });
                         }
                     }
                 }
@@ -1462,7 +1396,7 @@ where
                     } else {
                         return Err(ExecutorError::TransactionValidity(
                             TransactionValidityError::InvalidContractInputIndex(utxo_id),
-                        ))
+                        ));
                     }
                 }
                 Output::Change {
@@ -1527,7 +1461,7 @@ where
             };
 
             if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
-                return Err(ExecutorError::OutputAlreadyExists)
+                return Err(ExecutorError::OutputAlreadyExists);
             }
         }
 
@@ -1536,12 +1470,12 @@ where
 
     fn persist_receipts(
         &self,
-        tx_id: &Bytes32,
+        tx_id: &TxId,
         receipts: &[Receipt],
         db: &mut Database,
     ) -> ExecutorResult<()> {
         if db.storage::<Receipts>().insert(tx_id, receipts)?.is_some() {
-            return Err(ExecutorError::OutputAlreadyExists)
+            return Err(ExecutorError::OutputAlreadyExists);
         }
         Ok(())
     }
@@ -1702,39 +1636,20 @@ mod tests {
         fuel_merkle::sparse,
         fuel_tx,
         fuel_tx::{
-            field::{
-                Inputs,
-                Outputs,
-            },
-            Chargeable,
-            CheckError,
-            ConsensusParameters,
-            Create,
-            Finalizable,
-            Script,
-            Transaction,
-            TransactionBuilder,
+            field::{Inputs, Outputs},
+            Chargeable, CheckError, ConsensusParameters, Create, Finalizable, Script,
+            Transaction, TransactionBuilder,
         },
-        fuel_types::{
-            bytes::SerializableVec,
-            ContractId,
-            Salt,
-        },
+        fuel_types::{bytes::SerializableVec, ContractId, Salt},
         fuel_vm::{
-            script_with_data_offset,
-            util::test_helpers::TestBuilder as TxBuilder,
-            Call,
+            script_with_data_offset, util::test_helpers::TestBuilder as TxBuilder, Call,
             CallFrame,
         },
         services::executor::ExecutionBlock,
         tai64::Tai64,
     };
     use itertools::Itertools;
-    use rand::{
-        prelude::StdRng,
-        Rng,
-        SeedableRng,
-    };
+    use rand::{prelude::StdRng, Rng, SeedableRng};
 
     pub(crate) fn setup_executable_script() -> (Create, Script) {
         let mut rng = StdRng::seed_from_u64(2322);
