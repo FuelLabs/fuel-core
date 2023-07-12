@@ -772,17 +772,6 @@ where
         <Tx as IntoChecked>::Metadata: Fee + CheckedMetadata + Clone,
     {
         let block_height = *header.height();
-        // Wrap the transaction in the execution kind.
-        self.compute_inputs(
-            match execution_kind {
-                ExecutionKind::DryRun => ExecutionTypes::DryRun(original_tx),
-                ExecutionKind::Production => ExecutionTypes::Production(original_tx),
-                ExecutionKind::Validation => ExecutionTypes::Validation(original_tx),
-            },
-            tx_db_transaction.deref_mut(),
-            options,
-        )?;
-
         let mut checked_tx = original_tx
             .clone()
             .into_checked_basic(block_height, &self.config.transaction_parameters)?;
@@ -790,6 +779,18 @@ where
         let tx_id = checked_tx.id();
         let min_fee = checked_tx.metadata().min_fee();
         let max_fee = checked_tx.metadata().max_fee();
+
+        // Wrap the transaction in the execution kind.
+        self.compute_inputs(
+            match execution_kind {
+                ExecutionKind::DryRun => ExecutionTypes::DryRun(original_tx),
+                ExecutionKind::Production => ExecutionTypes::Production(original_tx),
+                ExecutionKind::Validation => ExecutionTypes::Validation(original_tx),
+            },
+            tx_id,
+            tx_db_transaction.deref_mut(),
+            options,
+        )?;
 
         self.verify_tx_predicates(&checked_tx, tx_id)?;
 
@@ -1161,6 +1162,7 @@ where
     fn compute_inputs<Tx>(
         &self,
         tx: ExecutionTypes<&mut Tx, &Tx>,
+        tx_id: TxId,
         db: &mut Database,
         options: ExecutionOptions,
     ) -> ExecutorResult<()>
@@ -1243,8 +1245,7 @@ where
                             )?;
                             if tx_pointer != &coin.tx_pointer {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx
-                                        .id(&self.config.transaction_parameters.chain_id),
+                                    transaction_id: tx_id,
                                 })
                             }
                         }
@@ -1265,20 +1266,17 @@ where
                                 != contract.validated_utxo(options.utxo_validation)?
                             {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx
-                                        .id(&self.config.transaction_parameters.chain_id),
+                                    transaction_id: tx_id,
                                 })
                             }
                             if balance_root != &contract.balance_root()? {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx
-                                        .id(&self.config.transaction_parameters.chain_id),
+                                    transaction_id: tx_id,
                                 })
                             }
                             if state_root != &contract.state_root()? {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx
-                                        .id(&self.config.transaction_parameters.chain_id),
+                                    transaction_id: tx_id,
                                 })
                             }
                         }
