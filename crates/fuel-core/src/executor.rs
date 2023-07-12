@@ -65,6 +65,7 @@ use fuel_core_types::{
         Address,
         AssetId,
         Bytes32,
+        Cacheable,
         Input,
         Mint,
         Output,
@@ -768,10 +769,11 @@ where
         options: ExecutionOptions,
     ) -> ExecutorResult<()>
     where
-        Tx: ExecutableTransaction + PartialEq,
+        Tx: ExecutableTransaction + PartialEq + Cacheable,
         <Tx as IntoChecked>::Metadata: Fee + CheckedMetadata + Clone,
     {
         let block_height = *header.height();
+        let tx_id = original_tx.id(&self.config.transaction_parameters.chain_id);
         // Wrap the transaction in the execution kind.
         self.compute_inputs(
             match execution_kind {
@@ -779,6 +781,7 @@ where
                 ExecutionKind::Production => ExecutionTypes::Production(original_tx),
                 ExecutionKind::Validation => ExecutionTypes::Validation(original_tx),
             },
+            tx_id,
             tx_db_transaction.deref_mut(),
             options,
         )?;
@@ -791,7 +794,7 @@ where
         let min_fee = checked_tx.metadata().min_fee();
         let max_fee = checked_tx.metadata().max_fee();
 
-        self.verify_tx_predicates(&checked_tx)?;
+        self.verify_tx_predicates(&checked_tx, tx_id)?;
 
         if options.utxo_validation {
             // validate utxos exist and maturity is properly set
@@ -831,8 +834,13 @@ where
             .into();
         let reverted = vm_result.should_revert();
 
-        // TODO: Avoid cloning here, we can extract value from result
-        let mut tx = vm_result.tx().clone();
+        let (state, mut tx, receipts) = vm_result.into_inner();
+        #[cfg(debug_assertions)]
+        {
+            tx.precompute(&self.config.transaction_parameters.chain_id)?;
+            debug_assert_eq!(tx.id(&self.config.transaction_parameters.chain_id), tx_id);
+        }
+
         // only commit state changes if execution was a success
         if !reverted {
             sub_block_db_commit.commit()?;
@@ -840,7 +848,7 @@ where
 
         // update block commitment
         let (used_gas, tx_fee) =
-            self.total_fee_paid(min_fee, max_fee, tx.price(), vm_result.receipts())?;
+            self.total_fee_paid(min_fee, max_fee, tx.price(), &receipts)?;
 
         // Check or set the executed transaction.
         match execution_kind {
@@ -889,17 +897,12 @@ where
             .insert(&tx_id, &original_tx.clone().into())?;
 
         // persist receipts
-        self.persist_receipts(
-            &tx_id,
-            vm_result.receipts(),
-            tx_db_transaction.deref_mut(),
-        )?;
+        self.persist_receipts(&tx_id, &receipts, tx_db_transaction.deref_mut())?;
 
-        let status = if vm_result.should_revert() {
-            self.log_backtrace(&vm, vm_result.receipts());
+        let status = if reverted {
+            self.log_backtrace(&vm, &receipts);
             // get reason for revert
-            let reason = vm_result
-                .receipts()
+            let reason = receipts
                 .iter()
                 .find_map(|receipt| match receipt {
                     // Format as `Revert($rA)`
@@ -908,16 +911,16 @@ where
                     Receipt::Panic { reason, .. } => Some(format!("{}", reason.reason())),
                     _ => None,
                 })
-                .unwrap_or_else(|| format!("{:?}", vm_result.state()));
+                .unwrap_or_else(|| format!("{:?}", &state));
 
             TransactionExecutionResult::Failed {
                 reason,
-                result: Some(*vm_result.state()),
+                result: Some(state),
             }
         } else {
             // else tx was a success
             TransactionExecutionResult::Success {
-                result: Some(*vm_result.state()),
+                result: Some(state),
             }
         };
 
@@ -934,7 +937,7 @@ where
         });
         execution_data
             .message_ids
-            .extend(vm_result.receipts().iter().filter_map(|r| r.message_id()));
+            .extend(receipts.iter().filter_map(|r| r.message_id()));
 
         Ok(())
     }
@@ -1061,12 +1064,15 @@ where
     }
 
     /// Verify all the predicates of a tx.
-    pub fn verify_tx_predicates<Tx>(&self, tx: &Checked<Tx>) -> ExecutorResult<()>
+    pub fn verify_tx_predicates<Tx>(
+        &self,
+        tx: &Checked<Tx>,
+        id: TxId,
+    ) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
         <Tx as IntoChecked>::Metadata: CheckedMetadata,
     {
-        let id = tx.id();
         if Interpreter::<PredicateStorage>::check_predicates(
             tx,
             self.config.transaction_parameters,
@@ -1158,6 +1164,7 @@ where
     fn compute_inputs<Tx>(
         &self,
         tx: ExecutionTypes<&mut Tx, &Tx>,
+        tx_id: TxId,
         db: &mut Database,
         options: ExecutionOptions,
     ) -> ExecutorResult<()>
@@ -1240,8 +1247,7 @@ where
                             )?;
                             if tx_pointer != &coin.tx_pointer {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx
-                                        .id(&self.config.transaction_parameters.chain_id),
+                                    transaction_id: tx_id,
                                 })
                             }
                         }
@@ -1262,20 +1268,17 @@ where
                                 != contract.validated_utxo(options.utxo_validation)?
                             {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx
-                                        .id(&self.config.transaction_parameters.chain_id),
+                                    transaction_id: tx_id,
                                 })
                             }
                             if balance_root != &contract.balance_root()? {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx
-                                        .id(&self.config.transaction_parameters.chain_id),
+                                    transaction_id: tx_id,
                                 })
                             }
                             if state_root != &contract.state_root()? {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx
-                                        .id(&self.config.transaction_parameters.chain_id),
+                                    transaction_id: tx_id,
                                 })
                             }
                         }
@@ -1536,7 +1539,7 @@ where
 
     fn persist_receipts(
         &self,
-        tx_id: &Bytes32,
+        tx_id: &TxId,
         receipts: &[Receipt],
         db: &mut Database,
     ) -> ExecutorResult<()> {
