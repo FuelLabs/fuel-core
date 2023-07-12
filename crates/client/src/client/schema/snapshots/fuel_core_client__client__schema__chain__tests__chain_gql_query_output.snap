@@ -1,6 +1,6 @@
 ---
 source: crates/client/src/client/schema/chain.rs
-assertion_line: 75
+assertion_line: 189
 expression: operation.query
 ---
 query {
@@ -54,6 +54,144 @@ query {
       gasPerByte
       maxMessageDataLength
       chainId
+    }
+    gasCosts {
+      add
+      addi
+      aloc
+      and
+      andi
+      bal
+      bhei
+      bhsh
+      burn
+      cb
+      cfei
+      cfsi
+      croo
+      div
+      divi
+      ecr
+      eq
+      exp
+      expi
+      flag
+      gm
+      gt
+      gtf
+      ji
+      jmp
+      jne
+      jnei
+      jnzi
+      jmpf
+      jmpb
+      jnzf
+      jnzb
+      jnef
+      jneb
+      k256
+      lb
+      log
+      lt
+      lw
+      mcpi
+      mint
+      mlog
+      modOp
+      modi
+      moveOp
+      movi
+      mroo
+      mul
+      muli
+      mldv
+      noop
+      not
+      or
+      ori
+      ret
+      rvrt
+      s256
+      sb
+      scwq
+      sll
+      slli
+      srl
+      srli
+      srw
+      sub
+      subi
+      sw
+      sww
+      swwq
+      time
+      tr
+      tro
+      wdcm
+      wqcm
+      wdop
+      wqop
+      wdml
+      wqml
+      wddv
+      wqdv
+      wdmd
+      wqmd
+      wdam
+      wqam
+      wdmm
+      wqmm
+      xor
+      xori
+      call {
+        base
+        depPerUnit
+      }
+      ccp {
+        base
+        depPerUnit
+      }
+      csiz {
+        base
+        depPerUnit
+      }
+      ldc {
+        base
+        depPerUnit
+      }
+      logd {
+        base
+        depPerUnit
+      }
+      mcl {
+        base
+        depPerUnit
+      }
+      mcli {
+        base
+        depPerUnit
+      }
+      mcp {
+        base
+        depPerUnit
+      }
+      meq {
+        base
+        depPerUnit
+      }
+      retd {
+        base
+        depPerUnit
+      }
+      smo {
+        base
+        depPerUnit
+      }
+      srwq {
+        base
+        depPerUnit
+      }
     }
   }
 }
