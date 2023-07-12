@@ -65,6 +65,7 @@ use fuel_core_types::{
         Address,
         AssetId,
         Bytes32,
+        Cacheable,
         Input,
         Mint,
         Output,
@@ -768,18 +769,11 @@ where
         options: ExecutionOptions,
     ) -> ExecutorResult<()>
     where
-        Tx: ExecutableTransaction + PartialEq,
+        Tx: ExecutableTransaction + PartialEq + Cacheable,
         <Tx as IntoChecked>::Metadata: Fee + CheckedMetadata + Clone,
     {
         let block_height = *header.height();
-        let mut checked_tx = original_tx
-            .clone()
-            .into_checked_basic(block_height, &self.config.transaction_parameters)?;
-
-        let tx_id = checked_tx.id();
-        let min_fee = checked_tx.metadata().min_fee();
-        let max_fee = checked_tx.metadata().max_fee();
-
+        let tx_id = original_tx.id(&self.config.transaction_parameters.chain_id);
         // Wrap the transaction in the execution kind.
         self.compute_inputs(
             match execution_kind {
@@ -791,6 +785,14 @@ where
             tx_db_transaction.deref_mut(),
             options,
         )?;
+
+        let mut checked_tx = original_tx
+            .clone()
+            .into_checked_basic(block_height, &self.config.transaction_parameters)?;
+
+        let tx_id = checked_tx.id();
+        let min_fee = checked_tx.metadata().min_fee();
+        let max_fee = checked_tx.metadata().max_fee();
 
         self.verify_tx_predicates(&checked_tx, tx_id)?;
 
@@ -834,6 +836,12 @@ where
 
         // TODO: Avoid cloning here, we can extract value from result
         let mut tx = vm_result.tx().clone();
+        #[cfg(debug_assertions)]
+        {
+            tx.precompute(&self.config.transaction_parameters.chain_id)?;
+            debug_assert_eq!(tx.id(&self.config.transaction_parameters.chain_id), tx_id);
+        }
+
         // only commit state changes if execution was a success
         if !reverted {
             sub_block_db_commit.commit()?;
