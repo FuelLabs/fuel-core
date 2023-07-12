@@ -42,11 +42,7 @@ use fuel_core_types::{
     },
     fuel_asm::Word,
     fuel_crypto::Signature,
-    fuel_tx::{
-        ConsensusParameters,
-        TxId,
-        UniqueIdentifier,
-    },
+    fuel_tx::TxId,
     fuel_types::BlockHeight,
     secrecy::{
         ExposeSecret,
@@ -141,7 +137,6 @@ pub struct MainTask<T, B, I> {
     trigger: Trigger,
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
-    consensus_params: ConsensusParameters,
     sync_task_handle: ServiceRunner<SyncTask>,
 }
 
@@ -169,7 +164,6 @@ where
         let Config {
             block_gas_limit,
             signing_key,
-            consensus_params,
             min_connected_reserved_peers,
             time_until_synced,
             trigger,
@@ -200,7 +194,6 @@ where
             last_block_created,
             trigger,
             timer: DeadlineClock::new(),
-            consensus_params,
             sync_task_handle,
         }
     }
@@ -311,12 +304,12 @@ where
         ) = self.signal_produce_block(height, block_time).await?.into();
 
         let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
-        for (tx, err) in skipped_transactions {
+        for (tx_id, err) in skipped_transactions {
             error!(
                 "During block production got invalid transaction {:?} with error {:?}",
-                tx, err
+                tx_id, err
             );
-            tx_ids_to_remove.push(tx.id(&self.consensus_params.chain_id));
+            tx_ids_to_remove.push(tx_id);
         }
         self.txpool.remove_txs(tx_ids_to_remove);
 
