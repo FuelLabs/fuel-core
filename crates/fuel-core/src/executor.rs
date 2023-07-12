@@ -772,13 +772,8 @@ where
         <Tx as IntoChecked>::Metadata: Fee + CheckedMetadata + Clone,
     {
         let block_height = *header.height();
-        let mut checked_tx = original_tx
-            .clone()
-            .into_checked_basic(block_height, &self.config.transaction_parameters)?;
 
-        let tx_id = checked_tx.id();
-        let min_fee = checked_tx.metadata().min_fee();
-        let max_fee = checked_tx.metadata().max_fee();
+        let tx_id = original_tx.id(&self.config.transaction_parameters.chain_id);
 
         // Wrap the transaction in the execution kind.
         self.compute_inputs(
@@ -791,6 +786,14 @@ where
             tx_db_transaction.deref_mut(),
             options,
         )?;
+
+        let mut checked_tx = original_tx
+            .clone()
+            .into_checked_basic(block_height, &self.config.transaction_parameters)?;
+
+        let tx_id = checked_tx.id();
+        let min_fee = checked_tx.metadata().min_fee();
+        let max_fee = checked_tx.metadata().max_fee();
 
         self.verify_tx_predicates(&checked_tx, tx_id)?;
 
