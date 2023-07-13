@@ -43,6 +43,8 @@ RUN xx-cargo build --release --no-default-features --features "production" -p fu
 # Stage 2: Run
 FROM --platform=$BUILDPLATFORM ubuntu:22.04 as run
 
+COPY --from=xx / /
+
 ARG IP=0.0.0.0
 ARG PORT=4000
 ARG P2P_PORT=30333
@@ -56,6 +58,8 @@ WORKDIR /root/
 
 RUN apt-get update -y \
     && apt-get install -y --no-install-recommends ca-certificates \
+    && xx-apt-get update -y  \
+    && xx-apt-get install -y libc6-dev \
     # Clean up
     && apt-get autoremove -y \
     && apt-get clean -y \
