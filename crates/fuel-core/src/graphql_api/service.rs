@@ -7,10 +7,7 @@ use crate::{
         DatabasePort,
         TxPoolPort,
     },
-    graphql_api::{
-        logging::LoggingExtension,
-        Config,
-    },
+    graphql_api::Config,
     schema::{
         CoreSchema,
         CoreSchemaBuilder,

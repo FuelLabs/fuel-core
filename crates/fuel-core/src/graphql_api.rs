@@ -10,7 +10,6 @@ use fuel_core_types::{
 };
 use std::net::SocketAddr;
 
-pub(crate) mod logging;
 pub mod ports;
 #[cfg(feature = "metrics")]
 pub(crate) mod prometheus;
