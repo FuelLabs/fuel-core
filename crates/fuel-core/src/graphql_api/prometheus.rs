@@ -13,21 +13,36 @@ use async_graphql::{
     Value,
 };
 use fuel_core_metrics::graphql_metrics::GRAPHQL_METRICS;
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::Duration,
+};
 use tokio::time::Instant;
 
-pub(crate) struct PrometheusExtension {}
+pub(crate) struct MetricsExtension {
+    log_threshold_ms: Duration,
+}
 
-impl ExtensionFactory for PrometheusExtension {
-    fn create(&self) -> Arc<dyn Extension> {
-        Arc::new(PrometheusExtInner {})
+impl MetricsExtension {
+    pub fn new(log_threshold_ms: Duration) -> Self {
+        MetricsExtension { log_threshold_ms }
     }
 }
 
-pub(crate) struct PrometheusExtInner;
+impl ExtensionFactory for MetricsExtension {
+    fn create(&self) -> Arc<dyn Extension> {
+        Arc::new(MetricsExtInner {
+            log_threshold_ms: self.log_threshold_ms,
+        })
+    }
+}
+
+pub(crate) struct MetricsExtInner {
+    log_threshold_ms: Duration,
+}
 
 #[async_trait::async_trait]
-impl Extension for PrometheusExtInner {
+impl Extension for MetricsExtInner {
     async fn request(
         &self,
         ctx: &ExtensionContext<'_>,
@@ -54,10 +69,29 @@ impl Extension for PrometheusExtInner {
 
         let start_time = Instant::now();
         let res = next.run(ctx, info).await;
-        let seconds = start_time.elapsed().as_secs_f64();
+        let elapsed = start_time.elapsed();
 
         if let Some(field_name) = field_name {
-            GRAPHQL_METRICS.graphql_observe(field_name, seconds);
+            GRAPHQL_METRICS.graphql_observe(field_name, elapsed.as_secs_f64());
+        }
+
+        if elapsed > self.log_threshold_ms {
+            tracing::info!(
+                "GraphQL query exceeded threshold of {:?} seconds at {:?} seconds",
+                self.log_threshold_ms.as_secs_f64(),
+                elapsed.as_secs_f64()
+            );
+            match &res {
+                Ok(inner) => match inner {
+                    None => {
+                        tracing::info!("Request: None");
+                    }
+                    Some(object) => {
+                        tracing::info!("Request: {:?}", &object);
+                    }
+                },
+                Err(err) => tracing::info!("GraphQL query resolve error: {:?}", &err),
+            }
         }
 
         res
