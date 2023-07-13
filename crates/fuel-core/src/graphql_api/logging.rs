@@ -22,8 +22,7 @@ pub(crate) struct LoggingExtension {
 }
 
 impl LoggingExtension {
-    pub fn new(log_threshold_ms: u64) -> Self {
-        let log_threshold_ms = Duration::from_millis(log_threshold_ms);
+    pub fn new(log_threshold_ms: Duration) -> Self {
         LoggingExtension { log_threshold_ms }
     }
 }

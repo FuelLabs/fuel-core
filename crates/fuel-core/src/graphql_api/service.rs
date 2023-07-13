@@ -65,6 +65,7 @@ use std::{
         TcpListener,
     },
     pin::Pin,
+    time::Duration,
 };
 use tokio_stream::StreamExt;
 use tower_http::{
@@ -164,7 +165,7 @@ pub fn new_service(
     txpool: TxPool,
     producer: BlockProducer,
     consensus_module: ConsensusModule,
-    log_threshold_ms: u64,
+    log_threshold_ms: Duration,
 ) -> anyhow::Result<Service> {
     let network_addr = config.addr;
 
