@@ -38,6 +38,8 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
 >;
 pub type GraphQL = crate::fuel_core_graphql_api::service::Service;
 
+const LOG_THRESHOLD_MS: u64 = 2000;
+
 pub fn init_sub_services(
     config: &Config,
     database: &Database,
@@ -187,6 +189,7 @@ pub fn init_sub_services(
         Box::new(tx_pool_adapter),
         Box::new(producer_adapter),
         Box::new(poa_adapter),
+        LOG_THRESHOLD_MS,
     )?;
 
     let shared = SharedState {

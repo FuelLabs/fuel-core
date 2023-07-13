@@ -7,7 +7,10 @@ use crate::{
         DatabasePort,
         TxPoolPort,
     },
-    graphql_api::Config,
+    graphql_api::{
+        logging::LoggingExtension,
+        Config,
+    },
     schema::{
         CoreSchema,
         CoreSchemaBuilder,
@@ -161,6 +164,7 @@ pub fn new_service(
     txpool: TxPool,
     producer: BlockProducer,
     consensus_module: ConsensusModule,
+    log_threshold_ms: u64,
 ) -> anyhow::Result<Service> {
     let network_addr = config.addr;
 
@@ -174,6 +178,8 @@ pub fn new_service(
 
     #[cfg(feature = "metrics")]
     let builder = builder.extension(PrometheusExtension {});
+
+    let builder = builder.extension(LoggingExtension::new(log_threshold_ms));
 
     let schema = builder.finish();
 
