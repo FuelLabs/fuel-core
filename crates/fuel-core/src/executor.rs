@@ -667,40 +667,15 @@ where
         }
 
         let block_height = *header.height();
-        match tx {
-            MaybeCheckedTransaction::Transaction(Transaction::Script(script)) => {
-                let checked = script.into_checked_basic(
-                    block_height,
-                    &self.config.transaction_parameters,
-                )?;
-                self.execute_create_or_script(
-                    idx,
-                    checked,
-                    header,
-                    execution_data,
-                    tx_db_transaction,
-                    execution_kind,
-                    options,
-                )
-            }
-            MaybeCheckedTransaction::Transaction(Transaction::Create(create)) => {
-                let checked = create.into_checked_basic(
-                    block_height,
-                    &self.config.transaction_parameters,
-                )?;
-                self.execute_create_or_script(
-                    idx,
-                    checked,
-                    header,
-                    execution_data,
-                    tx_db_transaction,
-                    execution_kind,
-                    options,
-                )
-            }
-            MaybeCheckedTransaction::CheckedTransaction(CheckedTransaction::Script(
-                script,
-            )) => self.execute_create_or_script(
+        let checked_tx = match tx {
+            MaybeCheckedTransaction::Transaction(tx) => tx
+                .into_checked_basic(block_height, &self.config.transaction_parameters)?
+                .into(),
+            MaybeCheckedTransaction::CheckedTransaction(checked_tx) => checked_tx,
+        };
+
+        match checked_tx {
+            CheckedTransaction::Script(script) => self.execute_create_or_script(
                 idx,
                 script,
                 header,
@@ -709,9 +684,7 @@ where
                 execution_kind,
                 options,
             ),
-            MaybeCheckedTransaction::CheckedTransaction(CheckedTransaction::Create(
-                create,
-            )) => self.execute_create_or_script(
+            CheckedTransaction::Create(create) => self.execute_create_or_script(
                 idx,
                 create,
                 header,
@@ -720,7 +693,7 @@ where
                 execution_kind,
                 options,
             ),
-            _ => {
+            CheckedTransaction::Mint(_) => {
                 // Right now, we only support `Mint` transactions for coinbase,
                 // which are processed separately as a first transaction.
                 //
