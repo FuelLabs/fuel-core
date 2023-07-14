@@ -214,7 +214,7 @@ where
             new_transaction = self.gossiped_tx_stream.next() => {
                 if let Some(GossipData { data: Some(tx), message_id, peer_id }) = new_transaction {
                     let id = tx.id(&self.shared.consensus_params.chain_id);
-                    let current_height = self.shared.db.current_block_height().unwrap();
+                    let current_height = self.shared.db.current_block_height()?;
 
                     // verify tx
                     let checked_tx = check_single_tx(tx, current_height, &self.shared.config).await;
