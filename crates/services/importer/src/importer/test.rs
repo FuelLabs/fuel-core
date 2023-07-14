@@ -25,7 +25,7 @@ use fuel_core_types::{
         primitives::BlockId,
         SealedBlock,
     },
-    fuel_tx::Transaction,
+    fuel_tx::TxId,
     fuel_types::BlockHeight,
     services::{
         block_importer::{
@@ -178,12 +178,7 @@ where
         .return_once(move |_| {
             let mock_result = result()?;
             let skipped_transactions: Vec<_> = (0..mock_result.skipped_transactions)
-                .map(|_| {
-                    (
-                        Transaction::default_test_tx(),
-                        ExecutorError::InvalidBlockId,
-                    )
-                })
+                .map(|_| (TxId::zeroed(), ExecutorError::InvalidBlockId))
                 .collect();
             Ok(Uncommitted::new(
                 ExecutionResult {

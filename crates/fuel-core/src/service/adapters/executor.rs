@@ -4,6 +4,7 @@ use crate::{
     executor::{
         ExecutionBlockWithSource,
         Executor,
+        MaybeCheckedTransaction,
     },
     service::adapters::{
         ExecutorAdapter,
@@ -31,11 +32,11 @@ use fuel_core_types::{
 };
 
 impl crate::executor::TransactionsSource for TransactionsSource {
-    fn next(&self, gas_limit: u64) -> Vec<fuel_tx::Transaction> {
+    fn next(&self, gas_limit: u64) -> Vec<MaybeCheckedTransaction> {
         self.txpool
             .select_transactions(gas_limit)
-            .iter()
-            .map(|tx| tx.as_ref().into())
+            .into_iter()
+            .map(|tx| MaybeCheckedTransaction::CheckedTransaction(tx.as_ref().into()))
             .collect()
     }
 }
