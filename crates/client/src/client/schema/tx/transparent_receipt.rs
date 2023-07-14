@@ -46,6 +46,7 @@ pub struct Receipt {
     pub recipient: Option<Address>,
     pub nonce: Option<Nonce>,
     pub contract_id: Option<ContractId>,
+    pub sub_id: Option<Bytes32>,
 }
 
 #[derive(cynic::Enum, Clone, Copy, Debug)]
@@ -62,6 +63,8 @@ pub enum ReceiptType {
     TransferOut,
     ScriptResult,
     MessageOut,
+    Mint,
+    Burn,
 }
 
 impl TryFrom<Receipt> for fuel_tx::Receipt {
@@ -134,10 +137,12 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .digest
                     .ok_or_else(|| MissingField("digest".to_string()))?
                     .into(),
-                data: schema
-                    .data
-                    .ok_or_else(|| MissingField("data".to_string()))?
-                    .into(),
+                data: Some(
+                    schema
+                        .data
+                        .ok_or_else(|| MissingField("data".to_string()))?
+                        .into(),
+                ),
                 pc: schema
                     .pc
                     .ok_or_else(|| MissingField("pc".to_string()))?
@@ -227,10 +232,12 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .digest
                     .ok_or_else(|| MissingField("digest".to_string()))?
                     .into(),
-                data: schema
-                    .data
-                    .ok_or_else(|| MissingField("data".to_string()))?
-                    .into(),
+                data: Some(
+                    schema
+                        .data
+                        .ok_or_else(|| MissingField("data".to_string()))?
+                        .into(),
+                ),
                 pc: schema
                     .pc
                     .ok_or_else(|| MissingField("pc".to_string()))?
@@ -324,9 +331,55 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .digest
                     .ok_or_else(|| MissingField("digest".to_string()))?
                     .into(),
-                data: schema
-                    .data
-                    .ok_or_else(|| MissingField("data".to_string()))?
+                data: Some(
+                    schema
+                        .data
+                        .ok_or_else(|| MissingField("data".to_string()))?
+                        .into(),
+                ),
+            },
+            ReceiptType::Mint => fuel_tx::Receipt::Mint {
+                sub_id: schema
+                    .sub_id
+                    .ok_or_else(|| MissingField("sub_id".to_string()))?
+                    .into(),
+                contract_id: schema
+                    .contract_id
+                    .ok_or_else(|| MissingField("contract_id".to_string()))?
+                    .into(),
+                val: schema
+                    .val
+                    .ok_or_else(|| MissingField("val".to_string()))?
+                    .into(),
+                pc: schema
+                    .pc
+                    .ok_or_else(|| MissingField("pc".to_string()))?
+                    .into(),
+                is: schema
+                    .is
+                    .ok_or_else(|| MissingField("is".to_string()))?
+                    .into(),
+            },
+            ReceiptType::Burn => fuel_tx::Receipt::Burn {
+                sub_id: schema
+                    .sub_id
+                    .ok_or_else(|| MissingField("sub_id".to_string()))?
+                    .into(),
+                contract_id: schema
+                    .contract_id
+                    .ok_or_else(|| MissingField("contract_id".to_string()))?
+                    .into(),
+                val: schema
+                    .val
+                    .ok_or_else(|| MissingField("val".to_string()))?
+                    .into(),
+                pc: schema
+                    .pc
+                    .ok_or_else(|| MissingField("pc".to_string()))?
+                    .into(),
+                is: schema
+                    .is
+                    .ok_or_else(|| MissingField("is".to_string()))?
                     .into(),
             },
         })

@@ -76,8 +76,7 @@ async fn test_tx_gossiping() {
         .next()
         .expect("Producer is initialized with one transaction");
 
-    let response = client_one.transaction(&tx_id).await.unwrap();
-    assert!(response.is_some());
+    let _ = client_one.await_transaction_commit(&tx_id).await.unwrap();
 
     let mut client_two_subscription = client_two
         .subscribe_transaction_status(&tx_id)

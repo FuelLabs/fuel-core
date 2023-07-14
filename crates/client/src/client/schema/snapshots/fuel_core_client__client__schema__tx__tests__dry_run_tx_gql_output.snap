@@ -35,6 +35,7 @@ mutation($tx: HexString!, $utxoValidation: Boolean) {
     recipient
     nonce
     contractId
+    subId
   }
 }
 
