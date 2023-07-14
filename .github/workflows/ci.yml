@@ -121,6 +121,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install protobuf-compiler
+      - uses: rui314/setup-mold@v1
       - uses: buildjet/cache@v3
         with:
           path: |
