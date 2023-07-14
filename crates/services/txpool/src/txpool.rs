@@ -11,12 +11,12 @@ use crate::{
     Error,
     TxInfo,
 };
+
 use fuel_core_metrics::txpool_metrics::TXPOOL_METRICS;
 use fuel_core_types::{
     fuel_tx::{
         Chargeable,
         Transaction,
-        UniqueIdentifier,
     },
     fuel_types::BlockHeight,
     fuel_vm::checked_transaction::{
@@ -71,41 +71,53 @@ where
         &self.by_dependency
     }
 
-    #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id(&self.config.chain_config.transaction_parameters.chain_id)), ret, err)]
-    // this is atomic operation. Return removed(pushed out/replaced) transactions
-    fn insert_inner(
-        &mut self,
-        // TODO: Pass `&Transaction`
-        tx: Arc<Transaction>,
-    ) -> anyhow::Result<InsertionResult> {
+    pub fn check_transactions(
+        &self,
+        txs: &[Arc<Transaction>],
+    ) -> Vec<anyhow::Result<CheckedTransaction>> {
+        let mut checked_txs = Vec::with_capacity(txs.len());
+
+        for tx in txs.iter() {
+            checked_txs.push(self.check_single_tx(tx.deref().clone()));
+        }
+
+        checked_txs
+    }
+
+    pub fn check_single_tx(&self, tx: Transaction) -> anyhow::Result<CheckedTransaction> {
         let current_height = self.database.current_block_height()?;
 
         if tx.is_mint() {
             return Err(Error::NotSupportedTransactionType.into())
         }
 
-        // verify gas price is at least the minimum
         self.verify_tx_min_gas_price(&tx)?;
 
         let tx: CheckedTransaction = if self.config.utxo_validation {
-            tx.deref()
-                .clone()
-                .into_checked(
-                    current_height,
-                    &self.config.chain_config.transaction_parameters,
-                    &self.config.chain_config.gas_costs,
-                )?
-                .into()
+            tx.into_checked(
+                current_height,
+                &self.config.chain_config.transaction_parameters,
+                &self.config.chain_config.gas_costs,
+            )?
+            .into()
         } else {
-            tx.deref()
-                .clone()
-                .into_checked_basic(
-                    current_height,
-                    &self.config.chain_config.transaction_parameters,
-                )?
-                .into()
+            tx.into_checked_basic(
+                current_height,
+                &self.config.chain_config.transaction_parameters,
+            )?
+            .into()
         };
 
+        Ok(tx)
+    }
+
+    // #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id(&self.config.chain_config.transaction_parameters.chain_id)), ret, err)]
+    // this is atomic operation. Return removed(pushed out/replaced) transactions
+    fn insert_inner(
+        &mut self,
+        // TODO: Pass `&Transaction`
+        tx: CheckedTransaction,
+    ) -> anyhow::Result<InsertionResult> {
         let tx = Arc::new(match tx {
             CheckedTransaction::Script(script) => PoolTransaction::Script(script),
             CheckedTransaction::Create(create) => PoolTransaction::Create(create),
@@ -231,7 +243,7 @@ where
         self.remove_by_tx_id(tx_id)
     }
 
-    fn verify_tx_min_gas_price(&mut self, tx: &Transaction) -> Result<(), Error> {
+    fn verify_tx_min_gas_price(&self, tx: &Transaction) -> Result<(), Error> {
         let price = match tx {
             Transaction::Script(script) => script.price(),
             Transaction::Create(create) => create.price(),
@@ -254,14 +266,21 @@ where
     pub fn insert(
         &mut self,
         tx_status_sender: &TxStatusChange,
-        txs: &[Arc<Transaction>],
+        txs: Vec<anyhow::Result<CheckedTransaction>>,
     ) -> Vec<anyhow::Result<InsertionResult>> {
         // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
         // should be done before transaction comes to txpool, or before it enters RwLocked region.
         let mut res = Vec::new();
-        for tx in txs.iter() {
-            res.push(self.insert_inner(tx.clone()))
+
+        for tx in txs.into_iter() {
+            match tx {
+                Ok(tx) => {
+                    res.push(self.insert_inner(tx));
+                }
+                Err(err) => res.push(Err(err)),
+            }
         }
+
         // announce to subscribers
         for ret in res.iter() {
             match ret {

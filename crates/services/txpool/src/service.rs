@@ -205,12 +205,17 @@ where
             new_transaction = self.gossiped_tx_stream.next() => {
                 if let Some(GossipData { data: Some(tx), message_id, peer_id }) = new_transaction {
                     let id = tx.id(&self.shared.consensus_params.chain_id);
-                    let txs = vec!(Arc::new(tx));
+
+                    // verify tx
+                    let checked_tx = self.shared.txpool.lock().check_single_tx(tx);
+                    let txs = vec![checked_tx];
+
+                    // insert tx
                     let mut result = tracing::info_span!("Received tx via gossip", %id)
                         .in_scope(|| {
                             self.shared.txpool.lock().insert(
                                 &self.shared.tx_status_sender,
-                                &txs
+                                txs
                             )
                         });
 
@@ -317,7 +322,15 @@ where
         &self,
         txs: Vec<Arc<Transaction>>,
     ) -> Vec<anyhow::Result<InsertionResult>> {
-        let insert = { self.txpool.lock().insert(&self.tx_status_sender, &txs) };
+        // verify txs
+        let checked_txs = self.txpool.lock().check_transactions(&txs);
+
+        // insert txs
+        let insert = {
+            self.txpool
+                .lock()
+                .insert(&self.tx_status_sender, checked_txs)
+        };
 
         for (ret, tx) in insert.iter().zip(txs.into_iter()) {
             match ret {
