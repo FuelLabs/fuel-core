@@ -5,11 +5,16 @@ use crate::{
         TxPoolDb,
     },
     transaction_selector::select_transactions,
+    txpool::{
+        check_single_tx,
+        check_transactions,
+    },
     Config,
     Error as TxPoolError,
     TxInfo,
     TxPool,
 };
+
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
@@ -206,13 +211,15 @@ where
                 if let Some(GossipData { data: Some(tx), message_id, peer_id }) = new_transaction {
                     let id = tx.id(&self.shared.consensus_params.chain_id);
 
-                    // verify tx
-                    let checked_tx = {
-                        let lock = self.shared.txpool.lock().clone();
-                        let res = lock.check_single_tx(tx).await;
+                    let (config, current_height) = {
+                        let lock = self.shared.txpool.lock();
+                        let config = lock.config().clone();
+                        let current_height = lock.current_height().unwrap();
 
-                        res
+                        (config, current_height)
                     };
+
+                    let checked_tx = check_single_tx(tx, current_height, &config).await;
                     let txs = vec![checked_tx];
 
                     // insert tx
@@ -328,7 +335,14 @@ where
         txs: Vec<Arc<Transaction>>,
     ) -> Vec<anyhow::Result<InsertionResult>> {
         // verify txs
-        let checked_txs = self.txpool.lock().check_transactions(&txs).await;
+        let lock = self.txpool.lock();
+        let config = lock.config();
+        let current_height = match lock.current_height() {
+            Ok(val) => val,
+            Err(e) => return vec![Err(e.into())],
+        };
+
+        let checked_txs = check_transactions(&txs, current_height, config).await;
 
         // insert txs
         let insert = {

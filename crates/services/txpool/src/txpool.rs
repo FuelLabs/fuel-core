@@ -63,6 +63,10 @@ where
         }
     }
 
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
     pub fn txs(&self) -> &HashMap<TxId, TxInfo> {
         &self.by_hash
     }
@@ -71,47 +75,8 @@ where
         &self.by_dependency
     }
 
-    pub async fn check_transactions(
-        &self,
-        txs: &[Arc<Transaction>],
-    ) -> Vec<anyhow::Result<CheckedTransaction>> {
-        let mut checked_txs = Vec::with_capacity(txs.len());
-
-        for tx in txs.iter() {
-            checked_txs.push(self.check_single_tx(tx.deref().clone()).await);
-        }
-
-        checked_txs
-    }
-
-    pub async fn check_single_tx(
-        &self,
-        tx: Transaction,
-    ) -> anyhow::Result<CheckedTransaction> {
-        let current_height = self.database.current_block_height()?;
-
-        if tx.is_mint() {
-            return Err(Error::NotSupportedTransactionType.into())
-        }
-
-        self.verify_tx_min_gas_price(&tx)?;
-
-        let tx: CheckedTransaction = if self.config.utxo_validation {
-            tx.into_checked(
-                current_height,
-                &self.config.chain_config.transaction_parameters,
-                &self.config.chain_config.gas_costs,
-            )?
-            .into()
-        } else {
-            tx.into_checked_basic(
-                current_height,
-                &self.config.chain_config.transaction_parameters,
-            )?
-            .into()
-        };
-
-        Ok(tx)
+    pub fn current_height(&self) -> anyhow::Result<BlockHeight> {
+        Ok(self.database.current_block_height()?)
     }
 
     // #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id(&self.config.chain_config.transaction_parameters.chain_id)), ret, err)]
@@ -244,24 +209,6 @@ where
     //  when transaction was skipped during block execution(`ExecutionResult.skipped_transaction`).
     pub fn remove_committed_tx(&mut self, tx_id: &TxId) -> Vec<ArcPoolTx> {
         self.remove_by_tx_id(tx_id)
-    }
-
-    fn verify_tx_min_gas_price(&self, tx: &Transaction) -> Result<(), Error> {
-        let price = match tx {
-            Transaction::Script(script) => script.price(),
-            Transaction::Create(create) => create.price(),
-            Transaction::Mint(_) => unreachable!(),
-        };
-        if self.config.metrics {
-            // Gas Price metrics are recorded here to avoid double matching for
-            // every single transaction, but also means metrics aren't collected on gas
-            // price if there is no minimum gas price
-            TXPOOL_METRICS.gas_price_histogram.observe(price as f64);
-        }
-        if price < self.config.min_gas_price {
-            return Err(Error::NotInsertedGasPriceTooLow)
-        }
-        Ok(())
     }
 
     #[tracing::instrument(level = "info", skip_all)]
@@ -409,6 +356,68 @@ where
 
         result
     }
+}
+
+pub async fn check_transactions(
+    txs: &[Arc<Transaction>],
+    current_height: BlockHeight,
+    config: &Config,
+) -> Vec<anyhow::Result<CheckedTransaction>> {
+    let mut checked_txs = Vec::with_capacity(txs.len());
+
+    for tx in txs.iter() {
+        checked_txs
+            .push(check_single_tx(tx.deref().clone(), current_height, config).await);
+    }
+
+    checked_txs
+}
+
+pub async fn check_single_tx(
+    tx: Transaction,
+    current_height: BlockHeight,
+    config: &Config,
+) -> anyhow::Result<CheckedTransaction> {
+    if tx.is_mint() {
+        return Err(Error::NotSupportedTransactionType.into())
+    }
+
+    verify_tx_min_gas_price(&tx, config)?;
+
+    let tx: CheckedTransaction = if config.utxo_validation {
+        tx.into_checked(
+            current_height,
+            &config.chain_config.transaction_parameters,
+            &config.chain_config.gas_costs,
+        )?
+        .into()
+    } else {
+        tx.into_checked_basic(
+            current_height,
+            &config.chain_config.transaction_parameters,
+        )?
+        .into()
+    };
+
+    Ok(tx)
+}
+
+fn verify_tx_min_gas_price(tx: &Transaction, config: &Config) -> Result<(), Error> {
+    let price = match tx {
+        Transaction::Script(script) => script.price(),
+        Transaction::Create(create) => create.price(),
+        Transaction::Mint(_) => unreachable!(),
+    };
+    if config.metrics {
+        // Gas Price metrics are recorded here to avoid double matching for
+        // every single transaction, but also means metrics aren't collected on gas
+        // price if there is no minimum gas price
+        TXPOOL_METRICS.gas_price_histogram.observe(price as f64);
+    }
+    if price < config.min_gas_price {
+        return Err(Error::NotInsertedGasPriceTooLow)
+    }
+    Ok(())
 }
 
 #[cfg(test)]
