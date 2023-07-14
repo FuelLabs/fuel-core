@@ -109,7 +109,9 @@ where
         let tx = Arc::new(match tx {
             CheckedTransaction::Script(script) => PoolTransaction::Script(script),
             CheckedTransaction::Create(create) => PoolTransaction::Create(create),
-            CheckedTransaction::Mint(_) => unreachable!(),
+            CheckedTransaction::Mint(_) => {
+                return Err(anyhow::anyhow!("Mint transactions is not supported"))
+            }
         });
 
         if !tx.is_computed() {

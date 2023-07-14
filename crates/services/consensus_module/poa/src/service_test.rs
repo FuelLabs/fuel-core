@@ -275,7 +275,12 @@ async fn remove_skipped_transactions() {
                     skipped_transactions: mock_skipped_txs
                         .clone()
                         .into_iter()
-                        .map(|tx| (tx.into(), ExecutorError::OutputAlreadyExists))
+                        .map(|tx| {
+                            (
+                                tx.id(&ConsensusParameters::DEFAULT.chain_id),
+                                ExecutorError::OutputAlreadyExists,
+                            )
+                        })
                         .collect(),
                     tx_status: Default::default(),
                 },
