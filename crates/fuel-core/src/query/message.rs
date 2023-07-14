@@ -164,6 +164,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         Some(r) => r,
         None => return Ok(None),
     };
+    let data = data.ok_or(anyhow::anyhow!("Receipt doesn't have a `data`"))?;
 
     // Get the block id from the transaction status if it's ready.
     let message_block_id = match database

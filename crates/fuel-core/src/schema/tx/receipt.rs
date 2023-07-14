@@ -18,7 +18,6 @@ use derive_more::Display;
 use fuel_core_types::{
     fuel_asm::Word,
     fuel_tx,
-    fuel_types::bytes::SerializableVec,
 };
 
 #[derive(Copy, Clone, Debug, Display, Enum, Eq, PartialEq)]
@@ -34,6 +33,8 @@ pub enum ReceiptType {
     TransferOut,
     ScriptResult,
     MessageOut,
+    Mint,
+    Burn,
 }
 
 impl From<&fuel_tx::Receipt> for ReceiptType {
@@ -50,6 +51,8 @@ impl From<&fuel_tx::Receipt> for ReceiptType {
             fuel_tx::Receipt::TransferOut { .. } => ReceiptType::TransferOut,
             fuel_tx::Receipt::ScriptResult { .. } => ReceiptType::ScriptResult,
             fuel_tx::Receipt::MessageOut { .. } => ReceiptType::MessageOut,
+            fuel_tx::Receipt::Mint { .. } => ReceiptType::Mint,
+            fuel_tx::Receipt::Burn { .. } => ReceiptType::Burn,
         }
     }
 }
@@ -118,9 +121,6 @@ impl Receipt {
     async fn receipt_type(&self) -> ReceiptType {
         (&self.0).into()
     }
-    async fn raw_payload(&self) -> HexString {
-        HexString(self.0.clone().to_bytes())
-    }
     async fn result(&self) -> Option<U64> {
         self.0.result().map(|r| Word::from(*r).into())
     }
@@ -141,6 +141,9 @@ impl Receipt {
     }
     async fn contract_id(&self) -> Option<ContractId> {
         self.0.contract_id().map(|id| ContractId(*id))
+    }
+    async fn sub_id(&self) -> Option<Bytes32> {
+        self.0.sub_id().copied().map(Into::into)
     }
 }
 

@@ -293,7 +293,9 @@ type GasCosts {
 	croo: U64!
 	div: U64!
 	divi: U64!
-	ecr: U64!
+	ecr1: U64!
+	eck1: U64!
+	ed19: U64!
 	eq: U64!
 	exp: U64!
 	expi: U64!
@@ -701,7 +703,6 @@ type Receipt {
 	rd: U64
 	len: U64
 	receiptType: ReceiptType!
-	rawPayload: HexString!
 	result: U64
 	gasUsed: U64
 	data: HexString
@@ -709,6 +710,7 @@ type Receipt {
 	recipient: Address
 	nonce: Nonce
 	contractId: ContractId
+	subId: Bytes32
 }
 
 enum ReceiptType {
@@ -723,6 +725,8 @@ enum ReceiptType {
 	TRANSFER_OUT
 	SCRIPT_RESULT
 	MESSAGE_OUT
+	MINT
+	BURN
 }
 
 enum ReturnType {

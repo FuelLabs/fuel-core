@@ -2,6 +2,7 @@ use super::block::BlockIdFragment;
 use crate::client::{
     schema::{
         schema,
+        tx::transparent_receipt::Receipt,
         Address,
         ConnectionArgs,
         ConversionError,
@@ -93,7 +94,7 @@ pub struct TransactionEdge {
 #[cynic(graphql_type = "Transaction", schema_path = "./assets/schema.sdl")]
 pub struct OpaqueTransaction {
     pub raw_payload: HexString,
-    pub receipts: Option<Vec<OpaqueReceipt>>,
+    pub receipts: Option<Vec<Receipt>>,
     pub status: Option<TransactionStatus>,
 }
 
@@ -111,22 +112,6 @@ impl TryFrom<OpaqueTransaction> for fuel_tx::Transaction {
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Transaction")]
 pub struct TransactionIdFragment {
     pub id: TransactionId,
-}
-
-#[derive(cynic::QueryFragment, Debug)]
-#[cynic(graphql_type = "Receipt", schema_path = "./assets/schema.sdl")]
-pub struct OpaqueReceipt {
-    pub raw_payload: HexString,
-}
-
-impl TryFrom<OpaqueReceipt> for fuel_tx::Receipt {
-    type Error = ConversionError;
-
-    fn try_from(value: OpaqueReceipt) -> Result<Self, Self::Error> {
-        let bytes = value.raw_payload.0 .0;
-        fuel_tx::Receipt::from_bytes(bytes.as_slice())
-            .map_err(ConversionError::ReceiptFromBytesError)
-    }
 }
 
 #[derive(cynic::Enum, Copy, Clone, Debug)]

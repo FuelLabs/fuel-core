@@ -20,9 +20,9 @@ pub fn run(c: &mut Criterion) {
     let signature = Signature::sign(&secret, &message);
 
     run_group_ref(
-        &mut c.benchmark_group("ecr"),
-        "ecr",
-        VmBench::new(op::ecr(0x11, 0x20, 0x21))
+        &mut c.benchmark_group("eck1"),
+        "eck1",
+        VmBench::new(op::eck1(0x11, 0x20, 0x21))
             .with_prepare_script(vec![
                 op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
                 op::addi(0x21, 0x20, signature.as_ref().len().try_into().unwrap()),

@@ -1,6 +1,5 @@
 ---
 source: crates/client/src/client/schema/chain.rs
-assertion_line: 189
 expression: operation.query
 ---
 query {
@@ -71,7 +70,9 @@ query {
       croo
       div
       divi
-      ecr
+      eck1
+      ecr1
+      ed19
       eq
       exp
       expi

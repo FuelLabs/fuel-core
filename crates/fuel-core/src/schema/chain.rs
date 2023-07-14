@@ -163,8 +163,16 @@ impl GasCosts {
         self.0.divi.into()
     }
 
-    async fn ecr(&self) -> U64 {
-        self.0.ecr.into()
+    async fn ecr1(&self) -> U64 {
+        self.0.ecr1.into()
+    }
+
+    async fn eck1(&self) -> U64 {
+        self.0.eck1.into()
+    }
+
+    async fn ed19(&self) -> U64 {
+        self.0.ed19.into()
     }
 
     async fn eq(&self) -> U64 {
