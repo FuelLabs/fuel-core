@@ -114,25 +114,29 @@ impl TxStatusChange {
     }
 }
 
-pub struct SharedState<P2P, DB> {
+pub struct SharedState<P2P, DB: Clone> {
     tx_status_sender: TxStatusChange,
     txpool: Arc<ParkingMutex<TxPool<DB>>>,
     p2p: Arc<P2P>,
     consensus_params: ConsensusParameters,
+    db: DB,
+    config: Config,
 }
 
-impl<P2P, DB> Clone for SharedState<P2P, DB> {
+impl<P2P, DB: Clone> Clone for SharedState<P2P, DB> {
     fn clone(&self) -> Self {
         Self {
             tx_status_sender: self.tx_status_sender.clone(),
             txpool: self.txpool.clone(),
             p2p: self.p2p.clone(),
             consensus_params: self.consensus_params,
+            db: self.db.clone(),
+            config: self.config.clone(),
         }
     }
 }
 
-pub struct Task<P2P, DB> {
+pub struct Task<P2P, DB: Clone> {
     gossiped_tx_stream: BoxStream<TransactionGossipData>,
     committed_block_stream: BoxStream<Arc<ImportResult>>,
     shared: SharedState<P2P, DB>,
@@ -143,7 +147,7 @@ pub struct Task<P2P, DB> {
 impl<P2P, DB> RunnableService for Task<P2P, DB>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
-    DB: TxPoolDb,
+    DB: TxPoolDb + Clone,
 {
     const NAME: &'static str = "TxPool";
 
@@ -169,7 +173,7 @@ where
 impl<P2P, DB> RunnableTask for Task<P2P, DB>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
-    DB: TxPoolDb,
+    DB: TxPoolDb + Clone,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
@@ -210,16 +214,10 @@ where
             new_transaction = self.gossiped_tx_stream.next() => {
                 if let Some(GossipData { data: Some(tx), message_id, peer_id }) = new_transaction {
                     let id = tx.id(&self.shared.consensus_params.chain_id);
+                    let current_height = self.shared.db.current_block_height().unwrap();
 
-                    let (config, current_height) = {
-                        let lock = self.shared.txpool.lock();
-                        let config = lock.config().clone();
-                        let current_height = lock.current_height().unwrap();
-
-                        (config, current_height)
-                    };
-
-                    let checked_tx = check_single_tx(tx, current_height, &config).await;
+                    // verify tx
+                    let checked_tx = check_single_tx(tx, current_height, &self.shared.config).await;
                     let txs = vec![checked_tx];
 
                     // insert tx
@@ -271,7 +269,7 @@ where
 //  `StorageInspect` trait.
 impl<P2P, DB> SharedState<P2P, DB>
 where
-    DB: TxPoolDb,
+    DB: TxPoolDb + Clone,
 {
     pub fn pending_number(&self) -> usize {
         self.txpool.lock().pending_number()
@@ -327,7 +325,7 @@ where
 impl<P2P, DB> SharedState<P2P, DB>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
-    DB: TxPoolDb,
+    DB: TxPoolDb + Clone,
 {
     #[tracing::instrument(name = "insert_submitted_txn", skip_all)]
     pub async fn insert(
@@ -335,14 +333,13 @@ where
         txs: Vec<Arc<Transaction>>,
     ) -> Vec<anyhow::Result<InsertionResult>> {
         // verify txs
-        let lock = self.txpool.lock();
-        let config = lock.config();
-        let current_height = match lock.current_height() {
+        let block_height = self.db.current_block_height();
+        let current_height = match block_height {
             Ok(val) => val,
             Err(e) => return vec![Err(e.into())],
         };
 
-        let checked_txs = check_transactions(&txs, current_height, config).await;
+        let checked_txs = check_transactions(&txs, current_height, &self.config).await;
 
         // insert txs
         let insert = {
@@ -405,7 +402,7 @@ pub fn new_service<P2P, Importer, DB>(
 where
     Importer: BlockImporter,
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + 'static,
-    DB: TxPoolDb + 'static,
+    DB: TxPoolDb + Clone + 'static,
 {
     let p2p = Arc::new(p2p);
     let gossiped_tx_stream = p2p.gossiped_transaction_events();
@@ -414,7 +411,7 @@ where
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let consensus_params = config.chain_config.transaction_parameters;
     let number_of_active_subscription = config.number_of_active_subscription;
-    let txpool = Arc::new(ParkingMutex::new(TxPool::new(config, db)));
+    let txpool = Arc::new(ParkingMutex::new(TxPool::new(config.clone(), db.clone())));
     let task = Task {
         gossiped_tx_stream,
         committed_block_stream,
@@ -423,6 +420,8 @@ where
             txpool,
             p2p,
             consensus_params,
+            db,
+            config,
         },
         ttl_timer,
     };

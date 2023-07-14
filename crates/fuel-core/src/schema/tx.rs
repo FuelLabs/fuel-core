@@ -255,6 +255,7 @@ impl TxMutation {
         // TODO: use spawn_blocking here
         let _: Vec<_> = txpool
             .insert(vec![Arc::new(tx.clone())])
+            .await
             .into_iter()
             .try_collect()?;
         let id = tx.id(&config.transaction_parameters.chain_id);
@@ -325,6 +326,7 @@ impl TxStatusSubscription {
         // TODO: use spawn_blocking here
         let _: Vec<_> = txpool
             .insert(vec![Arc::new(tx)])
+            .await
             .into_iter()
             .try_collect()?;
 
