@@ -3,18 +3,24 @@ use async_graphql::{
         Extension,
         ExtensionContext,
         ExtensionFactory,
+        NextParseQuery,
         NextRequest,
         NextResolve,
         ResolveInfo,
     },
+    parser::types::ExecutableDocument,
     QueryPathSegment,
     Response,
     ServerResult,
     Value,
+    Variables,
 };
 use fuel_core_metrics::graphql_metrics::GRAPHQL_METRICS;
 use std::{
-    sync::Arc,
+    sync::{
+        Arc,
+        OnceLock,
+    },
     time::Duration,
 };
 use tokio::time::Instant;
@@ -33,12 +39,14 @@ impl ExtensionFactory for MetricsExtension {
     fn create(&self) -> Arc<dyn Extension> {
         Arc::new(MetricsExtInner {
             log_threshold_ms: self.log_threshold_ms,
+            current_query: Arc::new(OnceLock::new()),
         })
     }
 }
 
 pub(crate) struct MetricsExtInner {
     log_threshold_ms: Duration,
+    current_query: Arc<OnceLock<String>>,
 }
 
 #[async_trait::async_trait]
@@ -54,6 +62,21 @@ impl Extension for MetricsExtInner {
         GRAPHQL_METRICS.graphql_observe("request", seconds);
 
         result
+    }
+
+    async fn parse_query(
+        &self,
+        ctx: &ExtensionContext<'_>,
+        query: &str,
+        variables: &Variables,
+        next: NextParseQuery<'_>,
+    ) -> ServerResult<ExecutableDocument> {
+        let doc = next.run(ctx, query, variables).await?;
+        let set_query_res = self.current_query.set(query.to_string());
+        if set_query_res.is_err() {
+            tracing::warn!("Failed to save current query {query:?}");
+        }
+        Ok(doc)
     }
 
     async fn resolve(
@@ -76,22 +99,17 @@ impl Extension for MetricsExtInner {
         }
 
         if elapsed > self.log_threshold_ms {
+            let query = self
+                .current_query
+                .get()
+                .map(String::as_str)
+                .unwrap_or("UNKNOWN");
             tracing::info!(
-                "GraphQL query exceeded threshold of {:?} seconds at {:?} seconds",
+                "Query {:?} exceeded threshold of {:?} seconds at {:?} seconds",
+                query,
                 self.log_threshold_ms.as_secs_f64(),
                 elapsed.as_secs_f64()
             );
-            match &res {
-                Ok(inner) => match inner {
-                    None => {
-                        tracing::info!("Request: None");
-                    }
-                    Some(object) => {
-                        tracing::info!("Request: {:?}", &object);
-                    }
-                },
-                Err(err) => tracing::info!("GraphQL query resolve error: {:?}", &err),
-            }
         }
 
         res

@@ -1,5 +1,5 @@
 #[cfg(feature = "metrics")]
-use crate::graphql_api::prometheus::MetricsExtension;
+use crate::graphql_api::metrics_extension::MetricsExtension;
 use crate::{
     fuel_core_graphql_api::ports::{
         BlockProducerPort,
