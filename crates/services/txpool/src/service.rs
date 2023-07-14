@@ -143,7 +143,7 @@ pub struct Task<P2P, DB> {
 impl<P2P, DB> RunnableService for Task<P2P, DB>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
-    DB: TxPoolDb + Clone,
+    DB: TxPoolDb,
 {
     const NAME: &'static str = "TxPool";
 
@@ -169,7 +169,7 @@ where
 impl<P2P, DB> RunnableTask for Task<P2P, DB>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
-    DB: TxPoolDb + Clone,
+    DB: TxPoolDb,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
@@ -405,7 +405,7 @@ pub fn new_service<P2P, Importer, DB>(
 where
     Importer: BlockImporter,
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + 'static,
-    DB: TxPoolDb + 'static + Clone,
+    DB: TxPoolDb + 'static,
 {
     let p2p = Arc::new(p2p);
     let gossiped_tx_stream = p2p.gossiped_transaction_events();
