@@ -187,6 +187,7 @@ pub fn init_sub_services(
         Box::new(tx_pool_adapter),
         Box::new(producer_adapter),
         Box::new(poa_adapter),
+        config.query_log_threshold_time,
     )?;
 
     let shared = SharedState {

@@ -17,4 +17,9 @@ async fn chain_info() {
         node_config.chain_conf.transaction_parameters,
         chain_info.consensus_parameters.into()
     );
+
+    assert_eq!(
+        node_config.chain_conf.gas_costs,
+        chain_info.gas_costs.into()
+    );
 }

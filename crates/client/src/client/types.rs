@@ -4,6 +4,7 @@ pub mod chain_info;
 pub mod coins;
 pub mod consensus_parameters;
 pub mod contract;
+pub mod gas_costs;
 pub mod merkle_proof;
 pub mod message;
 pub mod node_info;
@@ -23,6 +24,10 @@ pub use consensus_parameters::ConsensusParameters;
 pub use contract::{
     Contract,
     ContractBalance,
+};
+pub use gas_costs::{
+    DependentCost,
+    GasCosts,
 };
 pub use merkle_proof::MerkleProof;
 pub use message::{

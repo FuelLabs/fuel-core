@@ -96,6 +96,7 @@ type ChainInfo {
 	baseChainHeight: U32!
 	peerCount: Int!
 	consensusParameters: ConsensusParameters!
+	gasCosts: GasCosts!
 }
 
 type ChangeOutput {
@@ -252,6 +253,11 @@ type ContractOutput {
 	stateRoot: Bytes32!
 }
 
+type DependentCost {
+	base: U64!
+	depPerUnit: U64!
+}
+
 input ExcludeInput {
 	"""
 	Utxos to exclude from the selection.
@@ -270,6 +276,109 @@ type FailureStatus {
 	programState: ProgramState
 }
 
+
+type GasCosts {
+	add: U64!
+	addi: U64!
+	aloc: U64!
+	and: U64!
+	andi: U64!
+	bal: U64!
+	bhei: U64!
+	bhsh: U64!
+	burn: U64!
+	cb: U64!
+	cfei: U64!
+	cfsi: U64!
+	croo: U64!
+	div: U64!
+	divi: U64!
+	ecr: U64!
+	eq: U64!
+	exp: U64!
+	expi: U64!
+	flag: U64!
+	gm: U64!
+	gt: U64!
+	gtf: U64!
+	ji: U64!
+	jmp: U64!
+	jne: U64!
+	jnei: U64!
+	jnzi: U64!
+	jmpf: U64!
+	jmpb: U64!
+	jnzf: U64!
+	jnzb: U64!
+	jnef: U64!
+	jneb: U64!
+	k256: U64!
+	lb: U64!
+	log: U64!
+	lt: U64!
+	lw: U64!
+	mcpi: U64!
+	mint: U64!
+	mlog: U64!
+	modOp: U64!
+	modi: U64!
+	moveOp: U64!
+	movi: U64!
+	mroo: U64!
+	mul: U64!
+	muli: U64!
+	mldv: U64!
+	noop: U64!
+	not: U64!
+	or: U64!
+	ori: U64!
+	ret: U64!
+	rvrt: U64!
+	s256: U64!
+	sb: U64!
+	scwq: U64!
+	sll: U64!
+	slli: U64!
+	srl: U64!
+	srli: U64!
+	srw: U64!
+	sub: U64!
+	subi: U64!
+	sw: U64!
+	sww: U64!
+	swwq: U64!
+	time: U64!
+	tr: U64!
+	tro: U64!
+	wdcm: U64!
+	wqcm: U64!
+	wdop: U64!
+	wqop: U64!
+	wdml: U64!
+	wqml: U64!
+	wddv: U64!
+	wqdv: U64!
+	wdmd: U64!
+	wqmd: U64!
+	wdam: U64!
+	wqam: U64!
+	wdmm: U64!
+	wqmm: U64!
+	xor: U64!
+	xori: U64!
+	call: DependentCost!
+	ccp: DependentCost!
+	csiz: DependentCost!
+	ldc: DependentCost!
+	logd: DependentCost!
+	mcl: DependentCost!
+	mcli: DependentCost!
+	mcp: DependentCost!
+	meq: DependentCost!
+	retd: DependentCost!
+	smo: DependentCost!
+	srwq: DependentCost!
+}
 
 type Genesis {
 	"""

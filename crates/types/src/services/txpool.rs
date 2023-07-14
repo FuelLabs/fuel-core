@@ -27,6 +27,7 @@ use crate::{
         ProgramState,
     },
 };
+use fuel_vm_private::checked_transaction::CheckedTransaction;
 use std::{
     sync::Arc,
     time::Duration,
@@ -122,6 +123,15 @@ impl From<&PoolTransaction> for Transaction {
             PoolTransaction::Create(create) => {
                 Transaction::Create(create.transaction().clone())
             }
+        }
+    }
+}
+
+impl From<&PoolTransaction> for CheckedTransaction {
+    fn from(tx: &PoolTransaction) -> Self {
+        match tx {
+            PoolTransaction::Script(script) => CheckedTransaction::Script(script.clone()),
+            PoolTransaction::Create(create) => CheckedTransaction::Create(create.clone()),
         }
     }
 }
