@@ -190,6 +190,10 @@ pub struct Command {
     /// Time to wait after receiving the latest block before considered to be Synced.
     #[clap(long = "time_until_synced", default_value = "0s", env)]
     pub time_until_synced: humantime::Duration,
+
+    /// Time to wait after submitting a query before debug info will be logged about query.
+    #[clap(long = "query_log_threshold_time", default_value = "2s", env)]
+    pub query_log_threshold_time: humantime::Duration,
 }
 
 impl Command {
@@ -225,6 +229,7 @@ impl Command {
             tx_number_active_subscriptions,
             min_connected_reserved_peers,
             time_until_synced,
+            query_log_threshold_time,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -319,6 +324,7 @@ impl Command {
             verifier,
             min_connected_reserved_peers,
             time_until_synced: time_until_synced.into(),
+            query_log_threshold_time: query_log_threshold_time.into(),
         })
     }
 }

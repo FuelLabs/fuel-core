@@ -58,6 +58,8 @@ pub struct Config {
     pub min_connected_reserved_peers: usize,
     /// Time to wait after receiving the latest block before considered to be Synced.
     pub time_until_synced: Duration,
+    /// Time to wait after submitting a query before debug info will be logged about query.
+    pub query_log_threshold_time: Duration,
 }
 
 impl Config {
@@ -100,6 +102,7 @@ impl Config {
             verifier: Default::default(),
             min_connected_reserved_peers: 0,
             time_until_synced: Duration::ZERO,
+            query_log_threshold_time: Duration::from_secs(2),
         }
     }
 }
