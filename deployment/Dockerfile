@@ -41,7 +41,7 @@ RUN xx-cargo build --release --no-default-features --features "production" -p fu
     && mv ./target/$(xx-cargo --print-target-triple)/release/fuel-core.d ./target/release/fuel-core.d
 
 # Stage 2: Run
-FROM --platform=$BUILDPLATFORM ubuntu:22.04 as run
+FROM ubuntu:22.04 as run
 
 ARG IP=0.0.0.0
 ARG PORT=4000
