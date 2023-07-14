@@ -121,9 +121,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install protobuf-compiler
-      - uses: Swatinem/rust-cache@v2
+      - uses: buildjet/cache@v3
         with:
-          key: '${{ matrix.command }} ${{ matrix.args }}'
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ matrix.command }}-${{ matrix.args }}-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           cache-on-failure: "true"
       - name: ${{ matrix.command }} ${{ matrix.args }}
         run: cargo ${{ matrix.command }} ${{ matrix.args }}
@@ -263,8 +269,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=${{ steps.meta.outputs.tags }}
+          cache-to: type=inline,mode=max
 
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
         if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
@@ -386,11 +392,6 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           target: ${{ matrix.job.target }}
-
-      - uses: Swatinem/rust-cache@v1
-        with:
-          cache-on-failure: true
-          key: '${{ matrix.job.target }}'
 
       - name: Install cross
         uses: baptiste0928/cargo-install@v1
