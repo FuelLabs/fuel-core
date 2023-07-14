@@ -162,7 +162,7 @@ pub fn new_service(
     txpool: TxPool,
     producer: BlockProducer,
     consensus_module: ConsensusModule,
-    log_threshold_ms: Duration,
+    _log_threshold_ms: Duration,
 ) -> anyhow::Result<Service> {
     let network_addr = config.addr;
 
@@ -175,7 +175,7 @@ pub fn new_service(
     let builder = builder.extension(async_graphql::extensions::Tracing);
 
     #[cfg(feature = "metrics")]
-    let builder = builder.extension(MetricsExtension::new(log_threshold_ms));
+    let builder = builder.extension(MetricsExtension::new(_log_threshold_ms));
 
     let schema = builder.finish();
 
