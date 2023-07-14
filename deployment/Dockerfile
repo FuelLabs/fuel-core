@@ -59,7 +59,7 @@ WORKDIR /root/
 RUN apt-get update -y \
     && apt-get install -y --no-install-recommends ca-certificates \
     && xx-apt-get update -y  \
-    && xx-apt-get install -y libc6-dev \
+    && xx-apt-get install -y libc6-dev g++ binutils \
     # Clean up
     && apt-get autoremove -y \
     && apt-get clean -y \
