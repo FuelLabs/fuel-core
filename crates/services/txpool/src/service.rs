@@ -138,7 +138,7 @@ pub struct Task<P2P, DB> {
 impl<P2P, DB> RunnableService for Task<P2P, DB>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
-    DB: TxPoolDb,
+    DB: TxPoolDb + Clone,
 {
     const NAME: &'static str = "TxPool";
 
@@ -164,7 +164,7 @@ where
 impl<P2P, DB> RunnableTask for Task<P2P, DB>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
-    DB: TxPoolDb,
+    DB: TxPoolDb + Clone,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
@@ -207,7 +207,12 @@ where
                     let id = tx.id(&self.shared.consensus_params.chain_id);
 
                     // verify tx
-                    let checked_tx = self.shared.txpool.lock().check_single_tx(tx);
+                    let checked_tx = {
+                        let lock = self.shared.txpool.lock().clone();
+                        let res = lock.check_single_tx(tx).await;
+
+                        res
+                    };
                     let txs = vec![checked_tx];
 
                     // insert tx
@@ -318,12 +323,12 @@ where
     DB: TxPoolDb,
 {
     #[tracing::instrument(name = "insert_submitted_txn", skip_all)]
-    pub fn insert(
+    pub async fn insert(
         &self,
         txs: Vec<Arc<Transaction>>,
     ) -> Vec<anyhow::Result<InsertionResult>> {
         // verify txs
-        let checked_txs = self.txpool.lock().check_transactions(&txs);
+        let checked_txs = self.txpool.lock().check_transactions(&txs).await;
 
         // insert txs
         let insert = {
@@ -386,7 +391,7 @@ pub fn new_service<P2P, Importer, DB>(
 where
     Importer: BlockImporter,
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + 'static,
-    DB: TxPoolDb + 'static,
+    DB: TxPoolDb + 'static + Clone,
 {
     let p2p = Arc::new(p2p);
     let gossiped_tx_stream = p2p.gossiped_transaction_events();

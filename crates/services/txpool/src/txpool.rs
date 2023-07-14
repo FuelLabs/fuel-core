@@ -71,20 +71,23 @@ where
         &self.by_dependency
     }
 
-    pub fn check_transactions(
+    pub async fn check_transactions(
         &self,
         txs: &[Arc<Transaction>],
     ) -> Vec<anyhow::Result<CheckedTransaction>> {
         let mut checked_txs = Vec::with_capacity(txs.len());
 
         for tx in txs.iter() {
-            checked_txs.push(self.check_single_tx(tx.deref().clone()));
+            checked_txs.push(self.check_single_tx(tx.deref().clone()).await);
         }
 
         checked_txs
     }
 
-    pub fn check_single_tx(&self, tx: Transaction) -> anyhow::Result<CheckedTransaction> {
+    pub async fn check_single_tx(
+        &self,
+        tx: Transaction,
+    ) -> anyhow::Result<CheckedTransaction> {
         let current_height = self.database.current_block_height()?;
 
         if tx.is_mint() {
