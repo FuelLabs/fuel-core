@@ -130,7 +130,6 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ matrix.command }}-${{ matrix.args }}-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          cache-on-failure: "true"
       - name: ${{ matrix.command }} ${{ matrix.args }}
         run: cargo ${{ matrix.command }} ${{ matrix.args }}
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
