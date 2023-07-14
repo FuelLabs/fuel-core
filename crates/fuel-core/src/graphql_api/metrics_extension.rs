@@ -39,14 +39,14 @@ impl ExtensionFactory for MetricsExtension {
     fn create(&self) -> Arc<dyn Extension> {
         Arc::new(MetricsExtInner {
             log_threshold_ms: self.log_threshold_ms,
-            current_query: Arc::new(OnceLock::new()),
+            current_query: OnceLock::new(),
         })
     }
 }
 
 pub(crate) struct MetricsExtInner {
     log_threshold_ms: Duration,
-    current_query: Arc<OnceLock<String>>,
+    current_query: OnceLock<String>,
 }
 
 #[async_trait::async_trait]
