@@ -268,8 +268,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ steps.meta.outputs.tags }}
-          cache-to: type=inline,mode=max
+          cache-from: type=registry,ref=fuellabs/fuel-core:build-cache
+          cache-to: type=registry,ref=fuellabs/fuel-core:build-cache,mode=max
 
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
         if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
