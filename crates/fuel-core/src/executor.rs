@@ -791,8 +791,8 @@ where
         options: ExecutionOptions,
     ) -> ExecutorResult<Transaction>
     where
-        Tx: ExecutableTransaction + PartialEq + Cacheable,
-        <Tx as IntoChecked>::Metadata: Fee + CheckedMetadata + Clone,
+        Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
+        <Tx as IntoChecked>::Metadata: Fee + CheckedMetadata + Clone + Send + Sync,
     {
         let tx_id = checked_tx.id();
         let min_fee = checked_tx.metadata().min_fee();
