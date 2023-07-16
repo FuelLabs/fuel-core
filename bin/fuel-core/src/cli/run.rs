@@ -46,8 +46,8 @@ use std::{
 };
 use tracing::{
     info,
-    log::warn,
     trace,
+    warn,
 };
 
 pub const CONSENSUS_KEY_ENV: &str = "CONSENSUS_KEY_SECRET";
