@@ -150,7 +150,7 @@ async fn test_prune_transactions_the_oldest() {
         tx2.id(&ConsensusParameters::DEFAULT.chain_id),
         tx3.id(&ConsensusParameters::DEFAULT.chain_id),
     ]);
-    assert!(out[0].is_none(), "Tx1 should pruned");
+    assert!(out[0].is_none(), "Tx1 should be pruned");
     assert!(out[1].is_some(), "Tx2 should exist");
     assert!(out[2].is_some(), "Tx3 should exist");
 
@@ -161,7 +161,7 @@ async fn test_prune_transactions_the_oldest() {
         tx2.id(&ConsensusParameters::DEFAULT.chain_id),
         tx3.id(&ConsensusParameters::DEFAULT.chain_id),
     ]);
-    assert!(out[0].is_none(), "Tx1 should pruned");
+    assert!(out[0].is_none(), "Tx1 should be pruned");
     assert!(out[1].is_none(), "Tx2 should pruned");
     assert!(out[2].is_some(), "Tx3 should exist");
 
