@@ -21,7 +21,6 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
     fuel_vm::checked_transaction::{
         CheckPredicates,
-        Checked,
         CheckedTransaction,
         IntoChecked,
         ParallelExecutor,
@@ -394,10 +393,9 @@ pub async fn check_single_tx(
     let tx: CheckedTransaction = if config.utxo_validation {
         let consensus_params = &config.chain_config.transaction_parameters;
 
-        let tx: Checked<Transaction> = tx
-            .into_checked_basic(current_height, &consensus_params)?
-            .check_signatures(&consensus_params.chain_id)?
-            .into();
+        let tx = tx
+            .into_checked_basic(current_height, consensus_params)?
+            .check_signatures(&consensus_params.chain_id)?;
 
         tx.check_predicates_async::<TokioWithRayon>(
             consensus_params,
