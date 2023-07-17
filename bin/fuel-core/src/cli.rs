@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
     str::FromStr,
 };
-use tracing::log::warn;
+use tracing::warn;
 use tracing_subscriber::{
     filter::EnvFilter,
     layer::SubscriberExt,
