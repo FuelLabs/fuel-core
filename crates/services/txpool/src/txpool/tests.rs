@@ -55,7 +55,7 @@ use super::check_single_tx;
 
 const GAS_LIMIT: Word = 1000;
 
-async fn check_transaction(
+async fn check_unwrap_tx(
     tx: Transaction,
     db: MockDb,
     config: &Config,
@@ -63,6 +63,14 @@ async fn check_transaction(
     check_single_tx(tx, db.current_block_height().unwrap(), config)
         .await
         .expect("Transaction should be checked")
+}
+
+async fn check_tx(
+    tx: Transaction,
+    db: MockDb,
+    config: &Config,
+) -> anyhow::Result<CheckedTransaction> {
+    check_single_tx(tx, db.current_block_height().unwrap(), config).await
 }
 
 #[tokio::test]
@@ -77,7 +85,7 @@ async fn insert_simple_tx_succeeds() {
         .add_input(gas_coin)
         .finalize_as_transaction();
 
-    let tx = check_transaction(tx, db.clone(), &txpool.config).await;
+    let tx = check_unwrap_tx(tx, db.clone(), &txpool.config).await;
 
     txpool
         .insert_inner(tx)
@@ -111,8 +119,8 @@ async fn insert_simple_tx_dependency_chain_succeeds() {
         .add_input(gas_coin)
         .finalize_as_transaction();
 
-    let tx1 = check_transaction(tx1, db.clone(), &txpool.config).await;
-    let tx2 = check_transaction(tx2, db.clone(), &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, db.clone(), &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, db.clone(), &txpool.config).await;
 
     txpool.insert_inner(tx1).expect("Tx1 should be OK, got Err");
     txpool
@@ -164,10 +172,10 @@ async fn faulty_t2_collided_on_contract_id_from_tx1() {
     .add_output(output)
     .finalize_as_transaction();
 
-    let tx = check_transaction(tx, db.clone(), &txpool.config).await;
+    let tx = check_unwrap_tx(tx, db.clone(), &txpool.config).await;
     txpool.insert_inner(tx).expect("Tx1 should be Ok, got Err");
 
-    let tx_faulty = check_transaction(tx_faulty, db.clone(), &txpool.config).await;
+    let tx_faulty = check_unwrap_tx(tx_faulty, db.clone(), &txpool.config).await;
 
     let err = txpool
         .insert_inner(tx_faulty)
@@ -213,13 +221,13 @@ async fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
         .finalize_as_transaction();
 
     let tx_faulty_id = tx_faulty.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
-    let tx_faulty = check_transaction(tx_faulty, db.clone(), &txpool.config).await;
+    let tx_faulty = check_unwrap_tx(tx_faulty, db.clone(), &txpool.config).await;
 
     txpool
         .insert_inner(tx_faulty.clone())
         .expect("Tx1 should be Ok, got Err");
 
-    let tx = check_transaction(tx, db.clone(), &txpool.config).await;
+    let tx = check_unwrap_tx(tx, db.clone(), &txpool.config).await;
 
     let err = txpool
         .insert_inner(tx)
@@ -240,7 +248,7 @@ async fn not_inserted_known_tx() {
     let mut txpool = TxPool::new(config, db.clone());
 
     let tx = Transaction::default_test_tx();
-    let tx = check_transaction(tx, db.clone(), &txpool.config).await;
+    let tx = check_unwrap_tx(tx, db.clone(), &txpool.config).await;
 
     txpool
         .insert_inner(tx.clone())
@@ -267,7 +275,7 @@ async fn try_to_insert_tx2_missing_utxo() {
         .add_input(input)
         .finalize_as_transaction();
 
-    let tx = check_transaction(tx, txpool.database.clone(), &txpool.config).await;
+    let tx = check_unwrap_tx(tx, txpool.database.clone(), &txpool.config).await;
 
     let err = txpool
         .insert_inner(tx)
@@ -299,13 +307,13 @@ async fn higher_priced_tx_removes_lower_priced_tx() {
         .finalize_as_transaction();
 
     let tx1_id = tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
-    let tx1 = check_transaction(tx1, db.clone(), &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, db.clone(), &txpool.config).await;
 
     txpool
         .insert_inner(tx1.clone())
         .expect("Tx1 should be Ok, got Err");
 
-    let tx2 = check_transaction(tx2, db.clone(), &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, db.clone(), &txpool.config).await;
 
     let vec = txpool.insert_inner(tx2).expect("Tx2 should be Ok, got Err");
     assert_eq!(vec.removed[0].id(), tx1_id, "Tx1 id should be removed");
@@ -343,17 +351,17 @@ async fn underpriced_tx1_not_included_coin_collision() {
         .add_input(input)
         .finalize_as_transaction();
 
-    let tx1_checked = check_transaction(tx1.clone(), db.clone(), txpool.config()).await;
+    let tx1_checked = check_unwrap_tx(tx1.clone(), db.clone(), txpool.config()).await;
     txpool
         .insert_inner(tx1_checked)
         .expect("Tx1 should be Ok, got Err");
 
-    let tx2_checked = check_transaction(tx2.clone(), db.clone(), txpool.config()).await;
+    let tx2_checked = check_unwrap_tx(tx2.clone(), db.clone(), txpool.config()).await;
     txpool
         .insert_inner(tx2_checked)
         .expect("Tx2 should be Ok, got Err");
 
-    let tx3_checked = check_transaction(tx3, db.clone(), txpool.config()).await;
+    let tx3_checked = check_unwrap_tx(tx3, db.clone(), txpool.config()).await;
     let err = txpool
         .insert_inner(tx3_checked)
         .expect_err("Tx3 should be Err, got Ok");
@@ -395,10 +403,10 @@ async fn overpriced_tx_contract_input_not_inserted() {
         .add_output(Output::contract(1, Default::default(), Default::default()))
         .finalize_as_transaction();
 
-    let tx1 = check_transaction(tx1, db.clone(), &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, db.clone(), &txpool.config).await;
     txpool.insert_inner(tx1).expect("Tx1 should be Ok, got err");
 
-    let tx2 = check_transaction(tx2, db.clone(), &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, db.clone(), &txpool.config).await;
     let err = txpool
         .insert_inner(tx2)
         .expect_err("Tx2 should be Err, got Ok");
@@ -443,8 +451,8 @@ async fn dependent_contract_input_inserted() {
         .add_output(Output::contract(1, Default::default(), Default::default()))
         .finalize_as_transaction();
 
-    let tx1 = check_transaction(tx1, db.clone(), &txpool.config).await;
-    let tx2 = check_transaction(tx2, db.clone(), &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, db.clone(), &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, db.clone(), &txpool.config).await;
     txpool.insert_inner(tx1).expect("Tx1 should be Ok, got Err");
     txpool.insert_inner(tx2).expect("Tx2 should be Ok, got Err");
 }
@@ -484,9 +492,9 @@ async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
 
     let tx1_id = tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
     let tx2_id = tx2.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
-    let tx1 = check_transaction(tx1, db.clone(), &txpool.config).await;
-    let tx2 = check_transaction(tx2, db.clone(), &txpool.config).await;
-    let tx3 = check_transaction(tx3, db.clone(), &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, db.clone(), &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, db.clone(), &txpool.config).await;
+    let tx3 = check_unwrap_tx(tx3, db.clone(), &txpool.config).await;
 
     txpool
         .insert_inner(tx1.clone())
@@ -530,9 +538,9 @@ async fn more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
         .add_input(gas_coin)
         .finalize_as_transaction();
 
-    let tx1 = check_transaction(tx1, db.clone(), &txpool.config).await;
-    let tx2 = check_transaction(tx2, db.clone(), &txpool.config).await;
-    let tx3 = check_transaction(tx3, db.clone(), &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, db.clone(), &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, db.clone(), &txpool.config).await;
+    let tx3 = check_unwrap_tx(tx3, db.clone(), &txpool.config).await;
 
     txpool.insert_inner(tx1).expect("Tx1 should be OK, got Err");
     let squeezed = txpool.insert_inner(tx2).expect("Tx2 should be OK, got Err");
@@ -570,8 +578,8 @@ async fn tx_limit_hit() {
         .add_input(gas_coin)
         .finalize_as_transaction();
 
-    let tx1 = check_transaction(tx1, db.clone(), &txpool.config).await;
-    let tx2 = check_transaction(tx2, db.clone(), &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, db.clone(), &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, db.clone(), &txpool.config).await;
     txpool.insert_inner(tx1).expect("Tx1 should be Ok, got Err");
 
     let err = txpool
@@ -623,9 +631,9 @@ async fn tx_depth_hit() {
         .add_input(input)
         .finalize_as_transaction();
 
-    let tx1 = check_transaction(tx1, db.clone(), &txpool.config).await;
-    let tx2 = check_transaction(tx2, db.clone(), &txpool.config).await;
-    let tx3 = check_transaction(tx3, db.clone(), &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, db.clone(), &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, db.clone(), &txpool.config).await;
+    let tx3 = check_unwrap_tx(tx3, db.clone(), &txpool.config).await;
 
     txpool.insert_inner(tx1).expect("Tx1 should be OK, got Err");
     txpool.insert_inner(tx2).expect("Tx2 should be OK, got Err");
@@ -670,9 +678,9 @@ async fn sorted_out_tx1_2_4() {
     let tx2_id = tx2.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
     let tx3_id = tx3.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
 
-    let tx1 = check_transaction(tx1, db.clone(), &txpool.config).await;
-    let tx2 = check_transaction(tx2, db.clone(), &txpool.config).await;
-    let tx3 = check_transaction(tx3, db.clone(), &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, db.clone(), &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, db.clone(), &txpool.config).await;
+    let tx3 = check_unwrap_tx(tx3, db.clone(), &txpool.config).await;
 
     txpool.insert_inner(tx1).expect("Tx1 should be Ok, got Err");
     txpool.insert_inner(tx2).expect("Tx2 should be Ok, got Err");
@@ -727,9 +735,9 @@ async fn find_dependent_tx1_tx2() {
     let tx2_id = tx2.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
     let tx3_id = tx3.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
 
-    let tx1 = check_transaction(tx1, db.clone(), &txpool.config).await;
-    let tx2 = check_transaction(tx2, db.clone(), &txpool.config).await;
-    let tx3 = check_transaction(tx3, db.clone(), &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, db.clone(), &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, db.clone(), &txpool.config).await;
+    let tx3 = check_unwrap_tx(tx3, db.clone(), &txpool.config).await;
 
     txpool.insert_inner(tx1).expect("Tx0 should be Ok, got Err");
     txpool.insert_inner(tx2).expect("Tx1 should be Ok, got Err");
@@ -768,7 +776,7 @@ async fn tx_at_least_min_gas_price_is_insertable() {
         .add_input(gas_coin)
         .finalize_as_transaction();
 
-    let tx = check_transaction(tx, txpool.database.clone(), &txpool.config).await;
+    let tx = check_unwrap_tx(tx, txpool.database.clone(), &txpool.config).await;
     txpool.insert_inner(tx).expect("Tx should be Ok, got Err");
 }
 
@@ -776,26 +784,25 @@ async fn tx_at_least_min_gas_price_is_insertable() {
 async fn tx_below_min_gas_price_is_not_insertable() {
     let mut rng = StdRng::seed_from_u64(0);
     let db = MockDb::default();
-    let mut txpool = TxPool::new(
-        Config {
-            min_gas_price: 11,
-            ..Default::default()
-        },
-        db.clone(),
-    );
 
-    let (_, gas_coin) = setup_coin(&mut rng, Some(&txpool.database));
+    let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
     let tx = TransactionBuilder::script(vec![], vec![])
         .gas_price(10)
         .gas_limit(GAS_LIMIT)
         .add_input(gas_coin)
         .finalize_as_transaction();
 
-    let tx = check_transaction(tx, txpool.database.clone(), &txpool.config).await;
+    let err = check_tx(
+        tx,
+        db,
+        &Config {
+            min_gas_price: 11,
+            ..Default::default()
+        },
+    )
+    .await
+    .expect_err("expected insertion failure");
 
-    let err = txpool
-        .insert_inner(tx)
-        .expect_err("expected insertion failure");
     assert!(matches!(
         err.root_cause().downcast_ref::<Error>().unwrap(),
         Error::NotInsertedGasPriceTooLow
@@ -817,7 +824,7 @@ async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
     let tx1_id = tx.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
     let mut txpool = TxPool::new(Default::default(), db.clone());
 
-    let tx = check_transaction(tx, db.clone(), &txpool.config).await;
+    let tx = check_unwrap_tx(tx, db.clone(), &txpool.config).await;
     txpool.insert_inner(tx).expect("should succeed");
 
     let tx_info = txpool.find_one(&tx1_id).unwrap();
@@ -838,7 +845,7 @@ async fn tx_rejected_when_input_message_id_is_spent() {
     db.spend_message(*message.id());
     let mut txpool = TxPool::new(Default::default(), db.clone());
 
-    let tx = check_transaction(tx, db.clone(), &txpool.config).await;
+    let tx = check_unwrap_tx(tx, db.clone(), &txpool.config).await;
     let err = txpool.insert_inner(tx).expect_err("should fail");
 
     // check error
@@ -860,7 +867,7 @@ async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
     // Do not insert any messages into the DB to ensure there is no matching message for the
     // tx.
     let mut txpool = TxPool::new(Default::default(), db.clone());
-    let tx = check_transaction(tx, db.clone(), &txpool.config).await;
+    let tx = check_unwrap_tx(tx, db.clone(), &txpool.config).await;
     let err = txpool.insert_inner(tx).expect_err("should fail");
 
     // check error
@@ -897,14 +904,14 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
     let mut txpool = TxPool::new(Default::default(), db.clone());
 
     let tx_high_id = tx_high.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
-    let tx_high = check_transaction(tx_high, db.clone(), &txpool.config).await;
+    let tx_high = check_unwrap_tx(tx_high, db.clone(), &txpool.config).await;
 
     // Insert a tx for the message id with a high gas amount
     txpool
         .insert_inner(tx_high)
         .expect("expected successful insertion");
 
-    let tx_low = check_transaction(tx_low, db.clone(), &txpool.config).await;
+    let tx_low = check_unwrap_tx(tx_low, db.clone(), &txpool.config).await;
     // Insert a tx for the message id with a low gas amount
     // Because the new transaction's id matches an existing transaction, we compare the gas
     // prices of both the new and existing transactions. Since the existing transaction's gas
@@ -938,7 +945,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
 
     let mut txpool = TxPool::new(Default::default(), db.clone());
     let tx_low_id = tx_low.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
-    let tx_low = check_transaction(tx_low, db.clone(), &txpool.config).await;
+    let tx_low = check_unwrap_tx(tx_low, db.clone(), &txpool.config).await;
     txpool.insert_inner(tx_low).expect("should succeed");
 
     // Insert a tx for the message id with a high gas amount
@@ -950,7 +957,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
         .gas_limit(GAS_LIMIT)
         .add_input(conflicting_message_input)
         .finalize_as_transaction();
-    let tx_high = check_transaction(tx_high, db.clone(), &txpool.config).await;
+    let tx_high = check_unwrap_tx(tx_high, db.clone(), &txpool.config).await;
     let squeezed_out_txs = txpool.insert_inner(tx_high).expect("should succeed");
 
     assert_eq!(squeezed_out_txs.removed.len(), 1);
@@ -993,9 +1000,9 @@ async fn message_of_squeezed_out_tx_can_be_resubmitted_at_lower_gas_price() {
     db.insert_message(message_2);
     let mut txpool = TxPool::new(Default::default(), db.clone());
 
-    let tx1 = check_transaction(tx1, db.clone(), &txpool.config).await;
-    let tx2 = check_transaction(tx2, db.clone(), &txpool.config).await;
-    let tx3 = check_transaction(tx3, db.clone(), &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, db.clone(), &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, db.clone(), &txpool.config).await;
+    let tx3 = check_unwrap_tx(tx3, db.clone(), &txpool.config).await;
 
     txpool.insert_inner(tx1).expect("should succeed");
 
@@ -1008,7 +1015,6 @@ async fn message_of_squeezed_out_tx_can_be_resubmitted_at_lower_gas_price() {
 async fn predicates_with_incorrect_owner_fails() {
     let mut rng = StdRng::seed_from_u64(0);
     let db = MockDb::default();
-    let mut txpool = TxPool::new(Default::default(), db.clone());
     let mut coin = random_predicate(&mut rng, AssetId::BASE, TEST_COIN_AMOUNT, None);
     if let Input::CoinPredicate(CoinPredicate { owner, .. }) = &mut coin {
         *owner = Address::zeroed();
@@ -1020,11 +1026,10 @@ async fn predicates_with_incorrect_owner_fails() {
         .add_input(gas_coin)
         .finalize_as_transaction();
 
-    let tx = check_transaction(tx, db.clone(), &txpool.config).await;
-
-    let err = txpool
-        .insert_inner(tx)
+    let err = check_tx(tx, db.clone(), &Default::default())
+        .await
         .expect_err("Transaction should be err, got ok");
+
     assert!(
         err.to_string().contains("InputPredicateOwner"),
         "unexpected error: {err}",
@@ -1041,7 +1046,6 @@ async fn predicate_without_enough_gas_returns_out_of_gas() {
         .transaction_parameters
         .max_gas_per_predicate = 10000;
     config.chain_config.transaction_parameters.max_gas_per_tx = 10000;
-    let mut txpool = TxPool::new(config.clone(), db.clone());
     let coin = custom_predicate(
         &mut rng,
         AssetId::BASE,
@@ -1061,11 +1065,10 @@ async fn predicate_without_enough_gas_returns_out_of_gas() {
         .add_input(gas_coin)
         .finalize_as_transaction();
 
-    let tx = check_transaction(tx, db.clone(), &txpool.config).await;
-
-    let err = txpool
-        .insert_inner(tx)
+    let err = check_tx(tx, db.clone(), &Default::default())
+        .await
         .expect_err("Transaction should be err, got ok");
+
     assert!(
         err.to_string().contains("PredicateExhaustedGas"),
         "unexpected error: {err}",
@@ -1076,7 +1079,6 @@ async fn predicate_without_enough_gas_returns_out_of_gas() {
 async fn predicate_that_returns_false_is_invalid() {
     let mut rng = StdRng::seed_from_u64(0);
     let db = MockDb::default();
-    let mut txpool = TxPool::new(Default::default(), db.clone());
     let coin = custom_predicate(
         &mut rng,
         AssetId::BASE,
@@ -1093,11 +1095,10 @@ async fn predicate_that_returns_false_is_invalid() {
         .add_input(gas_coin)
         .finalize_as_transaction();
 
-    let tx = check_transaction(tx, db.clone(), &txpool.config).await;
-
-    let err = txpool
-        .insert_inner(tx)
+    let err = check_tx(tx, db.clone(), &Default::default())
+        .await
         .expect_err("Transaction should be err, got ok");
+
     assert!(
         err.to_string().contains("PredicateVerificationFailed"),
         "unexpected error: {err}",
