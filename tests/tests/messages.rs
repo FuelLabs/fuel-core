@@ -421,7 +421,7 @@ async fn can_get_message_proof() {
                 .collect();
             assert!(verify_merkle(
                 result.message_block_header.message_receipt_root,
-                generated_message_id,
+                &generated_message_id,
                 message_proof_index,
                 &message_proof_set,
                 result.message_block_header.message_receipt_count,
@@ -456,7 +456,7 @@ async fn can_get_message_proof() {
             let blocks_count = result.commit_block_header.height;
             assert!(verify_merkle(
                 result.commit_block_header.prev_root,
-                message_block_id,
+                &message_block_id,
                 block_proof_index,
                 &block_proof_set,
                 blocks_count as u64,
@@ -468,7 +468,7 @@ async fn can_get_message_proof() {
 // TODO: Others test:  Data missing etc.
 fn verify_merkle<D: AsRef<[u8]>>(
     root: Bytes32,
-    data: D,
+    data: &D,
     index: u64,
     set: &[Bytes32],
     leaf_count: u64,
