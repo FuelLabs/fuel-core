@@ -3014,6 +3014,8 @@ dependencies = [
  "fuel-core-trace",
  "fuel-core-txpool",
  "fuel-core-types",
+ "fuel-vm",
+ "futures",
  "itertools",
  "mockall",
  "parking_lot 0.12.1",
@@ -3021,6 +3023,7 @@ dependencies = [
  "rstest",
  "test-strategy",
  "tokio",
+ "tokio-rayon",
  "tokio-stream",
  "tracing",
 ]

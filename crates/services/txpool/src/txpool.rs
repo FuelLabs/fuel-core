@@ -20,8 +20,11 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
     fuel_vm::checked_transaction::{
+        CheckPredicates,
+        Checked,
         CheckedTransaction,
         IntoChecked,
+        ParallelExecutor,
     },
     services::txpool::{
         ArcPoolTx,
@@ -29,12 +32,14 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
+use fuel_vm_private::error::PredicateVerificationFailed;
 use std::{
     cmp::Reverse,
     collections::HashMap,
     ops::Deref,
     sync::Arc,
 };
+use tokio_rayon::AsyncRayonHandle;
 
 #[derive(Debug, Clone)]
 pub struct TxPool<DB> {
@@ -387,11 +392,18 @@ pub async fn check_single_tx(
     verify_tx_min_gas_price(&tx, config)?;
 
     let tx: CheckedTransaction = if config.utxo_validation {
-        tx.into_checked(
-            current_height,
-            &config.chain_config.transaction_parameters,
+        let consensus_params = &config.chain_config.transaction_parameters;
+
+        let tx: Checked<Transaction> = tx
+            .into_checked_basic(current_height, &consensus_params)?
+            .check_signatures(&consensus_params.chain_id)?
+            .into();
+
+        tx.check_predicates_async::<TokioWithRayon>(
+            consensus_params,
             &config.chain_config.gas_costs,
-        )?
+        )
+        .await?
         .into()
     } else {
         tx.into_checked_basic(
@@ -420,6 +432,28 @@ fn verify_tx_min_gas_price(tx: &Transaction, config: &Config) -> Result<(), Erro
         return Err(Error::NotInsertedGasPriceTooLow)
     }
     Ok(())
+}
+
+pub struct TokioWithRayon;
+
+#[async_trait::async_trait]
+impl ParallelExecutor for TokioWithRayon {
+    type Task = AsyncRayonHandle<Result<(Word, usize), PredicateVerificationFailed>>;
+
+    fn create_task<F>(func: F) -> Self::Task
+    where
+        F: FnOnce() -> Result<(Word, usize), PredicateVerificationFailed>
+            + Send
+            + 'static,
+    {
+        tokio_rayon::spawn(func)
+    }
+
+    async fn execute_tasks(
+        futures: Vec<Self::Task>,
+    ) -> Vec<Result<(Word, usize), PredicateVerificationFailed>> {
+        futures::future::join_all(futures).await
+    }
 }
 
 #[cfg(test)]
