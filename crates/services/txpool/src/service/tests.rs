@@ -30,7 +30,7 @@ async fn test_find() {
 
     let service = ctx.service();
 
-    let out = service.shared.insert(vec![tx1.clone(), tx2.clone()]);
+    let out = service.shared.insert(vec![tx1.clone(), tx2.clone()]).await;
 
     assert_eq!(out.len(), 2, "Should be len 2:{out:?}");
     assert!(out[0].is_ok(), "Tx1 should be OK, got err:{out:?}");
@@ -72,7 +72,8 @@ async fn test_prune_transactions() {
 
     let out = service
         .shared
-        .insert(vec![tx1.clone(), tx2.clone(), tx3.clone()]);
+        .insert(vec![tx1.clone(), tx2.clone(), tx3.clone()])
+        .await;
 
     // Check that we have all transactions after insertion.
     assert_eq!(out.len(), 3, "Should be len 3:{out:?}");
@@ -125,11 +126,11 @@ async fn test_prune_transactions_the_oldest() {
 
     let service = ctx.service();
 
-    let out = service.shared.insert(vec![tx1.clone()]);
+    let out = service.shared.insert(vec![tx1.clone()]).await;
     assert!(out[0].is_ok(), "Tx1 should be OK, got err:{out:?}");
 
     tokio::time::sleep(Duration::from_secs(TIMEOUT - DELAY)).await;
-    let out = service.shared.insert(vec![tx2.clone()]);
+    let out = service.shared.insert(vec![tx2.clone()]).await;
     assert!(out[0].is_ok(), "Tx2 should be OK, got err:{out:?}");
 
     let out = service.shared.find(vec![
@@ -141,7 +142,7 @@ async fn test_prune_transactions_the_oldest() {
     assert!(out[1].is_some(), "Tx2 should exist");
 
     tokio::time::sleep(Duration::from_secs(TIMEOUT)).await;
-    let out = service.shared.insert(vec![tx3.clone()]);
+    let out = service.shared.insert(vec![tx3.clone()]).await;
     assert!(out[0].is_ok(), "Tx3 should be OK, got err:{out:?}");
 
     let out = service.shared.find(vec![
@@ -185,7 +186,7 @@ async fn simple_insert_removal_subscription() {
         .tx_update_subscribe(tx2.cached_id().unwrap())
         .await;
 
-    let out = service.shared.insert(vec![tx1.clone(), tx2.clone()]);
+    let out = service.shared.insert(vec![tx1.clone(), tx2.clone()]).await;
 
     if out[0].is_ok() {
         assert_eq!(
