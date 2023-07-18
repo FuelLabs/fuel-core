@@ -1,13 +1,23 @@
 use std::sync::Arc;
 
 use fuel_core_types::{
-    blockchain::{primitives::BlockId, SealedBlock, SealedBlockHeader},
+    blockchain::{
+        primitives::BlockId,
+        SealedBlock,
+        SealedBlockHeader,
+    },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
 };
 use libp2p::PeerId;
-use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, FromInto};
+use serde::{
+    Deserialize,
+    Serialize,
+};
+use serde_with::{
+    serde_as,
+    FromInto,
+};
 use tokio::sync::oneshot;
 
 pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &[u8] = b"/fuel/req_res/0.0.1";

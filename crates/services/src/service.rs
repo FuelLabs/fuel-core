@@ -1,4 +1,7 @@
-use crate::state::{State, StateWatcher};
+use crate::state::{
+    State,
+    StateWatcher,
+};
 use anyhow::anyhow;
 use futures::FutureExt;
 use tokio::sync::watch;
@@ -156,7 +159,7 @@ where
         loop {
             let state = start.borrow().clone();
             if !state.starting() {
-                return Ok(state);
+                return Ok(state)
             }
             start.changed().await?;
         }
@@ -166,7 +169,7 @@ where
         loop {
             let state = stop.borrow().clone();
             if state.stopped() {
-                return Ok(state);
+                return Ok(state)
             }
             stop.changed().await?;
         }
@@ -300,7 +303,7 @@ where
 
     // If the state after update is not `Starting` then return to stop the service.
     if !state.borrow().starting() {
-        return;
+        return
     }
 
     // We can panic here, because it is inside of the task.
@@ -328,7 +331,7 @@ where
             Ok(Ok(should_continue)) => {
                 if !should_continue {
                     tracing::debug!("stopping");
-                    break;
+                    break
                 }
                 tracing::debug!("run loop");
             }
@@ -339,7 +342,7 @@ where
             Err(panic) => {
                 tracing::debug!("got a panic");
                 got_panic = Some(panic);
-                break;
+                break
             }
         }
     }

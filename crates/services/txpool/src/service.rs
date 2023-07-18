@@ -1,34 +1,66 @@
 use crate::{
-    ports::{BlockImporter, PeerToPeer, TxPoolDb},
+    ports::{
+        BlockImporter,
+        PeerToPeer,
+        TxPoolDb,
+    },
     transaction_selector::select_transactions,
-    Config, Error as TxPoolError, TxInfo, TxPool,
+    Config,
+    Error as TxPoolError,
+    TxInfo,
+    TxPool,
 };
 
 use fuel_core_p2p::PeerId;
 use fuel_core_services::{
-    stream::BoxStream, RunnableService, RunnableTask, Service as _, ServiceRunner,
+    stream::BoxStream,
+    RunnableService,
+    RunnableTask,
+    Service as _,
+    ServiceRunner,
     StateWatcher,
 };
 use fuel_core_types::{
-    fuel_tx::{ConsensusParameters, Transaction, TxId, UniqueIdentifier},
-    fuel_types::{BlockHeight, Bytes32},
+    fuel_tx::{
+        ConsensusParameters,
+        Transaction,
+        TxId,
+        UniqueIdentifier,
+    },
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+    },
     services::{
         block_importer::ImportResult,
         p2p::{
-            GossipData, GossipsubMessageAcceptance, GossipsubMessageInfo,
+            GossipData,
+            GossipsubMessageAcceptance,
+            GossipsubMessageInfo,
             TransactionGossipData,
         },
-        txpool::{ArcPoolTx, Error, InsertionResult, TransactionStatus},
+        txpool::{
+            ArcPoolTx,
+            Error,
+            InsertionResult,
+            TransactionStatus,
+        },
     },
     tai64::Tai64,
 };
 use parking_lot::Mutex as ParkingMutex;
 use std::sync::Arc;
-use tokio::{sync::broadcast, time::MissedTickBehavior};
+use tokio::{
+    sync::broadcast,
+    time::MissedTickBehavior,
+};
 use tokio_stream::StreamExt;
 use update_sender::UpdateSender;
 
-use self::update_sender::{MpscChannel, TxStatusStream};
+use self::update_sender::{
+    MpscChannel,
+    TxStatusStream,
+};
 
 mod update_sender;
 

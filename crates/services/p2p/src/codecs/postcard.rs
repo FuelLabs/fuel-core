@@ -1,21 +1,42 @@
-use super::{GossipsubCodec, NetworkCodec, RequestResponseConverter};
+use super::{
+    GossipsubCodec,
+    NetworkCodec,
+    RequestResponseConverter,
+};
 use crate::{
-    gossipsub::messages::{GossipTopicTag, GossipsubBroadcastRequest, GossipsubMessage},
+    gossipsub::messages::{
+        GossipTopicTag,
+        GossipsubBroadcastRequest,
+        GossipsubMessage,
+    },
     request_response::messages::{
-        NetworkResponse, OutboundResponse, RequestMessage, ResponseMessage,
-        MAX_REQUEST_SIZE, REQUEST_RESPONSE_PROTOCOL_ID,
+        NetworkResponse,
+        OutboundResponse,
+        RequestMessage,
+        ResponseMessage,
+        MAX_REQUEST_SIZE,
+        REQUEST_RESPONSE_PROTOCOL_ID,
     },
 };
 use async_trait::async_trait;
-use futures::{AsyncRead, AsyncWriteExt};
+use futures::{
+    AsyncRead,
+    AsyncWriteExt,
+};
 use libp2p::{
     core::{
-        upgrade::{read_length_prefixed, write_length_prefixed},
+        upgrade::{
+            read_length_prefixed,
+            write_length_prefixed,
+        },
         ProtocolName,
     },
     request_response::RequestResponseCodec,
 };
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 use std::io;
 
 #[derive(Debug, Clone)]

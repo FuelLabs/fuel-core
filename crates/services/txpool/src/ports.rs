@@ -2,12 +2,27 @@ use fuel_core_p2p::PeerId;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
-    entities::{coins::coin::CompressedCoin, message::Message},
-    fuel_tx::{Transaction, UtxoId},
-    fuel_types::{BlockHeight, Bytes32, ContractId, Nonce},
+    entities::{
+        coins::coin::CompressedCoin,
+        message::Message,
+    },
+    fuel_tx::{
+        Transaction,
+        UtxoId,
+    },
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+        ContractId,
+        Nonce,
+    },
     services::{
         block_importer::ImportResult,
-        p2p::{GossipsubMessageAcceptance, GossipsubMessageInfo, NetworkData},
+        p2p::{
+            GossipsubMessageAcceptance,
+            GossipsubMessageInfo,
+            NetworkData,
+        },
         txpool::TransactionStatus,
     },
 };

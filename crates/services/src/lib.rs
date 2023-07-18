@@ -9,7 +9,12 @@ mod state;
 /// Re-exports for streaming utilities
 pub mod stream {
     #[doc(no_inline)]
-    pub use futures::stream::{empty, pending, unfold, Stream};
+    pub use futures::stream::{
+        empty,
+        pending,
+        unfold,
+        Stream,
+    };
 
     /// A Send + Sync BoxStream
     pub type BoxStream<T> =
@@ -34,7 +39,15 @@ pub mod stream {
 }
 
 pub use service::{
-    EmptyShared, RunnableService, RunnableTask, Service, ServiceRunner, Shared,
+    EmptyShared,
+    RunnableService,
+    RunnableTask,
+    Service,
+    ServiceRunner,
+    Shared,
     SharedMutex,
 };
-pub use state::{State, StateWatcher};
+pub use state::{
+    State,
+    StateWatcher,
+};

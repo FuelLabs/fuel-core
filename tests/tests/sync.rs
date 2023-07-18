@@ -1,10 +1,23 @@
 use fuel_core::p2p_test_helpers::*;
-use fuel_core_types::{fuel_crypto::SecretKey, fuel_tx::Input};
+use fuel_core_types::{
+    fuel_crypto::SecretKey,
+    fuel_tx::Input,
+};
 use itertools::Itertools;
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{
+    rngs::StdRng,
+    SeedableRng,
+};
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap, VecDeque},
-    hash::{Hash, Hasher},
+    collections::{
+        hash_map::DefaultHasher,
+        HashMap,
+        VecDeque,
+    },
+    hash::{
+        Hash,
+        Hasher,
+    },
 };
 use test_case::test_case;
 

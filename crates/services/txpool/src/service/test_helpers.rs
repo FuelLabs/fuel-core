@@ -1,11 +1,26 @@
 use super::*;
-use crate::{ports::BlockImporter, MockDb};
-use fuel_core_services::{stream::BoxStream, Service as ServiceTrait};
+use crate::{
+    ports::BlockImporter,
+    MockDb,
+};
+use fuel_core_services::{
+    stream::BoxStream,
+    Service as ServiceTrait,
+};
 use fuel_core_types::{
     blockchain::SealedBlock,
     entities::coins::coin::Coin,
-    fuel_crypto::rand::{rngs::StdRng, SeedableRng},
-    fuel_tx::{Cacheable, Input, Transaction, TransactionBuilder, Word},
+    fuel_crypto::rand::{
+        rngs::StdRng,
+        SeedableRng,
+    },
+    fuel_tx::{
+        Cacheable,
+        Input,
+        Transaction,
+        TransactionBuilder,
+        Word,
+    },
     services::p2p::GossipsubMessageAcceptance,
 };
 use std::cell::RefCell;

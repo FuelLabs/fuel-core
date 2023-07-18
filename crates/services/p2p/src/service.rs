@@ -1,32 +1,72 @@
 use crate::{
-    codecs::{postcard::PostcardCodec, NetworkCodec},
+    codecs::{
+        postcard::PostcardCodec,
+        NetworkCodec,
+    },
     config::Config,
-    gossipsub::messages::{GossipsubBroadcastRequest, GossipsubMessage},
-    p2p_service::{FuelP2PEvent, FuelP2PService},
-    ports::{BlockHeightImporter, P2pDb},
-    request_response::messages::{OutboundResponse, RequestMessage, ResponseChannelItem},
+    gossipsub::messages::{
+        GossipsubBroadcastRequest,
+        GossipsubMessage,
+    },
+    p2p_service::{
+        FuelP2PEvent,
+        FuelP2PService,
+    },
+    ports::{
+        BlockHeightImporter,
+        P2pDb,
+    },
+    request_response::messages::{
+        OutboundResponse,
+        RequestMessage,
+        ResponseChannelItem,
+    },
 };
 use anyhow::anyhow;
 use fuel_core_services::{
-    stream::BoxStream, RunnableService, RunnableTask, ServiceRunner, StateWatcher,
+    stream::BoxStream,
+    RunnableService,
+    RunnableTask,
+    ServiceRunner,
+    StateWatcher,
 };
 use fuel_core_types::{
     blockchain::{
-        block::Block, consensus::ConsensusVote, primitives::BlockId, SealedBlock,
+        block::Block,
+        consensus::ConsensusVote,
+        primitives::BlockId,
+        SealedBlock,
         SealedBlockHeader,
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::p2p::{
-        peer_reputation::{AppScore, PeerReport},
-        BlockHeightHeartbeatData, GossipData, GossipsubMessageAcceptance,
-        GossipsubMessageInfo, PeerId as FuelPeerId, TransactionGossipData,
+        peer_reputation::{
+            AppScore,
+            PeerReport,
+        },
+        BlockHeightHeartbeatData,
+        GossipData,
+        GossipsubMessageAcceptance,
+        GossipsubMessageInfo,
+        PeerId as FuelPeerId,
+        TransactionGossipData,
     },
 };
 use futures::StreamExt;
-use libp2p::{gossipsub::MessageAcceptance, PeerId};
-use std::{fmt::Debug, sync::Arc};
-use tokio::sync::{broadcast, mpsc, oneshot};
+use libp2p::{
+    gossipsub::MessageAcceptance,
+    PeerId,
+};
+use std::{
+    fmt::Debug,
+    sync::Arc,
+};
+use tokio::sync::{
+    broadcast,
+    mpsc,
+    oneshot,
+};
 use tracing::warn;
 
 pub type Service<D> = ServiceRunner<Task<D>>;
@@ -539,7 +579,10 @@ pub mod tests {
     use fuel_core_types::{
         blockchain::{
             block::Block,
-            consensus::{poa::PoAConsensus, Consensus},
+            consensus::{
+                poa::PoAConsensus,
+                Consensus,
+            },
         },
         fuel_types::BlockHeight,
     };
