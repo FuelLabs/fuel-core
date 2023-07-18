@@ -4,27 +4,59 @@ use crate::{
     chain_config::ChainConfig,
     database::Database,
     p2p::Multiaddr,
-    service::{genesis::maybe_initialize_state, Config, FuelService, ServiceTrait},
+    service::{
+        genesis::maybe_initialize_state,
+        Config,
+        FuelService,
+        ServiceTrait,
+    },
 };
-use fuel_core_p2p::{codecs::postcard::PostcardCodec, network_service::FuelP2PService};
-use fuel_core_poa::{ports::BlockImporter, Trigger};
-use fuel_core_storage::{tables::Transactions, StorageAsRef};
+use fuel_core_p2p::{
+    codecs::postcard::PostcardCodec,
+    network_service::FuelP2PService,
+};
+use fuel_core_poa::{
+    ports::BlockImporter,
+    Trigger,
+};
+use fuel_core_storage::{
+    tables::Transactions,
+    StorageAsRef,
+};
 use fuel_core_types::{
-    fuel_asm::{op, RegId},
+    fuel_asm::{
+        op,
+        RegId,
+    },
     fuel_crypto::SecretKey,
     fuel_tx::{
-        ConsensusParameters, Input, Transaction, TransactionBuilder, TxId,
-        UniqueIdentifier, UtxoId,
+        ConsensusParameters,
+        Input,
+        Transaction,
+        TransactionBuilder,
+        TxId,
+        UniqueIdentifier,
+        UtxoId,
     },
-    fuel_types::{Address, Bytes32},
+    fuel_types::{
+        Address,
+        Bytes32,
+    },
     secrecy::Secret,
 };
 use futures::StreamExt;
 use itertools::Itertools;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{
+    rngs::StdRng,
+    Rng,
+    SeedableRng,
+};
 use std::{
     collections::HashMap,
-    ops::{Index, IndexMut},
+    ops::{
+        Index,
+        IndexMut,
+    },
     sync::Arc,
     time::Duration,
 };
