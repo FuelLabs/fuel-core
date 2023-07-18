@@ -86,6 +86,8 @@ jobs:
       - prevent-openssl
       - rustfmt
     runs-on: buildjet-4vcpu-ubuntu-2204
+    env:
+      RUSTFLAGS: -D warnings
     strategy:
       matrix:
         include:
@@ -104,8 +106,6 @@ jobs:
             args: --manifest-path version-compatibility/Cargo.toml --workspace
           - command: build
             args: -p fuel-core-bin --no-default-features --features production
-        env:
-          RUSTFLAGS: -D warnings
     # disallow any job that takes longer than 45 minutes
     timeout-minutes: 45
     continue-on-error: ${{ matrix.skip-error || false }}

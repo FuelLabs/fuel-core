@@ -7,6 +7,7 @@
 # - Nightly rust formatter
 # - `cargo install cargo-sort`
 
+export RUSTFLAGS="-D warnings"
 cargo +nightly fmt --all -- --check &&
 cargo sort -w --check &&
 source .github/workflows/scripts/verify_openssl.sh &&
