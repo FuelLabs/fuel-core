@@ -1102,9 +1102,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.3.12"
+version = "4.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3eab9e8ceb9afdade1ab3f0fd8dbce5b1b2f468ad653baf10e771781b2b67b73"
+checksum = "8f644d0dac522c8b05ddc39aaaccc5b136d5dc4ff216610c5641e3be5becf56c"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -1113,9 +1113,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.3.12"
+version = "4.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f2763db829349bf00cfc06251268865ed4363b93a943174f638daf3ecdba2cd"
+checksum = "af410122b9778e024f9e0fb35682cc09cc3f85cad5e8d3ba8f47a9702df6e73d"
 dependencies = [
  "anstream",
  "anstyle",
@@ -2087,7 +2087,7 @@ dependencies = [
  "group 0.13.0",
  "pkcs8 0.10.2",
  "rand_core 0.6.4",
- "sec1 0.7.2",
+ "sec1 0.7.3",
  "subtle",
  "zeroize",
 ]
@@ -2602,14 +2602,14 @@ dependencies = [
 
 [[package]]
 name = "fuel-core"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "assert_matches",
  "async-graphql",
  "async-trait",
  "axum",
- "clap 4.3.12",
+ "clap 4.3.15",
  "derive_more",
  "enum-iterator",
  "fuel-core-chain-config",
@@ -2651,14 +2651,14 @@ dependencies = [
  "tokio-stream",
  "tower-http",
  "tracing",
- "uuid 1.4.0",
+ "uuid 1.4.1",
 ]
 
 [[package]]
 name = "fuel-core-benches"
 version = "0.0.0"
 dependencies = [
- "clap 4.3.12",
+ "clap 4.3.15",
  "criterion",
  "ctrlc",
  "ethnum",
@@ -2674,7 +2674,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-bft"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "parking_lot 0.12.1",
@@ -2683,10 +2683,10 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-bin"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
- "clap 4.3.12",
+ "clap 4.3.15",
  "const_format",
  "dirs",
  "fuel-core",
@@ -2703,7 +2703,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-chain-config"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "bech32 0.9.1",
@@ -2722,7 +2722,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-client"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "cynic",
@@ -2745,9 +2745,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-client-bin"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
- "clap 4.3.12",
+ "clap 4.3.15",
  "fuel-core-client",
  "fuel-core-types",
  "serde_json",
@@ -2756,7 +2756,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-consensus-module"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "fuel-core-chain-config",
@@ -2768,7 +2768,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-database"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "fuel-core-storage",
@@ -2779,7 +2779,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-e2e-client"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2804,7 +2804,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-executor"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "fuel-core-chain-config",
@@ -2815,7 +2815,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-importer"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "fuel-core-storage",
@@ -2830,10 +2830,10 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-keygen"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
- "clap 4.3.12",
+ "clap 4.3.15",
  "fuel-core-types",
  "libp2p-core 0.38.0",
  "serde_json",
@@ -2841,7 +2841,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-metrics"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "axum",
  "lazy_static",
@@ -2852,7 +2852,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-p2p"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2895,7 +2895,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-poa"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2913,7 +2913,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-producer"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2930,7 +2930,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-relayer"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2958,7 +2958,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-services"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2971,7 +2971,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-storage"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "fuel-core-types",
@@ -2982,7 +2982,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-sync"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3028,7 +3028,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-trace"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "ctor",
  "tracing",
@@ -3038,7 +3038,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-txpool"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3062,7 +3062,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-types"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -4617,7 +4617,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6d8de370f98a6cb8a4606618e53e802f93b094ddec0f96988eaec2c27e6e9ce7"
 dependencies = [
- "clap 4.3.12",
+ "clap 4.3.15",
  "termcolor",
  "threadpool",
 ]
@@ -5243,9 +5243,9 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec"
-version = "3.6.3"
+version = "3.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "756d439303e94fae44f288ba881ad29670c65b0c4b0e05674ca81061bb65f2c5"
+checksum = "dd8e946cc0cc711189c0b0249fb8b599cbeeab9784d83c415719368bb8d4ac64"
 dependencies = [
  "arrayvec",
  "bitvec 1.0.1",
@@ -5257,9 +5257,9 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec-derive"
-version = "3.6.3"
+version = "3.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d884d78fcf214d70b1e239fcd1c6e5e95aa3be1881918da2e488cc946c7a476"
+checksum = "2a296c3079b5fefbc499e1de58dc26c09b1b9a5952d26694ee89f04a43ebbb3e"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -5392,9 +5392,9 @@ checksum = "9b2a4787296e9989611394c33f193f676704af1686e70b8f8033ab5ba9a35a94"
 
 [[package]]
 name = "pest"
-version = "2.7.0"
+version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f73935e4d55e2abf7f130186537b19e7a4abc886a0252380b59248af473a3fc9"
+checksum = "0d2d1d55045829d65aad9d389139882ad623b33b904e7c9f1b10c5b8927298e5"
 dependencies = [
  "thiserror",
  "ucd-trie",
@@ -6600,9 +6600,9 @@ dependencies = [
 
 [[package]]
 name = "scopeguard"
-version = "1.1.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
+checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "scrypt"
@@ -6664,9 +6664,9 @@ dependencies = [
 
 [[package]]
 name = "sec1"
-version = "0.7.2"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0aec48e813d6b90b15f0b8948af3c63483992dee44c03e9930b3eebdabe046e"
+checksum = "d3e97a565f76233a6003f9f5c54be1d9c5bdfa3eccfb189469f11ec4901c47dc"
 dependencies = [
  "base16ct 0.2.0",
  "der 0.7.7",
@@ -6819,9 +6819,9 @@ dependencies = [
 
 [[package]]
 name = "serde_yaml"
-version = "0.9.23"
+version = "0.9.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da6075b41c7e3b079e5f246eb6094a44850d3a4c25a67c581c80796c80134012"
+checksum = "bd5f51e3fdb5b9cdd1577e1cb7a733474191b1aca6a72c2e50913241632c1180"
 dependencies = [
  "indexmap 2.0.0",
  "itoa",
@@ -7951,9 +7951,9 @@ dependencies = [
 
 [[package]]
 name = "uuid"
-version = "1.4.0"
+version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d023da39d1fde5a8a3fe1f3e01ca9632ada0a63e9797de55a879d6e2236277be"
+checksum = "79daa5ed5740825c40b389c5e50312b9c86df53fccd33f281df655642b43869d"
 dependencies = [
  "getrandom 0.2.10",
 ]
@@ -8281,7 +8281,7 @@ dependencies = [
  "tokio",
  "turn",
  "url",
- "uuid 1.4.0",
+ "uuid 1.4.1",
  "waitgroup",
  "webrtc-mdns",
  "webrtc-util",
@@ -8708,7 +8708,7 @@ dependencies = [
 name = "xtask"
 version = "0.0.0"
 dependencies = [
- "clap 4.3.12",
+ "clap 4.3.15",
  "fuel-core",
 ]
 
