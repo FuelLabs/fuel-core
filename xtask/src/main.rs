@@ -1,4 +1,5 @@
 #![deny(unused_crate_dependencies)]
+#![deny(warnings)]
 
 use clap::Parser;
 use commands::{

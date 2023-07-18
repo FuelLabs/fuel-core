@@ -857,7 +857,7 @@ impl FuelClient {
         commit_block_id: Option<&BlockId>,
         commit_block_height: Option<BlockHeight>,
     ) -> io::Result<Option<types::MessageProof>> {
-        let transaction_id: schema::TransactionId = (*transaction_id).into();
+        let transaction_id: TransactionId = (*transaction_id).into();
         let message_id: schema::MessageId = (*message_id).into();
         let commit_block_id: Option<schema::BlockId> =
             commit_block_id.map(|commit_block_id| (*commit_block_id).into());
