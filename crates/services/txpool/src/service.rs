@@ -1,12 +1,10 @@
 use crate::{
     ports::{BlockImporter, PeerToPeer, TxPoolDb},
     transaction_selector::select_transactions,
-    txpool, Config, Error as TxPoolError, TxInfo, TxPool,
+    Config, Error as TxPoolError, TxInfo, TxPool,
 };
 
-use fuel_core_p2p::{
-    codecs::postcard::PostcardCodec, network_service::FuelP2PService, PeerId,
-};
+use fuel_core_p2p::PeerId;
 use fuel_core_services::{
     stream::BoxStream, RunnableService, RunnableTask, Service as _, ServiceRunner,
     StateWatcher,
@@ -25,9 +23,9 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use parking_lot::Mutex as ParkingMutex;
-use std::{pin::Pin, sync::Arc};
+use std::sync::Arc;
 use tokio::{sync::broadcast, time::MissedTickBehavior};
-use tokio_stream::{Stream, StreamExt};
+use tokio_stream::StreamExt;
 use update_sender::UpdateSender;
 
 use self::update_sender::{MpscChannel, TxStatusStream};

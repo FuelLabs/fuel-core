@@ -1,4 +1,5 @@
 #![deny(unused_crate_dependencies)]
+#![deny(warnings)]
 
 use fuel_core_types::{
     services::txpool::{

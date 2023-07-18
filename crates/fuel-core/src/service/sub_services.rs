@@ -1,17 +1,23 @@
 #![allow(clippy::let_unit_value)]
 use super::adapters::P2PAdapter;
 
-use crate::txpool::service::new_txpool_syncing_service;
 use crate::{
     database::Database,
     fuel_core_graphql_api::Config as GraphQLConfig,
     schema::build_schema,
     service::{
         adapters::{
-            BlockImporterAdapter, BlockProducerAdapter, ExecutorAdapter,
-            MaybeRelayerAdapter, PoAAdapter, TxPoolAdapter, VerifierAdapter,
+            BlockImporterAdapter,
+            BlockProducerAdapter,
+            ExecutorAdapter,
+            MaybeRelayerAdapter,
+            PoAAdapter,
+            TxPoolAdapter,
+            VerifierAdapter,
         },
-        Config, SharedState, SubServices,
+        Config,
+        SharedState,
+        SubServices,
     },
 };
 use fuel_core_poa::Trigger;
@@ -181,6 +187,7 @@ pub fn init_sub_services(
         Box::new(tx_pool_adapter),
         Box::new(producer_adapter),
         Box::new(poa_adapter),
+        config.query_log_threshold_time,
     )?;
 
     let shared = SharedState {

@@ -15,7 +15,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_VERSION: 1.69.0
+  RUST_VERSION: 1.71.0
   NIGHTLY_RUST_VERSION: nightly-2023-05-23
   RUSTFLAGS: -D warnings
   REGISTRY: ghcr.io
@@ -86,6 +86,8 @@ jobs:
       - prevent-openssl
       - rustfmt
     runs-on: buildjet-4vcpu-ubuntu-2204
+    env:
+      RUSTFLAGS: -D warnings
     strategy:
       matrix:
         include:
@@ -255,9 +257,10 @@ jobs:
           password: ${{ secrets.DOCKER_IO_READ_ONLY_TOKEN }}
 
       - name: Build and push the image to ghcr.io
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v4
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           file: deployment/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}

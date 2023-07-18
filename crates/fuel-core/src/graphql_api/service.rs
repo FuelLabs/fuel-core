@@ -1,5 +1,5 @@
 #[cfg(feature = "metrics")]
-use crate::graphql_api::prometheus::PrometheusExtension;
+use crate::graphql_api::metrics_extension::MetricsExtension;
 use crate::{
     fuel_core_graphql_api::ports::{
         BlockProducerPort,
@@ -62,6 +62,7 @@ use std::{
         TcpListener,
     },
     pin::Pin,
+    time::Duration,
 };
 use tokio_stream::StreamExt;
 use tower_http::{
@@ -161,6 +162,7 @@ pub fn new_service(
     txpool: TxPool,
     producer: BlockProducer,
     consensus_module: ConsensusModule,
+    _log_threshold_ms: Duration,
 ) -> anyhow::Result<Service> {
     let network_addr = config.addr;
 
@@ -173,7 +175,7 @@ pub fn new_service(
     let builder = builder.extension(async_graphql::extensions::Tracing);
 
     #[cfg(feature = "metrics")]
-    let builder = builder.extension(PrometheusExtension {});
+    let builder = builder.extension(MetricsExtension::new(_log_threshold_ms));
 
     let schema = builder.finish();
 

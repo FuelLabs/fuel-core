@@ -6,6 +6,7 @@
 
 #![deny(unused_crate_dependencies)]
 #![deny(missing_docs)]
+#![deny(warnings)]
 
 use fuel_core_types::services::executor::Error as ExecutorError;
 use std::io::ErrorKind;

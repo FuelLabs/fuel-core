@@ -136,7 +136,7 @@ where
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        self.p2p_service.start()?;
+        self.p2p_service.start().await?;
         Ok(self)
     }
 }

@@ -1,9 +1,6 @@
 use crate::{
     database::Database,
-    service::{
-        adapters::{BlockImporterAdapter, P2PAdapter},
-        sub_services::TxPoolService,
-    },
+    service::adapters::{BlockImporterAdapter, P2PAdapter},
 };
 use fuel_core_p2p::PeerId;
 use fuel_core_services::stream::BoxStream;

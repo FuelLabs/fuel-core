@@ -42,11 +42,7 @@ use fuel_core_types::{
     },
     fuel_asm::Word,
     fuel_crypto::Signature,
-    fuel_tx::{
-        ConsensusParameters,
-        TxId,
-        UniqueIdentifier,
-    },
+    fuel_tx::TxId,
     fuel_types::BlockHeight,
     secrecy::{
         ExposeSecret,
@@ -141,7 +137,6 @@ pub struct MainTask<T, B, I> {
     trigger: Trigger,
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
-    consensus_params: ConsensusParameters,
     sync_task_handle: ServiceRunner<SyncTask>,
 }
 
@@ -169,7 +164,6 @@ where
         let Config {
             block_gas_limit,
             signing_key,
-            consensus_params,
             min_connected_reserved_peers,
             time_until_synced,
             trigger,
@@ -200,7 +194,6 @@ where
             last_block_created,
             trigger,
             timer: DeadlineClock::new(),
-            consensus_params,
             sync_task_handle,
         }
     }
@@ -227,9 +220,6 @@ where
                 }
                 Trigger::Interval { block_time } => {
                     increase_time(self.last_timestamp, block_time)
-                }
-                Trigger::Hybrid { min_block_time, .. } => {
-                    increase_time(self.last_timestamp, min_block_time)
                 }
             },
             RequestType::Trigger => {
@@ -314,12 +304,12 @@ where
         ) = self.signal_produce_block(height, block_time).await?.into();
 
         let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
-        for (tx, err) in skipped_transactions {
+        for (tx_id, err) in skipped_transactions {
             error!(
                 "During block production got invalid transaction {:?} with error {:?}",
-                tx, err
+                tx_id, err
             );
-            tx_ids_to_remove.push(tx.id(&self.consensus_params.chain_id));
+            tx_ids_to_remove.push(tx_id);
         }
         self.txpool.remove_txs(tx_ids_to_remove);
 
@@ -357,36 +347,6 @@ where
                     .set_deadline(last_block_created + block_time, OnConflict::Overwrite)
                     .await;
             }
-            (
-                Trigger::Hybrid {
-                    max_block_time,
-                    min_block_time,
-                    max_tx_idle_time,
-                },
-                RequestType::Trigger,
-            ) => {
-                let consumable_gas = self.txpool.total_consumable_gas();
-
-                // If txpool still has more than a full block of transactions available,
-                // produce new block in min_block_time.
-                if consumable_gas > self.block_gas_limit {
-                    self.timer
-                        .set_timeout(min_block_time, OnConflict::Max)
-                        .await;
-                } else if self.txpool.pending_number() > 0 {
-                    // If we still have available txs, reduce the timeout to max idle time
-                    self.timer
-                        .set_timeout(max_tx_idle_time, OnConflict::Max)
-                        .await;
-                } else {
-                    self.timer
-                        .set_timeout(max_block_time, OnConflict::Max)
-                        .await;
-                }
-            }
-            (Trigger::Hybrid { .. }, RequestType::Manual) => {
-                unreachable!("Trigger types hybrid cannot be used with manual. This is enforced during config validation")
-            }
         }
 
         Ok(())
@@ -403,28 +363,6 @@ where
                 Ok(())
             }
             Trigger::Never | Trigger::Interval { .. } => Ok(()),
-            Trigger::Hybrid {
-                max_tx_idle_time,
-                min_block_time,
-                ..
-            } => {
-                let consumable_gas = self.txpool.total_consumable_gas();
-
-                // If we have over one full block of transactions and min_block_time
-                // has expired, start block production immediately
-                if consumable_gas > self.block_gas_limit
-                    && self.last_block_created + min_block_time < Instant::now()
-                {
-                    self.produce_next_block().await?;
-                } else if self.txpool.pending_number() > 0 {
-                    // We have at least one transaction, so tx_max_idle_time is the limit
-                    self.timer
-                        .set_timeout(max_tx_idle_time, OnConflict::Min)
-                        .await;
-                }
-
-                Ok(())
-            }
         }
     }
 
@@ -434,13 +372,7 @@ where
                 unreachable!("Timer is never set in this mode");
             }
             // In the Interval mode the timer expires only when a new block should be created.
-            // In the Hybrid mode the timer can be either:
-            // 1. min_block_time expired after it was set when a block
-            //    would have been produced too soon
-            // 2. max_tx_idle_time expired after a tx has arrived
-            // 3. max_block_time expired
-            // => we produce a new block in any case
-            Trigger::Interval { .. } | Trigger::Hybrid { .. } => {
+            Trigger::Interval { .. } => {
                 self.produce_next_block().await?;
                 Ok(())
             }
@@ -477,11 +409,6 @@ where
                     .set_timeout(block_time, OnConflict::Overwrite)
                     .await;
             }
-            Trigger::Hybrid { max_block_time, .. } => {
-                self.timer
-                    .set_timeout(max_block_time, OnConflict::Overwrite)
-                    .await;
-            }
         };
 
         Ok(self)
@@ -496,11 +423,15 @@ where
     I: BlockImporter<Database = D>,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+        let should_continue;
         // make sure we're synced first
         while *self.sync_task_handle.shared.borrow() == SyncState::NotSynced {
             tokio::select! {
                 biased;
-                _ = watcher.while_started() => {}
+                result = watcher.while_started() => {
+                    should_continue = result?.started();
+                    return Ok(should_continue);
+                }
                 _ = self.sync_task_handle.shared.changed() => {
                     if let SyncState::Synced(block_header) = &*self.sync_task_handle.shared.borrow() {
                         let (last_height, last_timestamp, last_block_created) =
@@ -513,7 +444,6 @@ where
             }
         }
 
-        let should_continue;
         tokio::select! {
             biased;
             _ = watcher.while_started() => {

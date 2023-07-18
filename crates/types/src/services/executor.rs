@@ -10,7 +10,6 @@ use crate::{
     },
     fuel_tx::{
         CheckError,
-        Transaction,
         TxId,
         UtxoId,
     },
@@ -41,7 +40,7 @@ pub struct ExecutionResult {
     pub block: Block,
     /// The list of skipped transactions with corresponding errors. Those transactions were
     /// not included in the block and didn't affect the state of the blockchain.
-    pub skipped_transactions: Vec<(Transaction, Error)>,
+    pub skipped_transactions: Vec<(TxId, Error)>,
     /// The status of the transactions execution included into the block.
     pub tx_status: Vec<TransactionExecutionStatus>,
 }
@@ -253,7 +252,7 @@ pub enum Error {
     #[error("The computed fee caused an integer overflow")]
     FeeOverflow,
     #[error("Not supported transaction: {0:?}")]
-    NotSupportedTransaction(Box<Transaction>),
+    NotSupportedTransaction(TxId),
     #[error("The first transaction in the block is not `Mint` - coinbase.")]
     CoinbaseIsNotFirstTransaction,
     #[error("Coinbase should have one output.")]
