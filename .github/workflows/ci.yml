@@ -86,6 +86,8 @@ jobs:
       - prevent-openssl
       - rustfmt
     runs-on: buildjet-4vcpu-ubuntu-2204
+    env:
+      RUSTFLAGS: -D warnings
     strategy:
       matrix:
         include:

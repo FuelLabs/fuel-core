@@ -1,4 +1,5 @@
 #![deny(unused_crate_dependencies)]
+#![deny(warnings)]
 
 mod config;
 
