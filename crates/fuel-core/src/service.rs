@@ -10,7 +10,7 @@ use fuel_core_services::{
     StateWatcher,
 };
 use std::net::SocketAddr;
-use tracing::log::warn;
+use tracing::warn;
 
 pub use config::{
     Config,

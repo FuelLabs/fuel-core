@@ -1,6 +1,7 @@
 //! Common traits and logic for managing the lifecycle of services
 #![deny(unused_crate_dependencies)]
 #![deny(missing_docs)]
+#![deny(warnings)]
 
 mod service;
 mod state;
