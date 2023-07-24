@@ -114,7 +114,7 @@ impl TxStatusChange {
     }
 }
 
-pub struct SharedState<P2P, DB: Clone> {
+pub struct SharedState<P2P, DB> {
     tx_status_sender: TxStatusChange,
     txpool: Arc<ParkingMutex<TxPool<DB>>>,
     p2p: Arc<P2P>,
