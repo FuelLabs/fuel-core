@@ -19,10 +19,10 @@ fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
 fuel-vm-private = { workspace = true }
-futures = "0.3.28"
+futures = { workspace = true }
 parking_lot = { workspace = true }
 tokio = { workspace = true, default-features = false, features = ["sync"] }
-tokio-rayon = "2.1.0"
+tokio-rayon = { workspace = true }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
 
