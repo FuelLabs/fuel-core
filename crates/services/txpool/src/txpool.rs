@@ -31,7 +31,13 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use fuel_vm_private::error::PredicateVerificationFailed;
+use fuel_vm_private::{
+    checked_transaction::{
+        Checked,
+        Checks,
+    },
+    error::PredicateVerificationFailed,
+};
 use std::{
     cmp::Reverse,
     collections::HashMap,
@@ -407,6 +413,11 @@ pub async fn check_single_tx(
         )?
         .into()
     };
+
+    debug_assert!({
+        let checked: Checked<_> = tx.clone().into();
+        checked.checks().contains(Checks::All)
+    });
 
     Ok(tx)
 }
