@@ -136,7 +136,7 @@ impl<P2P, DB: Clone> Clone for SharedState<P2P, DB> {
     }
 }
 
-pub struct Task<P2P, DB: Clone> {
+pub struct Task<P2P, DB> {
     gossiped_tx_stream: BoxStream<TransactionGossipData>,
     committed_block_stream: BoxStream<Arc<ImportResult>>,
     shared: SharedState<P2P, DB>,
