@@ -225,19 +225,14 @@ where
     pub fn insert(
         &mut self,
         tx_status_sender: &TxStatusChange,
-        txs: Vec<anyhow::Result<CheckedTransaction>>,
+        txs: Vec<CheckedTransaction>,
     ) -> Vec<anyhow::Result<InsertionResult>> {
         // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
         // should be done before transaction comes to txpool, or before it enters RwLocked region.
         let mut res = Vec::new();
 
         for tx in txs.into_iter() {
-            match tx {
-                Ok(tx) => {
-                    res.push(self.insert_inner(tx));
-                }
-                Err(err) => res.push(Err(err)),
-            }
+            res.push(self.insert_inner(tx));
         }
 
         // announce to subscribers

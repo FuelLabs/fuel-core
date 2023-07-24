@@ -50,6 +50,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
+
 use parking_lot::Mutex as ParkingMutex;
 use std::sync::Arc;
 use tokio::{
@@ -218,31 +219,34 @@ where
 
                     // verify tx
                     let checked_tx = check_single_tx(tx, current_height, &self.shared.config).await;
-                    let txs = vec![checked_tx];
 
-                    // insert tx
-                    let mut result = tracing::info_span!("Received tx via gossip", %id)
-                        .in_scope(|| {
-                            self.shared.txpool.lock().insert(
-                                &self.shared.tx_status_sender,
-                                txs
-                            )
-                        });
+                    if let Ok(tx) = checked_tx {
+                        let txs = vec![tx];
 
-                    if let Some(acceptance) = match result.pop() {
-                        Some(Ok(_)) => {
-                            Some(GossipsubMessageAcceptance::Accept)
-                        },
-                        Some(Err(_)) => {
-                            Some(GossipsubMessageAcceptance::Reject)
+                        // insert tx
+                        let mut result = tracing::info_span!("Received tx via gossip", %id)
+                            .in_scope(|| {
+                                self.shared.txpool.lock().insert(
+                                    &self.shared.tx_status_sender,
+                                    txs
+                                )
+                            });
+
+                        if let Some(acceptance) = match result.pop() {
+                            Some(Ok(_)) => {
+                                Some(GossipsubMessageAcceptance::Accept)
+                            },
+                            Some(Err(_)) => {
+                                Some(GossipsubMessageAcceptance::Reject)
+                            }
+                            _ => None
+                        } {
+                            let message_info = GossipsubMessageInfo {
+                                message_id,
+                                peer_id,
+                            };
+                            let _ = self.shared.p2p.notify_gossip_transaction_validity(message_info, acceptance);
                         }
-                        _ => None
-                    } {
-                        let message_info = GossipsubMessageInfo {
-                            message_id,
-                            peer_id,
-                        };
-                        let _ = self.shared.p2p.notify_gossip_transaction_validity(message_info, acceptance);
                     }
 
                     should_continue = true;
@@ -339,7 +343,17 @@ where
             Err(e) => return vec![Err(e.into())],
         };
 
-        let checked_txs = check_transactions(&txs, current_height, &self.config).await;
+        let checked_txs = check_transactions(&txs, current_height, &self.config)
+            .await
+            .into_iter()
+            .filter_map(|tx_chech| match tx_chech {
+                Ok(tx) => Some(tx.clone()),
+                Err(e) => {
+                    tracing::error!("Transaction is invalid: {}", e);
+                    None
+                }
+            })
+            .collect();
 
         // insert txs
         let insert = {
