@@ -67,6 +67,7 @@ where
         }
     }
 
+    #[cfg(test)]
     pub fn config(&self) -> &Config {
         &self.config
     }
@@ -77,10 +78,6 @@ where
 
     pub fn dependency(&self) -> &Dependency {
         &self.by_dependency
-    }
-
-    pub fn current_height(&self) -> anyhow::Result<BlockHeight> {
-        Ok(self.database.current_block_height()?)
     }
 
     // #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id(&self.config.chain_config.transaction_parameters.chain_id)), ret, err)]
