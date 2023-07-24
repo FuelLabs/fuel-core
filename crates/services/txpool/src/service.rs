@@ -173,7 +173,7 @@ where
 impl<P2P, DB> RunnableTask for Task<P2P, DB>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
-    DB: TxPoolDb + Clone,
+    DB: TxPoolDb,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
@@ -269,7 +269,7 @@ where
 //  `StorageInspect` trait.
 impl<P2P, DB> SharedState<P2P, DB>
 where
-    DB: TxPoolDb + Clone,
+    DB: TxPoolDb,
 {
     pub fn pending_number(&self) -> usize {
         self.txpool.lock().pending_number()
@@ -325,7 +325,7 @@ where
 impl<P2P, DB> SharedState<P2P, DB>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
-    DB: TxPoolDb + Clone,
+    DB: TxPoolDb,
 {
     #[tracing::instrument(name = "insert_submitted_txn", skip_all)]
     pub async fn insert(
