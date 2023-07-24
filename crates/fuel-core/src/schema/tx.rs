@@ -252,7 +252,7 @@ impl TxMutation {
         let txpool = ctx.data_unchecked::<TxPool>();
         let config = ctx.data_unchecked::<Config>();
         let tx = FuelTx::from_bytes(&tx.0)?;
-        // TODO: use spawn_blocking here
+
         let _: Vec<_> = txpool
             .insert(vec![Arc::new(tx.clone())])
             .await
@@ -323,7 +323,7 @@ impl TxStatusSubscription {
         let tx = FuelTx::from_bytes(&tx.0)?;
         let tx_id = tx.id(&config.transaction_parameters.chain_id);
         let subscription = txpool.tx_update_subscribe(tx_id).await;
-        // TODO: use spawn_blocking here
+
         let _: Vec<_> = txpool
             .insert(vec![Arc::new(tx)])
             .await
