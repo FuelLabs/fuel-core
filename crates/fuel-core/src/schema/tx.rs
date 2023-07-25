@@ -62,6 +62,7 @@ use tokio_stream::StreamExt;
 use types::Transaction;
 
 use self::types::TransactionStatus;
+use fuel_core_types::fuel_vm::checked_transaction::CheckPredicateParams;
 
 pub mod input;
 pub mod output;
@@ -207,7 +208,9 @@ impl TxQuery {
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         let config = ctx.data_unchecked::<Config>();
 
-        tx.estimate_predicates(&config.transaction_parameters, &config.gas_costs)?;
+        tx.estimate_predicates(&CheckPredicateParams::from(
+            &config.transaction_parameters,
+        ))?;
 
         Ok(Transaction::from_tx(
             tx.id(&config.transaction_parameters.chain_id),

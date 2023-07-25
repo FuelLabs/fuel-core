@@ -83,6 +83,7 @@ use fuel_core_types::{
     },
     fuel_vm::{
         checked_transaction::{
+            CheckPredicateParams,
             CheckPredicates,
             Checked,
             CheckedTransaction,
@@ -94,6 +95,7 @@ use fuel_core_types::{
         interpreter::{
             CheckedMetadata,
             ExecutableTransaction,
+            InterpreterParams,
         },
         state::StateTransition,
         Backtrace as FuelBacktrace,
@@ -116,6 +118,7 @@ use fuel_core_types::{
         txpool::TransactionStatus,
     },
 };
+
 use parking_lot::Mutex as ParkingMutex;
 use std::{
     borrow::Cow,
@@ -744,11 +747,8 @@ where
         mint: Mint,
         expected_amount: Option<Word>,
     ) -> ExecutorResult<Mint> {
-        let checked_mint = mint.into_checked(
-            block_height,
-            &self.config.transaction_parameters,
-            &self.config.gas_costs,
-        )?;
+        let checked_mint =
+            mint.into_checked(block_height, &self.config.transaction_parameters)?;
 
         if checked_mint.transaction().tx_pointer().tx_index() != 0 {
             return Err(ExecutorError::CoinbaseIsNotFirstTransaction)
@@ -799,7 +799,9 @@ where
         let max_fee = checked_tx.metadata().max_fee();
 
         checked_tx = checked_tx
-            .check_predicates(&self.config.transaction_parameters, &self.config.gas_costs)
+            .check_predicates(&CheckPredicateParams::from(
+                &self.config.transaction_parameters,
+            ))
             .map_err(|_| {
                 ExecutorError::TransactionValidity(
                     TransactionValidityError::InvalidPredicate(tx_id),
@@ -834,8 +836,7 @@ where
         );
         let mut vm = Interpreter::with_storage(
             vm_db,
-            self.config.transaction_parameters,
-            self.config.gas_costs.clone(),
+            InterpreterParams::from(&self.config.transaction_parameters),
         );
         let vm_result: StateTransition<_> = vm
             .transact(checked_tx.clone())
@@ -1142,7 +1143,7 @@ where
             if let Receipt::ScriptResult { gas_used, .. } = r {
                 used_gas = *gas_used;
                 let fee = TransactionFee::gas_refund_value(
-                    &self.config.transaction_parameters,
+                    self.config.transaction_parameters.fee_params(),
                     used_gas,
                     gas_price,
                 )

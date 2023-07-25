@@ -34,9 +34,6 @@ pub mod fuel_vm {
         checked_transaction,
         consts,
         crypto,
-        gas::DependentCost,
-        gas::GasCosts,
-        gas::GasCostsValues,
         interpreter,
         prelude::{
             Backtrace,

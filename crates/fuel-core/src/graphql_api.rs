@@ -4,8 +4,10 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
-    fuel_tx::ConsensusParameters,
-    fuel_vm::GasCosts,
+    fuel_tx::{
+        ConsensusParameters,
+        GasCosts,
+    },
     secrecy::Secret,
 };
 use std::net::SocketAddr;

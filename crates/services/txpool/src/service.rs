@@ -122,7 +122,7 @@ impl<P2P, DB> Clone for SharedState<P2P, DB> {
             tx_status_sender: self.tx_status_sender.clone(),
             txpool: self.txpool.clone(),
             p2p: self.p2p.clone(),
-            consensus_params: self.consensus_params,
+            consensus_params: self.consensus_params.clone(),
         }
     }
 }
@@ -380,7 +380,7 @@ where
     let committed_block_stream = importer.block_events();
     let mut ttl_timer = tokio::time::interval(config.transaction_ttl);
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    let consensus_params = config.chain_config.transaction_parameters;
+    let consensus_params = config.chain_config.transaction_parameters.clone();
     let number_of_active_subscription = config.number_of_active_subscription;
     let txpool = Arc::new(ParkingMutex::new(TxPool::new(config, db)));
     let task = Task {

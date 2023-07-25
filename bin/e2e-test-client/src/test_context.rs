@@ -176,7 +176,11 @@ impl Wallet {
             amount: 0,
             asset_id,
         });
-        tx.with_params(self.consensus_params);
+        tx.with_tx_params(self.consensus_params.tx_params);
+        tx.with_predicate_params(self.consensus_params.predicate_params);
+        tx.with_script_params(self.consensus_params.script_params);
+        tx.with_contract_params(self.consensus_params.contract_params);
+        tx.with_fee_params(self.consensus_params.fee_params);
 
         Ok(tx.finalize_as_transaction())
     }

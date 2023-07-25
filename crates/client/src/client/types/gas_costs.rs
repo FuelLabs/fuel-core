@@ -4,13 +4,14 @@ macro_rules! include_from_impls {
     ($(#[$meta:meta])* $vis:vis struct $name:ident {
         $($field_vis:vis $field_name:ident: $field_type:ty,)*
     }) => {
+        $(#[$meta])*
         $vis struct $name {
             $($field_vis $field_name: $field_type,)*
         }
 
-        impl From<$name> for fuel_core_types::fuel_vm::GasCosts {
+        impl From<$name> for fuel_core_types::fuel_tx::GasCosts {
            fn from(value: $name) -> Self {
-               let values = fuel_core_types::fuel_vm::GasCostsValues {
+               let values = fuel_core_types::fuel_tx::GasCostsValues {
                    $($field_name: value.$field_name.into(),)*
                };
                Self::new(values)
@@ -143,7 +144,7 @@ pub struct DependentCost {
     pub dep_per_unit: u64,
 }
 
-impl From<DependentCost> for fuel_core_types::fuel_vm::DependentCost {
+impl From<DependentCost> for fuel_core_types::fuel_tx::DependentCost {
     fn from(value: DependentCost) -> Self {
         Self {
             base: value.base,

@@ -7,6 +7,9 @@ use fuel_core_types::{
     fuel_crypto::Hasher,
     fuel_tx::{
         ConsensusParameters,
+        GasCosts,
+        GasCostsValues,
+        TxParameters,
         UtxoId,
     },
     fuel_types::{
@@ -14,11 +17,7 @@ use fuel_core_types::{
         AssetId,
         Bytes32,
     },
-    fuel_vm::{
-        GasCosts,
-        GasCostsValues,
-        SecretKey,
-    },
+    fuel_vm::SecretKey,
 };
 use itertools::Itertools;
 use rand::{
@@ -75,8 +74,8 @@ impl Default for ChainConfig {
     fn default() -> Self {
         Self {
             chain_name: "local".into(),
-            block_gas_limit: ConsensusParameters::DEFAULT.max_gas_per_tx * 10, /* TODO: Pick a sensible default */
-            transaction_parameters: ConsensusParameters::DEFAULT,
+            block_gas_limit: TxParameters::DEFAULT.max_gas_per_tx * 10, /* TODO: Pick a sensible default */
+            transaction_parameters: ConsensusParameters::default(),
             initial_state: None,
             gas_costs: GasCosts::default(),
             consensus: ConsensusConfig::default_poa(),

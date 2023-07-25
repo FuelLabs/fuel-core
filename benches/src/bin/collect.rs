@@ -1,5 +1,5 @@
 use clap::Parser;
-use fuel_core_types::fuel_vm::GasCostsValues;
+use fuel_core_types::fuel_tx::GasCostsValues;
 use serde::{
     Deserialize,
     Serialize,
