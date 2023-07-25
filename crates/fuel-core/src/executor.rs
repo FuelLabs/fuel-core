@@ -1720,6 +1720,7 @@ mod tests {
         },
         fuel_types::{
             bytes::SerializableVec,
+            ChainId,
             ContractId,
             Salt,
         },
@@ -1779,7 +1780,7 @@ mod tests {
                 op::call(0x10, 0x12, 0x11, RegId::CGAS),
                 op::ret(RegId::ONE),
             ],
-            ConsensusParameters::DEFAULT.tx_offset()
+            fuel_tx::TxParameters::DEFAULT.tx_offset()
         );
 
         let script_data: Vec<u8> = [
@@ -1799,7 +1800,7 @@ mod tests {
         .collect();
 
         let script = TxBuilder::new(2322)
-            .gas_limit(ConsensusParameters::DEFAULT.max_gas_per_tx)
+            .gas_limit(fuel_tx::TxParameters::DEFAULT.max_gas_per_tx)
             .start_script(script, script_data)
             .contract_input(contract_id)
             .coin_input(asset_id, input_amount)
@@ -1922,7 +1923,10 @@ mod tests {
 
     mod coinbase {
         use super::*;
-        use fuel_core_types::fuel_asm::GTFArgs;
+        use fuel_core_types::{
+            fuel_asm::GTFArgs,
+            fuel_tx::FeeParameters,
+        };
 
         #[test]
         fn executor_commits_transactions_with_non_zero_coinbase_generation() {
@@ -1941,10 +1945,15 @@ mod tests {
                 .clone();
 
             let recipient = [1u8; 32].into();
+
+            let fee_params = FeeParameters {
+                gas_price_factor,
+                ..Default::default()
+            };
             let config = Config {
                 coinbase_recipient: recipient,
                 transaction_parameters: ConsensusParameters {
-                    gas_price_factor,
+                    fee_params,
                     ..Default::default()
                 },
                 ..Default::default()
@@ -1953,7 +1962,7 @@ mod tests {
             let producer = Executor::test(Default::default(), config);
 
             let expected_fee_amount = TransactionFee::checked_from_values(
-                &producer.config.transaction_parameters,
+                producer.config.transaction_parameters.fee_params(),
                 script.metered_bytes_size() as Word,
                 gas_used_by_predicates,
                 limit,
@@ -2018,7 +2027,7 @@ mod tests {
             let recipient = [1u8; 32].into();
             config.coinbase_recipient = recipient;
 
-            config.transaction_parameters.gas_price_factor = gas_price_factor;
+            config.transaction_parameters.fee_params.gas_price_factor = gas_price_factor;
 
             let producer = Executor::test(Default::default(), config);
 
@@ -2054,10 +2063,15 @@ mod tests {
                 .transaction()
                 .clone();
             let recipient = [1u8; 32].into();
+
+            let fee_params = FeeParameters {
+                gas_price_factor,
+                ..Default::default()
+            };
             let config = Config {
                 coinbase_recipient: recipient,
                 transaction_parameters: ConsensusParameters {
-                    gas_price_factor,
+                    fee_params,
                     ..Default::default()
                 },
                 ..Default::default()
@@ -2065,7 +2079,7 @@ mod tests {
 
             let producer = Executor::test(Default::default(), config);
 
-            let params = producer.config.transaction_parameters;
+            let params = producer.config.transaction_parameters.clone();
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![script.into()];
@@ -2360,7 +2374,11 @@ mod tests {
     fn executor_invalidates_missing_gas_input() {
         let mut rng = StdRng::seed_from_u64(2322u64);
         let producer = Executor::test(Default::default(), Default::default());
-        let factor = producer.config.transaction_parameters.gas_price_factor as f64;
+        let factor = producer
+            .config
+            .transaction_parameters
+            .fee_params()
+            .gas_price_factor as f64;
 
         let verifier = Executor::test(Default::default(), Default::default());
 
@@ -2604,7 +2622,7 @@ mod tests {
             .clone()
             .into();
 
-        let tx_id = tx.id(&ConsensusParameters::DEFAULT.chain_id);
+        let tx_id = tx.id(&ChainId::default());
 
         let producer = Executor::test(Default::default(), Default::default());
 
@@ -2802,10 +2820,7 @@ mod tests {
         // `tx2` should be skipped.
         assert_eq!(block.transactions().len(), 2 /* coinbase and `tx1` */);
         assert_eq!(skipped_transactions.len(), 1);
-        assert_eq!(
-            skipped_transactions[0].0,
-            tx2.id(&ConsensusParameters::DEFAULT.chain_id)
-        );
+        assert_eq!(skipped_transactions[0].0, tx2.id(&ChainId::default()));
 
         // The first input should be spent by `tx1` after execution.
         let coin = db
@@ -2856,19 +2871,16 @@ mod tests {
             3 // coinbase, `tx2` and `tx3`
         );
         assert_eq!(
-            block.transactions()[1].id(&ConsensusParameters::DEFAULT.chain_id),
-            tx2.id(&ConsensusParameters::DEFAULT.chain_id)
+            block.transactions()[1].id(&ChainId::default()),
+            tx2.id(&ChainId::default())
         );
         assert_eq!(
-            block.transactions()[2].id(&ConsensusParameters::DEFAULT.chain_id),
-            tx3.id(&ConsensusParameters::DEFAULT.chain_id)
+            block.transactions()[2].id(&ChainId::default()),
+            tx3.id(&ChainId::default())
         );
         // `tx1` should be skipped.
         assert_eq!(skipped_transactions.len(), 1);
-        assert_eq!(
-            &skipped_transactions[0].0,
-            &tx1.id(&ConsensusParameters::DEFAULT.chain_id)
-        );
+        assert_eq!(&skipped_transactions[0].0, &tx1.id(&ChainId::default()));
         let tx2_index_in_the_block =
             block.transactions()[2].as_script().unwrap().inputs()[0]
                 .tx_pointer()
@@ -2975,7 +2987,7 @@ mod tests {
         let storage_tx = executor
             .database
             .storage::<Transactions>()
-            .get(&executed_tx.id(&ConsensusParameters::DEFAULT.chain_id))
+            .get(&executed_tx.id(&ChainId::default()))
             .unwrap()
             .unwrap()
             .into_owned();
@@ -3048,7 +3060,7 @@ mod tests {
         let storage_tx = executor
             .database
             .storage::<Transactions>()
-            .get(&expected_tx.id(&ConsensusParameters::DEFAULT.chain_id))
+            .get(&expected_tx.id(&ChainId::default()))
             .unwrap()
             .unwrap()
             .into_owned();
@@ -3087,7 +3099,7 @@ mod tests {
                 op::call(0x10, 0x12, 0x11, RegId::CGAS),
                 op::ret(RegId::ONE),
             ],
-            ConsensusParameters::DEFAULT.tx_offset()
+            fuel_tx::TxParameters::DEFAULT.tx_offset()
         );
 
         let script_data: Vec<u8> = [
@@ -3161,7 +3173,7 @@ mod tests {
         let storage_tx = executor
             .database
             .storage::<Transactions>()
-            .get(&expected_tx.id(&ConsensusParameters::DEFAULT.chain_id))
+            .get(&expected_tx.id(&ChainId::default()))
             .unwrap()
             .unwrap()
             .into_owned();
@@ -3203,7 +3215,7 @@ mod tests {
                 op::call(0x10, 0x12, 0x11, RegId::CGAS),
                 op::ret(RegId::ONE),
             ],
-            ConsensusParameters::DEFAULT.tx_offset()
+            fuel_tx::TxParameters::DEFAULT.tx_offset()
         );
 
         let script_data: Vec<u8> = [
@@ -3528,7 +3540,7 @@ mod tests {
             .transaction()
             .clone()
             .into();
-        let tx_id = tx3.id(&ConsensusParameters::DEFAULT.chain_id);
+        let tx_id = tx3.id(&ChainId::default());
 
         let second_block = PartialFuelBlock {
             header: PartialBlockHeader {
@@ -3590,7 +3602,7 @@ mod tests {
     #[test]
     fn outputs_with_amount_are_included_utxo_set() {
         let (deploy, script) = setup_executable_script();
-        let script_id = script.id(&ConsensusParameters::DEFAULT.chain_id);
+        let script_id = script.id(&ChainId::default());
 
         let database = &Database::default();
         let executor = Executor::test(database.clone(), Default::default());
@@ -3641,7 +3653,7 @@ mod tests {
             .transaction()
             .clone()
             .into();
-        let tx_id = tx.id(&ConsensusParameters::DEFAULT.chain_id);
+        let tx_id = tx.id(&ChainId::default());
 
         let database = &Database::default();
         let executor = Executor::test(database.clone(), Default::default());
@@ -3750,7 +3762,7 @@ mod tests {
             .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), amount, vec![0xff; 10])
             .add_output(Output::change(to, amount + amount, AssetId::BASE))
             .finalize();
-        let tx_id = tx.id(&ConsensusParameters::DEFAULT.chain_id);
+        let tx_id = tx.id(&ChainId::default());
 
         let message_coin = message_from_input(&tx.inputs()[0], 0);
         let message_data = message_from_input(&tx.inputs()[1], 0);
@@ -3813,7 +3825,7 @@ mod tests {
             .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), amount, vec![0xff; 10])
             .add_output(Output::change(to, amount + amount, AssetId::BASE))
             .finalize();
-        let tx_id = tx.id(&ConsensusParameters::DEFAULT.chain_id);
+        let tx_id = tx.id(&ChainId::default());
 
         let message_coin = message_from_input(&tx.inputs()[0], 0);
         let message_data = message_from_input(&tx.inputs()[1], 0);
@@ -4118,7 +4130,7 @@ mod tests {
 
         let receipts = database
             .storage::<Receipts>()
-            .get(&tx.id(&ConsensusParameters::DEFAULT.chain_id))
+            .get(&tx.id(&ChainId::default()))
             .unwrap()
             .unwrap();
         assert_eq!(block_height as u64, receipts[0].val().unwrap());
@@ -4195,7 +4207,7 @@ mod tests {
 
         let receipts = database
             .storage::<Receipts>()
-            .get(&tx.id(&ConsensusParameters::DEFAULT.chain_id))
+            .get(&tx.id(&ChainId::default()))
             .unwrap()
             .unwrap();
 

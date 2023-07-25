@@ -21,14 +21,12 @@ use fuel_core_types::{
         primitives::DaBlockHeight,
     },
     fuel_tx,
-    fuel_tx::{
-        ConsensusParameters,
-        Receipt,
-    },
+    fuel_tx::Receipt,
     fuel_types::{
         Address,
         BlockHeight,
         Bytes32,
+        ChainId,
     },
     services::{
         block_producer::Components,
@@ -148,7 +146,7 @@ impl Executor for MockExecutor {
         let mut block_db = self.0.blocks.lock().unwrap();
         block_db.insert(
             *block.header().height(),
-            block.compress(&ConsensusParameters::DEFAULT.chain_id),
+            block.compress(&ChainId::default()),
         );
         Ok(UncommittedResult::new(
             ExecutionResult {

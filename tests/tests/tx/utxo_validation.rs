@@ -15,6 +15,7 @@ use fuel_core_types::{
     fuel_asm::*,
     fuel_crypto::*,
     fuel_tx::*,
+    fuel_types::ChainId,
 };
 use futures::future::join_all;
 use itertools::Itertools;
@@ -76,14 +77,14 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
         client.submit_and_await_commit(&tx).await.unwrap();
         // verify that the tx returned from the api matches the submitted tx
         let ret_tx = client
-            .transaction(&tx.id(&ConsensusParameters::DEFAULT.chain_id))
+            .transaction(&tx.id(&ChainId::default()))
             .await
             .unwrap()
             .unwrap()
             .transaction;
 
         let transaction_result = client
-            .transaction_status(&ret_tx.id(&ConsensusParameters::DEFAULT.chain_id))
+            .transaction_status(&ret_tx.id(&ChainId::default()))
             .await
             .ok()
             .unwrap();
@@ -249,10 +250,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
         .collect_vec();
 
     // collect all tx ids
-    let tx_ids: BTreeSet<_> = txs
-        .iter()
-        .map(|tx| tx.id(&ConsensusParameters::DEFAULT.chain_id))
-        .collect();
+    let tx_ids: BTreeSet<_> = txs.iter().map(|tx| tx.id(&ChainId::default())).collect();
 
     // setup the genesis coins for spending
     test_builder.config_coin_inputs_from_transactions(&txs.iter().collect_vec());
