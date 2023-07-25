@@ -44,7 +44,7 @@ use fuel_core_types::{
         UtxoId,
     },
 };
-use fuel_vm_private::checked_transaction::CheckedTransaction;
+use fuel_vm_private::checked_transaction::Checked;
 use std::{
     cmp::Reverse,
     collections::HashMap,
@@ -59,7 +59,7 @@ async fn check_unwrap_tx(
     tx: Transaction,
     db: MockDb,
     config: &Config,
-) -> CheckedTransaction {
+) -> Checked<Transaction> {
     check_single_tx(tx, db.current_block_height().unwrap(), config)
         .await
         .expect("Transaction should be checked")
@@ -69,7 +69,7 @@ async fn check_tx(
     tx: Transaction,
     db: MockDb,
     config: &Config,
-) -> anyhow::Result<CheckedTransaction> {
+) -> anyhow::Result<Checked<Transaction>> {
     check_single_tx(tx, db.current_block_height().unwrap(), config).await
 }
 
