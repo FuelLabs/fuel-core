@@ -86,13 +86,16 @@ where
         &self.by_dependency
     }
 
-    // #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id(&self.config.chain_config.transaction_parameters.chain_id)), ret, err)]
+    #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id()), ret, err)]
     // this is atomic operation. Return removed(pushed out/replaced) transactions
     fn insert_inner(
         &mut self,
         // TODO: Pass `&Transaction`
-        tx: CheckedTransaction,
+        tx: Checked<Transaction>,
     ) -> anyhow::Result<InsertionResult> {
+        // conversion to `CheckedTransaction` so that we can go to `PoolTransaction`
+        let tx: CheckedTransaction = tx.into();
+
         let tx = Arc::new(match tx {
             CheckedTransaction::Script(script) => PoolTransaction::Script(script),
             CheckedTransaction::Create(create) => PoolTransaction::Create(create),
@@ -225,7 +228,7 @@ where
     pub fn insert(
         &mut self,
         tx_status_sender: &TxStatusChange,
-        txs: Vec<CheckedTransaction>,
+        txs: Vec<Checked<Transaction>>,
     ) -> Vec<anyhow::Result<InsertionResult>> {
         // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
         // should be done before transaction comes to txpool, or before it enters RwLocked region.
@@ -366,7 +369,7 @@ pub async fn check_transactions(
     txs: &[Arc<Transaction>],
     current_height: BlockHeight,
     config: &Config,
-) -> Vec<anyhow::Result<CheckedTransaction>> {
+) -> Vec<anyhow::Result<Checked<Transaction>>> {
     let mut checked_txs = Vec::with_capacity(txs.len());
 
     for tx in txs.iter() {
@@ -381,14 +384,14 @@ pub async fn check_single_tx(
     tx: Transaction,
     current_height: BlockHeight,
     config: &Config,
-) -> anyhow::Result<CheckedTransaction> {
+) -> anyhow::Result<Checked<Transaction>> {
     if tx.is_mint() {
         return Err(Error::NotSupportedTransactionType.into())
     }
 
     verify_tx_min_gas_price(&tx, config)?;
 
-    let tx: CheckedTransaction = if config.utxo_validation {
+    let tx: Checked<Transaction> = if config.utxo_validation {
         let consensus_params = &config.chain_config.transaction_parameters;
 
         let tx = tx
@@ -400,19 +403,14 @@ pub async fn check_single_tx(
             &config.chain_config.gas_costs,
         )
         .await?
-        .into()
     } else {
         tx.into_checked_basic(
             current_height,
             &config.chain_config.transaction_parameters,
         )?
-        .into()
     };
 
-    debug_assert!({
-        let checked: Checked<_> = tx.clone().into();
-        checked.checks().contains(Checks::All)
-    });
+    debug_assert!(tx.checks().contains(Checks::All));
 
     Ok(tx)
 }
