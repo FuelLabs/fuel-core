@@ -386,7 +386,7 @@ where
                         "the number of inserted txs matches the number of OK results"
                     )
                 }),
-                Err(e) => Err(e.into()),
+                Err(e) => Err(e),
             })
             .collect()
     }
