@@ -397,6 +397,8 @@ pub async fn check_single_tx(
             .into_checked_basic(current_height, consensus_params)?
             .check_signatures(&consensus_params.chain_id)?;
 
+        debug_assert!(tx.checks().contains(Checks::All));
+
         tx.check_predicates_async::<TokioWithRayon>(
             consensus_params,
             &config.chain_config.gas_costs,
@@ -408,8 +410,6 @@ pub async fn check_single_tx(
             &config.chain_config.transaction_parameters,
         )?
     };
-
-    debug_assert!(tx.checks().contains(Checks::All));
 
     Ok(tx)
 }
