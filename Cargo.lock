@@ -3049,7 +3049,6 @@ dependencies = [
  "fuel-core-trace",
  "fuel-core-txpool",
  "fuel-core-types",
- "fuel-vm",
  "futures",
  "itertools",
  "mockall",

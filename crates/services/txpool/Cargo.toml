@@ -18,7 +18,6 @@ fuel-core-metrics = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
-fuel-vm-private = { workspace = true }
 futures = { workspace = true }
 parking_lot = { workspace = true }
 tokio = { workspace = true, default-features = false, features = ["sync"] }

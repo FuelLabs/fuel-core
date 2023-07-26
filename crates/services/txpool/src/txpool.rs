@@ -19,11 +19,16 @@ use fuel_core_types::{
         Transaction,
     },
     fuel_types::BlockHeight,
-    fuel_vm::checked_transaction::{
-        CheckPredicates,
-        CheckedTransaction,
-        IntoChecked,
-        ParallelExecutor,
+    fuel_vm::{
+        checked_transaction::{
+            CheckPredicates,
+            Checked,
+            CheckedTransaction,
+            Checks,
+            IntoChecked,
+            ParallelExecutor,
+        },
+        PredicateVerificationFailed,
     },
     services::txpool::{
         ArcPoolTx,
@@ -31,13 +36,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use fuel_vm_private::{
-    checked_transaction::{
-        Checked,
-        Checks,
-    },
-    error::PredicateVerificationFailed,
-};
+
 use std::{
     cmp::Reverse,
     collections::HashMap,
