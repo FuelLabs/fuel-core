@@ -220,33 +220,41 @@ where
                     // verify tx
                     let checked_tx = check_single_tx(tx, current_height, &self.shared.config).await;
 
-                    if let Ok(tx) = checked_tx {
-                        let txs = vec![tx];
+                    let acceptance = match checked_tx {
+                        Ok(tx) => {
+                            let txs = vec![tx];
 
-                        // insert tx
-                        let mut result = tracing::info_span!("Received tx via gossip", %id)
-                            .in_scope(|| {
-                                self.shared.txpool.lock().insert(
-                                    &self.shared.tx_status_sender,
-                                    txs
-                                )
-                            });
+                            // insert tx
+                            let mut result = tracing::info_span!("Received tx via gossip", %id)
+                                .in_scope(|| {
+                                    self.shared.txpool.lock().insert(
+                                        &self.shared.tx_status_sender,
+                                        txs
+                                    )
+                                });
 
-                        if let Some(acceptance) = match result.pop() {
-                            Some(Ok(_)) => {
-                                Some(GossipsubMessageAcceptance::Accept)
-                            },
-                            Some(Err(_)) => {
-                                Some(GossipsubMessageAcceptance::Reject)
+                            match result.pop() {
+                                Some(Ok(_)) => {
+                                    Some(GossipsubMessageAcceptance::Accept)
+                                },
+                                Some(Err(_)) => {
+                                    Some(GossipsubMessageAcceptance::Reject)
+                                }
+                                _ => None
                             }
-                            _ => None
-                        } {
-                            let message_info = GossipsubMessageInfo {
-                                message_id,
-                                peer_id,
-                            };
-                            let _ = self.shared.p2p.notify_gossip_transaction_validity(message_info, acceptance);
                         }
+                        Err(_) => {
+                            Some(GossipsubMessageAcceptance::Reject)
+                        }
+                    };
+
+                    if let Some(acceptance) = acceptance {
+                        let message_info = GossipsubMessageInfo {
+                            message_id,
+                            peer_id,
+                        };
+
+                        let _ = self.shared.p2p.notify_gossip_transaction_validity(message_info, acceptance);
                     }
 
                     should_continue = true;
