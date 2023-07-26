@@ -702,6 +702,7 @@ mod tests {
             .output()
             .unwrap();
         println!("{}", String::from_utf8(output.stderr).unwrap());
+
         assert!(output.status.success());
     }
 
