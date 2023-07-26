@@ -8,7 +8,6 @@ use fuel_core_types::{
     fuel_tx::{
         ConsensusParameters,
         GasCosts,
-        GasCostsValues,
         TxParameters,
         UtxoId,
     },
@@ -31,7 +30,6 @@ use serde::{
 use serde_with::{
     serde_as,
     skip_serializing_none,
-    FromInto,
 };
 use std::{
     io::ErrorKind,
@@ -63,10 +61,7 @@ pub struct ChainConfig {
     pub block_gas_limit: u64,
     #[serde(default)]
     pub initial_state: Option<StateConfig>,
-    pub transaction_parameters: ConsensusParameters,
-    #[serde(default)]
-    #[serde_as(as = "FromInto<GasCostsValues>")]
-    pub gas_costs: GasCosts,
+    pub consensus_parameters: ConsensusParameters,
     pub consensus: ConsensusConfig,
 }
 
@@ -75,9 +70,8 @@ impl Default for ChainConfig {
         Self {
             chain_name: "local".into(),
             block_gas_limit: TxParameters::DEFAULT.max_gas_per_tx * 10, /* TODO: Pick a sensible default */
-            transaction_parameters: ConsensusParameters::default(),
+            consensus_parameters: ConsensusParameters::default(),
             initial_state: None,
-            gas_costs: GasCosts::default(),
             consensus: ConsensusConfig::default_poa(),
         }
     }
@@ -171,8 +165,7 @@ impl GenesisCommitment for ChainConfig {
             block_gas_limit,
             // Skip the `initial_state` bec
             initial_state: _,
-            transaction_parameters,
-            gas_costs,
+            consensus_parameters,
             consensus,
         } = self;
 
@@ -180,8 +173,7 @@ impl GenesisCommitment for ChainConfig {
         let config_hash = *Hasher::default()
             .chain(chain_name.as_bytes())
             .chain(block_gas_limit.to_be_bytes())
-            .chain(transaction_parameters.root()?)
-            .chain(gas_costs.root()?)
+            .chain(consensus_parameters.root()?)
             .chain(consensus.root()?)
             .finalize();
 

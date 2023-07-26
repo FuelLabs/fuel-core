@@ -71,7 +71,7 @@ where
         &self.by_dependency
     }
 
-    #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id(&self.config.chain_config.transaction_parameters.chain_id)), ret, err)]
+    #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id(&self.config.chain_config.consensus_parameters.chain_id)), ret, err)]
     // this is atomic operation. Return removed(pushed out/replaced) transactions
     fn insert_inner(
         &mut self,
@@ -92,7 +92,7 @@ where
                 .clone()
                 .into_checked(
                     current_height,
-                    &self.config.chain_config.transaction_parameters,
+                    &self.config.chain_config.consensus_parameters,
                 )?
                 .into()
         } else {
@@ -100,7 +100,7 @@ where
                 .clone()
                 .into_checked_basic(
                     current_height,
-                    &self.config.chain_config.transaction_parameters,
+                    &self.config.chain_config.consensus_parameters,
                 )?
                 .into()
         };

@@ -188,8 +188,7 @@ impl TxQuery {
                         .owned_transactions(owner, start, direction)
                         .map(|result| {
                             result.map(|(cursor, tx)| {
-                                let tx_id =
-                                    tx.id(&config.transaction_parameters.chain_id);
+                                let tx_id = tx.id(&config.consensus_parameters.chain_id);
                                 (cursor.into(), Transaction::from_tx(tx_id, tx))
                             })
                         });
@@ -209,11 +208,11 @@ impl TxQuery {
         let config = ctx.data_unchecked::<Config>();
 
         tx.estimate_predicates(&CheckPredicateParams::from(
-            &config.transaction_parameters,
+            &config.consensus_parameters,
         ))?;
 
         Ok(Transaction::from_tx(
-            tx.id(&config.transaction_parameters.chain_id),
+            tx.id(&config.consensus_parameters.chain_id),
             tx,
         ))
     }
@@ -238,7 +237,7 @@ impl TxMutation {
         let config = ctx.data_unchecked::<Config>();
 
         let mut tx = FuelTx::from_bytes(&tx.0)?;
-        tx.precompute(&config.transaction_parameters.chain_id)?;
+        tx.precompute(&config.consensus_parameters.chain_id)?;
 
         let receipts = block_producer.dry_run_tx(tx, None, utxo_validation).await?;
         Ok(receipts.iter().map(Into::into).collect())
@@ -260,7 +259,7 @@ impl TxMutation {
             .insert(vec![Arc::new(tx.clone())])
             .into_iter()
             .try_collect()?;
-        let id = tx.id(&config.transaction_parameters.chain_id);
+        let id = tx.id(&config.consensus_parameters.chain_id);
 
         let tx = Transaction(tx, id);
         Ok(tx)
@@ -323,7 +322,7 @@ impl TxStatusSubscription {
         let txpool = ctx.data_unchecked::<TxPool>();
         let config = ctx.data_unchecked::<Config>();
         let tx = FuelTx::from_bytes(&tx.0)?;
-        let tx_id = tx.id(&config.transaction_parameters.chain_id);
+        let tx_id = tx.id(&config.consensus_parameters.chain_id);
         let subscription = txpool.tx_update_subscribe(tx_id).await;
         // TODO: use spawn_blocking here
         let _: Vec<_> = txpool

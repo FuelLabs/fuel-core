@@ -6,7 +6,7 @@ use fuel_core_types::fuel_tx::{
 #[derive(Clone, Debug, Default)]
 pub struct Config {
     /// Network-wide common parameters used for validating the chain
-    pub transaction_parameters: ConsensusParameters,
+    pub consensus_parameters: ConsensusParameters,
     /// The address of the fee recipient
     pub coinbase_recipient: Address,
     /// Print execution backtraces if transaction execution reverts.

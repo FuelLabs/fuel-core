@@ -14,7 +14,7 @@ async fn chain_info() {
 
     assert_eq!(node_config.chain_conf.chain_name, chain_info.name);
     assert_eq!(
-        node_config.chain_conf.transaction_parameters,
+        node_config.chain_conf.consensus_parameters,
         chain_info.consensus_parameters.into()
     );
 

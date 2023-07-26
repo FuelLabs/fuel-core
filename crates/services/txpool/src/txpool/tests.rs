@@ -1054,12 +1054,12 @@ fn predicate_without_enough_gas_returns_out_of_gas() {
     let mut config = Config::default();
     config
         .chain_config
-        .transaction_parameters
+        .consensus_parameters
         .predicate_params
         .max_gas_per_predicate = 10000;
     config
         .chain_config
-        .transaction_parameters
+        .consensus_parameters
         .tx_params
         .max_gas_per_tx = 10000;
     let mut txpool = TxPool::new(config.clone(), db.clone());
@@ -1071,7 +1071,7 @@ fn predicate_without_enough_gas_returns_out_of_gas() {
         vec![op::jmp(RegId::ZERO)].into_iter().collect(),
         None,
     )
-    .into_estimated(&config.chain_config.transaction_parameters);
+    .into_estimated(&config.chain_config.consensus_parameters);
 
     let (_, gas_coin) = add_coin_to_state(coin, Some(&db));
     let tx = Arc::new(

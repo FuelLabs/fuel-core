@@ -380,7 +380,7 @@ where
     let committed_block_stream = importer.block_events();
     let mut ttl_timer = tokio::time::interval(config.transaction_ttl);
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    let consensus_params = config.chain_config.transaction_parameters.clone();
+    let consensus_params = config.chain_config.consensus_parameters.clone();
     let number_of_active_subscription = config.number_of_active_subscription;
     let txpool = Arc::new(ParkingMutex::new(TxPool::new(config, db)));
     let task = Task {

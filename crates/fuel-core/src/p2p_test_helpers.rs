@@ -188,7 +188,7 @@ pub async fn make_nodes(
     let mut producers_with_txs = Vec::with_capacity(producers.len());
     let mut chain_config = ChainConfig::local_testnet();
     chain_config
-        .transaction_parameters
+        .consensus_parameters
         .contract_params
         .max_storage_slots = 1 << 17; // 131072
 

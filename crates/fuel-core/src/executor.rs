@@ -308,7 +308,7 @@ where
             .transactions()
             .iter()
             .map(|tx| {
-                let id = tx.id(&self.config.transaction_parameters.chain_id);
+                let id = tx.id(&self.config.consensus_parameters.chain_id);
                 StorageInspect::<Receipts>::get(temporary_db.as_ref(), &id)
                     .transpose()
                     .unwrap_or_else(|| Ok(Default::default()))
@@ -482,7 +482,7 @@ where
                 &finalized_block_id,
                 &result
                     .block
-                    .compress(&self.config.transaction_parameters.chain_id),
+                    .compress(&self.config.consensus_parameters.chain_id),
             )?;
 
         // Get the complete fuel block.
@@ -564,7 +564,7 @@ where
             for transaction in iter {
                 let mut filter_tx = |tx: MaybeCheckedTransaction, idx| {
                     let mut tx_db_transaction = block_db_transaction.transaction();
-                    let tx_id = tx.id(&self.config.transaction_parameters.chain_id);
+                    let tx_id = tx.id(&self.config.consensus_parameters.chain_id);
                     let result = self.execute_transaction(
                         idx,
                         tx,
@@ -672,7 +672,7 @@ where
         let block_height = *header.height();
         let checked_tx = match tx {
             MaybeCheckedTransaction::Transaction(tx) => tx
-                .into_checked_basic(block_height, &self.config.transaction_parameters)?
+                .into_checked_basic(block_height, &self.config.consensus_parameters)?
                 .into(),
             MaybeCheckedTransaction::CheckedTransaction(checked_tx) => checked_tx,
         };
@@ -714,7 +714,7 @@ where
         block_db_transaction: &mut DatabaseTransaction,
     ) -> ExecutorResult<()> {
         let block_height = *block.header.height();
-        let coinbase_id = coinbase_tx.id(&self.config.transaction_parameters.chain_id);
+        let coinbase_id = coinbase_tx.id(&self.config.consensus_parameters.chain_id);
         self.persist_output_utxos(
             block_height,
             0,
@@ -748,7 +748,7 @@ where
         expected_amount: Option<Word>,
     ) -> ExecutorResult<Mint> {
         let checked_mint =
-            mint.into_checked(block_height, &self.config.transaction_parameters)?;
+            mint.into_checked(block_height, &self.config.consensus_parameters)?;
 
         if checked_mint.transaction().tx_pointer().tx_index() != 0 {
             return Err(ExecutorError::CoinbaseIsNotFirstTransaction)
@@ -800,7 +800,7 @@ where
 
         checked_tx = checked_tx
             .check_predicates(&CheckPredicateParams::from(
-                &self.config.transaction_parameters,
+                &self.config.consensus_parameters,
             ))
             .map_err(|_| {
                 ExecutorError::TransactionValidity(
@@ -819,7 +819,7 @@ where
             )?;
             // validate transaction signature
             checked_tx = checked_tx
-                .check_signatures(&self.config.transaction_parameters.chain_id)
+                .check_signatures(&self.config.consensus_parameters.chain_id)
                 .map_err(TransactionValidityError::from)?;
             debug_assert!(checked_tx.checks().contains(Checks::Signatures));
         }
@@ -836,7 +836,7 @@ where
         );
         let mut vm = Interpreter::with_storage(
             vm_db,
-            InterpreterParams::from(&self.config.transaction_parameters),
+            InterpreterParams::from(&self.config.consensus_parameters),
         );
         let vm_result: StateTransition<_> = vm
             .transact(checked_tx.clone())
@@ -850,8 +850,8 @@ where
         let (state, mut tx, receipts) = vm_result.into_inner();
         #[cfg(debug_assertions)]
         {
-            tx.precompute(&self.config.transaction_parameters.chain_id)?;
-            debug_assert_eq!(tx.id(&self.config.transaction_parameters.chain_id), tx_id);
+            tx.precompute(&self.config.consensus_parameters.chain_id)?;
+            debug_assert_eq!(tx.id(&self.config.consensus_parameters.chain_id), tx_id);
         }
 
         // Wrap the transaction in the execution kind.
@@ -1143,7 +1143,7 @@ where
             if let Receipt::ScriptResult { gas_used, .. } = r {
                 used_gas = *gas_used;
                 let fee = TransactionFee::gas_refund_value(
-                    self.config.transaction_parameters.fee_params(),
+                    self.config.consensus_parameters.fee_params(),
                     used_gas,
                     gas_price,
                 )
@@ -1558,7 +1558,7 @@ where
             let block_height = *block.header().height();
             let mut inputs = &[][..];
             let outputs;
-            let tx_id = tx.id(&self.config.transaction_parameters.chain_id);
+            let tx_id = tx.id(&self.config.consensus_parameters.chain_id);
             match tx {
                 Transaction::Script(tx) => {
                     inputs = tx.inputs().as_slice();
@@ -1952,7 +1952,7 @@ mod tests {
             };
             let config = Config {
                 coinbase_recipient: recipient,
-                transaction_parameters: ConsensusParameters {
+                consensus_parameters: ConsensusParameters {
                     fee_params,
                     ..Default::default()
                 },
@@ -1962,7 +1962,7 @@ mod tests {
             let producer = Executor::test(Default::default(), config);
 
             let expected_fee_amount = TransactionFee::checked_from_values(
-                producer.config.transaction_parameters.fee_params(),
+                producer.config.consensus_parameters.fee_params(),
                 script.metered_bytes_size() as Word,
                 gas_used_by_predicates,
                 limit,
@@ -2027,7 +2027,7 @@ mod tests {
             let recipient = [1u8; 32].into();
             config.coinbase_recipient = recipient;
 
-            config.transaction_parameters.fee_params.gas_price_factor = gas_price_factor;
+            config.consensus_parameters.fee_params.gas_price_factor = gas_price_factor;
 
             let producer = Executor::test(Default::default(), config);
 
@@ -2070,7 +2070,7 @@ mod tests {
             };
             let config = Config {
                 coinbase_recipient: recipient,
-                transaction_parameters: ConsensusParameters {
+                consensus_parameters: ConsensusParameters {
                     fee_params,
                     ..Default::default()
                 },
@@ -2079,7 +2079,7 @@ mod tests {
 
             let producer = Executor::test(Default::default(), config);
 
-            let params = producer.config.transaction_parameters.clone();
+            let params = producer.config.consensus_parameters.clone();
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![script.into()];
@@ -2182,7 +2182,7 @@ mod tests {
                 let receipts = producer
                     .database
                     .storage::<Receipts>()
-                    .get(&script.id(&producer.config.transaction_parameters.chain_id))
+                    .get(&script.id(&producer.config.consensus_parameters.chain_id))
                     .unwrap()
                     .unwrap();
 
@@ -2376,7 +2376,7 @@ mod tests {
         let producer = Executor::test(Default::default(), Default::default());
         let factor = producer
             .config
-            .transaction_parameters
+            .consensus_parameters
             .fee_params()
             .gas_price_factor as f64;
 
@@ -3272,7 +3272,7 @@ mod tests {
         let mut new_tx = executed_tx.clone();
         *new_tx.script_mut() = vec![];
         new_tx
-            .precompute(&executor.config.transaction_parameters.chain_id)
+            .precompute(&executor.config.consensus_parameters.chain_id)
             .unwrap();
 
         let block = PartialFuelBlock {

@@ -389,7 +389,6 @@ pub struct ChainInfo {
     pub peer_count: i32,
     pub latest_block: Block,
     pub consensus_parameters: ConsensusParameters,
-    pub gas_costs: GasCosts,
 }
 
 #[cfg(test)]

@@ -46,7 +46,7 @@ impl ConsensusParameters {
         let config = ctx.data_unchecked::<GraphQLConfig>();
 
         Ok(TxParameters(
-            config.transaction_parameters.tx_params().to_owned(),
+            config.consensus_parameters.tx_params().to_owned(),
         ))
     }
 
@@ -57,7 +57,7 @@ impl ConsensusParameters {
         let config = ctx.data_unchecked::<GraphQLConfig>();
 
         Ok(PredicateParameters(
-            config.transaction_parameters.predicate_params().to_owned(),
+            config.consensus_parameters.predicate_params().to_owned(),
         ))
     }
 
@@ -68,7 +68,7 @@ impl ConsensusParameters {
         let config = ctx.data_unchecked::<GraphQLConfig>();
 
         Ok(ScriptParameters(
-            config.transaction_parameters.script_params().to_owned(),
+            config.consensus_parameters.script_params().to_owned(),
         ))
     }
 
@@ -79,7 +79,7 @@ impl ConsensusParameters {
         let config = ctx.data_unchecked::<GraphQLConfig>();
 
         Ok(ContractParameters(
-            config.transaction_parameters.contract_params().to_owned(),
+            config.consensus_parameters.contract_params().to_owned(),
         ))
     }
 
@@ -90,7 +90,7 @@ impl ConsensusParameters {
         let config = ctx.data_unchecked::<GraphQLConfig>();
 
         Ok(FeeParameters(
-            config.transaction_parameters.fee_params().to_owned(),
+            config.consensus_parameters.fee_params().to_owned(),
         ))
     }
 
@@ -101,7 +101,7 @@ impl ConsensusParameters {
     async fn gas_costs(&self, ctx: &Context<'_>) -> async_graphql::Result<GasCosts> {
         let config = ctx.data_unchecked::<GraphQLConfig>();
 
-        Ok(GasCosts(config.gas_costs.clone()))
+        Ok(GasCosts(config.consensus_parameters.gas_costs.clone()))
     }
 }
 
@@ -632,13 +632,13 @@ impl ChainInfo {
     ) -> async_graphql::Result<ConsensusParameters> {
         let config = ctx.data_unchecked::<GraphQLConfig>();
 
-        Ok(ConsensusParameters(config.transaction_parameters.clone()))
+        Ok(ConsensusParameters(config.consensus_parameters.clone()))
     }
 
     async fn gas_costs(&self, ctx: &Context<'_>) -> async_graphql::Result<GasCosts> {
         let config = ctx.data_unchecked::<GraphQLConfig>();
 
-        Ok(GasCosts(config.gas_costs.clone()))
+        Ok(GasCosts(config.consensus_parameters.gas_costs.clone()))
     }
 }
 

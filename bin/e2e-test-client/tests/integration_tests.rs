@@ -89,7 +89,7 @@ async fn setup_local_node() -> FuelService {
     // The `run_contract_large_state` test creates a contract with a huge state
     config
         .chain_conf
-        .transaction_parameters
+        .consensus_parameters
         .contract_params
         .max_storage_slots = 1 << 17; // 131072
     FuelService::new_node(config).await.unwrap()
