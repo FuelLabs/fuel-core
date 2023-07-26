@@ -343,9 +343,10 @@ where
             Err(e) => return vec![Err(e.into())],
         };
 
-        let checked_txs = check_transactions(&txs, current_height, &self.config)
-            .await
-            .into_iter()
+        let checked_txs = check_transactions(&txs, current_height, &self.config).await;
+
+        let valid_txs = checked_txs
+            .iter()
             .filter_map(|tx_chech| match tx_chech {
                 Ok(tx) => Some(tx.clone()),
                 Err(e) => {
@@ -356,13 +357,9 @@ where
             .collect();
 
         // insert txs
-        let insert = {
-            self.txpool
-                .lock()
-                .insert(&self.tx_status_sender, checked_txs)
-        };
+        let insertion = { self.txpool.lock().insert(&self.tx_status_sender, valid_txs) };
 
-        for (ret, tx) in insert.iter().zip(txs.into_iter()) {
+        for (ret, tx) in insertion.iter().zip(txs.into_iter()) {
             match ret {
                 Ok(_) => {
                     let result = self.p2p.broadcast_transaction(tx.clone());
@@ -377,7 +374,21 @@ where
                 Err(_) => {}
             }
         }
-        insert
+
+        let mut insertion = insertion.into_iter().rev();
+
+        checked_txs
+            .into_iter()
+            .rev()
+            .map(|check_result| match check_result {
+                Ok(_) => insertion.next().unwrap_or_else(|| {
+                    unreachable!(
+                        "the number of inserted txs matches the number of OK results"
+                    )
+                }),
+                Err(e) => Err(e.into()),
+            })
+            .collect()
     }
 }
 
