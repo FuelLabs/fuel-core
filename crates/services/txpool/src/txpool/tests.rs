@@ -43,8 +43,9 @@ use fuel_core_types::{
         UniqueIdentifier,
         UtxoId,
     },
+    fuel_vm::checked_transaction::Checked,
 };
-use fuel_vm_private::checked_transaction::Checked;
+
 use std::{
     cmp::Reverse,
     collections::HashMap,
