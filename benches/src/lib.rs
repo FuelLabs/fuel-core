@@ -400,13 +400,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             .gas_price(gas_price)
             .gas_limit(gas_limit)
             .maturity(maturity)
-            .with_tx_params(p.tx_params)
-            .with_predicate_params(p.predicate_params)
-            .with_script_params(p.script_params)
-            .with_contract_params(p.contract_params)
-            .with_fee_params(p.fee_params)
-            .with_chain_id(p.chain_id)
-            .with_gas_costs(p.gas_costs.clone())
+            .with_params(p.clone())
             .finalize();
         tx.estimate_predicates(&CheckPredicateParams::from(&p))
             .unwrap();
