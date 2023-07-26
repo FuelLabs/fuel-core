@@ -235,20 +235,20 @@ where
 
                             match result.pop() {
                                 Some(Ok(_)) => {
-                                    Some(GossipsubMessageAcceptance::Accept)
+                                    GossipsubMessageAcceptance::Accept
                                 },
                                 Some(Err(_)) => {
-                                    Some(GossipsubMessageAcceptance::Reject)
+                                    GossipsubMessageAcceptance::Reject
                                 }
-                                _ => None
+                                _ => GossipsubMessageAcceptance::Ignore
                             }
                         }
                         Err(_) => {
-                            Some(GossipsubMessageAcceptance::Reject)
+                            GossipsubMessageAcceptance::Reject
                         }
                     };
 
-                    if let Some(acceptance) = acceptance {
+                    if acceptance != GossipsubMessageAcceptance::Ignore {
                         let message_info = GossipsubMessageInfo {
                             message_id,
                             peer_id,
