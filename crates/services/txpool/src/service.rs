@@ -353,14 +353,16 @@ where
 
         let checked_txs = check_transactions(&txs, current_height, &self.config).await;
 
-        let valid_txs = checked_txs
-            .iter()
-            .filter_map(|tx_chech| match tx_chech {
-                Ok(tx) => Some(tx.clone()),
-                Err(e) => {
-                    tracing::error!("Transaction is invalid: {}", e);
+        let mut valid_txs = vec![];
+
+        let checked_txs: Vec<_> = checked_txs
+            .into_iter()
+            .map(|tx_check| match tx_check {
+                Ok(tx) => {
+                    valid_txs.push(tx);
                     None
                 }
+                Err(err) => Some(err),
             })
             .collect();
 
@@ -383,18 +385,17 @@ where
             }
         }
 
-        let mut insertion = insertion.into_iter().rev();
+        let mut insertion = insertion.into_iter();
 
         checked_txs
             .into_iter()
-            .rev()
             .map(|check_result| match check_result {
-                Ok(_) => insertion.next().unwrap_or_else(|| {
+                None => insertion.next().unwrap_or_else(|| {
                     unreachable!(
-                        "the number of inserted txs matches the number of OK results"
+                        "the number of inserted txs matches the number of `None` results"
                     )
                 }),
-                Err(e) => Err(e),
+                Some(err) => Err(err),
             })
             .collect()
     }
