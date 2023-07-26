@@ -81,7 +81,7 @@ async fn test_prune_transactions() {
     assert!(out[1].is_ok(), "Tx2 should be OK, got err:{out:?}");
     assert!(out[2].is_ok(), "Tx3 should be OK, got err:{out:?}");
 
-    tokio::time::sleep(Duration::from_secs(TIMEOUT / 2)).await;
+    tokio::time::sleep(Duration::from_secs(TIMEOUT)).await;
     let out = service.shared.find(vec![
         tx1.id(&ConsensusParameters::DEFAULT.chain_id),
         tx2.id(&ConsensusParameters::DEFAULT.chain_id),
@@ -92,7 +92,7 @@ async fn test_prune_transactions() {
     assert!(out[1].is_some(), "Tx2 should exist");
     assert!(out[2].is_some(), "Tx3 should exist");
 
-    tokio::time::sleep(Duration::from_secs(TIMEOUT / 2 + 1)).await;
+    tokio::time::sleep(Duration::from_secs(TIMEOUT)).await;
     let out = service.shared.find(vec![
         tx1.id(&ConsensusParameters::DEFAULT.chain_id),
         tx2.id(&ConsensusParameters::DEFAULT.chain_id),
