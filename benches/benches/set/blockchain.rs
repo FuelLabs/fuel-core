@@ -12,9 +12,9 @@ use fuel_core_storage::ContractsAssetsStorage;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::{
-        ConsensusParameters,
         Input,
         Output,
+        Word,
     },
     fuel_types::*,
     fuel_vm::{
