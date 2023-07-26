@@ -90,7 +90,6 @@ where
     // this is atomic operation. Return removed(pushed out/replaced) transactions
     fn insert_inner(
         &mut self,
-        // TODO: Pass `&Transaction`
         tx: Checked<Transaction>,
     ) -> anyhow::Result<InsertionResult> {
         // conversion to `CheckedTransaction` so that we can go to `PoolTransaction`
