@@ -154,12 +154,16 @@ pub trait DatabaseChain {
     fn base_chain_height(&self) -> StorageResult<DaBlockHeight>;
 }
 
+#[async_trait]
 pub trait TxPoolPort: Send + Sync {
     fn transaction(&self, id: TxId) -> Option<Transaction>;
 
     fn submission_time(&self, id: TxId) -> Option<Tai64>;
 
-    fn insert(&self, txs: Vec<Arc<Transaction>>) -> Vec<anyhow::Result<InsertionResult>>;
+    async fn insert(
+        &self,
+        txs: Vec<Arc<Transaction>>,
+    ) -> Vec<anyhow::Result<InsertionResult>>;
 
     fn tx_update_subscribe(
         &self,

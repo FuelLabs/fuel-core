@@ -11,17 +11,24 @@ use crate::{
     Error,
     TxInfo,
 };
+
 use fuel_core_metrics::txpool_metrics::TXPOOL_METRICS;
 use fuel_core_types::{
     fuel_tx::{
         Chargeable,
         Transaction,
-        UniqueIdentifier,
     },
     fuel_types::BlockHeight,
-    fuel_vm::checked_transaction::{
-        CheckedTransaction,
-        IntoChecked,
+    fuel_vm::{
+        checked_transaction::{
+            CheckPredicates,
+            Checked,
+            CheckedTransaction,
+            Checks,
+            IntoChecked,
+            ParallelExecutor,
+        },
+        PredicateVerificationFailed,
     },
     services::txpool::{
         ArcPoolTx,
@@ -29,12 +36,14 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
+
 use std::{
     cmp::Reverse,
     collections::HashMap,
     ops::Deref,
     sync::Arc,
 };
+use tokio_rayon::AsyncRayonHandle;
 
 #[derive(Debug, Clone)]
 pub struct TxPool<DB> {
@@ -63,6 +72,11 @@ where
         }
     }
 
+    #[cfg(test)]
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
     pub fn txs(&self) -> &HashMap<TxId, TxInfo> {
         &self.by_hash
     }
@@ -71,40 +85,14 @@ where
         &self.by_dependency
     }
 
-    #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id(&self.config.chain_config.transaction_parameters.chain_id)), ret, err)]
+    #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id()), ret, err)]
     // this is atomic operation. Return removed(pushed out/replaced) transactions
     fn insert_inner(
         &mut self,
-        // TODO: Pass `&Transaction`
-        tx: Arc<Transaction>,
+        tx: Checked<Transaction>,
     ) -> anyhow::Result<InsertionResult> {
-        let current_height = self.database.current_block_height()?;
-
-        if tx.is_mint() {
-            return Err(Error::NotSupportedTransactionType.into())
-        }
-
-        // verify gas price is at least the minimum
-        self.verify_tx_min_gas_price(&tx)?;
-
-        let tx: CheckedTransaction = if self.config.utxo_validation {
-            tx.deref()
-                .clone()
-                .into_checked(
-                    current_height,
-                    &self.config.chain_config.transaction_parameters,
-                    &self.config.chain_config.gas_costs,
-                )?
-                .into()
-        } else {
-            tx.deref()
-                .clone()
-                .into_checked_basic(
-                    current_height,
-                    &self.config.chain_config.transaction_parameters,
-                )?
-                .into()
-        };
+        // conversion to `CheckedTransaction` so that we can go to `PoolTransaction`
+        let tx: CheckedTransaction = tx.into();
 
         let tx = Arc::new(match tx {
             CheckedTransaction::Script(script) => PoolTransaction::Script(script),
@@ -233,37 +221,21 @@ where
         self.remove_by_tx_id(tx_id)
     }
 
-    fn verify_tx_min_gas_price(&mut self, tx: &Transaction) -> Result<(), Error> {
-        let price = match tx {
-            Transaction::Script(script) => script.price(),
-            Transaction::Create(create) => create.price(),
-            Transaction::Mint(_) => unreachable!(),
-        };
-        if self.config.metrics {
-            // Gas Price metrics are recorded here to avoid double matching for
-            // every single transaction, but also means metrics aren't collected on gas
-            // price if there is no minimum gas price
-            TXPOOL_METRICS.gas_price_histogram.observe(price as f64);
-        }
-        if price < self.config.min_gas_price {
-            return Err(Error::NotInsertedGasPriceTooLow)
-        }
-        Ok(())
-    }
-
     #[tracing::instrument(level = "info", skip_all)]
     /// Import a set of transactions from network gossip or GraphQL endpoints.
     pub fn insert(
         &mut self,
         tx_status_sender: &TxStatusChange,
-        txs: &[Arc<Transaction>],
+        txs: Vec<Checked<Transaction>>,
     ) -> Vec<anyhow::Result<InsertionResult>> {
         // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
         // should be done before transaction comes to txpool, or before it enters RwLocked region.
         let mut res = Vec::new();
-        for tx in txs.iter() {
-            res.push(self.insert_inner(tx.clone()))
+
+        for tx in txs.into_iter() {
+            res.push(self.insert_inner(tx));
         }
+
         // announce to subscribers
         for ret in res.iter() {
             match ret {
@@ -388,6 +360,99 @@ where
         }
 
         result
+    }
+}
+
+pub async fn check_transactions(
+    txs: &[Arc<Transaction>],
+    current_height: BlockHeight,
+    config: &Config,
+) -> Vec<anyhow::Result<Checked<Transaction>>> {
+    let mut checked_txs = Vec::with_capacity(txs.len());
+
+    for tx in txs.iter() {
+        checked_txs
+            .push(check_single_tx(tx.deref().clone(), current_height, config).await);
+    }
+
+    checked_txs
+}
+
+pub async fn check_single_tx(
+    tx: Transaction,
+    current_height: BlockHeight,
+    config: &Config,
+) -> anyhow::Result<Checked<Transaction>> {
+    if tx.is_mint() {
+        return Err(Error::NotSupportedTransactionType.into())
+    }
+
+    verify_tx_min_gas_price(&tx, config)?;
+
+    let tx: Checked<Transaction> = if config.utxo_validation {
+        let consensus_params = &config.chain_config.transaction_parameters;
+
+        let tx = tx
+            .into_checked_basic(current_height, consensus_params)?
+            .check_signatures(&consensus_params.chain_id)?;
+
+        let tx = tx
+            .check_predicates_async::<TokioWithRayon>(
+                consensus_params,
+                &config.chain_config.gas_costs,
+            )
+            .await?;
+
+        debug_assert!(tx.checks().contains(Checks::All));
+
+        tx
+    } else {
+        tx.into_checked_basic(
+            current_height,
+            &config.chain_config.transaction_parameters,
+        )?
+    };
+
+    Ok(tx)
+}
+
+fn verify_tx_min_gas_price(tx: &Transaction, config: &Config) -> Result<(), Error> {
+    let price = match tx {
+        Transaction::Script(script) => script.price(),
+        Transaction::Create(create) => create.price(),
+        Transaction::Mint(_) => return Err(Error::NotSupportedTransactionType),
+    };
+    if config.metrics {
+        // Gas Price metrics are recorded here to avoid double matching for
+        // every single transaction, but also means metrics aren't collected on gas
+        // price if there is no minimum gas price
+        TXPOOL_METRICS.gas_price_histogram.observe(price as f64);
+    }
+    if price < config.min_gas_price {
+        return Err(Error::NotInsertedGasPriceTooLow)
+    }
+    Ok(())
+}
+
+pub struct TokioWithRayon;
+
+#[async_trait::async_trait]
+impl ParallelExecutor for TokioWithRayon {
+    type Task = AsyncRayonHandle<Result<(Word, usize), PredicateVerificationFailed>>;
+
+    fn create_task<F>(func: F) -> Self::Task
+    where
+        F: FnOnce() -> Result<(Word, usize), PredicateVerificationFailed>
+            + Send
+            + 'static,
+    {
+        tokio_rayon::spawn(func)
+    }
+
+    async fn execute_tasks(
+        futures: Vec<Self::Task>,
+    ) -> Vec<Result<(Word, usize), PredicateVerificationFailed>> {
+        futures::future::join_all(futures).await
     }
 }
 
