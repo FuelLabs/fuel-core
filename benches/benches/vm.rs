@@ -42,7 +42,7 @@ where
 
             let mut elapsed_time = Duration::default();
             for _ in 0..iters {
-                let mut start = std::time::Instant::now();
+                let start = std::time::Instant::now();
                 match instruction {
                     Instruction::CALL(call) => {
                         let (ra, rb, rc, rd) = call.unpack();
