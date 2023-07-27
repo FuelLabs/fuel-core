@@ -29,10 +29,10 @@ pub struct TxParameters {
 impl From<TxParameters> for fuel_core_types::fuel_tx::TxParameters {
     fn from(params: TxParameters) -> Self {
         Self {
-            max_inputs: params.max_inputs.0,
-            max_outputs: params.max_outputs.0,
-            max_witnesses: params.max_witnesses.0,
-            max_gas_per_tx: params.max_gas_per_tx.0,
+            max_inputs: params.max_inputs.into(),
+            max_outputs: params.max_outputs.into(),
+            max_witnesses: params.max_witnesses.into(),
+            max_gas_per_tx: params.max_gas_per_tx.into(),
         }
     }
 }
@@ -49,10 +49,10 @@ pub struct PredicateParameters {
 impl From<PredicateParameters> for fuel_core_types::fuel_tx::PredicateParameters {
     fn from(params: PredicateParameters) -> Self {
         Self {
-            max_predicate_length: params.max_predicate_length.0,
-            max_predicate_data_length: params.max_predicate_data_length.0,
-            max_message_data_length: params.max_message_data_length.0,
-            max_gas_per_predicate: params.max_gas_per_predicate.0,
+            max_predicate_length: params.max_predicate_length.into(),
+            max_predicate_data_length: params.max_predicate_data_length.into(),
+            max_message_data_length: params.max_message_data_length.into(),
+            max_gas_per_predicate: params.max_gas_per_predicate.into(),
         }
     }
 }
@@ -67,8 +67,8 @@ pub struct ScriptParameters {
 impl From<ScriptParameters> for fuel_core_types::fuel_tx::ScriptParameters {
     fn from(params: ScriptParameters) -> Self {
         Self {
-            max_script_length: params.max_script_length.0,
-            max_script_data_length: params.max_script_data_length.0,
+            max_script_length: params.max_script_length.into(),
+            max_script_data_length: params.max_script_data_length.into(),
         }
     }
 }
@@ -83,8 +83,8 @@ pub struct ContractParameters {
 impl From<ContractParameters> for fuel_core_types::fuel_tx::ContractParameters {
     fn from(params: ContractParameters) -> Self {
         Self {
-            contract_max_size: params.contract_max_size.0,
-            max_storage_slots: params.max_storage_slots.0,
+            contract_max_size: params.contract_max_size.into(),
+            max_storage_slots: params.max_storage_slots.into(),
         }
     }
 }
@@ -99,8 +99,8 @@ pub struct FeeParameters {
 impl From<FeeParameters> for fuel_core_types::fuel_tx::FeeParameters {
     fn from(params: FeeParameters) -> Self {
         Self {
-            gas_price_factor: params.gas_price_factor.0,
-            gas_per_byte: params.gas_per_byte.0,
+            gas_price_factor: params.gas_price_factor.into(),
+            gas_per_byte: params.gas_per_byte.into(),
         }
     }
 }
