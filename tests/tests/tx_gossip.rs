@@ -72,6 +72,7 @@ async fn test_tx_gossiping() {
 
     let (tx_id, _) = producers[0]
         .insert_txs()
+        .await
         .into_iter()
         .next()
         .expect("Producer is initialized with one transaction");

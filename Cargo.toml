@@ -86,6 +86,7 @@ hyper = { version = "0.14.26" }
 rand = "0.8"
 parking_lot = "0.12"
 tokio = { version = "1.27", default-features = false }
+tokio-rayon = "2.1.0"
 tokio-stream = "0.1"
 tracing = "0.1"
 thiserror = "1.0"
