@@ -2,6 +2,7 @@ use crate::helpers::TestContext;
 use fuel_core::{
     database::Database,
     executor::Executor,
+    schema::tx::receipt::all_receipts,
     service::{
         adapters::MaybeRelayerAdapter,
         Config,
@@ -208,6 +209,15 @@ async fn receipts() {
     // run test
     let receipts = client.receipts(&id).await.unwrap();
     assert!(receipts.is_some());
+}
+
+#[tokio::test]
+async fn receipts_decoding() {
+    let srv = FuelService::new_node(Config::local_node()).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let actual_receipts = client.all_receipts().await.unwrap();
+    assert_eq!(actual_receipts, all_receipts())
 }
 
 #[tokio::test]

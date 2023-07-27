@@ -214,6 +214,15 @@ impl TxQuery {
             tx,
         ))
     }
+
+    #[cfg(feature = "test-helpers")]
+    /// Returns all possible receipts for test purposes.
+    async fn all_receipts(&self) -> Vec<receipt::Receipt> {
+        receipt::all_receipts()
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
 }
 
 #[derive(Default)]

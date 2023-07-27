@@ -343,10 +343,7 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .sub_id
                     .ok_or_else(|| MissingField("sub_id".to_string()))?
                     .into(),
-                contract_id: schema
-                    .contract_id
-                    .ok_or_else(|| MissingField("contract_id".to_string()))?
-                    .into(),
+                contract_id: schema.contract.map(|id| id.id.into()).unwrap_or_default(),
                 val: schema
                     .val
                     .ok_or_else(|| MissingField("val".to_string()))?
@@ -365,10 +362,7 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .sub_id
                     .ok_or_else(|| MissingField("sub_id".to_string()))?
                     .into(),
-                contract_id: schema
-                    .contract_id
-                    .ok_or_else(|| MissingField("contract_id".to_string()))?
-                    .into(),
+                contract_id: schema.contract.map(|id| id.id.into()).unwrap_or_default(),
                 val: schema
                     .val
                     .ok_or_else(|| MissingField("val".to_string()))?
