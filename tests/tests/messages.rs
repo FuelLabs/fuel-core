@@ -17,7 +17,11 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_types::{
-    fuel_asm::*,
+    fuel_asm::{
+        op,
+        GTFArgs,
+        RegId,
+    },
     fuel_crypto::*,
     fuel_merkle,
     fuel_tx::{
