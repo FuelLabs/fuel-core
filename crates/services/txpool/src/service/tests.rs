@@ -4,7 +4,10 @@ use crate::service::test_helpers::{
     TestContextBuilder,
 };
 use fuel_core_services::Service as ServiceTrait;
-use fuel_core_types::fuel_tx::UniqueIdentifier;
+use fuel_core_types::{
+    fuel_tx::UniqueIdentifier,
+    fuel_types::ChainId,
+};
 use std::time::Duration;
 
 #[tokio::test]
@@ -158,7 +161,7 @@ async fn test_prune_transactions_the_oldest() {
         tx1.id(&Default::default()),
         tx2.id(&Default::default()),
         tx3.id(&Default::default()),
-        tx4.id(&ConsensusParameters::DEFAULT.chain_id),
+        tx4.id(&ChainId::default()),
     ]);
     assert!(out[0].is_none(), "Tx1 should be pruned");
     assert!(out[1].is_none(), "Tx2 should be pruned");
@@ -173,7 +176,7 @@ async fn test_prune_transactions_the_oldest() {
         tx1.id(&Default::default()),
         tx2.id(&Default::default()),
         tx3.id(&Default::default()),
-        tx4.id(&ConsensusParameters::DEFAULT.chain_id),
+        tx4.id(&ChainId::default()),
     ]);
     assert!(out[0].is_none(), "Tx1 should be pruned");
     assert!(out[1].is_none(), "Tx2 should be pruned");

@@ -42,6 +42,7 @@ use fuel_core_types::{
         UniqueIdentifier,
         UtxoId,
     },
+    fuel_types::ChainId,
     fuel_vm::checked_transaction::Checked,
 };
 
@@ -211,7 +212,7 @@ async fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
         ))
         .finalize_as_transaction();
 
-    let tx_faulty_id = tx_faulty.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
+    let tx_faulty_id = tx_faulty.id(&ChainId::default());
     let tx_faulty = check_unwrap_tx(tx_faulty, db.clone(), &txpool.config).await;
 
     txpool
@@ -297,7 +298,7 @@ async fn higher_priced_tx_removes_lower_priced_tx() {
         .add_input(coin_input)
         .finalize_as_transaction();
 
-    let tx1_id = tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
+    let tx1_id = tx1.id(&ChainId::default());
     let tx1 = check_unwrap_tx(tx1, db.clone(), &txpool.config).await;
 
     txpool
@@ -475,8 +476,8 @@ async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
         .add_input(gas_coin)
         .finalize_as_transaction();
 
-    let tx1_id = tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
-    let tx2_id = tx2.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
+    let tx1_id = tx1.id(&ChainId::default());
+    let tx2_id = tx2.id(&ChainId::default());
     let tx1 = check_unwrap_tx(tx1, db.clone(), &txpool.config).await;
     let tx2 = check_unwrap_tx(tx2, db.clone(), &txpool.config).await;
     let tx3 = check_unwrap_tx(tx3, db.clone(), &txpool.config).await;
@@ -653,9 +654,9 @@ async fn sorted_out_tx1_2_4() {
         .add_input(gas_coin)
         .finalize_as_transaction();
 
-    let tx1_id = tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
-    let tx2_id = tx2.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
-    let tx3_id = tx3.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
+    let tx1_id = tx1.id(&ChainId::default());
+    let tx2_id = tx2.id(&ChainId::default());
+    let tx3_id = tx3.id(&ChainId::default());
 
     let tx1 = check_unwrap_tx(tx1, db.clone(), &txpool.config).await;
     let tx2 = check_unwrap_tx(tx2, db.clone(), &txpool.config).await;
@@ -704,9 +705,9 @@ async fn find_dependent_tx1_tx2() {
         .add_input(input)
         .finalize_as_transaction();
 
-    let tx1_id = tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
-    let tx2_id = tx2.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
-    let tx3_id = tx3.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
+    let tx1_id = tx1.id(&ChainId::default());
+    let tx2_id = tx2.id(&ChainId::default());
+    let tx3_id = tx3.id(&ChainId::default());
 
     let tx1 = check_unwrap_tx(tx1, db.clone(), &txpool.config).await;
     let tx2 = check_unwrap_tx(tx2, db.clone(), &txpool.config).await;
@@ -794,7 +795,7 @@ async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
     let db = MockDb::default();
     db.insert_message(message);
 
-    let tx1_id = tx.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
+    let tx1_id = tx.id(&ChainId::default());
     let mut txpool = TxPool::new(Default::default(), db.clone());
 
     let tx = check_unwrap_tx(tx, db.clone(), &txpool.config).await;
@@ -876,7 +877,7 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
 
     let mut txpool = TxPool::new(Default::default(), db.clone());
 
-    let tx_high_id = tx_high.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
+    let tx_high_id = tx_high.id(&ChainId::default());
     let tx_high = check_unwrap_tx(tx_high, db.clone(), &txpool.config).await;
 
     // Insert a tx for the message id with a high gas amount
@@ -917,7 +918,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
     db.insert_message(message);
 
     let mut txpool = TxPool::new(Default::default(), db.clone());
-    let tx_low_id = tx_low.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
+    let tx_low_id = tx_low.id(&ChainId::default());
     let tx_low = check_unwrap_tx(tx_low, db.clone(), &txpool.config).await;
     txpool.insert_inner(tx_low).expect("should succeed");
 
