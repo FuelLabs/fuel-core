@@ -650,6 +650,10 @@ type Query {
 	"""
 	estimatePredicates(tx: HexString!): Transaction!
 	"""
+	Returns all possible receipts for test purposes.
+	"""
+	allReceipts: [Receipt!]!
+	"""
 	Returns true when the GraphQL API is serving requests.
 	"""
 	health: Boolean!

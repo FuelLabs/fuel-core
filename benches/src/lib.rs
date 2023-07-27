@@ -1,9 +1,14 @@
 use fuel_core::database::vm_database::VmDatabase;
 pub use fuel_core::database::Database;
 use fuel_core_types::{
-    fuel_asm::*,
+    fuel_asm::{
+        op,
+        GTFArgs,
+        Instruction,
+        RegId,
+    },
     fuel_tx::*,
-    fuel_types::BlockHeight,
+    fuel_types::*,
     fuel_vm::{
         checked_transaction::{
             EstimatePredicates,

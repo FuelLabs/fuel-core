@@ -648,6 +648,19 @@ impl FuelClient {
         Ok(receipts)
     }
 
+    #[cfg(feature = "test-helpers")]
+    pub async fn all_receipts(&self) -> io::Result<Vec<Receipt>> {
+        let query = schema::tx::AllReceipts::build(());
+        let receipts = self.query(query).await?.all_receipts;
+
+        let vec: Result<Vec<Receipt>, ConversionError> = receipts
+            .into_iter()
+            .map(TryInto::<Receipt>::try_into)
+            .collect();
+
+        Ok(vec?)
+    }
+
     pub async fn produce_blocks(
         &self,
         blocks_to_produce: u64,

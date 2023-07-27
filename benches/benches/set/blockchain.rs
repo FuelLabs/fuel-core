@@ -10,7 +10,11 @@ use fuel_core::database::vm_database::VmDatabase;
 use fuel_core_benches::*;
 use fuel_core_storage::ContractsAssetsStorage;
 use fuel_core_types::{
-    fuel_asm::*,
+    fuel_asm::{
+        op,
+        GTFArgs,
+        RegId,
+    },
     fuel_tx::{
         ConsensusParameters,
         Input,

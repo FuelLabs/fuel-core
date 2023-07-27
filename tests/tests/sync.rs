@@ -48,7 +48,7 @@ async fn test_producer_getting_own_blocks_back() {
     validator.shutdown().await;
 
     // Insert the transactions into the tx pool.
-    let expected = producer.insert_txs();
+    let expected = producer.insert_txs().await;
 
     // Wait up to 10 seconds for the producer to commit their own blocks.
     producer.consistency_10s(&expected).await;
@@ -100,7 +100,7 @@ async fn test_partition_single(num_txs: usize) {
     validators["Carol"].shutdown().await;
 
     // Insert the transactions into the tx pool.
-    let expected = producer.insert_txs();
+    let expected = producer.insert_txs().await;
 
     // Wait up to 10 seconds for the producer to commit their own blocks.
     producer.consistency_10s(&expected).await;
@@ -167,7 +167,7 @@ async fn test_partitions_larger_groups(
     }
 
     // Insert the transactions into the tx pool.
-    let expected = producer.insert_txs();
+    let expected = producer.insert_txs().await;
     producer.consistency_20s(&expected).await;
 
     // The overlap between two groups.
@@ -262,7 +262,7 @@ async fn test_multiple_producers_different_keys() {
     // and gather the expect transactions for each group.
     let mut expected = Vec::with_capacity(num_partitions);
     for p in &mut producers {
-        expected.push(p.insert_txs());
+        expected.push(p.insert_txs().await);
     }
 
     // Wait producers to produce all blocks.
@@ -313,7 +313,7 @@ async fn test_multiple_producers_same_key() {
 
     let mut expected = HashMap::new();
     for p in &mut producers {
-        expected.extend(p.insert_txs());
+        expected.extend(p.insert_txs().await);
     }
 
     for v in &mut validators {
