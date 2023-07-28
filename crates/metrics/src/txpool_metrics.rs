@@ -1,6 +1,9 @@
 use lazy_static::lazy_static;
 use prometheus_client::{
-    metrics::histogram::Histogram,
+    metrics::{
+        counter::Counter,
+        histogram::Histogram,
+    },
     registry::Registry,
 };
 use std::default::Default;
@@ -10,6 +13,7 @@ pub struct TxPoolMetrics {
     pub registry: Registry,
     pub gas_price_histogram: Histogram,
     pub tx_size_histogram: Histogram,
+    pub run_tracker: Counter,
 }
 
 impl Default for TxPoolMetrics {
@@ -24,10 +28,13 @@ impl Default for TxPoolMetrics {
 
         let tx_size_histogram = Histogram::new(tx_sizes.into_iter());
 
+        let run_tracker = Counter::default();
+
         let mut metrics = TxPoolMetrics {
             registry,
             gas_price_histogram,
             tx_size_histogram,
+            run_tracker,
         };
 
         metrics.registry.register(
@@ -40,6 +47,12 @@ impl Default for TxPoolMetrics {
             "Tx_Size_Histogram",
             "A Histogram keeping track of the size of txs",
             metrics.tx_size_histogram.clone(),
+        );
+
+        metrics.registry.register(
+            "txpool_run_method_duration",
+            "Measure time for txpool service",
+            metrics.run_tracker.clone(),
         );
 
         metrics

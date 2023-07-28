@@ -10,6 +10,7 @@ use crate::{
     TxInfo,
     TxPool,
 };
+use fuel_core_metrics::txpool_metrics::TXPOOL_METRICS;
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
@@ -169,6 +170,8 @@ where
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
 
+        let start = std::time::Instant::now();
+
         tokio::select! {
             biased;
 
@@ -236,6 +239,9 @@ where
                 }
             }
         }
+
+        TXPOOL_METRICS.run_tracker.inc_by(start.elapsed().as_secs());
+
         Ok(should_continue)
     }
 

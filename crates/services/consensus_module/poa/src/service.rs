@@ -20,6 +20,7 @@ use anyhow::{
     anyhow,
     Context,
 };
+use fuel_core_metrics::service::ServiceMetrics;
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
@@ -58,6 +59,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
+use lazy_static::lazy_static;
 use std::{
     ops::Deref,
     time::Duration,
@@ -73,6 +75,11 @@ use tokio_stream::StreamExt;
 use tracing::error;
 
 pub type Service<T, B, I> = ServiceRunner<MainTask<T, B, I>>;
+
+lazy_static! {
+    static ref POA_METRICS: ServiceMetrics =
+        ServiceMetrics::new("sync_run_method_duration");
+}
 #[derive(Clone)]
 pub struct SharedState {
     request_sender: mpsc::Sender<Request>,
@@ -423,6 +430,8 @@ where
     I: BlockImporter<Database = D>,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+        let start = ServiceMetrics::instant();
+
         let should_continue;
         // make sure we're synced first
         while *self.sync_task_handle.shared.borrow() == SyncState::NotSynced {
@@ -481,6 +490,8 @@ where
                 should_continue = true;
             }
         }
+
+        POA_METRICS.observe(start);
         Ok(should_continue)
     }
 

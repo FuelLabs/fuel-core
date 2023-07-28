@@ -7,6 +7,7 @@ use std::{
     sync::Arc,
 };
 
+use fuel_core_metrics::service::ServiceMetrics;
 use fuel_core_services::{
     SharedMutex,
     StateWatcher,
@@ -29,6 +30,7 @@ use futures::{
     },
     Stream,
 };
+use lazy_static::lazy_static;
 use std::future::Future;
 use tokio::sync::Notify;
 use tracing::Instrument;
@@ -54,6 +56,11 @@ mod tests;
 
 #[cfg(test)]
 mod back_pressure_tests;
+
+lazy_static! {
+    static ref IMPORT_METRICS: ServiceMetrics =
+        ServiceMetrics::new("import_run_method_duration");
+}
 
 #[derive(Clone, Copy, Debug)]
 /// Parameters for the import task.
@@ -118,8 +125,11 @@ where
         &self,
         shutdown: &mut StateWatcher,
     ) -> anyhow::Result<bool> {
+        let start = ServiceMetrics::instant();
+
         self.import_inner(shutdown).await?;
 
+        IMPORT_METRICS.observe(start);
         Ok(wait_for_notify_or_shutdown(&self.notify, shutdown).await)
     }
 

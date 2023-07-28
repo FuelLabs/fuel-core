@@ -23,6 +23,7 @@ use crate::{
     },
 };
 use anyhow::anyhow;
+use fuel_core_metrics::p2p_metrics::P2P_METRICS;
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
@@ -61,6 +62,7 @@ use libp2p::{
 use std::{
     fmt::Debug,
     sync::Arc,
+    time::Instant,
 };
 use tokio::sync::{
     broadcast,
@@ -180,6 +182,8 @@ where
     D: P2pDb + 'static,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+        let start = Instant::now();
+
         let should_continue;
         tokio::select! {
             biased;
@@ -309,6 +313,7 @@ where
             }
         }
 
+        P2P_METRICS.run_tracker.inc_by(start.elapsed().as_secs());
         Ok(should_continue)
     }
 

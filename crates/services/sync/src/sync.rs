@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use fuel_core_metrics::service::ServiceMetrics;
 use fuel_core_services::{
     stream::{
         BoxStream,
@@ -12,12 +13,18 @@ use fuel_core_services::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use futures::stream::StreamExt;
+use lazy_static::lazy_static;
 use tokio::sync::Notify;
 
 use crate::state::State;
 
 #[cfg(test)]
 mod tests;
+
+lazy_static! {
+    static ref SYNC_METRICS: ServiceMetrics =
+        ServiceMetrics::new("sync_run_method_duration");
+}
 
 pub(crate) enum IncomingHeight {
     Observed(BlockHeight),
@@ -53,6 +60,8 @@ impl SyncHeights {
     /// Sync the state from the height stream.
     /// This stream never blocks or errors.
     pub(crate) async fn sync(&mut self) -> Option<()> {
+        let start = ServiceMetrics::instant();
+
         let height = self.height_stream.next().await?;
         let state_change = match height {
             IncomingHeight::Committed(height) => {
@@ -65,6 +74,9 @@ impl SyncHeights {
         if state_change {
             self.notify.notify_one();
         }
+
+        SYNC_METRICS.observe(start);
+
         Some(())
     }
 
