@@ -297,8 +297,7 @@ impl P2PArgs {
                 metrics,
                 state: NotInitialized,
             };
-            let config = self.disable_p2p.then_some(config);
-            Ok(config)
+            Ok(Some(config))
         }
     }
 }
