@@ -34,7 +34,7 @@ const MAX_RESPONSE_SIZE_STR: &str = const_format::formatcp!("{MAX_RESPONSE_SIZE}
 pub struct P2PArgs {
     /// Disable P2P. By default, P2P is enabled when the binary is compiled with the "p2p" feature
     /// flag. Providing `--disable-p2p` will disable the P2P service.
-    #[clap(long, short, action, default_value = "false")]
+    #[clap(long, short, action)]
     pub disable_p2p: bool,
 
     /// Peering secret key. Supports either a hex encoded secret key inline or a path to bip32 mnemonic encoded secret file.
@@ -218,6 +218,7 @@ impl P2PArgs {
         metrics: bool,
     ) -> anyhow::Result<Option<Config<NotInitialized>>> {
         if self.disable_p2p {
+            tracing::info!("P2P service disabled");
             Ok(None)
         } else {
             let local_keypair = {
