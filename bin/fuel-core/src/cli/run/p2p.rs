@@ -217,7 +217,6 @@ impl P2PArgs {
         self,
         metrics: bool,
     ) -> anyhow::Result<Option<Config<NotInitialized>>> {
-        dbg!(self.disable_p2p);
         if self.disable_p2p {
             Ok(None)
         } else {
