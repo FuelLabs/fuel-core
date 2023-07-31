@@ -129,15 +129,15 @@ async fn test_back_pressure(input: Input, state: State, params: Config) -> Count
 // async fn test_parallelism(input: Input, state: State, params: Config) {}
 async fn test_parallelism() {
     let input = Input {
-        headers: Duration::from_millis(0),
-        transactions: Duration::from_millis(0),
+        headers: Duration::from_millis(100),
+        transactions: Duration::from_millis(100),
         executes: Duration::from_millis(10),
         ..Default::default()
     };
-    let state = State::new(None, 100);
+    let state = State::new(None, 500);
     let params = Config {
         max_get_header_requests: 10,
-        max_get_txns_requests: 1,
+        max_get_txns_requests: 10,
     };
 
     let counts = SharedCounts::new(Default::default());
@@ -203,6 +203,7 @@ impl PeerToPeerPort for PressurePeerToPeerPort {
         &self,
         height: BlockHeight,
     ) -> anyhow::Result<Option<SourcePeer<SealedBlockHeader>>> {
+        tokio::time::sleep(self.1[0]).await;
         self.2.apply(|c| c.inc_headers());
         self.2.apply(|c| {
             println!(
@@ -210,7 +211,6 @@ impl PeerToPeerPort for PressurePeerToPeerPort {
                 &c.now.headers, &c.now.transactions
             );
         });
-        tokio::time::sleep(self.1[0]).await;
         self.2.apply(|c| {
             c.inc_blocks();
         });
@@ -220,6 +220,7 @@ impl PeerToPeerPort for PressurePeerToPeerPort {
         &self,
         block_id: SourcePeer<BlockId>,
     ) -> anyhow::Result<Option<Vec<Transaction>>> {
+        tokio::time::sleep(self.1[1]).await;
         self.2.apply(|c| c.inc_transactions());
         self.2.apply(|c| {
             println!(
@@ -227,7 +228,6 @@ impl PeerToPeerPort for PressurePeerToPeerPort {
                 &c.now.headers, &c.now.transactions
             );
         });
-        tokio::time::sleep(self.1[1]).await;
         self.2.apply(|c| c.dec_headers());
         self.0.get_transactions(block_id).await
     }
@@ -240,6 +240,12 @@ impl BlockImporterPort for PressureBlockImporterPort {
     }
 
     async fn execute_and_commit(&self, block: SealedBlock) -> anyhow::Result<()> {
+        let timeout = self.1;
+        tokio::task::spawn_blocking(move || {
+            thread::sleep(timeout);
+        })
+        .await
+        .unwrap();
         self.2.apply(|c| c.inc_executes());
         self.2.apply(|c| {
             println!(
@@ -247,7 +253,6 @@ impl BlockImporterPort for PressureBlockImporterPort {
                 &c.now.headers, &c.now.transactions
             );
         });
-        tokio::time::sleep(self.1).await;
         self.2.apply(|c| {
             c.dec_executes();
             c.dec_blocks();
