@@ -1,4 +1,7 @@
-use std::time::Duration;
+use std::{
+    thread,
+    time::Duration,
+};
 
 use fuel_core_services::stream::BoxStream;
 use fuel_core_types::{
@@ -122,6 +125,53 @@ async fn test_back_pressure(input: Input, state: State, params: Config) -> Count
     counts.apply(|c| c.max.clone())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+// async fn test_parallelism(input: Input, state: State, params: Config) {}
+async fn test_parallelism() {
+    let input = Input {
+        headers: Duration::from_millis(0),
+        transactions: Duration::from_millis(0),
+        executes: Duration::from_millis(10),
+        ..Default::default()
+    };
+    let state = State::new(None, 100);
+    let params = Config {
+        max_get_header_requests: 10,
+        max_get_txns_requests: 1,
+    };
+
+    let counts = SharedCounts::new(Default::default());
+    let state = SharedMutex::new(state);
+
+    let p2p = Arc::new(PressurePeerToPeerPort::new(
+        counts.clone(),
+        [input.headers, input.transactions],
+    ));
+    let executor = Arc::new(PressureBlockImporterPort::new(
+        counts.clone(),
+        input.executes,
+    ));
+    let consensus = Arc::new(PressureConsensusPort::new(counts.clone(), input.consensus));
+    let notify = Arc::new(Notify::new());
+
+    let import = Import {
+        state,
+        notify,
+        params,
+        p2p,
+        executor,
+        consensus,
+    };
+
+    let (_tx, shutdown) = tokio::sync::watch::channel(fuel_core_services::State::Started);
+    let mut watcher = shutdown.into();
+
+    import.notify.notify_one();
+    import.import(&mut watcher).await.unwrap();
+    let c = counts.apply(|c| c.now.clone());
+    dbg!(c);
+}
+
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone)]
 struct Count {
     headers: usize,
@@ -154,9 +204,14 @@ impl PeerToPeerPort for PressurePeerToPeerPort {
         height: BlockHeight,
     ) -> anyhow::Result<Option<SourcePeer<SealedBlockHeader>>> {
         self.2.apply(|c| c.inc_headers());
+        self.2.apply(|c| {
+            println!(
+                "Getting headers:\nHeaders: {} - Transactions: {}\n",
+                &c.now.headers, &c.now.transactions
+            );
+        });
         tokio::time::sleep(self.1[0]).await;
         self.2.apply(|c| {
-            c.dec_headers();
             c.inc_blocks();
         });
         self.0.get_sealed_block_header(height).await
@@ -166,8 +221,14 @@ impl PeerToPeerPort for PressurePeerToPeerPort {
         block_id: SourcePeer<BlockId>,
     ) -> anyhow::Result<Option<Vec<Transaction>>> {
         self.2.apply(|c| c.inc_transactions());
+        self.2.apply(|c| {
+            println!(
+                "Getting transactions:\nHeaders: {} - Transactions: {}\n",
+                &c.now.headers, &c.now.transactions
+            );
+        });
         tokio::time::sleep(self.1[1]).await;
-        self.2.apply(|c| c.dec_transactions());
+        self.2.apply(|c| c.dec_headers());
         self.0.get_transactions(block_id).await
     }
 }
@@ -180,10 +241,17 @@ impl BlockImporterPort for PressureBlockImporterPort {
 
     async fn execute_and_commit(&self, block: SealedBlock) -> anyhow::Result<()> {
         self.2.apply(|c| c.inc_executes());
+        self.2.apply(|c| {
+            println!(
+                "Executing block:\nHeaders: {} - Transactions: {}\n",
+                &c.now.headers, &c.now.transactions
+            );
+        });
         tokio::time::sleep(self.1).await;
         self.2.apply(|c| {
             c.dec_executes();
             c.dec_blocks();
+            c.dec_transactions();
         });
         self.0.execute_and_commit(block).await
     }
