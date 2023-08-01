@@ -82,6 +82,11 @@ enum TaskRequest {
         height: BlockHeight,
         channel: oneshot::Sender<Option<SealedBlock>>,
     },
+    GetBlocksInclusive {
+        from_height: BlockHeight,
+        to_height: BlockHeight,
+        channel: oneshot::Sender<Option<Vec<SealedBlock>>>,
+    },
     GetSealedHeader {
         height: BlockHeight,
         channel: oneshot::Sender<Option<(PeerId, SealedBlockHeader)>>,
@@ -222,6 +227,12 @@ where
                         let peer = self.p2p_service.peer_manager().get_peer_id_with_height(&height);
                         let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
                     }
+                    Some(TaskRequest::GetBlocksInclusive { from_height, to_height, channel }) => {
+                        let request_msg = RequestMessage::BlocksInclusive(from_height, to_height);
+                        let channel_item = ResponseChannelItem::BlocksInclusive(channel);
+                        let peer = self.p2p_service.peer_manager().get_peer_id_with_height(&from_height);
+                        let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
+                    }
                     Some(TaskRequest::GetSealedHeader{ height, channel: response }) => {
                         let request_msg = RequestMessage::SealedHeader(height);
                         let channel_item = ResponseChannelItem::SealedHeader(response);
@@ -281,6 +292,11 @@ where
                                 let block_response = self.db.get_sealed_block(&block_height)?
                                     .map(Arc::new);
                                 let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Block(block_response));
+                            }
+                            RequestMessage::BlocksInclusive(from_height, to_height) => {
+                                let blocks_response = self.db.get_sealed_blocks_inclusive(&from_height, &to_height)?;
+
+                                let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::BlocksInclusive(blocks_response));
                             }
                             RequestMessage::Transactions(block_id) => {
                                 let transactions_response = self.db.get_transactions(&block_id)?
@@ -359,6 +375,24 @@ impl SharedState {
         self.request_sender
             .send(TaskRequest::GetBlock {
                 height,
+                channel: sender,
+            })
+            .await?;
+
+        receiver.await.map_err(|e| anyhow!("{}", e))
+    }
+
+    pub async fn get_blocks_inclusive(
+        &self,
+        from_height: BlockHeight,
+        to_height: BlockHeight,
+    ) -> anyhow::Result<Option<Vec<SealedBlock>>> {
+        let (sender, receiver) = oneshot::channel();
+
+        self.request_sender
+            .send(TaskRequest::GetBlocksInclusive {
+                from_height,
+                to_height,
                 channel: sender,
             })
             .await?;
@@ -554,6 +588,14 @@ pub mod tests {
                 entity: block,
                 consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
             }))
+        }
+
+        fn get_sealed_blocks_inclusive(
+            &self,
+            _start_height: &BlockHeight,
+            _end_height: &BlockHeight,
+        ) -> StorageResult<Vec<SealedBlock>> {
+            todo!()
         }
 
         fn get_sealed_header(

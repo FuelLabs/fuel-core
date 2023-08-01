@@ -16,6 +16,12 @@ pub trait P2pDb: Send + Sync {
         height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlock>>;
 
+    fn get_sealed_blocks_inclusive(
+        &self,
+        start_height: &BlockHeight,
+        end_height: &BlockHeight,
+    ) -> StorageResult<Vec<SealedBlock>>;
+
     fn get_sealed_header(
         &self,
         height: &BlockHeight,
