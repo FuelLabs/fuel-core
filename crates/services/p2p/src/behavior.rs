@@ -43,7 +43,7 @@ use libp2p::{
 use tracing::{
     debug,
     error,
-    log::warn,
+    warn,
 };
 
 #[derive(Debug)]

@@ -394,7 +394,7 @@ impl Node {
     }
 
     /// Insert the test transactions into the node's transaction pool.
-    pub fn insert_txs(&self) -> HashMap<Bytes32, Transaction> {
+    pub async fn insert_txs(&self) -> HashMap<Bytes32, Transaction> {
         let mut expected = HashMap::new();
         for tx in &self.test_txs {
             let tx_result = self
@@ -402,6 +402,7 @@ impl Node {
                 .shared
                 .txpool
                 .insert(vec![Arc::new(tx.clone())])
+                .await
                 .pop()
                 .unwrap()
                 .unwrap();

@@ -70,7 +70,7 @@ async fn insert_from_local_broadcasts_to_p2p() {
         .tx_update_subscribe(tx1.cached_id().unwrap())
         .await;
 
-    let out = service.shared.insert(vec![Arc::new(tx1.clone())]);
+    let out = service.shared.insert(vec![Arc::new(tx1.clone())]).await;
 
     if out[0].is_ok() {
         // we are sure that included tx are already broadcasted.

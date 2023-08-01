@@ -4,6 +4,7 @@
 
 #![deny(unused_crate_dependencies)]
 #![deny(missing_docs)]
+#![deny(warnings)]
 
 #[doc(no_inline)]
 pub use fuel_vm_private::{
@@ -33,6 +34,7 @@ pub mod fuel_vm {
         checked_transaction,
         consts,
         crypto,
+        error::PredicateVerificationFailed,
         gas::DependentCost,
         gas::GasCosts,
         gas::GasCostsValues,
