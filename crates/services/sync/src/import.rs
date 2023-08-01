@@ -206,7 +206,6 @@ where
                 }).then(|task| {
                     async { task.map_err(|e| anyhow!(e))? }
                 })
-
             }
             .instrument(tracing::debug_span!("consensus_and_transactions"))
             .in_current_span()
@@ -277,20 +276,6 @@ async fn wait_for_notify_or_shutdown(
 
     // Check if the notify signal was received.
     matches!(r, futures::future::Either::Left(_))
-}
-
-/// Returns a stream of headers processing concurrently up to `max_get_header_requests`.
-/// The headers are returned in order.
-fn get_header_range_buffered(
-    range: RangeInclusive<u32>,
-    params: &Config,
-    p2p: Arc<impl PeerToPeerPort + Send + Sync + 'static>,
-) -> impl Stream<Item = anyhow::Result<SourcePeer<SealedBlockHeader>>> {
-    get_header_range(range, p2p)
-        .buffered(params.max_get_header_requests)
-        // Continue the stream unless an error or none occurs.
-        .into_scan_none_or_err()
-        .scan_none_or_err()
 }
 
 #[tracing::instrument(skip(p2p))]
