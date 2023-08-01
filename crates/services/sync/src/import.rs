@@ -7,6 +7,7 @@ use std::{
     sync::Arc,
 };
 
+use anyhow::anyhow;
 use fuel_core_services::{
     SharedMutex,
     StateWatcher,
@@ -29,7 +30,9 @@ use futures::{
         self,
         StreamExt,
     },
+    FutureExt,
     Stream,
+    TryStreamExt,
 };
 use std::future::Future;
 use tokio::sync::Notify;
@@ -166,17 +169,18 @@ where
             ..
         } = &self;
         // Request up to `max_get_header_requests` headers from the network.
-        get_header_range_buffered(range.clone(), params, p2p.clone())
+        get_header_range(range.clone(), p2p.clone())
         .map({
             let p2p = p2p.clone();
             let consensus_port = consensus.clone();
             move |result| {
                 let p2p = p2p.clone();
                 let consensus_port = consensus_port.clone();
-                async move {
+                tokio::spawn(async move {
                     // Short circuit on error.
-                    let header = match result {
-                        Ok(h) => h,
+                    let header = match result.await {
+                        Ok(Some(h)) => h,
+                        Ok(None) => return Ok(None),
                         Err(e) => return Err(e),
                     };
                     let SourcePeer {
@@ -189,7 +193,7 @@ where
                     // Check the consensus is valid on this header.
                     if !consensus_port
                         .check_sealed_header(&header)
-                        .trace_err("Failed to check consensus on header")? 
+                        .trace_err("Failed to check consensus on header")?
                     {
                         tracing::warn!("Header {:?} failed consensus check", header);
                         return Ok(None)
@@ -199,7 +203,10 @@ where
                     consensus_port.await_da_height(&header.entity.da_height).await?;
 
                     get_transactions_on_block(p2p.as_ref(), block_id, header).await
-                }
+                }).then(|task| {
+                    async { task.map_err(|e| anyhow!(e))? }
+                })
+
             }
             .instrument(tracing::debug_span!("consensus_and_transactions"))
             .in_current_span()

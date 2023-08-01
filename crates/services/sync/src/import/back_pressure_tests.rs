@@ -129,12 +129,12 @@ async fn test_back_pressure(input: Input, state: State, params: Config) -> Count
 // async fn test_parallelism(input: Input, state: State, params: Config) {}
 async fn test_parallelism() {
     let input = Input {
-        headers: Duration::from_millis(100),
-        transactions: Duration::from_millis(100),
-        executes: Duration::from_millis(10),
+        headers: Duration::from_millis(10),
+        transactions: Duration::from_millis(10),
+        executes: Duration::from_millis(100),
         ..Default::default()
     };
-    let state = State::new(None, 500);
+    let state = State::new(None, 50);
     let params = Config {
         max_get_header_requests: 10,
         max_get_txns_requests: 10,
@@ -222,13 +222,13 @@ impl PeerToPeerPort for PressurePeerToPeerPort {
     ) -> anyhow::Result<Option<Vec<Transaction>>> {
         tokio::time::sleep(self.1[1]).await;
         self.2.apply(|c| c.inc_transactions());
+        self.2.apply(|c| c.dec_headers());
         self.2.apply(|c| {
             println!(
                 "Getting transactions:\nHeaders: {} - Transactions: {}\n",
                 &c.now.headers, &c.now.transactions
             );
         });
-        self.2.apply(|c| c.dec_headers());
         self.0.get_transactions(block_id).await
     }
 }
@@ -246,7 +246,10 @@ impl BlockImporterPort for PressureBlockImporterPort {
         })
         .await
         .unwrap();
-        self.2.apply(|c| c.inc_executes());
+        self.2.apply(|c| {
+            c.dec_transactions();
+            c.inc_executes()
+        });
         self.2.apply(|c| {
             println!(
                 "Executing block:\nHeaders: {} - Transactions: {}\n",
@@ -256,7 +259,6 @@ impl BlockImporterPort for PressureBlockImporterPort {
         self.2.apply(|c| {
             c.dec_executes();
             c.dec_blocks();
-            c.dec_transactions();
         });
         self.0.execute_and_commit(block).await
     }
