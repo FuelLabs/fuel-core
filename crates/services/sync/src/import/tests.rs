@@ -433,11 +433,12 @@ async fn test_import(state: State, mocks: Mocks) -> (State, bool) {
         let s = SharedMutex::new(State::new(3, 5));
         let state = s.clone();
         let mut p2p = MockPeerToPeerPort::default();
-        p2p.expect_get_sealed_block_header()
-            .times(3)
-            .returning(move |h| {
+        p2p.expect_get_sealed_block_headers_inclusive()
+            .times(2)
+            .returning(move |start, finish| {
                 state.apply(|s| s.observe(6));
-                Ok(Some(empty_header(h)))
+                let headers = (u32::from(start)..=u32::from(finish)).map(|h| empty_header(h.into())).collect();
+                Ok(headers)
             });
         p2p.expect_get_transactions()
             .times(3)

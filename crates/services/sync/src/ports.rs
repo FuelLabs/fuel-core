@@ -31,6 +31,14 @@ pub trait PeerToPeerPort {
         height: BlockHeight,
     ) -> anyhow::Result<Option<SourcePeer<SealedBlockHeader>>>;
 
+    /// Request range of sealed block headers from the network
+    /// starting from block height `start` up to, and including `end`.
+    async fn get_sealed_block_headers_inclusive(
+        &self,
+        start: BlockHeight,
+        end: BlockHeight,
+    ) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>>;
+
     /// Request transactions from the network for the given block
     /// and source peer.
     async fn get_transactions(

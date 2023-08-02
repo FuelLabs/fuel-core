@@ -1527,10 +1527,10 @@ mod tests {
 
     fn arbitrary_blocks() -> Vec<SealedBlock> {
         let mut blocks = Vec::new();
-        for _ in 2..=5 {
+        for i in 2..=5 {
             let block = Block::new(
                 PartialBlockHeader::default(),
-                (0..5).map(|_| Transaction::default_test_tx()).collect(),
+                (0..i).map(|_| Transaction::default_test_tx()).collect(),
                 &[],
             );
 

@@ -161,6 +161,15 @@ impl PeerToPeerPort for PressurePeerToPeerPort {
         });
         self.0.get_sealed_block_header(height).await
     }
+
+    async fn get_sealed_block_headers_inclusive(
+        &self,
+        start: BlockHeight,
+        end: BlockHeight,
+    ) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>> {
+        todo!()
+    }
+
     async fn get_transactions(
         &self,
         block_id: SourcePeer<BlockId>,

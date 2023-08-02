@@ -163,41 +163,21 @@ where
             consensus,
             ..
         } = &self;
-        // Request up to `max_get_header_requests` headers from the network.
-        get_header_range_buffered(range.clone(), params, p2p.clone())
+
+        let headers_res = get_header_range_single_req(range.clone(), p2p.clone()).await;
+        let headers = match headers_res {
+            Ok(headers) => headers,
+            Err(e) => return (0, Err(e)),
+        };
+
+        futures::stream::iter(headers)
         .map({
             let p2p = p2p.clone();
             let consensus_port = consensus.clone();
             move |result| {
                 let p2p = p2p.clone();
                 let consensus_port = consensus_port.clone();
-                async move {
-                    // Short circuit on error.
-                    let header = match result {
-                        Ok(h) => h,
-                        Err(e) => return Err(e),
-                    };
-                    let SourcePeer {
-                        peer_id,
-                        data: header,
-                    } = header;
-                    let id = header.entity.id();
-                    let block_id = SourcePeer { peer_id, data: id };
-
-                    // Check the consensus is valid on this header.
-                    if !consensus_port
-                        .check_sealed_header(&header)
-                        .trace_err("Failed to check consensus on header")? 
-                    {
-                        tracing::warn!("Header {:?} failed consensus check", header);
-                        return Ok(None)
-                    }
-
-                    // Wait for the da to be at least the da height on the header.
-                    consensus_port.await_da_height(&header.entity.da_height).await?;
-
-                    get_transactions_on_block(p2p.as_ref(), block_id, header).await
-                }
+                Self::get_block_for_header(result, p2p, consensus_port)
             }
             .instrument(tracing::debug_span!("consensus_and_transactions"))
             .in_current_span()
@@ -250,6 +230,35 @@ where
         .in_current_span()
         .await
     }
+
+    async fn get_block_for_header(
+        header: SourcePeer<SealedBlockHeader>,
+        p2p: Arc<P>,
+        consensus_port: Arc<C>,
+    ) -> anyhow::Result<Option<SealedBlock>> {
+        let SourcePeer {
+            peer_id,
+            data: header,
+        } = header;
+        let id = header.entity.id();
+        let block_id = SourcePeer { peer_id, data: id };
+
+        // Check the consensus is valid on this header.
+        if !consensus_port
+            .check_sealed_header(&header)
+            .trace_err("Failed to check consensus on header")?
+        {
+            tracing::warn!("Header {:?} failed consensus check", header);
+            return Ok(None)
+        }
+
+        // Wait for the da to be at least the da height on the header.
+        consensus_port
+            .await_da_height(&header.entity.da_height)
+            .await?;
+
+        get_transactions_on_block(p2p.as_ref(), block_id, header).await
+    }
 }
 
 /// Waits for a notify or shutdown signal.
@@ -277,7 +286,7 @@ fn get_header_range_buffered(
     params: &Config,
     p2p: Arc<impl PeerToPeerPort + Send + Sync + 'static>,
 ) -> impl Stream<Item = anyhow::Result<SourcePeer<SealedBlockHeader>>> {
-    get_header_range(range, p2p)
+    get_header_range_stream(range, p2p)
         .buffered(params.max_get_header_requests)
         // Continue the stream unless an error or none occurs.
         .into_scan_none_or_err()
@@ -286,7 +295,7 @@ fn get_header_range_buffered(
 
 #[tracing::instrument(skip(p2p))]
 /// Returns a stream of network requests for headers.
-fn get_header_range(
+fn get_header_range_stream(
     range: RangeInclusive<u32>,
     p2p: Arc<impl PeerToPeerPort + 'static>,
 ) -> impl Stream<
@@ -315,6 +324,16 @@ fn get_header_range(
         ))
         .in_current_span()
     })
+}
+
+async fn get_header_range_single_req(
+    range: RangeInclusive<u32>,
+    p2p: Arc<impl PeerToPeerPort + 'static>,
+) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>> {
+    let start = *range.start();
+    let end = *range.end();
+    p2p.get_sealed_block_headers_inclusive(start.into(), end.into())
+        .await
 }
 
 /// Returns true if the header is the expected height.
@@ -450,3 +469,13 @@ impl<S> ScanErr<S> {
         })
     }
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use crate::ports::MockPeerToPeerPort;
+//
+//     #[test]
+//     fn get_header_range() {
+//         let p2p = MockPeerToPeerPort
+//     }
+// }
