@@ -1,0 +1,187 @@
+{
+  "chain_name": "Testnet Beta 4",
+  "block_gas_limit": 5000000000,
+  "initial_state": {
+    "coins": [
+      {
+        "owner": "0xa1184d77d0d08a064e03b2bd9f50863e88faddea4693a05ca1ee9b1732ea99b7",
+        "amount": "0x1000000000000000",
+        "asset_id": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "owner": "0xb5566df884bee4e458151c2fe4082c8af38095cc442c61e0dc83a371d70d88fd",
+        "amount": "0x1000000000000000",
+        "asset_id": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "owner": "0x9da7247e1d63d30d69f136f0f8654ee8340362c785b50f0a60513c7edbf5bb7c",
+        "amount": "0x1000000000000000",
+        "asset_id": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "owner": "0x4b2ca966aad1a9d66994731db5138933cf61679107c3cde2a10d9594e47c084e",
+        "amount": "0x1000000000000000",
+        "asset_id": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "owner": "0x26183fbe7375045250865947695dfc12500dcc43efb9102b4e8c4d3c20009dcb",
+        "amount": "0x1000000000000000",
+        "asset_id": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "owner": "0x81f3a10b61828580d06cc4c7b0ed8f59b9fb618be856c55d33decd95489a1e23",
+        "amount": "0x1000000000000000",
+        "asset_id": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "owner": "0x587aa0482482efea0234752d1ad9a9c438d1f34d2859b8bef2d56a432cb68e33",
+        "amount": "0x1000000000000000",
+        "asset_id": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ]
+  },
+  "transaction_parameters": {
+    "contract_max_size": 16777216,
+    "max_inputs": 255,
+    "max_outputs": 255,
+    "max_witnesses": 255,
+    "max_gas_per_tx": 100000000,
+    "max_script_length": 1048576,
+    "max_script_data_length": 1048576,
+    "max_storage_slots": 255,
+    "max_predicate_length": 1048576,
+    "max_predicate_data_length": 1048576,
+    "gas_price_factor": 1000000000,
+    "gas_per_byte": 4,
+    "max_message_data_length": 1048576,
+    "chain_id": 0
+  },
+  "gas_costs": {
+    "add": 1,
+    "addi": 1,
+    "aloc": 1,
+    "and": 1,
+    "andi": 1,
+    "bal": 21,
+    "bhei": 1,
+    "bhsh": 1,
+    "burn": 35,
+    "cb": 2,
+    "cfei": 1,
+    "cfsi": 1,
+    "croo": 28,
+    "div": 1,
+    "divi": 1,
+    "ecr": 1703,
+    "eq": 1,
+    "exp": 1,
+    "expi": 1,
+    "flag": 1,
+    "gm": 1,
+    "gt": 1,
+    "gtf": 1,
+    "ji": 1,
+    "jmp": 1,
+    "jne": 1,
+    "jnei": 1,
+    "jnzi": 1,
+    "jmpf": 1,
+    "jmpb": 1,
+    "jnzf": 1,
+    "jnzb": 1,
+    "jnef": 1,
+    "jneb": 1,
+    "k256": 19,
+    "lb": 1,
+    "log": 40,
+    "lt": 1,
+    "lw": 1,
+    "mcpi": 3,
+    "mint": 35,
+    "mlog": 1,
+    "mod": 1,
+    "modi": 1,
+    "move": 1,
+    "movi": 1,
+    "mroo": 2,
+    "mul": 1,
+    "muli": 1,
+    "noop": 1,
+    "not": 1,
+    "or": 1,
+    "ori": 1,
+    "ret_contract": 61,
+    "rvrt_contract": 61,
+    "s256": 5,
+    "sb": 1,
+    "scwq": 11,
+    "sll": 1,
+    "slli": 1,
+    "srl": 1,
+    "srli": 1,
+    "srw": 23,
+    "sub": 1,
+    "subi": 1,
+    "sw": 1,
+    "sww": 79,
+    "swwq": 72,
+    "time": 1,
+    "tr": 120,
+    "tro": 99,
+    "xor": 1,
+    "xori": 1,
+    "call": {
+      "base": 116,
+      "dep_per_unit": 14
+    },
+    "ccp": {
+      "base": 24,
+      "dep_per_unit": 13
+    },
+    "csiz": {
+      "base": 17,
+      "dep_per_unit": 15
+    },
+    "ldc": {
+      "base": 23,
+      "dep_per_unit": 14
+    },
+    "logd": {
+      "base": 46,
+      "dep_per_unit": 19
+    },
+    "mcl": {
+      "base": 1,
+      "dep_per_unit": 2359
+    },
+    "mcli": {
+      "base": 1,
+      "dep_per_unit": 2322
+    },
+    "mcp": {
+      "base": 1,
+      "dep_per_unit": 1235
+    },
+    "meq": {
+      "base": 1,
+      "dep_per_unit": 2343
+    },
+    "retd_contract": {
+      "base": 65,
+      "dep_per_unit": 19
+    },
+    "smo": {
+      "base": 84,
+      "dep_per_unit": 13
+    },
+    "srwq": {
+      "base": 54,
+      "dep_per_unit": 2
+    }
+  },
+  "consensus": {
+    "PoA": {
+      "signing_key": "0xf65d6448a273b531ee942c133bb91a6f904c7d7f3104cdaf6b9f7f50d3518871"
+    }
+  }
+}
