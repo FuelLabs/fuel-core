@@ -32,19 +32,19 @@ const MAX_RESPONSE_SIZE_STR: &str = const_format::formatcp!("{MAX_RESPONSE_SIZE}
 
 #[derive(Debug, Clone, Args)]
 pub struct P2PArgs {
-    /// Disable P2P. By default, P2P is enabled when the binary is compiled with the "p2p" feature
-    /// flag. Providing `--disable-p2p` will disable the P2P service.
+    /// Enable P2P. By default, P2P is disabled, even when the binary is compiled with the "p2p"
+    /// feature flag. Providing `--enable-p2p` will enable the P2P service.
     #[clap(long, short, action)]
-    pub disable_p2p: bool,
+    pub enable_p2p: bool,
 
     /// Peering secret key. Supports either a hex encoded secret key inline or a path to bip32 mnemonic encoded secret file.
     #[clap(long = "keypair", env, value_parser = KeypairArg::try_from_string)]
-    #[arg(required_unless_present("disable_p2p"))]
+    #[arg(required_if_eq("enable_p2p", "true"))]
     pub keypair: Option<KeypairArg>,
 
     /// The name of the p2p Network
     #[clap(long = "network", env)]
-    #[arg(required_unless_present("disable_p2p"))]
+    #[arg(required_if_eq("enable_p2p", "true"))]
     pub network: Option<String>,
 
     /// p2p network's IP Address
@@ -217,10 +217,7 @@ impl P2PArgs {
         self,
         metrics: bool,
     ) -> anyhow::Result<Option<Config<NotInitialized>>> {
-        if self.disable_p2p {
-            tracing::info!("P2P service disabled");
-            Ok(None)
-        } else {
+        if self.enable_p2p {
             let local_keypair = {
                 match self.keypair.expect("mandatory value") {
                     KeypairArg::Path(path) => {
@@ -299,6 +296,9 @@ impl P2PArgs {
                 state: NotInitialized,
             };
             Ok(Some(config))
+        } else {
+            tracing::info!("P2P service disabled");
+            Ok(None)
         }
     }
 }
