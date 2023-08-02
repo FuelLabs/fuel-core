@@ -20,7 +20,10 @@ use anyhow::{
     anyhow,
     Context,
 };
-use fuel_core_metrics::service::ServiceMetrics;
+use fuel_core_metrics::service::{
+    ServiceMetrics,
+    POA_METRICS,
+};
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
@@ -59,7 +62,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use lazy_static::lazy_static;
+
 use std::{
     ops::Deref,
     time::Duration,
@@ -76,10 +79,6 @@ use tracing::error;
 
 pub type Service<T, B, I> = ServiceRunner<MainTask<T, B, I>>;
 
-lazy_static! {
-    static ref POA_METRICS: ServiceMetrics =
-        ServiceMetrics::new("sync_run_method_duration");
-}
 #[derive(Clone)]
 pub struct SharedState {
     request_sender: mpsc::Sender<Request>,

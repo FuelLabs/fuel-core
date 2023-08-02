@@ -26,7 +26,6 @@ fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
 futures = { workspace = true }
-lazy_static = { workspace = true }
 once_cell = { workspace = true }
 parking_lot = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }

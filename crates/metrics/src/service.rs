@@ -38,7 +38,19 @@ pub fn encode_metrics_response() -> impl IntoResponse {
         return error_body()
     }
 
+    if encode(&mut encoded, &POA_METRICS.registry).is_err() {
+        return error_body()
+    }
+
     if encode(&mut encoded, &GRAPHQL_METRICS.registry).is_err() {
+        return error_body()
+    }
+
+    if encode(&mut encoded, &RELAYER_METRICS.registry).is_err() {
+        return error_body()
+    }
+
+    if encode(&mut encoded, &IMPORT_METRICS.registry).is_err() {
         return error_body()
     }
 
@@ -89,6 +101,13 @@ impl ServiceMetrics {
     }
 }
 
-// lazy_static! {
-//     pub static ref TXPOOL_METRICS: TxPoolMetrics = TxPoolMetrics::default();
-// }
+lazy_static::lazy_static! {
+    pub static ref POA_METRICS: ServiceMetrics =
+        ServiceMetrics::new("sync_run_method_duration");
+
+    pub static ref RELAYER_METRICS: ServiceMetrics =
+        ServiceMetrics::new("relayer_run_method_duration");
+
+    pub static ref IMPORT_METRICS: ServiceMetrics =
+        ServiceMetrics::new("import_run_method_duration");
+}

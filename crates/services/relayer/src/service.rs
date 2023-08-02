@@ -21,7 +21,10 @@ use ethers_providers::{
     Provider,
     ProviderError,
 };
-use fuel_core_metrics::service::ServiceMetrics;
+use fuel_core_metrics::service::{
+    ServiceMetrics,
+    RELAYER_METRICS,
+};
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
@@ -39,7 +42,7 @@ use fuel_core_types::{
     fuel_types::Nonce,
 };
 use futures::StreamExt;
-use lazy_static::lazy_static;
+
 use std::{
     borrow::Cow,
     convert::TryInto,
@@ -68,11 +71,6 @@ type NotifySynced = watch::Sender<Option<DaBlockHeight>>;
 /// The alias of runnable relayer service.
 pub type Service<D> = CustomizableService<Provider<Http>, D>;
 type CustomizableService<P, D> = ServiceRunner<NotInitializedTask<P, D>>;
-
-lazy_static! {
-    static ref RELAYER_METRICS: ServiceMetrics =
-        ServiceMetrics::new("relayer_run_method_duration");
-}
 
 /// The shared state of the relayer task.
 #[derive(Clone)]

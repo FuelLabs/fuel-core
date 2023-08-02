@@ -17,7 +17,6 @@ fuel-core-metrics = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
-lazy_static = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
