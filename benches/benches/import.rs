@@ -40,7 +40,6 @@ use fuel_core_types::{
             GeneratedConsensusFields,
         },
         primitives::{
-            BlockHeight,
             BlockId,
             DaBlockHeight,
         },
@@ -51,7 +50,10 @@ use fuel_core_types::{
         Bytes32,
         Transaction,
     },
-    fuel_types::ContractId,
+    fuel_types::{
+        BlockHeight,
+        ContractId,
+    },
     services::p2p::SourcePeer,
 };
 use rand::{
@@ -130,12 +132,6 @@ impl PeerToPeerPort for PressurePeerToPeerPort {
         tokio::time::sleep(self.1[0]).await;
         self.2.apply(|c| c.inc_headers());
         self.2.apply(|c| {
-            println!(
-                "Getting headers:\nHeaders: {} - Transactions: {}\n",
-                &c.now.headers, &c.now.transactions
-            );
-        });
-        self.2.apply(|c| {
             c.inc_blocks();
         });
         self.0.get_sealed_block_header(height).await
@@ -147,12 +143,6 @@ impl PeerToPeerPort for PressurePeerToPeerPort {
         tokio::time::sleep(self.1[1]).await;
         self.2.apply(|c| c.inc_transactions());
         self.2.apply(|c| c.dec_headers());
-        self.2.apply(|c| {
-            println!(
-                "Getting transactions:\nHeaders: {} - Transactions: {}\n",
-                &c.now.headers, &c.now.transactions
-            );
-        });
         self.0.get_transactions(block_id).await
     }
 }
@@ -173,12 +163,6 @@ impl BlockImporterPort for PressureBlockImporterPort {
         self.2.apply(|c| {
             c.dec_transactions();
             c.inc_executes()
-        });
-        self.2.apply(|c| {
-            println!(
-                "Executing block:\nHeaders: {} - Transactions: {}\n",
-                &c.now.headers, &c.now.transactions
-            );
         });
         self.2.apply(|c| {
             c.dec_executes();
@@ -270,9 +254,9 @@ impl Counts {
 
 async fn test() {
     let input = Input {
-        headers: Duration::from_millis(10),
-        transactions: Duration::from_millis(10),
-        executes: Duration::from_millis(100),
+        headers: Duration::from_millis(5),
+        transactions: Duration::from_millis(5),
+        executes: Duration::from_millis(10),
         ..Default::default()
     };
     let state = State::new(None, 50);
