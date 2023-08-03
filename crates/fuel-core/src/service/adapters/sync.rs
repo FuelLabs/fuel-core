@@ -56,6 +56,14 @@ impl PeerToPeerPort for P2PAdapter {
         }
     }
 
+    async fn get_sealed_block_headers_inclusive(
+        &self,
+        _start: BlockHeight,
+        _end: BlockHeight,
+    ) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>> {
+        todo!()
+    }
+
     async fn get_transactions(
         &self,
         block: SourcePeer<BlockId>,

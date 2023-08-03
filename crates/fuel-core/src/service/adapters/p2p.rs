@@ -26,8 +26,8 @@ impl P2pDb for Database {
 
     fn get_sealed_blocks_inclusive(
         &self,
-        start_height: &BlockHeight,
-        end_height: &BlockHeight,
+        _start_height: &BlockHeight,
+        _end_height: &BlockHeight,
     ) -> StorageResult<Vec<SealedBlock>> {
         todo!()
     }

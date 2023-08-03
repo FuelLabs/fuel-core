@@ -19,7 +19,6 @@ use fuel_core_types::{
         SealedBlock,
         SealedBlockHeader,
     },
-    fuel_types::BlockHeight,
     services::p2p::SourcePeer,
 };
 use futures::{
@@ -263,7 +262,7 @@ where
 
 // The response from the P2P network isn't guaranteed to include all the
 fn check_headers_match_range(
-    headers: &Vec<SourcePeer<SealedBlockHeader>>,
+    headers: &[SourcePeer<SealedBlockHeader>],
     range: RangeInclusive<u32>,
 ) -> Vec<SourcePeer<SealedBlockHeader>> {
     let mut new_headers = Vec::new();

@@ -10,6 +10,7 @@ use crate::ports::{
     MockConsensusPort,
     MockPeerToPeerPort,
 };
+use fuel_core_types::fuel_types::BlockHeight;
 use test_case::test_case;
 
 use super::*;
@@ -484,7 +485,7 @@ async fn import_inner__can_work_in_two_loops() {
     };
 
     // when
-    let res = test_import_inner(s.into(), mocks, Some(c)).await;
+    let res = test_import_inner(s, mocks, Some(c)).await;
 
     // then
     assert_eq!((State::new(6, None), true), res);

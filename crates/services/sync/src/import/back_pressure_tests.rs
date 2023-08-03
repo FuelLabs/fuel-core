@@ -20,6 +20,7 @@ use super::{
     tests::empty_header,
     *,
 };
+use fuel_core_types::fuel_types::BlockHeight;
 use test_case::test_case;
 
 #[derive(Default)]
