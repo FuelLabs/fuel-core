@@ -134,9 +134,12 @@ where
 
             // If we did not process the entire range, mark the failed heights as failed.
             if (count as u32) < range_len {
-                let range = (*range.start() + count as u32)..=*range.end();
-                tracing::error!("Failed to import range of blocks: {:?}", range);
-                self.state.apply(|s| s.failed_to_process(range));
+                let incomplete_range = (*range.start() + count as u32)..=*range.end();
+                tracing::error!(
+                    "Failed to import range of blocks: {:?}",
+                    incomplete_range
+                );
+                self.state.apply(|s| s.failed_to_process(incomplete_range));
             }
             result?;
         }
@@ -165,10 +168,11 @@ where
         } = &self;
 
         let headers_res = get_header_range_single_req(range.clone(), p2p.clone()).await;
-        let headers = match headers_res {
+        let unchecked_headers = match headers_res {
             Ok(headers) => headers,
             Err(e) => return (0, Err(e)),
         };
+        let headers = check_headers_match_range(&unchecked_headers, range.clone());
 
         futures::stream::iter(headers)
         .map({
@@ -259,6 +263,25 @@ where
 
         get_transactions_on_block(p2p.as_ref(), block_id, header).await
     }
+}
+
+// The response from the P2P network isn't guaranteed to include all the
+fn check_headers_match_range(
+    headers: &Vec<SourcePeer<SealedBlockHeader>>,
+    range: RangeInclusive<u32>,
+) -> Vec<SourcePeer<SealedBlockHeader>> {
+    let mut new_headers = Vec::new();
+    let mut header_iter = headers.iter();
+    for height in range {
+        if let Some(header) =
+            header_iter.find(|h| h.data.entity.height() == &height.into())
+        {
+            new_headers.push(header.clone());
+        } else {
+            break
+        }
+    }
+    new_headers
 }
 
 /// Waits for a notify or shutdown signal.
