@@ -17,8 +17,8 @@ rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = "0.9.13"
-tokio = { workspace = true, features = ["full"] }
 tikv-jemallocator = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 
 [[bench]]
 harness = false

@@ -115,7 +115,7 @@ fn block_target_gas(c: &mut Criterion) {
         "Script with meq opcode and infinite loop",
         &mut group,
         [
-            op::movi(0x10, 1 << 18 - 1),
+            op::movi(0x10, (1 << 18) - 1),
             op::meq(0x11, RegId::SP, RegId::SP, 0x10),
             op::jmpb(RegId::ZERO, 0),
         ]
@@ -126,7 +126,7 @@ fn block_target_gas(c: &mut Criterion) {
         "Script with logd opcode and infinite loop",
         &mut group,
         [
-            op::movi(0x10, 1 << 18 - 1),
+            op::movi(0x10, (1 << 18) - 1),
             op::logd(RegId::ZERO, RegId::ZERO, RegId::ZERO, 0x10),
             op::jmpb(RegId::ZERO, 0),
         ]

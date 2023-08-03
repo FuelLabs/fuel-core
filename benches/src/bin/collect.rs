@@ -808,6 +808,9 @@ mod tests {
 
     #[test]
     fn test_linear_regression() {
-        assert_eq!(linear_regression(vec![(4, 2), (8, 3), (12, 4), (16, 5)]), 4);
+        assert_eq!(
+            linear_regression(vec![(4, 2), (8, 3), (12, 4), (16, 5)]),
+            4.0
+        );
     }
 }
