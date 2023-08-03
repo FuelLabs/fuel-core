@@ -31,17 +31,17 @@ expression: json
     "aloc": 1,
     "and": 1,
     "andi": 1,
-    "bal": 22,
+    "bal": 13,
     "bhei": 1,
     "bhsh": 1,
-    "burn": 126,
+    "burn": 132,
     "cb": 1,
     "cfei": 1,
     "cfsi": 1,
-    "croo": 20,
+    "croo": 16,
     "div": 1,
     "divi": 1,
-    "eck1": 1592,
+    "eck1": 951,
     "ecr1": 3000,
     "ed19": 3000,
     "eq": 1,
@@ -62,13 +62,13 @@ expression: json
     "jnzb": 1,
     "jnef": 1,
     "jneb": 1,
-    "k256": 16,
+    "k256": 11,
     "lb": 1,
-    "log": 43,
+    "log": 9,
     "lt": 1,
     "lw": 1,
-    "mcpi": 3,
-    "mint": 127,
+    "mcpi": 33,
+    "mint": 135,
     "mlog": 1,
     "mod": 1,
     "modi": 1,
@@ -82,86 +82,86 @@ expression: json
     "not": 1,
     "or": 1,
     "ori": 1,
-    "ret_contract": 63,
-    "rvrt_contract": 65,
-    "s256": 4,
+    "ret_contract": 13,
+    "rvrt_contract": 13,
+    "s256": 2,
     "sb": 1,
-    "scwq": 23,
+    "scwq": 13,
     "sll": 1,
     "slli": 1,
     "srl": 1,
     "srli": 1,
-    "srw": 21,
+    "srw": 12,
     "sub": 1,
     "subi": 1,
     "sw": 1,
-    "sww": 67,
-    "swwq": 68,
+    "sww": 43,
+    "swwq": 44,
     "time": 1,
-    "tr": 255,
-    "tro": 196,
+    "tr": 105,
+    "tro": 60,
     "wdcm": 1,
     "wqcm": 1,
     "wdop": 1,
     "wqop": 1,
     "wdml": 1,
-    "wqml": 2,
-    "wddv": 2,
-    "wqdv": 3,
-    "wdmd": 4,
-    "wqmd": 7,
-    "wdam": 3,
-    "wqam": 4,
-    "wdmm": 4,
-    "wqmm": 4,
+    "wqml": 1,
+    "wddv": 1,
+    "wqdv": 2,
+    "wdmd": 3,
+    "wqmd": 4,
+    "wdam": 2,
+    "wqam": 3,
+    "wdmm": 3,
+    "wqmm": 3,
     "xor": 1,
     "xori": 1,
     "call": {
-      "base": 173,
-      "dep_per_unit": 180
+      "base": 144,
+      "dep_per_unit": 214
     },
     "ccp": {
-      "base": 22,
-      "dep_per_unit": 152
+      "base": 15,
+      "dep_per_unit": 103
     },
     "csiz": {
-      "base": 16,
-      "dep_per_unit": 868
+      "base": 17,
+      "dep_per_unit": 790
     },
     "ldc": {
-      "base": 22,
-      "dep_per_unit": 150
+      "base": 15,
+      "dep_per_unit": 272
     },
     "logd": {
-      "base": 48,
-      "dep_per_unit": 18
+      "base": 26,
+      "dep_per_unit": 64
     },
     "mcl": {
       "base": 1,
-      "dep_per_unit": 2503
+      "dep_per_unit": 3333
     },
     "mcli": {
       "base": 1,
-      "dep_per_unit": 2559
+      "dep_per_unit": 3333
     },
     "mcp": {
       "base": 1,
-      "dep_per_unit": 1301
+      "dep_per_unit": 2000
     },
     "meq": {
       "base": 1,
-      "dep_per_unit": 1747
+      "dep_per_unit": 2500
     },
     "retd_contract": {
-      "base": 71,
-      "dep_per_unit": 18
+      "base": 29,
+      "dep_per_unit": 62
     },
     "smo": {
-      "base": 207,
-      "dep_per_unit": 18
+      "base": 209,
+      "dep_per_unit": 55
     },
     "srwq": {
-      "base": 44,
+      "base": 47,
       "dep_per_unit": 5
     }
   },
