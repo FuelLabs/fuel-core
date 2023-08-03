@@ -1457,6 +1457,7 @@ dependencies = [
  "ciborium",
  "clap 3.2.25",
  "criterion-plot",
+ "futures",
  "itertools",
  "lazy_static",
  "num-traits",
@@ -1468,6 +1469,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "tinytemplate",
+ "tokio",
  "walkdir",
 ]
 
@@ -2663,18 +2665,23 @@ dependencies = [
 name = "fuel-core-benches"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "clap 4.3.19",
  "criterion",
  "ctrlc",
  "ethnum",
  "fuel-core",
+ "fuel-core-services",
  "fuel-core-storage",
+ "fuel-core-sync",
  "fuel-core-types",
  "rand 0.8.5",
  "serde",
  "serde_json",
  "serde_yaml",
  "tikv-jemallocator",
+ "tokio",
 ]
 
 [[package]]

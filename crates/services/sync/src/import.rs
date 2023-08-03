@@ -73,11 +73,12 @@ impl Default for Config {
     }
 }
 
-pub(crate) struct Import<P, E, C> {
+/// Import
+pub struct Import<P, E, C> {
     /// Shared state between import and sync tasks.
     state: SharedMutex<State>,
     /// Notify import when sync has new work.
-    notify: Arc<Notify>,
+    pub notify: Arc<Notify>,
     /// Configuration parameters.
     params: Config,
     /// Network port.
@@ -89,7 +90,8 @@ pub(crate) struct Import<P, E, C> {
 }
 
 impl<P, E, C> Import<P, E, C> {
-    pub(crate) fn new(
+    /// New Import
+    pub fn new(
         state: SharedMutex<State>,
         notify: Arc<Notify>,
         params: Config,
@@ -114,10 +116,8 @@ where
     C: ConsensusPort + Send + Sync + 'static,
 {
     #[tracing::instrument(skip_all)]
-    pub(crate) async fn import(
-        &self,
-        shutdown: &mut StateWatcher,
-    ) -> anyhow::Result<bool> {
+    /// Import
+    pub async fn import(&self, shutdown: &mut StateWatcher) -> anyhow::Result<bool> {
         self.import_inner(shutdown).await?;
 
         Ok(wait_for_notify_or_shutdown(&self.notify, shutdown).await)

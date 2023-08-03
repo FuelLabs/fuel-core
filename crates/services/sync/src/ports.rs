@@ -15,7 +15,7 @@ use fuel_core_types::{
     services::p2p::SourcePeer,
 };
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "benchmarking"), mockall::automock)]
 #[async_trait::async_trait]
 /// Port for communication with the network.
 pub trait PeerToPeerPort {
@@ -39,7 +39,7 @@ pub trait PeerToPeerPort {
     ) -> anyhow::Result<Option<Vec<Transaction>>>;
 }
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "benchmarking"), mockall::automock)]
 #[async_trait::async_trait]
 /// Port for communication with the consensus service.
 pub trait ConsensusPort {
@@ -49,7 +49,7 @@ pub trait ConsensusPort {
     async fn await_da_height(&self, da_height: &DaBlockHeight) -> anyhow::Result<()>;
 }
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "benchmarking"), mockall::automock)]
 #[async_trait::async_trait]
 /// Port for communication with the block importer.
 pub trait BlockImporterPort {
