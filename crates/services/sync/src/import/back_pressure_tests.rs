@@ -164,8 +164,8 @@ impl PeerToPeerPort for PressurePeerToPeerPort {
 
     async fn get_sealed_block_headers_inclusive(
         &self,
-        start: BlockHeight,
-        end: BlockHeight,
+        _start: BlockHeight,
+        _end: BlockHeight,
     ) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>> {
         todo!()
     }

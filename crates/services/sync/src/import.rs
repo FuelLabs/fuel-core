@@ -23,13 +23,9 @@ use fuel_core_types::{
     services::p2p::SourcePeer,
 };
 use futures::{
-    stream::{
-        self,
-        StreamExt,
-    },
+    stream::StreamExt,
     Stream,
 };
-use std::future::Future;
 use tokio::sync::Notify;
 use tracing::Instrument;
 
@@ -302,53 +298,6 @@ async fn wait_for_notify_or_shutdown(
     matches!(r, futures::future::Either::Left(_))
 }
 
-/// Returns a stream of headers processing concurrently up to `max_get_header_requests`.
-/// The headers are returned in order.
-fn get_header_range_buffered(
-    range: RangeInclusive<u32>,
-    params: &Config,
-    p2p: Arc<impl PeerToPeerPort + Send + Sync + 'static>,
-) -> impl Stream<Item = anyhow::Result<SourcePeer<SealedBlockHeader>>> {
-    get_header_range_stream(range, p2p)
-        .buffered(params.max_get_header_requests)
-        // Continue the stream unless an error or none occurs.
-        .into_scan_none_or_err()
-        .scan_none_or_err()
-}
-
-#[tracing::instrument(skip(p2p))]
-/// Returns a stream of network requests for headers.
-fn get_header_range_stream(
-    range: RangeInclusive<u32>,
-    p2p: Arc<impl PeerToPeerPort + 'static>,
-) -> impl Stream<
-    Item = impl Future<Output = anyhow::Result<Option<SourcePeer<SealedBlockHeader>>>>,
-> {
-    stream::iter(range).map(move |height| {
-        let p2p = p2p.clone();
-        let height: BlockHeight = height.into();
-        async move {
-            tracing::debug!("getting header height: {}", *height);
-            Ok(p2p
-                .get_sealed_block_header(height)
-                .await
-                .trace_err("Failed to get header")?
-                .and_then(|header| {
-                    // Check the header is the expected height.
-                    validate_header_height(height, &header.data)
-                        .then_some(header)
-                        .trace_none_error("Failed to validate header height")
-                })
-                .trace_none_warn("Failed to find header"))
-        }
-        .instrument(tracing::debug_span!(
-            "get_sealed_block_header",
-            height = *height
-        ))
-        .in_current_span()
-    })
-}
-
 async fn get_header_range_single_req(
     range: RangeInclusive<u32>,
     p2p: Arc<impl PeerToPeerPort + 'static>,
@@ -357,14 +306,6 @@ async fn get_header_range_single_req(
     let end = *range.end();
     p2p.get_sealed_block_headers_inclusive(start.into(), end.into())
         .await
-}
-
-/// Returns true if the header is the expected height.
-fn validate_header_height(
-    expected_height: BlockHeight,
-    header: &SealedBlockHeader,
-) -> bool {
-    header.entity.consensus.height == expected_height
 }
 
 #[tracing::instrument(
