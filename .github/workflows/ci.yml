@@ -123,10 +123,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install protobuf-compiler
-      - uses: Swatinem/rust-cache@v2
+      - uses: rui314/setup-mold@v1
+      - uses: buildjet/cache@v3
         with:
-          key: '${{ matrix.command }} ${{ matrix.args }}'
-          cache-on-failure: "true"
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ matrix.command }}-${{ matrix.args }}-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: ${{ matrix.command }} ${{ matrix.args }}
         run: cargo ${{ matrix.command }} ${{ matrix.args }}
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
@@ -265,8 +271,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=ghcr.io/fuellabs/fuel-core-build-cache:latest
+          cache-to: type=registry,ref=ghcr.io/fuellabs/fuel-core-build-cache:latest,mode=max
 
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
         if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
@@ -323,8 +329,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=ghcr.io/fuellabs/fuel-core-e2e-build-cache:latest
+          cache-to: type=registry,ref=ghcr.io/fuellabs/fuel-core-e2e-build-cache:latest,mode=max
 
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
         if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
@@ -388,11 +394,6 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           target: ${{ matrix.job.target }}
-
-      - uses: Swatinem/rust-cache@v1
-        with:
-          cache-on-failure: true
-          key: '${{ matrix.job.target }}'
 
       - name: Install cross
         uses: baptiste0928/cargo-install@v1
