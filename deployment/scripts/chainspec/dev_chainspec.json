@@ -1,11 +1,11 @@
 {
   "chain_name": "Testnet",
-  "block_gas_limit": 100000000,
+  "block_gas_limit": 10000000,
   "initial_state": {
     "coins": [
       {
-        "owner": "53a9c6a74bee79c5e04115a007984f4bddaafed75f512f68766c6ed59d0aedec",
-        "amount": "0x04000000000000",
+        "owner": "0x53a9c6a74bee79c5e04115a007984f4bddaafed75f512f68766c6ed59d0aedec",
+        "amount": "0x0004000000000000",
         "asset_id": "0x0000000000000000000000000000000000000000000000000000000000000000"
       }
     ]
@@ -15,15 +15,17 @@
     "max_inputs": 255,
     "max_outputs": 255,
     "max_witnesses": 255,
-    "max_gas_per_tx": 100000000,
+    "max_gas_per_tx": 10000000,
     "max_script_length": 1048576,
     "max_script_data_length": 1048576,
     "max_storage_slots": 255,
     "max_predicate_length": 1048576,
     "max_predicate_data_length": 1048576,
+    "max_gas_per_predicate": 10000000,
     "gas_price_factor": 1000000000,
     "gas_per_byte": 4,
-    "max_message_data_length": 1048576
+    "max_message_data_length": 1048576,
+    "chain_id": 0
   },
   "gas_costs": {
     "add": 1,
@@ -31,17 +33,19 @@
     "aloc": 1,
     "and": 1,
     "andi": 1,
-    "bal": 21,
+    "bal": 13,
     "bhei": 1,
     "bhsh": 1,
-    "burn": 35,
-    "cb": 2,
+    "burn": 132,
+    "cb": 1,
     "cfei": 1,
     "cfsi": 1,
-    "croo": 28,
+    "croo": 16,
     "div": 1,
     "divi": 1,
-    "ecr": 1703,
+    "eck1": 951,
+    "ecr1": 3000,
+    "ed19": 3000,
     "eq": 1,
     "exp": 1,
     "expi": 1,
@@ -54,13 +58,19 @@
     "jne": 1,
     "jnei": 1,
     "jnzi": 1,
-    "k256": 19,
+    "jmpf": 1,
+    "jmpb": 1,
+    "jnzf": 1,
+    "jnzb": 1,
+    "jnef": 1,
+    "jneb": 1,
+    "k256": 11,
     "lb": 1,
-    "log": 40,
+    "log": 9,
     "lt": 1,
     "lw": 1,
-    "mcpi": 3,
-    "mint": 35,
+    "mcpi": 33,
+    "mint": 135,
     "mlog": 1,
     "mod": 1,
     "modi": 1,
@@ -69,82 +79,97 @@
     "mroo": 2,
     "mul": 1,
     "muli": 1,
+    "mldv": 1,
     "noop": 1,
     "not": 1,
     "or": 1,
     "ori": 1,
-    "ret_contract": 61,
-    "rvrt_contract": 61,
-    "s256": 5,
+    "ret_contract": 13,
+    "rvrt_contract": 13,
+    "s256": 2,
     "sb": 1,
-    "scwq": 11,
+    "scwq": 13,
     "sll": 1,
     "slli": 1,
     "srl": 1,
     "srli": 1,
-    "srw": 23,
+    "srw": 12,
     "sub": 1,
     "subi": 1,
     "sw": 1,
-    "sww": 79,
-    "swwq": 72,
+    "sww": 43,
+    "swwq": 44,
     "time": 1,
-    "tr": 120,
-    "tro": 99,
+    "tr": 105,
+    "tro": 60,
+    "wdcm": 1,
+    "wqcm": 1,
+    "wdop": 1,
+    "wqop": 1,
+    "wdml": 1,
+    "wqml": 1,
+    "wddv": 1,
+    "wqdv": 2,
+    "wdmd": 3,
+    "wqmd": 4,
+    "wdam": 2,
+    "wqam": 3,
+    "wdmm": 3,
+    "wqmm": 3,
     "xor": 1,
     "xori": 1,
     "call": {
-      "base": 116,
-      "dep_per_unit": 14
+      "base": 144,
+      "dep_per_unit": 214
     },
     "ccp": {
-      "base": 24,
-      "dep_per_unit": 13
+      "base": 15,
+      "dep_per_unit": 103
     },
     "csiz": {
       "base": 17,
-      "dep_per_unit": 15
+      "dep_per_unit": 790
     },
     "ldc": {
-      "base": 23,
-      "dep_per_unit": 14
+      "base": 15,
+      "dep_per_unit": 272
     },
     "logd": {
-      "base": 46,
-      "dep_per_unit": 19
+      "base": 26,
+      "dep_per_unit": 64
     },
     "mcl": {
       "base": 1,
-      "dep_per_unit": 2359
+      "dep_per_unit": 3333
     },
     "mcli": {
       "base": 1,
-      "dep_per_unit": 2322
+      "dep_per_unit": 3333
     },
     "mcp": {
       "base": 1,
-      "dep_per_unit": 1235
+      "dep_per_unit": 2000
     },
     "meq": {
       "base": 1,
-      "dep_per_unit": 2343
+      "dep_per_unit": 2500
     },
     "retd_contract": {
-      "base": 65,
-      "dep_per_unit": 19
+      "base": 29,
+      "dep_per_unit": 62
     },
     "smo": {
-      "base": 84,
-      "dep_per_unit": 13
+      "base": 209,
+      "dep_per_unit": 55
     },
     "srwq": {
-      "base": 54,
-      "dep_per_unit": 2
+      "base": 47,
+      "dep_per_unit": 5
     }
   },
   "consensus": {
     "PoA": {
-      "signing_key": "0xf65d6448a273b531ee942c133bb91a6f904c7d7f3104cdaf6b9f7f50d3518871"
+      "signing_key": "f65d6448a273b531ee942c133bb91a6f904c7d7f3104cdaf6b9f7f50d3518871"
     }
   }
 }
