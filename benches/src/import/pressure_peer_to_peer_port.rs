@@ -68,7 +68,8 @@ impl PeerToPeerPort for PressurePeerToPeerPort {
         &self,
         height: BlockHeight,
     ) -> anyhow::Result<Option<SourcePeer<SealedBlockHeader>>> {
-        tokio::time::sleep(self.duration(0)).await;
+        let timeout = self.duration(0);
+        tokio::time::sleep(timeout).await;
         self.service().get_sealed_block_header(height).await
     }
 
@@ -76,7 +77,8 @@ impl PeerToPeerPort for PressurePeerToPeerPort {
         &self,
         block_id: SourcePeer<BlockId>,
     ) -> anyhow::Result<Option<Vec<Transaction>>> {
-        tokio::time::sleep(self.duration(1)).await;
+        let timeout = self.duration(1);
+        tokio::time::sleep(timeout).await;
         self.service().get_transactions(block_id).await
     }
 }

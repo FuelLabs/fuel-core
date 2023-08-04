@@ -78,7 +78,7 @@ pub struct Import<P, E, C> {
     /// Shared state between import and sync tasks.
     state: SharedMutex<State>,
     /// Notify import when sync has new work.
-    pub notify: Arc<Notify>,
+    notify: Arc<Notify>,
     /// Configuration parameters.
     params: Config,
     /// Network port.
@@ -107,6 +107,11 @@ impl<P, E, C> Import<P, E, C> {
             executor,
             consensus,
         }
+    }
+
+    /// Notify one
+    pub fn notify_one(&self) {
+        self.notify.notify_one()
     }
 }
 impl<P, E, C> Import<P, E, C>
@@ -228,7 +233,6 @@ where
                         Ok(b) => b,
                         Err(e) => return Err(e),
                     };
-
                     execute_and_commit(executor.as_ref(), &state, block).await
                 }
             }
