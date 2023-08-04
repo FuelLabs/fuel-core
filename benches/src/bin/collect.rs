@@ -596,6 +596,25 @@ fn linear_regression(x_y: Vec<(u64, u64)>) -> f64 {
         .map(|(x, y)| (*x as f64 - avg_x) * (*y as f64 - avg_y))
         .sum();
     let sq_x: f64 = x_y.iter().map(|(x, _)| (*x as f64 - avg_x).powi(2)).sum();
+
+    // The original formula says:
+    //
+    // y = B * x,
+    // where B = sum((x_i - x_avg) * (y_i - y_avg)) / sum((x_i - x_avg) ^ 2) = sum_x_y / sq_x
+    //
+    // We want to know how many elements fit into one `noop` opcode timing,
+    // so we need value of `x / y`:
+    //
+    // y = B * x
+    //     |
+    //    \|/
+    // 1 / B = x / y
+    //     |
+    //    \|/
+    // 1 / sum_x_y / sq_x = x / y
+    //     |
+    //    \|/
+    // sq_x / sum_x_y = x / y
     sq_x / sum_x_y
 }
 
