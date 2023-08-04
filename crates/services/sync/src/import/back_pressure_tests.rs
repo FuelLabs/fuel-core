@@ -96,15 +96,12 @@ async fn test_back_pressure(input: Input, state: State, params: Config) -> Count
     let counts = SharedCounts::new(Default::default());
     let state = SharedMutex::new(state);
 
-    let p2p = Arc::new(PressurePeerToPeerPort::new(
+    let p2p = Arc::new(PressurePeerToPeer::new(
         counts.clone(),
         [input.headers, input.transactions],
     ));
-    let executor = Arc::new(PressureBlockImporterPort::new(
-        counts.clone(),
-        input.executes,
-    ));
-    let consensus = Arc::new(PressureConsensusPort::new(counts.clone(), input.consensus));
+    let executor = Arc::new(PressureBlockImporter::new(counts.clone(), input.executes));
+    let consensus = Arc::new(PressureConsensus::new(counts.clone(), input.consensus));
     let notify = Arc::new(Notify::new());
 
     let import = Import {
@@ -140,50 +137,62 @@ struct Counts {
 
 type SharedCounts = SharedMutex<Counts>;
 
-struct PressurePeerToPeerPort(MockPeerToPeerPort, [Duration; 2], SharedCounts);
-struct PressureBlockImporterPort(MockBlockImporterPort, Duration, SharedCounts);
+struct PressurePeerToPeer {
+    p2p: MockPeerToPeerPort,
+    durations: [Duration; 2],
+    counts: SharedCounts,
+}
 
-struct PressureConsensusPort(MockConsensusPort, Duration, SharedCounts);
+struct PressureBlockImporter(MockBlockImporterPort, Duration, SharedCounts);
+
+struct PressureConsensus(MockConsensusPort, Duration, SharedCounts);
 
 #[async_trait::async_trait]
-impl PeerToPeerPort for PressurePeerToPeerPort {
+impl PeerToPeerPort for PressurePeerToPeer {
     fn height_stream(&self) -> BoxStream<BlockHeight> {
-        self.0.height_stream()
+        self.p2p.height_stream()
     }
     async fn get_sealed_block_header(
         &self,
         height: BlockHeight,
     ) -> anyhow::Result<Option<SourcePeer<SealedBlockHeader>>> {
-        self.2.apply(|c| c.inc_headers());
-        tokio::time::sleep(self.1[0]).await;
-        self.2.apply(|c| {
+        self.counts.apply(|c| c.inc_headers());
+        tokio::time::sleep(self.durations[0]).await;
+        self.counts.apply(|c| {
             c.dec_headers();
             c.inc_blocks();
         });
-        self.0.get_sealed_block_header(height).await
+        self.p2p.get_sealed_block_header(height).await
     }
 
     async fn get_sealed_block_headers_inclusive(
         &self,
-        _start: BlockHeight,
-        _end: BlockHeight,
+        start: BlockHeight,
+        end: BlockHeight,
     ) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>> {
-        todo!()
+        // TODO: Does this need more count tracking?
+        for _ in u32::from(*start)..=u32::from(*end) {
+            // self.counts.apply(|c| c.inc_headers());
+            self.counts.apply(|c| c.inc_blocks());
+        }
+        self.p2p
+            .get_sealed_block_headers_inclusive(start, end)
+            .await
     }
 
     async fn get_transactions(
         &self,
         block_id: SourcePeer<BlockId>,
     ) -> anyhow::Result<Option<Vec<Transaction>>> {
-        self.2.apply(|c| c.inc_transactions());
-        tokio::time::sleep(self.1[1]).await;
-        self.2.apply(|c| c.dec_transactions());
-        self.0.get_transactions(block_id).await
+        self.counts.apply(|c| c.inc_transactions());
+        tokio::time::sleep(self.durations[1]).await;
+        self.counts.apply(|c| c.dec_transactions());
+        self.p2p.get_transactions(block_id).await
     }
 }
 
 #[async_trait::async_trait]
-impl BlockImporterPort for PressureBlockImporterPort {
+impl BlockImporterPort for PressureBlockImporter {
     fn committed_height_stream(&self) -> BoxStream<BlockHeight> {
         self.0.committed_height_stream()
     }
@@ -200,7 +209,7 @@ impl BlockImporterPort for PressureBlockImporterPort {
 }
 
 #[async_trait::async_trait]
-impl ConsensusPort for PressureConsensusPort {
+impl ConsensusPort for PressureConsensus {
     fn check_sealed_header(&self, header: &SealedBlockHeader) -> anyhow::Result<bool> {
         self.0.check_sealed_header(header)
     }
@@ -213,18 +222,27 @@ impl ConsensusPort for PressureConsensusPort {
     }
 }
 
-impl PressurePeerToPeerPort {
+impl PressurePeerToPeer {
     fn new(counts: SharedCounts, delays: [Duration; 2]) -> Self {
         let mut mock = MockPeerToPeerPort::default();
-        mock.expect_get_sealed_block_header()
-            .returning(|h| Ok(Some(empty_header(h))));
+        mock.expect_get_sealed_block_headers_inclusive()
+            .returning(|s, f| {
+                Ok((u32::from(*s)..=u32::from(*f))
+                    .map(BlockHeight::from)
+                    .map(empty_header)
+                    .collect())
+            });
         mock.expect_get_transactions()
             .returning(|_| Ok(Some(vec![])));
-        Self(mock, delays, counts)
+        Self {
+            p2p: mock,
+            durations: delays,
+            counts,
+        }
     }
 }
 
-impl PressureBlockImporterPort {
+impl PressureBlockImporter {
     fn new(counts: SharedCounts, delays: Duration) -> Self {
         let mut mock = MockBlockImporterPort::default();
         mock.expect_execute_and_commit().returning(move |_| Ok(()));
@@ -232,7 +250,7 @@ impl PressureBlockImporterPort {
     }
 }
 
-impl PressureConsensusPort {
+impl PressureConsensus {
     fn new(counts: SharedCounts, delays: Duration) -> Self {
         let mut mock = MockConsensusPort::default();
         mock.expect_await_da_height().returning(|_| Ok(()));

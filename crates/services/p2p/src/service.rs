@@ -174,6 +174,7 @@ where
     }
 }
 
+// TODO: Add tests https://github.com/FuelLabs/fuel-core/issues/1275
 #[async_trait::async_trait]
 impl<D> RunnableTask for Task<D>
 where
@@ -294,8 +295,10 @@ where
 
                                 let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeader(response));
                             }
-                            RequestMessage::SealedHeadersRangeInclusive(_, _) => {
-                                todo!()
+                            RequestMessage::SealedHeadersRangeInclusive(start, finish) => {
+                                let response = self.db.get_sealed_headers_range_inclusive(&start, &finish)?;
+
+                                let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeadersRangeInclusive(response));
                             }
                         }
                     },
@@ -569,6 +572,14 @@ pub mod tests {
                 entity: header,
                 consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
             }))
+        }
+
+        fn get_sealed_headers_range_inclusive(
+            &self,
+            _start_height: &BlockHeight,
+            _end_height: &BlockHeight,
+        ) -> StorageResult<Vec<SealedBlockHeader>> {
+            todo!()
         }
 
         fn get_transactions(

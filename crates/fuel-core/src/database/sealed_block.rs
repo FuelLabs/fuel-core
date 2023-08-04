@@ -93,6 +93,21 @@ impl Database {
         self.get_sealed_block_header(&block_id)
     }
 
+    pub fn get_sealed_block_headers_range_inclusive(
+        &self,
+        start: &BlockHeight,
+        finish: &BlockHeight,
+    ) -> StorageResult<Vec<SealedBlockHeader>> {
+        let headers = (u32::from(*start)..=u32::from(*finish))
+            .map(BlockHeight::from)
+            .map(|height| self.get_sealed_block_header_by_height(&height))
+            .collect::<StorageResult<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+            .collect();
+        Ok(headers)
+    }
+
     pub fn get_sealed_block_header(
         &self,
         block_id: &BlockId,
