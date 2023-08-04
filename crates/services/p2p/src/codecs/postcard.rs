@@ -204,10 +204,6 @@ impl RequestResponseConverter for PostcardCodec {
 
                 Ok(ResponseMessage::SealedBlock(response))
             }
-            NetworkResponse::BlocksInclusive(block_bytes) => {
-                let response = self.deserialize(block_bytes)?;
-                Ok(ResponseMessage::SealedBlocksInclusive(response))
-            }
             NetworkResponse::Header(header_bytes) => {
                 let response = if let Some(header_bytes) = header_bytes {
                     Some(self.deserialize(header_bytes)?)
@@ -226,6 +222,13 @@ impl RequestResponseConverter for PostcardCodec {
 
                 Ok(ResponseMessage::Transactions(response))
             }
+            NetworkResponse::BlocksInclusive(_) => {
+                todo!("This variant needs to be removed")
+            }
+            NetworkResponse::Headers(response) => {
+                let deserialized = self.deserialize(response)?;
+                Ok(ResponseMessage::SealedHeadersRangeInclusive(deserialized))
+            }
         }
     }
 
@@ -242,10 +245,6 @@ impl RequestResponseConverter for PostcardCodec {
                 };
 
                 Ok(NetworkResponse::Block(response))
-            }
-            OutboundResponse::BlocksInclusive(sealed_blocks) => {
-                let bytes = self.serialize(sealed_blocks)?;
-                Ok(NetworkResponse::BlocksInclusive(bytes))
             }
             OutboundResponse::SealedHeader(sealed_header) => {
                 let response = if let Some(sealed_header) = sealed_header {
@@ -264,6 +263,11 @@ impl RequestResponseConverter for PostcardCodec {
                 };
 
                 Ok(NetworkResponse::Transactions(response))
+            }
+            OutboundResponse::SealedHeadersRangeInclusive(headers) => {
+                let serialized = self.serialize(headers)?;
+                dbg!(&serialized);
+                Ok(NetworkResponse::Headers(serialized))
             }
         }
     }

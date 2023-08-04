@@ -24,14 +24,6 @@ impl P2pDb for Database {
         self.get_sealed_block_by_height(height)
     }
 
-    fn get_sealed_blocks_inclusive(
-        &self,
-        _start_height: &BlockHeight,
-        _end_height: &BlockHeight,
-    ) -> StorageResult<Vec<SealedBlock>> {
-        todo!()
-    }
-
     fn get_sealed_header(
         &self,
         height: &BlockHeight,

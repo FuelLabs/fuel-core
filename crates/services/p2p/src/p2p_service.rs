@@ -599,17 +599,6 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                                 }
                             }
                             (
-                                Some(ResponseChannelItem::BlocksInclusive(channel)),
-                                Ok(ResponseMessage::SealedBlocksInclusive(blocks)),
-                            ) => {
-                                if channel.send(Some(blocks)).is_err() {
-                                    debug!(
-                                        "Failed to send through the channel for {:?}",
-                                        request_id
-                                    );
-                                }
-                            }
-                            (
                                 Some(ResponseChannelItem::Transactions(channel)),
                                 Ok(ResponseMessage::Transactions(transactions)),
                             ) => {
@@ -625,6 +614,19 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                                 Ok(ResponseMessage::SealedHeader(header)),
                             ) => {
                                 if channel.send(header.map(|h| (peer, h))).is_err() {
+                                    debug!(
+                                        "Failed to send through the channel for {:?}",
+                                        request_id
+                                    );
+                                }
+                            }
+                            (
+                                Some(ResponseChannelItem::SealedHeadersRangeInclusive(
+                                    channel,
+                                )),
+                                Ok(ResponseMessage::SealedHeadersRangeInclusive(headers)),
+                            ) => {
+                                if channel.send(Some((peer, headers))).is_err() {
                                     debug!(
                                         "Failed to send through the channel for {:?}",
                                         request_id
@@ -1543,6 +1545,20 @@ mod tests {
         blocks
     }
 
+    fn arbitrary_headers() -> Vec<SealedBlockHeader> {
+        let mut blocks = Vec::new();
+        for _ in 2..=5 {
+            let header = Default::default();
+
+            let sealed_block = SealedBlockHeader {
+                entity: header,
+                consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
+            };
+            blocks.push(sealed_block);
+        }
+        blocks
+    }
+
     // Metadata gets skipped during serialization, so this is the fuzzy way to compare blocks
     fn eq_except_metadata(a: &SealedBlock, b: &SealedBlock) -> bool {
         a.entity.header().application == b.entity.header().application
@@ -1596,24 +1612,24 @@ mod tests {
                                         });
 
                                     }
-                                    RequestMessage::BlocksInclusive(_, _) => {
-                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg, ResponseChannelItem::BlocksInclusive(tx_orchestrator)).is_ok());
-                                        let tx_test_end = tx_test_end.clone();
-
-                                        tokio::spawn(async move {
-                                            let response_message = rx_orchestrator.await;
-
-                                            if let Ok(Some(sealed_blocks)) = response_message {
-                                                let expected = arbitrary_blocks();
-                                                let check = sealed_blocks.iter().zip(expected.iter()).all(|(a, b)| eq_except_metadata(a, b));
-                                                let _ = tx_test_end.send(check).await;
-                                            } else {
-                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
-                                                let _ = tx_test_end.send(false).await;
-                                            }
-                                        });
-                                    }
+                                    // RequestMessage::BlocksInclusive(_, _) => {
+                                    //     let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                    //     assert!(node_a.send_request_msg(None, request_msg, ResponseChannelItem::BlocksInclusive(tx_orchestrator)).is_ok());
+                                    //     let tx_test_end = tx_test_end.clone();
+                                    //
+                                    //     tokio::spawn(async move {
+                                    //         let response_message = rx_orchestrator.await;
+                                    //
+                                    //         if let Ok(Some(sealed_blocks)) = response_message {
+                                    //             let expected = arbitrary_blocks();
+                                    //             let check = sealed_blocks.iter().zip(expected.iter()).all(|(a, b)| eq_except_metadata(a, b));
+                                    //             let _ = tx_test_end.send(check).await;
+                                    //         } else {
+                                    //             tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                    //             let _ = tx_test_end.send(false).await;
+                                    //         }
+                                    //     });
+                                    // }
                                     RequestMessage::SealedHeader(_) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
                                         assert!(node_a.send_request_msg(None, request_msg, ResponseChannelItem::SealedHeader(tx_orchestrator)).is_ok());
@@ -1623,6 +1639,24 @@ mod tests {
                                             let response_message = rx_orchestrator.await;
 
                                             if let Ok(Some(_)) = response_message {
+                                                let _ = tx_test_end.send(true).await;
+                                            } else {
+                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                                let _ = tx_test_end.send(false).await;
+                                            }
+                                        });
+                                    }
+                                    RequestMessage::SealedHeadersRangeInclusive(_, _) => {
+                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                        assert!(node_a.send_request_msg(None, request_msg, ResponseChannelItem::SealedHeadersRangeInclusive(tx_orchestrator)).is_ok());
+                                        let tx_test_end = tx_test_end.clone();
+
+                                        tokio::spawn(async move {
+                                            let response_message = rx_orchestrator.await;
+
+                                            dbg!(&response_message);
+
+                                            if let Ok(Some(sealed_headers)) = response_message {
                                                 let _ = tx_test_end.send(true).await;
                                             } else {
                                                 tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
@@ -1667,11 +1701,11 @@ mod tests {
 
                                 let _ = node_b.send_response_msg(request_id, OutboundResponse::Block(Some(Arc::new(sealed_block))));
                             }
-                            RequestMessage::BlocksInclusive(_, _) => {
-                                let blocks = arbitrary_blocks();
-
-                                let _ = node_b.send_response_msg(request_id, OutboundResponse::BlocksInclusive(blocks));
-                            }
+                            // RequestMessage::BlocksInclusive(_, _) => {
+                            //     let blocks = arbitrary_blocks();
+                            //
+                            //     let _ = node_b.send_response_msg(request_id, OutboundResponse::BlocksInclusive(blocks));
+                            // }
                             RequestMessage::SealedHeader(_) => {
                                 let header = Default::default();
 
@@ -1681,6 +1715,12 @@ mod tests {
                                 };
 
                                 let _ = node_b.send_response_msg(request_id, OutboundResponse::SealedHeader(Some(Arc::new(sealed_header))));
+                            }
+                            RequestMessage::SealedHeadersRangeInclusive(_, _) => {
+                                let sealed_headers: Vec<_> = arbitrary_headers();
+                                dbg!(&sealed_headers);
+
+                                let _ = node_b.send_response_msg(request_id, OutboundResponse::SealedHeadersRangeInclusive(sealed_headers));
                             }
                             RequestMessage::Transactions(_) => {
                                 let transactions = (0..5).map(|_| Transaction::default_test_tx()).collect();
@@ -1711,9 +1751,12 @@ mod tests {
 
     #[tokio::test]
     #[instrument]
-    async fn request_response_works_with_blocks_inclusive() {
-        request_response_works_with(RequestMessage::BlocksInclusive(2.into(), 5.into()))
-            .await
+    async fn request_response_works_with_sealed_headers_range_inclusive() {
+        request_response_works_with(RequestMessage::SealedHeadersRangeInclusive(
+            0.into(),
+            0.into(),
+        ))
+        .await
     }
 
     #[tokio::test]
