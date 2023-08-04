@@ -1527,24 +1527,6 @@ mod tests {
         }
     }
 
-    fn arbitrary_blocks() -> Vec<SealedBlock> {
-        let mut blocks = Vec::new();
-        for i in 2..=5 {
-            let block = Block::new(
-                PartialBlockHeader::default(),
-                (0..i).map(|_| Transaction::default_test_tx()).collect(),
-                &[],
-            );
-
-            let sealed_block = SealedBlock {
-                entity: block,
-                consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
-            };
-            blocks.push(sealed_block);
-        }
-        blocks
-    }
-
     fn arbitrary_headers() -> Vec<SealedBlockHeader> {
         let mut blocks = Vec::new();
         for _ in 2..=5 {
@@ -1560,10 +1542,9 @@ mod tests {
     }
 
     // Metadata gets skipped during serialization, so this is the fuzzy way to compare blocks
-    fn eq_except_metadata(a: &SealedBlock, b: &SealedBlock) -> bool {
-        a.entity.header().application == b.entity.header().application
-            && a.entity.header().consensus == b.entity.header().consensus
-            && a.entity.transactions() == b.entity.transactions()
+    fn eq_except_metadata(a: &SealedBlockHeader, b: &SealedBlockHeader) -> bool {
+        a.entity.application == b.entity.application
+            && a.entity.consensus == b.entity.consensus
     }
 
     async fn request_response_works_with(request_msg: RequestMessage) {
@@ -1612,24 +1593,6 @@ mod tests {
                                         });
 
                                     }
-                                    // RequestMessage::BlocksInclusive(_, _) => {
-                                    //     let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                    //     assert!(node_a.send_request_msg(None, request_msg, ResponseChannelItem::BlocksInclusive(tx_orchestrator)).is_ok());
-                                    //     let tx_test_end = tx_test_end.clone();
-                                    //
-                                    //     tokio::spawn(async move {
-                                    //         let response_message = rx_orchestrator.await;
-                                    //
-                                    //         if let Ok(Some(sealed_blocks)) = response_message {
-                                    //             let expected = arbitrary_blocks();
-                                    //             let check = sealed_blocks.iter().zip(expected.iter()).all(|(a, b)| eq_except_metadata(a, b));
-                                    //             let _ = tx_test_end.send(check).await;
-                                    //         } else {
-                                    //             tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
-                                    //             let _ = tx_test_end.send(false).await;
-                                    //         }
-                                    //     });
-                                    // }
                                     RequestMessage::SealedHeader(_) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
                                         assert!(node_a.send_request_msg(None, request_msg, ResponseChannelItem::SealedHeader(tx_orchestrator)).is_ok());
@@ -1654,10 +1617,11 @@ mod tests {
                                         tokio::spawn(async move {
                                             let response_message = rx_orchestrator.await;
 
-                                            dbg!(&response_message);
+                                            let expected = arbitrary_headers();
 
-                                            if let Ok(Some(sealed_headers)) = response_message {
-                                                let _ = tx_test_end.send(true).await;
+                                            if let Ok(Some((_, sealed_headers))) = response_message {
+                                                let check = expected.iter().zip(sealed_headers.iter()).all(|(a, b)| eq_except_metadata(a, b));
+                                                let _ = tx_test_end.send(check).await;
                                             } else {
                                                 tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
                                                 let _ = tx_test_end.send(false).await;
@@ -1701,11 +1665,6 @@ mod tests {
 
                                 let _ = node_b.send_response_msg(request_id, OutboundResponse::Block(Some(Arc::new(sealed_block))));
                             }
-                            // RequestMessage::BlocksInclusive(_, _) => {
-                            //     let blocks = arbitrary_blocks();
-                            //
-                            //     let _ = node_b.send_response_msg(request_id, OutboundResponse::BlocksInclusive(blocks));
-                            // }
                             RequestMessage::SealedHeader(_) => {
                                 let header = Default::default();
 
@@ -1718,7 +1677,6 @@ mod tests {
                             }
                             RequestMessage::SealedHeadersRangeInclusive(_, _) => {
                                 let sealed_headers: Vec<_> = arbitrary_headers();
-                                dbg!(&sealed_headers);
 
                                 let _ = node_b.send_response_msg(request_id, OutboundResponse::SealedHeadersRangeInclusive(sealed_headers));
                             }

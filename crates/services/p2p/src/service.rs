@@ -82,19 +82,9 @@ enum TaskRequest {
         height: BlockHeight,
         channel: oneshot::Sender<Option<SealedBlock>>,
     },
-    GetBlocksInclusive {
-        from_height: BlockHeight,
-        to_height: BlockHeight,
-        channel: oneshot::Sender<Option<Vec<SealedBlock>>>,
-    },
     GetSealedHeader {
         height: BlockHeight,
         channel: oneshot::Sender<Option<(PeerId, SealedBlockHeader)>>,
-    },
-    GetSealedHeadersInclusive {
-        from_height: BlockHeight,
-        to_height: BlockHeight,
-        channel: oneshot::Sender<Option<(PeerId, Vec<SealedBlockHeader>)>>,
     },
     GetTransactions {
         block_id: BlockId,
@@ -249,8 +239,6 @@ where
                     Some(TaskRequest::RespondWithPeerReport { peer_id, score, reporting_service }) => {
                         self.p2p_service.report_peer(peer_id, score, reporting_service)
                     }
-                    Some(TaskRequest::GetBlocksInclusive { .. }) => todo!(),
-                    Some(TaskRequest::GetSealedHeadersInclusive { .. }) => todo!(),
                     None => {
                         unreachable!("The `Task` is holder of the `Sender`, so it should not be possible");
                     }
@@ -374,24 +362,6 @@ impl SharedState {
         self.request_sender
             .send(TaskRequest::GetBlock {
                 height,
-                channel: sender,
-            })
-            .await?;
-
-        receiver.await.map_err(|e| anyhow!("{}", e))
-    }
-
-    pub async fn get_blocks_inclusive(
-        &self,
-        from_height: BlockHeight,
-        to_height: BlockHeight,
-    ) -> anyhow::Result<Option<Vec<SealedBlock>>> {
-        let (sender, receiver) = oneshot::channel();
-
-        self.request_sender
-            .send(TaskRequest::GetBlocksInclusive {
-                from_height,
-                to_height,
                 channel: sender,
             })
             .await?;
