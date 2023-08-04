@@ -86,6 +86,11 @@ enum TaskRequest {
         height: BlockHeight,
         channel: oneshot::Sender<Option<(PeerId, SealedBlockHeader)>>,
     },
+    GetSealedHeadersRangeInclusive {
+        start: BlockHeight,
+        end: BlockHeight,
+        channel: oneshot::Sender<Option<(PeerId, Vec<SealedBlockHeader>)>>,
+    },
     GetTransactions {
         block_id: BlockId,
         from_peer: PeerId,
@@ -227,6 +232,12 @@ where
                         let request_msg = RequestMessage::SealedHeader(height);
                         let channel_item = ResponseChannelItem::SealedHeader(response);
                         let peer = self.p2p_service.peer_manager().get_peer_id_with_height(&height);
+                        let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
+                    }
+                    Some(TaskRequest::GetSealedHeadersRangeInclusive { start, end, channel: response}) => {
+                        let request_msg = RequestMessage::SealedHeadersRangeInclusive(start, end);
+                        let channel_item = ResponseChannelItem::SealedHeadersRangeInclusive(response);
+                        let peer = self.p2p_service.peer_manager().get_peer_id_with_height(&start);
                         let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
                     }
                     Some(TaskRequest::GetTransactions { block_id, from_peer, channel }) => {
@@ -388,6 +399,27 @@ impl SharedState {
         receiver
             .await
             .map(|o| o.map(|(peer_id, header)| (peer_id.to_bytes(), header)))
+            .map_err(|e| anyhow!("{}", e))
+    }
+
+    pub async fn get_sealed_block_headers_inclusive(
+        &self,
+        start: BlockHeight,
+        end: BlockHeight,
+    ) -> anyhow::Result<Option<(Vec<u8>, Vec<SealedBlockHeader>)>> {
+        let (sender, receiver) = oneshot::channel();
+
+        self.request_sender
+            .send(TaskRequest::GetSealedHeadersRangeInclusive {
+                start,
+                end,
+                channel: sender,
+            })
+            .await?;
+
+        receiver
+            .await
+            .map(|o| o.map(|(peer_id, headers)| (peer_id.to_bytes(), headers)))
             .map_err(|e| anyhow!("{}", e))
     }
 

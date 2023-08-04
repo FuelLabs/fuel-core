@@ -58,10 +58,21 @@ impl PeerToPeerPort for P2PAdapter {
 
     async fn get_sealed_block_headers_inclusive(
         &self,
-        _start: BlockHeight,
-        _end: BlockHeight,
+        start: BlockHeight,
+        end: BlockHeight,
     ) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>> {
-        todo!()
+        if let Some(service) = &self.service {
+            Ok(service
+                .get_sealed_block_headers_inclusive(start, end)
+                .await?
+                .map(|(peer_id, header)| SourcePeer {
+                    peer_id: peer_id.into(),
+                    data: header,
+                })
+                .collect())
+        } else {
+            Ok(Vec::new())
+        }
     }
 
     async fn get_transactions(
