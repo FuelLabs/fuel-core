@@ -530,7 +530,7 @@ impl State {
                         time: *y,
                     })
                     .collect();
-                let dep_per_unit = (1.0 / slope(x_y)) as u64;
+                let (_, dep_per_unit) = dependent_cost(x_y);
                 (
                     name,
                     Cost::DependentAll {
@@ -543,8 +543,8 @@ impl State {
         } else {
             let iter = dependant_groups.into_iter().map(|(name, x_y)| {
                 groups.remove(&name);
-                let base = x_y.first().unwrap().1;
-                let dep_per_unit = (1.0 / slope(x_y)) as u64;
+
+                let (base, dep_per_unit) = dependent_cost(x_y);
                 (name, Cost::Dependent { base, dep_per_unit })
             });
             costs.0.extend(iter);
@@ -586,7 +586,7 @@ impl Costs {
     }
 }
 
-fn slope(x_y: Vec<(u64, u64)>) -> f64 {
+fn linear_regression(x_y: Vec<(u64, u64)>) -> f64 {
     let avg_x =
         x_y.iter().map(|(x, _)| x).copied().sum::<u64>() as f64 / x_y.len() as f64;
     let avg_y =
@@ -596,7 +596,127 @@ fn slope(x_y: Vec<(u64, u64)>) -> f64 {
         .map(|(x, y)| (*x as f64 - avg_x) * (*y as f64 - avg_y))
         .sum();
     let sq_x: f64 = x_y.iter().map(|(x, _)| (*x as f64 - avg_x).powi(2)).sum();
-    sum_x_y / sq_x
+
+    // The original formula says:
+    //
+    // y = B * x,
+    // where B = sum((x_i - x_avg) * (y_i - y_avg)) / sum((x_i - x_avg) ^ 2) = sum_x_y / sq_x
+    //
+    // We want to know how many elements fit into one `noop` opcode timing,
+    // so we need value of `x / y`:
+    //
+    // y = B * x
+    //     |
+    //    \|/
+    // 1 / B = x / y
+    //     |
+    //    \|/
+    // 1 / sum_x_y / sq_x = x / y
+    //     |
+    //    \|/
+    // sq_x / sum_x_y = x / y
+    sq_x / sum_x_y
+}
+
+fn dependent_cost(x_y: Vec<(u64, u64)>) -> (u64, u64) {
+    const NEAR_LINEAR: f64 = 0.1;
+
+    enum Type {
+        /// The points have a linear property. The first point
+        /// and the last points are almost the same(The difference is < 0.1).
+        Linear,
+        /// When the delta of the last point is much lower than
+        /// the first point, it is a logarithmic chart.
+        Logarithm,
+        /// When the delta of the last point is much more than
+        /// the first point, it is an exponential chart.
+        Exp,
+    }
+
+    #[derive(Clone, Copy)]
+    struct Point {
+        /// Number of elements for the opcode.
+        x: u64,
+        /// Time in `noop`s required to process `x` elements.
+        ///
+        /// Note: If the time to process `noop` opcode is `20` nanoseconds
+        /// and the time required to process `x` elements is `140`,
+        /// the `y` is 7 in this case.
+        y: u64,
+    }
+
+    impl Point {
+        /// The price in `noop` time to process a single element.
+        fn price(&self) -> f64 {
+            (self.y as f64) / (self.x as f64)
+        }
+
+        /// The amount that this operation costs per increase in one `noop` time.
+        fn amount(&self) -> f64 {
+            (self.x as f64) / (self.y as f64)
+        }
+    }
+
+    let linear_regression = linear_regression(x_y.clone());
+
+    let x_y = x_y
+        .into_iter()
+        .map(|(x, y)| Point { x, y })
+        .collect::<Vec<_>>();
+
+    let first = x_y.first().unwrap();
+    let last = x_y.last().unwrap();
+
+    let near_linear = linear_regression * NEAR_LINEAR;
+    let expected_type = if (linear_regression - first.amount()).abs() < near_linear
+        && (linear_regression - last.amount()).abs() < near_linear
+    {
+        Type::Linear
+    } else if first.price() > last.price() {
+        Type::Logarithm
+    } else {
+        Type::Exp
+    };
+
+    match expected_type {
+        Type::Linear => {
+            // The time of the first point is a base.
+            // The minimal charge per element is the worse scenario
+            // and we use it as an amount per unit.
+            let mut x_y = x_y.into_iter();
+            let base = x_y.next().unwrap().y;
+
+            let amount = x_y
+                .map(|p| p.amount())
+                .min_by(|a, b| a.partial_cmp(b).unwrap())
+                .unwrap();
+            (base, amount as u64)
+        }
+        Type::Logarithm => {
+            // The logarithm function slows down fast, and the point where it becomes more
+            // linear is the base point. After this point we use linear strategy.
+            let mut x_y = x_y.into_iter();
+
+            let mut base = x_y.next().unwrap();
+
+            let amount = x_y
+                .skip_while(|p| {
+                    if p.amount() < linear_regression - base.amount() {
+                        base = *p;
+                        true
+                    } else {
+                        false
+                    }
+                })
+                .map(|p| p.amount())
+                .min_by(|a, b| a.partial_cmp(b).unwrap())
+                .unwrap();
+            (base.y, amount as u64)
+        }
+        Type::Exp => {
+            panic!("We don't support exponential chart")
+        }
+    }
 }
 
 #[cfg(test)]
@@ -706,7 +826,10 @@ mod tests {
     }
 
     #[test]
-    fn test_slope() {
-        assert_eq!(slope(vec![(4, 2), (8, 3), (12, 4), (16, 5)]), 0.25);
+    fn test_linear_regression() {
+        assert_eq!(
+            linear_regression(vec![(4, 2), (8, 3), (12, 4), (16, 5)]),
+            4.0
+        );
     }
 }

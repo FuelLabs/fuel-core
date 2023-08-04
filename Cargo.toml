@@ -75,7 +75,7 @@ fuel-core-tests = { version = "0.0.0", path = "./tests" }
 fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 
 # Fuel dependencies
-fuel-vm-private = { version = "0.35.2", package = "fuel-vm" }
+fuel-vm-private = { version = "0.35.3", package = "fuel-vm" }
 
 # Common dependencies
 anyhow = "1.0"
@@ -111,4 +111,3 @@ itertools = "0.10"
 insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
-
