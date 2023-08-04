@@ -171,7 +171,7 @@ impl PeerToPeerPort for PressurePeerToPeer {
         end: BlockHeight,
     ) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>> {
         // TODO: Does this need more count tracking?
-        for _ in u32::from(*start)..=u32::from(*end) {
+        for _ in *start..=*end {
             // self.counts.apply(|c| c.inc_headers());
             self.counts.apply(|c| c.inc_blocks());
         }
@@ -227,10 +227,7 @@ impl PressurePeerToPeer {
         let mut mock = MockPeerToPeerPort::default();
         mock.expect_get_sealed_block_headers_inclusive()
             .returning(|s, f| {
-                Ok((u32::from(*s)..=u32::from(*f))
-                    .map(BlockHeight::from)
-                    .map(empty_header)
-                    .collect())
+                Ok((*s..=*f).map(BlockHeight::from).map(empty_header).collect())
             });
         mock.expect_get_transactions()
             .returning(|_| Ok(Some(vec![])));
