@@ -24,7 +24,7 @@ async fn test_import(state: State, mocks: Mocks) -> (State, bool) {
 }
 
 #[tokio::test]
-async fn import_inner__signature_fails_on_header_5_only() {
+async fn import__signature_fails_on_header_5_only() {
     // given
     let mut consensus_port = MockConsensusPort::default();
     consensus_port
@@ -51,7 +51,7 @@ async fn import_inner__signature_fails_on_header_5_only() {
 }
 
 #[tokio::test]
-async fn import_inner__signature_fails_on_header_4_only() {
+async fn import__signature_fails_on_header_4_only() {
     // given
     let mut consensus_port = MockConsensusPort::default();
     consensus_port
@@ -74,7 +74,7 @@ async fn import_inner__signature_fails_on_header_4_only() {
 }
 
 #[tokio::test]
-async fn import_inner__header_not_found() {
+async fn import__header_not_found() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers_inclusive()
@@ -96,7 +96,7 @@ async fn import_inner__header_not_found() {
 }
 
 #[tokio::test]
-async fn import_inner__header_5_not_found() {
+async fn import__header_5_not_found() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers_inclusive()
@@ -121,7 +121,7 @@ async fn import_inner__header_5_not_found() {
 }
 
 #[tokio::test]
-async fn import_inner__header_4_not_found() {
+async fn import__header_4_not_found() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers_inclusive()
@@ -146,7 +146,7 @@ async fn import_inner__header_4_not_found() {
 }
 
 #[tokio::test]
-async fn import_inner__transactions_not_found() {
+async fn import__transactions_not_found() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers_inclusive()
@@ -171,7 +171,7 @@ async fn import_inner__transactions_not_found() {
 }
 
 #[tokio::test]
-async fn import_inner__transactions_not_found_for_header_4() {
+async fn import__transactions_not_found_for_header_4() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers_inclusive()
@@ -202,7 +202,7 @@ async fn import_inner__transactions_not_found_for_header_4() {
 }
 
 #[tokio::test]
-async fn import_inner__transactions_not_found_for_header_5() {
+async fn import__transactions_not_found_for_header_5() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers_inclusive()
@@ -233,7 +233,7 @@ async fn import_inner__transactions_not_found_for_header_5() {
 }
 
 #[tokio::test]
-async fn import_inner__p2p_error() {
+async fn import__p2p_error() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers_inclusive()
@@ -255,7 +255,7 @@ async fn import_inner__p2p_error() {
 }
 
 #[tokio::test]
-async fn import_inner__p2p_error_on_4_transactions() {
+async fn import__p2p_error_on_4_transactions() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers_inclusive()
@@ -286,7 +286,7 @@ async fn import_inner__p2p_error_on_4_transactions() {
 }
 
 #[tokio::test]
-async fn import_inner__p2p_error_on_5_transactions() {
+async fn import__p2p_error_on_5_transactions() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers_inclusive()
@@ -317,7 +317,7 @@ async fn import_inner__p2p_error_on_5_transactions() {
 }
 
 #[tokio::test]
-async fn import_inner__consensus_error_on_4() {
+async fn import__consensus_error_on_4() {
     // given
     let mut consensus_port = MockConsensusPort::default();
     consensus_port
@@ -346,7 +346,7 @@ async fn import_inner__consensus_error_on_4() {
 }
 
 #[tokio::test]
-async fn import_inner__consensus_error_on_5() {
+async fn import__consensus_error_on_5() {
     // given
     let mut consensus_port = MockConsensusPort::default();
     consensus_port
@@ -379,7 +379,7 @@ async fn import_inner__consensus_error_on_5() {
 }
 
 #[tokio::test]
-async fn import_inner__execution_error_on_header_4() {
+async fn import__execution_error_on_header_4() {
     // given
     let mut executor = MockBlockImporterPort::default();
     executor
@@ -408,7 +408,7 @@ async fn import_inner__execution_error_on_header_4() {
 }
 
 #[tokio::test]
-async fn import_inner__execution_error_on_header_5() {
+async fn import__execution_error_on_header_5() {
     // given
     let mut executor = MockBlockImporterPort::default();
     executor
@@ -460,7 +460,7 @@ async fn signature_always_fails() {
 }
 
 #[tokio::test]
-async fn import_inner__can_work_in_two_loops() {
+async fn import__can_work_in_two_loops() {
     // given
     let s = SharedMutex::new(State::new(3, 5));
     let state = s.clone();
