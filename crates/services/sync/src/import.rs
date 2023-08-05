@@ -7,6 +7,7 @@ use std::{
     sync::Arc,
 };
 
+use anyhow::anyhow;
 use fuel_core_services::{
     SharedMutex,
     StateWatcher,
@@ -27,6 +28,7 @@ use futures::{
         self,
         StreamExt,
     },
+    FutureExt,
     Stream,
 };
 use std::future::Future;
@@ -123,16 +125,39 @@ where
     #[tracing::instrument(skip_all)]
     /// Import
     pub async fn import(&self, shutdown: &mut StateWatcher) -> anyhow::Result<bool> {
-        self.import_inner(shutdown).await?;
+        self.import_inner(shutdown, 1).await?;
 
         Ok(wait_for_notify_or_shutdown(&self.notify, shutdown).await)
     }
 
-    async fn import_inner(&self, shutdown: &StateWatcher) -> anyhow::Result<()> {
+    /// Import
+    pub async fn import_v2(&self, shutdown: &mut StateWatcher) -> anyhow::Result<bool> {
+        self.import_inner(shutdown, 2).await?;
+
+        Ok(wait_for_notify_or_shutdown(&self.notify, shutdown).await)
+    }
+
+    /// Import
+    pub async fn import_v3(&self, shutdown: &mut StateWatcher) -> anyhow::Result<bool> {
+        self.import_inner(shutdown, 3).await?;
+
+        Ok(wait_for_notify_or_shutdown(&self.notify, shutdown).await)
+    }
+
+    async fn import_inner(
+        &self,
+        shutdown: &StateWatcher,
+        version: u32,
+    ) -> anyhow::Result<()> {
         // If there is a range to process, launch the stream.
         if let Some(range) = self.state.apply(|s| s.process_range()) {
             // Launch the stream to import the range.
-            let (count, result) = self.launch_stream(range.clone(), shutdown).await;
+            let (count, result) = match version {
+                1 => self.launch_stream(range.clone(), shutdown).await,
+                2 => self.launch_stream_v2(range.clone(), shutdown).await,
+                3 => self.launch_stream_v3(range.clone(), shutdown).await,
+                _ => panic!("INVALID"),
+            };
 
             // Get the size of the range.
             let range_len = range.size_hint().0 as u32;
@@ -253,6 +278,186 @@ where
         })
         .in_current_span()
         .await
+    }
+
+    async fn launch_stream_v2(
+        &self,
+        range: RangeInclusive<u32>,
+        shutdown: &StateWatcher,
+    ) -> (usize, anyhow::Result<()>) {
+        let Self {
+            state,
+            params,
+            p2p,
+            executor,
+            consensus,
+            ..
+        } = &self;
+        get_header_range(range.clone(), p2p.clone())
+            .map({
+                let p2p = p2p.clone();
+                let consensus_port = consensus.clone();
+                move |result| {
+                    let p2p = p2p.clone();
+                    let consensus_port = consensus_port.clone();
+                    tokio::spawn(async move {
+                        let header = match result.await {
+                            Ok(Some(h)) => h,
+                            Ok(None) => return Ok(None),
+                            Err(e) => return Err(e),
+                        };
+                        let SourcePeer {
+                            peer_id,
+                            data: header,
+                        } = header;
+                        let id = header.entity.id();
+                        let block_id = SourcePeer { peer_id, data: id };
+
+                        if !consensus_port
+                            .check_sealed_header(&header)
+                            .trace_err("Failed to check consensus on header")?
+                        {
+                            tracing::warn!("Header {:?} failed consensus check", header);
+                            return Ok(None)
+                        }
+
+                        consensus_port
+                            .await_da_height(&header.entity.da_height)
+                            .await?;
+
+                        get_transactions_on_block(p2p.as_ref(), block_id, header).await
+                    })
+                    .then(|task| async { task.map_err(|e| anyhow!(e))? })
+                }
+            })
+            .buffered(params.max_get_txns_requests)
+            .into_scan_none_or_err()
+            .scan_none_or_err()
+            .take_until({
+                let mut s = shutdown.clone();
+                async move {
+                    let _ = s.while_started().await;
+                    tracing::info!("In progress import stream shutting down");
+                }
+            })
+            .then({
+                let state = state.clone();
+                let executor = executor.clone();
+                move |block| {
+                    {
+                        let state = state.clone();
+                        let executor = executor.clone();
+                        async move {
+                            let block = match block {
+                                Ok(b) => b,
+                                Err(e) => return Err(e),
+                            };
+                            execute_and_commit(executor.as_ref(), &state, block).await
+                        }
+                    }
+                    .instrument(tracing::debug_span!("execute_and_commit"))
+                    .in_current_span()
+                }
+            })
+            .into_scan_err()
+            .scan_err()
+            .fold((0usize, Ok(())), |(count, err), result| async move {
+                match result {
+                    Ok(_) => (count + 1, err),
+                    Err(e) => (count, Err(e)),
+                }
+            })
+            .in_current_span()
+            .await
+    }
+
+    async fn launch_stream_v3(
+        &self,
+        range: RangeInclusive<u32>,
+        shutdown: &StateWatcher,
+    ) -> (usize, anyhow::Result<()>) {
+        let Self {
+            state,
+            params,
+            p2p,
+            executor,
+            consensus,
+            ..
+        } = &self;
+        get_header_range(range.clone(), p2p.clone())
+            .map({
+                let p2p = p2p.clone();
+                let consensus_port = consensus.clone();
+                move |result| {
+                    let p2p = p2p.clone();
+                    let consensus_port = consensus_port.clone();
+                    async move {
+                        let header = match result.await {
+                            Ok(Some(h)) => h,
+                            Ok(None) => return Ok(None),
+                            Err(e) => return Err(e),
+                        };
+                        let SourcePeer {
+                            peer_id,
+                            data: header,
+                        } = header;
+                        let id = header.entity.id();
+                        let block_id = SourcePeer { peer_id, data: id };
+
+                        if !consensus_port
+                            .check_sealed_header(&header)
+                            .trace_err("Failed to check consensus on header")?
+                        {
+                            tracing::warn!("Header {:?} failed consensus check", header);
+                            return Ok(None)
+                        }
+
+                        consensus_port
+                            .await_da_height(&header.entity.da_height)
+                            .await?;
+                        get_transactions_on_block(p2p.as_ref(), block_id, header).await
+                    }
+                }
+            })
+            .buffered(params.max_get_txns_requests)
+            .into_scan_none_or_err()
+            .scan_none_or_err()
+            .take_until({
+                let mut s = shutdown.clone();
+                async move {
+                    let _ = s.while_started().await;
+                    tracing::info!("In progress import stream shutting down");
+                }
+            })
+            .then({
+                let state = state.clone();
+                let executor = executor.clone();
+                move |block| {
+                    {
+                        let state = state.clone();
+                        let executor = executor.clone();
+                        async move {
+                            let block = match block {
+                                Ok(b) => b,
+                                Err(e) => return Err(e),
+                            };
+                            execute_and_commit(executor.as_ref(), &state, block).await
+                        }
+                    }
+                    .instrument(tracing::debug_span!("execute_and_commit"))
+                    .in_current_span()
+                }
+            })
+            .into_scan_err()
+            .scan_err()
+            .fold((0usize, Ok(())), |(count, err), result| async move {
+                match result {
+                    Ok(_) => (count + 1, err),
+                    Err(e) => (count, Err(e)),
+                }
+            })
+            .in_current_span()
+            .await
     }
 }
 
