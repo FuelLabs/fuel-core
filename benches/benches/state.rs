@@ -26,6 +26,10 @@ use std::{
     time::Duration,
 };
 
+// Use Jemalloc during benchmarks
+#[global_allocator]
+static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
 fn setup(db: &mut Database, contract: &ContractId, n: usize) {
     let mut rng_keys = thread_rng();
     let gen_keys = || -> Bytes32 { rng_keys.gen() };
