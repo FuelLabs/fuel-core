@@ -222,9 +222,6 @@ impl RequestResponseConverter for PostcardCodec {
 
                 Ok(ResponseMessage::Transactions(response))
             }
-            NetworkResponse::BlocksInclusive(_) => {
-                todo!("This variant needs to be removed")
-            }
             NetworkResponse::Headers(response) => {
                 let deserialized = self.deserialize(response)?;
                 Ok(ResponseMessage::SealedHeadersRangeInclusive(deserialized))

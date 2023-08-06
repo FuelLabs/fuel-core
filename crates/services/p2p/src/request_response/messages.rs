@@ -69,8 +69,6 @@ pub enum ResponseChannelItem {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum NetworkResponse {
     Block(Option<Vec<u8>>),
-    // TODO: Remove. Currently the compiler panics if I remove it for some reason
-    BlocksInclusive(Vec<u8>),
     Header(Option<Vec<u8>>),
     Headers(Vec<u8>),
     Transactions(Option<Vec<u8>>),
