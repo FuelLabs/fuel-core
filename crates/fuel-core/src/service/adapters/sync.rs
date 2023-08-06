@@ -20,7 +20,10 @@ use fuel_core_types::{
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
-    services::p2p::SourcePeer,
+    services::p2p::{
+        PeerId,
+        SourcePeer,
+    },
 };
 
 #[async_trait::async_trait]
@@ -65,11 +68,17 @@ impl PeerToPeerPort for P2PAdapter {
             Ok(service
                 .get_sealed_block_headers_inclusive(start, end)
                 .await?
-                .map(|(peer_id, header)| SourcePeer {
-                    peer_id: peer_id.into(),
-                    data: header,
+                .map(|(peer_id, headers)| {
+                    let peer_id: PeerId = peer_id.into();
+                    headers
+                        .into_iter()
+                        .map(|header| SourcePeer {
+                            peer_id: peer_id.clone(),
+                            data: header,
+                        })
+                        .collect()
                 })
-                .collect())
+                .unwrap_or(Vec::new()))
         } else {
             Ok(Vec::new())
         }

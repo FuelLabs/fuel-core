@@ -35,10 +35,7 @@ async fn test_new_service() {
     });
     p2p.expect_get_sealed_block_headers_inclusive()
         .returning(|s, f| {
-            Ok((u32::from(*s)..=u32::from(*f))
-                .map(BlockHeight::from)
-                .map(empty_header)
-                .collect())
+            Ok((*s..=*f).map(BlockHeight::from).map(empty_header).collect())
         });
     p2p.expect_get_transactions()
         .returning(|_| Ok(Some(vec![])));
