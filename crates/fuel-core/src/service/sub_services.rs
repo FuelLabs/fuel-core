@@ -46,7 +46,7 @@ pub fn init_sub_services(
         "The blockchain is not initialized with any block"
     ))?;
     #[cfg(feature = "relayer")]
-    let relayer_service = if config.relayer.eth_client.is_some() {
+    let relayer_service = if config.relayer.enabled {
         Some(fuel_core_relayer::new_service(
             database.clone(),
             config.relayer.clone(),
@@ -86,7 +86,7 @@ pub fn init_sub_services(
 
     #[cfg(feature = "p2p")]
     let mut network = {
-        if let Some(config) = config.p2p.clone() {
+        if config.p2p.enabled {
             let p2p_db = database.clone();
             let genesis = p2p_db.get_genesis()?;
             let p2p_config = config.init(genesis)?;

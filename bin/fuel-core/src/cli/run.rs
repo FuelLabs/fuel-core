@@ -146,8 +146,8 @@ pub struct Command {
     #[arg(long = "coinbase-recipient", env)]
     pub coinbase_recipient: Option<String>,
 
+    #[cfg_attr(feature = "relayer", clap(flatten))]
     #[cfg(feature = "relayer")]
-    #[clap(flatten)]
     pub relayer_args: relayer::RelayerArgs,
 
     #[cfg_attr(feature = "p2p", clap(flatten))]
@@ -235,6 +235,9 @@ impl Command {
         let addr = net::SocketAddr::new(ip, port);
 
         let chain_conf: ChainConfig = chain_config.as_str().parse()?;
+
+        #[cfg(feature = "relayer")]
+        let relayer_cfg = relayer_args.into_config();
 
         #[cfg(feature = "p2p")]
         let p2p_cfg = p2p_args.into_config(metrics)?;

@@ -213,92 +213,87 @@ impl From<SyncArgs> for fuel_core::sync::Config {
 }
 
 impl P2PArgs {
-    pub fn into_config(
-        self,
-        metrics: bool,
-    ) -> anyhow::Result<Option<Config<NotInitialized>>> {
-        if self.enable_p2p {
-            let local_keypair = {
-                match self.keypair.expect("mandatory value") {
-                    KeypairArg::Path(path) => {
-                        let phrase = std::fs::read_to_string(path)?;
-                        let secret_key =
-                            fuel_crypto::SecretKey::new_from_mnemonic_phrase_with_path(
-                                &phrase,
-                                "m/44'/60'/0'/0/0",
-                            )?;
-
-                        convert_to_libp2p_keypair(&mut secret_key.to_vec())?
-                    }
-                    KeypairArg::InlineSecret(secret_key) => {
-                        convert_to_libp2p_keypair(&mut secret_key.to_vec())?
-                    }
-                }
-            };
-
-            let gossipsub_config = default_gossipsub_builder()
-                .mesh_n(self.ideal_mesh_size)
-                .mesh_n_low(self.min_mesh_size)
-                .mesh_n_high(self.max_mesh_size)
-                .history_length(self.history_length)
-                .history_gossip(self.history_gossip)
-                .heartbeat_interval(Duration::from_secs(self.gossip_heartbeat_interval))
-                .max_transmit_size(self.max_transmit_size)
-                .build()
-                .expect("valid gossipsub configuration");
-
-            let random_walk = if self.random_walk == 0 {
-                None
-            } else {
-                Some(Duration::from_secs(self.random_walk))
-            };
-
-            let heartbeat_config = {
-                let send_duration = Duration::from_secs(self.heartbeat_send_duration);
-                let idle_duration = Duration::from_secs(self.heartbeat_idle_duration);
-                HeartbeatConfig::new(
-                    send_duration,
-                    idle_duration,
-                    self.heartbeat_max_failures,
-                )
-            };
-
-            let config = Config {
-                keypair: local_keypair,
-                network_name: self.network.expect("mandatory value"),
-                checksum: Default::default(),
-                address: self
-                    .address
-                    .unwrap_or_else(|| IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]))),
-                public_address: self.public_address,
-                tcp_port: self.peering_port,
-                max_block_size: self.max_block_size,
-                bootstrap_nodes: self.bootstrap_nodes,
-                reserved_nodes: self.reserved_nodes,
-                reserved_nodes_only_mode: self.reserved_nodes_only_mode,
-                enable_mdns: self.enable_mdns,
-                max_peers_connected: self.max_peers_connected,
-                max_connections_per_peer: self.max_connections_per_peer,
-                allow_private_addresses: self.allow_private_addresses,
-                random_walk,
-                connection_idle_timeout: Some(Duration::from_secs(
-                    self.connection_idle_timeout,
-                )),
-                gossipsub_config,
-                heartbeat_config,
-                set_request_timeout: Duration::from_secs(self.request_timeout),
-                set_connection_keep_alive: Duration::from_secs(
-                    self.connection_keep_alive,
-                ),
-                info_interval: Some(Duration::from_secs(self.info_interval)),
-                identify_interval: Some(Duration::from_secs(self.identify_interval)),
-                metrics,
-                state: NotInitialized,
-            };
-            Ok(Some(config))
-        } else {
+    pub fn into_config(self, metrics: bool) -> anyhow::Result<Config<NotInitialized>> {
+        if !self.enable_p2p {
             tracing::info!("P2P service disabled");
-            Ok(None)
         }
+
+        let local_keypair = {
+            match self.keypair.expect("mandatory value") {
+                KeypairArg::Path(path) => {
+                    let phrase = std::fs::read_to_string(path)?;
+                    let secret_key =
+                        fuel_crypto::SecretKey::new_from_mnemonic_phrase_with_path(
+                            &phrase,
+                            "m/44'/60'/0'/0/0",
+                        )?;
+
+                    convert_to_libp2p_keypair(&mut secret_key.to_vec())?
+                }
+                KeypairArg::InlineSecret(secret_key) => {
+                    convert_to_libp2p_keypair(&mut secret_key.to_vec())?
+                }
+            }
+        };
+
+        let gossipsub_config = default_gossipsub_builder()
+            .mesh_n(self.ideal_mesh_size)
+            .mesh_n_low(self.min_mesh_size)
+            .mesh_n_high(self.max_mesh_size)
+            .history_length(self.history_length)
+            .history_gossip(self.history_gossip)
+            .heartbeat_interval(Duration::from_secs(self.gossip_heartbeat_interval))
+            .max_transmit_size(self.max_transmit_size)
+            .build()
+            .expect("valid gossipsub configuration");
+
+        let random_walk = if self.random_walk == 0 {
+            None
+        } else {
+            Some(Duration::from_secs(self.random_walk))
+        };
+
+        let heartbeat_config = {
+            let send_duration = Duration::from_secs(self.heartbeat_send_duration);
+            let idle_duration = Duration::from_secs(self.heartbeat_idle_duration);
+            HeartbeatConfig::new(
+                send_duration,
+                idle_duration,
+                self.heartbeat_max_failures,
+            )
+        };
+
+        let config = Config {
+            enabled: self.enable_p2p,
+            keypair: local_keypair,
+            network_name: self.network.expect("mandatory value"),
+            checksum: Default::default(),
+            address: self
+                .address
+                .unwrap_or_else(|| IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]))),
+            public_address: self.public_address,
+            tcp_port: self.peering_port,
+            max_block_size: self.max_block_size,
+            bootstrap_nodes: self.bootstrap_nodes,
+            reserved_nodes: self.reserved_nodes,
+            reserved_nodes_only_mode: self.reserved_nodes_only_mode,
+            enable_mdns: self.enable_mdns,
+            max_peers_connected: self.max_peers_connected,
+            max_connections_per_peer: self.max_connections_per_peer,
+            allow_private_addresses: self.allow_private_addresses,
+            random_walk,
+            connection_idle_timeout: Some(Duration::from_secs(
+                self.connection_idle_timeout,
+            )),
+            gossipsub_config,
+            heartbeat_config,
+            set_request_timeout: Duration::from_secs(self.request_timeout),
+            set_connection_keep_alive: Duration::from_secs(self.connection_keep_alive),
+            info_interval: Some(Duration::from_secs(self.info_interval)),
+            identify_interval: Some(Duration::from_secs(self.identify_interval)),
+            metrics,
+            state: NotInitialized,
+        };
+        Ok(config)
     }
 }
