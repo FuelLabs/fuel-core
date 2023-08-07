@@ -67,6 +67,7 @@ const TRANSPORT_TIMEOUT: Duration = Duration::from_secs(20);
 
 #[derive(Clone, Debug)]
 pub struct Config<State = Initialized> {
+    pub enabled: bool,
     /// The keypair used for for handshake during communication with other p2p nodes.
     pub keypair: Keypair,
 
