@@ -96,7 +96,7 @@ pub fn init_sub_services(
         if config.p2p.enabled {
             let p2p_db = database.clone();
             let genesis = p2p_db.get_genesis()?;
-            let p2p_config = config.init(genesis)?;
+            let p2p_config = config.p2p.clone().init(genesis)?;
 
             Some(fuel_core_p2p::service::new_service(
                 p2p_config,

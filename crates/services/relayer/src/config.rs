@@ -17,6 +17,7 @@ pub(crate) static ETH_LOG_MESSAGE: Lazy<H256> =
 #[derive(Clone, Debug)]
 /// Configuration settings for the Relayer.
 pub struct Config {
+    /// Whether to enable the Relayer or not
     pub enabled: bool,
     /// The da block to which the contract was deployed.
     pub da_deploy_height: DaBlockHeight,
