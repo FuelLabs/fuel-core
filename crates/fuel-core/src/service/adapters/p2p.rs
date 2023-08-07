@@ -34,9 +34,9 @@ impl P2pDb for Database {
 
     fn get_sealed_headers_range(
         &self,
-        range: Range<u32>,
+        block_height_range: Range<u32>,
     ) -> StorageResult<Vec<SealedBlockHeader>> {
-        self.get_sealed_block_headers(range)
+        self.get_sealed_block_headers(block_height_range)
     }
 
     fn get_transactions(

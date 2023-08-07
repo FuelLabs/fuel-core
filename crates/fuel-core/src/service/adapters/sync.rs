@@ -62,11 +62,11 @@ impl PeerToPeerPort for P2PAdapter {
 
     async fn get_sealed_block_headers(
         &self,
-        range: Range<u32>,
+        block_range_height: Range<u32>,
     ) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>> {
         if let Some(service) = &self.service {
             Ok(service
-                .get_sealed_block_headers(range)
+                .get_sealed_block_headers(block_range_height)
                 .await?
                 .map(|(peer_id, headers)| {
                     let peer_id: PeerId = peer_id.into();

@@ -88,7 +88,7 @@ enum TaskRequest {
         channel: oneshot::Sender<Option<(PeerId, SealedBlockHeader)>>,
     },
     GetSealedHeaders {
-        range: Range<u32>,
+        block_height_range: Range<u32>,
         channel: oneshot::Sender<Option<(PeerId, Vec<SealedBlockHeader>)>>,
     },
     GetTransactions {
@@ -234,10 +234,13 @@ where
                         let peer = self.p2p_service.peer_manager().get_peer_id_with_height(&height);
                         let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
                     }
-                    Some(TaskRequest::GetSealedHeaders { range, channel: response}) => {
-                        let request_msg = RequestMessage::SealedHeaders(range.clone());
+                    Some(TaskRequest::GetSealedHeaders { block_height_range, channel: response}) => {
+                        let request_msg = RequestMessage::SealedHeaders(block_height_range.clone());
                         let channel_item = ResponseChannelItem::SealedHeaders(response);
-                        let peer = self.p2p_service.peer_manager().get_peer_id_with_height(&range.end.into());
+                        // Note: this range has already been check for validity
+                        let block_height = BlockHeight::from(block_height_range.end-1);
+                        let peer = self.p2p_service.peer_manager()
+                             .get_peer_id_with_height(&block_height);
                         let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
                     }
                     Some(TaskRequest::GetTransactions { block_id, from_peer, channel }) => {
@@ -404,13 +407,19 @@ impl SharedState {
 
     pub async fn get_sealed_block_headers(
         &self,
-        range: Range<u32>,
+        block_height_range: Range<u32>,
     ) -> anyhow::Result<Option<(Vec<u8>, Vec<SealedBlockHeader>)>> {
         let (sender, receiver) = oneshot::channel();
 
+        if block_height_range.is_empty() {
+            return Err(anyhow!(
+                "Cannot retrieve headers for an empty range of block heights"
+            ))
+        }
+
         self.request_sender
             .send(TaskRequest::GetSealedHeaders {
-                range,
+                block_height_range,
                 channel: sender,
             })
             .await?;
@@ -606,7 +615,7 @@ pub mod tests {
 
         fn get_sealed_headers_range(
             &self,
-            _range: Range<u32>,
+            _block_height_range: Range<u32>,
         ) -> StorageResult<Vec<SealedBlockHeader>> {
             todo!()
         }

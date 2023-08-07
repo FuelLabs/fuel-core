@@ -96,9 +96,9 @@ impl Database {
 
     pub fn get_sealed_block_headers(
         &self,
-        range: Range<u32>,
+        block_height_range: Range<u32>,
     ) -> StorageResult<Vec<SealedBlockHeader>> {
-        let headers = range
+        let headers = block_height_range
             .map(BlockHeight::from)
             .map(|height| self.get_sealed_block_header_by_height(&height))
             .collect::<StorageResult<Vec<_>>>()?

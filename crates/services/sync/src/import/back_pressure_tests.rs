@@ -170,14 +170,14 @@ impl PeerToPeerPort for PressurePeerToPeer {
 
     async fn get_sealed_block_headers(
         &self,
-        range: Range<u32>,
+        block_height_range: Range<u32>,
     ) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>> {
         // TODO: Does this need more count tracking?
-        for _ in range.clone() {
+        for _ in block_height_range.clone() {
             // self.counts.apply(|c| c.inc_headers());
             self.counts.apply(|c| c.inc_blocks());
         }
-        self.p2p.get_sealed_block_headers(range).await
+        self.p2p.get_sealed_block_headers(block_height_range).await
     }
 
     async fn get_transactions(
