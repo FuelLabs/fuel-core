@@ -173,7 +173,7 @@ impl PeerToPeerPort for PressurePeerToPeer {
         range: Range<u32>,
     ) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>> {
         // TODO: Does this need more count tracking?
-        for _ in range.to_owned() {
+        for _ in range.clone() {
             // self.counts.apply(|c| c.inc_headers());
             self.counts.apply(|c| c.inc_blocks());
         }

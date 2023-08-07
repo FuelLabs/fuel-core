@@ -410,7 +410,7 @@ impl SharedState {
 
         self.request_sender
             .send(TaskRequest::GetSealedHeaders {
-                range: range.to_owned(),
+                range,
                 channel: sender,
             })
             .await?;

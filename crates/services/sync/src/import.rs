@@ -168,7 +168,7 @@ where
             Err(e) => return (0, Err(e)),
         };
         let headers =
-            only_include_headers_that_match_range_order(unchecked_headers, range.clone());
+            only_include_headers_that_match_range_order(unchecked_headers, range);
 
         futures::stream::iter(headers)
         .map({

@@ -15,6 +15,7 @@ use fuel_core_types::{
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
 };
+use std::ops::Range;
 
 impl P2pDb for Database {
     fn get_sealed_block(
@@ -33,10 +34,9 @@ impl P2pDb for Database {
 
     fn get_sealed_headers_range(
         &self,
-        start_height: &BlockHeight,
-        end_height: &BlockHeight,
+        range: Range<u32>,
     ) -> StorageResult<Vec<SealedBlockHeader>> {
-        self.get_sealed_block_headers(start_height, end_height)
+        self.get_sealed_block_headers(range)
     }
 
     fn get_transactions(
