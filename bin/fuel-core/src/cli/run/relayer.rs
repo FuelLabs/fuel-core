@@ -72,5 +72,6 @@ impl RelayerArgs {
             syncing_log_frequency: Duration::from_secs(self.syncing_log_frequency_secs),
             metrics: false,
         };
+        config
     }
 }

@@ -317,7 +317,7 @@ impl Command {
             block_executor: Default::default(),
             block_importer: Default::default(),
             #[cfg(feature = "relayer")]
-            relayer: relayer_args.into(),
+            relayer: relayer_cfg,
             #[cfg(feature = "p2p")]
             p2p: p2p_cfg,
             #[cfg(feature = "p2p")]
@@ -338,15 +338,16 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     let network_name = {
         #[cfg(feature = "p2p")]
         {
-            config
-                .p2p
-                .as_ref()
-                .map(|config| config.network_name.clone())
-                .unwrap_or_else(|| "default_network".to_string())
+            if config.p2p.enabled {
+                &config.p2p.network_name
+            } else {
+                "default_network"
+            }
         }
         #[cfg(not(feature = "p2p"))]
-        "default_network".to_string()
-    };
+        "default_network"
+    }
+    .to_string();
     // log fuel-core version
     info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
     trace!("Initializing in TRACE mode.");

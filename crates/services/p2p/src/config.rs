@@ -67,6 +67,7 @@ const TRANSPORT_TIMEOUT: Duration = Duration::from_secs(20);
 
 #[derive(Clone, Debug)]
 pub struct Config<State = Initialized> {
+    /// Whether to enable P2P or not
     pub enabled: bool,
     /// The keypair used for for handshake during communication with other p2p nodes.
     pub keypair: Keypair,
@@ -150,6 +151,7 @@ impl Config<NotInitialized> {
         use fuel_core_chain_config::GenesisCommitment;
 
         Ok(Config {
+            enabled: self.enabled,
             keypair: self.keypair,
             network_name: self.network_name,
             checksum: genesis.root()?.into(),
@@ -193,6 +195,7 @@ impl Config<NotInitialized> {
         let keypair = Keypair::generate_secp256k1();
 
         Self {
+            enabled: false,
             keypair,
             network_name: network_name.into(),
             checksum: Default::default(),
