@@ -8,6 +8,7 @@ use criterion::{
     BenchmarkGroup,
     Criterion,
 };
+use std::time::Duration;
 
 use fuel_core_benches::*;
 use fuel_core_storage::transactional::Transaction;
@@ -39,8 +40,9 @@ where
                 db_txn
             };
 
-            let start = std::time::Instant::now();
+            let mut elapsed_time = Duration::default();
             for _ in 0..iters {
+                let start = std::time::Instant::now();
                 match instruction {
                     Instruction::CALL(call) => {
                         let (ra, rb, rc, rd) = call.unpack();
@@ -50,12 +52,13 @@ where
                         black_box(vm.instruction(*instruction).unwrap());
                     }
                 }
+                elapsed_time += start.elapsed();
                 vm.reset_vm_state(diff);
             }
             db_txn.commit().unwrap();
             // restore original db
             *vm.as_mut().database_mut() = original_db;
-            start.elapsed()
+            elapsed_time
         })
     });
 }

@@ -131,7 +131,7 @@ pub fn run(c: &mut Criterion) {
         mem_meq.throughput(Throughput::Bytes(i));
 
         let mut prepare_script =
-            vec![op::move_(0x11, RegId::SP), op::move_(0x12, RegId::SP)];
+            vec![op::move_(0x11, RegId::ZERO), op::move_(0x12, RegId::ZERO)];
         prepare_script.extend(set_full_word(0x13, i));
 
         run_group_ref(
