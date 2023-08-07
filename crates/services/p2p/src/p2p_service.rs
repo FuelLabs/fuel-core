@@ -621,10 +621,8 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                                 }
                             }
                             (
-                                Some(ResponseChannelItem::SealedHeadersRangeInclusive(
-                                    channel,
-                                )),
-                                Ok(ResponseMessage::SealedHeadersRangeInclusive(headers)),
+                                Some(ResponseChannelItem::SealedHeaders(channel)),
+                                Ok(ResponseMessage::SealedHeaders(headers)),
                             ) => {
                                 if channel.send(Some((peer, headers))).is_err() {
                                     debug!(
@@ -705,7 +703,10 @@ mod tests {
                 Consensus,
                 ConsensusVote,
             },
-            header::PartialBlockHeader,
+            header::{
+                BlockHeader,
+                PartialBlockHeader,
+            },
             primitives::BlockId,
             SealedBlock,
             SealedBlockHeader,
@@ -1529,8 +1530,9 @@ mod tests {
 
     fn arbitrary_headers() -> Vec<SealedBlockHeader> {
         let mut blocks = Vec::new();
-        for _ in 2..=5 {
-            let header = Default::default();
+        for i in 2..=5 {
+            let mut header: BlockHeader = Default::default();
+            header.consensus.height = i.into();
 
             let sealed_block = SealedBlockHeader {
                 entity: header,
@@ -1575,10 +1577,10 @@ mod tests {
                             if !peer_addresses.is_empty() && !request_sent {
                                 request_sent = true;
 
-                                match request_msg {
+                                match &request_msg {
                                     RequestMessage::Block(_) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg, ResponseChannelItem::Block(tx_orchestrator)).is_ok());
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::Block(tx_orchestrator)).is_ok());
                                         let tx_test_end = tx_test_end.clone();
 
                                         tokio::spawn(async move {
@@ -1595,7 +1597,7 @@ mod tests {
                                     }
                                     RequestMessage::SealedHeader(_) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg, ResponseChannelItem::SealedHeader(tx_orchestrator)).is_ok());
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::SealedHeader(tx_orchestrator)).is_ok());
                                         let tx_test_end = tx_test_end.clone();
 
                                         tokio::spawn(async move {
@@ -1609,9 +1611,9 @@ mod tests {
                                             }
                                         });
                                     }
-                                    RequestMessage::SealedHeadersRangeInclusive(_, _) => {
+                                    RequestMessage::SealedHeaders(_) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg, ResponseChannelItem::SealedHeadersRangeInclusive(tx_orchestrator)).is_ok());
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::SealedHeaders(tx_orchestrator)).is_ok());
                                         let tx_test_end = tx_test_end.clone();
 
                                         tokio::spawn(async move {
@@ -1630,7 +1632,7 @@ mod tests {
                                     }
                                     RequestMessage::Transactions(_) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg, ResponseChannelItem::Transactions(tx_orchestrator)).is_ok());
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::Transactions(tx_orchestrator)).is_ok());
                                         let tx_test_end = tx_test_end.clone();
 
                                         tokio::spawn(async move {
@@ -1653,7 +1655,7 @@ mod tests {
                 },
                 node_b_event = node_b.next_event() => {
                     // 2. Node B receives the RequestMessage from Node A initiated by the NetworkOrchestrator
-                    if let Some(FuelP2PEvent::RequestMessage{ request_id, request_message: received_request_message }) = node_b_event {
+                    if let Some(FuelP2PEvent::RequestMessage{ request_id, request_message: received_request_message }) = &node_b_event {
                         match received_request_message {
                             RequestMessage::Block(_) => {
                                 let block = Block::new(PartialBlockHeader::default(), (0..5).map(|_| Transaction::default_test_tx()).collect(), &[]);
@@ -1663,7 +1665,7 @@ mod tests {
                                     consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
                                 };
 
-                                let _ = node_b.send_response_msg(request_id, OutboundResponse::Block(Some(Arc::new(sealed_block))));
+                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::Block(Some(Arc::new(sealed_block))));
                             }
                             RequestMessage::SealedHeader(_) => {
                                 let header = Default::default();
@@ -1673,16 +1675,16 @@ mod tests {
                                     consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
                                 };
 
-                                let _ = node_b.send_response_msg(request_id, OutboundResponse::SealedHeader(Some(Arc::new(sealed_header))));
+                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::SealedHeader(Some(Arc::new(sealed_header))));
                             }
-                            RequestMessage::SealedHeadersRangeInclusive(_, _) => {
+                            RequestMessage::SealedHeaders(_) => {
                                 let sealed_headers: Vec<_> = arbitrary_headers();
 
-                                let _ = node_b.send_response_msg(request_id, OutboundResponse::SealedHeadersRangeInclusive(sealed_headers));
+                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::SealedHeadersRangeInclusive(sealed_headers));
                             }
                             RequestMessage::Transactions(_) => {
                                 let transactions = (0..5).map(|_| Transaction::default_test_tx()).collect();
-                                let _ = node_b.send_response_msg(request_id, OutboundResponse::Transactions(Some(Arc::new(transactions))));
+                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::Transactions(Some(Arc::new(transactions))));
                             }
                         }
 
@@ -1710,11 +1712,7 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn request_response_works_with_sealed_headers_range_inclusive() {
-        request_response_works_with(RequestMessage::SealedHeadersRangeInclusive(
-            0.into(),
-            0.into(),
-        ))
-        .await
+        request_response_works_with(RequestMessage::SealedHeaders(0..0)).await
     }
 
     #[tokio::test]

@@ -31,12 +31,12 @@ impl P2pDb for Database {
         self.get_sealed_block_header_by_height(height)
     }
 
-    fn get_sealed_headers_range_inclusive(
+    fn get_sealed_headers_range(
         &self,
         start_height: &BlockHeight,
         end_height: &BlockHeight,
     ) -> StorageResult<Vec<SealedBlockHeader>> {
-        self.get_sealed_block_headers_range_inclusive(start_height, end_height)
+        self.get_sealed_block_headers(start_height, end_height)
     }
 
     fn get_transactions(

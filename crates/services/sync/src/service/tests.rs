@@ -33,10 +33,13 @@ async fn test_new_service() {
         })
         .into_boxed()
     });
-    p2p.expect_get_sealed_block_headers_inclusive()
-        .returning(|s, f| {
-            Ok((*s..=*f).map(BlockHeight::from).map(empty_header).collect())
-        });
+    p2p.expect_get_sealed_block_headers().returning(|range| {
+        Ok(range
+            .clone()
+            .map(BlockHeight::from)
+            .map(empty_header)
+            .collect())
+    });
     p2p.expect_get_transactions()
         .returning(|_| Ok(Some(vec![])));
     let mut importer = MockBlockImporterPort::default();

@@ -25,6 +25,7 @@ use fuel_core_types::{
         SourcePeer,
     },
 };
+use std::ops::Range;
 
 #[async_trait::async_trait]
 impl PeerToPeerPort for P2PAdapter {
@@ -59,14 +60,13 @@ impl PeerToPeerPort for P2PAdapter {
         }
     }
 
-    async fn get_sealed_block_headers_inclusive(
+    async fn get_sealed_block_headers(
         &self,
-        start: BlockHeight,
-        end: BlockHeight,
+        range: Range<u32>,
     ) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>> {
         if let Some(service) = &self.service {
             Ok(service
-                .get_sealed_block_headers_inclusive(start, end)
+                .get_sealed_block_headers(range)
                 .await?
                 .map(|(peer_id, headers)| {
                     let peer_id: PeerId = peer_id.into();

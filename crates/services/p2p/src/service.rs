@@ -60,6 +60,7 @@ use libp2p::{
 };
 use std::{
     fmt::Debug,
+    ops::Range,
     sync::Arc,
 };
 use tokio::sync::{
@@ -86,9 +87,8 @@ enum TaskRequest {
         height: BlockHeight,
         channel: oneshot::Sender<Option<(PeerId, SealedBlockHeader)>>,
     },
-    GetSealedHeadersRangeInclusive {
-        start: BlockHeight,
-        end: BlockHeight,
+    GetSealedHeaders {
+        range: Range<u32>,
         channel: oneshot::Sender<Option<(PeerId, Vec<SealedBlockHeader>)>>,
     },
     GetTransactions {
@@ -234,10 +234,10 @@ where
                         let peer = self.p2p_service.peer_manager().get_peer_id_with_height(&height);
                         let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
                     }
-                    Some(TaskRequest::GetSealedHeadersRangeInclusive { start, end, channel: response}) => {
-                        let request_msg = RequestMessage::SealedHeadersRangeInclusive(start, end);
-                        let channel_item = ResponseChannelItem::SealedHeadersRangeInclusive(response);
-                        let peer = self.p2p_service.peer_manager().get_peer_id_with_height(&start);
+                    Some(TaskRequest::GetSealedHeaders { range, channel: response}) => {
+                        let request_msg = RequestMessage::SealedHeaders(range.clone());
+                        let channel_item = ResponseChannelItem::SealedHeaders(response);
+                        let peer = self.p2p_service.peer_manager().get_peer_id_with_height(&range.end.into());
                         let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
                     }
                     Some(TaskRequest::GetTransactions { block_id, from_peer, channel }) => {
@@ -306,8 +306,8 @@ where
 
                                 let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeader(response));
                             }
-                            RequestMessage::SealedHeadersRangeInclusive(start, finish) => {
-                                let response = self.db.get_sealed_headers_range_inclusive(&start, &finish)?;
+                            RequestMessage::SealedHeaders(range) => {
+                                let response = self.db.get_sealed_headers_range(range)?;
 
                                 let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeadersRangeInclusive(response));
                             }
@@ -402,17 +402,15 @@ impl SharedState {
             .map_err(|e| anyhow!("{}", e))
     }
 
-    pub async fn get_sealed_block_headers_inclusive(
+    pub async fn get_sealed_block_headers(
         &self,
-        start: BlockHeight,
-        end: BlockHeight,
+        range: Range<u32>,
     ) -> anyhow::Result<Option<(Vec<u8>, Vec<SealedBlockHeader>)>> {
         let (sender, receiver) = oneshot::channel();
 
         self.request_sender
-            .send(TaskRequest::GetSealedHeadersRangeInclusive {
-                start,
-                end,
+            .send(TaskRequest::GetSealedHeaders {
+                range: range.to_owned(),
                 channel: sender,
             })
             .await?;
@@ -606,10 +604,9 @@ pub mod tests {
             }))
         }
 
-        fn get_sealed_headers_range_inclusive(
+        fn get_sealed_headers_range(
             &self,
-            _start_height: &BlockHeight,
-            _end_height: &BlockHeight,
+            _range: Range<u32>,
         ) -> StorageResult<Vec<SealedBlockHeader>> {
             todo!()
         }

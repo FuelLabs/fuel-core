@@ -303,8 +303,7 @@ async fn get_header_range_single_req(
 ) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>> {
     let start = *range.start();
     let end = *range.end();
-    p2p.get_sealed_block_headers_inclusive(start.into(), end.into())
-        .await
+    p2p.get_sealed_block_headers(start..end + 1).await
 }
 
 #[tracing::instrument(

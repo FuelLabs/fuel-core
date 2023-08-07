@@ -77,9 +77,9 @@ async fn import__signature_fails_on_header_4_only() {
 async fn import__header_not_found() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_get_sealed_block_headers_inclusive()
+    p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_, _| Ok(Vec::new()));
+        .returning(|_| Ok(Vec::new()));
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
@@ -99,9 +99,9 @@ async fn import__header_not_found() {
 async fn import__header_5_not_found() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_get_sealed_block_headers_inclusive()
+    p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_, _| Ok(vec![empty_header(4.into())]));
+        .returning(|_| Ok(vec![empty_header(4.into())]));
     p2p.expect_get_transactions()
         .times(1)
         .returning(|_| Ok(Some(vec![])));
@@ -124,9 +124,9 @@ async fn import__header_5_not_found() {
 async fn import__header_4_not_found() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_get_sealed_block_headers_inclusive()
+    p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_, _| Ok(vec![empty_header(5.into())]));
+        .returning(|_| Ok(vec![empty_header(5.into())]));
     p2p.expect_get_transactions()
         .times(0)
         .returning(|_| Ok(Some(vec![])));
@@ -149,9 +149,9 @@ async fn import__header_4_not_found() {
 async fn import__transactions_not_found() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_get_sealed_block_headers_inclusive()
+    p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_, _| Ok(vec![empty_header(4.into()), empty_header(5.into())]));
+        .returning(|_| Ok(vec![empty_header(4.into()), empty_header(5.into())]));
     p2p.expect_get_transactions()
         .times(1)
         .returning(|_| Ok(None));
@@ -174,9 +174,9 @@ async fn import__transactions_not_found() {
 async fn import__transactions_not_found_for_header_4() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_get_sealed_block_headers_inclusive()
+    p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_, _| Ok(vec![empty_header(4.into()), empty_header(5.into())]));
+        .returning(|_| Ok(vec![empty_header(4.into()), empty_header(5.into())]));
     let mut height = 3;
     p2p.expect_get_transactions().times(1).returning(move |_| {
         height += 1;
@@ -205,9 +205,9 @@ async fn import__transactions_not_found_for_header_4() {
 async fn import__transactions_not_found_for_header_5() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_get_sealed_block_headers_inclusive()
+    p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_, _| Ok(vec![empty_header(4.into()), empty_header(5.into())]));
+        .returning(|_| Ok(vec![empty_header(4.into()), empty_header(5.into())]));
     let mut height = 3;
     p2p.expect_get_transactions().times(2).returning(move |_| {
         height += 1;
@@ -236,9 +236,9 @@ async fn import__transactions_not_found_for_header_5() {
 async fn import__p2p_error() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_get_sealed_block_headers_inclusive()
+    p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_, _| Err(anyhow::anyhow!("Some network error")));
+        .returning(|_| Err(anyhow::anyhow!("Some network error")));
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
@@ -258,9 +258,9 @@ async fn import__p2p_error() {
 async fn import__p2p_error_on_4_transactions() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_get_sealed_block_headers_inclusive()
+    p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_, _| Ok(vec![empty_header(4.into()), empty_header(5.into())]));
+        .returning(|_| Ok(vec![empty_header(4.into()), empty_header(5.into())]));
     let mut height = 3;
     p2p.expect_get_transactions().times(1).returning(move |_| {
         height += 1;
@@ -289,9 +289,9 @@ async fn import__p2p_error_on_4_transactions() {
 async fn import__p2p_error_on_5_transactions() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_get_sealed_block_headers_inclusive()
+    p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_, _| Ok(vec![empty_header(4.into()), empty_header(5.into())]));
+        .returning(|_| Ok(vec![empty_header(4.into()), empty_header(5.into())]));
     let mut height = 3;
     p2p.expect_get_transactions().times(2).returning(move |_| {
         height += 1;
@@ -465,13 +465,11 @@ async fn import__can_work_in_two_loops() {
     let s = SharedMutex::new(State::new(3, 5));
     let state = s.clone();
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_get_sealed_block_headers_inclusive()
+    p2p.expect_get_sealed_block_headers()
         .times(2)
-        .returning(move |start, finish| {
+        .returning(move |range| {
             state.apply(|s| s.observe(6));
-            let headers = (u32::from(start)..=u32::from(finish))
-                .map(|h| empty_header(h.into()))
-                .collect();
+            let headers = range.clone().map(|h| empty_header(h.into())).collect();
             Ok(headers)
         });
     p2p.expect_get_transactions()
@@ -610,12 +608,10 @@ impl DefaultMocks for MockPeerToPeerPort {
         let mut p2p = MockPeerToPeerPort::default();
         let mut t = t.into_iter().cycle();
 
-        p2p.expect_get_sealed_block_headers_inclusive()
+        p2p.expect_get_sealed_block_headers()
             .times(1)
-            .returning(|start, end| {
-                Ok((u32::from(start)..=u32::from(end))
-                    .map(|h| empty_header(h.into()))
-                    .collect())
+            .returning(|range| {
+                Ok(range.clone().map(|h| empty_header(h.into())).collect())
             });
         p2p.expect_get_transactions()
             .times(t.next().unwrap())

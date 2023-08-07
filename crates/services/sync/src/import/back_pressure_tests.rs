@@ -1,4 +1,7 @@
-use std::time::Duration;
+use std::{
+    ops::Range,
+    time::Duration,
+};
 
 use fuel_core_services::stream::BoxStream;
 use fuel_core_types::{
@@ -165,19 +168,16 @@ impl PeerToPeerPort for PressurePeerToPeer {
         self.p2p.get_sealed_block_header(height).await
     }
 
-    async fn get_sealed_block_headers_inclusive(
+    async fn get_sealed_block_headers(
         &self,
-        start: BlockHeight,
-        end: BlockHeight,
+        range: Range<u32>,
     ) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>> {
         // TODO: Does this need more count tracking?
-        for _ in *start..=*end {
+        for _ in range.to_owned() {
             // self.counts.apply(|c| c.inc_headers());
             self.counts.apply(|c| c.inc_blocks());
         }
-        self.p2p
-            .get_sealed_block_headers_inclusive(start, end)
-            .await
+        self.p2p.get_sealed_block_headers(range).await
     }
 
     async fn get_transactions(
@@ -225,10 +225,13 @@ impl ConsensusPort for PressureConsensus {
 impl PressurePeerToPeer {
     fn new(counts: SharedCounts, delays: [Duration; 2]) -> Self {
         let mut mock = MockPeerToPeerPort::default();
-        mock.expect_get_sealed_block_headers_inclusive()
-            .returning(|s, f| {
-                Ok((*s..=*f).map(BlockHeight::from).map(empty_header).collect())
-            });
+        mock.expect_get_sealed_block_headers().returning(|range| {
+            Ok(range
+                .clone()
+                .map(BlockHeight::from)
+                .map(empty_header)
+                .collect())
+        });
         mock.expect_get_transactions()
             .returning(|_| Ok(Some(vec![])));
         Self {
