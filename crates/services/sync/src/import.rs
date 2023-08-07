@@ -167,7 +167,8 @@ where
             Ok(headers) => headers,
             Err(e) => return (0, Err(e)),
         };
-        let headers = check_headers_match_range(&unchecked_headers, range.clone());
+        let headers =
+            only_include_headers_that_match_range_order(unchecked_headers, range);
 
         futures::stream::iter(headers)
         .map({
@@ -260,18 +261,30 @@ where
     }
 }
 
+fn some_if_height_matches(
+    header: SourcePeer<SealedBlockHeader>,
+    height: u32,
+) -> Option<SourcePeer<SealedBlockHeader>> {
+    if *(header.data.entity.height()) == height.into() {
+        Some(header)
+    } else {
+        None
+    }
+}
+
 // The response from the P2P network isn't guaranteed to include all the
-fn check_headers_match_range(
-    headers: &[SourcePeer<SealedBlockHeader>],
+fn only_include_headers_that_match_range_order(
+    headers: Vec<SourcePeer<SealedBlockHeader>>,
     range: RangeInclusive<u32>,
 ) -> Vec<SourcePeer<SealedBlockHeader>> {
     let mut new_headers = Vec::new();
-    let mut header_iter = headers.iter();
+    let mut header_iter = headers.into_iter();
     for height in range {
-        if let Some(header) =
-            header_iter.find(|h| h.data.entity.height() == &height.into())
+        if let Some(header) = header_iter
+            .next()
+            .and_then(|header| some_if_height_matches(header, height))
         {
-            new_headers.push(header.clone());
+            new_headers.push(header);
         } else {
             break
         }
@@ -303,8 +316,7 @@ async fn get_header_range_single_req(
 ) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>> {
     let start = *range.start();
     let end = *range.end();
-    p2p.get_sealed_block_headers_inclusive(start.into(), end.into())
-        .await
+    p2p.get_sealed_block_headers(start..end + 1).await
 }
 
 #[tracing::instrument(
@@ -432,13 +444,3 @@ impl<S> ScanErr<S> {
         })
     }
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use crate::ports::MockPeerToPeerPort;
-//
-//     #[test]
-//     fn get_header_range() {
-//         let p2p = MockPeerToPeerPort
-//     }
-// }

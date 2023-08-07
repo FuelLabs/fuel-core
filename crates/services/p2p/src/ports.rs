@@ -9,6 +9,7 @@ use fuel_core_types::{
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
 };
+use std::ops::Range;
 
 pub trait P2pDb: Send + Sync {
     fn get_sealed_block(
@@ -21,10 +22,9 @@ pub trait P2pDb: Send + Sync {
         height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlockHeader>>;
 
-    fn get_sealed_headers_range_inclusive(
+    fn get_sealed_headers_range(
         &self,
-        start_height: &BlockHeight,
-        end_height: &BlockHeight,
+        range: Range<u32>,
     ) -> StorageResult<Vec<SealedBlockHeader>>;
 
     fn get_transactions(

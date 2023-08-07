@@ -26,6 +26,7 @@ use fuel_core_types::{
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
 };
+use std::ops::Range;
 
 impl DatabaseColumn for SealedBlockConsensus {
     fn column() -> Column {
@@ -93,12 +94,11 @@ impl Database {
         self.get_sealed_block_header(&block_id)
     }
 
-    pub fn get_sealed_block_headers_range_inclusive(
+    pub fn get_sealed_block_headers(
         &self,
-        start: &BlockHeight,
-        finish: &BlockHeight,
+        range: Range<u32>,
     ) -> StorageResult<Vec<SealedBlockHeader>> {
-        let headers = (u32::from(*start)..=u32::from(*finish))
+        let headers = range
             .map(BlockHeight::from)
             .map(|height| self.get_sealed_block_header_by_height(&height))
             .collect::<StorageResult<Vec<_>>>()?

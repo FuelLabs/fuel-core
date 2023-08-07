@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    ops::Range,
+    sync::Arc,
+};
 
 use fuel_core_types::{
     blockchain::{
@@ -38,11 +41,11 @@ pub type ChannelItem<T> = oneshot::Sender<Option<T>>;
 // Client Peer: `NetworkResponse` (receive response) -> `ResponseMessage(data)` -> `ResponseChannelItem(channel, data)` (handle response)
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub enum RequestMessage {
     Block(BlockHeight),
     SealedHeader(BlockHeight),
-    SealedHeadersRangeInclusive(BlockHeight, BlockHeight),
+    SealedHeaders(Range<u32>),
     Transactions(#[serde_as(as = "FromInto<[u8; 32]>")] BlockId),
 }
 
@@ -51,7 +54,7 @@ pub enum RequestMessage {
 pub enum ResponseMessage {
     SealedBlock(Option<SealedBlock>),
     SealedHeader(Option<SealedBlockHeader>),
-    SealedHeadersRangeInclusive(Vec<SealedBlockHeader>),
+    SealedHeaders(Vec<SealedBlockHeader>),
     Transactions(Option<Vec<Transaction>>),
 }
 
@@ -60,7 +63,7 @@ pub enum ResponseMessage {
 pub enum ResponseChannelItem {
     Block(ChannelItem<SealedBlock>),
     SealedHeader(ChannelItem<(PeerId, SealedBlockHeader)>),
-    SealedHeadersRangeInclusive(ChannelItem<(PeerId, Vec<SealedBlockHeader>)>),
+    SealedHeaders(ChannelItem<(PeerId, Vec<SealedBlockHeader>)>),
     Transactions(ChannelItem<Vec<Transaction>>),
 }
 

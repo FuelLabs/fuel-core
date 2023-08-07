@@ -14,6 +14,7 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
     services::p2p::SourcePeer,
 };
+use std::ops::Range;
 
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
@@ -33,10 +34,9 @@ pub trait PeerToPeerPort {
 
     /// Request range of sealed block headers from the network
     /// starting from block height `start` up to, and including `end`.
-    async fn get_sealed_block_headers_inclusive(
+    async fn get_sealed_block_headers(
         &self,
-        start: BlockHeight,
-        end: BlockHeight,
+        range: Range<u32>,
     ) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>>;
 
     /// Request transactions from the network for the given block
