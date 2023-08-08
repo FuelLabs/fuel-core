@@ -32,13 +32,19 @@ const MAX_RESPONSE_SIZE_STR: &str = const_format::formatcp!("{MAX_RESPONSE_SIZE}
 
 #[derive(Debug, Clone, Args)]
 pub struct P2PArgs {
+    /// Enable P2P. By default, P2P is disabled, even when the binary is compiled with the "p2p"
+    /// feature flag. Providing `--enable-p2p` will enable the P2P service.
+    #[clap(long, short, action)]
+    pub enable_p2p: bool,
+
     /// Peering secret key. Supports either a hex encoded secret key inline or a path to bip32 mnemonic encoded secret file.
     #[clap(long = "keypair", env, value_parser = KeypairArg::try_from_string)]
+    #[arg(required_if_eq("enable_p2p", "true"))]
     pub keypair: Option<KeypairArg>,
 
     /// The name of the p2p Network
-    /// If this value is not provided the p2p network won't start
     #[clap(long = "network", env)]
+    #[arg(required_if_eq("enable_p2p", "true"))]
     pub network: Option<String>,
 
     /// p2p network's IP Address
@@ -211,57 +217,55 @@ impl P2PArgs {
         self,
         metrics: bool,
     ) -> anyhow::Result<Option<Config<NotInitialized>>> {
-        let local_keypair = {
-            match self.keypair {
-                Some(KeypairArg::Path(path)) => {
-                    let phrase = std::fs::read_to_string(path)?;
+        if self.enable_p2p {
+            let local_keypair = {
+                match self.keypair.expect("mandatory value") {
+                    KeypairArg::Path(path) => {
+                        let phrase = std::fs::read_to_string(path)?;
+                        let secret_key =
+                            fuel_crypto::SecretKey::new_from_mnemonic_phrase_with_path(
+                                &phrase,
+                                "m/44'/60'/0'/0/0",
+                            )?;
 
-                    let secret_key =
-                        fuel_crypto::SecretKey::new_from_mnemonic_phrase_with_path(
-                            &phrase,
-                            "m/44'/60'/0'/0/0",
-                        )?;
-
-                    Some(convert_to_libp2p_keypair(&mut secret_key.to_vec())?)
+                        convert_to_libp2p_keypair(&mut secret_key.to_vec())?
+                    }
+                    KeypairArg::InlineSecret(secret_key) => {
+                        convert_to_libp2p_keypair(&mut secret_key.to_vec())?
+                    }
                 }
-                Some(KeypairArg::InlineSecret(secret_key)) => {
-                    Some(convert_to_libp2p_keypair(&mut secret_key.to_vec())?)
-                }
-                _ => None,
-            }
-        };
+            };
 
-        let gossipsub_config = default_gossipsub_builder()
-            .mesh_n(self.ideal_mesh_size)
-            .mesh_n_low(self.min_mesh_size)
-            .mesh_n_high(self.max_mesh_size)
-            .history_length(self.history_length)
-            .history_gossip(self.history_gossip)
-            .heartbeat_interval(Duration::from_secs(self.gossip_heartbeat_interval))
-            .max_transmit_size(self.max_transmit_size)
-            .build()
-            .expect("valid gossipsub configuration");
+            let gossipsub_config = default_gossipsub_builder()
+                .mesh_n(self.ideal_mesh_size)
+                .mesh_n_low(self.min_mesh_size)
+                .mesh_n_high(self.max_mesh_size)
+                .history_length(self.history_length)
+                .history_gossip(self.history_gossip)
+                .heartbeat_interval(Duration::from_secs(self.gossip_heartbeat_interval))
+                .max_transmit_size(self.max_transmit_size)
+                .build()
+                .expect("valid gossipsub configuration");
 
-        let random_walk = if self.random_walk == 0 {
-            None
-        } else {
-            Some(Duration::from_secs(self.random_walk))
-        };
+            let random_walk = if self.random_walk == 0 {
+                None
+            } else {
+                Some(Duration::from_secs(self.random_walk))
+            };
 
-        let heartbeat_config = {
-            let send_duration = Duration::from_secs(self.heartbeat_send_duration);
-            let idle_duration = Duration::from_secs(self.heartbeat_idle_duration);
-            HeartbeatConfig::new(
-                send_duration,
-                idle_duration,
-                self.heartbeat_max_failures,
-            )
-        };
+            let heartbeat_config = {
+                let send_duration = Duration::from_secs(self.heartbeat_send_duration);
+                let idle_duration = Duration::from_secs(self.heartbeat_idle_duration);
+                HeartbeatConfig::new(
+                    send_duration,
+                    idle_duration,
+                    self.heartbeat_max_failures,
+                )
+            };
 
-        let config = || -> Option<Config<NotInitialized>> {
-            Some(Config {
-                keypair: local_keypair?,
-                network_name: self.network?,
+            let config = Config {
+                keypair: local_keypair,
+                network_name: self.network.expect("mandatory value"),
                 checksum: Default::default(),
                 address: self
                     .address
@@ -290,9 +294,11 @@ impl P2PArgs {
                 identify_interval: Some(Duration::from_secs(self.identify_interval)),
                 metrics,
                 state: NotInitialized,
-            })
-        };
-
-        Ok(config())
+            };
+            Ok(Some(config))
+        } else {
+            tracing::info!("P2P service disabled");
+            Ok(None)
+        }
     }
 }

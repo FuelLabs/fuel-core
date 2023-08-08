@@ -209,6 +209,24 @@ impl Database {
         }
     }
 
+    #[cfg(feature = "rocksdb")]
+    pub fn rocksdb() -> Self {
+        let tmp_dir = TempDir::new().unwrap();
+        let db = RocksDb::default_open(tmp_dir.path(), None).unwrap();
+        Self {
+            data: Arc::new(db),
+            _drop: Arc::new(
+                {
+                    move || {
+                        // cleanup temp dir
+                        drop(tmp_dir);
+                    }
+                }
+                .into(),
+            ),
+        }
+    }
+
     pub fn transaction(&self) -> DatabaseTransaction {
         self.into()
     }
@@ -423,27 +441,11 @@ impl Default for Database {
     fn default() -> Self {
         #[cfg(not(feature = "rocksdb"))]
         {
-            Self {
-                data: Arc::new(MemoryStore::default()),
-                _drop: Default::default(),
-            }
+            Self::in_memory()
         }
         #[cfg(feature = "rocksdb")]
         {
-            let tmp_dir = TempDir::new().unwrap();
-            let db = RocksDb::default_open(tmp_dir.path(), None).unwrap();
-            Self {
-                data: Arc::new(db),
-                _drop: Arc::new(
-                    {
-                        move || {
-                            // cleanup temp dir
-                            drop(tmp_dir);
-                        }
-                    }
-                    .into(),
-                ),
-            }
+            Self::rocksdb()
         }
     }
 }
