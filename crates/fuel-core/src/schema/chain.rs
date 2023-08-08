@@ -402,6 +402,22 @@ impl GasCosts {
         self.0.ori.into()
     }
 
+    async fn poph(&self) -> U64 {
+        self.0.poph.into()
+    }
+
+    async fn popl(&self) -> U64 {
+        self.0.popl.into()
+    }
+
+    async fn pshh(&self) -> U64 {
+        self.0.pshh.into()
+    }
+
+    async fn pshl(&self) -> U64 {
+        self.0.pshl.into()
+    }
+
     async fn ret(&self) -> U64 {
         self.0.ret.into()
     }

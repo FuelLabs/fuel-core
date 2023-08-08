@@ -336,6 +336,10 @@ type GasCosts {
 	not: U64!
 	or: U64!
 	ori: U64!
+	poph: U64!
+	popl: U64!
+	pshh: U64!
+	pshl: U64!
 	ret: U64!
 	rvrt: U64!
 	s256: U64!
