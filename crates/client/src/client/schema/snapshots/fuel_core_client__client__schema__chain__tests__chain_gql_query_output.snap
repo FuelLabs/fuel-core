@@ -1,6 +1,6 @@
 ---
 source: crates/client/src/client/schema/chain.rs
-assertion_line: 403
+assertion_line: 295
 expression: operation.query
 ---
 query {
@@ -121,6 +121,10 @@ query {
         not
         or
         ori
+        poph
+        popl
+        pshh
+        pshl
         ret
         rvrt
         s256
