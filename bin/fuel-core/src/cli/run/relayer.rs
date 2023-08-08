@@ -11,16 +11,16 @@ use std::str::FromStr;
 
 #[derive(Debug, Clone, Args)]
 pub struct RelayerArgs {
-    /// Enable the Relayer. By default, the Reelayer is disabled, even when the binary is compiled
+    /// Enable the Relayer. By default, the Relayer is disabled, even when the binary is compiled
     /// with the "relayer" feature flag. Providing `--enable-relayer` will enable the relayer
     /// service.
-    #[clap(long, short, action)]
+    #[clap(long = "enable-relayer", action)]
     pub enable_relayer: bool,
 
     /// Uri address to ethereum client. It can be in format of `http://localhost:8545/` or `ws://localhost:8545/`.
     /// If not set relayer will not start.
     #[arg(long = "relayer", env)]
-    #[arg(required_if_eq("enable_relayer", "true"))]
+    #[arg(required_if_eq("enable-relayer", "true"))]
     pub eth_client: Option<url::Url>,
 
     /// Ethereum contract address. Create EthAddress into fuel_types
@@ -59,7 +59,10 @@ pub fn parse_h160(input: &str) -> Result<H160, <H160 as FromStr>::Err> {
 
 impl RelayerArgs {
     pub fn into_config(self) -> Config {
-        if self.enable_relayer {}
+        if !self.enable_relayer {
+            tracing::info!("Relayer service disabled");
+        }
+
         let config = Config {
             enabled: self.enable_relayer,
             da_deploy_height: DaBlockHeight(self.da_deploy_height),
