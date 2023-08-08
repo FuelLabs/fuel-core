@@ -40,10 +40,11 @@ fn run(id: &str, group: &mut BenchmarkGroup<WallTime>, script: Vec<Instruction>)
 
         let database = Database::rocksdb();
         let mut config = Config::local_node();
-        config.chain_conf.transaction_parameters.max_gas_per_tx = TARGET_BLOCK_GAS_LIMIT;
+        config.chain_conf.consensus_parameters.tx_params.max_gas_per_tx = TARGET_BLOCK_GAS_LIMIT;
         config
             .chain_conf
-            .transaction_parameters
+            .consensus_parameters
+            .predicate_params
             .max_gas_per_predicate = TARGET_BLOCK_GAS_LIMIT;
         config.chain_conf.block_gas_limit = TARGET_BLOCK_GAS_LIMIT;
         config.utxo_validation = false;
@@ -73,7 +74,7 @@ fn run(id: &str, group: &mut BenchmarkGroup<WallTime>, script: Vec<Instruction>)
             )
             .finalize_as_transaction();
             async move {
-                let tx_id = tx.id(&config.chain_conf.transaction_parameters.chain_id);
+                let tx_id = tx.id(&config.chain_conf.consensus_parameters.chain_id);
 
                 let mut sub = shared.block_importer.block_importer.subscribe();
                 shared
