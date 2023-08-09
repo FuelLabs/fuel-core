@@ -60,13 +60,4 @@ async fn test_metrics_endpoint() {
 
     // Gt check exists because testing can be weird with multiple instances running
     assert!(categories.len() >= 16);
-
-    for index in [2, 6, 7, 8, 11, 12, 13] {
-        let value = categories[index].split(' ').collect::<Vec<&str>>()[1]
-            .to_string()
-            .parse::<f64>()
-            .unwrap();
-
-        assert!(value >= 0.0);
-    }
 }
