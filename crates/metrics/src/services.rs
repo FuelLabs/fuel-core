@@ -48,12 +48,12 @@ impl ServicesMetrics {
         }
 
         lock.register(
-            format!("{} idle", service_name),
+            format!("{}_idle_ns", service_name),
             format!("The idle time of the {} service", service_name),
             lifecycle.idle.clone(),
         );
         lock.register(
-            format!("{} busy", service_name),
+            format!("{}_busy_ns", service_name),
             format!("The busy time of the {} service", service_name),
             lifecycle.busy.clone(),
         );
