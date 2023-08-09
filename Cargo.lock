@@ -2829,8 +2829,11 @@ dependencies = [
  "axum",
  "lazy_static",
  "once_cell",
+ "pin-project-lite 0.2.10",
  "prometheus-client 0.18.1",
  "prometheus-client 0.20.0",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2945,6 +2948,7 @@ version = "0.20.3"
 dependencies = [
  "anyhow",
  "async-trait",
+ "fuel-core-metrics",
  "futures",
  "mockall",
  "parking_lot 0.12.1",
