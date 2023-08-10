@@ -1,5 +1,5 @@
 use clap::Parser;
-use fuel_core_types::fuel_vm::GasCostsValues;
+use fuel_core_types::fuel_tx::GasCostsValues;
 use serde::{
     Deserialize,
     Serialize,
@@ -822,6 +822,7 @@ mod tests {
             .output()
             .unwrap();
         println!("{}", String::from_utf8(output.stderr).unwrap());
+
         assert!(output.status.success());
     }
 

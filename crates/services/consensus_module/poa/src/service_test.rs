@@ -31,7 +31,10 @@ use fuel_core_types::{
         field::GasLimit,
         *,
     },
-    fuel_types::BlockHeight,
+    fuel_types::{
+        BlockHeight,
+        ChainId,
+    },
     secrecy::Secret,
     services::executor::{
         Error as ExecutorError,
@@ -231,8 +234,7 @@ impl MockTransactionPool {
             .returning(move |tx_ids: Vec<TxId>| {
                 let mut guard = removed.lock().unwrap();
                 for id in tx_ids {
-                    guard
-                        .retain(|tx| tx.id(&ConsensusParameters::DEFAULT.chain_id) == id);
+                    guard.retain(|tx| tx.id(&ChainId::default()) == id);
                 }
                 vec![]
             });
@@ -248,7 +250,7 @@ impl MockTransactionPool {
 fn make_tx(rng: &mut StdRng) -> Script {
     TransactionBuilder::script(vec![], vec![])
         .gas_price(0)
-        .gas_limit(rng.gen_range(1..ConsensusParameters::default().max_gas_per_tx))
+        .gas_limit(rng.gen_range(1..TxParameters::DEFAULT.max_gas_per_tx))
         .finalize_without_signature()
 }
 
@@ -277,7 +279,7 @@ async fn remove_skipped_transactions() {
                         .into_iter()
                         .map(|tx| {
                             (
-                                tx.id(&ConsensusParameters::DEFAULT.chain_id),
+                                tx.id(&ChainId::default()),
                                 ExecutorError::OutputAlreadyExists,
                             )
                         })
@@ -305,7 +307,7 @@ async fn remove_skipped_transactions() {
         // Transform transactions into ids.
         let skipped_transactions: Vec<_> = skipped_transactions
             .iter()
-            .map(|tx| tx.id(&ConsensusParameters::DEFAULT.chain_id))
+            .map(|tx| tx.id(&ChainId::default()))
             .collect();
 
         // Check that all transactions are unique.

@@ -175,21 +175,13 @@ union CoinType = Coin | MessageCoin
 union Consensus = Genesis | PoAConsensus
 
 type ConsensusParameters {
-	contractMaxSize: U64!
-	maxInputs: U64!
-	maxOutputs: U64!
-	maxWitnesses: U64!
-	maxGasPerTx: U64!
-	maxScriptLength: U64!
-	maxScriptDataLength: U64!
-	maxStorageSlots: U64!
-	maxPredicateLength: U64!
-	maxPredicateDataLength: U64!
-	maxGasPerPredicate: U64!
-	gasPriceFactor: U64!
-	gasPerByte: U64!
-	maxMessageDataLength: U64!
+	txParams: TxParameters!
+	predicateParams: PredicateParameters!
+	scriptParams: ScriptParameters!
+	contractParams: ContractParameters!
+	feeParams: FeeParameters!
 	chainId: U64!
+	gasCosts: GasCosts!
 }
 
 type Contract {
@@ -253,6 +245,11 @@ type ContractOutput {
 	stateRoot: Bytes32!
 }
 
+type ContractParameters {
+	contractMaxSize: U64!
+	maxStorageSlots: U64!
+}
+
 type DependentCost {
 	base: U64!
 	depPerUnit: U64!
@@ -274,6 +271,11 @@ type FailureStatus {
 	time: Tai64Timestamp!
 	reason: String!
 	programState: ProgramState
+}
+
+type FeeParameters {
+	gasPriceFactor: U64!
+	gasPerByte: U64!
 }
 
 
@@ -334,6 +336,10 @@ type GasCosts {
 	not: U64!
 	or: U64!
 	ori: U64!
+	poph: U64!
+	popl: U64!
+	pshh: U64!
+	pshl: U64!
 	ret: U64!
 	rvrt: U64!
 	s256: U64!
@@ -629,6 +635,13 @@ type PoAConsensus {
 	signature: Signature!
 }
 
+type PredicateParameters {
+	maxPredicateLength: U64!
+	maxPredicateDataLength: U64!
+	maxGasPerPredicate: U64!
+	maxMessageDataLength: U64!
+}
+
 type ProgramState {
 	returnType: ReturnType!
 	data: HexString!
@@ -752,6 +765,11 @@ enum RunState {
 
 scalar Salt
 
+type ScriptParameters {
+	maxScriptLength: U64!
+	maxScriptDataLength: U64!
+}
+
 scalar Signature
 
 input SpendQueryElementInput {
@@ -869,6 +887,13 @@ type TransactionEdge {
 scalar TransactionId
 
 union TransactionStatus = SubmittedStatus | SuccessStatus | SqueezedOutStatus | FailureStatus
+
+type TxParameters {
+	maxInputs: U64!
+	maxOutputs: U64!
+	maxWitnesses: U64!
+	maxGasPerTx: U64!
+}
 
 scalar TxPointer
 
