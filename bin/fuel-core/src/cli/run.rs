@@ -110,7 +110,7 @@ pub struct Command {
     pub chain_config: String,
 
     /// Allows GraphQL Endpoints to arbitrarily advanced blocks. Should be used for local development only
-    #[arg(long = "manual_blocks_enabled", env)]
+    #[arg(long = "manual-blocks-enabled", env)]
     pub manual_blocks_enabled: bool,
 
     /// Enable logging of backtraces from vm errors
@@ -161,10 +161,10 @@ pub struct Command {
     #[arg(long = "metrics", env)]
     pub metrics: bool,
 
-    #[clap(long = "verify_max_da_lag", default_value = "10", env)]
+    #[clap(long = "verify-max-da-lag", default_value = "10", env)]
     pub max_da_lag: u64,
 
-    #[clap(long = "verify_max_relayer_wait", default_value = "30s", env)]
+    #[clap(long = "verify-max-relayer-wait", default_value = "30s", env)]
     pub max_wait_time: humantime::Duration,
 
     /// The max time to live of the transaction inside of the `TxPool`.
@@ -184,15 +184,15 @@ pub struct Command {
     pub tx_number_active_subscriptions: usize,
 
     /// The number of reserved peers to connect to before starting to sync.
-    #[clap(long = "min_connected_reserved_peers", default_value = "0", env)]
+    #[clap(long = "min-connected-reserved-peers", default_value = "0", env)]
     pub min_connected_reserved_peers: usize,
 
     /// Time to wait after receiving the latest block before considered to be Synced.
-    #[clap(long = "time_until_synced", default_value = "0s", env)]
+    #[clap(long = "time-until-synced", default_value = "0s", env)]
     pub time_until_synced: humantime::Duration,
 
     /// Time to wait after submitting a query before debug info will be logged about query.
-    #[clap(long = "query_log_threshold_time", default_value = "2s", env)]
+    #[clap(long = "query-log-threshold-time", default_value = "2s", env)]
     pub query_log_threshold_time: humantime::Duration,
 }
 
