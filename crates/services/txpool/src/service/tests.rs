@@ -4,7 +4,10 @@ use crate::service::test_helpers::{
     TestContextBuilder,
 };
 use fuel_core_services::Service as ServiceTrait;
-use fuel_core_types::fuel_tx::UniqueIdentifier;
+use fuel_core_types::{
+    fuel_tx::UniqueIdentifier,
+    fuel_types::ChainId,
+};
 use std::time::Duration;
 
 #[tokio::test]
@@ -36,17 +39,13 @@ async fn test_find() {
     assert!(out[0].is_ok(), "Tx1 should be OK, got err:{out:?}");
     assert!(out[1].is_ok(), "Tx2 should be OK, got err:{out:?}");
     let out = service.shared.find(vec![
-        tx1.id(&ConsensusParameters::DEFAULT.chain_id),
-        tx3.id(&ConsensusParameters::DEFAULT.chain_id),
+        tx1.id(&Default::default()),
+        tx3.id(&Default::default()),
     ]);
     assert_eq!(out.len(), 2, "Should be len 2:{out:?}");
     assert!(out[0].is_some(), "Tx1 should be some:{out:?}");
     let id = out[0].as_ref().unwrap().id();
-    assert_eq!(
-        id,
-        tx1.id(&ConsensusParameters::DEFAULT.chain_id),
-        "Found tx id match{out:?}"
-    );
+    assert_eq!(id, tx1.id(&Default::default()), "Found tx id match{out:?}");
     assert!(out[1].is_none(), "Tx3 should not be found:{out:?}");
     service.stop_and_await().await.unwrap();
 }
@@ -83,9 +82,9 @@ async fn test_prune_transactions() {
 
     tokio::time::sleep(Duration::from_secs(TIMEOUT)).await;
     let out = service.shared.find(vec![
-        tx1.id(&ConsensusParameters::DEFAULT.chain_id),
-        tx2.id(&ConsensusParameters::DEFAULT.chain_id),
-        tx3.id(&ConsensusParameters::DEFAULT.chain_id),
+        tx1.id(&Default::default()),
+        tx2.id(&Default::default()),
+        tx3.id(&Default::default()),
     ]);
     assert_eq!(out.len(), 3, "Should be len 3:{out:?}");
     assert!(out[0].is_some(), "Tx1 should exist");
@@ -94,9 +93,9 @@ async fn test_prune_transactions() {
 
     tokio::time::sleep(Duration::from_secs(TIMEOUT)).await;
     let out = service.shared.find(vec![
-        tx1.id(&ConsensusParameters::DEFAULT.chain_id),
-        tx2.id(&ConsensusParameters::DEFAULT.chain_id),
-        tx3.id(&ConsensusParameters::DEFAULT.chain_id),
+        tx1.id(&Default::default()),
+        tx2.id(&Default::default()),
+        tx3.id(&Default::default()),
     ]);
     assert_eq!(out.len(), 3, "Should be len 3:{out:?}");
     assert!(out[0].is_none(), "Tx1 should be pruned");
@@ -138,8 +137,8 @@ async fn test_prune_transactions_the_oldest() {
 
     // check that tx1 and tx2 are still there at time `4`
     let out = service.shared.find(vec![
-        tx1.id(&ConsensusParameters::DEFAULT.chain_id),
-        tx2.id(&ConsensusParameters::DEFAULT.chain_id),
+        tx1.id(&Default::default()),
+        tx2.id(&Default::default()),
     ]);
     assert!(out[0].is_some(), "Tx1 should exist");
     assert!(out[1].is_some(), "Tx2 should exist");
@@ -159,10 +158,10 @@ async fn test_prune_transactions_the_oldest() {
 
     // time is now `11`, tx1 and tx2 should be pruned
     let out = service.shared.find(vec![
-        tx1.id(&ConsensusParameters::DEFAULT.chain_id),
-        tx2.id(&ConsensusParameters::DEFAULT.chain_id),
-        tx3.id(&ConsensusParameters::DEFAULT.chain_id),
-        tx4.id(&ConsensusParameters::DEFAULT.chain_id),
+        tx1.id(&Default::default()),
+        tx2.id(&Default::default()),
+        tx3.id(&Default::default()),
+        tx4.id(&ChainId::default()),
     ]);
     assert!(out[0].is_none(), "Tx1 should be pruned");
     assert!(out[1].is_none(), "Tx2 should be pruned");
@@ -174,10 +173,10 @@ async fn test_prune_transactions_the_oldest() {
 
     // time is now `16`, tx3 should be pruned
     let out = service.shared.find(vec![
-        tx1.id(&ConsensusParameters::DEFAULT.chain_id),
-        tx2.id(&ConsensusParameters::DEFAULT.chain_id),
-        tx3.id(&ConsensusParameters::DEFAULT.chain_id),
-        tx4.id(&ConsensusParameters::DEFAULT.chain_id),
+        tx1.id(&Default::default()),
+        tx2.id(&Default::default()),
+        tx3.id(&Default::default()),
+        tx4.id(&ChainId::default()),
     ]);
     assert!(out[0].is_none(), "Tx1 should be pruned");
     assert!(out[1].is_none(), "Tx2 should be pruned");

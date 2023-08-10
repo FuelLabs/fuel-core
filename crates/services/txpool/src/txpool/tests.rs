@@ -30,7 +30,6 @@ use fuel_core_types::{
         rngs::StdRng,
         SeedableRng,
     },
-    fuel_tx,
     fuel_tx::{
         input::coin::CoinPredicate,
         Address,
@@ -43,6 +42,7 @@ use fuel_core_types::{
         UniqueIdentifier,
         UtxoId,
     },
+    fuel_types::ChainId,
     fuel_vm::checked_transaction::Checked,
 };
 
@@ -109,10 +109,7 @@ async fn insert_simple_tx_dependency_chain_succeeds() {
         .finalize_as_transaction();
 
     let (_, gas_coin) = setup_coin(&mut rng, Some(&txpool.database));
-    let input = unset_input.into_input(UtxoId::new(
-        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
-        0,
-    ));
+    let input = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
     let tx2 = TransactionBuilder::script(vec![], vec![])
         .gas_price(1)
         .gas_limit(GAS_LIMIT)
@@ -153,10 +150,7 @@ async fn faulty_t2_collided_on_contract_id_from_tx1() {
     .finalize_as_transaction();
 
     let (_, gas_coin) = setup_coin(&mut rng, Some(&txpool.database));
-    let input = unset_input.into_input(UtxoId::new(
-        tx.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
-        1,
-    ));
+    let input = unset_input.into_input(UtxoId::new(tx.id(&Default::default()), 1));
 
     // attempt to insert a different creation tx with a valid dependency on the first tx,
     // but with a conflicting output contract id
@@ -214,14 +208,11 @@ async fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
             &mut rng,
             AssetId::BASE,
             TEST_COIN_AMOUNT,
-            Some(UtxoId::new(
-                tx_faulty.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
-                0,
-            )),
+            Some(UtxoId::new(tx_faulty.id(&Default::default()), 0)),
         ))
         .finalize_as_transaction();
 
-    let tx_faulty_id = tx_faulty.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
+    let tx_faulty_id = tx_faulty.id(&ChainId::default());
     let tx_faulty = check_unwrap_tx(tx_faulty, db.clone(), &txpool.config).await;
 
     txpool
@@ -307,7 +298,7 @@ async fn higher_priced_tx_removes_lower_priced_tx() {
         .add_input(coin_input)
         .finalize_as_transaction();
 
-    let tx1_id = tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
+    let tx1_id = tx1.id(&ChainId::default());
     let tx1 = check_unwrap_tx(tx1, db.clone(), &txpool.config).await;
 
     txpool
@@ -335,10 +326,7 @@ async fn underpriced_tx1_not_included_coin_collision() {
         .add_output(output)
         .finalize_as_transaction();
 
-    let input = unset_input.into_input(UtxoId::new(
-        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
-        0,
-    ));
+    let input = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
 
     let tx2 = TransactionBuilder::script(vec![], vec![])
         .gas_price(20)
@@ -368,7 +356,7 @@ async fn underpriced_tx1_not_included_coin_collision() {
         .expect_err("Tx3 should be Err, got Ok");
     assert!(matches!(
         err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedCollision(id, utxo_id)) if id == &tx2.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id) && utxo_id == &UtxoId::new(tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id), 0)
+        Some(Error::NotInsertedCollision(id, utxo_id)) if id == &tx2.id(&Default::default()) && utxo_id == &UtxoId::new(tx1.id(&Default::default()), 0)
     ));
 }
 
@@ -474,10 +462,7 @@ async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
         .add_output(output)
         .finalize_as_transaction();
 
-    let input = unset_input.into_input(UtxoId::new(
-        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
-        0,
-    ));
+    let input = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
 
     let tx2 = TransactionBuilder::script(vec![], vec![])
         .gas_price(9)
@@ -491,8 +476,8 @@ async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
         .add_input(gas_coin)
         .finalize_as_transaction();
 
-    let tx1_id = tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
-    let tx2_id = tx2.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
+    let tx1_id = tx1.id(&ChainId::default());
+    let tx2_id = tx2.id(&ChainId::default());
     let tx1 = check_unwrap_tx(tx1, db.clone(), &txpool.config).await;
     let tx2 = check_unwrap_tx(tx2, db.clone(), &txpool.config).await;
     let tx3 = check_unwrap_tx(tx3, db.clone(), &txpool.config).await;
@@ -612,10 +597,7 @@ async fn tx_depth_hit() {
         .add_output(output)
         .finalize_as_transaction();
 
-    let input = unset_input.into_input(UtxoId::new(
-        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
-        0,
-    ));
+    let input = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
     let (output, unset_input) = create_output_and_input(&mut rng, 5_000);
     let tx2 = TransactionBuilder::script(vec![], vec![])
         .gas_limit(GAS_LIMIT)
@@ -623,10 +605,7 @@ async fn tx_depth_hit() {
         .add_output(output)
         .finalize_as_transaction();
 
-    let input = unset_input.into_input(UtxoId::new(
-        tx2.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
-        0,
-    ));
+    let input = unset_input.into_input(UtxoId::new(tx2.id(&Default::default()), 0));
     let tx3 = TransactionBuilder::script(vec![], vec![])
         .gas_limit(GAS_LIMIT)
         .add_input(input)
@@ -675,9 +654,9 @@ async fn sorted_out_tx1_2_4() {
         .add_input(gas_coin)
         .finalize_as_transaction();
 
-    let tx1_id = tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
-    let tx2_id = tx2.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
-    let tx3_id = tx3.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
+    let tx1_id = tx1.id(&ChainId::default());
+    let tx2_id = tx2.id(&ChainId::default());
+    let tx3_id = tx3.id(&ChainId::default());
 
     let tx1 = check_unwrap_tx(tx1, db.clone(), &txpool.config).await;
     let tx2 = check_unwrap_tx(tx2, db.clone(), &txpool.config).await;
@@ -710,10 +689,7 @@ async fn find_dependent_tx1_tx2() {
         .add_output(output)
         .finalize_as_transaction();
 
-    let input = unset_input.into_input(UtxoId::new(
-        tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
-        0,
-    ));
+    let input = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
     let (output, unset_input) = create_output_and_input(&mut rng, 7_500);
     let tx2 = TransactionBuilder::script(vec![], vec![])
         .gas_price(10)
@@ -722,19 +698,16 @@ async fn find_dependent_tx1_tx2() {
         .add_output(output)
         .finalize_as_transaction();
 
-    let input = unset_input.into_input(UtxoId::new(
-        tx2.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id),
-        0,
-    ));
+    let input = unset_input.into_input(UtxoId::new(tx2.id(&Default::default()), 0));
     let tx3 = TransactionBuilder::script(vec![], vec![])
         .gas_price(9)
         .gas_limit(GAS_LIMIT)
         .add_input(input)
         .finalize_as_transaction();
 
-    let tx1_id = tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
-    let tx2_id = tx2.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
-    let tx3_id = tx3.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
+    let tx1_id = tx1.id(&ChainId::default());
+    let tx2_id = tx2.id(&ChainId::default());
+    let tx3_id = tx3.id(&ChainId::default());
 
     let tx1 = check_unwrap_tx(tx1, db.clone(), &txpool.config).await;
     let tx2 = check_unwrap_tx(tx2, db.clone(), &txpool.config).await;
@@ -822,7 +795,7 @@ async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
     let db = MockDb::default();
     db.insert_message(message);
 
-    let tx1_id = tx.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
+    let tx1_id = tx.id(&ChainId::default());
     let mut txpool = TxPool::new(Default::default(), db.clone());
 
     let tx = check_unwrap_tx(tx, db.clone(), &txpool.config).await;
@@ -904,7 +877,7 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
 
     let mut txpool = TxPool::new(Default::default(), db.clone());
 
-    let tx_high_id = tx_high.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
+    let tx_high_id = tx_high.id(&ChainId::default());
     let tx_high = check_unwrap_tx(tx_high, db.clone(), &txpool.config).await;
 
     // Insert a tx for the message id with a high gas amount
@@ -945,7 +918,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
     db.insert_message(message);
 
     let mut txpool = TxPool::new(Default::default(), db.clone());
-    let tx_low_id = tx_low.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id);
+    let tx_low_id = tx_low.id(&ChainId::default());
     let tx_low = check_unwrap_tx(tx_low, db.clone(), &txpool.config).await;
     txpool.insert_inner(tx_low).expect("should succeed");
 
@@ -1044,9 +1017,14 @@ async fn predicate_without_enough_gas_returns_out_of_gas() {
     let mut config = Config::default();
     config
         .chain_config
-        .transaction_parameters
+        .consensus_parameters
+        .predicate_params
         .max_gas_per_predicate = 10000;
-    config.chain_config.transaction_parameters.max_gas_per_tx = 10000;
+    config
+        .chain_config
+        .consensus_parameters
+        .tx_params
+        .max_gas_per_tx = 10000;
     let coin = custom_predicate(
         &mut rng,
         AssetId::BASE,
@@ -1055,10 +1033,7 @@ async fn predicate_without_enough_gas_returns_out_of_gas() {
         vec![op::jmp(RegId::ZERO)].into_iter().collect(),
         None,
     )
-    .into_estimated(
-        &config.chain_config.transaction_parameters,
-        &config.chain_config.gas_costs,
-    );
+    .into_estimated(&config.chain_config.consensus_parameters);
 
     let (_, gas_coin) = add_coin_to_state(coin, Some(&db.clone()));
     let tx = TransactionBuilder::script(vec![], vec![])

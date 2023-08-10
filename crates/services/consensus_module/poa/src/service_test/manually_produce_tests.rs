@@ -40,13 +40,13 @@ async fn can_manually_produce_block(
 ) {
     let mut rng = StdRng::seed_from_u64(1234u64);
     let mut ctx_builder = TestContextBuilder::new();
-    let consensus_params = Default::default();
+    let consensus_params = ConsensusParameters::default();
     ctx_builder.with_config(Config {
         trigger,
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
         metrics: false,
-        consensus_params,
+        consensus_params: consensus_params.clone(),
         ..Default::default()
     });
 

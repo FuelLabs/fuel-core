@@ -19,31 +19,94 @@ use async_graphql::{
     Context,
     Object,
 };
-use fuel_core_types::{
-    fuel_tx,
-    fuel_vm,
-};
+use fuel_core_types::fuel_tx;
 
 pub struct ChainInfo;
 
 pub struct ConsensusParameters(fuel_tx::ConsensusParameters);
+pub struct TxParameters(fuel_tx::TxParameters);
+pub struct PredicateParameters(fuel_tx::PredicateParameters);
+pub struct ScriptParameters(fuel_tx::ScriptParameters);
+pub struct ContractParameters(fuel_tx::ContractParameters);
+pub struct FeeParameters(fuel_tx::FeeParameters);
 
-pub struct GasCosts(fuel_vm::GasCosts);
+pub struct GasCosts(fuel_tx::GasCosts);
 
-pub struct DependentCost(fuel_vm::DependentCost);
+pub struct DependentCost(fuel_tx::DependentCost);
 
-impl From<fuel_vm::DependentCost> for DependentCost {
-    fn from(value: fuel_vm::DependentCost) -> Self {
+impl From<fuel_tx::DependentCost> for DependentCost {
+    fn from(value: fuel_tx::DependentCost) -> Self {
         Self(value)
     }
 }
 
 #[Object]
 impl ConsensusParameters {
-    async fn contract_max_size(&self) -> U64 {
-        self.0.contract_max_size.into()
+    async fn tx_params(&self, ctx: &Context<'_>) -> async_graphql::Result<TxParameters> {
+        let config = ctx.data_unchecked::<GraphQLConfig>();
+
+        Ok(TxParameters(
+            config.consensus_parameters.tx_params().to_owned(),
+        ))
     }
 
+    async fn predicate_params(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<PredicateParameters> {
+        let config = ctx.data_unchecked::<GraphQLConfig>();
+
+        Ok(PredicateParameters(
+            config.consensus_parameters.predicate_params().to_owned(),
+        ))
+    }
+
+    async fn script_params(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<ScriptParameters> {
+        let config = ctx.data_unchecked::<GraphQLConfig>();
+
+        Ok(ScriptParameters(
+            config.consensus_parameters.script_params().to_owned(),
+        ))
+    }
+
+    async fn contract_params(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<ContractParameters> {
+        let config = ctx.data_unchecked::<GraphQLConfig>();
+
+        Ok(ContractParameters(
+            config.consensus_parameters.contract_params().to_owned(),
+        ))
+    }
+
+    async fn fee_params(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<FeeParameters> {
+        let config = ctx.data_unchecked::<GraphQLConfig>();
+
+        Ok(FeeParameters(
+            config.consensus_parameters.fee_params().to_owned(),
+        ))
+    }
+
+    async fn chain_id(&self) -> U64 {
+        (*self.0.chain_id).into()
+    }
+
+    async fn gas_costs(&self, ctx: &Context<'_>) -> async_graphql::Result<GasCosts> {
+        let config = ctx.data_unchecked::<GraphQLConfig>();
+
+        Ok(GasCosts(config.consensus_parameters.gas_costs.clone()))
+    }
+}
+
+#[Object]
+impl TxParameters {
     async fn max_inputs(&self) -> U64 {
         self.0.max_inputs.into()
     }
@@ -59,19 +122,10 @@ impl ConsensusParameters {
     async fn max_gas_per_tx(&self) -> U64 {
         self.0.max_gas_per_tx.into()
     }
+}
 
-    async fn max_script_length(&self) -> U64 {
-        self.0.max_script_length.into()
-    }
-
-    async fn max_script_data_length(&self) -> U64 {
-        self.0.max_script_data_length.into()
-    }
-
-    async fn max_storage_slots(&self) -> U64 {
-        self.0.max_storage_slots.into()
-    }
-
+#[Object]
+impl PredicateParameters {
     async fn max_predicate_length(&self) -> U64 {
         self.0.max_predicate_length.into()
     }
@@ -84,20 +138,41 @@ impl ConsensusParameters {
         self.0.max_gas_per_predicate.into()
     }
 
+    async fn max_message_data_length(&self) -> U64 {
+        self.0.max_message_data_length.into()
+    }
+}
+
+#[Object]
+impl ScriptParameters {
+    async fn max_script_length(&self) -> U64 {
+        self.0.max_script_length.into()
+    }
+
+    async fn max_script_data_length(&self) -> U64 {
+        self.0.max_script_data_length.into()
+    }
+}
+
+#[Object]
+impl ContractParameters {
+    async fn contract_max_size(&self) -> U64 {
+        self.0.contract_max_size.into()
+    }
+
+    async fn max_storage_slots(&self) -> U64 {
+        self.0.max_storage_slots.into()
+    }
+}
+
+#[Object]
+impl FeeParameters {
     async fn gas_price_factor(&self) -> U64 {
         self.0.gas_price_factor.into()
     }
 
     async fn gas_per_byte(&self) -> U64 {
         self.0.gas_per_byte.into()
-    }
-
-    async fn max_message_data_length(&self) -> U64 {
-        self.0.max_message_data_length.into()
-    }
-
-    async fn chain_id(&self) -> U64 {
-        (*self.0.chain_id).into()
     }
 }
 
@@ -325,6 +400,22 @@ impl GasCosts {
 
     async fn ori(&self) -> U64 {
         self.0.ori.into()
+    }
+
+    async fn poph(&self) -> U64 {
+        self.0.poph.into()
+    }
+
+    async fn popl(&self) -> U64 {
+        self.0.popl.into()
+    }
+
+    async fn pshh(&self) -> U64 {
+        self.0.pshh.into()
+    }
+
+    async fn pshl(&self) -> U64 {
+        self.0.pshl.into()
     }
 
     async fn ret(&self) -> U64 {
@@ -557,13 +648,13 @@ impl ChainInfo {
     ) -> async_graphql::Result<ConsensusParameters> {
         let config = ctx.data_unchecked::<GraphQLConfig>();
 
-        Ok(ConsensusParameters(config.transaction_parameters))
+        Ok(ConsensusParameters(config.consensus_parameters.clone()))
     }
 
     async fn gas_costs(&self, ctx: &Context<'_>) -> async_graphql::Result<GasCosts> {
         let config = ctx.data_unchecked::<GraphQLConfig>();
 
-        Ok(GasCosts(config.gas_costs.clone()))
+        Ok(GasCosts(config.consensus_parameters.gas_costs.clone()))
     }
 }
 

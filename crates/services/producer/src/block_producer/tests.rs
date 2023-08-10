@@ -23,7 +23,6 @@ use fuel_core_types::{
             PartialBlockHeader,
         },
     },
-    fuel_tx::ConsensusParameters,
     services::executor::Error as ExecutorError,
     tai64::Tai64,
 };
@@ -83,7 +82,7 @@ async fn can_produce_next_block() {
         transactions: vec![],
     }
     .generate(&[])
-    .compress(&ConsensusParameters::DEFAULT.chain_id);
+    .compress(&Default::default());
 
     let db = MockDb {
         blocks: Arc::new(Mutex::new(
@@ -133,7 +132,7 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
         transactions: vec![],
     }
     .generate(&[])
-    .compress(&ConsensusParameters::DEFAULT.chain_id);
+    .compress(&Default::default());
 
     let db = MockDb {
         blocks: Arc::new(Mutex::new(

@@ -226,7 +226,7 @@ impl CoinQuery {
                     e.amount.0,
                     e.max
                         .map(|max| max.0)
-                        .unwrap_or(config.transaction_parameters.max_inputs),
+                        .unwrap_or(config.consensus_parameters.tx_params().max_inputs),
                 )
             })
             .collect_vec();

@@ -1,0 +1,73 @@
+use lazy_static::lazy_static;
+use prometheus_client::{
+    encoding::text::encode,
+    metrics::counter::Counter,
+    registry::Registry,
+};
+use std::{
+    ops::Deref,
+    sync::Mutex,
+};
+
+/// The statistic of the service life cycle.
+#[derive(Default, Debug)]
+pub struct ServiceLifecycle {
+    /// The time spent for real actions by the service.
+    ///
+    /// Time is in nanoseconds.
+    // TODO: Use `AtomicU128` when it is stable, otherwise, the field can overflow at some point.
+    pub busy: Counter,
+    /// The idle time of awaiting sub-tasks or any action from the system/user.
+    ///
+    /// Time is in nanoseconds.
+    // TODO: Use `AtomicU128` when it is stable, otherwise, the field can overflow at some point.
+    pub idle: Counter,
+}
+
+/// The register of the metrics for each service.
+#[derive(Default)]
+pub struct ServicesMetrics {
+    // It is okay to use std mutex because we register each service only one time.
+    pub registry: Mutex<Registry>,
+}
+
+impl ServicesMetrics {
+    pub fn register_service(&self, service_name: &str) -> ServiceLifecycle {
+        let lifecycle = ServiceLifecycle::default();
+        let mut lock = self
+            .registry
+            .lock()
+            .expect("The lock of the service metric is poisoned");
+
+        // Check that it is a unique service.
+        let mut encoded_bytes = String::new();
+        encode(&mut encoded_bytes, lock.deref())
+            .expect("Unable to decode service metrics");
+        if encoded_bytes.contains(service_name) {
+            tracing::error!("Service with '{}' name is already registered", service_name);
+        }
+
+        lock.register(
+            format!("{}_idle_ns", service_name),
+            format!("The idle time of the {} service", service_name),
+            lifecycle.idle.clone(),
+        );
+        lock.register(
+            format!("{}_busy_ns", service_name),
+            format!("The busy time of the {} service", service_name),
+            lifecycle.busy.clone(),
+        );
+
+        lifecycle
+    }
+}
+
+lazy_static! {
+    pub static ref SERVICES_METRICS: ServicesMetrics = ServicesMetrics::default();
+}
+
+#[test]
+fn register_success() {
+    SERVICES_METRICS.register_service("Foo");
+    SERVICES_METRICS.register_service("Bar");
+}
