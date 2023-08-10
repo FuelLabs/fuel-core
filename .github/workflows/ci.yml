@@ -6,6 +6,7 @@ on:
     branches:
       - master
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   release:
     types: [published]
 
@@ -22,6 +23,14 @@ env:
   SEGMENT_DOWNLOAD_TIMEOUT_MINS: 2
 
 jobs:
+  check-changelog:
+    name: Check Changelog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: tarides/changelog-check-action@v2
+        with:
+          changelog: CHANGELOG.md
+
   rustfmt:
     runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
@@ -85,6 +94,7 @@ jobs:
       - lint-toml-files
       - prevent-openssl
       - rustfmt
+      - check-changelog
     runs-on: buildjet-4vcpu-ubuntu-2204
     env:
       RUSTFLAGS: -D warnings
