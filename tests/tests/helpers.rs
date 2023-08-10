@@ -154,7 +154,7 @@ impl TestSetupBuilder {
             }),
             ..ChainConfig::local_testnet()
         };
-        chain_config.transaction_parameters.max_gas_per_tx = self.gas_limit;
+        chain_config.consensus_parameters.tx_params.max_gas_per_tx = self.gas_limit;
         chain_config.block_gas_limit = self.gas_limit;
         let config = Config {
             utxo_validation: self.utxo_validation,

@@ -19,8 +19,7 @@ Description of the upcoming release here.
 - Something changed here 2
 
 #### Breaking
-- Some breaking change here 3
-- Some breaking change here 4
+- [#1262](https://github.com/FuelLabs/fuel-core/pull/1262): The `ConsensusParameters` aggregates all configuration data related to the consensus. It contains many fields that are segregated by the usage. The API of some functions was affected to use lesser types instead the whole `ConsensusParameters`. It is a huge breaking change requiring repetitively monotonically updating all places that use the `ConsensusParameters`. But during updating, consider that maybe you can use lesser types. Usage of them may simplify signatures of methods and make them more user-friendly and transparent.
 
 ### Fixed
 

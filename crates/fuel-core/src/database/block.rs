@@ -300,7 +300,7 @@ mod tests {
             },
             primitives::Empty,
         },
-        fuel_tx::ConsensusParameters,
+        fuel_types::ChainId,
         fuel_vm::crypto::ephemeral_merkle_root,
     };
     use test_case::test_case;
@@ -335,7 +335,7 @@ mod tests {
             StorageMutate::<FuelBlocks>::insert(
                 &mut database,
                 &block.id(),
-                &block.compress(&ConsensusParameters::DEFAULT.chain_id),
+                &block.compress(&ChainId::default()),
             )
             .unwrap();
         }
@@ -399,7 +399,7 @@ mod tests {
             StorageMutate::<FuelBlocks>::insert(
                 database,
                 &block.id(),
-                &block.compress(&ConsensusParameters::DEFAULT.chain_id),
+                &block.compress(&ChainId::default()),
             )
             .unwrap();
         }

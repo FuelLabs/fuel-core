@@ -17,7 +17,10 @@ use fuel_core_client::client::{
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::*,
-    fuel_types::bytes::*,
+    fuel_types::{
+        bytes::*,
+        ChainId,
+    },
     fuel_vm::*,
 };
 use rstest::rstest;
@@ -211,8 +214,7 @@ async fn can_get_message_proof() {
         .collect();
 
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-    let owner =
-        Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT.chain_id);
+    let owner = Input::predicate_owner(&predicate, &ChainId::default());
     let coin_input = Input::coin_predicate(
         Default::default(),
         owner,
@@ -256,7 +258,7 @@ async fn can_get_message_proof() {
         vec![],
     );
 
-    let transaction_id = script.id(&ConsensusParameters::DEFAULT.chain_id);
+    let transaction_id = script.id(&ChainId::default());
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();

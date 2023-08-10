@@ -8,17 +8,25 @@ use fuel_core_types::{
         RegId,
     },
     fuel_tx::*,
-    fuel_types::*,
+    fuel_types::{
+        BlockHeight,
+        Word,
+    },
     fuel_vm::{
         checked_transaction::{
+            CheckPredicateParams,
             EstimatePredicates,
             IntoChecked,
         },
         consts::*,
-        interpreter::diff,
+        interpreter::{
+            diff,
+            InterpreterParams,
+        },
         *,
     },
 };
+
 pub use rand::Rng;
 use std::{
     io,
@@ -100,9 +108,13 @@ impl VmBench {
     pub const CONTRACT: ContractId = ContractId::zeroed();
 
     pub fn new(instruction: Instruction) -> Self {
+        let tx_params = TxParameters {
+            max_gas_per_tx: LARGE_GAS_LIMIT + 1,
+            ..Default::default()
+        };
         Self {
             params: ConsensusParameters {
-                max_gas_per_tx: LARGE_GAS_LIMIT + 1,
+                tx_params,
                 ..Default::default()
             },
             gas_price: 0,
@@ -386,18 +398,20 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         // add at least one coin input
         tx.add_random_fee_input();
 
-        let mut p = params;
-        p.gas_per_byte = 0;
+        let mut p = params.clone();
+        p.fee_params.gas_per_byte = 0;
+        p.gas_costs = GasCosts::free();
         let mut tx = tx
             .gas_price(gas_price)
             .gas_limit(gas_limit)
             .maturity(maturity)
-            .with_params(p)
+            .with_params(p.clone())
             .finalize();
-        tx.estimate_predicates(&p, &GasCosts::free()).unwrap();
-        let tx = tx.into_checked(height, &p, &GasCosts::free()).unwrap();
+        tx.estimate_predicates(&CheckPredicateParams::from(&p))
+            .unwrap();
+        let tx = tx.into_checked(height, &p).unwrap();
 
-        let mut txtor = Transactor::new(db, params, GasCosts::free());
+        let mut txtor = Transactor::new(db, InterpreterParams::from(&params));
 
         txtor.transact(tx);
 
