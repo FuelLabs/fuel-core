@@ -176,7 +176,7 @@ impl Wallet {
             amount: 0,
             asset_id,
         });
-        tx.with_params(self.consensus_params);
+        tx.with_params(self.consensus_params.clone());
 
         Ok(tx.finalize_as_transaction())
     }

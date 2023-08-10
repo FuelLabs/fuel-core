@@ -1,5 +1,6 @@
 ---
 source: crates/chain-config/src/config.rs
+assertion_line: 210
 expression: json
 ---
 {
@@ -17,161 +18,175 @@ expression: json
       }
     ]
   },
-  "transaction_parameters": {
-    "contract_max_size": 16777216,
-    "max_inputs": 255,
-    "max_outputs": 255,
-    "max_witnesses": 255,
-    "max_gas_per_tx": 100000000,
-    "max_script_length": 1048576,
-    "max_script_data_length": 1048576,
-    "max_storage_slots": 255,
-    "max_predicate_length": 1048576,
-    "max_predicate_data_length": 1048576,
-    "max_gas_per_predicate": 100000000,
-    "gas_price_factor": 1000000000,
-    "gas_per_byte": 4,
-    "max_message_data_length": 1048576,
-    "chain_id": 0
-  },
-  "gas_costs": {
-    "add": 1,
-    "addi": 1,
-    "aloc": 1,
-    "and": 1,
-    "andi": 1,
-    "bal": 13,
-    "bhei": 1,
-    "bhsh": 1,
-    "burn": 132,
-    "cb": 1,
-    "cfei": 1,
-    "cfsi": 1,
-    "croo": 16,
-    "div": 1,
-    "divi": 1,
-    "eck1": 951,
-    "ecr1": 3000,
-    "ed19": 3000,
-    "eq": 1,
-    "exp": 1,
-    "expi": 1,
-    "flag": 1,
-    "gm": 1,
-    "gt": 1,
-    "gtf": 1,
-    "ji": 1,
-    "jmp": 1,
-    "jne": 1,
-    "jnei": 1,
-    "jnzi": 1,
-    "jmpf": 1,
-    "jmpb": 1,
-    "jnzf": 1,
-    "jnzb": 1,
-    "jnef": 1,
-    "jneb": 1,
-    "k256": 11,
-    "lb": 1,
-    "log": 9,
-    "lt": 1,
-    "lw": 1,
-    "mcpi": 33,
-    "mint": 135,
-    "mlog": 1,
-    "mod": 1,
-    "modi": 1,
-    "move": 1,
-    "movi": 1,
-    "mroo": 2,
-    "mul": 1,
-    "muli": 1,
-    "mldv": 1,
-    "noop": 1,
-    "not": 1,
-    "or": 1,
-    "ori": 1,
-    "ret_contract": 13,
-    "rvrt_contract": 13,
-    "s256": 2,
-    "sb": 1,
-    "scwq": 13,
-    "sll": 1,
-    "slli": 1,
-    "srl": 1,
-    "srli": 1,
-    "srw": 12,
-    "sub": 1,
-    "subi": 1,
-    "sw": 1,
-    "sww": 43,
-    "swwq": 44,
-    "time": 1,
-    "tr": 105,
-    "tro": 60,
-    "wdcm": 1,
-    "wqcm": 1,
-    "wdop": 1,
-    "wqop": 1,
-    "wdml": 1,
-    "wqml": 1,
-    "wddv": 1,
-    "wqdv": 2,
-    "wdmd": 3,
-    "wqmd": 4,
-    "wdam": 2,
-    "wqam": 3,
-    "wdmm": 3,
-    "wqmm": 3,
-    "xor": 1,
-    "xori": 1,
-    "call": {
-      "base": 144,
-      "dep_per_unit": 214
+  "consensus_parameters": {
+    "tx_params": {
+      "max_inputs": 255,
+      "max_outputs": 255,
+      "max_witnesses": 255,
+      "max_gas_per_tx": 100000000
     },
-    "ccp": {
-      "base": 15,
-      "dep_per_unit": 103
+    "predicate_params": {
+      "max_predicate_length": 1048576,
+      "max_predicate_data_length": 1048576,
+      "max_message_data_length": 1048576,
+      "max_gas_per_predicate": 100000000
     },
-    "csiz": {
-      "base": 17,
-      "dep_per_unit": 790
+    "script_params": {
+      "max_script_length": 1048576,
+      "max_script_data_length": 1048576
     },
-    "ldc": {
-      "base": 15,
-      "dep_per_unit": 272
+    "contract_params": {
+      "contract_max_size": 16777216,
+      "max_storage_slots": 255
     },
-    "logd": {
-      "base": 26,
-      "dep_per_unit": 64
+    "fee_params": {
+      "gas_price_factor": 1000000000,
+      "gas_per_byte": 4
     },
-    "mcl": {
-      "base": 1,
-      "dep_per_unit": 3333
-    },
-    "mcli": {
-      "base": 1,
-      "dep_per_unit": 3333
-    },
-    "mcp": {
-      "base": 1,
-      "dep_per_unit": 2000
-    },
-    "meq": {
-      "base": 1,
-      "dep_per_unit": 2500
-    },
-    "retd_contract": {
-      "base": 29,
-      "dep_per_unit": 62
-    },
-    "smo": {
-      "base": 209,
-      "dep_per_unit": 55
-    },
-    "srwq": {
-      "base": 47,
-      "dep_per_unit": 5
+    "chain_id": 0,
+    "gas_costs": {
+      "add": 1,
+      "addi": 1,
+      "aloc": 1,
+      "and": 1,
+      "andi": 1,
+      "bal": 13,
+      "bhei": 1,
+      "bhsh": 1,
+      "burn": 132,
+      "cb": 1,
+      "cfei": 1,
+      "cfsi": 1,
+      "croo": 16,
+      "div": 1,
+      "divi": 1,
+      "eck1": 951,
+      "ecr1": 3000,
+      "ed19": 3000,
+      "eq": 1,
+      "exp": 1,
+      "expi": 1,
+      "flag": 1,
+      "gm": 1,
+      "gt": 1,
+      "gtf": 1,
+      "ji": 1,
+      "jmp": 1,
+      "jne": 1,
+      "jnei": 1,
+      "jnzi": 1,
+      "jmpf": 1,
+      "jmpb": 1,
+      "jnzf": 1,
+      "jnzb": 1,
+      "jnef": 1,
+      "jneb": 1,
+      "k256": 11,
+      "lb": 1,
+      "log": 9,
+      "lt": 1,
+      "lw": 1,
+      "mcpi": 33,
+      "mint": 135,
+      "mlog": 1,
+      "mod": 1,
+      "modi": 1,
+      "move": 1,
+      "movi": 1,
+      "mroo": 2,
+      "mul": 1,
+      "muli": 1,
+      "mldv": 1,
+      "noop": 1,
+      "not": 1,
+      "or": 1,
+      "ori": 1,
+      "poph": 2,
+      "popl": 2,
+      "pshh": 2,
+      "pshl": 2,
+      "ret_contract": 13,
+      "rvrt_contract": 13,
+      "s256": 2,
+      "sb": 1,
+      "scwq": 13,
+      "sll": 1,
+      "slli": 1,
+      "srl": 1,
+      "srli": 1,
+      "srw": 12,
+      "sub": 1,
+      "subi": 1,
+      "sw": 1,
+      "sww": 43,
+      "swwq": 44,
+      "time": 1,
+      "tr": 105,
+      "tro": 60,
+      "wdcm": 1,
+      "wqcm": 1,
+      "wdop": 1,
+      "wqop": 1,
+      "wdml": 1,
+      "wqml": 1,
+      "wddv": 1,
+      "wqdv": 2,
+      "wdmd": 3,
+      "wqmd": 4,
+      "wdam": 2,
+      "wqam": 3,
+      "wdmm": 3,
+      "wqmm": 3,
+      "xor": 1,
+      "xori": 1,
+      "call": {
+        "base": 144,
+        "dep_per_unit": 214
+      },
+      "ccp": {
+        "base": 15,
+        "dep_per_unit": 103
+      },
+      "csiz": {
+        "base": 17,
+        "dep_per_unit": 790
+      },
+      "ldc": {
+        "base": 15,
+        "dep_per_unit": 272
+      },
+      "logd": {
+        "base": 26,
+        "dep_per_unit": 64
+      },
+      "mcl": {
+        "base": 1,
+        "dep_per_unit": 3333
+      },
+      "mcli": {
+        "base": 1,
+        "dep_per_unit": 3333
+      },
+      "mcp": {
+        "base": 1,
+        "dep_per_unit": 2000
+      },
+      "meq": {
+        "base": 1,
+        "dep_per_unit": 2500
+      },
+      "retd_contract": {
+        "base": 29,
+        "dep_per_unit": 62
+      },
+      "smo": {
+        "base": 209,
+        "dep_per_unit": 55
+      },
+      "srwq": {
+        "base": 47,
+        "dep_per_unit": 5
+      }
     }
   },
   "consensus": {
