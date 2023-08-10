@@ -52,6 +52,12 @@ pub enum Error {
     Other(#[from] anyhow::Error),
 }
 
+impl PartialEq for Error {
+    fn eq(&self, other: &Self) -> bool {
+        format!("{self:?}") == format!("{other:?}")
+    }
+}
+
 impl From<Error> for std::io::Error {
     fn from(e: Error) -> Self {
         std::io::Error::new(ErrorKind::Other, e)
