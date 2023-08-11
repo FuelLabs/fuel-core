@@ -499,7 +499,7 @@ where
             ..
         } = &self;
 
-        let n = *range.end() as usize;
+        let end = *range.end() as usize;
         let count = SharedMutex::new(0);
         let (header_sender, mut header_receiver) =
             mpsc::channel::<SourcePeer<SealedBlockHeader>>(
@@ -516,7 +516,7 @@ where
         .shared();
         let complete = poll_fn(|_cx| {
             let i = count.apply(|count| *count) as usize;
-            let poll = if i < n {
+            let poll = if i < end + 1 {
                 Poll::Pending
             } else {
                 Poll::Ready(())
