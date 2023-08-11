@@ -162,22 +162,21 @@ where
             ..
         } = &self;
 
-        let headers_res = get_header_range_single_req(range.clone(), p2p.clone()).await;
-        let unchecked_headers = match headers_res {
-            Ok(headers) => headers,
-            Err(e) => return (0, Err(e)),
-        };
-        let headers =
-            only_include_headers_that_match_range_order(unchecked_headers, range);
+        // let headers_res = get_header_range_single_req(&range, p2p.clone()).await;
+        // let unchecked_headers = match headers_res {
+        //     Ok(headers) => headers,
+        //     Err(e) => return (0, Err(e)),
+        // };
+        // let headers =
+        //     only_include_headers_that_match_range_order(unchecked_headers, range);
 
-        futures::stream::iter(headers)
+        // futures::stream::iter(headers)
+        get_header_range(range.clone(), p2p.clone())
         .map({
             let p2p = p2p.clone();
             let consensus_port = consensus.clone();
             move |result| {
-                let p2p = p2p.clone();
-                let consensus_port = consensus_port.clone();
-                Self::get_block_for_header(result, p2p, consensus_port)
+                Self::get_block_for_header(result, p2p.clone(), consensus_port.clone())
             }
             .instrument(tracing::debug_span!("consensus_and_transactions"))
             .in_current_span()
@@ -221,9 +220,9 @@ where
         // Count the number of successfully executed blocks and
         // find any errors.
         // Fold the stream into a count and any errors.
-        .fold((0usize, Ok(())), |(count, err), result| async move {
+        .fold((0usize, Ok(())), |(count, res), result| async move {
             match result {
-                Ok(_) => (count + 1, err),
+                Ok(_) => (count + 1, res),
                 Err(e) => (count, Err(e)),
             }
         })
@@ -232,10 +231,14 @@ where
     }
 
     async fn get_block_for_header(
-        header: SourcePeer<SealedBlockHeader>,
+        result: anyhow::Result<SourcePeer<SealedBlockHeader>>,
         p2p: Arc<P>,
         consensus_port: Arc<C>,
     ) -> anyhow::Result<Option<SealedBlock>> {
+        let header = match result {
+            Ok(h) => h,
+            Err(e) => return Err(e),
+        };
         let SourcePeer {
             peer_id,
             data: header,
@@ -261,35 +264,62 @@ where
     }
 }
 
-fn some_if_height_matches(
-    header: SourcePeer<SealedBlockHeader>,
-    height: u32,
-) -> Option<SourcePeer<SealedBlockHeader>> {
-    if *(header.data.entity.height()) == height.into() {
-        Some(header)
-    } else {
-        None
-    }
+fn get_header_range<P: PeerToPeerPort + Send + Sync + 'static>(
+    range: RangeInclusive<u32>,
+    p2p: Arc<P>,
+) -> impl Stream<Item = anyhow::Result<SourcePeer<SealedBlockHeader>>> {
+    // TODO: Take as params
+    const HEADERS_PER_REQUEST: u32 = 100;
+    const MAX_REQUESTS_IN_FLIGHT: usize = 10;
+
+    futures::stream::iter(range_chunks(range, HEADERS_PER_REQUEST))
+        .map(move |range| {
+            let p2p = p2p.clone();
+            async move {
+                let headers = get_header_range_single_req(&range, p2p).await?;
+                Ok((range, headers))
+            }
+        })
+        .buffered(MAX_REQUESTS_IN_FLIGHT)
+        .into_scan_err()
+        .scan_err()
+        .map(|val| {
+            let sorted_headers = match val {
+                Ok((range, headers)) => {
+                    let mut range_iter = range.into_iter();
+                    headers
+                        .into_iter()
+                        .map(move |header| {
+                            let height = range_iter.next().unwrap();
+                            if *(header.data.entity.height()) == height.into() {
+                                Ok(Some(header))
+                            } else {
+                                Ok(None)
+                            }
+                        })
+                        .collect()
+                }
+                Err(e) => vec![Err(e)],
+            };
+            futures::stream::iter(sorted_headers)
+        })
+        .flatten()
+        .into_scan_none_or_err()
+        .scan_none_or_err()
 }
 
-// The response from the P2P network isn't guaranteed to include all the
-fn only_include_headers_that_match_range_order(
-    headers: Vec<SourcePeer<SealedBlockHeader>>,
-    range: RangeInclusive<u32>,
-) -> Vec<SourcePeer<SealedBlockHeader>> {
-    let mut new_headers = Vec::new();
-    let mut header_iter = headers.into_iter();
-    for height in range {
-        if let Some(header) = header_iter
-            .next()
-            .and_then(|header| some_if_height_matches(header, height))
-        {
-            new_headers.push(header);
-        } else {
-            break
-        }
+fn range_chunks(range: RangeInclusive<u32>, chunk_size: u32) -> Vec<RangeInclusive<u32>> {
+    let mut chunks = Vec::new();
+    let mut start = *range.start();
+    let end = *range.end();
+    while start <= end {
+        let chunk_start = start;
+        let chunk_end = start + chunk_size;
+        let chunk_end = if chunk_end > end { end } else { chunk_end };
+        chunks.push(chunk_start..=chunk_end);
+        start = chunk_end + 1;
     }
-    new_headers
+    chunks
 }
 
 /// Waits for a notify or shutdown signal.
@@ -311,7 +341,7 @@ async fn wait_for_notify_or_shutdown(
 }
 
 async fn get_header_range_single_req(
-    range: RangeInclusive<u32>,
+    range: &RangeInclusive<u32>,
     p2p: Arc<impl PeerToPeerPort + 'static>,
 ) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>> {
     let start = *range.start();
@@ -414,13 +444,13 @@ impl<S> ScanNoneErr<S> {
         S: Stream<Item = anyhow::Result<Option<R>>> + Send + 'static,
     {
         let stream = self.0.boxed();
-        futures::stream::unfold((false, stream), |(mut err, mut stream)| async move {
-            if err {
+        futures::stream::unfold((false, stream), |(mut is_err, mut stream)| async move {
+            if is_err {
                 None
             } else {
                 let result = stream.next().await?;
-                err = result.is_err();
-                result.transpose().map(|result| (result, (err, stream)))
+                is_err = result.is_err();
+                result.transpose().map(|result| (result, (is_err, stream)))
             }
         })
     }
