@@ -1,4 +1,9 @@
-use fuel_core_services::stream::BoxStream;
+use crate::import::Count;
+
+use fuel_core_services::{
+    stream::BoxStream,
+    SharedMutex,
+};
 use fuel_core_sync::ports::{
     MockPeerToPeerPort,
     PeerToPeerPort,
@@ -37,16 +42,16 @@ fn empty_header(h: BlockHeight) -> SourcePeer<SealedBlockHeader> {
     }
 }
 
-pub struct PressurePeerToPeerPort(MockPeerToPeerPort, [Duration; 2]);
+pub struct PressurePeerToPeerPort(MockPeerToPeerPort, [Duration; 2], SharedMutex<Count>);
 
 impl PressurePeerToPeerPort {
-    pub fn new(delays: [Duration; 2]) -> Self {
+    pub fn new(delays: [Duration; 2], count: SharedMutex<Count>) -> Self {
         let mut mock = MockPeerToPeerPort::default();
         mock.expect_get_sealed_block_header()
             .returning(|h| Ok(Some(empty_header(h))));
         mock.expect_get_transactions()
             .returning(|_| Ok(Some(vec![])));
-        Self(mock, delays)
+        Self(mock, delays, count)
     }
 
     fn service(&self) -> &impl PeerToPeerPort {
@@ -55,6 +60,10 @@ impl PressurePeerToPeerPort {
 
     fn duration(&self, index: usize) -> Duration {
         self.1[index]
+    }
+
+    fn count(&self) -> SharedMutex<Count> {
+        self.2.clone()
     }
 }
 
@@ -68,8 +77,10 @@ impl PeerToPeerPort for PressurePeerToPeerPort {
         &self,
         height: BlockHeight,
     ) -> anyhow::Result<Option<SourcePeer<SealedBlockHeader>>> {
+        self.count().apply(|count| count.inc_headers());
         let timeout = self.duration(0);
         tokio::time::sleep(timeout).await;
+        self.count().apply(|count| count.inc_blocks());
         self.service().get_sealed_block_header(height).await
     }
 
@@ -79,6 +90,7 @@ impl PeerToPeerPort for PressurePeerToPeerPort {
     ) -> anyhow::Result<Option<Vec<Transaction>>> {
         let timeout = self.duration(1);
         tokio::time::sleep(timeout).await;
+        self.count().apply(|count| count.inc_transactions());
         self.service().get_transactions(block_id).await
     }
 }

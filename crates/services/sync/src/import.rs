@@ -24,6 +24,7 @@ use fuel_core_types::{
     services::p2p::SourcePeer,
 };
 use futures::{
+    future::poll_fn,
     stream::{
         self,
         StreamExt,
@@ -31,8 +32,14 @@ use futures::{
     FutureExt,
     Stream,
 };
-use std::future::Future;
-use tokio::sync::Notify;
+use std::{
+    future::Future,
+    task::Poll,
+};
+use tokio::sync::{
+    mpsc,
+    Notify,
+};
 use tracing::Instrument;
 
 use crate::{
@@ -144,6 +151,13 @@ where
         Ok(wait_for_notify_or_shutdown(&self.notify, shutdown).await)
     }
 
+    /// Import
+    pub async fn import_v4(&self, shutdown: &mut StateWatcher) -> anyhow::Result<bool> {
+        self.import_inner(shutdown, 4).await?;
+
+        Ok(wait_for_notify_or_shutdown(&self.notify, shutdown).await)
+    }
+
     async fn import_inner(
         &self,
         shutdown: &StateWatcher,
@@ -156,6 +170,7 @@ where
                 1 => self.launch_stream(range.clone(), shutdown).await,
                 2 => self.launch_stream_v2(range.clone(), shutdown).await,
                 3 => self.launch_stream_v3(range.clone(), shutdown).await,
+                4 => self.launch_stream_v4(range.clone(), shutdown).await,
                 _ => panic!("INVALID"),
             };
 
@@ -194,7 +209,11 @@ where
             ..
         } = &self;
         // Request up to `max_get_header_requests` headers from the network.
-        get_header_range_buffered(range.clone(), params, p2p.clone())
+        get_header_range(range, p2p.clone())
+            .buffered(params.max_get_header_requests)
+            // Continue the stream unless an error or none occurs.
+            .into_scan_none_or_err()
+            .scan_none_or_err()
         .map({
             let p2p = p2p.clone();
             let consensus_port = consensus.clone();
@@ -384,81 +403,241 @@ where
             consensus,
             ..
         } = &self;
-        get_header_range(range.clone(), p2p.clone())
-            .map({
+
+        let p2p_ = p2p.clone();
+        stream::iter(range)
+            .map(move |height| {
+                let p2p = p2p_.clone();
+                let height: BlockHeight = height.into();
+                async move {
+                    let r =
+                        p2p.get_sealed_block_header(height)
+                            .await?
+                            .and_then(|header| {
+                                validate_header_height(height, &header.data)
+                                    .then_some(header)
+                            });
+                    Ok(r)
+                }
+            })
+            .map(move |result| {
                 let p2p = p2p.clone();
                 let consensus_port = consensus.clone();
-                move |result| {
+                async move {
                     let p2p = p2p.clone();
                     let consensus_port = consensus_port.clone();
-                    async move {
-                        let header = match result.await {
-                            Ok(Some(h)) => h,
-                            Ok(None) => return Ok(None),
-                            Err(e) => return Err(e),
-                        };
-                        let SourcePeer {
-                            peer_id,
-                            data: header,
-                        } = header;
-                        let id = header.entity.id();
-                        let block_id = SourcePeer { peer_id, data: id };
+                    let header = match result.await {
+                        Ok(Some(h)) => h,
+                        Ok(None) => return Ok(None),
+                        Err(e) => return Err(e),
+                    };
+                    let SourcePeer {
+                        peer_id,
+                        data: header,
+                    } = header;
+                    let id = header.entity.id();
+                    let block_id = SourcePeer { peer_id, data: id };
 
-                        if !consensus_port
-                            .check_sealed_header(&header)
-                            .trace_err("Failed to check consensus on header")?
-                        {
-                            tracing::warn!("Header {:?} failed consensus check", header);
-                            return Ok(None)
-                        }
-
-                        consensus_port
-                            .await_da_height(&header.entity.da_height)
-                            .await?;
-                        get_transactions_on_block(p2p.as_ref(), block_id, header).await
+                    if !consensus_port
+                        .check_sealed_header(&header)
+                        .trace_err("Failed to check consensus on header")?
+                    {
+                        tracing::warn!("Header {:?} failed consensus check", header);
+                        return Ok(None)
                     }
+
+                    consensus_port
+                        .await_da_height(&header.entity.da_height)
+                        .await?;
+                    let block =
+                        get_transactions_on_block(p2p.as_ref(), block_id, header).await?;
+                    Ok(block)
                 }
             })
             .buffered(params.max_get_txns_requests)
-            .into_scan_none_or_err()
-            .scan_none_or_err()
             .take_until({
                 let mut s = shutdown.clone();
                 async move {
                     let _ = s.while_started().await;
-                    tracing::info!("In progress import stream shutting down");
                 }
             })
-            .then({
+            .then(move |block| {
                 let state = state.clone();
                 let executor = executor.clone();
-                move |block| {
-                    {
-                        let state = state.clone();
-                        let executor = executor.clone();
-                        async move {
-                            let block = match block {
-                                Ok(b) => b,
-                                Err(e) => return Err(e),
-                            };
-                            execute_and_commit(executor.as_ref(), &state, block).await
-                        }
-                    }
-                    .instrument(tracing::debug_span!("execute_and_commit"))
-                    .in_current_span()
+                async move {
+                    let state = state.clone();
+                    let executor = executor.clone();
+                    let block = match block {
+                        Ok(Some(b)) => b,
+                        Ok(None) => return Ok(()),
+                        Err(e) => return Err(e),
+                    };
+                    execute_and_commit(executor.as_ref(), &state, block).await?;
+                    Ok(())
                 }
             })
-            .into_scan_err()
-            .scan_err()
             .fold((0usize, Ok(())), |(count, err), result| async move {
                 match result {
                     Ok(_) => (count + 1, err),
                     Err(e) => (count, Err(e)),
                 }
             })
-            .in_current_span()
             .await
     }
+
+    async fn launch_stream_v4(
+        &self,
+        range: RangeInclusive<u32>,
+        shutdown: &StateWatcher,
+    ) -> (usize, anyhow::Result<()>) {
+        let Self {
+            state,
+            params,
+            p2p,
+            executor,
+            consensus,
+            ..
+        } = &self;
+
+        let n = *range.end() as usize;
+        let count = SharedMutex::new(0);
+        let (header_sender, mut header_receiver) =
+            mpsc::channel::<SourcePeer<SealedBlockHeader>>(
+                params.max_get_header_requests,
+            );
+        let (block_sender, mut block_receiver) =
+            mpsc::channel::<SealedBlock>(params.max_get_header_requests);
+        let (execute_sender, mut execute_receiver) =
+            mpsc::channel::<anyhow::Result<()>>(params.max_get_header_requests);
+        let stop = async {
+            let mut s = shutdown.clone();
+            let _ = s.while_started().await;
+        }
+        .shared();
+        let complete = poll_fn(|_cx| {
+            let i = count.apply(|count| *count) as usize;
+            let poll = if i < n {
+                Poll::Pending
+            } else {
+                Poll::Ready(())
+            };
+            poll
+        })
+        .shared();
+
+        range
+            .map(|i| {
+                let height: BlockHeight = i.into();
+                height
+            })
+            .for_each(|height| {
+                tokio::spawn(download_header(p2p.clone(), height, header_sender.clone()));
+            });
+
+        let mut results = vec![];
+        loop {
+            tokio::select! {
+                header = header_receiver.recv() => {
+                    if let Some(header) = header {
+                        tokio::spawn(download_block(p2p.clone(), consensus.clone(), header, block_sender.clone()));
+                    }
+                }
+
+                block = block_receiver.recv() => {
+                    if let Some(block) = block {
+                        tokio::spawn(execute_block(executor.clone(), state.clone(), block, execute_sender.clone()));
+                    }
+                }
+
+                execute = execute_receiver.recv() => {
+                    if let Some(execute) = execute {
+                        results.push(execute);
+                        count.apply(|count| *count += 1);
+                    }
+                }
+
+                _ = complete.clone() => { break; }
+                _ = stop.clone() => { break; }
+            }
+        }
+
+        let i = count.apply(|count| *count) as usize;
+        let err = results.into_iter().collect::<Result<Vec<_>, _>>().err();
+        match err {
+            Some(err) => (i, Err(err)),
+            None => (i, Ok(())),
+        }
+    }
+}
+
+async fn download_header<P>(
+    p2p: Arc<P>,
+    block_height: BlockHeight,
+    sender: mpsc::Sender<SourcePeer<SealedBlockHeader>>,
+) -> anyhow::Result<()>
+where
+    P: PeerToPeerPort + Send + Sync + 'static,
+{
+    let p2p = p2p.clone();
+    let block_header =
+        p2p.get_sealed_block_header(block_height)
+            .await?
+            .and_then(|header| {
+                validate_header_height(block_height, &header.data).then_some(header)
+            });
+    if let Some(block_header) = block_header {
+        sender.send(block_header).await?;
+    }
+    Ok(())
+}
+
+async fn download_block<P, C>(
+    p2p: Arc<P>,
+    consensus: Arc<C>,
+    header: SourcePeer<SealedBlockHeader>,
+    sender: mpsc::Sender<SealedBlock>,
+) -> anyhow::Result<()>
+where
+    P: PeerToPeerPort + Send + Sync + 'static,
+    C: ConsensusPort + Send + Sync + 'static,
+{
+    let SourcePeer {
+        peer_id,
+        data: header,
+    } = header;
+    let id = header.entity.id();
+    let block_id = SourcePeer { peer_id, data: id };
+
+    if !consensus
+        .check_sealed_header(&header)
+        .trace_err("Failed to check consensus on header")?
+    {
+        tracing::warn!("Header {:?} failed consensus check", header);
+        return Ok(())
+    }
+
+    consensus.await_da_height(&header.entity.da_height).await?;
+    let block = get_transactions_on_block(p2p.as_ref(), block_id, header).await?;
+    if let Some(block) = block {
+        sender.send(block).await?
+    }
+
+    Ok(())
+}
+
+async fn execute_block<E>(
+    executor: Arc<E>,
+    state: SharedMutex<State>,
+    block: SealedBlock,
+    sender: mpsc::Sender<anyhow::Result<()>>,
+) -> anyhow::Result<()>
+where
+    E: BlockImporterPort + Send + Sync + 'static,
+{
+    let state = state.clone();
+    let result = execute_and_commit(executor.as_ref(), &state, block).await;
+    sender.send(result).await?;
+    Ok(())
 }
 
 /// Waits for a notify or shutdown signal.
@@ -479,19 +658,19 @@ async fn wait_for_notify_or_shutdown(
     matches!(r, futures::future::Either::Left(_))
 }
 
-/// Returns a stream of headers processing concurrently up to `max_get_header_requests`.
-/// The headers are returned in order.
-fn get_header_range_buffered(
-    range: RangeInclusive<u32>,
-    params: &Config,
-    p2p: Arc<impl PeerToPeerPort + Send + Sync + 'static>,
-) -> impl Stream<Item = anyhow::Result<SourcePeer<SealedBlockHeader>>> {
-    get_header_range(range, p2p)
-        .buffered(params.max_get_header_requests)
-        // Continue the stream unless an error or none occurs.
-        .into_scan_none_or_err()
-        .scan_none_or_err()
-}
+// /// Returns a stream of headers processing concurrently up to `max_get_header_requests`.
+// /// The headers are returned in order.
+// fn get_header_range_buffered(
+//     range: RangeInclusive<u32>,
+//     params: &Config,
+//     p2p: Arc<impl PeerToPeerPort + Send + Sync + 'static>,
+// ) -> impl Stream<Item = anyhow::Result<SourcePeer<SealedBlockHeader>>> {
+//     get_header_range(range, p2p)
+//         .buffered(params.max_get_header_requests)
+//         // Continue the stream unless an error or none occurs.
+//         .into_scan_none_or_err()
+//         .scan_none_or_err()
+// }
 
 #[tracing::instrument(skip(p2p))]
 /// Returns a stream of network requests for headers.
