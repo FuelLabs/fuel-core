@@ -224,10 +224,10 @@ spec:
             - "--sync-header-batch-size"
             - "{{ .Values.app.sync_header_batch_size }}"
           {{- end }}
-          { { - if .Values.app.sync_max_header_batch_requests } }
+          {{- if .Values.app.sync_max_header_batch_requests }}
             - "--sync-max-header-batch-requests"
             - "{{ .Values.app.sync_max_header_batch_requests }}"
-          { { - end } }
+          {{- end }}
           {{- if .Values.app.reserved_nodes_only_mode }}
             - "--reserved-nodes-only-mode"
           {{- end}}
