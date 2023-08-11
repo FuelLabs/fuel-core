@@ -47,6 +47,7 @@ enum Version {
     V1,
     V2,
     V3,
+    V4,
 }
 
 impl Display for Version {
@@ -55,6 +56,7 @@ impl Display for Version {
             Version::V1 => write!(f, "v1"),
             Version::V2 => write!(f, "v2"),
             Version::V3 => write!(f, "v3"),
+            Version::V4 => write!(f, "v4"),
         }
     }
 }
@@ -68,6 +70,7 @@ async fn import_version_switch(
         Version::V1 => import.import(shutdown).await.unwrap(),
         Version::V2 => import.import_v2(shutdown).await.unwrap(),
         Version::V3 => import.import_v3(shutdown).await.unwrap(),
+        Version::V4 => import.import_v4(shutdown).await.unwrap(),
     };
 }
 
@@ -144,6 +147,9 @@ fn bench_imports(c: &mut Criterion) {
     // bench_import(&mut group, Version::V3, n, durations, 5);
     // bench_import(&mut group, Version::V3, n, durations, 10);
     bench_import(&mut group, Version::V3, n, durations, 50);
+
+    // V4
+    bench_import(&mut group, Version::V4, n, durations, 50);
 }
 
 criterion_group!(benches, bench_imports);
