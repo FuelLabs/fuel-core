@@ -53,17 +53,20 @@ mod back_pressure_tests;
 #[derive(Clone, Copy, Debug)]
 /// Parameters for the import task.
 pub struct Config {
-    /// The maximum number of get header requests to make in a single batch.
-    pub max_get_header_requests: usize,
     /// The maximum number of get transaction requests to make in a single batch.
     pub max_get_txns_requests: usize,
+    /// The maximum number of headers to request in a single batch.
+    pub header_batch_size: u32,
+    /// The maximum number of header batch requests to have active at one time.
+    pub max_header_batch_requests: usize,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            max_get_header_requests: 10,
             max_get_txns_requests: 10,
+            header_batch_size: 100,
+            max_header_batch_requests: 10,
         }
     }
 }
@@ -162,7 +165,7 @@ where
             ..
         } = &self;
 
-        get_header_range(range.clone(), p2p.clone())
+        get_header_range(range.clone(), p2p.clone(), params.header_batch_size, params.max_header_batch_requests)
         .map({
             let p2p = p2p.clone();
             let consensus_port = consensus.clone();
@@ -258,12 +261,10 @@ where
 fn get_header_range<P: PeerToPeerPort + Send + Sync + 'static>(
     range: RangeInclusive<u32>,
     p2p: Arc<P>,
+    batch_size: u32,
+    requests_in_flight: usize,
 ) -> impl Stream<Item = anyhow::Result<SourcePeer<SealedBlockHeader>>> {
-    // TODO: Take as params
-    const HEADERS_PER_REQUEST: u32 = 100;
-    const MAX_REQUESTS_IN_FLIGHT: usize = 10;
-
-    futures::stream::iter(range_chunks(range, HEADERS_PER_REQUEST))
+    futures::stream::iter(range_chunks(range, batch_size))
         .map(move |range| {
             let p2p = p2p.clone();
             async move {
@@ -271,25 +272,22 @@ fn get_header_range<P: PeerToPeerPort + Send + Sync + 'static>(
                 Ok((range, headers))
             }
         })
-        .buffered(MAX_REQUESTS_IN_FLIGHT)
+        .buffered(requests_in_flight)
         .into_scan_err()
         .scan_err()
         .map(|val| {
             let sorted_headers = match val {
-                Ok((range, headers)) => {
-                    let mut range_iter = range.into_iter();
-                    headers
-                        .into_iter()
-                        .map(move |header| {
-                            let height = range_iter.next().unwrap();
-                            if *(header.data.entity.height()) == height.into() {
-                                Ok(Some(header))
-                            } else {
-                                Ok(None)
-                            }
-                        })
-                        .collect()
-                }
+                Ok((mut range, headers)) => headers
+                    .into_iter()
+                    .map(move |header| {
+                        let height = range.next().unwrap();
+                        if *(header.data.entity.height()) == height.into() {
+                            Ok(Some(header))
+                        } else {
+                            Ok(None)
+                        }
+                    })
+                    .collect(),
                 Err(e) => vec![Err(e)],
             };
             futures::stream::iter(sorted_headers)
