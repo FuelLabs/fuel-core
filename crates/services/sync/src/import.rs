@@ -162,15 +162,6 @@ where
             ..
         } = &self;
 
-        // let headers_res = get_header_range_single_req(&range, p2p.clone()).await;
-        // let unchecked_headers = match headers_res {
-        //     Ok(headers) => headers,
-        //     Err(e) => return (0, Err(e)),
-        // };
-        // let headers =
-        //     only_include_headers_that_match_range_order(unchecked_headers, range);
-
-        // futures::stream::iter(headers)
         get_header_range(range.clone(), p2p.clone())
         .map({
             let p2p = p2p.clone();
