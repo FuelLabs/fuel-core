@@ -10,7 +10,7 @@ Description of the upcoming release here.
 
 ### Added
 
-- [#1286](https://github.com/FuelLabs/fuel-core/pull/1286) Include readable names for test cases where missing
+- [#1286](https://github.com/FuelLabs/fuel-core/pull/1286): Include readable names for test cases where missing.
 
 ### Changed
 
