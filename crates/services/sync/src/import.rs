@@ -266,11 +266,20 @@ fn get_header_range<P: PeerToPeerPort + Send + Sync + 'static>(
 ) -> impl Stream<Item = anyhow::Result<SourcePeer<SealedBlockHeader>>> {
     futures::stream::iter(range_chunks(range, batch_size))
         .map(move |range| {
+            tracing::debug!(
+                "getting header range from {} to {} inclusive",
+                range.start(),
+                range.end()
+            );
             let p2p = p2p.clone();
             async move {
-                let headers = get_header_range_single_req(&range, p2p).await?;
+                let headers = get_header_range_single_req(&range, p2p)
+                    .await
+                    .trace_err("Failed to get headers")?;
                 Ok((range, headers))
             }
+            .instrument(tracing::debug_span!("get_header_range_single_req"))
+            .in_current_span()
         })
         .buffered(requests_in_flight)
         .into_scan_err()
