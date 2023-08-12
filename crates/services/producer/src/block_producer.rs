@@ -32,7 +32,13 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::sync::Arc;
+use std::{
+    ops::{
+        Add,
+        Sub,
+    },
+    sync::Arc,
+};
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tracing::debug;
@@ -126,7 +132,8 @@ where
         let height = match height {
             None => self.db.current_block_height()?,
             Some(height) => height,
-        } + 1.into();
+        }
+        .add(1.into());
 
         let is_script = transaction.is_script();
         // The dry run execution should use the state of the blockchain based on the
@@ -232,7 +239,7 @@ where
             Err(Error::GenesisBlock.into())
         } else {
             // get info from previous block height
-            let prev_height = height - 1u32.into();
+            let prev_height = height.sub(1u32.into());
             let previous_block = self.db.get_block(&prev_height)?;
             let prev_root = self.db.block_header_merkle_root(&prev_height)?;
 

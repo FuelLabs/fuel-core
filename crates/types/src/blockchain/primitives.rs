@@ -115,7 +115,8 @@ impl core::ops::Add<u64> for DaBlockHeight {
     type Output = Self;
 
     fn add(self, other: u64) -> Self::Output {
-        Self::from(self.0 + other)
+        let sum = self.0.saturating_add(other);
+        Self::from(sum)
     }
 }
 

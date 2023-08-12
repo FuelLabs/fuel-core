@@ -167,10 +167,11 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 
         let total_connections = {
             // Reserved nodes do not count against the configured peer input/output limits.
-            let total_peers =
-                config.max_peers_connected + config.reserved_nodes.len() as u32;
+            let total_peers = config
+                .max_peers_connected
+                .saturating_add(config.reserved_nodes.len() as u32);
 
-            total_peers * config.max_connections_per_peer
+            total_peers.saturating_mul(config.max_connections_per_peer)
         };
 
         let max_established_incoming = {
@@ -180,7 +181,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 // Rather, it will send outgoing connection requests to its reserved nodes
                 0
             } else {
-                total_connections / 2
+                total_connections.saturating_div(2)
             }
         };
 

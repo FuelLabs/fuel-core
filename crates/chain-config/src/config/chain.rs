@@ -69,7 +69,7 @@ impl Default for ChainConfig {
     fn default() -> Self {
         Self {
             chain_name: "local".into(),
-            block_gas_limit: TxParameters::DEFAULT.max_gas_per_tx * 10, /* TODO: Pick a sensible default */
+            block_gas_limit: TxParameters::DEFAULT.max_gas_per_tx.saturating_mul(10), /* TODO: Pick a sensible default */
             consensus_parameters: ConsensusParameters::default(),
             initial_state: None,
             consensus: ConsensusConfig::default_poa(),

@@ -102,12 +102,18 @@ pub fn eth_log_message(
     b.extend(H256::from_low_u64_be(data.len() as u64).as_ref());
 
     // data takes as lest 32 bytes;
-    let data_size = ((data.len() / 32) + 1) * 32;
-    let start = b.len();
+    let data_size = data
+        .len()
+        .saturating_div(32)
+        .saturating_add(1)
+        .saturating_mul(32);
+    let original_len = b.len();
     // resize buffer to be able to extend data.
-    b.resize(b.len() + data_size, 0);
+    let new_len = original_len.saturating_add(data_size);
+    b.resize(new_len, 0);
     for (i, data) in data.iter().enumerate() {
-        b[start + i] = *data;
+        let index = original_len.checked_add(i).expect("should be in bounds");
+        b[index] = *data;
     }
 
     log_default(

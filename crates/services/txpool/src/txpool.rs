@@ -41,7 +41,10 @@ use fuel_core_types::fuel_vm::checked_transaction::CheckPredicateParams;
 use std::{
     cmp::Reverse,
     collections::HashMap,
-    ops::Deref,
+    ops::{
+        Deref,
+        Sub,
+    },
     sync::Arc,
 };
 use tokio_rayon::AsyncRayonHandle;
@@ -345,7 +348,7 @@ where
 
     /// Remove all old transactions from the pool.
     pub fn prune_old_txs(&mut self) -> Vec<ArcPoolTx> {
-        let deadline = tokio::time::Instant::now() - self.config.transaction_ttl;
+        let deadline = tokio::time::Instant::now().sub(self.config.transaction_ttl);
 
         let mut result = vec![];
 

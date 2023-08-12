@@ -59,7 +59,11 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use std::{
-    ops::Deref,
+    ops::{
+        Add,
+        Deref,
+        Sub,
+    },
     time::Duration,
 };
 use tokio::{
@@ -202,13 +206,13 @@ where
         let last_timestamp = last_block.time();
         let duration =
             Duration::from_secs(Tai64::now().0.saturating_sub(last_timestamp.0));
-        let last_block_created = Instant::now() - duration;
+        let last_block_created = Instant::now().sub(duration);
         let last_height = *last_block.height();
         (last_height, last_timestamp, last_block_created)
     }
 
     fn next_height(&self) -> BlockHeight {
-        self.last_height + 1u32.into()
+        self.last_height.add(1u32.into())
     }
 
     fn next_time(&self, request_type: RequestType) -> anyhow::Result<Tai64> {
@@ -339,12 +343,15 @@ where
             (Trigger::Instant, _) => {}
             (Trigger::Interval { block_time }, RequestType::Trigger) => {
                 self.timer
-                    .set_deadline(last_block_created + block_time, OnConflict::Min)
+                    .set_deadline(last_block_created.add(block_time), OnConflict::Min)
                     .await;
             }
             (Trigger::Interval { block_time }, RequestType::Manual) => {
                 self.timer
-                    .set_deadline(last_block_created + block_time, OnConflict::Overwrite)
+                    .set_deadline(
+                        last_block_created.add(block_time),
+                        OnConflict::Overwrite,
+                    )
                     .await;
             }
         }

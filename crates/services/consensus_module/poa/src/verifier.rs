@@ -9,6 +9,7 @@ use fuel_core_types::{
     },
     fuel_tx::Input,
 };
+use std::ops::Sub;
 
 #[cfg(test)]
 mod tests;
@@ -48,7 +49,7 @@ pub fn verify_block_fields<D: Database>(
         "The PoA block can't have the zero height"
     );
 
-    let prev_height = height - 1u32.into();
+    let prev_height = height.sub(1u32.into());
     let prev_root = database.block_header_merkle_root(&prev_height)?;
     let header = block.header();
     ensure!(

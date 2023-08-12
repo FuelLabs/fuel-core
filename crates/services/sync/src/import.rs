@@ -134,8 +134,11 @@ where
 
             // If we did not process the entire range, mark the failed heights as failed.
             if (count as u32) < range_len {
-                let range = (*range.start() + count as u32)..=*range.end();
                 tracing::error!("Failed to import range of blocks: {:?}", range);
+                let new_start = range.start().checked_add(count as u32).expect(
+                    "This should always be valid since it will always be in the range",
+                );
+                let range = new_start..=*range.end();
                 self.state.apply(|s| s.failed_to_process(range));
             }
             result?;
@@ -243,7 +246,7 @@ where
         // Fold the stream into a count and any errors.
         .fold((0usize, Ok(())), |(count, err), result| async move {
             match result {
-                Ok(_) => (count + 1, err),
+                Ok(_) => (count.saturating_add(1), err),
                 Err(e) => (count, Err(e)),
             }
         })

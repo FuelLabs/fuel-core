@@ -1,3 +1,4 @@
+#![allow(clippy::arithmetic_side_effects)]
 //! Utilities and helper methods for writing tests
 
 use anyhow::{

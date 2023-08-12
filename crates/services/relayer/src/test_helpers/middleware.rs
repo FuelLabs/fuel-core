@@ -1,3 +1,5 @@
+#![allow(clippy::arithmetic_side_effects)]
+
 use async_trait::async_trait;
 use ethers_core::types::{
     Block,
