@@ -10,8 +10,7 @@ Description of the upcoming release here.
 
 ### Added
 
-- Something new here 1
-- Something new here 2
+- [#1286](https://github.com/FuelLabs/fuel-core/pull/1286): Include readable names for test cases where missing.
 
 ### Changed
 
