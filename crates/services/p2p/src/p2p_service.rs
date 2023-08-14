@@ -1528,9 +1528,9 @@ mod tests {
         }
     }
 
-    fn arbitrary_headers() -> Vec<SealedBlockHeader> {
+    fn arbitrary_headers_for_range(range: Range<u32>) -> Vec<SealedBlockHeader> {
         let mut blocks = Vec::new();
-        for i in 2..=5 {
+        for i in range {
             let mut header: BlockHeader = Default::default();
             header.consensus.height = i.into();
 
@@ -1611,7 +1611,7 @@ mod tests {
                                             }
                                         });
                                     }
-                                    RequestMessage::SealedHeaders(_) => {
+                                    RequestMessage::SealedHeaders(range) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
                                         assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::SealedHeaders(tx_orchestrator)).is_ok());
                                         let tx_test_end = tx_test_end.clone();
@@ -1619,7 +1619,7 @@ mod tests {
                                         tokio::spawn(async move {
                                             let response_message = rx_orchestrator.await;
 
-                                            let expected = arbitrary_headers();
+                                            let expected = arbitrary_headers_for_range(range);
 
                                             if let Ok(Some((_, sealed_headers))) = response_message {
                                                 let check = expected.iter().zip(sealed_headers.iter()).all(|(a, b)| eq_except_metadata(a, b));
@@ -1677,10 +1677,10 @@ mod tests {
 
                                 let _ = node_b.send_response_msg(*request_id, OutboundResponse::SealedHeader(Some(Arc::new(sealed_header))));
                             }
-                            RequestMessage::SealedHeaders(_) => {
-                                let sealed_headers: Vec<_> = arbitrary_headers();
+                            RequestMessage::SealedHeaders(range) => {
+                                let sealed_headers: Vec<_> = arbitrary_headers_for_range(range);
 
-                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::SealedHeadersRangeInclusive(sealed_headers));
+                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::SealedHeaders(sealed_headers));
                             }
                             RequestMessage::Transactions(_) => {
                                 let transactions = (0..5).map(|_| Transaction::default_test_tx()).collect();

@@ -165,7 +165,7 @@ where
             ..
         } = &self;
 
-        get_header_range(range.clone(), p2p.clone(), params.header_batch_size, params.max_header_batch_requests)
+        get_headers_buffered(range.clone(), params, p2p.clone())
         .map({
             let p2p = p2p.clone();
             let consensus_port = consensus.clone();
@@ -258,13 +258,17 @@ where
     }
 }
 
-fn get_header_range<P: PeerToPeerPort + Send + Sync + 'static>(
+fn get_headers_buffered<P: PeerToPeerPort + Send + Sync + 'static>(
     range: RangeInclusive<u32>,
+    params: &Config,
     p2p: Arc<P>,
-    batch_size: u32,
-    requests_in_flight: usize,
 ) -> impl Stream<Item = anyhow::Result<SourcePeer<SealedBlockHeader>>> {
-    futures::stream::iter(range_chunks(range, batch_size))
+    let Config {
+        header_batch_size,
+        max_header_batch_requests,
+        ..
+    } = params;
+    futures::stream::iter(range_chunks(range, *header_batch_size))
         .map(move |range| {
             tracing::debug!(
                 "getting header range from {} to {} inclusive",
@@ -272,52 +276,25 @@ fn get_header_range<P: PeerToPeerPort + Send + Sync + 'static>(
                 range.end()
             );
             let p2p = p2p.clone();
-            async move {
-                let headers = get_header_range_single_req(&range, p2p)
-                    .await
-                    .trace_err("Failed to get headers")?;
-                Ok((range, headers))
-            }
-            .instrument(tracing::debug_span!("get_header_range_single_req"))
-            .in_current_span()
+            async move { get_headers_batch(range, p2p).await }
+                .instrument(tracing::debug_span!("get_header_range_single_req"))
+                .in_current_span()
         })
-        .buffered(requests_in_flight)
-        .into_scan_err()
-        .scan_err()
-        .map(|val| {
-            let sorted_headers = match val {
-                Ok((mut range, headers)) => headers
-                    .into_iter()
-                    .map(move |header| {
-                        let height = range.next().unwrap();
-                        if *(header.data.entity.height()) == height.into() {
-                            Ok(Some(header))
-                        } else {
-                            Ok(None)
-                        }
-                    })
-                    .collect(),
-                Err(e) => vec![Err(e)],
-            };
-            futures::stream::iter(sorted_headers)
-        })
+        .buffered(*max_header_batch_requests)
         .flatten()
         .into_scan_none_or_err()
         .scan_none_or_err()
 }
 
-fn range_chunks(range: RangeInclusive<u32>, chunk_size: u32) -> Vec<RangeInclusive<u32>> {
-    let mut chunks = Vec::new();
-    let mut start = *range.start();
+fn range_chunks(
+    range: RangeInclusive<u32>,
+    chunk_size: u32,
+) -> impl Iterator<Item = RangeInclusive<u32>> {
     let end = *range.end();
-    while start <= end {
-        let chunk_start = start;
-        let chunk_end = start + chunk_size;
-        let chunk_end = if chunk_end > end { end } else { chunk_end };
-        chunks.push(chunk_start..=chunk_end);
-        start = chunk_end + 1;
-    }
-    chunks
+    range.step_by(chunk_size as usize).map(move |chunk_start| {
+        let block_end = (chunk_start + chunk_size).min(end);
+        chunk_start..=block_end
+    })
 }
 
 /// Waits for a notify or shutdown signal.
@@ -338,13 +315,38 @@ async fn wait_for_notify_or_shutdown(
     matches!(r, futures::future::Either::Left(_))
 }
 
-async fn get_header_range_single_req(
-    range: &RangeInclusive<u32>,
+async fn get_headers_batch(
+    mut range: RangeInclusive<u32>,
     p2p: Arc<impl PeerToPeerPort + 'static>,
-) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>> {
-    let start = *range.start();
-    let end = *range.end();
-    p2p.get_sealed_block_headers(start..end + 1).await
+) -> impl Stream<Item = anyhow::Result<Option<SourcePeer<SealedBlockHeader>>>> {
+    tracing::debug!(
+        "getting header range from {} to {} inclusive",
+        range.start(),
+        range.end()
+    );
+    let start = range.start();
+    let end = range.end();
+    let res = p2p
+        .get_sealed_block_headers(*start..*end + 1)
+        .await
+        .trace_err("Failed to get headers");
+    let sorted_headers = match res {
+        Ok(headers) => headers
+            .into_iter()
+            .map(move |header| {
+                let header = range.next().and_then(|height| {
+                    if *(header.data.entity.height()) == height.into() {
+                        Some(header)
+                    } else {
+                        None
+                    }
+                });
+                Ok(header)
+            })
+            .collect(),
+        Err(e) => vec![Err(e)],
+    };
+    futures::stream::iter(sorted_headers)
 }
 
 #[tracing::instrument(

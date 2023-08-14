@@ -270,8 +270,9 @@ impl Database {
             .get(commit_block_height)?
             .ok_or(not_found!(FuelBlockMerkleMetadata))?;
 
+        let storage = self.borrow();
         let tree: MerkleTree<FuelBlockMerkleData, _> =
-            MerkleTree::load(self, commit_merkle_metadata.version)
+            MerkleTree::load(storage, commit_merkle_metadata.version)
                 .map_err(|err| StorageError::Other(err.into()))?;
 
         let proof_index = message_merkle_metadata.version - 1;

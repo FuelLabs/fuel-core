@@ -238,7 +238,7 @@ where
                         let request_msg = RequestMessage::SealedHeaders(block_height_range.clone());
                         let channel_item = ResponseChannelItem::SealedHeaders(response);
                         // Note: this range has already been check for validity
-                        let block_height = BlockHeight::from(block_height_range.end-1);
+                        let block_height = BlockHeight::from(block_height_range.end - 1);
                         let peer = self.p2p_service.peer_manager()
                              .get_peer_id_with_height(&block_height);
                         let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
@@ -310,9 +310,9 @@ where
                                 let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeader(response));
                             }
                             RequestMessage::SealedHeaders(range) => {
-                                let response = self.db.get_sealed_headers_range(range)?;
+                                let response = self.db.get_sealed_headers(range)?;
 
-                                let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeadersRangeInclusive(response));
+                                let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeaders(response));
                             }
                         }
                     },
@@ -613,7 +613,7 @@ pub mod tests {
             }))
         }
 
-        fn get_sealed_headers_range(
+        fn get_sealed_headers(
             &self,
             _block_height_range: Range<u32>,
         ) -> StorageResult<Vec<SealedBlockHeader>> {

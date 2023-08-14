@@ -22,7 +22,7 @@ pub trait P2pDb: Send + Sync {
         height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlockHeader>>;
 
-    fn get_sealed_headers_range(
+    fn get_sealed_headers(
         &self,
         block_height_range: Range<u32>,
     ) -> StorageResult<Vec<SealedBlockHeader>>;

@@ -32,7 +32,7 @@ impl P2pDb for Database {
         self.get_sealed_block_header_by_height(height)
     }
 
-    fn get_sealed_headers_range(
+    fn get_sealed_headers(
         &self,
         block_height_range: Range<u32>,
     ) -> StorageResult<Vec<SealedBlockHeader>> {

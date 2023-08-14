@@ -261,7 +261,7 @@ impl RequestResponseConverter for PostcardCodec {
 
                 Ok(NetworkResponse::Transactions(response))
             }
-            OutboundResponse::SealedHeadersRangeInclusive(headers) => {
+            OutboundResponse::SealedHeaders(headers) => {
                 let serialized = self.serialize(headers)?;
                 Ok(NetworkResponse::Headers(serialized))
             }

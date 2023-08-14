@@ -83,7 +83,7 @@ pub enum NetworkResponse {
 pub enum OutboundResponse {
     Block(Option<Arc<SealedBlock>>),
     SealedHeader(Option<Arc<SealedBlockHeader>>),
-    SealedHeadersRangeInclusive(Vec<SealedBlockHeader>),
+    SealedHeaders(Vec<SealedBlockHeader>),
     Transactions(Option<Arc<Vec<Transaction>>>),
 }
 
