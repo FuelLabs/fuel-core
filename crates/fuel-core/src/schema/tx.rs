@@ -37,7 +37,10 @@ use fuel_core_storage::{
     Error as StorageError,
     Result as StorageResult,
 };
-use fuel_core_txpool::service::TxStatusMessage;
+use fuel_core_txpool::{
+    service::TxStatusMessage,
+    txpool::TokioWithRayon,
+};
 use fuel_core_types::{
     fuel_tx::{
         Cacheable,
@@ -205,11 +208,13 @@ impl TxQuery {
         tx: HexString,
     ) -> async_graphql::Result<Transaction> {
         let mut tx = FuelTx::from_bytes(&tx.0)?;
+
         let config = ctx.data_unchecked::<Config>();
 
-        tx.estimate_predicates(&CheckPredicateParams::from(
+        tx.estimate_predicates_async::<TokioWithRayon>(&CheckPredicateParams::from(
             &config.consensus_parameters,
-        ))?;
+        ))
+        .await?;
 
         Ok(Transaction::from_tx(
             tx.id(&config.consensus_parameters.chain_id),
