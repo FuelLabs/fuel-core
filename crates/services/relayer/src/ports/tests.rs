@@ -69,13 +69,13 @@ fn insert_always_raises_da_height_monotonically() {
     db.insert_messages(&5u64.into(), &messages[..5]).unwrap();
 }
 
-#[test_case(None, 0, 0)]
-#[test_case(None, 10, 10)]
-#[test_case(0, 10, 10)]
-#[test_case(0, None, 0)]
-#[test_case(10, 11, 11)]
-#[test_case(11, None, 11)]
-#[test_case(11, None, 10)]
+#[test_case(None, 0, 0; "can set DA height to 0 when there is none available")]
+#[test_case(None, 10, 10; "can set DA height to 10 when there is none available")]
+#[test_case(0, 10, 10; "can set DA height to 10 when it is 0")]
+#[test_case(0, None, 0; "inserts are bypassed when height goes from 0 to 0")]
+#[test_case(10, 11, 11; "can set DA height to 11 when it is 10")]
+#[test_case(11, None, 11; "inserts are bypassed when height goes from 11 to 11")]
+#[test_case(11, None, 10; "inserts are bypassed when height reverted from 11 to 10")]
 fn set_raises_da_height_monotonically(
     get: impl Into<Option<u64>>,
     inserts: impl Into<Option<u64>>,

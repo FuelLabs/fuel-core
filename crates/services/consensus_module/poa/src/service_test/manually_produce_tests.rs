@@ -6,30 +6,39 @@ use test_case::test_case;
 
 use super::*;
 
-#[test_case(Tai64::now(), 10, vec![Tai64::now(); 10], Trigger::Never, 0)]
-#[test_case(Tai64::now(), 10, vec![Tai64::now(); 10], Trigger::Instant, 0)]
+#[test_case(Tai64::now(), 10, vec![Tai64::now(); 10], Trigger::Never, 0;
+"can manually produce blocks even when trigger is Never")]
+#[test_case(Tai64::now(), 10, vec![Tai64::now(); 10], Trigger::Instant, 0;
+"can manually produce blocks when trigger is Instant")]
 #[test_case(
     Tai64::now(), 3, vec![Tai64::now(), Tai64::now() + 10, Tai64::now() + 20],
     Trigger::Interval { block_time: Duration::from_secs(10) }, 0
-)]
-#[test_case(Tai64::now() + 100, 10, vec![Tai64::now() + 100; 10], Trigger::Never, 0)]
-#[test_case(Tai64::now() + 100, 10, vec![Tai64::now() + 100; 10], Trigger::Instant, 0)]
+; "can manually produce blocks with different times")]
+#[test_case(Tai64::now() + 100, 10, vec![Tai64::now() + 100; 10], Trigger::Never, 0;
+"can manually produce blocks starting in the future even when trigger is Never")]
+#[test_case(Tai64::now() + 100, 10, vec![Tai64::now() + 100; 10], Trigger::Instant, 0;
+"can manually produce blocks starting in the future when trigger is Instant")]
 #[test_case(
     Tai64::now() + 100, 3, vec![Tai64::now() + 100, Tai64::now() + 110, Tai64::now() + 120],
-    Trigger::Interval { block_time: Duration::from_secs(10) }, 0
-)]
-#[test_case(Tai64::now(), 10, vec![Tai64::now(); 10], Trigger::Never, 10)]
-#[test_case(Tai64::now(), 10, vec![Tai64::now(); 10], Trigger::Instant, 10)]
+    Trigger::Interval { block_time: Duration::from_secs(10) }, 0;
+"can manually produce blocks starting in the future with different times")]
+#[test_case(Tai64::now(), 10, vec![Tai64::now(); 10], Trigger::Never, 10;
+"can manually produce blocks with txs even when trigger is Never")]
+#[test_case(Tai64::now(), 10, vec![Tai64::now(); 10], Trigger::Instant, 10;
+"can manually produce blocks with txs when trigger is Instant")]
 #[test_case(
     Tai64::now(), 3, vec![Tai64::now(), Tai64::now() + 10, Tai64::now() + 20],
     Trigger::Interval { block_time: Duration::from_secs(10) }, 10
-)]
-#[test_case(Tai64::now() + 100, 10, vec![Tai64::now() + 100; 10], Trigger::Never, 10)]
-#[test_case(Tai64::now() + 100, 10, vec![Tai64::now() + 100; 10], Trigger::Instant, 10)]
+;
+"can manually produce blocks with different times with txs")]
+#[test_case(Tai64::now() + 100, 10, vec![Tai64::now() + 100; 10], Trigger::Never, 10;
+"can manually produce blocks with txs starting in the future even when trigger is Never")]
+#[test_case(Tai64::now() + 100, 10, vec![Tai64::now() + 100; 10], Trigger::Instant, 10;
+"can manually produce blocks with txs starting in the future when trigger is Instant")]
 #[test_case(
     Tai64::now() + 100, 3, vec![Tai64::now() + 100, Tai64::now() + 110, Tai64::now() + 120],
-    Trigger::Interval { block_time: Duration::from_secs(10) }, 10
-)]
+    Trigger::Interval { block_time: Duration::from_secs(10) }, 10;
+"can manually produce blocks with txs starting in the future with different times")]
 #[tokio::test]
 async fn can_manually_produce_block(
     start_time: Tai64,
