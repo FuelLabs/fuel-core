@@ -1,4 +1,7 @@
-use clap::Args;
+use clap::{
+    builder::ArgPredicate::IsPresent,
+    Args,
+};
 use core::time::Duration;
 use fuel_core::{
     relayer::{
@@ -21,6 +24,7 @@ pub struct RelayerArgs {
     /// If not set relayer will not start.
     #[arg(long = "relayer", env)]
     #[arg(required_if_eq("enable_relayer", "true"))]
+    #[arg(requires_if(IsPresent, "enable_relayer"))]
     pub eth_client: Option<url::Url>,
 
     /// Ethereum contract address. Create EthAddress into fuel_types

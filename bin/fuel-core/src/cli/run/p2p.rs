@@ -1,5 +1,8 @@
 use anyhow::anyhow;
-use clap::Args;
+use clap::{
+    builder::ArgPredicate::IsPresent,
+    Args,
+};
 use fuel_core::{
     p2p::{
         config::{
@@ -40,11 +43,13 @@ pub struct P2PArgs {
     /// Peering secret key. Supports either a hex encoded secret key inline or a path to bip32 mnemonic encoded secret file.
     #[clap(long = "keypair", env, value_parser = KeypairArg::try_from_string)]
     #[arg(required_if_eq("enable_p2p", "true"))]
+    #[arg(requires_if(IsPresent, "enable_p2p"))]
     pub keypair: Option<KeypairArg>,
 
     /// The name of the p2p Network
     #[clap(long = "network", env)]
     #[arg(required_if_eq("enable_p2p", "true"))]
+    #[arg(requires_if(IsPresent, "enable_p2p"))]
     pub network: Option<String>,
 
     /// p2p network's IP Address
