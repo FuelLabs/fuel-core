@@ -213,9 +213,13 @@ impl From<SyncArgs> for fuel_core::sync::Config {
 }
 
 impl P2PArgs {
-    pub fn into_config(self, metrics: bool) -> anyhow::Result<Config<NotInitialized>> {
+    pub fn into_config(
+        self,
+        metrics: bool,
+    ) -> anyhow::Result<Option<Config<NotInitialized>>> {
         if !self.enable_p2p {
             tracing::info!("P2P service disabled");
+            return Ok(None)
         }
 
         let local_keypair = {
@@ -264,7 +268,6 @@ impl P2PArgs {
         };
 
         let config = Config {
-            enabled: self.enable_p2p,
             keypair: local_keypair,
             network_name: self.network.expect("mandatory value"),
             checksum: Default::default(),
@@ -294,6 +297,6 @@ impl P2PArgs {
             metrics,
             state: NotInitialized,
         };
-        Ok(config)
+        Ok(Some(config))
     }
 }

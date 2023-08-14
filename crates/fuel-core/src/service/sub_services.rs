@@ -4,6 +4,7 @@ use super::adapters::P2PAdapter;
 use crate::{
     database::Database,
     fuel_core_graphql_api::Config as GraphQLConfig,
+    relayer::Config as RelayerConfig,
     schema::build_schema,
     service::{
         adapters::{
@@ -21,6 +22,7 @@ use crate::{
     },
 };
 use fuel_core_poa::Trigger;
+use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -46,10 +48,10 @@ pub fn init_sub_services(
         "The blockchain is not initialized with any block"
     ))?;
     #[cfg(feature = "relayer")]
-    let relayer_service = if config.relayer.enabled {
+    let relayer_service = if let Some(config) = &config.relayer {
         Some(fuel_core_relayer::new_service(
             database.clone(),
-            config.relayer.clone(),
+            config.clone(),
         )?)
     } else {
         None
@@ -60,7 +62,10 @@ pub fn init_sub_services(
         #[cfg(feature = "relayer")]
         relayer_synced: relayer_service.as_ref().map(|r| r.shared.clone()),
         #[cfg(feature = "relayer")]
-        da_deploy_height: config.relayer.da_deploy_height,
+        da_deploy_height: config.relayer.as_ref().map_or(
+            DaBlockHeight(RelayerConfig::DEFAULT_DA_DEPLOY_HEIGHT),
+            |config| config.da_deploy_height,
+        ),
     };
 
     let executor = ExecutorAdapter {
@@ -86,10 +91,10 @@ pub fn init_sub_services(
 
     #[cfg(feature = "p2p")]
     let mut network = {
-        if config.p2p.enabled {
+        if let Some(config) = config.p2p.clone() {
             let p2p_db = database.clone();
             let genesis = p2p_db.get_genesis()?;
-            let p2p_config = config.p2p.clone().init(genesis)?;
+            let p2p_config = config.init(genesis)?;
 
             Some(fuel_core_p2p::service::new_service(
                 p2p_config,

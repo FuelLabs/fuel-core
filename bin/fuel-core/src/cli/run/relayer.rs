@@ -20,7 +20,7 @@ pub struct RelayerArgs {
     /// Uri address to ethereum client. It can be in format of `http://localhost:8545/` or `ws://localhost:8545/`.
     /// If not set relayer will not start.
     #[arg(long = "relayer", env)]
-    #[arg(required_if_eq("enable-relayer", "true"))]
+    #[arg(required_if_eq("enable_relayer", "true"))]
     pub eth_client: Option<url::Url>,
 
     /// Ethereum contract address. Create EthAddress into fuel_types
@@ -58,13 +58,13 @@ pub fn parse_h160(input: &str) -> Result<H160, <H160 as FromStr>::Err> {
 }
 
 impl RelayerArgs {
-    pub fn into_config(self) -> Config {
+    pub fn into_config(self) -> Option<Config> {
         if !self.enable_relayer {
             tracing::info!("Relayer service disabled");
+            return None
         }
 
         let config = Config {
-            enabled: self.enable_relayer,
             da_deploy_height: DaBlockHeight(self.da_deploy_height),
             da_finalization: DaBlockHeight(self.da_finalization),
             eth_client: self.eth_client,
@@ -75,6 +75,6 @@ impl RelayerArgs {
             syncing_log_frequency: Duration::from_secs(self.syncing_log_frequency_secs),
             metrics: false,
         };
-        config
+        Some(config)
     }
 }
