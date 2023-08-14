@@ -345,7 +345,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
                 .unwrap_or_else(|| "default_network".to_string())
         }
         #[cfg(not(feature = "p2p"))]
-        "default_network"
+        "default_network".to_string()
     }
     .to_string();
     // log fuel-core version
