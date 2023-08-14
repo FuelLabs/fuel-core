@@ -131,9 +131,11 @@ pub fn run(c: &mut Criterion) {
                 ),
             ])
             .with_data(
-                ed19_signature
+                ed19_keypair
+                    .public
                     .to_bytes()
                     .iter()
+                    .chain(ed19_signature.to_bytes().iter())
                     .chain(message.iter())
                     .copied()
                     .collect(),
