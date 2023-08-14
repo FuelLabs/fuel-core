@@ -277,19 +277,50 @@ $ cargo run --bin fuel-core-client -- transaction submit \
 ## Debugging
 
 ### Using CLion
-TODO
+
+Running Fuel Core with CLion requires the Rust plugin for CLion.
+
+#### Create A Run Configuration
+
+1. In the top-right corner of the CLion window, click on the dropdown menu and select "Edit Configurations..."
+2. In the "Run/Debug Configurations" window, click on the "+" button and select "Cargo"
+3. In the "Name" field, give your configuration a descriptive name, such as "Run Fuel Node"
+4. In the "Command" field, enter `run --all-features --bin fuel-core -- run <ARGUMENTS>`, where `<ARGUMENTS>` is the desired CLI arguments. Refer to the provided CLI documentation for guidance on which options and arguments to use. For example, you can provide options like `--enable-p2p`, `--enable-relayer`, `--ip`, `--port`, and `--chain`.
+5. If your application uses environment variables for configuration (as indicated in the CLI documentation), you can set them in the "Environment variables" section. Enter the variables and their values as needed.
+6. Click "Apply" or "OK" to save your run configuration.
+
+#### Running and Debugging 
+
+1. With your configuration selected in the dropdown menu, click on the Run button to start running your Fuel client node. 
+2. Alternatively, click on the Debug button to start your client node in debug mode. In debug mode, CLion will enable debug symbols and suspend execution at breakpoints.
 
 ### Using Visual Studio Code
-TODO
+
+Running Fuel Core with Visual Studio Code requires the CodeLLDB extension.
+
+#### Create A Run Configuration
+
+1. In VS Code, click on the "Run and Debug" icon in the left sidebar. 
+2. VS Code will offer to create a "launch.json" file to configure how your client node is run. Clicking this will prompt you to select a debugger. Select the CodeLLDB debugger to proceed. VS Code will generate a `launch.json` file for you.
+3. In the "Run and Debug" menu, click the dropdown menu and select "Add Configuration..."
+4. In the "type" field, enter "lldb". In the "request" field, enter "launch".
+5. In the "name" field, give your configuration a descriptive name, such as "Run Fuel Node"
+6. In the "cargo"/"args" array, enter the following arguments: `"run"`, `"--all-features"`, `"--bin"`, `"fuel-core"`, `"--"`", `"run"`, `"<ARGUMENTS>"`, where `"<ARGUMENTS>"` is a list of string-encapsulated key-value CLI arguments.  Refer to the provided CLI documentation for guidance on which options and arguments to use.
+7. Save these changes made to your `launch.json` file.
+
+#### Running and Debugging
+
+1. With your configuration selected in the dropdown menu, click on the Run button to start running your Fuel client node.
+
 
 ### Initializing Your Node with a Pre-existing Database
 TODO
 
 ### With P2P
-TODO
+
 
 ### With Relayer
-TODO
+
 
 ### Connecting Your Node to the Network
 TODO
