@@ -51,7 +51,7 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("ecr1"),
         "ecr1",
-        VmBench::new(op::ecr1(0x11, 0x20, 0x21))
+        VmBench::new(op::ecr1(RegId::HP, 0x20, 0x21))
             .with_prepare_script(vec![
                 op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
                 op::addi(
@@ -59,10 +59,8 @@ pub fn run(c: &mut Criterion) {
                     0x20,
                     ecr1_signature.as_ref().len().try_into().unwrap(),
                 ),
-                op::addi(0x22, 0x21, message.as_ref().len().try_into().unwrap()),
                 op::movi(0x10, PublicKey::LEN.try_into().unwrap()),
                 op::aloc(0x10),
-                op::move_(0x11, RegId::HP),
             ])
             .with_data(
                 ecr1_signature
