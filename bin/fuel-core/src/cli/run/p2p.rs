@@ -52,129 +52,129 @@ pub struct P2PArgs {
     pub address: Option<IpAddr>,
 
     /// Optional address of your local node made reachable for other nodes in the network.
-    #[clap(long = "public_address", env)]
+    #[clap(long = "public-address", env)]
     pub public_address: Option<Multiaddr>,
 
     /// p2p network's TCP Port
-    #[clap(long = "peering_port", default_value = "30333", env)]
+    #[clap(long = "peering-port", default_value = "30333", env)]
     pub peering_port: u16,
 
     /// Max Block size
-    #[clap(long = "max_block_size", default_value = MAX_RESPONSE_SIZE_STR, env)]
+    #[clap(long = "max-block-size", default_value = MAX_RESPONSE_SIZE_STR, env)]
     pub max_block_size: usize,
 
     /// Addresses of the bootstrap nodes
     /// They should contain PeerId within their `Multiaddr`
-    #[clap(long = "bootstrap_nodes", value_delimiter = ',', env)]
+    #[clap(long = "bootstrap-nodes", value_delimiter = ',', env)]
     pub bootstrap_nodes: Vec<Multiaddr>,
 
     /// Addresses of the reserved nodes
     /// They should contain PeerId within their `Multiaddr`
-    #[clap(long = "reserved_nodes", value_delimiter = ',', env)]
+    #[clap(long = "reserved-nodes", value_delimiter = ',', env)]
     pub reserved_nodes: Vec<Multiaddr>,
 
     /// With this set to `true` you create a guarded node that is only ever connected to trusted, reserved nodes.    
-    #[clap(long = "reserved_nodes_only_mode", env)]
+    #[clap(long = "reserved-nodes-only-mode", env)]
     pub reserved_nodes_only_mode: bool,
 
     /// Allow nodes to be discoverable on the local network
-    #[clap(long = "enable_mdns", env)]
+    #[clap(long = "enable-mdns", env)]
     pub enable_mdns: bool,
 
     /// Max number of unique peers connected
     /// This number should be at least number of `mesh_n` from `Gossipsub` configuration.
     /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
-    #[clap(long = "max_peers_connected", default_value = "50", env)]
+    #[clap(long = "max-peers-connected", default_value = "50", env)]
     pub max_peers_connected: u32,
 
     /// Max number of connections per single peer
     /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
-    #[clap(long = "max_connections_per_peer", default_value = "3", env)]
+    #[clap(long = "max-connections-per-peer", default_value = "3", env)]
     pub max_connections_per_peer: u32,
 
     /// Set the delay between random walks for p2p node discovery in seconds.
     /// If it's not set the random walk will be disabled.
     /// Also if `reserved_nodes_only_mode` is set to `true`,
     /// the random walk will be disabled.
-    #[clap(long = "random_walk", default_value = "0", env)]
+    #[clap(long = "random-walk", default_value = "0", env)]
     pub random_walk: u64,
 
     /// Choose to include private IPv4/IPv6 addresses as discoverable
     /// except for the ones stored in `bootstrap_nodes`
-    #[clap(long = "allow_private_addresses", env)]
+    #[clap(long = "allow-private-addresses", env)]
     pub allow_private_addresses: bool,
 
     /// Choose how long will connection keep alive if idle
-    #[clap(long = "connection_idle_timeout", default_value = "120", env)]
+    #[clap(long = "connection-idle-timeout", default_value = "120", env)]
     pub connection_idle_timeout: u64,
 
     /// Choose how often to recieve PeerInfo from other nodes
-    #[clap(long = "info_interval", default_value = "3", env)]
+    #[clap(long = "info-interval", default_value = "3", env)]
     pub info_interval: u64,
 
     /// Choose the interval at which identification requests are sent to
     /// the remote on established connections after the first request
-    #[clap(long = "identify_interval", default_value = "5", env)]
+    #[clap(long = "identify-interval", default_value = "5", env)]
     pub identify_interval: u64,
 
     /// Choose max mesh size for gossipsub protocol
-    #[clap(long = "max_mesh_size", default_value = "12", env)]
+    #[clap(long = "max-mesh-size", default_value = "12", env)]
     pub max_mesh_size: usize,
 
     /// Choose min mesh size for gossipsub protocol
-    #[clap(long = "min_mesh_size", default_value = "4", env)]
+    #[clap(long = "min-mesh-size", default_value = "4", env)]
     pub min_mesh_size: usize,
 
     /// Choose ideal mesh size for gossipsub protocol
-    #[clap(long = "ideal_mesh_size", default_value = "6", env)]
+    #[clap(long = "ideal-mesh-size", default_value = "6", env)]
     pub ideal_mesh_size: usize,
 
     /// Number of heartbeats to keep in the gossipsub `memcache`
-    #[clap(long = "history_length", default_value = "5", env)]
+    #[clap(long = "history-length", default_value = "5", env)]
     pub history_length: usize,
 
     /// Number of past heartbeats to gossip about
-    #[clap(long = "history_gossip", default_value = "3", env)]
+    #[clap(long = "history-gossip", default_value = "3", env)]
     pub history_gossip: usize,
 
     /// Time between each gossipsub heartbeat
-    #[clap(long = "gossip_heartbeat_interval", default_value = "1", env)]
+    #[clap(long = "gossip-heartbeat-interval", default_value = "1", env)]
     pub gossip_heartbeat_interval: u64,
 
     /// The maximum byte size for each gossip (default is 18 MiB)
-    #[clap(long = "max_transmit_size", default_value = MAX_RESPONSE_SIZE_STR, env)]
+    #[clap(long = "max-transmit-size", default_value = MAX_RESPONSE_SIZE_STR, env)]
     pub max_transmit_size: usize,
 
     /// Choose timeout for sent requests in RequestResponse protocol
-    #[clap(long = "request_timeout", default_value = "20", env)]
+    #[clap(long = "request-timeout", default_value = "20", env)]
     pub request_timeout: u64,
 
     /// Choose how long RequestResponse protocol connections will live if idle
-    #[clap(long = "connection_keep_alive", default_value = "20", env)]
+    #[clap(long = "connection-keep-alive", default_value = "20", env)]
     pub connection_keep_alive: u64,
 
     /// Sending of `BlockHeight` should not take longer than this duration, in seconds.
-    #[clap(long = "heartbeat_send_duration", default_value = "2", env)]
+    #[clap(long = "heartbeat-send-duration", default_value = "2", env)]
     pub heartbeat_send_duration: u64,
 
     /// Idle time in seconds before sending next `BlockHeight`
-    #[clap(long = "heartbeat_idle_duration", default_value = "1", env)]
+    #[clap(long = "heartbeat-idle-duration", default_value = "1", env)]
     pub heartbeat_idle_duration: u64,
 
     /// Max failures allowed at `Heartbeat` protocol.
     /// If reached, the protocol will request disconnect.
     /// Cannot be zero.
-    #[clap(long = "heartbeat_max_failures", default_value = "5", env)]
+    #[clap(long = "heartbeat-max-failures", default_value = "5", env)]
     pub heartbeat_max_failures: NonZeroU32,
 }
 
 #[derive(Debug, Clone, Args)]
 pub struct SyncArgs {
     /// The maximum number of get header requests to make in a single batch.
-    #[clap(long = "sync_max_get_header", default_value = "10", env)]
+    #[clap(long = "sync-max-get-header", default_value = "10", env)]
     pub max_get_header_requests: usize,
     /// The maximum number of get transaction requests to make in a single batch.
-    #[clap(long = "sync_max_get_txns", default_value = "10", env)]
+    #[clap(long = "sync-max-get-txns", default_value = "10", env)]
     pub max_get_txns_requests: usize,
 }
 
