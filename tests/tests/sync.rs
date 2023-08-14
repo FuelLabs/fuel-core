@@ -60,9 +60,9 @@ async fn test_producer_getting_own_blocks_back() {
     validator.consistency_10s(&expected).await;
 }
 
-#[test_case(1)]
-#[test_case(10)]
-#[test_case(100)]
+#[test_case(1; "partition with 1 tx")]
+#[test_case(10; "partition with 10 txs")]
+#[test_case(100; "partition with 100 txs")]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_partition_single(num_txs: usize) {
     // Create a random seed based on the test parameters.
@@ -118,12 +118,12 @@ async fn test_partition_single(num_txs: usize) {
     validators["Carol"].consistency_20s(&expected).await;
 }
 
-#[test_case(1, 3, 3)]
-#[test_case(10, 3, 3)]
-#[test_case(100, 3, 3)]
-#[test_case(1, 8, 4)]
-#[test_case(10, 8, 4)]
-#[test_case(100, 8, 4)]
+#[test_case(1, 3, 3; "partition with 1 tx 3 validators 3 partitions")]
+#[test_case(10, 3, 3; "partition with 10 txs 3 validators 3 partitions")]
+#[test_case(100, 3, 3; "partition with 100 txs 3 validators 3 partitions")]
+#[test_case(1, 8, 4; "partition with 1 tx 8 validators 4 partitions")]
+#[test_case(10, 8, 4; "partition with 10 txs 8 validators 4 partitions")]
+#[test_case(100, 8, 4; "partition with 100 txs 8 validators 4 partitions")]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_partitions_larger_groups(
     num_txs: usize,
