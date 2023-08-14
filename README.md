@@ -275,3 +275,21 @@ $ cargo run --bin fuel-core-client -- transaction submit \
 ```
 
 ## Debugging
+
+### Using CLion
+TODO
+
+### Using Visual Studio Code
+TODO
+
+### Initializing Your Node with a Pre-existing Database
+TODO
+
+### With P2P
+TODO
+
+### With Relayer
+TODO
+
+### Connecting Your Node to the Network
+TODO
