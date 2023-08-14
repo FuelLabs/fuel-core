@@ -42,6 +42,7 @@ use fuel_core_types::{
 use itertools::Itertools;
 use std::{
     borrow::{
+        Borrow,
         BorrowMut,
         Cow,
     },

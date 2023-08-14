@@ -735,6 +735,7 @@ mod tests {
     use rand::Rng;
     use std::{
         collections::HashSet,
+        ops::Range,
         sync::Arc,
         time::Duration,
     };
@@ -1577,7 +1578,7 @@ mod tests {
                             if !peer_addresses.is_empty() && !request_sent {
                                 request_sent = true;
 
-                                match &request_msg {
+                                match request_msg.clone() {
                                     RequestMessage::Block(_) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
                                         assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::Block(tx_orchestrator)).is_ok());
@@ -1619,7 +1620,7 @@ mod tests {
                                         tokio::spawn(async move {
                                             let response_message = rx_orchestrator.await;
 
-                                            let expected = arbitrary_headers_for_range(range);
+                                            let expected = arbitrary_headers_for_range(range.clone());
 
                                             if let Ok(Some((_, sealed_headers))) = response_message {
                                                 let check = expected.iter().zip(sealed_headers.iter()).all(|(a, b)| eq_except_metadata(a, b));
@@ -1678,7 +1679,7 @@ mod tests {
                                 let _ = node_b.send_response_msg(*request_id, OutboundResponse::SealedHeader(Some(Arc::new(sealed_header))));
                             }
                             RequestMessage::SealedHeaders(range) => {
-                                let sealed_headers: Vec<_> = arbitrary_headers_for_range(range);
+                                let sealed_headers: Vec<_> = arbitrary_headers_for_range(range.clone());
 
                                 let _ = node_b.send_response_msg(*request_id, OutboundResponse::SealedHeaders(sealed_headers));
                             }
