@@ -24,7 +24,7 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("eck1"),
         "eck1",
-        VmBench::new(op::eck1(0x11, 0x20, 0x21))
+        VmBench::new(op::eck1(RegId::HP, 0x20, 0x21))
             .with_prepare_script(vec![
                 op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
                 op::addi(
@@ -32,48 +32,8 @@ pub fn run(c: &mut Criterion) {
                     0x20,
                     eck1_signature.as_ref().len().try_into().unwrap(),
                 ),
-                op::addi(0x22, 0x21, message.as_ref().len().try_into().unwrap()),
                 op::movi(0x10, PublicKey::LEN.try_into().unwrap()),
                 op::aloc(0x10),
-                op::move_(0x11, RegId::HP),
-            ])
-            .with_data(
-                eck1_signature
-                    .iter()
-                    .chain(message.iter())
-                    .copied()
-                    .collect(),
-            ),
-    );
-
-    run_group_ref(
-        &mut c.benchmark_group("k256"),
-        "k256",
-        VmBench::new(op::k256(0x10, 0x00, 0x11))
-            .with_prepare_script(vec![
-                op::movi(0x10, Bytes32::LEN.try_into().unwrap()),
-                op::aloc(0x10),
-                op::move_(0x10, RegId::HP),
-                op::movi(0x11, 32),
-            ])
-            .with_data(
-                eck1_signature
-                    .iter()
-                    .chain(message.iter())
-                    .copied()
-                    .collect(),
-            ),
-    );
-
-    run_group_ref(
-        &mut c.benchmark_group("s256"),
-        "s256",
-        VmBench::new(op::s256(0x10, 0x00, 0x11))
-            .with_prepare_script(vec![
-                op::movi(0x10, Bytes32::LEN.try_into().unwrap()),
-                op::aloc(0x10),
-                op::move_(0x10, RegId::HP),
-                op::movi(0x11, 32),
             ])
             .with_data(
                 eck1_signature
@@ -113,6 +73,42 @@ pub fn run(c: &mut Criterion) {
             ),
     );
 
+    run_group_ref(
+        &mut c.benchmark_group("k256"),
+        "k256",
+        VmBench::new(op::k256(RegId::HP, RegId::ZERO, 0x11))
+            .with_prepare_script(vec![
+                op::movi(0x10, Bytes32::LEN.try_into().unwrap()),
+                op::aloc(0x10),
+                op::movi(0x11, 32),
+            ])
+            .with_data(
+                eck1_signature
+                    .iter()
+                    .chain(message.iter())
+                    .copied()
+                    .collect(),
+            ),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("s256"),
+        "s256",
+        VmBench::new(op::s256(RegId::HP, RegId::ZERO, 0x11))
+            .with_prepare_script(vec![
+                op::movi(0x10, Bytes32::LEN.try_into().unwrap()),
+                op::aloc(0x10),
+                op::movi(0x11, 32),
+            ])
+            .with_data(
+                eck1_signature
+                    .iter()
+                    .chain(message.iter())
+                    .copied()
+                    .collect(),
+            ),
+    );
+
     let ed19_keypair =
         ed25519_dalek::Keypair::generate(&mut ed25519_dalek_old_rand::rngs::OsRng {});
     let ed19_signature = ed19_keypair.sign(&*message);
@@ -133,10 +129,6 @@ pub fn run(c: &mut Criterion) {
                     0x21,
                     ed19_signature.as_ref().len().try_into().unwrap(),
                 ),
-                op::addi(0x22, 0x21, message.as_ref().len().try_into().unwrap()),
-                op::movi(0x10, PublicKey::LEN.try_into().unwrap()),
-                op::aloc(0x10),
-                op::move_(0x11, RegId::HP),
             ])
             .with_data(
                 ed19_signature
