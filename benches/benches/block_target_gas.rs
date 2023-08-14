@@ -5,6 +5,7 @@ use criterion::{
     BenchmarkGroup,
     Criterion,
 };
+use ed25519_dalek::Signer;
 use fuel_core::service::{
     config::Trigger,
     Config,
@@ -20,6 +21,10 @@ use fuel_core_types::{
         Instruction,
         RegId,
     },
+    fuel_crypto::{
+        secp256r1,
+        *,
+    },
     fuel_tx::UniqueIdentifier,
     fuel_types::AssetId,
 };
@@ -28,7 +33,12 @@ use fuel_core_types::{
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-fn run(id: &str, group: &mut BenchmarkGroup<WallTime>, script: Vec<Instruction>) {
+fn run(
+    id: &str,
+    group: &mut BenchmarkGroup<WallTime>,
+    script: Vec<Instruction>,
+    script_data: Vec<u8>,
+) {
     group.bench_function(id, |b| {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -60,7 +70,7 @@ fn run(id: &str, group: &mut BenchmarkGroup<WallTime>, script: Vec<Instruction>)
             let tx = fuel_core_types::fuel_tx::TransactionBuilder::script(
                 // Infinite loop
                 script.clone().into_iter().collect(),
-                vec![],
+                script_data.clone(),
             )
             .gas_limit(TARGET_BLOCK_GAS_LIMIT - BASE)
             .gas_price(1)
@@ -110,6 +120,7 @@ fn block_target_gas(c: &mut Criterion) {
         "Script with noop opcode and infinite loop",
         &mut group,
         [op::noop(), op::jmpb(RegId::ZERO, 0)].to_vec(),
+        vec![],
     );
 
     run(
@@ -121,6 +132,7 @@ fn block_target_gas(c: &mut Criterion) {
             op::jmpb(RegId::ZERO, 0),
         ]
         .to_vec(),
+        vec![],
     );
 
     run(
@@ -132,6 +144,7 @@ fn block_target_gas(c: &mut Criterion) {
             op::jmpb(RegId::ZERO, 0),
         ]
         .to_vec(),
+        vec![],
     );
 
     run(
@@ -142,6 +155,63 @@ fn block_target_gas(c: &mut Criterion) {
             op::jmpb(RegId::ZERO, 0),
         ]
         .to_vec(),
+        vec![],
+    );
+
+    let message = fuel_core_types::fuel_crypto::Message::new(b"foo");
+    let ecr1_secret = p256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+    let ecr1_signature = secp256r1::sign_prehashed(&ecr1_secret, &message)
+        .expect("Failed to sign with secp256r1");
+
+    run(
+        "Script with ecr1 opcode and infinite loop",
+        &mut group,
+        [
+            op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
+            op::addi(
+                0x21,
+                0x20,
+                ecr1_signature.as_ref().len().try_into().unwrap(),
+            ),
+            op::addi(0x22, 0x21, message.as_ref().len().try_into().unwrap()),
+            op::movi(0x10, PublicKey::LEN.try_into().unwrap()),
+            op::aloc(0x10),
+            op::move_(0x11, RegId::HP),
+            op::ecr1(0x11, 0x20, 0x21),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    let ed19_keypair =
+        ed25519_dalek::Keypair::generate(&mut ed25519_dalek_old_rand::rngs::OsRng {});
+    let ed19_signature = ed19_keypair.sign(&*message);
+
+    run(
+        "Script with ed19 opcode and infinite loop",
+        &mut group,
+        [
+            op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
+            op::addi(
+                0x21,
+                0x20,
+                ed19_keypair.public.as_ref().len().try_into().unwrap(),
+            ),
+            op::addi(
+                0x22,
+                0x21,
+                ed19_signature.as_ref().len().try_into().unwrap(),
+            ),
+            op::addi(0x22, 0x21, message.as_ref().len().try_into().unwrap()),
+            op::movi(0x10, ed25519_dalek::PUBLIC_KEY_LENGTH.try_into().unwrap()),
+            op::aloc(0x10),
+            op::move_(0x11, RegId::HP),
+            op::ed19(0x10, 0x11, 0x12),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
     );
 
     // The test is supper long because we don't use `DependentCost` for k256 opcode

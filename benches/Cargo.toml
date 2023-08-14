@@ -9,10 +9,13 @@ version = "0.0.0"
 clap = { workspace = true, features = ["derive"] }
 criterion = { version = "0.5", features = ["html_reports", "async", "async_tokio"] }
 ctrlc = "3.2.3"
+ed25519-dalek = "1.0" # TODO: upgrade to 2.0 when it's released, and remove rand below
+ed25519-dalek_old_rand = { package = "rand", version = "0.7.3" }
 ethnum = "1.3"
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = ["metrics", "rocksdb-production"] }
 fuel-core-storage = { path = "./../crates/storage" }
 fuel-core-types = { path = "./../crates/types", features = ["test-helpers"] }
+p256 =  { version = "0.13", default-features = false, features = ["digest", "ecdsa"] }
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
