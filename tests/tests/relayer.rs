@@ -8,6 +8,7 @@ use ethers::{
 };
 use fuel_core::{
     database::Database,
+    relayer,
     service::{
         Config,
         FuelService,
@@ -69,8 +70,9 @@ use tokio::sync::oneshot::Sender;
 #[tokio::test(flavor = "multi_thread")]
 async fn relayer_can_download_logs() {
     let mut config = Config::local_node();
-    let eth_node = MockMiddleware::default();
+    config.relayer = Some(relayer::Config::default());
     let relayer_config = config.relayer.as_mut().expect("Expected relayer config");
+    let eth_node = MockMiddleware::default();
     let contract_address = relayer_config.eth_v2_listening_contracts[0];
     let message = |nonce, block_number: u64| {
         make_message_event(
@@ -123,8 +125,9 @@ async fn relayer_can_download_logs() {
 async fn messages_are_spendable_after_relayer_is_synced() {
     let mut rng = StdRng::seed_from_u64(1234);
     let mut config = Config::local_node();
-    let eth_node = MockMiddleware::default();
+    config.relayer = Some(relayer::Config::default());
     let relayer_config = config.relayer.as_mut().expect("Expected relayer config");
+    let eth_node = MockMiddleware::default();
     let contract_address = relayer_config.eth_v2_listening_contracts[0];
 
     // setup a real spendable message
