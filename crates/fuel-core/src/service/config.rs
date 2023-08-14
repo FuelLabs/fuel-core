@@ -95,7 +95,7 @@ impl Config {
             block_executor: Default::default(),
             block_importer: Default::default(),
             #[cfg(feature = "relayer")]
-            relayer: Some(Default::default()),
+            relayer: None,
             #[cfg(feature = "p2p")]
             p2p: Some(P2PConfig::<NotInitialized>::default("test_network")),
             #[cfg(feature = "p2p")]
