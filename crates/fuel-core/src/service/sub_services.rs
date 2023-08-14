@@ -4,7 +4,6 @@ use super::adapters::P2PAdapter;
 use crate::{
     database::Database,
     fuel_core_graphql_api::Config as GraphQLConfig,
-    relayer::Config as RelayerConfig,
     schema::build_schema,
     service::{
         adapters::{
@@ -22,9 +21,13 @@ use crate::{
     },
 };
 use fuel_core_poa::Trigger;
-use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+#[cfg(feature = "relayer")]
+use crate::relayer::Config as RelayerConfig;
+#[cfg(feature = "relayer")]
+use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
 pub type PoAService =
     fuel_core_poa::Service<TxPoolAdapter, BlockProducerAdapter, BlockImporterAdapter>;
