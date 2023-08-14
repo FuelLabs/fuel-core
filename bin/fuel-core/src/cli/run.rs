@@ -338,11 +338,11 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     let network_name = {
         #[cfg(feature = "p2p")]
         {
-            if config.p2p.enabled {
-                &config.p2p.network_name
-            } else {
-                "default_network"
-            }
+            config
+                .p2p
+                .as_ref()
+                .map(|config| config.network_name.clone())
+                .unwrap_or_else(|| "default_network".to_string())
         }
         #[cfg(not(feature = "p2p"))]
         "default_network"

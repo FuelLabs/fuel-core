@@ -17,8 +17,6 @@ pub(crate) static ETH_LOG_MESSAGE: Lazy<H256> =
 #[derive(Clone, Debug)]
 /// Configuration settings for the Relayer.
 pub struct Config {
-    /// Whether to enable the Relayer or not
-    pub enabled: bool,
     /// The da block to which the contract was deployed.
     pub da_deploy_height: DaBlockHeight,
     /// Number of da blocks after which messages/stakes/validators become finalized.
@@ -58,7 +56,6 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            enabled: false,
             da_deploy_height: DaBlockHeight::from(Self::DEFAULT_DA_DEPLOY_HEIGHT),
             da_finalization: DaBlockHeight::from(Self::DEFAULT_DA_FINALIZATION),
             eth_client: None,

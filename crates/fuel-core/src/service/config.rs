@@ -51,7 +51,7 @@ pub struct Config {
     #[cfg(feature = "relayer")]
     pub relayer: Option<RelayerConfig>,
     #[cfg(feature = "p2p")]
-    pub p2p: P2PConfig<NotInitialized>,
+    pub p2p: Option<P2PConfig<NotInitialized>>,
     #[cfg(feature = "p2p")]
     pub sync: fuel_core_sync::Config,
     pub consensus_key: Option<Secret<SecretKeyWrapper>>,
@@ -97,7 +97,7 @@ impl Config {
             #[cfg(feature = "relayer")]
             relayer: None,
             #[cfg(feature = "p2p")]
-            p2p: P2PConfig::<NotInitialized>::default("test_network"),
+            p2p: Some(P2PConfig::<NotInitialized>::default("test_network")),
             #[cfg(feature = "p2p")]
             sync: fuel_core_sync::Config::default(),
             consensus_key: Some(Secret::new(default_consensus_dev_key().into())),
