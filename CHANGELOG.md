@@ -10,6 +10,7 @@ Description of the upcoming release here.
 
 ### Added
 
+- [#1263](https://github.com/FuelLabs/fuel-core/pull/1263): Add gas benchmarks for `ED19` and `ECR1` instructions.
 - [#1286](https://github.com/FuelLabs/fuel-core/pull/1286): Include readable names for test cases where missing.
 
 ### Changed
