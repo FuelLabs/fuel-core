@@ -79,6 +79,8 @@ struct Expected {
     m: Vec<Log>,
 }
 
+const DEFAULT_LOG_PAGE_SIZE: u64 = 5;
+
 #[test_case(
     Input {
         eth_gap: 0..=1,
@@ -132,7 +134,7 @@ async fn can_paginate_logs(input: Input) -> Expected {
         &EthSyncGap::new(*eth_gap.start(), *eth_gap.end()),
         contracts,
         &eth_node,
-        Config::DEFAULT_LOG_PAGE_SIZE,
+        DEFAULT_LOG_PAGE_SIZE,
     )
     .map_ok(|(_, l)| l)
     .try_concat()

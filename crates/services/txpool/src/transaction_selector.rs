@@ -48,7 +48,7 @@ mod tests {
             Rng,
         },
         fuel_tx::{
-            ConsensusParameters,
+            FeeParameters,
             Output,
             TransactionBuilder,
         },
@@ -69,6 +69,11 @@ mod tests {
     /// `select_transactions` against that, returning the list of selected gas price, limit pairs
     fn make_txs_and_select(txs: &[TxGas], block_gas_limit: Word) -> Vec<TxGas> {
         let mut rng = thread_rng();
+
+        let fee_params = FeeParameters {
+            gas_price_factor: 1,
+            ..FeeParameters::default()
+        };
 
         let mut txs = txs
             .iter()
@@ -92,10 +97,7 @@ mod tests {
                     amount: 0,
                     asset_id: Default::default(),
                 })
-                .with_params(ConsensusParameters {
-                    gas_price_factor: 1,
-                    ..ConsensusParameters::default()
-                })
+                .with_fee_params(fee_params)
                 // The block producer assumes transactions are already checked
                 // so it doesn't need to compute valid sigs for tests
                 .finalize_checked_basic(Default::default()).into()

@@ -4,7 +4,7 @@ use axum::{
     response::IntoResponse,
 };
 #[cfg(feature = "metrics")]
-use fuel_core_metrics::service::encode_metrics_response;
+use fuel_core_metrics::response::encode_metrics_response;
 
 pub async fn metrics(_req: Request<Body>) -> impl IntoResponse {
     #[cfg(feature = "metrics")]

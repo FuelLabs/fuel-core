@@ -37,6 +37,7 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 
+use fuel_core_types::fuel_vm::checked_transaction::CheckPredicateParams;
 use std::{
     cmp::Reverse,
     collections::HashMap,
@@ -91,7 +92,6 @@ where
         &mut self,
         tx: Checked<Transaction>,
     ) -> anyhow::Result<InsertionResult> {
-        // conversion to `CheckedTransaction` so that we can go to `PoolTransaction`
         let tx: CheckedTransaction = tx.into();
 
         let tx = Arc::new(match tx {
@@ -390,27 +390,23 @@ pub async fn check_single_tx(
     verify_tx_min_gas_price(&tx, config)?;
 
     let tx: Checked<Transaction> = if config.utxo_validation {
-        let consensus_params = &config.chain_config.transaction_parameters;
+        let consensus_params = &config.chain_config.consensus_parameters;
 
         let tx = tx
             .into_checked_basic(current_height, consensus_params)?
             .check_signatures(&consensus_params.chain_id)?;
 
         let tx = tx
-            .check_predicates_async::<TokioWithRayon>(
+            .check_predicates_async::<TokioWithRayon>(&CheckPredicateParams::from(
                 consensus_params,
-                &config.chain_config.gas_costs,
-            )
+            ))
             .await?;
 
         debug_assert!(tx.checks().contains(Checks::All));
 
         tx
     } else {
-        tx.into_checked_basic(
-            current_height,
-            &config.chain_config.transaction_parameters,
-        )?
+        tx.into_checked_basic(current_height, &config.chain_config.consensus_parameters)?
     };
 
     Ok(tx)

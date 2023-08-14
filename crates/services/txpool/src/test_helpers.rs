@@ -30,12 +30,10 @@ use fuel_core_types::{
     },
     fuel_types::{
         AssetId,
+        ChainId,
         Word,
     },
-    fuel_vm::{
-        checked_transaction::EstimatePredicates,
-        GasCosts,
-    },
+    fuel_vm::checked_transaction::EstimatePredicates,
 };
 
 // use some arbitrary large amount, this shouldn't affect the txpool logic except for covering
@@ -103,8 +101,7 @@ pub(crate) fn random_predicate(
     let mut predicate_code: Vec<u8> = vec![op::ret(1)].into_iter().collect();
     // append some randomizing bytes after the predicate has already returned.
     predicate_code.push(rng.gen());
-    let owner =
-        Input::predicate_owner(&predicate_code, &ConsensusParameters::DEFAULT.chain_id);
+    let owner = Input::predicate_owner(&predicate_code, &ChainId::default());
     Input::coin_predicate(
         utxo_id.unwrap_or_else(|| rng.gen()),
         owner,
@@ -126,7 +123,7 @@ pub(crate) fn custom_predicate(
     code: Vec<u8>,
     utxo_id: Option<UtxoId>,
 ) -> Input {
-    let owner = Input::predicate_owner(&code, &ConsensusParameters::DEFAULT.chain_id);
+    let owner = Input::predicate_owner(&code, &ChainId::default());
     Input::coin_predicate(
         utxo_id.unwrap_or_else(|| rng.gen()),
         owner,
@@ -142,19 +139,19 @@ pub(crate) fn custom_predicate(
 
 pub trait IntoEstimated {
     fn into_default_estimated(self) -> Self;
-    fn into_estimated(self, params: &ConsensusParameters, gas_costs: &GasCosts) -> Self;
+    fn into_estimated(self, params: &ConsensusParameters) -> Self;
 }
 
 impl IntoEstimated for Input {
     fn into_default_estimated(self) -> Self {
-        self.into_estimated(&Default::default(), &Default::default())
+        self.into_estimated(&Default::default())
     }
 
-    fn into_estimated(self, params: &ConsensusParameters, gas_costs: &GasCosts) -> Self {
+    fn into_estimated(self, params: &ConsensusParameters) -> Self {
         let mut tx = TransactionBuilder::script(vec![], vec![])
             .add_input(self)
             .finalize();
-        let _ = tx.estimate_predicates(params, gas_costs);
+        let _ = tx.estimate_predicates(&params.into());
         tx.inputs()[0].clone()
     }
 }

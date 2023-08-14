@@ -18,9 +18,10 @@ use fuel_core_types::{
         },
         *,
     },
-    fuel_vm::{
-        checked_transaction::EstimatePredicates,
-        GasCosts,
+    fuel_types::ChainId,
+    fuel_vm::checked_transaction::{
+        CheckPredicateParams,
+        EstimatePredicates,
     },
 };
 use futures::StreamExt;
@@ -52,8 +53,7 @@ async fn subscribe_txn_status() {
             .collect();
 
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-        let owner =
-            Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT.chain_id);
+        let owner = Input::predicate_owner(&predicate, &ChainId::default());
         // The third transaction needs to have a different input.
         let utxo_id = if i == 2 { 2 } else { 1 };
         let utxo_id = UtxoId::new(Bytes32::from([utxo_id; 32]), 1);
@@ -80,7 +80,7 @@ async fn subscribe_txn_status() {
         )
         .into();
         // estimate predicate gas for coin_input predicate
-        tx.estimate_predicates(&ConsensusParameters::DEFAULT, &GasCosts::default())
+        tx.estimate_predicates(&CheckPredicateParams::default())
             .expect("should estimate predicate");
 
         tx
@@ -88,11 +88,7 @@ async fn subscribe_txn_status() {
     let txns: Vec<_> = (0..3).map(create_script).collect();
     let mut jhs = vec![];
 
-    for (txn_idx, id) in txns
-        .iter()
-        .map(|t| t.id(&ConsensusParameters::DEFAULT.chain_id))
-        .enumerate()
-    {
+    for (txn_idx, id) in txns.iter().map(|t| t.id(&ChainId::default())).enumerate() {
         let jh = tokio::spawn({
             let client = client.clone();
             async move {
@@ -134,8 +130,7 @@ async fn test_regression_in_subscribe() {
     let mut config = Config::local_node();
     config.utxo_validation = true;
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-    let owner =
-        Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT.chain_id);
+    let owner = Input::predicate_owner(&predicate, &ChainId::default());
     let node = FuelService::new_node(config).await.unwrap();
     let coin_pred = Input::coin_predicate(
         rng.gen(),
