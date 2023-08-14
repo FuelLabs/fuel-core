@@ -70,7 +70,8 @@ use tokio::sync::oneshot::Sender;
 async fn relayer_can_download_logs() {
     let mut config = Config::local_node();
     let eth_node = MockMiddleware::default();
-    let contract_address = config.relayer.eth_v2_listening_contracts[0];
+    let mut relayer_config = config.relayer.expect("Expected relayer config");
+    let contract_address = relayer_config.eth_v2_listening_contracts[0];
     let message = |nonce, block_number: u64| {
         make_message_event(
             Nonce::from(nonce),
@@ -92,7 +93,7 @@ async fn relayer_can_download_logs() {
     let eth_node = Arc::new(eth_node);
     let eth_node_handle = spawn_eth_node(eth_node).await;
 
-    config.relayer.eth_client = Some(
+    relayer_config.eth_client = Some(
         format!("http://{}", eth_node_handle.address)
             .as_str()
             .try_into()
@@ -123,7 +124,8 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     let mut rng = StdRng::seed_from_u64(1234);
     let mut config = Config::local_node();
     let eth_node = MockMiddleware::default();
-    let contract_address = config.relayer.eth_v2_listening_contracts[0];
+    let mut relayer_config = config.relayer.expect("Expected relayer config");
+    let contract_address = relayer_config.eth_v2_listening_contracts[0];
 
     // setup a real spendable message
     let secret_key: SecretKey = rng.gen();
@@ -148,7 +150,7 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     let eth_node = Arc::new(eth_node);
     let eth_node_handle = spawn_eth_node(eth_node).await;
 
-    config.relayer.eth_client = Some(
+    relayer_config.eth_client = Some(
         format!("http://{}", eth_node_handle.address)
             .as_str()
             .try_into()

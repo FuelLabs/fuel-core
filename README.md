@@ -273,3 +273,5 @@ $ cargo run --bin fuel-core-client -- transaction submit \
   ]
 }],\"receipts_root\":\"0x6114142d12e0f58cfb8c72c270cd0535944fb1ba763dce83c17e882c482224a2\"}}"
 ```
+
+## Debugging
