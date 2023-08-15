@@ -32,8 +32,7 @@ pub trait PeerToPeerPort {
         height: BlockHeight,
     ) -> anyhow::Result<Option<SourcePeer<SealedBlockHeader>>>;
 
-    /// Request range of sealed block headers from the network
-    /// starting from block height `start` up to, and including `end`.
+    /// Request a range of sealed block headers from the network.
     async fn get_sealed_block_headers(
         &self,
         block_height_range: Range<u32>,
