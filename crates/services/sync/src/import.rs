@@ -324,10 +324,10 @@ async fn get_headers_batch(
         range.start(),
         range.end()
     );
-    let start = range.start();
-    let end = range.end();
+    let start = *range.start();
+    let end = *range.end() + 1;
     let res = p2p
-        .get_sealed_block_headers(*start..*end + 1)
+        .get_sealed_block_headers(start..end)
         .await
         .trace_err("Failed to get headers");
     let sorted_headers = match res {
