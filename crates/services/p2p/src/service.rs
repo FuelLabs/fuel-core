@@ -576,16 +576,7 @@ pub mod tests {
 
     use fuel_core_services::Service;
     use fuel_core_storage::Result as StorageResult;
-    use fuel_core_types::{
-        blockchain::{
-            block::Block,
-            consensus::{
-                poa::PoAConsensus,
-                Consensus,
-            },
-        },
-        fuel_types::BlockHeight,
-    };
+    use fuel_core_types::fuel_types::BlockHeight;
 
     #[derive(Clone, Debug)]
     struct FakeDb;
