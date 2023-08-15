@@ -1,4 +1,7 @@
-use clap::Args;
+use clap::{
+    builder::ArgPredicate::IsPresent,
+    Args,
+};
 use core::time::Duration;
 use fuel_core::{
     relayer::{
@@ -11,9 +14,17 @@ use std::str::FromStr;
 
 #[derive(Debug, Clone, Args)]
 pub struct RelayerArgs {
+    /// Enable the Relayer. By default, the Relayer is disabled, even when the binary is compiled
+    /// with the "relayer" feature flag. Providing `--enable-relayer` will enable the relayer
+    /// service.
+    #[clap(long = "enable-relayer", action)]
+    pub enable_relayer: bool,
+
     /// Uri address to ethereum client. It can be in format of `http://localhost:8545/` or `ws://localhost:8545/`.
     /// If not set relayer will not start.
     #[arg(long = "relayer", env)]
+    #[arg(required_if_eq("enable_relayer", "true"))]
+    #[arg(requires_if(IsPresent, "enable_relayer"))]
     pub eth_client: Option<url::Url>,
 
     /// Ethereum contract address. Create EthAddress into fuel_types
@@ -50,18 +61,24 @@ pub fn parse_h160(input: &str) -> Result<H160, <H160 as FromStr>::Err> {
     H160::from_str(input)
 }
 
-impl From<RelayerArgs> for Config {
-    fn from(args: RelayerArgs) -> Self {
-        Config {
-            da_deploy_height: DaBlockHeight(args.da_deploy_height),
-            da_finalization: DaBlockHeight(args.da_finalization),
-            eth_client: args.eth_client,
-            eth_v2_listening_contracts: args.eth_v2_listening_contracts,
-            log_page_size: args.log_page_size,
-            sync_minimum_duration: Duration::from_secs(args.sync_minimum_duration_secs),
-            syncing_call_frequency: Duration::from_secs(args.syncing_call_frequency_secs),
-            syncing_log_frequency: Duration::from_secs(args.syncing_log_frequency_secs),
-            metrics: false,
+impl RelayerArgs {
+    pub fn into_config(self) -> Option<Config> {
+        if !self.enable_relayer {
+            tracing::info!("Relayer service disabled");
+            return None
         }
+
+        let config = Config {
+            da_deploy_height: DaBlockHeight(self.da_deploy_height),
+            da_finalization: DaBlockHeight(self.da_finalization),
+            eth_client: self.eth_client,
+            eth_v2_listening_contracts: self.eth_v2_listening_contracts,
+            log_page_size: self.log_page_size,
+            sync_minimum_duration: Duration::from_secs(self.sync_minimum_duration_secs),
+            syncing_call_frequency: Duration::from_secs(self.syncing_call_frequency_secs),
+            syncing_log_frequency: Duration::from_secs(self.syncing_log_frequency_secs),
+            metrics: false,
+        };
+        Some(config)
     }
 }
