@@ -277,7 +277,7 @@ fn get_headers_buffered<P: PeerToPeerPort + Send + Sync + 'static>(
             );
             let p2p = p2p.clone();
             async move { get_headers_batch(range, p2p).await }
-                .instrument(tracing::debug_span!("get_header_range_single_req"))
+                .instrument(tracing::debug_span!("get_headers_batch"))
                 .in_current_span()
         })
         .buffered(*max_header_batch_requests)
