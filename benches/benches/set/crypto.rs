@@ -9,7 +9,10 @@ use fuel_core_types::{
     fuel_types::*,
 };
 use rand::{
-    rngs::StdRng,
+    rngs::{
+        OsRng,
+        StdRng,
+    },
     SeedableRng,
 };
 
@@ -107,8 +110,8 @@ pub fn run(c: &mut Criterion) {
             ),
     );
 
-    let ed19_keypair =
-        ed25519_dalek::Keypair::generate(&mut ed25519_dalek_old_rand::rngs::OsRng {});
+    let mut rng = OsRng;
+    let ed19_keypair = ed25519_dalek::SigningKey::generate(&mut rng);
     let ed19_signature = ed19_keypair.sign(&*message);
 
     run_group_ref(
@@ -120,17 +123,22 @@ pub fn run(c: &mut Criterion) {
                 op::addi(
                     0x21,
                     0x20,
-                    ed19_keypair.public.as_ref().len().try_into().unwrap(),
+                    ed19_keypair
+                        .verifying_key()
+                        .as_ref()
+                        .len()
+                        .try_into()
+                        .unwrap(),
                 ),
                 op::addi(
                     0x22,
                     0x21,
-                    ed19_signature.as_ref().len().try_into().unwrap(),
+                    ed19_signature.to_bytes().len().try_into().unwrap(),
                 ),
             ])
             .with_data(
                 ed19_keypair
-                    .public
+                    .verifying_key()
                     .to_bytes()
                     .iter()
                     .chain(ed19_signature.to_bytes().iter())

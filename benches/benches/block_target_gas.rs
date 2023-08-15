@@ -11,7 +11,10 @@ use fuel_core::service::{
     Config,
     ServiceTrait,
 };
-use rand::SeedableRng;
+use rand::{
+    rngs::OsRng,
+    SeedableRng,
+};
 
 use fuel_core_benches::*;
 use fuel_core_types::{
@@ -184,8 +187,8 @@ fn block_target_gas(c: &mut Criterion) {
         vec![],
     );
 
-    let ed19_keypair =
-        ed25519_dalek::Keypair::generate(&mut ed25519_dalek_old_rand::rngs::OsRng {});
+    let mut rng = OsRng;
+    let ed19_keypair = ed25519_dalek::SigningKey::generate(&mut rng);
     let ed19_signature = ed19_keypair.sign(&*message);
 
     run(
@@ -196,12 +199,17 @@ fn block_target_gas(c: &mut Criterion) {
             op::addi(
                 0x21,
                 0x20,
-                ed19_keypair.public.as_ref().len().try_into().unwrap(),
+                ed19_keypair
+                    .verifying_key()
+                    .as_ref()
+                    .len()
+                    .try_into()
+                    .unwrap(),
             ),
             op::addi(
                 0x22,
                 0x21,
-                ed19_signature.as_ref().len().try_into().unwrap(),
+                ed19_signature.to_bytes().len().try_into().unwrap(),
             ),
             op::addi(0x22, 0x21, message.as_ref().len().try_into().unwrap()),
             op::movi(0x10, ed25519_dalek::PUBLIC_KEY_LENGTH.try_into().unwrap()),
