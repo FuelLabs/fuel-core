@@ -237,7 +237,9 @@ where
                     Some(TaskRequest::GetSealedHeaders { block_height_range, channel: response}) => {
                         let request_msg = RequestMessage::SealedHeaders(block_height_range.clone());
                         let channel_item = ResponseChannelItem::SealedHeaders(response);
-                        // Note: this range has already been check for validity
+
+                        // Note: this range has already been check for
+                        // validity in `SharedState::get_sealed_block_headers`.
                         let block_height = BlockHeight::from(block_height_range.end - 1);
                         let peer = self.p2p_service.peer_manager()
                              .get_peer_id_with_height(&block_height);
