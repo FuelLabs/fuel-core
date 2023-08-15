@@ -23,15 +23,6 @@ pub trait PeerToPeerPort {
     /// Stream of newly observed block heights.
     fn height_stream(&self) -> BoxStream<BlockHeight>;
 
-    /// Request sealed block header from the network
-    /// at the given height.
-    ///
-    /// Returns the source peer this header was received from.
-    async fn get_sealed_block_header(
-        &self,
-        height: BlockHeight,
-    ) -> anyhow::Result<Option<SourcePeer<SealedBlockHeader>>>;
-
     /// Request a range of sealed block headers from the network.
     async fn get_sealed_block_headers(
         &self,

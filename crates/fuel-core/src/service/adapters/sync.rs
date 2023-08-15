@@ -43,23 +43,6 @@ impl PeerToPeerPort for P2PAdapter {
         }
     }
 
-    async fn get_sealed_block_header(
-        &self,
-        height: BlockHeight,
-    ) -> anyhow::Result<Option<SourcePeer<SealedBlockHeader>>> {
-        if let Some(service) = &self.service {
-            Ok(service
-                .get_sealed_block_header(height)
-                .await?
-                .map(|(peer_id, header)| SourcePeer {
-                    peer_id: peer_id.into(),
-                    data: header,
-                }))
-        } else {
-            Ok(None)
-        }
-    }
-
     async fn get_sealed_block_headers(
         &self,
         block_range_height: Range<u32>,

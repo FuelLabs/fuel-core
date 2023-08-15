@@ -595,38 +595,28 @@ pub mod tests {
             &self,
             _height: &BlockHeight,
         ) -> StorageResult<Option<SealedBlock>> {
-            let block = Block::new(Default::default(), vec![], &[]);
-
-            Ok(Some(SealedBlock {
-                entity: block,
-                consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
-            }))
+            unimplemented!()
         }
 
         fn get_sealed_header(
             &self,
             _height: &BlockHeight,
         ) -> StorageResult<Option<SealedBlockHeader>> {
-            let header = Default::default();
-
-            Ok(Some(SealedBlockHeader {
-                entity: header,
-                consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
-            }))
+            unimplemented!()
         }
 
         fn get_sealed_headers(
             &self,
             _block_height_range: Range<u32>,
         ) -> StorageResult<Vec<SealedBlockHeader>> {
-            todo!()
+            unimplemented!()
         }
 
         fn get_transactions(
             &self,
             _block_id: &fuel_core_types::blockchain::primitives::BlockId,
         ) -> StorageResult<Option<Vec<Transaction>>> {
-            Ok(Some(vec![]))
+            unimplemented!()
         }
     }
 

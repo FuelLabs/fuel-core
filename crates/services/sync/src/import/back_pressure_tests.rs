@@ -48,7 +48,7 @@ struct Input {
         headers: Duration::from_millis(10),
         ..Default::default()
     },
-    State::new(None, 1),
+    State::new(None, 0),
     Config{
         max_get_txns_requests: 1,
         header_batch_size: 1,
@@ -98,6 +98,20 @@ struct Input {
     }
     => is less_or_equal_than Count{ headers: 10, consensus: 10, transactions: 10, executes: 1, blocks: 21 }
     ; "50 headers with max 10 with slow executes"
+)]
+#[test_case(
+Input {
+executes: Duration::from_millis(10),
+..Default::default()
+},
+State::new(None, 50),
+Config{
+max_get_txns_requests: 10,
+header_batch_size: 10,
+max_header_batch_requests: 10,
+}
+=> is less_or_equal_than Count{ headers: 10, consensus: 10, transactions: 10, executes: 1, blocks: 21 }
+; "50 headers with max 10 size and max 10 requests"
 )]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_back_pressure(input: Input, state: State, params: Config) -> Count {
@@ -160,26 +174,15 @@ impl PeerToPeerPort for PressurePeerToPeer {
     fn height_stream(&self) -> BoxStream<BlockHeight> {
         self.p2p.height_stream()
     }
-    async fn get_sealed_block_header(
-        &self,
-        height: BlockHeight,
-    ) -> anyhow::Result<Option<SourcePeer<SealedBlockHeader>>> {
-        self.counts.apply(|c| c.inc_headers());
-        tokio::time::sleep(self.durations[0]).await;
-        self.counts.apply(|c| {
-            c.dec_headers();
-            c.inc_blocks();
-        });
-        self.p2p.get_sealed_block_header(height).await
-    }
 
     async fn get_sealed_block_headers(
         &self,
         block_height_range: Range<u32>,
     ) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>> {
-        // TODO: Does this need more count tracking?
+        self.counts.apply(|c| c.inc_headers());
+        tokio::time::sleep(self.durations[0]).await;
+        self.counts.apply(|c| c.dec_headers());
         for _ in block_height_range.clone() {
-            // self.counts.apply(|c| c.inc_headers());
             self.counts.apply(|c| c.inc_blocks());
         }
         self.p2p.get_sealed_block_headers(block_height_range).await
