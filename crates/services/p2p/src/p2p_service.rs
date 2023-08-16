@@ -591,7 +591,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                                 Some(ResponseChannelItem::Block(channel)),
                                 Ok(ResponseMessage::SealedBlock(block)),
                             ) => {
-                                if channel.send(block).is_err() {
+                                if channel.send(*block).is_err() {
                                     debug!(
                                         "Failed to send through the channel for {:?}",
                                         request_id
@@ -603,17 +603,6 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                                 Ok(ResponseMessage::Transactions(transactions)),
                             ) => {
                                 if channel.send(transactions).is_err() {
-                                    debug!(
-                                        "Failed to send through the channel for {:?}",
-                                        request_id
-                                    );
-                                }
-                            }
-                            (
-                                Some(ResponseChannelItem::SealedHeader(channel)),
-                                Ok(ResponseMessage::SealedHeader(header)),
-                            ) => {
-                                if channel.send(header.map(|h| (peer, h))).is_err() {
                                     debug!(
                                         "Failed to send through the channel for {:?}",
                                         request_id
@@ -1596,22 +1585,6 @@ mod tests {
                                         });
 
                                     }
-                                    RequestMessage::SealedHeader(_) => {
-                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::SealedHeader(tx_orchestrator)).is_ok());
-                                        let tx_test_end = tx_test_end.clone();
-
-                                        tokio::spawn(async move {
-                                            let response_message = rx_orchestrator.await;
-
-                                            if let Ok(Some(_)) = response_message {
-                                                let _ = tx_test_end.send(true).await;
-                                            } else {
-                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
-                                                let _ = tx_test_end.send(false).await;
-                                            }
-                                        });
-                                    }
                                     RequestMessage::SealedHeaders(range) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
                                         assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::SealedHeaders(tx_orchestrator)).is_ok());
@@ -1668,16 +1641,6 @@ mod tests {
 
                                 let _ = node_b.send_response_msg(*request_id, OutboundResponse::Block(Some(Arc::new(sealed_block))));
                             }
-                            RequestMessage::SealedHeader(_) => {
-                                let header = Default::default();
-
-                                let sealed_header = SealedBlockHeader {
-                                    entity: header,
-                                    consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
-                                };
-
-                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::SealedHeader(Some(Arc::new(sealed_header))));
-                            }
                             RequestMessage::SealedHeaders(range) => {
                                 let sealed_headers: Vec<_> = arbitrary_headers_for_range(range.clone());
 
@@ -1688,7 +1651,6 @@ mod tests {
                                 let _ = node_b.send_response_msg(*request_id, OutboundResponse::Transactions(Some(Arc::new(transactions))));
                             }
                         }
-
                     }
 
                     tracing::info!("Node B Event: {:?}", node_b_event);
@@ -1714,12 +1676,6 @@ mod tests {
     #[instrument]
     async fn request_response_works_with_sealed_headers_range_inclusive() {
         request_response_works_with(RequestMessage::SealedHeaders(0..0)).await
-    }
-
-    #[tokio::test]
-    #[instrument]
-    async fn request_response_works_with_sealed_header() {
-        request_response_works_with(RequestMessage::SealedHeader(0.into())).await
     }
 
     #[tokio::test]

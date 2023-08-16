@@ -83,10 +83,6 @@ enum TaskRequest {
         height: BlockHeight,
         channel: oneshot::Sender<Option<SealedBlock>>,
     },
-    GetSealedHeader {
-        height: BlockHeight,
-        channel: oneshot::Sender<Option<(PeerId, SealedBlockHeader)>>,
-    },
     GetSealedHeaders {
         block_height_range: Range<u32>,
         channel: oneshot::Sender<Option<(PeerId, Vec<SealedBlockHeader>)>>,
@@ -231,12 +227,6 @@ where
                         let peer = self.p2p_service.peer_manager().get_peer_id_with_height(&height);
                         let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
                     }
-                    Some(TaskRequest::GetSealedHeader{ height, channel: response }) => {
-                        let request_msg = RequestMessage::SealedHeader(height);
-                        let channel_item = ResponseChannelItem::SealedHeader(response);
-                        let peer = self.p2p_service.peer_manager().get_peer_id_with_height(&height);
-                        let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
-                    }
                     Some(TaskRequest::GetSealedHeaders { block_height_range, channel: response}) => {
                         let request_msg = RequestMessage::SealedHeaders(block_height_range.clone());
                         let channel_item = ResponseChannelItem::SealedHeaders(response);
@@ -307,12 +297,6 @@ where
                                     .map(Arc::new);
 
                                 let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(transactions_response));
-                            }
-                            RequestMessage::SealedHeader(block_height) => {
-                                let response = self.db.get_sealed_header(&block_height)?
-                                    .map(Arc::new);
-
-                                let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeader(response));
                             }
                             RequestMessage::SealedHeaders(range) => {
                                 let max_len = self.max_headers_per_request.try_into().expect("u32 should always fit into usize");
@@ -393,25 +377,6 @@ impl SharedState {
             .await?;
 
         receiver.await.map_err(|e| anyhow!("{}", e))
-    }
-
-    pub async fn get_sealed_block_header(
-        &self,
-        height: BlockHeight,
-    ) -> anyhow::Result<Option<(Vec<u8>, SealedBlockHeader)>> {
-        let (sender, receiver) = oneshot::channel();
-
-        self.request_sender
-            .send(TaskRequest::GetSealedHeader {
-                height,
-                channel: sender,
-            })
-            .await?;
-
-        receiver
-            .await
-            .map(|o| o.map(|(peer_id, header)| (peer_id.to_bytes(), header)))
-            .map_err(|e| anyhow!("{}", e))
     }
 
     pub async fn get_sealed_block_headers(

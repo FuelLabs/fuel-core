@@ -44,7 +44,6 @@ pub type ChannelItem<T> = oneshot::Sender<Option<T>>;
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub enum RequestMessage {
     Block(BlockHeight),
-    SealedHeader(BlockHeight),
     SealedHeaders(Range<u32>),
     Transactions(#[serde_as(as = "FromInto<[u8; 32]>")] BlockId),
 }
@@ -52,8 +51,7 @@ pub enum RequestMessage {
 /// Final Response Message that p2p service sends to the Orchestrator
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ResponseMessage {
-    SealedBlock(Option<SealedBlock>),
-    SealedHeader(Option<SealedBlockHeader>),
+    SealedBlock(Box<Option<SealedBlock>>),
     SealedHeaders(Vec<SealedBlockHeader>),
     Transactions(Option<Vec<Transaction>>),
 }
@@ -62,7 +60,6 @@ pub enum ResponseMessage {
 #[derive(Debug)]
 pub enum ResponseChannelItem {
     Block(ChannelItem<SealedBlock>),
-    SealedHeader(ChannelItem<(PeerId, SealedBlockHeader)>),
     SealedHeaders(ChannelItem<(PeerId, Vec<SealedBlockHeader>)>),
     Transactions(ChannelItem<Vec<Transaction>>),
 }
@@ -72,7 +69,6 @@ pub enum ResponseChannelItem {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum NetworkResponse {
     Block(Option<Vec<u8>>),
-    Header(Option<Vec<u8>>),
     Headers(Vec<u8>),
     Transactions(Option<Vec<u8>>),
 }
@@ -82,7 +78,6 @@ pub enum NetworkResponse {
 #[derive(Debug, Clone)]
 pub enum OutboundResponse {
     Block(Option<Arc<SealedBlock>>),
-    SealedHeader(Option<Arc<SealedBlockHeader>>),
     SealedHeaders(Vec<SealedBlockHeader>),
     Transactions(Option<Arc<Vec<Transaction>>>),
 }
