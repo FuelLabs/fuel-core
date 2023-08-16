@@ -104,8 +104,9 @@ pub async fn init_logging() -> anyhow::Result<()> {
 
 pub async fn run_cli() -> anyhow::Result<()> {
     init_logging().await?;
-    if init_environment().is_some() {
-        info!("Loading environment variables from .env file")
+    if let Some(path) = init_environment() {
+        let path = path.display();
+        info!("Loading environment variables from {path}");
     }
     let opt = Opt::try_parse();
     if opt.is_err() {
