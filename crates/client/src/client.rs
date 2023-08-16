@@ -411,6 +411,7 @@ impl FuelClient {
         Ok(status)
     }
 
+    #[cfg(feature = "subscriptions")]
     /// Submits transaction, await confirmation and return receipts.
     pub async fn submit_and_await_commit_with_receipts(
         &self,
