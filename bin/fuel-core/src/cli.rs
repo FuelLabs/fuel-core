@@ -1,5 +1,4 @@
 use clap::Parser;
-use dotenvy::dotenv;
 use std::{
     env,
     path::PathBuf,
@@ -15,6 +14,9 @@ use tracing_subscriber::{
     registry,
     Layer,
 };
+
+#[cfg(feature = "env")]
+use dotenvy::dotenv;
 
 lazy_static::lazy_static! {
     pub static ref DEFAULT_DB_PATH: PathBuf = dirs::home_dir().unwrap().join(".fuel").join("db");
