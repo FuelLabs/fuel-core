@@ -120,6 +120,7 @@ pub struct Task<D> {
     /// Receive internal Task Requests
     request_receiver: mpsc::Receiver<TaskRequest>,
     shared: SharedState,
+    max_headers_per_request: u32,
 }
 
 impl<D> Task<D> {
@@ -134,6 +135,7 @@ impl<D> Task<D> {
 
         let next_block_height = block_importer.next_block_height();
         let max_block_size = config.max_block_size;
+        let max_headers_per_request = config.max_headers_per_request;
         let p2p_service = FuelP2PService::new(config, PostcardCodec::new(max_block_size));
 
         let reserved_peers_broadcast =
@@ -150,6 +152,7 @@ impl<D> Task<D> {
                 reserved_peers_broadcast,
                 block_height_broadcast,
             },
+            max_headers_per_request,
         }
     }
 }
@@ -312,9 +315,13 @@ where
                                 let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeader(response));
                             }
                             RequestMessage::SealedHeaders(range) => {
-                                let response = self.db.get_sealed_headers(range)?;
-
-                                let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeaders(response));
+                                let max_len = self.max_headers_per_request.try_into().expect("u32 should always fit into usize");
+                                if range.len() > max_len {
+                                    return Err(anyhow!("Requested too many headers: {} > {}", range.len(), max_len));
+                                } else {
+                                    let response = self.db.get_sealed_headers(range)?;
+                                    let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeaders(response));
+                                };
                             }
                         }
                     },
