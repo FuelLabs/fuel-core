@@ -1,10 +1,14 @@
 use clap::Parser;
+use dotenvy::dotenv;
 use std::{
     env,
     path::PathBuf,
     str::FromStr,
 };
-use tracing::warn;
+use tracing::{
+    info,
+    warn,
+};
 use tracing_subscriber::{
     filter::EnvFilter,
     layer::SubscriberExt,
@@ -40,6 +44,16 @@ pub enum Fuel {
 
 pub const LOG_FILTER: &str = "RUST_LOG";
 pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
+
+#[cfg(feature = "env")]
+fn init_environment() -> Option<PathBuf> {
+    dotenv().ok()
+}
+
+#[cfg(not(feature = "env"))]
+fn init_environment() -> Option<PathBuf> {
+    None
+}
 
 pub async fn init_logging() -> anyhow::Result<()> {
     let filter = match env::var_os(LOG_FILTER) {
@@ -87,6 +101,10 @@ pub async fn init_logging() -> anyhow::Result<()> {
 }
 
 pub async fn run_cli() -> anyhow::Result<()> {
+    init_logging().await?;
+    if init_environment().is_some() {
+        info!("Loading environment variables from .env file")
+    }
     let opt = Opt::try_parse();
     if opt.is_err() {
         let command = run::Command::try_parse();

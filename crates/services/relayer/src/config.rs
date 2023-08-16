@@ -22,7 +22,7 @@ pub struct Config {
     /// Number of da blocks after which messages/stakes/validators become finalized.
     pub da_finalization: DaBlockHeight,
     /// Uri address to ethereum client.
-    pub eth_client: Option<url::Url>,
+    pub relayer: Option<url::Url>,
     // TODO: Create `EthAddress` into `fuel_core_types`.
     /// Ethereum contract address.
     pub eth_v2_listening_contracts: Vec<H160>,
@@ -58,7 +58,7 @@ impl Default for Config {
         Self {
             da_deploy_height: DaBlockHeight::from(Self::DEFAULT_DA_DEPLOY_HEIGHT),
             da_finalization: DaBlockHeight::from(Self::DEFAULT_DA_FINALIZATION),
-            eth_client: None,
+            relayer: None,
             eth_v2_listening_contracts: vec![H160::from_str(
                 "0x03E4538018285e1c03CCce2F92C9538c87606911",
             )

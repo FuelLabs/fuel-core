@@ -95,7 +95,7 @@ async fn relayer_can_download_logs() {
     let eth_node = Arc::new(eth_node);
     let eth_node_handle = spawn_eth_node(eth_node).await;
 
-    relayer_config.eth_client = Some(
+    relayer_config.relayer = Some(
         format!("http://{}", eth_node_handle.address)
             .as_str()
             .try_into()
@@ -153,7 +153,7 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     let eth_node = Arc::new(eth_node);
     let eth_node_handle = spawn_eth_node(eth_node).await;
 
-    relayer_config.eth_client = Some(
+    relayer_config.relayer = Some(
         format!("http://{}", eth_node_handle.address)
             .as_str()
             .try_into()
