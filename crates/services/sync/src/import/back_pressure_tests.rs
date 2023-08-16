@@ -100,18 +100,18 @@ struct Input {
     ; "50 headers with max 10 with slow executes"
 )]
 #[test_case(
-Input {
-executes: Duration::from_millis(10),
-..Default::default()
-},
-State::new(None, 50),
-Config{
-max_get_txns_requests: 10,
-header_batch_size: 10,
-max_header_batch_requests: 10,
-}
-=> is less_or_equal_than Count{ headers: 10, consensus: 10, transactions: 10, executes: 1, blocks: 21 }
-; "50 headers with max 10 size and max 10 requests"
+    Input {
+        executes: Duration::from_millis(10),
+        ..Default::default()
+    },
+    State::new(None, 50),
+    Config{
+        max_get_txns_requests: 10,
+        header_batch_size: 10,
+        max_header_batch_requests: 10,
+    }
+    => is less_or_equal_than Count{ headers: 10, consensus: 10, transactions: 10, executes: 1, blocks: 21 }
+    ; "50 headers with max 10 size and max 10 requests"
 )]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_back_pressure(input: Input, state: State, params: Config) -> Count {
