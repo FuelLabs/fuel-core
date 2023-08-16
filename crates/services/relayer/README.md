@@ -25,22 +25,3 @@ If the state determines that the relayer is out of sync with the DA layer then l
 The range of blocks is `(last_downloaded_height + 1)..=current_finalized_height`.
 
 Logs are paginated into sets of blocks to avoid overloading a single rpc call.
-
-## Contract Flake
-The `flake.nix` in this repo has a tool to fetch, compile and generate the abi for the fuel contracts.
-While it is not mandatory to use nix to do this the advantage is the exact versions of the contracts that were used to generate the abi files is pinned in the `flake.lock` file.
-
-### Usage
-To generate the api files run the following from the `fuel-core-relayer` directory.
-```bash
-nix run .#generate-abi-json abi
-```
-To update the version of the contracts that is used run:
-```bash
-nix flake update
-nix run .#generate-abi-json abi
-```
-You can see the versions that are pinned by running:
-```bash
-nix flake info
-```
