@@ -16,6 +16,8 @@ Description of the upcoming release here.
 
 ### Changed
 
+- [#1302](https://github.com/FuelLabs/fuel-core/pull/1302): Removed the usage of flake and building of the bridge contract ABI.
+    It simplifies the maintenance and updating of the events, requiring only putting the event definition into the codebase of the relayer.
 - [#1293](https://github.com/FuelLabs/fuel-core/issues/1293): Parallelized the `estimate_predicates` endpoint to utilize all available threads.
 
 #### Breaking
