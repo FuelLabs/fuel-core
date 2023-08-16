@@ -28,7 +28,7 @@ Or for a dependent bench you would do:
 
 ## Using `collect` to generate bench data
 Firstly you should run the benchmarks and collect the output:
-`cargo criterion -p fuel-core-benches --message-format json -- --bench >bench.json`
+`cargo criterion -p fuel-core-benches --message-format json --bench vm > bench.json`
 You could just pipe the output into the collect binary but benches are slow to run
 so I suggest saving the output like above.
 
