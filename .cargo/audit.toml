@@ -1,0 +1,2 @@
+[advisories]
+ignore = ["RUSTSEC-2022-0093"] # https://github.com/FuelLabs/fuel-core/issues/1301
