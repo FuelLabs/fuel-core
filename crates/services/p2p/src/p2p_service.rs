@@ -1675,7 +1675,7 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn request_response_works_with_sealed_headers_range_inclusive() {
-        request_response_works_with(RequestMessage::SealedHeaders(0..0)).await
+        request_response_works_with(RequestMessage::SealedHeaders(2..6)).await
     }
 
     #[tokio::test]
