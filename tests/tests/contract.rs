@@ -258,8 +258,6 @@ async fn can_get_message_proof() {
         vec![],
     );
 
-    let transaction_id = script.id(&ChainId::default());
-
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -281,13 +279,14 @@ async fn can_get_message_proof() {
         .await
         .expect("Should be able to estimate deploy tx");
     // Call the contract.
-    matches!(
-        client.submit_and_await_commit(&script).await,
-        Ok(TransactionStatus::Success { .. })
-    );
+    let (status, receipts) = client
+        .submit_and_await_commit_with_receipts(&script)
+        .await
+        .unwrap();
+    matches!(status, TransactionStatus::Success { .. });
 
     // Get the receipts from the contract call.
-    let receipts = client.receipts(&transaction_id).await.unwrap().unwrap();
+    let receipts = receipts.unwrap();
     let logd = receipts
         .iter()
         .find(|f| matches!(f, Receipt::LogData { .. }))
