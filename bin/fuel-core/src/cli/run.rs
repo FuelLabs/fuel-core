@@ -146,8 +146,8 @@ pub struct Command {
     #[arg(long = "coinbase-recipient", env)]
     pub coinbase_recipient: Option<String>,
 
+    #[cfg_attr(feature = "relayer", clap(flatten))]
     #[cfg(feature = "relayer")]
-    #[clap(flatten)]
     pub relayer_args: relayer::RelayerArgs,
 
     #[cfg_attr(feature = "p2p", clap(flatten))]
@@ -236,6 +236,9 @@ impl Command {
 
         let chain_conf: ChainConfig = chain_config.as_str().parse()?;
 
+        #[cfg(feature = "relayer")]
+        let relayer_cfg = relayer_args.into_config();
+
         #[cfg(feature = "p2p")]
         let p2p_cfg = p2p_args.into_config(metrics)?;
 
@@ -314,7 +317,7 @@ impl Command {
             block_executor: Default::default(),
             block_importer: Default::default(),
             #[cfg(feature = "relayer")]
-            relayer: relayer_args.into(),
+            relayer: relayer_cfg,
             #[cfg(feature = "p2p")]
             p2p: p2p_cfg,
             #[cfg(feature = "p2p")]
@@ -342,8 +345,9 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
                 .unwrap_or_else(|| "default_network".to_string())
         }
         #[cfg(not(feature = "p2p"))]
-        "default_network".to_string()
-    };
+        "default_network"
+    }
+    .to_string();
     // log fuel-core version
     info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
     trace!("Initializing in TRACE mode.");
