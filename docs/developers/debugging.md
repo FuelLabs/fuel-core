@@ -41,7 +41,7 @@ Users can supply CLI arguments to their node indirectly by populating the releva
 
 Users can define environment variables by configuring their shell or setting them inside the current terminal.
 
-Additionally, users can add a `.env` file to the root directory of their local copy of their Fuel node (or wherever the working directory is).
+Additionally, users can add a `.env` file to the root directory of their local copy of their Fuel node (or wherever the working directory is). Using a `.env` file requires compiling the client with the `env` feature. This can be accomplished by including `env` in the list of features or by passing the `--all-features` flag. 
 
 Using environment variables for CLI arguments allows these values to be reused across IDEs and IDE configurations seamlessly.
 
@@ -80,7 +80,7 @@ Running Fuel Core with CLion requires the official JetBrains Rust plugin. Find t
 2. In the "Run/Debug Configurations" window, click on the "+" button and select "Cargo"
 3. In the "Name" field, give your configuration a descriptive name, such as "Run Beta 3"
 4. In the "Command" field, enter `run --all-features --bin fuel-core -- run <ARGUMENTS>`, where `<ARGUMENTS>` represents the desired CLI arguments. Refer to the CLI documentation for guidance on which options and arguments to use.
-5. If your application uses environment variables for configuration (as indicated in the CLI documentation), you can set them in the "Environment variables" section. Enter the variables and their values as needed. It is recommended to set the `RUST_LOG` environment variable to either `info` or `debug`.
+5. If you use environment variables for configuration (as indicated in the CLI documentation), you can set them in the "Environment variables" section. Enter the variables and their values as needed. It is recommended to set the `RUST_LOG` environment variable to either `info` or `debug`.
 6. Click "Apply" or "OK" to save your run configuration.
 
 ### Example Configuration
