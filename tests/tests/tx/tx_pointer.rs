@@ -5,7 +5,6 @@ use crate::helpers::{
 use fuel_core::chain_config::CoinConfig;
 use fuel_core_types::{
     fuel_crypto::SecretKey,
-    fuel_tx,
     fuel_tx::{
         field::{
             Inputs,
@@ -83,7 +82,7 @@ async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
 
     // verify that the tx returned from the api has tx pointers set matching the genesis config
     let ret_tx = client
-        .transaction(&tx.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id))
+        .transaction(&tx.id(&Default::default()))
         .await
         .unwrap()
         .unwrap()
@@ -137,7 +136,7 @@ async fn tx_pointer_set_from_previous_block() {
     let tx1 = tx1.into();
     client.submit_and_await_commit(&tx1).await.unwrap();
     let ret_tx1 = client
-        .transaction(&tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id))
+        .transaction(&tx1.id(&Default::default()))
         .await
         .unwrap()
         .unwrap()
@@ -148,7 +147,7 @@ async fn tx_pointer_set_from_previous_block() {
     let tx2 = script_tx(
         secret_key,
         ret_tx1.outputs()[0].amount().unwrap(),
-        UtxoId::new(tx1.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id), 0),
+        UtxoId::new(tx1.id(&Default::default()), 0),
         contract_id,
         rng.gen(),
     );
@@ -156,7 +155,7 @@ async fn tx_pointer_set_from_previous_block() {
     client.submit_and_await_commit(&tx2).await.unwrap();
 
     let ret_tx2 = client
-        .transaction(&tx2.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id))
+        .transaction(&tx2.id(&Default::default()))
         .await
         .unwrap()
         .unwrap()
@@ -205,7 +204,7 @@ async fn tx_pointer_unset_when_utxo_validation_disabled() {
     client.submit_and_await_commit(&tx).await.unwrap();
 
     let ret_tx = client
-        .transaction(&tx.id(&fuel_tx::ConsensusParameters::DEFAULT.chain_id))
+        .transaction(&tx.id(&Default::default()))
         .await
         .unwrap()
         .unwrap()

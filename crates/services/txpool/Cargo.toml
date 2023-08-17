@@ -19,8 +19,10 @@ fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-p2p = { workspace = true }
 fuel-core-types = { workspace = true }
+futures = { workspace = true }
 parking_lot = { workspace = true }
 tokio = { workspace = true, default-features = false, features = ["sync"] }
+tokio-rayon = { workspace = true }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
 

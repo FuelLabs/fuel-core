@@ -8,6 +8,7 @@ mod coins;
 mod contract;
 mod dap;
 mod debugger;
+mod deployment;
 mod health;
 mod helpers;
 mod messages;

@@ -3,6 +3,8 @@ use futures::TryStreamExt;
 
 use super::*;
 
+const DEFAULT_LOG_PAGE_SIZE: u64 = 5;
+
 #[tokio::test]
 async fn can_download_logs() {
     let eth_node = MockMiddleware::default();
@@ -32,7 +34,7 @@ async fn can_download_logs() {
         &eth_state.needs_to_sync_eth().unwrap(),
         contracts,
         &eth_node,
-        Config::DEFAULT_LOG_PAGE_SIZE,
+        DEFAULT_LOG_PAGE_SIZE,
     )
     .map_ok(|(_, l)| l)
     .try_concat()

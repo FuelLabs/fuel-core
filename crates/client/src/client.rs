@@ -411,6 +411,19 @@ impl FuelClient {
         Ok(status)
     }
 
+    #[cfg(feature = "subscriptions")]
+    /// Submits transaction, await confirmation and return receipts.
+    pub async fn submit_and_await_commit_with_receipts(
+        &self,
+        tx: &Transaction,
+    ) -> io::Result<(TransactionStatus, Option<Vec<Receipt>>)> {
+        let tx_id = self.submit(tx).await?;
+        let status = self.await_transaction_commit(&tx_id).await?;
+        let receipts = self.receipts(&tx_id).await?;
+
+        Ok((status, receipts))
+    }
+
     pub async fn start_session(&self) -> io::Result<String> {
         let query = schema::StartSession::build(());
 
@@ -646,6 +659,19 @@ impl FuelClient {
             .transpose()?;
 
         Ok(receipts)
+    }
+
+    #[cfg(feature = "test-helpers")]
+    pub async fn all_receipts(&self) -> io::Result<Vec<Receipt>> {
+        let query = schema::tx::AllReceipts::build(());
+        let receipts = self.query(query).await?.all_receipts;
+
+        let vec: Result<Vec<Receipt>, ConversionError> = receipts
+            .into_iter()
+            .map(TryInto::<Receipt>::try_into)
+            .collect();
+
+        Ok(vec?)
     }
 
     pub async fn produce_blocks(

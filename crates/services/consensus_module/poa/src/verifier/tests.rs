@@ -52,7 +52,7 @@ fn correct() -> Input {
     }
 }
 
-#[test_case(correct() => matches Ok(_) ; "Correct block")]
+#[test_case(correct() => matches Ok(_) ; "genesis verify correct block")]
 #[test_case(
     {
         let mut i = correct();
@@ -65,28 +65,28 @@ fn correct() -> Input {
         let mut i = correct();
         i.ch.prev_root = [3u8; 32].into();
         i
-    } => matches Err(_) ; "Prev root mis-match"
+    } => matches Err(_) ; "genesis verify prev root mis-match should error"
 )]
 #[test_case(
     {
         let mut i = correct();
         i.ah.da_height = 1u64.into();
         i
-    } => matches Err(_) ; "da height lower then prev header"
+    } => matches Err(_) ; "genesis verify da height lower then prev header should error"
 )]
 #[test_case(
     {
         let mut i = correct();
         i.ch.generated.application_hash = [0u8; 32].into();
         i
-    } => matches Err(_) ; "application hash mis-match"
+    } => matches Err(_) ; "genesis verify application hash mis-match should error"
 )]
 #[test_case(
     {
         let mut i = correct();
         i.ch.time = Tai64(1);
         i
-    } => matches Err(_) ; "time before prev header"
+    } => matches Err(_) ; "genesis verify time before prev header should error"
 )]
 fn test_verify_genesis_block_fields(input: Input) -> anyhow::Result<()> {
     let Input {

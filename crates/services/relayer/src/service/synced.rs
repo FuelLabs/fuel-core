@@ -19,12 +19,15 @@ pub fn update_synced(synced: &NotifySynced, state: &EthState) {
 /// state has become synced.
 fn update_synced_inner(
     synced: &watch::Sender<Option<DaBlockHeight>>,
-    is_synced: Option<u64>,
+    new_sync_state: Option<u64>,
 ) {
     synced.send_if_modified(|last_state| {
-        let r = is_synced.is_some();
-        *last_state = is_synced.map(DaBlockHeight::from);
-        r
+        if let Some(val) = new_sync_state {
+            *last_state = Some(DaBlockHeight::from(val));
+            true
+        } else {
+            false
+        }
     });
 }
 
@@ -40,16 +43,16 @@ mod tests {
     // until a future state change that puts the relayer in sync
     // with the ethereum node.
     //
-    // previous_state, new_state => (state, should_wait)
-    #[test_case(false, false => (false, true))]
-    #[test_case(false, true => (true, false))]
-    #[test_case(true, true => (true, false))]
-    #[test_case(true, false => (false, true))]
-    fn can_update_sync(was_synced: bool, is_synced: bool) -> (bool, bool) {
-        let (tx, rx) = watch::channel(was_synced.then_some(0u64.into()));
+    // previous_state, new_state => keep waiting
+    #[test_case(None, None => true; "if nothing updated with nothing then keep waiting")]
+    #[test_case(None, Some(0) => false; "if nothing updated with something then stop waiting")]
+    #[test_case(Some(0), Some(0) => false; "if something updated with same thing then stop waiting")]
+    #[test_case(Some(0), None => true; "if something updated with nothing then keep waiting")]
+    #[test_case(Some(0), Some(1) => false; "if something updated with something new then stop waiting")]
+    fn can_update_sync(previous_state: Option<u64>, new_state: Option<u64>) -> bool {
+        let (tx, rx) = watch::channel(previous_state.map(Into::into));
         assert!(!rx.has_changed().unwrap());
-        update_synced_inner(&tx, is_synced.then_some(0u64));
-        let is_in_sync = rx.borrow().is_some();
-        (is_in_sync, !rx.has_changed().unwrap())
+        update_synced_inner(&tx, new_state);
+        !rx.has_changed().unwrap()
     }
 }

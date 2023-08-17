@@ -24,6 +24,11 @@ use fuel_core_poa::Trigger;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+#[cfg(feature = "relayer")]
+use crate::relayer::Config as RelayerConfig;
+#[cfg(feature = "relayer")]
+use fuel_core_types::blockchain::primitives::DaBlockHeight;
+
 pub type PoAService =
     fuel_core_poa::Service<TxPoolAdapter, BlockProducerAdapter, BlockImporterAdapter>;
 #[cfg(feature = "relayer")]
@@ -46,10 +51,10 @@ pub fn init_sub_services(
         "The blockchain is not initialized with any block"
     ))?;
     #[cfg(feature = "relayer")]
-    let relayer_service = if config.relayer.eth_client.is_some() {
+    let relayer_service = if let Some(config) = &config.relayer {
         Some(fuel_core_relayer::new_service(
             database.clone(),
-            config.relayer.clone(),
+            config.clone(),
         )?)
     } else {
         None
@@ -60,15 +65,17 @@ pub fn init_sub_services(
         #[cfg(feature = "relayer")]
         relayer_synced: relayer_service.as_ref().map(|r| r.shared.clone()),
         #[cfg(feature = "relayer")]
-        da_deploy_height: config.relayer.da_deploy_height,
+        da_deploy_height: config.relayer.as_ref().map_or(
+            DaBlockHeight(RelayerConfig::DEFAULT_DA_DEPLOY_HEIGHT),
+            |config| config.da_deploy_height,
+        ),
     };
 
     let executor = ExecutorAdapter {
         relayer: relayer_adapter.clone(),
         config: Arc::new(fuel_core_executor::Config {
-            transaction_parameters: config.chain_conf.transaction_parameters,
+            consensus_parameters: config.chain_conf.consensus_parameters.clone(),
             coinbase_recipient: config.block_producer.coinbase_recipient,
-            gas_costs: config.chain_conf.gas_costs.clone(),
             backtrace: config.vm.backtrace,
             utxo_validation_default: config.utxo_validation,
         }),
@@ -158,8 +165,7 @@ pub fn init_sub_services(
         {
             crate::schema::dap::init(
                 build_schema(),
-                config.chain_conf.transaction_parameters,
-                config.chain_conf.gas_costs.clone(),
+                config.chain_conf.consensus_parameters.clone(),
             )
             .data(database.clone())
         }
@@ -178,8 +184,7 @@ pub fn init_sub_services(
             min_gas_price: config.txpool.min_gas_price,
             max_tx: config.txpool.max_tx,
             max_depth: config.txpool.max_depth,
-            transaction_parameters: config.chain_conf.transaction_parameters,
-            gas_costs: config.chain_conf.gas_costs.clone(),
+            consensus_parameters: config.chain_conf.consensus_parameters.clone(),
             consensus_key: config.consensus_key.clone(),
         },
         schema,

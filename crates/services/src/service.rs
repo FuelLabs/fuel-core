@@ -3,6 +3,13 @@ use crate::state::{
     StateWatcher,
 };
 use anyhow::anyhow;
+use fuel_core_metrics::{
+    future_tracker::FutureTracker,
+    services::{
+        ServiceLifecycle,
+        SERVICES_METRICS,
+    },
+};
 use futures::FutureExt;
 use tokio::sync::watch;
 use tracing::Instrument;
@@ -135,9 +142,7 @@ where
 {
     /// Initializes a new `ServiceRunner` containing a `RunnableService`
     pub fn new(service: S) -> Self {
-        let shared = service.shared_data();
-        let state = initialize_loop(service, S::TaskParams::default());
-        Self { shared, state }
+        Self::new_with_params(service, S::TaskParams::default())
     }
 }
 
@@ -148,7 +153,8 @@ where
     /// Initializes a new `ServiceRunner` containing a `RunnableService` with parameters for underlying `Task`
     pub fn new_with_params(service: S, params: S::TaskParams) -> Self {
         let shared = service.shared_data();
-        let state = initialize_loop(service, params);
+        let metric = SERVICES_METRICS.register_service(S::NAME);
+        let state = initialize_loop(service, params, metric);
         Self { shared, state }
     }
 
@@ -245,7 +251,11 @@ where
 
 #[tracing::instrument(skip_all, fields(service = S::NAME))]
 /// Initialize the background loop as a spawned task.
-fn initialize_loop<S>(service: S, params: S::TaskParams) -> Shared<watch::Sender<State>>
+fn initialize_loop<S>(
+    service: S,
+    params: S::TaskParams,
+    metric: ServiceLifecycle,
+) -> Shared<watch::Sender<State>>
 where
     S: RunnableService + 'static,
 {
@@ -256,8 +266,12 @@ where
     tokio::task::spawn(
         async move {
             tracing::debug!("running");
-            let run =
-                std::panic::AssertUnwindSafe(run(service, stop_sender.clone(), params));
+            let run = std::panic::AssertUnwindSafe(run(
+                service,
+                stop_sender.clone(),
+                params,
+                metric,
+            ));
             tracing::debug!("awaiting run");
             let result = run.catch_unwind().await;
 
@@ -291,8 +305,12 @@ where
 }
 
 /// Runs the main loop.
-async fn run<S>(service: S, sender: Shared<watch::Sender<State>>, params: S::TaskParams)
-where
+async fn run<S>(
+    service: S,
+    sender: Shared<watch::Sender<State>>,
+    params: S::TaskParams,
+    metric: ServiceLifecycle,
+) where
     S: RunnableService + 'static,
 {
     let mut state: StateWatcher = sender.subscribe().into();
@@ -324,25 +342,35 @@ where
     let mut got_panic = None;
 
     while state.borrow_and_update().started() {
-        let task = std::panic::AssertUnwindSafe(task.run(&mut state));
+        let tracked_task = FutureTracker::new(task.run(&mut state));
+        let task = std::panic::AssertUnwindSafe(tracked_task);
         let panic_result = task.catch_unwind().await;
 
-        match panic_result {
-            Ok(Ok(should_continue)) => {
+        if let Err(panic) = panic_result {
+            tracing::debug!("got a panic");
+            got_panic = Some(panic);
+            break
+        }
+
+        let tracked_result = panic_result.expect("Checked the panic above");
+
+        // TODO: Use `u128` when `AtomicU128` is stable.
+        metric.busy.inc_by(tracked_result.busy.as_nanos() as u64);
+        metric.idle.inc_by(tracked_result.idle.as_nanos() as u64);
+
+        let result = tracked_result.output;
+
+        match result {
+            Ok(should_continue) => {
                 if !should_continue {
                     tracing::debug!("stopping");
                     break
                 }
                 tracing::debug!("run loop");
             }
-            Ok(Err(e)) => {
+            Err(e) => {
                 let e: &dyn std::error::Error = &*e;
                 tracing::error!(e);
-            }
-            Err(panic) => {
-                tracing::debug!("got a panic");
-                got_panic = Some(panic);
-                break
             }
         }
     }

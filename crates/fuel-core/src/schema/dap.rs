@@ -36,7 +36,6 @@ use fuel_core_types::{
             IntoChecked,
         },
         consts,
-        GasCosts,
         Interpreter,
         InterpreterError,
     },
@@ -62,14 +61,12 @@ pub struct ConcreteStorage {
     tx: HashMap<ID, Vec<Script>>,
     db: HashMap<ID, DatabaseTransaction>,
     params: ConsensusParameters,
-    gas_costs: GasCosts,
 }
 
 impl ConcreteStorage {
-    pub fn new(params: ConsensusParameters, gas_costs: GasCosts) -> Self {
+    pub fn new(params: ConsensusParameters) -> Self {
         Self {
             params,
-            gas_costs,
             ..Default::default()
         }
     }
@@ -108,8 +105,7 @@ impl ConcreteStorage {
                 self.tx.insert(id.clone(), txs.to_owned());
             });
 
-        let mut vm =
-            Interpreter::with_storage(vm_database, self.params, self.gas_costs.clone());
+        let mut vm = Interpreter::with_storage(vm_database, (&self.params).into());
         vm.transact(checked_tx)?;
         self.vm.insert(id.clone(), vm);
         self.db.insert(id.clone(), storage);
@@ -135,8 +131,7 @@ impl ConcreteStorage {
         let checked_tx =
             tx.into_checked_basic(vm_database.block_height()?, &self.params)?;
 
-        let mut vm =
-            Interpreter::with_storage(vm_database, self.params, self.gas_costs.clone());
+        let mut vm = Interpreter::with_storage(vm_database, (&self.params).into());
         vm.transact(checked_tx)?;
         self.vm.insert(id.clone(), vm).ok_or_else(|| {
             InterpreterError::Io(io::Error::new(
@@ -205,11 +200,8 @@ pub struct DapMutation;
 pub fn init<Q, M, S>(
     schema: SchemaBuilder<Q, M, S>,
     params: ConsensusParameters,
-    gas_costs: GasCosts,
 ) -> SchemaBuilder<Q, M, S> {
-    schema.data(GraphStorage::new(Mutex::new(ConcreteStorage::new(
-        params, gas_costs,
-    ))))
+    schema.data(GraphStorage::new(Mutex::new(ConcreteStorage::new(params))))
 }
 
 #[Object]

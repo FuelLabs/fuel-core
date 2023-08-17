@@ -20,7 +20,7 @@ use fuel_core_types::{
     fuel_tx,
 };
 
-#[derive(Copy, Clone, Debug, Display, Enum, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Display, Enum, Eq, PartialEq, strum_macros::EnumIter)]
 pub enum ReceiptType {
     Call,
     Return,
@@ -157,4 +157,110 @@ impl From<fuel_tx::Receipt> for Receipt {
     fn from(receipt: fuel_tx::Receipt) -> Self {
         Receipt(receipt)
     }
+}
+
+#[cfg(feature = "test-helpers")]
+pub fn all_receipts() -> Vec<fuel_tx::Receipt> {
+    use strum::IntoEnumIterator;
+
+    let mut receipts = vec![];
+    for variant in ReceiptType::iter() {
+        let receipt = match variant {
+            ReceiptType::Call => fuel_tx::Receipt::call(
+                fuel_tx::ContractId::from([1u8; 32]),
+                fuel_tx::ContractId::from([2u8; 32]),
+                3,
+                fuel_tx::AssetId::from([3u8; 32]),
+                5,
+                6,
+                7,
+                8,
+                9,
+            ),
+            ReceiptType::Return => {
+                fuel_tx::Receipt::ret(fuel_tx::ContractId::from([1u8; 32]), 2, 3, 4)
+            }
+            ReceiptType::ReturnData => fuel_tx::Receipt::return_data(
+                fuel_tx::ContractId::from([1u8; 32]),
+                2,
+                3,
+                4,
+                vec![5; 30],
+            ),
+            ReceiptType::Panic => fuel_tx::Receipt::panic(
+                fuel_tx::ContractId::from([1u8; 32]),
+                fuel_core_types::fuel_asm::PanicInstruction::error(
+                    fuel_core_types::fuel_asm::PanicReason::ArithmeticOverflow,
+                    2,
+                ),
+                3,
+                4,
+            ),
+            ReceiptType::Revert => {
+                fuel_tx::Receipt::revert(fuel_tx::ContractId::from([1u8; 32]), 2, 3, 4)
+            }
+            ReceiptType::Log => fuel_tx::Receipt::log(
+                fuel_tx::ContractId::from([1u8; 32]),
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+            ),
+            ReceiptType::LogData => fuel_tx::Receipt::log_data(
+                fuel_tx::ContractId::from([1u8; 32]),
+                2,
+                3,
+                4,
+                5,
+                6,
+                vec![7; 30],
+            ),
+            ReceiptType::Transfer => fuel_tx::Receipt::transfer(
+                fuel_tx::ContractId::from([1u8; 32]),
+                fuel_tx::ContractId::from([2u8; 32]),
+                3,
+                fuel_tx::AssetId::from([4u8; 32]),
+                5,
+                6,
+            ),
+            ReceiptType::TransferOut => fuel_tx::Receipt::transfer_out(
+                fuel_tx::ContractId::from([1u8; 32]),
+                fuel_tx::Address::from([2u8; 32]),
+                3,
+                fuel_tx::AssetId::from([4u8; 32]),
+                5,
+                6,
+            ),
+            ReceiptType::ScriptResult => fuel_tx::Receipt::script_result(
+                fuel_tx::ScriptExecutionResult::Success,
+                1,
+            ),
+            ReceiptType::MessageOut => fuel_tx::Receipt::message_out(
+                &Default::default(),
+                1,
+                fuel_tx::Address::from([2u8; 32]),
+                fuel_tx::Address::from([3u8; 32]),
+                4,
+                vec![5; 30],
+            ),
+            ReceiptType::Mint => fuel_tx::Receipt::mint(
+                fuel_tx::Bytes32::from([1u8; 32]),
+                fuel_tx::ContractId::from([2u8; 32]),
+                3,
+                4,
+                5,
+            ),
+            ReceiptType::Burn => fuel_tx::Receipt::burn(
+                fuel_tx::Bytes32::from([1u8; 32]),
+                fuel_tx::ContractId::from([2u8; 32]),
+                3,
+                4,
+                5,
+            ),
+        };
+        receipts.push(receipt);
+    }
+    receipts
 }

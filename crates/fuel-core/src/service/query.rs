@@ -24,11 +24,12 @@ use super::*;
 
 impl FuelService {
     /// Submit a transaction to the txpool.
-    pub fn submit(&self, tx: Transaction) -> anyhow::Result<InsertionResult> {
+    pub async fn submit(&self, tx: Transaction) -> anyhow::Result<InsertionResult> {
         let results: Vec<_> = self
             .shared
             .txpool
             .insert(vec![Arc::new(tx)])
+            .await
             .into_iter()
             .collect::<Result<_, _>>()?;
         results
@@ -42,14 +43,9 @@ impl FuelService {
         &self,
         tx: Transaction,
     ) -> anyhow::Result<impl Stream<Item = anyhow::Result<TransactionStatus>>> {
-        let id = tx.id(&self
-            .shared
-            .config
-            .chain_conf
-            .transaction_parameters
-            .chain_id);
+        let id = tx.id(&self.shared.config.chain_conf.consensus_parameters.chain_id);
         let stream = self.transaction_status_change(id).await;
-        self.submit(tx)?;
+        self.submit(tx).await?;
         Ok(stream)
     }
 
@@ -58,17 +54,12 @@ impl FuelService {
         &self,
         tx: Transaction,
     ) -> anyhow::Result<TransactionStatus> {
-        let id = tx.id(&self
-            .shared
-            .config
-            .chain_conf
-            .transaction_parameters
-            .chain_id);
+        let id = tx.id(&self.shared.config.chain_conf.consensus_parameters.chain_id);
         let stream = self.transaction_status_change(id).await.filter(|status| {
             futures::future::ready(!matches!(status, Ok(TransactionStatus::Submitted(_))))
         });
         futures::pin_mut!(stream);
-        self.submit(tx)?;
+        self.submit(tx).await?;
         stream
             .next()
             .await

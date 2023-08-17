@@ -5,6 +5,10 @@ use crate::{
         TxPoolDb,
     },
     transaction_selector::select_transactions,
+    txpool::{
+        check_single_tx,
+        check_transactions,
+    },
     Config,
     Error as TxPoolError,
     TxInfo,
@@ -12,6 +16,7 @@ use crate::{
 };
 
 use fuel_core_p2p::PeerId;
+
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
@@ -48,6 +53,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
+
 use parking_lot::Mutex as ParkingMutex;
 use std::sync::Arc;
 use tokio::{
@@ -125,15 +131,19 @@ pub struct SharedState<P2P, DB> {
     txpool: Arc<ParkingMutex<TxPool<DB>>>,
     p2p: Arc<P2P>,
     consensus_params: ConsensusParameters,
+    db: DB,
+    config: Config,
 }
 
-impl<P2P, DB> Clone for SharedState<P2P, DB> {
+impl<P2P, DB: Clone> Clone for SharedState<P2P, DB> {
     fn clone(&self) -> Self {
         Self {
             tx_status_sender: self.tx_status_sender.clone(),
             txpool: self.txpool.clone(),
             p2p: self.p2p.clone(),
-            consensus_params: self.consensus_params,
+            consensus_params: self.consensus_params.clone(),
+            db: self.db.clone(),
+            config: self.config.clone(),
         }
     }
 }
@@ -239,7 +249,7 @@ where
 impl<P2P, DB> RunnableService for Task<P2P, DB>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
-    DB: TxPoolDb,
+    DB: TxPoolDb + Clone,
 {
     const NAME: &'static str = "TxPool";
 
@@ -309,28 +319,45 @@ where
             new_transaction = self.gossiped_tx_stream.next() => {
                 if let Some(GossipData { data: Some(tx), message_id, peer_id }) = new_transaction {
                     let id = tx.id(&self.shared.consensus_params.chain_id);
-                    let txs = vec!(Arc::new(tx));
-                    let mut result = tracing::info_span!("Received tx via gossip", %id)
-                        .in_scope(|| {
-                            self.shared.txpool.lock().insert(
-                                &self.shared.tx_status_sender,
-                                &txs
-                            )
-                        });
+                    let current_height = self.shared.db.current_block_height()?;
 
-                    if let Some(acceptance) = match result.pop() {
-                        Some(Ok(_)) => {
-                            Some(GossipsubMessageAcceptance::Accept)
-                        },
-                        Some(Err(_)) => {
-                            Some(GossipsubMessageAcceptance::Reject)
+                    // verify tx
+                    let checked_tx = check_single_tx(tx, current_height, &self.shared.config).await;
+
+                    let acceptance = match checked_tx {
+                        Ok(tx) => {
+                            let txs = vec![tx];
+
+                            // insert tx
+                            let mut result = tracing::info_span!("Received tx via gossip", %id)
+                                .in_scope(|| {
+                                    self.shared.txpool.lock().insert(
+                                        &self.shared.tx_status_sender,
+                                        txs
+                                    )
+                                });
+
+                            match result.pop() {
+                                Some(Ok(_)) => {
+                                    GossipsubMessageAcceptance::Accept
+                                },
+                                Some(Err(_)) => {
+                                    GossipsubMessageAcceptance::Reject
+                                }
+                                _ => GossipsubMessageAcceptance::Ignore
+                            }
                         }
-                        _ => None
-                    } {
+                        Err(_) => {
+                            GossipsubMessageAcceptance::Reject
+                        }
+                    };
+
+                    if acceptance != GossipsubMessageAcceptance::Ignore {
                         let message_info = GossipsubMessageInfo {
                             message_id,
                             peer_id,
                         };
+
                         let _ = self.shared.p2p.notify_gossip_transaction_validity(message_info, acceptance);
                     }
 
@@ -419,13 +446,36 @@ where
     DB: TxPoolDb,
 {
     #[tracing::instrument(name = "insert_submitted_txn", skip_all)]
-    pub fn insert(
+    pub async fn insert(
         &self,
         txs: Vec<Arc<Transaction>>,
     ) -> Vec<anyhow::Result<InsertionResult>> {
-        let insert = { self.txpool.lock().insert(&self.tx_status_sender, &txs) };
+        // verify txs
+        let block_height = self.db.current_block_height();
+        let current_height = match block_height {
+            Ok(val) => val,
+            Err(e) => return vec![Err(e.into())],
+        };
 
-        for (ret, tx) in insert.iter().zip(txs.into_iter()) {
+        let checked_txs = check_transactions(&txs, current_height, &self.config).await;
+
+        let mut valid_txs = vec![];
+
+        let checked_txs: Vec<_> = checked_txs
+            .into_iter()
+            .map(|tx_check| match tx_check {
+                Ok(tx) => {
+                    valid_txs.push(tx);
+                    None
+                }
+                Err(err) => Some(err),
+            })
+            .collect();
+
+        // insert txs
+        let insertion = { self.txpool.lock().insert(&self.tx_status_sender, valid_txs) };
+
+        for (ret, tx) in insertion.iter().zip(txs.into_iter()) {
             match ret {
                 Ok(_) => {
                     let result = self.p2p.broadcast_transaction(tx.clone());
@@ -440,7 +490,20 @@ where
                 Err(_) => {}
             }
         }
-        insert
+
+        let mut insertion = insertion.into_iter();
+
+        checked_txs
+            .into_iter()
+            .map(|check_result| match check_result {
+                None => insertion.next().unwrap_or_else(|| {
+                    unreachable!(
+                        "the number of inserted txs matches the number of `None` results"
+                    )
+                }),
+                Some(err) => Err(err),
+            })
+            .collect()
     }
 }
 
@@ -500,19 +563,19 @@ pub fn new_service<P2P, Importer, DB>(
 where
     Importer: BlockImporter,
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + 'static,
-    DB: TxPoolDb + 'static,
+    DB: TxPoolDb + Clone + 'static,
 {
     let p2p = Arc::new(p2p);
     let gossiped_tx_stream = p2p.gossiped_transaction_events();
     let committed_block_stream = importer.block_events();
     let mut ttl_timer = tokio::time::interval(config.transaction_ttl);
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    let consensus_params = config.chain_config.transaction_parameters;
+    let consensus_params = config.chain_config.consensus_parameters.clone();
     let number_of_active_subscription = config.number_of_active_subscription;
-    let txpool = Arc::new(ParkingMutex::new(TxPool::new(config.clone(), db)));
+    let txpool = Arc::new(ParkingMutex::new(TxPool::new(config.clone(), db.clone())));
 
     let txpool_sync_task =
-        new_txpool_syncing_service(config, txpool.clone(), p2p.clone());
+        new_txpool_syncing_service(config.clone(), txpool.clone(), p2p.clone());
 
     let task = Task {
         gossiped_tx_stream,
@@ -523,6 +586,8 @@ where
             txpool,
             p2p,
             consensus_params,
+            db,
+            config,
         },
         ttl_timer,
     };

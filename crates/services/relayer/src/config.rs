@@ -45,7 +45,7 @@ pub struct Config {
 
 #[allow(missing_docs)]
 impl Config {
-    pub const DEFAULT_LOG_PAGE_SIZE: u64 = 5;
+    pub const DEFAULT_LOG_PAGE_SIZE: u64 = 10_000;
     pub const DEFAULT_DA_FINALIZATION: u64 = 100;
     pub const DEFAULT_DA_DEPLOY_HEIGHT: u64 = 0;
     pub const DEFAULT_SYNC_MINIMUM_DURATION: Duration = Duration::from_secs(5);

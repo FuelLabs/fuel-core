@@ -59,7 +59,11 @@ async fn stop_service_at_the_middle() {
     let mock_db = MockDb::default();
     let eth_node = MockMiddleware::default();
     eth_node.update_data(|data| data.best_block.number = Some(200.into()));
-    let relayer = new_service_test(eth_node, mock_db.clone(), Default::default());
+    let config = Config {
+        log_page_size: 5,
+        ..Default::default()
+    };
+    let relayer = new_service_test(eth_node, mock_db.clone(), config);
     relayer.start_and_await().await.unwrap();
 
     // Skip the initial requests to start the synchronization.

@@ -284,7 +284,7 @@ pub struct DryRunArg {
 )]
 pub struct DryRun {
     #[arguments(tx: $tx, utxoValidation: $utxo_validation)]
-    pub dry_run: Vec<transparent_receipt::Receipt>,
+    pub dry_run: Vec<Receipt>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -307,6 +307,12 @@ pub struct Submit {
 pub struct SubmitAndAwaitSubscription {
     #[arguments(tx: $tx)]
     pub submit_and_await: TransactionStatus,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Query")]
+pub struct AllReceipts {
+    pub all_receipts: Vec<Receipt>,
 }
 
 #[cfg(test)]

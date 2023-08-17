@@ -17,7 +17,10 @@ use fuel_core_client::client::{
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::*,
-    fuel_types::bytes::*,
+    fuel_types::{
+        bytes::*,
+        ChainId,
+    },
     fuel_vm::*,
 };
 use rstest::rstest;
@@ -211,8 +214,7 @@ async fn can_get_message_proof() {
         .collect();
 
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-    let owner =
-        Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT.chain_id);
+    let owner = Input::predicate_owner(&predicate, &ChainId::default());
     let coin_input = Input::coin_predicate(
         Default::default(),
         owner,
@@ -256,8 +258,6 @@ async fn can_get_message_proof() {
         vec![],
     );
 
-    let transaction_id = script.id(&ConsensusParameters::DEFAULT.chain_id);
-
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -279,13 +279,14 @@ async fn can_get_message_proof() {
         .await
         .expect("Should be able to estimate deploy tx");
     // Call the contract.
-    matches!(
-        client.submit_and_await_commit(&script).await,
-        Ok(TransactionStatus::Success { .. })
-    );
+    let (status, receipts) = client
+        .submit_and_await_commit_with_receipts(&script)
+        .await
+        .unwrap();
+    matches!(status, TransactionStatus::Success { .. });
 
     // Get the receipts from the contract call.
-    let receipts = client.receipts(&transaction_id).await.unwrap().unwrap();
+    let receipts = receipts.unwrap();
     let logd = receipts
         .iter()
         .find(|f| matches!(f, Receipt::LogData { .. }))

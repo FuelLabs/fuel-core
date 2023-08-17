@@ -204,6 +204,7 @@ impl DatabaseChain for Database {
 
 impl DatabasePort for Database {}
 
+#[async_trait]
 impl TxPoolPort for TxPoolAdapter {
     fn transaction(&self, id: TxId) -> Option<Transaction> {
         self.service
@@ -217,8 +218,11 @@ impl TxPoolPort for TxPoolAdapter {
             .map(|info| Tai64::from_unix(info.submitted_time().as_secs() as i64))
     }
 
-    fn insert(&self, txs: Vec<Arc<Transaction>>) -> Vec<anyhow::Result<InsertionResult>> {
-        self.service.insert(txs)
+    async fn insert(
+        &self,
+        txs: Vec<Arc<Transaction>>,
+    ) -> Vec<anyhow::Result<InsertionResult>> {
+        self.service.insert(txs).await
     }
 
     fn tx_update_subscribe(&self, id: TxId) -> BoxFuture<BoxStream<TxStatusMessage>> {

@@ -3,7 +3,6 @@ use fuel_core_types::{
     entities::message::Message,
     fuel_asm::op,
     fuel_tx::{
-        ConsensusParameters,
         Contract,
         ContractId,
         Input,
@@ -21,10 +20,7 @@ pub(crate) fn create_message_predicate_from_message(
     let predicate = vec![op::ret(1)].into_iter().collect::<Vec<u8>>();
     let message = Message {
         sender: Default::default(),
-        recipient: Input::predicate_owner(
-            &predicate,
-            &ConsensusParameters::DEFAULT.chain_id,
-        ),
+        recipient: Input::predicate_owner(&predicate, &Default::default()),
         nonce: nonce.into(),
         amount,
         data: vec![],
@@ -35,7 +31,7 @@ pub(crate) fn create_message_predicate_from_message(
         message.clone(),
         Input::message_coin_predicate(
             message.sender,
-            Input::predicate_owner(&predicate, &ConsensusParameters::DEFAULT.chain_id),
+            Input::predicate_owner(&predicate, &Default::default()),
             message.amount,
             message.nonce,
             Default::default(),
