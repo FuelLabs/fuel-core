@@ -18,6 +18,7 @@ app:
   poa_instant: "${fuel_core_poa_instant}"
   poa_interval_period: "${fuel_core_poa_interval_period}"
   max_block_size: "${fuel_core_max_buffer_size}"
+  max_headers_per_request: "${fuel_core_max_headers_per_request}"
   max_database_cache_size: "${fuel_core_max_database_cache_size}"
   max_transmit_size: "${fuel_core_max_buffer_size}"
   sync_max_get_header: "${fuel_core_sync_max_get_header}"

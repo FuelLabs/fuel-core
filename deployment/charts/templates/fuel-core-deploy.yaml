@@ -208,6 +208,10 @@ spec:
             - "--max-block-size"
             - "{{ .Values.app.max_block_size }}"
           {{- end }}
+          {{- if .Values.app.max_headers_per_request }}
+          - "--max-headers-per-request"
+          - "{{ .Values.app.max_headers_per_request }}"
+          {{- end }}
           {{- if .Values.app.max_database_cache_size }}
             - "--max-database-cache-size"
             - "{{ .Values.app.max_database_cache_size }}"
