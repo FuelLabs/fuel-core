@@ -2,9 +2,9 @@
 
 ## Setup Requirements
 
-Building Fuel is supported on MacOS and Linux.
+Building Fuel is supported on macOS and Linux.
 
-The Fuel client is written in Rust. For developers wishing to build the Fuel client locally, it is recommended to use the latest version of Rust. The build process uses the stable Rust toolchain.
+The Fuel client is written in Rust. For developers who wish to build the Fuel client locally, it is recommended to use the latest version of Rust. The build process uses the stable Rust toolchain.
 
 See the [Fuel Client system requirements](../../README.md#system-requirements).
 
@@ -12,9 +12,9 @@ See the [Fuel Client system requirements](../../README.md#system-requirements).
 
 Building and running debug builds of the Fuel client is done using Cargo.
 
-By default, when using the `cargo build` or `cargo run` commands, Cargo generates a debug build. This build is optimized for debugging and development purposes, and it includes debug symbols and minimal optimizations. IDEs rely on debug builds to provide robust debugging features.
+By default, when using the `cargo build` or `cargo run` commands, Cargo generates a debug build. This build is optimized for debugging and development purposes, including debug symbols and minimal optimizations. IDEs rely on debug builds to provide robust debugging features.
 
-The `cargo run` command is used to compile and execute the Fuel client application directly from source code. When running `cargo run`, Cargo compiles the Fuel client, and runs the resulting binary. During development and debugging, this should be used instead of installing the client (`cargo install`) or running the executable directly.
+The `cargo run` command will compile and execute the Fuel client application directly from source code. When running `cargo run`, Cargo compiles the Fuel client, and runs the resulting binary. During development and debugging, this should be used instead of installing the client (`cargo install`) or running the executable directly.
 
 When building or running the Fuel client, it is recommended to pass the  `--all-features` flag to Cargo. This will instruct Cargo to compile the client with features such as P2P and the Relayer service.
 
@@ -39,7 +39,7 @@ It is suggested to run the client with the P2P and Relayer services enabled. Thi
 
 Users can supply CLI arguments to their node indirectly by populating the relevant environment variables. The list of CLI arguments and their environment variables can be found by running the `help` command.
 
-Users can define environment variables by configuring their shell, setting them inside the current terminal.
+Users can define environment variables by configuring their shell or setting them inside the current terminal.
 
 Additionally, users can add a `.env` file to the root directory of their local copy of their Fuel node (or wherever the working directory is).
 
