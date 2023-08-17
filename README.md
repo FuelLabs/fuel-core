@@ -142,6 +142,10 @@ The service relies on the environment variable `RUST_LOG`. For more information,
 
 Human logging can be disabled with the environment variable `HUMAN_LOGGING=false`
 
+## Debugging
+
+See the guide on [debugging](docs/developers/debugging.md) for an overview on running a debug build of a local node.
+
 ## Docker & Kubernetes
 
 ```sh
