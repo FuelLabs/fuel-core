@@ -412,6 +412,12 @@ impl<T> SharedMutex<T> {
     }
 }
 
+impl<T> From<T> for SharedMutex<T> {
+    fn from(t: T) -> Self {
+        Self::new(t)
+    }
+}
+
 fn panic_to_string(e: Box<dyn core::any::Any + Send>) -> String {
     let panic_information = match e.downcast::<String>() {
         Ok(v) => *v,
