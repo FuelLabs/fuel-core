@@ -5,6 +5,7 @@ use std::{
     str::FromStr,
 };
 use tracing::{
+    error,
     info,
     warn,
 };
@@ -49,7 +50,13 @@ pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
 
 #[cfg(feature = "env")]
 fn init_environment() -> Option<PathBuf> {
-    dotenv().ok()
+    match dotenv() {
+        Ok(path) => Some(path),
+        Err(e) => {
+            error!("Unable to load .env environment variables: {e}. Please check that you have created a .env file in your working directory.");
+            None
+        }
+    }
 }
 
 #[cfg(not(feature = "env"))]
