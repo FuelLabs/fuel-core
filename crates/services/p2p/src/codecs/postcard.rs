@@ -213,9 +213,12 @@ impl RequestResponseConverter for PostcardCodec {
 
                 Ok(ResponseMessage::Transactions(response))
             }
-            NetworkResponse::Headers(response) => {
-                let deserialized = self.deserialize(response)?;
-                Ok(ResponseMessage::SealedHeaders(deserialized))
+            NetworkResponse::Headers(headers_bytes) => {
+                let response = headers_bytes
+                    .as_ref()
+                    .map(|bytes| self.deserialize(bytes))
+                    .transpose()?;
+                Ok(ResponseMessage::SealedHeaders(response))
             }
         }
     }
@@ -243,9 +246,12 @@ impl RequestResponseConverter for PostcardCodec {
 
                 Ok(NetworkResponse::Transactions(response))
             }
-            OutboundResponse::SealedHeaders(headers) => {
-                let serialized = self.serialize(headers)?;
-                Ok(NetworkResponse::Headers(serialized))
+            OutboundResponse::SealedHeaders(maybe_headers) => {
+                let response = maybe_headers
+                    .as_ref()
+                    .map(|headers| self.serialize(&headers))
+                    .transpose()?;
+                Ok(NetworkResponse::Headers(response))
             }
         }
     }

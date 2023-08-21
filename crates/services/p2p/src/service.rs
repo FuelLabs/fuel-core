@@ -85,7 +85,7 @@ enum TaskRequest {
     },
     GetSealedHeaders {
         block_height_range: Range<u32>,
-        channel: oneshot::Sender<Option<(PeerId, Vec<SealedBlockHeader>)>>,
+        channel: oneshot::Sender<Option<(PeerId, Option<Vec<SealedBlockHeader>>)>>,
     },
     GetTransactions {
         block_id: BlockId,
@@ -300,12 +300,14 @@ where
                             }
                             RequestMessage::SealedHeaders(range) => {
                                 let max_len = self.max_headers_per_request.try_into().expect("u32 should always fit into usize");
-                                if range.len() > max_len {
-                                    return Err(anyhow!("Requested too many headers: {} > {}", range.len(), max_len));
+                                let response = if range.len() > max_len {
+                                    tracing::error!("Requested range of sealed headers is too big. Requested length: {:?}, Max length: {:?}", range.len(), max_len);
+                                    // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
+                                    None
                                 } else {
-                                    let response = self.db.get_sealed_headers(range)?;
-                                    let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeaders(response));
+                                    Some(self.db.get_sealed_headers(range)?)
                                 };
+                                let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeaders(response));
                             }
                         }
                     },
@@ -382,7 +384,7 @@ impl SharedState {
     pub async fn get_sealed_block_headers(
         &self,
         block_height_range: Range<u32>,
-    ) -> anyhow::Result<Option<(Vec<u8>, Vec<SealedBlockHeader>)>> {
+    ) -> anyhow::Result<Option<(Vec<u8>, Option<Vec<SealedBlockHeader>>)>> {
         let (sender, receiver) = oneshot::channel();
 
         if block_height_range.is_empty() {

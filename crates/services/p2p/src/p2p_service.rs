@@ -1596,7 +1596,7 @@ mod tests {
                                             let expected = arbitrary_headers_for_range(range.clone());
 
                                             if let Ok(Some((_, sealed_headers))) = response_message {
-                                                let check = expected.iter().zip(sealed_headers.iter()).all(|(a, b)| eq_except_metadata(a, b));
+                                                let check = expected.iter().zip(sealed_headers.unwrap().iter()).all(|(a, b)| eq_except_metadata(a, b));
                                                 let _ = tx_test_end.send(check).await;
                                             } else {
                                                 tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
@@ -1644,7 +1644,7 @@ mod tests {
                             RequestMessage::SealedHeaders(range) => {
                                 let sealed_headers: Vec<_> = arbitrary_headers_for_range(range.clone());
 
-                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::SealedHeaders(sealed_headers));
+                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::SealedHeaders(Some(sealed_headers)));
                             }
                             RequestMessage::Transactions(_) => {
                                 let transactions = (0..5).map(|_| Transaction::default_test_tx()).collect();

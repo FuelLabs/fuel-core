@@ -52,7 +52,7 @@ pub enum RequestMessage {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ResponseMessage {
     SealedBlock(Box<Option<SealedBlock>>),
-    SealedHeaders(Vec<SealedBlockHeader>),
+    SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Vec<Transaction>>),
 }
 
@@ -60,7 +60,7 @@ pub enum ResponseMessage {
 #[derive(Debug)]
 pub enum ResponseChannelItem {
     Block(ChannelItem<SealedBlock>),
-    SealedHeaders(ChannelItem<(PeerId, Vec<SealedBlockHeader>)>),
+    SealedHeaders(ChannelItem<(PeerId, Option<Vec<SealedBlockHeader>>)>),
     Transactions(ChannelItem<Vec<Transaction>>),
 }
 
@@ -69,7 +69,7 @@ pub enum ResponseChannelItem {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum NetworkResponse {
     Block(Option<Vec<u8>>),
-    Headers(Vec<u8>),
+    Headers(Option<Vec<u8>>),
     Transactions(Option<Vec<u8>>),
 }
 
@@ -78,7 +78,7 @@ pub enum NetworkResponse {
 #[derive(Debug, Clone)]
 pub enum OutboundResponse {
     Block(Option<Arc<SealedBlock>>),
-    SealedHeaders(Vec<SealedBlockHeader>),
+    SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Arc<Vec<Transaction>>>),
 }
 

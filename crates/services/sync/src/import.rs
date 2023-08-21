@@ -331,19 +331,21 @@ async fn get_headers_batch(
         .await
         .trace_err("Failed to get headers");
     let sorted_headers = match res {
-        Ok(headers) => headers
-            .into_iter()
-            .map(move |header| {
-                let header = range.next().and_then(|height| {
-                    if *(header.data.entity.height()) == height.into() {
-                        Some(header)
-                    } else {
-                        None
-                    }
-                });
-                Ok(header)
-            })
-            .collect(),
+        Ok(None) =>
+                vec![Err(anyhow::anyhow!("Headers provider was unable to fulfill request for unspecified reason. Possibly because requested batch size was too large"))],
+        Ok(Some(headers))  =>        headers
+                    .into_iter()
+                    .map(move |header| {
+                        let header = range.next().and_then(|height| {
+                            if *(header.data.entity.height()) == height.into() {
+                                Some(header)
+                            } else {
+                                None
+                            }
+                        });
+                        Ok(header)
+                    })
+                    .collect(),
         Err(e) => vec![Err(e)],
     };
     futures::stream::iter(sorted_headers)

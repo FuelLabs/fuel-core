@@ -46,24 +46,25 @@ impl PeerToPeerPort for P2PAdapter {
     async fn get_sealed_block_headers(
         &self,
         block_range_height: Range<u32>,
-    ) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>> {
+    ) -> anyhow::Result<Option<Vec<SourcePeer<SealedBlockHeader>>>> {
         if let Some(service) = &self.service {
             Ok(service
                 .get_sealed_block_headers(block_range_height)
                 .await?
-                .map(|(peer_id, headers)| {
+                .and_then(|(peer_id, headers)| {
                     let peer_id: PeerId = peer_id.into();
-                    headers
-                        .into_iter()
-                        .map(|header| SourcePeer {
-                            peer_id: peer_id.clone(),
-                            data: header,
-                        })
-                        .collect()
-                })
-                .unwrap_or(Vec::new()))
+                    headers.map(|headers| {
+                        headers
+                            .into_iter()
+                            .map(|header| SourcePeer {
+                                peer_id: peer_id.clone(),
+                                data: header,
+                            })
+                            .collect()
+                    })
+                }))
         } else {
-            Ok(Vec::new())
+            Ok(None)
         }
     }
 

@@ -178,7 +178,7 @@ impl PeerToPeerPort for PressurePeerToPeer {
     async fn get_sealed_block_headers(
         &self,
         block_height_range: Range<u32>,
-    ) -> anyhow::Result<Vec<SourcePeer<SealedBlockHeader>>> {
+    ) -> anyhow::Result<Option<Vec<SourcePeer<SealedBlockHeader>>>> {
         self.counts.apply(|c| c.inc_headers());
         tokio::time::sleep(self.durations[0]).await;
         self.counts.apply(|c| c.dec_headers());
@@ -234,11 +234,13 @@ impl PressurePeerToPeer {
     fn new(counts: SharedCounts, delays: [Duration; 2]) -> Self {
         let mut mock = MockPeerToPeerPort::default();
         mock.expect_get_sealed_block_headers().returning(|range| {
-            Ok(range
-                .clone()
-                .map(BlockHeight::from)
-                .map(empty_header)
-                .collect())
+            Ok(Some(
+                range
+                    .clone()
+                    .map(BlockHeight::from)
+                    .map(empty_header)
+                    .collect(),
+            ))
         });
         mock.expect_get_transactions()
             .returning(|_| Ok(Some(vec![])));
