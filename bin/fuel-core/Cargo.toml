@@ -36,7 +36,10 @@ tracing-subscriber = { workspace = true, features = [
 url = { version = "2.2", optional = true }
 
 [dev-dependencies]
+rand = "0.8"
+serial_test = "2.0"
 test-case = { workspace = true }
+tokio = { version = "1.20",  features = ["macros"] }
 
 [features]
 debug = ["env", "fuel-core/debug"]
@@ -49,3 +52,9 @@ rocksdb = ["fuel-core/rocksdb"]
 rocksdb-production = ["fuel-core/rocksdb-production"]
 # features to enable in production, but increase build times
 production = ["env", "metrics", "relayer", "rocksdb-production", "p2p"]
+
+[[test]]
+name = "cli-tests-default"
+path = "./tests/cli-tests-default.rs"
+harness = true
+required-features = ["default"]
