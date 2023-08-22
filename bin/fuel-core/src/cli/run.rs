@@ -1,7 +1,6 @@
 #![allow(unused_variables)]
 use crate::{
     cli::{
-        init_logging,
         run::consensus::PoATriggerArgs,
         DEFAULT_DB_PATH,
     },
@@ -333,7 +332,6 @@ impl Command {
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
-    init_logging().await?;
     let config = command.get_config()?;
     let network_name = {
         #[cfg(feature = "p2p")]

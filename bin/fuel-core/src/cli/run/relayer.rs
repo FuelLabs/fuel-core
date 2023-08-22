@@ -25,7 +25,7 @@ pub struct RelayerArgs {
     #[arg(long = "relayer", env)]
     #[arg(required_if_eq("enable_relayer", "true"))]
     #[arg(requires_if(IsPresent, "enable_relayer"))]
-    pub eth_client: Option<url::Url>,
+    pub relayer: Option<url::Url>,
 
     /// Ethereum contract address. Create EthAddress into fuel_types
     #[arg(long = "relayer-v2-listening-contracts", value_parser = parse_h160, env)]
@@ -71,7 +71,7 @@ impl RelayerArgs {
         let config = Config {
             da_deploy_height: DaBlockHeight(self.da_deploy_height),
             da_finalization: DaBlockHeight(self.da_finalization),
-            eth_client: self.eth_client,
+            relayer: self.relayer,
             eth_v2_listening_contracts: self.eth_v2_listening_contracts,
             log_page_size: self.log_page_size,
             sync_minimum_duration: Duration::from_secs(self.sync_minimum_duration_secs),
