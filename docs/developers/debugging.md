@@ -100,7 +100,7 @@ If there are no additional client processes running, the error is symptomatic of
 thread 'main' panicked at 'source slice length (64) does not match destination slice length (32)', <>/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fuel-types-0.36.0/src/array_types.rs:389:16
 ```
 
-There are some circumstances under which the client may encounter a fatal or unexpected state, and execution panics. A common reason may be that the database schema was created from an older version of the client codebase. This can happen when switching between codebase versions (e.g., `git checkout ..`) with different database schemas. In this case, users can remove the database using `rm -rf ~/.fuel/db` (specifying the exact path to the Fuel database as necessary) and try again.
+There are some circumstances under which the client may encounter a fatal or unexpected state, and execution panics. A common reason may be that the database schema was created from an older version of the client codebase. This can happen when switching between codebase versions (e.g., `git checkout ..`) with different database schemas. In this case, users can remove the database using `rm -rf ~/.fuel/db` (specifying the exact path to the Fuel database as necessary) and try again. If users continue to experience database errors due to RocksDB, they can opt to use an in-memory database instead by passing `--db-type in-memory`.
 
 ## Recommended IDEs
 
@@ -158,7 +158,36 @@ Running Fuel Core with Visual Studio Code requires the CodeLLDB extension. Find 
 
 ### Example Configuration
 
-![vs_code_configuration.png](assets/vs_code_configuration.png)
+Inside `launch.json`:
+
+```json
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Run Fuel Client",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--all-features",
+                    "--bin=fuel-core"
+                ]
+            },
+            "args": [
+                "run",
+                "--enable-p2p",
+                "--enable-relayer",
+                "--utxo-validation",
+                "--poa-instant", "false"
+            ]
+        }
+    ]
+  }
+```
+
+Users can prepend this example configuration to any existing list of configurations in their respective `launch.json` file. 
 
 ### Running and Debugging
 
