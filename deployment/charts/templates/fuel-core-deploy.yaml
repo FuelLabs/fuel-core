@@ -208,6 +208,10 @@ spec:
             - "--max-block-size"
             - "{{ .Values.app.max_block_size }}"
           {{- end }}
+          {{- if .Values.app.max_headers_per_request }}
+            - "--max-headers-per-request"
+            - "{{ .Values.app.max_headers_per_request }}"
+          {{- end }}
           {{- if .Values.app.max_database_cache_size }}
             - "--max-database-cache-size"
             - "{{ .Values.app.max_database_cache_size }}"
@@ -216,13 +220,17 @@ spec:
             - "--max-transmit-size"
             - "{{ .Values.app.max_transmit_size }}"
           {{- end }}
-          {{- if .Values.app.sync_max_get_header }}
-            - "--sync-max-get-header"
-            - "{{ .Values.app.sync_max_get_header }}"
-          {{- end }}
           {{- if .Values.app.sync_max_get_txns }}
             - "--sync-max-get-txns"
             - "{{ .Values.app.sync_max_get_txns }}"
+          {{- end }}
+          {{- if .Values.app.sync_header_batch_size}}
+            - "--sync-header-batch-size"
+            - "{{ .Values.app.sync_header_batch_size }}"
+          {{- end }}
+          {{- if .Values.app.sync_max_header_batch_requests }}
+            - "--sync-max-header-batch-requests"
+            - "{{ .Values.app.sync_max_header_batch_requests }}"
           {{- end }}
           {{- if .Values.app.reserved_nodes_only_mode }}
             - "--reserved-nodes-only-mode"

@@ -20,6 +20,7 @@ anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 const_format = { version = "0.2", optional = true }
 dirs = "4.0"
+dotenvy = { version = "0.15", optional = true }
 fuel-core = { workspace = true }
 humantime = "2.1"
 lazy_static = { workspace = true }
@@ -38,12 +39,13 @@ url = { version = "2.2", optional = true }
 test-case = { workspace = true }
 
 [features]
-debug = ["fuel-core/debug"]
+debug = ["env", "fuel-core/debug"]
 default = ["debug", "metrics", "relayer", "rocksdb"]
+env = ["dep:dotenvy"]
 metrics = ["fuel-core/metrics"]
 p2p = ["fuel-core/p2p", "const_format"]
 relayer = ["fuel-core/relayer", "dep:url", "dep:serde_json"]
 rocksdb = ["fuel-core/rocksdb"]
 rocksdb-production = ["fuel-core/rocksdb-production"]
 # features to enable in production, but increase build times
-production = ["metrics", "relayer", "rocksdb-production", "p2p"]
+production = ["env", "metrics", "relayer", "rocksdb-production", "p2p"]

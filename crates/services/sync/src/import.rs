@@ -19,17 +19,12 @@ use fuel_core_types::{
         SealedBlock,
         SealedBlockHeader,
     },
-    fuel_types::BlockHeight,
     services::p2p::SourcePeer,
 };
 use futures::{
-    stream::{
-        self,
-        StreamExt,
-    },
+    stream::StreamExt,
     Stream,
 };
-use std::future::Future;
 use tokio::sync::Notify;
 use tracing::Instrument;
 
@@ -58,17 +53,20 @@ mod back_pressure_tests;
 #[derive(Clone, Copy, Debug)]
 /// Parameters for the import task.
 pub struct Config {
-    /// The maximum number of get header requests to make in a single batch.
-    pub max_get_header_requests: usize,
     /// The maximum number of get transaction requests to make in a single batch.
     pub max_get_txns_requests: usize,
+    /// The maximum number of headers to request in a single batch.
+    pub header_batch_size: u32,
+    /// The maximum number of header batch requests to have active at one time.
+    pub max_header_batch_requests: usize,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            max_get_header_requests: 10,
             max_get_txns_requests: 10,
+            header_batch_size: 100,
+            max_header_batch_requests: 10,
         }
     }
 }
@@ -134,9 +132,12 @@ where
 
             // If we did not process the entire range, mark the failed heights as failed.
             if (count as u32) < range_len {
-                let range = (*range.start() + count as u32)..=*range.end();
-                tracing::error!("Failed to import range of blocks: {:?}", range);
-                self.state.apply(|s| s.failed_to_process(range));
+                let incomplete_range = (*range.start() + count as u32)..=*range.end();
+                tracing::error!(
+                    "Failed to import range of blocks: {:?}",
+                    incomplete_range
+                );
+                self.state.apply(|s| s.failed_to_process(incomplete_range));
             }
             result?;
         }
@@ -163,41 +164,13 @@ where
             consensus,
             ..
         } = &self;
-        // Request up to `max_get_header_requests` headers from the network.
-        get_header_range_buffered(range.clone(), params, p2p.clone())
+
+        get_headers_buffered(range.clone(), params, p2p.clone())
         .map({
             let p2p = p2p.clone();
             let consensus_port = consensus.clone();
             move |result| {
-                let p2p = p2p.clone();
-                let consensus_port = consensus_port.clone();
-                async move {
-                    // Short circuit on error.
-                    let header = match result {
-                        Ok(h) => h,
-                        Err(e) => return Err(e),
-                    };
-                    let SourcePeer {
-                        peer_id,
-                        data: header,
-                    } = header;
-                    let id = header.entity.id();
-                    let block_id = SourcePeer { peer_id, data: id };
-
-                    // Check the consensus is valid on this header.
-                    if !consensus_port
-                        .check_sealed_header(&header)
-                        .trace_err("Failed to check consensus on header")? 
-                    {
-                        tracing::warn!("Header {:?} failed consensus check", header);
-                        return Ok(None)
-                    }
-
-                    // Wait for the da to be at least the da height on the header.
-                    consensus_port.await_da_height(&header.entity.da_height).await?;
-
-                    get_transactions_on_block(p2p.as_ref(), block_id, header).await
-                }
+                Self::get_block_for_header(result, p2p.clone(), consensus_port.clone())
             }
             .instrument(tracing::debug_span!("consensus_and_transactions"))
             .in_current_span()
@@ -241,15 +214,87 @@ where
         // Count the number of successfully executed blocks and
         // find any errors.
         // Fold the stream into a count and any errors.
-        .fold((0usize, Ok(())), |(count, err), result| async move {
+        .fold((0usize, Ok(())), |(count, res), result| async move {
             match result {
-                Ok(_) => (count + 1, err),
+                Ok(_) => (count + 1, res),
                 Err(e) => (count, Err(e)),
             }
         })
         .in_current_span()
         .await
     }
+
+    async fn get_block_for_header(
+        result: anyhow::Result<SourcePeer<SealedBlockHeader>>,
+        p2p: Arc<P>,
+        consensus_port: Arc<C>,
+    ) -> anyhow::Result<Option<SealedBlock>> {
+        let header = match result {
+            Ok(h) => h,
+            Err(e) => return Err(e),
+        };
+        let SourcePeer {
+            peer_id,
+            data: header,
+        } = header;
+        let id = header.entity.id();
+        let block_id = SourcePeer { peer_id, data: id };
+
+        // Check the consensus is valid on this header.
+        if !consensus_port
+            .check_sealed_header(&header)
+            .trace_err("Failed to check consensus on header")?
+        {
+            tracing::warn!("Header {:?} failed consensus check", header);
+            return Ok(None)
+        }
+
+        // Wait for the da to be at least the da height on the header.
+        consensus_port
+            .await_da_height(&header.entity.da_height)
+            .await?;
+
+        get_transactions_on_block(p2p.as_ref(), block_id, header).await
+    }
+}
+
+fn get_headers_buffered<P: PeerToPeerPort + Send + Sync + 'static>(
+    range: RangeInclusive<u32>,
+    params: &Config,
+    p2p: Arc<P>,
+) -> impl Stream<Item = anyhow::Result<SourcePeer<SealedBlockHeader>>> {
+    let Config {
+        header_batch_size,
+        max_header_batch_requests,
+        ..
+    } = params;
+    futures::stream::iter(range_chunks(range, *header_batch_size))
+        .map(move |range| {
+            tracing::debug!(
+                "getting header range from {} to {} inclusive",
+                range.start(),
+                range.end()
+            );
+            let p2p = p2p.clone();
+            async move { get_headers_batch(range, p2p).await }
+                .instrument(tracing::debug_span!("get_headers_batch"))
+                .in_current_span()
+        })
+        .buffered(*max_header_batch_requests)
+        .flatten()
+        .into_scan_none_or_err()
+        .scan_none_or_err()
+}
+
+fn range_chunks(
+    range: RangeInclusive<u32>,
+    chunk_size: u32,
+) -> impl Iterator<Item = RangeInclusive<u32>> {
+    let end = *range.end();
+    range.step_by(chunk_size as usize).map(move |chunk_start| {
+        let block_end = (chunk_start + chunk_size).min(end);
+        chunk_start..=block_end
+    })
 }
 
 /// Waits for a notify or shutdown signal.
@@ -270,59 +315,40 @@ async fn wait_for_notify_or_shutdown(
     matches!(r, futures::future::Either::Left(_))
 }
 
-/// Returns a stream of headers processing concurrently up to `max_get_header_requests`.
-/// The headers are returned in order.
-fn get_header_range_buffered(
-    range: RangeInclusive<u32>,
-    params: &Config,
-    p2p: Arc<impl PeerToPeerPort + Send + Sync + 'static>,
-) -> impl Stream<Item = anyhow::Result<SourcePeer<SealedBlockHeader>>> {
-    get_header_range(range, p2p)
-        .buffered(params.max_get_header_requests)
-        // Continue the stream unless an error or none occurs.
-        .into_scan_none_or_err()
-        .scan_none_or_err()
-}
-
-#[tracing::instrument(skip(p2p))]
-/// Returns a stream of network requests for headers.
-fn get_header_range(
-    range: RangeInclusive<u32>,
+async fn get_headers_batch(
+    mut range: RangeInclusive<u32>,
     p2p: Arc<impl PeerToPeerPort + 'static>,
-) -> impl Stream<
-    Item = impl Future<Output = anyhow::Result<Option<SourcePeer<SealedBlockHeader>>>>,
-> {
-    stream::iter(range).map(move |height| {
-        let p2p = p2p.clone();
-        let height: BlockHeight = height.into();
-        async move {
-            tracing::debug!("getting header height: {}", *height);
-            Ok(p2p
-                .get_sealed_block_header(height)
-                .await
-                .trace_err("Failed to get header")?
-                .and_then(|header| {
-                    // Check the header is the expected height.
-                    validate_header_height(height, &header.data)
-                        .then_some(header)
-                        .trace_none_error("Failed to validate header height")
-                })
-                .trace_none_warn("Failed to find header"))
-        }
-        .instrument(tracing::debug_span!(
-            "get_sealed_block_header",
-            height = *height
-        ))
-        .in_current_span()
-    })
-}
-
-/// Returns true if the header is the expected height.
-fn validate_header_height(
-    expected_height: BlockHeight,
-    header: &SealedBlockHeader,
-) -> bool {
-    header.entity.consensus.height == expected_height
+) -> impl Stream<Item = anyhow::Result<Option<SourcePeer<SealedBlockHeader>>>> {
+    tracing::debug!(
+        "getting header range from {} to {} inclusive",
+        range.start(),
+        range.end()
+    );
+    let start = *range.start();
+    let end = *range.end() + 1;
+    let res = p2p
+        .get_sealed_block_headers(start..end)
+        .await
+        .trace_err("Failed to get headers");
+    let sorted_headers = match res {
+        Ok(None) =>
+                vec![Err(anyhow::anyhow!("Headers provider was unable to fulfill request for unspecified reason. Possibly because requested batch size was too large"))],
+        Ok(Some(headers))  =>        headers
+                    .into_iter()
+                    .map(move |header| {
+                        let header = range.next().and_then(|height| {
+                            if *(header.data.entity.height()) == height.into() {
+                                Some(header)
+                            } else {
+                                None
+                            }
+                        });
+                        Ok(header)
+                    })
+                    .collect(),
+        Err(e) => vec![Err(e)],
+    };
+    futures::stream::iter(sorted_headers)
 }
 
 #[tracing::instrument(
@@ -420,13 +446,13 @@ impl<S> ScanNoneErr<S> {
         S: Stream<Item = anyhow::Result<Option<R>>> + Send + 'static,
     {
         let stream = self.0.boxed();
-        futures::stream::unfold((false, stream), |(mut err, mut stream)| async move {
-            if err {
+        futures::stream::unfold((false, stream), |(mut is_err, mut stream)| async move {
+            if is_err {
                 None
             } else {
                 let result = stream.next().await?;
-                err = result.is_err();
-                result.transpose().map(|result| (result, (err, stream)))
+                is_err = result.is_err();
+                result.transpose().map(|result| (result, (is_err, stream)))
             }
         })
     }

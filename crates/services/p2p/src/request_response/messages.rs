@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    ops::Range,
+    sync::Arc,
+};
 
 use fuel_core_types::{
     blockchain::{
@@ -38,10 +41,10 @@ pub type ChannelItem<T> = oneshot::Sender<Option<T>>;
 // Client Peer: `NetworkResponse` (receive response) -> `ResponseMessage(data)` -> `ResponseChannelItem(channel, data)` (handle response)
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub enum RequestMessage {
     Block(BlockHeight),
-    SealedHeader(BlockHeight),
+    SealedHeaders(Range<u32>),
     Transactions(#[serde_as(as = "FromInto<[u8; 32]>")] BlockId),
     PooledTransactions,
 }
@@ -49,8 +52,8 @@ pub enum RequestMessage {
 /// Final Response Message that p2p service sends to the Orchestrator
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ResponseMessage {
-    SealedBlock(Option<SealedBlock>),
-    SealedHeader(Option<SealedBlockHeader>),
+    SealedBlock(Box<Option<SealedBlock>>),
+    SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Vec<Transaction>>),
     PooledTransactions(Option<Vec<String>>), // temp as string
 }
@@ -59,7 +62,7 @@ pub enum ResponseMessage {
 #[derive(Debug)]
 pub enum ResponseChannelItem {
     Block(ChannelItem<SealedBlock>),
-    SealedHeader(ChannelItem<(PeerId, SealedBlockHeader)>),
+    SealedHeaders(ChannelItem<(PeerId, Option<Vec<SealedBlockHeader>>)>),
     Transactions(ChannelItem<Vec<Transaction>>),
     PooledTransactions(ChannelItem<Vec<String>>), // temp as string
 }
@@ -69,7 +72,7 @@ pub enum ResponseChannelItem {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum NetworkResponse {
     Block(Option<Vec<u8>>),
-    Header(Option<Vec<u8>>),
+    Headers(Option<Vec<u8>>),
     Transactions(Option<Vec<u8>>),
     PooledTransactions(Option<Vec<u8>>),
 }
@@ -79,7 +82,7 @@ pub enum NetworkResponse {
 #[derive(Debug, Clone)]
 pub enum OutboundResponse {
     Block(Option<Arc<SealedBlock>>),
-    SealedHeader(Option<Arc<SealedBlockHeader>>),
+    SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Arc<Vec<Transaction>>>),
     PooledTransactions(Option<Arc<Vec<String>>>), // temp as string
 }

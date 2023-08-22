@@ -348,7 +348,7 @@ pub fn new_service<D>(database: D, config: Config) -> anyhow::Result<Service<D>>
 where
     D: RelayerDb + Clone + 'static,
 {
-    let url = config.eth_client.clone().ok_or_else(|| {
+    let url = config.relayer.clone().ok_or_else(|| {
         anyhow::anyhow!(
             "Tried to start Relayer without setting an eth_client in the config"
         )
