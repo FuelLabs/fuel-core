@@ -153,7 +153,8 @@ Running Fuel Core with Visual Studio Code requires the CodeLLDB extension. Find 
 3. In the "Run and Debug" menu, click the dropdown menu and select "Add Configuration..."
 4. In the `"type"` field, enter `"lldb"`. In the `"request"` field, enter `"launch"`.
 5. In the `"name"` field, give your configuration a descriptive name, such as `"Run Fuel Client"`
-6. In the `"args"` array nested under `"cargo"`, enter the following arguments: `"run"`, `"--all-features"`, `"--bin"`, `"fuel-core"`, `"--"`, `"run"`, `<ARGUMENTS>`, where `<ARGUMENTS>` is a list of CLI values and arguments encapsulated by quotes. Refer to the CLI documentation for guidance on which options and arguments to use.
+6. In the `"args"` array nested under `"cargo"`, enter the following arguments: `"build"`, `"--all-features"`, `"--bin=fuel-core"`.
+7. In the top-level `"args"` array, enter the following arguments: `"run"`, `"--enable-p2p"`, `"--enable-relayer`, followed by any additional CLI values and arguments encapsulated by quotes. Refer to the CLI documentation for guidance on which options and arguments to use.
 7. Save these changes made to your `launch.json` file.
 
 ### Example Configuration
