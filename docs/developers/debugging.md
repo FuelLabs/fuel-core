@@ -184,7 +184,7 @@ Inside `launch.json`:
             ]
         }
     ]
-  }
+}
 ```
 
 Users can prepend this example configuration to any existing list of configurations in their respective `launch.json` file. 
