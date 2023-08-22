@@ -2,7 +2,6 @@ pub mod balance;
 pub mod block;
 pub mod chain_info;
 pub mod coins;
-pub mod consensus_parameters;
 pub mod contract;
 pub mod gas_costs;
 pub mod merkle_proof;
@@ -20,7 +19,6 @@ pub use coins::{
     CoinType,
     MessageCoin,
 };
-pub use consensus_parameters::ConsensusParameters;
 pub use contract::{
     Contract,
     ContractBalance,

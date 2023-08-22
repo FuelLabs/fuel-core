@@ -86,9 +86,7 @@ impl Wallet {
             .chain_info()
             .await
             .expect("failed to get chain info")
-            .consensus_parameters
-            .into();
-
+            .consensus_parameters;
         Self {
             secret,
             address,
