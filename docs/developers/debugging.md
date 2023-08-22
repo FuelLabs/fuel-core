@@ -62,6 +62,46 @@ The `--network` argument identifies the name of the network to join. The network
 
 For more information about client networking, see the Fuel guide on [running a node](https://docs-hub.vercel.app/guides/running-a-node/).
 
+## Common Issues
+
+Developers running a local client may encounter potential issues with configuration or runtime execution. This section aims to provide examples of some of those issues and to provide known solutions.
+
+**Address Already In Use**
+
+```
+Error: Address already in use (os error 48)
+```
+
+This error indicates there is already a local process running on the specified port. This can be another instance of the Fuel client or any other software running on the local system. 
+
+In the case that the port is already occupied by another program running on the user's machine, the user can simply specify a new port using `--port <PORT>` (or supplying a `PORT` environment variable). If the port is occupied by another running instance of the Fuel client, users can kill the process. On macOS and Linux, this can be accomplished with the following steps:
+1. In a new terminal, enter `lsof -i :PORT`, where `PORT` is replaced by the currently occupied port.
+2. Find the process ID (PID) of the offending process and copy it.
+3. Enter `kill -9 PID`, where `PID` is the process ID identified in the previous step.
+4. The address is now available. Rerun the command to start the client. 
+
+**RocksDB Error** 
+
+```
+Error: Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`
+```
+
+This error can happen under the following circumstances:
+- Two (or more) local client processes are running and attempting to access the same RocksDB instance
+- The RocksDB instance was created from an older version of the client codebase and is incompatible with the client
+
+In the case where multiple client processes are running, the issue can be resolved by terminating any ongoing processes that are currently accessing the database. 
+
+If there are no additional client processes running, the error is symptomatic of the latter case, and users can remove the incompatible database by performing the aforementioned command `rm -rf ~/.fuel/db` (specifying the exact path to the Fuel database as necessary).
+
+**Panics**
+
+```
+thread 'main' panicked at 'source slice length (64) does not match destination slice length (32)', <>/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fuel-types-0.36.0/src/array_types.rs:389:16
+```
+
+There are some circumstances under which the client may encounter a fatal or unexpected state, and execution panics. A common reason may be that the database schema was created from an older version of the client codebase. This can happen when switching between codebase versions (e.g., `git checkout ..`) with different database schemas. In this case, users can remove the database using `rm -rf ~/.fuel/db` (specifying the exact path to the Fuel database as necessary) and try again.
+
 ## Recommended IDEs
 
 During development, it is recommended to delegate the execution of Cargo instructions to an IDE and connect the application to the IDE's debugger, instead of running these instructions manually.
