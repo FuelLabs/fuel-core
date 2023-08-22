@@ -80,7 +80,7 @@ Running Fuel Core with CLion requires the official JetBrains Rust plugin. Find t
 
 1. In the top-right corner of the CLion window, click on the configurations dropdown menu and select "Edit Configurations..."
 2. In the "Run/Debug Configurations" window, click on the "+" button and select "Cargo"
-3. In the "Name" field, give your configuration a descriptive name, such as "Run Beta 3"
+3. In the "Name" field, give your configuration a descriptive name, such as "Run Fuel Client"
 4. In the "Command" field, enter `run --all-features --bin fuel-core -- run <ARGUMENTS>`, where `<ARGUMENTS>` represents the desired CLI arguments. Refer to the CLI documentation for guidance on which options and arguments to use.
 5. If you use environment variables for configuration (as indicated in the CLI documentation), you can set them in the "Environment variables" section. Enter the variables and their values as needed. It is recommended to set the `RUST_LOG` environment variable to either `info` or `debug`.
 6. By default, the "Working directory" field will be populated with the path to the root of your local repository. If this value has changed or is missing, enter the path to the root of your local repository here.
@@ -112,7 +112,7 @@ Running Fuel Core with Visual Studio Code requires the CodeLLDB extension. Find 
 2. VS Code will offer to create a `launch.json` file to configure how your client node is run. Clicking this will prompt you to select a debugger. Select the CodeLLDB debugger to proceed. VS Code will generate a `launch.json` file for you.
 3. In the "Run and Debug" menu, click the dropdown menu and select "Add Configuration..."
 4. In the `"type"` field, enter `"lldb"`. In the `"request"` field, enter `"launch"`.
-5. In the `"name"` field, give your configuration a descriptive name, such as `"Run Beta 3"`
+5. In the `"name"` field, give your configuration a descriptive name, such as `"Run Fuel Client"`
 6. In the `"args"` array nested under `"cargo"`, enter the following arguments: `"run"`, `"--all-features"`, `"--bin"`, `"fuel-core"`, `"--"`, `"run"`, `<ARGUMENTS>`, where `<ARGUMENTS>` is a list of CLI values and arguments encapsulated by quotes. Refer to the CLI documentation for guidance on which options and arguments to use.
 7. Save these changes made to your `launch.json` file.
 
