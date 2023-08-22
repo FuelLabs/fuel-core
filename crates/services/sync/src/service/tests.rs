@@ -33,8 +33,15 @@ async fn test_new_service() {
         })
         .into_boxed()
     });
-    p2p.expect_get_sealed_block_header()
-        .returning(|h| Ok(Some(empty_header(h))));
+    p2p.expect_get_sealed_block_headers().returning(|range| {
+        Ok(Some(
+            range
+                .clone()
+                .map(BlockHeight::from)
+                .map(empty_header)
+                .collect(),
+        ))
+    });
     p2p.expect_get_transactions()
         .returning(|_| Ok(Some(vec![])));
     let mut importer = MockBlockImporterPort::default();
@@ -52,8 +59,9 @@ async fn test_new_service() {
         .returning(|_| Ok(true));
     consensus.expect_await_da_height().returning(|_| Ok(()));
     let params = Config {
-        max_get_header_requests: 10,
         max_get_txns_requests: 10,
+        header_batch_size: 10,
+        max_header_batch_requests: 10,
     };
     let s = new_service(4u32.into(), p2p, importer, consensus, params).unwrap();
 

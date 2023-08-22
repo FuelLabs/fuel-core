@@ -202,16 +202,7 @@ impl RequestResponseConverter for PostcardCodec {
                     None
                 };
 
-                Ok(ResponseMessage::SealedBlock(response))
-            }
-            NetworkResponse::Header(header_bytes) => {
-                let response = if let Some(header_bytes) = header_bytes {
-                    Some(self.deserialize(header_bytes)?)
-                } else {
-                    None
-                };
-
-                Ok(ResponseMessage::SealedHeader(response))
+                Ok(ResponseMessage::SealedBlock(Box::new(response)))
             }
             NetworkResponse::Transactions(tx_bytes) => {
                 let response = if let Some(tx_bytes) = tx_bytes {
@@ -221,6 +212,13 @@ impl RequestResponseConverter for PostcardCodec {
                 };
 
                 Ok(ResponseMessage::Transactions(response))
+            }
+            NetworkResponse::Headers(headers_bytes) => {
+                let response = headers_bytes
+                    .as_ref()
+                    .map(|bytes| self.deserialize(bytes))
+                    .transpose()?;
+                Ok(ResponseMessage::SealedHeaders(response))
             }
         }
     }
@@ -239,15 +237,6 @@ impl RequestResponseConverter for PostcardCodec {
 
                 Ok(NetworkResponse::Block(response))
             }
-            OutboundResponse::SealedHeader(sealed_header) => {
-                let response = if let Some(sealed_header) = sealed_header {
-                    Some(self.serialize(sealed_header.as_ref())?)
-                } else {
-                    None
-                };
-
-                Ok(NetworkResponse::Header(response))
-            }
             OutboundResponse::Transactions(transactions) => {
                 let response = if let Some(transactions) = transactions {
                     Some(self.serialize(transactions.as_ref())?)
@@ -256,6 +245,13 @@ impl RequestResponseConverter for PostcardCodec {
                 };
 
                 Ok(NetworkResponse::Transactions(response))
+            }
+            OutboundResponse::SealedHeaders(maybe_headers) => {
+                let response = maybe_headers
+                    .as_ref()
+                    .map(|headers| self.serialize(&headers))
+                    .transpose()?;
+                Ok(NetworkResponse::Headers(response))
             }
         }
     }

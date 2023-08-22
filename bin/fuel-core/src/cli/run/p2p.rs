@@ -68,6 +68,10 @@ pub struct P2PArgs {
     #[clap(long = "max-block-size", default_value = MAX_RESPONSE_SIZE_STR, env)]
     pub max_block_size: usize,
 
+    /// Max number of headers in a single headers request response
+    #[clap(long = "max-headers-per-request", default_value = "100", env)]
+    pub max_headers_per_request: u32,
+
     /// Addresses of the bootstrap nodes
     /// They should contain PeerId within their `Multiaddr`
     #[clap(long = "bootstrap-nodes", value_delimiter = ',', env)]
@@ -175,12 +179,15 @@ pub struct P2PArgs {
 
 #[derive(Debug, Clone, Args)]
 pub struct SyncArgs {
-    /// The maximum number of get header requests to make in a single batch.
-    #[clap(long = "sync-max-get-header", default_value = "10", env)]
-    pub max_get_header_requests: usize,
     /// The maximum number of get transaction requests to make in a single batch.
     #[clap(long = "sync-max-get-txns", default_value = "10", env)]
     pub max_get_txns_requests: usize,
+    /// The maximum number of headers to request in a single batch.
+    #[clap(long = "sync-header-batch-size", default_value = "10", env)]
+    pub header_batch_size: u32,
+    /// The maximum number of header batch requests to have active at one time.
+    #[clap(long = "sync-max-header-batch-requests", default_value = "10", env)]
+    pub max_header_batch_requests: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -211,8 +218,9 @@ impl KeypairArg {
 impl From<SyncArgs> for fuel_core::sync::Config {
     fn from(value: SyncArgs) -> Self {
         Self {
-            max_get_header_requests: value.max_get_header_requests,
             max_get_txns_requests: value.max_get_txns_requests,
+            header_batch_size: value.header_batch_size,
+            max_header_batch_requests: value.max_header_batch_requests,
         }
     }
 }
@@ -282,6 +290,7 @@ impl P2PArgs {
             public_address: self.public_address,
             tcp_port: self.peering_port,
             max_block_size: self.max_block_size,
+            max_headers_per_request: self.max_headers_per_request,
             bootstrap_nodes: self.bootstrap_nodes,
             reserved_nodes: self.reserved_nodes,
             reserved_nodes_only_mode: self.reserved_nodes_only_mode,
