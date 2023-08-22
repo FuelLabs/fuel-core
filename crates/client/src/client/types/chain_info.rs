@@ -1,10 +1,8 @@
 use crate::client::{
     schema,
-    types::{
-        Block,
-        ConsensusParameters,
-    },
+    types::Block,
 };
+use fuel_core_types::fuel_tx::ConsensusParameters;
 
 pub struct ChainInfo {
     pub base_chain_height: u32,
