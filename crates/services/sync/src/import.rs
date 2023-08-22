@@ -35,7 +35,10 @@ use std::{
     future::Future,
     task::Poll,
 };
-use tokio::sync::{mpsc, Notify};
+use tokio::sync::{
+    mpsc,
+    Notify,
+};
 use tracing::Instrument;
 
 use crate::{
@@ -263,28 +266,28 @@ fn range_chunks(
     })
 }
 
-    #[tracing::instrument(skip(self, shutdown))]
-    /// Launches a stream to import and execute a range of blocks.
-    ///
-    /// This stream will process all blocks up to the given range or
-    /// an error occurs.
-    /// If an error occurs, the preceding blocks still be processed
-    /// and the error will be returned.
-    async fn launch_stream(
-        &self,
-        range: RangeInclusive<u32>,
-        shutdown: &StateWatcher,
-    ) -> (usize, anyhow::Result<()>) {
-        let Self {
-            state,
-            params,
-            p2p,
-            executor,
-            consensus,
-            ..
-        } = &self;
+#[tracing::instrument(skip(self, shutdown))]
+/// Launches a stream to import and execute a range of blocks.
+///
+/// This stream will process all blocks up to the given range or
+/// an error occurs.
+/// If an error occurs, the preceding blocks still be processed
+/// and the error will be returned.
+async fn launch_stream(
+    &self,
+    range: RangeInclusive<u32>,
+    shutdown: &StateWatcher,
+) -> (usize, anyhow::Result<()>) {
+    let Self {
+        state,
+        params,
+        p2p,
+        executor,
+        consensus,
+        ..
+    } = &self;
 
-        get_headers_buffered(range.clone(), params, p2p.clone())
+    get_headers_buffered(range.clone(), params, p2p.clone())
         .map({
             let p2p = p2p.clone();
             let consensus_port = consensus.clone();
@@ -340,135 +343,29 @@ fn range_chunks(
         })
         .in_current_span()
         .await
-    }
+}
 
-    async fn launch_stream_v2(
-        &self,
-        range: RangeInclusive<u32>,
-        shutdown: &StateWatcher,
-    ) -> (usize, anyhow::Result<()>) {
-        let Self {
-            state,
-            params,
-            p2p,
-            executor,
-            consensus,
-            ..
-        } = &self;
-        get_header_range(range.clone(), p2p.clone())
-            .map({
+async fn launch_stream_v2(
+    &self,
+    range: RangeInclusive<u32>,
+    shutdown: &StateWatcher,
+) -> (usize, anyhow::Result<()>) {
+    let Self {
+        state,
+        params,
+        p2p,
+        executor,
+        consensus,
+        ..
+    } = &self;
+    get_header_range(range.clone(), p2p.clone())
+        .map({
+            let p2p = p2p.clone();
+            let consensus_port = consensus.clone();
+            move |result| {
                 let p2p = p2p.clone();
-                let consensus_port = consensus.clone();
-                move |result| {
-                    let p2p = p2p.clone();
-                    let consensus_port = consensus_port.clone();
-                    tokio::spawn(async move {
-                        let header = match result.await {
-                            Ok(Some(h)) => h,
-                            Ok(None) => return Ok(None),
-                            Err(e) => return Err(e),
-                        };
-                        let SourcePeer {
-                            peer_id,
-                            data: header,
-                        } = header;
-                        let id = header.entity.id();
-                        let block_id = SourcePeer { peer_id, data: id };
-
-                        if !consensus_port
-                            .check_sealed_header(&header)
-                            .trace_err("Failed to check consensus on header")?
-                        {
-                            tracing::warn!("Header {:?} failed consensus check", header);
-                            return Ok(None)
-                        }
-
-                        consensus_port
-                            .await_da_height(&header.entity.da_height)
-                            .await?;
-
-                        get_transactions_on_block(p2p.as_ref(), block_id, header).await
-                    })
-                    .then(|task| async { task.map_err(|e| anyhow!(e))? })
-                }
-            })
-            .buffered(params.max_get_txns_requests)
-            .into_scan_none_or_err()
-            .scan_none_or_err()
-            .take_until({
-                let mut s = shutdown.clone();
-                async move {
-                    let _ = s.while_started().await;
-                    tracing::info!("In progress import stream shutting down");
-                }
-            })
-            .then({
-                let state = state.clone();
-                let executor = executor.clone();
-                move |block| {
-                    {
-                        let state = state.clone();
-                        let executor = executor.clone();
-                        async move {
-                            let block = match block {
-                                Ok(b) => b,
-                                Err(e) => return Err(e),
-                            };
-                            execute_and_commit(executor.as_ref(), &state, block).await
-                        }
-                    }
-                    .instrument(tracing::debug_span!("execute_and_commit"))
-                    .in_current_span()
-                }
-            })
-            .into_scan_err()
-            .scan_err()
-            .fold((0usize, Ok(())), |(count, err), result| async move {
-                match result {
-                    Ok(_) => (count + 1, err),
-                    Err(e) => (count, Err(e)),
-                }
-            })
-            .in_current_span()
-            .await
-    }
-
-    async fn launch_stream_v3(
-        &self,
-        range: RangeInclusive<u32>,
-        shutdown: &StateWatcher,
-    ) -> (usize, anyhow::Result<()>) {
-        let Self {
-            state,
-            params,
-            p2p,
-            executor,
-            consensus,
-            ..
-        } = &self;
-
-        let p2p_ = p2p.clone();
-        stream::iter(range)
-            .map(move |height| {
-                let p2p = p2p_.clone();
-                let height: BlockHeight = height.into();
-                async move {
-                    let r =
-                        p2p.get_sealed_block_header(height)
-                            .await?
-                            .and_then(|header| {
-                                validate_header_height(height, &header.data)
-                                    .then_some(header)
-                            });
-                    Ok(r)
-                }
-            })
-            .map(move |result| {
-                let p2p = p2p.clone();
-                let consensus_port = consensus.clone();
-                async move {
-                    let p2p = p2p.clone();
-                    let consensus_port = consensus_port.clone();
+                let consensus_port = consensus_port.clone();
+                tokio::spawn(async move {
                     let header = match result.await {
                         Ok(Some(h)) => h,
                         Ok(None) => return Ok(None),
@@ -492,124 +389,226 @@ fn range_chunks(
                     consensus_port
                         .await_da_height(&header.entity.da_height)
                         .await?;
-                    let block =
-                        get_transactions_on_block(p2p.as_ref(), block_id, header).await?;
-                    Ok(block)
-                }
-            })
-            .buffered(params.max_get_txns_requests)
-            .take_until({
-                let mut s = shutdown.clone();
-                async move {
-                    let _ = s.while_started().await;
-                }
-            })
-            .then(move |block| {
-                let state = state.clone();
-                let executor = executor.clone();
-                async move {
+
+                    get_transactions_on_block(p2p.as_ref(), block_id, header).await
+                })
+                .then(|task| async { task.map_err(|e| anyhow!(e))? })
+            }
+        })
+        .buffered(params.max_get_txns_requests)
+        .into_scan_none_or_err()
+        .scan_none_or_err()
+        .take_until({
+            let mut s = shutdown.clone();
+            async move {
+                let _ = s.while_started().await;
+                tracing::info!("In progress import stream shutting down");
+            }
+        })
+        .then({
+            let state = state.clone();
+            let executor = executor.clone();
+            move |block| {
+                {
                     let state = state.clone();
                     let executor = executor.clone();
-                    let block = match block {
-                        Ok(Some(b)) => b,
-                        Ok(None) => return Ok(()),
-                        Err(e) => return Err(e),
-                    };
-                    execute_and_commit(executor.as_ref(), &state, block).await?;
-                    Ok(())
+                    async move {
+                        let block = match block {
+                            Ok(b) => b,
+                            Err(e) => return Err(e),
+                        };
+                        execute_and_commit(executor.as_ref(), &state, block).await
+                    }
                 }
-            })
-            .fold((0usize, Ok(())), |(count, err), result| async move {
-                match result {
-                    Ok(_) => (count + 1, err),
-                    Err(e) => (count, Err(e)),
+                .instrument(tracing::debug_span!("execute_and_commit"))
+                .in_current_span()
+            }
+        })
+        .into_scan_err()
+        .scan_err()
+        .fold((0usize, Ok(())), |(count, err), result| async move {
+            match result {
+                Ok(_) => (count + 1, err),
+                Err(e) => (count, Err(e)),
+            }
+        })
+        .in_current_span()
+        .await
+}
+
+async fn launch_stream_v3(
+    &self,
+    range: RangeInclusive<u32>,
+    shutdown: &StateWatcher,
+) -> (usize, anyhow::Result<()>) {
+    let Self {
+        state,
+        params,
+        p2p,
+        executor,
+        consensus,
+        ..
+    } = &self;
+
+    let p2p_ = p2p.clone();
+    stream::iter(range)
+        .map(move |height| {
+            let p2p = p2p_.clone();
+            let height: BlockHeight = height.into();
+            async move {
+                let r = p2p
+                    .get_sealed_block_header(height)
+                    .await?
+                    .and_then(|header| {
+                        validate_header_height(height, &header.data).then_some(header)
+                    });
+                Ok(r)
+            }
+        })
+        .map(move |result| {
+            let p2p = p2p.clone();
+            let consensus_port = consensus.clone();
+            async move {
+                let p2p = p2p.clone();
+                let consensus_port = consensus_port.clone();
+                let header = match result.await {
+                    Ok(Some(h)) => h,
+                    Ok(None) => return Ok(None),
+                    Err(e) => return Err(e),
+                };
+                let SourcePeer {
+                    peer_id,
+                    data: header,
+                } = header;
+                let id = header.entity.id();
+                let block_id = SourcePeer { peer_id, data: id };
+
+                if !consensus_port
+                    .check_sealed_header(&header)
+                    .trace_err("Failed to check consensus on header")?
+                {
+                    tracing::warn!("Header {:?} failed consensus check", header);
+                    return Ok(None)
                 }
-            })
-            .await
+
+                consensus_port
+                    .await_da_height(&header.entity.da_height)
+                    .await?;
+                let block =
+                    get_transactions_on_block(p2p.as_ref(), block_id, header).await?;
+                Ok(block)
+            }
+        })
+        .buffered(params.max_get_txns_requests)
+        .take_until({
+            let mut s = shutdown.clone();
+            async move {
+                let _ = s.while_started().await;
+            }
+        })
+        .then(move |block| {
+            let state = state.clone();
+            let executor = executor.clone();
+            async move {
+                let state = state.clone();
+                let executor = executor.clone();
+                let block = match block {
+                    Ok(Some(b)) => b,
+                    Ok(None) => return Ok(()),
+                    Err(e) => return Err(e),
+                };
+                execute_and_commit(executor.as_ref(), &state, block).await?;
+                Ok(())
+            }
+        })
+        .fold((0usize, Ok(())), |(count, err), result| async move {
+            match result {
+                Ok(_) => (count + 1, err),
+                Err(e) => (count, Err(e)),
+            }
+        })
+        .await
+}
+
+async fn launch_stream_v4(
+    &self,
+    range: RangeInclusive<u32>,
+    shutdown: &StateWatcher,
+) -> (usize, anyhow::Result<()>) {
+    let Self {
+        state,
+        params,
+        p2p,
+        executor,
+        consensus,
+        ..
+    } = &self;
+
+    let end = *range.end() as usize;
+    let count = SharedMutex::new(0);
+    let (header_sender, mut header_receiver) =
+        mpsc::channel::<SourcePeer<SealedBlockHeader>>(params.max_get_header_requests);
+    let (block_sender, mut block_receiver) =
+        mpsc::channel::<SealedBlock>(params.max_get_header_requests);
+    let (execute_sender, mut execute_receiver) =
+        mpsc::channel::<anyhow::Result<()>>(params.max_get_header_requests);
+    let stop = async {
+        let mut s = shutdown.clone();
+        let _ = s.while_started().await;
+    }
+    .shared();
+    let complete = poll_fn(|_cx| {
+        let i = count.apply(|count| *count) as usize;
+        let poll = if i < end + 1 {
+            Poll::Pending
+        } else {
+            Poll::Ready(())
+        };
+        poll
+    })
+    .shared();
+
+    range
+        .map(|i| {
+            let height: BlockHeight = i.into();
+            height
+        })
+        .for_each(|height| {
+            tokio::spawn(download_header(p2p.clone(), height, header_sender.clone()));
+        });
+
+    let mut results = vec![];
+    loop {
+        tokio::select! {
+            header = header_receiver.recv() => {
+                if let Some(header) = header {
+                    tokio::spawn(download_block(p2p.clone(), consensus.clone(), header, block_sender.clone()));
+                }
+            }
+
+            block = block_receiver.recv() => {
+                if let Some(block) = block {
+                    tokio::spawn(execute_block(executor.clone(), state.clone(), block, execute_sender.clone()));
+                }
+            }
+
+            execute = execute_receiver.recv() => {
+                if let Some(execute) = execute {
+                    results.push(execute);
+                    count.apply(|count| *count += 1);
+                }
+            }
+
+            _ = complete.clone() => { break; }
+            _ = stop.clone() => { break; }
+        }
     }
 
-    async fn launch_stream_v4(
-        &self,
-        range: RangeInclusive<u32>,
-        shutdown: &StateWatcher,
-    ) -> (usize, anyhow::Result<()>) {
-        let Self {
-            state,
-            params,
-            p2p,
-            executor,
-            consensus,
-            ..
-        } = &self;
-
-        let end = *range.end() as usize;
-        let count = SharedMutex::new(0);
-        let (header_sender, mut header_receiver) =
-            mpsc::channel::<SourcePeer<SealedBlockHeader>>(
-                params.max_get_header_requests,
-            );
-        let (block_sender, mut block_receiver) =
-            mpsc::channel::<SealedBlock>(params.max_get_header_requests);
-        let (execute_sender, mut execute_receiver) =
-            mpsc::channel::<anyhow::Result<()>>(params.max_get_header_requests);
-        let stop = async {
-            let mut s = shutdown.clone();
-            let _ = s.while_started().await;
-        }
-        .shared();
-        let complete = poll_fn(|_cx| {
-            let i = count.apply(|count| *count) as usize;
-            let poll = if i < end + 1 {
-                Poll::Pending
-            } else {
-                Poll::Ready(())
-            };
-            poll
-        })
-        .shared();
-
-        range
-            .map(|i| {
-                let height: BlockHeight = i.into();
-                height
-            })
-            .for_each(|height| {
-                tokio::spawn(download_header(p2p.clone(), height, header_sender.clone()));
-            });
-
-        let mut results = vec![];
-        loop {
-            tokio::select! {
-                header = header_receiver.recv() => {
-                    if let Some(header) = header {
-                        tokio::spawn(download_block(p2p.clone(), consensus.clone(), header, block_sender.clone()));
-                    }
-                }
-
-                block = block_receiver.recv() => {
-                    if let Some(block) = block {
-                        tokio::spawn(execute_block(executor.clone(), state.clone(), block, execute_sender.clone()));
-                    }
-                }
-
-                execute = execute_receiver.recv() => {
-                    if let Some(execute) = execute {
-                        results.push(execute);
-                        count.apply(|count| *count += 1);
-                    }
-                }
-
-                _ = complete.clone() => { break; }
-                _ = stop.clone() => { break; }
-            }
-        }
-
-        let i = count.apply(|count| *count) as usize;
-        let err = results.into_iter().collect::<Result<Vec<_>, _>>().err();
-        match err {
-            Some(err) => (i, Err(err)),
-            None => (i, Ok(())),
-        }
+    let i = count.apply(|count| *count) as usize;
+    let err = results.into_iter().collect::<Result<Vec<_>, _>>().err();
+    match err {
+        Some(err) => (i, Err(err)),
+        None => (i, Ok(())),
     }
 }
 

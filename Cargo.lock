@@ -2653,6 +2653,8 @@ dependencies = [
 name = "fuel-core-benches"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "clap",
  "criterion",
  "ctrlc",
