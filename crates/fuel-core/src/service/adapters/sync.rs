@@ -20,8 +20,12 @@ use fuel_core_types::{
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
-    services::p2p::SourcePeer,
+    services::p2p::{
+        PeerId,
+        SourcePeer,
+    },
 };
+use std::ops::Range;
 
 #[async_trait::async_trait]
 impl PeerToPeerPort for P2PAdapter {
@@ -39,17 +43,25 @@ impl PeerToPeerPort for P2PAdapter {
         }
     }
 
-    async fn get_sealed_block_header(
+    async fn get_sealed_block_headers(
         &self,
-        height: BlockHeight,
-    ) -> anyhow::Result<Option<SourcePeer<SealedBlockHeader>>> {
+        block_range_height: Range<u32>,
+    ) -> anyhow::Result<Option<Vec<SourcePeer<SealedBlockHeader>>>> {
         if let Some(service) = &self.service {
             Ok(service
-                .get_sealed_block_header(height)
+                .get_sealed_block_headers(block_range_height)
                 .await?
-                .map(|(peer_id, header)| SourcePeer {
-                    peer_id: peer_id.into(),
-                    data: header,
+                .and_then(|(peer_id, headers)| {
+                    let peer_id: PeerId = peer_id.into();
+                    headers.map(|headers| {
+                        headers
+                            .into_iter()
+                            .map(|header| SourcePeer {
+                                peer_id: peer_id.clone(),
+                                data: header,
+                            })
+                            .collect()
+                    })
                 }))
         } else {
             Ok(None)

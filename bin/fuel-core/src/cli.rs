@@ -17,6 +17,8 @@ use tracing_subscriber::{
 
 #[cfg(feature = "env")]
 use dotenvy::dotenv;
+#[cfg(feature = "env")]
+use tracing::error;
 
 lazy_static::lazy_static! {
     pub static ref DEFAULT_DB_PATH: PathBuf = dirs::home_dir().unwrap().join(".fuel").join("db");
@@ -49,7 +51,13 @@ pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
 
 #[cfg(feature = "env")]
 fn init_environment() -> Option<PathBuf> {
-    dotenv().ok()
+    match dotenv() {
+        Ok(path) => Some(path),
+        Err(e) => {
+            error!("Unable to load .env environment variables: {e}. Please check that you have created a .env file in your working directory.");
+            None
+        }
+    }
 }
 
 #[cfg(not(feature = "env"))]

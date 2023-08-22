@@ -60,6 +60,7 @@ use libp2p::{
 };
 use std::{
     fmt::Debug,
+    ops::Range,
     sync::Arc,
 };
 use tokio::sync::{
@@ -82,9 +83,9 @@ enum TaskRequest {
         height: BlockHeight,
         channel: oneshot::Sender<Option<SealedBlock>>,
     },
-    GetSealedHeader {
-        height: BlockHeight,
-        channel: oneshot::Sender<Option<(PeerId, SealedBlockHeader)>>,
+    GetSealedHeaders {
+        block_height_range: Range<u32>,
+        channel: oneshot::Sender<Option<(PeerId, Option<Vec<SealedBlockHeader>>)>>,
     },
     GetTransactions {
         block_id: BlockId,
@@ -115,6 +116,7 @@ pub struct Task<D> {
     /// Receive internal Task Requests
     request_receiver: mpsc::Receiver<TaskRequest>,
     shared: SharedState,
+    max_headers_per_request: u32,
 }
 
 impl<D> Task<D> {
@@ -129,6 +131,7 @@ impl<D> Task<D> {
 
         let next_block_height = block_importer.next_block_height();
         let max_block_size = config.max_block_size;
+        let max_headers_per_request = config.max_headers_per_request;
         let p2p_service = FuelP2PService::new(config, PostcardCodec::new(max_block_size));
 
         let reserved_peers_broadcast =
@@ -145,6 +148,7 @@ impl<D> Task<D> {
                 reserved_peers_broadcast,
                 block_height_broadcast,
             },
+            max_headers_per_request,
         }
     }
 }
@@ -174,6 +178,7 @@ where
     }
 }
 
+// TODO: Add tests https://github.com/FuelLabs/fuel-core/issues/1275
 #[async_trait::async_trait]
 impl<D> RunnableTask for Task<D>
 where
@@ -222,10 +227,15 @@ where
                         let peer = self.p2p_service.peer_manager().get_peer_id_with_height(&height);
                         let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
                     }
-                    Some(TaskRequest::GetSealedHeader{ height, channel: response }) => {
-                        let request_msg = RequestMessage::SealedHeader(height);
-                        let channel_item = ResponseChannelItem::SealedHeader(response);
-                        let peer = self.p2p_service.peer_manager().get_peer_id_with_height(&height);
+                    Some(TaskRequest::GetSealedHeaders { block_height_range, channel: response}) => {
+                        let request_msg = RequestMessage::SealedHeaders(block_height_range.clone());
+                        let channel_item = ResponseChannelItem::SealedHeaders(response);
+
+                        // Note: this range has already been check for
+                        // validity in `SharedState::get_sealed_block_headers`.
+                        let block_height = BlockHeight::from(block_height_range.end - 1);
+                        let peer = self.p2p_service.peer_manager()
+                             .get_peer_id_with_height(&block_height);
                         let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
                     }
                     Some(TaskRequest::GetTransactions { block_id, from_peer, channel }) => {
@@ -288,11 +298,16 @@ where
 
                                 let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(transactions_response));
                             }
-                            RequestMessage::SealedHeader(block_height) => {
-                                let response = self.db.get_sealed_header(&block_height)?
-                                    .map(Arc::new);
-
-                                let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeader(response));
+                            RequestMessage::SealedHeaders(range) => {
+                                let max_len = self.max_headers_per_request.try_into().expect("u32 should always fit into usize");
+                                let response = if range.len() > max_len {
+                                    tracing::error!("Requested range of sealed headers is too big. Requested length: {:?}, Max length: {:?}", range.len(), max_len);
+                                    // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
+                                    None
+                                } else {
+                                    Some(self.db.get_sealed_headers(range)?)
+                                };
+                                let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeaders(response));
                             }
                         }
                     },
@@ -366,22 +381,28 @@ impl SharedState {
         receiver.await.map_err(|e| anyhow!("{}", e))
     }
 
-    pub async fn get_sealed_block_header(
+    pub async fn get_sealed_block_headers(
         &self,
-        height: BlockHeight,
-    ) -> anyhow::Result<Option<(Vec<u8>, SealedBlockHeader)>> {
+        block_height_range: Range<u32>,
+    ) -> anyhow::Result<Option<(Vec<u8>, Option<Vec<SealedBlockHeader>>)>> {
         let (sender, receiver) = oneshot::channel();
 
+        if block_height_range.is_empty() {
+            return Err(anyhow!(
+                "Cannot retrieve headers for an empty range of block heights"
+            ))
+        }
+
         self.request_sender
-            .send(TaskRequest::GetSealedHeader {
-                height,
+            .send(TaskRequest::GetSealedHeaders {
+                block_height_range,
                 channel: sender,
             })
             .await?;
 
         receiver
             .await
-            .map(|o| o.map(|(peer_id, header)| (peer_id.to_bytes(), header)))
+            .map(|o| o.map(|(peer_id, headers)| (peer_id.to_bytes(), headers)))
             .map_err(|e| anyhow!("{}", e))
     }
 
@@ -529,16 +550,7 @@ pub mod tests {
 
     use fuel_core_services::Service;
     use fuel_core_storage::Result as StorageResult;
-    use fuel_core_types::{
-        blockchain::{
-            block::Block,
-            consensus::{
-                poa::PoAConsensus,
-                Consensus,
-            },
-        },
-        fuel_types::BlockHeight,
-    };
+    use fuel_core_types::fuel_types::BlockHeight;
 
     #[derive(Clone, Debug)]
     struct FakeDb;
@@ -548,31 +560,28 @@ pub mod tests {
             &self,
             _height: &BlockHeight,
         ) -> StorageResult<Option<SealedBlock>> {
-            let block = Block::new(Default::default(), vec![], &[]);
-
-            Ok(Some(SealedBlock {
-                entity: block,
-                consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
-            }))
+            unimplemented!()
         }
 
         fn get_sealed_header(
             &self,
             _height: &BlockHeight,
         ) -> StorageResult<Option<SealedBlockHeader>> {
-            let header = Default::default();
+            unimplemented!()
+        }
 
-            Ok(Some(SealedBlockHeader {
-                entity: header,
-                consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
-            }))
+        fn get_sealed_headers(
+            &self,
+            _block_height_range: Range<u32>,
+        ) -> StorageResult<Vec<SealedBlockHeader>> {
+            unimplemented!()
         }
 
         fn get_transactions(
             &self,
             _block_id: &fuel_core_types::blockchain::primitives::BlockId,
         ) -> StorageResult<Option<Vec<Transaction>>> {
-            Ok(Some(vec![]))
+            unimplemented!()
         }
     }
 
