@@ -58,7 +58,9 @@ cargo run --bin fuel-core-keygen new
 
 The resulting key pair printed to the console contains an address and secret. The `secret` can be provided to the `--keypair` argument when running the node.
 
-The `--network` argument identifies the name of the network to join. The network name is used during peer discovery. When joining a network, it is necessary that the network name provided during startup matches the network name specified by network peers; if the network name does not match, peers will reject the connection. For example, users can specify `--network beta3-prod` to join the Beta 3 Production network. Similarly, setting the environment variable `NETWORK="beta3-prod"` will produce the same result.
+The `--network` argument identifies the name of the network to join. The network name is used during peer discovery. For example, users can specify `--network beta-4` to join the Beta 4 network. Similarly, setting the environment variable `NETWORK="beta-4"` will produce the same result.
+
+For more information about client networking, see the Fuel guide on [running a node](https://docs-hub.vercel.app/guides/running-a-node/).
 
 ## Recommended IDEs
 
