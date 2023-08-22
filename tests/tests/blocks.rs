@@ -27,6 +27,7 @@ use fuel_core_types::{
         consensus::Consensus,
     },
     fuel_tx::*,
+    fuel_types::ChainId,
     secrecy::ExposeSecret,
     tai64::Tai64,
 };
@@ -96,7 +97,7 @@ async fn produce_block() {
     client.submit_and_await_commit(&tx).await.unwrap();
 
     let transaction_response = client
-        .transaction(&tx.id(&ConsensusParameters::DEFAULT.chain_id))
+        .transaction(&tx.id(&ChainId::default()))
         .await
         .unwrap();
 
@@ -171,7 +172,7 @@ async fn produce_block_negative() {
     client.submit_and_await_commit(&tx).await.unwrap();
 
     let transaction_response = client
-        .transaction(&tx.id(&ConsensusParameters::DEFAULT.chain_id))
+        .transaction(&tx.id(&ChainId::default()))
         .await
         .unwrap();
 

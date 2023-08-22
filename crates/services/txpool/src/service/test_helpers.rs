@@ -50,7 +50,7 @@ impl TestContext {
             .add_input(gas_coin)
             .finalize_as_transaction();
 
-        tx.precompute(&ConsensusParameters::DEFAULT.chain_id)
+        tx.precompute(&Default::default())
             .expect("Should be able to cache");
         tx
     }

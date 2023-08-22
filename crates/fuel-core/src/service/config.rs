@@ -27,6 +27,9 @@ use fuel_core_p2p::config::{
     NotInitialized,
 };
 
+#[cfg(feature = "relayer")]
+use fuel_core_relayer::Config as RelayerConfig;
+
 pub use fuel_core_poa::Trigger;
 
 #[derive(Clone, Debug)]
@@ -46,7 +49,7 @@ pub struct Config {
     pub block_executor: fuel_core_executor::Config,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
-    pub relayer: fuel_core_relayer::Config,
+    pub relayer: Option<RelayerConfig>,
     #[cfg(feature = "p2p")]
     pub p2p: Option<P2PConfig<NotInitialized>>,
     #[cfg(feature = "p2p")]
@@ -92,7 +95,7 @@ impl Config {
             block_executor: Default::default(),
             block_importer: Default::default(),
             #[cfg(feature = "relayer")]
-            relayer: Default::default(),
+            relayer: None,
             #[cfg(feature = "p2p")]
             p2p: Some(P2PConfig::<NotInitialized>::default("test_network")),
             #[cfg(feature = "p2p")]
@@ -126,7 +129,7 @@ impl TryFrom<&Config> for fuel_core_poa::Config {
             block_gas_limit: config.chain_conf.block_gas_limit,
             signing_key: config.consensus_key.clone(),
             metrics: false,
-            consensus_params: config.chain_conf.transaction_parameters,
+            consensus_params: config.chain_conf.consensus_parameters.clone(),
             min_connected_reserved_peers: config.min_connected_reserved_peers,
             time_until_synced: config.time_until_synced,
         })

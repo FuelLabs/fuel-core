@@ -2,13 +2,12 @@
 use ethers_contract::abigen;
 
 pub mod bridge {
-    // The `FuelMessagePortal.json` file is auto-generated from contracts:
-    // https://github.com/FuelLabs/fuel-v2-contracts
-    //
-    // To re-generate the file:
-    // 1. Download the repository
-    // 2. Build the contracts(Check the `README.md` file for details).
-    // 3. Copy the content of the `abi` field in the
-    //  `artifacts/contracts/fuelchain/FuelMessagePortal.sol/FuelMessagePortal.json`
-    super::abigen!(MessageSent, "abi/FuelMessagePortal.json");
+    // The link to the original event definition:
+    // https://github.com/FuelLabs/fuel-bridge/blob/05c4d9cced70d262742e20c85c7ef8a5d8898701/packages/portal-contracts/contracts/fuelchain/FuelMessagePortal.sol#L54
+    super::abigen!(
+        MessageSent,
+        r#"[
+            event MessageSent(bytes32 indexed sender, bytes32 indexed recipient, uint256 indexed nonce, uint64 amount, bytes data)
+        ]"#,
+    );
 }

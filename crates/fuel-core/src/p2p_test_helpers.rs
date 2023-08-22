@@ -30,7 +30,6 @@ use fuel_core_types::{
     },
     fuel_crypto::SecretKey,
     fuel_tx::{
-        ConsensusParameters,
         Input,
         Transaction,
         TransactionBuilder,
@@ -41,6 +40,7 @@ use fuel_core_types::{
     fuel_types::{
         Address,
         Bytes32,
+        ChainId,
     },
     secrecy::Secret,
 };
@@ -187,7 +187,10 @@ pub async fn make_nodes(
 
     let mut producers_with_txs = Vec::with_capacity(producers.len());
     let mut chain_config = ChainConfig::local_testnet();
-    chain_config.transaction_parameters.max_storage_slots = 1 << 17; // 131072
+    chain_config
+        .consensus_parameters
+        .contract_params
+        .max_storage_slots = 1 << 17; // 131072
 
     for (all, producer) in txs_coins.into_iter().zip(producers.into_iter()) {
         match all {
@@ -408,7 +411,7 @@ impl Node {
                 .unwrap();
 
             let tx = Transaction::from(tx_result.inserted.as_ref());
-            expected.insert(tx.id(&ConsensusParameters::DEFAULT.chain_id), tx);
+            expected.insert(tx.id(&ChainId::default()), tx);
 
             assert!(tx_result.removed.is_empty());
         }
@@ -436,7 +439,7 @@ fn not_found_txs<'iter>(
 ) -> Vec<TxId> {
     let mut not_found = vec![];
     txs.iter().for_each(|(id, tx)| {
-        assert_eq!(id, &tx.id(&ConsensusParameters::DEFAULT.chain_id));
+        assert_eq!(id, &tx.id(&Default::default()));
         if !db.storage::<Transactions>().contains_key(id).unwrap() {
             not_found.push(*id);
         }

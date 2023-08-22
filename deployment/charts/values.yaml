@@ -18,10 +18,12 @@ app:
   poa_instant: "${fuel_core_poa_instant}"
   poa_interval_period: "${fuel_core_poa_interval_period}"
   max_block_size: "${fuel_core_max_buffer_size}"
+  max_headers_per_request: "${fuel_core_max_headers_per_request}"
   max_database_cache_size: "${fuel_core_max_database_cache_size}"
   max_transmit_size: "${fuel_core_max_buffer_size}"
-  sync_max_get_header: "${fuel_core_sync_max_get_header}"
   sync_max_get_txns: "${fuel_core_sync_max_get_txns}"
+  sync_header_batch_size: "${fuel_core_sync_header_batch_size}"
+  sync_max_header_batch_requests: "${fuel_core_sync_max_header_batch_requests}"
   p2p_key: ${fuel_core_p2p_key}
   allow_private_addresses: ${fuel_core_allow_private_addresses}
   reserved_nodes_only_mode: ${fuel_core_reserved_only}

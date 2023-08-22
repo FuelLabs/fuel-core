@@ -37,7 +37,10 @@ use fuel_core_storage::{
     Error as StorageError,
     Result as StorageResult,
 };
-use fuel_core_txpool::service::TxStatusMessage;
+use fuel_core_txpool::{
+    service::TxStatusMessage,
+    txpool::TokioWithRayon,
+};
 use fuel_core_types::{
     fuel_tx::{
         Cacheable,
@@ -62,6 +65,7 @@ use tokio_stream::StreamExt;
 use types::Transaction;
 
 use self::types::TransactionStatus;
+use fuel_core_types::fuel_vm::checked_transaction::CheckPredicateParams;
 
 pub mod input;
 pub mod output;
@@ -187,8 +191,7 @@ impl TxQuery {
                         .owned_transactions(owner, start, direction)
                         .map(|result| {
                             result.map(|(cursor, tx)| {
-                                let tx_id =
-                                    tx.id(&config.transaction_parameters.chain_id);
+                                let tx_id = tx.id(&config.consensus_parameters.chain_id);
                                 (cursor.into(), Transaction::from_tx(tx_id, tx))
                             })
                         });
@@ -205,12 +208,16 @@ impl TxQuery {
         tx: HexString,
     ) -> async_graphql::Result<Transaction> {
         let mut tx = FuelTx::from_bytes(&tx.0)?;
+
         let config = ctx.data_unchecked::<Config>();
 
-        tx.estimate_predicates(&config.transaction_parameters, &config.gas_costs)?;
+        tx.estimate_predicates_async::<TokioWithRayon>(&CheckPredicateParams::from(
+            &config.consensus_parameters,
+        ))
+        .await?;
 
         Ok(Transaction::from_tx(
-            tx.id(&config.transaction_parameters.chain_id),
+            tx.id(&config.consensus_parameters.chain_id),
             tx,
         ))
     }
@@ -244,7 +251,7 @@ impl TxMutation {
         let config = ctx.data_unchecked::<Config>();
 
         let mut tx = FuelTx::from_bytes(&tx.0)?;
-        tx.precompute(&config.transaction_parameters.chain_id)?;
+        tx.precompute(&config.consensus_parameters.chain_id)?;
 
         let receipts = block_producer.dry_run_tx(tx, None, utxo_validation).await?;
         Ok(receipts.iter().map(Into::into).collect())
@@ -267,7 +274,7 @@ impl TxMutation {
             .await
             .into_iter()
             .try_collect()?;
-        let id = tx.id(&config.transaction_parameters.chain_id);
+        let id = tx.id(&config.consensus_parameters.chain_id);
 
         let tx = Transaction(tx, id);
         Ok(tx)
@@ -330,7 +337,7 @@ impl TxStatusSubscription {
         let txpool = ctx.data_unchecked::<TxPool>();
         let config = ctx.data_unchecked::<Config>();
         let tx = FuelTx::from_bytes(&tx.0)?;
-        let tx_id = tx.id(&config.transaction_parameters.chain_id);
+        let tx_id = tx.id(&config.consensus_parameters.chain_id);
         let subscription = txpool.tx_update_subscribe(tx_id).await;
 
         let _: Vec<_> = txpool
