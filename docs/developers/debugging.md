@@ -87,10 +87,10 @@ Error: Failed to open rocksdb, you may need to wipe a pre-existing incompatible 
 ```
 
 This error can happen under the following circumstances:
-- Two (or more) local client processes are running and attempting to access the same RocksDB instance
+- Two (or more) local processes are running and attempting to access the same RocksDB instance
 - The RocksDB instance was created from an older version of the client codebase and is incompatible with the client
 
-In the case where multiple client processes are running, the issue can be resolved by terminating any ongoing processes that are currently accessing the database. 
+In the case where multiple processes are attempting to access the RocksDB instance, the issue can be resolved by terminating any ongoing processes that are currently accessing the database. 
 
 If there are no additional client processes running, the error is symptomatic of the latter case, and users can remove the incompatible database by performing the aforementioned command `rm -rf ~/.fuel/db` (specifying the exact path to the Fuel database as necessary).
 
