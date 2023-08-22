@@ -15,11 +15,11 @@ async fn chain_info() {
     assert_eq!(node_config.chain_conf.chain_name, chain_info.name);
     assert_eq!(
         node_config.chain_conf.consensus_parameters,
-        chain_info.consensus_parameters.clone().into()
+        chain_info.consensus_parameters.clone()
     );
 
     assert_eq!(
         node_config.chain_conf.consensus_parameters.gas_costs,
-        chain_info.consensus_parameters.gas_costs.into()
+        chain_info.consensus_parameters.gas_costs
     );
 }
