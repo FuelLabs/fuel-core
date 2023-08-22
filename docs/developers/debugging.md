@@ -83,7 +83,12 @@ Running Fuel Core with CLion requires the official JetBrains Rust plugin. Find t
 3. In the "Name" field, give your configuration a descriptive name, such as "Run Beta 3"
 4. In the "Command" field, enter `run --all-features --bin fuel-core -- run <ARGUMENTS>`, where `<ARGUMENTS>` represents the desired CLI arguments. Refer to the CLI documentation for guidance on which options and arguments to use.
 5. If you use environment variables for configuration (as indicated in the CLI documentation), you can set them in the "Environment variables" section. Enter the variables and their values as needed. It is recommended to set the `RUST_LOG` environment variable to either `info` or `debug`.
-6. Click "Apply" or "OK" to save your run configuration.
+6. By default, the "Working directory" field will be populated with the path to the root of your local repository. If this value has changed or is missing, enter the path to the root of your local repository here.
+7. Click "Apply" or "OK" to save your run configuration.
+
+#### Optional Settings
+
+The "Before launch" settings are optional. CLion adds "Build" to these options by default, but this can be removed or configured to create a customized build flow. It is useful to remember that when using `cargo run`, Cargo automatically performs a build before execution. By having CLion perform the build prior to `cargo run`, CLion will invoke the same build process in a CLion run window. When CLion then invokes `cargo run`, Cargo will find that the binary is already built, and proceed immediately to execution.
 
 ### Example Configuration
 
