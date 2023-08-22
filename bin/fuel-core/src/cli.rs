@@ -5,7 +5,6 @@ use std::{
     str::FromStr,
 };
 use tracing::{
-    error,
     info,
     warn,
 };
@@ -18,6 +17,8 @@ use tracing_subscriber::{
 
 #[cfg(feature = "env")]
 use dotenvy::dotenv;
+#[cfg(feature = "env")]
+use tracing::error;
 
 lazy_static::lazy_static! {
     pub static ref DEFAULT_DB_PATH: PathBuf = dirs::home_dir().unwrap().join(".fuel").join("db");
