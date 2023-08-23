@@ -1,16 +1,13 @@
 #![allow(non_snake_case)]
 
-use fuel_core_types::blockchain::{
-    consensus::Consensus,
-    header::BlockHeader,
+use crate::{
+    import::test_helpers::empty_header,
+    ports::{
+        MockBlockImporterPort,
+        MockConsensusPort,
+        MockPeerToPeerPort,
+    },
 };
-
-use crate::ports::{
-    MockBlockImporterPort,
-    MockConsensusPort,
-    MockPeerToPeerPort,
-};
-use fuel_core_types::fuel_types::BlockHeight;
 use test_case::test_case;
 
 use super::*;
@@ -56,13 +53,17 @@ async fn import__signature_fails_on_header_4_only() {
     let mut consensus_port = MockConsensusPort::default();
     consensus_port
         .expect_check_sealed_header()
-        .times(1)
+        .times(2)
         .returning(|h| Ok(**h.entity.height() != 4));
+    consensus_port
+        .expect_await_da_height()
+        .times(1)
+        .returning(|_| Ok(()));
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
         consensus_port,
-        p2p: DefaultMocks::times([0]),
+        p2p: DefaultMocks::times([1]),
         executor: DefaultMocks::times([0]),
     };
 
@@ -175,13 +176,13 @@ async fn import__transactions_not_found() {
         .times(1)
         .returning(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])));
     p2p.expect_get_transactions()
-        .times(1)
+        .times(2)
         .returning(|_| Ok(None));
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
         p2p,
-        consensus_port: DefaultMocks::times([1]),
+        consensus_port: DefaultMocks::times([2]),
         executor: DefaultMocks::times([0]),
     };
 
@@ -200,7 +201,7 @@ async fn import__transactions_not_found_for_header_4() {
         .times(1)
         .returning(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])));
     let mut height = 3;
-    p2p.expect_get_transactions().times(1).returning(move |_| {
+    p2p.expect_get_transactions().times(2).returning(move |_| {
         height += 1;
         if height == 4 {
             Ok(None)
@@ -212,7 +213,7 @@ async fn import__transactions_not_found_for_header_4() {
     let state = State::new(3, 5).into();
     let mocks = Mocks {
         p2p,
-        consensus_port: DefaultMocks::times([1]),
+        consensus_port: DefaultMocks::times([2]),
         executor: DefaultMocks::times([0]),
     };
 
@@ -284,7 +285,7 @@ async fn import__p2p_error_on_4_transactions() {
         .times(1)
         .returning(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])));
     let mut height = 3;
-    p2p.expect_get_transactions().times(1).returning(move |_| {
+    p2p.expect_get_transactions().times(2).returning(move |_| {
         height += 1;
         if height == 4 {
             Err(anyhow::anyhow!("Some network error"))
@@ -296,7 +297,7 @@ async fn import__p2p_error_on_4_transactions() {
     let state = State::new(3, 5).into();
     let mocks = Mocks {
         p2p,
-        consensus_port: DefaultMocks::times([1]),
+        consensus_port: DefaultMocks::times([2]),
         executor: DefaultMocks::times([0]),
     };
 
@@ -344,7 +345,7 @@ async fn import__consensus_error_on_4() {
     let mut consensus_port = MockConsensusPort::default();
     consensus_port
         .expect_check_sealed_header()
-        .times(1)
+        .times(2)
         .returning(|h| {
             if **h.entity.height() == 4 {
                 Err(anyhow::anyhow!("Some consensus error"))
@@ -352,11 +353,15 @@ async fn import__consensus_error_on_4() {
                 Ok(true)
             }
         });
+    consensus_port
+        .expect_await_da_height()
+        .times(1)
+        .returning(|_| Ok(()));
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
         consensus_port,
-        p2p: DefaultMocks::times([0]),
+        p2p: DefaultMocks::times([1]),
         executor: DefaultMocks::times([0]),
     };
 
@@ -417,8 +422,8 @@ async fn import__execution_error_on_header_4() {
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
-        consensus_port: DefaultMocks::times([1]),
-        p2p: DefaultMocks::times([1]),
+        consensus_port: DefaultMocks::times([2]),
+        p2p: DefaultMocks::times([2]),
         executor,
     };
 
@@ -464,7 +469,7 @@ async fn signature_always_fails() {
     let mut consensus_port = MockConsensusPort::default();
     consensus_port
         .expect_check_sealed_header()
-        .times(1)
+        .times(2)
         .returning(|_| Ok(false));
 
     let state = State::new(3, 5).into();
@@ -655,23 +660,5 @@ impl DefaultMocks for MockBlockImporterPort {
             .times(t)
             .returning(move |_| Ok(()));
         executor
-    }
-}
-
-pub(crate) fn empty_header(h: BlockHeight) -> SourcePeer<SealedBlockHeader> {
-    let mut header = BlockHeader::default();
-    header.consensus.height = h;
-    let transaction_tree =
-        fuel_core_types::fuel_merkle::binary::in_memory::MerkleTree::new();
-    header.application.generated.transactions_root = transaction_tree.root().into();
-
-    let consensus = Consensus::default();
-    let sealed = Sealed {
-        entity: header,
-        consensus,
-    };
-    SourcePeer {
-        peer_id: vec![].into(),
-        data: sealed,
     }
 }

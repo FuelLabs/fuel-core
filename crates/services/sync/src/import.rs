@@ -184,7 +184,6 @@ where
                 tokio::spawn(async move {
                     Self::get_block_for_header(result, p2p.clone(), consensus_port.clone()).await
                 }).then(|task| async { task.map_err(|e| anyhow!(e))? })
-                // Self::get_block_for_header(result, p2p.clone(), consensus_port.clone())
             }
             .instrument(tracing::debug_span!("consensus_and_transactions"))
             .in_current_span()
