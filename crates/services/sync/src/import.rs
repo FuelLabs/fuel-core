@@ -179,8 +179,6 @@ where
             let p2p = p2p.clone();
             let consensus_port = consensus.clone();
             move |result| {
-                let p2p = p2p.clone();
-                let consensus_port = consensus_port.clone();
                 Self::get_block_for_header(result, p2p.clone(), consensus_port.clone())
             }
             .instrument(tracing::debug_span!("consensus_and_transactions"))
