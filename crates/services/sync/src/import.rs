@@ -7,7 +7,6 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::anyhow;
 use fuel_core_services::{
     SharedMutex,
     StateWatcher,
@@ -24,7 +23,6 @@ use fuel_core_types::{
 };
 use futures::{
     stream::StreamExt,
-    FutureExt,
     Stream,
 };
 use tokio::sync::Notify;
@@ -183,9 +181,7 @@ where
             move |result| {
                 let p2p = p2p.clone();
                 let consensus_port = consensus_port.clone();
-                tokio::spawn(async move {
-                    Self::get_block_for_header(result, p2p.clone(), consensus_port.clone()).await
-                }).then(|task| async { task.map_err(|e| anyhow!(e))? })
+                Self::get_block_for_header(result, p2p.clone(), consensus_port.clone())
             }
             .instrument(tracing::debug_span!("consensus_and_transactions"))
             .in_current_span()
