@@ -229,14 +229,74 @@ where
     }
 }
 
-type NetworkBlockHeader = SourcePeer<SealedBlockHeader>;
-type BlockHeaderResultOpt = anyhow::Result<Option<NetworkBlockHeader>>;
+type PeerBlockHeader = SourcePeer<SealedBlockHeader>;
+
+fn get_transactions<
+    P: PeerToPeerPort + Send + Sync + 'static,
+    C: ConsensusPort + Send + Sync + 'static,
+>(
+    range: RangeInclusive<u32>,
+    params: &Config,
+    p2p: Arc<P>,
+    consensus: Arc<C>,
+) -> impl Stream<Item = impl Future<Output = anyhow::Result<Option<SealedBlock>>>> {
+    get_headers(range, params, p2p.clone()).map({
+        let p2p = p2p.clone();
+        let consensus_port = consensus.clone();
+        move |batch| {
+            {
+                let p2p = p2p.clone();
+                let consensus_port = consensus_port.clone();
+                tokio::spawn(async move {
+                    get_block_for_header(batch, p2p.clone(), consensus_port.clone()).await
+                })
+                .then(|task| async { task.map_err(|e| anyhow!(e))? })
+            }
+            .instrument(tracing::debug_span!("consensus_and_transactions"))
+            .in_current_span()
+        }
+    })
+}
+
+fn get_headers<P: PeerToPeerPort + Send + Sync + 'static>(
+    range: RangeInclusive<u32>,
+    params: &Config,
+    p2p: Arc<P>,
+) -> impl Stream<Item = anyhow::Result<Option<PeerBlockHeader>>> {
+    let Config {
+        header_batch_size, ..
+    } = params;
+    let ranges = range_chunks(range, *header_batch_size);
+    let p2p_gen = iter::repeat_with(move || p2p.clone());
+    let iter = ranges.zip(p2p_gen);
+    futures::stream::iter(iter)
+        .then(move |(range, p2p)| async {
+            tracing::debug!(
+                "getting header range from {} to {} inclusive",
+                range.start(),
+                range.end()
+            );
+            get_headers_batch(range, p2p).await
+        })
+        .flatten()
+}
+
+fn range_chunks(
+    range: RangeInclusive<u32>,
+    chunk_size: u32,
+) -> impl Iterator<Item = RangeInclusive<u32>> {
+    let end = *range.end();
+    range.step_by(chunk_size as usize).map(move |chunk_start| {
+        let block_end = (chunk_start + chunk_size).min(end);
+        chunk_start..=block_end
+    })
+}
 
 async fn get_block_for_header<
     P: PeerToPeerPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 >(
-    result: BlockHeaderResultOpt,
+    result: anyhow::Result<Option<PeerBlockHeader>>,
     p2p: Arc<P>,
     consensus_port: Arc<C>,
 ) -> anyhow::Result<Option<SealedBlock>> {
@@ -269,67 +329,6 @@ async fn get_block_for_header<
     get_transactions_on_block(p2p.as_ref(), block_id, header).await
 }
 
-fn get_headers<P: PeerToPeerPort + Send + Sync + 'static>(
-    range: RangeInclusive<u32>,
-    params: &Config,
-    p2p: Arc<P>,
-) -> impl Stream<Item = BlockHeaderResultOpt> {
-    let Config {
-        header_batch_size, ..
-    } = params;
-    let ranges = range_chunks(range, *header_batch_size);
-    let p2p_gen = iter::repeat_with(move || p2p.clone());
-    let iter = ranges.zip(p2p_gen);
-    futures::stream::iter(iter)
-        .then(move |(range, p2p)| async {
-            tracing::debug!(
-                "getting header range from {} to {} inclusive",
-                range.start(),
-                range.end()
-            );
-            get_headers_batch(range, p2p).await
-        })
-        .flatten()
-}
-
-fn range_chunks(
-    range: RangeInclusive<u32>,
-    chunk_size: u32,
-) -> impl Iterator<Item = RangeInclusive<u32>> {
-    let end = *range.end();
-    range.step_by(chunk_size as usize).map(move |chunk_start| {
-        let block_end = (chunk_start + chunk_size).min(end);
-        chunk_start..=block_end
-    })
-}
-
-fn get_transactions<
-    P: PeerToPeerPort + Send + Sync + 'static,
-    C: ConsensusPort + Send + Sync + 'static,
->(
-    range: RangeInclusive<u32>,
-    params: &Config,
-    p2p: Arc<P>,
-    consensus: Arc<C>,
-) -> impl Stream<Item = impl Future<Output = anyhow::Result<Option<SealedBlock>>>> {
-    get_headers(range, params, p2p.clone()).map({
-        let p2p = p2p.clone();
-        let consensus_port = consensus.clone();
-        move |batch| {
-            {
-                let p2p = p2p.clone();
-                let consensus_port = consensus_port.clone();
-                tokio::spawn(async move {
-                    get_block_for_header(batch, p2p.clone(), consensus_port.clone()).await
-                })
-                .then(|task| async { task.map_err(|e| anyhow!(e))? })
-            }
-            .instrument(tracing::debug_span!("consensus_and_transactions"))
-            .in_current_span()
-        }
-    })
-}
-
 /// Waits for a notify or shutdown signal.
 /// Returns true if the notify signal was received.
 async fn wait_for_notify_or_shutdown(
@@ -351,7 +350,7 @@ async fn wait_for_notify_or_shutdown(
 async fn get_headers_batch(
     mut range: RangeInclusive<u32>,
     p2p: Arc<impl PeerToPeerPort + 'static>,
-) -> impl Stream<Item = BlockHeaderResultOpt> {
+) -> impl Stream<Item = anyhow::Result<Option<PeerBlockHeader>>> {
     tracing::debug!(
         "getting header range from {} to {} inclusive",
         range.start(),
