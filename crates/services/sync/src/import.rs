@@ -75,7 +75,8 @@ impl Default for Config {
     }
 }
 
-/// Import
+/// The combination of shared state, configuration, and services that define
+/// import behavior.
 pub struct Import<P, E, C> {
     /// Shared state between import and sync tasks.
     state: SharedMutex<State>,
@@ -92,7 +93,8 @@ pub struct Import<P, E, C> {
 }
 
 impl<P, E, C> Import<P, E, C> {
-    /// New Import
+    /// Configure an import behavior from a shared state, configuration and
+    /// services that can be executed by an ImportTask.
     pub fn new(
         state: SharedMutex<State>,
         notify: Arc<Notify>,
@@ -111,7 +113,7 @@ impl<P, E, C> Import<P, E, C> {
         }
     }
 
-    /// Notify one
+    /// Signal other asynchronous tasks that an import event has occurred.
     pub fn notify_one(&self) {
         self.notify.notify_one()
     }
