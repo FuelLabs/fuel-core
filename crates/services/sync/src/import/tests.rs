@@ -55,11 +55,15 @@ async fn import__signature_fails_on_header_4_only() {
         .expect_check_sealed_header()
         .times(2)
         .returning(|h| Ok(**h.entity.height() != 4));
+    consensus_port
+        .expect_await_da_height()
+        .times(1)
+        .returning(|_| Ok(()));
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
         consensus_port,
-        p2p: DefaultMocks::times([0]),
+        p2p: DefaultMocks::times([1]),
         executor: DefaultMocks::times([0]),
     };
 
@@ -349,11 +353,15 @@ async fn import__consensus_error_on_4() {
                 Ok(true)
             }
         });
+    consensus_port
+        .expect_await_da_height()
+        .times(1)
+        .returning(|_| Ok(()));
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
         consensus_port,
-        p2p: DefaultMocks::times([0]),
+        p2p: DefaultMocks::times([1]),
         executor: DefaultMocks::times([0]),
     };
 
