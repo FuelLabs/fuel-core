@@ -10,6 +10,7 @@ Description of the upcoming release here.
 
 ### Added
 
+- [#1274](https://github.com/FuelLabs/fuel-core/pull/1274) Added tests to benchmark block synchronization.
 - [#1309](https://github.com/FuelLabs/fuel-core/pull/1309): Add documentation for running debug builds with CLion and Visual Studio Code.  
 - [#1308](https://github.com/FuelLabs/fuel-core/pull/1308): Add support for loading .env files when compiling with the `env` feature. This allows users to conveniently supply CLI arguments in a secure and IDE-agnostic way. 
 - [#1263](https://github.com/FuelLabs/fuel-core/pull/1263): Add gas benchmarks for `ED19` and `ECR1` instructions.
@@ -18,7 +19,6 @@ Description of the upcoming release here.
 
 ### Changed
 
-- [#1274](https://github.com/FuelLabs/fuel-core/pull/1274) Modified block synchronization to use asynchronous task execution when retrieving block headers.
 - [#1314](https://github.com/FuelLabs/fuel-core/pull/1314): Removed `types::ConsensusParameters` in favour of `fuel_tx:ConsensusParameters`.
 - [#1302](https://github.com/FuelLabs/fuel-core/pull/1302): Removed the usage of flake and building of the bridge contract ABI.
     It simplifies the maintenance and updating of the events, requiring only putting the event definition into the codebase of the relayer.
