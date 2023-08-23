@@ -125,7 +125,7 @@ where
     C: ConsensusPort + Send + Sync + 'static,
 {
     #[tracing::instrument(skip_all)]
-    /// Import
+    /// Execute imports until a shutdown is requested.
     pub async fn import(&self, shutdown: &mut StateWatcher) -> anyhow::Result<bool> {
         self.import_inner(shutdown).await?;
 
