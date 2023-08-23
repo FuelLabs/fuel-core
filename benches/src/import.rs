@@ -1,16 +1,20 @@
-mod count;
-mod pressure_block_importer_port;
-mod pressure_consensus_port;
-mod pressure_peer_to_peer_port;
-
-pub use count::Count;
 use fuel_core_services::{
     SharedMutex,
     StateWatcher,
 };
-pub use pressure_block_importer_port::PressureBlockImporterPort;
-pub use pressure_consensus_port::PressureConsensusPort;
-pub use pressure_peer_to_peer_port::PressurePeerToPeerPort;
+pub use fuel_core_sync::import::test_helpers::SharedCounts;
+use fuel_core_sync::{
+    import::{
+        test_helpers::{
+            PressureBlockImporter,
+            PressureConsensus,
+            PressurePeerToPeer,
+        },
+        Import,
+    },
+    state::State,
+    Config,
+};
 use std::{
     sync::Arc,
     time::Duration,
@@ -20,14 +24,8 @@ use tokio::sync::{
     Notify,
 };
 
-use fuel_core_sync::{
-    import::Import,
-    state::State,
-    Config,
-};
-
 pub type PressureImport =
-    Import<PressurePeerToPeerPort, PressureBlockImporterPort, PressureConsensusPort>;
+    Import<PressurePeerToPeer, PressureBlockImporter, PressureConsensus>;
 
 #[derive(Default, Clone, Copy)]
 pub struct Durations {
@@ -38,7 +36,7 @@ pub struct Durations {
 }
 
 pub fn provision_import_test(
-    shared_count: SharedMutex<Count>,
+    shared_count: SharedCounts,
     shared_state: SharedMutex<State>,
     input: Durations,
     header_batch_size: u32,
@@ -55,17 +53,17 @@ pub fn provision_import_test(
         header_batch_size,
         max_get_txns_requests,
     };
-    let p2p = Arc::new(PressurePeerToPeerPort::new(
+    let p2p = Arc::new(PressurePeerToPeer::new(
+        shared_count.clone(),
         [input.headers, input.transactions],
-        shared_count.clone(),
     ));
-    let executor = Arc::new(PressureBlockImporterPort::new(
+    let executor = Arc::new(PressureBlockImporter::new(
+        shared_count.clone(),
         input.executes,
-        shared_count.clone(),
     ));
-    let consensus = Arc::new(PressureConsensusPort::new(
-        input.consensus,
+    let consensus = Arc::new(PressureConsensus::new(
         shared_count.clone(),
+        input.consensus,
     ));
 
     let (tx, shutdown) = tokio::sync::watch::channel(fuel_core_services::State::Started);

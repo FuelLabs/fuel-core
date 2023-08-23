@@ -8,7 +8,7 @@ use futures::{
 };
 
 use crate::{
-    import::empty_header,
+    import::test_helpers::empty_header,
     ports::{
         MockBlockImporterPort,
         MockConsensusPort,

@@ -43,8 +43,10 @@ use crate::{
     },
 };
 
-#[cfg(test)]
-pub(crate) use tests::empty_header;
+#[cfg(any(test, feature = "benchmarking"))]
+/// Accessories for testing the sync. Available only when compiling under test
+/// or benchmarking.
+pub mod test_helpers;
 
 #[cfg(test)]
 mod tests;
@@ -182,6 +184,7 @@ where
                 tokio::spawn(async move {
                     Self::get_block_for_header(result, p2p.clone(), consensus_port.clone()).await
                 }).then(|task| async { task.map_err(|e| anyhow!(e))? })
+                // Self::get_block_for_header(result, p2p.clone(), consensus_port.clone())
             }
             .instrument(tracing::debug_span!("consensus_and_transactions"))
             .in_current_span()

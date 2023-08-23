@@ -8,9 +8,9 @@ use criterion::{
 };
 use fuel_core_benches::import::{
     provision_import_test,
-    Count,
     Durations,
     PressureImport,
+    SharedCounts,
 };
 use fuel_core_services::{
     SharedMutex,
@@ -48,7 +48,7 @@ fn bench_imports(c: &mut Criterion) {
             b.to_async(&rt).iter_custom(|iters| async move {
                 let mut elapsed_time = Duration::default();
                 for _ in 0..iters {
-                    let shared_count = SharedMutex::new(Count::default());
+                    let shared_count = SharedCounts::new(Default::default());
                     let state = State::new(None, n);
                     let shared_state = SharedMutex::new(state);
                     let (import, _tx, mut shutdown) = provision_import_test(
@@ -71,6 +71,7 @@ fn bench_imports(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("import");
 
+    let n = 50;
     let durations = Durations {
         headers: Duration::from_millis(5),
         consensus: Duration::from_millis(5),
@@ -78,8 +79,8 @@ fn bench_imports(c: &mut Criterion) {
         executes: Duration::from_millis(10),
     };
     let batch_size = 10;
-    let n = 50;
-    bench_import(&mut group, n, durations, batch_size, 50);
+    let buffer_size = 50;
+    bench_import(&mut group, n, durations, batch_size, buffer_size);
 }
 
 criterion_group!(benches, bench_imports);
