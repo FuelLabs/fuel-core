@@ -229,8 +229,6 @@ where
     }
 }
 
-type PeerBlockHeader = SourcePeer<SealedBlockHeader>;
-
 fn get_transactions<
     P: PeerToPeerPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
@@ -262,7 +260,7 @@ fn get_headers<P: PeerToPeerPort + Send + Sync + 'static>(
     range: RangeInclusive<u32>,
     params: &Config,
     p2p: Arc<P>,
-) -> impl Stream<Item = anyhow::Result<Option<PeerBlockHeader>>> {
+) -> impl Stream<Item = anyhow::Result<Option<SourcePeer<SealedBlockHeader>>>> {
     let Config {
         header_batch_size, ..
     } = params;
@@ -296,7 +294,7 @@ async fn get_block_for_header<
     P: PeerToPeerPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 >(
-    result: anyhow::Result<Option<PeerBlockHeader>>,
+    result: anyhow::Result<Option<SourcePeer<SealedBlockHeader>>>,
     p2p: Arc<P>,
     consensus_port: Arc<C>,
 ) -> anyhow::Result<Option<SealedBlock>> {
@@ -350,7 +348,7 @@ async fn wait_for_notify_or_shutdown(
 async fn get_headers_batch(
     mut range: RangeInclusive<u32>,
     p2p: Arc<impl PeerToPeerPort + 'static>,
-) -> impl Stream<Item = anyhow::Result<Option<PeerBlockHeader>>> {
+) -> impl Stream<Item = anyhow::Result<Option<SourcePeer<SealedBlockHeader>>>> {
     tracing::debug!(
         "getting header range from {} to {} inclusive",
         range.start(),
