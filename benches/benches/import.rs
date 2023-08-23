@@ -1,5 +1,4 @@
 use criterion::{
-    black_box,
     criterion_group,
     criterion_main,
     measurement::WallTime,
@@ -61,7 +60,7 @@ fn bench_imports(c: &mut Criterion) {
                     );
                     import.notify_one();
                     let start = std::time::Instant::now();
-                    black_box(execute_import(import, &mut shutdown).await);
+                    execute_import(import, &mut shutdown).await;
                     elapsed_time += start.elapsed();
                 }
                 elapsed_time
