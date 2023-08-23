@@ -71,16 +71,31 @@ fn bench_imports(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("import");
 
-    let n = 50;
+    let n = 100;
     let durations = Durations {
         headers: Duration::from_millis(5),
         consensus: Duration::from_millis(5),
         transactions: Duration::from_millis(5),
         executes: Duration::from_millis(10),
     };
-    let batch_size = 10;
-    let buffer_size = 50;
-    bench_import(&mut group, n, durations, batch_size, buffer_size);
+
+    // Header batch size = 10, header/txn buffer size = 10
+    bench_import(&mut group, n, durations, 10, 10);
+
+    // Header batch size = 20, header/txn buffer size = 10
+    bench_import(&mut group, n, durations, 20, 10);
+
+    // Header batch size = 50, header/txn buffer size = 10
+    bench_import(&mut group, n, durations, 20, 10);
+
+    // Header batch size = 10, header/txn buffer size = 20
+    bench_import(&mut group, n, durations, 10, 20);
+
+    // Header batch size = 10, header/txn buffer size = 50
+    bench_import(&mut group, n, durations, 10, 50);
+
+    // Header batch size = 50, header/txn buffer size = 50
+    bench_import(&mut group, n, durations, 10, 20);
 }
 
 criterion_group!(benches, bench_imports);
