@@ -9,7 +9,6 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::anyhow;
 use fuel_core_services::{
     SharedMutex,
     StateWatcher,
@@ -26,7 +25,6 @@ use fuel_core_types::{
 };
 use futures::{
     stream::StreamExt,
-    FutureExt,
     Stream,
 };
 use tokio::sync::Notify;
