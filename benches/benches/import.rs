@@ -7,7 +7,7 @@ use criterion::{
     Criterion,
 };
 use fuel_core_benches::import::{
-    create_import,
+    provision_import_test,
     Count,
     Durations,
     PressureImport,
@@ -24,7 +24,7 @@ async fn execute_import(import: PressureImport, shutdown: &mut StateWatcher) {
     import.import(shutdown).await.unwrap();
 }
 
-fn name(n: usize, durations: Durations, buffer_size: usize) -> String {
+fn name(n: u32, durations: Durations, buffer_size: usize) -> String {
     format!(
         "import {n} * {d_h}/{d_c}/{d_t}/{d_e} - {sz}",
         n = n,
@@ -38,7 +38,7 @@ fn name(n: usize, durations: Durations, buffer_size: usize) -> String {
 
 fn bench_imports(c: &mut Criterion) {
     let bench_import = |group: &mut BenchmarkGroup<WallTime>,
-                        n: usize,
+                        n: u32,
                         durations: Durations,
                         batch_size: u32,
                         buffer_size: usize| {
@@ -49,9 +49,9 @@ fn bench_imports(c: &mut Criterion) {
                 let mut elapsed_time = Duration::default();
                 for _ in 0..iters {
                     let shared_count = SharedMutex::new(Count::default());
-                    let state = State::new(None, n as u32);
+                    let state = State::new(None, n);
                     let shared_state = SharedMutex::new(state);
-                    let (import, _tx, mut shutdown) = create_import(
+                    let (import, _tx, mut shutdown) = provision_import_test(
                         shared_count.clone(),
                         shared_state,
                         durations,
@@ -78,7 +78,7 @@ fn bench_imports(c: &mut Criterion) {
         executes: Duration::from_millis(10),
     };
     let batch_size = 10;
-    let n = 50usize;
+    let n = 50;
     bench_import(&mut group, n, durations, batch_size, 50);
 }
 

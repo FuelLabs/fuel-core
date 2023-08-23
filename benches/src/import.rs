@@ -37,7 +37,7 @@ pub struct Durations {
     pub executes: Duration,
 }
 
-pub fn create_import(
+pub fn provision_import_test(
     shared_count: SharedMutex<Count>,
     shared_state: SharedMutex<State>,
     input: Durations,
