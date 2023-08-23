@@ -236,13 +236,12 @@ where
     }
 
     async fn get_block_for_header(
-        result: anyhow::Result<Option<SourcePeer<SealedBlockHeader>>>,
+        result: anyhow::Result<SourcePeer<SealedBlockHeader>>,
         p2p: Arc<P>,
         consensus_port: Arc<C>,
     ) -> anyhow::Result<Option<SealedBlock>> {
         let header = match result {
-            Ok(Some(h)) => h,
-            Ok(None) => return Ok(None),
+            Ok(h) => h,
             Err(e) => return Err(e),
         };
         let SourcePeer {
@@ -274,7 +273,7 @@ fn get_headers_buffered<P: PeerToPeerPort + Send + Sync + 'static>(
     range: RangeInclusive<u32>,
     params: &Config,
     p2p: Arc<P>,
-) -> impl Stream<Item = anyhow::Result<Option<SourcePeer<SealedBlockHeader>>>> {
+) -> impl Stream<Item = anyhow::Result<SourcePeer<SealedBlockHeader>>> {
     let Config {
         header_batch_size,
         max_header_batch_requests,
@@ -294,8 +293,8 @@ fn get_headers_buffered<P: PeerToPeerPort + Send + Sync + 'static>(
         })
         .buffered(*max_header_batch_requests)
         .flatten()
-    // .into_scan_none_or_err()
-    // .scan_none_or_err()
+        .into_scan_none_or_err()
+        .scan_none_or_err()
 }
 
 fn range_chunks(
