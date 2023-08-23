@@ -12,6 +12,10 @@ impl Count {
         self.headers += 1;
     }
 
+    pub fn dec_headers(&mut self) {
+        self.headers -= 1;
+    }
+
     pub fn inc_transactions(&mut self) {
         self.transactions += 1;
     }

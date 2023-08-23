@@ -2,7 +2,6 @@ mod count;
 mod pressure_block_importer_port;
 mod pressure_consensus_port;
 mod pressure_peer_to_peer_port;
-mod test;
 
 pub use count::Count;
 use fuel_core_services::{
@@ -42,7 +41,8 @@ pub fn create_import(
     shared_count: SharedMutex<Count>,
     shared_state: SharedMutex<State>,
     input: Durations,
-    max_get_header_requests: usize,
+    header_batch_size: u32,
+    max_header_batch_requests: usize,
     max_get_txns_requests: usize,
 ) -> (
     PressureImport,
@@ -51,7 +51,8 @@ pub fn create_import(
 ) {
     let shared_notify = Arc::new(Notify::new());
     let params = Config {
-        max_get_header_requests,
+        max_header_batch_requests,
+        header_batch_size,
         max_get_txns_requests,
     };
     let p2p = Arc::new(PressurePeerToPeerPort::new(

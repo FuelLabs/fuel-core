@@ -1,4 +1,5 @@
 use crate::import::Count;
+use std::ops::Range;
 
 use fuel_core_services::{
     stream::BoxStream,
@@ -47,8 +48,15 @@ pub struct PressurePeerToPeerPort(MockPeerToPeerPort, [Duration; 2], SharedMutex
 impl PressurePeerToPeerPort {
     pub fn new(delays: [Duration; 2], count: SharedMutex<Count>) -> Self {
         let mut mock = MockPeerToPeerPort::default();
-        mock.expect_get_sealed_block_header()
-            .returning(|h| Ok(Some(empty_header(h))));
+        mock.expect_get_sealed_block_headers().returning(|range| {
+            Ok(Some(
+                range
+                    .clone()
+                    .map(BlockHeight::from)
+                    .map(empty_header)
+                    .collect(),
+            ))
+        });
         mock.expect_get_transactions()
             .returning(|_| Ok(Some(vec![])));
         Self(mock, delays, count)
@@ -73,15 +81,20 @@ impl PeerToPeerPort for PressurePeerToPeerPort {
         self.service().height_stream()
     }
 
-    async fn get_sealed_block_header(
+    async fn get_sealed_block_headers(
         &self,
-        height: BlockHeight,
-    ) -> anyhow::Result<Option<SourcePeer<SealedBlockHeader>>> {
+        block_height_range: Range<u32>,
+    ) -> anyhow::Result<Option<Vec<SourcePeer<SealedBlockHeader>>>> {
         self.count().apply(|count| count.inc_headers());
         let timeout = self.duration(0);
+        self.count().apply(|c| c.dec_headers());
         tokio::time::sleep(timeout).await;
-        self.count().apply(|count| count.inc_blocks());
-        self.service().get_sealed_block_header(height).await
+        for _ in block_height_range.clone() {
+            self.count().apply(|c| c.inc_blocks());
+        }
+        self.service()
+            .get_sealed_block_headers(block_height_range)
+            .await
     }
 
     async fn get_transactions(
