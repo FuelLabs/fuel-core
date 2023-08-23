@@ -146,20 +146,6 @@ where
         Ok(wait_for_notify_or_shutdown(&self.notify, shutdown).await)
     }
 
-    /// Import
-    pub async fn import_v3(&self, shutdown: &mut StateWatcher) -> anyhow::Result<bool> {
-        self.import_inner(shutdown, 3).await?;
-
-        Ok(wait_for_notify_or_shutdown(&self.notify, shutdown).await)
-    }
-
-    /// Import
-    pub async fn import_v4(&self, shutdown: &mut StateWatcher) -> anyhow::Result<bool> {
-        self.import_inner(shutdown, 4).await?;
-
-        Ok(wait_for_notify_or_shutdown(&self.notify, shutdown).await)
-    }
-
     async fn import_inner(
         &self,
         shutdown: &StateWatcher,
@@ -215,61 +201,61 @@ where
         } = &self;
 
         get_headers_buffered(range.clone(), params, p2p.clone())
-            .map({
-                let p2p = p2p.clone();
-                let consensus_port = consensus.clone();
-                move |result| {
-                    Self::get_block_for_header(result, p2p.clone(), consensus_port.clone())
-                }
-                    .instrument(tracing::debug_span!("consensus_and_transactions"))
-                    .in_current_span()
-            })
-            // Request up to `max_get_txns_requests` transactions from the network.
-            .buffered(params.max_get_txns_requests)
-            // Continue the stream unless an error or none occurs.
-            // Note the error will be returned but the stream will close.
-            .into_scan_none_or_err()
-            .scan_none_or_err()
-            // Continue the stream until the shutdown signal is received.
-            .take_until({
-                let mut s = shutdown.clone();
-                async move {
-                    let _ = s.while_started().await;
-                    tracing::info!("In progress import stream shutting down");
-                }
-            })
-            .then({
+        .map({
+            let p2p = p2p.clone();
+            let consensus_port = consensus.clone();
+            move |result| {
+                Self::get_block_for_header(result, p2p.clone(), consensus_port.clone())
+            }
+                .instrument(tracing::debug_span!("consensus_and_transactions"))
+                .in_current_span()
+        })
+        // Request up to `max_get_txns_requests` transactions from the network.
+        .buffered(params.max_get_txns_requests)
+        // Continue the stream unless an error or none occurs.
+        // Note the error will be returned but the stream will close.
+        .into_scan_none_or_err()
+        .scan_none_or_err()
+        // Continue the stream until the shutdown signal is received.
+        .take_until({
+            let mut s = shutdown.clone();
+            async move {
+                let _ = s.while_started().await;
+                tracing::info!("In progress import stream shutting down");
+            }
+        })
+        .then({
+            let state = state.clone();
+            let executor = executor.clone();
+            move |block| {
                 let state = state.clone();
                 let executor = executor.clone();
-                move |block| {
-                    let state = state.clone();
-                    let executor = executor.clone();
-                    async move {
-                        // Short circuit on error.
-                        let block = match block {
-                            Ok(b) => b,
-                            Err(e) => return Err(e),
-                        };
-                        execute_and_commit(executor.as_ref(), &state, block).await
-                    }
+                async move {
+                    // Short circuit on error.
+                    let block = match block {
+                        Ok(b) => b,
+                        Err(e) => return Err(e),
+                    };
+                    execute_and_commit(executor.as_ref(), &state, block).await
                 }
-                    .instrument(tracing::debug_span!("execute_and_commit"))
-                    .in_current_span()
-            })
-            // Continue the stream unless an error occurs.
-            .into_scan_err()
-            .scan_err()
-            // Count the number of successfully executed blocks and
-            // find any errors.
-            // Fold the stream into a count and any errors.
-            .fold((0usize, Ok(())), |(count, res), result| async move {
-                match result {
-                    Ok(_) => (count + 1, res),
-                    Err(e) => (count, Err(e)),
-                }
-            })
-            .in_current_span()
-            .await
+            }
+                .instrument(tracing::debug_span!("execute_and_commit"))
+                .in_current_span()
+        })
+        // Continue the stream unless an error occurs.
+        .into_scan_err()
+        .scan_err()
+        // Count the number of successfully executed blocks and
+        // find any errors.
+        // Fold the stream into a count and any errors.
+        .fold((0usize, Ok(())), |(count, res), result| async move {
+            match result {
+                Ok(_) => (count + 1, res),
+                Err(e) => (count, Err(e)),
+            }
+        })
+        .in_current_span()
+        .await
     }
 
     async fn launch_stream_v2(
