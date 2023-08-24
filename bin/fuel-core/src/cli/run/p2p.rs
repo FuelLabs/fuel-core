@@ -185,9 +185,6 @@ pub struct SyncArgs {
     /// The maximum number of headers to request in a single batch.
     #[clap(long = "sync-header-batch-size", default_value = "10", env)]
     pub header_batch_size: u32,
-    /// The maximum number of header batch requests to have active at one time.
-    #[clap(long = "sync-max-header-batch-requests", default_value = "10", env)]
-    pub max_header_batch_requests: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -220,7 +217,6 @@ impl From<SyncArgs> for fuel_core::sync::Config {
         Self {
             max_get_txns_requests: value.max_get_txns_requests,
             header_batch_size: value.header_batch_size,
-            max_header_batch_requests: value.max_header_batch_requests,
         }
     }
 }

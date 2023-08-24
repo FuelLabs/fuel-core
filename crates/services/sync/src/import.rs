@@ -63,8 +63,6 @@ pub struct Config {
     pub max_get_txns_requests: usize,
     /// The maximum number of headers to request in a single batch.
     pub header_batch_size: u32,
-    /// The maximum number of header batch requests to have active at one time.
-    pub max_header_batch_requests: usize,
 }
 
 impl Default for Config {
@@ -72,7 +70,6 @@ impl Default for Config {
         Self {
             max_get_txns_requests: 10,
             header_batch_size: 100,
-            max_header_batch_requests: 10,
         }
     }
 }

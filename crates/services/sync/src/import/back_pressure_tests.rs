@@ -23,7 +23,6 @@ struct Input {
     Config{
         max_get_txns_requests: 1,
         header_batch_size: 1,
-        max_header_batch_requests: 1,
     }
     => Count::default() ; "Empty sanity test"
 )]
@@ -36,7 +35,6 @@ struct Input {
     Config{
         max_get_txns_requests: 1,
         header_batch_size: 1,
-        max_header_batch_requests: 1,
     }
     => is less_or_equal_than Count{ headers: 1, consensus: 1, transactions: 1, executes: 1, blocks: 1 }
     ; "Single with slow headers"
@@ -50,7 +48,6 @@ struct Input {
     Config{
         max_get_txns_requests: 10,
         header_batch_size: 10,
-        max_header_batch_requests: 1,
     }
     => is less_or_equal_than Count{ headers: 10, consensus: 10, transactions: 10, executes: 1, blocks: 21 }
     ; "100 headers with max 10 with slow headers"
@@ -64,7 +61,6 @@ struct Input {
     Config{
         max_get_txns_requests: 10,
         header_batch_size: 10,
-        max_header_batch_requests: 1,
     }
     => is less_or_equal_than Count{ headers: 10, consensus: 10, transactions: 10, executes: 1, blocks: 21 }
     ; "100 headers with max 10 with slow transactions"
@@ -78,7 +74,6 @@ struct Input {
     Config{
         max_get_txns_requests: 10,
         header_batch_size: 10,
-        max_header_batch_requests: 1,
     }
     => is less_or_equal_than Count{ headers: 10, consensus: 10, transactions: 10, executes: 1, blocks: 21 }
     ; "50 headers with max 10 with slow executes"
@@ -92,7 +87,6 @@ struct Input {
     Config{
         max_get_txns_requests: 10,
         header_batch_size: 10,
-        max_header_batch_requests: 10,
     }
     => is less_or_equal_than Count{ headers: 10, consensus: 10, transactions: 10, executes: 1, blocks: 21 }
     ; "50 headers with max 10 size and max 10 requests"

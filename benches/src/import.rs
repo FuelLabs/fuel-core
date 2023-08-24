@@ -40,7 +40,6 @@ pub fn provision_import_test(
     shared_state: SharedMutex<State>,
     input: Durations,
     header_batch_size: u32,
-    max_header_batch_requests: usize,
     max_get_txns_requests: usize,
 ) -> (
     PressureImport,
@@ -49,7 +48,6 @@ pub fn provision_import_test(
 ) {
     let shared_notify = Arc::new(Notify::new());
     let params = Config {
-        max_header_batch_requests,
         header_batch_size,
         max_get_txns_requests,
     };

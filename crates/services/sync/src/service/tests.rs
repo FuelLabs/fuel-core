@@ -61,7 +61,6 @@ async fn test_new_service() {
     let params = Config {
         max_get_txns_requests: 10,
         header_batch_size: 10,
-        max_header_batch_requests: 10,
     };
     let s = new_service(4u32.into(), p2p, importer, consensus, params).unwrap();
 

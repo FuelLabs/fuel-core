@@ -530,7 +530,6 @@ async fn test_import_inner(
     let params = Config {
         max_get_txns_requests: 10,
         header_batch_size: 10,
-        max_header_batch_requests: 10,
     };
     let p2p = Arc::new(p2p);
 
