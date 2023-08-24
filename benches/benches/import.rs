@@ -74,8 +74,8 @@ fn bench_imports(c: &mut Criterion) {
     let durations = Durations {
         headers: Duration::from_millis(5),
         consensus: Duration::from_millis(5),
-        transactions: Duration::from_millis(5),
-        executes: Duration::from_millis(10),
+        transactions: Duration::from_millis(10),
+        executes: Duration::from_millis(15),
     };
 
     // Header batch size = 10, header/txn buffer size = 10
