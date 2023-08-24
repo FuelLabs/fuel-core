@@ -69,26 +69,26 @@ fn bench_imports(c: &mut Criterion) {
 
     let n = 100;
     let durations = Durations {
-        headers: Duration::from_millis(5),
-        consensus: Duration::from_millis(5),
+        headers: Duration::from_millis(10),
+        consensus: Duration::from_millis(10),
         transactions: Duration::from_millis(10),
-        executes: Duration::from_millis(15),
+        executes: Duration::from_millis(5),
     };
 
     // Header batch size = 10, header/txn buffer size = 10
     bench_import(c, n, durations, 10, 10);
 
-    // Header batch size = 20, header/txn buffer size = 10
-    bench_import(c, n, durations, 20, 10);
-
-    // Header batch size = 50, header/txn buffer size = 10
-    bench_import(c, n, durations, 50, 10);
-
-    // Header batch size = 10, header/txn buffer size = 20
-    bench_import(c, n, durations, 10, 20);
+    // Header batch size = 10, header/txn buffer size = 25
+    bench_import(c, n, durations, 10, 25);
 
     // Header batch size = 10, header/txn buffer size = 50
     bench_import(c, n, durations, 10, 50);
+
+    // Header batch size = 25, header/txn buffer size = 10
+    bench_import(c, n, durations, 25, 10);
+
+    // Header batch size = 50, header/txn buffer size = 10
+    bench_import(c, n, durations, 50, 10);
 
     // Header batch size = 50, header/txn buffer size = 50
     bench_import(c, n, durations, 50, 50);
