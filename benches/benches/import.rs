@@ -81,20 +81,20 @@ fn bench_imports(c: &mut Criterion) {
     // Header batch size = 10, header/txn buffer size = 10
     bench_import(&mut group, n, durations, 10, 10);
 
-    // Header batch size = 20, header/txn buffer size = 10
-    bench_import(&mut group, n, durations, 20, 10);
-
-    // Header batch size = 50, header/txn buffer size = 10
-    bench_import(&mut group, n, durations, 20, 10);
-
     // Header batch size = 10, header/txn buffer size = 20
     bench_import(&mut group, n, durations, 10, 20);
 
     // Header batch size = 10, header/txn buffer size = 50
     bench_import(&mut group, n, durations, 10, 50);
 
+    // Header batch size = 20, header/txn buffer size = 10
+    bench_import(&mut group, n, durations, 20, 10);
+
+    // Header batch size = 50, header/txn buffer size = 10
+    bench_import(&mut group, n, durations, 50, 10);
+
     // Header batch size = 50, header/txn buffer size = 50
-    bench_import(&mut group, n, durations, 10, 20);
+    bench_import(&mut group, n, durations, 50, 50);
 }
 
 criterion_group!(benches, bench_imports);
