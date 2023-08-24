@@ -56,7 +56,6 @@ fn bench_imports(c: &mut Criterion) {
                         durations,
                         batch_size,
                         buffer_size,
-                        buffer_size,
                     );
                     import.notify_one();
                     let start = std::time::Instant::now();
