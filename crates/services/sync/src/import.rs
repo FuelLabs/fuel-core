@@ -246,7 +246,7 @@ fn get_transactions<
                 let p2p = p2p.clone();
                 let consensus_port = consensus_port.clone();
                 tokio::spawn(async move {
-                    get_block_for_header(batch, p2p.clone(), consensus_port.clone()).await
+                    get_sealed_blocks(batch, p2p.clone(), consensus_port.clone()).await
                 })
                 .then(|task| async { task.map_err(|e| anyhow!(e))? })
             }
@@ -290,7 +290,7 @@ fn range_chunks(
     })
 }
 
-async fn get_block_for_header<
+async fn get_sealed_blocks<
     P: PeerToPeerPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 >(
