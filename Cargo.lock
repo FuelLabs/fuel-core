@@ -2659,13 +2659,17 @@ dependencies = [
 name = "fuel-core-benches"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "clap",
  "criterion",
  "ctrlc",
  "ed25519-dalek",
  "ethnum",
  "fuel-core",
+ "fuel-core-services",
  "fuel-core-storage",
+ "fuel-core-sync",
  "fuel-core-types",
  "p256 0.13.2",
  "rand 0.7.3",

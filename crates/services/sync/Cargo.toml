@@ -15,6 +15,7 @@ async-trait = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-types = { workspace = true }
 futures = { workspace = true }
+mockall = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 
@@ -23,3 +24,6 @@ fuel-core-trace = { path = "../../trace" }
 fuel-core-types = { path = "../../types", features = ["test-helpers"] }
 mockall = { workspace = true }
 test-case = { workspace = true }
+
+[features]
+benchmarking = ["dep:mockall"]

@@ -1,16 +1,13 @@
 #![allow(non_snake_case)]
 
-use fuel_core_types::blockchain::{
-    consensus::Consensus,
-    header::BlockHeader,
+use crate::{
+    import::test_helpers::empty_header,
+    ports::{
+        MockBlockImporterPort,
+        MockConsensusPort,
+        MockPeerToPeerPort,
+    },
 };
-
-use crate::ports::{
-    MockBlockImporterPort,
-    MockConsensusPort,
-    MockPeerToPeerPort,
-};
-use fuel_core_types::fuel_types::BlockHeight;
 use test_case::test_case;
 
 use super::*;
@@ -655,23 +652,5 @@ impl DefaultMocks for MockBlockImporterPort {
             .times(t)
             .returning(move |_| Ok(()));
         executor
-    }
-}
-
-pub(crate) fn empty_header(h: BlockHeight) -> SourcePeer<SealedBlockHeader> {
-    let mut header = BlockHeader::default();
-    header.consensus.height = h;
-    let transaction_tree =
-        fuel_core_types::fuel_merkle::binary::in_memory::MerkleTree::new();
-    header.application.generated.transactions_root = transaction_tree.root().into();
-
-    let consensus = Consensus::default();
-    let sealed = Sealed {
-        entity: header,
-        consensus,
-    };
-    SourcePeer {
-        peer_id: vec![].into(),
-        data: sealed,
     }
 }

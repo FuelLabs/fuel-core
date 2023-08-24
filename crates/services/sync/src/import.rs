@@ -41,8 +41,10 @@ use crate::{
     },
 };
 
-#[cfg(test)]
-pub(crate) use tests::empty_header;
+#[cfg(any(test, feature = "benchmarking"))]
+/// Accessories for testing the sync. Available only when compiling under test
+/// or benchmarking.
+pub mod test_helpers;
 
 #[cfg(test)]
 mod tests;
@@ -71,7 +73,9 @@ impl Default for Config {
     }
 }
 
-pub(crate) struct Import<P, E, C> {
+/// The combination of shared state, configuration, and services that define
+/// import behavior.
+pub struct Import<P, E, C> {
     /// Shared state between import and sync tasks.
     state: SharedMutex<State>,
     /// Notify import when sync has new work.
@@ -87,7 +91,9 @@ pub(crate) struct Import<P, E, C> {
 }
 
 impl<P, E, C> Import<P, E, C> {
-    pub(crate) fn new(
+    /// Configure an import behavior from a shared state, configuration and
+    /// services that can be executed by an ImportTask.
+    pub fn new(
         state: SharedMutex<State>,
         notify: Arc<Notify>,
         params: Config,
@@ -104,6 +110,11 @@ impl<P, E, C> Import<P, E, C> {
             consensus,
         }
     }
+
+    /// Signal other asynchronous tasks that an import event has occurred.
+    pub fn notify_one(&self) {
+        self.notify.notify_one()
+    }
 }
 impl<P, E, C> Import<P, E, C>
 where
@@ -112,10 +123,8 @@ where
     C: ConsensusPort + Send + Sync + 'static,
 {
     #[tracing::instrument(skip_all)]
-    pub(crate) async fn import(
-        &self,
-        shutdown: &mut StateWatcher,
-    ) -> anyhow::Result<bool> {
+    /// Execute imports until a shutdown is requested.
+    pub async fn import(&self, shutdown: &mut StateWatcher) -> anyhow::Result<bool> {
         self.import_inner(shutdown).await?;
 
         Ok(wait_for_notify_or_shutdown(&self.notify, shutdown).await)

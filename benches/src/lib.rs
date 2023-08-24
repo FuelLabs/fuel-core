@@ -1,3 +1,5 @@
+pub mod import;
+
 use fuel_core::database::vm_database::VmDatabase;
 pub use fuel_core::database::Database;
 use fuel_core_types::{
