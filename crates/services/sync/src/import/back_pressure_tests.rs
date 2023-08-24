@@ -21,7 +21,7 @@ struct Input {
 #[test_case(
     Input::default(), State::new(None, None),
     Config{
-        max_get_txns_requests: 1,
+        block_stream_buffer_size: 1,
         header_batch_size: 1,
     }
     => Count::default() ; "Empty sanity test"
@@ -33,7 +33,7 @@ struct Input {
     },
     State::new(None, 0),
     Config{
-        max_get_txns_requests: 1,
+        block_stream_buffer_size: 1,
         header_batch_size: 1,
     }
     => is less_or_equal_than Count{ headers: 1, consensus: 1, transactions: 1, executes: 1, blocks: 1 }
@@ -46,7 +46,7 @@ struct Input {
     },
     State::new(None, 100),
     Config{
-        max_get_txns_requests: 10,
+        block_stream_buffer_size: 10,
         header_batch_size: 10,
     }
     => is less_or_equal_than Count{ headers: 10, consensus: 10, transactions: 10, executes: 1, blocks: 21 }
@@ -59,7 +59,7 @@ struct Input {
     },
     State::new(None, 100),
     Config{
-        max_get_txns_requests: 10,
+        block_stream_buffer_size: 10,
         header_batch_size: 10,
     }
     => is less_or_equal_than Count{ headers: 10, consensus: 10, transactions: 10, executes: 1, blocks: 21 }
@@ -72,7 +72,7 @@ struct Input {
     },
     State::new(None, 50),
     Config{
-        max_get_txns_requests: 10,
+        block_stream_buffer_size: 10,
         header_batch_size: 10,
     }
     => is less_or_equal_than Count{ headers: 10, consensus: 10, transactions: 10, executes: 1, blocks: 21 }
@@ -85,7 +85,7 @@ struct Input {
     },
     State::new(None, 50),
     Config{
-        max_get_txns_requests: 10,
+        block_stream_buffer_size: 10,
         header_batch_size: 10,
     }
     => is less_or_equal_than Count{ headers: 10, consensus: 10, transactions: 10, executes: 1, blocks: 21 }

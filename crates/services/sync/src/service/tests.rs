@@ -59,7 +59,7 @@ async fn test_new_service() {
         .returning(|_| Ok(true));
     consensus.expect_await_da_height().returning(|_| Ok(()));
     let params = Config {
-        max_get_txns_requests: 10,
+        block_stream_buffer_size: 10,
         header_batch_size: 10,
     };
     let s = new_service(4u32.into(), p2p, importer, consensus, params).unwrap();

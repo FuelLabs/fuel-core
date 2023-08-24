@@ -528,7 +528,7 @@ async fn test_import_inner(
         executor,
     } = mocks;
     let params = Config {
-        max_get_txns_requests: 10,
+        block_stream_buffer_size: 10,
         header_batch_size: 10,
     };
     let p2p = Arc::new(p2p);

@@ -180,8 +180,8 @@ pub struct P2PArgs {
 #[derive(Debug, Clone, Args)]
 pub struct SyncArgs {
     /// The maximum number of get transaction requests to make in a single batch.
-    #[clap(long = "sync-max-get-txns", default_value = "10", env)]
-    pub max_get_txns_requests: usize,
+    #[clap(long = "sync-block-stream-buffer-size", default_value = "10", env)]
+    pub block_stream_buffer_size: usize,
     /// The maximum number of headers to request in a single batch.
     #[clap(long = "sync-header-batch-size", default_value = "10", env)]
     pub header_batch_size: u32,
@@ -215,7 +215,7 @@ impl KeypairArg {
 impl From<SyncArgs> for fuel_core::sync::Config {
     fn from(value: SyncArgs) -> Self {
         Self {
-            max_get_txns_requests: value.max_get_txns_requests,
+            block_stream_buffer_size: value.block_stream_buffer_size,
             header_batch_size: value.header_batch_size,
         }
     }

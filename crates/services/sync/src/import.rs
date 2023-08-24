@@ -60,7 +60,7 @@ mod back_pressure_tests;
 /// Parameters for the import task.
 pub struct Config {
     /// The maximum number of get transaction requests to make in a single batch.
-    pub max_get_txns_requests: usize,
+    pub block_stream_buffer_size: usize,
     /// The maximum number of headers to request in a single batch.
     pub header_batch_size: u32,
 }
@@ -68,7 +68,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            max_get_txns_requests: 10,
+            block_stream_buffer_size: 10,
             header_batch_size: 100,
         }
     }
@@ -175,9 +175,9 @@ where
             ..
         } = &self;
 
-        get_transactions(range.clone(), params, p2p.clone(), consensus.clone())
-        // Request up to `max_get_txns_requests` transactions from the network.
-        .buffered(params.max_get_txns_requests)
+        get_block_stream(range.clone(), params, p2p.clone(), consensus.clone())
+        // Request up to `block_stream_buffer_size` transactions from the network.
+        .buffered(params.block_stream_buffer_size)
         // Continue the stream unless an error or none occurs.
         // Note the error will be returned but the stream will close.
         .into_scan_none_or_err()
@@ -226,7 +226,7 @@ where
     }
 }
 
-fn get_transactions<
+fn get_block_stream<
     P: PeerToPeerPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 >(
@@ -235,7 +235,7 @@ fn get_transactions<
     p2p: Arc<P>,
     consensus: Arc<C>,
 ) -> impl Stream<Item = impl Future<Output = anyhow::Result<Option<SealedBlock>>>> {
-    get_headers(range, params, p2p.clone()).map({
+    get_header_stream(range, params, p2p.clone()).map({
         let p2p = p2p.clone();
         let consensus_port = consensus.clone();
         move |batch| {
@@ -253,7 +253,7 @@ fn get_transactions<
     })
 }
 
-fn get_headers<P: PeerToPeerPort + Send + Sync + 'static>(
+fn get_header_stream<P: PeerToPeerPort + Send + Sync + 'static>(
     range: RangeInclusive<u32>,
     params: &Config,
     p2p: Arc<P>,
