@@ -56,7 +56,7 @@ use fuel_core_types::fuel_vm::state::DebugEval;
 
 pub struct Config {
     /// `true` means that debugger functionality is enabled.
-    debug: bool,
+    debug_enabled: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -204,17 +204,17 @@ pub struct DapMutation;
 pub fn init<Q, M, S>(
     schema: SchemaBuilder<Q, M, S>,
     params: ConsensusParameters,
-    debug: bool,
+    debug_enabled: bool,
 ) -> SchemaBuilder<Q, M, S> {
     schema
         .data(GraphStorage::new(Mutex::new(ConcreteStorage::new(params))))
-        .data(Config { debug })
+        .data(Config { debug_enabled })
 }
 
 fn require_debug(ctx: &Context<'_>) -> async_graphql::Result<()> {
     let config = ctx.data_unchecked::<Config>();
 
-    if config.debug {
+    if config.debug_enabled {
         Ok(())
     } else {
         Err(async_graphql::Error::new("The 'debug' feature is disabled"))

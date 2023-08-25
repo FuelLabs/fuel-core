@@ -10,17 +10,20 @@ Description of the upcoming release here.
 
 ### Added
 
-- [#1322](https://github.com/FuelLabs/fuel-core/pull/1322): 
-    The `debug` flag is added to the CLI. The flag should be used for local development only. Enabling debug mode:
-    - Allows GraphQL Endpoints to arbitrarily advance blocks.
-    - Enables debugger GraphQL Endpoints.
-    - Allows setting `utxo_validation` to `false`.
 - [#1309](https://github.com/FuelLabs/fuel-core/pull/1309): Add documentation for running debug builds with CLion and Visual Studio Code.  
 - [#1308](https://github.com/FuelLabs/fuel-core/pull/1308): Add support for loading .env files when compiling with the `env` feature. This allows users to conveniently supply CLI arguments in a secure and IDE-agnostic way. 
 - [#1304](https://github.com/FuelLabs/fuel-core/pull/1304): Implemented `submit_and_await_commit_with_receipts` method for `FuelClient`.
 - [#1286](https://github.com/FuelLabs/fuel-core/pull/1286): Include readable names for test cases where missing.
 - [#1274](https://github.com/FuelLabs/fuel-core/pull/1274): Added tests to benchmark block synchronization.
 - [#1263](https://github.com/FuelLabs/fuel-core/pull/1263): Add gas benchmarks for `ED19` and `ECR1` instructions.
+
+#### Breaking
+
+- [#1322](https://github.com/FuelLabs/fuel-core/pull/1322):
+  The `debug` flag is added to the CLI. The flag should be used for local development only. Enabling debug mode:
+    - Allows GraphQL Endpoints to arbitrarily advance blocks.
+    - Enables debugger GraphQL Endpoints.
+    - Allows setting `utxo_validation` to `false`.
 
 ### Changed
 

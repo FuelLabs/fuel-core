@@ -135,8 +135,12 @@ pub fn init_sub_services(
     let producer_adapter = BlockProducerAdapter::new(block_producer);
 
     let poa_config: fuel_core_poa::Config = config.into();
-    let production_enabled =
-        !matches!(poa_config.trigger, Trigger::Never) || config.debug;
+    let mut production_enabled = !matches!(poa_config.trigger, Trigger::Never);
+
+    if !production_enabled && config.debug {
+        production_enabled = true;
+        tracing::info!("Enabled manual block production because of `debug` flag");
+    }
 
     let poa = (production_enabled).then(|| {
         fuel_core_poa::new_service(
