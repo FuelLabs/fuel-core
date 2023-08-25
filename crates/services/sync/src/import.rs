@@ -175,7 +175,10 @@ where
             ..
         } = &self;
 
-        get_block_stream(range.clone(), params, p2p.clone(), consensus.clone())
+        let (shutdown_guard_send, mut shutdown_guard_recv) =
+            tokio::sync::mpsc::channel(1);
+
+        let result = get_block_stream(range.clone(), params, p2p.clone(), consensus.clone(), shutdown_guard_send, shutdown.clone())
         // Request up to `block_stream_buffer_size` transactions from the network.
         .buffered(params.block_stream_buffer_size)
         // Continue the stream unless an error or none occurs.
@@ -222,7 +225,10 @@ where
             }
         })
         .in_current_span()
-        .await
+        .await;
+        // wait for any spawned tasks to shutdown
+        let _ = shutdown_guard_recv.recv().await;
+        result
     }
 }
 
@@ -234,18 +240,38 @@ fn get_block_stream<
     params: &Config,
     p2p: Arc<P>,
     consensus: Arc<C>,
+    shutdown_guard: tokio::sync::mpsc::Sender<()>,
+    shutdown_signal: StateWatcher,
 ) -> impl Stream<Item = impl Future<Output = anyhow::Result<Option<SealedBlock>>>> {
     get_header_stream(range, params, p2p.clone()).map({
         let p2p = p2p.clone();
         let consensus_port = consensus.clone();
+        let shutdown_guard = shutdown_guard.clone();
+        let shutdown_signal = shutdown_signal.clone();
         move |batch| {
             {
                 let p2p = p2p.clone();
                 let consensus_port = consensus_port.clone();
+                let shutdown_guard = shutdown_guard.clone();
+                let mut shutdown_signal = shutdown_signal.clone();
                 tokio::spawn(async move {
-                    get_sealed_blocks(batch, p2p.clone(), consensus_port.clone()).await
+                    let _shutdown_guard = shutdown_guard.clone();
+                    let result;
+                    tokio::select! {
+                        block = get_sealed_blocks(batch, p2p.clone(), consensus_port.clone()) => {
+                            result = block
+                        }
+                        _ = shutdown_signal.while_started() => {
+                            // do nothing and return empty response early if shutdown
+                            result = Ok(None)
+                        }
+                    }
+                    result
+
                 })
-                .then(|task| async { task.map_err(|e| anyhow!(e))? })
+                .then(|task| async {
+                    task.map_err(|e| anyhow!(e))?
+                })
             }
             .instrument(tracing::debug_span!("consensus_and_transactions"))
             .in_current_span()
