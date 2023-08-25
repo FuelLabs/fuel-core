@@ -185,7 +185,7 @@ where
         });
         let stream = block_stream.zip(guard_stream);
         let result = stream
-            .then(move |(stream_block_batch, (shutdown_guard, shutdown_signal))| async move {
+            .then(|(stream_block_batch, (shutdown_guard, shutdown_signal))| async move {
                 let shutdown_guard = shutdown_guard.clone();
                 let shutdown_signal = shutdown_signal.clone();
                 tokio::spawn(async move {
