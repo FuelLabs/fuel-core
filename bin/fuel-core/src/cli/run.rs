@@ -357,8 +357,6 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         "default_network"
     }
     .to_string();
-        "default_network".to_string()
-    };
 
     #[cfg(feature = "profiling")]
     let profiling = command.profiling.clone();
