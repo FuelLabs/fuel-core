@@ -185,7 +185,7 @@ where
         });
         let stream = block_stream.zip(guard_stream);
         let result = stream
-            .then(move |(stream_block, (shutdown_guard, shutdown_signal))| async move {
+            .then(move |(stream_block_batch, (shutdown_guard, shutdown_signal))| async move {
                 let shutdown_guard = shutdown_guard.clone();
                 let shutdown_signal = shutdown_signal.clone();
                 tokio::spawn(async move {
@@ -193,8 +193,8 @@ where
                     let _shutdown_guard = shutdown_guard.clone();
                     let mut shutdown_signal = shutdown_signal.clone();
                     tokio::select! {
-                        // Stream a single block
-                        block = stream_block => block,
+                        // Stream a batch of blocks
+                        blocks = stream_block_batch => blocks,
                         // If a shutdown signal is received during the stream, terminate early and
                         // return an empty response
                         _ = shutdown_signal.while_started() => Ok(None)
