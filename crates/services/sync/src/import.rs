@@ -6,6 +6,7 @@ use std::{
     future::Future,
     iter,
     ops::RangeInclusive,
+    // sync,
     sync::Arc,
 };
 
@@ -175,7 +176,32 @@ where
             ..
         } = &self;
 
-        get_block_stream(range.clone(), params, p2p.clone(), consensus.clone())
+        let shutdown_signal = shutdown.clone();
+        let (shutdown_guard, mut shutdown_guard_recv) =
+            tokio::sync::mpsc::channel::<()>(1);
+        let block_stream =
+            get_block_stream(range.clone(), params, p2p.clone(), consensus.clone());
+        let guard_stream = futures::stream::repeat_with(move || {
+            (shutdown_guard.clone(), shutdown_signal.clone())
+        });
+        let stream = block_stream.zip(guard_stream);
+        let result = stream
+            .then(move |(stream_block, (shutdown_guard, shutdown_signal))| async move {
+                let shutdown_guard = shutdown_guard.clone();
+                let shutdown_signal = shutdown_signal.clone();
+                tokio::spawn(async move {
+                    // Hold a shutdown sender for the lifetime of the spawned task
+                    let _shutdown_guard = shutdown_guard.clone();
+                    let mut shutdown_signal = shutdown_signal.clone();
+                    tokio::select! {
+                        // Stream a single block
+                        block = stream_block => block,
+                        // If a shutdown signal is received during the stream, terminate early and
+                        // return an empty response
+                        _ = shutdown_signal.while_started() => Ok(None)
+                    }
+                }).then(|task| async { task.map_err(|e| anyhow!(e))? })
+            })
         // Request up to `block_stream_buffer_size` transactions from the network.
         .buffered(params.block_stream_buffer_size)
         // Continue the stream unless an error or none occurs.
@@ -222,7 +248,11 @@ where
             }
         })
         .in_current_span()
-        .await
+        .await;
+
+        // Wait for any spawned tasks to shutdown
+        let _ = shutdown_guard_recv.recv().await;
+        result
     }
 }
 
@@ -242,10 +272,7 @@ fn get_block_stream<
             {
                 let p2p = p2p.clone();
                 let consensus_port = consensus_port.clone();
-                tokio::spawn(async move {
-                    get_sealed_blocks(batch, p2p.clone(), consensus_port.clone()).await
-                })
-                .then(|task| async { task.map_err(|e| anyhow!(e))? })
+                get_sealed_blocks(batch, p2p.clone(), consensus_port.clone())
             }
             .instrument(tracing::debug_span!("consensus_and_transactions"))
             .in_current_span()
