@@ -186,8 +186,6 @@ where
         let stream = block_stream.zip(guard_stream);
         let result = stream
             .then(|(stream_block_batch, (shutdown_guard, shutdown_signal))| async move {
-                let shutdown_guard = shutdown_guard.clone();
-                let shutdown_signal = shutdown_signal.clone();
                 tokio::spawn(async move {
                     // Hold a shutdown sender for the lifetime of the spawned task
                     let _shutdown_guard = shutdown_guard.clone();
