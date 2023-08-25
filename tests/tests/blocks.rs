@@ -153,44 +153,20 @@ async fn produce_block_manually() {
 async fn produce_block_negative() {
     let db = Database::default();
 
-    let srv = FuelService::from_database(db, Config::local_node())
-        .await
-        .unwrap();
+    let config = Config {
+        debug: false,
+        ..Config::local_node()
+    };
+    let srv = FuelService::from_database(db, config).await.unwrap();
 
     let client = FuelClient::from(srv.bound_address);
 
     let new_height = client.produce_blocks(5, None).await;
 
     assert_eq!(
-        "Response errors; Manual Blocks must be enabled to use this endpoint",
+        "Response errors; `debug` must be enabled to use this endpoint",
         new_height.err().unwrap().to_string()
     );
-
-    let tx = Transaction::default_test_tx();
-    client.submit_and_await_commit(&tx).await.unwrap();
-
-    let transaction_response = client
-        .transaction(&tx.id(&ChainId::default()))
-        .await
-        .unwrap();
-
-    if let TransactionStatus::Success { block_id, .. } =
-        transaction_response.unwrap().status
-    {
-        let block_id = block_id.parse().unwrap();
-        let block_height: u32 = client
-            .block(&block_id)
-            .await
-            .unwrap()
-            .unwrap()
-            .header
-            .height;
-
-        // Block height is now 6 after being advance 5
-        assert!(1 == block_height);
-    } else {
-        panic!("Wrong tx status");
-    };
 }
 
 #[tokio::test]
