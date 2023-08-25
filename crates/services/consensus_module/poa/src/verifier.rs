@@ -57,6 +57,11 @@ pub fn verify_block_fields<D: Database>(
     );
 
     ensure!(
+        header.time() >= prev_header.time(),
+        "The `time` of the next block can't be lower"
+    );
+
+    ensure!(
         header.consensus.application_hash == header.application.hash(),
         "The application hash mismatch."
     );

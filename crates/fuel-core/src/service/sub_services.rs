@@ -134,7 +134,7 @@ pub fn init_sub_services(
     };
     let producer_adapter = BlockProducerAdapter::new(block_producer);
 
-    let poa_config: fuel_core_poa::Config = config.try_into()?;
+    let poa_config: fuel_core_poa::Config = config.into();
     let production_enabled =
         !matches!(poa_config.trigger, Trigger::Never) || config.debug;
 
