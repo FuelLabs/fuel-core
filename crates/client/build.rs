@@ -1,11 +1,9 @@
 fn main() {
     println!("cargo:rerun-if-changed=./assets/debugAdapterProtocol.json");
 
-    #[cfg(feature = "dap")]
     generate_dap_schema();
 }
 
-#[cfg(feature = "dap")]
 fn generate_dap_schema() {
     use schemafy_lib::{
         Expander,

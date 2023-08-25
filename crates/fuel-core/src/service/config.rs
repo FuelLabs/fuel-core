@@ -32,44 +32,87 @@ use fuel_core_relayer::Config as RelayerConfig;
 
 pub use fuel_core_poa::Trigger;
 
-#[derive(Clone, Debug)]
-pub struct Config {
-    pub addr: SocketAddr,
-    pub max_database_cache_size: usize,
-    pub database_path: PathBuf,
-    pub database_type: DbType,
-    pub chain_conf: ChainConfig,
-    // default to false until downstream consumers stabilize
-    pub utxo_validation: bool,
-    pub manual_blocks_enabled: bool,
-    pub block_production: Trigger,
-    pub vm: VMConfig,
-    pub txpool: fuel_core_txpool::Config,
-    pub block_producer: fuel_core_producer::Config,
-    pub block_executor: fuel_core_executor::Config,
-    pub block_importer: fuel_core_importer::Config,
-    #[cfg(feature = "relayer")]
-    pub relayer: Option<RelayerConfig>,
-    #[cfg(feature = "p2p")]
-    pub p2p: Option<P2PConfig<NotInitialized>>,
-    #[cfg(feature = "p2p")]
-    pub sync: fuel_core_sync::Config,
-    pub consensus_key: Option<Secret<SecretKeyWrapper>>,
-    pub name: String,
-    pub verifier: fuel_core_consensus_module::RelayerVerifierConfig,
-    /// The number of reserved peers to connect to before starting to sync.
-    pub min_connected_reserved_peers: usize,
-    /// Time to wait after receiving the latest block before considered to be Synced.
-    pub time_until_synced: Duration,
-    /// Time to wait after submitting a query before debug info will be logged about query.
-    pub query_log_threshold_time: Duration,
+macro_rules! define_config {
+    ($(#[$meta:meta])* $vis:vis struct $name:ident {
+        $($(#[$field_meta:meta])* $field_vis:vis $field_name:ident: $field_type:ty,)*
+    }) => {
+        pub mod unvalidated {
+            use super::*;
+
+            $(#[$meta])*
+            $vis struct $name {
+                $($(#[$field_meta])* $field_vis $field_name: $field_type,)*
+            }
+        }
+
+        #[allow(clippy::manual_non_exhaustive)]
+        $(#[$meta])*
+        $vis struct $name {
+            $($(#[$field_meta])* $field_vis $field_name: $field_type,)*
+
+            /// Private field to enforce usage of internal constructor.
+            _private: (),
+        }
+
+        impl $name {
+           fn from(value: unvalidated::$name) -> Self {
+               Self {
+                   $(
+                        $(#[$field_meta])*
+                        $field_name: value.$field_name,
+                   )*
+                   _private: (),
+               }
+           }
+        }
+    }
 }
 
-impl Config {
+define_config! {
+    #[derive(Clone, Debug)]
+    pub struct Config {
+        pub addr: SocketAddr,
+        pub max_database_cache_size: usize,
+        pub database_path: PathBuf,
+        pub database_type: DbType,
+        pub chain_conf: ChainConfig,
+        /// The `true` value:
+        /// - Enables manual block production.
+        /// - Enables debugger endpoint.
+        /// - Allows setting `utxo_validation` to `false`.
+        pub debug: bool,
+        // default to false until downstream consumers stabilize
+        pub utxo_validation: bool,
+        pub block_production: Trigger,
+        pub vm: VMConfig,
+        pub txpool: fuel_core_txpool::Config,
+        pub block_producer: fuel_core_producer::Config,
+        pub block_executor: fuel_core_executor::Config,
+        pub block_importer: fuel_core_importer::Config,
+        #[cfg(feature = "relayer")]
+        pub relayer: Option<RelayerConfig>,
+        #[cfg(feature = "p2p")]
+        pub p2p: Option<P2PConfig<NotInitialized>>,
+        #[cfg(feature = "p2p")]
+        pub sync: fuel_core_sync::Config,
+        pub consensus_key: Option<Secret<SecretKeyWrapper>>,
+        pub name: String,
+        pub verifier: fuel_core_consensus_module::RelayerVerifierConfig,
+        /// The number of reserved peers to connect to before starting to sync.
+        pub min_connected_reserved_peers: usize,
+        /// Time to wait after receiving the latest block before considered to be Synced.
+        pub time_until_synced: Duration,
+        /// Time to wait after submitting a query before debug info will be logged about query.
+        pub query_log_threshold_time: Duration,
+    }
+}
+
+impl unvalidated::Config {
     pub fn local_node() -> Self {
         let chain_conf = ChainConfig::local_testnet();
         let utxo_validation = false;
         let min_gas_price = 0;
+
         Self {
             addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
             // Set the cache for tests = 10MB
@@ -79,8 +122,8 @@ impl Config {
             database_type: DbType::RocksDb,
             #[cfg(not(feature = "rocksdb"))]
             database_type: DbType::InMemory,
+            debug: true,
             chain_conf: chain_conf.clone(),
-            manual_blocks_enabled: false,
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,
@@ -108,23 +151,42 @@ impl Config {
             query_log_threshold_time: Duration::from_secs(2),
         }
     }
+
+    // TODO: Rework our configs system to avoid nesting of the same configs.
+    pub fn validate(mut self) -> Config {
+        if !self.debug && !self.utxo_validation {
+            tracing::warn!(
+                "The `utxo_validation` should be `true` with disabled `debug`"
+            );
+            self.utxo_validation = true;
+        }
+
+        if self.txpool.chain_config != self.chain_conf {
+            tracing::warn!("The `ChainConfig` of `TxPool` was inconsistent");
+            self.txpool.chain_config = self.chain_conf.clone();
+        }
+        if self.txpool.utxo_validation != self.utxo_validation {
+            tracing::warn!("The `utxo_validation` of `TxPool` was inconsistent");
+            self.txpool.utxo_validation = self.utxo_validation;
+        }
+        if self.block_producer.utxo_validation != self.utxo_validation {
+            tracing::warn!("The `utxo_validation` of `BlockProducer` was inconsistent");
+            self.block_producer.utxo_validation = self.utxo_validation;
+        }
+
+        Config::from(self)
+    }
 }
 
-impl TryFrom<&Config> for fuel_core_poa::Config {
-    type Error = anyhow::Error;
+impl Config {
+    pub fn local_node() -> Self {
+        unvalidated::Config::local_node().validate()
+    }
+}
 
-    fn try_from(config: &Config) -> Result<Self, Self::Error> {
-        // If manual block production then require trigger never or instant.
-        anyhow::ensure!(
-            !config.manual_blocks_enabled
-                || matches!(
-                    config.block_production,
-                    Trigger::Never | Trigger::Instant | Trigger::Interval { .. }
-                ),
-            "Cannot use manual block production unless trigger mode is never, instant or interval."
-        );
-
-        Ok(fuel_core_poa::Config {
+impl From<&Config> for fuel_core_poa::Config {
+    fn from(config: &Config) -> Self {
+        fuel_core_poa::Config {
             trigger: config.block_production,
             block_gas_limit: config.chain_conf.block_gas_limit,
             signing_key: config.consensus_key.clone(),
@@ -132,7 +194,7 @@ impl TryFrom<&Config> for fuel_core_poa::Config {
             consensus_params: config.chain_conf.consensus_parameters.clone(),
             min_connected_reserved_peers: config.min_connected_reserved_peers,
             time_until_synced: config.time_until_synced,
-        })
+        }
     }
 }
 

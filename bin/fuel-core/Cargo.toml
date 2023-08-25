@@ -39,8 +39,7 @@ url = { version = "2.2", optional = true }
 test-case = { workspace = true }
 
 [features]
-debug = ["env", "fuel-core/debug"]
-default = ["debug", "metrics", "relayer", "rocksdb"]
+default = ["env", "metrics", "relayer", "rocksdb"]
 env = ["dep:dotenvy"]
 metrics = ["fuel-core/metrics"]
 p2p = ["fuel-core/p2p", "const_format"]

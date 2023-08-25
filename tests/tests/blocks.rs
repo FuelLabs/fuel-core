@@ -126,9 +126,7 @@ async fn produce_block() {
 async fn produce_block_manually() {
     let db = Database::default();
 
-    let mut config = Config::local_node();
-
-    config.manual_blocks_enabled = true;
+    let config = Config::local_node();
 
     let srv = FuelService::from_database(db, config.clone())
         .await
@@ -200,8 +198,6 @@ async fn produce_block_custom_time() {
     let db = Database::default();
 
     let mut config = Config::local_node();
-
-    config.manual_blocks_enabled = true;
     config.block_production = Trigger::Interval {
         block_time: Duration::from_secs(10),
     };
@@ -230,9 +226,7 @@ async fn produce_block_custom_time() {
 async fn produce_block_bad_start_time() {
     let db = Database::default();
 
-    let mut config = Config::local_node();
-
-    config.manual_blocks_enabled = true;
+    let config = Config::local_node();
 
     let srv = FuelService::from_database(db.clone(), config)
         .await
@@ -262,7 +256,6 @@ async fn produce_block_overflow_time() {
     config.block_production = Trigger::Interval {
         block_time: Duration::from_secs(10),
     };
-    config.manual_blocks_enabled = true;
 
     let srv = FuelService::from_database(db.clone(), config)
         .await
@@ -285,8 +278,7 @@ async fn block_connection_5(
     #[values(PageDirection::Forward, PageDirection::Backward)]
     pagination_direction: PageDirection,
 ) {
-    let mut config = Config::local_node();
-    config.manual_blocks_enabled = true;
+    let config = Config::local_node();
 
     // setup server & client
     let srv = FuelService::from_database(Default::default(), config)

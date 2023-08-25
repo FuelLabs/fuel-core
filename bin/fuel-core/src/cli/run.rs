@@ -18,7 +18,10 @@ use fuel_core::{
     },
     producer::Config as ProducerConfig,
     service::{
-        config::Trigger,
+        config::{
+            unvalidated,
+            Trigger,
+        },
         Config,
         DbType,
         RelayerVerifierConfig,
@@ -108,9 +111,12 @@ pub struct Command {
     )]
     pub chain_config: String,
 
-    /// Allows GraphQL Endpoints to arbitrarily advanced blocks. Should be used for local development only
-    #[arg(long = "manual-blocks-enabled", env)]
-    pub manual_blocks_enabled: bool,
+    /// Should be used for local development only. Enabling debug mode:
+    /// - Allows GraphQL Endpoints to arbitrarily advanced blocks.
+    /// - Enabled debugger GraphQL Endpoints.
+    /// - Allows setting `utxo_validation` to `false`.
+    #[arg(long = "debug", env)]
+    pub debug: bool,
 
     /// Enable logging of backtraces from vm errors
     #[arg(long = "vm-backtrace", env)]
@@ -206,7 +212,7 @@ impl Command {
             database_type,
             chain_config,
             vm_backtrace,
-            manual_blocks_enabled,
+            debug,
             utxo_validation,
             min_gas_price,
             consensus_key,
@@ -286,14 +292,14 @@ impl Command {
             max_wait_time: max_wait_time.into(),
         };
 
-        Ok(Config {
+        let config = unvalidated::Config {
             addr,
             max_database_cache_size,
             database_path,
             database_type,
             chain_conf: chain_conf.clone(),
+            debug,
             utxo_validation,
-            manual_blocks_enabled,
             block_production: trigger,
             vm: VMConfig {
                 backtrace: vm_backtrace,
@@ -327,7 +333,9 @@ impl Command {
             min_connected_reserved_peers,
             time_until_synced: time_until_synced.into(),
             query_log_threshold_time: query_log_threshold_time.into(),
-        })
+        }
+        .validate();
+        Ok(config)
     }
 }
 

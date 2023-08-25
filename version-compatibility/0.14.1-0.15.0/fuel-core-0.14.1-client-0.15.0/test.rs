@@ -44,9 +44,7 @@ mod test {
     async fn produce_block_compatible() {
         let db = Database::default();
 
-        let mut config = Config::local_node();
-
-        config.manual_blocks_enabled = true;
+        let config = Config::local_node();
 
         let srv = FuelService::from_database(db, config.clone())
             .await

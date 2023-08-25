@@ -1,5 +1,3 @@
-#![cfg(feature = "debug")]
-
 use fuel_core::service::{
     Config,
     FuelService,
