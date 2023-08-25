@@ -39,7 +39,7 @@ pub struct Config {
     pub database_path: PathBuf,
     pub database_type: DbType,
     pub chain_conf: ChainConfig,
-    /// The `true` value:
+    /// When `true`:
     /// - Enables manual block production.
     /// - Enables debugger endpoint.
     /// - Allows setting `utxo_validation` to `false`.
