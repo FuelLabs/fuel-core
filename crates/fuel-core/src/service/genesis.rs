@@ -361,10 +361,7 @@ mod tests {
     use super::*;
 
     use crate::service::{
-        config::{
-            unvalidated,
-            Config,
-        },
+        config::Config,
         FuelService,
     };
     use fuel_core_chain_config::{
@@ -401,14 +398,13 @@ mod tests {
     #[tokio::test]
     async fn config_initializes_chain_name() {
         let test_name = "test_net_123".to_string();
-        let service_config = unvalidated::Config {
+        let service_config = Config {
             chain_conf: ChainConfig {
                 chain_name: test_name.clone(),
                 ..ChainConfig::local_testnet()
             },
-            ..unvalidated::Config::local_node()
-        }
-        .validate();
+            ..Config::local_node()
+        };
 
         let db = Database::default();
         FuelService::from_database(db.clone(), service_config)
@@ -426,7 +422,7 @@ mod tests {
     #[tokio::test]
     async fn config_initializes_block_height() {
         let test_height = BlockHeight::from(99u32);
-        let service_config = unvalidated::Config {
+        let service_config = Config {
             chain_conf: ChainConfig {
                 initial_state: Some(StateConfig {
                     height: Some(test_height),
@@ -434,9 +430,8 @@ mod tests {
                 }),
                 ..ChainConfig::local_testnet()
             },
-            ..unvalidated::Config::local_node()
-        }
-        .validate();
+            ..Config::local_node()
+        };
 
         let db = Database::default();
         FuelService::from_database(db.clone(), service_config)
@@ -472,7 +467,7 @@ mod tests {
         let asset_id_bob: AssetId = rng.gen();
         let bob_value = rng.gen();
 
-        let service_config = unvalidated::Config {
+        let service_config = Config {
             chain_conf: ChainConfig {
                 initial_state: Some(StateConfig {
                     coins: Some(vec![
@@ -507,9 +502,8 @@ mod tests {
                 }),
                 ..ChainConfig::local_testnet()
             },
-            ..unvalidated::Config::local_node()
-        }
-        .validate();
+            ..Config::local_node()
+        };
 
         let db = Database::default();
         FuelService::from_database(db.clone(), service_config)
@@ -561,7 +555,7 @@ mod tests {
         let root = contract.root();
         let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
 
-        let service_config = unvalidated::Config {
+        let service_config = Config {
             chain_conf: ChainConfig {
                 initial_state: Some(StateConfig {
                     contracts: Some(vec![ContractConfig {
@@ -579,9 +573,8 @@ mod tests {
                 }),
                 ..ChainConfig::local_testnet()
             },
-            ..unvalidated::Config::local_node()
-        }
-        .validate();
+            ..Config::local_node()
+        };
 
         let db = Database::default();
         FuelService::from_database(db.clone(), service_config)
@@ -645,7 +638,7 @@ mod tests {
         let root = contract.root();
         let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
 
-        let service_config = unvalidated::Config {
+        let service_config = Config {
             chain_conf: ChainConfig {
                 initial_state: Some(StateConfig {
                     contracts: Some(vec![ContractConfig {
@@ -663,9 +656,8 @@ mod tests {
                 }),
                 ..ChainConfig::local_testnet()
             },
-            ..unvalidated::Config::local_node()
-        }
-        .validate();
+            ..Config::local_node()
+        };
 
         let db = Database::default();
         FuelService::from_database(db.clone(), service_config)
@@ -684,7 +676,7 @@ mod tests {
 
     #[tokio::test]
     async fn coin_tx_pointer_cant_exceed_genesis_height() {
-        let service_config = unvalidated::Config {
+        let service_config = Config {
             chain_conf: ChainConfig {
                 initial_state: Some(StateConfig {
                     height: Some(BlockHeight::from(10u32)),
@@ -703,9 +695,8 @@ mod tests {
                 }),
                 ..ChainConfig::local_testnet()
             },
-            ..unvalidated::Config::local_node()
-        }
-        .validate();
+            ..Config::local_node()
+        };
 
         let db = Database::default();
         let init_result = FuelService::from_database(db.clone(), service_config).await;
@@ -723,7 +714,7 @@ mod tests {
         let salt: Salt = rng.gen();
         let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
 
-        let service_config = unvalidated::Config {
+        let service_config = Config {
             chain_conf: ChainConfig {
                 initial_state: Some(StateConfig {
                     height: Some(BlockHeight::from(10u32)),
@@ -743,9 +734,8 @@ mod tests {
                 }),
                 ..ChainConfig::local_testnet()
             },
-            ..unvalidated::Config::local_node()
-        }
-        .validate();
+            ..Config::local_node()
+        };
 
         let db = Database::default();
         let init_result = FuelService::from_database(db.clone(), service_config).await;

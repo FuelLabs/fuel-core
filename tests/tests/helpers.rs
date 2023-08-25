@@ -6,7 +6,6 @@ use fuel_core::{
         StateConfig,
     },
     service::{
-        config::unvalidated,
         Config,
         FuelService,
     },
@@ -157,7 +156,7 @@ impl TestSetupBuilder {
         };
         chain_config.consensus_parameters.tx_params.max_gas_per_tx = self.gas_limit;
         chain_config.block_gas_limit = self.gas_limit;
-        let config = unvalidated::Config {
+        let config = Config {
             utxo_validation: self.utxo_validation,
             txpool: fuel_core_txpool::Config {
                 chain_config: chain_config.clone(),
@@ -165,9 +164,8 @@ impl TestSetupBuilder {
                 ..fuel_core_txpool::Config::default()
             },
             chain_conf: chain_config,
-            ..unvalidated::Config::local_node()
-        }
-        .validate();
+            ..Config::local_node()
+        };
 
         let srv = FuelService::new_node(config).await.unwrap();
         let client = FuelClient::from(srv.bound_address);

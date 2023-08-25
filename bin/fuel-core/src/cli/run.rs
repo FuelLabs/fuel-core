@@ -18,10 +18,7 @@ use fuel_core::{
     },
     producer::Config as ProducerConfig,
     service::{
-        config::{
-            unvalidated,
-            Trigger,
-        },
+        config::Trigger,
         Config,
         DbType,
         RelayerVerifierConfig,
@@ -292,7 +289,7 @@ impl Command {
             max_wait_time: max_wait_time.into(),
         };
 
-        let config = unvalidated::Config {
+        let config = Config {
             addr,
             max_database_cache_size,
             database_path,
@@ -333,8 +330,7 @@ impl Command {
             min_connected_reserved_peers,
             time_until_synced: time_until_synced.into(),
             query_log_threshold_time: query_log_threshold_time.into(),
-        }
-        .validate();
+        };
         Ok(config)
     }
 }
