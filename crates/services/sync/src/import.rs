@@ -154,7 +154,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(skip(self, shutdown))]
+    // #[tracing::instrument(skip(self, shutdown))]
     /// Launches a stream to import and execute a range of blocks.
     ///
     /// This stream will process all blocks up to the given range or
@@ -185,20 +185,20 @@ where
         });
         let stream = block_stream.zip(guard_stream);
         let result = stream
-            .then(|(stream_block_batch, (shutdown_guard, shutdown_signal))| async move {
-                tokio::spawn(async move {
-                    // Hold a shutdown sender for the lifetime of the spawned task
-                    let _shutdown_guard = shutdown_guard.clone();
-                    let mut shutdown_signal = shutdown_signal.clone();
-                    tokio::select! {
-                        // Stream a batch of blocks
-                        blocks = stream_block_batch => blocks,
-                        // If a shutdown signal is received during the stream, terminate early and
-                        // return an empty response
-                        _ = shutdown_signal.while_started() => Ok(None)
-                    }
-                }).then(|task| async { task.map_err(|e| anyhow!(e))? })
-            })
+        .map(|(stream_block_batch, (shutdown_guard, shutdown_signal))| {
+            tokio::spawn(async move {
+                // Hold a shutdown sender for the lifetime of the spawned task
+                let _shutdown_guard = shutdown_guard.clone();
+                let mut shutdown_signal = shutdown_signal.clone();
+                tokio::select! {
+                    // Stream a batch of blocks
+                    blocks = stream_block_batch => blocks,
+                    // If a shutdown signal is received during the stream, terminate early and
+                    // return an empty response
+                    _ = shutdown_signal.while_started() => Ok(None)
+                }
+            }).then(|task| async { task.map_err(|e| anyhow!(e))? })
+        })
         // Request up to `block_stream_buffer_size` transactions from the network.
         .buffered(params.block_stream_buffer_size)
         // Continue the stream unless an error or none occurs.
