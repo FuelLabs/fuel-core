@@ -12,8 +12,8 @@ Description of the upcoming release here.
 
 - [#1322](https://github.com/FuelLabs/fuel-core/pull/1322): 
     The `debug` flag is added to the CLI. The flag should be used for local development only. Enabling debug mode:
-    - Allows GraphQL Endpoints to arbitrarily advanced blocks.
-    - Enabled debugger GraphQL Endpoints.
+    - Allows GraphQL Endpoints to arbitrarily advance blocks.
+    - Enables debugger GraphQL Endpoints.
     - Allows setting `utxo_validation` to `false`.
 - [#1309](https://github.com/FuelLabs/fuel-core/pull/1309): Add documentation for running debug builds with CLion and Visual Studio Code.  
 - [#1308](https://github.com/FuelLabs/fuel-core/pull/1308): Add support for loading .env files when compiling with the `env` feature. This allows users to conveniently supply CLI arguments in a secure and IDE-agnostic way. 

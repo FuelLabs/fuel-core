@@ -109,8 +109,8 @@ pub struct Command {
     pub chain_config: String,
 
     /// Should be used for local development only. Enabling debug mode:
-    /// - Allows GraphQL Endpoints to arbitrarily advanced blocks.
-    /// - Enabled debugger GraphQL Endpoints.
+    /// - Allows GraphQL Endpoints to arbitrarily advance blocks.
+    /// - Enables debugger GraphQL Endpoints.
     /// - Allows setting `utxo_validation` to `false`.
     #[arg(long = "debug", env)]
     pub debug: bool,

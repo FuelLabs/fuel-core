@@ -55,7 +55,7 @@ use uuid::Uuid;
 use fuel_core_types::fuel_vm::state::DebugEval;
 
 pub struct Config {
-    /// The `true` means that debugger functionality is enabled.
+    /// `true` means that debugger functionality is enabled.
     debug: bool,
 }
 
