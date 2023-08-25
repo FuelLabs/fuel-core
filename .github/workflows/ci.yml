@@ -114,6 +114,8 @@ jobs:
           - command: test
             args: -p fuel-core-client --no-default-features
           - command: test
+            args: -p fuel-core-chain-config --no-default-features
+          - command: test
             args: --manifest-path version-compatibility/Cargo.toml --workspace
           - command: build
             args: -p fuel-core-bin --no-default-features --features production
