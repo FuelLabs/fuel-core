@@ -180,12 +180,10 @@ where
             tokio::sync::mpsc::channel::<()>(1);
         let block_stream =
             get_block_stream(range.clone(), params, p2p.clone(), consensus.clone());
-        let guard_stream = futures::stream::repeat_with(move || {
-            (shutdown_guard.clone(), shutdown_signal.clone())
-        });
-        let stream = block_stream.zip(guard_stream);
-        let result = stream
-        .map(|(stream_block_batch, (shutdown_guard, shutdown_signal))| {
+        let result = block_stream
+        .map(move |stream_block_batch| {
+            let shutdown_guard = shutdown_guard.clone();
+            let shutdown_signal = shutdown_signal.clone();
             tokio::spawn(async move {
                 // Hold a shutdown sender for the lifetime of the spawned task
                 let _shutdown_guard = shutdown_guard.clone();
