@@ -154,7 +154,7 @@ where
         Ok(())
     }
 
-    // #[tracing::instrument(skip(self, shutdown))]
+    #[tracing::instrument(skip(self, shutdown))]
     /// Launches a stream to import and execute a range of blocks.
     ///
     /// This stream will process all blocks up to the given range or
