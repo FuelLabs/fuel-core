@@ -36,6 +36,7 @@ use crate::{
     ports::{
         BlockImporterPort,
         ConsensusPort,
+        PeerReport,
         PeerToPeerPort,
     },
     state::State,
@@ -328,14 +329,18 @@ async fn get_sealed_blocks<
         data: header,
     } = header;
     let id = header.entity.id();
-    let block_id = SourcePeer { peer_id, data: id };
+    let block_id = SourcePeer {
+        peer_id: peer_id.clone(),
+        data: id,
+    };
 
     // Check the consensus is valid on this header.
     if !consensus_port
         .check_sealed_header(&header)
         .trace_err("Failed to check consensus on header")?
     {
-        tracing::warn!("Header {:?} failed consensus check", header);
+        tracing::warn!("Header {:?} failed consensus check", &header);
+        p2p.report_peer(peer_id, PeerReport::BadBlockHeader).await?;
         return Ok(None)
     }
 

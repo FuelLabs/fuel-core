@@ -27,6 +27,13 @@ pub use pressure_consensus::PressureConsensus;
 pub use pressure_peer_to_peer::PressurePeerToPeer;
 
 pub fn empty_header(h: BlockHeight) -> SourcePeer<SealedBlockHeader> {
+    empty_header_for_peer_id(h, vec![])
+}
+
+pub fn empty_header_for_peer_id(
+    h: BlockHeight,
+    peer_id: Vec<u8>,
+) -> SourcePeer<SealedBlockHeader> {
     let mut header = BlockHeader::default();
     header.consensus.height = h;
     let transaction_tree =
@@ -39,7 +46,7 @@ pub fn empty_header(h: BlockHeight) -> SourcePeer<SealedBlockHeader> {
         consensus,
     };
     SourcePeer {
-        peer_id: vec![].into(),
+        peer_id: peer_id.into(),
         data: sealed,
     }
 }

@@ -1191,7 +1191,7 @@ mod tests {
                     }
                     tracing::info!("Node B Event: {:?}", node_b_event);
                 }
-            };
+            }
         }
     }
 

@@ -1,11 +1,15 @@
 #![allow(non_snake_case)]
 
 use crate::{
-    import::test_helpers::empty_header,
+    import::test_helpers::{
+        empty_header,
+        empty_header_for_peer_id,
+    },
     ports::{
         MockBlockImporterPort,
         MockConsensusPort,
         MockPeerToPeerPort,
+        PeerReport,
     },
 };
 use test_case::test_case;
@@ -565,6 +569,64 @@ async fn test_import_inner(
     };
     let final_state = import.state.apply(|s| s.clone());
     (final_state, received_notify_signal)
+}
+
+#[tokio::test]
+async fn import__bad_block_header_sends_peer_report() {
+    let notify = Arc::new(Notify::new());
+    let mut p2p = MockPeerToPeerPort::default();
+
+    let peer_id = vec![1, 2, 3, 4];
+    let cloned_peer_id = peer_id.clone();
+    p2p.expect_get_sealed_block_headers()
+        .returning(move |range| {
+            Ok(Some(
+                range
+                    .clone()
+                    .map(|h| empty_header_for_peer_id(h.into(), cloned_peer_id.clone()))
+                    .collect(),
+            ))
+        });
+    p2p.expect_get_transactions()
+        .returning(|_| Ok(Some(vec![])));
+
+    p2p.expect_report_peer()
+        .times(1)
+        .withf(move |peer, report| {
+            let peer_id = peer_id.clone();
+            peer.as_ref() == &peer_id && matches!(report, PeerReport::BadBlockHeader)
+        })
+        .returning(|_, _| Ok(()));
+    let executor = MockBlockImporterPort::default();
+    let mut consensus_port = MockConsensusPort::default();
+    consensus_port
+        .expect_check_sealed_header()
+        .returning(|_| Ok(false));
+
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
+    let p2p = Arc::new(p2p);
+    let executor = Arc::new(executor);
+    let consensus = Arc::new(consensus_port);
+
+    let state = State::new(None, 0).into();
+    let import = Import {
+        state,
+        notify,
+        params,
+        p2p,
+        executor,
+        consensus,
+    };
+    let (_tx, shutdown) = tokio::sync::watch::channel(fuel_core_services::State::Started);
+    let mut watcher = shutdown.into();
+    // Given
+
+    // When
+    import.notify.notify_one();
+    import.import(&mut watcher).await.unwrap();
 }
 
 struct Mocks {

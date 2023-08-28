@@ -12,9 +12,16 @@ use fuel_core_types::{
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
-    services::p2p::SourcePeer,
+    services::p2p::{
+        PeerId,
+        SourcePeer,
+    },
 };
 use std::ops::Range;
+
+pub enum PeerReport {
+    BadBlockHeader,
+}
 
 #[cfg_attr(any(test, feature = "benchmarking"), mockall::automock)]
 #[async_trait::async_trait]
@@ -35,6 +42,8 @@ pub trait PeerToPeerPort {
         &self,
         block_id: SourcePeer<BlockId>,
     ) -> anyhow::Result<Option<Vec<Transaction>>>;
+
+    async fn report_peer(&self, peer: PeerId, report: PeerReport) -> anyhow::Result<()>;
 }
 
 #[cfg_attr(any(test, feature = "benchmarking"), mockall::automock)]

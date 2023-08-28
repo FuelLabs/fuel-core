@@ -5,6 +5,7 @@ use crate::{
     },
     ports::{
         MockPeerToPeerPort,
+        PeerReport,
         PeerToPeerPort,
     },
 };
@@ -16,7 +17,10 @@ use fuel_core_types::{
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
-    services::p2p::SourcePeer,
+    services::p2p::{
+        PeerId,
+        SourcePeer,
+    },
 };
 use std::{
     ops::Range,
@@ -56,6 +60,14 @@ impl PeerToPeerPort for PressurePeerToPeer {
         tokio::time::sleep(self.durations[1]).await;
         self.counts.apply(|c| c.dec_transactions());
         self.p2p.get_transactions(block_id).await
+    }
+
+    async fn report_peer(
+        &self,
+        _peer: PeerId,
+        _report: PeerReport,
+    ) -> anyhow::Result<()> {
+        todo!()
     }
 }
 
