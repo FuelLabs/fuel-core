@@ -1,8 +1,6 @@
 use criterion::{
     criterion_group,
     criterion_main,
-    measurement::WallTime,
-    BenchmarkGroup,
     Criterion,
 };
 use fuel_core_benches::import::{
@@ -23,26 +21,28 @@ async fn execute_import(import: PressureImport, shutdown: &mut StateWatcher) {
     import.import(shutdown).await.unwrap();
 }
 
-fn name(n: u32, durations: Durations, buffer_size: usize) -> String {
+fn name(n: u32, durations: Durations, batch_size: u32, buffer_size: usize) -> String {
     format!(
-        "import {n} * {d_h}/{d_c}/{d_t}/{d_e} - {sz}",
+        "import {n} * {d_h}/{d_c}/{d_t}/{d_e} - {bas}/{bus}",
         n = n,
         d_h = durations.headers.as_millis(),
         d_c = durations.consensus.as_millis(),
         d_t = durations.transactions.as_millis(),
         d_e = durations.executes.as_millis(),
-        sz = buffer_size
+        bas = batch_size,
+        bus = buffer_size
     )
 }
 
 fn bench_imports(c: &mut Criterion) {
-    let bench_import = |group: &mut BenchmarkGroup<WallTime>,
+    let bench_import = |c: &mut Criterion,
                         n: u32,
                         durations: Durations,
                         batch_size: u32,
                         buffer_size: usize| {
-        let name = name(n, durations, buffer_size);
-        group.bench_function(name, move |b| {
+        let name = name(n, durations, batch_size, buffer_size);
+        let mut group = c.benchmark_group(format!("import {}", name));
+        group.bench_function("bench", move |b| {
             let rt = Runtime::new().unwrap();
             b.to_async(&rt).iter_custom(|iters| async move {
                 let mut elapsed_time = Duration::default();
@@ -56,7 +56,6 @@ fn bench_imports(c: &mut Criterion) {
                         durations,
                         batch_size,
                         buffer_size,
-                        buffer_size,
                     );
                     import.notify_one();
                     let start = std::time::Instant::now();
@@ -68,33 +67,31 @@ fn bench_imports(c: &mut Criterion) {
         });
     };
 
-    let mut group = c.benchmark_group("import");
-
     let n = 100;
     let durations = Durations {
-        headers: Duration::from_millis(5),
-        consensus: Duration::from_millis(5),
-        transactions: Duration::from_millis(5),
-        executes: Duration::from_millis(10),
+        headers: Duration::from_millis(10),
+        consensus: Duration::from_millis(10),
+        transactions: Duration::from_millis(10),
+        executes: Duration::from_millis(5),
     };
 
     // Header batch size = 10, header/txn buffer size = 10
-    bench_import(&mut group, n, durations, 10, 10);
+    bench_import(c, n, durations, 10, 10);
 
-    // Header batch size = 20, header/txn buffer size = 10
-    bench_import(&mut group, n, durations, 20, 10);
-
-    // Header batch size = 50, header/txn buffer size = 10
-    bench_import(&mut group, n, durations, 20, 10);
-
-    // Header batch size = 10, header/txn buffer size = 20
-    bench_import(&mut group, n, durations, 10, 20);
+    // Header batch size = 10, header/txn buffer size = 25
+    bench_import(c, n, durations, 10, 25);
 
     // Header batch size = 10, header/txn buffer size = 50
-    bench_import(&mut group, n, durations, 10, 50);
+    bench_import(c, n, durations, 10, 50);
+
+    // Header batch size = 25, header/txn buffer size = 10
+    bench_import(c, n, durations, 25, 10);
+
+    // Header batch size = 50, header/txn buffer size = 10
+    bench_import(c, n, durations, 50, 10);
 
     // Header batch size = 50, header/txn buffer size = 50
-    bench_import(&mut group, n, durations, 10, 20);
+    bench_import(c, n, durations, 50, 50);
 }
 
 criterion_group!(benches, bench_imports);

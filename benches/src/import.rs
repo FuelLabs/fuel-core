@@ -40,8 +40,7 @@ pub fn provision_import_test(
     shared_state: SharedMutex<State>,
     input: Durations,
     header_batch_size: u32,
-    max_header_batch_requests: usize,
-    max_get_txns_requests: usize,
+    block_stream_buffer_size: usize,
 ) -> (
     PressureImport,
     Sender<fuel_core_services::State>,
@@ -49,9 +48,8 @@ pub fn provision_import_test(
 ) {
     let shared_notify = Arc::new(Notify::new());
     let params = Config {
-        max_header_batch_requests,
         header_batch_size,
-        max_get_txns_requests,
+        block_stream_buffer_size,
     };
     let p2p = Arc::new(PressurePeerToPeer::new(
         shared_count.clone(),
