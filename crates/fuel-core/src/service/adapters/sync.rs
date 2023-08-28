@@ -98,9 +98,7 @@ impl PeerToPeerPort for P2PAdapter {
         if let Some(service) = &self.service {
             let service_name = "Sync";
             let new_peer_report_reason: NewPeerReportReason = report.into();
-            service
-                .report_peer(peer, new_peer_report_reason, service_name)
-                .await?;
+            service.report_peer(peer, new_peer_report_reason, service_name)?;
             Ok(())
         } else {
             Ok(())
