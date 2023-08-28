@@ -3,10 +3,13 @@
 //! importing blocks from the network into the local blockchain.
 
 use std::{
+    future::Future,
+    iter,
     ops::RangeInclusive,
     sync::Arc,
 };
 
+use anyhow::anyhow;
 use fuel_core_services::{
     SharedMutex,
     StateWatcher,
@@ -23,6 +26,7 @@ use fuel_core_types::{
 };
 use futures::{
     stream::StreamExt,
+    FutureExt,
     Stream,
 };
 use tokio::sync::Notify;
@@ -56,19 +60,16 @@ mod back_pressure_tests;
 /// Parameters for the import task.
 pub struct Config {
     /// The maximum number of get transaction requests to make in a single batch.
-    pub max_get_txns_requests: usize,
+    pub block_stream_buffer_size: usize,
     /// The maximum number of headers to request in a single batch.
     pub header_batch_size: u32,
-    /// The maximum number of header batch requests to have active at one time.
-    pub max_header_batch_requests: usize,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            max_get_txns_requests: 10,
+            block_stream_buffer_size: 10,
             header_batch_size: 100,
-            max_header_batch_requests: 10,
         }
     }
 }
@@ -174,18 +175,30 @@ where
             ..
         } = &self;
 
-        get_headers_buffered(range.clone(), params, p2p.clone())
-        .map({
-            let p2p = p2p.clone();
-            let consensus_port = consensus.clone();
-            move |result| {
-                Self::get_block_for_header(result, p2p.clone(), consensus_port.clone())
-            }
-            .instrument(tracing::debug_span!("consensus_and_transactions"))
-            .in_current_span()
+        let shutdown_signal = shutdown.clone();
+        let (shutdown_guard, mut shutdown_guard_recv) =
+            tokio::sync::mpsc::channel::<()>(1);
+        let block_stream =
+            get_block_stream(range.clone(), params, p2p.clone(), consensus.clone());
+        let result = block_stream
+        .map(move |stream_block_batch| {
+            let shutdown_guard = shutdown_guard.clone();
+            let shutdown_signal = shutdown_signal.clone();
+            tokio::spawn(async move {
+                // Hold a shutdown sender for the lifetime of the spawned task
+                let _shutdown_guard = shutdown_guard.clone();
+                let mut shutdown_signal = shutdown_signal.clone();
+                tokio::select! {
+                    // Stream a batch of blocks
+                    blocks = stream_block_batch => blocks,
+                    // If a shutdown signal is received during the stream, terminate early and
+                    // return an empty response
+                    _ = shutdown_signal.while_started() => Ok(None)
+                }
+            }).then(|task| async { task.map_err(|e| anyhow!(e))? })
         })
-        // Request up to `max_get_txns_requests` transactions from the network.
-        .buffered(params.max_get_txns_requests)
+        // Request up to `block_stream_buffer_size` transactions from the network.
+        .buffered(params.block_stream_buffer_size)
         // Continue the stream unless an error or none occurs.
         // Note the error will be returned but the stream will close.
         .into_scan_none_or_err()
@@ -230,66 +243,58 @@ where
             }
         })
         .in_current_span()
-        .await
-    }
+        .await;
 
-    async fn get_block_for_header(
-        result: anyhow::Result<SourcePeer<SealedBlockHeader>>,
-        p2p: Arc<P>,
-        consensus_port: Arc<C>,
-    ) -> anyhow::Result<Option<SealedBlock>> {
-        let header = match result {
-            Ok(h) => h,
-            Err(e) => return Err(e),
-        };
-        let SourcePeer {
-            peer_id,
-            data: header,
-        } = header;
-        let id = header.entity.id();
-        let block_id = SourcePeer { peer_id, data: id };
-
-        // Check the consensus is valid on this header.
-        if !consensus_port
-            .check_sealed_header(&header)
-            .trace_err("Failed to check consensus on header")?
-        {
-            tracing::warn!("Header {:?} failed consensus check", header);
-            return Ok(None)
-        }
-
-        // Wait for the da to be at least the da height on the header.
-        consensus_port
-            .await_da_height(&header.entity.da_height)
-            .await?;
-
-        get_transactions_on_block(p2p.as_ref(), block_id, header).await
+        // Wait for any spawned tasks to shutdown
+        let _ = shutdown_guard_recv.recv().await;
+        result
     }
 }
 
-fn get_headers_buffered<P: PeerToPeerPort + Send + Sync + 'static>(
+fn get_block_stream<
+    P: PeerToPeerPort + Send + Sync + 'static,
+    C: ConsensusPort + Send + Sync + 'static,
+>(
+    range: RangeInclusive<u32>,
+    params: &Config,
+    p2p: Arc<P>,
+    consensus: Arc<C>,
+) -> impl Stream<Item = impl Future<Output = anyhow::Result<Option<SealedBlock>>>> {
+    get_header_stream(range, params, p2p.clone()).map({
+        let p2p = p2p.clone();
+        let consensus_port = consensus.clone();
+        move |batch| {
+            {
+                let p2p = p2p.clone();
+                let consensus_port = consensus_port.clone();
+                get_sealed_blocks(batch, p2p.clone(), consensus_port.clone())
+            }
+            .instrument(tracing::debug_span!("consensus_and_transactions"))
+            .in_current_span()
+        }
+    })
+}
+
+fn get_header_stream<P: PeerToPeerPort + Send + Sync + 'static>(
     range: RangeInclusive<u32>,
     params: &Config,
     p2p: Arc<P>,
 ) -> impl Stream<Item = anyhow::Result<SourcePeer<SealedBlockHeader>>> {
     let Config {
-        header_batch_size,
-        max_header_batch_requests,
-        ..
+        header_batch_size, ..
     } = params;
-    futures::stream::iter(range_chunks(range, *header_batch_size))
-        .map(move |range| {
+    let ranges = range_chunks(range, *header_batch_size);
+    let p2p_gen = iter::repeat_with(move || p2p.clone());
+    let iter = ranges.zip(p2p_gen);
+    futures::stream::iter(iter)
+        .then(move |(range, p2p)| async {
             tracing::debug!(
                 "getting header range from {} to {} inclusive",
                 range.start(),
                 range.end()
             );
-            let p2p = p2p.clone();
-            async move { get_headers_batch(range, p2p).await }
-                .instrument(tracing::debug_span!("get_headers_batch"))
-                .in_current_span()
+            get_headers_batch(range, p2p).await
         })
-        .buffered(*max_header_batch_requests)
         .flatten()
         .into_scan_none_or_err()
         .scan_none_or_err()
@@ -304,6 +309,42 @@ fn range_chunks(
         let block_end = (chunk_start + chunk_size).min(end);
         chunk_start..=block_end
     })
+}
+
+async fn get_sealed_blocks<
+    P: PeerToPeerPort + Send + Sync + 'static,
+    C: ConsensusPort + Send + Sync + 'static,
+>(
+    result: anyhow::Result<SourcePeer<SealedBlockHeader>>,
+    p2p: Arc<P>,
+    consensus_port: Arc<C>,
+) -> anyhow::Result<Option<SealedBlock>> {
+    let header = match result {
+        Ok(h) => h,
+        Err(e) => return Err(e),
+    };
+    let SourcePeer {
+        peer_id,
+        data: header,
+    } = header;
+    let id = header.entity.id();
+    let block_id = SourcePeer { peer_id, data: id };
+
+    // Check the consensus is valid on this header.
+    if !consensus_port
+        .check_sealed_header(&header)
+        .trace_err("Failed to check consensus on header")?
+    {
+        tracing::warn!("Header {:?} failed consensus check", header);
+        return Ok(None)
+    }
+
+    // Wait for the da to be at least the da height on the header.
+    consensus_port
+        .await_da_height(&header.entity.da_height)
+        .await?;
+
+    get_transactions_on_block(p2p.as_ref(), block_id, header).await
 }
 
 /// Waits for a notify or shutdown signal.
