@@ -5,7 +5,7 @@ use crate::{
     },
     ports::{
         MockPeerToPeerPort,
-        PeerReport,
+        PeerReportReason,
         PeerToPeerPort,
     },
 };
@@ -65,9 +65,9 @@ impl PeerToPeerPort for PressurePeerToPeer {
     async fn report_peer(
         &self,
         _peer: PeerId,
-        _report: PeerReport,
+        _report: PeerReportReason,
     ) -> anyhow::Result<()> {
-        todo!()
+        unimplemented!()
     }
 }
 

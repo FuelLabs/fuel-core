@@ -7,6 +7,7 @@ use fuel_core_services::stream::BoxStream;
 use fuel_core_sync::ports::{
     BlockImporterPort,
     ConsensusPort,
+    PeerReportReason,
     PeerToPeerPort,
 };
 use fuel_core_types::{
@@ -21,6 +22,10 @@ use fuel_core_types::{
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::p2p::{
+        peer_reputation::{
+            AppScore,
+            PeerReport,
+        },
         PeerId,
         SourcePeer,
     },
@@ -82,6 +87,39 @@ impl PeerToPeerPort for P2PAdapter {
                 .await
         } else {
             Ok(None)
+        }
+    }
+
+    async fn report_peer(
+        &self,
+        peer: PeerId,
+        report: PeerReportReason,
+    ) -> anyhow::Result<()> {
+        if let Some(service) = &self.service {
+            let service_name = "Sync";
+            let new_peer_report_reason: NewPeerReportReason = report.into();
+            service
+                .report_peer(peer, new_peer_report_reason, service_name)
+                .await?;
+            Ok(())
+        } else {
+            Ok(())
+        }
+    }
+}
+
+struct NewPeerReportReason(PeerReportReason);
+
+impl From<PeerReportReason> for NewPeerReportReason {
+    fn from(reason: PeerReportReason) -> Self {
+        Self(reason)
+    }
+}
+
+impl PeerReport for NewPeerReportReason {
+    fn get_score_from_report(&self) -> AppScore {
+        match self.0 {
+            PeerReportReason::BadBlockHeader => -100.,
         }
     }
 }

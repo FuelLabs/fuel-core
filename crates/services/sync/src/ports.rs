@@ -19,7 +19,9 @@ use fuel_core_types::{
 };
 use std::ops::Range;
 
-pub enum PeerReport {
+/// Possible reasons to report a peer
+pub enum PeerReportReason {
+    /// Report a peer for sending a bad block header
     BadBlockHeader,
 }
 
@@ -43,7 +45,12 @@ pub trait PeerToPeerPort {
         block_id: SourcePeer<BlockId>,
     ) -> anyhow::Result<Option<Vec<Transaction>>>;
 
-    async fn report_peer(&self, peer: PeerId, report: PeerReport) -> anyhow::Result<()>;
+    /// Report a peer for some reason to modify their reputation.
+    async fn report_peer(
+        &self,
+        peer: PeerId,
+        report: PeerReportReason,
+    ) -> anyhow::Result<()>;
 }
 
 #[cfg_attr(any(test, feature = "benchmarking"), mockall::automock)]

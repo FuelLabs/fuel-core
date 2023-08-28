@@ -9,7 +9,7 @@ use crate::{
         MockBlockImporterPort,
         MockConsensusPort,
         MockPeerToPeerPort,
-        PeerReport,
+        PeerReportReason,
     },
 };
 use test_case::test_case;
@@ -594,7 +594,8 @@ async fn import__bad_block_header_sends_peer_report() {
         .times(1)
         .withf(move |peer, report| {
             let peer_id = peer_id.clone();
-            peer.as_ref() == &peer_id && matches!(report, PeerReport::BadBlockHeader)
+            peer.as_ref() == &peer_id
+                && matches!(report, PeerReportReason::BadBlockHeader)
         })
         .returning(|_, _| Ok(()));
     let executor = MockBlockImporterPort::default();
