@@ -26,4 +26,4 @@ mockall = { workspace = true }
 test-case = { workspace = true }
 
 [features]
-benchmarking = ["dep:mockall"]
+benchmarking = ["dep:mockall", "fuel-core-types/test-helpers"]

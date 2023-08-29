@@ -189,8 +189,7 @@ async fn messages_empty_results_for_owner_with_no_messages(
 #[tokio::test]
 async fn can_get_message_proof() {
     for n in [1, 2, 10] {
-        let mut config = Config::local_node();
-        config.manual_blocks_enabled = true;
+        let config = Config::local_node();
 
         let coin = config
             .chain_conf

@@ -59,7 +59,7 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tokio-stream = { workspace = true, features = ["sync"] }
 tower-http = { version = "0.3", features = ["set-header", "trace"] }
 tracing = { workspace = true }
-uuid = { version = "1.1", features = ["v4"], optional = true }
+uuid = { version = "1.1", features = ["v4"] }
 
 [dev-dependencies]
 assert_matches = "1.5"
@@ -73,9 +73,7 @@ test-case = { workspace = true }
 test-strategy = { workspace = true }
 
 [features]
-dap = ["dep:uuid"]
-debug = ["fuel-core-types/debug", "dap"]
-default = ["debug", "metrics", "rocksdb"]
+default = ["metrics", "rocksdb"]
 metrics = ["dep:fuel-core-metrics"]
 p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]

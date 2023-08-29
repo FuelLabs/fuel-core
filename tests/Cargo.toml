@@ -29,7 +29,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 cynic = { workspace = true }
 ethers = "1.0.2"
-fuel-core = { path = "../crates/fuel-core", default-features = false, features = ["dap", "test-helpers"] }
+fuel-core = { path = "../crates/fuel-core", default-features = false, features = ["test-helpers"] }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
 fuel-core-p2p = { path = "../crates/services/p2p", features = ["test-helpers"], optional = true }
 fuel-core-poa = { path = "../crates/services/consensus_module/poa" }
@@ -57,7 +57,6 @@ tokio = { workspace = true, features = [
 ] }
 
 [features]
-debug = ["fuel-core-types/debug"]
 default = ["fuel-core/default", "metrics", "relayer"]
 metrics = ["fuel-core/metrics", "fuel-core/rocksdb"]
 p2p = ["fuel-core/p2p", "fuel-core-p2p"]
