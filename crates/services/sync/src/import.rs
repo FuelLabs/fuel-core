@@ -224,11 +224,7 @@ where
                 let state = state.clone();
                 let executor = executor.clone();
                 async move {
-                    // Short circuit on error.
-                    let (peer_id, block) = match res {
-                        Ok(pair) => pair,
-                        Err(e) => return Err(e),
-                    };
+                    let (peer_id, block) = res?;
 
                     let res = execute_and_commit(executor.as_ref(), &state, block).await;
                     match &res {
@@ -358,7 +354,6 @@ async fn get_sealed_blocks<
         .check_sealed_header(&header)
         .trace_err("Failed to check consensus on header")?
     {
-        tracing::warn!("Header {:?} failed consensus check", &header);
         let _ = p2p
             .report_peer(peer_id.clone(), PeerReportReason::BadBlockHeader)
             .await
@@ -448,21 +443,24 @@ async fn get_headers_batch(
                     })
                     .collect(),
             };
-            let expected_len = end - start;
-            if headers.len() != expected_len as usize
-                || headers.iter().any(|h| h.is_err())
-            {
-                tracing::info!("Reporting peer");
-                let _ = p2p
-                    .report_peer(peer_id.clone(), PeerReportReason::MissingBlockHeaders)
-                    .await
-                    .map_err(|e| {
-                        tracing::error!(
-                            "Failed to report bad block header from peer {:?}: {:?}",
-                            peer_id,
-                            e
+            if let Some(expected_len) = end.checked_sub(start) {
+                if headers.len() != expected_len as usize
+                    || headers.iter().any(|h| h.is_err())
+                {
+                    let _ = p2p
+                        .report_peer(
+                            peer_id.clone(),
+                            PeerReportReason::MissingBlockHeaders,
                         )
-                    });
+                        .await
+                        .map_err(|e| {
+                            tracing::error!(
+                                "Failed to report bad block header from peer {:?}: {:?}",
+                                peer_id,
+                                e
+                            )
+                        });
+                }
             }
             headers
         }

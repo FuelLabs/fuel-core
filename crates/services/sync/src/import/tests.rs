@@ -764,6 +764,7 @@ impl PeerReportTestBuider {
     fn p2p(&self, expected_report: PeerReportReason) -> Arc<MockPeerToPeerPort> {
         let peer_id = self.shared_peer_id.clone();
         let mut p2p = MockPeerToPeerPort::default();
+
         if let Some(get_headers) = self.get_sealed_headers.clone() {
             p2p.expect_get_sealed_block_headers().returning(move |_| {
                 Ok(peer_sourced_headers_peer_id(
@@ -781,13 +782,9 @@ impl PeerReportTestBuider {
                 });
         }
 
-        if let Some(get_transactions) = self.get_transactions.clone() {
-            p2p.expect_get_transactions()
-                .returning(move |_| Ok(get_transactions.clone()));
-        } else {
-            p2p.expect_get_transactions()
-                .returning(|_| Ok(Some(vec![])));
-        }
+        let get_transactions = self.get_transactions.clone().unwrap_or(Some(vec![]));
+        p2p.expect_get_transactions()
+            .returning(move |_| Ok(get_transactions.clone()));
 
         let peer_id = self.shared_peer_id.clone();
         p2p.expect_report_peer()
@@ -797,11 +794,13 @@ impl PeerReportTestBuider {
                 peer.as_ref() == peer_id && report == &expected_report
             })
             .returning(|_, _| Ok(()));
+
         Arc::new(p2p)
     }
 
     fn executor(&self) -> Arc<MockBlockImporterPort> {
         let mut executor = MockBlockImporterPort::default();
+
         if let Some(error) = self.execute_and_commit_error.clone() {
             executor
                 .expect_execute_and_commit()
@@ -809,24 +808,22 @@ impl PeerReportTestBuider {
         } else {
             executor.expect_execute_and_commit().returning(|_| Ok(()));
         }
+
         Arc::new(executor)
     }
 
     fn consensus(&self) -> Arc<MockConsensusPort> {
         let mut consensus_port = MockConsensusPort::default();
+
         consensus_port
             .expect_await_da_height()
             .returning(|_| Ok(()));
 
-        if let Some(check_sealed_header) = self.check_sealed_header {
-            consensus_port
-                .expect_check_sealed_header()
-                .returning(move |_| Ok(check_sealed_header));
-        } else {
-            consensus_port
-                .expect_check_sealed_header()
-                .returning(|_| Ok(true));
-        }
+        let check_sealed_header = self.check_sealed_header.unwrap_or(true);
+        consensus_port
+            .expect_check_sealed_header()
+            .returning(move |_| Ok(check_sealed_header));
+
         Arc::new(consensus_port)
     }
 }
