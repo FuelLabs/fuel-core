@@ -529,13 +529,14 @@ async fn test_import_inner(
     let notify = Arc::new(Notify::new());
     let Mocks {
         consensus_port,
-        p2p,
+        mut p2p,
         executor,
     } = mocks;
     let params = Config {
         block_stream_buffer_size: 10,
         header_batch_size: 10,
     };
+    p2p.expect_report_peer().returning(|_, _| Ok(()));
     let p2p = Arc::new(p2p);
 
     let executor = Arc::new(executor);
@@ -620,6 +621,7 @@ struct PeerReportTestBuider {
     get_transactions: Option<Option<Vec<Transaction>>>,
     check_sealed_header: Option<bool>,
     block_count: u32,
+    debug: bool,
 }
 
 impl PeerReportTestBuider {
@@ -629,6 +631,7 @@ impl PeerReportTestBuider {
             get_transactions: None,
             check_sealed_header: None,
             block_count: 1,
+            debug: false,
         }
     }
 
@@ -651,10 +654,11 @@ impl PeerReportTestBuider {
     }
 
     pub async fn run(self, expected_report: PeerReportReason) {
-        tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::ERROR)
-            .try_init()
-            .unwrap();
+        if self.debug {
+            let _ = tracing_subscriber::fmt()
+                .with_max_level(tracing::Level::DEBUG)
+                .try_init();
+        }
 
         let p2p = self.p2p(expected_report);
         let executor = self.executor();

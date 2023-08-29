@@ -229,11 +229,6 @@ where
                     };
 
                     execute_and_commit(executor.as_ref(), &state, block).await.map(|_| peer_id)
-                    // if res.is_ok() {
-                    //     let _ = p2p.report_peer(peer_id.clone(), PeerReportReason::SuccessfulBlockImport)
-                    //         .await.map_err(|e| tracing::error!("Failed to report successful block import for peer {:?}: {:?}", peer_id, e));
-                    // }
-                    // res
                 }
             }
             .instrument(tracing::debug_span!("execute_and_commit"))
@@ -354,8 +349,16 @@ async fn get_sealed_blocks<
         .trace_err("Failed to check consensus on header")?
     {
         tracing::warn!("Header {:?} failed consensus check", &header);
-        p2p.report_peer(peer_id, PeerReportReason::BadBlockHeader)
-            .await?;
+        let _ = p2p
+            .report_peer(peer_id.clone(), PeerReportReason::BadBlockHeader)
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to report bad block header from peer {:?}: {:?}",
+                    peer_id,
+                    e
+                )
+            });
         return Ok(None)
     }
 
@@ -451,28 +454,40 @@ where
         .trace_none_warn("Could not find transactions for header");
     match maybe_txs {
         None => {
-            p2p.report_peer(peer_id.clone(), PeerReportReason::MissingTransactions)
-                .await?;
+            let _ = p2p
+                .report_peer(peer_id.clone(), PeerReportReason::MissingTransactions)
+                .await
+                .map_err(|e| {
+                    tracing::error!(
+                        "Failed to report missing transactions from peer {:?}: {:?}",
+                        peer_id,
+                        e
+                    )
+                });
             Ok(None)
         }
-        Some(transactions) => match Block::try_from_executed(header, transactions) {
-            Some(block) => {
-                tracing::info!("Created block from header and txs");
-                Ok(Some((
-                    peer_id.clone(),
-                    SealedBlock {
-                        entity: block,
-                        consensus,
-                    },
-                )))
+        Some(transactions) => {
+            match Block::try_from_executed(header, transactions) {
+                Some(block) => {
+                    tracing::info!("Created block from header and txs");
+                    Ok(Some((
+                        peer_id.clone(),
+                        SealedBlock {
+                            entity: block,
+                            consensus,
+                        },
+                    )))
+                }
+                None => {
+                    tracing::warn!(
+                        "Failed to created block from header and transactions"
+                    );
+                    let _ = p2p.report_peer(peer_id.clone(), PeerReportReason::InvalidTransactions)
+                    .await .map_err(|e| tracing::error!("Failed to report invalid transaction from peer {:?}: {:?}", peer_id, e));
+                    Ok(None)
+                }
             }
-            None => {
-                tracing::warn!("Failed to created block from header and transactions");
-                p2p.report_peer(peer_id.clone(), PeerReportReason::InvalidTransactions)
-                    .await?;
-                Ok(None)
-            }
-        },
+        }
     }
 }
 
