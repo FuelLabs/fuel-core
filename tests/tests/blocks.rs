@@ -126,9 +126,7 @@ async fn produce_block() {
 async fn produce_block_manually() {
     let db = Database::default();
 
-    let mut config = Config::local_node();
-
-    config.manual_blocks_enabled = true;
+    let config = Config::local_node();
 
     let srv = FuelService::from_database(db, config.clone())
         .await
@@ -155,44 +153,20 @@ async fn produce_block_manually() {
 async fn produce_block_negative() {
     let db = Database::default();
 
-    let srv = FuelService::from_database(db, Config::local_node())
-        .await
-        .unwrap();
+    let config = Config {
+        debug: false,
+        ..Config::local_node()
+    };
+    let srv = FuelService::from_database(db, config).await.unwrap();
 
     let client = FuelClient::from(srv.bound_address);
 
     let new_height = client.produce_blocks(5, None).await;
 
     assert_eq!(
-        "Response errors; Manual Blocks must be enabled to use this endpoint",
+        "Response errors; `debug` must be enabled to use this endpoint",
         new_height.err().unwrap().to_string()
     );
-
-    let tx = Transaction::default_test_tx();
-    client.submit_and_await_commit(&tx).await.unwrap();
-
-    let transaction_response = client
-        .transaction(&tx.id(&ChainId::default()))
-        .await
-        .unwrap();
-
-    if let TransactionStatus::Success { block_id, .. } =
-        transaction_response.unwrap().status
-    {
-        let block_id = block_id.parse().unwrap();
-        let block_height: u32 = client
-            .block(&block_id)
-            .await
-            .unwrap()
-            .unwrap()
-            .header
-            .height;
-
-        // Block height is now 6 after being advance 5
-        assert!(1 == block_height);
-    } else {
-        panic!("Wrong tx status");
-    };
 }
 
 #[tokio::test]
@@ -200,8 +174,6 @@ async fn produce_block_custom_time() {
     let db = Database::default();
 
     let mut config = Config::local_node();
-
-    config.manual_blocks_enabled = true;
     config.block_production = Trigger::Interval {
         block_time: Duration::from_secs(10),
     };
@@ -230,9 +202,7 @@ async fn produce_block_custom_time() {
 async fn produce_block_bad_start_time() {
     let db = Database::default();
 
-    let mut config = Config::local_node();
-
-    config.manual_blocks_enabled = true;
+    let config = Config::local_node();
 
     let srv = FuelService::from_database(db.clone(), config)
         .await
@@ -262,7 +232,6 @@ async fn produce_block_overflow_time() {
     config.block_production = Trigger::Interval {
         block_time: Duration::from_secs(10),
     };
-    config.manual_blocks_enabled = true;
 
     let srv = FuelService::from_database(db.clone(), config)
         .await
@@ -285,8 +254,7 @@ async fn block_connection_5(
     #[values(PageDirection::Forward, PageDirection::Backward)]
     pagination_direction: PageDirection,
 ) {
-    let mut config = Config::local_node();
-    config.manual_blocks_enabled = true;
+    let config = Config::local_node();
 
     // setup server & client
     let srv = FuelService::from_database(Default::default(), config)

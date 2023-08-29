@@ -52,8 +52,12 @@ use tracing::{
 };
 use uuid::Uuid;
 
-#[cfg(feature = "debug")]
 use fuel_core_types::fuel_vm::state::DebugEval;
+
+pub struct Config {
+    /// `true` means that debugger functionality is enabled.
+    debug_enabled: bool,
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct ConcreteStorage {
@@ -200,8 +204,21 @@ pub struct DapMutation;
 pub fn init<Q, M, S>(
     schema: SchemaBuilder<Q, M, S>,
     params: ConsensusParameters,
+    debug_enabled: bool,
 ) -> SchemaBuilder<Q, M, S> {
-    schema.data(GraphStorage::new(Mutex::new(ConcreteStorage::new(params))))
+    schema
+        .data(GraphStorage::new(Mutex::new(ConcreteStorage::new(params))))
+        .data(Config { debug_enabled })
+}
+
+fn require_debug(ctx: &Context<'_>) -> async_graphql::Result<()> {
+    let config = ctx.data_unchecked::<Config>();
+
+    if config.debug_enabled {
+        Ok(())
+    } else {
+        Err(async_graphql::Error::new("The 'debug' feature is disabled"))
+    }
 }
 
 #[Object]
@@ -212,6 +229,7 @@ impl DapQuery {
         id: ID,
         register: U64,
     ) -> async_graphql::Result<U64> {
+        require_debug(ctx)?;
         ctx.data_unchecked::<GraphStorage>()
             .lock()
             .await
@@ -227,6 +245,7 @@ impl DapQuery {
         start: U64,
         size: U64,
     ) -> async_graphql::Result<String> {
+        require_debug(ctx)?;
         ctx.data_unchecked::<GraphStorage>()
             .lock()
             .await
@@ -239,6 +258,7 @@ impl DapQuery {
 #[Object]
 impl DapMutation {
     async fn start_session(&self, ctx: &Context<'_>) -> async_graphql::Result<ID> {
+        require_debug(ctx)?;
         trace!("Initializing new interpreter");
 
         let db = ctx.data_unchecked::<Database>();
@@ -254,15 +274,21 @@ impl DapMutation {
         Ok(id)
     }
 
-    async fn end_session(&self, ctx: &Context<'_>, id: ID) -> bool {
+    async fn end_session(
+        &self,
+        ctx: &Context<'_>,
+        id: ID,
+    ) -> async_graphql::Result<bool> {
+        require_debug(ctx)?;
         let existed = ctx.data_unchecked::<GraphStorage>().lock().await.kill(&id);
 
         debug!("Session {:?} dropped with result {}", id, existed);
 
-        existed
+        Ok(existed)
     }
 
     async fn reset(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<bool> {
+        require_debug(ctx)?;
         let db = ctx.data_unchecked::<Database>();
 
         ctx.data_unchecked::<GraphStorage>()
@@ -281,6 +307,7 @@ impl DapMutation {
         id: ID,
         op: String,
     ) -> async_graphql::Result<bool> {
+        require_debug(ctx)?;
         trace!("Execute encoded op {}", op);
 
         let op: Instruction = serde_json::from_str(op.as_str())?;
@@ -295,25 +322,13 @@ impl DapMutation {
         Ok(result)
     }
 
-    #[cfg(not(feature = "debug"))]
-    async fn set_single_stepping(
-        &self,
-        _ctx: &Context<'_>,
-        _id: ID,
-        _enable: bool,
-    ) -> async_graphql::Result<bool> {
-        Err(async_graphql::Error::new(
-            "Feature 'debug' is not compiled in",
-        ))
-    }
-
-    #[cfg(feature = "debug")]
     async fn set_single_stepping(
         &self,
         ctx: &Context<'_>,
         id: ID,
         enable: bool,
     ) -> async_graphql::Result<bool> {
+        require_debug(ctx)?;
         trace!("Set single stepping to {} for VM {:?}", enable, id);
 
         let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
@@ -326,25 +341,13 @@ impl DapMutation {
         Ok(enable)
     }
 
-    #[cfg(not(feature = "debug"))]
-    async fn set_breakpoint(
-        &self,
-        _ctx: &Context<'_>,
-        _id: ID,
-        _breakpoint: self::gql_types::Breakpoint,
-    ) -> async_graphql::Result<bool> {
-        Err(async_graphql::Error::new(
-            "Feature 'debug' is not compiled in",
-        ))
-    }
-
-    #[cfg(feature = "debug")]
     async fn set_breakpoint(
         &self,
         ctx: &Context<'_>,
         id: ID,
-        breakpoint: self::gql_types::Breakpoint,
+        breakpoint: gql_types::Breakpoint,
     ) -> async_graphql::Result<bool> {
+        require_debug(ctx)?;
         trace!("Continue execution of VM {:?}", id);
 
         let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
@@ -362,7 +365,8 @@ impl DapMutation {
         ctx: &Context<'_>,
         id: ID,
         tx_json: String,
-    ) -> async_graphql::Result<self::gql_types::RunResult> {
+    ) -> async_graphql::Result<gql_types::RunResult> {
+        require_debug(ctx)?;
         trace!("Spawning a new VM instance");
 
         let tx: Transaction = serde_json::from_str(&tx_json)
@@ -395,31 +399,18 @@ impl DapMutation {
                     })
                     .collect();
 
-                #[cfg(feature = "debug")]
-                {
-                    let dbgref = state_ref.state().debug_ref();
-                    Ok(self::gql_types::RunResult {
-                        state: match dbgref {
-                            Some(_) => self::gql_types::RunState::Breakpoint,
-                            None => self::gql_types::RunState::Completed,
-                        },
-                        breakpoint: dbgref.and_then(|d| match d {
-                            DebugEval::Continue => None,
-                            DebugEval::Breakpoint(bp) => Some(bp.into()),
-                        }),
-                        json_receipts,
-                    })
-                }
-
-                #[cfg(not(feature = "debug"))]
-                {
-                    let _ = state_ref;
-                    Ok(self::gql_types::RunResult {
-                        state: self::gql_types::RunState::Completed,
-                        breakpoint: None,
-                        json_receipts,
-                    })
-                }
+                let dbgref = state_ref.state().debug_ref();
+                Ok(gql_types::RunResult {
+                    state: match dbgref {
+                        Some(_) => gql_types::RunState::Breakpoint,
+                        None => gql_types::RunState::Completed,
+                    },
+                    breakpoint: dbgref.and_then(|d| match d {
+                        DebugEval::Continue => None,
+                        DebugEval::Breakpoint(bp) => Some(bp.into()),
+                    }),
+                    json_receipts,
+                })
             }
             CheckedTransaction::Create(create) => {
                 vm.deploy(create).map_err(|err| {
@@ -428,8 +419,8 @@ impl DapMutation {
                     ))
                 })?;
 
-                Ok(self::gql_types::RunResult {
-                    state: self::gql_types::RunState::Completed,
+                Ok(gql_types::RunResult {
+                    state: gql_types::RunState::Completed,
                     breakpoint: None,
                     json_receipts: vec![],
                 })
@@ -440,23 +431,12 @@ impl DapMutation {
         }
     }
 
-    #[cfg(not(feature = "debug"))]
-    async fn continue_tx(
-        &self,
-        _ctx: &Context<'_>,
-        _id: ID,
-    ) -> async_graphql::Result<self::gql_types::RunResult> {
-        Err(async_graphql::Error::new(
-            "Feature 'debug' is not compiled in",
-        ))
-    }
-
-    #[cfg(feature = "debug")]
     async fn continue_tx(
         &self,
         ctx: &Context<'_>,
         id: ID,
-    ) -> async_graphql::Result<self::gql_types::RunResult> {
+    ) -> async_graphql::Result<gql_types::RunResult> {
+        require_debug(ctx)?;
         trace!("Continue execution of VM {:?}", id);
 
         let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
@@ -470,9 +450,9 @@ impl DapMutation {
         let state = match vm.resume() {
             Ok(state) => state,
             // The transaction was already completed earlier, so it cannot be resumed
-            Err(fuel_core_types::fuel_vm::InterpreterError::DebugStateNotInitialized) => {
-                return Ok(self::gql_types::RunResult {
-                    state: self::gql_types::RunState::Completed,
+            Err(InterpreterError::DebugStateNotInitialized) => {
+                return Ok(gql_types::RunResult {
+                    state: gql_types::RunState::Completed,
                     breakpoint: None,
                     json_receipts: Vec::new(),
                 })
@@ -492,10 +472,10 @@ impl DapMutation {
 
         let dbgref = state.debug_ref();
 
-        Ok(self::gql_types::RunResult {
+        Ok(gql_types::RunResult {
             state: match dbgref {
-                Some(_) => self::gql_types::RunState::Breakpoint,
-                None => self::gql_types::RunState::Completed,
+                Some(_) => gql_types::RunState::Breakpoint,
+                None => gql_types::RunState::Completed,
             },
             breakpoint: dbgref.and_then(|d| match d {
                 DebugEval::Continue => None,
@@ -515,7 +495,6 @@ mod gql_types {
         U64,
     };
 
-    #[cfg(feature = "debug")]
     use fuel_core_types::fuel_vm::Breakpoint as FuelBreakpoint;
 
     #[derive(Debug, Clone, Copy, InputObject)]
@@ -524,7 +503,6 @@ mod gql_types {
         pc: U64,
     }
 
-    #[cfg(feature = "debug")]
     impl From<&FuelBreakpoint> for Breakpoint {
         fn from(bp: &FuelBreakpoint) -> Self {
             Self {
@@ -534,7 +512,6 @@ mod gql_types {
         }
     }
 
-    #[cfg(feature = "debug")]
     impl From<Breakpoint> for FuelBreakpoint {
         fn from(bp: Breakpoint) -> Self {
             Self::new(bp.contract.into(), bp.pc.0)
@@ -549,7 +526,6 @@ mod gql_types {
         pc: U64,
     }
 
-    #[cfg(feature = "debug")]
     impl From<&FuelBreakpoint> for OutputBreakpoint {
         fn from(bp: &FuelBreakpoint) -> Self {
             Self {

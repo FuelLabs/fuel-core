@@ -39,9 +39,13 @@ pub struct Config {
     pub database_path: PathBuf,
     pub database_type: DbType,
     pub chain_conf: ChainConfig,
+    /// When `true`:
+    /// - Enables manual block production.
+    /// - Enables debugger endpoint.
+    /// - Allows setting `utxo_validation` to `false`.
+    pub debug: bool,
     // default to false until downstream consumers stabilize
     pub utxo_validation: bool,
-    pub manual_blocks_enabled: bool,
     pub block_production: Trigger,
     pub vm: VMConfig,
     pub txpool: fuel_core_txpool::Config,
@@ -70,6 +74,7 @@ impl Config {
         let chain_conf = ChainConfig::local_testnet();
         let utxo_validation = false;
         let min_gas_price = 0;
+
         Self {
             addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
             // Set the cache for tests = 10MB
@@ -79,8 +84,8 @@ impl Config {
             database_type: DbType::RocksDb,
             #[cfg(not(feature = "rocksdb"))]
             database_type: DbType::InMemory,
+            debug: true,
             chain_conf: chain_conf.clone(),
-            manual_blocks_enabled: false,
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,
@@ -108,23 +113,36 @@ impl Config {
             query_log_threshold_time: Duration::from_secs(2),
         }
     }
+
+    // TODO: Rework our configs system to avoid nesting of the same configs.
+    pub fn make_config_consistent(mut self) -> Config {
+        if !self.debug && !self.utxo_validation {
+            tracing::warn!(
+                "The `utxo_validation` should be `true` with disabled `debug`"
+            );
+            self.utxo_validation = true;
+        }
+
+        if self.txpool.chain_config != self.chain_conf {
+            tracing::warn!("The `ChainConfig` of `TxPool` was inconsistent");
+            self.txpool.chain_config = self.chain_conf.clone();
+        }
+        if self.txpool.utxo_validation != self.utxo_validation {
+            tracing::warn!("The `utxo_validation` of `TxPool` was inconsistent");
+            self.txpool.utxo_validation = self.utxo_validation;
+        }
+        if self.block_producer.utxo_validation != self.utxo_validation {
+            tracing::warn!("The `utxo_validation` of `BlockProducer` was inconsistent");
+            self.block_producer.utxo_validation = self.utxo_validation;
+        }
+
+        self
+    }
 }
 
-impl TryFrom<&Config> for fuel_core_poa::Config {
-    type Error = anyhow::Error;
-
-    fn try_from(config: &Config) -> Result<Self, Self::Error> {
-        // If manual block production then require trigger never or instant.
-        anyhow::ensure!(
-            !config.manual_blocks_enabled
-                || matches!(
-                    config.block_production,
-                    Trigger::Never | Trigger::Instant | Trigger::Interval { .. }
-                ),
-            "Cannot use manual block production unless trigger mode is never, instant or interval."
-        );
-
-        Ok(fuel_core_poa::Config {
+impl From<&Config> for fuel_core_poa::Config {
+    fn from(config: &Config) -> Self {
+        fuel_core_poa::Config {
             trigger: config.block_production,
             block_gas_limit: config.chain_conf.block_gas_limit,
             signing_key: config.consensus_key.clone(),
@@ -132,7 +150,7 @@ impl TryFrom<&Config> for fuel_core_poa::Config {
             consensus_params: config.chain_conf.consensus_parameters.clone(),
             min_connected_reserved_peers: config.min_connected_reserved_peers,
             time_until_synced: config.time_until_synced,
-        })
+        }
     }
 }
 
