@@ -364,25 +364,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
 
     // start profiling agent if url is configured
     #[cfg(feature = "profiling")]
-    let _profiling_agent = profiling
-        .pyroscope_url
-        .as_ref()
-        .map(|url| -> anyhow::Result<_> {
-            // Configure profiling backend
-            let agent = PyroscopeAgent::builder(url, &"fuel-core".to_string())
-                .tags(vec![
-                    ("service", config.name.as_str()),
-                    ("network", network_name.as_str()),
-                ])
-                .backend(pprof_backend(
-                    PprofConfig::new().sample_rate(profiling.pprof_sample_rate),
-                ))
-                .build()
-                .context("failed to start profiler")?;
-            let agent_running = agent.start().unwrap();
-            Ok(agent_running)
-        })
-        .transpose()?;
+    let _profiling_agent = start_pyroscope_agent(profiling, &config, network_name)?;
 
     // log fuel-core version
     info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
@@ -420,6 +402,33 @@ fn load_consensus_key(
     } else {
         Ok(None)
     }
+}
+
+#[cfg(feature = "profiling")]
+fn start_pyroscope_agent<T>(
+    profiling_args: profiling::ProfilingArgs,
+    config: &Config,
+    network_name: String,
+) -> anyhow::Result<T> {
+    profiling_args
+        .pyroscope_url
+        .as_ref()
+        .map(|url| -> anyhow::Result<_> {
+            // Configure profiling backend
+            let agent = PyroscopeAgent::builder(url, &"fuel-core".to_string())
+                .tags(vec![
+                    ("service", config.name.as_str()),
+                    ("network", network_name.as_str()),
+                ])
+                .backend(pprof_backend(
+                    PprofConfig::new().sample_rate(profiling_args.pprof_sample_rate),
+                ))
+                .build()
+                .context("failed to start profiler")?;
+            let agent_running = agent.start().unwrap();
+            Ok(agent_running)
+        })
+        .transpose()
 }
 
 async fn shutdown_signal() -> anyhow::Result<()> {
