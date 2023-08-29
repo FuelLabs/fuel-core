@@ -22,9 +22,11 @@ use std::ops::Range;
 /// Possible reasons to report a peer
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PeerReportReason {
+    // Good
     /// Successfully imported block
     SuccessfulBlockImport,
 
+    // Bad
     /// Did not receive advertised block headers
     MissingBlockHeaders,
     /// Report a peer for sending a bad block header

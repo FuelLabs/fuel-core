@@ -51,25 +51,17 @@ impl PeerToPeerPort for P2PAdapter {
     async fn get_sealed_block_headers(
         &self,
         block_range_height: Range<u32>,
-    ) -> anyhow::Result<Option<Vec<SourcePeer<SealedBlockHeader>>>> {
+    ) -> anyhow::Result<SourcePeer<Option<Vec<SealedBlockHeader>>>> {
         if let Some(service) = &self.service {
-            Ok(service
-                .get_sealed_block_headers(block_range_height)
-                .await?
-                .and_then(|(peer_id, headers)| {
-                    let peer_id: PeerId = peer_id.into();
-                    headers.map(|headers| {
-                        headers
-                            .into_iter()
-                            .map(|header| SourcePeer {
-                                peer_id: peer_id.clone(),
-                                data: header,
-                            })
-                            .collect()
-                    })
-                }))
+            let (peer_id, headers) =
+                service.get_sealed_block_headers(block_range_height).await?;
+            let sourced_headers = SourcePeer {
+                peer_id: peer_id.into(),
+                data: headers,
+            };
+            Ok(sourced_headers)
         } else {
-            Ok(None)
+            Err(anyhow::anyhow!("No P2P service available"))
         }
     }
 
@@ -86,7 +78,7 @@ impl PeerToPeerPort for P2PAdapter {
                 .get_transactions_from_peer(peer_id.into(), block)
                 .await
         } else {
-            Ok(None)
+            Err(anyhow::anyhow!("No P2P service available"))
         }
     }
 
@@ -101,7 +93,7 @@ impl PeerToPeerPort for P2PAdapter {
             service.report_peer(peer, new_peer_report_reason, service_name)?;
             Ok(())
         } else {
-            Ok(())
+            Err(anyhow::anyhow!("No P2P service available"))
         }
     }
 }
@@ -117,9 +109,13 @@ impl From<PeerReportReason> for NewPeerReportReason {
 impl PeerReport for NewPeerReportReason {
     fn get_score_from_report(&self) -> AppScore {
         match self.0 {
+            // Good
+            PeerReportReason::SuccessfulBlockImport => 5.,
+            // Bad
             PeerReportReason::BadBlockHeader => -100.,
             PeerReportReason::MissingTransactions => -100.,
             PeerReportReason::InvalidTransactions => -100.,
+            PeerReportReason::MissingBlockHeaders => -100.,
         }
     }
 }

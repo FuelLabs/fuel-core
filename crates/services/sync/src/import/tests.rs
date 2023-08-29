@@ -674,6 +674,7 @@ impl PeerReportTestBuider {
         }
     }
 
+    #[allow(dead_code)]
     pub fn debug(mut self) -> Self {
         self.debug = true;
         self
@@ -775,7 +776,7 @@ impl PeerReportTestBuider {
             .times(self.block_count as usize)
             .withf(move |peer, report| {
                 let peer_id = peer_id.clone();
-                peer.as_ref() == &peer_id && report == &expected_report
+                peer.as_ref() == peer_id && report == &expected_report
             })
             .returning(|_, _| Ok(()));
         Arc::new(p2p)
@@ -796,7 +797,7 @@ impl PeerReportTestBuider {
         if let Some(check_sealed_header) = self.check_sealed_header {
             consensus_port
                 .expect_check_sealed_header()
-                .returning(move |_| Ok(check_sealed_header.clone()));
+                .returning(move |_| Ok(check_sealed_header));
         } else {
             consensus_port
                 .expect_check_sealed_header()
