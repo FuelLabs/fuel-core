@@ -274,6 +274,7 @@ type FailureStatus {
 }
 
 type FeeParameters {
+	baseAssetId: Bytes32!
 	gasPriceFactor: U64!
 	gasPerByte: U64!
 }
