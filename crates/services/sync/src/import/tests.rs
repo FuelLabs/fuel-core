@@ -621,6 +621,17 @@ async fn import__multiple_blocks_happy_path_sends_good_peer_report() {
 }
 
 #[tokio::test]
+async fn import__missing_headers_sends_peer_report() {
+    // Given
+    PeerReportTestBuider::new()
+        // When
+        .with_get_headers(None)
+        // Then
+        .run(PeerReportReason::MissingBlockHeaders)
+        .await;
+}
+
+#[tokio::test]
 async fn import__bad_block_header_sends_peer_report() {
     // Given
     PeerReportTestBuider::new()
@@ -644,6 +655,7 @@ async fn import__missing_transactions_sends_peer_report() {
 
 struct PeerReportTestBuider {
     shared_peer_id: Vec<u8>,
+    get_sealed_headers: Option<Option<Vec<SealedBlockHeader>>>,
     get_transactions: Option<Option<Vec<Transaction>>>,
     check_sealed_header: Option<bool>,
     block_count: u32,
@@ -654,11 +666,25 @@ impl PeerReportTestBuider {
     pub fn new() -> Self {
         Self {
             shared_peer_id: vec![1, 2, 3, 4],
+            get_sealed_headers: None,
             get_transactions: None,
             check_sealed_header: None,
             block_count: 1,
             debug: false,
         }
+    }
+
+    pub fn debug(mut self) -> Self {
+        self.debug = true;
+        self
+    }
+
+    pub fn with_get_headers(
+        mut self,
+        get_headers: Option<Vec<SealedBlockHeader>>,
+    ) -> Self {
+        self.get_sealed_headers = Some(get_headers);
+        self
     }
 
     pub fn with_get_transactions(
@@ -713,27 +739,28 @@ impl PeerReportTestBuider {
         let mut watcher = shutdown.into();
 
         import.notify.notify_one();
-        import.import(&mut watcher).await.unwrap();
+        let _ = import.import(&mut watcher).await;
     }
 
     fn p2p(&self, expected_report: PeerReportReason) -> Arc<MockPeerToPeerPort> {
         let peer_id = self.shared_peer_id.clone();
         let mut p2p = MockPeerToPeerPort::default();
-        p2p.expect_get_sealed_block_headers()
-            .returning(move |range| {
+        if let Some(get_headers) = self.get_sealed_headers.clone() {
+            p2p.expect_get_sealed_block_headers().returning(move |_| {
                 Ok(peer_sourced_headers_peer_id(
-                    Some(range.clone().map(|h| empty_header(h.into())).collect()),
+                    get_headers.clone(),
                     peer_id.clone().into(),
                 ))
             });
-        let peer_id = self.shared_peer_id.clone();
-        p2p.expect_report_peer()
-            .times(self.block_count as usize)
-            .withf(move |peer, report| {
-                let peer_id = peer_id.clone();
-                peer.as_ref() == &peer_id && report == &expected_report
-            })
-            .returning(|_, _| Ok(()));
+        } else {
+            p2p.expect_get_sealed_block_headers()
+                .returning(move |range| {
+                    Ok(peer_sourced_headers_peer_id(
+                        Some(range.clone().map(|h| empty_header(h.into())).collect()),
+                        peer_id.clone().into(),
+                    ))
+                });
+        }
 
         if let Some(get_transactions) = self.get_transactions.clone() {
             p2p.expect_get_transactions()
@@ -742,6 +769,15 @@ impl PeerReportTestBuider {
             p2p.expect_get_transactions()
                 .returning(|_| Ok(Some(vec![])));
         }
+
+        let peer_id = self.shared_peer_id.clone();
+        p2p.expect_report_peer()
+            .times(self.block_count as usize)
+            .withf(move |peer, report| {
+                let peer_id = peer_id.clone();
+                peer.as_ref() == &peer_id && report == &expected_report
+            })
+            .returning(|_, _| Ok(()));
         Arc::new(p2p)
     }
 

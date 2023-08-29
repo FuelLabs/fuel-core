@@ -24,6 +24,9 @@ use std::ops::Range;
 pub enum PeerReportReason {
     /// Successfully imported block
     SuccessfulBlockImport,
+
+    /// Did not receive advertised block headers
+    MissingBlockHeaders,
     /// Report a peer for sending a bad block header
     BadBlockHeader,
     /// Did not receive advertised transactions

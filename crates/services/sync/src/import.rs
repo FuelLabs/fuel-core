@@ -411,8 +411,15 @@ async fn get_headers_batch(
             } = sourced_headers;
             let cloned_peer_id = peer_id.clone();
             let headers = match maybe_headers {
-                None =>
-                    vec![Err(anyhow::anyhow!("Headers provider was unable to fulfill request for unspecified reason. Possibly because requested batch size was too large"))],
+                None => {
+                    tracing::error!(
+                        "No headers received from peer {:?} for range {} to {}",
+                        peer_id,
+                        start,
+                        end
+                    );
+                    vec![Err(anyhow::anyhow!("Headers provider was unable to fulfill request for unspecified reason. Possibly because requested batch size was too large"))]
+                }
                 Some(headers) => headers
                     .into_iter()
                     .map(move |header| {
@@ -432,9 +439,12 @@ async fn get_headers_batch(
                     .collect(),
             };
             let expected_len = end - start;
-            if headers.len() != expected_len as usize {
+            if headers.len() != expected_len as usize
+                || headers.iter().any(|h| h.is_err())
+            {
+                tracing::info!("Reporting peer");
                 let _ = p2p
-                    .report_peer(peer_id.clone(), PeerReportReason::BadBlockHeader)
+                    .report_peer(peer_id.clone(), PeerReportReason::MissingBlockHeaders)
                     .await
                     .map_err(|e| {
                         tracing::error!(
