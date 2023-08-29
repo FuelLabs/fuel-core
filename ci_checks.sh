@@ -14,5 +14,7 @@ cargo clippy --all-targets --all-features &&
 cargo make check --locked &&
 cargo make check --all-features --locked &&
 cargo test --all-features --workspace &&
-cargo make test --no-default-features &&
+cargo test -p fuel-core --no-default-features &&
+cargo test -p fuel-core-client --no-default-features &&
+cargo test -p fuel-core-chain-config --no-default-features &&
 cargo test --manifest-path version-compatibility/Cargo.toml --workspace

@@ -109,9 +109,12 @@ jobs:
             args: check --locked
           - command: test
             args: --all-features --workspace
-          # use cargo make test to avoid workspace feature unification
-          - command: make
-            args: test --no-default-features
+          - command: test
+            args: -p fuel-core --no-default-features
+          - command: test
+            args: -p fuel-core-client --no-default-features
+          - command: test
+            args: -p fuel-core-chain-config --no-default-features
           - command: test
             args: --manifest-path version-compatibility/Cargo.toml --workspace
           - command: build
