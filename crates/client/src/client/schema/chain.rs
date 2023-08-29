@@ -235,7 +235,6 @@ include_from_impls_and_cynic! {
         pub smo: DependentCost,
         pub srwq: DependentCost,
         pub swwq: DependentCost,
-
     }
 }
 

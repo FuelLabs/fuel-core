@@ -139,7 +139,6 @@ include_from_impls! {
         pub smo: DependentCost,
         pub srwq: DependentCost,
         pub swwq: DependentCost,
-
     }
 }
 
