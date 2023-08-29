@@ -24,6 +24,7 @@ use super::*;
 #[tokio::test]
 async fn test_new_service() {
     let mut p2p = MockPeerToPeerPort::default();
+    p2p.expect_report_peer().returning(|_, _| Ok(()));
     p2p.expect_height_stream().returning(|| {
         stream::iter(
             std::iter::successors(Some(6u32), |n| Some(n + 1)).map(BlockHeight::from),

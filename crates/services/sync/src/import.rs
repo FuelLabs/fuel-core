@@ -218,7 +218,9 @@ where
         .then({
             let state = state.clone();
             let executor = executor.clone();
+            let p2p = p2p.clone();
             move |res| {
+                let p2p = p2p.clone();
                 let state = state.clone();
                 let executor = executor.clone();
                 async move {
@@ -228,7 +230,20 @@ where
                         Err(e) => return Err(e),
                     };
 
-                    execute_and_commit(executor.as_ref(), &state, block).await.map(|_| peer_id)
+                    let res = execute_and_commit(executor.as_ref(), &state, block).await;
+                    match &res {
+                        Ok(_) => {
+                            let _ = p2p.report_peer(peer_id.clone(), PeerReportReason::SuccessfulBlockImport)
+                                .await
+                                .map_err(|e| tracing::error!("Failed to report successful block import for peer {:?}: {:?}", peer_id, e));
+                        },
+                        Err(_) => {
+                            let _ = p2p.report_peer(peer_id.clone(), PeerReportReason::InvalidBlock)
+                                .await
+                                .map_err(|e| tracing::error!("Failed to report failed block import for peer {:?}: {:?}", peer_id, e));
+                        },
+                    }
+                    res
                 }
             }
             .instrument(tracing::debug_span!("execute_and_commit"))
@@ -242,12 +257,7 @@ where
         // Fold the stream into a count and any errors.
         .fold((0usize, Ok(())), |(count, res), result| async move {
             match result {
-                Ok(peer_id) => {
-                    let _ = p2p.report_peer(peer_id.clone(), PeerReportReason::SuccessfulBlockImport)
-                        .await
-                        .map_err(|e| tracing::error!("Failed to report successful block import for peer {:?}: {:?}", peer_id, e));
-                    (count + 1, res)
-                },
+                Ok(_) => (count + 1, res),
                 Err(e) => (count, Err(e)),
             }
         })
@@ -506,22 +516,21 @@ where
         }
         Some(transactions) => {
             match Block::try_from_executed(header, transactions) {
-                Some(block) => {
-                    tracing::info!("Created block from header and txs");
-                    Ok(Some((
-                        peer_id.clone(),
-                        SealedBlock {
-                            entity: block,
-                            consensus,
-                        },
-                    )))
-                }
+                Some(block) => Ok(Some((
+                    peer_id.clone(),
+                    SealedBlock {
+                        entity: block,
+                        consensus,
+                    },
+                ))),
                 None => {
-                    tracing::warn!(
+                    tracing::error!(
                         "Failed to created block from header and transactions"
                     );
-                    let _ = p2p.report_peer(peer_id.clone(), PeerReportReason::InvalidTransactions)
-                    .await .map_err(|e| tracing::error!("Failed to report invalid transaction from peer {:?}: {:?}", peer_id, e));
+                    let _ = p2p
+                        .report_peer(peer_id.clone(), PeerReportReason::InvalidTransactions)
+                        .await
+                        .map_err(|e| tracing::error!("Failed to report invalid transaction from peer {:?}: {:?}", peer_id, e));
                     Ok(None)
                 }
             }

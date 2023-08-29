@@ -116,6 +116,7 @@ impl PeerReport for NewPeerReportReason {
             PeerReportReason::MissingTransactions => -100.,
             PeerReportReason::InvalidTransactions => -100.,
             PeerReportReason::MissingBlockHeaders => -100.,
+            PeerReportReason::InvalidBlock => -100.,
         }
     }
 }

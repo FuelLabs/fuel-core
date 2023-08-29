@@ -35,6 +35,8 @@ pub enum PeerReportReason {
     MissingTransactions,
     /// Received invalid transactions
     InvalidTransactions,
+    /// Received invalid block
+    InvalidBlock,
 }
 
 #[cfg_attr(any(test, feature = "benchmarking"), mockall::automock)]

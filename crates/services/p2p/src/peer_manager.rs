@@ -120,7 +120,6 @@ impl PeerManager {
             .and_then(|info| info.heartbeat_data.seconds_since_last_heartbeat())
         {
             debug!(target: "fuel-p2p", "Previous heartbeat happened {:?} seconds ago", time_elapsed);
-            todo!("Do peer evaluation checks?")
         }
 
         let heartbeat_data = HeartbeatData::new(block_height);

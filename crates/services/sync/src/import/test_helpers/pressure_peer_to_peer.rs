@@ -67,7 +67,7 @@ impl PeerToPeerPort for PressurePeerToPeer {
         _peer: PeerId,
         _report: PeerReportReason,
     ) -> anyhow::Result<()> {
-        unimplemented!()
+        Ok(())
     }
 }
 
