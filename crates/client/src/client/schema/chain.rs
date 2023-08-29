@@ -1,6 +1,7 @@
 use crate::client::schema::{
     block::Block,
     schema,
+    Bytes32,
     U32,
     U64,
 };
@@ -92,6 +93,7 @@ impl From<ContractParameters> for fuel_core_types::fuel_tx::ContractParameters {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FeeParameters {
+    pub base_asset_id: Bytes32,
     pub gas_price_factor: U64,
     pub gas_per_byte: U64,
 }
@@ -99,6 +101,7 @@ pub struct FeeParameters {
 impl From<FeeParameters> for fuel_core_types::fuel_tx::FeeParameters {
     fn from(params: FeeParameters) -> Self {
         Self {
+            base_asset_id: params.base_asset_id.into(),
             gas_price_factor: params.gas_price_factor.into(),
             gas_per_byte: params.gas_per_byte.into(),
         }
