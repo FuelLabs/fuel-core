@@ -404,14 +404,25 @@ async fn get_headers_batch(
         .await
         .trace_err("Failed to get headers");
     let sorted_headers = match res {
-        Ok(None) =>
-                vec![Err(anyhow::anyhow!("Headers provider was unable to fulfill request for unspecified reason. Possibly because requested batch size was too large"))],
-        Ok(Some(headers))  =>        headers
+        Ok(sourced_headers) => {
+            let SourcePeer {
+                peer_id,
+                data: maybe_headers,
+            } = sourced_headers;
+            let cloned_peer_id = peer_id.clone();
+            let headers = match maybe_headers {
+                None =>
+                    vec![Err(anyhow::anyhow!("Headers provider was unable to fulfill request for unspecified reason. Possibly because requested batch size was too large"))],
+                Some(headers) => headers
                     .into_iter()
                     .map(move |header| {
                         let header = range.next().and_then(|height| {
-                            if *(header.data.entity.height()) == height.into() {
-                                Some(header)
+                            if *(header.entity.height()) == height.into() {
+                                let sourced_header = SourcePeer {
+                                    peer_id: cloned_peer_id.clone(),
+                                    data: header,
+                                };
+                                Some(sourced_header)
                             } else {
                                 None
                             }
@@ -419,6 +430,23 @@ async fn get_headers_batch(
                         Ok(header)
                     })
                     .collect(),
+            };
+            let expected_len = end - start;
+            if headers.len() != expected_len as usize {
+                let _ = p2p
+                    .report_peer(peer_id.clone(), PeerReportReason::BadBlockHeader)
+                    .await
+                    .map_err(|e| {
+                        tracing::error!(
+                            "Failed to report bad block header from peer {:?}: {:?}",
+                            peer_id,
+                            e
+                        )
+                    });
+            }
+            headers
+        }
+
         Err(e) => vec![Err(e)],
     };
     futures::stream::iter(sorted_headers)

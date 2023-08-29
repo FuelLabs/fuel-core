@@ -15,25 +15,21 @@ use fuel_core_types::{
         SealedBlockHeader,
     },
     fuel_types::BlockHeight,
-    services::p2p::SourcePeer,
 };
 
 pub use counts::{
     Count,
     SharedCounts,
 };
+use fuel_core_types::services::p2p::{
+    PeerId,
+    SourcePeer,
+};
 pub use pressure_block_importer::PressureBlockImporter;
 pub use pressure_consensus::PressureConsensus;
 pub use pressure_peer_to_peer::PressurePeerToPeer;
 
-pub fn empty_header(h: BlockHeight) -> SourcePeer<SealedBlockHeader> {
-    empty_header_for_peer_id(h, vec![])
-}
-
-pub fn empty_header_for_peer_id(
-    h: BlockHeight,
-    peer_id: Vec<u8>,
-) -> SourcePeer<SealedBlockHeader> {
+pub fn empty_header(h: BlockHeight) -> SealedBlockHeader {
     let mut header = BlockHeader::default();
     header.consensus.height = h;
     let transaction_tree =
@@ -41,12 +37,24 @@ pub fn empty_header_for_peer_id(
     header.application.generated.transactions_root = transaction_tree.root().into();
 
     let consensus = Consensus::default();
-    let sealed = Sealed {
+    Sealed {
         entity: header,
         consensus,
-    };
+    }
+}
+
+pub fn peer_sourced_headers(
+    headers: Option<Vec<SealedBlockHeader>>,
+) -> SourcePeer<Option<Vec<SealedBlockHeader>>> {
+    peer_sourced_headers_peer_id(headers, vec![].into())
+}
+
+pub fn peer_sourced_headers_peer_id(
+    headers: Option<Vec<SealedBlockHeader>>,
+    peer_id: PeerId,
+) -> SourcePeer<Option<Vec<SealedBlockHeader>>> {
     SourcePeer {
-        peer_id: peer_id.into(),
-        data: sealed,
+        peer_id,
+        data: headers,
     }
 }

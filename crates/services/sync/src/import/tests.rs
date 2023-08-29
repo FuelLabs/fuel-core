@@ -3,7 +3,8 @@
 use crate::{
     import::test_helpers::{
         empty_header,
-        empty_header_for_peer_id,
+        peer_sourced_headers,
+        peer_sourced_headers_peer_id,
     },
     ports::{
         MockBlockImporterPort,
@@ -85,7 +86,7 @@ async fn import__header_not_found() {
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| Ok(Some(Vec::new())));
+        .returning(|_| Ok(peer_sourced_headers(Some(Vec::new()))));
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
@@ -107,7 +108,7 @@ async fn import__header_response_incomplete() {
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| Ok(None));
+        .returning(|_| Ok(peer_sourced_headers(None)));
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
@@ -129,7 +130,7 @@ async fn import__header_5_not_found() {
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| Ok(Some(vec![empty_header(4.into())])));
+        .returning(|_| Ok(peer_sourced_headers(Some(vec![empty_header(4.into())]))));
     p2p.expect_get_transactions()
         .times(1)
         .returning(|_| Ok(Some(vec![])));
@@ -154,7 +155,7 @@ async fn import__header_4_not_found() {
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| Ok(Some(vec![empty_header(5.into())])));
+        .returning(|_| Ok(peer_sourced_headers(Some(vec![empty_header(5.into())]))));
     p2p.expect_get_transactions()
         .times(0)
         .returning(|_| Ok(Some(vec![])));
@@ -179,7 +180,12 @@ async fn import__transactions_not_found() {
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])));
+        .returning(|_| {
+            Ok(peer_sourced_headers(Some(vec![
+                empty_header(4.into()),
+                empty_header(5.into()),
+            ])))
+        });
     p2p.expect_get_transactions()
         .times(2)
         .returning(|_| Ok(None));
@@ -204,7 +210,12 @@ async fn import__transactions_not_found_for_header_4() {
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])));
+        .returning(|_| {
+            Ok(peer_sourced_headers(Some(vec![
+                empty_header(4.into()),
+                empty_header(5.into()),
+            ])))
+        });
     let mut height = 3;
     p2p.expect_get_transactions().times(2).returning(move |_| {
         height += 1;
@@ -235,7 +246,12 @@ async fn import__transactions_not_found_for_header_5() {
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])));
+        .returning(|_| {
+            Ok(peer_sourced_headers(Some(vec![
+                empty_header(4.into()),
+                empty_header(5.into()),
+            ])))
+        });
     let mut height = 3;
     p2p.expect_get_transactions().times(2).returning(move |_| {
         height += 1;
@@ -288,7 +304,12 @@ async fn import__p2p_error_on_4_transactions() {
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])));
+        .returning(|_| {
+            Ok(peer_sourced_headers(Some(vec![
+                empty_header(4.into()),
+                empty_header(5.into()),
+            ])))
+        });
     let mut height = 3;
     p2p.expect_get_transactions().times(2).returning(move |_| {
         height += 1;
@@ -319,7 +340,12 @@ async fn import__p2p_error_on_5_transactions() {
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])));
+        .returning(|_| {
+            Ok(peer_sourced_headers(Some(vec![
+                empty_header(4.into()),
+                empty_header(5.into()),
+            ])))
+        });
     let mut height = 3;
     p2p.expect_get_transactions().times(2).returning(move |_| {
         height += 1;
@@ -502,7 +528,7 @@ async fn import__can_work_in_two_loops() {
         .returning(move |range| {
             state.apply(|s| s.observe(6));
             let headers = range.clone().map(|h| empty_header(h.into())).collect();
-            Ok(Some(headers))
+            Ok(peer_sourced_headers(Some(headers)))
         });
     p2p.expect_get_transactions()
         .times(3)
@@ -695,11 +721,9 @@ impl PeerReportTestBuider {
         let mut p2p = MockPeerToPeerPort::default();
         p2p.expect_get_sealed_block_headers()
             .returning(move |range| {
-                Ok(Some(
-                    range
-                        .clone()
-                        .map(|h| empty_header_for_peer_id(h.into(), peer_id.clone()))
-                        .collect(),
+                Ok(peer_sourced_headers_peer_id(
+                    Some(range.clone().map(|h| empty_header(h.into())).collect()),
+                    peer_id.clone().into(),
                 ))
             });
         let peer_id = self.shared_peer_id.clone();
@@ -817,9 +841,9 @@ impl DefaultMocks for MockPeerToPeerPort {
         p2p.expect_get_sealed_block_headers()
             .times(1)
             .returning(|range| {
-                Ok(Some(
+                Ok(peer_sourced_headers(Some(
                     range.clone().map(|h| empty_header(h.into())).collect(),
-                ))
+                )))
             });
         p2p.expect_get_transactions()
             .times(t.next().unwrap())
