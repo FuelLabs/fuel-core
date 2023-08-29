@@ -38,5 +38,4 @@ Description of the upcoming release here.
 - Some fix here 2
 
 #### Breaking
-- Some breaking fix here 3
-- Some breaking fix here 4
+- [#1338](https://github.com/FuelLabs/fuel-core/pull/1338): Updated GraphQL client to use `DependentCost` for `k256`, `mcpi`, `s256`, `scwq`, `swwq` opcodes.
