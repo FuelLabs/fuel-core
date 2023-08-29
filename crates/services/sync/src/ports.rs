@@ -20,9 +20,14 @@ use fuel_core_types::{
 use std::ops::Range;
 
 /// Possible reasons to report a peer
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PeerReportReason {
     /// Report a peer for sending a bad block header
     BadBlockHeader,
+    /// Did not receive advertised transactions
+    MissingTransactions,
+    /// Received invalid transactions
+    InvalidTransactions,
 }
 
 #[cfg_attr(any(test, feature = "benchmarking"), mockall::automock)]

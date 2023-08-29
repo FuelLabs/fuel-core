@@ -12,6 +12,7 @@ use crate::{
         PeerReportReason,
     },
 };
+use fuel_core_types::fuel_tx::Transaction;
 use test_case::test_case;
 
 use super::*;
@@ -573,61 +574,143 @@ async fn test_import_inner(
 
 #[tokio::test]
 async fn import__bad_block_header_sends_peer_report() {
-    let notify = Arc::new(Notify::new());
-    let mut p2p = MockPeerToPeerPort::default();
-
-    let peer_id = vec![1, 2, 3, 4];
-    let cloned_peer_id = peer_id.clone();
-    p2p.expect_get_sealed_block_headers()
-        .returning(move |range| {
-            Ok(Some(
-                range
-                    .clone()
-                    .map(|h| empty_header_for_peer_id(h.into(), cloned_peer_id.clone()))
-                    .collect(),
-            ))
-        });
-    p2p.expect_get_transactions()
-        .returning(|_| Ok(Some(vec![])));
-
-    p2p.expect_report_peer()
-        .times(1)
-        .withf(move |peer, report| {
-            let peer_id = peer_id.clone();
-            peer.as_ref() == &peer_id
-                && matches!(report, PeerReportReason::BadBlockHeader)
-        })
-        .returning(|_, _| Ok(()));
-    let executor = MockBlockImporterPort::default();
-    let mut consensus_port = MockConsensusPort::default();
-    consensus_port
-        .expect_check_sealed_header()
-        .returning(|_| Ok(false));
-
-    let params = Config {
-        block_stream_buffer_size: 10,
-        header_batch_size: 10,
-    };
-    let p2p = Arc::new(p2p);
-    let executor = Arc::new(executor);
-    let consensus = Arc::new(consensus_port);
-
-    let state = State::new(None, 0).into();
-    let import = Import {
-        state,
-        notify,
-        params,
-        p2p,
-        executor,
-        consensus,
-    };
-    let (_tx, shutdown) = tokio::sync::watch::channel(fuel_core_services::State::Started);
-    let mut watcher = shutdown.into();
     // Given
+    PeerReportTestBuider::new()
+        // When
+        .with_check_sealed_header(false)
+        // Then
+        .run(PeerReportReason::BadBlockHeader)
+        .await;
+}
 
-    // When
-    import.notify.notify_one();
-    import.import(&mut watcher).await.unwrap();
+#[tokio::test]
+async fn import__missing_transactions_sends_peer_report() {
+    // Given
+    PeerReportTestBuider::new()
+        // When
+        .with_get_transactions(None)
+        // Then
+        .run(PeerReportReason::MissingTransactions)
+        .await;
+}
+
+struct PeerReportTestBuider {
+    shared_peer_id: Vec<u8>,
+    get_transactions: Option<Option<Vec<Transaction>>>,
+    check_sealed_header: Option<bool>,
+}
+
+impl PeerReportTestBuider {
+    pub fn new() -> Self {
+        Self {
+            shared_peer_id: vec![1, 2, 3, 4],
+            get_transactions: None,
+            check_sealed_header: None,
+        }
+    }
+
+    pub fn with_get_transactions(
+        mut self,
+        get_transactions: Option<Vec<Transaction>>,
+    ) -> Self {
+        self.get_transactions = Some(get_transactions);
+        self
+    }
+
+    pub fn with_check_sealed_header(mut self, check_sealed_header: bool) -> Self {
+        self.check_sealed_header = Some(check_sealed_header);
+        self
+    }
+
+    pub async fn run(self, expected_report: PeerReportReason) {
+        tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::ERROR)
+            .try_init()
+            .unwrap();
+
+        let p2p = self.p2p(expected_report);
+        let executor = self.executor();
+        let consensus = self.consensus();
+
+        let state = State::new(None, 0).into();
+
+        let notify = Arc::new(Notify::new());
+
+        let params = Config {
+            block_stream_buffer_size: 10,
+            header_batch_size: 10,
+        };
+
+        let import = Import {
+            state,
+            notify,
+            params,
+            p2p,
+            executor,
+            consensus,
+        };
+        let (_tx, shutdown) =
+            tokio::sync::watch::channel(fuel_core_services::State::Started);
+        let mut watcher = shutdown.into();
+
+        import.notify.notify_one();
+        import.import(&mut watcher).await.unwrap();
+    }
+
+    fn p2p(&self, expected_report: PeerReportReason) -> Arc<MockPeerToPeerPort> {
+        let peer_id = self.shared_peer_id.clone();
+        let mut p2p = MockPeerToPeerPort::default();
+        p2p.expect_get_sealed_block_headers()
+            .returning(move |range| {
+                Ok(Some(
+                    range
+                        .clone()
+                        .map(|h| empty_header_for_peer_id(h.into(), peer_id.clone()))
+                        .collect(),
+                ))
+            });
+        let peer_id = self.shared_peer_id.clone();
+        p2p.expect_report_peer()
+            .times(1)
+            .withf(move |peer, report| {
+                let peer_id = peer_id.clone();
+                peer.as_ref() == &peer_id && report == &expected_report
+            })
+            .returning(|_, _| Ok(()));
+
+        if let Some(get_transactions) = self.get_transactions.clone() {
+            p2p.expect_get_transactions()
+                .returning(move |_| Ok(get_transactions.clone()));
+        } else {
+            p2p.expect_get_transactions()
+                .returning(|_| Ok(Some(vec![])));
+        }
+        Arc::new(p2p)
+    }
+
+    fn executor(&self) -> Arc<MockBlockImporterPort> {
+        let mut executor = MockBlockImporterPort::default();
+        executor.expect_execute_and_commit().returning(|_| Ok(()));
+        Arc::new(executor)
+    }
+
+    fn consensus(&self) -> Arc<MockConsensusPort> {
+        let mut consensus_port = MockConsensusPort::default();
+        consensus_port
+            .expect_await_da_height()
+            .returning(|_| Ok(()));
+
+        if let Some(check_sealed_header) = self.check_sealed_header {
+            consensus_port
+                .expect_check_sealed_header()
+                .returning(move |_| Ok(check_sealed_header.clone()));
+        } else {
+            consensus_port
+                .expect_check_sealed_header()
+                .returning(|_| Ok(true));
+        }
+        Arc::new(consensus_port)
+    }
 }
 
 struct Mocks {

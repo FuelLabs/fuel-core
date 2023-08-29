@@ -22,7 +22,10 @@ use fuel_core_types::{
         SealedBlock,
         SealedBlockHeader,
     },
-    services::p2p::SourcePeer,
+    services::p2p::{
+        PeerId,
+        SourcePeer,
+    },
 };
 use futures::{
     stream::StreamExt,
@@ -350,7 +353,7 @@ async fn get_sealed_blocks<
         .await_da_height(&header.entity.da_height)
         .await?;
 
-    get_transactions_on_block(p2p.as_ref(), block_id, header).await
+    get_transactions_on_block(p2p.as_ref(), block_id, header, &peer_id).await
 }
 
 /// Waits for a notify or shutdown signal.
@@ -419,6 +422,7 @@ async fn get_transactions_on_block<P>(
     p2p: &P,
     block_id: SourcePeer<BlockId>,
     header: SealedBlockHeader,
+    peer_id: &PeerId,
 ) -> anyhow::Result<Option<SealedBlock>>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
@@ -429,19 +433,33 @@ where
     } = header;
 
     // Request the transactions for this block.
-    Ok(p2p
+    let maybe_txs = p2p
         .get_transactions(block_id)
         .await
         .trace_err("Failed to get transactions")?
-        .trace_none_warn("Could not find transactions for header")
-        .and_then(|transactions| {
-            let block = Block::try_from_executed(header, transactions)
-                .trace_none_warn("Failed to created header from executed transactions")?;
-            Some(SealedBlock {
-                entity: block,
-                consensus,
-            })
-        }))
+        .trace_none_warn("Could not find transactions for header");
+    match maybe_txs {
+        None => {
+            p2p.report_peer(peer_id.clone(), PeerReportReason::MissingTransactions)
+                .await?;
+            Ok(None)
+        }
+        Some(transactions) => match Block::try_from_executed(header, transactions) {
+            Some(block) => {
+                tracing::info!("Created block from header and txs");
+                Ok(Some(SealedBlock {
+                    entity: block,
+                    consensus,
+                }))
+            }
+            None => {
+                tracing::warn!("Failed to created block from header and transactions");
+                p2p.report_peer(peer_id.clone(), PeerReportReason::InvalidTransactions)
+                    .await?;
+                Ok(None)
+            }
+        },
+    }
 }
 
 #[tracing::instrument(

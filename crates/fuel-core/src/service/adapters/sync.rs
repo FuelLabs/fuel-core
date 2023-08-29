@@ -118,6 +118,8 @@ impl PeerReport for NewPeerReportReason {
     fn get_score_from_report(&self) -> AppScore {
         match self.0 {
             PeerReportReason::BadBlockHeader => -100.,
+            PeerReportReason::MissingTransactions => -100.,
+            PeerReportReason::InvalidTransactions => -100.,
         }
     }
 }
