@@ -218,17 +218,22 @@ where
         .then({
             let state = state.clone();
             let executor = executor.clone();
-            move |block| {
+            move |res| {
                 let state = state.clone();
                 let executor = executor.clone();
                 async move {
                     // Short circuit on error.
-                    let block = match block {
-                        Ok(b) => b,
+                    let (peer_id, block) = match res {
+                        Ok(pair) => pair,
                         Err(e) => return Err(e),
                     };
 
-                    execute_and_commit(executor.as_ref(), &state, block).await
+                    execute_and_commit(executor.as_ref(), &state, block).await.map(|_| peer_id)
+                    // if res.is_ok() {
+                    //     let _ = p2p.report_peer(peer_id.clone(), PeerReportReason::SuccessfulBlockImport)
+                    //         .await.map_err(|e| tracing::error!("Failed to report successful block import for peer {:?}: {:?}", peer_id, e));
+                    // }
+                    // res
                 }
             }
             .instrument(tracing::debug_span!("execute_and_commit"))
@@ -242,7 +247,12 @@ where
         // Fold the stream into a count and any errors.
         .fold((0usize, Ok(())), |(count, res), result| async move {
             match result {
-                Ok(_) => (count + 1, res),
+                Ok(peer_id) => {
+                    let _ = p2p.report_peer(peer_id.clone(), PeerReportReason::SuccessfulBlockImport)
+                        .await
+                        .map_err(|e| tracing::error!("Failed to report successful block import for peer {:?}: {:?}", peer_id, e));
+                    (count + 1, res)
+                },
                 Err(e) => (count, Err(e)),
             }
         })
@@ -263,7 +273,8 @@ fn get_block_stream<
     params: &Config,
     p2p: Arc<P>,
     consensus: Arc<C>,
-) -> impl Stream<Item = impl Future<Output = anyhow::Result<Option<SealedBlock>>>> {
+) -> impl Stream<Item = impl Future<Output = anyhow::Result<Option<(PeerId, SealedBlock)>>>>
+{
     get_header_stream(range, params, p2p.clone()).map({
         let p2p = p2p.clone();
         let consensus_port = consensus.clone();
@@ -322,7 +333,7 @@ async fn get_sealed_blocks<
     result: anyhow::Result<SourcePeer<SealedBlockHeader>>,
     p2p: Arc<P>,
     consensus_port: Arc<C>,
-) -> anyhow::Result<Option<SealedBlock>> {
+) -> anyhow::Result<Option<(PeerId, SealedBlock)>> {
     let header = match result {
         Ok(h) => h,
         Err(e) => return Err(e),
@@ -423,7 +434,7 @@ async fn get_transactions_on_block<P>(
     block_id: SourcePeer<BlockId>,
     header: SealedBlockHeader,
     peer_id: &PeerId,
-) -> anyhow::Result<Option<SealedBlock>>
+) -> anyhow::Result<Option<(PeerId, SealedBlock)>>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
 {
@@ -447,10 +458,13 @@ where
         Some(transactions) => match Block::try_from_executed(header, transactions) {
             Some(block) => {
                 tracing::info!("Created block from header and txs");
-                Ok(Some(SealedBlock {
-                    entity: block,
-                    consensus,
-                }))
+                Ok(Some((
+                    peer_id.clone(),
+                    SealedBlock {
+                        entity: block,
+                        consensus,
+                    },
+                )))
             }
             None => {
                 tracing::warn!("Failed to created block from header and transactions");

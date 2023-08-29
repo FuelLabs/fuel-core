@@ -573,6 +573,27 @@ async fn test_import_inner(
 }
 
 #[tokio::test]
+async fn import__happy_path_sends_good_peer_report() {
+    // Given
+    PeerReportTestBuider::new()
+        // When (no changes)
+        // Then
+        .run(PeerReportReason::SuccessfulBlockImport)
+        .await;
+}
+
+#[tokio::test]
+async fn import__multiple_blocks_happy_path_sends_good_peer_report() {
+    // Given
+    PeerReportTestBuider::new()
+        // When 
+        .times(3)
+        // Then
+        .run(PeerReportReason::SuccessfulBlockImport)
+        .await;
+}
+
+#[tokio::test]
 async fn import__bad_block_header_sends_peer_report() {
     // Given
     PeerReportTestBuider::new()
@@ -598,6 +619,7 @@ struct PeerReportTestBuider {
     shared_peer_id: Vec<u8>,
     get_transactions: Option<Option<Vec<Transaction>>>,
     check_sealed_header: Option<bool>,
+    block_count: u32,
 }
 
 impl PeerReportTestBuider {
@@ -606,6 +628,7 @@ impl PeerReportTestBuider {
             shared_peer_id: vec![1, 2, 3, 4],
             get_transactions: None,
             check_sealed_header: None,
+            block_count: 1,
         }
     }
 
@@ -622,6 +645,11 @@ impl PeerReportTestBuider {
         self
     }
 
+    pub fn times(mut self, block_count: u32) -> Self {
+        self.block_count = block_count;
+        self
+    }
+
     pub async fn run(self, expected_report: PeerReportReason) {
         tracing_subscriber::fmt()
             .with_max_level(tracing::Level::ERROR)
@@ -632,7 +660,8 @@ impl PeerReportTestBuider {
         let executor = self.executor();
         let consensus = self.consensus();
 
-        let state = State::new(None, 0).into();
+        let index = self.block_count - 1;
+        let state = State::new(None, index).into();
 
         let notify = Arc::new(Notify::new());
 
@@ -671,7 +700,7 @@ impl PeerReportTestBuider {
             });
         let peer_id = self.shared_peer_id.clone();
         p2p.expect_report_peer()
-            .times(1)
+            .times(self.block_count as usize)
             .withf(move |peer, report| {
                 let peer_id = peer_id.clone();
                 peer.as_ref() == &peer_id && report == &expected_report
