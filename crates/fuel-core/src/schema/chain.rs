@@ -10,6 +10,7 @@ use crate::{
     schema::{
         block::Block,
         scalars::{
+            AssetId,
             Bytes32,
             U32,
             U64,
@@ -168,7 +169,7 @@ impl ContractParameters {
 
 #[Object]
 impl FeeParameters {
-    async fn base_asset_id(&self) -> Bytes32 {
+    async fn base_asset_id(&self) -> AssetId {
         self.0.base_asset_id.into()
     }
 
