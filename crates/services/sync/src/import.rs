@@ -234,9 +234,8 @@ where
                                 .map_err(|e| tracing::error!("Failed to report successful block import for peer {:?}: {:?}", peer_id, e));
                         },
                         Err(_) => {
-                            let _ = p2p.report_peer(peer_id.clone(), PeerReportReason::InvalidBlock)
-                                .await
-                                .map_err(|e| tracing::error!("Failed to report failed block import for peer {:?}: {:?}", peer_id, e));
+                            // If this fails, then it means that consensus has approved a block that is invalid.
+                            // This would suggest a more serious issue than a bad peer, e.g. a fork or an out-of-date client.
                         },
                     }
                     res

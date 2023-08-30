@@ -653,23 +653,11 @@ async fn import__missing_transactions_sends_peer_report() {
         .await;
 }
 
-#[tokio::test]
-async fn import__invalid_block_sends_peer_report() {
-    // Given
-    PeerReportTestBuider::new()
-        // When
-        .with_execute_and_commit_error()
-        // Then
-        .run_with_expected_report(PeerReportReason::InvalidBlock)
-        .await;
-}
-
 struct PeerReportTestBuider {
     shared_peer_id: Vec<u8>,
     get_sealed_headers: Option<Option<Vec<SealedBlockHeader>>>,
     get_transactions: Option<Option<Vec<Transaction>>>,
     check_sealed_header: Option<bool>,
-    execute_and_commit_error: Option<String>,
     block_count: u32,
     debug: bool,
 }
@@ -681,7 +669,6 @@ impl PeerReportTestBuider {
             get_sealed_headers: None,
             get_transactions: None,
             check_sealed_header: None,
-            execute_and_commit_error: None,
             block_count: 1,
             debug: false,
         }
@@ -711,11 +698,6 @@ impl PeerReportTestBuider {
 
     pub fn with_check_sealed_header(mut self, check_sealed_header: bool) -> Self {
         self.check_sealed_header = Some(check_sealed_header);
-        self
-    }
-
-    pub fn with_execute_and_commit_error(mut self) -> Self {
-        self.execute_and_commit_error = Some("Some execution error".to_string());
         self
     }
 
@@ -801,13 +783,7 @@ impl PeerReportTestBuider {
     fn executor(&self) -> Arc<MockBlockImporterPort> {
         let mut executor = MockBlockImporterPort::default();
 
-        if let Some(error) = self.execute_and_commit_error.clone() {
-            executor
-                .expect_execute_and_commit()
-                .returning(move |_| Err(anyhow::anyhow!(error.to_string())));
-        } else {
-            executor.expect_execute_and_commit().returning(|_| Ok(()));
-        }
+        executor.expect_execute_and_commit().returning(|_| Ok(()));
 
         Arc::new(executor)
     }
