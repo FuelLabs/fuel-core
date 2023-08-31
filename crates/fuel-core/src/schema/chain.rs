@@ -11,7 +11,6 @@ use crate::{
         block::Block,
         scalars::{
             AssetId,
-            Bytes32,
             U32,
             U64,
         },

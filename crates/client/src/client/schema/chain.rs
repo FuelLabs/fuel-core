@@ -2,7 +2,6 @@ use crate::client::schema::{
     block::Block,
     schema,
     schema::AssetId,
-    Bytes32,
     U32,
     U64,
 };

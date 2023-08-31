@@ -19,7 +19,7 @@ version = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 derive_more = { version = "0.99" }
-fuel-vm-private = { workspace = true, features = ["debug"] }
+fuel-vm-private = { workspace = true }
 secrecy = "0.8"
 serde = { workspace = true, features = ["derive"], optional = true }
 tai64 = { version = "4.0", features = ["serde"] }
