@@ -109,8 +109,24 @@ pub fn init_sub_services(
     };
 
     #[cfg(feature = "p2p")]
-    let p2p_adapter =
-        P2PAdapter::new(network.as_ref().map(|network| network.shared.clone()));
+    let p2p_adapter = {
+        use crate::service::adapters::PeerReportConfig;
+
+        // Hardcoded for now, but left here to be configurable in the future.
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1340
+        let peer_report_config = PeerReportConfig {
+            successful_block_import: 5.,
+            missing_block_headers: -100.,
+            bad_block_header: -100.,
+            missing_transactions: -100.,
+            invalid_transactions: -100.,
+        };
+        P2PAdapter::new(
+            network.as_ref().map(|network| network.shared.clone()),
+            peer_report_config,
+        )
+    };
+
     #[cfg(not(feature = "p2p"))]
     let p2p_adapter = P2PAdapter::new();
 

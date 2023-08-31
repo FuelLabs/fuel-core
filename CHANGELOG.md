@@ -16,14 +16,7 @@ Description of the upcoming release here.
 - [#1286](https://github.com/FuelLabs/fuel-core/pull/1286): Include readable names for test cases where missing.
 - [#1274](https://github.com/FuelLabs/fuel-core/pull/1274): Added tests to benchmark block synchronization.
 - [#1263](https://github.com/FuelLabs/fuel-core/pull/1263): Add gas benchmarks for `ED19` and `ECR1` instructions.
-
-#### Breaking
-
-- [#1322](https://github.com/FuelLabs/fuel-core/pull/1322):
-  The `debug` flag is added to the CLI. The flag should be used for local development only. Enabling debug mode:
-    - Allows GraphQL Endpoints to arbitrarily advance blocks.
-    - Enables debugger GraphQL Endpoints.
-    - Allows setting `utxo_validation` to `false`.
+- [#1331](https://github.com/FuelLabs/fuel-core/pull/1331): Add peer reputation reporting to block import code
 
 ### Changed
 
@@ -39,9 +32,11 @@ Description of the upcoming release here.
 - [#1290](https://github.com/FuelLabs/fuel-core/pull/1290): Standardize CLI args to use `-` instead of `_`.
 - [#1279](https://github.com/FuelLabs/fuel-core/pull/1279): Added a new CLI flag to enable the Relayer service `--enable-relayer`, and disabled the Relayer service by default. When supplying the `--enable-relayer` flag, the `--relayer` argument becomes mandatory, and omitting it is an error. Similarly, providing a `--relayer` argument without the `--enable-relayer` flag is an error. Lastly, providing the `--keypair` or `--network` arguments will also produce an error if the `--enable-p2p` flag is not set.
 - [#1262](https://github.com/FuelLabs/fuel-core/pull/1262): The `ConsensusParameters` aggregates all configuration data related to the consensus. It contains many fields that are segregated by the usage. The API of some functions was affected to use lesser types instead the whole `ConsensusParameters`. It is a huge breaking change requiring repetitively monotonically updating all places that use the `ConsensusParameters`. But during updating, consider that maybe you can use lesser types. Usage of them may simplify signatures of methods and make them more user-friendly and transparent.
+- [#1322](https://github.com/FuelLabs/fuel-core/pull/1322): The `manual_blocks_enabled` flag is removed from the CLI. The analog is a `debug` flag.
+- [#1322](https://github.com/FuelLabs/fuel-core/pull/1322):
+  The `debug` flag is added to the CLI. The flag should be used for local development only. Enabling debug mode:
+    - Allows GraphQL Endpoints to arbitrarily advance blocks.
+    - Enables debugger GraphQL Endpoints.
+    - Allows setting `utxo_validation` to `false`.
 
 ### Removed
-
-#### Breaking
-- [#1322](https://github.com/FuelLabs/fuel-core/pull/1322): The `manual_blocks_enabled` flag is removed from the CLI. The analog is a `debug` flag.
-

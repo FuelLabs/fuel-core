@@ -12,9 +12,30 @@ use fuel_core_types::{
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
-    services::p2p::SourcePeer,
+    services::p2p::{
+        PeerId,
+        SourcePeer,
+    },
 };
 use std::ops::Range;
+
+/// Possible reasons to report a peer
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PeerReportReason {
+    // Good
+    /// Successfully imported block
+    SuccessfulBlockImport,
+
+    // Bad
+    /// Did not receive advertised block headers
+    MissingBlockHeaders,
+    /// Report a peer for sending a bad block header
+    BadBlockHeader,
+    /// Did not receive advertised transactions
+    MissingTransactions,
+    /// Received invalid transactions
+    InvalidTransactions,
+}
 
 #[cfg_attr(any(test, feature = "benchmarking"), mockall::automock)]
 #[async_trait::async_trait]
@@ -27,7 +48,7 @@ pub trait PeerToPeerPort {
     async fn get_sealed_block_headers(
         &self,
         block_height_range: Range<u32>,
-    ) -> anyhow::Result<Option<Vec<SourcePeer<SealedBlockHeader>>>>;
+    ) -> anyhow::Result<SourcePeer<Option<Vec<SealedBlockHeader>>>>;
 
     /// Request transactions from the network for the given block
     /// and source peer.
@@ -35,6 +56,13 @@ pub trait PeerToPeerPort {
         &self,
         block_id: SourcePeer<BlockId>,
     ) -> anyhow::Result<Option<Vec<Transaction>>>;
+
+    /// Report a peer for some reason to modify their reputation.
+    async fn report_peer(
+        &self,
+        peer: PeerId,
+        report: PeerReportReason,
+    ) -> anyhow::Result<()>;
 }
 
 #[cfg_attr(any(test, feature = "benchmarking"), mockall::automock)]

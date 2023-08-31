@@ -28,8 +28,6 @@ pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &[u8] = b"/fuel/req_res/0.0.1";
 /// Max Size in Bytes of the Request Message
 pub(crate) const MAX_REQUEST_SIZE: usize = core::mem::size_of::<RequestMessage>();
 
-pub type ChannelItem<T> = oneshot::Sender<Option<T>>;
-
 // Peer receives a `RequestMessage`.
 // It prepares a response in form of `OutboundResponse`
 // This `OutboundResponse` gets prepared to be sent over the wire in `NetworkResponse` format.
@@ -59,9 +57,9 @@ pub enum ResponseMessage {
 /// Holds oneshot channels for specific responses
 #[derive(Debug)]
 pub enum ResponseChannelItem {
-    Block(ChannelItem<SealedBlock>),
-    SealedHeaders(ChannelItem<(PeerId, Option<Vec<SealedBlockHeader>>)>),
-    Transactions(ChannelItem<Vec<Transaction>>),
+    Block(oneshot::Sender<Option<SealedBlock>>),
+    SealedHeaders(oneshot::Sender<(PeerId, Option<Vec<SealedBlockHeader>>)>),
+    Transactions(oneshot::Sender<Option<Vec<Transaction>>>),
 }
 
 /// Response that is sent over the wire

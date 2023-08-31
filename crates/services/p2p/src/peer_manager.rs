@@ -115,11 +115,11 @@ impl PeerManager {
         peer_id: &PeerId,
         block_height: BlockHeight,
     ) {
-        if let Some(previous_heartbeat) = self
+        if let Some(time_elapsed) = self
             .get_peer_info(peer_id)
             .and_then(|info| info.heartbeat_data.seconds_since_last_heartbeat())
         {
-            debug!(target: "fuel-p2p", "Previous hearbeat happened {:?} seconds ago", previous_heartbeat);
+            debug!(target: "fuel-p2p", "Previous heartbeat happened {:?} seconds ago", time_elapsed);
         }
 
         let heartbeat_data = HeartbeatData::new(block_height);
