@@ -1,7 +1,7 @@
 use crate::client::schema::{
     block::Block,
+    primitives::AssetId,
     schema,
-    schema::AssetId,
     U32,
     U64,
 };

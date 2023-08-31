@@ -9,6 +9,7 @@ use crate::{
             Database,
             TxPool,
         },
+        Config,
         IntoApiResult,
     },
     query::{
@@ -276,14 +277,22 @@ impl Transaction {
         TransactionId(self.1)
     }
 
-    async fn input_asset_ids(&self) -> Option<Vec<AssetId>> {
+    async fn input_asset_ids(&self, ctx: &Context<'_>) -> Option<Vec<AssetId>> {
+        let config = ctx.data_unchecked::<Config>();
+        let base_asset_id = &config.consensus_parameters.fee_params.base_asset_id;
         match &self.0 {
-            fuel_tx::Transaction::Script(script) => {
-                Some(script.input_asset_ids().map(|c| AssetId(*c)).collect())
-            }
-            fuel_tx::Transaction::Create(create) => {
-                Some(create.input_asset_ids().map(|c| AssetId(*c)).collect())
-            }
+            fuel_tx::Transaction::Script(script) => Some(
+                script
+                    .input_asset_ids(base_asset_id)
+                    .map(|c| AssetId(*c))
+                    .collect(),
+            ),
+            fuel_tx::Transaction::Create(create) => Some(
+                create
+                    .input_asset_ids(base_asset_id)
+                    .map(|c| AssetId(*c))
+                    .collect(),
+            ),
             fuel_tx::Transaction::Mint(_) => None,
         }
     }
