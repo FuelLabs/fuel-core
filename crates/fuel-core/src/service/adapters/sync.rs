@@ -89,8 +89,8 @@ impl PeerToPeerPort for P2PAdapter {
     ) -> anyhow::Result<()> {
         if let Some(service) = &self.service {
             let service_name = "Sync";
-            let new_peer_report_reason: NewPeerReportReason = report.into();
-            service.report_peer(peer, new_peer_report_reason, service_name)?;
+            let new_report = self.process_report(report);
+            service.report_peer(peer, new_report, service_name)?;
             Ok(())
         } else {
             Err(anyhow::anyhow!("No P2P service available"))
@@ -98,25 +98,34 @@ impl PeerToPeerPort for P2PAdapter {
     }
 }
 
-struct NewPeerReportReason(PeerReportReason);
-
-impl From<PeerReportReason> for NewPeerReportReason {
-    fn from(reason: PeerReportReason) -> Self {
-        Self(reason)
+impl P2PAdapter {
+    fn process_report(&self, reason: PeerReportReason) -> P2PAdapterPeerReport {
+        let score = match &reason {
+            PeerReportReason::SuccessfulBlockImport => {
+                self.peer_report_config.successful_block_import
+            }
+            PeerReportReason::MissingBlockHeaders => {
+                self.peer_report_config.missing_block_headers
+            }
+            PeerReportReason::BadBlockHeader => self.peer_report_config.bad_block_header,
+            PeerReportReason::MissingTransactions => {
+                self.peer_report_config.missing_transactions
+            }
+            PeerReportReason::InvalidTransactions => {
+                self.peer_report_config.invalid_transactions
+            }
+        };
+        P2PAdapterPeerReport { score }
     }
 }
 
-impl PeerReport for NewPeerReportReason {
+struct P2PAdapterPeerReport {
+    score: AppScore,
+}
+
+impl PeerReport for P2PAdapterPeerReport {
     fn get_score_from_report(&self) -> AppScore {
-        match self.0 {
-            // Good
-            PeerReportReason::SuccessfulBlockImport => 5.,
-            // Bad
-            PeerReportReason::BadBlockHeader => -100.,
-            PeerReportReason::MissingTransactions => -100.,
-            PeerReportReason::InvalidTransactions => -100.,
-            PeerReportReason::MissingBlockHeaders => -100.,
-        }
+        self.score
     }
 }
 

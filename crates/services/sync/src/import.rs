@@ -233,9 +233,10 @@ where
                                 .await
                                 .map_err(|e| tracing::error!("Failed to report successful block import for peer {:?}: {:?}", peer_id, e));
                         },
-                        Err(_) => {
+                        Err(e) => {
                             // If this fails, then it means that consensus has approved a block that is invalid.
                             // This would suggest a more serious issue than a bad peer, e.g. a fork or an out-of-date client.
+                            tracing::error!("Failed to execute and commit block from peer {:?}: {:?}", peer_id, e);
                         },
                     }
                     res
