@@ -455,7 +455,7 @@ async fn get_headers_batch(
                         .await
                         .map_err(|e| {
                             tracing::error!(
-                                "Failed to report bad block header from peer {:?}: {:?}",
+                                "Failed to report missing block header from peer {:?}: {:?}",
                                 peer_id,
                                 e
                             )

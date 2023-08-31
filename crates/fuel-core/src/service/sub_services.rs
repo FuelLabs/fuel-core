@@ -113,6 +113,7 @@ pub fn init_sub_services(
         use crate::service::adapters::PeerReportConfig;
 
         // Hardcoded for now, but left here to be configurable in the future.
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1340
         let peer_report_config = PeerReportConfig {
             successful_block_import: 5.,
             missing_block_headers: -100.,
