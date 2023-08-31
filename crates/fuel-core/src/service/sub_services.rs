@@ -134,9 +134,13 @@ pub fn init_sub_services(
     };
     let producer_adapter = BlockProducerAdapter::new(block_producer);
 
-    let poa_config: fuel_core_poa::Config = config.try_into()?;
-    let production_enabled =
-        !matches!(poa_config.trigger, Trigger::Never) || config.manual_blocks_enabled;
+    let poa_config: fuel_core_poa::Config = config.into();
+    let mut production_enabled = !matches!(poa_config.trigger, Trigger::Never);
+
+    if !production_enabled && config.debug {
+        production_enabled = true;
+        tracing::info!("Enabled manual block production because of `debug` flag");
+    }
 
     let poa = (production_enabled).then(|| {
         fuel_core_poa::new_service(
@@ -160,26 +164,18 @@ pub fn init_sub_services(
     )?;
 
     // TODO: Figure out on how to move it into `fuel-core-graphql-api`.
-    let schema = {
-        #[cfg(feature = "dap")]
-        {
-            crate::schema::dap::init(
-                build_schema(),
-                config.chain_conf.consensus_parameters.clone(),
-            )
-            .data(database.clone())
-        }
-        #[cfg(not(feature = "dap"))]
-        {
-            build_schema()
-        }
-    };
+    let schema = crate::schema::dap::init(
+        build_schema(),
+        config.chain_conf.consensus_parameters.clone(),
+        config.debug,
+    )
+    .data(database.clone());
 
     let graph_ql = crate::fuel_core_graphql_api::service::new_service(
         GraphQLConfig {
             addr: config.addr,
             utxo_validation: config.utxo_validation,
-            manual_blocks_enabled: config.manual_blocks_enabled,
+            debug: config.debug,
             vm_backtrace: config.vm.backtrace,
             min_gas_price: config.txpool.min_gas_price,
             max_tx: config.txpool.max_tx,

@@ -24,7 +24,6 @@ pub mod block;
 pub mod chain;
 pub mod coins;
 pub mod contract;
-#[cfg(feature = "dap")]
 pub mod dap;
 pub mod health;
 pub mod message;
@@ -32,7 +31,6 @@ pub mod node_info;
 pub mod scalars;
 pub mod tx;
 
-#[cfg(feature = "dap")]
 #[derive(MergedObject, Default)]
 pub struct Query(
     dap::DapQuery,
@@ -48,28 +46,8 @@ pub struct Query(
     message::MessageQuery,
 );
 
-#[cfg(not(feature = "dap"))]
-#[derive(MergedObject, Default)]
-pub struct Query(
-    balance::BalanceQuery,
-    block::BlockQuery,
-    chain::ChainQuery,
-    tx::TxQuery,
-    health::HealthQuery,
-    coins::CoinQuery,
-    contract::ContractQuery,
-    contract::ContractBalanceQuery,
-    node_info::NodeQuery,
-    message::MessageQuery,
-);
-
-#[cfg(feature = "dap")]
 #[derive(MergedObject, Default)]
 pub struct Mutation(dap::DapMutation, tx::TxMutation, block::BlockMutation);
-
-#[cfg(not(feature = "dap"))]
-#[derive(MergedObject, Default)]
-pub struct Mutation(tx::TxMutation, block::BlockMutation);
 
 #[derive(MergedSubscription, Default)]
 pub struct Subscription(tx::TxStatusSubscription);

@@ -297,10 +297,8 @@ impl BlockMutation {
         let consensus_module = ctx.data_unchecked::<ConsensusModule>();
         let config = ctx.data_unchecked::<GraphQLConfig>().clone();
 
-        if !config.manual_blocks_enabled {
-            return Err(
-                anyhow!("Manual Blocks must be enabled to use this endpoint").into(),
-            )
+        if !config.debug {
+            return Err(anyhow!("`debug` must be enabled to use this endpoint").into())
         }
 
         let start_time = start_timestamp.map(|timestamp| timestamp.0);
