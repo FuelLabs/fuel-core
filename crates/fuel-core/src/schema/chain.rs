@@ -327,10 +327,6 @@ impl GasCosts {
         self.0.jneb.into()
     }
 
-    async fn k256(&self) -> U64 {
-        self.0.k256.into()
-    }
-
     async fn lb(&self) -> U64 {
         self.0.lb.into()
     }
@@ -345,10 +341,6 @@ impl GasCosts {
 
     async fn lw(&self) -> U64 {
         self.0.lw.into()
-    }
-
-    async fn mcpi(&self) -> U64 {
-        self.0.mcpi.into()
     }
 
     async fn mint(&self) -> U64 {
@@ -431,16 +423,8 @@ impl GasCosts {
         self.0.rvrt.into()
     }
 
-    async fn s256(&self) -> U64 {
-        self.0.s256.into()
-    }
-
     async fn sb(&self) -> U64 {
         self.0.sb.into()
-    }
-
-    async fn scwq(&self) -> U64 {
-        self.0.scwq.into()
     }
 
     async fn sll(&self) -> U64 {
@@ -477,10 +461,6 @@ impl GasCosts {
 
     async fn sww(&self) -> U64 {
         self.0.sww.into()
-    }
-
-    async fn swwq(&self) -> U64 {
-        self.0.swwq.into()
     }
 
     async fn time(&self) -> U64 {
@@ -571,6 +551,10 @@ impl GasCosts {
         self.0.csiz.into()
     }
 
+    async fn k256(&self) -> DependentCost {
+        self.0.k256.into()
+    }
+
     async fn ldc(&self) -> DependentCost {
         self.0.ldc.into()
     }
@@ -591,6 +575,10 @@ impl GasCosts {
         self.0.mcp.into()
     }
 
+    async fn mcpi(&self) -> DependentCost {
+        self.0.mcpi.into()
+    }
+
     async fn meq(&self) -> DependentCost {
         self.0.meq.into()
     }
@@ -599,12 +587,24 @@ impl GasCosts {
         self.0.retd.into()
     }
 
+    async fn s256(&self) -> DependentCost {
+        self.0.s256.into()
+    }
+
+    async fn scwq(&self) -> DependentCost {
+        self.0.scwq.into()
+    }
+
     async fn smo(&self) -> DependentCost {
         self.0.smo.into()
     }
 
     async fn srwq(&self) -> DependentCost {
         self.0.srwq.into()
+    }
+
+    async fn swwq(&self) -> DependentCost {
+        self.0.swwq.into()
     }
 }
 
