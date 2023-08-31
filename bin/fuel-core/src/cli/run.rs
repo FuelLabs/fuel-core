@@ -36,9 +36,10 @@ use fuel_core::{
         },
     },
 };
-#[cfg(feature = "profiling")]
-use pyroscope::PyroscopeAgent;
-#[cfg(feature = "profiling")]
+use pyroscope::{
+    pyroscope::PyroscopeAgentRunning,
+    PyroscopeAgent,
+};
 use pyroscope_pprofrs::{
     pprof_backend,
     PprofConfig,
@@ -358,12 +359,10 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     }
     .to_string();
 
-    #[cfg(feature = "profiling")]
     let profiling = command.profiling.clone();
     let config = command.get_config()?;
 
     // start profiling agent if url is configured
-    #[cfg(feature = "profiling")]
     let _profiling_agent = start_pyroscope_agent(profiling, &config, network_name)?;
 
     // log fuel-core version
@@ -404,12 +403,11 @@ fn load_consensus_key(
     }
 }
 
-#[cfg(feature = "profiling")]
-fn start_pyroscope_agent<T>(
+fn start_pyroscope_agent(
     profiling_args: profiling::ProfilingArgs,
     config: &Config,
     network_name: String,
-) -> anyhow::Result<T> {
+) -> anyhow::Result<Option<PyroscopeAgent<PyroscopeAgentRunning>>> {
     profiling_args
         .pyroscope_url
         .as_ref()

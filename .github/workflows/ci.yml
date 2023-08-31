@@ -305,7 +305,7 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: |
-            ghcr.io/fuellabs/fuel-core-profiling
+            ghcr.io/fuellabs/fuel-core-debug
           tags: |
             type=sha
             type=ref,event=branch
@@ -329,9 +329,7 @@ jobs:
         with:
           context: .
           file: deployment/Dockerfile
-          build-args: |
-            "FEATURES=production,profiling"
-            "DEBUG_SYMBOLS=true"
+          build-args: "DEBUG_SYMBOLS=true"
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
