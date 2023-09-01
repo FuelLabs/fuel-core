@@ -85,7 +85,7 @@ enum TaskRequest {
     },
     GetSealedHeaders {
         block_height_range: Range<u32>,
-        channel: oneshot::Sender<Option<(PeerId, Option<Vec<SealedBlockHeader>>)>>,
+        channel: oneshot::Sender<(PeerId, Option<Vec<SealedBlockHeader>>)>,
     },
     GetTransactions {
         block_id: BlockId,
@@ -384,7 +384,7 @@ impl SharedState {
     pub async fn get_sealed_block_headers(
         &self,
         block_height_range: Range<u32>,
-    ) -> anyhow::Result<Option<(Vec<u8>, Option<Vec<SealedBlockHeader>>)>> {
+    ) -> anyhow::Result<(Vec<u8>, Option<Vec<SealedBlockHeader>>)> {
         let (sender, receiver) = oneshot::channel();
 
         if block_height_range.is_empty() {
@@ -402,7 +402,7 @@ impl SharedState {
 
         receiver
             .await
-            .map(|o| o.map(|(peer_id, headers)| (peer_id.to_bytes(), headers)))
+            .map(|(peer_id, headers)| (peer_id.to_bytes(), headers))
             .map_err(|e| anyhow!("{}", e))
     }
 

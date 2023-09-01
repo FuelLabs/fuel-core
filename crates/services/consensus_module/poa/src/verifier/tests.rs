@@ -13,7 +13,6 @@ use fuel_core_types::{
 use test_case::test_case;
 
 struct Input {
-    c: Config,
     block_header_merkle_root: [u8; 32],
     prev_header_time: Tai64,
     prev_header_da_height: u64,
@@ -31,9 +30,6 @@ fn app_hash(da_height: u64) -> Bytes32 {
 
 fn correct() -> Input {
     Input {
-        c: Config {
-            enabled_manual_blocks: false,
-        },
         block_header_merkle_root: [2u8; 32],
         prev_header_time: Tai64(2),
         prev_header_da_height: 2,
@@ -90,7 +86,6 @@ fn correct() -> Input {
 )]
 fn test_verify_genesis_block_fields(input: Input) -> anyhow::Result<()> {
     let Input {
-        c,
         block_header_merkle_root,
         prev_header_time,
         prev_header_da_height,
@@ -109,5 +104,5 @@ fn test_verify_genesis_block_fields(input: Input) -> anyhow::Result<()> {
     let mut b = Block::default();
     b.header_mut().consensus = ch;
     b.header_mut().application = ah;
-    verify_block_fields(&c, &d, &b)
+    verify_block_fields(&d, &b)
 }
