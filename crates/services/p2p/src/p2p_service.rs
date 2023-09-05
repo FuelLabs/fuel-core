@@ -613,7 +613,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                                 Some(ResponseChannelItem::SealedHeaders(channel)),
                                 Ok(ResponseMessage::SealedHeaders(headers)),
                             ) => {
-                                if channel.send(Some((peer, headers))).is_err() {
+                                if channel.send((peer, headers)).is_err() {
                                     debug!(
                                         "Failed to send through the channel for {:?}",
                                         request_id
@@ -1191,7 +1191,7 @@ mod tests {
                     }
                     tracing::info!("Node B Event: {:?}", node_b_event);
                 }
-            };
+            }
         }
     }
 
@@ -1595,7 +1595,7 @@ mod tests {
 
                                             let expected = arbitrary_headers_for_range(range.clone());
 
-                                            if let Ok(Some((_, sealed_headers))) = response_message {
+                                            if let Ok((_, sealed_headers)) = response_message {
                                                 let check = expected.iter().zip(sealed_headers.unwrap().iter()).all(|(a, b)| eq_except_metadata(a, b));
                                                 let _ = tx_test_end.send(check).await;
                                             } else {

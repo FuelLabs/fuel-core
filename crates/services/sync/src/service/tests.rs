@@ -8,7 +8,10 @@ use futures::{
 };
 
 use crate::{
-    import::test_helpers::empty_header,
+    import::test_helpers::{
+        empty_header,
+        peer_sourced_headers,
+    },
     ports::{
         MockBlockImporterPort,
         MockConsensusPort,
@@ -21,6 +24,7 @@ use super::*;
 #[tokio::test]
 async fn test_new_service() {
     let mut p2p = MockPeerToPeerPort::default();
+    p2p.expect_report_peer().returning(|_, _| Ok(()));
     p2p.expect_height_stream().returning(|| {
         stream::iter(
             std::iter::successors(Some(6u32), |n| Some(n + 1)).map(BlockHeight::from),
@@ -34,13 +38,13 @@ async fn test_new_service() {
         .into_boxed()
     });
     p2p.expect_get_sealed_block_headers().returning(|range| {
-        Ok(Some(
+        Ok(peer_sourced_headers(Some(
             range
                 .clone()
                 .map(BlockHeight::from)
                 .map(empty_header)
                 .collect(),
-        ))
+        )))
     });
     p2p.expect_get_transactions()
         .returning(|_| Ok(Some(vec![])));

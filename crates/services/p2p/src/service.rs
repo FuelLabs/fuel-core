@@ -85,7 +85,7 @@ enum TaskRequest {
     },
     GetSealedHeaders {
         block_height_range: Range<u32>,
-        channel: oneshot::Sender<Option<(PeerId, Option<Vec<SealedBlockHeader>>)>>,
+        channel: oneshot::Sender<(PeerId, Option<Vec<SealedBlockHeader>>)>,
     },
     GetTransactions {
         block_id: BlockId,
@@ -287,27 +287,54 @@ where
                     Some(FuelP2PEvent::RequestMessage { request_message, request_id }) => {
                         match request_message {
                             RequestMessage::Block(block_height) => {
-                                // TODO: Process `StorageError` somehow.
-                                let block_response = self.db.get_sealed_block(&block_height)?
-                                    .map(Arc::new);
-                                let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Block(block_response));
+                                match self.db.get_sealed_block(&block_height) {
+                                    Ok(maybe_block) => {
+                                        let response = maybe_block.map(Arc::new);
+                                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Block(response));
+                                    },
+                                    Err(e) => {
+                                        tracing::error!("Failed to get block at height {:?}: {:?}", block_height, e);
+                                        let response = None;
+                                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Block(response));
+                                        return Err(e.into())
+                                    }
+                                }
                             }
                             RequestMessage::Transactions(block_id) => {
-                                let transactions_response = self.db.get_transactions(&block_id)?
-                                    .map(Arc::new);
-
-                                let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(transactions_response));
+                                match self.db.get_transactions(&block_id) {
+                                    Ok(maybe_transactions) => {
+                                        let response = maybe_transactions.map(Arc::new);
+                                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(response));
+                                    },
+                                    Err(e) => {
+                                        tracing::error!("Failed to get transactions for block {:?}: {:?}", block_id, e);
+                                        let response = None;
+                                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(response));
+                                        return Err(e.into())
+                                    }
+                                }
                             }
                             RequestMessage::SealedHeaders(range) => {
                                 let max_len = self.max_headers_per_request.try_into().expect("u32 should always fit into usize");
-                                let response = if range.len() > max_len {
+                                if range.len() > max_len {
                                     tracing::error!("Requested range of sealed headers is too big. Requested length: {:?}, Max length: {:?}", range.len(), max_len);
                                     // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
-                                    None
+                                    let response = None;
+                                    let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeaders(response));
                                 } else {
-                                    Some(self.db.get_sealed_headers(range)?)
+                                    match self.db.get_sealed_headers(range.clone()) {
+                                        Ok(headers) => {
+                                            let response = Some(headers);
+                                            let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeaders(response));
+                                        },
+                                        Err(e) => {
+                                            tracing::error!("Failed to get sealed headers for range {:?}: {:?}", range, &e);
+                                            let response = None;
+                                            let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeaders(response));
+                                            return Err(e.into())
+                                        }
+                                    }
                                 };
-                                let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeaders(response));
                             }
                         }
                     },
@@ -384,7 +411,7 @@ impl SharedState {
     pub async fn get_sealed_block_headers(
         &self,
         block_height_range: Range<u32>,
-    ) -> anyhow::Result<Option<(Vec<u8>, Option<Vec<SealedBlockHeader>>)>> {
+    ) -> anyhow::Result<(Vec<u8>, Option<Vec<SealedBlockHeader>>)> {
         let (sender, receiver) = oneshot::channel();
 
         if block_height_range.is_empty() {
@@ -402,7 +429,7 @@ impl SharedState {
 
         receiver
             .await
-            .map(|o| o.map(|(peer_id, headers)| (peer_id.to_bytes(), headers)))
+            .map(|(peer_id, headers)| (peer_id.to_bytes(), headers))
             .map_err(|e| anyhow!("{}", e))
     }
 
