@@ -57,6 +57,19 @@ pub struct SourcePeer<T> {
     pub data: T,
 }
 
+impl<T> SourcePeer<T> {
+    /// Maps a `SourcePeer<T>` to `SourcePeer<U>` by applying a function to the
+    /// contained data. The internal `peer_id` is maintained.
+    pub fn map<F, U>(self, mut f: F) -> SourcePeer<U>
+    where
+        F: FnMut(T) -> U,
+    {
+        let peer_id = self.peer_id;
+        let data = f(self.data);
+        SourcePeer::<U> { peer_id, data }
+    }
+}
+
 impl<T> GossipData<T> {
     /// Construct a new gossip message
     pub fn new(

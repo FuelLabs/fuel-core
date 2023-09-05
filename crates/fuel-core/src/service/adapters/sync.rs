@@ -82,6 +82,13 @@ impl PeerToPeerPort for P2PAdapter {
         }
     }
 
+    async fn get_transactions_2(
+        &self,
+        _block_id: SourcePeer<Vec<BlockId>>,
+    ) -> anyhow::Result<Option<Vec<Transaction>>> {
+        todo!()
+    }
+
     async fn report_peer(
         &self,
         peer: PeerId,

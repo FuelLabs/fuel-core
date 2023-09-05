@@ -62,6 +62,13 @@ impl PeerToPeerPort for PressurePeerToPeer {
         self.p2p.get_transactions(block_id).await
     }
 
+    async fn get_transactions_2(
+        &self,
+        _block_id: SourcePeer<Vec<BlockId>>,
+    ) -> anyhow::Result<Option<Vec<Transaction>>> {
+        todo!()
+    }
+
     async fn report_peer(
         &self,
         _peer: PeerId,
