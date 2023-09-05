@@ -24,6 +24,8 @@ dotenvy = { version = "0.15", optional = true }
 fuel-core = { workspace = true }
 humantime = "2.1"
 lazy_static = { workspace = true }
+pyroscope = "0.5"
+pyroscope_pprofrs = "0.2"
 serde_json = { workspace = true, features = ["raw_value"], optional = true }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

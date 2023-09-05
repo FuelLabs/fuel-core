@@ -234,6 +234,14 @@ spec:
           {{- if .Values.app.allow_private_addresses }}
             - "--allow-private-addresses"
           {{- end }}
+          {{- if .Values.app.pyroscope_url }}
+            - "--pyroscope-url"
+            - "{{ .Values.app.pyroscope_url }}"
+          {{- end }}
+          {{- if .Values.app.pprof_sample_rate }}
+            - "--pprof-sample-rate"
+            - "{{ .Values.app.pprof_sample_rate }}"
+          {{- end }}
           resources:
             limits:
               cpu: {{ .Values.app.resources.cpu_limits }}
