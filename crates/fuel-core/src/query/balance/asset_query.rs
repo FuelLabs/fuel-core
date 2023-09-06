@@ -63,6 +63,7 @@ pub struct AssetsQuery<'a> {
     pub assets: Option<HashSet<&'a AssetId>>,
     pub exclude: Option<&'a Exclude>,
     pub database: &'a Database,
+    pub base_asset_id: &'a AssetId,
 }
 
 impl<'a> AssetsQuery<'a> {
@@ -71,12 +72,14 @@ impl<'a> AssetsQuery<'a> {
         assets: Option<HashSet<&'a AssetId>>,
         exclude: Option<&'a Exclude>,
         database: &'a Database,
+        base_asset_id: &'a AssetId,
     ) -> Self {
         Self {
             owner,
             assets,
             exclude,
             database,
+            base_asset_id,
         }
     }
 
@@ -156,7 +159,8 @@ impl<'a> AssetsQuery<'a> {
         coins_iter.chain(messages_iter.take_while(|_| {
             self.assets
                 .as_ref()
-                .map(|assets| assets.contains(&AssetId::BASE))
+                // TODO: bvrooman update
+                .map(|assets| assets.contains(self.base_asset_id))
                 .unwrap_or(true)
         }))
     }
@@ -174,6 +178,7 @@ impl<'a> AssetQuery<'a> {
     pub fn new(
         owner: &'a Address,
         asset: &'a AssetSpendTarget,
+        base_asset_id: &'a AssetId,
         exclude: Option<&'a Exclude>,
         database: &'a Database,
     ) -> Self {
@@ -184,7 +189,13 @@ impl<'a> AssetQuery<'a> {
             asset,
             exclude,
             database,
-            query: AssetsQuery::new(owner, Some(allowed), exclude, database),
+            query: AssetsQuery::new(
+                owner,
+                Some(allowed),
+                exclude,
+                database,
+                base_asset_id,
+            ),
         }
     }
 

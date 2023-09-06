@@ -72,6 +72,7 @@ impl CoinType {
         }
     }
 
+    // TODO: bvrooman: update
     /// Returns the asset held by the coin.
     pub fn asset_id(&self) -> &AssetId {
         match self {

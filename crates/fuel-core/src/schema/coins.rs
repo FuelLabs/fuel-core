@@ -96,6 +96,7 @@ impl MessageCoin {
         self.0.amount.into()
     }
 
+    // TODO: bvrooman: update
     async fn asset_id(&self) -> AssetId {
         fuel_core_types::fuel_types::AssetId::BASE.into()
     }
@@ -242,7 +243,9 @@ impl CoinQuery {
             utxos.chain(messages).collect()
         });
 
-        let spend_query = SpendQuery::new(owner, &query_per_asset, excluded_ids)?;
+        let base_asset_id = config.consensus_parameters.base_asset_id();
+        let spend_query =
+            SpendQuery::new(owner, &query_per_asset, excluded_ids, *base_asset_id)?;
 
         let db = ctx.data_unchecked::<Database>();
 

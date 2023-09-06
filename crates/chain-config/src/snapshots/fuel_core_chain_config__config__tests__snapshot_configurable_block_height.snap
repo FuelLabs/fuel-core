@@ -1,6 +1,5 @@
 ---
 source: crates/chain-config/src/config.rs
-assertion_line: 91
 expression: json
 ---
 {
@@ -72,12 +71,10 @@ expression: json
       "jnzb": 1,
       "jnef": 1,
       "jneb": 1,
-      "k256": 11,
       "lb": 1,
       "log": 9,
       "lt": 1,
       "lw": 1,
-      "mcpi": 33,
       "mint": 135,
       "mlog": 1,
       "mod": 1,
@@ -98,9 +95,7 @@ expression: json
       "pshl": 2,
       "ret_contract": 13,
       "rvrt_contract": 13,
-      "s256": 2,
       "sb": 1,
-      "scwq": 13,
       "sll": 1,
       "slli": 1,
       "srl": 1,
@@ -109,8 +104,7 @@ expression: json
       "sub": 1,
       "subi": 1,
       "sw": 1,
-      "sww": 43,
-      "swwq": 44,
+      "sww": 67,
       "time": 1,
       "tr": 105,
       "tro": 60,
@@ -130,6 +124,14 @@ expression: json
       "wqmm": 3,
       "xor": 1,
       "xori": 1,
+      "k256": {
+        "base": 11,
+        "dep_per_unit": 214
+      },
+      "s256": {
+        "base": 2,
+        "dep_per_unit": 214
+      },
       "call": {
         "base": 144,
         "dep_per_unit": 214
@@ -162,6 +164,10 @@ expression: json
         "base": 1,
         "dep_per_unit": 2000
       },
+      "mcpi": {
+        "base": 3,
+        "dep_per_unit": 2000
+      },
       "meq": {
         "base": 1,
         "dep_per_unit": 2500
@@ -177,8 +183,17 @@ expression: json
       "srwq": {
         "base": 47,
         "dep_per_unit": 5
+      },
+      "scwq": {
+        "base": 13,
+        "dep_per_unit": 5
+      },
+      "swwq": {
+        "base": 44,
+        "dep_per_unit": 5
       }
-    }
+    },
+    "base_asset_id": "0000000000000000000000000000000000000000000000000000000000000000"
   },
   "consensus": {
     "PoA": {

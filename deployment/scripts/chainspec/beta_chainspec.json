@@ -65,7 +65,7 @@
       "gas_price_factor": 1000000000,
       "gas_per_byte": 4
     },
-    "base_asset_id": 0,
+    "base_asset_id": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "chain_id": 0,
     "gas_costs": {
       "add": 1,
