@@ -19,7 +19,7 @@ use crate::client::{
 use fuel_core_types::{
     fuel_tx,
     fuel_types::{
-        bytes::Deserializable,
+        canonical::Deserialize,
         Bytes32,
     },
     fuel_vm,
@@ -319,7 +319,7 @@ pub struct AllReceipts {
 pub mod tests {
     use super::*;
     use crate::client::schema::Bytes;
-    use fuel_core_types::fuel_types::bytes::SerializableVec;
+    use fuel_core_types::fuel_types::canonical::SerializedSize;
 
     #[test]
     fn transparent_transaction_by_id_query_gql_output() {
@@ -368,7 +368,7 @@ pub mod tests {
     #[test]
     fn dry_run_tx_gql_output() {
         use cynic::MutationBuilder;
-        let mut tx = fuel_tx::Transaction::default_test_tx();
+        let tx = fuel_tx::Transaction::default_test_tx();
         let query = DryRun::build(DryRunArg {
             tx: HexString(Bytes(tx.to_bytes())),
             utxo_validation: None,
@@ -379,7 +379,7 @@ pub mod tests {
     #[test]
     fn submit_tx_gql_output() {
         use cynic::MutationBuilder;
-        let mut tx = fuel_tx::Transaction::default_test_tx();
+        let tx = fuel_tx::Transaction::default_test_tx();
         let query = Submit::build(TxArg {
             tx: HexString(Bytes(tx.to_bytes())),
         });

@@ -26,6 +26,7 @@ use fuel_core_storage::{
     StorageAsRef,
     StorageInspect,
 };
+#[allow(unused_imports)]
 use fuel_core_types::{
     blockchain::{
         block::{
@@ -78,6 +79,7 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
+        canonical::SerializedSize,
         BlockHeight,
         MessageId,
     },
@@ -1719,7 +1721,6 @@ mod tests {
             TransactionBuilder,
         },
         fuel_types::{
-            bytes::SerializableVec,
             ChainId,
             ContractId,
             Salt,

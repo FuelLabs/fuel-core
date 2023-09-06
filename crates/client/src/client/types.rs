@@ -43,12 +43,8 @@ use crate::client::schema::{
 };
 use fuel_core_types::{
     fuel_tx::Transaction,
-    fuel_types::bytes::Deserializable,
+    fuel_types::canonical::Deserialize,
     fuel_vm::ProgramState,
-};
-use serde::{
-    Deserialize,
-    Serialize,
 };
 use tai64::Tai64;
 
@@ -79,13 +75,13 @@ pub mod primitives {
     pub type TransactionId = Bytes32;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TransactionResponse {
     pub transaction: Transaction,
     pub status: TransactionStatus,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum TransactionStatus {
     Submitted {
         submitted_at: Tai64,
