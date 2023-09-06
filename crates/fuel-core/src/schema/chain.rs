@@ -95,6 +95,12 @@ impl ConsensusParameters {
         ))
     }
 
+    async fn base_asset_id(&self, ctx: &Context<'_>) -> async_graphql::Result<AssetId> {
+        let config = ctx.data_unchecked::<GraphQLConfig>();
+
+        Ok(AssetId(*config.consensus_parameters.base_asset_id()))
+    }
+
     async fn chain_id(&self) -> U64 {
         (*self.0.chain_id).into()
     }
@@ -168,10 +174,6 @@ impl ContractParameters {
 
 #[Object]
 impl FeeParameters {
-    async fn base_asset_id(&self) -> AssetId {
-        self.0.base_asset_id.into()
-    }
-
     async fn gas_price_factor(&self) -> U64 {
         self.0.gas_price_factor.into()
     }

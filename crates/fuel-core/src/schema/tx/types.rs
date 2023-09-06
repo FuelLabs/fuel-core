@@ -279,7 +279,7 @@ impl Transaction {
 
     async fn input_asset_ids(&self, ctx: &Context<'_>) -> Option<Vec<AssetId>> {
         let config = ctx.data_unchecked::<Config>();
-        let base_asset_id = &config.consensus_parameters.fee_params.base_asset_id;
+        let base_asset_id = config.consensus_parameters.base_asset_id();
         match &self.0 {
             fuel_tx::Transaction::Script(script) => Some(
                 script
