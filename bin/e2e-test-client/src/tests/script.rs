@@ -9,7 +9,7 @@ use fuel_core_types::{
         ScriptExecutionResult,
         Transaction,
     },
-    fuel_types::bytes::Deserializable,
+    fuel_types::canonical::Deserialize,
 };
 use libtest_mimic::Failed;
 use std::time::Duration;

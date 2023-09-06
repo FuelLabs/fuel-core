@@ -32,7 +32,7 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
-        bytes::SizedBytes,
+        canonical::SerializedSize,
         Address,
         AssetId,
     },
@@ -253,7 +253,7 @@ impl Wallet {
         });
 
         let tx = tx.finalize();
-        println!("The size of the transaction is {}", tx.serialized_size());
+        println!("The size of the transaction is {}", tx.size());
 
         let status = self
             .client
