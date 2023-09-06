@@ -62,10 +62,10 @@
       "max_storage_slots": 255
     },
     "fee_params": {
-      "base_asset_id": 0,
       "gas_price_factor": 1000000000,
       "gas_per_byte": 4
     },
+    "base_asset_id": 0,
     "chain_id": 0,
     "gas_costs": {
       "add": 1,
