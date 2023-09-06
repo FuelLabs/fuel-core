@@ -31,6 +31,11 @@ pub trait P2pDb: Send + Sync {
         &self,
         block_id: &BlockId,
     ) -> StorageResult<Option<Vec<Transaction>>>;
+
+    fn get_transactions_2(
+        &self,
+        block_ids: Vec<&BlockId>,
+    ) -> StorageResult<Option<Vec<Transaction>>>;
 }
 
 pub trait BlockHeightImporter: Send + Sync {

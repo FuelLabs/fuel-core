@@ -33,7 +33,7 @@ pub(crate) const MAX_REQUEST_SIZE: usize = core::mem::size_of::<RequestMessage>(
 // This `OutboundResponse` gets prepared to be sent over the wire in `NetworkResponse` format.
 // The Peer that requested the message receives the response over the wire in `NetworkResponse` format.
 // It then unpacks it into `ResponseMessage`.
-// `ResponseChannelItem` is used to forward the data within `ResponseMessage` to the receving channel.
+// `ResponseChannelItem` is used to forward the data within `ResponseMessage` to the receiving channel.
 // Client Peer: `RequestMessage` (send request)
 // Server Peer: `RequestMessage` (receive request) -> `OutboundResponse` -> `NetworkResponse` (send response)
 // Client Peer: `NetworkResponse` (receive response) -> `ResponseMessage(data)` -> `ResponseChannelItem(channel, data)` (handle response)
@@ -44,6 +44,7 @@ pub enum RequestMessage {
     Block(BlockHeight),
     SealedHeaders(Range<u32>),
     Transactions(#[serde_as(as = "FromInto<[u8; 32]>")] BlockId),
+    Transactions2(Vec<BlockId>),
 }
 
 /// Final Response Message that p2p service sends to the Orchestrator
@@ -78,6 +79,7 @@ pub enum OutboundResponse {
     Block(Option<Arc<SealedBlock>>),
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Arc<Vec<Transaction>>>),
+    Transactions2(Option<Arc<Vec<Transaction>>>),
 }
 
 #[derive(Debug)]

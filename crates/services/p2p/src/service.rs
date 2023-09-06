@@ -92,6 +92,11 @@ enum TaskRequest {
         from_peer: PeerId,
         channel: oneshot::Sender<Option<Vec<Transaction>>>,
     },
+    GetTransactions2 {
+        block_ids: Vec<BlockId>,
+        from_peer: PeerId,
+        channel: oneshot::Sender<Option<Vec<Transaction>>>,
+    },
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
     RespondWithPeerReport {
@@ -243,6 +248,11 @@ where
                         let channel_item = ResponseChannelItem::Transactions(channel);
                         let _ = self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item);
                     }
+                  Some(TaskRequest::GetTransactions2 { block_ids, from_peer, channel }) => {
+                        let request_msg = RequestMessage::Transactions2(block_ids);
+                        let channel_item = ResponseChannelItem::Transactions(channel);
+                        let _ = self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item);
+                    }
                     Some(TaskRequest::RespondWithGossipsubMessageReport((message, acceptance))) => {
                         report_message(&mut self.p2p_service, message, acceptance);
                     }
@@ -313,6 +323,21 @@ where
                                         return Err(e.into())
                                     }
                                 }
+                            }
+                            RequestMessage::Transactions2(block_ids) => {
+                                // match self.db.get_transactions(&block_id) {
+                                //     Ok(maybe_transactions) => {
+                                //         let response = maybe_transactions.map(Arc::new);
+                                //         let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(response));
+                                //     },
+                                //     Err(e) => {
+                                //         tracing::error!("Failed to get transactions for block {:?}: {:?}", block_id, e);
+                                //         let response = None;
+                                //         let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(response));
+                                //         return Err(e.into())
+                                //     }
+                                // }
+                                todo!()
                             }
                             RequestMessage::SealedHeaders(range) => {
                                 let max_len = self.max_headers_per_request.try_into().expect("u32 should always fit into usize");

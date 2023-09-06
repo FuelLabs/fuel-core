@@ -4,7 +4,11 @@ use crate::{
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
 };
-use std::fmt::Debug;
+use std::{
+    fmt::Debug,
+    vec,
+};
+
 /// Contains types and logic for Peer Reputation
 pub mod peer_reputation;
 
@@ -67,6 +71,16 @@ impl<T> SourcePeer<T> {
         let peer_id = self.peer_id;
         let data = f(self.data);
         SourcePeer::<U> { peer_id, data }
+    }
+}
+
+impl<T> FromIterator<SourcePeer<T>> for SourcePeer<Vec<T>> {
+    fn from_iter<U: IntoIterator<Item = SourcePeer<T>>>(iter: U) -> Self {
+        let mut c = Vec::new();
+        for i in iter {
+            c.push(i);
+        }
+        c
     }
 }
 
