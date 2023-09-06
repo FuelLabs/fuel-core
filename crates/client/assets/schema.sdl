@@ -316,12 +316,10 @@ type GasCosts {
 	jnzb: U64!
 	jnef: U64!
 	jneb: U64!
-	k256: U64!
 	lb: U64!
 	log: U64!
 	lt: U64!
 	lw: U64!
-	mcpi: U64!
 	mint: U64!
 	mlog: U64!
 	modOp: U64!
@@ -342,9 +340,7 @@ type GasCosts {
 	pshl: U64!
 	ret: U64!
 	rvrt: U64!
-	s256: U64!
 	sb: U64!
-	scwq: U64!
 	sll: U64!
 	slli: U64!
 	srl: U64!
@@ -354,7 +350,6 @@ type GasCosts {
 	subi: U64!
 	sw: U64!
 	sww: U64!
-	swwq: U64!
 	time: U64!
 	tr: U64!
 	tro: U64!
@@ -377,15 +372,20 @@ type GasCosts {
 	call: DependentCost!
 	ccp: DependentCost!
 	csiz: DependentCost!
+	k256: DependentCost!
 	ldc: DependentCost!
 	logd: DependentCost!
 	mcl: DependentCost!
 	mcli: DependentCost!
 	mcp: DependentCost!
+	mcpi: DependentCost!
 	meq: DependentCost!
 	retd: DependentCost!
+	s256: DependentCost!
+	scwq: DependentCost!
 	smo: DependentCost!
 	srwq: DependentCost!
+	swwq: DependentCost!
 }
 
 type Genesis {

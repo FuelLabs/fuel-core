@@ -48,7 +48,7 @@ use fuel_core_types::{
         UniqueIdentifier,
     },
     fuel_types,
-    fuel_types::bytes::Deserializable,
+    fuel_types::canonical::Deserialize,
     fuel_vm::checked_transaction::EstimatePredicates,
     services::txpool,
 };
