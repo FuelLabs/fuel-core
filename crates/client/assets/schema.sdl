@@ -180,6 +180,7 @@ type ConsensusParameters {
 	scriptParams: ScriptParameters!
 	contractParams: ContractParameters!
 	feeParams: FeeParameters!
+	baseAssetId: AssetId!
 	chainId: U64!
 	gasCosts: GasCosts!
 }
@@ -274,7 +275,6 @@ type FailureStatus {
 }
 
 type FeeParameters {
-	baseAssetId: AssetId!
 	gasPriceFactor: U64!
 	gasPerByte: U64!
 }

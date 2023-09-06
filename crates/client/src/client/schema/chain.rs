@@ -14,6 +14,7 @@ pub struct ConsensusParameters {
     pub script_params: ScriptParameters,
     pub contract_params: ContractParameters,
     pub fee_params: FeeParameters,
+    pub base_asset_id: AssetId,
     pub chain_id: U64,
     pub gas_costs: GasCosts,
 }
@@ -93,7 +94,6 @@ impl From<ContractParameters> for fuel_core_types::fuel_tx::ContractParameters {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FeeParameters {
-    pub base_asset_id: AssetId,
     pub gas_price_factor: U64,
     pub gas_per_byte: U64,
 }
@@ -101,7 +101,6 @@ pub struct FeeParameters {
 impl From<FeeParameters> for fuel_core_types::fuel_tx::FeeParameters {
     fn from(params: FeeParameters) -> Self {
         Self {
-            base_asset_id: params.base_asset_id.into(),
             gas_price_factor: params.gas_price_factor.into(),
             gas_per_byte: params.gas_per_byte.into(),
         }
@@ -265,6 +264,7 @@ impl From<ConsensusParameters> for fuel_core_types::fuel_tx::ConsensusParameters
             script_params: params.script_params.into(),
             contract_params: params.contract_params.into(),
             fee_params: params.fee_params.into(),
+            base_asset_id: params.base_asset_id.into(),
             chain_id: params.chain_id.0.into(),
             gas_costs: params.gas_costs.into(),
         }
