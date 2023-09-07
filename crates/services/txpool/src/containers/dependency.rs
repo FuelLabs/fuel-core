@@ -597,12 +597,12 @@ impl Dependency {
         }
 
         // insert all coins/contracts that we got from db;
-        self.coins.extend(db_coins.into_iter());
+        self.coins.extend(db_coins);
         // for contracts from db that are not found in dependency, we already inserted used_by
         // and are okay to just extend current list
-        self.contracts.extend(db_contracts.into_iter());
+        self.contracts.extend(db_contracts);
         // insert / overwrite all applicable message id spending relations
-        self.messages.extend(db_messages.into_iter());
+        self.messages.extend(db_messages);
 
         // iterate over all outputs and insert them, marking them as available.
         for (index, output) in tx.outputs().iter().enumerate() {
