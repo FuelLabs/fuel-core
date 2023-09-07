@@ -116,7 +116,7 @@ where
         let mut db = MockDatabase::default();
         db.expect_latest_block_height()
             .returning(move || result().map(Into::into));
-        db.expect_update_tx_count().returning(|new_txs| Ok(new_txs));
+        db.expect_update_tx_count().returning(Ok);
         db
     }
 }
@@ -134,7 +134,7 @@ where
             .returning(move || height().map(Into::into));
         db.expect_seal_block().returning(move |_, _| seal());
         db.expect_commit().times(commits).returning(|| Ok(()));
-        db.expect_update_tx_count().returning(|new_txs| Ok(new_txs));
+        db.expect_update_tx_count().returning(Ok);
         db
     }
 }
