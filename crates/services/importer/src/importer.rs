@@ -92,16 +92,23 @@ pub struct Importer<D, E, V> {
     guard: tokio::sync::Semaphore,
 }
 
-impl<D, E, V> Importer<D, E, V> {
+impl<D, E, V> Importer<D, E, V>
+where
+    D: ImporterDatabase,
+{
     pub fn new(config: Config, database: D, executor: E, verifier: V) -> Self {
         let (broadcast, _) = broadcast::channel(config.max_block_notify_buffer);
-        Self {
+
+        let importer = Self {
             database,
             executor,
             verifier,
             broadcast,
             guard: tokio::sync::Semaphore::new(1),
-        }
+        };
+        // set initial values for importer metrics
+        importer.init_metrics();
+        importer
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<Arc<ImportResult>> {
@@ -120,6 +127,22 @@ impl<D, E, V> Importer<D, E, V> {
                 Err(Error::SemaphoreError(err))
             }
         }
+    }
+
+    fn init_metrics(&self) {
+        // load starting values from database
+
+        // Errors are optimistically handled via fallback to default values since the metrics
+        // should get updated regularly anyways and these errors will be discovered and handled
+        // correctly in more mission critical areas (such as _commit_result)
+        let current_block_height =
+            self.database.latest_block_height().unwrap_or_default();
+        let total_tx_count = self.database.update_tx_count(0).unwrap_or_default();
+
+        IMPORTER_METRICS.total_txs_count.set(total_tx_count as i64);
+        IMPORTER_METRICS
+            .block_height
+            .set(current_block_height.as_usize() as i64);
     }
 }
 
@@ -231,8 +254,12 @@ where
 
         db_tx.commit()?;
 
-        // ensure the metrics reflect the latest tx count after the block is successfully committed
+        // ensure the metrics reflect the latest tx count & block height after
+        // the block is successfully committed
         IMPORTER_METRICS.total_txs_count.set(total_txs as i64);
+        IMPORTER_METRICS
+            .block_height
+            .set(actual_height.as_usize() as i64);
 
         tracing::info!("Committed block {:#x}", result.sealed_block.entity.id());
         let _ = self.broadcast.send(Arc::new(result));

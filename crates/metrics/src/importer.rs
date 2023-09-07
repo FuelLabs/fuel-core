@@ -6,8 +6,9 @@ use prometheus_client::{
 
 pub struct ImporterMetrics {
     pub registry: Registry,
-    // using gauge in case txs have to be rolled back for any reason
+    // using gauges in case blocks are rolled back for any reason
     pub total_txs_count: Gauge,
+    pub block_height: Gauge,
 }
 
 impl Default for ImporterMetrics {
@@ -15,6 +16,7 @@ impl Default for ImporterMetrics {
         let mut registry = Registry::default();
 
         let tx_count_gauge = Gauge::default();
+        let block_height_gauge = Gauge::default();
 
         registry.register(
             "importer_tx_count",
@@ -22,9 +24,16 @@ impl Default for ImporterMetrics {
             tx_count_gauge.clone(),
         );
 
+        registry.register(
+            "importer_block_height",
+            "the current height of the chain",
+            block_height_gauge.clone(),
+        );
+
         Self {
             registry,
             total_txs_count: tx_count_gauge,
+            block_height: block_height_gauge,
         }
     }
 }
