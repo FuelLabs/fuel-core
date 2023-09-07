@@ -1,6 +1,7 @@
 use crate::client::schema::{
     block::Block,
     schema,
+    AssetId,
     U32,
     U64,
 };
@@ -264,6 +265,7 @@ impl From<ConsensusParameters> for fuel_core_types::fuel_tx::ConsensusParameters
             fee_params: params.fee_params.into(),
             chain_id: params.chain_id.0.into(),
             gas_costs: params.gas_costs.into(),
+            base_asset_id: AssetId::default().into(),
         }
     }
 }

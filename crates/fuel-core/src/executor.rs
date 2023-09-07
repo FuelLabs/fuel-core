@@ -4104,7 +4104,7 @@ mod tests {
                 &CompressedCoin {
                     owner: *coin_input.input_owner().unwrap(),
                     amount: coin_input.amount().unwrap(),
-                    asset_id: *coin_input.asset_id().unwrap(),
+                    asset_id: *coin_input.asset_id(&AssetId::BASE).unwrap(),
                     maturity: coin_input.maturity().unwrap(),
                     tx_pointer: TxPointer::new(Default::default(), block_tx_idx),
                 },
@@ -4181,7 +4181,7 @@ mod tests {
                 &CompressedCoin {
                     owner: *coin_input.input_owner().unwrap(),
                     amount: coin_input.amount().unwrap(),
-                    asset_id: *coin_input.asset_id().unwrap(),
+                    asset_id: *coin_input.asset_id(&AssetId::BASE).unwrap(),
                     maturity: coin_input.maturity().unwrap(),
                     tx_pointer: TxPointer::default(),
                 },
