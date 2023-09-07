@@ -13,6 +13,7 @@ description = "Fuel Block Importer"
 anyhow = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
+fuel-core-metrics = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }

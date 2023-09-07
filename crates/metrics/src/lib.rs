@@ -4,6 +4,7 @@
 pub mod core_metrics;
 pub mod future_tracker;
 pub mod graphql_metrics;
+pub mod importer;
 pub mod p2p_metrics;
 pub mod response;
 pub mod services;

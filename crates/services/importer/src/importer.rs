@@ -7,6 +7,7 @@ use crate::{
     },
     Config,
 };
+use fuel_core_metrics::importer::IMPORTER_METRICS;
 use fuel_core_storage::{
     transactional::StorageTransaction,
     Error as StorageError,
@@ -223,9 +224,17 @@ where
             .seal_block(&block_id, &result.sealed_block.consensus)?
             .should_be_unique(&expected_next_height)?;
 
+        // Update the total tx count in chain metadata
+        let total_txs = db_after_execution
+            // Safety: casting len to u64 since it's impossible to execute a block with more than 2^64 txs
+            .update_tx_count(result.sealed_block.entity.transactions().len() as u64)?;
+
         db_tx.commit()?;
 
-        tracing::info!("Committed block");
+        // ensure the metrics reflect the latest tx count after the block is successfully committed
+        IMPORTER_METRICS.total_txs_count.set(total_txs as i64);
+
+        tracing::info!("Committed block {:#x}", result.sealed_block.entity.id());
         let _ = self.broadcast.send(Arc::new(result));
         Ok(())
     }

@@ -2944,6 +2944,7 @@ name = "fuel-core-importer"
 version = "0.20.4"
 dependencies = [
  "anyhow",
+ "fuel-core-metrics",
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types",

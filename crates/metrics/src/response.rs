@@ -1,5 +1,6 @@
 use crate::{
     graphql_metrics::GRAPHQL_METRICS,
+    importer::IMPORTER_METRICS,
     p2p_metrics::P2P_METRICS,
     services::SERVICES_METRICS,
     txpool_metrics::TXPOOL_METRICS,
@@ -29,6 +30,7 @@ pub fn encode_metrics_response() -> impl IntoResponse {
 
     let mut encoded = String::from_utf8_lossy(&libp2p_bytes).into_owned();
 
+    // encode the rest of the fuel-core metrics using latest prometheus
     {
         let lock = SERVICES_METRICS
             .registry
@@ -39,12 +41,15 @@ pub fn encode_metrics_response() -> impl IntoResponse {
         }
     }
 
-    // encode the rest of the fuel-core metrics using latest prometheus
     if encode(&mut encoded, &TXPOOL_METRICS.registry).is_err() {
         return error_body()
     }
 
     if encode(&mut encoded, &GRAPHQL_METRICS.registry).is_err() {
+        return error_body()
+    }
+
+    if encode(&mut encoded, &IMPORTER_METRICS.registry).is_err() {
         return error_body()
     }
 

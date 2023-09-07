@@ -113,6 +113,10 @@ impl ImporterDatabase for Database {
     fn latest_block_height(&self) -> StorageResult<BlockHeight> {
         self.latest_height()
     }
+
+    fn update_tx_count(&self, new_txs_count: u64) -> StorageResult<u64> {
+        self.increase_tx_count(new_txs_count).map_err(Into::into)
+    }
 }
 
 impl ExecutorDatabase for Database {
