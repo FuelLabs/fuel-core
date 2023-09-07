@@ -26,7 +26,7 @@ async fn test_metrics_endpoint() {
     // Should generate some database reads
     client.balance(&owner, Some(&asset_id)).await.unwrap();
 
-    let script = vec![
+    let script = [
         op::addi(0x10, RegId::ZERO, 0xca),
         op::addi(0x11, RegId::ZERO, 0xba),
         op::log(0x10, 0x11, RegId::ZERO, RegId::ZERO),
