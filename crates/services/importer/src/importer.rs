@@ -36,6 +36,7 @@ use fuel_core_types::{
 use std::{
     sync::Arc,
     time::{
+        Instant,
         SystemTime,
         UNIX_EPOCH,
     },
@@ -365,8 +366,14 @@ where
     /// It is a combination of the [`Importer::verify_and_execute_block`] and [`Importer::commit_result`].
     pub fn execute_and_commit(&self, sealed_block: SealedBlock) -> Result<(), Error> {
         let _guard = self.lock()?;
+        let start = Instant::now();
         let result = self.verify_and_execute_block(sealed_block)?;
-        self._commit_result(result)
+        let commit_result = self._commit_result(result);
+        // record the execution time to prometheus
+        let time = start.elapsed().as_secs_f64();
+        IMPORTER_METRICS.execute_and_commit_duration.observe(time);
+        // return execution result
+        commit_result
     }
 }
 

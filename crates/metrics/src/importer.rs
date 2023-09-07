@@ -1,6 +1,10 @@
+use crate::graphql_metrics::BUCKETS;
 use lazy_static::lazy_static;
 use prometheus_client::{
-    metrics::gauge::Gauge,
+    metrics::{
+        gauge::Gauge,
+        histogram::Histogram,
+    },
     registry::Registry,
 };
 use std::sync::atomic::AtomicU64;
@@ -11,6 +15,7 @@ pub struct ImporterMetrics {
     pub total_txs_count: Gauge,
     pub block_height: Gauge,
     pub latest_block_import_timestamp: Gauge<f64, AtomicU64>,
+    pub execute_and_commit_duration: Histogram,
 }
 
 impl Default for ImporterMetrics {
@@ -20,6 +25,7 @@ impl Default for ImporterMetrics {
         let tx_count_gauge = Gauge::default();
         let block_height_gauge = Gauge::default();
         let latest_block_import_ms = Gauge::default();
+        let execute_and_commit_duration = Histogram::new(BUCKETS.iter().cloned());
 
         registry.register(
             "importer_tx_count",
@@ -39,11 +45,18 @@ impl Default for ImporterMetrics {
             latest_block_import_ms.clone(),
         );
 
+        registry.register(
+            "importer_execute_and_commit_duration_s",
+            "Records the duration time of executing and committing a block",
+            execute_and_commit_duration.clone(),
+        );
+
         Self {
             registry,
             total_txs_count: tx_count_gauge,
             block_height: block_height_gauge,
             latest_block_import_timestamp: latest_block_import_ms,
+            execute_and_commit_duration,
         }
     }
 }
