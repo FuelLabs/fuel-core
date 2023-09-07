@@ -1,3 +1,6 @@
+// Allow `arc_with_non_send_sync` to enable use of `Arbitrary`
+#![allow(clippy::arc_with_non_send_sync)]
+
 //! This module provides functions and data structures for
 //! testing and modeling transaction status changes. Property-based
 //! testing techniques to generate different
