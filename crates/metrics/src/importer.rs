@@ -40,7 +40,7 @@ impl Default for ImporterMetrics {
         );
 
         registry.register(
-            "importer_latest_block_commit_timestamp_seconds",
+            "importer_latest_block_commit_timestamp_s",
             "A timestamp of when the current block was imported",
             latest_block_import_ms.clone(),
         );
