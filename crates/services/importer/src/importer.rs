@@ -98,23 +98,17 @@ pub struct Importer<D, E, V> {
     guard: tokio::sync::Semaphore,
 }
 
-impl<D, E, V> Importer<D, E, V>
-where
-    D: ImporterDatabase,
-{
+impl<D, E, V> Importer<D, E, V> {
     pub fn new(config: Config, database: D, executor: E, verifier: V) -> Self {
         let (broadcast, _) = broadcast::channel(config.max_block_notify_buffer);
 
-        let importer = Self {
+        Self {
             database,
             executor,
             verifier,
             broadcast,
             guard: tokio::sync::Semaphore::new(1),
-        };
-        // set initial values for importer metrics
-        importer.init_metrics();
-        importer
+        }
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<Arc<ImportResult>> {
@@ -133,30 +127,6 @@ where
                 Err(Error::SemaphoreError(err))
             }
         }
-    }
-
-    fn init_metrics(&self) {
-        // load starting values from database
-
-        // Errors are optimistically handled via fallback to default values since the metrics
-        // should get updated regularly anyways and these errors will be discovered and handled
-        // correctly in more mission critical areas (such as _commit_result)
-        let current_block_height =
-            self.database.latest_block_height().unwrap_or_default();
-        let total_tx_count = self.database.update_tx_count(0).unwrap_or_default();
-
-        IMPORTER_METRICS.total_txs_count.set(total_tx_count as i64);
-        IMPORTER_METRICS
-            .block_height
-            .set(current_block_height.as_usize() as i64);
-        // on init just set to current time since it's not worth tracking in the db
-        let current_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs_f64();
-        IMPORTER_METRICS
-            .latest_block_import_timestamp
-            .set(current_time);
     }
 }
 
@@ -284,6 +254,31 @@ where
         tracing::info!("Committed block {:#x}", result.sealed_block.entity.id());
         let _ = self.broadcast.send(Arc::new(result));
         Ok(())
+    }
+
+    /// Should only be called once after startup to set importer metrics to their initial values
+    pub fn init_metrics(&self) {
+        // load starting values from database
+
+        // Errors are optimistically handled via fallback to default values since the metrics
+        // should get updated regularly anyways and these errors will be discovered and handled
+        // correctly in more mission critical areas (such as _commit_result)
+        let current_block_height =
+            self.database.latest_block_height().unwrap_or_default();
+        let total_tx_count = self.database.update_tx_count(0).unwrap_or_default();
+
+        IMPORTER_METRICS.total_txs_count.set(total_tx_count as i64);
+        IMPORTER_METRICS
+            .block_height
+            .set(current_block_height.as_usize() as i64);
+        // on init just set to current time since it's not worth tracking in the db
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64();
+        IMPORTER_METRICS
+            .latest_block_import_timestamp
+            .set(current_time);
     }
 }
 
