@@ -33,7 +33,13 @@ use fuel_core_types::{
         Uncommitted,
     },
 };
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::{
+        SystemTime,
+        UNIX_EPOCH,
+    },
+};
 use tokio::sync::{
     broadcast,
     TryAcquireError,
@@ -143,6 +149,14 @@ where
         IMPORTER_METRICS
             .block_height
             .set(current_block_height.as_usize() as i64);
+        // on init just set to current time since it's not worth tracking in the db
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64();
+        IMPORTER_METRICS
+            .latest_block_import_timestamp
+            .set(current_time);
     }
 }
 
@@ -254,12 +268,18 @@ where
 
         db_tx.commit()?;
 
-        // ensure the metrics reflect the latest tx count & block height after
-        // the block is successfully committed
+        // update the importer metrics after the block is successfully committed
         IMPORTER_METRICS.total_txs_count.set(total_txs as i64);
         IMPORTER_METRICS
             .block_height
             .set(actual_height.as_usize() as i64);
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64();
+        IMPORTER_METRICS
+            .latest_block_import_timestamp
+            .set(current_time);
 
         tracing::info!("Committed block {:#x}", result.sealed_block.entity.id());
         let _ = self.broadcast.send(Arc::new(result));
