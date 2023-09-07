@@ -63,10 +63,16 @@ use std::{
     ops::Range,
     sync::Arc,
 };
-use tokio::sync::{
-    broadcast,
-    mpsc,
-    oneshot,
+use tokio::{
+    sync::{
+        broadcast,
+        mpsc,
+        oneshot,
+    },
+    time::{
+        Duration,
+        Instant,
+    },
 };
 use tracing::warn;
 
@@ -117,6 +123,9 @@ pub struct Task<D> {
     request_receiver: mpsc::Receiver<TaskRequest>,
     shared: SharedState,
     max_headers_per_request: u32,
+    // milliseconds wait time between peer heartbeat reputation checks
+    check_frequency: Duration,
+    next_check_time: Instant,
 }
 
 impl<D> Task<D> {
@@ -137,6 +146,11 @@ impl<D> Task<D> {
         let reserved_peers_broadcast =
             p2p_service.peer_manager().reserved_peers_updates();
 
+        // TODO: Parameterize
+        let check_frequency = 10_000; // ten seconds
+        let check_frequency = Duration::from_millis(check_frequency);
+        let next_check_time = Instant::now() + check_frequency;
+
         Self {
             p2p_service,
             db,
@@ -149,7 +163,13 @@ impl<D> Task<D> {
                 block_height_broadcast,
             },
             max_headers_per_request,
+            check_frequency,
+            next_check_time,
         }
+    }
+
+    fn peer_heartbeat_reputation_checks(&self) -> anyhow::Result<()> {
+        todo!()
     }
 }
 
@@ -186,6 +206,7 @@ where
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
+
         tokio::select! {
             biased;
 
@@ -340,6 +361,17 @@ where
                     },
                     _ => (),
                 }
+            },
+            _  = tokio::time::sleep_until(self.next_check_time) => {
+                should_continue = true;
+                let res = self.peer_heartbeat_reputation_checks();
+                match res {
+                    Ok(_) => tracing::debug!("Peer heartbeat reputation checks completed"),
+                    Err(e) => {
+                        tracing::error!("Failed to perform peer heartbeat reputation checks: {:?}", e);
+                    }
+                }
+                self.next_check_time = self.next_check_time + self.check_frequency;
             },
             latest_block_height = self.next_block_height.next() => {
                 if let Some(latest_block_height) = latest_block_height {

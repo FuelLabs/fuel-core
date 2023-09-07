@@ -40,7 +40,7 @@ const MIN_GOSSIPSUB_SCORE_BEFORE_BAN: AppScore = GRAYLIST_THRESHOLD;
 pub struct PeerInfo {
     pub peer_addresses: HashSet<Multiaddr>,
     pub client_version: Option<String>,
-    pub heartbeat_data: HeartbeatData,
+    pub heartbeat_data: Option<HeartbeatData>,
     pub score: AppScore,
 }
 
@@ -53,12 +53,6 @@ impl Default for PeerInfo {
             peer_addresses: Default::default(),
         }
     }
-}
-
-enum PeerInfoInsert {
-    Addresses(Vec<Multiaddr>),
-    ClientVersion(String),
-    HeartbeatData(HeartbeatData),
 }
 
 /// Manages Peers and their events
@@ -117,14 +111,14 @@ impl PeerManager {
     ) {
         if let Some(time_elapsed) = self
             .get_peer_info(peer_id)
-            .and_then(|info| info.heartbeat_data.seconds_since_last_heartbeat())
+            .and_then(|info| info.heartbeat_data.as_ref())
+            .map(|data| data.seconds_since_last_heartbeat())
         {
-            debug!(target: "fuel-p2p", "Previous heartbeat happened {:?} seconds ago", time_elapsed);
+            debug!(target: "fuel-p2p", "Previous heartbeat happened {:?} milliseconds ago", time_elapsed.as_millis());
         }
 
-        let heartbeat_data = HeartbeatData::new(block_height);
-
-        self.insert_peer_info(peer_id, PeerInfoInsert::HeartbeatData(heartbeat_data));
+        let peers = self.get_relevant_peers(peer_id);
+        update_heartbeat(peers, peer_id, block_height);
     }
 
     /// Returns `true` signaling that the peer should be disconnected
@@ -137,7 +131,8 @@ impl PeerManager {
         if initial_connection {
             self.handle_initial_connection(peer_id, addresses)
         } else {
-            self.insert_peer_info(peer_id, PeerInfoInsert::Addresses(addresses));
+            let peers = self.get_relevant_peers(peer_id);
+            insert_peer_addresses(peers, peer_id, addresses);
             false
         }
     }
@@ -148,8 +143,9 @@ impl PeerManager {
         addresses: Vec<Multiaddr>,
         agent_version: String,
     ) {
-        self.insert_peer_info(peer_id, PeerInfoInsert::ClientVersion(agent_version));
-        self.insert_peer_info(peer_id, PeerInfoInsert::Addresses(addresses));
+        let peers = self.get_relevant_peers(peer_id);
+        insert_client_version(peers, peer_id, agent_version);
+        insert_peer_addresses(peers, peer_id, addresses);
     }
 
     pub fn batch_update_score_with_decay(&mut self) {
@@ -243,7 +239,11 @@ impl PeerManager {
             .iter()
             .chain(self.reserved_connected_peers.iter())
             .filter(|(_, peer_info)| {
-                peer_info.heartbeat_data.block_height >= Some(*height)
+                peer_info
+                    .heartbeat_data
+                    .as_ref()
+                    .map(|data| data.block_height)
+                    >= Some(*height)
             })
             .map(|(peer_id, _)| *peer_id)
             .choose(&mut range)
@@ -280,7 +280,8 @@ impl PeerManager {
             self.send_reserved_peers_update();
         }
 
-        self.insert_peer_info(peer_id, PeerInfoInsert::Addresses(addresses));
+        let peers = self.get_relevant_peers(peer_id);
+        insert_peer_addresses(peers, peer_id, addresses);
 
         false
     }
@@ -291,22 +292,11 @@ impl PeerManager {
             .send(self.reserved_connected_peers.len());
     }
 
-    fn insert_peer_info(&mut self, peer_id: &PeerId, data: PeerInfoInsert) {
-        let peers = if self.reserved_peers.contains(peer_id) {
+    fn get_relevant_peers(&mut self, peer_id: &PeerId) -> &mut HashMap<PeerId, PeerInfo> {
+        if self.reserved_peers.contains(peer_id) {
             &mut self.reserved_connected_peers
         } else {
             &mut self.non_reserved_connected_peers
-        };
-        match data {
-            PeerInfoInsert::Addresses(addresses) => {
-                insert_peer_addresses(peers, peer_id, addresses)
-            }
-            PeerInfoInsert::ClientVersion(client_version) => {
-                insert_client_version(peers, peer_id, client_version)
-            }
-            PeerInfoInsert::HeartbeatData(block_height) => {
-                insert_heartbeat_data(peers, peer_id, block_height)
-            }
         }
     }
 }
@@ -316,22 +306,43 @@ pub struct ConnectionState {
     peers_allowed: bool,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct HeartbeatData {
-    pub block_height: Option<BlockHeight>,
-    pub last_heartbeat: Option<Instant>,
+    pub block_height: BlockHeight,
+    pub last_heartbeat: Instant,
+    // Size of moving average window
+    window: u32,
+    // How many heartbeats into the first window have been received
+    count: u32,
+    // Moving average of duration between heartbeats
+    moving_average: Duration,
 }
 
 impl HeartbeatData {
-    pub fn new(block_height: BlockHeight) -> Self {
+    pub fn new(block_height: BlockHeight, window: u32) -> Self {
         Self {
-            block_height: Some(block_height),
-            last_heartbeat: Some(Instant::now()),
+            block_height,
+            last_heartbeat: Instant::now(),
+            window,
+            count: 0,
+            moving_average: Duration::from_secs(0),
         }
     }
 
-    pub fn seconds_since_last_heartbeat(&self) -> Option<Duration> {
-        self.last_heartbeat.map(|time| time.elapsed())
+    pub fn seconds_since_last_heartbeat(&self) -> Duration {
+        self.last_heartbeat.elapsed()
+    }
+
+    pub fn update(&mut self, block_height: BlockHeight) {
+        self.block_height = block_height;
+        let old_hearbeat = self.last_heartbeat;
+        self.last_heartbeat = Instant::now();
+        let new_duration = self.last_heartbeat - old_hearbeat;
+        if self.count < self.window {
+            self.count += 1;
+        }
+        self.moving_average =
+            (self.moving_average * (self.count - 1) + new_duration) / self.count;
     }
 }
 
@@ -369,13 +380,22 @@ fn insert_peer_addresses(
     }
 }
 
-fn insert_heartbeat_data(
+fn update_heartbeat(
     peers: &mut HashMap<PeerId, PeerInfo>,
     peer_id: &PeerId,
-    heartbeat_data: HeartbeatData,
+    block_height: BlockHeight,
 ) {
+    const HEARTBEAT_AVG_WINDOW: u32 = 10;
     if let Some(peer) = peers.get_mut(peer_id) {
-        peer.heartbeat_data = heartbeat_data;
+        match peer.heartbeat_data {
+            Some(ref mut heartbeat_data) => {
+                heartbeat_data.update(block_height);
+            }
+            None => {
+                peer.heartbeat_data =
+                    Some(HeartbeatData::new(block_height, HEARTBEAT_AVG_WINDOW));
+            }
+        }
     } else {
         log_missing_peer(peer_id);
     }
