@@ -198,7 +198,8 @@ expression: json
         "base": 44,
         "dep_per_unit": 5
       }
-    }
+    },
+    "base_asset_id": "0000000000000000000000000000000000000000000000000000000000000000"
   },
   "consensus": {
     "PoA": {
