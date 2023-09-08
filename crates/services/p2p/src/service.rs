@@ -116,7 +116,6 @@ impl Debug for TaskRequest {
 pub enum HeartBeatPeerReportReason {
     OldHeartBeat,
     LowHeartBeatFrequency,
-    NoHeartBeats,
 }
 
 impl PeerReport for HeartBeatPeerReportReason {
