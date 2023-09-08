@@ -419,14 +419,13 @@ impl<T> From<T> for SharedMutex<T> {
 }
 
 fn panic_to_string(e: Box<dyn core::any::Any + Send>) -> String {
-    let panic_information = match e.downcast::<String>() {
+    match e.downcast::<String>() {
         Ok(v) => *v,
         Err(e) => match e.downcast::<&str>() {
             Ok(v) => v.to_string(),
             _ => "Unknown Source of Error".to_owned(),
         },
-    };
-    panic_information
+    }
 }
 
 #[cfg(test)]
