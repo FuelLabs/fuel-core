@@ -46,7 +46,7 @@ async fn subscribe_txn_status() {
 
     let create_script = |i: u8| {
         // The first two scripts will run and the rest will fail.
-        let script = vec![op::addi(0x11 - i, 0x10, 1), op::ret(RegId::ONE)];
+        let script = [op::addi(0x11 - i, 0x10, 1), op::ret(RegId::ONE)];
         let script: Vec<u8> = script
             .iter()
             .flat_map(|op| u32::from(*op).to_be_bytes())

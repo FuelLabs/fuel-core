@@ -241,7 +241,7 @@ fn test_tsc_inner(
                     Err(_) => Err(StorageError::NotFound("", "")),
                 });
 
-            let stream = futures::stream::iter(stream.into_iter()).boxed();
+            let stream = futures::stream::iter(stream).boxed();
             super::transaction_status_change(mock_state, stream, txn_id(0))
                 .await
                 .collect::<Vec<_>>()
