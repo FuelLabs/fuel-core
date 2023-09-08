@@ -197,10 +197,10 @@ async fn can_get_message_proof() {
         .collect();
 
     // Call contract script.
-    let script = vec![
-        // Save the ptr to the script data to register 16.
-        // This will be used to read the contract id + two
-        // empty params. So 32 + 8 + 8.
+    // Save the ptr to the script data to register 16.
+    // This will be used to read the contract id + two
+    // empty params. So 32 + 8 + 8.
+    let script = [
         op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
         op::addi(0x10, 0x10, (Bytes32::LEN * 3).try_into().unwrap()),
         // Call the contract and forward no coins.

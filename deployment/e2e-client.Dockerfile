@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM rust:1.71.0 AS chef
+FROM rust:1.72.0 AS chef
 RUN cargo install cargo-chef
 WORKDIR /build/
 # hadolint ignore=DL3008
