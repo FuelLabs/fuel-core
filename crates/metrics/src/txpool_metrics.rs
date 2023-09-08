@@ -1,9 +1,11 @@
-use lazy_static::lazy_static;
 use prometheus_client::{
     metrics::histogram::Histogram,
     registry::Registry,
 };
-use std::default::Default;
+use std::{
+    default::Default,
+    sync::OnceLock,
+};
 
 pub struct TxPoolMetrics {
     // Attaches each Metric to the Registry
@@ -46,6 +48,7 @@ impl Default for TxPoolMetrics {
     }
 }
 
-lazy_static! {
-    pub static ref TXPOOL_METRICS: TxPoolMetrics = TxPoolMetrics::default();
+static TXPOOL_METRICS: OnceLock<TxPoolMetrics> = OnceLock::new();
+pub fn txpool_metrics() -> &'static TxPoolMetrics {
+    TXPOOL_METRICS.get_or_init(TxPoolMetrics::default)
 }

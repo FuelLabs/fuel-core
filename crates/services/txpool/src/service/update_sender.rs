@@ -304,7 +304,7 @@ where
 
     // Insert a new vec into the senders map if not exists,
     // and then push the sender to the vec.
-    senders.entry(tx_id).or_insert_with(Vec::new).push(Sender {
+    senders.entry(tx_id).or_default().push(Sender {
         _permit: permit,
         stream: TxUpdateStream::new(),
         tx,

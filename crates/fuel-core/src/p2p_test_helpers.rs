@@ -123,7 +123,7 @@ impl Bootstrap {
             loop {
                 tokio::select! {
                     result = shutdown.recv() => {
-                        assert!(matches!(result, Ok(_)));
+                        assert!(result.is_ok());
                         break;
                     }
                     _ = bootstrap.next_event() => {}

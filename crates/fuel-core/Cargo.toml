@@ -25,7 +25,7 @@ fuel-core-consensus-module = { workspace = true }
 fuel-core-database = { workspace = true }
 fuel-core-executor = { workspace = true }
 fuel-core-importer = { workspace = true }
-fuel-core-metrics = { workspace = true, optional = true }
+fuel-core-metrics = { workspace = true }
 fuel-core-p2p = { workspace = true, optional = true }
 fuel-core-poa = { workspace = true }
 fuel-core-producer = { workspace = true }
@@ -73,8 +73,7 @@ test-case = { workspace = true }
 test-strategy = { workspace = true }
 
 [features]
-default = ["metrics", "rocksdb"]
-metrics = ["dep:fuel-core-metrics"]
+default = ["rocksdb"]
 p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
 rocksdb = ["dep:rocksdb", "dep:tempfile"]
