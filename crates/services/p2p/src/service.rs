@@ -113,6 +113,18 @@ impl Debug for TaskRequest {
     }
 }
 
+pub enum HeartBeatPeerReportReason {
+    OldHeartBeat,
+    LowHeartBeatFrequency,
+    NoHeartBeats,
+}
+
+impl PeerReport for HeartBeatPeerReportReason {
+    fn get_score_from_report(&self) -> AppScore {
+        todo!()
+    }
+}
+
 /// Orchestrates various p2p-related events between the inner `P2pService`
 /// and the top level `NetworkService`.
 pub struct Task<D> {
@@ -169,8 +181,32 @@ impl<D> Task<D> {
     }
 
     fn peer_heartbeat_reputation_checks(&self) -> anyhow::Result<()> {
-        todo!()
+        const MAX_HEARTBEAT_AGE: Duration = Duration::from_millis(5_000);
+        const MAX_AVG_TIME_BETWEEN_HEARTBEATS: Duration = Duration::from_millis(1_000);
+        for (peer_id, peer_info) in self.p2p_service.peer_manager().get_all_peers() {
+            if peer_info.heartbeat_data.duration_since_last_heartbeat()
+                > MAX_HEARTBEAT_AGE
+            {
+                let report = HeartBeatPeerReportReason::OldHeartBeat;
+                let service = "p2p";
+                let peer_id = convert_peer_id(peer_id)?;
+                self.shared.report_peer(peer_id, report, service)?;
+            } else if peer_info.heartbeat_data.average_time_between_heartbeats()
+                > MAX_AVG_TIME_BETWEEN_HEARTBEATS
+            {
+                let report = HeartBeatPeerReportReason::LowHeartBeatFrequency;
+                let service = "p2p";
+                let peer_id = convert_peer_id(peer_id)?;
+                self.shared.report_peer(peer_id, report, service)?;
+            }
+        }
+        Ok(())
     }
+}
+
+fn convert_peer_id(peer_id: &PeerId) -> anyhow::Result<FuelPeerId> {
+    let inner = Vec::try_from(peer_id.clone())?;
+    Ok(FuelPeerId::from(inner))
 }
 
 #[async_trait::async_trait]
