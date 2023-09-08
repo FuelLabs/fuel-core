@@ -49,7 +49,7 @@ pub(crate) fn add_coin_to_state(input: Input, mock_db: Option<&MockDb>) -> (Coin
     let coin = CompressedCoin {
         owner: *input.input_owner().unwrap(),
         amount: TEST_COIN_AMOUNT,
-        asset_id: *input.asset_id().unwrap(),
+        asset_id: *input.asset_id(&AssetId::BASE).unwrap(),
         maturity: Default::default(),
         tx_pointer: Default::default(),
     };

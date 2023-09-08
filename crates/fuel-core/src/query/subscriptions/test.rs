@@ -1,3 +1,6 @@
+// Allow `arc_with_non_send_sync` to enable use of `Arbitrary`
+#![allow(clippy::arc_with_non_send_sync)]
+
 //! This module provides functions and data structures for
 //! testing and modeling transaction status changes. Property-based
 //! testing techniques to generate different
@@ -241,7 +244,7 @@ fn test_tsc_inner(
                     Err(_) => Err(StorageError::NotFound("", "")),
                 });
 
-            let stream = futures::stream::iter(stream.into_iter()).boxed();
+            let stream = futures::stream::iter(stream).boxed();
             super::transaction_status_change(mock_state, stream, txn_id(0))
                 .await
                 .collect::<Vec<_>>()

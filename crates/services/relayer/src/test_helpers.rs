@@ -114,7 +114,7 @@ pub fn eth_log_message(
         address,
         eth_block,
         vec![*config::ETH_LOG_MESSAGE, H256::default(), H256::default()],
-        BytesMut::from_iter(b.into_iter()).freeze(),
+        BytesMut::from_iter(b).freeze(),
     )
 }
 

@@ -1,6 +1,7 @@
 use crate::client::schema::{
     block::Block,
     schema,
+    AssetId,
     U32,
     U64,
 };
@@ -164,12 +165,10 @@ include_from_impls_and_cynic! {
         pub jnzb: U64,
         pub jnef: U64,
         pub jneb: U64,
-        pub k256: U64,
         pub lb: U64,
         pub log: U64,
         pub lt: U64,
         pub lw: U64,
-        pub mcpi: U64,
         pub mint: U64,
         pub mlog: U64,
         pub mod_op: U64,
@@ -190,9 +189,7 @@ include_from_impls_and_cynic! {
         pub pshl: U64,
         pub ret: U64,
         pub rvrt: U64,
-        pub s256: U64,
         pub sb: U64,
-        pub scwq: U64,
         pub sll: U64,
         pub slli: U64,
         pub srl: U64,
@@ -202,7 +199,6 @@ include_from_impls_and_cynic! {
         pub subi: U64,
         pub sw: U64,
         pub sww: U64,
-        pub swwq: U64,
         pub time: U64,
         pub tr: U64,
         pub tro: U64,
@@ -226,15 +222,20 @@ include_from_impls_and_cynic! {
         pub call: DependentCost,
         pub ccp: DependentCost,
         pub csiz: DependentCost,
+        pub k256: DependentCost,
         pub ldc: DependentCost,
         pub logd: DependentCost,
         pub mcl: DependentCost,
         pub mcli: DependentCost,
         pub mcp: DependentCost,
+        pub mcpi: DependentCost,
         pub meq: DependentCost,
         pub retd: DependentCost,
+        pub s256: DependentCost,
+        pub scwq: DependentCost,
         pub smo: DependentCost,
         pub srwq: DependentCost,
+        pub swwq: DependentCost,
     }
 }
 
@@ -264,6 +265,7 @@ impl From<ConsensusParameters> for fuel_core_types::fuel_tx::ConsensusParameters
             fee_params: params.fee_params.into(),
             chain_id: params.chain_id.0.into(),
             gas_costs: params.gas_costs.into(),
+            base_asset_id: AssetId::default().into(),
         }
     }
 }

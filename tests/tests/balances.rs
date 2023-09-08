@@ -146,7 +146,7 @@ async fn first_5_balances() {
         .map(|i| AssetId::new([i; 32]))
         .collect::<Vec<AssetId>>();
 
-    let all_owners = vec![Address::default(), owner, Address::from([20u8; 32])];
+    let all_owners = [Address::default(), owner, Address::from([20u8; 32])];
     let coins = {
         // setup all coins for all owners
         let mut coins = vec![];
