@@ -1,4 +1,3 @@
-use lazy_static::lazy_static;
 use prometheus_client::{
     metrics::{
         counter::Counter,
@@ -6,6 +5,7 @@ use prometheus_client::{
     },
     registry::Registry,
 };
+use std::sync::OnceLock;
 
 pub struct DatabaseMetrics {
     pub registry: Registry,
@@ -64,10 +64,11 @@ pub fn init(mut metrics: DatabaseMetrics) -> DatabaseMetrics {
     metrics
 }
 
-lazy_static! {
-    pub static ref DATABASE_METRICS: DatabaseMetrics = {
-        let registry = DatabaseMetrics::new();
+static DATABASE_METRICS: OnceLock<DatabaseMetrics> = OnceLock::new();
 
+pub fn database_metrics() -> &'static DatabaseMetrics {
+    DATABASE_METRICS.get_or_init(|| {
+        let registry = DatabaseMetrics::new();
         init(registry)
-    };
+    })
 }

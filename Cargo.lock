@@ -2944,6 +2944,7 @@ name = "fuel-core-importer"
 version = "0.20.4"
 dependencies = [
  "anyhow",
+ "fuel-core-metrics",
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types",
@@ -2970,7 +2971,6 @@ name = "fuel-core-metrics"
 version = "0.20.4"
 dependencies = [
  "axum",
- "lazy_static",
  "once_cell",
  "pin-project-lite 0.2.12",
  "prometheus-client 0.18.1",

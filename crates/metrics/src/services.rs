@@ -1,4 +1,3 @@
-use lazy_static::lazy_static;
 use prometheus_client::{
     encoding::text::encode,
     metrics::counter::Counter,
@@ -6,7 +5,10 @@ use prometheus_client::{
 };
 use std::{
     ops::Deref,
-    sync::Mutex,
+    sync::{
+        Mutex,
+        OnceLock,
+    },
 };
 
 /// The statistic of the service life cycle.
@@ -62,12 +64,14 @@ impl ServicesMetrics {
     }
 }
 
-lazy_static! {
-    pub static ref SERVICES_METRICS: ServicesMetrics = ServicesMetrics::default();
+static SERVICES_METRICS: OnceLock<ServicesMetrics> = OnceLock::new();
+
+pub fn services_metrics() -> &'static ServicesMetrics {
+    SERVICES_METRICS.get_or_init(ServicesMetrics::default)
 }
 
 #[test]
 fn register_success() {
-    SERVICES_METRICS.register_service("Foo");
-    SERVICES_METRICS.register_service("Bar");
+    services_metrics().register_service("Foo");
+    services_metrics().register_service("Bar");
 }

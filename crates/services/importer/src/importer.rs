@@ -7,6 +7,7 @@ use crate::{
     },
     Config,
 };
+use fuel_core_metrics::importer::importer_metrics;
 use fuel_core_storage::{
     transactional::StorageTransaction,
     Error as StorageError,
@@ -32,7 +33,14 @@ use fuel_core_types::{
         Uncommitted,
     },
 };
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::{
+        Instant,
+        SystemTime,
+        UNIX_EPOCH,
+    },
+};
 use tokio::sync::{
     broadcast,
     TryAcquireError,
@@ -94,6 +102,7 @@ pub struct Importer<D, E, V> {
 impl<D, E, V> Importer<D, E, V> {
     pub fn new(config: Config, database: D, executor: E, verifier: V) -> Self {
         let (broadcast, _) = broadcast::channel(config.max_block_notify_buffer);
+
         Self {
             database,
             executor,
@@ -223,11 +232,56 @@ where
             .seal_block(&block_id, &result.sealed_block.consensus)?
             .should_be_unique(&expected_next_height)?;
 
+        // Update the total tx count in chain metadata
+        let total_txs = db_after_execution
+            // Safety: casting len to u64 since it's impossible to execute a block with more than 2^64 txs
+            .increase_tx_count(result.sealed_block.entity.transactions().len() as u64)?;
+
         db_tx.commit()?;
 
-        tracing::info!("Committed block");
+        // update the importer metrics after the block is successfully committed
+        importer_metrics().total_txs_count.set(total_txs as i64);
+        importer_metrics()
+            .block_height
+            .set(actual_height.as_usize() as i64);
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64();
+        importer_metrics()
+            .latest_block_import_timestamp
+            .set(current_time);
+
+        tracing::info!("Committed block {:#x}", result.sealed_block.entity.id());
         let _ = self.broadcast.send(Arc::new(result));
         Ok(())
+    }
+
+    /// Should only be called once after startup to set importer metrics to their initial values
+    pub fn init_metrics(&self) {
+        // load starting values from database
+
+        // Errors are optimistically handled via fallback to default values since the metrics
+        // should get updated regularly anyways and these errors will be discovered and handled
+        // correctly in more mission critical areas (such as _commit_result)
+        let current_block_height =
+            self.database.latest_block_height().unwrap_or_default();
+        let total_tx_count = self.database.increase_tx_count(0).unwrap_or_default();
+
+        importer_metrics()
+            .total_txs_count
+            .set(total_tx_count as i64);
+        importer_metrics()
+            .block_height
+            .set(current_block_height.as_usize() as i64);
+        // on init just set to current time since it's not worth tracking in the db
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64();
+        importer_metrics()
+            .latest_block_import_timestamp
+            .set(current_time);
     }
 }
 
@@ -314,8 +368,14 @@ where
     /// It is a combination of the [`Importer::verify_and_execute_block`] and [`Importer::commit_result`].
     pub fn execute_and_commit(&self, sealed_block: SealedBlock) -> Result<(), Error> {
         let _guard = self.lock()?;
+        let start = Instant::now();
         let result = self.verify_and_execute_block(sealed_block)?;
-        self._commit_result(result)
+        let commit_result = self._commit_result(result);
+        // record the execution time to prometheus
+        let time = start.elapsed().as_secs_f64();
+        importer_metrics().execute_and_commit_duration.observe(time);
+        // return execution result
+        commit_result
     }
 }
 
