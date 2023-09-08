@@ -369,7 +369,7 @@ where
         // insert txs
         let insertion = { self.txpool.lock().insert(&self.tx_status_sender, valid_txs) };
 
-        for (ret, tx) in insertion.iter().zip(txs.into_iter()) {
+        for (ret, tx) in insertion.iter().zip(txs) {
             match ret {
                 Ok(_) => {
                     let result = self.p2p.broadcast_transaction(tx.clone());

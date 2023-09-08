@@ -123,7 +123,7 @@ impl Bootstrap {
             loop {
                 tokio::select! {
                     result = shutdown.recv() => {
-                        assert!(matches!(result, Ok(_)));
+                        assert!(result.is_ok());
                         break;
                     }
                     _ = bootstrap.next_event() => {}
@@ -189,7 +189,7 @@ pub async fn make_nodes(
     let mut chain_config = ChainConfig::local_testnet();
     chain_config.transaction_parameters.max_storage_slots = 1 << 17; // 131072
 
-    for (all, producer) in txs_coins.into_iter().zip(producers.into_iter()) {
+    for (all, producer) in txs_coins.into_iter().zip(producers) {
         match all {
             Some(all) => {
                 let mut txs = Vec::with_capacity(all.len());

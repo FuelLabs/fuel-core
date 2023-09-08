@@ -1,9 +1,9 @@
-use lazy_static::lazy_static;
 use libp2p_prom_client::{
     metrics::counter::Counter,
     registry::Registry,
 };
 use once_cell::race::OnceBox;
+use std::sync::OnceLock;
 
 pub struct P2PMetrics {
     pub gossip_sub_registry: OnceBox<Registry>,
@@ -34,6 +34,8 @@ impl P2PMetrics {
     }
 }
 
-lazy_static! {
-    pub static ref P2P_METRICS: P2PMetrics = P2PMetrics::new();
+static P2P_METRICS: OnceLock<P2PMetrics> = OnceLock::new();
+
+pub fn p2p_metrics() -> &'static P2PMetrics {
+    P2P_METRICS.get_or_init(P2PMetrics::new)
 }

@@ -1,4 +1,4 @@
-use lazy_static::lazy_static;
+use crate::timing_buckets;
 use prometheus_client::{
     encoding::EncodeLabelSet,
     metrics::{
@@ -7,6 +7,7 @@ use prometheus_client::{
     },
     registry::Registry,
 };
+use std::sync::OnceLock;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct Label {
@@ -23,7 +24,7 @@ impl GraphqlMetrics {
     fn new() -> Self {
         let mut registry = Registry::default();
         let requests = Family::<Label, Histogram>::new_with_constructor(|| {
-            Histogram::new(BUCKETS.iter().cloned())
+            Histogram::new(timing_buckets().iter().cloned())
         });
         registry.register("graphql_request_duration_seconds", "", requests.clone());
         Self { registry, requests }
@@ -37,9 +38,7 @@ impl GraphqlMetrics {
     }
 }
 
-lazy_static! {
-    pub static ref GRAPHQL_METRICS: GraphqlMetrics = GraphqlMetrics::new();
-    // recommended bucket defaults for API response times
-    static ref BUCKETS: Vec<f64> =
-        vec![0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0];
+static GRAPHQL_METRICS: OnceLock<GraphqlMetrics> = OnceLock::new();
+pub fn graphql_metrics() -> &'static GraphqlMetrics {
+    GRAPHQL_METRICS.get_or_init(GraphqlMetrics::new)
 }

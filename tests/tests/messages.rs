@@ -379,12 +379,9 @@ async fn can_get_message_proof() {
                 // Recipient address
                 arg.recipient_address.into_iter()
                     // The message data
-                    .chain(arg.message_data.clone().into_iter())
+                    .chain(arg.message_data.clone())
             })).collect();
-        let script_data = AssetId::BASE
-            .into_iter()
-            .chain(smo_data.into_iter())
-            .collect();
+        let script_data = AssetId::BASE.into_iter().chain(smo_data).collect();
 
         // Call contract script.
         let script = vec![

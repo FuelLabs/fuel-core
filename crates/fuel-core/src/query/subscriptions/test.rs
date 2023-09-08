@@ -16,6 +16,9 @@
 //! - `tx_status_message()`: Generates a TxStatusMessage
 //! - `transaction_status()`: Generates a TransactionStatus
 //! - `input_stream()`: Generates a Vec<TxStatusMessage> of length 0 to 5
+
+#![allow(clippy::arc_with_non_send_sync)]
+
 use fuel_core_txpool::service::TxStatusMessage;
 use fuel_core_types::{
     fuel_types::Bytes32,
@@ -241,7 +244,7 @@ fn test_tsc_inner(
                     Err(_) => Err(StorageError::NotFound("", "")),
                 });
 
-            let stream = futures::stream::iter(stream.into_iter()).boxed();
+            let stream = futures::stream::iter(stream).boxed();
             super::transaction_status_change(mock_state, stream, txn_id(0))
                 .await
                 .collect::<Vec<_>>()

@@ -39,11 +39,10 @@ test-case = { workspace = true }
 
 [features]
 debug = ["fuel-core/debug"]
-default = ["debug", "metrics", "relayer", "rocksdb"]
-metrics = ["fuel-core/metrics"]
+default = ["debug", "relayer", "rocksdb"]
 p2p = ["fuel-core/p2p", "const_format"]
 relayer = ["fuel-core/relayer", "dep:url", "dep:serde_json"]
 rocksdb = ["fuel-core/rocksdb"]
 rocksdb-production = ["fuel-core/rocksdb-production"]
 # features to enable in production, but increase build times
-production = ["metrics", "relayer", "rocksdb-production", "p2p"]
+production = ["relayer", "rocksdb-production", "p2p"]

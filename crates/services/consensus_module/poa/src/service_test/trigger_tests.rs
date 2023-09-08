@@ -157,7 +157,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     time::sleep(Duration::new(3, 0)).await;
 
     // Make sure the empty block is actually produced
-    assert!(matches!(ctx.block_import.try_recv(), Ok(_)));
+    assert!(ctx.block_import.try_recv().is_ok());
     // Emulate tx status update to trigger the execution
     ctx.status_sender.send_replace(Some(TxId::zeroed()));
 
@@ -171,7 +171,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     time::sleep(Duration::new(2, 0)).await;
 
     // Make sure it's produced
-    assert!(matches!(ctx.block_import.try_recv(), Ok(_)));
+    assert!(ctx.block_import.try_recv().is_ok());
 
     // Emulate tx status update to trigger the execution
     ctx.status_sender.send_replace(Some(TxId::zeroed()));
@@ -188,7 +188,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     time::sleep(Duration::new(2, 0)).await;
 
     // Make sure only one block is produced
-    assert!(matches!(ctx.block_import.try_recv(), Ok(_)));
+    assert!(ctx.block_import.try_recv().is_ok());
     assert!(matches!(
         ctx.block_import.try_recv(),
         Err(broadcast::error::TryRecvError::Empty)
@@ -232,7 +232,7 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
     // Make sure only one block per round is produced
     for _ in 0..5 {
         time::sleep(Duration::new(2, 0)).await;
-        assert!(matches!(ctx.block_import.try_recv(), Ok(_)));
+        assert!(ctx.block_import.try_recv().is_ok());
         assert!(matches!(
             ctx.block_import.try_recv(),
             Err(broadcast::error::TryRecvError::Empty)

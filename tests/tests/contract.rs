@@ -189,7 +189,7 @@ async fn can_get_message_proof() {
         .as_ref()
         .iter()
         .copied()
-        .chain(db_data.clone().into_iter())
+        .chain(db_data.clone())
         .chain(Call::new(id, 0, 0).to_bytes())
         .collect();
 

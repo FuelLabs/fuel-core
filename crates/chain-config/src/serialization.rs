@@ -148,10 +148,7 @@ macro_rules! impl_hex_number {
                     }
                     len if len < SIZE => {
                         // pad if length < word size
-                        bytes = (0..SIZE - len)
-                            .map(|_| 0u8)
-                            .chain(bytes.into_iter())
-                            .collect();
+                        bytes = (0..SIZE - len).map(|_| 0u8).chain(bytes).collect();
                     }
                     _ => {}
                 }
