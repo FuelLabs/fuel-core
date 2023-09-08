@@ -11,8 +11,6 @@ use crate::{
     Error,
     TxInfo,
 };
-
-use fuel_core_metrics::txpool_metrics::TXPOOL_METRICS;
 use fuel_core_types::{
     fuel_tx::{
         Chargeable,
@@ -37,6 +35,7 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 
+use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_types::fuel_vm::checked_transaction::CheckPredicateParams;
 use std::{
     cmp::Reverse,
@@ -130,11 +129,11 @@ where
             }
         }
         if self.config.metrics {
-            TXPOOL_METRICS
+            txpool_metrics()
                 .gas_price_histogram
                 .observe(tx.price() as f64);
 
-            TXPOOL_METRICS
+            txpool_metrics()
                 .tx_size_histogram
                 .observe(tx.metered_bytes_size() as f64);
         }
@@ -422,7 +421,7 @@ fn verify_tx_min_gas_price(tx: &Transaction, config: &Config) -> Result<(), Erro
         // Gas Price metrics are recorded here to avoid double matching for
         // every single transaction, but also means metrics aren't collected on gas
         // price if there is no minimum gas price
-        TXPOOL_METRICS.gas_price_histogram.observe(price as f64);
+        txpool_metrics().gas_price_histogram.observe(price as f64);
     }
     if price < config.min_gas_price {
         return Err(Error::NotInsertedGasPriceTooLow)
