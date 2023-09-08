@@ -1,6 +1,5 @@
 ---
 source: crates/client/src/client/schema/chain.rs
-assertion_line: 295
 expression: operation.query
 ---
 query {
@@ -101,12 +100,10 @@ query {
         jnzb
         jnef
         jneb
-        k256
         lb
         log
         lt
         lw
-        mcpi
         mint
         mlog
         modOp
@@ -127,9 +124,7 @@ query {
         pshl
         ret
         rvrt
-        s256
         sb
-        scwq
         sll
         slli
         srl
@@ -139,7 +134,6 @@ query {
         subi
         sw
         sww
-        swwq
         time
         tr
         tro
@@ -171,6 +165,10 @@ query {
           base
           depPerUnit
         }
+        k256 {
+          base
+          depPerUnit
+        }
         ldc {
           base
           depPerUnit
@@ -191,6 +189,10 @@ query {
           base
           depPerUnit
         }
+        mcpi {
+          base
+          depPerUnit
+        }
         meq {
           base
           depPerUnit
@@ -199,11 +201,23 @@ query {
           base
           depPerUnit
         }
+        s256 {
+          base
+          depPerUnit
+        }
+        scwq {
+          base
+          depPerUnit
+        }
         smo {
           base
           depPerUnit
         }
         srwq {
+          base
+          depPerUnit
+        }
+        swwq {
           base
           depPerUnit
         }

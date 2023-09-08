@@ -177,7 +177,7 @@ fn model_subscribe(
     // Only add a new sender if the model is not full.
     if model.values().map(|v| v.len()).sum::<usize>() < CAPACITY {
         // Insert new senders with an empty state.
-        let senders = model.entry(id).or_insert_with(HashMap::new);
+        let senders = model.entry(id).or_default();
         senders.insert(*sender_id, State::Empty);
 
         // Add a new receiver to the model.

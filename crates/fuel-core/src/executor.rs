@@ -26,6 +26,7 @@ use fuel_core_storage::{
     StorageAsRef,
     StorageInspect,
 };
+#[allow(unused_imports)]
 use fuel_core_types::{
     blockchain::{
         block::{
@@ -78,6 +79,7 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
+        canonical::SerializedSize,
         BlockHeight,
         MessageId,
     },
@@ -1719,7 +1721,6 @@ mod tests {
             TransactionBuilder,
         },
         fuel_types::{
-            bytes::SerializableVec,
             ChainId,
             ContractId,
             Salt,
@@ -4103,7 +4104,7 @@ mod tests {
                 &CompressedCoin {
                     owner: *coin_input.input_owner().unwrap(),
                     amount: coin_input.amount().unwrap(),
-                    asset_id: *coin_input.asset_id().unwrap(),
+                    asset_id: *coin_input.asset_id(&AssetId::BASE).unwrap(),
                     maturity: coin_input.maturity().unwrap(),
                     tx_pointer: TxPointer::new(Default::default(), block_tx_idx),
                 },
@@ -4180,7 +4181,7 @@ mod tests {
                 &CompressedCoin {
                     owner: *coin_input.input_owner().unwrap(),
                     amount: coin_input.amount().unwrap(),
-                    asset_id: *coin_input.asset_id().unwrap(),
+                    asset_id: *coin_input.asset_id(&AssetId::BASE).unwrap(),
                     maturity: coin_input.maturity().unwrap(),
                     tx_pointer: TxPointer::default(),
                 },

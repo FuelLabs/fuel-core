@@ -60,7 +60,8 @@ use fuel_core_types::{
         Chargeable,
         Executable,
     },
-    fuel_types::bytes::SerializableVec,
+    fuel_types,
+    fuel_types::canonical::SerializedSize,
     fuel_vm::ProgramState as VmProgramState,
     services::{
         txpool,
@@ -278,12 +279,18 @@ impl Transaction {
 
     async fn input_asset_ids(&self) -> Option<Vec<AssetId>> {
         match &self.0 {
-            fuel_tx::Transaction::Script(script) => {
-                Some(script.input_asset_ids().map(|c| AssetId(*c)).collect())
-            }
-            fuel_tx::Transaction::Create(create) => {
-                Some(create.input_asset_ids().map(|c| AssetId(*c)).collect())
-            }
+            fuel_tx::Transaction::Script(script) => Some(
+                script
+                    .input_asset_ids(&fuel_types::AssetId::BASE)
+                    .map(|c| AssetId(*c))
+                    .collect(),
+            ),
+            fuel_tx::Transaction::Create(create) => Some(
+                create
+                    .input_asset_ids(&fuel_types::AssetId::BASE)
+                    .map(|c| AssetId(*c))
+                    .collect(),
+            ),
             fuel_tx::Transaction::Mint(_) => None,
         }
     }
