@@ -7,7 +7,7 @@ use crate::{
     },
     Config,
 };
-use fuel_core_metrics::importer::IMPORTER_METRICS;
+use fuel_core_metrics::importer::importer_metrics;
 use fuel_core_storage::{
     transactional::StorageTransaction,
     Error as StorageError,
@@ -235,20 +235,20 @@ where
         // Update the total tx count in chain metadata
         let total_txs = db_after_execution
             // Safety: casting len to u64 since it's impossible to execute a block with more than 2^64 txs
-            .update_tx_count(result.sealed_block.entity.transactions().len() as u64)?;
+            .increase_tx_count(result.sealed_block.entity.transactions().len() as u64)?;
 
         db_tx.commit()?;
 
         // update the importer metrics after the block is successfully committed
-        IMPORTER_METRICS.total_txs_count.set(total_txs as i64);
-        IMPORTER_METRICS
+        importer_metrics().total_txs_count.set(total_txs as i64);
+        importer_metrics()
             .block_height
             .set(actual_height.as_usize() as i64);
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs_f64();
-        IMPORTER_METRICS
+        importer_metrics()
             .latest_block_import_timestamp
             .set(current_time);
 
@@ -266,10 +266,12 @@ where
         // correctly in more mission critical areas (such as _commit_result)
         let current_block_height =
             self.database.latest_block_height().unwrap_or_default();
-        let total_tx_count = self.database.update_tx_count(0).unwrap_or_default();
+        let total_tx_count = self.database.increase_tx_count(0).unwrap_or_default();
 
-        IMPORTER_METRICS.total_txs_count.set(total_tx_count as i64);
-        IMPORTER_METRICS
+        importer_metrics()
+            .total_txs_count
+            .set(total_tx_count as i64);
+        importer_metrics()
             .block_height
             .set(current_block_height.as_usize() as i64);
         // on init just set to current time since it's not worth tracking in the db
@@ -277,7 +279,7 @@ where
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs_f64();
-        IMPORTER_METRICS
+        importer_metrics()
             .latest_block_import_timestamp
             .set(current_time);
     }
@@ -371,7 +373,7 @@ where
         let commit_result = self._commit_result(result);
         // record the execution time to prometheus
         let time = start.elapsed().as_secs_f64();
-        IMPORTER_METRICS.execute_and_commit_duration.observe(time);
+        importer_metrics().execute_and_commit_duration.observe(time);
         // return execution result
         commit_result
     }

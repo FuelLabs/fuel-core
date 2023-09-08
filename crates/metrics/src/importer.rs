@@ -1,5 +1,4 @@
-use crate::graphql_metrics::BUCKETS;
-use lazy_static::lazy_static;
+use crate::timing_buckets;
 use prometheus_client::{
     metrics::{
         gauge::Gauge,
@@ -7,7 +6,10 @@ use prometheus_client::{
     },
     registry::Registry,
 };
-use std::sync::atomic::AtomicU64;
+use std::sync::{
+    atomic::AtomicU64,
+    OnceLock,
+};
 
 pub struct ImporterMetrics {
     pub registry: Registry,
@@ -25,7 +27,8 @@ impl Default for ImporterMetrics {
         let tx_count_gauge = Gauge::default();
         let block_height_gauge = Gauge::default();
         let latest_block_import_ms = Gauge::default();
-        let execute_and_commit_duration = Histogram::new(BUCKETS.iter().cloned());
+        let execute_and_commit_duration =
+            Histogram::new(timing_buckets().iter().cloned());
 
         registry.register(
             "importer_tx_count",
@@ -61,6 +64,9 @@ impl Default for ImporterMetrics {
     }
 }
 
-lazy_static! {
-    pub static ref IMPORTER_METRICS: ImporterMetrics = ImporterMetrics::default();
+// Setup a global static for accessing importer metrics
+static IMPORTER_METRICS: OnceLock<ImporterMetrics> = OnceLock::new();
+
+pub fn importer_metrics() -> &'static ImporterMetrics {
+    IMPORTER_METRICS.get_or_init(ImporterMetrics::default)
 }

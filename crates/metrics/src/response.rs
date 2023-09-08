@@ -1,9 +1,9 @@
 use crate::{
-    graphql_metrics::GRAPHQL_METRICS,
-    importer::IMPORTER_METRICS,
-    p2p_metrics::P2P_METRICS,
-    services::SERVICES_METRICS,
-    txpool_metrics::TXPOOL_METRICS,
+    graphql_metrics::graphql_metrics,
+    importer::importer_metrics,
+    p2p_metrics::p2p_metrics,
+    services::services_metrics,
+    txpool_metrics::txpool_metrics,
 };
 use axum::{
     body::Body,
@@ -19,12 +19,12 @@ use prometheus_client::encoding::text::encode;
 pub fn encode_metrics_response() -> impl IntoResponse {
     // encode libp2p metrics using older prometheus
     let mut libp2p_bytes = Vec::<u8>::new();
-    if let Some(value) = P2P_METRICS.gossip_sub_registry.get() {
+    if let Some(value) = p2p_metrics().gossip_sub_registry.get() {
         if libp2p_encode(&mut libp2p_bytes, value).is_err() {
             return error_body()
         }
     }
-    if libp2p_encode(&mut libp2p_bytes, &P2P_METRICS.peer_metrics).is_err() {
+    if libp2p_encode(&mut libp2p_bytes, &p2p_metrics().peer_metrics).is_err() {
         return error_body()
     }
 
@@ -32,7 +32,7 @@ pub fn encode_metrics_response() -> impl IntoResponse {
 
     // encode the rest of the fuel-core metrics using latest prometheus
     {
-        let lock = SERVICES_METRICS
+        let lock = services_metrics()
             .registry
             .lock()
             .expect("The service metrics lock is poisoned");
@@ -41,15 +41,15 @@ pub fn encode_metrics_response() -> impl IntoResponse {
         }
     }
 
-    if encode(&mut encoded, &TXPOOL_METRICS.registry).is_err() {
+    if encode(&mut encoded, &txpool_metrics().registry).is_err() {
         return error_body()
     }
 
-    if encode(&mut encoded, &GRAPHQL_METRICS.registry).is_err() {
+    if encode(&mut encoded, &graphql_metrics().registry).is_err() {
         return error_body()
     }
 
-    if encode(&mut encoded, &IMPORTER_METRICS.registry).is_err() {
+    if encode(&mut encoded, &importer_metrics().registry).is_err() {
         return error_body()
     }
 

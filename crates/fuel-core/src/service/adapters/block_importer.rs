@@ -116,7 +116,7 @@ impl ImporterDatabase for Database {
         self.latest_height()
     }
 
-    fn update_tx_count(&self, new_txs_count: u64) -> StorageResult<u64> {
+    fn increase_tx_count(&self, new_txs_count: u64) -> StorageResult<u64> {
         self.increase_tx_count(new_txs_count).map_err(Into::into)
     }
 }

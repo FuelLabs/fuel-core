@@ -59,7 +59,7 @@ impl Database {
         Ok(new_tx_count)
     }
 
-    pub fn get_tx_count(&self) -> DatabaseResult<usize> {
+    pub fn get_tx_count(&self) -> DatabaseResult<u64> {
         self.get(TX_COUNT, Column::Metadata)
             .map(|v| v.unwrap_or_default())
     }
