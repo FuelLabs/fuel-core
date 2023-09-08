@@ -419,7 +419,6 @@ impl<T> From<T> for SharedMutex<T> {
 }
 
 fn panic_to_string(e: Box<dyn core::any::Any + Send>) -> String {
-    
     match e.downcast::<String>() {
         Ok(v) => *v,
         Err(e) => match e.downcast::<&str>() {
