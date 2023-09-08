@@ -159,7 +159,6 @@ impl<'a> AssetsQuery<'a> {
         coins_iter.chain(messages_iter.take_while(|_| {
             self.assets
                 .as_ref()
-                // TODO: bvrooman update
                 .map(|assets| assets.contains(self.base_asset_id))
                 .unwrap_or(true)
         }))

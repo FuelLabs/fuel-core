@@ -96,9 +96,8 @@ impl MessageCoin {
         self.0.amount.into()
     }
 
-    // TODO: bvrooman: update
-    async fn asset_id(&self) -> AssetId {
-        fuel_core_types::fuel_types::AssetId::BASE.into()
+    async fn asset_id(&self, base_asset_id: AssetId) -> AssetId {
+        base_asset_id
     }
 
     async fn da_height(&self) -> U64 {

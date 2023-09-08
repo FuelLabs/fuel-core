@@ -324,7 +324,9 @@ mod tests {
                         .map(|coins| {
                             coins
                                 .iter()
-                                .map(|coin| (*coin.asset_id(), coin.amount()))
+                                .map(|coin| {
+                                    (*coin.asset_id(base_asset_id), coin.amount())
+                                })
                                 .collect()
                         })
                 })
@@ -481,7 +483,7 @@ mod tests {
                     .flat_map(|coins| {
                         coins
                             .into_iter()
-                            .map(|coin| (*coin.asset_id(), coin.amount()))
+                            .map(|coin| (*coin.asset_id(&base_asset_id), coin.amount()))
                             .sorted_by_key(|(asset_id, amount)| {
                                 (
                                     asset_ids.iter().position(|c| c == asset_id).unwrap(),
@@ -669,7 +671,9 @@ mod tests {
                         .into_iter()
                         .flat_map(|coin| {
                             coin.into_iter()
-                                .map(|coin| (*coin.asset_id(), coin.amount()))
+                                .map(|coin| {
+                                    (*coin.asset_id(&base_asset_id), coin.amount())
+                                })
                                 .sorted_by_key(|(asset_id, amount)| {
                                     (
                                         asset_ids

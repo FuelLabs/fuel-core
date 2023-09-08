@@ -87,8 +87,9 @@ impl BalanceQueryData for Database {
         for coin in AssetsQuery::new(&owner, None, None, self, &base_asset_id).coins() {
             match coin {
                 Ok(coin) => {
-                    *amounts_per_asset.entry(*coin.asset_id()).or_default() +=
-                        coin.amount();
+                    *amounts_per_asset
+                        .entry(*coin.asset_id(&base_asset_id))
+                        .or_default() += coin.amount();
                 }
                 Err(err) => {
                     errors.push(err);
