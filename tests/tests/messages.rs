@@ -279,7 +279,8 @@ async fn can_get_message_proof() {
             .collect();
 
         // Call contract script.
-        let script = [op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+        let script = [
+            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
             // load balance to forward to 0x11
             op::movi(0x11, n as u32 * amount),
             // shift the smo data into 0x10
@@ -287,7 +288,8 @@ async fn can_get_message_proof() {
             // Call the contract and forward no coins.
             op::call(0x12, 0x11, 0x10, RegId::CGAS),
             // Return.
-            op::ret(RegId::ONE)];
+            op::ret(RegId::ONE),
+        ];
         let script: Vec<u8> = script
             .iter()
             .flat_map(|op| u32::from(*op).to_be_bytes())

@@ -52,10 +52,12 @@ mod utxo_validation;
 fn basic_script_snapshot() {
     // Since this script is referenced in docs, snapshot the byte representation in-case opcodes
     // are reassigned in the future
-    let script = [op::addi(0x10, RegId::ZERO, 0xca),
+    let script = [
+        op::addi(0x10, RegId::ZERO, 0xca),
         op::addi(0x11, RegId::ZERO, 0xba),
         op::log(0x10, 0x11, RegId::ZERO, RegId::ZERO),
-        op::ret(RegId::ONE)];
+        op::ret(RegId::ONE),
+    ];
     let script: Vec<u8> = script
         .iter()
         .flat_map(|op| u32::from(*op).to_be_bytes())
@@ -72,10 +74,12 @@ async fn dry_run_script() {
     let gas_limit = 1_000_000;
     let maturity = Default::default();
 
-    let script = [op::addi(0x10, RegId::ZERO, 0xca),
+    let script = [
+        op::addi(0x10, RegId::ZERO, 0xca),
         op::addi(0x11, RegId::ZERO, 0xba),
         op::log(0x10, 0x11, RegId::ZERO, RegId::ZERO),
-        op::ret(RegId::ONE)];
+        op::ret(RegId::ONE),
+    ];
     let script: Vec<u8> = script
         .iter()
         .flat_map(|op| u32::from(*op).to_be_bytes())
@@ -147,10 +151,12 @@ async fn submit() {
     let gas_limit = 1_000_000;
     let maturity = Default::default();
 
-    let script = [op::addi(0x10, RegId::ZERO, 0xca),
+    let script = [
+        op::addi(0x10, RegId::ZERO, 0xca),
         op::addi(0x11, RegId::ZERO, 0xba),
         op::log(0x10, 0x11, RegId::ZERO, RegId::ZERO),
-        op::ret(RegId::ONE)];
+        op::ret(RegId::ONE),
+    ];
     let script: Vec<u8> = script
         .iter()
         .flat_map(|op| u32::from(*op).to_be_bytes())
