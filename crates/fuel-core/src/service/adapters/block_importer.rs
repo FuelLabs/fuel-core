@@ -51,8 +51,10 @@ impl BlockImporterAdapter {
         executor: ExecutorAdapter,
         verifier: VerifierAdapter,
     ) -> Self {
+        let importer = Importer::new(config, database, executor, verifier);
+        importer.init_metrics();
         Self {
-            block_importer: Arc::new(Importer::new(config, database, executor, verifier)),
+            block_importer: Arc::new(importer),
         }
     }
 
@@ -112,6 +114,10 @@ impl RelayerPort for MaybeRelayerAdapter {
 impl ImporterDatabase for Database {
     fn latest_block_height(&self) -> StorageResult<BlockHeight> {
         self.latest_height()
+    }
+
+    fn increase_tx_count(&self, new_txs_count: u64) -> StorageResult<u64> {
+        self.increase_tx_count(new_txs_count).map_err(Into::into)
     }
 }
 

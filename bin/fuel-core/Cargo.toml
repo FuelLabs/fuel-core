@@ -41,12 +41,11 @@ url = { version = "2.2", optional = true }
 test-case = { workspace = true }
 
 [features]
-default = ["env", "metrics", "relayer", "rocksdb"]
+default = ["env", "relayer", "rocksdb"]
 env = ["dep:dotenvy"]
-metrics = ["fuel-core/metrics"]
 p2p = ["fuel-core/p2p", "const_format"]
 relayer = ["fuel-core/relayer", "dep:url", "dep:serde_json"]
 rocksdb = ["fuel-core/rocksdb"]
 rocksdb-production = ["fuel-core/rocksdb-production"]
 # features to enable in production, but increase build times
-production = ["env", "metrics", "relayer", "rocksdb-production", "p2p"]
+production = ["env", "relayer", "rocksdb-production", "p2p"]

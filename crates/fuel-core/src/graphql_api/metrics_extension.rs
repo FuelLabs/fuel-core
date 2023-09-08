@@ -15,7 +15,7 @@ use async_graphql::{
     Value,
     Variables,
 };
-use fuel_core_metrics::graphql_metrics::GRAPHQL_METRICS;
+use fuel_core_metrics::graphql_metrics::graphql_metrics;
 use std::{
     sync::{
         Arc,
@@ -59,7 +59,7 @@ impl Extension for MetricsExtInner {
         let start_time = Instant::now();
         let result = next.run(ctx).await;
         let seconds = start_time.elapsed().as_secs_f64();
-        GRAPHQL_METRICS.graphql_observe("request", seconds);
+        graphql_metrics().graphql_observe("request", seconds);
 
         result
     }
@@ -95,7 +95,7 @@ impl Extension for MetricsExtInner {
         let elapsed = start_time.elapsed();
 
         if let Some(field_name) = field_name {
-            GRAPHQL_METRICS.graphql_observe(field_name, elapsed.as_secs_f64());
+            graphql_metrics().graphql_observe(field_name, elapsed.as_secs_f64());
         }
 
         if elapsed > self.log_threshold_ms {
