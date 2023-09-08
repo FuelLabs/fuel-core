@@ -61,6 +61,7 @@ use fuel_core_types::{
         Chargeable,
         Executable,
     },
+    fuel_types,
     fuel_types::canonical::SerializedSize,
     fuel_vm::ProgramState as VmProgramState,
     services::{

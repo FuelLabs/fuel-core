@@ -841,7 +841,7 @@ mod tests {
             } = case;
             let mut rng = StdRng::seed_from_u64(0xf00df00d);
             let owner = Address::default();
-            let asset_ids = vec![rng.gen()];
+            let asset_ids = [rng.gen()];
             let base_asset_id = rng.gen();
             let mut db = TestDatabase::new();
             for amount in db_amount {

@@ -16,14 +16,6 @@ harness = true
 name = "integration_tests"
 path = "tests/lib.rs"
 
-# Metrics tests need to query /metrics without and explicit endpoint, and without
-# a seperate endpoint, the noise can cause issues
-[[test]]
-harness = true
-name = "metrics_tests"
-path = "tests/metrics.rs"
-required-features = ["metrics"]
-
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
@@ -57,7 +49,6 @@ tokio = { workspace = true, features = [
 ] }
 
 [features]
-default = ["fuel-core/default", "metrics", "relayer"]
-metrics = ["fuel-core/metrics", "fuel-core/rocksdb"]
+default = ["fuel-core/default", "relayer"]
 p2p = ["fuel-core/p2p", "fuel-core-p2p"]
 relayer = ["fuel-core/relayer", "fuel-core-relayer"]
