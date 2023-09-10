@@ -274,17 +274,16 @@ mod tests {
         (owner, asset_ids, base_asset_id, db)
     }
 
-    fn setup_messages() -> (Address, AssetId, AssetId, TestDatabase) {
+    fn setup_messages() -> (Address, AssetId, TestDatabase) {
         let mut rng = StdRng::seed_from_u64(0xf00df00d);
         let owner = Address::default();
-        let asset_id = rng.gen();
         let base_asset_id = rng.gen();
         let mut db = TestDatabase::new();
         (0..5usize).for_each(|i| {
             db.make_message(owner, (i + 1) as Word);
         });
 
-        (owner, asset_id, base_asset_id, db)
+        (owner, base_asset_id, db)
     }
 
     fn setup_coins_and_messages() -> (Address, [AssetId; 2], AssetId, TestDatabase) {
@@ -419,8 +418,8 @@ mod tests {
             single_asset_assert(owner, &asset_ids, &base_asset_id, db);
 
             // Setup for messages
-            let (owner, asset_ids, base_asset_id, db) = setup_messages();
-            single_asset_assert(owner, &[asset_ids], &base_asset_id, db);
+            let (owner, base_asset_id, db) = setup_messages();
+            single_asset_assert(owner, &[], &base_asset_id, db);
 
             // Setup for coins and messages
             let (owner, asset_ids, base_asset_id, db) = setup_coins_and_messages();
@@ -574,8 +573,8 @@ mod tests {
             single_asset_assert(owner, &asset_ids, base_asset_id, db);
 
             // Setup for messages
-            let (owner, asset_ids, base_asset_id, db) = setup_messages();
-            single_asset_assert(owner, &[asset_ids], base_asset_id, db);
+            let (owner, base_asset_id, db) = setup_messages();
+            single_asset_assert(owner, &[], base_asset_id, db);
 
             // Setup for coins and messages
             let (owner, asset_ids, base_asset_id, db) = setup_coins_and_messages();
@@ -655,15 +654,13 @@ mod tests {
             let query = |query_per_asset: Vec<AssetSpendTarget>,
                          excluded_ids: Vec<CoinId>|
              -> Result<Vec<(AssetId, u64)>, CoinsQueryError> {
-                let coins = random_improve(
-                    &db.service_database(),
-                    &SpendQuery::new(
-                        owner,
-                        &query_per_asset,
-                        Some(excluded_ids),
-                        base_asset_id,
-                    )?,
-                );
+                let spend_query = SpendQuery::new(
+                    owner,
+                    &query_per_asset,
+                    Some(excluded_ids),
+                    base_asset_id,
+                )?;
+                let coins = random_improve(&db.service_database(), &spend_query);
 
                 // Transform result for convenience
                 coins.map(|coins| {
@@ -737,7 +734,7 @@ mod tests {
         }
 
         #[test]
-        fn exclusion() {
+        fn exclusion_coins() {
             // Setup coins
             let (owner, asset_ids, base_asset_id, db) = setup_coins();
 
@@ -750,9 +747,12 @@ mod tests {
                 .collect_vec();
 
             exclusion_assert(owner, &asset_ids, base_asset_id, db, excluded_ids);
+        }
 
+        #[test]
+        fn exclusion_messages() {
             // Setup messages
-            let (owner, asset_ids, base_asset_id, db) = setup_messages();
+            let (owner, base_asset_id, db) = setup_messages();
 
             // Exclude largest messages IDs
             let excluded_ids = db
@@ -762,8 +762,11 @@ mod tests {
                 .map(|message| CoinId::Message(*message.id()))
                 .collect_vec();
 
-            exclusion_assert(owner, &[asset_ids], base_asset_id, db, excluded_ids);
+            exclusion_assert(owner, &[base_asset_id], base_asset_id, db, excluded_ids);
+        }
 
+        #[test]
+        fn exclusion_coins_and_messages() {
             // Setup coins and messages
             let (owner, asset_ids, base_asset_id, db) = setup_coins_and_messages();
 
