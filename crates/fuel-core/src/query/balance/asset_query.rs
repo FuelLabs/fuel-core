@@ -156,12 +156,24 @@ impl<'a> AssetsQuery<'a> {
                 })
             });
 
+        let citer = coins_iter.collect::<Vec<_>>();
+        let miter = messages_iter.collect::<Vec<_>>();
+        dbg!(&citer);
+        dbg!(&miter);
+        let coins_iter = citer.into_iter();
+        let messages_iter = miter.into_iter();
+
         coins_iter.chain(messages_iter.take_while(|_| {
             self.assets
                 .as_ref()
                 .map(|assets| assets.contains(self.base_asset_id))
                 .unwrap_or(true)
         }))
+
+        // let v = iter.collect::<Vec<_>>();
+        // dbg!(&v);
+
+        // v.into_iter()
     }
 }
 
@@ -183,6 +195,7 @@ impl<'a> AssetQuery<'a> {
     ) -> Self {
         let mut allowed = HashSet::new();
         allowed.insert(&asset.id);
+        // allowed.insert(&base_asset_id);
         Self {
             owner,
             asset,
