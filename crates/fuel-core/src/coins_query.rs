@@ -128,6 +128,8 @@ pub fn largest_first(query: &AssetQuery) -> Result<Vec<CoinType>, CoinsQueryErro
     let mut inputs: Vec<_> = query.coins().try_collect()?;
     inputs.sort_by_key(|coin| Reverse(coin.amount()));
 
+    dbg!(&inputs);
+
     let mut collected_amount = 0u64;
     let mut coins = vec![];
 
@@ -295,8 +297,8 @@ mod tests {
     fn setup_coins_and_messages() -> (Address, [AssetId; 2], AssetId, TestDatabase) {
         let mut rng = StdRng::seed_from_u64(0xf00df00d);
         let owner = Address::default();
-        let asset_ids = [rng.gen(), rng.gen()];
         let base_asset_id = rng.gen();
+        let asset_ids = [base_asset_id, rng.gen()];
         let mut db = TestDatabase::new();
         // 2 coins and 3 messages
         (0..2usize).for_each(|i| {
@@ -304,7 +306,6 @@ mod tests {
         });
         (2..5usize).for_each(|i| {
             db.make_message(owner, (i + 1) as Word);
-            // db.make_coin(owner, (i + 1) as Word, base_asset_id);
         });
 
         (0..5usize).for_each(|i| {
