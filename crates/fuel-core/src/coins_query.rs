@@ -199,8 +199,7 @@ pub fn random_improve(
             // Add to list
             collected_amount = collected_amount.saturating_add(coin.amount());
             dbg!(&coin);
-            // dbg!(&coin.asset_id(&spend_query.base_asset_id));
-            dbg!(&coin.asset_id());
+            dbg!(&coin.asset_id(&spend_query.base_asset_id));
             coins.push(coin);
         }
 
@@ -679,8 +678,7 @@ mod tests {
                         .flat_map(|coin| {
                             coin.into_iter()
                                 .map(|coin| {
-                                    // (*coin.asset_id(&base_asset_id), coin.amount())
-                                    (*coin.asset_id(), coin.amount())
+                                    (*coin.asset_id(&base_asset_id), coin.amount())
                                 })
                                 .map(|(asset_id, amount)| {
                                     dbg!(asset_id, asset_ids);

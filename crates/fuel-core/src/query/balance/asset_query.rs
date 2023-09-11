@@ -195,7 +195,7 @@ impl<'a> AssetQuery<'a> {
     ) -> Self {
         let mut allowed = HashSet::new();
         allowed.insert(&asset.id);
-        // allowed.insert(&base_asset_id);
+        allowed.insert(&base_asset_id);
         Self {
             owner,
             asset,
