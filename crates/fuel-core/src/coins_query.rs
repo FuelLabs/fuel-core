@@ -419,15 +419,21 @@ mod tests {
         }
 
         #[test]
-        fn single_asset() {
+        fn single_asset_coins() {
             // Setup for coins
             let (owner, asset_ids, base_asset_id, db) = setup_coins();
             single_asset_assert(owner, &asset_ids, &base_asset_id, db);
+        }
 
+        #[test]
+        fn single_asset_messages() {
             // Setup for messages
             let (owner, base_asset_id, db) = setup_messages();
             single_asset_assert(owner, &[], &base_asset_id, db);
+        }
 
+        #[test]
+        fn single_asset_coins_and_messages() {
             // Setup for coins and messages
             let (owner, asset_ids, base_asset_id, db) = setup_coins_and_messages();
             single_asset_assert(owner, &asset_ids, &base_asset_id, db);
@@ -448,19 +454,24 @@ mod tests {
                 base_asset_id,
                 &db.service_database(),
             );
-            assert_matches!(coins, Ok(coins)
-            if coins == vec![
+            let expected = vec![
                 vec![(asset_ids[0], 5)],
-                vec![(asset_ids[1], 5), (asset_ids[1], 4)]
-            ]);
+                vec![(asset_ids[1], 5), (asset_ids[1], 4)],
+            ];
+            dbg!(&coins);
+            dbg!(&expected);
+            assert_matches!(coins, Ok(coins) if coins == expected);
         }
 
         #[test]
-        fn multiple_assets() {
+        fn multiple_assets_coins() {
             // Setup coins
             let (owner, asset_ids, base_asset_id, db) = setup_coins();
             multiple_assets_helper(owner, &asset_ids, &base_asset_id, db);
+        }
 
+        #[test]
+        fn multiple_assets_coins_and_messages() {
             // Setup coins and messages
             let (owner, asset_ids, base_asset_id, db) = setup_coins_and_messages();
             multiple_assets_helper(owner, &asset_ids, &base_asset_id, db);
@@ -574,15 +585,21 @@ mod tests {
         }
 
         #[test]
-        fn single_asset() {
+        fn single_asset_coins() {
             // Setup for coins
             let (owner, asset_ids, base_asset_id, db) = setup_coins();
             single_asset_assert(owner, &asset_ids, base_asset_id, db);
+        }
 
+        #[test]
+        fn single_asset_messages() {
             // Setup for messages
             let (owner, base_asset_id, db) = setup_messages();
-            single_asset_assert(owner, &[], base_asset_id, db);
+            single_asset_assert(owner, &[base_asset_id], base_asset_id, db);
+        }
 
+        #[test]
+        fn single_asset_coins_and_messages() {
             // Setup for coins and messages
             let (owner, asset_ids, base_asset_id, db) = setup_coins_and_messages();
             single_asset_assert(owner, &asset_ids, base_asset_id, db);
@@ -634,11 +651,14 @@ mod tests {
         }
 
         #[test]
-        fn multiple_assets() {
+        fn multiple_assets_coins() {
             // Setup coins
             let (owner, asset_ids, base_asset_id, db) = setup_coins();
             multiple_assets_assert(owner, &asset_ids, base_asset_id, db);
+        }
 
+        #[test]
+        fn multiple_assets_coins_and_messages() {
             // Setup coins and messages
             let (owner, asset_ids, base_asset_id, db) = setup_coins_and_messages();
             multiple_assets_assert(owner, &asset_ids, base_asset_id, db);

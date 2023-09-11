@@ -156,19 +156,20 @@ impl<'a> AssetsQuery<'a> {
                 })
             });
 
-        let citer = coins_iter.collect::<Vec<_>>();
-        let miter = messages_iter.collect::<Vec<_>>();
-        dbg!(&citer);
-        dbg!(&miter);
-        let coins_iter = citer.into_iter();
-        let messages_iter = miter.into_iter();
+        let c_iter = coins_iter.collect::<Vec<_>>();
+        let predicate = self
+            .assets
+            .as_ref()
+            .map(|assets| assets.contains(self.base_asset_id))
+            .unwrap_or(true);
+        dbg!(predicate);
+        let m_iter = messages_iter.take_while(|_| predicate).collect::<Vec<_>>();
+        dbg!(&c_iter);
+        dbg!(&m_iter);
+        let coins_iter = c_iter.into_iter();
+        let messages_iter = m_iter.into_iter();
 
-        coins_iter.chain(messages_iter.take_while(|_| {
-            self.assets
-                .as_ref()
-                .map(|assets| assets.contains(self.base_asset_id))
-                .unwrap_or(true)
-        }))
+        coins_iter.chain(messages_iter)
 
         // let v = iter.collect::<Vec<_>>();
         // dbg!(&v);
