@@ -9,7 +9,6 @@ use fuel_core_types::{
 };
 use std::net::SocketAddr;
 
-#[cfg(feature = "metrics")]
 pub(crate) mod metrics_extension;
 pub mod ports;
 pub mod service;

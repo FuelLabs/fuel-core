@@ -30,7 +30,7 @@ use crate::{
         ResponseMessage,
     },
 };
-use fuel_core_metrics::p2p_metrics::P2P_METRICS;
+use fuel_core_metrics::p2p_metrics::p2p_metrics;
 use fuel_core_types::{
     fuel_types::BlockHeight,
     services::p2p::peer_reputation::AppScore,
@@ -501,7 +501,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                         agent_version,
                     } => {
                         if self.metrics {
-                            P2P_METRICS.unique_peers.inc();
+                            p2p_metrics().unique_peers.inc();
                         }
 
                         self.peer_manager.handle_peer_identified(

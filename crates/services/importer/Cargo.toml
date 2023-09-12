@@ -11,6 +11,7 @@ description = "Fuel Block Importer"
 
 [dependencies]
 anyhow = { workspace = true }
+fuel-core-metrics = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
 thiserror = { workspace = true }

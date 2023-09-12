@@ -785,7 +785,7 @@ mod tests {
                 max_coins,
             } = case;
             let owner = Address::default();
-            let asset_ids = vec![AssetId::BASE];
+            let asset_ids = [AssetId::BASE];
             let mut db = TestDatabase::new();
             for amount in db_amount {
                 match coin_type {
