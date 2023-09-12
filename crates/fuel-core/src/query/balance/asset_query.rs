@@ -163,7 +163,7 @@ impl<'a> AssetsQuery<'a> {
     //  https://github.com/FuelLabs/fuel-core/issues/588
     pub fn coins(&self) -> Box<dyn Iterator<Item = StorageResult<CoinType>> + '_> {
         let coins_iter = self.coins_iter();
-        if self.has_asset(&self.base_asset_id) {
+        if self.has_asset(self.base_asset_id) {
             let messages_iter = self.messages_iter();
             let iter = coins_iter.chain(messages_iter);
             Box::new(iter)
