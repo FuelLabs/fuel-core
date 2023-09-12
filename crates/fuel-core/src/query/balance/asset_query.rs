@@ -108,10 +108,7 @@ impl<'a> AssetsQuery<'a> {
             })
             .filter_ok(|coin| {
                 if let CoinType::Coin(coin) = coin {
-                    self.assets
-                        .as_ref()
-                        .map(|assets| assets.contains(&coin.asset_id))
-                        .unwrap_or(true)
+                    self.has_asset(&coin.asset_id)
                 } else {
                     true
                 }
@@ -150,13 +147,12 @@ impl<'a> AssetsQuery<'a> {
                     )
                 })
             })
-            .into_iter()
     }
 
-    fn has_base_asset(&self) -> bool {
+    fn has_asset(&self, asset_id: &AssetId) -> bool {
         self.assets
             .as_ref()
-            .map(|assets| assets.contains(self.base_asset_id))
+            .map(|assets| assets.contains(asset_id))
             .unwrap_or(true)
     }
 
@@ -167,7 +163,7 @@ impl<'a> AssetsQuery<'a> {
     //  https://github.com/FuelLabs/fuel-core/issues/588
     pub fn coins(&self) -> Box<dyn Iterator<Item = StorageResult<CoinType>> + '_> {
         let coins_iter = self.coins_iter();
-        if self.has_base_asset() {
+        if self.has_asset(&self.base_asset_id) {
             let messages_iter = self.messages_iter();
             let iter = coins_iter.chain(messages_iter);
             Box::new(iter)
