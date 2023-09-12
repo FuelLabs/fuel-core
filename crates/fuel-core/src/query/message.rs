@@ -36,6 +36,7 @@ use fuel_core_types::{
     },
     fuel_merkle::binary::in_memory::MerkleTree,
     fuel_tx::{
+        input::message::compute_message_id,
         Receipt,
         TxId,
     },
@@ -139,7 +140,7 @@ impl<D: DatabasePort + ?Sized> MessageProofData for D {
 pub fn message_proof<T: MessageProofData + ?Sized>(
     database: &T,
     transaction_id: Bytes32,
-    message_id: MessageId,
+    desired_nonce: Nonce,
     commit_block_id: BlockId,
 ) -> StorageResult<Option<MessageProof>> {
     // Check if the receipts for this transaction actually contain this message id or exit.
@@ -154,7 +155,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
                 amount,
                 data,
                 ..
-            } if r.message_id() == Some(message_id) => {
+            } if r.nonce() == Some(&desired_nonce) => {
                 Some((sender, recipient, nonce, amount, data))
             }
             _ => None,
@@ -184,6 +185,8 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         Some(t) => t.into_inner(),
         None => return Ok(None),
     };
+
+    let message_id = compute_message_id(&sender, &recipient, &nonce, amount, &data);
 
     let message_proof =
         match message_receipts_proof(database, message_id, &message_block_txs)? {
