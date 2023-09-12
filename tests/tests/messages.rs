@@ -381,13 +381,16 @@ async fn can_get_message_proof() {
         let message_ids: Vec<_> =
             receipts.iter().filter_map(|r| r.message_id()).collect();
 
-        // Check we actually go the correct amount of ids back.
-        assert_eq!(message_ids.len(), args.len(), "{receipts:?}");
+        // Get the nonces from the receipt
+        let nonces: Vec<_> = receipts.iter().filter_map(|r| r.nonce()).collect();
 
-        for message_id in message_ids.clone() {
+        // Check we actually go the correct amount of ids back.
+        assert_eq!(nonces.len(), args.len(), "{receipts:?}");
+
+        for nonce in nonces.clone() {
             // Request the proof.
             let result = client
-                .message_proof(&transaction_id, &message_id, None, Some(last_height))
+                .message_proof(&transaction_id, nonce, None, Some(last_height))
                 .await
                 .unwrap()
                 .unwrap();
@@ -401,9 +404,6 @@ async fn can_get_message_proof() {
                 result.amount,
                 &result.data,
             );
-
-            // Check message id is the same as the one passed in.
-            assert_eq!(generated_message_id, message_id);
 
             // 2. Generate the block id. (full header)
             let mut hasher = Hasher::default();

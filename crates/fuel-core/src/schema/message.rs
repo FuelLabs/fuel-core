@@ -6,7 +6,6 @@ use super::{
         Address,
         Bytes32,
         HexString,
-        MessageId,
         Nonce,
         TransactionId,
         U64,
@@ -118,7 +117,7 @@ impl MessageQuery {
         &self,
         ctx: &Context<'_>,
         transaction_id: TransactionId,
-        message_id: MessageId,
+        nonce: Nonce,
         commit_block_id: Option<BlockId>,
         commit_block_height: Option<U32>,
     ) -> async_graphql::Result<Option<MessageProof>> {
@@ -137,7 +136,7 @@ impl MessageQuery {
         Ok(crate::query::message_proof(
             data.deref(),
             transaction_id.into(),
-            message_id.into(),
+            nonce.into(),
             block_id,
         )?
         .map(MessageProof))
