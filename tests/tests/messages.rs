@@ -378,16 +378,15 @@ async fn can_get_message_proof() {
         let receipts = client.receipts(&transaction_id).await.unwrap().unwrap();
 
         // Get the message id from the receipts.
-        let message_ids: Vec<_> =
-            receipts.iter().filter_map(|r| r.message_id()).collect();
+        let nonces: Vec<_> = receipts.iter().filter_map(|r| r.nonce()).collect();
 
         // Check we actually go the correct amount of ids back.
-        assert_eq!(message_ids.len(), args.len(), "{receipts:?}");
+        assert_eq!(nonces.len(), args.len(), "{receipts:?}");
 
-        for message_id in message_ids.clone() {
+        for nonce in nonces.clone() {
             // Request the proof.
             let result = client
-                .message_proof(&transaction_id, &message_id, None, Some(last_height))
+                .message_proof(&transaction_id, &nonce, None, Some(last_height))
                 .await
                 .unwrap()
                 .unwrap();
@@ -401,9 +400,6 @@ async fn can_get_message_proof() {
                 result.amount,
                 &result.data,
             );
-
-            // Check message id is the same as the one passed in.
-            assert_eq!(generated_message_id, message_id);
 
             // 2. Generate the block id. (full header)
             let mut hasher = Hasher::default();
@@ -433,7 +429,7 @@ async fn can_get_message_proof() {
 
             // Generate a proof to compare
             let mut tree = fuel_merkle::binary::in_memory::MerkleTree::new();
-            for id in &message_ids {
+            for id in &nonces {
                 tree.push(id.as_ref());
             }
             let (expected_root, expected_set) = tree.prove(message_proof_index).unwrap();

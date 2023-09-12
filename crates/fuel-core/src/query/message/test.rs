@@ -86,12 +86,12 @@ async fn can_build_message_proof() {
     let commit_block_height = BlockHeight::from(2u32);
     let message_block_height = BlockHeight::from(1u32);
     let expected_receipt = receipt(Some(11));
-    let message_id = expected_receipt.message_id().unwrap();
+    let nonce = expected_receipt.nonce().unwrap();
     let receipts: [Receipt; 4] = [
         receipt(Some(10)),
         receipt(None),
         receipt(Some(3)),
-        expected_receipt,
+        expected_receipt.clone(),
     ];
     static TXNS: [Bytes32; 4] = [txn_id(20), txn_id(24), txn_id(1), txn_id(33)];
     let transaction_id = TXNS[3];
@@ -199,11 +199,14 @@ async fn can_build_message_proof() {
 
     let data: Box<dyn MessageProofData> = Box::new(data);
 
-    let proof =
-        message_proof(data.deref(), transaction_id, message_id, commit_block.id())
-            .unwrap()
-            .unwrap();
-    assert_eq!(proof.message_id(), message_id);
+    let proof = message_proof(
+        data.deref(),
+        transaction_id,
+        nonce.to_owned(),
+        commit_block.id(),
+    )
+    .unwrap()
+    .unwrap();
     assert_eq!(
         proof.message_block_header.message_receipt_root,
         message_block.header().message_receipt_root
