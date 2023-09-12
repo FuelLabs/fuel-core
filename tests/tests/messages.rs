@@ -378,6 +378,10 @@ async fn can_get_message_proof() {
         let receipts = client.receipts(&transaction_id).await.unwrap().unwrap();
 
         // Get the message id from the receipts.
+        let message_ids: Vec<_> =
+            receipts.iter().filter_map(|r| r.message_id()).collect();
+
+        // Get the nonces from the receipt
         let nonces: Vec<_> = receipts.iter().filter_map(|r| r.nonce()).collect();
 
         // Check we actually go the correct amount of ids back.
@@ -429,7 +433,7 @@ async fn can_get_message_proof() {
 
             // Generate a proof to compare
             let mut tree = fuel_merkle::binary::in_memory::MerkleTree::new();
-            for id in &nonces {
+            for id in &message_ids {
                 tree.push(id.as_ref());
             }
             let (expected_root, expected_set) = tree.prove(message_proof_index).unwrap();
