@@ -430,7 +430,7 @@ mod tests {
         fn single_asset_messages() {
             // Setup for messages
             let (owner, base_asset_id, db) = setup_messages();
-            single_asset_assert(owner, &[], &base_asset_id, db);
+            single_asset_assert(owner, &[base_asset_id], &base_asset_id, db);
         }
 
         #[test]
@@ -830,17 +830,74 @@ mod tests {
         max_coins: usize,
     }
 
-    #[test_case::test_case(
-        TestCase {
+    pub enum CoinType {
+        Coin,
+        Message,
+    }
+
+    fn test_case_run(
+        case: TestCase,
+        coin_type: CoinType,
+        base_asset_id: AssetId,
+    ) -> Result<usize, CoinsQueryError> {
+        let TestCase {
+            db_amount,
+            target_amount,
+            max_coins,
+        } = case;
+        let owner = Address::default();
+        let asset_ids = [base_asset_id];
+        let mut db = TestDatabase::new();
+        for amount in db_amount {
+            match coin_type {
+                CoinType::Coin => {
+                    let _ = db.make_coin(owner, amount, asset_ids[0]);
+                }
+                CoinType::Message => {
+                    let _ = db.make_message(owner, amount);
+                }
+            };
+        }
+
+        let coins = random_improve(
+            &db.service_database(),
+            &SpendQuery::new(
+                owner,
+                &[AssetSpendTarget {
+                    id: asset_ids[0],
+                    target: target_amount,
+                    max: max_coins,
+                }],
+                None,
+                base_asset_id,
+            )?,
+        )?;
+
+        assert_eq!(coins.len(), 1);
+        Ok(coins[0].len())
+    }
+
+    #[test]
+    fn insufficient_coins_returns_error() {
+        let test_case = TestCase {
             db_amount: vec![0],
             target_amount: u64::MAX,
             max_coins: usize::MAX,
-        }
-        => Err(CoinsQueryError::InsufficientCoins {
-            asset_id: AssetId::BASE, collected_amount: 0
-        })
-        ; "Insufficient coins in the DB(0) to reach target(u64::MAX)"
-    )]
+        };
+        let mut rng = StdRng::seed_from_u64(0xF00DF00D);
+        let base_asset_id = rng.gen();
+        let coin_result = test_case_run(test_case.clone(), CoinType::Coin, base_asset_id);
+        let message_result = test_case_run(test_case, CoinType::Message, base_asset_id);
+        assert_eq!(coin_result, message_result);
+        assert_matches!(
+            coin_result,
+            Err(CoinsQueryError::InsufficientCoins {
+                asset_id: _base_asset_id,
+                collected_amount: 0
+            })
+        )
+    }
+
     #[test_case::test_case(
         TestCase {
             db_amount: vec![u64::MAX, u64::MAX],
@@ -869,58 +926,11 @@ mod tests {
         ; "Enough coins in the DB to reach target(u64::MAX) but limit is zero"
     )]
     fn corner_cases(case: TestCase) -> Result<usize, CoinsQueryError> {
-        pub enum CoinType {
-            Coin,
-            Message,
-        }
-
-        fn test_case_run(
-            case: TestCase,
-            coin_type: CoinType,
-        ) -> Result<usize, CoinsQueryError> {
-            let TestCase {
-                db_amount,
-                target_amount,
-                max_coins,
-            } = case;
-            let mut rng = StdRng::seed_from_u64(0xf00df00d);
-            let owner = Address::default();
-            let asset_ids = [rng.gen()];
-            let base_asset_id = rng.gen();
-            let mut db = TestDatabase::new();
-            for amount in db_amount {
-                match coin_type {
-                    CoinType::Coin => {
-                        let _ = db.make_coin(owner, amount, asset_ids[0]);
-                    }
-                    CoinType::Message => {
-                        let _ = db.make_message(owner, amount);
-                    }
-                };
-            }
-
-            let coins = random_improve(
-                &db.service_database(),
-                &SpendQuery::new(
-                    owner,
-                    &[AssetSpendTarget {
-                        id: asset_ids[0],
-                        target: target_amount,
-                        max: max_coins,
-                    }],
-                    None,
-                    base_asset_id,
-                )?,
-            )?;
-
-            assert_eq!(coins.len(), 1);
-            Ok(coins[0].len())
-        }
-
-        let coin_result = test_case_run(case.clone(), CoinType::Coin);
-        let message_result = test_case_run(case, CoinType::Message);
+        let mut rng = StdRng::seed_from_u64(0xF00DF00D);
+        let base_asset_id = rng.gen();
+        let coin_result = test_case_run(case.clone(), CoinType::Coin, base_asset_id);
+        let message_result = test_case_run(case, CoinType::Message, base_asset_id);
         assert_eq!(coin_result, message_result);
-
         coin_result
     }
 
