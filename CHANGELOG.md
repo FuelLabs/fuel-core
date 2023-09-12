@@ -42,6 +42,7 @@ Description of the upcoming release here.
     - Allows GraphQL Endpoints to arbitrarily advance blocks.
     - Enables debugger GraphQL Endpoints.
     - Allows setting `utxo_validation` to `false`.
+- [#1363](https://github.com/FuelLabs/fuel-core/pull/1363): Change message_proof api to take `nonce` instead of `message_id`
 
 ### Removed
 
