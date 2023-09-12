@@ -96,8 +96,10 @@ impl MessageCoin {
         self.0.amount.into()
     }
 
-    async fn asset_id(&self, base_asset_id: AssetId) -> AssetId {
-        base_asset_id
+    async fn asset_id(&self, ctx: &Context<'_>) -> AssetId {
+        let config = ctx.data_unchecked::<GraphQLConfig>();
+        let base_asset_id = *config.consensus_parameters.base_asset_id();
+        base_asset_id.into()
     }
 
     async fn da_height(&self) -> U64 {
