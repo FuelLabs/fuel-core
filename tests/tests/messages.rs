@@ -390,7 +390,7 @@ async fn can_get_message_proof() {
         for nonce in nonces.clone() {
             // Request the proof.
             let result = client
-                .message_proof(&transaction_id, &nonce, None, Some(last_height))
+                .message_proof(&transaction_id, nonce, None, Some(last_height))
                 .await
                 .unwrap()
                 .unwrap();
