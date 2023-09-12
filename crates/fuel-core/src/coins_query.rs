@@ -20,7 +20,7 @@ use fuel_core_types::{
     },
 };
 use itertools::Itertools;
-// use rand::prelude::*;
+use rand::prelude::*;
 use std::{
     cmp::Reverse,
     collections::HashSet,
@@ -128,8 +128,6 @@ pub fn largest_first(query: &AssetQuery) -> Result<Vec<CoinType>, CoinsQueryErro
     let mut inputs: Vec<_> = query.coins().try_collect()?;
     inputs.sort_by_key(|coin| Reverse(coin.amount()));
 
-    dbg!(&inputs);
-
     let mut collected_amount = 0u64;
     let mut coins = vec![];
 
@@ -168,8 +166,7 @@ pub fn random_improve(
 
     for query in spend_query.asset_queries(db) {
         let mut inputs: Vec<_> = query.coins().try_collect()?;
-        dbg!(&inputs);
-        // inputs.shuffle(&mut thread_rng());
+        inputs.shuffle(&mut thread_rng());
         inputs.truncate(query.asset.max);
 
         let mut collected_amount = 0;
@@ -184,7 +181,6 @@ pub fn random_improve(
             if collected_amount >= target {
                 // Break if found coin exceeds max `u64` or the upper limit
                 if collected_amount == u64::MAX || coin.amount() > upper_target {
-                    println!("Break if found coin exceeds max `u64` or the upper limit");
                     break
                 }
 
@@ -193,15 +189,12 @@ pub fn random_improve(
                 let distance = target.abs_diff(change_amount);
                 let next_distance = target.abs_diff(change_amount + coin.amount());
                 if next_distance >= distance {
-                    println!("Break if adding doesn't improve the distance");
                     break
                 }
             }
 
             // Add to list
             collected_amount = collected_amount.saturating_add(coin.amount());
-            dbg!(&coin);
-            dbg!(&coin.asset_id(&spend_query.base_asset_id));
             coins.push(coin);
         }
 
@@ -459,8 +452,6 @@ mod tests {
                 vec![(asset_ids[0], 5)],
                 vec![(asset_ids[1], 5), (asset_ids[1], 4)],
             ];
-            dbg!(&coins);
-            dbg!(&expected);
             assert_matches!(coins, Ok(coins) if coins == expected);
         }
 
@@ -690,20 +681,14 @@ mod tests {
                 )?;
                 let coins = random_improve(&db.service_database(), &spend_query);
 
-                println!("BEFORE MAP");
-                dbg!(&coins);
                 // Transform result for convenience
-                let coins = coins.map(|coins| {
+                coins.map(|coins| {
                     coins
                         .into_iter()
                         .flat_map(|coin| {
                             coin.into_iter()
                                 .map(|coin| {
                                     (*coin.asset_id(&base_asset_id), coin.amount())
-                                })
-                                .map(|(asset_id, amount)| {
-                                    dbg!(asset_id, asset_ids);
-                                    (asset_id, amount)
                                 })
                                 .sorted_by_key(|(asset_id, amount)| {
                                     (
@@ -716,22 +701,15 @@ mod tests {
                                 })
                         })
                         .collect()
-                });
-                println!("AFTER MAP");
-                dbg!(&coins);
-                coins
+                })
             };
 
             // Query some amounts, including higher than the owner's balance
             for amount in 0..20 {
-                println!("AMOUNT");
-                dbg!(amount);
                 let coins = query(
                     vec![AssetSpendTarget::new(asset_id, amount, u64::MAX)],
                     excluded_ids.clone(),
                 );
-                println!("COINS");
-                dbg!(&coins);
 
                 // Transform result for convenience
                 let coins = coins.map(|coins| {
@@ -739,7 +717,6 @@ mod tests {
                         .into_iter()
                         .map(|(id, amount)| {
                             // Check the asset ID before we drop it
-                            dbg!(id, asset_id);
                             assert_eq!(id, asset_id);
                             amount
                         })

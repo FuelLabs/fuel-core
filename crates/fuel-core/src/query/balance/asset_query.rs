@@ -123,6 +123,11 @@ impl<'a> AssetsQuery<'a> {
                 }
             });
 
+        let predicate = self
+            .assets
+            .as_ref()
+            .map(|assets| assets.contains(self.base_asset_id))
+            .unwrap_or(true);
         let messages_iter = self
             .database
             .owned_message_ids(self.owner, None, IterDirection::Forward)
@@ -154,27 +159,10 @@ impl<'a> AssetsQuery<'a> {
                             .expect("The checked above that message data is empty."),
                     )
                 })
-            });
-
-        let c_iter = coins_iter.collect::<Vec<_>>();
-        let predicate = self
-            .assets
-            .as_ref()
-            .map(|assets| assets.contains(self.base_asset_id))
-            .unwrap_or(true);
-        dbg!(predicate);
-        let m_iter = messages_iter.take_while(|_| predicate).collect::<Vec<_>>();
-        dbg!(&c_iter);
-        dbg!(&m_iter);
-        let coins_iter = c_iter.into_iter();
-        let messages_iter = m_iter.into_iter();
+            })
+            .take_while(move |_| predicate);
 
         coins_iter.chain(messages_iter)
-
-        // let v = iter.collect::<Vec<_>>();
-        // dbg!(&v);
-
-        // v.into_iter()
     }
 }
 
