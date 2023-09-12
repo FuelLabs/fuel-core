@@ -14,7 +14,6 @@ use crate::client::{
     schema::{
         schema,
         Address,
-        MessageId,
         Nonce,
         U32,
         U64,
@@ -81,7 +80,7 @@ pub struct OwnedMessagesConnectionArgs {
 pub struct MessageProofQuery {
     #[arguments(
         transactionId: $transaction_id,
-        messageId: $message_id,
+        nonce: $nonce,
         commitBlockId: $commit_block_id,
         commitBlockHeight: $commit_block_height
     )]
@@ -128,7 +127,7 @@ pub struct MessageProofArgs {
     /// Transaction id that contains the output message.
     pub transaction_id: TransactionId,
     /// Message id of the output message that requires a proof.
-    pub message_id: MessageId,
+    pub nonce: Nonce,
 
     /// The query supports either `commit_block_id`, or `commit_block_height` set on, not both.
 
