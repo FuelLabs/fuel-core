@@ -200,7 +200,6 @@ pub fn random_improve(
 
         // Fallback to largest_first if we can't fit more coins
         if collected_amount < query.asset.target {
-            println!("Fallback to largest_first");
             swap(&mut coins, &mut largest_first(&query)?);
         }
 
