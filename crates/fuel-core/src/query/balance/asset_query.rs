@@ -83,14 +83,8 @@ impl<'a> AssetsQuery<'a> {
         }
     }
 
-    /// Returns the iterator over all valid(spendable, allowed by `exclude`) coins of the `owner`.
-    ///
-    /// # Note: The coins of different type are not grouped by the `asset_id`.
-    // TODO: Optimize this by creating an index
-    //  https://github.com/FuelLabs/fuel-core/issues/588
-    pub fn coins(&self) -> impl Iterator<Item = StorageResult<CoinType>> + '_ {
-        let coins_iter = self
-            .database
+    fn coins_iter(&self) -> impl Iterator<Item = StorageResult<CoinType>> + '_ {
+        self.database
             .owned_coins_ids(self.owner, None, IterDirection::Forward)
             .map(|id| id.map(CoinId::from))
             .filter_ok(|id| {
@@ -121,15 +115,11 @@ impl<'a> AssetsQuery<'a> {
                 } else {
                     true
                 }
-            });
+            })
+    }
 
-        let predicate = self
-            .assets
-            .as_ref()
-            .map(|assets| assets.contains(self.base_asset_id))
-            .unwrap_or(true);
-        let messages_iter = self
-            .database
+    fn messages_iter(&self) -> impl Iterator<Item = StorageResult<CoinType>> + '_ {
+        self.database
             .owned_message_ids(self.owner, None, IterDirection::Forward)
             .map(|id| id.map(CoinId::from))
             .filter_ok(|id| {
@@ -160,9 +150,30 @@ impl<'a> AssetsQuery<'a> {
                     )
                 })
             })
-            .take_while(move |_| predicate);
+            .into_iter()
+    }
 
-        coins_iter.chain(messages_iter)
+    fn has_base_asset(&self) -> bool {
+        self.assets
+            .as_ref()
+            .map(|assets| assets.contains(self.base_asset_id))
+            .unwrap_or(true)
+    }
+
+    /// Returns the iterator over all valid(spendable, allowed by `exclude`) coins of the `owner`.
+    ///
+    /// # Note: The coins of different type are not grouped by the `asset_id`.
+    // TODO: Optimize this by creating an index
+    //  https://github.com/FuelLabs/fuel-core/issues/588
+    pub fn coins(&self) -> Box<dyn Iterator<Item = StorageResult<CoinType>> + '_> {
+        let coins_iter = self.coins_iter();
+        if self.has_base_asset() {
+            let messages_iter = self.messages_iter();
+            let iter = coins_iter.chain(messages_iter);
+            Box::new(iter)
+        } else {
+            Box::new(coins_iter)
+        }
     }
 }
 
