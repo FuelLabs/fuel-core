@@ -510,7 +510,7 @@ type MessageCoin {
 	recipient: Address!
 	nonce: Nonce!
 	amount: U64!
-	assetId: AssetId!
+	assetId(baseAssetId: AssetId!): AssetId!
 	daHeight: U64!
 }
 
