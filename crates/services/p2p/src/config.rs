@@ -131,7 +131,7 @@ pub struct Config<State = Initialized> {
     /// Sets the keep-alive timeout of idle connections.
     pub set_connection_keep_alive: Duration,
 
-    /// Time between checking heartbeat avgs for each peer
+    /// Time between checking heartbeat status for all peers
     pub heartbeat_check_interval: Duration,
     /// Max avg time between heartbeats for a given peer before getting reputation penalty
     pub heartbeat_max_avg_interval: Duration,
