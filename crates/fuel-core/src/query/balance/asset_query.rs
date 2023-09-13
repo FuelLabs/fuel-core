@@ -161,15 +161,10 @@ impl<'a> AssetsQuery<'a> {
     /// # Note: The coins of different type are not grouped by the `asset_id`.
     // TODO: Optimize this by creating an index
     //  https://github.com/FuelLabs/fuel-core/issues/588
-    pub fn coins(&self) -> Box<dyn Iterator<Item = StorageResult<CoinType>> + '_> {
-        let coins_iter = self.coins_iter();
-        if self.has_asset(self.base_asset_id) {
-            let messages_iter = self.messages_iter();
-            let iter = coins_iter.chain(messages_iter);
-            Box::new(iter)
-        } else {
-            Box::new(coins_iter)
-        }
+    pub fn coins(&self) -> impl Iterator<Item = StorageResult<CoinType>> + '_ {
+        let has_base_asset = self.has_asset(self.base_asset_id);
+        self.coins_iter()
+            .chain(self.messages_iter().take_while(move |_| has_base_asset))
     }
 }
 
