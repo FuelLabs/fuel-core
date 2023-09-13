@@ -135,7 +135,9 @@ pub struct Task<D> {
     shared: SharedState,
     max_headers_per_request: u32,
     // milliseconds wait time between peer heartbeat reputation checks
-    check_frequency: Duration,
+    heartbeat_check_interval: Duration,
+    heartbeat_max_avg_interval: Duration,
+    heartbeat_max_time_since_last: Duration,
     next_check_time: Instant,
 }
 
@@ -145,22 +147,25 @@ impl<D> Task<D> {
         db: Arc<D>,
         block_importer: Arc<B>,
     ) -> Self {
+        let Config {
+            max_block_size,
+            max_headers_per_request,
+            heartbeat_check_interval,
+            heartbeat_max_avg_interval,
+            heartbeat_max_time_since_last,
+            ..
+        } = config;
         let (request_sender, request_receiver) = mpsc::channel(100);
         let (tx_broadcast, _) = broadcast::channel(100);
         let (block_height_broadcast, _) = broadcast::channel(100);
 
         let next_block_height = block_importer.next_block_height();
-        let max_block_size = config.max_block_size;
-        let max_headers_per_request = config.max_headers_per_request;
         let p2p_service = FuelP2PService::new(config, PostcardCodec::new(max_block_size));
 
         let reserved_peers_broadcast =
             p2p_service.peer_manager().reserved_peers_updates();
 
-        // TODO: Parameterize
-        let check_frequency = 10_000; // ten seconds
-        let check_frequency = Duration::from_millis(check_frequency);
-        let next_check_time = Instant::now() + check_frequency;
+        let next_check_time = Instant::now() + heartbeat_check_interval;
 
         Self {
             p2p_service,
@@ -174,24 +179,24 @@ impl<D> Task<D> {
                 block_height_broadcast,
             },
             max_headers_per_request,
-            check_frequency,
+            heartbeat_check_interval,
+            heartbeat_max_avg_interval,
+            heartbeat_max_time_since_last,
             next_check_time,
         }
     }
 
     fn peer_heartbeat_reputation_checks(&self) -> anyhow::Result<()> {
-        const MAX_HEARTBEAT_AGE: Duration = Duration::from_millis(5_000);
-        const MAX_AVG_TIME_BETWEEN_HEARTBEATS: Duration = Duration::from_millis(1_000);
         for (peer_id, peer_info) in self.p2p_service.peer_manager().get_all_peers() {
             if peer_info.heartbeat_data.duration_since_last_heartbeat()
-                > MAX_HEARTBEAT_AGE
+                > self.heartbeat_max_time_since_last
             {
                 let report = HeartBeatPeerReportReason::OldHeartBeat;
                 let service = "p2p";
                 let peer_id = convert_peer_id(peer_id)?;
                 self.shared.report_peer(peer_id, report, service)?;
             } else if peer_info.heartbeat_data.average_time_between_heartbeats()
-                > MAX_AVG_TIME_BETWEEN_HEARTBEATS
+                > self.heartbeat_max_avg_interval
             {
                 let report = HeartBeatPeerReportReason::LowHeartBeatFrequency;
                 let service = "p2p";
@@ -406,7 +411,7 @@ where
                         tracing::error!("Failed to perform peer heartbeat reputation checks: {:?}", e);
                     }
                 }
-                self.next_check_time = self.next_check_time + self.check_frequency;
+                self.next_check_time = self.next_check_time + self.heartbeat_check_interval;
             },
             latest_block_height = self.next_block_height.next() => {
                 if let Some(latest_block_height) = latest_block_height {
