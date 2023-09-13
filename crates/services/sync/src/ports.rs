@@ -61,7 +61,7 @@ pub trait PeerToPeerPort {
     /// and source peer.
     async fn get_transactions_2(
         &self,
-        block_id: SourcePeer<Vec<BlockId>>,
+        block_ids: SourcePeer<Vec<BlockId>>,
     ) -> anyhow::Result<Option<Vec<Transaction>>>;
 
     /// Report a peer for some reason to modify their reputation.

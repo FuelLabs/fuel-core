@@ -14,7 +14,13 @@ use fuel_core_services::{
     SharedMutex,
     StateWatcher,
 };
-use fuel_core_types::blockchain::consensus::Sealed;
+use fuel_core_types::{
+    blockchain::consensus::Sealed,
+    services::{
+        block_importer::Source,
+        p2p::PeerId,
+    },
+};
 use fuel_core_types::{
     blockchain::{
         block::Block,
@@ -306,8 +312,13 @@ fn get_header_stream<P: PeerToPeerPort + Send + Sync + 'static>(
     let Config {
         header_batch_size, ..
     } = params;
+    let mut peer = None;
     let ranges = range_chunks(range, *header_batch_size);
     futures::stream::iter(ranges)
+        // For each range:
+        //  - Asynchronously get the batch of headers from the range
+        //  - Flatten the batches of headers into a single stream
+        //  - Stop at None/Err
         .then(move |range| {
             let p2p = p2p.clone();
             async {
@@ -316,7 +327,17 @@ fn get_header_stream<P: PeerToPeerPort + Send + Sync + 'static>(
                     range.start(),
                     range.end()
                 );
-                get_headers_batch(range, p2p).await
+
+                let (peer_id, stream) = get_headers_batch(range, p2p).await;
+                let same = if let Some(peer_id) = peer_id {
+                    if peer.is_none() {
+                        peer = Some(peer_id);
+                    }
+                    peer.map(|peer| peer == peer_id).unwrap_or(false)
+                } else {
+                    false
+                };
+
             }
         })
         .flatten()
@@ -413,10 +434,25 @@ async fn wait_for_notify_or_shutdown(
     matches!(r, futures::future::Either::Left(_))
 }
 
+// TODO:
+// This function streams items of SourcePeer<SealedBlockHeader>s.
+// However, internally, it uses
+//      p2p.get_sealed_block_headers(start..end)
+// which returns a SourcePeer<Vec<BlockHeader>>
+// This means that it is guaranteed that all block headers are sourced from the
+// same peer.
+// This means that the stream item is attaching the same SourcePeer to
+// each SealedBlockHeader, but there is no visible guarantee to the caller that
+// each SourcePeer is the same.
+// Instead, it may be superior to return a single SourcePeer separately so that
+// the caller knows all headers come from a single source
 async fn get_headers_batch(
     mut range: RangeInclusive<u32>,
     p2p: Arc<impl PeerToPeerPort + 'static>,
-) -> impl Stream<Item = anyhow::Result<Option<SourcePeer<SealedBlockHeader>>>> {
+) -> (
+    Option<PeerId>,
+    impl Stream<Item = anyhow::Result<Option<SealedBlockHeader>>>,
+) {
     tracing::debug!(
         "getting header range from {} to {} inclusive",
         range.start(),
@@ -428,13 +464,12 @@ async fn get_headers_batch(
         .get_sealed_block_headers(start..end)
         .await
         .trace_err("Failed to get headers");
-    let sorted_headers = match res {
+    let (peer_id, sorted_headers) = match res {
         Ok(sourced_headers) => {
             let SourcePeer {
                 peer_id,
                 data: maybe_headers,
             } = sourced_headers;
-            let cloned_peer_id = peer_id.clone();
             let headers = match maybe_headers {
                 None => {
                     tracing::error!(
@@ -450,11 +485,7 @@ async fn get_headers_batch(
                     .map(move |header| {
                         let header = range.next().and_then(|height| {
                             if *(header.entity.height()) == height.into() {
-                                let sourced_header = SourcePeer {
-                                    peer_id: cloned_peer_id.clone(),
-                                    data: header,
-                                };
-                                Some(sourced_header)
+                                Some(header)
                             } else {
                                 None
                             }
@@ -482,12 +513,13 @@ async fn get_headers_batch(
                         });
                 }
             }
-            headers
+            (Some(peer_id), headers)
         }
 
-        Err(e) => vec![Err(e)],
+        Err(e) => (None, vec![Err(e)]),
     };
-    futures::stream::iter(sorted_headers)
+    let stream = futures::stream::iter(sorted_headers);
+    (peer_id, stream)
 }
 
 #[tracing::instrument(

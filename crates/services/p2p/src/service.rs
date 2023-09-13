@@ -477,6 +477,25 @@ impl SharedState {
         receiver.await.map_err(|e| anyhow!("{}", e))
     }
 
+    pub async fn get_transactions2_from_peer(
+        &self,
+        peer_id: Vec<u8>,
+        block_ids: Vec<BlockId>,
+    ) -> anyhow::Result<Option<Vec<Transaction>>> {
+        let (sender, receiver) = oneshot::channel();
+        let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
+
+        self.request_sender
+            .send(TaskRequest::GetTransactions2 {
+                block_ids,
+                from_peer,
+                channel: sender,
+            })
+            .await?;
+
+        receiver.await.map_err(|e| anyhow!("{}", e))
+    }
+
     pub fn broadcast_vote(&self, vote: Arc<ConsensusVote>) -> anyhow::Result<()> {
         self.request_sender
             .try_send(TaskRequest::BroadcastVote(vote))?;
