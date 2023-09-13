@@ -274,7 +274,7 @@ fn get_block_stream<
     params: &Config,
     p2p: Arc<P>,
     consensus: Arc<C>,
-) -> impl Stream<Item = impl Future<Output = anyhow::Result<Option<SourcePeer<SealedBlock>>>>>
+) -> impl Stream<Item = impl Future<Output = anyhow::Result<SourcePeer<Vec<SealedBlock>>>>>
 {
     // Currently:
     // 1. Gets all headers in a flattened stream
@@ -286,19 +286,13 @@ fn get_block_stream<
 
     get_header_stream(range, params, p2p.clone())
         .chunks(10)
+        .map({ move |sealed_headers| sealed_headers.into_iter().collect() })
+        .into_scan_err()
+        .scan_err()
         .map({
             let p2p = p2p.clone();
             let consensus_port = consensus.clone();
-            move |sealed_headers| {
-                {
-                    let result = sealed_headers.into_iter().collect();
-                    let p2p = p2p.clone();
-                    let consensus_port = consensus_port.clone();
-                    get_sealed_blocks(result, p2p.clone(), consensus_port.clone())
-                }
-                .instrument(tracing::debug_span!("consensus_and_transactions"))
-                .in_current_span()
-            }
+            move |x| get_sealed_blocks(x, p2p.clone(), consensus_port.clone())
         })
 }
 
@@ -346,14 +340,14 @@ async fn get_sealed_blocks<
     P: PeerToPeerPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 >(
-    result: anyhow::Result<SourcePeer<Vec<SealedBlockHeader>>>,
+    headers: Vec<SourcePeer<SealedBlockHeader>>,
     p2p: Arc<P>,
     consensus_port: Arc<C>,
 ) -> anyhow::Result<SourcePeer<Vec<SealedBlock>>> {
-    let headers = match result {
-        Ok(h) => h,
-        Err(e) => return Err(e),
-    };
+    // let headers = match result {
+    //     Ok(h) => h,
+    //     Err(e) => return Err(e),
+    // };
 
     for header in headers.clone() {
         // Check the consensus is valid on this header.
@@ -511,19 +505,6 @@ async fn get_blocks<P>(
 where
     P: PeerToPeerPort + Send + Sync + 'static,
 {
-    // let SourcePeer {
-    //     peer_id,
-    //     data: block_headers,
-    // } = headers;
-    // let block_ids = block_headers
-    //     .into_iter()
-    //     .map(|block_header| block_header.id())
-    //     .collect::<Vec<_>>();
-    // let block_ids = SourcePeer {
-    //     peer_id: peer_id.clone(),
-    //     data: block_ids,
-    // };
-
     // Request the transactions for this block.
 
     // Need vec of (block_header, block_id)
@@ -552,10 +533,7 @@ where
                             e
                         )
                     });
-                let response = SourcePeer {
-                    peer_id,
-                    data: vec![],
-                };
+                let response = peer_id.bind(vec![]);
                 Ok(response)
             }
             Some(transactions) => {

@@ -4,10 +4,7 @@ use crate::{
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
 };
-use std::{
-    fmt::Debug,
-    vec,
-};
+use std::fmt::Debug;
 
 /// Contains types and logic for Peer Reputation
 pub mod peer_reputation;
@@ -74,15 +71,15 @@ impl<T> SourcePeer<T> {
     }
 }
 
-impl<T> FromIterator<SourcePeer<T>> for SourcePeer<Vec<T>> {
-    fn from_iter<U: IntoIterator<Item = SourcePeer<T>>>(iter: U) -> Self {
-        let mut c = Vec::new();
-        for i in iter {
-            c.push(i);
-        }
-        c
-    }
-}
+// impl<T> FromIterator<SourcePeer<T>> for SourcePeer<Vec<T>> {
+//     fn from_iter<U: IntoIterator<Item = SourcePeer<T>>>(iter: U) -> Self {
+//         let mut c = Vec::new();
+//         for i in iter {
+//             c.push(i);
+//         }
+//         c
+//     }
+// }
 
 impl<T> GossipData<T> {
     /// Construct a new gossip message
@@ -139,5 +136,16 @@ impl From<Vec<u8>> for PeerId {
 impl From<PeerId> for Vec<u8> {
     fn from(peer_id: PeerId) -> Self {
         peer_id.0
+    }
+}
+
+impl PeerId {
+    /// Bind the PeerId and given data of type T together to generate a
+    /// SourcePeer<T>
+    pub fn bind<T>(self, data: T) -> SourcePeer<T> {
+        SourcePeer {
+            peer_id: self,
+            data,
+        }
     }
 }
