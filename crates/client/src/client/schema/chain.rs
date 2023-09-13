@@ -14,6 +14,7 @@ pub struct ConsensusParameters {
     pub script_params: ScriptParameters,
     pub contract_params: ContractParameters,
     pub fee_params: FeeParameters,
+    pub base_asset_id: AssetId,
     pub chain_id: U64,
     pub gas_costs: GasCosts,
 }
@@ -263,9 +264,9 @@ impl From<ConsensusParameters> for fuel_core_types::fuel_tx::ConsensusParameters
             script_params: params.script_params.into(),
             contract_params: params.contract_params.into(),
             fee_params: params.fee_params.into(),
+            base_asset_id: params.base_asset_id.into(),
             chain_id: params.chain_id.0.into(),
             gas_costs: params.gas_costs.into(),
-            base_asset_id: AssetId::default().into(),
         }
     }
 }

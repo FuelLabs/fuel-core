@@ -73,10 +73,10 @@ impl CoinType {
     }
 
     /// Returns the asset held by the coin.
-    pub fn asset_id(&self) -> &AssetId {
+    pub fn asset_id<'a>(&'a self, base_asset_id: &'a AssetId) -> &'a AssetId {
         match self {
             CoinType::Coin(coin) => &coin.asset_id,
-            CoinType::MessageCoin(_) => &AssetId::BASE,
+            CoinType::MessageCoin(_) => base_asset_id,
         }
     }
 }
