@@ -163,8 +163,11 @@ impl<'a> AssetsQuery<'a> {
     //  https://github.com/FuelLabs/fuel-core/issues/588
     pub fn coins(&self) -> impl Iterator<Item = StorageResult<CoinType>> + '_ {
         let has_base_asset = self.has_asset(self.base_asset_id);
-        self.coins_iter()
-            .chain(self.messages_iter().take_while(move |_| has_base_asset))
+        let messages_iter = has_base_asset
+            .then(|| self.messages_iter())
+            .into_iter()
+            .flatten();
+        self.coins_iter().chain(messages_iter)
     }
 }
 
