@@ -162,7 +162,7 @@ pub trait TaskP2PService {
         &mut self,
         peer_id: PeerId,
         score: AppScore,
-        reporting_service: &'static str,
+        reporting_service: &str,
     ) -> anyhow::Result<()>;
 
     fn update_block_height(&mut self, height: BlockHeight) -> anyhow::Result<()>;
@@ -225,7 +225,7 @@ impl TaskP2PService for FuelP2PService<PostcardCodec> {
         &mut self,
         peer_id: PeerId,
         score: AppScore,
-        reporting_service: &'static str,
+        reporting_service: &str,
     ) -> anyhow::Result<()> {
         self.report_peer(peer_id, score, reporting_service);
         Ok(())
