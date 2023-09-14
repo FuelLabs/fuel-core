@@ -314,11 +314,11 @@ pub struct HeartbeatData {
     pub block_height: Option<BlockHeight>,
     pub last_heartbeat: Instant,
     // Size of moving average window
-    window: u32,
+    pub window: u32,
     // How many heartbeats into the first window have been received
-    count: u32,
+    pub count: u32,
     // Moving average of duration between heartbeats
-    moving_average: Duration,
+    pub moving_average: Duration,
 }
 
 impl HeartbeatData {
