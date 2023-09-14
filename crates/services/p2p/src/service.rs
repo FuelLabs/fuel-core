@@ -343,9 +343,6 @@ impl<D> Task<FuelP2PService<PostcardCodec>, D, SharedState> {
 impl<P: TaskP2PService, D, B: Broadcast> Task<P, D, B> {
     fn peer_heartbeat_reputation_checks(&self) -> anyhow::Result<()> {
         for (peer_id, peer_info) in self.p2p_service.get_all_peer_info() {
-            let average_time_between_heartbeats =
-                peer_info.heartbeat_data.average_time_between_heartbeats();
-            let heartbeat_max_avg_interval = self.heartbeat_max_avg_interval;
             if peer_info.heartbeat_data.duration_since_last_heartbeat()
                 > self.heartbeat_max_time_since_last
             {
@@ -808,6 +805,7 @@ fn report_message<T: NetworkCodec>(
 
 #[cfg(test)]
 pub mod tests {
+    #![allow(non_snake_case)]
     use crate::ports::P2pDb;
 
     use super::*;
@@ -890,7 +888,7 @@ pub mod tests {
                 .collect()
         }
 
-        fn get_peer_id_with_height(&self, height: &BlockHeight) -> Option<PeerId> {
+        fn get_peer_id_with_height(&self, _height: &BlockHeight) -> Option<PeerId> {
             todo!()
         }
 
@@ -900,46 +898,46 @@ pub mod tests {
 
         fn publish_message(
             &mut self,
-            message: GossipsubBroadcastRequest,
+            _message: GossipsubBroadcastRequest,
         ) -> anyhow::Result<()> {
             todo!()
         }
 
         fn send_request_msg(
             &mut self,
-            peer_id: Option<PeerId>,
-            request_msg: RequestMessage,
-            channel_item: ResponseChannelItem,
+            _peer_id: Option<PeerId>,
+            _request_msg: RequestMessage,
+            _channel_item: ResponseChannelItem,
         ) -> anyhow::Result<()> {
             todo!()
         }
 
         fn send_response_msg(
             &mut self,
-            request_id: RequestId,
-            message: OutboundResponse,
+            _request_id: RequestId,
+            _message: OutboundResponse,
         ) -> anyhow::Result<()> {
             todo!()
         }
 
         fn report_message(
             &mut self,
-            message: GossipsubMessageInfo,
-            acceptance: GossipsubMessageAcceptance,
+            _message: GossipsubMessageInfo,
+            _acceptance: GossipsubMessageAcceptance,
         ) -> anyhow::Result<()> {
             todo!()
         }
 
         fn report_peer(
             &mut self,
-            peer_id: PeerId,
-            score: AppScore,
-            reporting_service: &str,
+            _peer_id: PeerId,
+            _score: AppScore,
+            _reporting_service: &str,
         ) -> anyhow::Result<()> {
             todo!()
         }
 
-        fn update_block_height(&mut self, height: BlockHeight) -> anyhow::Result<()> {
+        fn update_block_height(&mut self, _height: BlockHeight) -> anyhow::Result<()> {
             todo!()
         }
     }
@@ -949,28 +947,28 @@ pub mod tests {
     impl P2pDb for FakeDB {
         fn get_sealed_block(
             &self,
-            height: &BlockHeight,
+            _height: &BlockHeight,
         ) -> StorageResult<Option<SealedBlock>> {
             todo!()
         }
 
         fn get_sealed_header(
             &self,
-            height: &BlockHeight,
+            _height: &BlockHeight,
         ) -> StorageResult<Option<SealedBlockHeader>> {
             todo!()
         }
 
         fn get_sealed_headers(
             &self,
-            block_height_range: Range<u32>,
+            _block_height_range: Range<u32>,
         ) -> StorageResult<Vec<SealedBlockHeader>> {
             todo!()
         }
 
         fn get_transactions(
             &self,
-            block_id: &BlockId,
+            _block_id: &BlockId,
         ) -> StorageResult<Option<Vec<Transaction>>> {
             todo!()
         }
@@ -997,12 +995,15 @@ pub mod tests {
 
         fn block_height_broadcast(
             &self,
-            block_height_data: BlockHeightHeartbeatData,
+            _block_height_data: BlockHeightHeartbeatData,
         ) -> anyhow::Result<()> {
             todo!()
         }
 
-        fn tx_broadcast(&self, transaction: TransactionGossipData) -> anyhow::Result<()> {
+        fn tx_broadcast(
+            &self,
+            _transaction: TransactionGossipData,
+        ) -> anyhow::Result<()> {
             todo!()
         }
     }
@@ -1029,7 +1030,7 @@ pub mod tests {
         };
         let peer_info = vec![(peer_id, peer_info)];
         let p2p_service = FakeP2PService { peer_info };
-        let (request_sender, request_receiver) = mpsc::channel(100);
+        let (_request_sender, request_receiver) = mpsc::channel(100);
 
         let (report_sender, mut report_receiver) = mpsc::channel(100);
         let broadcast = FakeBroadcast {
@@ -1096,7 +1097,7 @@ pub mod tests {
         };
         let peer_info = vec![(peer_id, peer_info)];
         let p2p_service = FakeP2PService { peer_info };
-        let (request_sender, request_receiver) = mpsc::channel(100);
+        let (_request_sender, request_receiver) = mpsc::channel(100);
 
         let (report_sender, mut report_receiver) = mpsc::channel(100);
         let broadcast = FakeBroadcast {
