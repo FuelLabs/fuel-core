@@ -16,15 +16,18 @@ use fuel_core_services::{
 };
 use fuel_core_types::{
     self,
-    blockchain::consensus::Sealed,
+    // blockchain::consensus::Sealed,
     fuel_types::BlockHeight,
-    services::p2p::PeerId,
+    services::p2p::{
+        PeerId,
+        TransactionData,
+    },
 };
 use fuel_core_types::{
     blockchain::{
         block::Block,
         // consensus::Sealed,
-        header::BlockHeader,
+        // header::BlockHeader,
         SealedBlock,
         SealedBlockHeader,
     },
@@ -32,7 +35,7 @@ use fuel_core_types::{
 };
 use futures::{
     stream::StreamExt,
-    FutureExt,
+    // FutureExt,
     Stream,
 };
 use tokio::sync::Notify;
@@ -185,8 +188,27 @@ where
         let shutdown_signal = shutdown.clone();
         let (shutdown_guard, mut shutdown_guard_recv) =
             tokio::sync::mpsc::channel::<()>(1);
+
+        let block_height = BlockHeight::from(*range.end());
+        let peer = p2p.select_peer(block_height).await;
+
+        if let Err(err) = peer {
+            let err = Err(err);
+            return (0, err)
+        }
+
+        let peer = peer.expect("Checked");
+
+        if let None = peer {
+            let err = Err(anyhow!("Expected peer"));
+            return (0, err)
+        }
+
+        let peer = peer.expect("Checked");
+
         let block_stream =
-            get_block_stream(range.clone(), params, p2p.clone(), consensus.clone());
+            get_block_stream(peer, range.clone(), params, p2p.clone(), consensus.clone())
+                .await;
         let result = block_stream
         .map(move |stream_block_batch| {
             let shutdown_guard = shutdown_guard.clone();
@@ -271,57 +293,52 @@ where
     }
 }
 
-fn get_block_stream<
+async fn get_block_stream<
     P: PeerToPeerPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 >(
+    peer: PeerId,
     range: RangeInclusive<u32>,
     params: &Config,
     p2p: Arc<P>,
     consensus: Arc<C>,
-) -> impl Stream<Item = impl Future<Output = anyhow::Result<SourcePeer<Vec<SealedBlock>>>>>
-{
-    // Currently:
-    // 1. Gets all headers in a flattened stream
-    // 2. For each header, maps it to a sealed block
-
-    // Todo:
-    // Current: Request 1 block * transactions from a given peer
-    // Goal:    Request n blocks * transactions from x given peers
-
-    // Headers from single peer
-    get_header_batch_streams(range, params, p2p.clone())
-        .then({
-            move |header_batch_stream| async {
-                let batch = header_batch_stream
-                    .into_scan_err()
-                    .scan_err()
-                    .collect::<Vec<_>>()
-                    .await;
-                let iter = get_sealed_blocks(batch, p2p.clone(), consensus.clone()).await;
-                iter
+) -> impl Stream<Item = impl Future<Output = anyhow::Result<Vec<Option<SealedBlock>>>>> {
+    get_header_stream(peer.clone(), range, params, p2p.clone())
+        .chunks(10)
+        .map({
+            let p2p = p2p.clone();
+            let consensus_port = consensus.clone();
+            let peer = peer.clone();
+            move |batch| {
+                {
+                    let p2p = p2p.clone();
+                    let consensus_port = consensus_port.clone();
+                    let peer = peer.clone();
+                    let batch =
+                        batch.into_iter().filter_map(|header| header.ok()).collect();
+                    let headers = peer.bind(batch);
+                    get_sealed_blocks(headers, p2p.clone(), consensus_port.clone())
+                }
+                .instrument(tracing::debug_span!("consensus_and_transactions"))
+                .in_current_span()
             }
         })
-        .flatten()
 }
 
-type HeaderStreamStreamItem = anyhow::Result<SourcePeer<SealedBlockHeader>>;
+type HeaderStreamItem = anyhow::Result<SealedBlockHeader>;
 
-// Todo:
-// Return a stream, where the item is a Vector of sealed block headers
-fn get_header_batch_streams<P: PeerToPeerPort + Send + Sync + 'static>(
+fn get_header_stream<P: PeerToPeerPort + Send + Sync + 'static>(
+    peer: PeerId,
     range: RangeInclusive<u32>,
     params: &Config,
     p2p: Arc<P>,
     // ) -> impl Stream<Item = anyhow::Result<SourcePeer<SealedBlockHeader>>> {
-) -> impl Stream<Item = impl Stream<Item = HeaderStreamStreamItem>> {
+) -> impl Stream<Item = HeaderStreamItem> {
     let Config {
         header_batch_size, ..
     } = params;
     let ranges = range_chunks(range, *header_batch_size);
     futures::stream::iter(ranges)
-        // For each range:
-        //  - Asynchronously get a batch of headers from the range
         .then(move |range| {
             let p2p = p2p.clone();
             async {
@@ -330,9 +347,12 @@ fn get_header_batch_streams<P: PeerToPeerPort + Send + Sync + 'static>(
                     range.start(),
                     range.end()
                 );
-                get_headers_batch(range, p2p).await
+                get_headers_batch(peer, range, p2p).await
             }
         })
+        .flatten()
+        .into_scan_none_or_err()
+        .scan_none_or_err()
 }
 
 fn range_chunks(
@@ -359,68 +379,37 @@ async fn check_sealed_header<
         .check_sealed_header(header)
         .trace_err("Failed to check consensus on header")?;
     if !validity {
-        let _ = p2p
-            .report_peer(peer_id.clone(), PeerReportReason::BadBlockHeader)
-            .await
-            .map_err(|e| {
-                tracing::error!(
-                    "Failed to report bad block header from peer {:?}: {:?}",
-                    peer_id.clone(),
-                    e
-                )
-            });
+        report_peer(
+            p2p.clone(),
+            peer_id.clone(),
+            PeerReportReason::BadBlockHeader,
+        )
+        .await;
     }
     Ok(validity)
 }
 
-// todo: Accept a vector of headers
 async fn get_sealed_blocks<
     P: PeerToPeerPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 >(
-    headers: Vec<anyhow::Result<SourcePeer<SealedBlockHeader>>>,
+    headers: SourcePeer<Vec<SealedBlockHeader>>,
     p2p: Arc<P>,
-    consensus_port: Arc<C>,
-) -> anyhow::Result<SourcePeer<Vec<SealedBlock>>> {
-    let headers = match headers {
-        Ok(h) => h,
-        Err(e) => return Err(e),
-    };
-    let SourcePeer {
-        peer_id,
-        data: headers,
-    } = headers;
-    for header in headers.clone() {
+    consensus: Arc<C>,
+) -> anyhow::Result<Vec<Option<SealedBlock>>> {
+    let SourcePeer { peer_id, data } = &headers;
+    for header in data {
         // Check the consensus is valid on this header.
-        if !check_sealed_header(
-            &header,
-            peer_id.clone(),
-            p2p.clone(),
-            consensus_port.clone(),
-        )? {
-            return Ok(peer_id.bind(vec![]))
+        if !check_sealed_header(header, peer_id.clone(), p2p.clone(), consensus.clone())
+            .await?
+        {
+            return Ok(vec![])
         }
 
         // Wait for the da to be at least the da height on the header.
-        consensus_port
-            .await_da_height(&header.entity.da_height)
-            .await?;
+        consensus.await_da_height(&header.entity.da_height).await?;
     }
-
-    // todo: pass a vector of headers
-    // let consensus = headers.consensus.clone();
-    // let headers = sealed_headers.entity;
-    // let source_headers = SourcePeer {
-    //     peer_id,
-    //     data: headers,
-    // };
-    let blocks = get_blocks(p2p.as_ref(), headers).await?;
-    let blocks = blocks.map(|blocks| Sealed {
-        entity: blocks,
-        consensus: consensus.clone(),
-    });
-
-    Ok(blocks)
+    get_blocks(p2p.as_ref(), headers).await
 }
 
 /// Waits for a notify or shutdown signal.
@@ -456,9 +445,10 @@ type HeadersBatchItem = anyhow::Result<Option<SourcePeer<SealedBlockHeader>>>;
 // Instead, it may be superior to return a single SourcePeer separately so that
 // the caller knows all headers come from a single source
 async fn get_headers_batch(
+    peer: PeerId,
     mut range: RangeInclusive<u32>,
     p2p: Arc<impl PeerToPeerPort + 'static>,
-) -> SourcePeer<impl Stream<Item = anyhow::Result<Option<SealedBlockHeader>>>> {
+) -> impl Stream<Item = anyhow::Result<Option<SealedBlockHeader>>> {
     tracing::debug!(
         "getting header range from {} to {} inclusive",
         range.start(),
@@ -467,14 +457,6 @@ async fn get_headers_batch(
 
     let start = *range.start();
     let end = *range.end() + 1;
-
-    let block_height = BlockHeight::from(range.end());
-    let peer = p2p
-        .select_peer(block_height)
-        .await
-        .map_err(|e| vec![Err(e)])?
-        .ok_or_else(|| vec![Err(anyhow!("No peer"))])
-        .trace_err("Failed to select a peer")?;
 
     let res = p2p
         .get_sealed_block_headers(peer.bind(start..end))
@@ -524,7 +506,7 @@ async fn get_headers_batch(
                 }
             }
             let stream = futures::stream::iter(headers);
-            peer_id.bind(stream)
+            stream
         }
 
         Err(e) => vec![Err(e)],
@@ -553,77 +535,68 @@ async fn report_peer(
 )]
 async fn get_blocks<P>(
     p2p: &P,
-    headers: SourcePeer<Vec<BlockHeader>>,
-) -> anyhow::Result<SourcePeer<Vec<Block>>>
+    headers: SourcePeer<Vec<SealedBlockHeader>>,
+) -> anyhow::Result<Vec<Option<SealedBlock>>>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
 {
     // Request the transactions for this block.
 
-    // Need vec of (block_header, block_id)
-    // Map vec of (block_header, block_id) -> vec(block_header, transactions)
-
-    let SourcePeer { peer_id, data: hs } = headers;
-    let block_ids = hs.into_iter().map(|h| h.id());
-    let z = headers.map(|headers| headers.into_iter().zip(block_ids));
-
-    for (block_header, block_ids) in z {
-        let maybe_txs = p2p
-            .get_transactions_2(block_ids)
-            .await
-            .trace_err("Failed to get transactions")?
-            .trace_none_warn("Could not find transactions for header");
-        match maybe_txs {
-            None => {
-                let _ = p2p
-                    .report_peer(peer_id.clone(), PeerReportReason::MissingTransactions)
-                    .await
-                    .map_err(|e| {
-                        tracing::error!(
-                            "Failed to report missing transactions from peer {:?}: {:?}",
-                            peer_id.clone(),
-                            e
-                        )
-                    });
-                let response = peer_id.bind(vec![]);
-                Ok(response)
-            }
-            Some(transactions) => {
-                let block =
-                    Block::try_from_executed(block_header, transactions).map(|block| {
-                        SourcePeer {
-                            peer_id: peer_id.clone(),
-                            data: block,
-                        }
-                    });
+    let block_ids = headers.as_ref().map(|headers| {
+        headers
+            .iter()
+            .map(|header| header.entity.id())
+            .collect::<Vec<_>>()
+    });
+    let peer_id = block_ids.peer_id.clone();
+    let maybe_txs = p2p
+        .get_transactions_2(block_ids)
+        .await
+        .trace_err("Failed to get transactions")?
+        .trace_none_warn("Could not find transactions for header");
+    match maybe_txs {
+        None => {
+            report_peer(
+                p2p.clone(),
+                peer_id.clone(),
+                PeerReportReason::MissingTransactions,
+            )
+            .await;
+            Ok(vec![])
+        }
+        Some(transaction_data) => {
+            let headers = headers.data;
+            let mut blocks = vec![];
+            let iter = headers.into_iter().zip(transaction_data);
+            for (block_header, td) in iter {
+                let SealedBlockHeader {
+                    consensus,
+                    entity: header,
+                } = block_header;
+                let TransactionData { transactions, .. } = td;
+                let block = Block::try_from_executed(header, transactions).map(|block| {
+                    SealedBlock {
+                        entity: block,
+                        consensus,
+                    }
+                });
                 if block.is_none() {
                     tracing::error!(
                         "Failed to created block from header and transactions"
                     );
-                    let _ = p2p
-                        .report_peer(
-                            peer_id.clone(),
-                            PeerReportReason::InvalidTransactions,
-                        )
-                        .await
-                        .map_err(|e| {
-                            tracing::error!(
-                            "Failed to report invalid transaction from peer {:?}: {:?}",
-                            peer_id,
-                            e
-                        )
-                        });
+                    report_peer(
+                        p2p.clone(),
+                        peer_id.clone(),
+                        PeerReportReason::InvalidTransactions,
+                    )
+                    .await;
                 }
-                Ok(block)
+                blocks.push(block);
             }
+
+            Ok(blocks)
         }
     }
-
-    let r = SourcePeer {
-        peer_id,
-        data: vec![],
-    };
-    Ok(r)
 }
 
 #[tracing::instrument(

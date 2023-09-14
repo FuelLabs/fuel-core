@@ -28,6 +28,7 @@ use fuel_core_types::{
         },
         PeerId,
         SourcePeer,
+        TransactionData,
     },
 };
 use std::ops::Range;
@@ -102,7 +103,7 @@ impl PeerToPeerPort for P2PAdapter {
     async fn get_transactions_2(
         &self,
         block_ids: SourcePeer<Vec<BlockId>>,
-    ) -> anyhow::Result<Option<Vec<Transaction>>> {
+    ) -> anyhow::Result<Option<Vec<TransactionData>>> {
         let SourcePeer {
             peer_id,
             data: blocks,

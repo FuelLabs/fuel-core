@@ -15,6 +15,7 @@ use fuel_core_types::{
     services::p2p::{
         PeerId,
         SourcePeer,
+        TransactionData,
     },
 };
 use std::ops::Range;
@@ -68,7 +69,7 @@ pub trait PeerToPeerPort {
     async fn get_transactions_2(
         &self,
         block_ids: SourcePeer<Vec<BlockId>>,
-    ) -> anyhow::Result<Option<Vec<Transaction>>>;
+    ) -> anyhow::Result<Option<Vec<TransactionData>>>;
 
     /// Report a peer for some reason to modify their reputation.
     async fn report_peer(

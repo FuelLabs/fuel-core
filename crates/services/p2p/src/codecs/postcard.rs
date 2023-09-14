@@ -246,6 +246,15 @@ impl RequestResponseConverter for PostcardCodec {
 
                 Ok(NetworkResponse::Transactions(response))
             }
+            OutboundResponse::Transactions2(transactions) => {
+                let response = if let Some(transactions) = transactions {
+                    Some(self.serialize(transactions.as_ref())?)
+                } else {
+                    None
+                };
+
+                Ok(NetworkResponse::Transactions(response))
+            }
             OutboundResponse::SealedHeaders(maybe_headers) => {
                 let response = maybe_headers
                     .as_ref()

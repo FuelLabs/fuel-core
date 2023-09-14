@@ -566,7 +566,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 }
             }
             FuelBehaviourEvent::RequestResponse(req_res_event) => match req_res_event {
-                RequestResponseEvent::Message { peer, message } => match message {
+                RequestResponseEvent::Message { message, .. } => match message {
                     RequestResponseMessage::Request {
                         request,
                         channel,
@@ -613,7 +613,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                                 Some(ResponseChannelItem::SealedHeaders(channel)),
                                 Ok(ResponseMessage::SealedHeaders(headers)),
                             ) => {
-                                if channel.send((peer, headers)).is_err() {
+                                if channel.send(headers).is_err() {
                                     debug!(
                                         "Failed to send through the channel for {:?}",
                                         request_id

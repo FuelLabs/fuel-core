@@ -50,7 +50,7 @@ use fuel_core_types::{
         GossipsubMessageAcceptance,
         GossipsubMessageInfo,
         PeerId as FuelPeerId,
-        PeerId,
+        TransactionData,
         TransactionGossipData,
     },
 };
@@ -97,7 +97,7 @@ enum TaskRequest {
     GetTransactions2 {
         block_ids: Vec<BlockId>,
         from_peer: PeerId,
-        channel: oneshot::Sender<Option<Vec<Transaction>>>,
+        channel: oneshot::Sender<Option<Vec<TransactionData>>>,
     },
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
@@ -250,7 +250,7 @@ where
                     }
                     Some(TaskRequest::GetTransactions2 { block_ids, from_peer, channel }) => {
                         let request_msg = RequestMessage::Transactions2(block_ids);
-                        let channel_item = ResponseChannelItem::Transactions(channel);
+                        let channel_item = ResponseChannelItem::Transactions2(channel);
                         let _ = self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item);
                     }
                     Some(TaskRequest::RespondWithGossipsubMessageReport((message, acceptance))) => {
@@ -329,7 +329,7 @@ where
                                     }
                                 }
                             }
-                            RequestMessage::Transactions2(block_ids) => {
+                            RequestMessage::Transactions2(_block_ids) => {
                                 // match self.db.get_transactions(&block_id) {
                                 //     Ok(maybe_transactions) => {
                                 //         let response = maybe_transactions.map(Arc::new);
@@ -502,7 +502,7 @@ impl SharedState {
         &self,
         peer_id: Vec<u8>,
         block_ids: Vec<BlockId>,
-    ) -> anyhow::Result<Option<Vec<Transaction>>> {
+    ) -> anyhow::Result<Option<Vec<TransactionData>>> {
         let (sender, receiver) = oneshot::channel();
         let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
 

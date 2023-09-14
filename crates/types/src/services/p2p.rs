@@ -1,6 +1,7 @@
 //! Contains types related to P2P data
 
 use crate::{
+    blockchain::primitives::BlockId,
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
 };
@@ -9,6 +10,14 @@ use std::fmt::Debug;
 /// Contains types and logic for Peer Reputation
 pub mod peer_reputation;
 
+/// Maps BlockId to its transactions
+#[derive(Debug)]
+pub struct TransactionData {
+    /// Block id
+    pub block_id: BlockId,
+    /// transactions
+    pub transactions: Vec<Transaction>,
+}
 /// Lightweight representation of gossipped data that only includes IDs
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -68,6 +77,14 @@ impl<T> SourcePeer<T> {
         let peer_id = self.peer_id;
         let data = f(self.data);
         SourcePeer::<U> { peer_id, data }
+    }
+
+    /// Asref
+    pub fn as_ref(&self) -> SourcePeer<&T> {
+        SourcePeer {
+            peer_id: self.peer_id.clone(),
+            data: &self.data,
+        }
     }
 }
 
