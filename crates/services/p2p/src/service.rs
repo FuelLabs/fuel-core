@@ -12,6 +12,7 @@ use crate::{
         FuelP2PEvent,
         FuelP2PService,
     },
+    peer_manager::PeerInfo,
     ports::{
         BlockHeightImporter,
         P2pDb,
@@ -53,11 +54,15 @@ use fuel_core_types::{
         TransactionGossipData,
     },
 };
-use futures::StreamExt;
+use futures::{
+    future::BoxFuture,
+    StreamExt,
+};
 use libp2p::{
     gossipsub::MessageAcceptance,
     PeerId,
 };
+use libp2p_request_response::RequestId;
 use std::{
     fmt::Debug,
     ops::Range,
@@ -76,7 +81,7 @@ use tokio::{
 };
 use tracing::warn;
 
-pub type Service<D> = ServiceRunner<Task<D>>;
+pub type Service<D> = ServiceRunner<Task<FuelP2PService<PostcardCodec>, D>>;
 
 enum TaskRequest {
     // Broadcast requests to p2p network
@@ -124,10 +129,118 @@ impl PeerReport for HeartBeatPeerReportReason {
     }
 }
 
+pub trait TaskP2PService {
+    fn get_peer_ids(&self) -> Vec<PeerId>;
+    fn get_peer_all_peer_info(&self) -> Vec<(&PeerId, &PeerInfo)>;
+    fn get_peer_id_with_height(&self, height: &BlockHeight) -> Option<PeerId>;
+
+    fn next_event<'a>(&'a mut self) -> BoxFuture<'a, Option<FuelP2PEvent>>;
+
+    fn publish_message(
+        &mut self,
+        message: GossipsubBroadcastRequest,
+    ) -> anyhow::Result<()>;
+    fn send_request_msg(
+        &mut self,
+        peer_id: Option<PeerId>,
+        request_msg: RequestMessage,
+        channel_item: ResponseChannelItem,
+    ) -> anyhow::Result<()>;
+
+    fn send_response_msg(
+        &mut self,
+        request_id: RequestId,
+        message: OutboundResponse,
+    ) -> anyhow::Result<()>;
+    fn report_message(
+        &mut self,
+        message: GossipsubMessageInfo,
+        acceptance: GossipsubMessageAcceptance,
+    ) -> anyhow::Result<()>;
+
+    fn report_peer(
+        &mut self,
+        peer_id: PeerId,
+        score: AppScore,
+        reporting_service: &'static str,
+    ) -> anyhow::Result<()>;
+
+    fn update_block_height(&mut self, height: BlockHeight) -> anyhow::Result<()>;
+}
+
+impl TaskP2PService for FuelP2PService<PostcardCodec> {
+    fn get_peer_ids(&self) -> Vec<PeerId> {
+        self.get_peers_ids_iter().copied().collect()
+    }
+
+    fn get_peer_all_peer_info(&self) -> Vec<(&PeerId, &PeerInfo)> {
+        self.peer_manager().get_all_peers().collect()
+    }
+
+    fn get_peer_id_with_height(&self, height: &BlockHeight) -> Option<PeerId> {
+        self.peer_manager().get_peer_id_with_height(height)
+    }
+
+    fn next_event<'a>(&'a mut self) -> BoxFuture<'a, Option<FuelP2PEvent>> {
+        Box::pin(self.next_event())
+    }
+
+    fn publish_message(
+        &mut self,
+        message: GossipsubBroadcastRequest,
+    ) -> anyhow::Result<()> {
+        self.publish_message(message)?;
+        Ok(())
+    }
+
+    fn send_request_msg(
+        &mut self,
+        peer_id: Option<PeerId>,
+        request_msg: RequestMessage,
+        channel_item: ResponseChannelItem,
+    ) -> anyhow::Result<()> {
+        self.send_request_msg(peer_id, request_msg, channel_item)?;
+        Ok(())
+    }
+
+    fn send_response_msg(
+        &mut self,
+        request_id: RequestId,
+        message: OutboundResponse,
+    ) -> anyhow::Result<()> {
+        self.send_response_msg(request_id, message)?;
+        Ok(())
+    }
+
+    fn report_message(
+        &mut self,
+        message: GossipsubMessageInfo,
+        acceptance: GossipsubMessageAcceptance,
+    ) -> anyhow::Result<()> {
+        report_message(self, message, acceptance);
+        Ok(())
+    }
+
+    fn report_peer(
+        &mut self,
+        peer_id: PeerId,
+        score: AppScore,
+        reporting_service: &'static str,
+    ) -> anyhow::Result<()> {
+        self.report_peer(peer_id, score, reporting_service);
+        Ok(())
+    }
+
+    fn update_block_height(&mut self, height: BlockHeight) -> anyhow::Result<()> {
+        self.update_block_height(height);
+        Ok(())
+    }
+}
+
 /// Orchestrates various p2p-related events between the inner `P2pService`
 /// and the top level `NetworkService`.
-pub struct Task<D> {
-    p2p_service: FuelP2PService<PostcardCodec>,
+pub struct Task<P, D> {
+    p2p_service: P,
     db: Arc<D>,
     next_block_height: BoxStream<BlockHeight>,
     /// Receive internal Task Requests
@@ -141,7 +254,7 @@ pub struct Task<D> {
     next_check_time: Instant,
 }
 
-impl<D> Task<D> {
+impl<D> Task<FuelP2PService<PostcardCodec>, D> {
     pub fn new<B: BlockHeightImporter>(
         config: Config,
         db: Arc<D>,
@@ -185,9 +298,10 @@ impl<D> Task<D> {
             next_check_time,
         }
     }
-
+}
+impl<P: TaskP2PService, D> Task<P, D> {
     fn peer_heartbeat_reputation_checks(&self) -> anyhow::Result<()> {
-        for (peer_id, peer_info) in self.p2p_service.peer_manager().get_all_peers() {
+        for (peer_id, peer_info) in self.p2p_service.get_peer_all_peer_info() {
             if peer_info.heartbeat_data.duration_since_last_heartbeat()
                 > self.heartbeat_max_time_since_last
             {
@@ -214,14 +328,14 @@ fn convert_peer_id(peer_id: &PeerId) -> anyhow::Result<FuelPeerId> {
 }
 
 #[async_trait::async_trait]
-impl<D> RunnableService for Task<D>
+impl<D> RunnableService for Task<FuelP2PService<PostcardCodec>, D>
 where
     Self: RunnableTask,
 {
     const NAME: &'static str = "P2P";
 
     type SharedData = SharedState;
-    type Task = Task<D>;
+    type Task = Task<FuelP2PService<PostcardCodec>, D>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -240,8 +354,9 @@ where
 
 // TODO: Add tests https://github.com/FuelLabs/fuel-core/issues/1275
 #[async_trait::async_trait]
-impl<D> RunnableTask for Task<D>
+impl<P, D> RunnableTask for Task<P, D>
 where
+    P: TaskP2PService + Send + 'static,
     D: P2pDb + 'static,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
@@ -279,13 +394,13 @@ where
                         }
                     }
                     Some(TaskRequest::GetPeerIds(channel)) => {
-                        let peer_ids = self.p2p_service.get_peers_ids().copied().collect();
+                        let peer_ids = self.p2p_service.get_peer_ids();
                         let _ = channel.send(peer_ids);
                     }
                     Some(TaskRequest::GetBlock { height, channel }) => {
                         let request_msg = RequestMessage::Block(height);
                         let channel_item = ResponseChannelItem::Block(channel);
-                        let peer = self.p2p_service.peer_manager().get_peer_id_with_height(&height);
+                        let peer = self.p2p_service.get_peer_id_with_height(&height);
                         let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
                     }
                     Some(TaskRequest::GetSealedHeaders { block_height_range, channel: response}) => {
@@ -295,7 +410,7 @@ where
                         // Note: this range has already been check for
                         // validity in `SharedState::get_sealed_block_headers`.
                         let block_height = BlockHeight::from(block_height_range.end - 1);
-                        let peer = self.p2p_service.peer_manager()
+                        let peer = self.p2p_service
                              .get_peer_id_with_height(&block_height);
                         let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
                     }
@@ -305,10 +420,11 @@ where
                         let _ = self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item);
                     }
                     Some(TaskRequest::RespondWithGossipsubMessageReport((message, acceptance))) => {
-                        report_message(&mut self.p2p_service, message, acceptance);
+                        // report_message(&mut self.p2p_service, message, acceptance);
+                        self.p2p_service.report_message(message, acceptance)?;
                     }
                     Some(TaskRequest::RespondWithPeerReport { peer_id, score, reporting_service }) => {
-                        self.p2p_service.report_peer(peer_id, score, reporting_service)
+                        let _ = self.p2p_service.report_peer(peer_id, score, reporting_service);
                     }
                     None => {
                         unreachable!("The `Task` is holder of the `Sender`, so it should not be possible");
