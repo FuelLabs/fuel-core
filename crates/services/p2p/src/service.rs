@@ -81,7 +81,7 @@ use tokio::{
 };
 use tracing::warn;
 
-pub type Service<D> = ServiceRunner<Task<FuelP2PService<PostcardCodec>, D>>;
+pub type Service<D> = ServiceRunner<Task<FuelP2PService<PostcardCodec>, D, SharedState>>;
 
 enum TaskRequest {
     // Broadcast requests to p2p network
@@ -129,7 +129,7 @@ impl PeerReport for HeartBeatPeerReportReason {
     }
 }
 
-pub trait TaskP2PService {
+pub trait TaskP2PService: Send {
     fn get_peer_ids(&self) -> Vec<PeerId>;
     fn get_peer_all_peer_info(&self) -> Vec<(&PeerId, &PeerInfo)>;
     fn get_peer_id_with_height(&self, height: &BlockHeight) -> Option<PeerId>;
@@ -237,15 +237,55 @@ impl TaskP2PService for FuelP2PService<PostcardCodec> {
     }
 }
 
+pub trait Broadcast: Send {
+    fn report_peer<T: PeerReport>(
+        &self,
+        peer_id: FuelPeerId,
+        report: T,
+        reporting_service: &'static str,
+    ) -> anyhow::Result<()>;
+
+    fn block_height_broadcast(
+        &self,
+        block_height_data: BlockHeightHeartbeatData,
+    ) -> anyhow::Result<()>;
+
+    fn tx_broadcast(&self, transaction: TransactionGossipData) -> anyhow::Result<()>;
+}
+
+impl Broadcast for SharedState {
+    fn report_peer<T: PeerReport>(
+        &self,
+        peer_id: FuelPeerId,
+        report: T,
+        reporting_service: &'static str,
+    ) -> anyhow::Result<()> {
+        self.report_peer(peer_id, report, reporting_service)
+    }
+
+    fn block_height_broadcast(
+        &self,
+        block_height_data: BlockHeightHeartbeatData,
+    ) -> anyhow::Result<()> {
+        self.block_height_broadcast.send(block_height_data)?;
+        Ok(())
+    }
+
+    fn tx_broadcast(&self, transaction: TransactionGossipData) -> anyhow::Result<()> {
+        self.tx_broadcast.send(transaction)?;
+        Ok(())
+    }
+}
+
 /// Orchestrates various p2p-related events between the inner `P2pService`
 /// and the top level `NetworkService`.
-pub struct Task<P, D> {
+pub struct Task<P, D, B> {
     p2p_service: P,
     db: Arc<D>,
     next_block_height: BoxStream<BlockHeight>,
     /// Receive internal Task Requests
     request_receiver: mpsc::Receiver<TaskRequest>,
-    shared: SharedState,
+    broadcast: B,
     max_headers_per_request: u32,
     // milliseconds wait time between peer heartbeat reputation checks
     heartbeat_check_interval: Duration,
@@ -254,7 +294,7 @@ pub struct Task<P, D> {
     next_check_time: Instant,
 }
 
-impl<D> Task<FuelP2PService<PostcardCodec>, D> {
+impl<D> Task<FuelP2PService<PostcardCodec>, D, SharedState> {
     pub fn new<B: BlockHeightImporter>(
         config: Config,
         db: Arc<D>,
@@ -285,7 +325,7 @@ impl<D> Task<FuelP2PService<PostcardCodec>, D> {
             db,
             request_receiver,
             next_block_height,
-            shared: SharedState {
+            broadcast: SharedState {
                 request_sender,
                 tx_broadcast,
                 reserved_peers_broadcast,
@@ -299,7 +339,7 @@ impl<D> Task<FuelP2PService<PostcardCodec>, D> {
         }
     }
 }
-impl<P: TaskP2PService, D> Task<P, D> {
+impl<P: TaskP2PService, D, B: Broadcast> Task<P, D, B> {
     fn peer_heartbeat_reputation_checks(&self) -> anyhow::Result<()> {
         for (peer_id, peer_info) in self.p2p_service.get_peer_all_peer_info() {
             if peer_info.heartbeat_data.duration_since_last_heartbeat()
@@ -308,14 +348,14 @@ impl<P: TaskP2PService, D> Task<P, D> {
                 let report = HeartBeatPeerReportReason::OldHeartBeat;
                 let service = "p2p";
                 let peer_id = convert_peer_id(peer_id)?;
-                self.shared.report_peer(peer_id, report, service)?;
+                self.broadcast.report_peer(peer_id, report, service)?;
             } else if peer_info.heartbeat_data.average_time_between_heartbeats()
                 > self.heartbeat_max_avg_interval
             {
                 let report = HeartBeatPeerReportReason::LowHeartBeatFrequency;
                 let service = "p2p";
                 let peer_id = convert_peer_id(peer_id)?;
-                self.shared.report_peer(peer_id, report, service)?;
+                self.broadcast.report_peer(peer_id, report, service)?;
             }
         }
         Ok(())
@@ -328,18 +368,18 @@ fn convert_peer_id(peer_id: &PeerId) -> anyhow::Result<FuelPeerId> {
 }
 
 #[async_trait::async_trait]
-impl<D> RunnableService for Task<FuelP2PService<PostcardCodec>, D>
+impl<D> RunnableService for Task<FuelP2PService<PostcardCodec>, D, SharedState>
 where
     Self: RunnableTask,
 {
     const NAME: &'static str = "P2P";
 
     type SharedData = SharedState;
-    type Task = Task<FuelP2PService<PostcardCodec>, D>;
+    type Task = Task<FuelP2PService<PostcardCodec>, D, SharedState>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
-        self.shared.clone()
+        self.broadcast.clone()
     }
 
     async fn into_task(
@@ -354,10 +394,11 @@ where
 
 // TODO: Add tests https://github.com/FuelLabs/fuel-core/issues/1275
 #[async_trait::async_trait]
-impl<P, D> RunnableTask for Task<P, D>
+impl<P, D, B> RunnableTask for Task<P, D, B>
 where
-    P: TaskP2PService + Send + 'static,
+    P: TaskP2PService + 'static,
     D: P2pDb + 'static,
+    B: Broadcast + 'static,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
@@ -441,7 +482,7 @@ where
                             block_height,
                         };
 
-                        let _ = self.shared.block_height_broadcast.send(block_height_data);
+                        let _ = self.broadcast.block_height_broadcast(block_height_data);
                     }
                     Some(FuelP2PEvent::GossipsubMessage { message, message_id, peer_id,.. }) => {
                         let message_id = message_id.0;
@@ -449,7 +490,7 @@ where
                         match message {
                             GossipsubMessage::NewTx(transaction) => {
                                 let next_transaction = GossipData::new(transaction, peer_id, message_id);
-                                let _ = self.shared.tx_broadcast.send(next_transaction);
+                                let _ = self.broadcast.tx_broadcast(next_transaction);
                             },
                             GossipsubMessage::NewBlock(block) => {
                                 // todo: add logic to gossip newly received blocks
@@ -763,7 +804,10 @@ pub mod tests {
 
     use super::*;
 
-    use fuel_core_services::Service;
+    use fuel_core_services::{
+        Service,
+        State,
+    };
     use fuel_core_storage::Result as StorageResult;
     use fuel_core_types::fuel_types::BlockHeight;
 
@@ -818,5 +862,103 @@ pub mod tests {
         assert!(service.start_and_await().await.unwrap().started());
         // Node with p2p service stopped
         assert!(service.stop_and_await().await.unwrap().stopped());
+    }
+
+    struct FakeP2PService;
+
+    impl TaskP2PService for FakeP2PService {
+        fn get_peer_ids(&self) -> Vec<PeerId> {
+            todo!()
+        }
+
+        fn get_peer_all_peer_info(&self) -> Vec<(&PeerId, &PeerInfo)> {
+            todo!()
+        }
+
+        fn get_peer_id_with_height(&self, height: &BlockHeight) -> Option<PeerId> {
+            todo!()
+        }
+
+        fn next_event<'a>(&'a mut self) -> BoxFuture<'a, Option<FuelP2PEvent>> {
+            todo!()
+        }
+
+        fn publish_message(
+            &mut self,
+            message: GossipsubBroadcastRequest,
+        ) -> anyhow::Result<()> {
+            todo!()
+        }
+
+        fn send_request_msg(
+            &mut self,
+            peer_id: Option<PeerId>,
+            request_msg: RequestMessage,
+            channel_item: ResponseChannelItem,
+        ) -> anyhow::Result<()> {
+            todo!()
+        }
+
+        fn send_response_msg(
+            &mut self,
+            request_id: RequestId,
+            message: OutboundResponse,
+        ) -> anyhow::Result<()> {
+            todo!()
+        }
+
+        fn report_message(
+            &mut self,
+            message: GossipsubMessageInfo,
+            acceptance: GossipsubMessageAcceptance,
+        ) -> anyhow::Result<()> {
+            todo!()
+        }
+
+        fn report_peer(
+            &mut self,
+            peer_id: PeerId,
+            score: AppScore,
+            reporting_service: &str,
+        ) -> anyhow::Result<()> {
+            todo!()
+        }
+
+        fn update_block_height(&mut self, height: BlockHeight) -> anyhow::Result<()> {
+            todo!()
+        }
+    }
+
+    #[tokio::test]
+    async fn peer_heartbeat_reputation_checks__sends_reports() {
+        // given
+        let p2p_service = FakeP2PService;
+        let (request_sender, request_receiver) = mpsc::channel(100);
+        let broadcast = SharedState {
+            request_sender,
+            tx_broadcast: broadcast::channel(100).0,
+            reserved_peers_broadcast: broadcast::channel(100).0,
+            block_height_broadcast: broadcast::channel(100).0,
+        };
+
+        let mut task = Task {
+            p2p_service,
+            db: Arc::new(()),
+            next_block_height: Pin {},
+            request_receiver,
+            broadcast,
+            max_headers_per_request: 0,
+            heartbeat_check_interval: Duration::from_secs(0),
+            heartbeat_max_avg_interval: Default::default(),
+            heartbeat_max_time_since_last: Default::default(),
+            next_check_time: Instant::now(),
+        };
+        let (watch_sender, watch_receiver) = watch::channel(State::Started);
+        let mut watcher = StateWatcher::from(watch_receiver);
+        // when
+        task.run(&mut watcher).await.unwrap();
+
+        // then
+        todo!()
     }
 }
