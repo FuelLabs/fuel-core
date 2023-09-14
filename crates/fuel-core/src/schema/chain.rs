@@ -10,6 +10,7 @@ use crate::{
     schema::{
         block::Block,
         scalars::{
+            AssetId,
             U32,
             U64,
         },
@@ -92,6 +93,12 @@ impl ConsensusParameters {
         Ok(FeeParameters(
             config.consensus_parameters.fee_params().to_owned(),
         ))
+    }
+
+    async fn base_asset_id(&self, ctx: &Context<'_>) -> async_graphql::Result<AssetId> {
+        let config = ctx.data_unchecked::<GraphQLConfig>();
+
+        Ok(AssetId(*config.consensus_parameters.base_asset_id()))
     }
 
     async fn chain_id(&self) -> U64 {

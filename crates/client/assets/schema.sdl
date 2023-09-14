@@ -180,6 +180,7 @@ type ConsensusParameters {
 	scriptParams: ScriptParameters!
 	contractParams: ContractParameters!
 	feeParams: FeeParameters!
+	baseAssetId: AssetId!
 	chainId: U64!
 	gasCosts: GasCosts!
 }
