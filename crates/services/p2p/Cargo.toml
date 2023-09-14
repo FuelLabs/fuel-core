@@ -58,9 +58,9 @@ rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_with = "1.11"
 sha2 = "0.10"
+thiserror = "1.0.47"
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
-thiserror = "1.0.47"
 
 [dev-dependencies]
 ctor = "0.1"

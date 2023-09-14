@@ -135,7 +135,7 @@ pub trait TaskP2PService: Send {
     fn get_all_peer_info(&self) -> Vec<(&PeerId, &PeerInfo)>;
     fn get_peer_id_with_height(&self, height: &BlockHeight) -> Option<PeerId>;
 
-    fn next_event<'a>(&'a mut self) -> BoxFuture<'a, Option<FuelP2PEvent>>;
+    fn next_event(&mut self) -> BoxFuture<'_, Option<FuelP2PEvent>>;
 
     fn publish_message(
         &mut self,
@@ -182,7 +182,7 @@ impl TaskP2PService for FuelP2PService<PostcardCodec> {
         self.peer_manager().get_peer_id_with_height(height)
     }
 
-    fn next_event<'a>(&'a mut self) -> BoxFuture<'a, Option<FuelP2PEvent>> {
+    fn next_event(&mut self) -> BoxFuture<'_, Option<FuelP2PEvent>> {
         Box::pin(self.next_event())
     }
 
@@ -366,7 +366,7 @@ impl<P: TaskP2PService, D, B: Broadcast> Task<P, D, B> {
 }
 
 fn convert_peer_id(peer_id: &PeerId) -> anyhow::Result<FuelPeerId> {
-    let inner = Vec::try_from(peer_id.clone())?;
+    let inner = Vec::try_from(*peer_id)?;
     Ok(FuelPeerId::from(inner))
 }
 
@@ -572,7 +572,7 @@ where
                         tracing::error!("Failed to perform peer heartbeat reputation checks: {:?}", e);
                     }
                 }
-                self.next_check_time = self.next_check_time + self.heartbeat_check_interval;
+                self.next_check_time += self.heartbeat_check_interval;
             },
             latest_block_height = self.next_block_height.next() => {
                 if let Some(latest_block_height) = latest_block_height {
@@ -892,7 +892,7 @@ pub mod tests {
             todo!()
         }
 
-        fn next_event<'a>(&'a mut self) -> BoxFuture<'a, Option<FuelP2PEvent>> {
+        fn next_event(&mut self) -> BoxFuture<'_, Option<FuelP2PEvent>> {
             std::future::pending().boxed()
         }
 
