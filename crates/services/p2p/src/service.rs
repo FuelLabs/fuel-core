@@ -810,7 +810,7 @@ pub mod tests {
 
     use super::*;
 
-    use crate::peer_manager::HeartbeatData;
+    use crate::peer_manager::heartbeat_data::HeartbeatData;
     use fuel_core_services::{
         Service,
         State,
@@ -818,6 +818,7 @@ pub mod tests {
     use fuel_core_storage::Result as StorageResult;
     use fuel_core_types::fuel_types::BlockHeight;
     use futures::FutureExt;
+    use std::collections::VecDeque;
 
     #[derive(Clone, Debug)]
     struct FakeDb;
@@ -1013,14 +1014,15 @@ pub mod tests {
         // given
         let peer_id = PeerId::random();
         // more than limit
-        let moving_average = Duration::from_secs(30);
+        let last_duration = Duration::from_secs(30);
+        let mut durations = VecDeque::new();
+        durations.push_front(last_duration);
 
         let heartbeat_data = HeartbeatData {
             block_height: None,
             last_heartbeat: Instant::now(),
             window: 0,
-            count: 0,
-            moving_average,
+            durations,
         };
         let peer_info = PeerInfo {
             peer_addresses: Default::default(),
@@ -1079,15 +1081,16 @@ pub mod tests {
         // given
         let peer_id = PeerId::random();
         // under the limit
-        let moving_average = Duration::from_secs(5);
+        let last_duration = Duration::from_secs(5);
         let last_heartbeat = Instant::now() - Duration::from_secs(50);
+        let mut durations = VecDeque::new();
+        durations.push_front(last_duration);
 
         let heartbeat_data = HeartbeatData {
             block_height: None,
             last_heartbeat,
             window: 0,
-            count: 0,
-            moving_average,
+            durations,
         };
         let peer_info = PeerInfo {
             peer_addresses: Default::default(),

@@ -71,7 +71,7 @@ fuel-core-types = { path = "../../types", features = [
     "test-helpers"
 ] }
 rand = { workspace = true }
-tokio = { workspace = true, features = ["full"] }
+tokio = { workspace = true, features = ["full", "test-util"] }
 tracing-attributes = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 

@@ -22,15 +22,18 @@ use std::{
         Arc,
         RwLock,
     },
-    time::Duration,
 };
-use tokio::time::Instant;
 use tracing::{
     debug,
     info,
 };
 
-use crate::gossipsub_config::GRAYLIST_THRESHOLD;
+use crate::{
+    gossipsub_config::GRAYLIST_THRESHOLD,
+    peer_manager::heartbeat_data::HeartbeatData,
+};
+
+pub mod heartbeat_data;
 
 /// At this point we better just ban the peer
 const MIN_GOSSIPSUB_SCORE_BEFORE_BAN: AppScore = GRAYLIST_THRESHOLD;
@@ -310,50 +313,6 @@ impl PeerManager {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct ConnectionState {
     peers_allowed: bool,
-}
-
-#[derive(Debug, Clone)]
-pub struct HeartbeatData {
-    pub block_height: Option<BlockHeight>,
-    pub last_heartbeat: Instant,
-    // Size of moving average window
-    pub window: u32,
-    // How many heartbeats into the first window have been received
-    pub count: u32,
-    // Moving average of duration between heartbeats
-    pub moving_average: Duration,
-}
-
-impl HeartbeatData {
-    pub fn new(window: u32) -> Self {
-        Self {
-            block_height: None,
-            last_heartbeat: Instant::now(),
-            window,
-            count: 0,
-            moving_average: Duration::from_secs(0),
-        }
-    }
-
-    pub fn duration_since_last_heartbeat(&self) -> Duration {
-        self.last_heartbeat.elapsed()
-    }
-
-    pub fn average_time_between_heartbeats(&self) -> Duration {
-        self.moving_average
-    }
-
-    pub fn update(&mut self, block_height: BlockHeight) {
-        self.block_height = Some(block_height);
-        let old_hearbeat = self.last_heartbeat;
-        self.last_heartbeat = Instant::now();
-        let new_duration = self.last_heartbeat - old_hearbeat;
-        if self.count < self.window {
-            self.count += 1;
-        }
-        self.moving_average =
-            (self.moving_average * (self.count - 1) + new_duration) / self.count;
-    }
 }
 
 impl ConnectionState {
