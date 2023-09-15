@@ -333,8 +333,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=ghcr.io/fuellabs/fuel-core-debug-build-cache:latest
+          cache-to: type=registry,ref=ghcr.io/fuellabs/fuel-core-debug-build-cache:latest,mode=max
 
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
         if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
@@ -443,8 +443,8 @@ jobs:
           file: ci/Dockerfile.${{ matrix.job.target }}-clang
           tags: ${{ matrix.job.cross_image }}:latest
           load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=ghcr.io/fuellabs/${{ matrix.job.cross_image }}-build-cache:latest
+          cache-to: type=registry,ref=ghcr.io/fuellabs/${{ matrix.job.cross_image }}-build-cache:latest,mode=max
 
       - name: Install packages (macOS)
         if: matrix.job.os == 'macos-latest'
