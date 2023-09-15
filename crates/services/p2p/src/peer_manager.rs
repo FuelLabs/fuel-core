@@ -116,7 +116,7 @@ impl PeerManager {
             debug!(target: "fuel-p2p", "Previous heartbeat happened {:?} milliseconds ago", time_elapsed.as_millis());
         }
 
-        let peers = self.get_relevant_peers_mut(peer_id);
+        let peers = self.get_assigned_peer_table_mut(peer_id);
         update_heartbeat(peers, peer_id, block_height);
     }
 
@@ -130,7 +130,7 @@ impl PeerManager {
         if initial_connection {
             self.handle_initial_connection(peer_id, addresses)
         } else {
-            let peers = self.get_relevant_peers_mut(peer_id);
+            let peers = self.get_assigned_peer_table_mut(peer_id);
             insert_peer_addresses(peers, peer_id, addresses);
             false
         }
@@ -142,7 +142,7 @@ impl PeerManager {
         addresses: Vec<Multiaddr>,
         agent_version: String,
     ) {
-        let peers = self.get_relevant_peers_mut(peer_id);
+        let peers = self.get_assigned_peer_table_mut(peer_id);
         insert_client_version(peers, peer_id, agent_version);
         insert_peer_addresses(peers, peer_id, addresses);
     }
@@ -283,7 +283,7 @@ impl PeerManager {
             self.send_reserved_peers_update();
         }
 
-        let peers = self.get_relevant_peers_mut(peer_id);
+        let peers = self.get_assigned_peer_table_mut(peer_id);
         insert_peer_addresses(peers, peer_id, addresses);
 
         false
