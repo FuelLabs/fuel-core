@@ -22,15 +22,18 @@ use std::{
         Arc,
         RwLock,
     },
-    time::Duration,
 };
-use tokio::time::Instant;
 use tracing::{
     debug,
     info,
 };
 
-use crate::gossipsub_config::GRAYLIST_THRESHOLD;
+use crate::{
+    gossipsub_config::GRAYLIST_THRESHOLD,
+    peer_manager::heartbeat_data::HeartbeatData,
+};
+
+pub mod heartbeat_data;
 
 /// At this point we better just ban the peer
 const MIN_GOSSIPSUB_SCORE_BEFORE_BAN: AppScore = GRAYLIST_THRESHOLD;
@@ -44,21 +47,15 @@ pub struct PeerInfo {
     pub score: AppScore,
 }
 
-impl Default for PeerInfo {
-    fn default() -> Self {
+impl PeerInfo {
+    pub fn new(heartbeat_avg_window: u32) -> Self {
         Self {
+            peer_addresses: HashSet::new(),
+            client_version: None,
+            heartbeat_data: HeartbeatData::new(heartbeat_avg_window),
             score: DEFAULT_APP_SCORE,
-            client_version: Default::default(),
-            heartbeat_data: Default::default(),
-            peer_addresses: Default::default(),
         }
     }
-}
-
-enum PeerInfoInsert {
-    Addresses(Vec<Multiaddr>),
-    ClientVersion(String),
-    HeartbeatData(HeartbeatData),
 }
 
 /// Manages Peers and their events
@@ -117,14 +114,13 @@ impl PeerManager {
     ) {
         if let Some(time_elapsed) = self
             .get_peer_info(peer_id)
-            .and_then(|info| info.heartbeat_data.seconds_since_last_heartbeat())
+            .map(|info| info.heartbeat_data.duration_since_last_heartbeat())
         {
-            debug!(target: "fuel-p2p", "Previous heartbeat happened {:?} seconds ago", time_elapsed);
+            debug!(target: "fuel-p2p", "Previous heartbeat happened {:?} milliseconds ago", time_elapsed.as_millis());
         }
 
-        let heartbeat_data = HeartbeatData::new(block_height);
-
-        self.insert_peer_info(peer_id, PeerInfoInsert::HeartbeatData(heartbeat_data));
+        let peers = self.get_assigned_peer_table_mut(peer_id);
+        update_heartbeat(peers, peer_id, block_height);
     }
 
     /// Returns `true` signaling that the peer should be disconnected
@@ -137,7 +133,8 @@ impl PeerManager {
         if initial_connection {
             self.handle_initial_connection(peer_id, addresses)
         } else {
-            self.insert_peer_info(peer_id, PeerInfoInsert::Addresses(addresses));
+            let peers = self.get_assigned_peer_table_mut(peer_id);
+            insert_peer_addresses(peers, peer_id, addresses);
             false
         }
     }
@@ -148,8 +145,9 @@ impl PeerManager {
         addresses: Vec<Multiaddr>,
         agent_version: String,
     ) {
-        self.insert_peer_info(peer_id, PeerInfoInsert::ClientVersion(agent_version));
-        self.insert_peer_info(peer_id, PeerInfoInsert::Addresses(addresses));
+        let peers = self.get_assigned_peer_table_mut(peer_id);
+        insert_client_version(peers, peer_id, agent_version);
+        insert_peer_addresses(peers, peer_id, addresses);
     }
 
     pub fn batch_update_score_with_decay(&mut self) {
@@ -195,6 +193,12 @@ impl PeerManager {
             return self.reserved_connected_peers.get(peer_id)
         }
         self.non_reserved_connected_peers.get(peer_id)
+    }
+
+    pub fn get_all_peers(&self) -> impl Iterator<Item = (&PeerId, &PeerInfo)> {
+        self.non_reserved_connected_peers
+            .iter()
+            .chain(self.reserved_connected_peers.iter())
     }
 
     pub fn get_disconnected_reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
@@ -255,6 +259,8 @@ impl PeerManager {
         peer_id: &PeerId,
         addresses: Vec<Multiaddr>,
     ) -> bool {
+        const HEARTBEAT_AVG_WINDOW: u32 = 10;
+
         // if the connected Peer is not from the reserved peers
         if !self.reserved_peers.contains(peer_id) {
             let non_reserved_peers_connected = self.non_reserved_connected_peers.len();
@@ -272,15 +278,16 @@ impl PeerManager {
             }
 
             self.non_reserved_connected_peers
-                .insert(*peer_id, PeerInfo::default());
+                .insert(*peer_id, PeerInfo::new(HEARTBEAT_AVG_WINDOW));
         } else {
             self.reserved_connected_peers
-                .insert(*peer_id, PeerInfo::default());
+                .insert(*peer_id, PeerInfo::new(HEARTBEAT_AVG_WINDOW));
 
             self.send_reserved_peers_update();
         }
 
-        self.insert_peer_info(peer_id, PeerInfoInsert::Addresses(addresses));
+        let peers = self.get_assigned_peer_table_mut(peer_id);
+        insert_peer_addresses(peers, peer_id, addresses);
 
         false
     }
@@ -291,22 +298,14 @@ impl PeerManager {
             .send(self.reserved_connected_peers.len());
     }
 
-    fn insert_peer_info(&mut self, peer_id: &PeerId, data: PeerInfoInsert) {
-        let peers = if self.reserved_peers.contains(peer_id) {
+    fn get_assigned_peer_table_mut(
+        &mut self,
+        peer_id: &PeerId,
+    ) -> &mut HashMap<PeerId, PeerInfo> {
+        if self.reserved_peers.contains(peer_id) {
             &mut self.reserved_connected_peers
         } else {
             &mut self.non_reserved_connected_peers
-        };
-        match data {
-            PeerInfoInsert::Addresses(addresses) => {
-                insert_peer_addresses(peers, peer_id, addresses)
-            }
-            PeerInfoInsert::ClientVersion(client_version) => {
-                insert_client_version(peers, peer_id, client_version)
-            }
-            PeerInfoInsert::HeartbeatData(block_height) => {
-                insert_heartbeat_data(peers, peer_id, block_height)
-            }
         }
     }
 }
@@ -314,25 +313,6 @@ impl PeerManager {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct ConnectionState {
     peers_allowed: bool,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct HeartbeatData {
-    pub block_height: Option<BlockHeight>,
-    pub last_heartbeat: Option<Instant>,
-}
-
-impl HeartbeatData {
-    pub fn new(block_height: BlockHeight) -> Self {
-        Self {
-            block_height: Some(block_height),
-            last_heartbeat: Some(Instant::now()),
-        }
-    }
-
-    pub fn seconds_since_last_heartbeat(&self) -> Option<Duration> {
-        self.last_heartbeat.map(|time| time.elapsed())
-    }
 }
 
 impl ConnectionState {
@@ -369,13 +349,13 @@ fn insert_peer_addresses(
     }
 }
 
-fn insert_heartbeat_data(
+fn update_heartbeat(
     peers: &mut HashMap<PeerId, PeerInfo>,
     peer_id: &PeerId,
-    heartbeat_data: HeartbeatData,
+    block_height: BlockHeight,
 ) {
     if let Some(peer) = peers.get_mut(peer_id) {
-        peer.heartbeat_data = heartbeat_data;
+        peer.heartbeat_data.update(block_height);
     } else {
         log_missing_peer(peer_id);
     }

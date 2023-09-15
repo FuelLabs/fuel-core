@@ -220,6 +220,18 @@ spec:
             - "--max-transmit-size"
             - "{{ .Values.app.max_transmit_size }}"
           {{- end }}
+          {{- if .Values.app.heartbeat_check_interval }}
+            - "--heartbeat-check-interval"
+            - "{{ .Values.app.heartbeat_check_interval }}"
+          {{- end }}
+          {{- if .Values.app.heartbeat_max_avg_interval }}
+            - "--heartbeat-max-avg-interval"
+            - "{{ .Values.app.heartbeat_max_avg_interval }}"
+          {{- end }}
+          {{- if .Values.app.heartbeat_max_time_since_last  }}
+            - "--heartbeat-max-time-since-last"
+            - "{{ .Values.app.heartbeat_max_time_since_last }}"
+          {{- end }}
           {{- if .Values.app.sync_block_stream_size }}
             - "--sync-block-stream-size"
             - "{{ .Values.app.sync_block_stream_size }}"

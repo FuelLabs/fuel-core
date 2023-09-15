@@ -175,6 +175,18 @@ pub struct P2PArgs {
     /// Cannot be zero.
     #[clap(long = "heartbeat-max-failures", default_value = "5", env)]
     pub heartbeat_max_failures: NonZeroU32,
+
+    /// For peer reputations, the interval at which to check heartbeat health for all peers
+    #[clap(long = "heartbeat-check-interval", default_value = "5", env)]
+    pub heartbeat_check_interval: u64,
+
+    /// For peer reputations, the maximum average interval between heartbeats for a peer before penalty
+    #[clap(long = "heartbeat-max-avg-interval", default_value = "20", env)]
+    pub heartbeat_max_avg_interval: u64,
+
+    /// For peer reputations, the maximum time since last heartbeat before penalty
+    #[clap(long = "heartbeat-max-time-since-last", default_value = "40", env)]
+    pub heartbeat_max_time_since_last: u64,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -302,6 +314,13 @@ impl P2PArgs {
             heartbeat_config,
             set_request_timeout: Duration::from_secs(self.request_timeout),
             set_connection_keep_alive: Duration::from_secs(self.connection_keep_alive),
+            heartbeat_check_interval: Duration::from_secs(self.heartbeat_check_interval),
+            heartbeat_max_avg_interval: Duration::from_secs(
+                self.heartbeat_max_avg_interval,
+            ),
+            heartbeat_max_time_since_last: Duration::from_secs(
+                self.heartbeat_max_time_since_last,
+            ),
             info_interval: Some(Duration::from_secs(self.info_interval)),
             identify_interval: Some(Duration::from_secs(self.identify_interval)),
             metrics,
