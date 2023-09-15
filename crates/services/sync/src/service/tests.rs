@@ -8,10 +8,7 @@ use futures::{
 };
 
 use crate::{
-    import::test_helpers::{
-        empty_header,
-        peer_sourced_headers,
-    },
+    import::test_helpers::empty_header,
     ports::{
         MockBlockImporterPort,
         MockConsensusPort,
@@ -38,13 +35,15 @@ async fn test_new_service() {
         .into_boxed()
     });
     p2p.expect_get_sealed_block_headers().returning(|range| {
-        Ok(peer_sourced_headers(Some(
-            range
+        let headers = range.map(|range| {
+            let headers = range
                 .clone()
                 .map(BlockHeight::from)
                 .map(empty_header)
-                .collect(),
-        )))
+                .collect::<Vec<_>>();
+            Some(headers)
+        });
+        Ok(headers)
     });
     p2p.expect_get_transactions()
         .returning(|_| Ok(Some(vec![])));

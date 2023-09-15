@@ -1,7 +1,7 @@
 //! Contains types related to P2P data
 
 use crate::{
-    blockchain::primitives::BlockId,
+    // blockchain::primitives::BlockId,
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
 };
@@ -11,13 +11,15 @@ use std::fmt::Debug;
 pub mod peer_reputation;
 
 /// Maps BlockId to its transactions
-#[derive(Debug)]
-pub struct TransactionData {
-    /// Block id
-    pub block_id: BlockId,
-    /// transactions
-    pub transactions: Vec<Transaction>,
-}
+// #[derive(Debug, Clone)]
+// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+// pub struct TransactionData {
+//     /// Block id
+//     pub block_id: BlockId,
+//     /// transactions
+//     pub transactions: Vec<Transaction>,
+// }
+pub type TransactionData = Vec<Transaction>;
 /// Lightweight representation of gossipped data that only includes IDs
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

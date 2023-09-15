@@ -22,10 +22,7 @@ use fuel_core_types::{
     self,
     // blockchain::consensus::Sealed,
     fuel_types::BlockHeight,
-    services::p2p::{
-        PeerId,
-        TransactionData,
-    },
+    services::p2p::PeerId,
 };
 use fuel_core_types::{
     blockchain::{
@@ -550,6 +547,7 @@ where
     });
     let peer_id = block_ids.peer_id.clone();
     let maybe_txs = p2p
+        // flattened vec of all transactions Vec of all transactions
         .get_transactions_2(block_ids)
         .await
         .trace_err("Failed to get transactions")?
@@ -564,12 +562,11 @@ where
             let headers = headers.data;
             let iter = headers.into_iter().zip(transaction_data);
             let mut blocks = vec![];
-            for (block_header, td) in iter {
+            for (block_header, transactions) in iter {
                 let SealedBlockHeader {
                     consensus,
                     entity: header,
                 } = block_header;
-                let TransactionData { transactions, .. } = td;
                 let block = Block::try_from_executed(header, transactions)
                     .ok_or(anyhow!("Failed to create a new block: Transactions do not match the header."))
                     .map(|block| {

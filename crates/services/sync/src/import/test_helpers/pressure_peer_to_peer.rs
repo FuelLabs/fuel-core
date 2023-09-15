@@ -50,7 +50,8 @@ impl PeerToPeerPort for PressurePeerToPeer {
         _block_height: BlockHeight,
     ) -> anyhow::Result<Option<PeerId>> {
         let mut rng = StdRng::seed_from_u64(0xF00DF00D);
-        let peer_id = PeerId::from(rng.gen::<[u8; 32]>().to_vec());
+        let bytes = rng.gen::<[u8; 32]>().to_vec();
+        let peer_id = PeerId::from(bytes);
         Ok(Some(peer_id))
     }
 

@@ -14,6 +14,7 @@ use fuel_core_types::{
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
+    services::p2p::TransactionData,
 };
 use std::ops::Range;
 
@@ -48,9 +49,9 @@ impl P2pDb for Database {
 
     fn get_transactions_2(
         &self,
-        _block_ids: Vec<&BlockId>,
-    ) -> StorageResult<Option<Vec<Transaction>>> {
-        todo!()
+        block_ids: &Vec<BlockId>,
+    ) -> StorageResult<Option<Vec<TransactionData>>> {
+        self.get_transactions_on_blocks(block_ids)
     }
 }
 

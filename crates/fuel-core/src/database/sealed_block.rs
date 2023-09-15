@@ -25,6 +25,7 @@ use fuel_core_types::{
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
+    services::p2p::TransactionData,
 };
 use std::ops::Range;
 
@@ -134,5 +135,21 @@ impl Database {
         Ok(self
             .get_sealed_block_by_id(block_id)?
             .map(|Sealed { entity: block, .. }| block.into_inner().1))
+    }
+
+    pub fn get_transactions_on_blocks(
+        &self,
+        block_ids: &Vec<BlockId>,
+    ) -> StorageResult<Option<Vec<TransactionData>>> {
+        let transactions = block_ids
+            .iter()
+            .map(|block_id| {
+                let transactions = self
+                    .get_sealed_block_by_id(block_id)?
+                    .map(|Sealed { entity: block, .. }| block.into_inner().1);
+                Ok(transactions)
+            })
+            .collect::<StorageResult<_>>()?;
+        Ok(transactions)
     }
 }

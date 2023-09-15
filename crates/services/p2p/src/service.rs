@@ -329,20 +329,19 @@ where
                                     }
                                 }
                             }
-                            RequestMessage::Transactions2(_block_ids) => {
-                                // match self.db.get_transactions(&block_id) {
-                                //     Ok(maybe_transactions) => {
-                                //         let response = maybe_transactions.map(Arc::new);
-                                //         let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(response));
-                                //     },
-                                //     Err(e) => {
-                                //         tracing::error!("Failed to get transactions for block {:?}: {:?}", block_id, e);
-                                //         let response = None;
-                                //         let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(response));
-                                //         return Err(e.into())
-                                //     }
-                                // }
-                                todo!()
+                            RequestMessage::Transactions2(block_ids) => {
+                                match self.db.get_transactions_2(&block_ids) {
+                                    Ok(maybe_transactions) => {
+                                        let response = maybe_transactions.map(Arc::new);
+                                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions2(response));
+                                    },
+                                    Err(e) => {
+                                        tracing::error!("Failed to get transactions for blocks {:?}: {:?}", block_ids, e);
+                                        let response = None;
+                                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions2(response));
+                                        return Err(e.into())
+                                    }
+                                }
                             }
                             RequestMessage::SealedHeaders(range) => {
                                 let max_len = self.max_headers_per_request.try_into().expect("u32 should always fit into usize");
@@ -674,8 +673,15 @@ pub mod tests {
 
         fn get_transactions(
             &self,
-            _block_id: &fuel_core_types::blockchain::primitives::BlockId,
+            _block_id: &BlockId,
         ) -> StorageResult<Option<Vec<Transaction>>> {
+            unimplemented!()
+        }
+
+        fn get_transactions_2(
+            &self,
+            _block_ids: &Vec<BlockId>,
+        ) -> StorageResult<Option<Vec<TransactionData>>> {
             unimplemented!()
         }
     }

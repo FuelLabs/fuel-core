@@ -1595,7 +1595,7 @@ mod tests {
 
                                             let expected = arbitrary_headers_for_range(range.clone());
 
-                                            if let Ok((_, sealed_headers)) = response_message {
+                                            if let Ok(sealed_headers) = response_message {
                                                 let check = expected.iter().zip(sealed_headers.unwrap().iter()).all(|(a, b)| eq_except_metadata(a, b));
                                                 let _ = tx_test_end.send(check).await;
                                             } else {
@@ -1607,6 +1607,22 @@ mod tests {
                                     RequestMessage::Transactions(_) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
                                         assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::Transactions(tx_orchestrator)).is_ok());
+                                        let tx_test_end = tx_test_end.clone();
+
+                                        tokio::spawn(async move {
+                                            let response_message = rx_orchestrator.await;
+
+                                            if let Ok(Some(transactions)) = response_message {
+                                                let _ = tx_test_end.send(transactions.len() == 5).await;
+                                            } else {
+                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                                let _ = tx_test_end.send(false).await;
+                                            }
+                                        });
+                                    }
+                                    RequestMessage::Transactions2(_) => {
+                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::Transactions2(tx_orchestrator)).is_ok());
                                         let tx_test_end = tx_test_end.clone();
 
                                         tokio::spawn(async move {
@@ -1647,6 +1663,10 @@ mod tests {
                                 let _ = node_b.send_response_msg(*request_id, OutboundResponse::SealedHeaders(Some(sealed_headers)));
                             }
                             RequestMessage::Transactions(_) => {
+                                let transactions = (0..5).map(|_| Transaction::default_test_tx()).collect();
+                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::Transactions(Some(Arc::new(transactions))));
+                            }
+                            RequestMessage::Transactions2(_) => {
                                 let transactions = (0..5).map(|_| Transaction::default_test_tx()).collect();
                                 let _ = node_b.send_response_msg(*request_id, OutboundResponse::Transactions(Some(Arc::new(transactions))));
                             }

@@ -8,6 +8,7 @@ use fuel_core_types::{
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
+    services::p2p::TransactionData,
 };
 use std::ops::Range;
 
@@ -34,8 +35,8 @@ pub trait P2pDb: Send + Sync {
 
     fn get_transactions_2(
         &self,
-        block_ids: Vec<&BlockId>,
-    ) -> StorageResult<Option<Vec<Transaction>>>;
+        block_ids: &Vec<BlockId>,
+    ) -> StorageResult<Option<Vec<TransactionData>>>;
 }
 
 pub trait BlockHeightImporter: Send + Sync {

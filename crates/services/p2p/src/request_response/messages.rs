@@ -53,6 +53,7 @@ pub enum ResponseMessage {
     SealedBlock(Box<Option<SealedBlock>>),
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Vec<Transaction>>),
+    Transactions2(Option<Vec<TransactionData>>),
 }
 
 /// Holds oneshot channels for specific responses
@@ -71,6 +72,7 @@ pub enum NetworkResponse {
     Block(Option<Vec<u8>>),
     Headers(Option<Vec<u8>>),
     Transactions(Option<Vec<u8>>),
+    Transactions2(Option<Vec<u8>>),
 }
 
 /// Initial state of the `ResponseMessage` prior to having its inner value serialized
@@ -80,7 +82,7 @@ pub enum OutboundResponse {
     Block(Option<Arc<SealedBlock>>),
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Arc<Vec<Transaction>>>),
-    Transactions2(Option<Arc<Vec<Transaction>>>),
+    Transactions2(Option<Arc<Vec<TransactionData>>>),
 }
 
 #[derive(Debug)]

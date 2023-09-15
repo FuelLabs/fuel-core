@@ -213,6 +213,15 @@ impl RequestResponseConverter for PostcardCodec {
 
                 Ok(ResponseMessage::Transactions(response))
             }
+            NetworkResponse::Transactions2(tx_bytes) => {
+                let response = if let Some(tx_bytes) = tx_bytes {
+                    Some(self.deserialize(tx_bytes)?)
+                } else {
+                    None
+                };
+
+                Ok(ResponseMessage::Transactions2(response))
+            }
             NetworkResponse::Headers(headers_bytes) => {
                 let response = headers_bytes
                     .as_ref()
