@@ -13,18 +13,21 @@ use crate::{
         PeerReportReason,
     },
 };
-use fuel_core_types::fuel_tx::Transaction;
-// use test_case::test_case;
+use fuel_core_types::{
+    fuel_tx::Transaction,
+    services::p2p::TransactionData,
+};
+use test_case::test_case;
 
 use super::*;
 
-// #[test_case(State::new(None, 5), Mocks::times([6]) => (State::new(5, None), true) ; "executes 5")]
-// #[test_case(State::new(3, 5), Mocks::times([2]) => (State::new(5, None), true) ; "executes 3 to 5")]
-// #[tokio::test]
-// async fn test_import(state: State, mocks: Mocks) -> (State, bool) {
-//     let state = SharedMutex::new(state);
-//     test_import_inner(state, mocks, None).await
-// }
+#[test_case(State::new(None, 5), Mocks::times([6]) => (State::new(5, None), true) ; "executes 5")]
+#[test_case(State::new(3, 5), Mocks::times([2]) => (State::new(5, None), true) ; "executes 3 to 5")]
+#[tokio::test]
+async fn test_import(state: State, mocks: Mocks) -> (State, bool) {
+    let state = SharedMutex::new(state);
+    test_import_inner(state, mocks, None).await
+}
 
 #[tokio::test]
 async fn test_import_3_to_5() {
@@ -934,14 +937,13 @@ impl DefaultMocks for MockPeerToPeerPort {
                 Ok(headers)
             });
 
-        // p2p.expect_get_transactions()
-        //     .times(t.next().unwrap())
-        //     .returning(|_| Ok(Some(vec![])));
-
-        p2p.expect_get_transactions_2().times(1).returning(|_| {
-            dbg!("ADFADDSDF");
-            Ok(Some(vec![]))
-        });
+        p2p.expect_get_transactions_2()
+            .times(1)
+            .returning(|block_ids| {
+                let data = block_ids.data;
+                let v = data.into_iter().map(|_| TransactionData::new()).collect();
+                Ok(Some(v))
+            });
         p2p
     }
 }

@@ -226,7 +226,10 @@ where
                 let mut shutdown_signal = shutdown_signal.clone();
                 tokio::select! {
                     // Stream a batch of blocks
-                    blocks = stream_block_batch => blocks,
+                    blocks = stream_block_batch => {
+                        dbg!(&blocks);
+                        blocks
+                    },
                     // If a shutdown signal is received during the stream, terminate early and
                     // return an empty response
                     _ = shutdown_signal.while_started() => Ok(vec![])

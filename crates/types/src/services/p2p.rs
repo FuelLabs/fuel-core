@@ -20,6 +20,7 @@ pub mod peer_reputation;
 //     pub transactions: Vec<Transaction>,
 // }
 pub type TransactionData = Vec<Transaction>;
+
 /// Lightweight representation of gossipped data that only includes IDs
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
