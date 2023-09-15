@@ -409,18 +409,38 @@ async fn get_sealed_blocks<
     p2p: Arc<P>,
     consensus: Arc<C>,
 ) -> anyhow::Result<Vec<SealedBlock>> {
-    let SourcePeer { peer_id, data } = &headers;
-    for header in data {
-        // Check the consensus is valid on this header.
-        if !check_sealed_header(header, peer_id.clone(), p2p.clone(), consensus.clone())
-            .await?
-        {
-            return Ok(vec![])
-        }
+    let SourcePeer { peer_id, data } = headers;
 
-        // Wait for the da to be at least the da height on the header.
-        consensus.await_da_height(&header.entity.da_height).await?
-    }
+    let stream = futures::stream::iter(data)
+        .then(|header| async {
+            let validity = check_sealed_header(
+                &header,
+                peer_id.clone(),
+                p2p.clone(),
+                consensus.clone(),
+            )
+            .await;
+            validity.map(|validity| (validity, header))
+        })
+        .try_filter_map(|(validity, header)| async {
+            let header = if validity { Some(header) } else { None };
+            Ok(header)
+        })
+        .collect::<anyhow::Result<Vec<_>>>()
+        .await?;
+
+    // for header in data {
+    //     // Check the consensus is valid on this header.
+    //     if !check_sealed_header(header, peer_id.clone(), p2p.clone(), consensus.clone())
+    //         .await?
+    //     {
+    //         return Ok(vec![])
+    //     }
+    //
+    //     // Wait for the da to be at least the da height on the header.
+    //     consensus.await_da_height(&header.entity.da_height).await?
+    // }
+
     get_blocks(p2p.as_ref(), headers).await
 }
 
@@ -550,7 +570,6 @@ where
     });
     let peer_id = block_ids.peer_id.clone();
     let maybe_txs = p2p
-        // flattened vec of all transactions Vec of all transactions
         .get_transactions_2(block_ids)
         .await
         .trace_err("Failed to get transactions")?

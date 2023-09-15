@@ -91,16 +91,6 @@ impl<T> SourcePeer<T> {
     }
 }
 
-// impl<T> FromIterator<SourcePeer<T>> for SourcePeer<Vec<T>> {
-//     fn from_iter<U: IntoIterator<Item = SourcePeer<T>>>(iter: U) -> Self {
-//         let mut c = Vec::new();
-//         for i in iter {
-//             c.push(i);
-//         }
-//         c
-//     }
-// }
-
 impl<T> GossipData<T> {
     /// Construct a new gossip message
     pub fn new(
