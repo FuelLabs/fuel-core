@@ -295,7 +295,7 @@ impl PeerManager {
             .send(self.reserved_connected_peers.len());
     }
 
-    fn get_relevant_peers_mut(
+    fn get_assigned_peer_table_mut(
         &mut self,
         peer_id: &PeerId,
     ) -> &mut HashMap<PeerId, PeerInfo> {
