@@ -20,7 +20,13 @@ use fuel_core_types::{
     services::p2p::{
         PeerId,
         SourcePeer,
+        TransactionData,
     },
+};
+use rand::{
+    prelude::StdRng,
+    Rng,
+    SeedableRng,
 };
 use std::{
     ops::Range,
@@ -39,14 +45,23 @@ impl PeerToPeerPort for PressurePeerToPeer {
         self.p2p.height_stream()
     }
 
+    async fn select_peer(
+        &self,
+        _block_height: BlockHeight,
+    ) -> anyhow::Result<Option<PeerId>> {
+        let mut rng = StdRng::seed_from_u64(0xF00DF00D);
+        let peer_id = PeerId::from(rng.gen::<[u8; 32]>().to_vec());
+        Ok(Some(peer_id))
+    }
+
     async fn get_sealed_block_headers(
         &self,
-        block_height_range: Range<u32>,
+        block_height_range: SourcePeer<Range<u32>>,
     ) -> anyhow::Result<SourcePeer<Option<Vec<SealedBlockHeader>>>> {
         self.counts.apply(|c| c.inc_headers());
         tokio::time::sleep(self.durations[0]).await;
         self.counts.apply(|c| c.dec_headers());
-        for _ in block_height_range.clone() {
+        for _ in block_height_range.data.clone() {
             self.counts.apply(|c| c.inc_blocks());
         }
         self.p2p.get_sealed_block_headers(block_height_range).await
@@ -65,7 +80,7 @@ impl PeerToPeerPort for PressurePeerToPeer {
     async fn get_transactions_2(
         &self,
         _block_id: SourcePeer<Vec<BlockId>>,
-    ) -> anyhow::Result<Option<Vec<Transaction>>> {
+    ) -> anyhow::Result<Option<Vec<TransactionData>>> {
         todo!()
     }
 
@@ -82,19 +97,15 @@ impl PressurePeerToPeer {
     pub fn new(counts: SharedCounts, delays: [Duration; 2]) -> Self {
         let mut mock = MockPeerToPeerPort::default();
         mock.expect_get_sealed_block_headers().returning(|range| {
-            let headers = Some(
-                range
+            let headers = range.map(|range| {
+                let range = range
                     .clone()
                     .map(BlockHeight::from)
                     .map(empty_header)
-                    .collect(),
-            );
-            let peer_id = vec![].into();
-            let source_peer_data = SourcePeer {
-                peer_id,
-                data: headers,
-            };
-            Ok(source_peer_data)
+                    .collect();
+                Some(range)
+            });
+            Ok(headers)
         });
         mock.expect_get_transactions()
             .returning(|_| Ok(Some(vec![])));

@@ -71,12 +71,9 @@ impl PeerToPeerPort for P2PAdapter {
         } = block_height_range;
         if let Some(service) = &self.service {
             let headers = service
-                .get_sealed_block_headers(peer_id.into(), block_height_range)
+                .get_sealed_block_headers(peer_id.clone().into(), block_height_range)
                 .await?;
-            let sourced_headers = SourcePeer {
-                peer_id: peer_id.into(),
-                data: headers,
-            };
+            let sourced_headers = peer_id.bind(headers);
             Ok(sourced_headers)
         } else {
             Err(anyhow::anyhow!("No P2P service available"))

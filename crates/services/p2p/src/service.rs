@@ -441,7 +441,7 @@ impl SharedState {
     pub async fn select_peer(
         &self,
         block_height: BlockHeight,
-    ) -> anyhow::Result<Option<PeerId>> {
+    ) -> anyhow::Result<Option<FuelPeerId>> {
         let (sender, receiver) = oneshot::channel();
 
         self.request_sender
@@ -451,7 +451,10 @@ impl SharedState {
             })
             .await?;
 
-        receiver.await.map_err(|e| anyhow!("{}", e))
+        receiver
+            .await
+            .map(|peer_id| peer_id.map(|peer_id| peer_id.to_bytes().into()))
+            .map_err(|e| anyhow!("{}", e))
     }
 
     pub async fn get_sealed_block_headers(

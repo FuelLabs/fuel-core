@@ -45,6 +45,13 @@ impl P2pDb for Database {
     ) -> StorageResult<Option<Vec<Transaction>>> {
         self.get_transactions_on_block(block_id)
     }
+
+    fn get_transactions_2(
+        &self,
+        _block_ids: Vec<&BlockId>,
+    ) -> StorageResult<Option<Vec<Transaction>>> {
+        todo!()
+    }
 }
 
 impl BlockHeightImporter for BlockImporterAdapter {
