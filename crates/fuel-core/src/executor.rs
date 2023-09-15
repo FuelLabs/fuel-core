@@ -537,7 +537,7 @@ where
                     vec![Output::coin(
                         self.config.coinbase_recipient,
                         0, // We will set it later
-                        AssetId::BASE,
+                        *self.config.consensus_parameters.base_asset_id(),
                     )],
                 )
             }
@@ -628,7 +628,7 @@ where
             coinbase_tx.outputs_mut().push(Output::coin(
                 self.config.coinbase_recipient,
                 execution_data.coinbase,
-                AssetId::BASE,
+                *self.config.consensus_parameters.base_asset_id(),
             ));
             block.transactions[0] = coinbase_tx.clone().into();
         }
@@ -764,7 +764,7 @@ where
             asset_id, amount, ..
         }) = checked_mint.transaction().outputs().first()
         {
-            if asset_id != &AssetId::BASE {
+            if asset_id != self.config.consensus_parameters.base_asset_id() {
                 return Err(ExecutorError::CoinbaseOutputIsInvalid)
             }
 
@@ -4065,6 +4065,8 @@ mod tests {
     fn get_block_height_returns_current_executing_block() {
         let mut rng = StdRng::seed_from_u64(1234);
 
+        let base_asset_id = rng.gen();
+
         // return current block height
         let script = vec![op::bhei(0x10), op::ret(0x10)];
         let tx = TransactionBuilder::script(script.into_iter().collect(), vec![])
@@ -4073,7 +4075,7 @@ mod tests {
                 rng.gen(),
                 rng.gen(),
                 1000,
-                AssetId::zeroed(),
+                base_asset_id,
                 Default::default(),
                 Default::default(),
             )
@@ -4104,7 +4106,7 @@ mod tests {
                 &CompressedCoin {
                     owner: *coin_input.input_owner().unwrap(),
                     amount: coin_input.amount().unwrap(),
-                    asset_id: *coin_input.asset_id(&AssetId::BASE).unwrap(),
+                    asset_id: *coin_input.asset_id(&base_asset_id).unwrap(),
                     maturity: coin_input.maturity().unwrap(),
                     tx_pointer: TxPointer::new(Default::default(), block_tx_idx),
                 },
@@ -4141,6 +4143,8 @@ mod tests {
     fn get_time_returns_current_executing_block_time() {
         let mut rng = StdRng::seed_from_u64(1234);
 
+        let base_asset_id = rng.gen();
+
         // return current block height
         let script = vec![op::bhei(0x10), op::time(0x11, 0x10), op::ret(0x11)];
         let tx = TransactionBuilder::script(script.into_iter().collect(), vec![])
@@ -4149,7 +4153,7 @@ mod tests {
                 rng.gen(),
                 rng.gen(),
                 1000,
-                AssetId::zeroed(),
+                base_asset_id,
                 Default::default(),
                 Default::default(),
             )
@@ -4181,7 +4185,7 @@ mod tests {
                 &CompressedCoin {
                     owner: *coin_input.input_owner().unwrap(),
                     amount: coin_input.amount().unwrap(),
-                    asset_id: *coin_input.asset_id(&AssetId::BASE).unwrap(),
+                    asset_id: *coin_input.asset_id(&base_asset_id).unwrap(),
                     maturity: coin_input.maturity().unwrap(),
                     tx_pointer: TxPointer::default(),
                 },

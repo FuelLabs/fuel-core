@@ -9,6 +9,7 @@ use crate::{
             Database,
             TxPool,
         },
+        Config,
         IntoApiResult,
     },
     query::{
@@ -60,7 +61,6 @@ use fuel_core_types::{
         Chargeable,
         Executable,
     },
-    fuel_types,
     fuel_types::canonical::SerializedSize,
     fuel_vm::ProgramState as VmProgramState,
     services::{
@@ -277,17 +277,19 @@ impl Transaction {
         TransactionId(self.1)
     }
 
-    async fn input_asset_ids(&self) -> Option<Vec<AssetId>> {
+    async fn input_asset_ids(&self, ctx: &Context<'_>) -> Option<Vec<AssetId>> {
+        let config = ctx.data_unchecked::<Config>();
+        let base_asset_id = config.consensus_parameters.base_asset_id();
         match &self.0 {
             fuel_tx::Transaction::Script(script) => Some(
                 script
-                    .input_asset_ids(&fuel_types::AssetId::BASE)
+                    .input_asset_ids(base_asset_id)
                     .map(|c| AssetId(*c))
                     .collect(),
             ),
             fuel_tx::Transaction::Create(create) => Some(
                 create
-                    .input_asset_ids(&fuel_types::AssetId::BASE)
+                    .input_asset_ids(base_asset_id)
                     .map(|c| AssetId(*c))
                     .collect(),
             ),

@@ -180,6 +180,7 @@ type ConsensusParameters {
 	scriptParams: ScriptParameters!
 	contractParams: ContractParameters!
 	feeParams: FeeParameters!
+	baseAssetId: AssetId!
 	chainId: U64!
 	gasCosts: GasCosts!
 }
@@ -542,8 +543,6 @@ type MessageEdge {
 	node: Message!
 }
 
-scalar MessageId
-
 type MessageProof {
 	messageProof: MerkleProof!
 	blockProof: MerkleProof!
@@ -696,7 +695,7 @@ type Query {
 	contractBalances(filter: ContractBalanceFilterInput!, first: Int, after: String, last: Int, before: String): ContractBalanceConnection!
 	nodeInfo: NodeInfo!
 	messages(owner: Address, first: Int, after: String, last: Int, before: String): MessageConnection!
-	messageProof(transactionId: TransactionId!, messageId: MessageId!, commitBlockId: BlockId, commitBlockHeight: U32): MessageProof
+	messageProof(transactionId: TransactionId!, nonce: Nonce!, commitBlockId: BlockId, commitBlockHeight: U32): MessageProof
 }
 
 type Receipt {
