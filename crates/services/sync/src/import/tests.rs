@@ -36,7 +36,6 @@ async fn test_import_3_to_5() {
     assert_eq!(v, expected);
 }
 
-#[ignore]
 #[tokio::test]
 async fn import__signature_fails_on_header_5_only() {
     // given
