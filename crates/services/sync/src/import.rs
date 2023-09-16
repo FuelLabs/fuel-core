@@ -240,8 +240,8 @@ where
         .buffered(params.block_stream_buffer_size)
         // Continue the stream unless an error or none occurs.
         // Note the error will be returned but the stream will close.
-        .into_scan_err()
-        .scan_err()
+        .into_scan_none_or_err()
+        .scan_none_or_err()
         // Continue the stream until the shutdown signal is received.
         .take_until({
             let mut s = shutdown.clone();
@@ -316,7 +316,7 @@ async fn get_block_stream<
     params: &Config,
     p2p: Arc<P>,
     consensus: Arc<C>,
-) -> impl Stream<Item = impl Future<Output = anyhow::Result<Vec<SealedBlock>>>> {
+) -> impl Stream<Item = impl Future<Output = anyhow::Result<Option<Vec<SealedBlock>>>>> {
     get_header_stream(peer.clone(), range, params, p2p.clone())
         .chunks(1)
         .map({
@@ -409,7 +409,7 @@ async fn get_sealed_blocks<
     headers: SourcePeer<Vec<SealedBlockHeader>>,
     p2p: Arc<P>,
     consensus: Arc<C>,
-) -> anyhow::Result<Vec<SealedBlock>> {
+) -> anyhow::Result<Option<Vec<SealedBlock>>> {
     let SourcePeer { peer_id, data } = headers;
     let p = peer_id.clone();
     let p2p_ = p2p.clone();
