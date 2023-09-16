@@ -226,7 +226,10 @@ where
                 let mut shutdown_signal = shutdown_signal.clone();
                 tokio::select! {
                     // Stream a batch of blocks
-                    blocks = stream_block_batch => blocks,
+                    blocks = stream_block_batch => {
+                        dbg!(&blocks);
+                        blocks
+                    },
                     // If a shutdown signal is received during the stream, terminate early and
                     // return an empty response
                     _ = shutdown_signal.while_started() => Ok(vec![])
@@ -289,6 +292,7 @@ where
         // find any errors.
         // Fold the stream into a count and any errors.
         .fold((0usize, Ok(())), |(count, res), result| async move {
+            dbg!(&result);
             match result {
                 Ok(_) => (count + 1, res),
                 Err(e) => (count, Err(e)),
@@ -314,7 +318,7 @@ async fn get_block_stream<
     consensus: Arc<C>,
 ) -> impl Stream<Item = impl Future<Output = anyhow::Result<Vec<SealedBlock>>>> {
     get_header_stream(peer.clone(), range, params, p2p.clone())
-        .chunks(10)
+        .chunks(1)
         .map({
             let p2p = p2p.clone();
             let consensus_port = consensus.clone();
@@ -420,18 +424,19 @@ async fn get_sealed_blocks<
                 let p2p = p2p.clone();
                 let consensus = consensus.clone();
                 let validity =
-                    check_sealed_header(&header, p, p2p.clone(), consensus.clone()).await;
+                    check_sealed_header(&header, p, p2p.clone(), consensus.clone())
+                        .await?;
 
-                // Wait for the da to be at least the da height on the header.
-                if validity.is_ok() {
+                if validity {
                     consensus.await_da_height(&header.entity.da_height).await?;
+                    Ok(Some(header))
+                } else {
+                    Ok(None)
                 }
-
-                validity.map(|_| header)
             }
         })
-        .into_scan_err()
-        .scan_err()
+        .into_scan_none_or_err()
+        .scan_none_or_err()
         .try_collect()
         .await?;
 

@@ -72,11 +72,11 @@ async fn import__signature_fails_on_header_4_only() {
     let mut consensus_port = MockConsensusPort::default();
     consensus_port
         .expect_check_sealed_header()
-        .times(1)
+        .times(2)
         .returning(|h| Ok(**h.entity.height() != 4));
     consensus_port
         .expect_await_da_height()
-        .times(0)
+        .times(1)
         .returning(|_| Ok(()));
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_select_peer().times(1).returning(|_| {
@@ -93,7 +93,7 @@ async fn import__signature_fails_on_header_4_only() {
             });
             Ok(headers)
         });
-    p2p.expect_get_transactions_2().times(0);
+    p2p.expect_get_transactions_2().times(2);
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
