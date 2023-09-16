@@ -72,17 +72,33 @@ async fn import__signature_fails_on_header_4_only() {
     let mut consensus_port = MockConsensusPort::default();
     consensus_port
         .expect_check_sealed_header()
-        .times(2)
+        .times(1)
         .returning(|h| Ok(**h.entity.height() != 4));
     consensus_port
         .expect_await_da_height()
-        .times(1)
+        .times(0)
         .returning(|_| Ok(()));
+    let mut p2p = MockPeerToPeerPort::default();
+    p2p.expect_select_peer().times(1).returning(|_| {
+        let bytes = vec![1u8, 2, 3, 4, 5];
+        let peer_id = bytes.into();
+        Ok(Some(peer_id))
+    });
+    p2p.expect_get_sealed_block_headers()
+        .times(1)
+        .returning(|range| {
+            let headers = range.map(|range| {
+                let headers = range.clone().map(|h| empty_header(h.into())).collect();
+                Some(headers)
+            });
+            Ok(headers)
+        });
+    p2p.expect_get_transactions_2().times(0);
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
         consensus_port,
-        p2p: DefaultMocks::times([1]),
+        p2p,
         executor: DefaultMocks::times([0]),
     };
 
@@ -921,7 +937,6 @@ impl DefaultMocks for MockPeerToPeerPort {
         p2p.expect_select_peer().times(1).returning(|_| {
             let bytes = vec![1u8, 2, 3, 4, 5];
             let peer_id = bytes.into();
-            dbg!(&peer_id);
             Ok(Some(peer_id))
         });
 
