@@ -1,73 +1,32 @@
 use crate::{
-    codecs::{
-        postcard::PostcardCodec,
-        NetworkCodec,
-    },
+    codecs::{postcard::PostcardCodec, NetworkCodec},
     config::Config,
-    gossipsub::messages::{
-        GossipsubBroadcastRequest,
-        GossipsubMessage,
-    },
-    p2p_service::{
-        FuelP2PEvent,
-        FuelP2PService,
-    },
-    ports::{
-        BlockHeightImporter,
-        P2pDb,
-    },
-    request_response::messages::{
-        OutboundResponse,
-        RequestMessage,
-        ResponseChannelItem,
-    },
+    gossipsub::messages::{GossipsubBroadcastRequest, GossipsubMessage},
+    p2p_service::{FuelP2PEvent, FuelP2PService},
+    ports::{BlockHeightImporter, P2pDb},
+    request_response::messages::{OutboundResponse, RequestMessage, ResponseChannelItem},
 };
 use anyhow::anyhow;
 use fuel_core_services::{
-    stream::BoxStream,
-    RunnableService,
-    RunnableTask,
-    ServiceRunner,
-    StateWatcher,
+    stream::BoxStream, RunnableService, RunnableTask, ServiceRunner, StateWatcher,
 };
 use fuel_core_types::{
     blockchain::{
-        block::Block,
-        consensus::ConsensusVote,
-        primitives::BlockId,
-        SealedBlock,
+        block::Block, consensus::ConsensusVote, primitives::BlockId, SealedBlock,
         SealedBlockHeader,
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::p2p::{
-        peer_reputation::{
-            AppScore,
-            PeerReport,
-        },
-        BlockHeightHeartbeatData,
-        GossipData,
-        GossipsubMessageAcceptance,
-        GossipsubMessageInfo,
-        PeerId as FuelPeerId,
-        TransactionGossipData,
+        peer_reputation::{AppScore, PeerReport},
+        BlockHeightHeartbeatData, GossipData, GossipsubMessageAcceptance,
+        GossipsubMessageInfo, PeerId as FuelPeerId, TransactionGossipData,
     },
 };
 use futures::StreamExt;
-use libp2p::{
-    gossipsub::MessageAcceptance,
-    PeerId,
-};
-use std::{
-    fmt::Debug,
-    ops::Range,
-    sync::Arc,
-};
-use tokio::sync::{
-    broadcast,
-    mpsc,
-    oneshot,
-};
+use libp2p::{gossipsub::MessageAcceptance, PeerId};
+use std::{fmt::Debug, ops::Range, sync::Arc};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::warn;
 
 pub type Service<D> = ServiceRunner<Task<D>>;
@@ -87,10 +46,9 @@ enum TaskRequest {
         block_height_range: Range<u32>,
         channel: oneshot::Sender<Option<(PeerId, Option<Vec<SealedBlockHeader>>)>>,
     },
-    // Request get current pooled transactions
-    GetPooledTransactions {
-        from_peer: PeerId,
-        channel: oneshot::Sender<Option<Vec<String>>>, // temp string
+    SendPooledTransactions {
+        to_peer: PeerId,
+        transactions: Vec<String>, // temp string
     },
     GetTransactions {
         block_id: BlockId,
@@ -203,6 +161,11 @@ where
             next_service_request = self.request_receiver.recv() => {
                 should_continue = true;
                 match next_service_request {
+                    Some(TaskRequest::SendPooledTransactions { to_peer, transactions }) => {
+                        let request_msg = RequestMessage::PooledTransactions(transactions);
+                        let channel_item = ResponseChannelItem::PooledTransactions(oneshot::channel().0);
+                        let _ = self.p2p_service.send_request_msg(Some(to_peer), request_msg, channel_item);
+                    }
                     Some(TaskRequest::BroadcastTransaction(transaction)) => {
                         let broadcast = GossipsubBroadcastRequest::NewTx(transaction);
                         let result = self.p2p_service.publish_message(broadcast);
@@ -223,12 +186,6 @@ where
                         if let Err(e) = result {
                             tracing::error!("Got an error during vote broadcasting {}", e);
                         }
-                    }
-                    Some(TaskRequest::GetPooledTransactions{ channel, from_peer }) => {
-                        dbg!("### Task::RequestGetPooledTransactions ###");
-                        let request_msg = RequestMessage::PooledTransactions;
-                        let channel_item = ResponseChannelItem::PooledTransactions(channel);
-                        let _ = self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item);
                     }
                     Some(TaskRequest::GetPeerIds(channel)) => {
                         let peer_ids = self.p2p_service.get_peers_ids().copied().collect();
@@ -318,8 +275,10 @@ where
 
                                 let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(transactions_response));
                             }
-                            RequestMessage::PooledTransactions => {
-                                todo!("Implement `RequestMessage::PooledTransactions`");
+                            RequestMessage::PooledTransactions(transactions) => {
+                                // Temp `todo!` because with this new implementation we're
+                                // never getting to this point, as the node was already disconnected.
+                                todo!("Pooled transactions are not yet implemented");
                             }
                             RequestMessage::SealedHeaders(range) => {
                                 let max_len = self.max_headers_per_request.try_into().expect("u32 should always fit into usize");
@@ -415,7 +374,7 @@ impl SharedState {
         if block_height_range.is_empty() {
             return Err(anyhow!(
                 "Cannot retrieve headers for an empty range of block heights"
-            ))
+            ));
         }
 
         self.request_sender
@@ -450,22 +409,22 @@ impl SharedState {
         receiver.await.map_err(|e| anyhow!("{}", e))
     }
 
-    pub async fn get_pooled_transactions_from_peer(
+    pub async fn send_pooled_transactions_to_peer(
         &self,
         peer_id: Vec<u8>,
-    ) -> anyhow::Result<Option<Vec<String>>> {
+        transactions: Vec<String>,
+    ) -> anyhow::Result<()> {
         // temp string
-        let (sender, receiver) = oneshot::channel();
-        let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
+        let to_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
 
         self.request_sender
-            .send(TaskRequest::GetPooledTransactions {
-                from_peer,
-                channel: sender,
+            .send(TaskRequest::SendPooledTransactions {
+                to_peer,
+                transactions,
             })
             .await?;
 
-        receiver.await.map_err(|e| anyhow!("{}", e))
+        Ok(())
     }
 
     pub fn broadcast_vote(&self, vote: Arc<ConsensusVote>) -> anyhow::Result<()> {

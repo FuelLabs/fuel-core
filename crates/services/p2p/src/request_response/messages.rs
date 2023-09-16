@@ -46,7 +46,7 @@ pub enum RequestMessage {
     Block(BlockHeight),
     SealedHeaders(Range<u32>),
     Transactions(#[serde_as(as = "FromInto<[u8; 32]>")] BlockId),
-    PooledTransactions,
+    PooledTransactions(Vec<String>), // temp as string
 }
 
 /// Final Response Message that p2p service sends to the Orchestrator

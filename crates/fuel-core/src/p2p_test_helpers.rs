@@ -148,6 +148,7 @@ pub async fn make_nodes(
     bootstrap_setup: impl IntoIterator<Item = Option<BootstrapSetup>>,
     producers_setup: impl IntoIterator<Item = Option<ProducerSetup>>,
     validators_setup: impl IntoIterator<Item = Option<ValidatorSetup>>,
+    disable_block_production: bool,
 ) -> Nodes {
     let producers: Vec<_> = producers_setup.into_iter().collect();
 
@@ -227,6 +228,7 @@ pub async fn make_nodes(
                             .then_some(name)
                             .unwrap_or_else(|| format!("b:{i}")),
                         chain_config.clone(),
+                        disable_block_production
                     );
                     if let Some(BootstrapSetup { pub_key, .. }) = boot {
                         match &mut node_config.chain_conf.consensus {
@@ -252,6 +254,7 @@ pub async fn make_nodes(
                 .then_some(name)
                 .unwrap_or_else(|| format!("p:{i}")),
             chain_config.clone(),
+            disable_block_production
         );
 
         let mut test_txs = Vec::with_capacity(0);
@@ -284,6 +287,7 @@ pub async fn make_nodes(
                 .then_some(name)
                 .unwrap_or_else(|| format!("v:{i}")),
             chain_config.clone(),
+            disable_block_production
         );
         node_config.block_production = Trigger::Never;
         node_config.p2p.as_mut().unwrap().bootstrap_nodes = boots.clone();
@@ -305,10 +309,13 @@ pub async fn make_nodes(
     }
 }
 
-pub fn make_config(name: String, chain_config: ChainConfig) -> Config {
+pub fn make_config(name: String, chain_config: ChainConfig, disable_block_production: bool) -> Config {
     let mut node_config = Config::local_node();
     node_config.chain_conf = chain_config;
     node_config.utxo_validation = true;
+    if disable_block_production {
+        node_config.block_production = Trigger::Never;
+    }
     node_config.name = name;
     node_config
 }

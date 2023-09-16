@@ -1,12 +1,9 @@
 use fuel_core::{
     chain_config::{CoinConfig, StateConfig},
+    p2p_test_helpers::{
+        make_nodes, BootstrapSetup, Nodes, ProducerSetup, ValidatorSetup,
+    },
     service::{Config, FuelService},
-use fuel_core::p2p_test_helpers::{
-    make_nodes,
-    BootstrapSetup,
-    Nodes,
-    ProducerSetup,
-    ValidatorSetup,
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_poa::Trigger;
@@ -18,8 +15,13 @@ use fuel_core_types::{
     },
     fuel_vm::*,
 };
-use rand::{rngs::StdRng, Rng, SeedableRng};
-use std::time::Duration;
+
+use rand::{rngs::StdRng, SeedableRng};
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+    time::Duration,
+};
 
 fn create_node_config_from_inputs(inputs: &[Input]) -> Config {
     let mut node_config = Config::local_node();
@@ -62,21 +64,6 @@ fn create_node_config_from_inputs(inputs: &[Input]) -> Config {
     node_config.p2p.as_mut().unwrap().enable_mdns = true;
     node_config
 }
-    fuel_tx::*,
-    fuel_vm::*,
-};
-use rand::{
-    rngs::StdRng,
-    SeedableRng,
-};
-use std::{
-    collections::hash_map::DefaultHasher,
-    hash::{
-        Hash,
-        Hasher,
-    },
-    time::Duration,
-};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_tx_gossiping() {
@@ -97,6 +84,7 @@ async fn test_tx_gossiping() {
         .map(|secret| Input::owner(&secret.public_key()))
         .collect();
 
+    let disable_block_production = false;
     // Create a producer for each key pair and a set of validators that share
     // the same key pair.
     let Nodes {
@@ -119,6 +107,7 @@ async fn test_tx_gossiping() {
                 Some(ValidatorSetup::new(*pub_key).with_name(format!("{pub_key}:{i}")))
             })
         }),
+        disable_block_production
     )
     .await;
 

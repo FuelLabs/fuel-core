@@ -28,6 +28,7 @@ async fn test_producer_getting_own_blocks_back() {
     // Create a producer and a validator that share the same key pair.
     let secret = SecretKey::random(&mut rng);
     let pub_key = Input::owner(&secret.public_key());
+    let disable_block_production = false;
     let Nodes {
         mut producers,
         mut validators,
@@ -38,6 +39,7 @@ async fn test_producer_getting_own_blocks_back() {
             ProducerSetup::new(secret).with_txs(1).with_name("Alice"),
         )],
         [Some(ValidatorSetup::new(pub_key).with_name("Bob"))],
+        disable_block_production,
     )
     .await;
 
@@ -73,6 +75,7 @@ async fn test_partition_single(num_txs: usize) {
     // Create a producer and two validators that share the same key pair.
     let secret = SecretKey::random(&mut rng);
     let pub_key = Input::owner(&secret.public_key());
+    let disable_block_production = false;
     let Nodes {
         mut producers,
         validators,
@@ -88,6 +91,7 @@ async fn test_partition_single(num_txs: usize) {
             Some(ValidatorSetup::new(pub_key).with_name("Bob")),
             Some(ValidatorSetup::new(pub_key).with_name("Carol")),
         ],
+        disable_block_production
     )
     .await;
 
@@ -138,6 +142,7 @@ async fn test_partitions_larger_groups(
     // Create a producer and a set of validators that share the same key pair.
     let secret = SecretKey::random(&mut rng);
     let pub_key = Input::owner(&secret.public_key());
+    let disable_block_production = false;
     let Nodes {
         mut producers,
         mut validators,
@@ -152,6 +157,7 @@ async fn test_partitions_larger_groups(
         (0..num_validators).map(|i| {
             Some(ValidatorSetup::new(pub_key).with_name(format!("{pub_key}:{i}")))
         }),
+        disable_block_production
     )
     .await;
 
@@ -232,6 +238,7 @@ async fn test_multiple_producers_different_keys() {
 
     // Create a producer for each key pair and a set of validators that share
     // the same key pair.
+    let disable_block_production = false;
     let Nodes {
         mut producers,
         validators,
@@ -252,6 +259,7 @@ async fn test_multiple_producers_different_keys() {
                 Some(ValidatorSetup::new(*pub_key).with_name(format!("{pub_key}:{i}")))
             })
         }),
+        disable_block_production
     )
     .await;
 
@@ -300,6 +308,7 @@ async fn test_multiple_producers_same_key() {
 
     let secret = SecretKey::random(&mut rng);
     let pub_key = Input::owner(&secret.public_key());
+    let disable_block_production = false;
     let Nodes {
         mut producers,
         mut validators,
@@ -308,6 +317,7 @@ async fn test_multiple_producers_same_key() {
         std::iter::repeat(Some(BootstrapSetup::new(pub_key))).take(num_producers),
         std::iter::repeat(Some(ProducerSetup::new(secret))).take(num_producers),
         std::iter::repeat(Some(ValidatorSetup::new(pub_key))).take(num_validators),
+        disable_block_production
     )
     .await;
 

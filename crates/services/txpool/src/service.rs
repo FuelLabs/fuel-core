@@ -1,72 +1,37 @@
 use crate::{
-    ports::{
-        BlockImporter,
-        PeerToPeer,
-        TxPoolDb,
-    },
+    ports::{BlockImporter, PeerToPeer, TxPoolDb},
     transaction_selector::select_transactions,
-    txpool::{
-        check_single_tx,
-        check_transactions,
-    },
-    Config,
-    Error as TxPoolError,
-    TxInfo,
-    TxPool,
+    txpool::{check_single_tx, check_transactions},
+    Config, Error as TxPoolError, TxInfo, TxPool,
 };
 
 use fuel_core_p2p::PeerId;
 
 use fuel_core_services::{
-    stream::BoxStream,
-    RunnableService,
-    RunnableTask,
-    Service as _,
-    ServiceRunner,
+    stream::BoxStream, RunnableService, RunnableTask, Service as _, ServiceRunner,
     StateWatcher,
 };
 use fuel_core_types::{
-    fuel_tx::{
-        ConsensusParameters,
-        Transaction,
-        TxId,
-        UniqueIdentifier,
-    },
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-    },
+    fuel_tx::{ConsensusParameters, Transaction, TxId, UniqueIdentifier},
+    fuel_types::{BlockHeight, Bytes32},
     services::{
         block_importer::ImportResult,
         p2p::{
-            GossipData,
-            GossipsubMessageAcceptance,
-            GossipsubMessageInfo,
+            GossipData, GossipsubMessageAcceptance, GossipsubMessageInfo,
             TransactionGossipData,
         },
-        txpool::{
-            ArcPoolTx,
-            Error,
-            InsertionResult,
-            TransactionStatus,
-        },
+        txpool::{ArcPoolTx, Error, InsertionResult, TransactionStatus},
     },
     tai64::Tai64,
 };
 
 use parking_lot::Mutex as ParkingMutex;
 use std::sync::Arc;
-use tokio::{
-    sync::broadcast,
-    time::MissedTickBehavior,
-};
+use tokio::{sync::broadcast, time::MissedTickBehavior};
 use tokio_stream::StreamExt;
 use update_sender::UpdateSender;
 
-use self::update_sender::{
-    MpscChannel,
-    TxStatusStream,
-};
+use self::update_sender::{MpscChannel, TxStatusStream};
 
 mod update_sender;
 
@@ -196,26 +161,29 @@ where
             }
 
             new_connection = self.peer_connections.next() => {
-                dbg!("New connection: {:?}", new_connection);
                 if let Some(peer_id) = new_connection {
                     should_continue = true;
-                    dbg!("Peer connected, inside TxPoolSyncTask: {:?}", peer_id);
+                    println!("Peer {:?} connected to me", peer_id);
 
-                    // New connection just happened, request the list of
-                    // pooled transactions from the peer.
-                    let peer_txs = self.p2p.request_pooled_transactions(peer_id).await;
-                    dbg!(&peer_txs);
-
-                    // TODO: Once the above is implemented, we compare this node's list of
-                    // transactions with the peer's list of transactions, and request the
-                    // transactions that are missing from this node's list.
-
+                    let mut txs = vec![];
                     for tx in self.txpool.lock().txs() {
-                        dbg!(&tx.0);
+                        txs.push(tx.0.to_string())
                     }
+
+                    // let _ = self.p2p.clone();
+
+                    // Current issue comes from this part: once we send
+                    // the pooled transactions here, which happens when a
+                    // node connects to this one, the node will be disconnected
+                    // due to it being penalized for sharing a tx.
+                    if !txs.is_empty() {
+                        // let txs = self.txpool.lock().txs();
+                        println!("Sending my pooled transactions: {:?}", txs);
+                        let _ =  self.p2p.send_pooled_transactions(peer_id, txs).await;
+                    }
+
                 } else {
                     should_continue = false;
-                    dbg!(&new_connection);
                 }
             }
         }
