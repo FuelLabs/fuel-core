@@ -25,7 +25,6 @@ pub mod services;
 
 /// Re-export of some fuel-vm types
 pub mod fuel_vm {
-    #[cfg(feature = "debug")]
     #[doc(no_inline)]
     pub use fuel_vm_private::prelude::Breakpoint;
 

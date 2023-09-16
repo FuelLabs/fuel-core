@@ -4,7 +4,10 @@ pub mod schema {
     cynic::use_schema!("./assets/schema.sdl");
 }
 
-use fuel_core_types::fuel_tx;
+use fuel_core_types::{
+    fuel_tx,
+    fuel_types::canonical,
+};
 use hex::FromHexError;
 use std::{
     array::TryFromSliceError,
@@ -289,9 +292,9 @@ pub enum ConversionError {
     #[error("failed integer conversion")]
     IntegerConversion,
     #[error("failed to deserialize transaction from bytes {0}")]
-    TransactionFromBytesError(std::io::Error),
+    TransactionFromBytesError(canonical::Error),
     #[error("failed to deserialize receipt from bytes {0}")]
-    ReceiptFromBytesError(std::io::Error),
+    ReceiptFromBytesError(canonical::Error),
     #[error("failed to convert from bytes due to unexpected length")]
     BytesLength,
     #[error("Unknown variant of the {0} enum")]

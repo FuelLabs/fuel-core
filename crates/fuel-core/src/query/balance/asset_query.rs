@@ -63,6 +63,7 @@ pub struct AssetsQuery<'a> {
     pub assets: Option<HashSet<&'a AssetId>>,
     pub exclude: Option<&'a Exclude>,
     pub database: &'a Database,
+    pub base_asset_id: &'a AssetId,
 }
 
 impl<'a> AssetsQuery<'a> {
@@ -71,23 +72,19 @@ impl<'a> AssetsQuery<'a> {
         assets: Option<HashSet<&'a AssetId>>,
         exclude: Option<&'a Exclude>,
         database: &'a Database,
+        base_asset_id: &'a AssetId,
     ) -> Self {
         Self {
             owner,
             assets,
             exclude,
             database,
+            base_asset_id,
         }
     }
 
-    /// Returns the iterator over all valid(spendable, allowed by `exclude`) coins of the `owner`.
-    ///
-    /// # Note: The coins of different type are not grouped by the `asset_id`.
-    // TODO: Optimize this by creating an index
-    //  https://github.com/FuelLabs/fuel-core/issues/588
-    pub fn coins(&self) -> impl Iterator<Item = StorageResult<CoinType>> + '_ {
-        let coins_iter = self
-            .database
+    fn coins_iter(&self) -> impl Iterator<Item = StorageResult<CoinType>> + '_ {
+        self.database
             .owned_coins_ids(self.owner, None, IterDirection::Forward)
             .map(|id| id.map(CoinId::from))
             .filter_ok(|id| {
@@ -111,17 +108,15 @@ impl<'a> AssetsQuery<'a> {
             })
             .filter_ok(|coin| {
                 if let CoinType::Coin(coin) = coin {
-                    self.assets
-                        .as_ref()
-                        .map(|assets| assets.contains(&coin.asset_id))
-                        .unwrap_or(true)
+                    self.has_asset(&coin.asset_id)
                 } else {
                     true
                 }
-            });
+            })
+    }
 
-        let messages_iter = self
-            .database
+    fn messages_iter(&self) -> impl Iterator<Item = StorageResult<CoinType>> + '_ {
+        self.database
             .owned_message_ids(self.owner, None, IterDirection::Forward)
             .map(|id| id.map(CoinId::from))
             .filter_ok(|id| {
@@ -151,14 +146,28 @@ impl<'a> AssetsQuery<'a> {
                             .expect("The checked above that message data is empty."),
                     )
                 })
-            });
+            })
+    }
 
-        coins_iter.chain(messages_iter.take_while(|_| {
-            self.assets
-                .as_ref()
-                .map(|assets| assets.contains(&AssetId::BASE))
-                .unwrap_or(true)
-        }))
+    fn has_asset(&self, asset_id: &AssetId) -> bool {
+        self.assets
+            .as_ref()
+            .map(|assets| assets.contains(asset_id))
+            .unwrap_or(true)
+    }
+
+    /// Returns the iterator over all valid(spendable, allowed by `exclude`) coins of the `owner`.
+    ///
+    /// # Note: The coins of different type are not grouped by the `asset_id`.
+    // TODO: Optimize this by creating an index
+    //  https://github.com/FuelLabs/fuel-core/issues/588
+    pub fn coins(&self) -> impl Iterator<Item = StorageResult<CoinType>> + '_ {
+        let has_base_asset = self.has_asset(self.base_asset_id);
+        let messages_iter = has_base_asset
+            .then(|| self.messages_iter())
+            .into_iter()
+            .flatten();
+        self.coins_iter().chain(messages_iter)
     }
 }
 
@@ -174,6 +183,7 @@ impl<'a> AssetQuery<'a> {
     pub fn new(
         owner: &'a Address,
         asset: &'a AssetSpendTarget,
+        base_asset_id: &'a AssetId,
         exclude: Option<&'a Exclude>,
         database: &'a Database,
     ) -> Self {
@@ -184,7 +194,13 @@ impl<'a> AssetQuery<'a> {
             asset,
             exclude,
             database,
-            query: AssetsQuery::new(owner, Some(allowed), exclude, database),
+            query: AssetsQuery::new(
+                owner,
+                Some(allowed),
+                exclude,
+                database,
+                base_asset_id,
+            ),
         }
     }
 

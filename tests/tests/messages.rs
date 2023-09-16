@@ -189,8 +189,7 @@ async fn messages_empty_results_for_owner_with_no_messages(
 #[tokio::test]
 async fn can_get_message_proof() {
     for n in [1, 2, 10] {
-        let mut config = Config::local_node();
-        config.manual_blocks_enabled = true;
+        let config = Config::local_node();
 
         let coin = config
             .chain_conf
@@ -280,10 +279,10 @@ async fn can_get_message_proof() {
             .collect();
 
         // Call contract script.
-        let script = vec![
-            // Save the ptr to the script data to register 16.
-            // This will be used to read the contract id + two
-            // empty params. So 32 + 8 + 8.
+        // Save the ptr to the script data to register 16.
+        // This will be used to read the contract id + two
+        // empty params. So 32 + 8 + 8.
+        let script = [
             op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
             // load balance to forward to 0x11
             op::movi(0x11, n as u32 * amount),
@@ -382,13 +381,16 @@ async fn can_get_message_proof() {
         let message_ids: Vec<_> =
             receipts.iter().filter_map(|r| r.message_id()).collect();
 
-        // Check we actually go the correct amount of ids back.
-        assert_eq!(message_ids.len(), args.len(), "{receipts:?}");
+        // Get the nonces from the receipt
+        let nonces: Vec<_> = receipts.iter().filter_map(|r| r.nonce()).collect();
 
-        for message_id in message_ids.clone() {
+        // Check we actually go the correct amount of ids back.
+        assert_eq!(nonces.len(), args.len(), "{receipts:?}");
+
+        for nonce in nonces.clone() {
             // Request the proof.
             let result = client
-                .message_proof(&transaction_id, &message_id, None, Some(last_height))
+                .message_proof(&transaction_id, nonce, None, Some(last_height))
                 .await
                 .unwrap()
                 .unwrap();
@@ -402,9 +404,6 @@ async fn can_get_message_proof() {
                 result.amount,
                 &result.data,
             );
-
-            // Check message id is the same as the one passed in.
-            assert_eq!(generated_message_id, message_id);
 
             // 2. Generate the block id. (full header)
             let mut hasher = Hasher::default();

@@ -96,8 +96,10 @@ impl MessageCoin {
         self.0.amount.into()
     }
 
-    async fn asset_id(&self) -> AssetId {
-        fuel_core_types::fuel_types::AssetId::BASE.into()
+    async fn asset_id(&self, ctx: &Context<'_>) -> AssetId {
+        let config = ctx.data_unchecked::<GraphQLConfig>();
+        let base_asset_id = *config.consensus_parameters.base_asset_id();
+        base_asset_id.into()
     }
 
     async fn da_height(&self) -> U64 {
@@ -242,7 +244,9 @@ impl CoinQuery {
             utxos.chain(messages).collect()
         });
 
-        let spend_query = SpendQuery::new(owner, &query_per_asset, excluded_ids)?;
+        let base_asset_id = config.consensus_parameters.base_asset_id();
+        let spend_query =
+            SpendQuery::new(owner, &query_per_asset, excluded_ids, *base_asset_id)?;
 
         let db = ctx.data_unchecked::<Database>();
 

@@ -172,8 +172,8 @@ impl ConnectionHandler for HeartbeatHandler {
             Self::Error,
         >,
     > {
-        if let Some(inbound_block_height) = self.inbound.as_mut() {
-            match inbound_block_height.poll_unpin(cx) {
+        if let Some(inbound_stream_and_block_height) = self.inbound.as_mut() {
+            match inbound_stream_and_block_height.poll_unpin(cx) {
                 Poll::Ready(Err(_)) => {
                     debug!(target: "fuel-libp2p", "Incoming heartbeat errored");
                     self.inbound = None;

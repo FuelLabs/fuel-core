@@ -15,8 +15,7 @@ use crate::{
         WriteOperation,
     },
 };
-#[cfg(feature = "metrics")]
-use fuel_core_metrics::core_metrics::DATABASE_METRICS;
+use fuel_core_metrics::core_metrics::database_metrics;
 use fuel_core_storage::iter::{
     BoxedIter,
     IntoBoxedIter,
@@ -142,13 +141,12 @@ impl RocksDb {
                 item.map(|(key, value)| {
                     let value_as_vec = Vec::from(value);
                     let key_as_vec = Vec::from(key);
-                    #[cfg(feature = "metrics")]
-                    {
-                        DATABASE_METRICS.read_meter.inc();
-                        DATABASE_METRICS
-                            .bytes_read
-                            .observe((key_as_vec.len() + value_as_vec.len()) as f64);
-                    }
+
+                    database_metrics().read_meter.inc();
+                    database_metrics()
+                        .bytes_read
+                        .observe((key_as_vec.len() + value_as_vec.len()) as f64);
+
                     (key_as_vec, Arc::new(value_as_vec))
                 })
                 .map_err(|e| DatabaseError::Other(e.into()))
@@ -158,18 +156,16 @@ impl RocksDb {
 
 impl KeyValueStore for RocksDb {
     fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
-        #[cfg(feature = "metrics")]
-        DATABASE_METRICS.read_meter.inc();
+        database_metrics().read_meter.inc();
         let value = self
             .db
             .get_cf(&self.cf(column), key)
             .map_err(|e| DatabaseError::Other(e.into()));
-        #[cfg(feature = "metrics")]
-        {
-            if let Ok(Some(value)) = &value {
-                DATABASE_METRICS.bytes_read.observe(value.len() as f64);
-            }
+
+        if let Ok(Some(value)) = &value {
+            database_metrics().bytes_read.observe(value.len() as f64);
         }
+
         value.map(|value| value.map(Arc::new))
     }
 
@@ -179,11 +175,9 @@ impl KeyValueStore for RocksDb {
         column: Column,
         value: Value,
     ) -> DatabaseResult<Option<Value>> {
-        #[cfg(feature = "metrics")]
-        {
-            DATABASE_METRICS.write_meter.inc();
-            DATABASE_METRICS.bytes_written.observe(value.len() as f64);
-        }
+        database_metrics().write_meter.inc();
+        database_metrics().bytes_written.observe(value.len() as f64);
+
         // FIXME: This is a race condition. We should use a transaction.
         let prev = self.get(key, column)?;
         // FIXME: This is a race condition. We should use a transaction.
@@ -273,8 +267,7 @@ impl KeyValueStore for RocksDb {
     }
 
     fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
-        #[cfg(feature = "metrics")]
-        DATABASE_METRICS.read_meter.inc();
+        database_metrics().read_meter.inc();
 
         Ok(self
             .db
@@ -289,8 +282,7 @@ impl KeyValueStore for RocksDb {
         column: Column,
         mut buf: &mut [u8],
     ) -> DatabaseResult<Option<usize>> {
-        #[cfg(feature = "metrics")]
-        DATABASE_METRICS.read_meter.inc();
+        database_metrics().read_meter.inc();
 
         let r = self
             .db
@@ -304,21 +296,16 @@ impl KeyValueStore for RocksDb {
             })
             .transpose()?;
 
-        #[cfg(feature = "metrics")]
-        {
-            if let Some(r) = &r {
-                DATABASE_METRICS.bytes_read.observe(*r as f64);
-            }
+        if let Some(r) = &r {
+            database_metrics().bytes_read.observe(*r as f64);
         }
+
         Ok(r)
     }
 
     fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
-        #[cfg(feature = "metrics")]
-        {
-            DATABASE_METRICS.write_meter.inc();
-            DATABASE_METRICS.bytes_written.observe(buf.len() as f64);
-        }
+        database_metrics().write_meter.inc();
+        database_metrics().bytes_written.observe(buf.len() as f64);
 
         let r = buf.len();
         self.db
@@ -329,8 +316,7 @@ impl KeyValueStore for RocksDb {
     }
 
     fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
-        #[cfg(feature = "metrics")]
-        DATABASE_METRICS.read_meter.inc();
+        database_metrics().read_meter.inc();
 
         let r = self
             .db
@@ -338,12 +324,10 @@ impl KeyValueStore for RocksDb {
             .map_err(|e| DatabaseError::Other(e.into()))?
             .map(|value| value.to_vec());
 
-        #[cfg(feature = "metrics")]
-        {
-            if let Some(r) = &r {
-                DATABASE_METRICS.bytes_read.observe(r.len() as f64);
-            }
+        if let Some(r) = &r {
+            database_metrics().bytes_read.observe(r.len() as f64);
         }
+
         Ok(r.map(Arc::new))
     }
 
@@ -389,13 +373,12 @@ impl BatchOperations for RocksDb {
                 }
             }
         }
-        #[cfg(feature = "metrics")]
-        {
-            DATABASE_METRICS.write_meter.inc();
-            DATABASE_METRICS
-                .bytes_written
-                .observe(batch.size_in_bytes() as f64);
-        }
+
+        database_metrics().write_meter.inc();
+        database_metrics()
+            .bytes_written
+            .observe(batch.size_in_bytes() as f64);
+
         self.db
             .write(batch)
             .map_err(|e| DatabaseError::Other(e.into()))

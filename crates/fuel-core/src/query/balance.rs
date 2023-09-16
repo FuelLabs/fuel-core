@@ -28,13 +28,18 @@ use std::{
 pub mod asset_query;
 
 pub trait BalanceQueryData: Send + Sync {
-    fn balance(&self, owner: Address, asset_id: AssetId)
-        -> StorageResult<AddressBalance>;
+    fn balance(
+        &self,
+        owner: Address,
+        asset_id: AssetId,
+        base_asset_id: AssetId,
+    ) -> StorageResult<AddressBalance>;
 
     fn balances(
         &self,
         owner: Address,
         direction: IterDirection,
+        base_asset_id: AssetId,
     ) -> BoxedIter<StorageResult<AddressBalance>>;
 }
 
@@ -43,10 +48,12 @@ impl BalanceQueryData for Database {
         &self,
         owner: Address,
         asset_id: AssetId,
+        base_asset_id: AssetId,
     ) -> StorageResult<AddressBalance> {
         let amount = AssetQuery::new(
             &owner,
             &AssetSpendTarget::new(asset_id, u64::MAX, u64::MAX),
+            &base_asset_id,
             None,
             self,
         )
@@ -72,15 +79,17 @@ impl BalanceQueryData for Database {
         &self,
         owner: Address,
         direction: IterDirection,
+        base_asset_id: AssetId,
     ) -> BoxedIter<StorageResult<AddressBalance>> {
         let mut amounts_per_asset = HashMap::new();
         let mut errors = vec![];
 
-        for coin in AssetsQuery::new(&owner, None, None, self).coins() {
+        for coin in AssetsQuery::new(&owner, None, None, self, &base_asset_id).coins() {
             match coin {
                 Ok(coin) => {
-                    *amounts_per_asset.entry(*coin.asset_id()).or_default() +=
-                        coin.amount();
+                    *amounts_per_asset
+                        .entry(*coin.asset_id(&base_asset_id))
+                        .or_default() += coin.amount();
                 }
                 Err(err) => {
                     errors.push(err);

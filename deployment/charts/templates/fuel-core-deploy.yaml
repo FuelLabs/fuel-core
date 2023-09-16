@@ -220,23 +220,39 @@ spec:
             - "--max-transmit-size"
             - "{{ .Values.app.max_transmit_size }}"
           {{- end }}
-          {{- if .Values.app.sync_max_get_txns }}
-            - "--sync-max-get-txns"
-            - "{{ .Values.app.sync_max_get_txns }}"
+          {{- if .Values.app.heartbeat_check_interval }}
+            - "--heartbeat-check-interval"
+            - "{{ .Values.app.heartbeat_check_interval }}"
           {{- end }}
-          {{- if .Values.app.sync_header_batch_size}}
+          {{- if .Values.app.heartbeat_max_avg_interval }}
+            - "--heartbeat-max-avg-interval"
+            - "{{ .Values.app.heartbeat_max_avg_interval }}"
+          {{- end }}
+          {{- if .Values.app.heartbeat_max_time_since_last  }}
+            - "--heartbeat-max-time-since-last"
+            - "{{ .Values.app.heartbeat_max_time_since_last }}"
+          {{- end }}
+          {{- if .Values.app.sync_block_stream_size }}
+            - "--sync-block-stream-size"
+            - "{{ .Values.app.sync_block_stream_size }}"
+          {{- end }}
+          {{- if .Values.app.sync_header_batch_size }}
             - "--sync-header-batch-size"
             - "{{ .Values.app.sync_header_batch_size }}"
-          {{- end }}
-          {{- if .Values.app.sync_max_header_batch_requests }}
-            - "--sync-max-header-batch-requests"
-            - "{{ .Values.app.sync_max_header_batch_requests }}"
           {{- end }}
           {{- if .Values.app.reserved_nodes_only_mode }}
             - "--reserved-nodes-only-mode"
           {{- end}}
           {{- if .Values.app.allow_private_addresses }}
             - "--allow-private-addresses"
+          {{- end }}
+          {{- if .Values.app.pyroscope_url }}
+            - "--pyroscope-url"
+            - "{{ .Values.app.pyroscope_url }}"
+          {{- end }}
+          {{- if .Values.app.pprof_sample_rate }}
+            - "--pprof-sample-rate"
+            - "{{ .Values.app.pprof_sample_rate }}"
           {{- end }}
           resources:
             limits:

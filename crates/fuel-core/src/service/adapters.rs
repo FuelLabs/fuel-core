@@ -5,6 +5,8 @@ use crate::{
 use fuel_core_consensus_module::block_verifier::Verifier;
 use fuel_core_txpool::service::SharedState as TxPoolSharedState;
 use fuel_core_types::fuel_types::BlockHeight;
+#[cfg(feature = "p2p")]
+use fuel_core_types::services::p2p::peer_reputation::AppScore;
 use std::sync::Arc;
 
 pub mod block_importer;
@@ -87,6 +89,17 @@ pub struct BlockImporterAdapter {
 #[derive(Clone)]
 pub struct P2PAdapter {
     service: Option<fuel_core_p2p::service::SharedState>,
+    peer_report_config: PeerReportConfig,
+}
+
+#[cfg(feature = "p2p")]
+#[derive(Clone)]
+pub struct PeerReportConfig {
+    pub successful_block_import: AppScore,
+    pub missing_block_headers: AppScore,
+    pub bad_block_header: AppScore,
+    pub missing_transactions: AppScore,
+    pub invalid_transactions: AppScore,
 }
 
 #[cfg(not(feature = "p2p"))]
@@ -95,8 +108,14 @@ pub struct P2PAdapter;
 
 #[cfg(feature = "p2p")]
 impl P2PAdapter {
-    pub fn new(service: Option<fuel_core_p2p::service::SharedState>) -> Self {
-        Self { service }
+    pub fn new(
+        service: Option<fuel_core_p2p::service::SharedState>,
+        peer_report_config: PeerReportConfig,
+    ) -> Self {
+        Self {
+            service,
+            peer_report_config,
+        }
     }
 }
 

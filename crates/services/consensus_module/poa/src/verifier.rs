@@ -13,12 +13,6 @@ use fuel_core_types::{
 #[cfg(test)]
 mod tests;
 
-/// The config of the block verifier.
-pub struct Config {
-    /// If the manual block is enabled, skip verification of some fields.
-    pub enabled_manual_blocks: bool,
-}
-
 // TODO: Make this function `async` and await the synchronization with the relayer.
 pub fn verify_consensus(
     consensus_config: &ConsensusConfig,
@@ -38,7 +32,6 @@ pub fn verify_consensus(
 }
 
 pub fn verify_block_fields<D: Database>(
-    config: &Config,
     database: &D,
     block: &Block,
 ) -> anyhow::Result<()> {
@@ -63,13 +56,10 @@ pub fn verify_block_fields<D: Database>(
         "The `da_height` of the next block can't be lower"
     );
 
-    // Skip the verification of the time if it is possible to produce blocks manually.
-    if !config.enabled_manual_blocks {
-        ensure!(
-            header.time() >= prev_header.time(),
-            "The `time` of the next block can't be lower"
-        );
-    }
+    ensure!(
+        header.time() >= prev_header.time(),
+        "The `time` of the next block can't be lower"
+    );
 
     ensure!(
         header.consensus.application_hash == header.application.hash(),

@@ -8,7 +8,10 @@ use futures::{
 };
 
 use crate::{
-    import::empty_header,
+    import::test_helpers::{
+        empty_header,
+        peer_sourced_headers,
+    },
     ports::{
         MockBlockImporterPort,
         MockConsensusPort,
@@ -21,6 +24,7 @@ use super::*;
 #[tokio::test]
 async fn test_new_service() {
     let mut p2p = MockPeerToPeerPort::default();
+    p2p.expect_report_peer().returning(|_, _| Ok(()));
     p2p.expect_height_stream().returning(|| {
         stream::iter(
             std::iter::successors(Some(6u32), |n| Some(n + 1)).map(BlockHeight::from),
@@ -34,13 +38,13 @@ async fn test_new_service() {
         .into_boxed()
     });
     p2p.expect_get_sealed_block_headers().returning(|range| {
-        Ok(Some(
+        Ok(peer_sourced_headers(Some(
             range
                 .clone()
                 .map(BlockHeight::from)
                 .map(empty_header)
                 .collect(),
-        ))
+        )))
     });
     p2p.expect_get_transactions()
         .returning(|_| Ok(Some(vec![])));
@@ -59,9 +63,8 @@ async fn test_new_service() {
         .returning(|_| Ok(true));
     consensus.expect_await_da_height().returning(|_| Ok(()));
     let params = Config {
-        max_get_txns_requests: 10,
+        block_stream_buffer_size: 10,
         header_batch_size: 10,
-        max_header_batch_requests: 10,
     };
     let s = new_service(4u32.into(), p2p, importer, consensus, params).unwrap();
 

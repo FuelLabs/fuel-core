@@ -1,34 +1,20 @@
-use std::{
-    ops::Range,
-    sync::Arc,
-};
+use std::{ops::Range, sync::Arc};
 
 use fuel_core_types::{
-    blockchain::{
-        primitives::BlockId,
-        SealedBlock,
-        SealedBlockHeader,
-    },
+    blockchain::{primitives::BlockId, SealedBlock, SealedBlockHeader},
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
 };
 use libp2p::PeerId;
-use serde::{
-    Deserialize,
-    Serialize,
-};
-use serde_with::{
-    serde_as,
-    FromInto,
-};
+use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, FromInto};
+use thiserror::Error;
 use tokio::sync::oneshot;
 
 pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &[u8] = b"/fuel/req_res/0.0.1";
 
 /// Max Size in Bytes of the Request Message
 pub(crate) const MAX_REQUEST_SIZE: usize = core::mem::size_of::<RequestMessage>();
-
-pub type ChannelItem<T> = oneshot::Sender<Option<T>>;
 
 // Peer receives a `RequestMessage`.
 // It prepares a response in form of `OutboundResponse`
@@ -61,10 +47,10 @@ pub enum ResponseMessage {
 /// Holds oneshot channels for specific responses
 #[derive(Debug)]
 pub enum ResponseChannelItem {
-    Block(ChannelItem<SealedBlock>),
-    SealedHeaders(ChannelItem<(PeerId, Option<Vec<SealedBlockHeader>>)>),
-    Transactions(ChannelItem<Vec<Transaction>>),
-    PooledTransactions(ChannelItem<Vec<String>>), // temp as string
+    Block(oneshot::Sender<Option<SealedBlock>>),
+    SealedHeaders(oneshot::Sender<(PeerId, Option<Vec<SealedBlockHeader>>)>),
+    Transactions(oneshot::Sender<Option<Vec<Transaction>>>),
+    PooledTransactions(oneshot::Sender<Option<Vec<String>>>), // temp as string
 }
 
 /// Response that is sent over the wire
@@ -87,14 +73,18 @@ pub enum OutboundResponse {
     PooledTransactions(Option<Arc<Vec<String>>>), // temp as string
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum RequestError {
+    #[error("Not currently connected to any peers")]
     NoPeersConnected,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Error)]
 pub enum ResponseError {
+    #[error("Response channel does not exist")]
     ResponseChannelDoesNotExist,
+    #[error("Failed to send response")]
     SendingResponseFailed,
+    #[error("Failed to convert response to intermediate format")]
     ConversionToIntermediateFailed,
 }

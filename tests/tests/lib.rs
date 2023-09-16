@@ -12,6 +12,7 @@ mod deployment;
 mod health;
 mod helpers;
 mod messages;
+mod metrics;
 mod node_info;
 mod poa;
 #[cfg(feature = "relayer")]

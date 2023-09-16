@@ -36,6 +36,14 @@ use fuel_core::{
         },
     },
 };
+use pyroscope::{
+    pyroscope::PyroscopeAgentRunning,
+    PyroscopeAgent,
+};
+use pyroscope_pprofrs::{
+    pprof_backend,
+    PprofConfig,
+};
 use std::{
     env,
     net,
@@ -57,6 +65,7 @@ const DEFAULT_DATABASE_CACHE_SIZE: usize = 1024 * 1024 * 1024;
 mod p2p;
 
 mod consensus;
+mod profiling;
 #[cfg(feature = "relayer")]
 mod relayer;
 
@@ -108,9 +117,12 @@ pub struct Command {
     )]
     pub chain_config: String,
 
-    /// Allows GraphQL Endpoints to arbitrarily advanced blocks. Should be used for local development only
-    #[arg(long = "manual-blocks-enabled", env)]
-    pub manual_blocks_enabled: bool,
+    /// Should be used for local development only. Enabling debug mode:
+    /// - Allows GraphQL Endpoints to arbitrarily advance blocks.
+    /// - Enables debugger GraphQL Endpoints.
+    /// - Allows setting `utxo_validation` to `false`.
+    #[arg(long = "debug", env)]
+    pub debug: bool,
 
     /// Enable logging of backtraces from vm errors
     #[arg(long = "vm-backtrace", env)]
@@ -193,6 +205,9 @@ pub struct Command {
     /// Time to wait after submitting a query before debug info will be logged about query.
     #[clap(long = "query-log-threshold-time", default_value = "2s", env)]
     pub query_log_threshold_time: humantime::Duration,
+
+    #[clap(flatten)]
+    pub profiling: profiling::ProfilingArgs,
 }
 
 impl Command {
@@ -206,7 +221,7 @@ impl Command {
             database_type,
             chain_config,
             vm_backtrace,
-            manual_blocks_enabled,
+            debug,
             utxo_validation,
             min_gas_price,
             consensus_key,
@@ -229,6 +244,7 @@ impl Command {
             min_connected_reserved_peers,
             time_until_synced,
             query_log_threshold_time,
+            profiling: _,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -286,14 +302,14 @@ impl Command {
             max_wait_time: max_wait_time.into(),
         };
 
-        Ok(Config {
+        let config = Config {
             addr,
             max_database_cache_size,
             database_path,
             database_type,
             chain_conf: chain_conf.clone(),
+            debug,
             utxo_validation,
-            manual_blocks_enabled,
             block_production: trigger,
             vm: VMConfig {
                 backtrace: vm_backtrace,
@@ -327,25 +343,32 @@ impl Command {
             min_connected_reserved_peers,
             time_until_synced: time_until_synced.into(),
             query_log_threshold_time: query_log_threshold_time.into(),
-        })
+        };
+        Ok(config)
     }
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
-    let config = command.get_config()?;
     let network_name = {
         #[cfg(feature = "p2p")]
         {
-            config
-                .p2p
-                .as_ref()
-                .map(|config| config.network_name.clone())
+            command
+                .p2p_args
+                .network
+                .clone()
                 .unwrap_or_else(|| "default_network".to_string())
         }
         #[cfg(not(feature = "p2p"))]
         "default_network"
     }
     .to_string();
+
+    let profiling = command.profiling.clone();
+    let config = command.get_config()?;
+
+    // start profiling agent if url is configured
+    let _profiling_agent = start_pyroscope_agent(profiling, &config, network_name)?;
+
     // log fuel-core version
     info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
     trace!("Initializing in TRACE mode.");
@@ -382,6 +405,32 @@ fn load_consensus_key(
     } else {
         Ok(None)
     }
+}
+
+fn start_pyroscope_agent(
+    profiling_args: profiling::ProfilingArgs,
+    config: &Config,
+    network_name: String,
+) -> anyhow::Result<Option<PyroscopeAgent<PyroscopeAgentRunning>>> {
+    profiling_args
+        .pyroscope_url
+        .as_ref()
+        .map(|url| -> anyhow::Result<_> {
+            // Configure profiling backend
+            let agent = PyroscopeAgent::builder(url, &"fuel-core".to_string())
+                .tags(vec![
+                    ("service", config.name.as_str()),
+                    ("network", network_name.as_str()),
+                ])
+                .backend(pprof_backend(
+                    PprofConfig::new().sample_rate(profiling_args.pprof_sample_rate),
+                ))
+                .build()
+                .context("failed to start profiler")?;
+            let agent_running = agent.start().unwrap();
+            Ok(agent_running)
+        })
+        .transpose()
 }
 
 async fn shutdown_signal() -> anyhow::Result<()> {

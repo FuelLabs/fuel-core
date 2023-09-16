@@ -66,9 +66,9 @@ pub struct FuelService {
 impl FuelService {
     /// Creates a `FuelService` instance from service config
     #[tracing::instrument(skip_all, fields(name = %config.name))]
-    pub fn new(database: Database, mut config: Config) -> anyhow::Result<Self> {
+    pub fn new(database: Database, config: Config) -> anyhow::Result<Self> {
+        let config = config.make_config_consistent();
         database.init(&config.chain_conf)?;
-        Self::make_config_consistent(&mut config);
         let task = Task::new(database, config)?;
         let runner = ServiceRunner::new(task);
         let shared = runner.shared.clone();
@@ -131,22 +131,6 @@ impl FuelService {
             relayer_handle.await_synced().await?;
         }
         Ok(())
-    }
-
-    // TODO: Rework our configs system to avoid nesting of the same configs.
-    fn make_config_consistent(config: &mut Config) {
-        if config.txpool.chain_config != config.chain_conf {
-            warn!("The `ChainConfig` of `TxPool` was inconsistent");
-            config.txpool.chain_config = config.chain_conf.clone();
-        }
-        if config.txpool.utxo_validation != config.utxo_validation {
-            warn!("The `utxo_validation` of `TxPool` was inconsistent");
-            config.txpool.utxo_validation = config.utxo_validation;
-        }
-        if config.block_producer.utxo_validation != config.utxo_validation {
-            warn!("The `utxo_validation` of `BlockProducer` was inconsistent");
-            config.block_producer.utxo_validation = config.utxo_validation;
-        }
     }
 }
 

@@ -16,20 +16,12 @@ harness = true
 name = "integration_tests"
 path = "tests/lib.rs"
 
-# Metrics tests need to query /metrics without and explicit endpoint, and without
-# a seperate endpoint, the noise can cause issues
-[[test]]
-harness = true
-name = "metrics_tests"
-path = "tests/metrics.rs"
-required-features = ["metrics"]
-
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 cynic = { workspace = true }
 ethers = "1.0.2"
-fuel-core = { path = "../crates/fuel-core", default-features = false, features = ["dap", "test-helpers"] }
+fuel-core = { path = "../crates/fuel-core", default-features = false, features = ["test-helpers"] }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
 fuel-core-p2p = { path = "../crates/services/p2p", features = ["test-helpers"], optional = true }
 fuel-core-poa = { path = "../crates/services/consensus_module/poa" }
@@ -57,8 +49,6 @@ tokio = { workspace = true, features = [
 ] }
 
 [features]
-debug = ["fuel-core-types/debug"]
-default = ["fuel-core/default", "metrics", "relayer"]
-metrics = ["fuel-core/metrics", "fuel-core/rocksdb"]
+default = ["fuel-core/default", "relayer"]
 p2p = ["fuel-core/p2p", "fuel-core-p2p"]
 relayer = ["fuel-core/relayer", "fuel-core-relayer"]

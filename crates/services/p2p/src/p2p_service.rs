@@ -13,7 +13,7 @@ use crate::{
         ResponseChannelItem, ResponseError, ResponseMessage,
     },
 };
-use fuel_core_metrics::p2p_metrics::P2P_METRICS;
+use fuel_core_metrics::p2p_metrics::p2p_metrics;
 use fuel_core_types::{
     fuel_types::BlockHeight, services::p2p::peer_reputation::AppScore,
 };
@@ -237,7 +237,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             .collect()
     }
 
-    pub fn get_peers_ids(&self) -> impl Iterator<Item = &PeerId> {
+    pub fn get_peers_ids_iter(&self) -> impl Iterator<Item = &PeerId> {
         self.peer_manager.get_peers_ids()
     }
 
@@ -271,7 +271,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let peer_id = match peer_id {
             Some(peer_id) => peer_id,
             _ => {
-                let peers = self.get_peers_ids();
+                let peers = self.get_peers_ids_iter();
                 let peers_count = self.peer_manager.total_peers_connected();
 
                 if peers_count == 0 {
@@ -468,7 +468,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                         agent_version,
                     } => {
                         if self.metrics {
-                            P2P_METRICS.unique_peers.inc();
+                            p2p_metrics().unique_peers.inc();
                         }
 
                         self.peer_manager.handle_peer_identified(
@@ -594,7 +594,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                                 Some(ResponseChannelItem::SealedHeaders(channel)),
                                 Ok(ResponseMessage::SealedHeaders(headers)),
                             ) => {
-                                if channel.send(Some((peer, headers))).is_err() {
+                                if channel.send((peer, headers)).is_err() {
                                     debug!(
                                         "Failed to send through the channel for {:?}",
                                         request_id
@@ -1160,7 +1160,7 @@ mod tests {
                     }
                     tracing::info!("Node B Event: {:?}", node_b_event);
                 }
-            };
+            }
         }
     }
 
@@ -1567,7 +1567,7 @@ mod tests {
 
                                             let expected = arbitrary_headers_for_range(range.clone());
 
-                                            if let Ok(Some((_, sealed_headers))) = response_message {
+                                            if let Ok((_, sealed_headers)) = response_message {
                                                 let check = expected.iter().zip(sealed_headers.unwrap().iter()).all(|(a, b)| eq_except_metadata(a, b));
                                                 let _ = tx_test_end.send(check).await;
                                             } else {
