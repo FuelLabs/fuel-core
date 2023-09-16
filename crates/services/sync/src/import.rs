@@ -420,13 +420,7 @@ async fn get_sealed_blocks<
                 let p2p = p2p.clone();
                 let consensus = consensus.clone();
                 let validity =
-                    check_sealed_header(&header, p, p2p.clone(), consensus.clone())
-                        .await
-                        .and_then(|validity| {
-                            validity
-                                .then(|| ())
-                                .ok_or_else(|| anyhow!("sealed header not valid"))
-                        });
+                    check_sealed_header(&header, p, p2p.clone(), consensus.clone()).await;
 
                 // Wait for the da to be at least the da height on the header.
                 if validity.is_ok() {
