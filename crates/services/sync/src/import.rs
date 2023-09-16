@@ -410,36 +410,41 @@ async fn get_sealed_blocks<
     consensus: Arc<C>,
 ) -> anyhow::Result<Vec<SealedBlock>> {
     let SourcePeer { peer_id, data } = headers;
+    let p = peer_id.clone();
+    let p2p_ = p2p.clone();
+    let consensus = consensus.clone();
+    let headers = futures::stream::iter(data)
+        .then(move |header| {
+            let p = p.clone();
+            let p2p = p2p_.clone();
+            let consensus = consensus.clone();
+            async move {
+                let p = p.clone();
+                let p2p = p2p.clone();
+                let consensus = consensus.clone();
+                let validity =
+                    check_sealed_header(&header, p, p2p.clone(), consensus.clone())
+                        .await
+                        .and_then(|validity| {
+                            validity
+                                .then(|| ())
+                                .ok_or_else(|| anyhow!("sealed header not valid"))
+                        });
 
-    let stream = futures::stream::iter(data)
-        .then(|header| async {
-            let validity = check_sealed_header(
-                &header,
-                peer_id.clone(),
-                p2p.clone(),
-                consensus.clone(),
-            )
-            .await;
-            validity.map(|validity| (validity, header))
+                // Wait for the da to be at least the da height on the header.
+                if validity.is_ok() {
+                    consensus.await_da_height(&header.entity.da_height).await?;
+                }
+
+                validity.map(|_| header)
+            }
         })
-        .try_filter_map(|(validity, header)| async {
-            let header = if validity { Some(header) } else { None };
-            Ok(header)
-        })
-        .collect::<anyhow::Result<Vec<_>>>()
+        .into_scan_err()
+        .scan_err()
+        .try_collect()
         .await?;
 
-    // for header in data {
-    //     // Check the consensus is valid on this header.
-    //     if !check_sealed_header(header, peer_id.clone(), p2p.clone(), consensus.clone())
-    //         .await?
-    //     {
-    //         return Ok(vec![])
-    //     }
-    //
-    //     // Wait for the da to be at least the da height on the header.
-    //     consensus.await_da_height(&header.entity.da_height).await?
-    // }
+    let headers = peer_id.bind(headers);
 
     get_blocks(p2p.as_ref(), headers).await
 }

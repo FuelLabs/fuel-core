@@ -66,7 +66,6 @@ async fn import__signature_fails_on_header_5_only() {
     assert_eq!((State::new(4, None), true), res);
 }
 
-#[ignore]
 #[tokio::test]
 async fn import__signature_fails_on_header_4_only() {
     // given
