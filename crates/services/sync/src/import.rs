@@ -707,7 +707,7 @@ impl<S> ScanEmptyErr<S> {
                 let result = stream.next().await?;
                 is_err = result.is_err();
                 result
-                    .map(|v| v.is_empty().then(|| v))
+                    .map(|v| (!v.is_empty()).then(|| v))
                     .transpose()
                     .map(|result| (result, (is_err, stream)))
             }
