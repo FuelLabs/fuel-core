@@ -240,8 +240,8 @@ where
         .buffered(params.block_stream_buffer_size)
         // Continue the stream unless an error or none occurs.
         // Note the error will be returned but the stream will close.
-        .into_scan_none_or_err()
-        .scan_none_or_err()
+        .into_scan_empty_or_err()
+        .scan_empty_or_err()
         // Continue the stream until the shutdown signal is received.
         .take_until({
             let mut s = shutdown.clone();
@@ -316,7 +316,7 @@ async fn get_block_stream<
     params: &Config,
     p2p: Arc<P>,
     consensus: Arc<C>,
-) -> impl Stream<Item = impl Future<Output = anyhow::Result<Option<Vec<SealedBlock>>>>> {
+) -> impl Stream<Item = impl Future<Output = anyhow::Result<Vec<SealedBlock>>>> {
     get_header_stream(peer.clone(), range, params, p2p.clone())
         .chunks(1)
         .map({
@@ -409,7 +409,7 @@ async fn get_sealed_blocks<
     headers: SourcePeer<Vec<SealedBlockHeader>>,
     p2p: Arc<P>,
     consensus: Arc<C>,
-) -> anyhow::Result<Option<Vec<SealedBlock>>> {
+) -> anyhow::Result<Vec<SealedBlock>> {
     let SourcePeer { peer_id, data } = headers;
     let p = peer_id.clone();
     let p2p_ = p2p.clone();
@@ -590,15 +590,15 @@ where
                     consensus,
                     entity: header,
                 } = block_header;
-                let block = Block::try_from_executed(header, transactions)
-                    .ok_or(anyhow!("Failed to create a new block: Transactions do not match the header."))
-                    .map(|block| {
-                        SealedBlock {
-                            entity: block,
-                            consensus,
+                let block = Block::try_from_executed(header, transactions).map(|block| {
+                    SealedBlock {
+                        entity: block,
+                        consensus,
                     }
                 });
-                if block.is_err() {
+                if let Some(block) = block {
+                    blocks.push(block);
+                } else {
                     tracing::error!(
                         "Failed to created block from header and transactions"
                     );
@@ -609,13 +609,11 @@ where
                     )
                     .await;
                 }
-                blocks.push(block);
             }
             blocks
         }
     };
-    let result = blocks.into_iter().collect();
-    result
+    Ok(blocks)
 }
 
 #[tracing::instrument(
@@ -656,6 +654,12 @@ trait StreamUtil: Sized {
         ScanNoneErr(self)
     }
 
+    /// Close the stream if an error occurs or a `None` is received.
+    /// Return the error if the stream closes.
+    fn into_scan_empty_or_err(self) -> ScanEmptyErr<Self> {
+        ScanEmptyErr(self)
+    }
+
     /// Turn a stream of `Result<T>` into a stream of `Result<T>`.
     /// Close the stream if an error occurs.
     /// Return the error if the stream closes.
@@ -667,6 +671,7 @@ trait StreamUtil: Sized {
 impl<S> StreamUtil for S {}
 
 struct ScanNoneErr<S>(S);
+struct ScanEmptyErr<S>(S);
 struct ScanErr<S>(S);
 
 impl<S> ScanNoneErr<S> {
@@ -683,6 +688,28 @@ impl<S> ScanNoneErr<S> {
                 let result = stream.next().await?;
                 is_err = result.is_err();
                 result.transpose().map(|result| (result, (is_err, stream)))
+            }
+        })
+    }
+}
+
+impl<S> ScanEmptyErr<S> {
+    /// Scan the stream for empty vector or errors.
+    fn scan_empty_or_err<R>(self) -> impl Stream<Item = anyhow::Result<Vec<R>>>
+    where
+        S: Stream<Item = anyhow::Result<Vec<R>>> + Send + 'static,
+    {
+        let stream = self.0.boxed();
+        futures::stream::unfold((false, stream), |(mut is_err, mut stream)| async move {
+            if is_err {
+                None
+            } else {
+                let result = stream.next().await?;
+                is_err = result.is_err();
+                result
+                    .map(|v| v.is_empty().then(|| v))
+                    .transpose()
+                    .map(|result| (result, (is_err, stream)))
             }
         })
     }
