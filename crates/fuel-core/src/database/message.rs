@@ -153,6 +153,10 @@ impl Database {
     pub fn is_message_spent(&self, id: &Nonce) -> StorageResult<bool> {
         fuel_core_storage::StorageAsRef::storage::<SpentMessages>(&self).contains_key(id)
     }
+
+    pub fn message_exists(&self, id: &Nonce) -> StorageResult<bool> {
+        fuel_core_storage::StorageAsRef::storage::<Messages>(&self).contains_key(id)
+    }
 }
 
 // TODO: Reuse `fuel_vm::storage::double_key` macro.

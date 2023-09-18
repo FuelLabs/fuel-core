@@ -6,16 +6,20 @@ use crate::client::{
             SpendQueryElementInput,
         },
         contract::ContractBalanceQueryArgs,
+        message::MessageStatusArgs,
         tx::DryRunArg,
         Tai64Timestamp,
         TransactionId,
     },
-    types::primitives::{
-        Address,
-        AssetId,
-        BlockId,
-        ContractId,
-        UtxoId,
+    types::{
+        message::MessageStatus,
+        primitives::{
+            Address,
+            AssetId,
+            BlockId,
+            ContractId,
+            UtxoId,
+        },
     },
 };
 use anyhow::Context;
@@ -872,6 +876,15 @@ impl FuelClient {
         let messages = self.query(query).await?.messages.into();
 
         Ok(messages)
+    }
+
+    pub async fn message_status(&self, nonce: &Nonce) -> io::Result<MessageStatus> {
+        let query = schema::message::MessageStatusQuery::build(MessageStatusArgs {
+            nonce: (*nonce).into(),
+        });
+        let status = self.query(query).await?.message_status.into();
+
+        Ok(status)
     }
 
     /// Request a merkle proof of an output message.
