@@ -8,7 +8,6 @@ use futures::{
 };
 use std::{
     future::Future,
-    // iter,
     ops::RangeInclusive,
     sync::Arc,
 };
@@ -216,6 +215,7 @@ where
             consensus.clone(),
         )
         .await;
+
         let result = block_stream
         .map(move |stream_block_batch| {
             let shutdown_guard = shutdown_guard.clone();
@@ -226,10 +226,7 @@ where
                 let mut shutdown_signal = shutdown_signal.clone();
                 tokio::select! {
                     // Stream a batch of blocks
-                    blocks = stream_block_batch => {
-                        dbg!(&blocks);
-                        blocks
-                    },
+                    blocks = stream_block_batch => blocks,
                     // If a shutdown signal is received during the stream, terminate early and
                     // return an empty response
                     _ = shutdown_signal.while_started() => Ok(vec![])
@@ -238,7 +235,7 @@ where
         })
         // Request up to `block_stream_buffer_size` transactions from the network.
         .buffered(params.block_stream_buffer_size)
-        // Continue the stream unless an error or none occurs.
+        // Continue the stream unless an error or empty batch occurs.
         // Note the error will be returned but the stream will close.
         .into_scan_empty_or_err()
         .scan_empty_or_err()
@@ -263,10 +260,13 @@ where
                 let peer = peer.clone();
                 async move {
                     let executor = executor.clone();
+                    dbg!(&res);
                     let sealed_blocks = res?;
+                    dbg!(&sealed_blocks);
                     let iter = futures::stream::iter(sealed_blocks);
                     let res = iter.then(|sealed_block| async {
                         let executor = executor.clone();
+                        dbg!(&sealed_block);
                         execute_and_commit(executor.as_ref(), &state, sealed_block).await
                     }).try_collect::<Vec<_>>().await;
                     match &res {
@@ -317,26 +317,53 @@ async fn get_block_stream<
     p2p: Arc<P>,
     consensus: Arc<C>,
 ) -> impl Stream<Item = impl Future<Output = anyhow::Result<Vec<SealedBlock>>>> {
-    get_header_stream(peer.clone(), range, params, p2p.clone())
-        .chunks(1)
+    let Config {
+        header_batch_size, ..
+    } = params;
+    let header_stream = get_header_stream(peer.clone(), range, params, p2p.clone());
+    let peer_ = peer.clone();
+    let p2p_ = p2p.clone();
+    let consensus_ = consensus.clone();
+    let generator = futures::stream::repeat_with(move || {
+        (peer_.clone(), p2p_.clone(), consensus_.clone())
+    });
+    let iter = header_stream.zip(generator);
+    let i = iter
+        .then(|(header, (peer, p2p, consensus))| async move {
+            let header = header?;
+            let validity =
+                check_sealed_header(&header, peer, p2p.clone(), consensus.clone())
+                    .await?;
+            if validity {
+                consensus.await_da_height(&header.entity.da_height).await?;
+                Ok(Some(header))
+            } else {
+                Ok(None)
+            }
+        })
+        .into_scan_none_or_err()
+        .scan_none_or_err()
+        .chunks(*header_batch_size as usize)
         .map({
             let p2p = p2p.clone();
             let consensus_port = consensus.clone();
             let peer = peer.clone();
-            move |batch| {
+            move |headers| {
                 {
                     let p2p = p2p.clone();
-                    let consensus_port = consensus_port.clone();
+                    let _consensus_port = consensus_port.clone();
                     let peer = peer.clone();
-                    let batch =
-                        batch.into_iter().filter_map(|header| header.ok()).collect();
-                    let headers = peer.bind(batch);
-                    get_sealed_blocks(headers, p2p.clone(), consensus_port.clone())
+                    let headers = peer.bind(headers);
+
+                    get_blocks(p2p, headers)
                 }
                 // .instrument(tracing::debug_span!("consensus_and_transactions"))
                 // .in_current_span()
             }
-        })
+        });
+
+    i
+    // i.into_scan_none_or_err().scan_none_or_err()
 }
 
 fn get_header_stream<P: PeerToPeerPort + Send + Sync + 'static>(
@@ -344,7 +371,6 @@ fn get_header_stream<P: PeerToPeerPort + Send + Sync + 'static>(
     range: RangeInclusive<u32>,
     params: &Config,
     p2p: Arc<P>,
-    // ) -> impl Stream<Item = anyhow::Result<SourcePeer<SealedBlockHeader>>> {
 ) -> impl Stream<Item = anyhow::Result<SealedBlockHeader>> {
     let Config {
         header_batch_size, ..
@@ -402,48 +428,16 @@ async fn check_sealed_header<
     Ok(validity)
 }
 
-async fn get_sealed_blocks<
-    P: PeerToPeerPort + Send + Sync + 'static,
-    C: ConsensusPort + Send + Sync + 'static,
->(
-    headers: SourcePeer<Vec<SealedBlockHeader>>,
-    p2p: Arc<P>,
-    consensus: Arc<C>,
-) -> anyhow::Result<Vec<SealedBlock>> {
-    let SourcePeer { peer_id, data } = headers;
-    let p = peer_id.clone();
-    let p2p_ = p2p.clone();
-    let consensus = consensus.clone();
-    let headers = futures::stream::iter(data)
-        .then(move |header| {
-            let p = p.clone();
-            let p2p = p2p_.clone();
-            let consensus = consensus.clone();
-            async move {
-                let p = p.clone();
-                let p2p = p2p.clone();
-                let consensus = consensus.clone();
-                let validity =
-                    check_sealed_header(&header, p, p2p.clone(), consensus.clone())
-                        .await?;
-
-                if validity {
-                    consensus.await_da_height(&header.entity.da_height).await?;
-                    Ok(Some(header))
-                } else {
-                    Ok(None)
-                }
-            }
-        })
-        .into_scan_none_or_err()
-        .scan_none_or_err()
-        .try_collect()
-        .await?;
-
-    let headers = peer_id.bind(headers);
-
-    get_blocks(p2p.as_ref(), headers).await
-}
+// async fn get_sealed_blocks<
+//     P: PeerToPeerPort + Send + Sync + 'static,
+//     C: ConsensusPort + Send + Sync + 'static,
+// >(
+//     headers: SourcePeer<Vec<anyhow::Result<SealedBlockHeader>>>,
+//     p2p: Arc<P>,
+//     _consensus: Arc<C>,
+// ) -> anyhow::Result<Vec<SealedBlock>> {
+//     get_blocks(p2p.as_ref(), headers).await
+// }
 
 /// Waits for a notify or shutdown signal.
 /// Returns true if the notify signal was received.
@@ -476,10 +470,8 @@ where
         range.start(),
         range.end()
     );
-
     let start = *range.start();
     let end = *range.end() + 1;
-
     let res = p2p
         .get_sealed_block_headers(peer.bind(start..end))
         .await
@@ -529,7 +521,10 @@ where
             headers
         }
 
-        Err(e) => vec![Err(e)],
+        Err(e) => {
+            dbg!(&e);
+            vec![Err(e)]
+        }
     };
     futures::stream::iter(headers)
 }
@@ -555,34 +550,43 @@ where
     err
 )]
 async fn get_blocks<P>(
-    p2p: &P,
-    headers: SourcePeer<Vec<SealedBlockHeader>>,
+    p2p: Arc<P>,
+    headers: SourcePeer<Vec<anyhow::Result<SealedBlockHeader>>>,
 ) -> anyhow::Result<Vec<SealedBlock>>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
 {
-    // Request the transactions for this block.
+    // Get transactions for the set of valid block ids
+    // Return the error as well if there is one
 
-    let block_ids = headers.as_ref().map(|headers| {
-        headers
-            .iter()
-            .map(|header| header.entity.id())
-            .collect::<Vec<_>>()
-    });
-    let peer_id = block_ids.peer_id.clone();
+    let SourcePeer {
+        peer_id,
+        data: headers,
+    } = headers;
+    let headers = headers
+        .into_iter()
+        .filter_map(|r| r.ok())
+        .collect::<Vec<_>>();
+    let block_ids = headers.iter().map(|header| header.entity.id()).collect();
+    let block_ids = peer_id.clone().bind(block_ids);
     let maybe_txs = p2p
         .get_transactions_2(block_ids)
         .await
         .trace_err("Failed to get transactions")?
         .trace_none_warn("Could not find transactions for header");
-    let blocks = match maybe_txs {
+
+    match maybe_txs {
         None => {
-            report_peer(p2p, peer_id.clone(), PeerReportReason::MissingTransactions)
-                .await;
-            vec![]
+            report_peer(
+                p2p.as_ref(),
+                peer_id.clone(),
+                PeerReportReason::MissingTransactions,
+            )
+            .await;
+            Ok(vec![])
         }
         Some(transaction_data) => {
-            let headers = headers.data;
+            let headers = headers;
             let iter = headers.into_iter().zip(transaction_data);
             let mut blocks = vec![];
             for (block_header, transactions) in iter {
@@ -603,17 +607,16 @@ where
                         "Failed to created block from header and transactions"
                     );
                     report_peer(
-                        p2p,
+                        p2p.as_ref(),
                         peer_id.clone(),
                         PeerReportReason::InvalidTransactions,
                     )
                     .await;
                 }
             }
-            blocks
+            Ok(blocks)
         }
-    };
-    Ok(blocks)
+    }
 }
 
 #[tracing::instrument(
@@ -691,6 +694,33 @@ impl<S> ScanNoneErr<S> {
             }
         })
     }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::import::StreamUtil;
+    use anyhow::anyhow;
+    use futures::StreamExt;
+
+    #[tokio::test]
+    async fn test_it() {
+        let i = [Ok(Some(0)), Ok(Some(1)), Ok(None)];
+        let stream = futures::stream::iter(i)
+            .into_scan_none_or_err()
+            .scan_none_or_err();
+        let output = stream.collect::<Vec<_>>().await;
+        println!("{:?}", output);
+    }
+
+    // #[tokio::test]
+    // async fn test_it_2() {
+    //     let i = [Ok(Some(0)), Ok(Some(1)), Err(anyhow!("err!"))];
+    //     let stream = futures::stream::iter(i)
+    //         .into_scan_none_or_err()
+    //         .scan_none_or_err();
+    //     let output = stream.collect::<anyhow::Result<Vec<_>>>().await;
+    //     println!("{:?}", output);
+    // }
 }
 
 impl<S> ScanEmptyErr<S> {

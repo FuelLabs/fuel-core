@@ -1557,7 +1557,7 @@ mod tests {
             tokio::select! {
                 message_sent = rx_test_end.recv() => {
                     // we received a signal to end the test
-                    assert!(message_sent.unwrap(), "Receuved incorrect or missing missing messsage");
+                    assert!(message_sent.unwrap(), "Received incorrect or missing missing message");
                     break;
                 }
                 node_a_event = node_a.next_event() => {
