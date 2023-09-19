@@ -321,49 +321,32 @@ async fn get_block_stream<
         header_batch_size, ..
     } = params;
     let header_stream = get_header_stream(peer.clone(), range, params, p2p.clone());
-    let peer_ = peer.clone();
-    let p2p_ = p2p.clone();
-    let consensus_ = consensus.clone();
-    let generator = futures::stream::repeat_with(move || {
-        (peer_.clone(), p2p_.clone(), consensus_.clone())
-    });
-    let iter = header_stream.zip(generator);
-    let i = iter
-        .then(|(header, (peer, p2p, consensus))| async move {
-            let header = header?;
-            let validity =
-                check_sealed_header(&header, peer, p2p.clone(), consensus.clone())
-                    .await?;
-            if validity {
-                consensus.await_da_height(&header.entity.da_height).await?;
-                Ok(Some(header))
-            } else {
-                Ok(None)
-            }
-        })
-        .into_scan_none_or_err()
-        .scan_none_or_err()
-        .chunks(*header_batch_size as usize)
-        .map({
-            let p2p = p2p.clone();
-            let consensus_port = consensus.clone();
-            let peer = peer.clone();
-            move |headers| {
-                {
-                    let p2p = p2p.clone();
-                    let _consensus_port = consensus_port.clone();
-                    let peer = peer.clone();
-                    let headers = peer.bind(headers);
-
-                    get_blocks(p2p, headers)
-                }
-                // .instrument(tracing::debug_span!("consensus_and_transactions"))
-                // .in_current_span()
-            }
-        });
-
-    i
-    // i.into_scan_none_or_err().scan_none_or_err()
+    let generator =
+        futures::stream::repeat((peer.clone(), p2p.clone(), consensus.clone()));
+    let iter = header_stream.zip(generator.clone());
+    iter.then(|(header, (peer, p2p, consensus))| async move {
+        let header = header?;
+        let validity =
+            check_sealed_header(&header, peer, p2p.clone(), consensus.clone()).await?;
+        if validity {
+            consensus.await_da_height(&header.entity.da_height).await?;
+            Ok(Some(header))
+        } else {
+            Ok(None)
+        }
+    })
+    .into_scan_none_or_err()
+    .scan_none_or_err()
+    .chunks(*header_batch_size as usize)
+    .zip(generator)
+    .map(|(headers, (peer, p2p, ..))| {
+        {
+            let headers = peer.bind(headers);
+            get_blocks(p2p, headers)
+        }
+        .instrument(tracing::debug_span!("consensus_and_transactions"))
+        .in_current_span()
+    })
 }
 
 fn get_header_stream<P: PeerToPeerPort + Send + Sync + 'static>(
@@ -699,7 +682,7 @@ impl<S> ScanNoneErr<S> {
 #[cfg(test)]
 mod test {
     use crate::import::StreamUtil;
-    use anyhow::anyhow;
+    // use anyhow::anyhow;
     use futures::StreamExt;
 
     #[tokio::test]
@@ -718,8 +701,8 @@ mod test {
     //     let stream = futures::stream::iter(i)
     //         .into_scan_none_or_err()
     //         .scan_none_or_err();
-    //     let output = stream.collect::<anyhow::Result<Vec<_>>>().await;
-    //     println!("{:?}", output);
+    //     let output = stream.collect::<Vec<_>>().await;
+    //     println!("{:?}", r);
     // }
 }
 
