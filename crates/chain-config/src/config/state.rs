@@ -1,7 +1,10 @@
 use crate::serialization::HexNumber;
 
 use fuel_core_storage::Result as StorageResult;
-use fuel_core_types::fuel_types::BlockHeight;
+use fuel_core_types::fuel_types::{
+    BlockHeight,
+    Nonce,
+};
 
 use serde::{
     Deserialize,
@@ -29,6 +32,8 @@ pub struct StateConfig {
     pub contracts: Option<Vec<ContractConfig>>,
     /// Messages from Layer 1
     pub messages: Option<Vec<MessageConfig>>,
+    /// Spent Messages
+    pub spent_messages: Option<Vec<Nonce>>,
     /// Starting block height (useful for flattened fork networks)
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]
@@ -44,6 +49,7 @@ impl StateConfig {
             coins: db.get_coin_config()?,
             contracts: db.get_contract_config()?,
             messages: db.get_message_config()?,
+            spent_messages: None,
             height: Some(db.get_block_height()?),
         })
     }

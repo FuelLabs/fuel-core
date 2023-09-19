@@ -46,10 +46,11 @@ pub struct MessageProof {
     pub data: Bytes,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum MessageStatus {
     Unspent,
     Spent,
-    Unknown,
+    NotFound,
 }
 
 impl From<schema::message::MessageStatus> for MessageStatus {
@@ -57,7 +58,7 @@ impl From<schema::message::MessageStatus> for MessageStatus {
         match value.state {
             schema::message::MessageState::Unspent => Self::Unspent,
             schema::message::MessageState::Spent => Self::Spent,
-            schema::message::MessageState::Unknown => Self::Unknown,
+            schema::message::MessageState::NotFound => Self::NotFound,
         }
     }
 }

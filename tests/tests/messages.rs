@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use fuel_core::{
     chain_config::{
         MessageConfig,
@@ -13,7 +15,10 @@ use fuel_core_client::client::{
         PageDirection,
         PaginationRequest,
     },
-    types::TransactionStatus,
+    types::{
+        message::MessageStatus,
+        TransactionStatus,
+    },
     FuelClient,
 };
 use fuel_core_types::{
@@ -184,6 +189,83 @@ async fn messages_empty_results_for_owner_with_no_messages(
     let result = client.messages(Some(&owner), request).await.unwrap();
 
     assert_eq!(result.results.len(), 0);
+}
+
+#[tokio::test]
+async fn message_status__can_get_unspent() {
+    // Given
+    let owner = Address::new([1; 32]);
+    let nonce = 1.into();
+
+    let msg = MessageConfig {
+        recipient: owner,
+        nonce: 1.into(),
+        ..Default::default()
+    };
+
+    let mut config = Config::local_node();
+    config.chain_conf.initial_state = Some(StateConfig {
+        messages: Some(vec![msg]),
+        ..Default::default()
+    });
+
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // When
+    let status = client.message_status(&nonce).await.unwrap();
+
+    // Then
+    assert_eq!(status, MessageStatus::Unspent);
+}
+
+#[tokio::test]
+async fn message_status__can_get_spent() {
+    // Given
+    let owner = Address::new([1; 32]);
+    let nonce = 1.into();
+
+    let msg = MessageConfig {
+        recipient: owner,
+        nonce,
+        ..Default::default()
+    };
+
+    // Include spent message
+    let spent_messages = Some(vec![nonce]);
+
+    let mut config = Config::local_node();
+    config.chain_conf.initial_state = Some(StateConfig {
+        messages: Some(vec![msg]),
+        spent_messages,
+        ..Default::default()
+    });
+
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // When
+    let status = client.message_status(&nonce).await.unwrap();
+
+    // Then
+    assert_eq!(status, MessageStatus::Spent);
+}
+
+#[tokio::test]
+async fn message_status__can_get_notfound() {
+    // Given
+    let nonce = 1.into();
+
+    let config = Config::local_node();
+
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // When
+    let status = client.message_status(&nonce).await.unwrap();
+
+    // Then
+    assert_eq!(status, MessageStatus::NotFound);
 }
 
 #[tokio::test]

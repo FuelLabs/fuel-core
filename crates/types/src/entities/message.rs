@@ -122,7 +122,7 @@ impl MessageStatus {
     /// Constructor for `MessageStatus` that fills with `Unknown` state
     pub fn unknown() -> Self {
         Self {
-            state: MessageState::Unknown,
+            state: MessageState::NotFound,
         }
     }
 }
@@ -134,5 +134,5 @@ pub enum MessageState {
     /// Message has already been spent
     Spent,
     /// There is no record of this Message
-    Unknown,
+    NotFound,
 }

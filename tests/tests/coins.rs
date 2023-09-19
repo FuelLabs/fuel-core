@@ -60,6 +60,7 @@ mod coin {
                 .collect(),
             ),
             messages: None,
+            spent_messages: None,
         });
 
         // setup server & client
@@ -313,6 +314,7 @@ mod message_coin {
                     })
                     .collect(),
             ),
+            spent_messages: None,
         });
 
         // setup server & client
@@ -533,6 +535,7 @@ mod all_coins {
                     })
                     .collect(),
             ),
+            spent_messages: None,
         });
 
         // setup server & client
@@ -711,6 +714,7 @@ async fn empty_setup() -> TestContext {
         contracts: None,
         coins: None,
         messages: None,
+        spent_messages: None,
     });
 
     // setup server & client

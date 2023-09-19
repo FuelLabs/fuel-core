@@ -230,7 +230,7 @@ pub struct MessageStatus(pub(crate) entities::message::MessageStatus);
 enum MessageState {
     Unspent,
     Spent,
-    Unknown,
+    NotFound,
 }
 
 #[Object]
@@ -239,7 +239,7 @@ impl MessageStatus {
         match self.0.state {
             entities::message::MessageState::Unspent => MessageState::Unspent,
             entities::message::MessageState::Spent => MessageState::Spent,
-            entities::message::MessageState::Unknown => MessageState::Unknown,
+            entities::message::MessageState::NotFound => MessageState::NotFound,
         }
     }
 }

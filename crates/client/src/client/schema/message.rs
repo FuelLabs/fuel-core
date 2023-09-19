@@ -42,7 +42,7 @@ pub struct MessageStatus {
 pub enum MessageState {
     Unspent,
     Spent,
-    Unknown,
+    NotFound,
 }
 
 #[derive(cynic::QueryFragment, Debug)]

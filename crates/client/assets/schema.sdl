@@ -558,7 +558,7 @@ type MessageProof {
 enum MessageState {
 	UNSPENT
 	SPENT
-	UNKNOWN
+	NOT_FOUND
 }
 
 type MessageStatus {
