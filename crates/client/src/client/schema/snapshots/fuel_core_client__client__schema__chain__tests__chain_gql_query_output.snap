@@ -62,6 +62,7 @@ query {
         gasPriceFactor
         gasPerByte
       }
+      baseAssetId
       chainId
       gasCosts {
         add

@@ -275,7 +275,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             .collect()
     }
 
-    pub fn get_peers_ids(&self) -> impl Iterator<Item = &PeerId> {
+    pub fn get_peers_ids_iter(&self) -> impl Iterator<Item = &PeerId> {
         self.peer_manager.get_peers_ids()
     }
 
@@ -309,7 +309,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let peer_id = match peer_id {
             Some(peer_id) => peer_id,
             _ => {
-                let peers = self.get_peers_ids();
+                let peers = self.get_peers_ids_iter();
                 let peers_count = self.peer_manager.total_peers_connected();
 
                 if peers_count == 0 {

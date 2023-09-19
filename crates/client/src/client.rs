@@ -44,7 +44,6 @@ use fuel_core_types::{
     fuel_types::{
         canonical::SerializedSize,
         BlockHeight,
-        MessageId,
         Nonce,
     },
 };
@@ -879,18 +878,18 @@ impl FuelClient {
     pub async fn message_proof(
         &self,
         transaction_id: &TxId,
-        message_id: &MessageId,
+        nonce: &Nonce,
         commit_block_id: Option<&BlockId>,
         commit_block_height: Option<BlockHeight>,
     ) -> io::Result<Option<types::MessageProof>> {
         let transaction_id: TransactionId = (*transaction_id).into();
-        let message_id: schema::MessageId = (*message_id).into();
+        let nonce: schema::Nonce = (*nonce).into();
         let commit_block_id: Option<schema::BlockId> =
             commit_block_id.map(|commit_block_id| (*commit_block_id).into());
         let commit_block_height = commit_block_height.map(Into::into);
         let query = schema::message::MessageProofQuery::build(MessageProofArgs {
             transaction_id,
-            message_id,
+            nonce,
             commit_block_id,
             commit_block_height,
         });
