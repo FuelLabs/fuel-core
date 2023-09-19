@@ -3,6 +3,7 @@
 //! importing blocks from the network into the local blockchain.
 
 use futures::{
+    stream,
     FutureExt,
     TryStreamExt,
 };
@@ -207,15 +208,16 @@ where
 
         let peer = peer.expect("Checked");
 
+        let generator =
+            stream::repeat((peer.clone(), state.clone(), p2p.clone(), executor.clone()));
+
         let block_stream = get_block_stream(
             peer.clone(),
             range.clone(),
             params,
             p2p.clone(),
             consensus.clone(),
-        )
-        .await;
-
+        );
         let result = block_stream
         .map(move |stream_block_batch| {
             let shutdown_guard = shutdown_guard.clone();
@@ -226,7 +228,10 @@ where
                 let mut shutdown_signal = shutdown_signal.clone();
                 tokio::select! {
                     // Stream a batch of blocks
-                    blocks = stream_block_batch => blocks,
+                    blocks = stream_block_batch => {
+                        dbg!(&blocks);
+                        blocks
+                    },
                     // If a shutdown signal is received during the stream, terminate early and
                     // return an empty response
                     _ = shutdown_signal.while_started() => Ok(vec![])
@@ -247,44 +252,30 @@ where
                 tracing::info!("In progress import stream shutting down");
             }
         })
+            .zip(generator)
         // Then execute and commit the block
-        .then({
-            let state = state.clone();
-            let executor = executor.clone();
-            let p2p = p2p.clone();
-            let peer = peer.clone();
-            move |res| {
-                let state = state.clone();
-                let executor = executor.clone();
-                let p2p = p2p.clone();
-                let peer = peer.clone();
-                async move {
-                    let executor = executor.clone();
-                    dbg!(&res);
-                    let sealed_blocks = res?;
-                    dbg!(&sealed_blocks);
-                    let iter = futures::stream::iter(sealed_blocks);
-                    let res = iter.then(|sealed_block| async {
-                        let executor = executor.clone();
-                        dbg!(&sealed_block);
-                        execute_and_commit(executor.as_ref(), &state, sealed_block).await
-                    }).try_collect::<Vec<_>>().await;
-                    match &res {
-                        Ok(_) => {
-                            report_peer(p2p.as_ref(), peer.clone(), PeerReportReason::SuccessfulBlockImport).await;
-                        },
-                        Err(e) => {
-                            // If this fails, then it means that consensus has approved a block that is invalid.
-                            // This would suggest a more serious issue than a bad peer, e.g. a fork or an out-of-date client.
-                            tracing::error!("Failed to execute and commit block from peer {:?}: {:?}", peer, e);
-                        },
-                    }
-                    res
+        .then(
+            |(res, (peer, state, p2p, executor))| async move {
+                let sealed_blocks = res?;
+                let sealed_blocks = futures::stream::iter(sealed_blocks);
+                let res = sealed_blocks.then(|sealed_block| async {
+                    execute_and_commit(executor.as_ref(), &state, sealed_block).await
+                }).try_collect::<Vec<_>>().await;
+                match &res {
+                    Ok(_) => {
+                        report_peer(p2p.as_ref(), peer.clone(), PeerReportReason::SuccessfulBlockImport).await;
+                    },
+                    Err(e) => {
+                        // If this fails, then it means that consensus has approved a block that is invalid.
+                        // This would suggest a more serious issue than a bad peer, e.g. a fork or an out-of-date client.
+                        tracing::error!("Failed to execute and commit block from peer {:?}: {:?}", peer, e);
+                    },
                 }
+                res
             }
             .instrument(tracing::debug_span!("execute_and_commit"))
             .in_current_span()
-        })
+        )
         // Continue the stream unless an error occurs.
         .into_scan_err()
         .scan_err()
@@ -292,7 +283,6 @@ where
         // find any errors.
         // Fold the stream into a count and any errors.
         .fold((0usize, Ok(())), |(count, res), result| async move {
-            dbg!(&result);
             match result {
                 Ok(_) => (count + 1, res),
                 Err(e) => (count, Err(e)),
@@ -307,7 +297,7 @@ where
     }
 }
 
-async fn get_block_stream<
+fn get_block_stream<
     P: PeerToPeerPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 >(
@@ -546,9 +536,11 @@ where
         peer_id,
         data: headers,
     } = headers;
+    let (headers, _err): (Vec<_>, Vec<_>) =
+        headers.into_iter().partition(|item| item.is_err());
     let headers = headers
         .into_iter()
-        .filter_map(|r| r.ok())
+        .filter_map(|header| header.ok())
         .collect::<Vec<_>>();
     let block_ids = headers.iter().map(|header| header.entity.id()).collect();
     let block_ids = peer_id.clone().bind(block_ids);
@@ -682,8 +674,11 @@ impl<S> ScanNoneErr<S> {
 #[cfg(test)]
 mod test {
     use crate::import::StreamUtil;
-    // use anyhow::anyhow;
-    use futures::StreamExt;
+    use anyhow::anyhow;
+    use futures::{
+        StreamExt,
+        TryStreamExt,
+    };
 
     #[tokio::test]
     async fn test_it() {
@@ -695,15 +690,15 @@ mod test {
         println!("{:?}", output);
     }
 
-    // #[tokio::test]
-    // async fn test_it_2() {
-    //     let i = [Ok(Some(0)), Ok(Some(1)), Err(anyhow!("err!"))];
-    //     let stream = futures::stream::iter(i)
-    //         .into_scan_none_or_err()
-    //         .scan_none_or_err();
-    //     let output = stream.collect::<Vec<_>>().await;
-    //     println!("{:?}", r);
-    // }
+    #[tokio::test]
+    async fn test_it_2() {
+        let i = [Ok(Some(0)), Ok(Some(1)), Err(anyhow!("err!"))];
+        let stream = futures::stream::iter(i)
+            .into_scan_none_or_err()
+            .scan_none_or_err();
+        let output = stream.try_collect::<Vec<_>>().await;
+        assert!(output.is_err());
+    }
 }
 
 impl<S> ScanEmptyErr<S> {

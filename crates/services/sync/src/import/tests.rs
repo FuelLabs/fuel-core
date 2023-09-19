@@ -17,17 +17,17 @@ use fuel_core_types::{
     fuel_tx::Transaction,
     services::p2p::TransactionData,
 };
-use test_case::test_case;
+// use test_case::test_case;
 
 use super::*;
 
-#[test_case(State::new(None, 5), Mocks::times([6]) => (State::new(5, None), true) ; "executes 5")]
-#[test_case(State::new(3, 5), Mocks::times([2]) => (State::new(5, None), true) ; "executes 3 to 5")]
-#[tokio::test]
-async fn test_import(state: State, mocks: Mocks) -> (State, bool) {
-    let state = SharedMutex::new(state);
-    test_import_inner(state, mocks, None).await
-}
+// #[test_case(State::new(None, 5), Mocks::times([6]) => (State::new(5, None), true) ; "executes 5")]
+// #[test_case(State::new(3, 5), Mocks::times([2]) => (State::new(5, None), true) ; "executes 3 to 5")]
+// #[tokio::test]
+// async fn test_import(state: State, mocks: Mocks) -> (State, bool) {
+//     let state = SharedMutex::new(state);
+//     test_import_inner(state, mocks, None).await
+// }
 
 #[tokio::test]
 async fn test_import_0_to_5() {
@@ -41,8 +41,37 @@ async fn test_import_0_to_5() {
 
 #[tokio::test]
 async fn test_import_3_to_5() {
+    let consensus_port = MockConsensusPort::times([2]);
+    let mut p2p = MockPeerToPeerPort::default();
+    p2p.expect_select_peer().times(1).returning(|_| {
+        let bytes = vec![1u8, 2, 3, 4, 5];
+        let peer_id = bytes.into();
+        Ok(Some(peer_id))
+    });
+    p2p.expect_get_sealed_block_headers()
+        .times(1)
+        .returning(|range| {
+            let headers = range.map(|range| {
+                let headers = range.clone().map(|h| empty_header(h.into())).collect();
+                Some(headers)
+            });
+            Ok(headers)
+        });
+    p2p.expect_get_transactions_2()
+        .times(1)
+        .returning(|block_ids| {
+            let data = block_ids.data;
+            let v = data.into_iter().map(|_| TransactionData::new()).collect();
+            Ok(Some(v))
+        });
+
+    let mocks = Mocks {
+        consensus_port,
+        p2p,
+        executor: DefaultMocks::times([1]),
+    };
+
     let state = State::new(3, 5);
-    let mocks = Mocks::times([2]);
     let state = SharedMutex::new(state);
     let v = test_import_inner(state, mocks, None).await;
     let expected = (State::new(5, None), true);
