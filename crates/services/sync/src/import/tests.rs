@@ -155,7 +155,7 @@ async fn import__signature_fails_on_header_4_only() {
             Ok(headers)
         });
     p2p.expect_get_transactions_2()
-        .times(1)
+        .times(0)
         .returning(|block_ids| {
             let data = block_ids.data;
             let v = data.into_iter().map(|_| TransactionData::new()).collect();
@@ -429,13 +429,7 @@ async fn import__p2p_error() {
     p2p.expect_get_sealed_block_headers()
         .times(1)
         .returning(|_| Err(anyhow::anyhow!("Some network error")));
-    p2p.expect_get_transactions_2()
-        .times(1)
-        .returning(|block_ids| {
-            let data = block_ids.data;
-            let v = data.into_iter().map(|_| TransactionData::new()).collect();
-            Ok(Some(v))
-        });
+    p2p.expect_get_transactions_2().times(0);
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {

@@ -50,10 +50,7 @@ use crate::{
         PeerToPeerPort,
     },
     state::State,
-    tracing_helpers::{
-        TraceErr,
-        TraceNone,
-    },
+    tracing_helpers::TraceErr,
 };
 
 #[cfg(any(test, feature = "benchmarking"))]
@@ -193,19 +190,15 @@ where
 
         let block_height = BlockHeight::from(*range.end());
         let peer = p2p.select_peer(block_height).await;
-
         if let Err(err) = peer {
             let err = Err(err);
             return (0, err)
         }
-
         let peer = peer.expect("Checked");
-
         if let None = peer {
             let err = Err(anyhow!("Expected peer"));
             return (0, err)
         }
-
         let peer = peer.expect("Checked");
 
         let generator =
@@ -218,78 +211,80 @@ where
             p2p.clone(),
             consensus.clone(),
         );
+
         let result = block_stream
-        .map(move |stream_block_batch| {
-            let shutdown_guard = shutdown_guard.clone();
-            let shutdown_signal = shutdown_signal.clone();
-            tokio::spawn(async move {
-                // Hold a shutdown sender for the lifetime of the spawned task
-                let _shutdown_guard = shutdown_guard.clone();
-                let mut shutdown_signal = shutdown_signal.clone();
-                tokio::select! {
-                    // Stream a batch of blocks
-                    blocks = stream_block_batch => {
-                        dbg!(&blocks);
-                        blocks
-                    },
-                    // If a shutdown signal is received during the stream, terminate early and
-                    // return an empty response
-                    _ = shutdown_signal.while_started() => Ok(vec![])
+            .map(move |stream_block_batch| {
+                let shutdown_guard = shutdown_guard.clone();
+                let shutdown_signal = shutdown_signal.clone();
+                tokio::spawn(async move {
+                    // Hold a shutdown sender for the lifetime of the spawned task
+                    let _shutdown_guard = shutdown_guard.clone();
+                    let mut shutdown_signal = shutdown_signal.clone();
+                    tokio::select! {
+                        // Stream a batch of blocks
+                        blocks = stream_block_batch => {
+                            dbg!(&blocks);
+                            blocks
+                        },
+                        // If a shutdown signal is received during the stream, terminate early and
+                        // return an empty response
+                        _ = shutdown_signal.while_started() => Ok((vec![], None))
+                    }
+                }).then(|task| async { task.map_err(|e| anyhow!(e))? })
+            })
+            // Request up to `block_stream_buffer_size` transactions from the network.
+            .buffered(params.block_stream_buffer_size)
+            // Continue the stream unless an error or empty batch occurs.
+            // Note the error will be returned but the stream will close.
+            .into_scan_err()
+            .scan_err()
+            // Continue the stream until the shutdown signal is received.
+            .take_until({
+                let mut s = shutdown.clone();
+                async move {
+                    let _ = s.while_started().await;
+                    tracing::info!("In progress import stream shutting down");
                 }
-            }).then(|task| async { task.map_err(|e| anyhow!(e))? })
-        })
-        // Request up to `block_stream_buffer_size` transactions from the network.
-        .buffered(params.block_stream_buffer_size)
-        // Continue the stream unless an error or empty batch occurs.
-        // Note the error will be returned but the stream will close.
-        .into_scan_empty_or_err()
-        .scan_empty_or_err()
-        // Continue the stream until the shutdown signal is received.
-        .take_until({
-            let mut s = shutdown.clone();
-            async move {
-                let _ = s.while_started().await;
-                tracing::info!("In progress import stream shutting down");
-            }
-        })
+            })
+            // Then execute and commit the block
             .zip(generator)
-        // Then execute and commit the block
-        .then(
-            |(res, (peer, state, p2p, executor))| async move {
-                let sealed_blocks = res?;
-                let sealed_blocks = futures::stream::iter(sealed_blocks);
-                let res = sealed_blocks.then(|sealed_block| async {
-                    execute_and_commit(executor.as_ref(), &state, sealed_block).await
-                }).try_collect::<Vec<_>>().await;
-                match &res {
-                    Ok(_) => {
-                        report_peer(p2p.as_ref(), peer.clone(), PeerReportReason::SuccessfulBlockImport).await;
-                    },
-                    Err(e) => {
-                        // If this fails, then it means that consensus has approved a block that is invalid.
-                        // This would suggest a more serious issue than a bad peer, e.g. a fork or an out-of-date client.
-                        tracing::error!("Failed to execute and commit block from peer {:?}: {:?}", peer, e);
-                    },
+            .then(
+                |(res, (peer, state, p2p, executor))| async move {
+                    let (sealed_blocks, e) = res?;
+                    let sealed_blocks = futures::stream::iter(sealed_blocks);
+                    let res = sealed_blocks.then(|sealed_block| async {
+                        execute_and_commit(executor.as_ref(), &state, sealed_block).await
+                    }).try_collect::<Vec<_>>().await.and_then(|v| e.map_or(Ok(v), |e| Err(e)));
+                    match &res {
+                        Ok(_) => {
+                            report_peer(p2p.as_ref(), peer.clone(), PeerReportReason::SuccessfulBlockImport).await;
+                        },
+                        Err(e) => {
+                            // If this fails, then it means that consensus has approved a block that is invalid.
+                            // This would suggest a more serious issue than a bad peer, e.g. a fork or an out-of-date client.
+                            tracing::error!("Failed to execute and commit block from peer {:?}: {:?}", peer, e);
+                        },
+                    }
+                    res
                 }
-                res
-            }
-            .instrument(tracing::debug_span!("execute_and_commit"))
+                .instrument(tracing::debug_span!("execute_and_commit"))
+                .in_current_span()
+            )
+            // Continue the stream unless an error occurs.
+            .into_scan_err()
+            .scan_err()
+            // Count the number of successfully executed blocks and
+            // find any errors.
+            // Fold the stream into a count and any errors.
+            .fold((0usize, Ok(())), |(count, res), result| async move {
+                dbg!(&result);
+                match result {
+                    Ok(_) => (count + 1, res),
+                    Err(e) => (count, Err(e)),
+                }
+            })
             .in_current_span()
-        )
-        // Continue the stream unless an error occurs.
-        .into_scan_err()
-        .scan_err()
-        // Count the number of successfully executed blocks and
-        // find any errors.
-        // Fold the stream into a count and any errors.
-        .fold((0usize, Ok(())), |(count, res), result| async move {
-            match result {
-                Ok(_) => (count + 1, res),
-                Err(e) => (count, Err(e)),
-            }
-        })
-        .in_current_span()
-        .await;
+            .await;
 
         // Wait for any spawned tasks to shutdown
         let _ = shutdown_guard_recv.recv().await;
@@ -306,7 +301,9 @@ fn get_block_stream<
     params: &Config,
     p2p: Arc<P>,
     consensus: Arc<C>,
-) -> impl Stream<Item = impl Future<Output = anyhow::Result<Vec<SealedBlock>>>> {
+) -> impl Stream<
+    Item = impl Future<Output = anyhow::Result<(Vec<SealedBlock>, Option<anyhow::Error>)>>,
+> {
     let Config {
         header_batch_size, ..
     } = params;
@@ -514,57 +511,56 @@ where
 }
 
 // Get blocks correlating to the headers from a specific peer
-#[tracing::instrument(
-    skip(p2p, headers),
-    // fields(
-    //     height = **header.data.height(),
-    //     id = %header.data.consensus.generated.application_hash
-    // ),
-    err
-)]
+// #[tracing::instrument(
+//     skip(p2p, headers),
+//     // fields(
+//     //     height = **header.data.height(),
+//     //     id = %header.data.consensus.generated.application_hash
+//     // ),
+//     err
+// )]
 async fn get_blocks<P>(
     p2p: Arc<P>,
     headers: SourcePeer<Vec<anyhow::Result<SealedBlockHeader>>>,
-) -> anyhow::Result<Vec<SealedBlock>>
+) -> anyhow::Result<(Vec<SealedBlock>, Option<anyhow::Error>)>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
 {
     // Get transactions for the set of valid block ids
     // Return the error as well if there is one
 
-    let SourcePeer {
-        peer_id,
-        data: headers,
-    } = headers;
-    let (headers, _err): (Vec<_>, Vec<_>) =
-        headers.into_iter().partition(|item| item.is_err());
-    let headers = headers
-        .into_iter()
-        .filter_map(|header| header.ok())
+    let mut err = None;
+    let SourcePeer { peer_id, data } = headers;
+    let headers = data
+        .iter()
+        .take_while(|item| item.is_ok())
+        .map(|item| item.as_ref().unwrap())
         .collect::<Vec<_>>();
+    if headers.len() < data.len() {
+        err = Some(anyhow!("An error occurred!!"));
+    }
+    if headers.is_empty() {
+        return Ok((vec![], err))
+    }
     let block_ids = headers.iter().map(|header| header.entity.id()).collect();
     let block_ids = peer_id.clone().bind(block_ids);
-    let maybe_txs = p2p
-        .get_transactions_2(block_ids)
-        .await
-        .trace_err("Failed to get transactions")?
-        .trace_none_warn("Could not find transactions for header");
-
+    let maybe_txs = p2p.get_transactions_2(block_ids).await;
     match maybe_txs {
-        None => {
+        Ok(None) => {
             report_peer(
                 p2p.as_ref(),
                 peer_id.clone(),
                 PeerReportReason::MissingTransactions,
             )
             .await;
-            Ok(vec![])
+            Ok((vec![], err))
         }
-        Some(transaction_data) => {
+        Ok(Some(transaction_data)) => {
             let headers = headers;
             let iter = headers.into_iter().zip(transaction_data);
             let mut blocks = vec![];
             for (block_header, transactions) in iter {
+                let block_header = block_header.clone();
                 let SealedBlockHeader {
                     consensus,
                     entity: header,
@@ -589,7 +585,11 @@ where
                     .await;
                 }
             }
-            Ok(blocks)
+            Ok((blocks, err))
+        }
+        Err(error) => {
+            err = Some(error);
+            Ok((vec![], err))
         }
     }
 }
@@ -632,11 +632,11 @@ trait StreamUtil: Sized {
         ScanNoneErr(self)
     }
 
-    /// Close the stream if an error occurs or a `None` is received.
-    /// Return the error if the stream closes.
-    fn into_scan_empty_or_err(self) -> ScanEmptyErr<Self> {
-        ScanEmptyErr(self)
-    }
+    // /// Close the stream if an error occurs or a `None` is received.
+    // /// Return the error if the stream closes.
+    // fn into_scan_empty_or_err(self) -> ScanEmptyErr<Self> {
+    //     ScanEmptyErr(self)
+    // }
 
     /// Turn a stream of `Result<T>` into a stream of `Result<T>`.
     /// Close the stream if an error occurs.
@@ -649,7 +649,7 @@ trait StreamUtil: Sized {
 impl<S> StreamUtil for S {}
 
 struct ScanNoneErr<S>(S);
-struct ScanEmptyErr<S>(S);
+// struct ScanEmptyErr<S>(S);
 struct ScanErr<S>(S);
 
 impl<S> ScanNoneErr<S> {
@@ -701,27 +701,27 @@ mod test {
     }
 }
 
-impl<S> ScanEmptyErr<S> {
-    /// Scan the stream for empty vector or errors.
-    fn scan_empty_or_err<R>(self) -> impl Stream<Item = anyhow::Result<Vec<R>>>
-    where
-        S: Stream<Item = anyhow::Result<Vec<R>>> + Send + 'static,
-    {
-        let stream = self.0.boxed();
-        futures::stream::unfold((false, stream), |(mut is_err, mut stream)| async move {
-            if is_err {
-                None
-            } else {
-                let result = stream.next().await?;
-                is_err = result.is_err();
-                result
-                    .map(|v| (!v.is_empty()).then(|| v))
-                    .transpose()
-                    .map(|result| (result, (is_err, stream)))
-            }
-        })
-    }
-}
+// impl<S> ScanEmptyErr<S> {
+//     /// Scan the stream for empty vector or errors.
+//     fn scan_empty_or_err<R>(self) -> impl Stream<Item = anyhow::Result<Vec<R>>>
+//     where
+//         S: Stream<Item = anyhow::Result<Vec<R>>> + Send + 'static,
+//     {
+//         let stream = self.0.boxed();
+//         futures::stream::unfold((false, stream), |(mut is_err, mut stream)| async move {
+//             if is_err {
+//                 None
+//             } else {
+//                 let result = stream.next().await?;
+//                 is_err = result.is_err();
+//                 result
+//                     .map(|v| (!v.is_empty()).then(|| v))
+//                     .transpose()
+//                     .map(|result| (result, (is_err, stream)))
+//             }
+//         })
+//     }
+// }
 
 impl<S> ScanErr<S> {
     /// Scan the stream for errors.
