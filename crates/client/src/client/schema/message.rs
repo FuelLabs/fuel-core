@@ -126,7 +126,7 @@ pub struct MessageProof {
 pub struct MessageProofArgs {
     /// Transaction id that contains the output message.
     pub transaction_id: TransactionId,
-    /// Message id of the output message that requires a proof.
+    /// The `Nonce` identifier of the output message that requires a proof.
     pub nonce: Nonce,
 
     /// The query supports either `commit_block_id`, or `commit_block_height` set on, not both.

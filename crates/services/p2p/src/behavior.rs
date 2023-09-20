@@ -40,11 +40,6 @@ use libp2p::{
     Multiaddr,
     PeerId,
 };
-use tracing::{
-    debug,
-    error,
-    warn,
-};
 
 #[derive(Debug)]
 pub enum FuelBehaviourEvent {
@@ -169,16 +164,16 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
             acceptance,
         ) {
             Ok(true) => {
-                debug!(target: "fuel-p2p", "Sent a report for MessageId: {} from PeerId: {}", msg_id, propagation_source);
+                tracing::debug!(target: "fuel-p2p", "Sent a report for MessageId: {} from PeerId: {}", msg_id, propagation_source);
                 if should_check_score {
                     return self.gossipsub.peer_score(propagation_source)
                 }
             }
             Ok(false) => {
-                warn!(target: "fuel-p2p", "Message with MessageId: {} not found in the Gossipsub Message Cache", msg_id);
+                tracing::warn!(target: "fuel-p2p", "Message with MessageId: {} not found in the Gossipsub Message Cache", msg_id);
             }
             Err(e) => {
-                error!(target: "fuel-p2p", "Failed to report Message with MessageId: {} with Error: {:?}", msg_id, e);
+                tracing::error!(target: "fuel-p2p", "Failed to report Message with MessageId: {} with Error: {:?}", msg_id, e);
             }
         }
 
