@@ -222,10 +222,7 @@ where
                     let mut shutdown_signal = shutdown_signal.clone();
                     tokio::select! {
                         // Stream a batch of blocks
-                        blocks = stream_block_batch => {
-                            dbg!(&blocks);
-                            blocks
-                        },
+                        blocks = stream_block_batch => blocks,
                         // If a shutdown signal is received during the stream, terminate early and
                         // return an empty response
                         _ = shutdown_signal.while_started() => Ok((vec![], None))
@@ -550,6 +547,7 @@ where
                 PeerReportReason::MissingTransactions,
             )
             .await;
+            // err = Some(anyhow!("Missing transactions!!"));
             Ok((vec![], err))
         }
         Ok(Some(transaction_data)) => {
