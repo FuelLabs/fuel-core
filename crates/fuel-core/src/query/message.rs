@@ -282,6 +282,6 @@ pub fn message_status<T: DatabaseMessages + ?Sized>(
     } else if database.message_exists(&message_nonce)? {
         Ok(MessageStatus::unspent())
     } else {
-        Ok(MessageStatus::unknown())
+        Ok(MessageStatus::not_found())
     }
 }

@@ -120,7 +120,7 @@ impl MessageStatus {
     }
 
     /// Constructor for `MessageStatus` that fills with `Unknown` state
-    pub fn unknown() -> Self {
+    pub fn not_found() -> Self {
         Self {
             state: MessageState::NotFound,
         }

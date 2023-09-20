@@ -345,7 +345,6 @@ fn init_da_messages(
                 if db.storage::<SpentMessages>().insert(nonce, &())?.is_some() {
                     return Err(anyhow!("Spent Message should not exist"))
                 }
-                // message_tree.push(message.root()?.as_slice());
             }
         }
     }

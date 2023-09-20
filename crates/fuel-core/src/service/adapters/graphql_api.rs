@@ -146,7 +146,7 @@ impl DatabaseMessages for Database {
     }
 
     fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
-        self.is_message_spent(nonce)
+        self.message_is_spent(nonce)
     }
 
     fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool> {
