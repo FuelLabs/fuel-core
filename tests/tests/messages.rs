@@ -224,17 +224,17 @@ async fn message_status__can_get_unspent() {
 #[tokio::test]
 async fn message_status__can_get_spent() {
     // Given
-    let alice = Address::from([1; 32]);
-    let bob = Address::from([2; 32]);
-    let charlie = Address::from([3; 32]);
+    let msg_recipient = Address::from([1; 32]);
+    let output_recipient = Address::from([2; 32]);
+    let msg_sender = Address::from([3; 32]);
 
-    let owner = Address::new([1; 32]);
     let nonce = 1.into();
     let amount = 1_000;
 
     let msg = MessageConfig {
-        recipient: owner,
-        nonce: 1.into(),
+        sender: msg_sender,
+        recipient: msg_recipient,
+        nonce,
         amount,
         ..Default::default()
     };
@@ -248,10 +248,15 @@ async fn message_status__can_get_spent() {
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    let input =
-        Input::message_coin_signed(charlie, alice, amount, nonce, Default::default());
+    let input = Input::message_coin_signed(
+        msg_sender,
+        msg_recipient,
+        amount,
+        nonce,
+        Default::default(),
+    );
 
-    let output = Output::coin(bob, amount, Default::default());
+    let output = Output::coin(output_recipient, amount, Default::default());
 
     let tx = Transaction::script(
         Default::default(),

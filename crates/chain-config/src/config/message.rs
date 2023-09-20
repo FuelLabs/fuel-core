@@ -40,8 +40,6 @@ pub struct MessageConfig {
     pub da_height: DaBlockHeight,
 }
 
-pub struct SpentMessageConfig {}
-
 impl From<MessageConfig> for Message {
     fn from(msg: MessageConfig) -> Self {
         Message {
