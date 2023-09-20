@@ -219,13 +219,34 @@ async fn message_status__can_get_unspent() {
 
     // Then
     assert_eq!(status, MessageStatus::Unspent);
+}
 
-    //////////////////////////////////////
-
+#[tokio::test]
+async fn message_status__can_get_spent() {
     // Given
     let alice = Address::from([1; 32]);
     let bob = Address::from([2; 32]);
     let charlie = Address::from([3; 32]);
+
+    let owner = Address::new([1; 32]);
+    let nonce = 1.into();
+    let amount = 1_000;
+
+    let msg = MessageConfig {
+        recipient: owner,
+        nonce: 1.into(),
+        amount,
+        ..Default::default()
+    };
+
+    let mut config = Config::local_node();
+    config.chain_conf.initial_state = Some(StateConfig {
+        messages: Some(vec![msg]),
+        ..Default::default()
+    });
+
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
 
     let input =
         Input::message_coin_signed(charlie, alice, amount, nonce, Default::default());
