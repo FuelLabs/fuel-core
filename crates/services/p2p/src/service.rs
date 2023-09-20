@@ -482,8 +482,7 @@ where
                         let _ = self.p2p_service.report_peer(peer_id, score, reporting_service);
                     }
                     Some(TaskRequest::SelectPeer { block_height, channel }) => {
-                        let peer = self.p2p_service.peer_manager()
-                             .get_peer_id_with_height(&block_height);
+                        let peer = self.p2p_service.get_peer_id_with_height(&block_height);
                         let _ = channel.send(peer);
                     }
                     None => {

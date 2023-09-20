@@ -67,22 +67,6 @@ pub struct Sealed<Entity> {
     pub consensus: Consensus,
 }
 
-impl<Entity> Sealed<Vec<Entity>> {
-    /// Transpose a Sealed Vector of `Entity` into a Vector of Sealed `Entity`
-    pub fn transpose(self) -> Vec<Sealed<Entity>> {
-        let consensus = self.consensus;
-        let entities = self
-            .entity
-            .into_iter()
-            .map(|e| Sealed {
-                entity: e,
-                consensus: consensus.clone(),
-            })
-            .collect();
-        entities
-    }
-}
-
 /// A vote from a validator.
 ///
 /// This is a dummy placeholder for the Vote Struct in fuel-bft

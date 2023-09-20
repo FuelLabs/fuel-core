@@ -274,7 +274,6 @@ where
             // find any errors.
             // Fold the stream into a count and any errors.
             .fold((0usize, Ok(())), |(count, res), result| async move {
-                dbg!(&result);
                 match result {
                     Ok(_) => (count + 1, res),
                     Err(e) => (count, Err(e)),
@@ -489,7 +488,6 @@ where
         }
 
         Err(e) => {
-            dbg!(&e);
             vec![Err(e)]
         }
     };
