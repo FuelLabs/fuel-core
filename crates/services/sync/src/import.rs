@@ -547,7 +547,6 @@ where
                 PeerReportReason::MissingTransactions,
             )
             .await;
-            // err = Some(anyhow!("Missing transactions!!"));
             Ok((vec![], err))
         }
         Ok(Some(transaction_data)) => {

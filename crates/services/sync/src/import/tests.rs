@@ -989,7 +989,6 @@ impl PeerReportTestBuilder {
     pub async fn run_with_expected_reports<R>(self, expected_reports: R)
     where
         R: IntoIterator<Item = PeerReportReason>,
-        <R as IntoIterator>::IntoIter: Send,
     {
         if self.debug {
             let _ = tracing_subscriber::fmt()
@@ -1030,7 +1029,6 @@ impl PeerReportTestBuilder {
     fn p2p<R>(&self, expected_reports: R) -> Arc<MockPeerToPeerPort>
     where
         R: IntoIterator<Item = PeerReportReason>,
-        <R as IntoIterator>::IntoIter: std::marker::Send,
     {
         let mut p2p = MockPeerToPeerPort::default();
 
