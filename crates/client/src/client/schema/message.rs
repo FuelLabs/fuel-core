@@ -32,6 +32,20 @@ pub struct Message {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct MessageStatus {
+    pub(crate) state: MessageState,
+}
+
+#[derive(cynic::Enum, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub enum MessageState {
+    Unspent,
+    Spent,
+    NotFound,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
@@ -137,6 +151,23 @@ pub struct MessageProofArgs {
     /// The block height of the commitment block.
     /// If it is `None`, the `commit_block_id` should be `Some`.
     pub commit_block_height: Option<U32>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    variables = "MessageStatusArgs"
+)]
+pub struct MessageStatusQuery {
+    #[arguments(nonce: $nonce)]
+    pub message_status: MessageStatus,
+}
+
+#[derive(cynic::QueryVariables, Debug)]
+pub struct MessageStatusArgs {
+    /// Nonce of the output message that requires a proof.
+    pub nonce: Nonce,
 }
 
 impl From<(Option<Address>, PaginationRequest<String>)> for OwnedMessagesConnectionArgs {
