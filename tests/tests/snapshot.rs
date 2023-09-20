@@ -80,7 +80,6 @@ async fn snapshot_state_config() {
             data: vec![],
             da_height: DaBlockHeight(rng.gen_range(0..1000)),
         }]),
-        spent_messages: None,
     };
 
     config.chain_conf.initial_state = Some(starting_state.clone());

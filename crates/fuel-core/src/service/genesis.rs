@@ -18,7 +18,6 @@ use fuel_core_storage::{
         ContractsRawCode,
         FuelBlocks,
         Messages,
-        SpentMessages,
     },
     transactional::Transactional,
     MerkleRoot,
@@ -338,13 +337,6 @@ fn init_da_messages(
                     return Err(anyhow!("Message should not exist"))
                 }
                 message_tree.push(message.root()?.as_slice());
-            }
-        }
-        if let Some(spent_message_state) = &state.spent_messages {
-            for nonce in spent_message_state {
-                if db.storage::<SpentMessages>().insert(nonce, &())?.is_some() {
-                    return Err(anyhow!("Spent Message should not exist"))
-                }
             }
         }
     }

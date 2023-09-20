@@ -75,7 +75,6 @@ async fn balance() {
                 })
                 .collect(),
         ),
-        spent_messages: None,
     });
 
     // setup server & client
@@ -208,7 +207,6 @@ async fn first_5_balances() {
         contracts: None,
         coins: Some(coins),
         messages: Some(messages),
-        spent_messages: None,
     });
 
     // setup server & client
