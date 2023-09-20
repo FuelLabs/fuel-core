@@ -68,7 +68,7 @@ async fn test_import_3_to_5() {
     let mocks = Mocks {
         consensus_port,
         p2p,
-        executor: DefaultMocks::times([1]),
+        executor: DefaultMocks::times([2]),
     };
 
     let state = State::new(3, 5);
@@ -378,7 +378,6 @@ async fn import__transactions_not_found_for_header_4() {
     assert_eq!((State::new(3, None), true), res);
 }
 
-#[ignore]
 #[tokio::test]
 async fn import__transactions_not_found_for_header_5() {
     // given
@@ -445,7 +444,6 @@ async fn import__p2p_error() {
     assert_eq!((State::new(3, None), false), res);
 }
 
-#[ignore]
 #[tokio::test]
 async fn import__p2p_error_on_4_transactions() {
     // given
@@ -626,7 +624,6 @@ async fn import__consensus_error_on_5() {
     assert_eq!((State::new(4, None), false), res);
 }
 
-#[ignore]
 #[tokio::test]
 async fn import__execution_error_on_header_4() {
     // given
@@ -656,7 +653,6 @@ async fn import__execution_error_on_header_4() {
     assert_eq!((State::new(3, None), false), res);
 }
 
-#[ignore]
 #[tokio::test]
 async fn import__execution_error_on_header_5() {
     // given
@@ -686,14 +682,13 @@ async fn import__execution_error_on_header_5() {
     assert_eq!((State::new(4, None), false), res);
 }
 
-#[ignore]
 #[tokio::test]
 async fn signature_always_fails() {
     // given
     let mut consensus_port = MockConsensusPort::default();
     consensus_port
         .expect_check_sealed_header()
-        .times(2)
+        .times(1)
         .returning(|_| Ok(false));
 
     let state = State::new(3, 5).into();
@@ -710,7 +705,6 @@ async fn signature_always_fails() {
     assert_eq!((State::new(3, None), true), res);
 }
 
-#[ignore]
 #[tokio::test]
 async fn import__can_work_in_two_loops() {
     // given
@@ -796,7 +790,6 @@ async fn test_import_inner(
     (final_state, received_notify_signal)
 }
 
-#[ignore]
 #[tokio::test]
 async fn import__happy_path_sends_good_peer_report() {
     // Given
@@ -1075,13 +1068,13 @@ impl DefaultMocks for MockConsensusPort {
 }
 
 impl DefaultMocks for MockPeerToPeerPort {
-    fn times<T>(_t: T) -> Self
+    fn times<T>(t: T) -> Self
     where
         T: IntoIterator<Item = usize> + Clone,
         <T as IntoIterator>::IntoIter: Clone,
     {
         let mut p2p = MockPeerToPeerPort::default();
-        // let mut t = t.into_iter().cycle();
+        let mut t = t.into_iter().cycle();
 
         p2p.expect_select_peer().times(1).returning(|_| {
             let bytes = vec![1u8, 2, 3, 4, 5];
@@ -1100,7 +1093,7 @@ impl DefaultMocks for MockPeerToPeerPort {
             });
 
         p2p.expect_get_transactions_2()
-            .times(1)
+            .times(t.next().unwrap())
             .returning(|block_ids| {
                 let data = block_ids.data;
                 let v = data.into_iter().map(|_| TransactionData::new()).collect();

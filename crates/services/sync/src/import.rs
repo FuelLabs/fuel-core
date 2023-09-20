@@ -271,8 +271,8 @@ where
                 .in_current_span()
             )
             // Continue the stream unless an error occurs.
-            .into_scan_err()
-            .scan_err()
+            .into_scan_empty_or_err()
+            .scan_empty_or_err()
             // Count the number of successfully executed blocks and
             // find any errors.
             // Fold the stream into a count and any errors.
@@ -526,15 +526,12 @@ async fn get_blocks<P>(
 where
     P: PeerToPeerPort + Send + Sync + 'static,
 {
-    // Get transactions for the set of valid block ids
-    // Return the error as well if there is one
-
     let mut err = None;
     let SourcePeer { peer_id, data } = headers;
     let headers = data
         .iter()
         .take_while(|item| item.is_ok())
-        .map(|item| item.as_ref().unwrap())
+        .map(|item| item.as_ref().expect("Result is checked for Ok"))
         .collect::<Vec<_>>();
     if headers.len() < data.len() {
         err = Some(anyhow!("An error occurred!!"));
@@ -632,11 +629,11 @@ trait StreamUtil: Sized {
         ScanNoneErr(self)
     }
 
-    // /// Close the stream if an error occurs or a `None` is received.
-    // /// Return the error if the stream closes.
-    // fn into_scan_empty_or_err(self) -> ScanEmptyErr<Self> {
-    //     ScanEmptyErr(self)
-    // }
+    /// Close the stream if an error occurs or an empty `Vector<T>` is received.
+    /// Return the error if the stream closes.
+    fn into_scan_empty_or_err(self) -> ScanEmptyErr<Self> {
+        ScanEmptyErr(self)
+    }
 
     /// Turn a stream of `Result<T>` into a stream of `Result<T>`.
     /// Close the stream if an error occurs.
@@ -649,7 +646,7 @@ trait StreamUtil: Sized {
 impl<S> StreamUtil for S {}
 
 struct ScanNoneErr<S>(S);
-// struct ScanEmptyErr<S>(S);
+struct ScanEmptyErr<S>(S);
 struct ScanErr<S>(S);
 
 impl<S> ScanNoneErr<S> {
@@ -701,27 +698,27 @@ mod test {
     }
 }
 
-// impl<S> ScanEmptyErr<S> {
-//     /// Scan the stream for empty vector or errors.
-//     fn scan_empty_or_err<R>(self) -> impl Stream<Item = anyhow::Result<Vec<R>>>
-//     where
-//         S: Stream<Item = anyhow::Result<Vec<R>>> + Send + 'static,
-//     {
-//         let stream = self.0.boxed();
-//         futures::stream::unfold((false, stream), |(mut is_err, mut stream)| async move {
-//             if is_err {
-//                 None
-//             } else {
-//                 let result = stream.next().await?;
-//                 is_err = result.is_err();
-//                 result
-//                     .map(|v| (!v.is_empty()).then(|| v))
-//                     .transpose()
-//                     .map(|result| (result, (is_err, stream)))
-//             }
-//         })
-//     }
-// }
+impl<S> ScanEmptyErr<S> {
+    /// Scan the stream for empty vector or errors.
+    fn scan_empty_or_err<R>(self) -> impl Stream<Item = anyhow::Result<Vec<R>>>
+    where
+        S: Stream<Item = anyhow::Result<Vec<R>>> + Send + 'static,
+    {
+        let stream = self.0.boxed();
+        futures::stream::unfold((false, stream), |(mut is_err, mut stream)| async move {
+            if is_err {
+                None
+            } else {
+                let result = stream.next().await?;
+                is_err = result.is_err();
+                result
+                    .map(|v| (!v.is_empty()).then(|| v))
+                    .transpose()
+                    .map(|result| (result, (is_err, stream)))
+            }
+        })
+    }
+}
 
 impl<S> ScanErr<S> {
     /// Scan the stream for errors.
