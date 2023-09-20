@@ -46,7 +46,7 @@ impl ServicesMetrics {
         encode(&mut encoded_bytes, lock.deref())
             .expect("Unable to decode service metrics");
         if encoded_bytes.contains(service_name) {
-            tracing::error!("Service with '{}' name is already registered", service_name);
+            tracing::warn!("Service with '{}' name is already registered", service_name);
         }
 
         lock.register(

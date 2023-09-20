@@ -70,7 +70,6 @@ use tokio::{
     time::Instant,
 };
 use tokio_stream::StreamExt;
-use tracing::error;
 
 pub type Service<T, B, I> = ServiceRunner<MainTask<T, B, I>>;
 #[derive(Clone)]
@@ -305,9 +304,10 @@ where
 
         let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
         for (tx_id, err) in skipped_transactions {
-            error!(
+            tracing::error!(
                 "During block production got invalid transaction {:?} with error {:?}",
-                tx_id, err
+                tx_id,
+                err
             );
             tx_ids_to_remove.push(tx_id);
         }
