@@ -2,6 +2,7 @@ use crate::{
     fuel_core_graphql_api::{
         ports::{
             DatabaseMessageProof,
+            DatabaseMessages,
             DatabasePort,
         },
         IntoApiResult,
@@ -33,6 +34,7 @@ use fuel_core_types::{
         MerkleProof,
         Message,
         MessageProof,
+        MessageStatus,
     },
     fuel_merkle::binary::in_memory::MerkleTree,
     fuel_tx::{
@@ -268,5 +270,18 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
             }
         }
         None => Ok(None),
+    }
+}
+
+pub fn message_status<T: DatabaseMessages + ?Sized>(
+    database: &T,
+    message_nonce: Nonce,
+) -> StorageResult<MessageStatus> {
+    if database.message_is_spent(&message_nonce)? {
+        Ok(MessageStatus::spent())
+    } else if database.message_exists(&message_nonce)? {
+        Ok(MessageStatus::unspent())
+    } else {
+        Ok(MessageStatus::not_found())
     }
 }
