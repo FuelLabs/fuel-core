@@ -131,6 +131,13 @@ pub struct Config<State = Initialized> {
     /// Sets the keep-alive timeout of idle connections.
     pub set_connection_keep_alive: Duration,
 
+    /// Time between checking heartbeat status for all peers
+    pub heartbeat_check_interval: Duration,
+    /// Max avg time between heartbeats for a given peer before getting reputation penalty
+    pub heartbeat_max_avg_interval: Duration,
+    /// Max time since a given peer has sent a heartbeat before getting reputation penalty
+    pub heartbeat_max_time_since_last: Duration,
+
     /// Enables prometheus metrics for this fuel-service
     pub metrics: bool,
 
@@ -176,6 +183,9 @@ impl Config<NotInitialized> {
             heartbeat_config: self.heartbeat_config,
             set_request_timeout: self.set_request_timeout,
             set_connection_keep_alive: self.set_connection_keep_alive,
+            heartbeat_check_interval: self.heartbeat_check_interval,
+            heartbeat_max_avg_interval: self.heartbeat_max_time_since_last,
+            heartbeat_max_time_since_last: self.heartbeat_max_time_since_last,
             metrics: self.metrics,
             state: Initialized(()),
         })
@@ -218,6 +228,9 @@ impl Config<NotInitialized> {
             heartbeat_config: HeartbeatConfig::default(),
             set_request_timeout: REQ_RES_TIMEOUT,
             set_connection_keep_alive: REQ_RES_TIMEOUT,
+            heartbeat_check_interval: Duration::from_secs(10),
+            heartbeat_max_avg_interval: Duration::from_secs(20),
+            heartbeat_max_time_since_last: Duration::from_secs(40),
             info_interval: Some(Duration::from_secs(3)),
             identify_interval: Some(Duration::from_secs(5)),
             metrics: false,

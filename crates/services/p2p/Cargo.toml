@@ -58,6 +58,7 @@ rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_with = "1.11"
 sha2 = "0.10"
+thiserror = "1.0.47"
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 
@@ -70,7 +71,7 @@ fuel-core-types = { path = "../../types", features = [
     "test-helpers"
 ] }
 rand = { workspace = true }
-tokio = { workspace = true, features = ["full"] }
+tokio = { workspace = true, features = ["full", "test-util"] }
 tracing-attributes = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 

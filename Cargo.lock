@@ -3017,6 +3017,7 @@ dependencies = [
  "serde",
  "serde_with",
  "sha2 0.10.7",
+ "thiserror",
  "tokio",
  "tracing",
  "tracing-attributes",

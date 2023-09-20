@@ -21,6 +21,7 @@ use serde_with::{
     serde_as,
     FromInto,
 };
+use thiserror::Error;
 use tokio::sync::oneshot;
 
 pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &[u8] = b"/fuel/req_res/0.0.1";
@@ -85,14 +86,18 @@ pub enum OutboundResponse {
     Transactions2(Option<Arc<Vec<TransactionData>>>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum RequestError {
+    #[error("Not currently connected to any peers")]
     NoPeersConnected,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Error)]
 pub enum ResponseError {
+    #[error("Response channel does not exist")]
     ResponseChannelDoesNotExist,
+    #[error("Failed to send response")]
     SendingResponseFailed,
+    #[error("Failed to convert response to intermediate format")]
     ConversionToIntermediateFailed,
 }

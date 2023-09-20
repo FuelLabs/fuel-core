@@ -21,6 +21,9 @@ app:
   max_headers_per_request: "${fuel_core_max_headers_per_request}"
   max_database_cache_size: "${fuel_core_max_database_cache_size}"
   max_transmit_size: "${fuel_core_max_buffer_size}"
+  heartbeat_check_interval: "${fuel_core_heartbeat_check_interval}"
+  heartbeat_max_avg_interval: "${fuel_core_heartbeat_max_avg_interval}"
+  heartbeat_max_time_since_last: "${fuel_core_heartbeat_max_time_since_last}"
   sync_block_stream_size: "${fuel_core_sync_block_stream_size}"
   sync_header_batch_size: "${fuel_core_sync_header_batch_size}"
   p2p_key: ${fuel_core_p2p_key}

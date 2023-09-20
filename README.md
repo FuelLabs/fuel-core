@@ -173,7 +173,7 @@ The transaction executor currently performs instant block production. Changes ar
 -   Service endpoint: `/graphql`
 -   Schema (available after building): `crates/client/assets/schema.sdl`
 
-The service expects a mutation defined as `submit` that receives a [Transaction](https://github.com/FuelLabs/fuel-vm/tree/master/fuel-tx) in hex encoded binary format, as [specified here](https://github.com/FuelLabs/fuel-specs/blob/master/src/protocol/tx_format/transaction.md).
+The service expects a mutation defined as `submit` that receives a [Transaction](https://github.com/FuelLabs/fuel-vm/tree/master/fuel-tx) in hex encoded binary format, as [specified here](https://github.com/FuelLabs/fuel-specs/blob/master/src/tx-format/transaction.md).
 
 ### cURL example
 
