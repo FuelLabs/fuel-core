@@ -555,6 +555,16 @@ type MessageProof {
 	data: HexString!
 }
 
+enum MessageState {
+	UNSPENT
+	SPENT
+	NOT_FOUND
+}
+
+type MessageStatus {
+	state: MessageState!
+}
+
 type Mutation {
 	startSession: ID!
 	endSession(id: ID!): Boolean!
@@ -696,6 +706,7 @@ type Query {
 	nodeInfo: NodeInfo!
 	messages(owner: Address, first: Int, after: String, last: Int, before: String): MessageConnection!
 	messageProof(transactionId: TransactionId!, nonce: Nonce!, commitBlockId: BlockId, commitBlockHeight: U32): MessageProof
+	messageStatus(nonce: Nonce!): MessageStatus!
 }
 
 type Receipt {

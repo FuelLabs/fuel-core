@@ -26,6 +26,7 @@ use async_graphql::{
         EmptyFields,
     },
     Context,
+    Enum,
     Object,
 };
 use fuel_core_types::entities;
@@ -141,6 +142,16 @@ impl MessageQuery {
         )?
         .map(MessageProof))
     }
+
+    async fn message_status(
+        &self,
+        ctx: &Context<'_>,
+        nonce: Nonce,
+    ) -> async_graphql::Result<MessageStatus> {
+        let data: &Database = ctx.data_unchecked();
+        let status = crate::query::message_status(data.deref(), nonce.into())?;
+        Ok(status.into())
+    }
 }
 pub struct MerkleProof(pub(crate) entities::message::MerkleProof);
 
@@ -210,5 +221,31 @@ impl From<entities::message::Message> for Message {
 impl From<entities::message::MerkleProof> for MerkleProof {
     fn from(proof: entities::message::MerkleProof) -> Self {
         MerkleProof(proof)
+    }
+}
+
+pub struct MessageStatus(pub(crate) entities::message::MessageStatus);
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+enum MessageState {
+    Unspent,
+    Spent,
+    NotFound,
+}
+
+#[Object]
+impl MessageStatus {
+    async fn state(&self) -> MessageState {
+        match self.0.state {
+            entities::message::MessageState::Unspent => MessageState::Unspent,
+            entities::message::MessageState::Spent => MessageState::Spent,
+            entities::message::MessageState::NotFound => MessageState::NotFound,
+        }
+    }
+}
+
+impl From<entities::message::MessageStatus> for MessageStatus {
+    fn from(status: entities::message::MessageStatus) -> Self {
+        MessageStatus(status)
     }
 }
