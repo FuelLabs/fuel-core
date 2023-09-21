@@ -195,7 +195,7 @@ where
             return (0, err)
         }
         let peer = peer.expect("Checked");
-        if let None = peer {
+        if peer.is_none() {
             let err = Err(anyhow!("Expected peer"));
             return (0, err)
         }
@@ -251,7 +251,7 @@ where
                     let sealed_blocks = futures::stream::iter(sealed_blocks);
                     let res = sealed_blocks.then(|sealed_block| async {
                         execute_and_commit(executor.as_ref(), &state, sealed_block).await
-                    }).try_collect::<Vec<_>>().await.and_then(|v| e.map_or(Ok(v), |e| Err(e)));
+                    }).try_collect::<Vec<_>>().await.and_then(|v| e.map_or(Ok(v), Err));
                     match &res {
                         Ok(_) => {
                             report_peer(p2p.as_ref(), peer.clone(), PeerReportReason::SuccessfulBlockImport).await;
@@ -706,7 +706,7 @@ impl<S> ScanEmptyErr<S> {
                 let result = stream.next().await?;
                 is_err = result.is_err();
                 result
-                    .map(|v| (!v.is_empty()).then(|| v))
+                    .map(|v| (!v.is_empty()).then_some(v))
                     .transpose()
                     .map(|result| (result, (is_err, stream)))
             }
