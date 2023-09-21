@@ -46,6 +46,23 @@ pub struct MessageProof {
     pub data: Bytes,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum MessageStatus {
+    Unspent,
+    Spent,
+    NotFound,
+}
+
+impl From<schema::message::MessageStatus> for MessageStatus {
+    fn from(value: schema::message::MessageStatus) -> Self {
+        match value.state {
+            schema::message::MessageState::Unspent => Self::Unspent,
+            schema::message::MessageState::Spent => Self::Spent,
+            schema::message::MessageState::NotFound => Self::NotFound,
+        }
+    }
+}
+
 // GraphQL Translation
 
 impl From<schema::message::Message> for Message {

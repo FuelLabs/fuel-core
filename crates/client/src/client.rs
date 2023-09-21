@@ -6,16 +6,20 @@ use crate::client::{
             SpendQueryElementInput,
         },
         contract::ContractBalanceQueryArgs,
+        message::MessageStatusArgs,
         tx::DryRunArg,
         Tai64Timestamp,
         TransactionId,
     },
-    types::primitives::{
-        Address,
-        AssetId,
-        BlockId,
-        ContractId,
-        UtxoId,
+    types::{
+        message::MessageStatus,
+        primitives::{
+            Address,
+            AssetId,
+            BlockId,
+            ContractId,
+            UtxoId,
+        },
     },
 };
 use anyhow::Context;
@@ -98,7 +102,6 @@ use std::{
     sync::Arc,
 };
 use tai64::Tai64;
-use tracing as _;
 use types::{
     TransactionResponse,
     TransactionStatus,
@@ -218,7 +221,6 @@ impl FuelClient {
     {
         use core::ops::Deref;
         use eventsource_client as es;
-        use hyper_rustls as _;
         use reqwest::cookie::CookieStore;
         let mut url = self.url.clone();
         url.set_path("/graphql-sub");
@@ -860,6 +862,15 @@ impl FuelClient {
         let messages = self.query(query).await?.messages.into();
 
         Ok(messages)
+    }
+
+    pub async fn message_status(&self, nonce: &Nonce) -> io::Result<MessageStatus> {
+        let query = schema::message::MessageStatusQuery::build(MessageStatusArgs {
+            nonce: (*nonce).into(),
+        });
+        let status = self.query(query).await?.message_status.into();
+
+        Ok(status)
     }
 
     /// Request a merkle proof of an output message.

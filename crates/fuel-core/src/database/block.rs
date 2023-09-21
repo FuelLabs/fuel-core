@@ -42,7 +42,6 @@ use fuel_core_types::{
 use itertools::Itertools;
 use std::{
     borrow::{
-        Borrow,
         BorrowMut,
         Cow,
     },
@@ -271,7 +270,7 @@ impl Database {
             .get(commit_block_height)?
             .ok_or(not_found!(FuelBlockMerkleMetadata))?;
 
-        let storage = self.borrow();
+        let storage = self;
         let tree: MerkleTree<FuelBlockMerkleData, _> =
             MerkleTree::load(storage, commit_merkle_metadata.version)
                 .map_err(|err| StorageError::Other(err.into()))?;
