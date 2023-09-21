@@ -197,7 +197,7 @@ impl DatabaseChain for Database {
             .unwrap_or_else(|| DEFAULT_NAME.to_string()))
     }
 
-    fn base_chain_height(&self) -> StorageResult<DaBlockHeight> {
+    fn da_height(&self) -> StorageResult<DaBlockHeight> {
         #[cfg(feature = "relayer")]
         {
             use fuel_core_relayer::ports::RelayerDb;

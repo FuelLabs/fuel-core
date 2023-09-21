@@ -93,7 +93,7 @@ scalar Bytes32
 type ChainInfo {
 	name: String!
 	latestBlock: Block!
-	baseChainHeight: U32!
+	daHeight: U64!
 	peerCount: Int!
 	consensusParameters: ConsensusParameters!
 	gasCosts: GasCosts!

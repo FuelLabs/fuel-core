@@ -5,7 +5,7 @@ use fuel_core_types::blockchain::primitives::DaBlockHeight;
 pub trait ChainQueryData: Send + Sync {
     fn name(&self) -> StorageResult<String>;
 
-    fn base_chain_height(&self) -> StorageResult<DaBlockHeight>;
+    fn da_height(&self) -> StorageResult<DaBlockHeight>;
 }
 
 impl<D: DatabasePort + ?Sized> ChainQueryData for D {
@@ -13,7 +13,7 @@ impl<D: DatabasePort + ?Sized> ChainQueryData for D {
         self.chain_name()
     }
 
-    fn base_chain_height(&self) -> StorageResult<DaBlockHeight> {
-        self.base_chain_height()
+    fn da_height(&self) -> StorageResult<DaBlockHeight> {
+        self.da_height()
     }
 }
