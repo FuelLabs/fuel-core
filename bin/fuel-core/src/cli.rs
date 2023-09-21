@@ -4,10 +4,6 @@ use std::{
     path::PathBuf,
     str::FromStr,
 };
-use tracing::{
-    info,
-    warn,
-};
 use tracing_subscriber::{
     filter::EnvFilter,
     layer::SubscriberExt,
@@ -17,8 +13,6 @@ use tracing_subscriber::{
 
 #[cfg(feature = "env")]
 use dotenvy::dotenv;
-#[cfg(feature = "env")]
-use tracing::error;
 
 lazy_static::lazy_static! {
     pub static ref DEFAULT_DB_PATH: PathBuf = dirs::home_dir().unwrap().join(".fuel").join("db");
@@ -51,13 +45,7 @@ pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
 
 #[cfg(feature = "env")]
 fn init_environment() -> Option<PathBuf> {
-    match dotenv() {
-        Ok(path) => Some(path),
-        Err(e) => {
-            error!("Unable to load .env environment variables: {e}. Please check that you have created a .env file in your working directory.");
-            None
-        }
-    }
+    dotenv().ok()
 }
 
 #[cfg(not(feature = "env"))]
@@ -114,13 +102,13 @@ pub async fn run_cli() -> anyhow::Result<()> {
     init_logging().await?;
     if let Some(path) = init_environment() {
         let path = path.display();
-        info!("Loading environment variables from {path}");
+        tracing::info!("Loading environment variables from {path}");
     }
     let opt = Opt::try_parse();
     if opt.is_err() {
         let command = run::Command::try_parse();
         if let Ok(command) = command {
-            warn!("This cli format for running `fuel-core` is deprecated and will be removed. Please use `fuel-core run` or use `--help` for more information");
+            tracing::warn!("This cli format for running `fuel-core` is deprecated and will be removed. Please use `fuel-core run` or use `--help` for more information");
             return run::exec(command).await
         }
     }

@@ -1024,7 +1024,7 @@ where
                     ..
                 }) => {
                     // Eagerly return already spent if status is known.
-                    if db.is_message_spent(nonce)? {
+                    if db.message_is_spent(nonce)? {
                         return Err(
                             TransactionValidityError::MessageAlreadySpent(*nonce).into()
                         )
@@ -3797,10 +3797,10 @@ mod tests {
         // Successful execution consumes `message_coin` and `message_data`.
         assert_eq!(block_db_transaction.all_messages(None, None).count(), 0);
         assert!(block_db_transaction
-            .is_message_spent(&message_coin.nonce)
+            .message_is_spent(&message_coin.nonce)
             .unwrap());
         assert!(block_db_transaction
-            .is_message_spent(&message_data.nonce)
+            .message_is_spent(&message_data.nonce)
             .unwrap());
         assert_eq!(
             block_db_transaction
@@ -3860,10 +3860,10 @@ mod tests {
         // We should spend only `message_coin`. The `message_data` should be unspent.
         assert_eq!(block_db_transaction.all_messages(None, None).count(), 1);
         assert!(block_db_transaction
-            .is_message_spent(&message_coin.nonce)
+            .message_is_spent(&message_coin.nonce)
             .unwrap());
         assert!(!block_db_transaction
-            .is_message_spent(&message_data.nonce)
+            .message_is_spent(&message_data.nonce)
             .unwrap());
         assert_eq!(
             block_db_transaction
