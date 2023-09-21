@@ -156,7 +156,17 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
         // poll sub-behaviors
         if let Poll::Ready(kad_action) = self.kademlia.poll(cx, params) {
-            Poll::Ready(kad_action)
+            match kad_action {
+                NetworkBehaviourAction::GenerateEvent(event) => match event {
+                    KademliaEvent::UnroutablePeer { peer } => {
+                        Poll::Ready(NetworkBehaviourAction::GenerateEvent(
+                            KademliaEvent::UnroutablePeer { peer },
+                        ))
+                    }
+                    _ => Poll::Pending,
+                },
+                _ => Poll::Ready(kad_action),
+            }
         } else if let Poll::Ready(mdns_event) = self.mdns.poll(cx, params) {
             match mdns_event {
                 NetworkBehaviourAction::GenerateEvent(MdnsEvent::Discovered(list)) => {
