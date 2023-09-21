@@ -1,50 +1,24 @@
 use crate::{
     codecs::NetworkCodec,
     config::Config,
-    discovery::{
-        DiscoveryBehaviour,
-        DiscoveryConfig,
-        DiscoveryEvent,
-    },
-    gossipsub::{
-        config::build_gossipsub_behaviour,
-        topics::GossipTopic,
-    },
-    peer_report::{
-        PeerReportBehaviour,
-        PeerReportEvent,
-    },
-    request_response::messages::{
-        NetworkResponse,
-        RequestMessage,
-    },
+    discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryEvent},
+    gossipsub::{config::build_gossipsub_behaviour, topics::GossipTopic},
+    peer_report::{PeerReportBehaviour, PeerReportEvent},
+    request_response::messages::{NetworkResponse, RequestMessage},
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use libp2p::{
     gossipsub::{
-        error::PublishError,
-        Gossipsub,
-        GossipsubEvent,
-        MessageAcceptance,
-        MessageId,
+        error::PublishError, Gossipsub, GossipsubEvent, MessageAcceptance, MessageId,
     },
     request_response::{
-        ProtocolSupport,
-        RequestId,
-        RequestResponse,
-        RequestResponseConfig,
-        RequestResponseEvent,
-        ResponseChannel,
+        ProtocolSupport, RequestId, RequestResponse, RequestResponseConfig,
+        RequestResponseEvent, ResponseChannel,
     },
     swarm::NetworkBehaviour,
-    Multiaddr,
-    PeerId,
+    Multiaddr, PeerId,
 };
-use tracing::{
-    debug,
-    error,
-    log::warn,
-};
+use tracing::{debug, error, log::warn};
 
 #[derive(Debug)]
 pub enum FuelBehaviourEvent {
@@ -169,16 +143,16 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
             acceptance,
         ) {
             Ok(true) => {
-                debug!(target: "fuel-p2p", "Sent a report for MessageId: {} from PeerId: {}", msg_id, propagation_source);
+                tracing::debug!(target: "fuel-p2p", "Sent a report for MessageId: {} from PeerId: {}", msg_id, propagation_source);
                 if should_check_score {
-                    return self.gossipsub.peer_score(propagation_source)
+                    return self.gossipsub.peer_score(propagation_source);
                 }
             }
             Ok(false) => {
-                warn!(target: "fuel-p2p", "Message with MessageId: {} not found in the Gossipsub Message Cache", msg_id);
+                tracing::warn!(target: "fuel-p2p", "Message with MessageId: {} not found in the Gossipsub Message Cache", msg_id);
             }
             Err(e) => {
-                error!(target: "fuel-p2p", "Failed to report Message with MessageId: {} with Error: {:?}", msg_id, e);
+                tracing::error!(target: "fuel-p2p", "Failed to report Message with MessageId: {} with Error: {:?}", msg_id, e);
             }
         }
 

@@ -144,6 +144,14 @@ impl DatabaseMessages for Database {
             .map(|result| result.map_err(StorageError::from))
             .into_boxed()
     }
+
+    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
+        self.message_is_spent(nonce)
+    }
+
+    fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool> {
+        self.message_exists(nonce)
+    }
 }
 
 impl DatabaseCoins for Database {
@@ -189,7 +197,7 @@ impl DatabaseChain for Database {
             .unwrap_or_else(|| DEFAULT_NAME.to_string()))
     }
 
-    fn base_chain_height(&self) -> StorageResult<DaBlockHeight> {
+    fn da_height(&self) -> StorageResult<DaBlockHeight> {
         #[cfg(feature = "relayer")]
         {
             use fuel_core_relayer::ports::RelayerDb;

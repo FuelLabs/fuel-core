@@ -121,6 +121,10 @@ pub trait DatabaseMessages:
         start_message_id: Option<Nonce>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<Message>>;
+
+    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool>;
+
+    fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool>;
 }
 
 /// Trait that specifies all the getters required for coins.
@@ -151,7 +155,7 @@ pub trait DatabaseContracts:
 pub trait DatabaseChain {
     fn chain_name(&self) -> StorageResult<String>;
 
-    fn base_chain_height(&self) -> StorageResult<DaBlockHeight>;
+    fn da_height(&self) -> StorageResult<DaBlockHeight>;
 }
 
 #[async_trait]

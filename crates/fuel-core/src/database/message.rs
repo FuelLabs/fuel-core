@@ -124,7 +124,7 @@ impl Database {
             .filter_map(|msg| {
                 // Return only unspent messages
                 if let Ok(msg) = msg {
-                    match self.is_message_spent(msg.id()) {
+                    match self.message_is_spent(msg.id()) {
                         Ok(false) => Some(Ok(msg)),
                         Ok(true) => None,
                         Err(e) => Some(Err(e)),
@@ -150,8 +150,12 @@ impl Database {
         Ok(Some(configs))
     }
 
-    pub fn is_message_spent(&self, id: &Nonce) -> StorageResult<bool> {
+    pub fn message_is_spent(&self, id: &Nonce) -> StorageResult<bool> {
         fuel_core_storage::StorageAsRef::storage::<SpentMessages>(&self).contains_key(id)
+    }
+
+    pub fn message_exists(&self, id: &Nonce) -> StorageResult<bool> {
+        fuel_core_storage::StorageAsRef::storage::<Messages>(&self).contains_key(id)
     }
 }
 
