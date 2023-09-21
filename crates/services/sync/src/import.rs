@@ -315,6 +315,12 @@ fn get_block_stream<
             consensus.await_da_height(&header.entity.da_height).await?;
             Ok(Some(header))
         } else {
+            // TODO: Could be replaced with an error, then
+            //      .into_scan_none_or_err()
+            //      .scan_none_or_err()
+            //  becomes:
+            //      .into_scan_err()
+            //      .scan_err()
             Ok(None)
         }
     })
@@ -323,12 +329,9 @@ fn get_block_stream<
     .chunks(*header_batch_size as usize)
     .zip(generator)
     .map(|(headers, (peer, p2p, ..))| {
-        {
-            let headers = peer.bind(headers);
-            get_blocks(p2p, headers)
-        }
-        .instrument(tracing::debug_span!("consensus_and_transactions"))
-        .in_current_span()
+        { get_blocks(p2p, peer, headers) }
+            .instrument(tracing::debug_span!("consensus_and_transactions"))
+            .in_current_span()
     })
 }
 
@@ -394,17 +397,6 @@ async fn check_sealed_header<
     Ok(validity)
 }
 
-// async fn get_sealed_blocks<
-//     P: PeerToPeerPort + Send + Sync + 'static,
-//     C: ConsensusPort + Send + Sync + 'static,
-// >(
-//     headers: SourcePeer<Vec<anyhow::Result<SealedBlockHeader>>>,
-//     p2p: Arc<P>,
-//     _consensus: Arc<C>,
-// ) -> anyhow::Result<Vec<SealedBlock>> {
-//     get_blocks(p2p.as_ref(), headers).await
-// }
-
 /// Waits for a notify or shutdown signal.
 /// Returns true if the notify signal was received.
 async fn wait_for_notify_or_shutdown(
@@ -456,7 +448,8 @@ where
                         start,
                         end
                     );
-                    vec![Err(anyhow::anyhow!("Headers provider was unable to fulfill request for unspecified reason. Possibly because requested batch size was too large"))]
+                    let error = Err(anyhow::anyhow!("Headers provider was unable to fulfill request for unspecified reason. Possibly because requested batch size was too large"));
+                    vec![error]
                 }
                 Some(headers) => headers
                     .into_iter()
@@ -488,7 +481,8 @@ where
         }
 
         Err(e) => {
-            vec![Err(e)]
+            let error = Err(e);
+            vec![error]
         }
     };
     futures::stream::iter(headers)
@@ -516,24 +510,27 @@ where
 // )]
 async fn get_blocks<P>(
     p2p: Arc<P>,
-    headers: SourcePeer<Vec<anyhow::Result<SealedBlockHeader>>>,
+    peer_id: PeerId,
+    headers: Vec<anyhow::Result<SealedBlockHeader>>,
 ) -> anyhow::Result<(Vec<SealedBlock>, Option<anyhow::Error>)>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
 {
-    let mut err = None;
-    let SourcePeer { peer_id, data } = headers;
-    let headers = data
-        .iter()
-        .take_while(|item| item.is_ok())
-        .map(|item| item.as_ref().expect("Result is checked for Ok"))
+    let (headers, errors): (Vec<_>, Vec<_>) =
+        headers.into_iter().partition(|r| r.is_ok());
+    let headers = headers
+        .into_iter()
+        .map(|item| item.expect("Result is checked for Ok"))
         .collect::<Vec<_>>();
-    if headers.len() < data.len() {
-        err = Some(anyhow!("An error occurred!!"));
-    }
+    let mut errors = errors
+        .into_iter()
+        .map(|item| item.expect_err("Result is checked for Error"))
+        .collect::<Vec<_>>();
+    let mut err = errors.pop();
     if headers.is_empty() {
         return Ok((vec![], err))
     }
+
     let block_ids = headers.iter().map(|header| header.entity.id()).collect();
     let block_ids = peer_id.clone().bind(block_ids);
     let maybe_txs = p2p.get_transactions_2(block_ids).await;
@@ -580,6 +577,8 @@ where
             Ok((blocks, err))
         }
         Err(error) => {
+            // Failure to retrieve transactions due to a networking error,
+            // invalid response, or any other reason constitutes a fatal error.
             err = Some(error);
             Ok((vec![], err))
         }
