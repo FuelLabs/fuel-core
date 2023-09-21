@@ -26,7 +26,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 tai64 = { version = "4.0", features = ["serde"] }
 thiserror = "1.0"
-tracing = "0.1"
+tracing = { version = "0.1", optional = true }
 
 [dev-dependencies]
 fuel-core-types = { workspace = true, features = ["serde", "test-helpers"] }
@@ -40,4 +40,4 @@ serde_json = { version = "1.0", features = ["raw_value"], optional = true }
 default = ["subscriptions"]
 test-helpers = []
 dap = ["schemafy_lib", "serde_json"]
-subscriptions = ["eventsource-client", "futures", "hyper-rustls"]
+subscriptions = ["eventsource-client", "futures", "hyper-rustls", "tracing"]
