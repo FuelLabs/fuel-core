@@ -266,12 +266,14 @@ pub enum Error {
     // TODO: Replace with `fuel_core_storage::Error` when execution error will live in the
     //  `fuel-core-executor`.
     #[error("got error during work with storage {0}")]
-    StorageError(Box<dyn StdError + Send + Sync>),
+    StorageError(anyhow::Error),
     #[error("got error during work with relayer {0}")]
     RelayerError(Box<dyn StdError + Send + Sync>),
     #[error("Transaction({transaction_id:#x}) execution error: {error:?}")]
     VmExecution {
-        error: InterpreterError,
+        // TODO: Replace with `fuel_core_storage::Error` when execution error will live in the
+        //  `fuel-core-executor`.
+        error: InterpreterError<anyhow::Error>,
         transaction_id: Bytes32,
     },
     #[error(transparent)]

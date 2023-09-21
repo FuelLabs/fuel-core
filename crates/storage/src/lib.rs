@@ -60,7 +60,19 @@ impl From<Error> for std::io::Error {
 
 impl From<Error> for ExecutorError {
     fn from(e: Error) -> Self {
-        ExecutorError::StorageError(Box::new(e))
+        ExecutorError::StorageError(anyhow::anyhow!(e))
+    }
+}
+
+impl From<Error> for fuel_vm_private::prelude::InterpreterError<Error> {
+    fn from(e: Error) -> Self {
+        fuel_vm_private::prelude::InterpreterError::Storage(e)
+    }
+}
+
+impl From<Error> for fuel_vm_private::prelude::RuntimeError<Error> {
+    fn from(e: Error) -> Self {
+        fuel_vm_private::prelude::RuntimeError::Storage(e)
     }
 }
 

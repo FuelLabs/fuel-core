@@ -138,27 +138,19 @@ impl ConcreteStorage {
         let mut vm = Interpreter::with_storage(vm_database, (&self.params).into());
         vm.transact(checked_tx)?;
         self.vm.insert(id.clone(), vm).ok_or_else(|| {
-            InterpreterError::Io(io::Error::new(
-                io::ErrorKind::NotFound,
-                "The VM instance was not found",
-            ))
+            io::Error::new(io::ErrorKind::NotFound, "The VM instance was not found")
         })?;
         self.db.insert(id.clone(), storage);
         Ok(())
     }
 
-    pub fn exec(&mut self, id: &ID, op: Instruction) -> Result<(), InterpreterError> {
+    pub fn exec(&mut self, id: &ID, op: Instruction) -> anyhow::Result<()> {
         self.vm
             .get_mut(id)
             .map(|vm| vm.instruction(op))
             .transpose()?
             .map(|_| ())
-            .ok_or_else(|| {
-                InterpreterError::Io(io::Error::new(
-                    io::ErrorKind::NotFound,
-                    "The VM instance was not found",
-                ))
-            })
+            .ok_or_else(|| anyhow::anyhow!("The VM instance was not found"))
     }
 
     fn vm_database(storage: &DatabaseTransaction) -> anyhow::Result<VmDatabase> {

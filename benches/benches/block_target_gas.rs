@@ -75,7 +75,7 @@ fn run(
             .gas_limit(TARGET_BLOCK_GAS_LIMIT - BASE)
             .gas_price(1)
             .add_unsigned_coin_input(
-                rng.gen(),
+                SecretKey::random(&mut rng),
                 rng.gen(),
                 u64::MAX,
                 AssetId::BASE,
