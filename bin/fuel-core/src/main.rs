@@ -11,5 +11,6 @@ mod cli;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // I was here
     cli::run_cli().await
 }
