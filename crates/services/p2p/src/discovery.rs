@@ -156,7 +156,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
         // poll sub-behaviors
         if let Poll::Ready(kad_action) = self.kademlia.poll(cx, params) {
-            return Poll::Ready(kad_action).into()
+            return Poll::Ready(kad_action)
         };
         while let Poll::Ready(mdns_event) = self.mdns.poll(cx, params) {
             match mdns_event {
@@ -170,7 +170,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                         address,
                         score,
                     })
-                    .into()
                 }
                 NetworkBehaviourAction::CloseConnection {
                     peer_id,
@@ -180,7 +179,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                         peer_id,
                         connection,
                     })
-                    .into()
                 }
                 _ => {}
             }
