@@ -290,6 +290,7 @@ pub struct Task<P, D, B> {
     heartbeat_peer_reputation_config: HeartbeatPeerReputationConfig,
 }
 
+#[derive(Clone)]
 pub struct HeartbeatPeerReputationConfig {
     old_heartbeat_penalty: AppScore,
     low_heartbeat_frequency_penalty: AppScore,
@@ -1002,14 +1003,14 @@ pub mod tests {
     }
 
     struct FakeBroadcast {
-        pub peer_reports: mpsc::Sender<(FuelPeerId, HeartBeatPeerReportReason, String)>,
+        pub peer_reports: mpsc::Sender<(FuelPeerId, AppScore, String)>,
     }
 
     impl Broadcast for FakeBroadcast {
         fn report_peer(
             &self,
             peer_id: FuelPeerId,
-            report: HeartBeatPeerReportReason,
+            report: AppScore,
             reporting_service: &'static str,
         ) -> anyhow::Result<()> {
             self.peer_reports.try_send((
@@ -1070,6 +1071,12 @@ pub mod tests {
         // Greater than actual
         let heartbeat_max_time_since_last = Duration::from_secs(40);
 
+        // Arbitrary values
+        let heartbeat_peer_reputation_config = HeartbeatPeerReputationConfig {
+            old_heartbeat_penalty: 5.6,
+            low_heartbeat_frequency_penalty: 20.45,
+        };
+
         let mut task = Task {
             p2p_service,
             db: Arc::new(FakeDB),
@@ -1081,6 +1088,7 @@ pub mod tests {
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
             next_check_time: Instant::now(),
+            heartbeat_peer_reputation_config: heartbeat_peer_reputation_config.clone(),
         };
         let (watch_sender, watch_receiver) = tokio::sync::watch::channel(State::Started);
         let mut watcher = StateWatcher::from(watch_receiver);
@@ -1098,7 +1106,10 @@ pub mod tests {
             FuelPeerId::from(peer_id.to_bytes().to_vec()),
             report_peer_id
         );
-        assert_eq!(report, HeartBeatPeerReportReason::LowHeartBeatFrequency);
+        assert_eq!(
+            report,
+            heartbeat_peer_reputation_config.low_heartbeat_frequency_penalty
+        );
         assert_eq!(reporting_service, "p2p");
     }
 
@@ -1138,6 +1149,12 @@ pub mod tests {
         // Less than actual
         let heartbeat_max_time_since_last = Duration::from_secs(40);
 
+        // Arbitrary values
+        let heartbeat_peer_reputation_config = HeartbeatPeerReputationConfig {
+            old_heartbeat_penalty: 5.6,
+            low_heartbeat_frequency_penalty: 20.45,
+        };
+
         let mut task = Task {
             p2p_service,
             db: Arc::new(FakeDB),
@@ -1149,6 +1166,7 @@ pub mod tests {
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
             next_check_time: Instant::now(),
+            heartbeat_peer_reputation_config: heartbeat_peer_reputation_config.clone(),
         };
         let (watch_sender, watch_receiver) = tokio::sync::watch::channel(State::Started);
         let mut watcher = StateWatcher::from(watch_receiver);
@@ -1166,7 +1184,10 @@ pub mod tests {
             FuelPeerId::from(peer_id.to_bytes().to_vec()),
             report_peer_id
         );
-        assert_eq!(report, HeartBeatPeerReportReason::OldHeartBeat);
+        assert_eq!(
+            report,
+            heartbeat_peer_reputation_config.old_heartbeat_penalty
+        );
         assert_eq!(reporting_service, "p2p");
     }
 }
