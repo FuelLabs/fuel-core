@@ -35,6 +35,10 @@ use libp2p::{
     Multiaddr,
     PeerId,
 };
+use libp2p_swarm::{
+    IntoConnectionHandler,
+    IntoConnectionHandlerSelect,
+};
 use std::{
     collections::VecDeque,
     task::{
@@ -129,17 +133,13 @@ impl NetworkBehaviour for PeerReportBehaviour {
         <Heartbeat as NetworkBehaviour>::ConnectionHandler,
         <Identify as NetworkBehaviour>::ConnectionHandler,
     >;
-    type OutEvent = PeerReportEvent;
+    type ToSwarm = PeerReportEvent;
 
     fn new_handler(&mut self) -> Self::ConnectionHandler {
         IntoConnectionHandler::select(
             self.heartbeat.new_handler(),
             self.identify.new_handler(),
         )
-    }
-
-    fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-        self.identify.addresses_of_peer(peer_id)
     }
 
     fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {

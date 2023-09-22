@@ -24,14 +24,11 @@ use futures::{
     AsyncWriteExt,
 };
 use libp2p::{
-    core::{
-        upgrade::{
-            read_length_prefixed,
-            write_length_prefixed,
-        },
-        ProtocolName,
+    core::upgrade::{
+        read_length_prefixed,
+        write_length_prefixed,
     },
-    request_response::RequestResponseCodec,
+    request_response::Codec as RequestResponseCodec,
 };
 use serde::{
     Deserialize,
@@ -266,11 +263,11 @@ impl NetworkCodec for PostcardCodec {
 #[derive(Debug, Clone)]
 pub struct MessageExchangePostcardProtocol;
 
-impl ProtocolName for MessageExchangePostcardProtocol {
-    fn protocol_name(&self) -> &[u8] {
-        REQUEST_RESPONSE_PROTOCOL_ID
-    }
-}
+// impl ProtocolName for MessageExchangePostcardProtocol {
+//     fn protocol_name(&self) -> &[u8] {
+//         REQUEST_RESPONSE_PROTOCOL_ID
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

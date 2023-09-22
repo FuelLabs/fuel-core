@@ -4,20 +4,20 @@ use crate::config::{
 };
 use fuel_core_metrics::p2p_metrics::p2p_metrics;
 use libp2p::gossipsub::{
-    metrics::Config as MetricsConfig,
+    Behaviour as Gossipsub,
+    Config as GossipsubConfig,
+    ConfigBuilder as GossipsubConfigBuilder,
     FastMessageId,
-    Gossipsub,
-    GossipsubConfig,
-    GossipsubConfigBuilder,
-    GossipsubMessage,
+    Message as GossipsubMessage,
     MessageAuthenticity,
     MessageId,
     PeerScoreParams,
     PeerScoreThresholds,
-    RawGossipsubMessage,
+    RawMessage as RawGossipsubMessage,
     Topic,
     TopicScoreParams,
 };
+use libp2p_gossipsub::MetricsConfig;
 use libp2p_prom_client::registry::Registry;
 use sha2::{
     Digest,

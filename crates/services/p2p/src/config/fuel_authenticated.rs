@@ -1,4 +1,3 @@
-use fuel_core_types::secrecy::Zeroize;
 use futures::{
     future,
     AsyncRead,
@@ -9,9 +8,9 @@ use futures::{
 use libp2p::{
     core::UpgradeInfo,
     noise::{
-        NoiseAuthenticated,
-        NoiseError,
-        NoiseOutput,
+        Config as NoiseConfig,
+        Error as NoiseError,
+        Output as NoiseOutput,
         Protocol,
     },
     InboundUpgrade,
@@ -26,16 +25,13 @@ pub(crate) trait Approver {
 }
 
 #[derive(Clone)]
-pub(crate) struct FuelAuthenticated<A: Approver, P, C: Zeroize, R> {
-    noise_authenticated: NoiseAuthenticated<P, C, R>,
+pub(crate) struct FuelAuthenticated<A: Approver> {
+    noise_authenticated: NoiseConfig,
     approver: A,
 }
 
-impl<A: Approver, P, C: Zeroize, R> FuelAuthenticated<A, P, C, R> {
-    pub(crate) fn new(
-        noise_authenticated: NoiseAuthenticated<P, C, R>,
-        approver: A,
-    ) -> Self {
+impl<A: Approver> FuelAuthenticated<A> {
+    pub(crate) fn new(noise_authenticated: NoiseConfig, approver: A) -> Self {
         Self {
             noise_authenticated,
             approver,
@@ -43,26 +39,18 @@ impl<A: Approver, P, C: Zeroize, R> FuelAuthenticated<A, P, C, R> {
     }
 }
 
-impl<A: Approver, P, C: Zeroize, R> UpgradeInfo for FuelAuthenticated<A, P, C, R>
-where
-    NoiseAuthenticated<P, C, R>: UpgradeInfo,
-{
-    type Info = <NoiseAuthenticated<P, C, R> as UpgradeInfo>::Info;
-    type InfoIter = <NoiseAuthenticated<P, C, R> as UpgradeInfo>::InfoIter;
+impl<A: Approver> UpgradeInfo for FuelAuthenticated<A> {
+    type Info = <NoiseConfig as UpgradeInfo>::Info;
+    type InfoIter = <NoiseConfig as UpgradeInfo>::InfoIter;
 
     fn protocol_info(&self) -> Self::InfoIter {
         self.noise_authenticated.protocol_info()
     }
 }
 
-impl<A, T, P, C, R> InboundUpgrade<T> for FuelAuthenticated<A, P, C, R>
+impl<A, T> InboundUpgrade<T> for FuelAuthenticated<A>
 where
-    NoiseAuthenticated<P, C, R>: UpgradeInfo
-        + InboundUpgrade<T, Output = (PeerId, NoiseOutput<T>), Error = NoiseError>
-        + 'static,
-    <NoiseAuthenticated<P, C, R> as InboundUpgrade<T>>::Future: Send,
     T: AsyncRead + AsyncWrite + Send + 'static,
-    C: Protocol<C> + AsRef<[u8]> + Zeroize + Send + 'static,
     A: Approver + Send + 'static,
 {
     type Output = (PeerId, NoiseOutput<T>);
@@ -84,14 +72,9 @@ where
     }
 }
 
-impl<A, T, P, C, R> OutboundUpgrade<T> for FuelAuthenticated<A, P, C, R>
+impl<A, T> OutboundUpgrade<T> for FuelAuthenticated<A>
 where
-    NoiseAuthenticated<P, C, R>: UpgradeInfo
-        + OutboundUpgrade<T, Output = (PeerId, NoiseOutput<T>), Error = NoiseError>
-        + 'static,
-    <NoiseAuthenticated<P, C, R> as OutboundUpgrade<T>>::Future: Send,
     T: AsyncRead + AsyncWrite + Send + 'static,
-    C: Protocol<C> + AsRef<[u8]> + Zeroize + Send + 'static,
     A: Approver + Send + 'static,
 {
     type Output = (PeerId, NoiseOutput<T>);

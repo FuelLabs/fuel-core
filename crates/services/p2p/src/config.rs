@@ -10,22 +10,25 @@ use libp2p::{
         muxing::StreamMuxerBox,
         transport::Boxed,
     },
-    gossipsub::GossipsubConfig,
+    gossipsub::Config as GossipsubConfig,
     identity::{
         secp256k1::SecretKey,
         Keypair,
     },
-    mplex,
-    noise::{self,},
+    noise::{
+        Config as NoiseConfig,
+        {self,},
+    },
     tcp::{
         tokio::Transport as TokioTcpTransport,
         Config as TcpConfig,
     },
-    yamux,
     Multiaddr,
     PeerId,
     Transport,
 };
+use libp2p_mplex::MplexConfig;
+use libp2p_yamux::YamuxConfig;
 use std::{
     collections::HashSet,
     net::{
@@ -276,13 +279,13 @@ pub(crate) fn build_transport(
             .into_authentic(&p2p_config.keypair)
             .expect("Noise key generation failed");
 
-        noise::NoiseConfig::xx(dh_keys).into_authenticated()
+        NoiseConfig::xx(dh_keys).into_authenticated()
     };
 
     let multiplex_config = {
-        let mplex_config = mplex::MplexConfig::default();
+        let mplex_config = MplexConfig::default();
 
-        let mut yamux_config = yamux::YamuxConfig::default();
+        let mut yamux_config = YamuxConfig::default();
         yamux_config.set_max_buffer_size(MAX_RESPONSE_SIZE);
         libp2p::core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
     };

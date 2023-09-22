@@ -38,22 +38,19 @@ use fuel_core_types::{
 use futures::prelude::*;
 use libp2p::{
     gossipsub::{
-        error::PublishError,
-        GossipsubEvent,
+        Event as GossipsubEvent,
         MessageAcceptance,
         MessageId,
         TopicHash,
     },
     multiaddr::Protocol,
     request_response::{
+        Event as RequestResponseEvent,
+        Message as RequestResponseMessage,
         RequestId,
-        RequestResponseEvent,
-        RequestResponseMessage,
         ResponseChannel,
     },
     swarm::{
-        AddressScore,
-        ConnectionLimits,
         SwarmBuilder,
         SwarmEvent,
     },
@@ -61,6 +58,7 @@ use libp2p::{
     PeerId,
     Swarm,
 };
+use libp2p_swarm::ConnectionLimits;
 use rand::seq::IteratorRandom;
 use std::{
     collections::HashMap,
@@ -711,10 +709,7 @@ mod tests {
         StreamExt,
     };
     use libp2p::{
-        gossipsub::{
-            error::PublishError,
-            Topic,
-        },
+        gossipsub::Topic,
         identity::Keypair,
         swarm::SwarmEvent,
         Multiaddr,

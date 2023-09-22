@@ -2,30 +2,32 @@ use self::mdns::MdnsWrapper;
 use futures::FutureExt;
 use ip_network::IpNetwork;
 use libp2p::{
-    core::connection::ConnectionId,
+    core::Endpoint,
     kad::{
-        handler::KademliaHandlerProto,
         store::MemoryStore,
         Kademlia,
         KademliaEvent,
-        QueryId,
     },
     mdns::Event as MdnsEvent,
-    multiaddr::Protocol,
     swarm::{
         derive_prelude::{
             ConnectionClosed,
             ConnectionEstablished,
             FromSwarm,
         },
+        ConnectionDenied,
         ConnectionHandler,
-        IntoConnectionHandler,
+        ConnectionId,
         NetworkBehaviour,
-        NetworkBehaviourAction,
         PollParameters,
+        THandler,
     },
     Multiaddr,
     PeerId,
+};
+use libp2p_swarm::{
+    IntoConnectionHandler,
+    NetworkBehaviourAction,
 };
 use std::{
     collections::{
@@ -102,14 +104,8 @@ impl DiscoveryBehaviour {
 }
 
 impl NetworkBehaviour for DiscoveryBehaviour {
-    type ConnectionHandler = KademliaHandlerProto<QueryId>;
-    type OutEvent = DiscoveryEvent;
-
-    // Initializes new handler on a new opened connection
-    fn new_handler(&mut self) -> Self::ConnectionHandler {
-        // in our case we just return KademliaHandlerProto
-        self.kademlia.new_handler()
-    }
+    type ConnectionHandler = KademliaHandler;
+    type ToSwarm = DiscoveryEvent;
 
     // receive events from KademliaHandler and pass it down to kademlia
     fn on_connection_handler_event(
@@ -261,48 +257,29 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         Poll::Pending
     }
 
-    /// return list of known addresses for a given peer
-    fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-        let mut list = self
-            .bootstrap_nodes
-            .iter()
-            .chain(self.reserved_nodes.iter())
-            .filter_map(|(current_peer_id, multiaddr)| {
-                if current_peer_id == peer_id {
-                    Some(multiaddr.clone())
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
+    fn handle_established_inbound_connection(
+        &mut self,
+        _connection_id: ConnectionId,
+        peer: PeerId,
+        local_addr: &Multiaddr,
+        remote_addr: &Multiaddr,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
+        self.kademlia.handle_established_inbound_connection(
+            _connection_id,
+            peer,
+            local_addr,
+            remote_addr,
+        )
+    }
 
-        {
-            let mut list_to_filter = Vec::new();
-
-            list_to_filter.extend(self.kademlia.addresses_of_peer(peer_id));
-            list_to_filter.extend(self.mdns.addresses_of_peer(peer_id));
-
-            // filter private addresses
-            // nodes could potentially report addresses in the private network
-            // which are not actually part of the network
-            if !self.allow_private_addresses {
-                list_to_filter.retain(|addr| match addr.iter().next() {
-                    Some(Protocol::Ip4(addr)) if !IpNetwork::from(addr).is_global() => {
-                        false
-                    }
-                    Some(Protocol::Ip6(addr)) if !IpNetwork::from(addr).is_global() => {
-                        false
-                    }
-                    _ => true,
-                });
-            }
-
-            list.extend(list_to_filter);
-        }
-
-        trace!("Addresses of {:?}: {:?}", peer_id, list);
-
-        list
+    fn handle_established_outbound_connection(
+        &mut self,
+        _connection_id: ConnectionId,
+        peer: PeerId,
+        addr: &Multiaddr,
+        role_override: Endpoint,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
+        todo!()
     }
 }
 

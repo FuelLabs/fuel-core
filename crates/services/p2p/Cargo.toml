@@ -22,15 +22,14 @@ fuel-core-types = { workspace = true, features = [
 ] }
 futures = { workspace = true }
 ip_network = "0.4"
-libp2p = { version = "=0.50.0", default-features = false, features = [
+libp2p = { version = "=0.52.3", default-features = false, features = [
     "dns",
     "gossipsub",
     "identify",
     "kad",
     "macros",
     "mdns",
-    "mplex",
-    "noise",    
+    "noise",
     "request-response",
     "secp256k1",
     "tcp",
@@ -38,14 +37,14 @@ libp2p = { version = "=0.50.0", default-features = false, features = [
     "yamux",
     "websocket",
 ] }
-libp2p-core = "=0.38.0"
-libp2p-dns = "=0.38.0"
-libp2p-gossipsub = "=0.43.0"
-libp2p-identify = "=0.41.0"
-libp2p-kad = "=0.42.0"
-libp2p-mdns = "=0.42.0"
-libp2p-mplex = "=0.38.0"
-libp2p-noise = "=0.41.0"
+libp2p-core = "=0.40.1"
+libp2p-dns = "=0.40.0"
+libp2p-gossipsub = "=0.45.1"
+libp2p-identify = "=0.43.0"
+libp2p-kad = "=0.44.5"
+libp2p-mdns = "=0.44.0"
+libp2p-mplex = "=0.40.0"
+libp2p-noise = "=0.43.1"
 libp2p-prom-client = { workspace = true }
 libp2p-request-response = "=0.23.0"
 libp2p-swarm = "=0.41.1"

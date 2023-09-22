@@ -6,8 +6,8 @@ use libp2p::{
     },
     swarm::{
         NetworkBehaviour,
-        NetworkBehaviourAction,
         PollParameters,
+        ToSwarm,
     },
     Multiaddr,
     PeerId,
@@ -52,12 +52,8 @@ impl MdnsWrapper {
         &mut self,
         cx: &mut Context<'_>,
         params: &mut impl PollParameters,
-    ) -> Poll<
-        NetworkBehaviourAction<
-            MdnsEvent,
-            <TokioMdns as NetworkBehaviour>::ConnectionHandler,
-        >,
-    > {
+    ) -> Poll<ToSwarm<MdnsEvent, <TokioMdns as NetworkBehaviour>::ConnectionHandler>>
+    {
         match self {
             Self::Ready(mdns) => mdns.poll(cx, params),
             Self::Disabled => Poll::Pending,

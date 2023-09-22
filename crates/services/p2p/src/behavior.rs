@@ -23,17 +23,17 @@ use fuel_core_types::fuel_types::BlockHeight;
 use libp2p::{
     gossipsub::{
         error::PublishError,
-        Gossipsub,
-        GossipsubEvent,
+        Behaviour as Gossipsub,
+        Event as GossipsubEvent,
         MessageAcceptance,
         MessageId,
     },
     request_response::{
+        Behaviour as RequestResponse,
+        Config as RequestResponseConfig,
+        Event as RequestResponseEvent,
         ProtocolSupport,
         RequestId,
-        RequestResponse,
-        RequestResponseConfig,
-        RequestResponseEvent,
         ResponseChannel,
     },
     swarm::NetworkBehaviour,
