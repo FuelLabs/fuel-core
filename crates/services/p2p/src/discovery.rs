@@ -155,9 +155,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         }
 
         // poll sub-behaviors
-        let mut poll_state = None;
         if let Poll::Ready(kad_action) = self.kademlia.poll(cx, params) {
-            poll_state = Poll::Ready(kad_action).into();
+            return Poll::Ready(kad_action).into()
         };
         while let Poll::Ready(mdns_event) = self.mdns.poll(cx, params) {
             match mdns_event {
@@ -167,30 +166,26 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                     }
                 }
                 NetworkBehaviourAction::ReportObservedAddr { address, score } => {
-                    poll_state =
-                        Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-                            address,
-                            score,
-                        })
-                        .into();
-                    break
+                    return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
+                        address,
+                        score,
+                    })
+                    .into()
                 }
                 NetworkBehaviourAction::CloseConnection {
                     peer_id,
                     connection,
                 } => {
-                    poll_state = Poll::Ready(NetworkBehaviourAction::CloseConnection {
+                    return Poll::Ready(NetworkBehaviourAction::CloseConnection {
                         peer_id,
                         connection,
                     })
-                    .into();
-                    break
+                    .into()
                 }
                 _ => {}
             }
         }
-
-        poll_state.unwrap_or(Poll::Pending)
+        Poll::Pending
     }
 
     /// return list of known addresses for a given peer
