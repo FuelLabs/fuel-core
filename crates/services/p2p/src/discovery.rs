@@ -155,48 +155,42 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         }
 
         // poll sub-behaviors
+        let mut poll_state = None;
         if let Poll::Ready(kad_action) = self.kademlia.poll(cx, params) {
-            match kad_action {
-                NetworkBehaviourAction::GenerateEvent(event) => match event {
-                    KademliaEvent::UnroutablePeer { peer } => {
-                        Poll::Ready(NetworkBehaviourAction::GenerateEvent(
-                            KademliaEvent::UnroutablePeer { peer },
-                        ))
-                    }
-                    _ => Poll::Pending,
-                },
-                _ => Poll::Ready(kad_action),
-            }
-        } else if let Poll::Ready(mdns_event) = self.mdns.poll(cx, params) {
+            poll_state = Poll::Ready(kad_action).into();
+        };
+        while let Poll::Ready(mdns_event) = self.mdns.poll(cx, params) {
             match mdns_event {
                 NetworkBehaviourAction::GenerateEvent(MdnsEvent::Discovered(list)) => {
-                    // inform kademlia of newly discovered local peers
-                    // only if there aren't enough peers already connected
-                    if self.connected_peers.len() < self.max_peers_connected {
-                        for (peer_id, multiaddr) in list {
-                            self.kademlia.add_address(&peer_id, multiaddr);
-                        }
+                    for (peer_id, multiaddr) in list {
+                        self.kademlia.add_address(&peer_id, multiaddr);
                     }
-                    Poll::Pending
                 }
                 NetworkBehaviourAction::ReportObservedAddr { address, score } => {
-                    Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-                        address,
-                        score,
-                    })
+                    poll_state =
+                        Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
+                            address,
+                            score,
+                        })
+                        .into();
+                    break
                 }
                 NetworkBehaviourAction::CloseConnection {
                     peer_id,
                     connection,
-                } => Poll::Ready(NetworkBehaviourAction::CloseConnection {
-                    peer_id,
-                    connection,
-                }),
-                _ => Poll::Pending,
+                } => {
+                    poll_state = Poll::Ready(NetworkBehaviourAction::CloseConnection {
+                        peer_id,
+                        connection,
+                    })
+                    .into();
+                    break
+                }
+                _ => {}
             }
-        } else {
-            Poll::Pending
         }
+
+        poll_state.unwrap_or(Poll::Pending)
     }
 
     /// return list of known addresses for a given peer
