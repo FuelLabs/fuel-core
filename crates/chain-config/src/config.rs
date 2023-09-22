@@ -4,6 +4,7 @@ mod consensus;
 mod contract;
 mod message;
 mod state;
+mod regenesis;
 
 pub use chain::*;
 pub use coin::*;
@@ -11,6 +12,7 @@ pub use consensus::*;
 pub use contract::*;
 pub use message::*;
 pub use state::*;
+pub use regenesis::*;
 
 #[cfg(test)]
 mod tests {

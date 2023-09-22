@@ -17,15 +17,18 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+bech32 = "0.9.0"
 clap = { workspace = true, features = ["derive", "env"] }
 const_format = { version = "0.2", optional = true }
 dirs = "4.0"
 dotenvy = { version = "0.15", optional = true }
 fuel-core = { workspace = true }
 humantime = "2.1"
+itertools = { workspace = true }
 lazy_static = { workspace = true }
 pyroscope = "0.5"
 pyroscope_pprofrs = "0.2"
+serde = { workspace = true }
 serde_json = { workspace = true, features = ["raw_value"], optional = true }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -14,7 +14,7 @@ use fuel_core_types::{
     fuel_types::{
         Address,
         AssetId,
-        Bytes32,
+        Bytes32, BlockHeight,
     },
     fuel_vm::SecretKey,
 };
@@ -61,6 +61,7 @@ pub struct ChainConfig {
     pub block_gas_limit: u64,
     #[serde(default)]
     pub initial_state: Option<StateConfig>,
+    pub block_height: BlockHeight,
     pub consensus_parameters: ConsensusParameters,
     pub consensus: ConsensusConfig,
 }
@@ -72,6 +73,7 @@ impl Default for ChainConfig {
             block_gas_limit: TxParameters::DEFAULT.max_gas_per_tx * 10, /* TODO: Pick a sensible default */
             consensus_parameters: ConsensusParameters::default(),
             initial_state: None,
+            block_height: BlockHeight::default(),
             consensus: ConsensusConfig::default_poa(),
         }
     }
@@ -165,6 +167,7 @@ impl GenesisCommitment for ChainConfig {
             block_gas_limit,
             // Skip the `initial_state` bec
             initial_state: _,
+            block_height,
             consensus_parameters,
             consensus,
         } = self;
@@ -175,6 +178,7 @@ impl GenesisCommitment for ChainConfig {
             .chain(block_gas_limit.to_be_bytes())
             .chain(consensus_parameters.root()?)
             .chain(consensus.root()?)
+            .chain(block_height.to_bytes())
             .finalize();
 
         Ok(config_hash)

@@ -13,8 +13,8 @@ use anyhow::{
 use clap::Parser;
 use fuel_core::{
     chain_config::{
-        default_consensus_dev_key,
-        ChainConfig,
+        default_consensus_dev_key, EventHandler, ChainConfigVisitor, Event, FUEL_BECH32_HRP, TESTNET_INITIAL_BALANCE, CoinConfig, StateConfig, ConsensusConfig,
+        
     },
     producer::Config as ProducerConfig,
     service::{
@@ -28,12 +28,12 @@ use fuel_core::{
     txpool::Config as TxPoolConfig,
     types::{
         blockchain::primitives::SecretKeyWrapper,
-        fuel_tx::Address,
+        fuel_tx::{Address, UtxoId, TxParameters, ConsensusParameters},
         fuel_vm::SecretKey,
         secrecy::{
             ExposeSecret,
             Secret,
-        },
+        }, fuel_crypto::rand::{rngs::StdRng, SeedableRng}, fuel_types::{Bytes32, BlockHeight},
     },
 };
 use pyroscope::{
@@ -44,18 +44,23 @@ use pyroscope_pprofrs::{
     pprof_backend,
     PprofConfig,
 };
+use serde_json::{Map, Value};
 use std::{
     env,
     net,
     ops::Deref,
     path::PathBuf,
-    str::FromStr,
+    str::FromStr, fs::File, io::BufReader, sync::mpsc::Receiver,
 };
 use tracing::{
     info,
     trace,
     warn,
 };
+use serde::Deserializer;
+use bech32::ToBase32;
+use bech32::Variant::Bech32m;
+use itertools::Itertools;
 
 pub const CONSENSUS_KEY_ENV: &str = "CONSENSUS_KEY_SECRET";
 // Default database cache is 1 GB
@@ -208,6 +213,9 @@ pub struct Command {
 
     #[clap(flatten)]
     pub profiling: profiling::ProfilingArgs,
+
+    #[arg(long = "regenesis", default_value = "false", env)]
+    pub regenesis: bool,
 }
 
 impl Command {
@@ -245,11 +253,13 @@ impl Command {
             time_until_synced,
             query_log_threshold_time,
             profiling: _,
+            regenesis,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
 
-        let chain_conf: ChainConfig = chain_config.as_str().parse()?;
+        //let chain_conf: ChainConfig = chain_config.as_str().parse()?;
+        let rx = read_chain_config(&chain_config)?;
 
         #[cfg(feature = "relayer")]
         let relayer_cfg = relayer_args.into_config();
@@ -346,6 +356,96 @@ impl Command {
         };
         Ok(config)
     }
+}
+
+pub fn initial_coin(
+    secret: SecretKey,
+    amount: u64,
+    utxo_id: Option<UtxoId>,
+) -> CoinConfig {
+    let address = Address::from(*secret.public_key().hash());
+
+    CoinConfig {
+        tx_id: utxo_id.as_ref().map(|u| *u.tx_id()),
+        output_index: utxo_id.as_ref().map(|u| u.output_index()),
+        tx_pointer_block_height: None,
+        tx_pointer_tx_idx: None,
+        maturity: None,
+        owner: address,
+        amount,
+        asset_id: Default::default(),
+    }
+}
+
+pub fn local_testnet_config() -> String {
+    // endow some preset accounts with an initial balance
+    tracing::info!("Initial Accounts");
+    let mut rng = StdRng::seed_from_u64(10);
+    let initial_coins = (0..5)
+        .map(|_| {
+            let secret = SecretKey::random(&mut rng);
+            let address = Address::from(*secret.public_key().hash());
+            let bech32_data = Bytes32::new(*address).to_base32();
+            let bech32_encoding =
+                bech32::encode(FUEL_BECH32_HRP, bech32_data, Bech32m).unwrap();
+            tracing::info!(
+                "PrivateKey({:#x}), Address({:#x} [bech32: {}]), Balance({})",
+                secret,
+                address,
+                bech32_encoding,
+                TESTNET_INITIAL_BALANCE
+            );
+            initial_coin(secret, TESTNET_INITIAL_BALANCE, None)
+        })
+        .collect_vec();
+
+        let mut json_map = Map::new();
+        let chain_name = serde_json::to_value("local".to_string()).unwrap();
+        let state_config = serde_json::to_value(Some(StateConfig {
+            coins: Some(initial_coins),
+            ..StateConfig::default()
+        })).unwrap();
+
+        json_map.insert("chain_name".to_string(), chain_name);
+        json_map.insert("initial_state".to_string(), state_config);
+        json_map.insert("block_height".to_string(), serde_json::to_value(BlockHeight::default()).unwrap());
+        json_map.insert("block_gas_limit".to_string(), serde_json::to_value(TxParameters::DEFAULT.max_gas_per_tx * 10).unwrap()); /* TODO: Pick a sensible default */
+        json_map.insert("consensus_parameters".to_string(), serde_json::to_value(ConsensusParameters::default()).unwrap());
+        json_map.insert("consensus".to_string(), serde_json::to_value(ConsensusConfig::default_poa()).unwrap());
+        
+        Value::Object(json_map).to_string()
+}
+
+
+pub(crate) fn read_chain_config(path: &str) -> anyhow::Result<Receiver<Event>> {
+    let (tx, rx) = std::sync::mpsc::sync_channel(1000);
+    let callback = EventHandler { sender: tx };
+    let visitor = ChainConfigVisitor { callback };
+
+    let _ = match path {
+        LOCAL_TESTNET => {
+            let config = local_testnet_config();
+            let reader = BufReader::new(config.as_bytes());
+            std::thread::spawn(|| {
+                serde_json::Deserializer::from_reader(reader)
+                    .deserialize_map(visitor)
+                    .unwrap()
+            });
+        },
+        s => {
+            // Attempt to load chain config from path
+            let file = File::open(path).unwrap();
+            let reader = BufReader::new(file);
+
+            std::thread::spawn(|| {
+                serde_json::Deserializer::from_reader(reader)
+                    .deserialize_map(visitor)
+                    .unwrap()
+            });
+        }
+    };
+
+    Ok(rx)
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
