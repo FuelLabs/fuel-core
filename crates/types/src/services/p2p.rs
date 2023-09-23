@@ -71,7 +71,7 @@ impl<T> SourcePeer<T> {
     {
         let peer_id = self.peer_id;
         let data = f(self.data);
-        SourcePeer::<U> { peer_id, data }
+        SourcePeer { peer_id, data }
     }
 
     /// Asref
