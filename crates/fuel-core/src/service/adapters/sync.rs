@@ -64,20 +64,20 @@ impl PeerToPeerPort for P2PAdapter {
     async fn get_sealed_block_headers(
         &self,
         block_height_range: SourcePeer<Range<u32>>,
-    ) -> anyhow::Result<SourcePeer<Option<Vec<SealedBlockHeader>>>> {
+    ) -> SourcePeer<anyhow::Result<Option<Vec<SealedBlockHeader>>>> {
         let SourcePeer {
             peer_id,
             data: block_height_range,
         } = block_height_range;
-        if let Some(service) = &self.service {
+        let result = if let Some(service) = &self.service {
             let headers = service
                 .get_sealed_block_headers(peer_id.clone().into(), block_height_range)
-                .await?;
-            let sourced_headers = peer_id.bind(headers);
-            Ok(sourced_headers)
+                .await;
+            headers
         } else {
             Err(anyhow::anyhow!("No P2P service available"))
-        }
+        };
+        peer_id.bind(result)
     }
 
     async fn get_transactions(

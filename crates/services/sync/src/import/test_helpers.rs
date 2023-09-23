@@ -21,10 +21,7 @@ pub use counts::{
     Count,
     SharedCounts,
 };
-use fuel_core_types::services::p2p::{
-    PeerId,
-    SourcePeer,
-};
+
 pub use pressure_block_importer::PressureBlockImporter;
 pub use pressure_consensus::PressureConsensus;
 pub use pressure_peer_to_peer::PressurePeerToPeer;
@@ -40,21 +37,5 @@ pub fn empty_header(h: BlockHeight) -> SealedBlockHeader {
     Sealed {
         entity: header,
         consensus,
-    }
-}
-
-pub fn peer_sourced_headers(
-    headers: Option<Vec<SealedBlockHeader>>,
-) -> SourcePeer<Option<Vec<SealedBlockHeader>>> {
-    peer_sourced_headers_peer_id(headers, vec![].into())
-}
-
-pub fn peer_sourced_headers_peer_id(
-    headers: Option<Vec<SealedBlockHeader>>,
-    peer_id: PeerId,
-) -> SourcePeer<Option<Vec<SealedBlockHeader>>> {
-    SourcePeer {
-        peer_id,
-        data: headers,
     }
 }

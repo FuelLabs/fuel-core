@@ -3118,6 +3118,7 @@ version = "0.20.4"
 dependencies = [
  "anyhow",
  "async-trait",
+ "derive_more",
  "fuel-core-services",
  "fuel-core-trace",
  "fuel-core-types",

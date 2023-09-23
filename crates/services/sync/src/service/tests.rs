@@ -35,15 +35,14 @@ async fn test_new_service() {
         .into_boxed()
     });
     p2p.expect_get_sealed_block_headers().returning(|range| {
-        let headers = range.map(|range| {
+        range.map(|range| {
             let headers = range
                 .clone()
                 .map(BlockHeight::from)
                 .map(empty_header)
                 .collect::<Vec<_>>();
-            Some(headers)
-        });
-        Ok(headers)
+            Ok(Some(headers))
+        })
     });
     p2p.expect_get_transactions()
         .returning(|_| Ok(Some(vec![])));

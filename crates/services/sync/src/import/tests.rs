@@ -1,11 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::{
-    import::test_helpers::{
-        empty_header,
-        peer_sourced_headers,
-        peer_sourced_headers_peer_id,
-    },
+    import::test_helpers::empty_header,
     ports::{
         MockBlockImporterPort,
         MockConsensusPort,
@@ -38,11 +34,10 @@ async fn test_import_0_to_5() {
     p2p.expect_get_sealed_block_headers()
         .times(1)
         .returning(|range| {
-            let headers = range.map(|range| {
+            range.map(|range| {
                 let headers = range.clone().map(|h| empty_header(h.into())).collect();
-                Some(headers)
-            });
-            Ok(headers)
+                Ok(Some(headers))
+            })
         });
     p2p.expect_get_transactions_2()
         .times(1)
@@ -77,11 +72,10 @@ async fn test_import_3_to_5() {
     p2p.expect_get_sealed_block_headers()
         .times(1)
         .returning(|range| {
-            let headers = range.map(|range| {
+            range.map(|range| {
                 let headers = range.clone().map(|h| empty_header(h.into())).collect();
-                Some(headers)
-            });
-            Ok(headers)
+                Ok(Some(headers))
+            })
         });
     p2p.expect_get_transactions_2()
         .times(1)
@@ -125,11 +119,10 @@ async fn import__signature_fails_on_header_5_only() {
     p2p.expect_get_sealed_block_headers()
         .times(1)
         .returning(|range| {
-            let headers = range.map(|range| {
+            range.map(|range| {
                 let headers = range.clone().map(|h| empty_header(h.into())).collect();
-                Some(headers)
-            });
-            Ok(headers)
+                Ok(Some(headers))
+            })
         });
     p2p.expect_get_transactions_2()
         .times(1)
@@ -174,11 +167,10 @@ async fn import__signature_fails_on_header_4_only() {
     p2p.expect_get_sealed_block_headers()
         .times(1)
         .returning(|range| {
-            let headers = range.map(|range| {
+            range.map(|range| {
                 let headers = range.clone().map(|h| empty_header(h.into())).collect();
-                Some(headers)
-            });
-            Ok(headers)
+                Ok(Some(headers))
+            })
         });
     p2p.expect_get_transactions_2()
         .times(0)
@@ -213,7 +205,7 @@ async fn import__header_not_found() {
     });
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| Ok(peer_sourced_headers(Some(Vec::new()))));
+        .returning(|range| range.map(|_| Ok(Some(Vec::new()))));
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
@@ -240,7 +232,7 @@ async fn import__header_response_incomplete() {
     });
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| Ok(peer_sourced_headers(None)));
+        .returning(|range| range.map(|_| Ok(None)));
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
@@ -267,7 +259,7 @@ async fn import__header_5_not_found() {
     });
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| Ok(peer_sourced_headers(Some(vec![empty_header(4.into())]))));
+        .returning(|range| range.map(|_| Ok(Some(vec![empty_header(4.into())]))));
     p2p.expect_get_transactions_2()
         .times(1)
         .returning(|block_ids| {
@@ -301,14 +293,8 @@ async fn import__header_4_not_found() {
     });
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| Ok(peer_sourced_headers(Some(vec![empty_header(5.into())]))));
-    p2p.expect_get_transactions_2()
-        .times(0)
-        .returning(|block_ids| {
-            let data = block_ids.data;
-            let v = data.into_iter().map(|_| TransactionData::new()).collect();
-            Ok(Some(v))
-        });
+        .returning(|range| range.map(|_| Ok(Some(vec![empty_header(5.into())]))));
+    p2p.expect_get_transactions_2().times(0);
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
@@ -335,11 +321,8 @@ async fn import__transactions_not_found() {
     });
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| {
-            Ok(peer_sourced_headers(Some(vec![
-                empty_header(4.into()),
-                empty_header(5.into()),
-            ])))
+        .returning(|range| {
+            range.map(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])))
         });
     p2p.expect_get_transactions_2()
         .times(1)
@@ -370,11 +353,8 @@ async fn import__transactions_not_found_for_header_4() {
     });
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| {
-            Ok(peer_sourced_headers(Some(vec![
-                empty_header(4.into()),
-                empty_header(5.into()),
-            ])))
+        .returning(|range| {
+            range.map(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])))
         });
     let mut height = 3;
     p2p.expect_get_transactions_2()
@@ -415,11 +395,8 @@ async fn import__transactions_not_found_for_header_5() {
     });
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| {
-            Ok(peer_sourced_headers(Some(vec![
-                empty_header(4.into()),
-                empty_header(5.into()),
-            ])))
+        .returning(|range| {
+            range.map(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])))
         });
     p2p.expect_get_transactions_2()
         .times(1)
@@ -453,7 +430,7 @@ async fn import__p2p_error() {
     });
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| Err(anyhow::anyhow!("Some network error")));
+        .returning(|range| range.map(|_| Err(anyhow::anyhow!("Some network error"))));
     p2p.expect_get_transactions_2().times(0);
 
     let state = State::new(3, 5).into();
@@ -481,11 +458,8 @@ async fn import__p2p_error_on_4_transactions() {
     });
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| {
-            Ok(peer_sourced_headers(Some(vec![
-                empty_header(4.into()),
-                empty_header(5.into()),
-            ])))
+        .returning(|range| {
+            range.map(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])))
         });
     p2p.expect_get_transactions_2()
         .times(1)
@@ -573,11 +547,8 @@ async fn import__consensus_error_on_4() {
     });
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| {
-            Ok(peer_sourced_headers(Some(vec![
-                empty_header(4.into()),
-                empty_header(5.into()),
-            ])))
+        .returning(|range| {
+            range.map(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])))
         });
     p2p.expect_get_transactions_2().times(0);
 
@@ -622,11 +593,8 @@ async fn import__consensus_error_on_5() {
     });
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| {
-            Ok(peer_sourced_headers(Some(vec![
-                empty_header(4.into()),
-                empty_header(5.into()),
-            ])))
+        .returning(|range| {
+            range.map(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])))
         });
     p2p.expect_get_transactions_2()
         .times(1)
@@ -661,11 +629,8 @@ async fn import__execution_error_on_header_4() {
     });
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| {
-            Ok(peer_sourced_headers(Some(vec![
-                empty_header(4.into()),
-                empty_header(5.into()),
-            ])))
+        .returning(|range| {
+            range.map(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])))
         });
     p2p.expect_get_transactions_2()
         .times(1)
@@ -712,11 +677,8 @@ async fn import__execution_error_on_header_5() {
     });
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|_| {
-            Ok(peer_sourced_headers(Some(vec![
-                empty_header(4.into()),
-                empty_header(5.into()),
-            ])))
+        .returning(|range| {
+            range.map(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])))
         });
     p2p.expect_get_transactions_2()
         .times(1)
@@ -760,6 +722,9 @@ async fn signature_always_fails() {
         .expect_check_sealed_header()
         .times(1)
         .returning(|_| Ok(false));
+    consensus_port
+        .expect_await_da_height()
+        .returning(|_| Ok(()));
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
@@ -790,11 +755,10 @@ async fn import__can_work_in_two_loops() {
         .times(2)
         .returning(move |range| {
             state.apply(|s| s.observe(6));
-            let headers = range.map(|range| {
+            range.map(|range| {
                 let headers = range.clone().map(|h| empty_header(h.into())).collect();
-                Some(headers)
-            });
-            Ok(headers)
+                Ok(Some(headers))
+            })
         });
     p2p.expect_get_transactions_2()
         .times(2)
@@ -895,7 +859,7 @@ async fn import__missing_headers_sends_peer_report() {
     // Given
     PeerReportTestBuilder::new()
         // When
-        .with_get_headers(None)
+        .with_get_sealed_block_headers(None)
         // Then
         .run_with_expected_reports([PeerReportReason::MissingBlockHeaders])
         .await;
@@ -952,7 +916,7 @@ impl PeerReportTestBuilder {
         self
     }
 
-    pub fn with_get_headers(
+    pub fn with_get_sealed_block_headers(
         mut self,
         get_headers: Option<Vec<SealedBlockHeader>>,
     ) -> Self {
@@ -1038,23 +1002,17 @@ impl PeerReportTestBuilder {
             Ok(Some(peer_id.clone().into()))
         });
 
-        let peer_id = self.shared_peer_id.clone();
         if let Some(get_headers) = self.get_sealed_headers.clone() {
-            p2p.expect_get_sealed_block_headers().returning(move |_| {
-                Ok(peer_sourced_headers_peer_id(
-                    get_headers.clone(),
-                    peer_id.clone().into(),
-                ))
-            });
+            p2p.expect_get_sealed_block_headers()
+                .returning(move |range| range.map(|_| Ok(get_headers.clone())));
         } else {
             p2p.expect_get_sealed_block_headers()
                 .returning(move |range| {
-                    let headers = range.map(|range| {
+                    range.map(|range| {
                         let headers =
                             range.clone().map(|h| empty_header(h.into())).collect();
-                        Some(headers)
-                    });
-                    Ok(headers)
+                        Ok(Some(headers))
+                    })
                 });
         }
 
@@ -1188,11 +1146,10 @@ impl DefaultMocks for MockPeerToPeerPort {
         p2p.expect_get_sealed_block_headers()
             .times(1)
             .returning(|range| {
-                let headers = range.map(|range| {
+                range.map(|range| {
                     let headers = range.clone().map(|h| empty_header(h.into())).collect();
-                    Some(headers)
-                });
-                Ok(headers)
+                    Ok(Some(headers))
+                })
             });
 
         p2p.expect_get_transactions_2()

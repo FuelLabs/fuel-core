@@ -158,7 +158,7 @@ where
                 );
                 self.state.apply(|s| s.failed_to_process(incomplete_range));
             }
-            result?;
+            result.map_err(|e| anyhow!(e))?;
         }
         Ok(())
     }
@@ -174,7 +174,7 @@ where
         &self,
         range: RangeInclusive<u32>,
         shutdown: &StateWatcher,
-    ) -> (usize, anyhow::Result<()>) {
+    ) -> (usize, Result<(), ImportError>) {
         let Self {
             state,
             params,
@@ -189,14 +189,9 @@ where
             tokio::sync::mpsc::channel::<()>(1);
 
         let block_height = BlockHeight::from(*range.end());
-        let peer = p2p.select_peer(block_height).await;
+        let peer = select_peer(block_height, p2p.as_ref()).await;
         if let Err(err) = peer {
             let err = Err(err);
-            return (0, err)
-        }
-        let peer = peer.expect("Checked");
-        if peer.is_none() {
-            let err = Err(anyhow!("Expected peer"));
             return (0, err)
         }
         let peer = peer.expect("Checked");
@@ -276,7 +271,8 @@ where
             .fold((0usize, Ok(())), |(count, res), result| async move {
                 match result {
                     Ok(_) => (count + 1, res),
-                    Err(e) => (count, Err(e)),
+                    Err(e) if !is_fatal_error(&e) => (count, Ok(())),
+                    Err(e)  => (count, Err(e))
                 }
             })
             .in_current_span()
@@ -285,6 +281,14 @@ where
         // Wait for any spawned tasks to shutdown
         let _ = shutdown_guard_recv.recv().await;
         result
+    }
+}
+
+fn is_fatal_error(e: &ImportError) -> bool {
+    match e {
+        ImportError::BlockHeightMismatch => false,
+        ImportError::BadBlockHeader => false,
+        _ => true,
     }
 }
 
@@ -298,7 +302,7 @@ fn get_block_stream<
     p2p: Arc<P>,
     consensus: Arc<C>,
 ) -> impl Stream<
-    Item = impl Future<Output = anyhow::Result<(Vec<SealedBlock>, Option<anyhow::Error>)>>,
+    Item = impl Future<Output = Result<(Vec<SealedBlock>, Option<ImportError>), ImportError>>,
 > {
     let Config {
         header_batch_size, ..
@@ -309,23 +313,12 @@ fn get_block_stream<
     let iter = header_stream.zip(generator.clone());
     iter.then(|(header, (peer, p2p, consensus))| async move {
         let header = header?;
-        let validity =
-            check_sealed_header(&header, peer, p2p.clone(), consensus.clone()).await?;
-        if validity {
-            consensus.await_da_height(&header.entity.da_height).await?;
-            Ok(Some(header))
-        } else {
-            // TODO: Could be replaced with an error, then
-            //      .into_scan_none_or_err()
-            //      .scan_none_or_err()
-            //  becomes:
-            //      .into_scan_err()
-            //      .scan_err()
-            Ok(None)
-        }
+        check_sealed_header(&header, peer, p2p.clone(), consensus.clone()).await?;
+        consensus.await_da_height(&header.entity.da_height).await?;
+        Ok(header)
     })
-    .into_scan_none_or_err()
-    .scan_none_or_err()
+    .into_scan_err()
+    .scan_err()
     .chunks(*header_batch_size as usize)
     .zip(generator)
     .map(|(headers, (peer, p2p, ..))| {
@@ -340,7 +333,7 @@ fn get_header_stream<P: PeerToPeerPort + Send + Sync + 'static>(
     range: RangeInclusive<u32>,
     params: &Config,
     p2p: Arc<P>,
-) -> impl Stream<Item = anyhow::Result<SealedBlockHeader>> {
+) -> impl Stream<Item = Result<SealedBlockHeader, ImportError>> {
     let Config {
         header_batch_size, ..
     } = params;
@@ -359,8 +352,8 @@ fn get_header_stream<P: PeerToPeerPort + Send + Sync + 'static>(
             }
         })
         .flatten()
-        .into_scan_none_or_err()
-        .scan_none_or_err()
+        .into_scan_err()
+        .scan_err()
 }
 
 fn range_chunks(
@@ -382,19 +375,22 @@ async fn check_sealed_header<
     peer_id: PeerId,
     p2p: Arc<P>,
     consensus_port: Arc<C>,
-) -> anyhow::Result<bool> {
+) -> Result<(), ImportError> {
     let validity = consensus_port
         .check_sealed_header(header)
+        .map_err(ImportError::ConsensusError)
         .trace_err("Failed to check consensus on header")?;
-    if !validity {
+    if validity {
+        Ok(())
+    } else {
         report_peer(
             p2p.as_ref(),
             peer_id.clone(),
             PeerReportReason::BadBlockHeader,
         )
         .await;
+        Err(ImportError::BadBlockHeader)
     }
-    Ok(validity)
 }
 
 /// Waits for a notify or shutdown signal.
@@ -415,11 +411,42 @@ async fn wait_for_notify_or_shutdown(
     matches!(r, futures::future::Either::Left(_))
 }
 
-async fn get_headers_batch<P>(
+#[derive(Debug, derive_more::Display)]
+enum ImportError {
+    ConsensusError(anyhow::Error),
+    NetworkError(anyhow::Error),
+    NoSuitablePeer,
+    MissingBlockHeaders,
+    BadBlockHeader,
+    BlockHeightMismatch,
+    Other(anyhow::Error),
+}
+
+impl From<anyhow::Error> for ImportError {
+    fn from(value: anyhow::Error) -> Self {
+        ImportError::Other(value)
+    }
+}
+
+async fn select_peer<P>(block_height: BlockHeight, p2p: &P) -> Result<PeerId, ImportError>
+where
+    P: PeerToPeerPort + Send + Sync + 'static,
+{
+    tracing::debug!("getting peer for block height {}", block_height);
+    let res = p2p.select_peer(block_height).await;
+    let peer_id = match res {
+        Ok(Some(peer_id)) => Ok(peer_id),
+        Ok(None) => Err(ImportError::NoSuitablePeer),
+        Err(e) => Err(e.into()),
+    };
+    peer_id
+}
+
+async fn get_sealed_block_headers<P>(
     peer: PeerId,
-    mut range: RangeInclusive<u32>,
+    range: RangeInclusive<u32>,
     p2p: &P,
-) -> impl Stream<Item = anyhow::Result<Option<SealedBlockHeader>>>
+) -> Result<Vec<SealedBlockHeader>, ImportError>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
 {
@@ -431,40 +458,53 @@ where
     let start = *range.start();
     let end = *range.end() + 1;
     let res = p2p
-        .get_sealed_block_headers(peer.bind(start..end))
-        .await
-        .trace_err("Failed to get headers");
+        .get_sealed_block_headers(peer.clone().bind(start..end))
+        .await;
+    let SourcePeer { data: headers, .. } = res;
+    let headers = match headers {
+        Ok(Some(headers)) => Ok(headers),
+        Ok(None) => Err(ImportError::MissingBlockHeaders),
+        Err(e) => Err(e.into()),
+    };
+    if let Err(e) = &headers {
+        if matches!(e, ImportError::MissingBlockHeaders) {
+            report_peer(p2p, peer.clone(), PeerReportReason::MissingBlockHeaders).await;
+        }
+    }
+    headers
+}
+
+async fn get_headers_batch<P>(
+    peer_id: PeerId,
+    range: RangeInclusive<u32>,
+    p2p: &P,
+) -> impl Stream<Item = Result<SealedBlockHeader, ImportError>>
+where
+    P: PeerToPeerPort + Send + Sync + 'static,
+{
+    tracing::debug!(
+        "getting header range from {} to {} inclusive",
+        range.start(),
+        range.end()
+    );
+    let start = *range.start();
+    let end = *range.end() + 1;
+    let res = get_sealed_block_headers(peer_id.clone(), range.clone(), p2p).await;
     let headers = match res {
-        Ok(sourced_headers) => {
-            let SourcePeer {
-                peer_id,
-                data: maybe_headers,
-            } = sourced_headers;
-            let headers = match maybe_headers {
-                None => {
-                    tracing::error!(
-                        "No headers received from peer {:?} for range {} to {}",
-                        peer_id,
-                        start,
-                        end
-                    );
-                    let error = Err(anyhow::anyhow!("Headers provider was unable to fulfill request for unspecified reason. Possibly because requested batch size was too large"));
-                    vec![error]
-                }
-                Some(headers) => headers
-                    .into_iter()
-                    .map(move |header| {
-                        let header = range.next().and_then(|height| {
-                            if *(header.entity.height()) == height.into() {
-                                Some(header)
-                            } else {
-                                None
-                            }
-                        });
+        Ok(headers) => {
+            let headers = headers.into_iter();
+            let heights = range.clone().into_iter().map(BlockHeight::from);
+            let headers = headers
+                .zip(heights)
+                .map(move |(header, expected_height)| {
+                    let height = *header.entity.height();
+                    if height == expected_height {
                         Ok(header)
-                    })
-                    .collect(),
-            };
+                    } else {
+                        Err(ImportError::BlockHeightMismatch)
+                    }
+                })
+                .collect::<Vec<_>>();
             if let Some(expected_len) = end.checked_sub(start) {
                 if headers.len() != expected_len as usize
                     || headers.iter().any(|h| h.is_err())
@@ -479,7 +519,6 @@ where
             }
             headers
         }
-
         Err(e) => {
             let error = Err(e);
             vec![error]
@@ -511,8 +550,8 @@ where
 async fn get_blocks<P>(
     p2p: Arc<P>,
     peer_id: PeerId,
-    headers: Vec<anyhow::Result<SealedBlockHeader>>,
-) -> anyhow::Result<(Vec<SealedBlock>, Option<anyhow::Error>)>
+    headers: Vec<Result<SealedBlockHeader, ImportError>>,
+) -> Result<(Vec<SealedBlock>, Option<ImportError>), ImportError>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
 {
@@ -579,7 +618,7 @@ where
         Err(error) => {
             // Failure to retrieve transactions due to a networking error,
             // invalid response, or any other reason constitutes a fatal error.
-            err = Some(error);
+            err = Some(ImportError::NetworkError(error));
             Ok((vec![], err))
         }
     }
@@ -597,13 +636,16 @@ async fn execute_and_commit<E>(
     executor: &E,
     state: &SharedMutex<State>,
     block: SealedBlock,
-) -> anyhow::Result<()>
+) -> Result<(), ImportError>
 where
     E: BlockImporterPort + Send + Sync + 'static,
 {
     // Execute and commit the block.
     let height = *block.entity.header().height();
-    let r = executor.execute_and_commit(block).await;
+    let r = executor
+        .execute_and_commit(block)
+        .await
+        .map_err(ImportError::from);
 
     // If the block executed successfully, mark it as committed.
     if r.is_ok() {
@@ -619,9 +661,9 @@ trait StreamUtil: Sized {
     /// Turn a stream of `Result<Option<T>>` into a stream of `Result<T>`.
     /// Close the stream if an error occurs or a `None` is received.
     /// Return the error if the stream closes.
-    fn into_scan_none_or_err(self) -> ScanNoneErr<Self> {
-        ScanNoneErr(self)
-    }
+    // fn into_scan_none_or_err(self) -> ScanNoneErr<Self> {
+    //     ScanNoneErr(self)
+    // }
 
     /// Close the stream if an error occurs or an empty `Vector<T>` is received.
     /// Return the error if the stream closes.
@@ -639,64 +681,34 @@ trait StreamUtil: Sized {
 
 impl<S> StreamUtil for S {}
 
-struct ScanNoneErr<S>(S);
+// struct ScanNoneErr<S>(S);
 struct ScanEmptyErr<S>(S);
 struct ScanErr<S>(S);
 
-impl<S> ScanNoneErr<S> {
-    /// Scan the stream for `None` or errors.
-    fn scan_none_or_err<R>(self) -> impl Stream<Item = anyhow::Result<R>>
-    where
-        S: Stream<Item = anyhow::Result<Option<R>>> + Send + 'static,
-    {
-        let stream = self.0.boxed();
-        futures::stream::unfold((false, stream), |(mut is_err, mut stream)| async move {
-            if is_err {
-                None
-            } else {
-                let result = stream.next().await?;
-                is_err = result.is_err();
-                result.transpose().map(|result| (result, (is_err, stream)))
-            }
-        })
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use crate::import::StreamUtil;
-    use anyhow::anyhow;
-    use futures::{
-        StreamExt,
-        TryStreamExt,
-    };
-
-    #[tokio::test]
-    async fn test_it() {
-        let i = [Ok(Some(0)), Ok(Some(1)), Ok(None)];
-        let stream = futures::stream::iter(i)
-            .into_scan_none_or_err()
-            .scan_none_or_err();
-        let output = stream.collect::<Vec<_>>().await;
-        println!("{:?}", output);
-    }
-
-    #[tokio::test]
-    async fn test_it_2() {
-        let i = [Ok(Some(0)), Ok(Some(1)), Err(anyhow!("err!"))];
-        let stream = futures::stream::iter(i)
-            .into_scan_none_or_err()
-            .scan_none_or_err();
-        let output = stream.try_collect::<Vec<_>>().await;
-        assert!(output.is_err());
-    }
-}
+// impl<S> ScanNoneErr<S> {
+//     /// Scan the stream for `None` or errors.
+//     fn scan_none_or_err<R>(self) -> impl Stream<Item = Result<R, ImportError>>
+//     where
+//         S: Stream<Item = Result<Option<R>, ImportError>> + Send + 'static,
+//     {
+//         let stream = self.0.boxed();
+//         futures::stream::unfold((false, stream), |(mut is_err, mut stream)| async move {
+//             if is_err {
+//                 None
+//             } else {
+//                 let result = stream.next().await?;
+//                 is_err = result.is_err();
+//                 result.transpose().map(|result| (result, (is_err, stream)))
+//             }
+//         })
+//     }
+// }
 
 impl<S> ScanEmptyErr<S> {
     /// Scan the stream for empty vector or errors.
-    fn scan_empty_or_err<R>(self) -> impl Stream<Item = anyhow::Result<Vec<R>>>
+    fn scan_empty_or_err<R>(self) -> impl Stream<Item = Result<Vec<R>, ImportError>>
     where
-        S: Stream<Item = anyhow::Result<Vec<R>>> + Send + 'static,
+        S: Stream<Item = Result<Vec<R>, ImportError>> + Send + 'static,
     {
         let stream = self.0.boxed();
         futures::stream::unfold((false, stream), |(mut is_err, mut stream)| async move {
@@ -716,9 +728,9 @@ impl<S> ScanEmptyErr<S> {
 
 impl<S> ScanErr<S> {
     /// Scan the stream for errors.
-    fn scan_err<R>(self) -> impl Stream<Item = anyhow::Result<R>>
+    fn scan_err<R>(self) -> impl Stream<Item = Result<R, ImportError>>
     where
-        S: Stream<Item = anyhow::Result<R>> + Send + 'static,
+        S: Stream<Item = Result<R, ImportError>> + Send + 'static,
     {
         let stream = self.0.boxed();
         futures::stream::unfold((false, stream), |(mut err, mut stream)| async move {

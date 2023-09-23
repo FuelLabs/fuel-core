@@ -12,6 +12,7 @@ version = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+derive_more = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-types = { workspace = true }
 futures = { workspace = true }
