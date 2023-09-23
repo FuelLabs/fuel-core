@@ -5,7 +5,7 @@ use crate::client::{
 use fuel_core_types::fuel_tx::ConsensusParameters;
 
 pub struct ChainInfo {
-    pub base_chain_height: u32,
+    pub da_height: u64,
     pub name: String,
     pub peer_count: i32,
     pub latest_block: Block,
@@ -17,7 +17,7 @@ pub struct ChainInfo {
 impl From<schema::chain::ChainInfo> for ChainInfo {
     fn from(value: schema::chain::ChainInfo) -> Self {
         Self {
-            base_chain_height: value.base_chain_height.into(),
+            da_height: value.da_height.into(),
             name: value.name,
             peer_count: value.peer_count,
             latest_block: value.latest_block.into(),

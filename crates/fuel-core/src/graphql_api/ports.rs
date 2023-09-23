@@ -155,7 +155,7 @@ pub trait DatabaseContracts:
 pub trait DatabaseChain {
     fn chain_name(&self) -> StorageResult<String>;
 
-    fn base_chain_height(&self) -> StorageResult<DaBlockHeight>;
+    fn da_height(&self) -> StorageResult<DaBlockHeight>;
 }
 
 #[async_trait]

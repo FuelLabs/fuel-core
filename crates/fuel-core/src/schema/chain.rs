@@ -11,7 +11,6 @@ use crate::{
         block::Block,
         scalars::{
             AssetId,
-            U32,
             U64,
         },
     },
@@ -635,14 +634,14 @@ impl ChainInfo {
         Ok(latest_block)
     }
 
-    async fn base_chain_height(&self, ctx: &Context<'_>) -> U32 {
+    async fn da_height(&self, ctx: &Context<'_>) -> U64 {
         let query: &Database = ctx.data_unchecked();
 
         let height = query
-            .latest_block_height()
+            .da_height()
             .expect("The blockchain always should have genesis block");
 
-        height.into()
+        height.0.into()
     }
 
     async fn peer_count(&self) -> u16 {

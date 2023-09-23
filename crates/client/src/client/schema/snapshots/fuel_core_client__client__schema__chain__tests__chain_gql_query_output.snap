@@ -4,7 +4,7 @@ expression: operation.query
 ---
 query {
   chain {
-    baseChainHeight
+    daHeight
     name
     peerCount
     latestBlock {
