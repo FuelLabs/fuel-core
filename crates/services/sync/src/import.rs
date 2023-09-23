@@ -226,7 +226,7 @@ where
             })
             // Request up to `block_stream_buffer_size` transactions from the network.
             .buffered(params.block_stream_buffer_size)
-            // Continue the stream unless an error or empty batch occurs.
+            // Continue the stream unless an error occurs.
             // Note the error will be returned but the stream will close.
             .into_scan_err()
             .scan_err()
@@ -271,8 +271,8 @@ where
             .fold((0usize, Ok(())), |(count, res), result| async move {
                 match result {
                     Ok(_) => (count + 1, res),
-                    Err(e) if !is_fatal_error(&e) => (count, Ok(())),
-                    Err(e)  => (count, Err(e))
+                    Err(e) if !e.is_fatal() => (count, Ok(())),
+                    Err(e) => (count, Err(e))
                 }
             })
             .in_current_span()
@@ -281,14 +281,6 @@ where
         // Wait for any spawned tasks to shutdown
         let _ = shutdown_guard_recv.recv().await;
         result
-    }
-}
-
-fn is_fatal_error(e: &ImportError) -> bool {
-    match e {
-        ImportError::BlockHeightMismatch => false,
-        ImportError::BadBlockHeader => false,
-        _ => true,
     }
 }
 
@@ -314,7 +306,10 @@ fn get_block_stream<
     iter.then(|(header, (peer, p2p, consensus))| async move {
         let header = header?;
         check_sealed_header(&header, peer, p2p.clone(), consensus.clone()).await?;
-        consensus.await_da_height(&header.entity.da_height).await?;
+        consensus
+            .await_da_height(&header.entity.da_height)
+            .await
+            .map_err(ImportError::ConsensusError)?;
         Ok(header)
     })
     .into_scan_err()
@@ -414,6 +409,7 @@ async fn wait_for_notify_or_shutdown(
 #[derive(Debug, derive_more::Display)]
 enum ImportError {
     ConsensusError(anyhow::Error),
+    ExecutionError(anyhow::Error),
     NetworkError(anyhow::Error),
     NoSuitablePeer,
     MissingBlockHeaders,
@@ -425,6 +421,16 @@ enum ImportError {
 impl From<anyhow::Error> for ImportError {
     fn from(value: anyhow::Error) -> Self {
         ImportError::Other(value)
+    }
+}
+
+impl ImportError {
+    fn is_fatal(&self) -> bool {
+        match self {
+            ImportError::BlockHeightMismatch => false,
+            ImportError::BadBlockHeader => false,
+            _ => true,
+        }
     }
 }
 
@@ -539,14 +545,14 @@ where
 }
 
 // Get blocks correlating to the headers from a specific peer
-// #[tracing::instrument(
-//     skip(p2p, headers),
-//     // fields(
-//     //     height = **header.data.height(),
-//     //     id = %header.data.consensus.generated.application_hash
-//     // ),
-//     err
-// )]
+#[tracing::instrument(
+    skip(p2p, headers),
+    // fields(
+    //     height = **header.data.height(),
+    //     id = %header.data.consensus.generated.application_hash
+    // ),
+    err
+)]
 async fn get_blocks<P>(
     p2p: Arc<P>,
     peer_id: PeerId,
@@ -645,7 +651,7 @@ where
     let r = executor
         .execute_and_commit(block)
         .await
-        .map_err(ImportError::from);
+        .map_err(ImportError::ExecutionError);
 
     // If the block executed successfully, mark it as committed.
     if r.is_ok() {
