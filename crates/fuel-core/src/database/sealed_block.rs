@@ -139,7 +139,7 @@ impl Database {
 
     pub fn get_transactions_on_blocks(
         &self,
-        block_ids: &Vec<BlockId>,
+        block_ids: &[BlockId],
     ) -> StorageResult<Option<Vec<Transactions>>> {
         let transactions = block_ids
             .iter()

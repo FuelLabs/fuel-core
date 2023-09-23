@@ -155,6 +155,7 @@ impl From<anyhow::Error> for ImportError {
 
 impl ImportError {
     fn is_fatal(&self) -> bool {
+        #[allow(clippy::match_like_matches_macro)]
         match self {
             ImportError::BlockHeightMismatch => false,
             ImportError::BadBlockHeader => false,
@@ -327,7 +328,7 @@ async fn get_block_stream<
     P: PeerToPeerPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 >(
-    peer: PeerId,
+    peer_id: PeerId,
     range: RangeInclusive<u32>,
     params: &Config,
     p2p: Arc<P>,
@@ -336,18 +337,16 @@ async fn get_block_stream<
     let Config {
         header_batch_size, ..
     } = params;
-    let header_stream = get_header_stream(peer.clone(), range, params, p2p.clone());
+    let header_stream = get_header_stream(peer_id.clone(), range, params, p2p.clone());
     let generator =
-        futures::stream::repeat((peer.clone(), p2p.clone(), consensus.clone()));
+        futures::stream::repeat((peer_id.clone(), p2p.clone(), consensus.clone()));
     let iter = header_stream.zip(generator.clone());
     let checked_headers = iter
-        .then(|(header, (peer, p2p, consensus))| async move {
+        .then(|(header, (peer_id, p2p, consensus))| async move {
             let header = header?;
-            check_sealed_header(&header, peer, p2p.clone(), consensus.clone()).await?;
-            consensus
-                .await_da_height(&header.entity.da_height)
-                .await
-                .map_err(ImportError::ConsensusError)?;
+            check_sealed_header(&header, peer_id, p2p.as_ref(), consensus.as_ref())
+                .await?;
+            await_da_height(&header, consensus.as_ref()).await?;
             Ok(header)
         })
         .into_scan_err()
@@ -403,8 +402,8 @@ async fn check_sealed_header<
 >(
     header: &SealedBlockHeader,
     peer_id: PeerId,
-    p2p: Arc<P>,
-    consensus_port: Arc<C>,
+    p2p: &P,
+    consensus_port: &C,
 ) -> Result<(), ImportError> {
     let validity = consensus_port
         .check_sealed_header(header)
@@ -413,14 +412,20 @@ async fn check_sealed_header<
     if validity {
         Ok(())
     } else {
-        report_peer(
-            p2p.as_ref(),
-            peer_id.clone(),
-            PeerReportReason::BadBlockHeader,
-        )
-        .await;
+        report_peer(p2p, peer_id.clone(), PeerReportReason::BadBlockHeader).await;
         Err(ImportError::BadBlockHeader)
     }
+}
+
+async fn await_da_height<C: ConsensusPort + Send + Sync + 'static>(
+    header: &SealedBlockHeader,
+    consensus: &C,
+) -> Result<(), ImportError> {
+    consensus
+        .await_da_height(&header.entity.da_height)
+        .await
+        .map_err(ImportError::ConsensusError)?;
+    Ok(())
 }
 
 /// Waits for a notify or shutdown signal.
@@ -447,12 +452,11 @@ where
 {
     tracing::debug!("getting peer for block height {}", block_height);
     let res = p2p.select_peer(block_height).await;
-    let peer_id = match res {
+    match res {
         Ok(Some(peer_id)) => Ok(peer_id),
         Ok(None) => Err(ImportError::NoSuitablePeer),
         Err(e) => Err(e.into()),
-    };
-    peer_id
+    }
 }
 
 async fn get_sealed_block_headers<P>(
@@ -474,15 +478,14 @@ where
         .get_sealed_block_headers(peer.clone().bind(start..end))
         .await;
     let SourcePeer { data: headers, .. } = res;
-    let headers = match headers {
+    match headers {
         Ok(Some(headers)) => Ok(headers),
         Ok(None) => {
             report_peer(p2p, peer.clone(), PeerReportReason::MissingBlockHeaders).await;
             Err(ImportError::MissingBlockHeaders)
         }
         Err(e) => Err(e.into()),
-    };
-    headers
+    }
 }
 
 async fn get_transactions<P>(
@@ -495,7 +498,7 @@ where
 {
     let block_ids = peer_id.clone().bind(block_ids);
     let res = p2p.get_transactions_2(block_ids).await;
-    let transactions = match res {
+    match res {
         Ok(Some(transactions)) => Ok(transactions),
         Ok(None) => {
             report_peer(p2p, peer_id.clone(), PeerReportReason::MissingTransactions)
@@ -503,8 +506,7 @@ where
             Err(ImportError::MissingTransactions)
         }
         Err(e) => Err(e.into()),
-    };
-    transactions
+    }
 }
 
 async fn get_headers_batch<P>(
@@ -526,7 +528,7 @@ where
     let headers = match res {
         Ok(headers) => {
             let headers = headers.into_iter();
-            let heights = range.clone().into_iter().map(BlockHeight::from);
+            let heights = range.map(BlockHeight::from);
             let headers = headers
                 .zip(heights)
                 .map(move |(header, expected_height)| {

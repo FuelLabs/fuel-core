@@ -35,7 +35,7 @@ pub trait P2pDb: Send + Sync {
 
     fn get_transactions_2(
         &self,
-        block_ids: &Vec<BlockId>,
+        block_ids: &[BlockId],
     ) -> StorageResult<Option<Vec<Transactions>>>;
 }
 
