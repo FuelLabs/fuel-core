@@ -883,7 +883,7 @@ async fn import__missing_transactions_sends_peer_report() {
         // When
         .with_get_transactions_2(None)
         // Then
-        .run_with_expected_reports([PeerReportReason::MissingTransactions, PeerReportReason::SuccessfulBlockImport])
+        .run_with_expected_reports([PeerReportReason::MissingTransactions])
         .await;
 }
 

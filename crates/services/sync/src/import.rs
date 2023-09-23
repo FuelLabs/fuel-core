@@ -25,6 +25,11 @@ use fuel_core_types::{
     services::p2p::PeerId,
 };
 use fuel_core_types::{
+    blockchain::primitives::BlockId,
+    // fuel_tx::Transaction,
+    services::p2p::TransactionData,
+};
+use fuel_core_types::{
     blockchain::{
         block::Block,
         // consensus::Sealed,
@@ -410,9 +415,9 @@ async fn wait_for_notify_or_shutdown(
 enum ImportError {
     ConsensusError(anyhow::Error),
     ExecutionError(anyhow::Error),
-    NetworkError(anyhow::Error),
     NoSuitablePeer,
     MissingBlockHeaders,
+    MissingTransactions,
     BadBlockHeader,
     BlockHeightMismatch,
     Other(anyhow::Error),
@@ -429,6 +434,7 @@ impl ImportError {
         match self {
             ImportError::BlockHeightMismatch => false,
             ImportError::BadBlockHeader => false,
+            ImportError::MissingTransactions => false,
             _ => true,
         }
     }
@@ -469,15 +475,35 @@ where
     let SourcePeer { data: headers, .. } = res;
     let headers = match headers {
         Ok(Some(headers)) => Ok(headers),
-        Ok(None) => Err(ImportError::MissingBlockHeaders),
+        Ok(None) => {
+            report_peer(p2p, peer.clone(), PeerReportReason::MissingBlockHeaders).await;
+            Err(ImportError::MissingBlockHeaders)
+        }
         Err(e) => Err(e.into()),
     };
-    if let Err(e) = &headers {
-        if matches!(e, ImportError::MissingBlockHeaders) {
-            report_peer(p2p, peer.clone(), PeerReportReason::MissingBlockHeaders).await;
-        }
-    }
     headers
+}
+
+async fn get_transactions<P>(
+    peer_id: PeerId,
+    block_ids: Vec<BlockId>,
+    p2p: &P,
+) -> Result<Vec<TransactionData>, ImportError>
+where
+    P: PeerToPeerPort + Send + Sync + 'static,
+{
+    let block_ids = peer_id.clone().bind(block_ids);
+    let res = p2p.get_transactions_2(block_ids).await;
+    let transactions = match res {
+        Ok(Some(transactions)) => Ok(transactions),
+        Ok(None) => {
+            report_peer(p2p, peer_id.clone(), PeerReportReason::MissingTransactions)
+                .await;
+            Err(ImportError::MissingTransactions)
+        }
+        Err(e) => Err(e.into()),
+    };
+    transactions
 }
 
 async fn get_headers_batch<P>(
@@ -577,19 +603,9 @@ where
     }
 
     let block_ids = headers.iter().map(|header| header.entity.id()).collect();
-    let block_ids = peer_id.clone().bind(block_ids);
-    let maybe_txs = p2p.get_transactions_2(block_ids).await;
+    let maybe_txs = get_transactions(peer_id.clone(), block_ids, p2p.as_ref()).await;
     match maybe_txs {
-        Ok(None) => {
-            report_peer(
-                p2p.as_ref(),
-                peer_id.clone(),
-                PeerReportReason::MissingTransactions,
-            )
-            .await;
-            Ok((vec![], err))
-        }
-        Ok(Some(transaction_data)) => {
+        Ok(transaction_data) => {
             let headers = headers;
             let iter = headers.into_iter().zip(transaction_data);
             let mut blocks = vec![];
@@ -624,7 +640,7 @@ where
         Err(error) => {
             // Failure to retrieve transactions due to a networking error,
             // invalid response, or any other reason constitutes a fatal error.
-            err = Some(ImportError::NetworkError(error));
+            err = Some(error);
             Ok((vec![], err))
         }
     }
