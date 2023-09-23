@@ -27,7 +27,7 @@ use fuel_core_types::{
 use fuel_core_types::{
     blockchain::primitives::BlockId,
     // fuel_tx::Transaction,
-    services::p2p::TransactionData,
+    services::p2p::Transactions,
 };
 use fuel_core_types::{
     blockchain::{
@@ -44,7 +44,10 @@ use futures::{
     // FutureExt,
     Stream,
 };
-use tokio::sync::Notify;
+use tokio::{
+    sync::Notify,
+    task::JoinError,
+};
 use tracing::Instrument;
 
 use crate::{
@@ -131,6 +134,36 @@ impl<P, E, C> Import<P, E, C> {
     }
 }
 
+#[derive(Debug, derive_more::Display)]
+enum ImportError {
+    ConsensusError(anyhow::Error),
+    ExecutionError(anyhow::Error),
+    NoSuitablePeer,
+    MissingBlockHeaders,
+    MissingTransactions,
+    BadBlockHeader,
+    BlockHeightMismatch,
+    JoinError(JoinError),
+    Other(anyhow::Error),
+}
+
+impl From<anyhow::Error> for ImportError {
+    fn from(value: anyhow::Error) -> Self {
+        ImportError::Other(value)
+    }
+}
+
+impl ImportError {
+    fn is_fatal(&self) -> bool {
+        match self {
+            ImportError::BlockHeightMismatch => false,
+            ImportError::BadBlockHeader => false,
+            ImportError::MissingTransactions => false,
+            _ => true,
+        }
+    }
+}
+
 impl<P, E, C> Import<P, E, C>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
@@ -210,7 +243,8 @@ where
             params,
             p2p.clone(),
             consensus.clone(),
-        );
+        )
+        .await;
 
         let result = block_stream
             .map(move |stream_block_batch| {
@@ -225,9 +259,9 @@ where
                         blocks = stream_block_batch => blocks,
                         // If a shutdown signal is received during the stream, terminate early and
                         // return an empty response
-                        _ = shutdown_signal.while_started() => Ok((vec![], None))
+                        _ = shutdown_signal.while_started() => (vec![], None)
                     }
-                }).then(|task| async { task.map_err(|e| anyhow!(e))? })
+                }).then(|task| async { task.map_err(ImportError::JoinError) })
             })
             // Request up to `block_stream_buffer_size` transactions from the network.
             .buffered(params.block_stream_buffer_size)
@@ -246,12 +280,12 @@ where
             // Then execute and commit the block
             .zip(generator)
             .then(
-                |(res, (peer, state, p2p, executor))| async move {
-                    let (sealed_blocks, e) = res?;
+                |(blocks_result, (peer, state, p2p, executor))| async move {
+                    let (sealed_blocks, error) = blocks_result?;
                     let sealed_blocks = futures::stream::iter(sealed_blocks);
                     let res = sealed_blocks.then(|sealed_block| async {
                         execute_and_commit(executor.as_ref(), &state, sealed_block).await
-                    }).try_collect::<Vec<_>>().await.and_then(|v| e.map_or(Ok(v), Err));
+                    }).try_collect::<Vec<_>>().await.and_then(|v| error.map_or(Ok(v), Err));
                     match &res {
                         Ok(_) => {
                             report_peer(p2p.as_ref(), peer.clone(), PeerReportReason::SuccessfulBlockImport).await;
@@ -289,7 +323,7 @@ where
     }
 }
 
-fn get_block_stream<
+async fn get_block_stream<
     P: PeerToPeerPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 >(
@@ -298,9 +332,7 @@ fn get_block_stream<
     params: &Config,
     p2p: Arc<P>,
     consensus: Arc<C>,
-) -> impl Stream<
-    Item = impl Future<Output = Result<(Vec<SealedBlock>, Option<ImportError>), ImportError>>,
-> {
+) -> impl Stream<Item = impl Future<Output = (Vec<SealedBlock>, Option<ImportError>)>> {
     let Config {
         header_batch_size, ..
     } = params;
@@ -308,24 +340,22 @@ fn get_block_stream<
     let generator =
         futures::stream::repeat((peer.clone(), p2p.clone(), consensus.clone()));
     let iter = header_stream.zip(generator.clone());
-    iter.then(|(header, (peer, p2p, consensus))| async move {
-        let header = header?;
-        check_sealed_header(&header, peer, p2p.clone(), consensus.clone()).await?;
-        consensus
-            .await_da_height(&header.entity.da_height)
-            .await
-            .map_err(ImportError::ConsensusError)?;
-        Ok(header)
-    })
-    .into_scan_err()
-    .scan_err()
-    .chunks(*header_batch_size as usize)
-    .zip(generator)
-    .map(|(headers, (peer, p2p, ..))| {
-        { get_blocks(p2p, peer, headers) }
-            .instrument(tracing::debug_span!("consensus_and_transactions"))
-            .in_current_span()
-    })
+    let checked_headers = iter
+        .then(|(header, (peer, p2p, consensus))| async move {
+            let header = header?;
+            check_sealed_header(&header, peer, p2p.clone(), consensus.clone()).await?;
+            consensus
+                .await_da_height(&header.entity.da_height)
+                .await
+                .map_err(ImportError::ConsensusError)?;
+            Ok(header)
+        })
+        .into_scan_err()
+        .scan_err();
+    checked_headers
+        .chunks(*header_batch_size as usize)
+        .zip(generator)
+        .map(|(headers, (peer_id, p2p, ..))| get_blocks(p2p, peer_id, headers))
 }
 
 fn get_header_stream<P: PeerToPeerPort + Send + Sync + 'static>(
@@ -411,35 +441,6 @@ async fn wait_for_notify_or_shutdown(
     matches!(r, futures::future::Either::Left(_))
 }
 
-#[derive(Debug, derive_more::Display)]
-enum ImportError {
-    ConsensusError(anyhow::Error),
-    ExecutionError(anyhow::Error),
-    NoSuitablePeer,
-    MissingBlockHeaders,
-    MissingTransactions,
-    BadBlockHeader,
-    BlockHeightMismatch,
-    Other(anyhow::Error),
-}
-
-impl From<anyhow::Error> for ImportError {
-    fn from(value: anyhow::Error) -> Self {
-        ImportError::Other(value)
-    }
-}
-
-impl ImportError {
-    fn is_fatal(&self) -> bool {
-        match self {
-            ImportError::BlockHeightMismatch => false,
-            ImportError::BadBlockHeader => false,
-            ImportError::MissingTransactions => false,
-            _ => true,
-        }
-    }
-}
-
 async fn select_peer<P>(block_height: BlockHeight, p2p: &P) -> Result<PeerId, ImportError>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
@@ -488,7 +489,7 @@ async fn get_transactions<P>(
     peer_id: PeerId,
     block_ids: Vec<BlockId>,
     p2p: &P,
-) -> Result<Vec<TransactionData>, ImportError>
+) -> Result<Vec<Transactions>, ImportError>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
 {
@@ -571,19 +572,19 @@ where
 }
 
 // Get blocks correlating to the headers from a specific peer
-#[tracing::instrument(
-    skip(p2p, headers),
-    // fields(
-    //     height = **header.data.height(),
-    //     id = %header.data.consensus.generated.application_hash
-    // ),
-    err
-)]
+// #[tracing::instrument(
+//     skip(p2p, headers),
+//     fields(
+//         height = **header.data.height(),
+//         id = %header.data.consensus.generated.application_hash
+//     ),
+//     err
+// )]
 async fn get_blocks<P>(
     p2p: Arc<P>,
     peer_id: PeerId,
     headers: Vec<Result<SealedBlockHeader, ImportError>>,
-) -> Result<(Vec<SealedBlock>, Option<ImportError>), ImportError>
+) -> (Vec<SealedBlock>, Option<ImportError>)
 where
     P: PeerToPeerPort + Send + Sync + 'static,
 {
@@ -599,7 +600,7 @@ where
         .collect::<Vec<_>>();
     let mut err = errors.pop();
     if headers.is_empty() {
-        return Ok((vec![], err))
+        return (vec![], err)
     }
 
     let block_ids = headers.iter().map(|header| header.entity.id()).collect();
@@ -635,13 +636,13 @@ where
                     .await;
                 }
             }
-            Ok((blocks, err))
+            (blocks, err)
         }
         Err(error) => {
             // Failure to retrieve transactions due to a networking error,
             // invalid response, or any other reason constitutes a fatal error.
             err = Some(error);
-            Ok((vec![], err))
+            (vec![], err)
         }
     }
 }

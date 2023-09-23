@@ -51,8 +51,8 @@ use fuel_core_types::{
         GossipsubMessageAcceptance,
         GossipsubMessageInfo,
         PeerId as FuelPeerId,
-        TransactionData,
         TransactionGossipData,
+        Transactions,
     },
 };
 use futures::{
@@ -108,7 +108,7 @@ enum TaskRequest {
     GetTransactions2 {
         block_ids: Vec<BlockId>,
         from_peer: PeerId,
-        channel: oneshot::Sender<Option<Vec<TransactionData>>>,
+        channel: oneshot::Sender<Option<Vec<Transactions>>>,
     },
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
@@ -737,7 +737,7 @@ impl SharedState {
         &self,
         peer_id: Vec<u8>,
         block_ids: Vec<BlockId>,
-    ) -> anyhow::Result<Option<Vec<TransactionData>>> {
+    ) -> anyhow::Result<Option<Vec<Transactions>>> {
         let (sender, receiver) = oneshot::channel();
         let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
 
@@ -921,7 +921,7 @@ pub mod tests {
         fn get_transactions_2(
             &self,
             _block_ids: &Vec<BlockId>,
-        ) -> StorageResult<Option<Vec<TransactionData>>> {
+        ) -> StorageResult<Option<Vec<Transactions>>> {
             unimplemented!()
         }
     }
@@ -1044,6 +1044,13 @@ pub mod tests {
             &self,
             _block_id: &BlockId,
         ) -> StorageResult<Option<Vec<Transaction>>> {
+            todo!()
+        }
+
+        fn get_transactions_2(
+            &self,
+            block_ids: &Vec<BlockId>,
+        ) -> StorageResult<Option<Vec<Transactions>>> {
             todo!()
         }
     }

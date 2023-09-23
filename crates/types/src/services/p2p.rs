@@ -10,16 +10,8 @@ use std::fmt::Debug;
 /// Contains types and logic for Peer Reputation
 pub mod peer_reputation;
 
-/// Maps BlockId to its transactions
-// #[derive(Debug, Clone)]
-// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-// pub struct TransactionData {
-//     /// Block id
-//     pub block_id: BlockId,
-//     /// transactions
-//     pub transactions: Vec<Transaction>,
-// }
-pub type TransactionData = Vec<Transaction>;
+/// List of transactions
+pub type Transactions = Vec<Transaction>;
 
 /// Lightweight representation of gossipped data that only includes IDs
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]

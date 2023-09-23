@@ -11,7 +11,7 @@ use fuel_core_types::{
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
-    services::p2p::TransactionData,
+    services::p2p::Transactions,
 };
 use serde::{
     Deserialize,
@@ -54,7 +54,7 @@ pub enum ResponseMessage {
     SealedBlock(Box<Option<SealedBlock>>),
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Vec<Transaction>>),
-    Transactions2(Option<Vec<TransactionData>>),
+    Transactions2(Option<Vec<Transactions>>),
 }
 
 /// Holds oneshot channels for specific responses
@@ -63,7 +63,7 @@ pub enum ResponseChannelItem {
     Block(oneshot::Sender<Option<SealedBlock>>),
     SealedHeaders(oneshot::Sender<Option<Vec<SealedBlockHeader>>>),
     Transactions(oneshot::Sender<Option<Vec<Transaction>>>),
-    Transactions2(oneshot::Sender<Option<Vec<TransactionData>>>),
+    Transactions2(oneshot::Sender<Option<Vec<Transactions>>>),
 }
 
 /// Response that is sent over the wire
@@ -83,7 +83,7 @@ pub enum OutboundResponse {
     Block(Option<Arc<SealedBlock>>),
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Arc<Vec<Transaction>>>),
-    Transactions2(Option<Arc<Vec<TransactionData>>>),
+    Transactions2(Option<Arc<Vec<Transactions>>>),
 }
 
 #[derive(Debug, Error)]

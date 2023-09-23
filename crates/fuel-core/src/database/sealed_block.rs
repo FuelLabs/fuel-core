@@ -25,7 +25,7 @@ use fuel_core_types::{
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
-    services::p2p::TransactionData,
+    services::p2p::Transactions,
 };
 use std::ops::Range;
 
@@ -140,7 +140,7 @@ impl Database {
     pub fn get_transactions_on_blocks(
         &self,
         block_ids: &Vec<BlockId>,
-    ) -> StorageResult<Option<Vec<TransactionData>>> {
+    ) -> StorageResult<Option<Vec<Transactions>>> {
         let transactions = block_ids
             .iter()
             .map(|block_id| {

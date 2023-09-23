@@ -20,7 +20,7 @@ use fuel_core_types::{
     services::p2p::{
         PeerId,
         SourcePeer,
-        TransactionData,
+        Transactions,
     },
 };
 use rand::{
@@ -81,7 +81,7 @@ impl PeerToPeerPort for PressurePeerToPeer {
     async fn get_transactions_2(
         &self,
         _block_id: SourcePeer<Vec<BlockId>>,
-    ) -> anyhow::Result<Option<Vec<TransactionData>>> {
+    ) -> anyhow::Result<Option<Vec<Transactions>>> {
         todo!()
     }
 
