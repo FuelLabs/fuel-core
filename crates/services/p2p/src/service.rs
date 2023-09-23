@@ -1049,7 +1049,7 @@ pub mod tests {
 
         fn get_transactions_2(
             &self,
-            block_ids: &Vec<BlockId>,
+            _block_ids: &Vec<BlockId>,
         ) -> StorageResult<Option<Vec<Transactions>>> {
             todo!()
         }
