@@ -2,6 +2,7 @@ use fuel_core_services::{
     stream::IntoBoxStream,
     Service,
 };
+use fuel_core_types::services::p2p::PeerId;
 use futures::{
     stream,
     StreamExt,
@@ -34,6 +35,10 @@ async fn test_new_service() {
         })
         .into_boxed()
     });
+    p2p.expect_select_peer().times(1).returning(move |_| {
+        let peer_id: PeerId = vec![1, 2, 3, 4, 5].into();
+        Ok(Some(peer_id))
+    });
     p2p.expect_get_sealed_block_headers().returning(|range| {
         range.map(|range| {
             let headers = range
@@ -44,8 +49,11 @@ async fn test_new_service() {
             Ok(Some(headers))
         })
     });
-    p2p.expect_get_transactions()
-        .returning(|_| Ok(Some(vec![])));
+    p2p.expect_get_transactions_2().returning(|block_ids| {
+        let data = block_ids.data;
+        let v = data.into_iter().map(|_| Vec::new()).collect();
+        Ok(Some(v))
+    });
     let mut importer = MockBlockImporterPort::default();
     importer
         .expect_committed_height_stream()
