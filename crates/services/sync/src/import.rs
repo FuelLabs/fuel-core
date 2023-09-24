@@ -154,6 +154,9 @@ impl From<anyhow::Error> for ImportError {
 }
 
 impl ImportError {
+    /// All `ImportErrors` will stop the import stream. Fatal `ImportErrors`
+    /// will prevent the notify signal at the end of the import. Non-fatal
+    /// `ImportErrors` will allow the notify signal at the end of the import.
     fn is_fatal(&self) -> bool {
         #[allow(clippy::match_like_matches_macro)]
         match self {
@@ -174,12 +177,12 @@ where
     #[tracing::instrument(skip_all)]
     /// Execute imports until a shutdown is requested.
     pub async fn import(&self, shutdown: &mut StateWatcher) -> anyhow::Result<bool> {
-        self.import_inner(shutdown).await?;
+        self.import_inner(shutdown).await.map_err(|e| anyhow!(e))?;
 
         Ok(wait_for_notify_or_shutdown(&self.notify, shutdown).await)
     }
 
-    async fn import_inner(&self, shutdown: &StateWatcher) -> anyhow::Result<()> {
+    async fn import_inner(&self, shutdown: &StateWatcher) -> Result<(), ImportError> {
         // If there is a range to process, launch the stream.
         if let Some(range) = self.state.apply(|s| s.process_range()) {
             // Launch the stream to import the range.
@@ -197,7 +200,7 @@ where
                 );
                 self.state.apply(|s| s.failed_to_process(incomplete_range));
             }
-            result.map_err(|e| anyhow!(e))?;
+            result?;
         }
         Ok(())
     }
@@ -235,7 +238,7 @@ where
         }
         let peer = peer.expect("Checked");
 
-        let generator =
+        let context_generator =
             stream::repeat((peer.clone(), state.clone(), p2p.clone(), executor.clone()));
 
         let block_stream = get_block_stream(
@@ -244,8 +247,7 @@ where
             params,
             p2p.clone(),
             consensus.clone(),
-        )
-        .await;
+        );
 
         let result = block_stream
             .map(move |stream_block_batch| {
@@ -279,7 +281,7 @@ where
                 }
             })
             // Then execute and commit the block
-            .zip(generator)
+            .zip(context_generator)
             .then(
                 |(blocks_result, (peer, state, p2p, executor))| async move {
                     let (sealed_blocks, error) = blocks_result?;
@@ -324,7 +326,7 @@ where
     }
 }
 
-async fn get_block_stream<
+fn get_block_stream<
     P: PeerToPeerPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 >(

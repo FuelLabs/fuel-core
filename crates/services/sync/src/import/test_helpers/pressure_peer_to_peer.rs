@@ -80,9 +80,15 @@ impl PeerToPeerPort for PressurePeerToPeer {
 
     async fn get_transactions_2(
         &self,
-        _block_id: SourcePeer<Vec<BlockId>>,
+        block_ids: SourcePeer<Vec<BlockId>>,
     ) -> anyhow::Result<Option<Vec<Transactions>>> {
-        todo!()
+        let transactions_count = block_ids.data.len();
+        self.counts
+            .apply(|c| c.add_transactions(transactions_count));
+        tokio::time::sleep(self.durations[1]).await;
+        self.counts
+            .apply(|c| c.sub_transactions(transactions_count));
+        self.p2p.get_transactions_2(block_ids).await
     }
 
     async fn report_peer(
@@ -109,6 +115,11 @@ impl PressurePeerToPeer {
         });
         mock.expect_get_transactions()
             .returning(|_| Ok(Some(vec![])));
+        mock.expect_get_transactions_2().returning(|block_ids| {
+            let data = block_ids.data;
+            let v = data.into_iter().map(|_| Transactions::new()).collect();
+            Ok(Some(v))
+        });
         Self {
             p2p: mock,
             durations: delays,
