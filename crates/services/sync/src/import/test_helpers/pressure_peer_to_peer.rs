@@ -117,7 +117,7 @@ impl PressurePeerToPeer {
             .returning(|_| Ok(Some(vec![])));
         mock.expect_get_transactions_2().returning(|block_ids| {
             let data = block_ids.data;
-            let v = data.into_iter().map(|_| Transactions::new()).collect();
+            let v = data.into_iter().map(|_| Transactions::default()).collect();
             Ok(Some(v))
         });
         Self {

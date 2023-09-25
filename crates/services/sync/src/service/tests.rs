@@ -2,7 +2,10 @@ use fuel_core_services::{
     stream::IntoBoxStream,
     Service,
 };
-use fuel_core_types::services::p2p::PeerId;
+use fuel_core_types::services::p2p::{
+    PeerId,
+    Transactions,
+};
 use futures::{
     stream,
     StreamExt,
@@ -51,7 +54,7 @@ async fn test_new_service() {
     });
     p2p.expect_get_transactions_2().returning(|block_ids| {
         let data = block_ids.data;
-        let v = data.into_iter().map(|_| Vec::new()).collect();
+        let v = data.into_iter().map(|_| Transactions::default()).collect();
         Ok(Some(v))
     });
     let mut importer = MockBlockImporterPort::default();

@@ -13,10 +13,7 @@ use fuel_core_types::{
         SealedBlockHeader,
     },
     fuel_tx::Transaction,
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-    },
+    fuel_types::BlockHeight,
     services::p2p::Transactions,
 };
 use serde::{
@@ -33,7 +30,7 @@ use tokio::sync::oneshot;
 pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &[u8] = b"/fuel/req_res/0.0.1";
 
 /// Max Size in Bytes of the Request Message
-pub(crate) const MAX_REQUEST_SIZE: usize = core::mem::size_of::<Bytes32>() * 50;
+pub(crate) const MAX_REQUEST_SIZE: usize = core::mem::size_of::<BlockId>() * 100;
 
 // Peer receives a `RequestMessage`.
 // It prepares a response in form of `OutboundResponse`

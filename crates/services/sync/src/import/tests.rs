@@ -43,7 +43,7 @@ async fn test_import_0_to_5() {
         .times(1)
         .returning(|block_ids| {
             let data = block_ids.data;
-            let v = data.into_iter().map(|_| Transactions::new()).collect();
+            let v = data.into_iter().map(|_| Transactions::default()).collect();
             Ok(Some(v))
         });
 
@@ -81,7 +81,7 @@ async fn test_import_3_to_5() {
         .times(1)
         .returning(|block_ids| {
             let data = block_ids.data;
-            let v = data.into_iter().map(|_| Transactions::new()).collect();
+            let v = data.into_iter().map(|_| Transactions::default()).collect();
             Ok(Some(v))
         });
 
@@ -128,7 +128,7 @@ async fn import__signature_fails_on_header_5_only() {
         .times(1)
         .returning(|block_ids| {
             let data = block_ids.data;
-            let v = data.into_iter().map(|_| Transactions::new()).collect();
+            let v = data.into_iter().map(|_| Transactions::default()).collect();
             Ok(Some(v))
         });
 
@@ -176,7 +176,7 @@ async fn import__signature_fails_on_header_4_only() {
         .times(0)
         .returning(|block_ids| {
             let data = block_ids.data;
-            let v = data.into_iter().map(|_| Transactions::new()).collect();
+            let v = data.into_iter().map(|_| Transactions::default()).collect();
             Ok(Some(v))
         });
 
@@ -264,7 +264,7 @@ async fn import__header_5_not_found() {
         .times(1)
         .returning(|block_ids| {
             let data = block_ids.data;
-            let v = data.into_iter().map(|_| Transactions::new()).collect();
+            let v = data.into_iter().map(|_| Transactions::default()).collect();
             Ok(Some(v))
         });
 
@@ -365,7 +365,7 @@ async fn import__transactions_not_found_for_header_4() {
                 Ok(None)
             } else {
                 let data = block_ids.data;
-                let v = data.into_iter().map(|_| Transactions::new()).collect();
+                let v = data.into_iter().map(|_| Transactions::default()).collect();
                 Ok(Some(v))
             }
         });
@@ -401,7 +401,7 @@ async fn import__transactions_not_found_for_header_5() {
     p2p.expect_get_transactions_2()
         .times(1)
         .returning(move |_| {
-            let v = vec![Transactions::new()];
+            let v = vec![Transactions::default()];
             Ok(Some(v))
         });
 
@@ -600,7 +600,7 @@ async fn import__consensus_error_on_5() {
         .times(1)
         .returning(|block_ids| {
             let data = block_ids.data;
-            let v = data.into_iter().map(|_| Transactions::new()).collect();
+            let v = data.into_iter().map(|_| Transactions::default()).collect();
             Ok(Some(v))
         });
 
@@ -636,7 +636,7 @@ async fn import__execution_error_on_header_4() {
         .times(1)
         .returning(|block_ids| {
             let data = block_ids.data;
-            let v = data.into_iter().map(|_| Transactions::new()).collect();
+            let v = data.into_iter().map(|_| Transactions::default()).collect();
             Ok(Some(v))
         });
 
@@ -684,7 +684,7 @@ async fn import__execution_error_on_header_5() {
         .times(1)
         .returning(|block_ids| {
             let data = block_ids.data;
-            let v = data.into_iter().map(|_| Transactions::new()).collect();
+            let v = data.into_iter().map(|_| Transactions::default()).collect();
             Ok(Some(v))
         });
 
@@ -764,7 +764,7 @@ async fn import__can_work_in_two_loops() {
         .times(2)
         .returning(|block_ids| {
             let data = block_ids.data;
-            let v = data.into_iter().map(|_| Transactions::new()).collect();
+            let v = data.into_iter().map(|_| Transactions::default()).collect();
             Ok(Some(v))
         });
     let c = DefaultMocks::times([2]);
@@ -1023,7 +1023,7 @@ impl PeerReportTestBuilder {
         } else {
             p2p.expect_get_transactions_2().returning(|block_ids| {
                 let data = block_ids.data;
-                let v = data.into_iter().map(|_| Transactions::new()).collect();
+                let v = data.into_iter().map(|_| Transactions::default()).collect();
                 Ok(Some(v))
             });
         }
@@ -1156,7 +1156,7 @@ impl DefaultMocks for MockPeerToPeerPort {
             .times(t.next().unwrap())
             .returning(|block_ids| {
                 let data = block_ids.data;
-                let v = data.into_iter().map(|_| Transactions::new()).collect();
+                let v = data.into_iter().map(|_| Transactions::default()).collect();
                 Ok(Some(v))
             });
         p2p

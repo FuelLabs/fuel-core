@@ -262,7 +262,7 @@ impl RequestResponseConverter for PostcardCodec {
                     None
                 };
 
-                Ok(NetworkResponse::Transactions(response))
+                Ok(NetworkResponse::Transactions2(response))
             }
             OutboundResponse::SealedHeaders(maybe_headers) => {
                 let response = maybe_headers

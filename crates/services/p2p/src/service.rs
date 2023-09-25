@@ -926,7 +926,7 @@ pub mod tests {
 
         fn get_transactions_2(
             &self,
-            _block_ids: &[BlockId],
+            _block_ids: &BlockIds,
         ) -> StorageResult<Option<Vec<Transactions>>> {
             unimplemented!()
         }
@@ -1055,7 +1055,7 @@ pub mod tests {
 
         fn get_transactions_2(
             &self,
-            _block_ids: &[BlockId],
+            _block_ids: &BlockIds,
         ) -> StorageResult<Option<Vec<Transactions>>> {
             todo!()
         }

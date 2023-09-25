@@ -150,7 +150,8 @@ impl Database {
             .map(|block_id| {
                 let transactions = self
                     .get_sealed_block_by_id(block_id)?
-                    .map(|Sealed { entity: block, .. }| block.into_inner().1);
+                    .map(|Sealed { entity: block, .. }| block.into_inner().1)
+                    .map(|transactions| Transactions(transactions));
                 Ok(transactions)
             })
             .collect::<StorageResult<_>>()?;

@@ -620,12 +620,13 @@ where
                     consensus,
                     entity: header,
                 } = block_header;
-                let block = Block::try_from_executed(header, transactions).map(|block| {
-                    SealedBlock {
-                        entity: block,
-                        consensus,
-                    }
-                });
+                let block =
+                    Block::try_from_executed(header, transactions.0).map(|block| {
+                        SealedBlock {
+                            entity: block,
+                            consensus,
+                        }
+                    });
                 if let Some(block) = block {
                     blocks.push(block);
                 } else {

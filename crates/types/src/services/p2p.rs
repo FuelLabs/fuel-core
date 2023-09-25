@@ -10,7 +10,9 @@ use std::fmt::Debug;
 pub mod peer_reputation;
 
 /// List of transactions
-pub type Transactions = Vec<Transaction>;
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Transactions(pub Vec<Transaction>);
 
 /// Lightweight representation of gossipped data that only includes IDs
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]

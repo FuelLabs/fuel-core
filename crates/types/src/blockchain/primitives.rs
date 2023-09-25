@@ -163,8 +163,8 @@ impl From<[u8; 32]> for BlockId {
     }
 }
 
-/// Array of BlockId
-#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+/// Vector of BlockId
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub struct BlockIds(pub Vec<BlockId>);
 
 impl From<Vec<[u8; 32]>> for BlockIds {
