@@ -35,10 +35,7 @@ use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::ConsensusVote,
-        primitives::{
-            BlockId,
-            BlockIds,
-        },
+        primitives::BlockId,
         SealedBlock,
         SealedBlockHeader,
     },
@@ -109,7 +106,7 @@ enum TaskRequest {
         channel: oneshot::Sender<Option<Vec<Transaction>>>,
     },
     GetTransactions2 {
-        block_ids: Vec<BlockId>,
+        block_height_range: Range<u32>,
         from_peer: PeerId,
         channel: oneshot::Sender<Option<Vec<Transactions>>>,
     },
@@ -472,9 +469,8 @@ where
                         let channel_item = ResponseChannelItem::Transactions(channel);
                         let _ = self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item);
                     }
-                    Some(TaskRequest::GetTransactions2 { block_ids, from_peer, channel }) => {
-                        let block_ids = BlockIds(block_ids);
-                        let request_msg = RequestMessage::Transactions2(block_ids);
+                    Some(TaskRequest::GetTransactions2 { block_height_range, from_peer, channel }) => {
+                        let request_msg = RequestMessage::Transactions2(block_height_range);
                         let channel_item = ResponseChannelItem::Transactions2(channel);
                         let _ = self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item);
                     }
@@ -554,14 +550,14 @@ where
                                     }
                                 }
                             }
-                            RequestMessage::Transactions2(block_ids) => {
-                                match self.db.get_transactions_2(&block_ids) {
+                            RequestMessage::Transactions2(range) => {
+                                match self.db.get_transactions_2(range.clone()) {
                                     Ok(maybe_transactions) => {
                                         let response = maybe_transactions.map(Arc::new);
                                         let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions2(response));
                                     },
                                     Err(e) => {
-                                        tracing::error!("Failed to get transactions for blocks {:?}: {:?}", block_ids, e);
+                                        tracing::error!("Failed to get transactions for range {:?}: {:?}", range, e);
                                         let response = None;
                                         let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions2(response));
                                         return Err(e.into())
@@ -740,14 +736,14 @@ impl SharedState {
     pub async fn get_transactions_2_from_peer(
         &self,
         peer_id: Vec<u8>,
-        block_ids: Vec<BlockId>,
+        range: Range<u32>,
     ) -> anyhow::Result<Option<Vec<Transactions>>> {
         let (sender, receiver) = oneshot::channel();
         let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
         dbg!(&from_peer);
 
         let request = TaskRequest::GetTransactions2 {
-            block_ids,
+            block_height_range: range,
             from_peer,
             channel: sender,
         };
@@ -926,7 +922,7 @@ pub mod tests {
 
         fn get_transactions_2(
             &self,
-            _block_ids: &BlockIds,
+            _block_height_range: Range<u32>,
         ) -> StorageResult<Option<Vec<Transactions>>> {
             unimplemented!()
         }
@@ -1055,7 +1051,7 @@ pub mod tests {
 
         fn get_transactions_2(
             &self,
-            _block_ids: &BlockIds,
+            _block_height_range: Range<u32>,
         ) -> StorageResult<Option<Vec<Transactions>>> {
             todo!()
         }

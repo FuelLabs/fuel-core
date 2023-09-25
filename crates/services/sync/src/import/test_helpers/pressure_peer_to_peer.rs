@@ -80,7 +80,7 @@ impl PeerToPeerPort for PressurePeerToPeer {
 
     async fn get_transactions_2(
         &self,
-        block_ids: SourcePeer<Vec<BlockId>>,
+        block_ids: SourcePeer<Range<u32>>,
     ) -> anyhow::Result<Option<Vec<Transactions>>> {
         let transactions_count = block_ids.data.len();
         self.counts

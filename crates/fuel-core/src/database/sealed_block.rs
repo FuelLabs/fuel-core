@@ -19,10 +19,7 @@ use fuel_core_types::{
             Genesis,
             Sealed,
         },
-        primitives::{
-            BlockId,
-            BlockIds,
-        },
+        primitives::BlockId,
         SealedBlock,
         SealedBlockHeader,
     },
@@ -142,14 +139,14 @@ impl Database {
 
     pub fn get_transactions_on_blocks(
         &self,
-        block_ids: &BlockIds,
+        block_height_range: Range<u32>,
     ) -> StorageResult<Option<Vec<Transactions>>> {
-        let transactions = block_ids
-            .0
-            .iter()
-            .map(|block_id| {
+        let transactions = block_height_range
+            .into_iter()
+            .map(BlockHeight::from)
+            .map(|block_height| {
                 let transactions = self
-                    .get_sealed_block_by_id(block_id)?
+                    .get_sealed_block_by_height(&block_height)?
                     .map(|Sealed { entity: block, .. }| block.into_inner().1)
                     .map(|transactions| Transactions(transactions));
                 Ok(transactions)

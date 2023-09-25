@@ -5,10 +5,7 @@ use std::{
 
 use fuel_core_types::{
     blockchain::{
-        primitives::{
-            BlockId,
-            BlockIds,
-        },
+        primitives::BlockId,
         SealedBlock,
         SealedBlockHeader,
     },
@@ -30,7 +27,7 @@ use tokio::sync::oneshot;
 pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &[u8] = b"/fuel/req_res/0.0.1";
 
 /// Max Size in Bytes of the Request Message
-pub(crate) const MAX_REQUEST_SIZE: usize = core::mem::size_of::<BlockId>() * 100;
+pub(crate) const MAX_REQUEST_SIZE: usize = core::mem::size_of::<RequestMessage>();
 
 // Peer receives a `RequestMessage`.
 // It prepares a response in form of `OutboundResponse`
@@ -48,7 +45,7 @@ pub enum RequestMessage {
     Block(BlockHeight),
     SealedHeaders(Range<u32>),
     Transactions(#[serde_as(as = "FromInto<[u8; 32]>")] BlockId),
-    Transactions2(#[serde_as(as = "FromInto<Vec<[u8; 32]>>")] BlockIds),
+    Transactions2(Range<u32>),
 }
 
 /// Final Response Message that p2p service sends to the Orchestrator

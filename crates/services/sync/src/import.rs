@@ -9,7 +9,10 @@ use futures::{
 };
 use std::{
     future::Future,
-    ops::RangeInclusive,
+    ops::{
+        Range,
+        RangeInclusive,
+    },
     sync::Arc,
 };
 
@@ -18,16 +21,12 @@ use fuel_core_services::{
     SharedMutex,
     StateWatcher,
 };
+use fuel_core_types::services::p2p::Transactions;
 use fuel_core_types::{
     self,
     // blockchain::consensus::Sealed,
     fuel_types::BlockHeight,
     services::p2p::PeerId,
-};
-use fuel_core_types::{
-    blockchain::primitives::BlockId,
-    // fuel_tx::Transaction,
-    services::p2p::Transactions,
 };
 use fuel_core_types::{
     blockchain::{
@@ -463,7 +462,7 @@ where
 
 async fn get_sealed_block_headers<P>(
     peer: PeerId,
-    range: RangeInclusive<u32>,
+    range: Range<u32>,
     p2p: &P,
 ) -> Result<Vec<SealedBlockHeader>, ImportError>
 where
@@ -471,14 +470,11 @@ where
 {
     tracing::debug!(
         "getting header range from {} to {} inclusive",
-        range.start(),
-        range.end()
+        range.start,
+        range.end
     );
-    let start = *range.start();
-    let end = *range.end() + 1;
-    let res = p2p
-        .get_sealed_block_headers(peer.clone().bind(start..end))
-        .await;
+    let range = peer.clone().bind(range);
+    let res = p2p.get_sealed_block_headers(range).await;
     let SourcePeer { data: headers, .. } = res;
     match headers {
         Ok(Some(headers)) => Ok(headers),
@@ -492,14 +488,14 @@ where
 
 async fn get_transactions<P>(
     peer_id: PeerId,
-    block_ids: Vec<BlockId>,
+    range: Range<u32>,
     p2p: &P,
 ) -> Result<Vec<Transactions>, ImportError>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
 {
-    let block_ids = peer_id.clone().bind(block_ids);
-    let res = p2p.get_transactions_2(block_ids).await;
+    let range = peer_id.clone().bind(range);
+    let res = p2p.get_transactions_2(range).await;
     match res {
         Ok(Some(transactions)) => Ok(transactions),
         Ok(None) => {
@@ -526,7 +522,7 @@ where
     );
     let start = *range.start();
     let end = *range.end() + 1;
-    let res = get_sealed_block_headers(peer_id.clone(), range.clone(), p2p).await;
+    let res = get_sealed_block_headers(peer_id.clone(), start..end, p2p).await;
     let headers = match res {
         Ok(headers) => {
             let headers = headers.into_iter();
@@ -607,8 +603,10 @@ where
         return (vec![], err)
     }
 
-    let block_ids = headers.iter().map(|header| header.entity.id()).collect();
-    let maybe_txs = get_transactions(peer_id.clone(), block_ids, p2p.as_ref()).await;
+    let start = headers.first().expect("checked").entity.height().to_usize() as u32;
+    let end = start + headers.len() as u32;
+    let range = start..end;
+    let maybe_txs = get_transactions(peer_id.clone(), range, p2p.as_ref()).await;
     match maybe_txs {
         Ok(transaction_data) => {
             let headers = headers;

@@ -98,15 +98,15 @@ impl PeerToPeerPort for P2PAdapter {
 
     async fn get_transactions_2(
         &self,
-        block_ids: SourcePeer<Vec<BlockId>>,
+        range: SourcePeer<Range<u32>>,
     ) -> anyhow::Result<Option<Vec<Transactions>>> {
         let SourcePeer {
             peer_id,
-            data: blocks,
-        } = block_ids;
+            data: range,
+        } = range;
         if let Some(service) = &self.service {
             service
-                .get_transactions_2_from_peer(peer_id.into(), blocks)
+                .get_transactions_2_from_peer(peer_id.into(), range)
                 .await
         } else {
             Err(anyhow::anyhow!("No P2P service available"))
