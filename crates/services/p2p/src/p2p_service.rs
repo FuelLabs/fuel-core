@@ -610,6 +610,17 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                                 }
                             }
                             (
+                                Some(ResponseChannelItem::Transactions2(channel)),
+                                Ok(ResponseMessage::Transactions2(transactions)),
+                            ) => {
+                                if channel.send(transactions).is_err() {
+                                    debug!(
+                                        "Failed to send through the channel for {:?}",
+                                        request_id
+                                    );
+                                }
+                            }
+                            (
                                 Some(ResponseChannelItem::SealedHeaders(channel)),
                                 Ok(ResponseMessage::SealedHeaders(headers)),
                             ) => {

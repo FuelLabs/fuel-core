@@ -35,7 +35,10 @@ use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::ConsensusVote,
-        primitives::BlockId,
+        primitives::{
+            BlockId,
+            BlockIds,
+        },
         SealedBlock,
         SealedBlockHeader,
     },
@@ -460,7 +463,7 @@ where
                         let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
                     }
                     Some(TaskRequest::GetSealedHeaders { block_height_range, from_peer, channel: response}) => {
-                        let request_msg = RequestMessage::SealedHeaders(block_height_range.clone());
+                        let request_msg = RequestMessage::SealedHeaders(block_height_range);
                         let channel_item = ResponseChannelItem::SealedHeaders(response);
                         let _ = self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item);
                     }
@@ -470,6 +473,7 @@ where
                         let _ = self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item);
                     }
                     Some(TaskRequest::GetTransactions2 { block_ids, from_peer, channel }) => {
+                        let block_ids = BlockIds(block_ids);
                         let request_msg = RequestMessage::Transactions2(block_ids);
                         let channel_item = ResponseChannelItem::Transactions2(channel);
                         let _ = self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item);
@@ -740,16 +744,18 @@ impl SharedState {
     ) -> anyhow::Result<Option<Vec<Transactions>>> {
         let (sender, receiver) = oneshot::channel();
         let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
+        dbg!(&from_peer);
 
-        self.request_sender
-            .send(TaskRequest::GetTransactions2 {
-                block_ids,
-                from_peer,
-                channel: sender,
-            })
-            .await?;
+        let request = TaskRequest::GetTransactions2 {
+            block_ids,
+            from_peer,
+            channel: sender,
+        };
+        self.request_sender.send(request).await?;
 
-        receiver.await.map_err(|e| anyhow!("{}", e))
+        let r = receiver.await.map_err(|e| anyhow!("Receiver error! {}", e));
+        dbg!(&r);
+        r
     }
 
     pub fn broadcast_vote(&self, vote: Arc<ConsensusVote>) -> anyhow::Result<()> {

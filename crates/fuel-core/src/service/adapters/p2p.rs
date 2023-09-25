@@ -8,7 +8,10 @@ use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::{
-        primitives::BlockId,
+        primitives::{
+            BlockId,
+            BlockIds,
+        },
         SealedBlock,
         SealedBlockHeader,
     },
@@ -49,7 +52,7 @@ impl P2pDb for Database {
 
     fn get_transactions_2(
         &self,
-        block_ids: &[BlockId],
+        block_ids: &BlockIds,
     ) -> StorageResult<Option<Vec<Transactions>>> {
         self.get_transactions_on_blocks(block_ids)
     }

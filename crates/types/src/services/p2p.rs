@@ -1,7 +1,6 @@
 //! Contains types related to P2P data
 
 use crate::{
-    // blockchain::primitives::BlockId,
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
 };

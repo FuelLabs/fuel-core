@@ -162,3 +162,25 @@ impl From<[u8; 32]> for BlockId {
         Self(bytes.into())
     }
 }
+
+/// Array of BlockId
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+pub struct BlockIds(pub Vec<BlockId>);
+
+impl From<Vec<[u8; 32]>> for BlockIds {
+    fn from(value: Vec<[u8; 32]>) -> Self {
+        let block_ids = value.into_iter().map(BlockId::from).collect();
+        Self(block_ids)
+    }
+}
+
+impl From<BlockIds> for Vec<[u8; 32]> {
+    fn from(value: BlockIds) -> Self {
+        let bytes = value
+            .0
+            .into_iter()
+            .map(|block_id| block_id.0.into())
+            .collect();
+        bytes
+    }
+}

@@ -60,8 +60,10 @@ impl PostcardCodec {
         &self,
         encoded_data: &'a [u8],
     ) -> Result<R, io::Error> {
-        postcard::from_bytes(encoded_data)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+        postcard::from_bytes(encoded_data).map_err(|e| {
+            dbg!(&e);
+            io::Error::new(io::ErrorKind::Other, e.to_string())
+        })
     }
 
     fn serialize<D: Serialize>(&self, data: &D) -> Result<Vec<u8>, io::Error> {

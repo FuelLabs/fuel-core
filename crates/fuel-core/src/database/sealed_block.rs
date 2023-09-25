@@ -19,7 +19,10 @@ use fuel_core_types::{
             Genesis,
             Sealed,
         },
-        primitives::BlockId,
+        primitives::{
+            BlockId,
+            BlockIds,
+        },
         SealedBlock,
         SealedBlockHeader,
     },
@@ -139,9 +142,10 @@ impl Database {
 
     pub fn get_transactions_on_blocks(
         &self,
-        block_ids: &[BlockId],
+        block_ids: &BlockIds,
     ) -> StorageResult<Option<Vec<Transactions>>> {
         let transactions = block_ids
+            .0
             .iter()
             .map(|block_id| {
                 let transactions = self
