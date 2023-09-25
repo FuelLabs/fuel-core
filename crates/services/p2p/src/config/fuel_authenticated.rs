@@ -11,7 +11,6 @@ use libp2p::{
         Config as NoiseConfig,
         Error as NoiseError,
         Output as NoiseOutput,
-        Protocol,
     },
     InboundUpgrade,
     OutboundUpgrade,

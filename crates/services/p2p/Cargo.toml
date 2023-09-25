@@ -46,11 +46,11 @@ libp2p-mdns = "=0.44.0"
 libp2p-mplex = "=0.40.0"
 libp2p-noise = "=0.43.1"
 libp2p-prom-client = { workspace = true }
-libp2p-request-response = "=0.23.0"
-libp2p-swarm = "=0.41.1"
-libp2p-tcp = "=0.38.0"
-libp2p-websocket = "=0.40.0"
-libp2p-yamux = "=0.42.0"
+libp2p-request-response = "=0.25.1"
+libp2p-swarm = "=0.43.4"
+libp2p-tcp = "=0.40.0"
+libp2p-websocket = "=0.42.1"
+libp2p-yamux = "=0.44.1"
 postcard = { workspace = true, features = ["use-std"] }
 prometheus-client = { workspace = true }
 rand = { workspace = true }

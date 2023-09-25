@@ -25,9 +25,11 @@ use libp2p::{
     Multiaddr,
     PeerId,
 };
+
+use libp2p_kad::handler::KademliaHandler;
 use libp2p_swarm::{
-    IntoConnectionHandler,
-    NetworkBehaviourAction,
+    THandlerOutEvent,
+    ToSwarm,
 };
 use std::{
     collections::{
@@ -112,7 +114,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         &mut self,
         peer_id: PeerId,
         connection: ConnectionId,
-        event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
+        event: THandlerOutEvent<Self>,
     ) {
         self.kademlia
             .on_connection_handler_event(peer_id, connection, event);
@@ -158,9 +160,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         &mut self,
         cx: &mut Context<'_>,
         params: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+    ) -> Poll<ToSwarm<Self::ToSwarm, Self::ConnectionHandler>> {
         if let Some(next_event) = self.pending_events.pop_front() {
-            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(next_event))
+            return Poll::Ready(ToSwarm::GenerateEvent(next_event))
         }
 
         // if random walk is enabled poll the stream that will fire when random walk is scheduled
@@ -183,41 +185,31 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         // poll Kademlia behaviour
         while let Poll::Ready(kad_action) = self.kademlia.poll(cx, params) {
             match kad_action {
-                NetworkBehaviourAction::GenerateEvent(
-                    KademliaEvent::UnroutablePeer { peer },
-                ) => {
-                    return Poll::Ready(NetworkBehaviourAction::GenerateEvent(
+                ToSwarm::GenerateEvent(KademliaEvent::UnroutablePeer { peer }) => {
+                    return Poll::Ready(ToSwarm::GenerateEvent(
                         DiscoveryEvent::UnroutablePeer(peer),
                     ))
                 }
 
-                NetworkBehaviourAction::Dial { handler, opts } => {
-                    return Poll::Ready(NetworkBehaviourAction::Dial { handler, opts })
-                }
-                NetworkBehaviourAction::CloseConnection {
+                ToSwarm::Dial { opts } => return Poll::Ready(ToSwarm::Dial { opts }),
+                ToSwarm::CloseConnection {
                     peer_id,
                     connection,
                 } => {
-                    return Poll::Ready(NetworkBehaviourAction::CloseConnection {
+                    return Poll::Ready(ToSwarm::CloseConnection {
                         peer_id,
                         connection,
                     })
                 }
-                NetworkBehaviourAction::NotifyHandler {
+                ToSwarm::NotifyHandler {
                     peer_id,
                     handler,
                     event,
                 } => {
-                    return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
+                    return Poll::Ready(ToSwarm::NotifyHandler {
                         peer_id,
                         handler,
                         event,
-                    })
-                }
-                NetworkBehaviourAction::ReportObservedAddr { address, score } => {
-                    return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-                        address,
-                        score,
                     })
                 }
                 _ => {}
@@ -226,7 +218,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
         while let Poll::Ready(mdns_event) = self.mdns.poll(cx, params) {
             match mdns_event {
-                NetworkBehaviourAction::GenerateEvent(MdnsEvent::Discovered(list)) => {
+                ToSwarm::GenerateEvent(MdnsEvent::Discovered(list)) => {
                     // inform kademlia of newly discovered local peers
                     // only if there aren't enough peers already connected
                     if self.connected_peers.len() < self.max_peers_connected {
@@ -235,17 +227,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                         }
                     }
                 }
-                NetworkBehaviourAction::ReportObservedAddr { address, score } => {
-                    return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-                        address,
-                        score,
-                    })
-                }
-                NetworkBehaviourAction::CloseConnection {
+                ToSwarm::CloseConnection {
                     peer_id,
                     connection,
                 } => {
-                    return Poll::Ready(NetworkBehaviourAction::CloseConnection {
+                    return Poll::Ready(ToSwarm::CloseConnection {
                         peer_id,
                         connection,
                     })

@@ -124,8 +124,8 @@ impl HeartbeatHandler {
 }
 
 impl ConnectionHandler for HeartbeatHandler {
-    type InEvent = HeartbeatInEvent;
-    type OutEvent = HeartbeatOutEvent;
+    type FromBehaviour = ();
+    type ToBehaviour = ();
     type Error = HeartbeatFailure;
 
     type InboundProtocol = ReadyUpgrade<&'static [u8]>;
@@ -142,7 +142,7 @@ impl ConnectionHandler for HeartbeatHandler {
         KeepAlive::Yes
     }
 
-    fn on_behaviour_event(&mut self, event: Self::InEvent) {
+    fn on_behaviour_event(&mut self, event: Self::FromBehaviour) {
         let HeartbeatInEvent::LatestBlock(block_height) = event;
 
         match self.outbound.take() {
@@ -168,7 +168,7 @@ impl ConnectionHandler for HeartbeatHandler {
         ConnectionHandlerEvent<
             Self::OutboundProtocol,
             Self::OutboundOpenInfo,
-            Self::OutEvent,
+            Self::ToBehaviour,
             Self::Error,
         >,
     > {

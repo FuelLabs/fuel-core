@@ -11,6 +11,7 @@ use libp2p::{
         transport::Boxed,
     },
     gossipsub::Config as GossipsubConfig,
+    identity,
     identity::{
         secp256k1::SecretKey,
         Keypair,
@@ -28,7 +29,7 @@ use libp2p::{
     Transport,
 };
 use libp2p_mplex::MplexConfig;
-use libp2p_yamux::YamuxConfig;
+use libp2p_yamux::Config as YamuxConfig;
 use std::{
     collections::HashSet,
     net::{
@@ -275,7 +276,7 @@ pub(crate) fn build_transport(
     .upgrade(libp2p::core::upgrade::Version::V1);
 
     let noise_authenticated = {
-        let dh_keys = noise::Keypair::<noise::X25519Spec>::new()
+        let dh_keys = identity::Keypair::new()
             .into_authentic(&p2p_config.keypair)
             .expect("Noise key generation failed");
 

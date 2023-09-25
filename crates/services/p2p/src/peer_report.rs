@@ -7,10 +7,7 @@ use crate::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use libp2p::{
-    core::{
-        connection::ConnectionId,
-        either::EitherOutput,
-    },
+    self,
     identify::{
         Behaviour as Identify,
         Config as IdentifyConfig,
@@ -26,18 +23,21 @@ use libp2p::{
             ListenFailure,
         },
         ConnectionHandler,
-        IntoConnectionHandler,
-        IntoConnectionHandlerSelect,
-        NetworkBehaviour,
-        NetworkBehaviourAction,
         PollParameters,
     },
     Multiaddr,
     PeerId,
 };
+use libp2p_core::Endpoint;
 use libp2p_swarm::{
-    IntoConnectionHandler,
-    IntoConnectionHandlerSelect,
+    derive_prelude::Either,
+    ConnectionDenied,
+    ConnectionHandlerSelect,
+    ConnectionId,
+    NetworkBehaviour,
+    THandler,
+    THandlerOutEvent,
+    ToSwarm,
 };
 use std::{
     collections::VecDeque,
@@ -129,18 +129,11 @@ impl PeerReportBehaviour {
 }
 
 impl NetworkBehaviour for PeerReportBehaviour {
-    type ConnectionHandler = IntoConnectionHandlerSelect<
+    type ConnectionHandler = Either<
         <Heartbeat as NetworkBehaviour>::ConnectionHandler,
         <Identify as NetworkBehaviour>::ConnectionHandler,
     >;
     type ToSwarm = PeerReportEvent;
-
-    fn new_handler(&mut self) -> Self::ConnectionHandler {
-        IntoConnectionHandler::select(
-            self.heartbeat.new_handler(),
-            self.identify.new_handler(),
-        )
-    }
 
     fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
         match event {
@@ -227,9 +220,10 @@ impl NetworkBehaviour for PeerReportBehaviour {
             FromSwarm::ListenFailure(e) => {
                 let (ping_handler, identity_handler) = e.handler.into_inner();
                 let ping_event = ListenFailure {
-                    handler: ping_handler,
                     local_addr: e.local_addr,
                     send_back_addr: e.send_back_addr,
+                    error: e.into(),
+                    connection_id: e.connection_id,
                 };
                 let identity_event = ListenFailure {
                     handler: identity_handler,
@@ -252,9 +246,9 @@ impl NetworkBehaviour for PeerReportBehaviour {
         &mut self,
         cx: &mut Context<'_>,
         params: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+    ) -> Poll<ToSwarm<Self::ToSwarm, Self::ConnectionHandler>> {
         if let Some(event) = self.pending_events.pop_front() {
-            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
+            return Poll::Ready(ToSwarm::GenerateEvent(event))
         }
 
         match self.heartbeat.poll(cx, params) {
@@ -287,13 +281,11 @@ impl NetworkBehaviour for PeerReportBehaviour {
         }
 
         if self.decay_interval.poll_tick(cx).is_ready() {
-            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(
-                PeerReportEvent::PerformDecay,
-            ))
+            return Poll::Ready(ToSwarm::GenerateEvent(PeerReportEvent::PerformDecay))
         }
 
         if self.health_check.poll_tick(cx).is_ready() {
-            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(
+            return Poll::Ready(ToSwarm::GenerateEvent(
                 PeerReportEvent::CheckReservedNodesHealth,
             ))
         }
@@ -305,30 +297,53 @@ impl NetworkBehaviour for PeerReportBehaviour {
         &mut self,
         peer_id: PeerId,
         connection_id: ConnectionId,
-        event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as
-            ConnectionHandler>::OutEvent,
+        event: THandlerOutEvent<Self>,
     ) {
         match event {
-            EitherOutput::First(heartbeat_event) => self
-                .heartbeat
-                .on_connection_handler_event(peer_id, connection_id, heartbeat_event),
-            EitherOutput::Second(identify_event) => self
-                .identify
-                .on_connection_handler_event(peer_id, connection_id, identify_event),
+            Either::Left(heartbeat_event) => self.heartbeat.on_connection_handler_event(
+                peer_id,
+                connection_id,
+                heartbeat_event,
+            ),
+            Either::Right(identify_event) => self.identify.on_connection_handler_event(
+                peer_id,
+                connection_id,
+                identify_event,
+            ),
         }
+    }
+
+    fn handle_established_inbound_connection(
+        &mut self,
+        _connection_id: ConnectionId,
+        peer: PeerId,
+        local_addr: &Multiaddr,
+        remote_addr: &Multiaddr,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
+        todo!()
+    }
+
+    fn handle_established_outbound_connection(
+        &mut self,
+        _connection_id: ConnectionId,
+        peer: PeerId,
+        addr: &Multiaddr,
+        role_override: Endpoint,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
+        todo!()
     }
 }
 
 impl FromAction<Heartbeat> for PeerReportBehaviour {
     fn convert_action(
         &mut self,
-        action: NetworkBehaviourAction<
-            <Heartbeat as NetworkBehaviour>::OutEvent,
+        action: ToSwarm<
+            <Heartbeat as NetworkBehaviour>::ToSwarm,
             <Heartbeat as NetworkBehaviour>::ConnectionHandler,
         >,
-    ) -> Option<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+    ) -> Option<ToSwarm<Self::ToSwarm, Self::ConnectionHandler>> {
         match action {
-            NetworkBehaviourAction::GenerateEvent(HeartbeatEvent {
+            ToSwarm::GenerateEvent(HeartbeatEvent {
                 peer_id,
                 latest_block_height,
             }) => {
@@ -336,29 +351,22 @@ impl FromAction<Heartbeat> for PeerReportBehaviour {
                     peer_id,
                     block_height: latest_block_height,
                 };
-                Some(NetworkBehaviourAction::GenerateEvent(event))
+                Some(ToSwarm::GenerateEvent(event))
             }
-            NetworkBehaviourAction::Dial { handler, opts } => {
-                let handler =
-                    IntoConnectionHandler::select(handler, self.identify.new_handler());
-                Some(NetworkBehaviourAction::Dial { handler, opts })
-            }
-            NetworkBehaviourAction::NotifyHandler {
+            ToSwarm::Dial { opts } => Some(ToSwarm::Dial { opts }),
+            ToSwarm::NotifyHandler {
                 peer_id,
                 handler,
                 event,
-            } => Some(NetworkBehaviourAction::NotifyHandler {
+            } => Some(ToSwarm::NotifyHandler {
                 peer_id,
                 handler,
-                event: EitherOutput::First(event),
+                event: Either::Left(event),
             }),
-            NetworkBehaviourAction::ReportObservedAddr { address, score } => {
-                Some(NetworkBehaviourAction::ReportObservedAddr { address, score })
-            }
-            NetworkBehaviourAction::CloseConnection {
+            ToSwarm::CloseConnection {
                 peer_id,
                 connection,
-            } => Some(NetworkBehaviourAction::CloseConnection {
+            } => Some(ToSwarm::CloseConnection {
                 peer_id,
                 connection,
             }),
@@ -369,13 +377,13 @@ impl FromAction<Heartbeat> for PeerReportBehaviour {
 impl FromAction<Identify> for PeerReportBehaviour {
     fn convert_action(
         &mut self,
-        action: NetworkBehaviourAction<
-            <Identify as NetworkBehaviour>::OutEvent,
+        action: ToSwarm<
+            <Identify as NetworkBehaviour>::ToSwarm,
             <Identify as NetworkBehaviour>::ConnectionHandler,
         >,
-    ) -> Option<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+    ) -> Option<ToSwarm<Self::ToSwarm, Self::ConnectionHandler>> {
         match action {
-            NetworkBehaviourAction::GenerateEvent(event) => match event {
+            ToSwarm::GenerateEvent(event) => match event {
                 IdentifyEvent::Received {
                     peer_id,
                     info:
@@ -401,7 +409,7 @@ impl FromAction<Identify> for PeerReportBehaviour {
                         addresses: listen_addrs,
                     };
 
-                    Some(NetworkBehaviourAction::GenerateEvent(event))
+                    Some(ToSwarm::GenerateEvent(event))
                 }
                 IdentifyEvent::Error { peer_id, error } => {
                     debug!(target: "fuel-p2p", "Identification with peer {:?} failed => {}", peer_id, error);
@@ -409,27 +417,20 @@ impl FromAction<Identify> for PeerReportBehaviour {
                 }
                 _ => None,
             },
-            NetworkBehaviourAction::Dial { handler, opts } => {
-                let handler =
-                    IntoConnectionHandler::select(self.heartbeat.new_handler(), handler);
-                Some(NetworkBehaviourAction::Dial { handler, opts })
-            }
-            NetworkBehaviourAction::NotifyHandler {
+            ToSwarm::Dial { opts } => Some(ToSwarm::Dial { opts }),
+            ToSwarm::NotifyHandler {
                 peer_id,
                 handler,
                 event,
-            } => Some(NetworkBehaviourAction::NotifyHandler {
+            } => Some(ToSwarm::NotifyHandler {
                 peer_id,
                 handler,
-                event: EitherOutput::Second(event),
+                event: Either::Right(event),
             }),
-            NetworkBehaviourAction::ReportObservedAddr { address, score } => {
-                Some(NetworkBehaviourAction::ReportObservedAddr { address, score })
-            }
-            NetworkBehaviourAction::CloseConnection {
+            ToSwarm::CloseConnection {
                 peer_id,
                 connection,
-            } => Some(NetworkBehaviourAction::CloseConnection {
+            } => Some(ToSwarm::CloseConnection {
                 peer_id,
                 connection,
             }),
@@ -440,8 +441,8 @@ impl FromAction<Identify> for PeerReportBehaviour {
 trait FromAction<T: NetworkBehaviour>: NetworkBehaviour {
     fn convert_action(
         &mut self,
-        action: NetworkBehaviourAction<T::OutEvent, T::ConnectionHandler>,
-    ) -> Option<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>>;
+        action: ToSwarm<T::ToSwarm, T::ConnectionHandler>,
+    ) -> Option<ToSwarm<Self::ToSwarm, Self::ConnectionHandler>>;
 }
 
 impl FromSwarmEvent for Heartbeat {}

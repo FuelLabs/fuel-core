@@ -22,11 +22,11 @@ use crate::{
 use fuel_core_types::fuel_types::BlockHeight;
 use libp2p::{
     gossipsub::{
-        error::PublishError,
         Behaviour as Gossipsub,
         Event as GossipsubEvent,
         MessageAcceptance,
         MessageId,
+        PublishError,
     },
     request_response::{
         Behaviour as RequestResponse,
@@ -51,7 +51,7 @@ pub enum FuelBehaviourEvent {
 
 /// Handles all p2p protocols needed for Fuel.
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "FuelBehaviourEvent")]
+#[behaviour(to_swarm = "FuelBehaviourEvent")]
 pub struct FuelBehaviour<Codec: NetworkCodec> {
     /// Node discovery
     discovery: DiscoveryBehaviour,

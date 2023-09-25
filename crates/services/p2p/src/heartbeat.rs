@@ -1,3 +1,4 @@
+use crate::Multiaddr;
 use fuel_core_types::fuel_types::BlockHeight;
 pub use handler::HeartbeatConfig;
 use handler::{
@@ -6,19 +7,24 @@ use handler::{
     HeartbeatOutEvent,
 };
 use libp2p::PeerId;
+use libp2p_core::Endpoint;
 use libp2p_swarm::{
     derive_prelude::ConnectionId,
+    ConnectionDenied,
     ConnectionHandler,
-    IntoConnectionHandler,
+    FromSwarm,
     NetworkBehaviour,
-    NetworkBehaviourAction,
     NotifyHandler,
     PollParameters,
+    THandler,
+    THandlerOutEvent,
+    ToSwarm,
 };
 use std::{
     collections::VecDeque,
     task::Poll,
 };
+
 mod handler;
 
 pub const HEARTBEAT_PROTOCOL: &[u8] = b"/fuel/heartbeat/0.0.1";
@@ -34,14 +40,14 @@ enum HeartbeatAction {
 }
 
 impl HeartbeatAction {
-    fn build(self) -> NetworkBehaviourAction<HeartbeatEvent, HeartbeatHandler> {
+    fn build(self) -> ToSwarm<HeartbeatEvent, HeartbeatHandler> {
         match self {
-            Self::HeartbeatEvent(event) => NetworkBehaviourAction::GenerateEvent(event),
+            Self::HeartbeatEvent(event) => ToSwarm::GenerateEvent(event),
             Self::BlockHeightRequest {
                 peer_id,
                 connection_id,
                 in_event,
-            } => NetworkBehaviourAction::NotifyHandler {
+            } => ToSwarm::NotifyHandler {
                 handler: NotifyHandler::One(connection_id),
                 peer_id,
                 event: in_event,
@@ -79,18 +85,37 @@ impl Heartbeat {
 
 impl NetworkBehaviour for Heartbeat {
     type ConnectionHandler = HeartbeatHandler;
-    type OutEvent = HeartbeatEvent;
+    type ToSwarm = HeartbeatEvent;
 
-    fn new_handler(&mut self) -> Self::ConnectionHandler {
-        HeartbeatHandler::new(self.config.clone())
+    fn handle_established_inbound_connection(
+        &mut self,
+        _connection_id: ConnectionId,
+        peer: PeerId,
+        local_addr: &Multiaddr,
+        remote_addr: &Multiaddr,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
+        todo!()
+    }
+
+    fn handle_established_outbound_connection(
+        &mut self,
+        _connection_id: ConnectionId,
+        peer: PeerId,
+        addr: &Multiaddr,
+        role_override: Endpoint,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
+        todo!()
+    }
+
+    fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
+        todo!()
     }
 
     fn on_connection_handler_event(
         &mut self,
         peer_id: PeerId,
         connection_id: ConnectionId,
-        event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as
-            ConnectionHandler>::OutEvent,
+        event: THandlerOutEvent<Self>,
     ) {
         match event {
             HeartbeatOutEvent::BlockHeight(latest_block_height) => self
@@ -116,7 +141,7 @@ impl NetworkBehaviour for Heartbeat {
         &mut self,
         _: &mut std::task::Context<'_>,
         _: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+    ) -> Poll<ToSwarm<Self::ToSwarm, Self::ConnectionHandler>> {
         if let Some(action) = self.pending_events.pop_front() {
             return Poll::Ready(action.build())
         }

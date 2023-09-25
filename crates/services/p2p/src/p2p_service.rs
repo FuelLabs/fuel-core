@@ -58,7 +58,9 @@ use libp2p::{
     PeerId,
     Swarm,
 };
-use libp2p_swarm::ConnectionLimits;
+use libp2p_gossipsub::PublishError;
+
+use libp2p::connection_limits::ConnectionLimits;
 use rand::seq::IteratorRandom;
 use std::{
     collections::HashMap,
@@ -199,7 +201,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let metrics = config.metrics;
 
         if let Some(public_address) = config.public_address {
-            let _ = swarm.add_external_address(public_address, AddressScore::Infinite);
+            let _ = swarm.add_external_address(public_address);
         }
 
         let reserved_peers = config
