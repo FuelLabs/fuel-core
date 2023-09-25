@@ -148,7 +148,7 @@ impl Database {
                 let transactions = self
                     .get_sealed_block_by_height(&block_height)?
                     .map(|Sealed { entity: block, .. }| block.into_inner().1)
-                    .map(|transactions| Transactions(transactions));
+                    .map(Transactions);
                 Ok(transactions)
             })
             .collect::<StorageResult<_>>()?;
