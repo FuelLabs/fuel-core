@@ -767,7 +767,6 @@ impl SharedState {
     ) -> anyhow::Result<Option<Vec<Transactions>>> {
         let (sender, receiver) = oneshot::channel();
         let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
-        dbg!(&from_peer);
 
         let request = TaskRequest::GetTransactions2 {
             block_height_range: range,
@@ -776,9 +775,7 @@ impl SharedState {
         };
         self.request_sender.send(request).await?;
 
-        let r = receiver.await.map_err(|e| anyhow!("Receiver error! {}", e));
-        dbg!(&r);
-        r
+        receiver.await.map_err(|e| anyhow!("Receiver error! {}", e))
     }
 
     pub fn broadcast_vote(&self, vote: Arc<ConsensusVote>) -> anyhow::Result<()> {

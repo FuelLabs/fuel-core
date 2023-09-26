@@ -316,7 +316,7 @@ pub fn make_config(name: String, chain_config: ChainConfig) -> Config {
 pub async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node {
     let db = Database::in_memory();
     let node = tokio::time::timeout(
-        Duration::from_secs(1000),
+        Duration::from_secs(1),
         FuelService::from_database(db.clone(), node_config),
     )
     .await
