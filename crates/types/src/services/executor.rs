@@ -276,8 +276,8 @@ pub enum Error {
         error: InterpreterError<anyhow::Error>,
         transaction_id: Bytes32,
     },
-    #[error(transparent)]
-    InvalidTransaction(#[from] CheckError),
+    #[error("{0:?}")]
+    InvalidTransaction(CheckError),
     #[error("Execution error with backtrace")]
     Backtrace(Box<Backtrace>),
     #[error("Transaction doesn't match expected result: {transaction_id:#x}")]
@@ -297,6 +297,12 @@ pub enum Error {
 impl From<Backtrace> for Error {
     fn from(e: Backtrace) -> Self {
         Error::Backtrace(Box::new(e))
+    }
+}
+
+impl From<CheckError> for Error {
+    fn from(e: CheckError) -> Self {
+        Self::InvalidTransaction(e)
     }
 }
 
@@ -337,5 +343,11 @@ pub enum TransactionValidityError {
     )]
     InvalidPredicate(TxId),
     #[error("Transaction validity: {0:#?}")]
-    Validation(#[from] CheckError),
+    Validation(CheckError),
+}
+
+impl From<CheckError> for TransactionValidityError {
+    fn from(e: CheckError) -> Self {
+        Self::Validation(e)
+    }
 }

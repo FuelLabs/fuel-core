@@ -112,9 +112,9 @@ dependencies = [
 
 [[package]]
 name = "aes-gcm"
-version = "0.10.2"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "209b47e8954a928e1d72e86eca7000ebb6655fe1436d33eefc2201cad027e237"
+checksum = "831010a0f742e1209b3bcea8fab6a8e149051ba6099432c8cb2cc117dec3ead1"
 dependencies = [
  "aead 0.5.2",
  "aes 0.8.3",
@@ -529,9 +529,9 @@ dependencies = [
 
 [[package]]
 name = "atomic-waker"
-version = "1.1.1"
+version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1181e1e0d1fce796a03db1ae795d67167da795f9cf4a39c37589e85ef57f26d3"
+checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "atty"
@@ -1113,9 +1113,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.4.4"
+version = "4.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1d7b8d5ec32af0fadc644bf1fd509a688c2103b185644bb1e29d164e0703136"
+checksum = "824956d0dca8334758a5b7f7e50518d66ea319330cbceedcf76905c2f6ab30e3"
 dependencies = [
  "clap_builder",
  "clap_derive 4.4.2",
@@ -1123,9 +1123,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.4.4"
+version = "4.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5179bb514e4d7c2051749d8fcefa2ed6d06a9f4e6d69faf3805f5d80b8cf8d56"
+checksum = "122ec64120a49b4563ccaedcbea7818d069ed8e9aa6d829b82d8a4128936b2ab"
 dependencies = [
  "anstream",
  "anstyle",
@@ -1309,9 +1309,9 @@ dependencies = [
 
 [[package]]
 name = "concurrent-queue"
-version = "2.2.0"
+version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62ec6771ecfa0762d24683ee5a32ad78487a3d3afdc0fb8cae19d2c5deb50b7c"
+checksum = "f057a694a54f12365049b0958a1685bb52d567f5593b355fbf685838e873d400"
 dependencies = [
  "crossbeam-utils",
 ]
@@ -1482,7 +1482,7 @@ dependencies = [
  "anes",
  "cast",
  "ciborium",
- "clap 4.4.4",
+ "clap 4.4.5",
  "criterion-plot",
  "futures",
  "is-terminal",
@@ -2594,9 +2594,9 @@ dependencies = [
 
 [[package]]
 name = "fastrand"
-version = "2.0.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6999dc1837253364c2ebb0704ba97994bd874e8f195d665c50b7548f6ea92764"
+checksum = "25cbce373ec4653f1a01a31e8a5e5ec0c622dc27ff9c4e6606eefef5cbbed4a5"
 
 [[package]]
 name = "ff"
@@ -2698,7 +2698,7 @@ checksum = "6c2141d6d6c8512188a7891b4b01590a45f6dac67afb4f255c4124dbb86d4eaa"
 [[package]]
 name = "fuel-asm"
 version = "0.37.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/nostd#a7f638241f062fdb0874da66eae5978122302233"
+source = "git+https://github.com/FuelLabs/fuel-vm#5e2f43261a25935417c36265ce3bde25e7f5bc58"
 dependencies = [
  "bitflags 1.3.2",
  "fuel-types",
@@ -2715,7 +2715,7 @@ dependencies = [
  "async-graphql",
  "async-trait",
  "axum",
- "clap 4.4.4",
+ "clap 4.4.5",
  "derive_more",
  "enum-iterator",
  "fuel-core-chain-config",
@@ -2766,7 +2766,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "clap 4.4.4",
+ "clap 4.4.5",
  "criterion",
  "ctrlc",
  "ed25519-dalek 1.0.1",
@@ -2800,7 +2800,7 @@ name = "fuel-core-bin"
 version = "0.20.4"
 dependencies = [
  "anyhow",
- "clap 4.4.4",
+ "clap 4.4.5",
  "const_format",
  "dirs",
  "dotenvy",
@@ -2864,7 +2864,7 @@ dependencies = [
 name = "fuel-core-client-bin"
 version = "0.20.4"
 dependencies = [
- "clap 4.4.4",
+ "clap 4.4.5",
  "fuel-core-client",
  "fuel-core-types",
  "serde_json",
@@ -2951,7 +2951,7 @@ name = "fuel-core-keygen"
 version = "0.20.4"
 dependencies = [
  "anyhow",
- "clap 4.4.4",
+ "clap 4.4.5",
  "fuel-core-types",
  "libp2p-core 0.38.0",
  "serde_json",
@@ -3202,7 +3202,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.37.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/nostd#a7f638241f062fdb0874da66eae5978122302233"
+source = "git+https://github.com/FuelLabs/fuel-vm#5e2f43261a25935417c36265ce3bde25e7f5bc58"
 dependencies = [
  "coins-bip32 0.8.7",
  "coins-bip39 0.8.7",
@@ -3222,7 +3222,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.37.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/nostd#a7f638241f062fdb0874da66eae5978122302233"
+source = "git+https://github.com/FuelLabs/fuel-vm#5e2f43261a25935417c36265ce3bde25e7f5bc58"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3233,27 +3233,28 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.37.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/nostd#a7f638241f062fdb0874da66eae5978122302233"
+source = "git+https://github.com/FuelLabs/fuel-vm#5e2f43261a25935417c36265ce3bde25e7f5bc58"
 dependencies = [
+ "derive_more",
  "digest 0.10.7",
  "fuel-storage",
  "hashbrown 0.13.2",
  "hex",
  "sha2 0.10.7",
- "thiserror",
 ]
 
 [[package]]
 name = "fuel-storage"
 version = "0.37.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/nostd#a7f638241f062fdb0874da66eae5978122302233"
+source = "git+https://github.com/FuelLabs/fuel-vm#5e2f43261a25935417c36265ce3bde25e7f5bc58"
 
 [[package]]
 name = "fuel-tx"
 version = "0.37.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/nostd#a7f638241f062fdb0874da66eae5978122302233"
+source = "git+https://github.com/FuelLabs/fuel-vm#5e2f43261a25935417c36265ce3bde25e7f5bc58"
 dependencies = [
  "derivative",
+ "derive_more",
  "fuel-asm",
  "fuel-crypto",
  "fuel-merkle",
@@ -3261,19 +3262,17 @@ dependencies = [
  "hashbrown 0.14.0",
  "itertools 0.10.5",
  "num-integer",
- "num_enum",
  "rand 0.8.5",
  "serde",
  "serde_json",
  "strum",
  "strum_macros",
- "thiserror",
 ]
 
 [[package]]
 name = "fuel-types"
 version = "0.37.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/nostd#a7f638241f062fdb0874da66eae5978122302233"
+source = "git+https://github.com/FuelLabs/fuel-vm#5e2f43261a25935417c36265ce3bde25e7f5bc58"
 dependencies = [
  "fuel-derive",
  "hex",
@@ -3284,12 +3283,13 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.37.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/nostd#a7f638241f062fdb0874da66eae5978122302233"
+source = "git+https://github.com/FuelLabs/fuel-vm#5e2f43261a25935417c36265ce3bde25e7f5bc58"
 dependencies = [
  "anyhow",
  "async-trait",
  "bitflags 1.3.2",
  "derivative",
+ "derive_more",
  "ethnum",
  "fuel-asm",
  "fuel-crypto",
@@ -3309,7 +3309,6 @@ dependencies = [
  "static_assertions",
  "strum",
  "tai64",
- "thiserror",
 ]
 
 [[package]]
@@ -4799,7 +4798,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6d8de370f98a6cb8a4606618e53e802f93b094ddec0f96988eaec2c27e6e9ce7"
 dependencies = [
- "clap 4.4.4",
+ "clap 4.4.5",
  "termcolor",
  "threadpool",
 ]
@@ -4906,10 +4905,11 @@ checksum = "73cbba799671b762df5a175adf59ce145165747bb891505c43d09aefbbf38beb"
 
 [[package]]
 name = "md-5"
-version = "0.10.5"
+version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6365506850d44bff6e2fbcb5176cf63650e48bd45ef2fe2665ae1570e0f4b9ca"
+checksum = "d89e7ee0cfbedfc4da3340218492196241d89eefb6dab27de5df917a6d2e78cf"
 dependencies = [
+ "cfg-if",
  "digest 0.10.7",
 ]
 
@@ -5315,26 +5315,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "num_enum"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70bf6736f74634d299d00086f02986875b3c2d924781a6a2cb6c201e73da0ceb"
-dependencies = [
- "num_enum_derive",
-]
-
-[[package]]
-name = "num_enum_derive"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56ea360eafe1022f7cc56cd7b869ed57330fb2453d0c7831d99b74c65d2f5597"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.37",
-]
-
-[[package]]
 name = "object"
 version = "0.32.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5490,9 +5470,9 @@ dependencies = [
 
 [[package]]
 name = "parking"
-version = "2.1.0"
+version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14f2252c834a40ed9bb5422029649578e63aa341ac401f74e719dd1afda8394e"
+checksum = "e52c774a4c39359c1d1c52e43f73dd91a75a614652c825408eec30c95a9b2067"
 
 [[package]]
 name = "parking_lot"
@@ -5613,9 +5593,9 @@ checksum = "9b2a4787296e9989611394c33f193f676704af1686e70b8f8033ab5ba9a35a94"
 
 [[package]]
 name = "pest"
-version = "2.7.3"
+version = "2.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7a4d085fd991ac8d5b05a147b437791b4260b76326baf0fc60cf7c9c27ecd33"
+checksum = "c022f1e7b65d6a24c0dbbd5fb344c66881bc01f3e5ae74a1c8100f2f985d98a4"
 dependencies = [
  "memchr",
  "thiserror",
@@ -6705,7 +6685,7 @@ checksum = "cd8d6c9f025a446bc4d18ad9632e69aec8f287aa84499ee335599fabd20c3fd8"
 dependencies = [
  "log",
  "ring",
- "rustls-webpki 0.101.5",
+ "rustls-webpki 0.101.6",
  "sct 0.7.0",
 ]
 
@@ -6754,9 +6734,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.101.5"
+version = "0.101.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45a27e3b59326c16e23d30aeb7a36a24cc0d29e71d68ff611cdfb4a01d013bed"
+checksum = "3c7d5dece342910d9ba34d259310cae3e0154b873b35408b787b59bce53d34fe"
 dependencies = [
  "ring",
  "untrusted",
@@ -7005,9 +6985,9 @@ dependencies = [
 
 [[package]]
 name = "semver"
-version = "1.0.18"
+version = "1.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0293b4b29daaf487284529cc2f5675b8e57c61f70167ba415a463651fd6a918"
+checksum = "ad977052201c6de01a8ef2aa3378c4bd23217a056337d1d6da40468d267a4fb0"
 dependencies = [
  "serde",
 ]
@@ -7132,9 +7112,9 @@ dependencies = [
 
 [[package]]
 name = "sha1"
-version = "0.10.5"
+version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f04293dc80c3993519f2d7f6f511707ee7094fe0c6d3406feb330cdb3540eba3"
+checksum = "e3bf829a2d51ab4a5ddf1352d8470c140cadc8301b2ae1789db023f01cedd6ba"
 dependencies = [
  "cfg-if",
  "cpufeatures",
@@ -7439,9 +7419,9 @@ checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 
 [[package]]
 name = "symbolic-common"
-version = "12.4.0"
+version = "12.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e0e9bc48b3852f36a84f8d0da275d50cb3c2b88b59b9ec35fdd8b7fa239e37d"
+checksum = "fac08504d60cf5bdffeb8a6a028f1a4868a5da1098bb19eb46239440039163fb"
 dependencies = [
  "debugid",
  "memmap2",
@@ -7451,9 +7431,9 @@ dependencies = [
 
 [[package]]
 name = "symbolic-demangle"
-version = "12.4.0"
+version = "12.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "691e53bdc0702aba3a5abc2cffff89346fcbd4050748883c7e2f714b33a69045"
+checksum = "8b212728d4f6c527c1d50d6169e715f6e02d849811843c13e366d8ca6d0cf5c4"
 dependencies = [
  "cpp_demangle",
  "rustc-demangle",
@@ -7555,7 +7535,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb94d2f3cc536af71caac6b6fcebf65860b347e7ce0cc9ebe8f70d3e521054ef"
 dependencies = [
  "cfg-if",
- "fastrand 2.0.0",
+ "fastrand 2.0.1",
  "redox_syscall 0.3.5",
  "rustix 0.38.14",
  "windows-sys 0.48.0",
@@ -7677,9 +7657,9 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.28"
+version = "0.3.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17f6bb557fd245c28e6411aa56b6403c689ad95061f50e4be16c274e70a17e48"
+checksum = "426f806f4089c493dcac0d24c29c01e2c38baf8e30f1b716ee37e83d200b18fe"
 dependencies = [
  "deranged",
  "itoa",
@@ -7690,15 +7670,15 @@ dependencies = [
 
 [[package]]
 name = "time-core"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7300fbefb4dadc1af235a9cef3737cea692a9d97e1b9cbcd4ebdae6f8868e6fb"
+checksum = "ef927ca75afb808a4d64dd374f00a2adf8d0fcff8e7b184af886c3c87ec4a3f3"
 
 [[package]]
 name = "time-macros"
-version = "0.2.14"
+version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a942f44339478ef67935ab2bbaec2fb0322496cf3cbe84b261e06ac3814c572"
+checksum = "4ad70d68dba9e1f8aceda7aa6711965dfec1cac869f311a51bd08b3a2ccbce20"
 dependencies = [
  "time-core",
 ]
@@ -8312,9 +8292,9 @@ dependencies = [
 
 [[package]]
 name = "waker-fn"
-version = "1.1.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d5b2c62b4012a3e1eca5a7e077d13b3bf498c4073e33ccd58626607748ceeca"
+checksum = "f3c4517f54858c779bbcbf228f4fca63d121bf85fbecb2dc578cdf4a39395690"
 
 [[package]]
 name = "walkdir"
@@ -8545,7 +8525,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4a00f4242f2db33307347bd5be53263c52a0331c96c14292118c9a6bb48d267"
 dependencies = [
  "aes 0.6.0",
- "aes-gcm 0.10.2",
+ "aes-gcm 0.10.3",
  "async-trait",
  "bincode",
  "block-modes",
@@ -9016,7 +8996,7 @@ dependencies = [
 name = "xtask"
 version = "0.0.0"
 dependencies = [
- "clap 4.4.4",
+ "clap 4.4.5",
  "fuel-core",
 ]
 

@@ -42,7 +42,7 @@ use fuel_core_types::{
     },
     fuel_types,
     fuel_types::{
-        canonical::SerializedSize,
+        canonical::Serialize,
         BlockHeight,
         Nonce,
     },

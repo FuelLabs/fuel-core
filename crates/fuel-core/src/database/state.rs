@@ -82,13 +82,13 @@ impl StorageMutate<ContractsState> for Database {
         let storage = self.borrow_mut();
         let mut tree: MerkleTree<ContractsStateMerkleData, _> =
             MerkleTree::load(storage, &root)
-                .map_err(|err| StorageError::Other(err.into()))?;
+                .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
 
         let state_key = *key.state_key().deref();
         // Update the contract's key-value dataset. The key is the state key and
         // the value is the 32 bytes
         tree.update(MerkleTreeKey::new(state_key), value.as_slice())
-            .map_err(|err| StorageError::Other(err.into()))?;
+            .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
 
         // Generate new metadata for the updated tree
         let root = tree.root();
@@ -118,13 +118,13 @@ impl StorageMutate<ContractsState> for Database {
             let storage = self.borrow_mut();
             let mut tree: MerkleTree<ContractsStateMerkleData, _> =
                 MerkleTree::load(storage, &root)
-                    .map_err(|err| StorageError::Other(err.into()))?;
+                    .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
 
             let state_key = *key.state_key().deref();
             // Update the contract's key-value dataset. The key is the state key and
             // the value is the 32 bytes
             tree.delete(MerkleTreeKey::new(state_key))
-                .map_err(|err| StorageError::Other(err.into()))?;
+                .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
 
             let root = tree.root();
             if root == *sparse::empty_sum() {

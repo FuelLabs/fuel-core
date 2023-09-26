@@ -79,7 +79,7 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
-        canonical::SerializedSize,
+        canonical::Serialize,
         BlockHeight,
         MessageId,
     },
