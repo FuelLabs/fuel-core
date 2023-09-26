@@ -775,7 +775,7 @@ impl SharedState {
         };
         self.request_sender.send(request).await?;
 
-        receiver.await.map_err(|e| anyhow!("Receiver error! {}", e))
+        receiver.await.map_err(|e| anyhow!("{}", e))
     }
 
     pub fn broadcast_vote(&self, vote: Arc<ConsensusVote>) -> anyhow::Result<()> {
