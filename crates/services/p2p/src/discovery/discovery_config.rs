@@ -12,10 +12,7 @@ use libp2p::{
     PeerId,
 };
 use std::{
-    collections::{
-        HashSet,
-        VecDeque,
-    },
+    collections::HashSet,
     time::Duration,
 };
 use tracing::warn;
@@ -183,7 +180,6 @@ impl DiscoveryConfig {
             bootstrap_nodes,
             reserved_nodes,
             connected_peers: HashSet::new(),
-            pending_events: VecDeque::new(),
             kademlia,
             next_kad_random_walk,
             duration_to_next_kad: Duration::from_secs(1),

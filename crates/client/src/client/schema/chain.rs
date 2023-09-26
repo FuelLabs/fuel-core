@@ -2,7 +2,6 @@ use crate::client::schema::{
     block::Block,
     schema,
     AssetId,
-    U32,
     U64,
 };
 
@@ -280,7 +279,7 @@ pub struct ChainQuery {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ChainInfo {
-    pub base_chain_height: U32,
+    pub da_height: U64,
     pub name: String,
     pub peer_count: i32,
     pub latest_block: Block,

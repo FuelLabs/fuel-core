@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use fuel_core::{
     chain_config::{
         MessageConfig,
@@ -13,7 +15,10 @@ use fuel_core_client::client::{
         PageDirection,
         PaginationRequest,
     },
-    types::TransactionStatus,
+    types::{
+        message::MessageStatus,
+        TransactionStatus,
+    },
     FuelClient,
 };
 use fuel_core_types::{
@@ -184,6 +189,110 @@ async fn messages_empty_results_for_owner_with_no_messages(
     let result = client.messages(Some(&owner), request).await.unwrap();
 
     assert_eq!(result.results.len(), 0);
+}
+
+#[tokio::test]
+async fn message_status__can_get_unspent() {
+    // Given
+    let owner = Address::new([1; 32]);
+    let nonce = 1.into();
+    let amount = 1_000;
+
+    let msg = MessageConfig {
+        recipient: owner,
+        nonce: 1.into(),
+        amount,
+        ..Default::default()
+    };
+
+    let mut config = Config::local_node();
+    config.chain_conf.initial_state = Some(StateConfig {
+        messages: Some(vec![msg]),
+        ..Default::default()
+    });
+
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // When
+    let status = client.message_status(&nonce).await.unwrap();
+
+    // Then
+    assert_eq!(status, MessageStatus::Unspent);
+}
+
+#[tokio::test]
+async fn message_status__can_get_spent() {
+    // Given
+    let msg_recipient = Address::from([1; 32]);
+    let output_recipient = Address::from([2; 32]);
+    let msg_sender = Address::from([3; 32]);
+
+    let nonce = 1.into();
+    let amount = 1_000;
+
+    let msg = MessageConfig {
+        sender: msg_sender,
+        recipient: msg_recipient,
+        nonce,
+        amount,
+        ..Default::default()
+    };
+
+    let mut config = Config::local_node();
+    config.chain_conf.initial_state = Some(StateConfig {
+        messages: Some(vec![msg]),
+        ..Default::default()
+    });
+
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let input = Input::message_coin_signed(
+        msg_sender,
+        msg_recipient,
+        amount,
+        nonce,
+        Default::default(),
+    );
+
+    let output = Output::coin(output_recipient, amount, Default::default());
+
+    let tx = Transaction::script(
+        Default::default(),
+        1_000_000,
+        Default::default(),
+        vec![],
+        vec![],
+        vec![input],
+        vec![output],
+        vec![Vec::new().into()],
+    )
+    .into();
+
+    // When
+    client.submit_and_await_commit(&tx).await.unwrap();
+    let status = client.message_status(&nonce).await.unwrap();
+
+    // Then
+    assert_eq!(status, MessageStatus::Spent);
+}
+
+#[tokio::test]
+async fn message_status__can_get_notfound() {
+    // Given
+    let nonce = 1.into();
+
+    let config = Config::local_node();
+
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // When
+    let status = client.message_status(&nonce).await.unwrap();
+
+    // Then
+    assert_eq!(status, MessageStatus::NotFound);
 }
 
 #[tokio::test]

@@ -2,7 +2,6 @@
 
 use async_trait::async_trait;
 use fuel_core_storage::{
-    not_found,
     tables::Messages,
     transactional::Transactional,
     Error as StorageError,
@@ -96,7 +95,7 @@ where
     fn get_finalized_da_height(&self) -> StorageResult<DaBlockHeight> {
         Ok(*StorageAsRef::storage::<RelayerMetadata>(&self)
             .get(&METADATA_KEY)?
-            .ok_or(not_found!("DaBlockHeight missing for relayer"))?)
+            .unwrap_or_default())
     }
 }
 
