@@ -1,0 +1,18 @@
+disallowed-macros = [
+    # https://github.com/FuelLabs/fuel-core/issues/1327
+    # https://docs.rs/log/latest/log/#macros
+    { reason = "Use tracing instead of log", path = "tracing::log::trace" },
+    { reason = "Use tracing instead of log", path = "tracing::log::debug" },
+    { reason = "Use tracing instead of log", path = "tracing::log::info" },
+    { reason = "Use tracing instead of log", path = "tracing::log::warn" },
+    { reason = "Use tracing instead of log", path = "tracing::log::error" },
+    { reason = "Use tracing instead of log", path = "tracing::log::log" },
+    { reason = "Use tracing instead of log", path = "tracing::log::log_enabled" },
+    { reason = "Use tracing instead of log", path = "log::trace" },
+    { reason = "Use tracing instead of log", path = "log::debug" },
+    { reason = "Use tracing instead of log", path = "log::info" },
+    { reason = "Use tracing instead of log", path = "log::warn" },
+    { reason = "Use tracing instead of log", path = "log::error" },
+    { reason = "Use tracing instead of log", path = "log::log" },
+    { reason = "Use tracing instead of log", path = "log::log_enabled" },
+]
