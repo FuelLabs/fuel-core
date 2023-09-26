@@ -448,7 +448,7 @@ async fn shutdown_signal() -> anyhow::Result<()> {
                     break;
                 }
                 _ = sigint.recv() => {
-                    tracing::log::info!("sigint received");
+                    tracing::info!("sigint received");
                     break;
                 }
             }
@@ -457,7 +457,7 @@ async fn shutdown_signal() -> anyhow::Result<()> {
     #[cfg(not(unix))]
     {
         tokio::signal::ctrl_c().await?;
-        tracing::log::info!("CTRL+C received");
+        tracing::info!("CTRL+C received");
     }
     Ok(())
 }
