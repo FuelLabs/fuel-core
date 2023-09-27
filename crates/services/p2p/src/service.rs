@@ -96,6 +96,11 @@ enum TaskRequest {
     BroadcastVote(Arc<ConsensusVote>),
     // Request to get one-off data from p2p network
     GetPeerIds(oneshot::Sender<Vec<PeerId>>),
+    // Request to get information about a connected peer
+    GetPeerInfo {
+        peer_id: PeerId,
+        channel: oneshot::Sender<Option<PeerInfo>>,
+    },
     GetBlock {
         height: BlockHeight,
         channel: oneshot::Sender<Option<SealedBlock>>,
@@ -489,7 +494,7 @@ where
                         let broadcast = GossipsubBroadcastRequest::NewTx(transaction);
                         let result = self.p2p_service.publish_message(broadcast);
                         if let Err(e) = result {
-                            tracing::error!("Got an error during transaction {} broadcasting {}", tx_id, e);
+                            tracing::error!("Got an error during transaction {} broadcasting for tx_id ({:?}): {}", transaction.cached_id(), tx_id, e);
                         }
                     }
                     Some(TaskRequest::BroadcastBlock(block)) => {
@@ -781,6 +786,22 @@ impl SharedState {
 
         self.request_sender
             .send(TaskRequest::GetPeerIds(sender))
+            .await?;
+
+        receiver.await.map_err(|e| anyhow!("{}", e))
+    }
+
+    pub async fn get_peer_info(
+        &self,
+        peer_id: PeerId,
+    ) -> anyhow::Result<Option<PeerInfo>> {
+        let (sender, receiver) = oneshot::channel();
+
+        self.request_sender
+            .send(TaskRequest::GetPeerInfo {
+                peer_id,
+                channel: sender,
+            })
             .await?;
 
         receiver.await.map_err(|e| anyhow!("{}", e))

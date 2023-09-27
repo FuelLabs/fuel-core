@@ -1,3 +1,4 @@
+use super::BlockProducerAdapter;
 use crate::{
     database::{
         transactions::OwnedTransactionIndexCursor,
@@ -14,9 +15,13 @@ use crate::{
         DatabasePort,
         DatabaseTransactions,
         DryRunExecution,
+        P2pPort,
         TxPoolPort,
     },
-    service::adapters::TxPoolAdapter,
+    service::adapters::{
+        P2PAdapter,
+        TxPoolAdapter,
+    },
 };
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
@@ -60,6 +65,11 @@ use fuel_core_types::{
     },
     services::{
         graphql_api::ContractBalance,
+        p2p::{
+            HeartbeatData,
+            PeerId,
+            PeerInfo,
+        },
         txpool::{
             InsertionResult,
             TransactionStatus,
@@ -264,4 +274,42 @@ impl DryRunExecution for BlockProducerAdapter {
 
 impl BlockProducerPort for BlockProducerAdapter {}
 
-use super::BlockProducerAdapter;
+impl P2pPort for P2PAdapter {
+    async fn connected_peers(&self) -> anyhow::Result<Vec<PeerId>> {
+        if let Some(service) = &self.service {
+            service.get_peer_ids().await.map(|peers| {
+                peers
+                    .iter()
+                    .map(|peer_id| peer_id.to_bytes().into())
+                    .collect()
+            })
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    async fn peer_info(&self, peer_id: &PeerId) -> anyhow::Result<Option<PeerInfo>> {
+        if let Some(service) = &self.service {
+            service
+                .get_peer_info(peer_id.clone().into())
+                .await
+                .map(|peer_info| {
+                    peer_info.map(|peer_info| PeerInfo {
+                        peer_addresses: peer_info
+                            .peer_addresses
+                            .iter()
+                            .map(|addresses| addresses.to_string())
+                            .collect(),
+                        client_version: peer_info.client_version,
+                        heartbeat_data: HeartbeatData {
+                            block_height: peer_info.heartbeat_data.block_height,
+                            last_heartbeat: todo!(),//peer_info.heartbeat_data.last_heartbeat,
+                        },
+                        app_score: peer_info.score,
+                    })
+                })
+        } else {
+            Ok(None)
+        }
+    }
+}
