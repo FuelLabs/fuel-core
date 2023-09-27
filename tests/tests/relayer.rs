@@ -131,7 +131,7 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     let contract_address = relayer_config.eth_v2_listening_contracts[0];
 
     // setup a real spendable message
-    let secret_key: SecretKey = rng.gen();
+    let secret_key: SecretKey = SecretKey::random(&mut rng);
     let pk = secret_key.public_key();
     let recipient = Input::owner(&pk);
     let sender = Address::zeroed();

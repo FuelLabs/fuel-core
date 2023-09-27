@@ -52,7 +52,10 @@ mod tests {
             Output,
             TransactionBuilder,
         },
-        fuel_vm::checked_transaction::builder::TransactionBuilderExt,
+        fuel_vm::{
+            checked_transaction::builder::TransactionBuilderExt,
+            SecretKey,
+        },
     };
     use itertools::Itertools;
     use std::sync::Arc;
@@ -85,7 +88,7 @@ mod tests {
                 .gas_price(tx_gas.price)
                 .gas_limit(tx_gas.limit)
                 .add_unsigned_coin_input(
-                    rng.gen(),
+                    SecretKey::random(&mut rng),
                     rng.gen(),
                     1_000_000,
                     Default::default(),

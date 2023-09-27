@@ -93,7 +93,7 @@ mod coin {
         let mut rng = StdRng::seed_from_u64(1234);
         let asset_id_a: AssetId = rng.gen();
         let asset_id_b: AssetId = rng.gen();
-        let secret_key: SecretKey = rng.gen();
+        let secret_key: SecretKey = SecretKey::random(&mut rng);
         let pk = secret_key.public_key();
         let owner = Input::owner(&pk);
         let context = setup(owner, asset_id_a, asset_id_b).await;
@@ -344,7 +344,7 @@ mod message_coin {
     async fn excludes_spent_coins() {
         let mut rng = StdRng::seed_from_u64(1234);
 
-        let secret_key: SecretKey = rng.gen();
+        let secret_key: SecretKey = SecretKey::random(&mut rng);
         let pk = secret_key.public_key();
         let owner = Input::owner(&pk);
         let (base_asset_id, context) = setup(owner).await;

@@ -75,7 +75,7 @@ fn run(
             .gas_limit(TARGET_BLOCK_GAS_LIMIT - BASE)
             .gas_price(1)
             .add_unsigned_coin_input(
-                rng.gen(),
+                SecretKey::random(&mut rng),
                 rng.gen(),
                 u64::MAX,
                 AssetId::BASE,
@@ -181,7 +181,12 @@ fn block_target_gas(c: &mut Criterion) {
             op::jmpb(RegId::ZERO, 0),
         ]
         .to_vec(),
-        vec![],
+        ecr1_signature
+            .as_ref()
+            .iter()
+            .chain(message.as_ref())
+            .copied()
+            .collect(),
     );
 
     let ed19_keypair =
@@ -207,11 +212,19 @@ fn block_target_gas(c: &mut Criterion) {
             op::movi(0x10, ed25519_dalek::PUBLIC_KEY_LENGTH.try_into().unwrap()),
             op::aloc(0x10),
             op::move_(0x11, RegId::HP),
-            op::ed19(0x10, 0x11, 0x12),
+            op::ed19(0x20, 0x21, 0x22),
             op::jmpb(RegId::ZERO, 0),
         ]
         .to_vec(),
-        vec![],
+        ed19_keypair
+            .public
+            .as_ref()
+            .as_ref()
+            .iter()
+            .chain(ed19_signature.as_ref())
+            .chain(message.as_ref())
+            .copied()
+            .collect(),
     );
 
     // The test is supper long because we don't use `DependentCost` for k256 opcode

@@ -18,7 +18,7 @@ use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::*,
     fuel_types::{
-        canonical::SerializedSize,
+        canonical::Serialize,
         ChainId,
     },
     fuel_vm::*,
