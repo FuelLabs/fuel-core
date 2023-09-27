@@ -4,7 +4,17 @@ use crate::{
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
 };
-use std::fmt::Debug;
+use std::{
+    collections::HashSet,
+    fmt::{
+        Debug,
+        Display,
+        Formatter,
+    },
+    time::Instant,
+};
+use tai64::Tai64;
+
 /// Contains types and logic for Peer Reputation
 pub mod peer_reputation;
 
@@ -113,4 +123,22 @@ impl From<PeerId> for Vec<u8> {
     fn from(peer_id: PeerId) -> Self {
         peer_id.0
     }
+}
+
+impl Display for PeerId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        bs58::encode(&self.0).fmt(f)
+    }
+}
+
+pub struct PeerInfo {
+    pub peer_addresses: HashSet<String>,
+    pub client_version: Option<String>,
+    pub heartbeat_data: HeartbeatData,
+    pub app_score: f64,
+}
+
+pub struct HeartbeatData {
+    pub block_height: Option<BlockHeight>,
+    pub last_heartbeat: Option<Instant>,
 }

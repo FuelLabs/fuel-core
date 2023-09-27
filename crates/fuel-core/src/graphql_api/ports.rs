@@ -50,6 +50,10 @@ use fuel_core_types::{
     },
     services::{
         graphql_api::ContractBalance,
+        p2p::{
+            PeerId,
+            PeerInfo,
+        },
         txpool::{
             InsertionResult,
             TransactionStatus,
@@ -205,4 +209,9 @@ pub trait DatabaseMessageProof: Send + Sync {
         message_block_height: &BlockHeight,
         commit_block_height: &BlockHeight,
     ) -> StorageResult<MerkleProof>;
+}
+
+pub trait P2pPort: Send + Sync {
+    fn connected_peers(&self) -> Vec<PeerId>;
+    fn peer_info(&self, peer_id: &PeerId) -> anyhow::Result<Option<PeerInfo>>;
 }

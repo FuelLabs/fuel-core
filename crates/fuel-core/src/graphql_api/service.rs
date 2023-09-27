@@ -5,6 +5,7 @@ use crate::{
         BlockProducerPort,
         ConsensusModulePort,
         DatabasePort,
+        P2pPort,
         TxPoolPort,
     },
     graphql_api::Config,
@@ -79,6 +80,7 @@ pub type BlockProducer = Box<dyn BlockProducerPort>;
 //  use only `Database` to receive all information about transactions.
 pub type TxPool = Box<dyn TxPoolPort>;
 pub type ConsensusModule = Box<dyn ConsensusModulePort>;
+pub type P2pService = Box<dyn P2pPort>;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -162,6 +164,7 @@ pub fn new_service(
     txpool: TxPool,
     producer: BlockProducer,
     consensus_module: ConsensusModule,
+    p2p_service: P2pService,
     _log_threshold_ms: Duration,
 ) -> anyhow::Result<Service> {
     let network_addr = config.addr;
@@ -171,7 +174,8 @@ pub fn new_service(
         .data(database)
         .data(txpool)
         .data(producer)
-        .data(consensus_module);
+        .data(consensus_module)
+        .data(p2p_service);
     let builder = builder.extension(async_graphql::extensions::Tracing);
 
     #[cfg(feature = "metrics")]

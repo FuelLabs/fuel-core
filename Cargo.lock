@@ -3086,6 +3086,7 @@ name = "fuel-core-types"
 version = "0.20.5"
 dependencies = [
  "anyhow",
+ "bs58 0.5.0",
  "derive_more",
  "fuel-vm",
  "secrecy",
