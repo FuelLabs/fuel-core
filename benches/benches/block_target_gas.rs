@@ -183,7 +183,7 @@ fn block_target_gas(c: &mut Criterion) {
         .to_vec(),
         ecr1_signature
             .as_ref()
-            .into_iter()
+            .iter()
             .chain(message.as_ref())
             .copied()
             .collect(),
@@ -220,7 +220,7 @@ fn block_target_gas(c: &mut Criterion) {
             .public
             .as_ref()
             .as_ref()
-            .into_iter()
+            .iter()
             .chain(ed19_signature.as_ref())
             .chain(message.as_ref())
             .copied()
