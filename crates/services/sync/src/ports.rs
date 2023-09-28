@@ -72,11 +72,7 @@ pub trait PeerToPeerPort {
     ) -> anyhow::Result<Option<Vec<Transactions>>>;
 
     /// Report a peer for some reason to modify their reputation.
-    async fn report_peer(
-        &self,
-        peer: PeerId,
-        report: PeerReportReason,
-    ) -> anyhow::Result<()>;
+    fn report_peer(&self, peer: PeerId, report: PeerReportReason) -> anyhow::Result<()>;
 }
 
 #[cfg_attr(any(test, feature = "benchmarking"), mockall::automock)]
