@@ -358,16 +358,15 @@ where
 }
 
 fn get_block_stream<
-    'a,
     P: PeerToPeerPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 >(
     peer_id: PeerId,
     range: RangeInclusive<u32>,
-    params: &'a Config,
+    params: &Config,
     p2p: Arc<P>,
     consensus: Arc<C>,
-) -> impl Stream<Item = impl Future<Output = SealedBlockBatch>> + 'a {
+) -> impl Stream<Item = impl Future<Output = SealedBlockBatch>> + '_ {
     let header_stream =
         get_header_batch_stream(peer_id.clone(), range.clone(), params, p2p.clone());
     let range = *range.start()..(*range.end() + 1);
