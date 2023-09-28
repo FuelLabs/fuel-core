@@ -429,12 +429,12 @@ fn get_block_stream<
         })
 }
 
-fn get_header_batch_stream<'a, P: PeerToPeerPort + Send + Sync + 'static>(
+fn get_header_batch_stream<P: PeerToPeerPort + Send + Sync + 'static>(
     peer: PeerId,
     range: RangeInclusive<u32>,
-    params: &'a Config,
+    params: &Config,
     p2p: Arc<P>,
-) -> impl Stream<Item = SealedHeaderBatch> + 'a {
+) -> impl Stream<Item = SealedHeaderBatch> {
     let Config {
         header_batch_size, ..
     } = params;
