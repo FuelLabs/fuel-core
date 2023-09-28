@@ -1,50 +1,15 @@
-use bech32::{
-    ToBase32,
-    Variant::Bech32m,
-};
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     fuel_crypto::Hasher,
-    fuel_tx::{
-        ConsensusParameters,
-        GasCosts,
-        TxParameters,
-        UtxoId,
-    },
-    fuel_types::{
-        Address,
-        AssetId,
-        Bytes32, BlockHeight,
-    },
+    fuel_tx::{ConsensusParameters, GasCosts, TxParameters, UtxoId},
+    fuel_types::{Address, AssetId, BlockHeight},
     fuel_vm::SecretKey,
 };
-use itertools::Itertools;
-use rand::{
-    rngs::StdRng,
-    SeedableRng,
-};
-use serde::{
-    Deserialize,
-    Serialize,
-};
-use serde_with::{
-    serde_as,
-    skip_serializing_none,
-};
-use std::{
-    io::ErrorKind,
-    path::PathBuf,
-    str::FromStr,
-};
+use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, skip_serializing_none};
+use std::{io::ErrorKind, path::PathBuf, str::FromStr};
 
-use crate::{
-    config::{
-        coin::CoinConfig,
-        state::StateConfig,
-    },
-    genesis::GenesisCommitment,
-    ConsensusConfig,
-};
+use crate::{config::coin::CoinConfig, genesis::GenesisCommitment, ConsensusConfig};
 
 // Fuel Network human-readable part for bech32 encoding
 pub const FUEL_BECH32_HRP: &str = "fuel";
@@ -59,8 +24,6 @@ pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 pub struct ChainConfig {
     pub chain_name: String,
     pub block_gas_limit: u64,
-    #[serde(default)]
-    pub initial_state: Option<StateConfig>,
     pub block_height: BlockHeight,
     pub consensus_parameters: ConsensusParameters,
     pub consensus: ConsensusConfig,
@@ -72,7 +35,6 @@ impl Default for ChainConfig {
             chain_name: "local".into(),
             block_gas_limit: TxParameters::DEFAULT.max_gas_per_tx * 10, /* TODO: Pick a sensible default */
             consensus_parameters: ConsensusParameters::default(),
-            initial_state: None,
             block_height: BlockHeight::default(),
             consensus: ConsensusConfig::default_poa(),
         }
@@ -85,31 +47,9 @@ impl ChainConfig {
     pub fn local_testnet() -> Self {
         // endow some preset accounts with an initial balance
         tracing::info!("Initial Accounts");
-        let mut rng = StdRng::seed_from_u64(10);
-        let initial_coins = (0..5)
-            .map(|_| {
-                let secret = fuel_core_types::fuel_crypto::SecretKey::random(&mut rng);
-                let address = Address::from(*secret.public_key().hash());
-                let bech32_data = Bytes32::new(*address).to_base32();
-                let bech32_encoding =
-                    bech32::encode(FUEL_BECH32_HRP, bech32_data, Bech32m).unwrap();
-                tracing::info!(
-                    "PrivateKey({:#x}), Address({:#x} [bech32: {}]), Balance({})",
-                    secret,
-                    address,
-                    bech32_encoding,
-                    TESTNET_INITIAL_BALANCE
-                );
-                Self::initial_coin(secret, TESTNET_INITIAL_BALANCE, None)
-            })
-            .collect_vec();
 
         Self {
             chain_name: LOCAL_TESTNET.to_string(),
-            initial_state: Some(StateConfig {
-                coins: Some(initial_coins),
-                ..StateConfig::default()
-            }),
             ..Default::default()
         }
     }
@@ -165,8 +105,6 @@ impl GenesisCommitment for ChainConfig {
         let ChainConfig {
             chain_name,
             block_gas_limit,
-            // Skip the `initial_state` bec
-            initial_state: _,
             block_height,
             consensus_parameters,
             consensus,

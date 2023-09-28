@@ -1,62 +1,31 @@
-use crate::{
-    database::Database,
-    service::config::Config,
-};
+use crate::{database::Database, service::config::Config};
 use anyhow::anyhow;
-use fuel_core_chain_config::{
-    ContractConfig,
-    GenesisCommitment,
-    StateConfig,
-};
+use fuel_core_chain_config::{ContractConfig, GenesisCommitment, StateConfig};
 use fuel_core_executor::refs::ContractRef;
 use fuel_core_importer::Importer;
 use fuel_core_storage::{
     tables::{
-        Coins,
-        ContractsInfo,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        FuelBlocks,
-        Messages,
+        Coins, ContractsInfo, ContractsLatestUtxo, ContractsRawCode, FuelBlocks, Messages,
     },
     transactional::Transactional,
-    MerkleRoot,
-    StorageAsMut,
+    MerkleRoot, StorageAsMut,
 };
 use fuel_core_types::{
     blockchain::{
         block::Block,
-        consensus::{
-            Consensus,
-            Genesis,
-        },
-        header::{
-            ApplicationHeader,
-            ConsensusHeader,
-            PartialBlockHeader,
-        },
+        consensus::{Consensus, Genesis},
+        header::{ApplicationHeader, ConsensusHeader, PartialBlockHeader},
         primitives::Empty,
         SealedBlock,
     },
     entities::{
-        coins::coin::CompressedCoin,
-        contract::ContractUtxoInfo,
-        message::Message,
+        coins::coin::CompressedCoin, contract::ContractUtxoInfo, message::Message,
     },
     fuel_merkle::binary,
-    fuel_tx::{
-        Contract,
-        TxPointer,
-        UtxoId,
-    },
-    fuel_types::{
-        bytes::WORD_SIZE,
-        Bytes32,
-        ContractId,
-    },
+    fuel_tx::{Contract, TxPointer, UtxoId},
+    fuel_types::{bytes::WORD_SIZE, Bytes32, ContractId},
     services::block_importer::{
-        ImportResult,
-        UncommittedResult as UncommittedImportResult,
+        ImportResult, UncommittedResult as UncommittedImportResult,
     },
 };
 use itertools::Itertools;
@@ -84,11 +53,11 @@ fn import_genesis_block(
     let database = database_transaction.as_mut();
     // Initialize the chain id and height.
 
+    let initial_state = todo!();
     let chain_config_hash = config.chain_conf.root()?.into();
-    let coins_root = init_coin_state(database, &config.chain_conf.initial_state)?.into();
-    let contracts_root =
-        init_contracts(database, &config.chain_conf.initial_state)?.into();
-    let messages_root = init_da_messages(database, &config.chain_conf.initial_state)?;
+    let coins_root = init_coin_state(database, &initial_state)?.into();
+    let contracts_root = init_contracts(database, &initial_state)?.into();
+    let messages_root = init_da_messages(database, &initial_state)?;
     let messages_root = messages_root.into();
 
     let genesis = Genesis {
@@ -110,12 +79,7 @@ fn import_genesis_block(
                 prev_root: Bytes32::zeroed(),
                 // The initial height is defined by the `ChainConfig`.
                 // If it is `None` then it will be zero.
-                height: config
-                    .chain_conf
-                    .initial_state
-                    .as_ref()
-                    .map(|config| config.height.unwrap_or_else(|| 0u32.into()))
-                    .unwrap_or_else(|| 0u32.into()),
+                height: config.chain_conf.block_height,
                 time: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
                 generated: Empty,
             },
@@ -196,11 +160,11 @@ fn init_coin_state(
                 if coin.tx_pointer.block_height() > state.height.unwrap_or_default() {
                     return Err(anyhow!(
                         "coin tx_pointer height cannot be greater than genesis block"
-                    ))
+                    ));
                 }
 
                 if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
-                    return Err(anyhow!("Coin should not exist"))
+                    return Err(anyhow!("Coin should not exist"));
                 }
                 coins_tree.push(coin.root()?.as_slice())
             }
@@ -257,7 +221,7 @@ fn init_contracts(
                 if tx_pointer.block_height() > state.height.unwrap_or_default() {
                     return Err(anyhow!(
                         "contract tx_pointer cannot be greater than genesis block"
-                    ))
+                    ));
                 }
 
                 // insert contract code
@@ -266,7 +230,7 @@ fn init_contracts(
                     .insert(&contract_id, contract.as_ref())?
                     .is_some()
                 {
-                    return Err(anyhow!("Contract code should not exist"))
+                    return Err(anyhow!("Contract code should not exist"));
                 }
 
                 // insert contract root
@@ -275,7 +239,7 @@ fn init_contracts(
                     .insert(&contract_id, &(salt, root))?
                     .is_some()
                 {
-                    return Err(anyhow!("Contract info should not exist"))
+                    return Err(anyhow!("Contract info should not exist"));
                 }
                 if db
                     .storage::<ContractsLatestUtxo>()
@@ -288,7 +252,7 @@ fn init_contracts(
                     )?
                     .is_some()
                 {
-                    return Err(anyhow!("Contract utxo should not exist"))
+                    return Err(anyhow!("Contract utxo should not exist"));
                 }
                 init_contract_state(db, &contract_id, contract_config)?;
                 init_contract_balance(db, &contract_id, contract_config)?;
@@ -334,7 +298,7 @@ fn init_da_messages(
                     .insert(message.id(), &message)?
                     .is_some()
                 {
-                    return Err(anyhow!("Message should not exist"))
+                    return Err(anyhow!("Message should not exist"));
                 }
                 message_tree.push(message.root()?.as_slice());
             }
@@ -360,39 +324,19 @@ fn init_contract_balance(
 mod tests {
     use super::*;
 
-    use crate::service::{
-        config::Config,
-        FuelService,
-    };
-    use fuel_core_chain_config::{
-        ChainConfig,
-        CoinConfig,
-        MessageConfig,
-    };
+    use crate::service::{config::Config, FuelService};
+    use fuel_core_chain_config::{ChainConfig, CoinConfig, MessageConfig};
     use fuel_core_storage::{
-        tables::{
-            ContractsAssets,
-            ContractsState,
-        },
+        tables::{ContractsAssets, ContractsState},
         StorageAsRef,
     };
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         entities::coins::coin::Coin,
         fuel_asm::op,
-        fuel_types::{
-            Address,
-            AssetId,
-            BlockHeight,
-            Salt,
-        },
+        fuel_types::{Address, AssetId, BlockHeight, Salt},
     };
-    use rand::{
-        rngs::StdRng,
-        Rng,
-        RngCore,
-        SeedableRng,
-    };
+    use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
     use std::vec;
 
     #[tokio::test]
