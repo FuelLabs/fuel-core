@@ -1005,8 +1005,8 @@ async fn predicates_with_incorrect_owner_fails() {
         .expect_err("Transaction should be err, got ok");
 
     assert!(
-        err.to_string().contains("InputPredicateOwner"),
-        "unexpected error: {err}",
+        format!("{err:?}").contains("InputPredicateOwner"),
+        "unexpected error: {err:?}",
     )
 }
 

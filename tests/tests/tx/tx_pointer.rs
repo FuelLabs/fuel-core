@@ -46,7 +46,7 @@ async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
     // setup genesis coin
     let coin_tx_pointer = TxPointer::new(starting_block, rng.gen());
     let coin_utxo_id: UtxoId = rng.gen();
-    let secret_key: SecretKey = rng.gen();
+    let secret_key: SecretKey = SecretKey::random(&mut rng);
     let owner = Input::owner(&secret_key.public_key());
     let amount = 1000;
 
@@ -116,7 +116,7 @@ async fn tx_pointer_set_from_previous_block() {
 
     // setup genesis coin
     let coin_utxo_id: UtxoId = rng.gen();
-    let secret_key: SecretKey = rng.gen();
+    let secret_key: SecretKey = SecretKey::random(&mut rng);
     let owner = Input::owner(&secret_key.public_key());
     let amount = 1000;
 
@@ -191,7 +191,7 @@ async fn tx_pointer_unset_when_utxo_validation_disabled() {
     test_builder.starting_block = Some(block_height.into());
     test_builder.utxo_validation = false;
 
-    let secret_key: SecretKey = rng.gen();
+    let secret_key: SecretKey = SecretKey::random(&mut rng);
     let script = script_tx(secret_key, 1000, Default::default(), contract_id, rng.gen());
 
     let TestContext {

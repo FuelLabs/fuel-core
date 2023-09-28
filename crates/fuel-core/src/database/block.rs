@@ -90,7 +90,7 @@ impl StorageMutate<FuelBlocks> for Database {
         let storage = self.borrow_mut();
         let mut tree: MerkleTree<FuelBlockMerkleData, _> =
             MerkleTree::load(storage, prev_metadata.version)
-                .map_err(|err| StorageError::Other(err.into()))?;
+                .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
         let data = key.as_slice();
         tree.push(data)?;
 
@@ -273,12 +273,12 @@ impl Database {
         let storage = self;
         let tree: MerkleTree<FuelBlockMerkleData, _> =
             MerkleTree::load(storage, commit_merkle_metadata.version)
-                .map_err(|err| StorageError::Other(err.into()))?;
+                .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
 
         let proof_index = message_merkle_metadata.version - 1;
         let (_, proof_set) = tree
             .prove(proof_index)
-            .map_err(|err| StorageError::Other(err.into()))?;
+            .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
 
         Ok(MerkleProof {
             proof_set,
