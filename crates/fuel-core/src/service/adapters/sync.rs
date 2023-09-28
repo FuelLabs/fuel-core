@@ -113,11 +113,7 @@ impl PeerToPeerPort for P2PAdapter {
         }
     }
 
-    async fn report_peer(
-        &self,
-        peer: PeerId,
-        report: PeerReportReason,
-    ) -> anyhow::Result<()> {
+    fn report_peer(&self, peer: PeerId, report: PeerReportReason) -> anyhow::Result<()> {
         if let Some(service) = &self.service {
             let service_name = "Sync";
             let new_report = self.process_report(report);

@@ -54,7 +54,7 @@ pub trait PeerToPeerPort {
     /// Request a range of sealed block headers from the network.
     async fn get_sealed_block_headers(
         &self,
-        block_height_range: SourcePeer<Range<u32>>,
+        block_height_range: Range<u32>,
     ) -> SourcePeer<anyhow::Result<Option<Vec<SealedBlockHeader>>>>;
 
     /// Request transactions from the network for the given block
@@ -72,11 +72,7 @@ pub trait PeerToPeerPort {
     ) -> anyhow::Result<Option<Vec<Transactions>>>;
 
     /// Report a peer for some reason to modify their reputation.
-    async fn report_peer(
-        &self,
-        peer: PeerId,
-        report: PeerReportReason,
-    ) -> anyhow::Result<()>;
+    fn report_peer(&self, peer: PeerId, report: PeerReportReason) -> anyhow::Result<()>;
 }
 
 #[cfg_attr(any(test, feature = "benchmarking"), mockall::automock)]

@@ -91,7 +91,7 @@ impl PeerToPeerPort for PressurePeerToPeer {
         self.p2p.get_transactions_2(block_ids).await
     }
 
-    async fn report_peer(
+    fn report_peer(
         &self,
         _peer: PeerId,
         _report: PeerReportReason,
