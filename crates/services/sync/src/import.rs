@@ -389,13 +389,11 @@ fn get_block_stream<
                                 p2p.clone(),
                                 consensus.clone(),
                             )?;
-                            Ok(header)
+                            Result::<_, ImportError>::Ok(header)
                         }
                     })
                     .take_while(|result| result.is_ok())
-                    .filter_map(|result: Result<SealedBlockHeader, ImportError>| {
-                        result.ok()
-                    })
+                    .filter_map(|result| result.ok())
                     .collect::<Vec<_>>()
             }
         })
