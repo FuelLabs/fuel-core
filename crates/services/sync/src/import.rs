@@ -425,6 +425,8 @@ fn get_block_stream<
                         get_blocks(p2p, headers).await
                     }
                 }
+                .instrument(tracing::debug_span!("consensus_and_transactions"))
+                .in_current_span()
             }
         })
 }
