@@ -149,10 +149,6 @@ impl<T> Batch<T> {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.results.is_empty()
-    }
-
     pub fn is_err(&self) -> bool {
         self.results.len() < self.range.len()
     }
@@ -347,7 +343,6 @@ where
             .fold(0usize, |count, batch| async move {
                 count + batch.results.len()
             })
-            // .in_current_span()
             .await;
 
         // Wait for any spawned tasks to shutdown
@@ -419,8 +414,16 @@ fn get_block_stream<
                 let p2p = p2p.clone();
                 async move {
                     let headers = headers.await.unwrap_or(Default::default());
-                    let headers = SealedHeaderBatch::new(peer_id.clone(), range, headers);
-                    get_blocks(p2p, headers).await
+                    if headers.is_empty() {
+                        SealedBlockBatch::empty(peer_id, range)
+                    } else {
+                        let headers = SealedHeaderBatch::new(
+                            peer_id.clone(),
+                            range.clone(),
+                            headers,
+                        );
+                        get_blocks(p2p, headers).await
+                    }
                 }
             }
         })
@@ -630,15 +633,10 @@ async fn get_blocks<P>(p2p: Arc<P>, headers: SealedHeaderBatch) -> SealedBlockBa
 where
     P: PeerToPeerPort + Send + Sync + 'static,
 {
-    if headers.is_empty() {
-        return SealedBlockBatch::empty(headers.peer, headers.range)
-    }
-
     let Batch {
         results: headers,
         peer,
         range,
-        ..
     } = headers;
     let maybe_txs = get_transactions(peer.clone(), range.clone(), p2p.as_ref()).await;
     match maybe_txs {
