@@ -319,7 +319,7 @@ pub struct AllReceipts {
 pub mod tests {
     use super::*;
     use crate::client::schema::Bytes;
-    use fuel_core_types::fuel_types::canonical::SerializedSize;
+    use fuel_core_types::fuel_types::canonical::Serialize;
 
     #[test]
     fn transparent_transaction_by_id_query_gql_output() {

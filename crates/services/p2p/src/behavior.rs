@@ -1,7 +1,7 @@
 use crate::{
     codecs::NetworkCodec,
     config::Config,
-    discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryEvent},
+    discovery::{DiscoveryBehaviour, DiscoveryConfig},
     gossipsub::{config::build_gossipsub_behaviour, topics::GossipTopic},
     peer_report::{PeerReportBehaviour, PeerReportEvent},
     request_response::messages::{NetworkResponse, RequestMessage},
@@ -18,11 +18,12 @@ use libp2p::{
     swarm::NetworkBehaviour,
     Multiaddr, PeerId,
 };
+use libp2p_kad::KademliaEvent;
 use tracing::{debug, error, log::warn};
 
 #[derive(Debug)]
 pub enum FuelBehaviourEvent {
-    Discovery(DiscoveryEvent),
+    Discovery(KademliaEvent),
     PeerReport(PeerReportEvent),
     Gossipsub(GossipsubEvent),
     RequestResponse(RequestResponseEvent<RequestMessage, NetworkResponse>),
@@ -169,8 +170,8 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
     }
 }
 
-impl From<DiscoveryEvent> for FuelBehaviourEvent {
-    fn from(event: DiscoveryEvent) -> Self {
+impl From<KademliaEvent> for FuelBehaviourEvent {
+    fn from(event: KademliaEvent) -> Self {
         FuelBehaviourEvent::Discovery(event)
     }
 }
