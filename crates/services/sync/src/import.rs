@@ -421,8 +421,7 @@ fn get_block_stream<
                 let p2p = p2p.clone();
                 async move {
                     let headers = headers.await.unwrap_or(Default::default());
-                    let headers =
-                        SealedHeaderBatch::new(peer_id.clone(), range.clone(), headers);
+                    let headers = SealedHeaderBatch::new(peer_id.clone(), range, headers);
                     get_blocks(p2p, headers).await
                 }
             }
