@@ -392,20 +392,24 @@ pub async fn check_single_tx(
         let consensus_params = &config.chain_config.consensus_parameters;
 
         let tx = tx
-            .into_checked_basic(current_height, consensus_params)?
-            .check_signatures(&consensus_params.chain_id)?;
+            .into_checked_basic(current_height, consensus_params)
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+            .check_signatures(&consensus_params.chain_id)
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
 
         let tx = tx
             .check_predicates_async::<TokioWithRayon>(&CheckPredicateParams::from(
                 consensus_params,
             ))
-            .await?;
+            .await
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
 
         debug_assert!(tx.checks().contains(Checks::All));
 
         tx
     } else {
-        tx.into_checked_basic(current_height, &config.chain_config.consensus_parameters)?
+        tx.into_checked_basic(current_height, &config.chain_config.consensus_parameters)
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?
     };
 
     Ok(tx)

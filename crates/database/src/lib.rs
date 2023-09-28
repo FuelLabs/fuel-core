@@ -61,7 +61,7 @@ impl From<TryFromSliceError> for Error {
 
 impl From<Error> for ExecutorError {
     fn from(e: Error) -> Self {
-        ExecutorError::StorageError(Box::new(StorageError::from(e)))
+        ExecutorError::StorageError(anyhow::anyhow!(StorageError::from(e)))
     }
 }
 

@@ -79,7 +79,7 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
-        canonical::SerializedSize,
+        canonical::Serialize,
         BlockHeight,
         MessageId,
     },
@@ -102,6 +102,7 @@ use fuel_core_types::{
         state::StateTransition,
         Backtrace as FuelBacktrace,
         Interpreter,
+        InterpreterError,
     },
     services::{
         block_producer::Components,
@@ -843,7 +844,7 @@ where
         let vm_result: StateTransition<_> = vm
             .transact(checked_tx.clone())
             .map_err(|error| ExecutorError::VmExecution {
-                error,
+                error: InterpreterError::Storage(anyhow::anyhow!(error)),
                 transaction_id: tx_id,
             })?
             .into();
@@ -2387,7 +2388,7 @@ mod tests {
         let gas_price = 1;
         let tx = TransactionBuilder::script(vec![], vec![])
             .add_unsigned_coin_input(
-                rng.gen(),
+                SecretKey::random(&mut rng),
                 rng.gen(),
                 rng.gen(),
                 rng.gen(),
@@ -3692,7 +3693,13 @@ mod tests {
     /// Helper to build transactions and a message in it for some of the message tests
     fn make_tx_and_message(rng: &mut StdRng, da_height: u64) -> (Transaction, Message) {
         let tx = TransactionBuilder::script(vec![], vec![])
-            .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), 1000, vec![])
+            .add_unsigned_message_input(
+                SecretKey::random(rng),
+                rng.gen(),
+                rng.gen(),
+                1000,
+                vec![],
+            )
             .finalize();
 
         let message = message_from_input(&tx.inputs()[0], da_height);
@@ -3758,9 +3765,9 @@ mod tests {
 
         let tx = TransactionBuilder::script(vec![], vec![])
             // Add `Input::MessageCoin`
-            .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), amount, vec![])
+            .add_unsigned_message_input(SecretKey::random(&mut rng), rng.gen(), rng.gen(), amount, vec![])
             // Add `Input::MessageData`
-            .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), amount, vec![0xff; 10])
+            .add_unsigned_message_input(SecretKey::random(&mut rng), rng.gen(), rng.gen(), amount, vec![0xff; 10])
             .add_output(Output::change(to, amount + amount, AssetId::BASE))
             .finalize();
         let tx_id = tx.id(&ChainId::default());
@@ -3821,9 +3828,9 @@ mod tests {
         let script = vec![op::ret(1)].into_iter().collect();
         let tx = TransactionBuilder::script(script, vec![])
             // Add `Input::MessageCoin`
-            .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), amount, vec![])
+            .add_unsigned_message_input(SecretKey::random(&mut rng), rng.gen(), rng.gen(), amount, vec![])
             // Add `Input::MessageData`
-            .add_unsigned_message_input(rng.gen(), rng.gen(), rng.gen(), amount, vec![0xff; 10])
+            .add_unsigned_message_input(SecretKey::random(&mut rng), rng.gen(), rng.gen(), amount, vec![0xff; 10])
             .add_output(Output::change(to, amount + amount, AssetId::BASE))
             .finalize();
         let tx_id = tx.id(&ChainId::default());
@@ -4072,7 +4079,7 @@ mod tests {
         let tx = TransactionBuilder::script(script.into_iter().collect(), vec![])
             .gas_limit(10000)
             .add_unsigned_coin_input(
-                rng.gen(),
+                SecretKey::random(&mut rng),
                 rng.gen(),
                 1000,
                 base_asset_id,
@@ -4150,7 +4157,7 @@ mod tests {
         let tx = TransactionBuilder::script(script.into_iter().collect(), vec![])
             .gas_limit(10000)
             .add_unsigned_coin_input(
-                rng.gen(),
+                SecretKey::random(&mut rng),
                 rng.gen(),
                 1000,
                 base_asset_id,

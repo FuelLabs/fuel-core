@@ -100,8 +100,9 @@ impl ConcreteStorage {
 
         let vm_database = Self::vm_database(&storage)?;
         let tx = Self::dummy_tx();
-        let checked_tx =
-            tx.into_checked_basic(vm_database.block_height()?, &self.params)?;
+        let checked_tx = tx
+            .into_checked_basic(vm_database.block_height()?, &self.params)
+            .map_err(|e| anyhow::anyhow!(e))?;
         self.tx
             .get_mut(&id)
             .map(|tx| tx.extend_from_slice(txs))
@@ -110,7 +111,7 @@ impl ConcreteStorage {
             });
 
         let mut vm = Interpreter::with_storage(vm_database, (&self.params).into());
-        vm.transact(checked_tx)?;
+        vm.transact(checked_tx).map_err(|e| anyhow::anyhow!(e))?;
         self.vm.insert(id.clone(), vm);
         self.db.insert(id.clone(), storage);
 
@@ -132,33 +133,27 @@ impl ConcreteStorage {
             .cloned()
             .unwrap_or(Self::dummy_tx());
 
-        let checked_tx =
-            tx.into_checked_basic(vm_database.block_height()?, &self.params)?;
+        let checked_tx = tx
+            .into_checked_basic(vm_database.block_height()?, &self.params)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let mut vm = Interpreter::with_storage(vm_database, (&self.params).into());
-        vm.transact(checked_tx)?;
+        vm.transact(checked_tx).map_err(|e| anyhow::anyhow!(e))?;
         self.vm.insert(id.clone(), vm).ok_or_else(|| {
-            InterpreterError::Io(io::Error::new(
-                io::ErrorKind::NotFound,
-                "The VM instance was not found",
-            ))
+            io::Error::new(io::ErrorKind::NotFound, "The VM instance was not found")
         })?;
         self.db.insert(id.clone(), storage);
         Ok(())
     }
 
-    pub fn exec(&mut self, id: &ID, op: Instruction) -> Result<(), InterpreterError> {
+    pub fn exec(&mut self, id: &ID, op: Instruction) -> anyhow::Result<()> {
         self.vm
             .get_mut(id)
             .map(|vm| vm.instruction(op))
-            .transpose()?
+            .transpose()
+            .map_err(|e| anyhow::anyhow!(e))?
             .map(|_| ())
-            .ok_or_else(|| {
-                InterpreterError::Io(io::Error::new(
-                    io::ErrorKind::NotFound,
-                    "The VM instance was not found",
-                ))
-            })
+            .ok_or_else(|| anyhow::anyhow!("The VM instance was not found"))
     }
 
     fn vm_database(storage: &DatabaseTransaction) -> anyhow::Result<VmDatabase> {
