@@ -74,14 +74,6 @@ impl<T> SourcePeer<T> {
         let data = f(self.data);
         SourcePeer { peer_id, data }
     }
-
-    /// Asref
-    pub fn as_ref(&self) -> SourcePeer<&T> {
-        SourcePeer {
-            peer_id: self.peer_id.clone(),
-            data: &self.data,
-        }
-    }
 }
 
 impl<T> GossipData<T> {
