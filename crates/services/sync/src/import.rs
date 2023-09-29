@@ -409,11 +409,11 @@ fn get_header_batch_stream<P: PeerToPeerPort + Send + Sync + 'static>(
 fn range_chunks(
     range: RangeInclusive<u32>,
     chunk_size: u32,
-) -> impl Iterator<Item = RangeInclusive<u32>> {
-    let end = *range.end();
+) -> impl Iterator<Item = Range<u32>> {
+    let end = *range.end() + 1;
     range.step_by(chunk_size as usize).map(move |chunk_start| {
         let block_end = (chunk_start + chunk_size).min(end);
-        chunk_start..=block_end
+        chunk_start..block_end
     })
 }
 
@@ -520,7 +520,7 @@ where
 }
 
 async fn get_headers_batch<P>(
-    range: RangeInclusive<u32>,
+    range: Range<u32>,
     p2p: Arc<P>,
 ) -> Result<SealedHeaderBatch, ImportError>
 where
@@ -528,12 +528,9 @@ where
 {
     tracing::debug!(
         "getting header range from {} to {} inclusive",
-        range.start(),
-        range.end()
+        range.start,
+        range.end
     );
-    let start = *range.start();
-    let end = *range.end() + 1;
-    let range = start..end;
     let result = get_sealed_block_headers(range.clone(), p2p.as_ref()).await;
     let sourced_headers = result?;
     let SourcePeer {
@@ -550,14 +547,12 @@ where
         })
         .map(|(header, _)| header)
         .collect::<Vec<_>>();
-    if let Some(expected_len) = end.checked_sub(start) {
-        if headers.len() != expected_len as usize {
-            report_peer(
-                p2p.as_ref(),
-                peer_id.clone(),
-                PeerReportReason::MissingBlockHeaders,
-            );
-        }
+    if headers.len() != range.len() as usize {
+        report_peer(
+            p2p.as_ref(),
+            peer_id.clone(),
+            PeerReportReason::MissingBlockHeaders,
+        );
     }
     Ok(Batch::new(peer_id, range.clone(), headers))
 }

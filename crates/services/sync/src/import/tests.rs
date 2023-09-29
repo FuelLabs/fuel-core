@@ -45,6 +45,10 @@ async fn test_import_0_to_5() {
             Ok(Some(v))
         });
 
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
     let mocks = Mocks {
         consensus_port,
         p2p,
@@ -53,7 +57,7 @@ async fn test_import_0_to_5() {
 
     let state = State::new(None, 5);
     let state = SharedMutex::new(state);
-    let v = test_import_inner(state, mocks, None).await;
+    let v = test_import_inner(state, mocks, None, params).await;
     let expected = (State::new(5, None), true);
     assert_eq!(v, expected);
 }
@@ -87,6 +91,10 @@ async fn test_import_3_to_5() {
             Ok(Some(v))
         });
 
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
     let mocks = Mocks {
         consensus_port,
         p2p,
@@ -95,8 +103,73 @@ async fn test_import_3_to_5() {
 
     let state = State::new(3, 5);
     let state = SharedMutex::new(state);
-    let v = test_import_inner(state, mocks, None).await;
+    let v = test_import_inner(state, mocks, None, params).await;
     let expected = (State::new(5, None), true);
+    assert_eq!(v, expected);
+}
+
+#[tokio::test]
+async fn test_import_0_to_499() {
+    // The observed block height
+    let end = 499;
+    // The number of blocks in range 0..end
+    let n = end + 1;
+    // The number of batches per request
+    let header_batch_size = 10;
+
+    let mut consensus_port = MockConsensusPort::default();
+
+    // Happens once for each header
+    let times = n;
+    consensus_port
+        .expect_check_sealed_header()
+        .times(times)
+        .returning(|_| Ok(true));
+
+    // Happens once for each batch
+    let times = n.div_ceil(header_batch_size);
+    consensus_port
+        .expect_await_da_height()
+        .times(times)
+        .returning(|_| Ok(()));
+
+    let mut p2p = MockPeerToPeerPort::default();
+
+    // Happens once for each batch
+    let times = n.div_ceil(header_batch_size);
+    p2p.expect_get_sealed_block_headers()
+        .times(times)
+        .returning(|range| {
+            let peer = random_peer();
+            let headers = Some(range.map(empty_header).collect());
+            let headers = peer.bind(headers);
+            Ok(headers)
+        });
+
+    // Happens once for each batch
+    let times = n.div_ceil(header_batch_size);
+    p2p.expect_get_transactions()
+        .times(times)
+        .returning(|block_ids| {
+            let data = block_ids.data;
+            let v = data.into_iter().map(|_| Transactions::default()).collect();
+            Ok(Some(v))
+        });
+
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: header_batch_size as u32,
+    };
+    let mocks = Mocks {
+        consensus_port,
+        p2p,
+        executor: DefaultMocks::times([n]),
+    };
+
+    let state = State::new(None, end as u32);
+    let state = SharedMutex::new(state);
+    let v = test_import_inner(state, mocks, None, params).await;
+    let expected = (State::new(end as u32, None), true);
     assert_eq!(v, expected);
 }
 
@@ -135,9 +208,13 @@ async fn import__signature_fails_on_header_5_only() {
         p2p,
         executor: DefaultMocks::times([1]),
     };
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
 
     // when
-    let res = test_import_inner(state, mocks, None).await;
+    let res = test_import_inner(state, mocks, None, params).await;
 
     // then
     assert_eq!((State::new(4, None), false), res);
@@ -179,9 +256,13 @@ async fn import__signature_fails_on_header_4_only() {
         p2p,
         executor: DefaultMocks::times([0]),
     };
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
 
     // when
-    let res = test_import_inner(state, mocks, None).await;
+    let res = test_import_inner(state, mocks, None, params).await;
 
     // then
     assert_eq!((State::new(3, None), false), res);
@@ -206,9 +287,13 @@ async fn import__header_not_found() {
         consensus_port: DefaultMocks::times([0]),
         executor: DefaultMocks::times([0]),
     };
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
 
     // when
-    let res = test_import_inner(state, mocks, None).await;
+    let res = test_import_inner(state, mocks, None, params).await;
 
     // then
     assert_eq!((State::new(3, None), false), res);
@@ -233,9 +318,13 @@ async fn import__header_response_incomplete() {
         consensus_port: DefaultMocks::times([0]),
         executor: DefaultMocks::times([0]),
     };
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
 
     // when
-    let res = test_import_inner(state, mocks, None).await;
+    let res = test_import_inner(state, mocks, None, params).await;
 
     // then
     assert_eq!((State::new(3, None), false), res);
@@ -268,9 +357,13 @@ async fn import__header_5_not_found() {
         consensus_port: DefaultMocks::times([1]),
         executor: DefaultMocks::times([1]),
     };
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
 
     // when
-    let res = test_import_inner(state, mocks, None).await;
+    let res = test_import_inner(state, mocks, None, params).await;
 
     // then
     assert_eq!((State::new(4, None), false), res);
@@ -296,9 +389,13 @@ async fn import__header_4_not_found() {
         consensus_port: DefaultMocks::times([0]),
         executor: DefaultMocks::times([0]),
     };
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
 
     // when
-    let res = test_import_inner(state, mocks, None).await;
+    let res = test_import_inner(state, mocks, None, params).await;
 
     // then
     assert_eq!((State::new(3, None), false), res);
@@ -336,9 +433,13 @@ async fn import__transactions_not_found() {
         consensus_port,
         executor: DefaultMocks::times([0]),
     };
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
 
     // when
-    let res = test_import_inner(state, mocks, None).await;
+    let res = test_import_inner(state, mocks, None, params).await;
 
     // then
     assert_eq!((State::new(3, None), false), res);
@@ -386,9 +487,13 @@ async fn import__transactions_not_found_for_header_4() {
         consensus_port,
         executor: DefaultMocks::times([0]),
     };
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
 
     // when
-    let res = test_import_inner(state, mocks, None).await;
+    let res = test_import_inner(state, mocks, None, params).await;
 
     // then
     assert_eq!((State::new(3, None), false), res);
@@ -427,9 +532,13 @@ async fn import__transactions_not_found_for_header_5() {
         consensus_port,
         executor: DefaultMocks::times([1]),
     };
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
 
     // when
-    let res = test_import_inner(state, mocks, None).await;
+    let res = test_import_inner(state, mocks, None, params).await;
 
     // then
     assert_eq!((State::new(4, None), false), res);
@@ -450,9 +559,13 @@ async fn import__p2p_error() {
         consensus_port: DefaultMocks::times([0]),
         executor: DefaultMocks::times([0]),
     };
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
 
     // when
-    let res = test_import_inner(state, mocks, None).await;
+    let res = test_import_inner(state, mocks, None, params).await;
 
     // then
     assert_eq!((State::new(3, None), false), res);
@@ -490,9 +603,13 @@ async fn import__p2p_error_on_4_transactions() {
         consensus_port,
         executor: DefaultMocks::times([0]),
     };
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
 
     // when
-    let res = test_import_inner(state, mocks, None).await;
+    let res = test_import_inner(state, mocks, None, params).await;
 
     // then
     assert_eq!((State::new(3, None), false), res);
@@ -534,9 +651,13 @@ async fn import__consensus_error_on_4() {
         p2p,
         executor: DefaultMocks::times([0]),
     };
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
 
     // when
-    let res = test_import_inner(state, mocks, None).await;
+    let res = test_import_inner(state, mocks, None, params).await;
 
     // then
     assert_eq!((State::new(3, None), false), res);
@@ -584,9 +705,13 @@ async fn import__consensus_error_on_5() {
         p2p,
         executor: DefaultMocks::times([1]),
     };
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
 
     // when
-    let res = test_import_inner(state, mocks, None).await;
+    let res = test_import_inner(state, mocks, None, params).await;
 
     // then
     assert_eq!((State::new(4, None), false), res);
@@ -640,9 +765,13 @@ async fn import__execution_error_on_header_4() {
         p2p,
         executor,
     };
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
 
     // when
-    let res = test_import_inner(state, mocks, None).await;
+    let res = test_import_inner(state, mocks, None, params).await;
 
     // then
     assert_eq!((State::new(3, None), false), res);
@@ -696,9 +825,13 @@ async fn import__execution_error_on_header_5() {
         p2p,
         executor,
     };
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
 
     // when
-    let res = test_import_inner(state, mocks, None).await;
+    let res = test_import_inner(state, mocks, None, params).await;
 
     // then
     assert_eq!((State::new(4, None), false), res);
@@ -720,9 +853,13 @@ async fn signature_always_fails() {
         p2p: DefaultMocks::times([0]),
         executor: DefaultMocks::times([0]),
     };
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
 
     // when
-    let res = test_import_inner(state, mocks, None).await;
+    let res = test_import_inner(state, mocks, None, params).await;
 
     // then
     assert_eq!((State::new(3, None), false), res);
@@ -768,9 +905,13 @@ async fn import__can_work_in_two_loops() {
         p2p,
         executor: DefaultMocks::times([3]),
     };
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
 
     // when
-    let res = test_import_inner(s, mocks, Some(c)).await;
+    let res = test_import_inner(s, mocks, Some(c), params).await;
 
     // then
     assert_eq!((State::new(6, None), true), res);
@@ -780,6 +921,7 @@ async fn test_import_inner(
     state: SharedMutex<State>,
     mocks: Mocks,
     count: Option<Count>,
+    params: Config,
 ) -> (State, bool) {
     let notify = Arc::new(Notify::new());
     let Mocks {
@@ -787,10 +929,6 @@ async fn test_import_inner(
         mut p2p,
         executor,
     } = mocks;
-    let params = Config {
-        block_stream_buffer_size: 10,
-        header_batch_size: 10,
-    };
     p2p.expect_report_peer().returning(|_, _| Ok(()));
     let p2p = Arc::new(p2p);
 
