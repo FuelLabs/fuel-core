@@ -1604,22 +1604,6 @@ mod tests {
                                             }
                                         });
                                     }
-                                    RequestMessage::Transactions(_) => {
-                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::Transactions(tx_orchestrator)).is_ok());
-                                        let tx_test_end = tx_test_end.clone();
-
-                                        tokio::spawn(async move {
-                                            let response_message = rx_orchestrator.await;
-
-                                            if let Ok(Some(transactions)) = response_message {
-                                                let _ = tx_test_end.send(transactions.len() == 5).await;
-                                            } else {
-                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
-                                                let _ = tx_test_end.send(false).await;
-                                            }
-                                        });
-                                    }
                                     RequestMessage::Transactions2(_) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
                                         assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::Transactions2(tx_orchestrator)).is_ok());
@@ -1664,7 +1648,7 @@ mod tests {
                             }
                             RequestMessage::Transactions2(_) => {
                                 let transactions = (0..5).map(|_| Transaction::default_test_tx()).collect();
-                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::Transactions(Some(Arc::new(transactions))));
+                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::Transactions2(Some(Arc::new(transactions))));
                             }
                         }
                     }
@@ -1678,8 +1662,7 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn request_response_works_with_transactions() {
-        request_response_works_with(RequestMessage::Transactions(BlockId::default()))
-            .await
+        request_response_works_with(RequestMessage::Transactions2(2..6)).await
     }
 
     #[tokio::test]
