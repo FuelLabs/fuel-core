@@ -14,17 +14,7 @@ use crate::{
 };
 use fuel_core_types::services::p2p::Transactions;
 
-// use test_case::test_case;
-
 use super::*;
-
-// #[test_case(State::new(None, 5), Mocks::times([6]) => (State::new(5, None), true) ; "executes 5")]
-// #[test_case(State::new(3, 5), Mocks::times([2]) => (State::new(5, None), true) ; "executes 3 to 5")]
-// #[tokio::test]
-// async fn test_import(state: State, mocks: Mocks) -> (State, bool) {
-//     let state = SharedMutex::new(state);
-//     test_import_inner(state, mocks, None).await
-// }
 
 #[tokio::test]
 async fn test_import_0_to_5() {
