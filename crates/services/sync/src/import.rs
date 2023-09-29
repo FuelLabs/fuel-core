@@ -157,11 +157,11 @@ impl<T> Batch<T> {
 type SealedHeaderBatch = Batch<SealedBlockHeader>;
 type SealedBlockBatch = Batch<SealedBlock>;
 
-impl SealedBlockBatch {
-    fn err(&self) -> Option<ImportError> {
-        self.is_err().then(|| ImportError::MissingTransactions)
-    }
-}
+// impl SealedBlockBatch {
+//     fn err(&self) -> Option<ImportError> {
+//         self.is_err().then(|| ImportError::MissingTransactions)
+//     }
+// }
 
 #[derive(Debug, derive_more::Display)]
 enum ImportError {
@@ -257,28 +257,28 @@ where
             p2p.clone(),
             consensus.clone(),
         );
-        let range = *range.start()..(*range.end() + 1);
+        // let range = *range.start()..(*range.end() + 1);
         let result = block_stream
             .map({
-                let peer = peer.clone();
-                let range = range.clone();
+                // let peer = peer.clone();
+                // let range = range.clone();
                 move |stream_block_batch| {
                     let shutdown_guard = shutdown_guard.clone();
                     let shutdown_signal = shutdown_signal.clone();
-                    let peer = peer.clone();
-                    let range = range.clone();
+                    // let peer = peer.clone();
+                    // let range = range.clone();
                     tokio::spawn(async move {
                         // Hold a shutdown sender for the lifetime of the spawned task
                         let _shutdown_guard = shutdown_guard.clone();
                         let mut shutdown_signal = shutdown_signal.clone();
-                        let peer = peer.clone();
-                        let range = range.clone();
+                        // let peer = peer.clone();
+                        // let range = range.clone();
                         tokio::select! {
                         // Stream a batch of blocks
-                        blocks = stream_block_batch => blocks,
+                        blocks = stream_block_batch => Some(blocks),
                         // If a shutdown signal is received during the stream, terminate early and
                         // return an empty response
-                        _ = shutdown_signal.while_started() => Batch::empty(peer, range)
+                        _ = shutdown_signal.while_started() => None
                     }
                     }).map(|task| task.map_err(ImportError::JoinError))
                 }
@@ -293,40 +293,41 @@ where
                     tracing::info!("In progress import stream shutting down");
                 }
             })
-            .map({
-                let peer = peer.clone();
-                let range = range.clone();
-                move |result| result.unwrap_or({
-                    let peer = peer.clone();
-                    let range = range.clone();
-                    SealedBlockBatch::empty(peer, range)
-                })
-            })
+            .into_scan_none_or_err()
+            .scan_none_or_err()
+            // .map({
+            //     let peer = peer.clone();
+            //     let range = range.clone();
+            //     move |result| result.unwrap_or({
+            //         let peer = peer.clone();
+            //         let range = range.clone();
+            //         SealedBlockBatch::empty(peer, range)
+            //     })
+            // })
             .then({
                 let peer = peer.clone();
-                let range = range.clone();
+                // let range = range.clone();
                     move |batch| {
                         let peer = peer.clone();
-                        let range = range.clone();
                         async move {
-                            let err = batch.err();
-                            let sealed_blocks = futures::stream::iter(batch.results);
+                            let batch = batch?;
+                            let error = batch.is_err().then(|| ImportError::MissingTransactions);
+                            let results = batch.results;
+                            let sealed_blocks = futures::stream::iter(results);
                             let res = sealed_blocks.then(|sealed_block| async {
                                 execute_and_commit(executor.as_ref(), state, sealed_block).await
-                            }).try_collect::<Vec<_>>().await.and_then(|v| err.map_or(Ok(v), Err));
-                            match res {
-                                Ok(v) => {
+                            }).try_collect::<Vec<_>>().await.and_then(|v| error.map_or(Ok(v), Err));
+                            match &res {
+                                Ok(_) => {
                                     report_peer(p2p.as_ref(), peer.clone(), PeerReportReason::SuccessfulBlockImport);
-                                    Batch::new(peer, range, v)
                                 },
                                 Err(e) => {
                                     // If this fails, then it means that consensus has approved a block that is invalid.
                                     // This would suggest a more serious issue than a bad peer, e.g. a fork or an out-of-date client.
                                     tracing::error!("Failed to execute and commit block from peer {:?}: {:?}", peer, e);
-                                    Batch::empty(peer, range)
-
                                 },
-                            }
+                            };
+                            res
                         }
                         .instrument(tracing::debug_span!("execute_and_commit"))
                         .in_current_span()
@@ -340,8 +341,11 @@ where
             // Count the number of successfully executed blocks and
             // find any errors.
             // Fold the stream into a count and any errors.
-            .fold(0usize, |count, batch| async move {
-                count + batch.results.len()
+            .fold(0usize, |count, result| async move {
+                match result {
+                    Ok(batch) => count + batch.len(),
+                    Err(_) => count
+                }
             })
             .await;
 
@@ -708,6 +712,10 @@ where
 
 /// Extra stream utilities.
 trait StreamUtil: Sized {
+    fn into_scan_none_or_err(self) -> ScanNoneErr<Self> {
+        ScanNoneErr(self)
+    }
+
     fn into_scan_err(self) -> ScanErr<Self> {
         ScanErr(self)
     }
@@ -716,12 +724,34 @@ trait StreamUtil: Sized {
 impl<S> StreamUtil for S {}
 
 struct ScanErr<S>(S);
+struct ScanNoneErr<S>(S);
+
+impl<S> ScanNoneErr<S> {
+    /// Scan the stream for `None` or errors.
+    fn scan_none_or_err<'a, T: 'a>(
+        self,
+    ) -> impl Stream<Item = Result<T, ImportError>> + 'a
+    where
+        S: Stream<Item = Result<Option<T>, ImportError>> + Send + 'a,
+    {
+        let stream = self.0.boxed();
+        futures::stream::unfold((false, stream), |(mut is_err, mut stream)| async move {
+            if is_err {
+                None
+            } else {
+                let result = stream.next().await?;
+                is_err = result.is_err();
+                result.transpose().map(|result| (result, (is_err, stream)))
+            }
+        })
+    }
+}
 
 impl<S> ScanErr<S> {
     /// Scan the stream for errors.
-    fn scan_err<'a, T: 'a>(self) -> impl Stream<Item = Batch<T>> + 'a
+    fn scan_err<'a, T: 'a>(self) -> impl Stream<Item = Result<T, ImportError>> + 'a
     where
-        S: Stream<Item = Batch<T>> + Send + 'a,
+        S: Stream<Item = Result<T, ImportError>> + Send + 'a,
     {
         let stream = self.0.boxed::<'a>();
         futures::stream::unfold((false, stream), |(mut err, mut stream)| async move {
