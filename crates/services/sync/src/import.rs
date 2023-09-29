@@ -487,7 +487,7 @@ where
         .get_sealed_block_headers(range)
         .await
         .trace_err("Failed to get headers");
-    let sorted_headers = match res {
+    match res {
         Ok(sourced_headers) => {
             let sourced = sourced_headers.map(|headers| match headers {
                 None => vec![],
@@ -496,8 +496,7 @@ where
             Ok(sourced)
         }
         Err(e) => Err(ImportError::Other(e)),
-    };
-    sorted_headers
+    }
 }
 
 async fn get_transactions<P>(

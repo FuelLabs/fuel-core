@@ -35,8 +35,7 @@ pub use pressure_peer_to_peer::PressurePeerToPeer;
 pub fn random_peer() -> PeerId {
     let mut rng = StdRng::seed_from_u64(0xF00DF00D);
     let bytes = rng.gen::<[u8; 32]>().to_vec();
-    let peer_id = PeerId::from(bytes);
-    peer_id
+    PeerId::from(bytes)
 }
 
 pub fn empty_header<I: Into<BlockHeight>>(i: I) -> SealedBlockHeader {
