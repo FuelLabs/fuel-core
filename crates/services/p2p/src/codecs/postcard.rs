@@ -274,13 +274,11 @@ impl ProtocolName for MessageExchangePostcardProtocol {
 
 #[cfg(test)]
 mod tests {
-    use fuel_core_types::blockchain::primitives::BlockId;
-
     use super::*;
 
     #[test]
     fn test_request_size_fits() {
-        let m = RequestMessage::Transactions2(BlockId::default());
+        let m = RequestMessage::Transactions2(2..6);
         assert!(postcard::to_stdvec(&m).unwrap().len() <= MAX_REQUEST_SIZE);
     }
 }

@@ -696,7 +696,6 @@ mod tests {
                 BlockHeader,
                 PartialBlockHeader,
             },
-            primitives::BlockId,
             SealedBlock,
             SealedBlockHeader,
         },
@@ -704,7 +703,10 @@ mod tests {
             Transaction,
             TransactionBuilder,
         },
-        services::p2p::GossipsubMessageAcceptance,
+        services::p2p::{
+            GossipsubMessageAcceptance,
+            Transactions,
+        },
     };
     use futures::{
         future::join_all,
@@ -1647,7 +1649,8 @@ mod tests {
                                 let _ = node_b.send_response_msg(*request_id, OutboundResponse::SealedHeaders(Some(sealed_headers)));
                             }
                             RequestMessage::Transactions2(_) => {
-                                let transactions = (0..5).map(|_| Transaction::default_test_tx()).collect();
+                                let txs = (0..5).map(|_| Transaction::default_test_tx()).collect();
+                                let transactions = vec![Transactions(txs)];
                                 let _ = node_b.send_response_msg(*request_id, OutboundResponse::Transactions2(Some(Arc::new(transactions))));
                             }
                         }
