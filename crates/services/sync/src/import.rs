@@ -547,7 +547,7 @@ where
         })
         .map(|(header, _)| header)
         .collect::<Vec<_>>();
-    if headers.len() != range.len() as usize {
+    if headers.len() != range.len() {
         report_peer(
             p2p.as_ref(),
             peer_id.clone(),

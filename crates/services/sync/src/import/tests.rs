@@ -16,6 +16,10 @@ use fuel_core_types::services::p2p::Transactions;
 
 use super::*;
 
+fn div_ceil(divisor: usize, dividend: usize) -> usize {
+    (divisor + (dividend - 1)) / dividend
+}
+
 #[tokio::test]
 async fn test_import_0_to_5() {
     let mut consensus_port = MockConsensusPort::default();
@@ -127,7 +131,7 @@ async fn test_import_0_to_499() {
         .returning(|_| Ok(true));
 
     // Happens once for each batch
-    let times = n.div_ceil(header_batch_size);
+    let times = div_ceil(n, header_batch_size);
     consensus_port
         .expect_await_da_height()
         .times(times)
@@ -136,7 +140,7 @@ async fn test_import_0_to_499() {
     let mut p2p = MockPeerToPeerPort::default();
 
     // Happens once for each batch
-    let times = n.div_ceil(header_batch_size);
+    let times = div_ceil(n, header_batch_size);
     p2p.expect_get_sealed_block_headers()
         .times(times)
         .returning(|range| {
@@ -147,7 +151,7 @@ async fn test_import_0_to_499() {
         });
 
     // Happens once for each batch
-    let times = n.div_ceil(header_batch_size);
+    let times = div_ceil(n, header_batch_size);
     p2p.expect_get_transactions()
         .times(times)
         .returning(|block_ids| {
