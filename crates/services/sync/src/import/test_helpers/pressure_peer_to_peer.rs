@@ -1,6 +1,7 @@
 use crate::{
     import::test_helpers::{
         empty_header,
+        random_peer,
         SharedCounts,
     },
     ports::{
@@ -19,22 +20,10 @@ use fuel_core_types::{
         Transactions,
     },
 };
-use rand::{
-    prelude::StdRng,
-    Rng,
-    SeedableRng,
-};
 use std::{
     ops::Range,
     time::Duration,
 };
-
-fn random_peer() -> PeerId {
-    let mut rng = StdRng::seed_from_u64(0xF00DF00D);
-    let bytes = rng.gen::<[u8; 32]>().to_vec();
-    let peer_id = PeerId::from(bytes);
-    peer_id
-}
 
 pub struct PressurePeerToPeer {
     p2p: MockPeerToPeerPort,

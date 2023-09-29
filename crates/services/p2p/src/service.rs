@@ -549,9 +549,6 @@ where
                                     }
                                 }
                             }
-                            RequestMessage::Transactions(_block_id) => {
-                                todo!()
-                            }
                             RequestMessage::Transactions2(range) => {
                                 match self.db.get_transactions_2(range.clone()) {
                                     Ok(maybe_transactions) => {
