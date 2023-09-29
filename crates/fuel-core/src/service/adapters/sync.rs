@@ -49,34 +49,23 @@ impl PeerToPeerPort for P2PAdapter {
         }
     }
 
-    async fn select_peer(
-        &self,
-        block_height: BlockHeight,
-    ) -> anyhow::Result<Option<PeerId>> {
-        if let Some(service) = &self.service {
-            let peer_id = service.select_peer(block_height).await?;
-            Ok(peer_id)
-        } else {
-            Err(anyhow::anyhow!("No P2P service available"))
-        }
-    }
-
     async fn get_sealed_block_headers(
         &self,
-        block_height_range: SourcePeer<Range<u32>>,
-    ) -> SourcePeer<anyhow::Result<Option<Vec<SealedBlockHeader>>>> {
-        let SourcePeer {
-            peer_id,
-            data: block_height_range,
-        } = block_height_range;
+        block_height_range: Range<u32>,
+    ) -> anyhow::Result<SourcePeer<Option<Vec<SealedBlockHeader>>>> {
         let result = if let Some(service) = &self.service {
-            service
-                .get_sealed_block_headers(peer_id.clone().into(), block_height_range)
-                .await
+            service.get_sealed_block_headers(block_height_range).await
         } else {
             Err(anyhow::anyhow!("No P2P service available"))
         };
-        peer_id.bind(result)
+        match result {
+            Ok((peer_id, headers)) => {
+                let peer_id: PeerId = peer_id.into();
+                let headers = peer_id.bind(headers);
+                Ok(headers)
+            }
+            Err(err) => Err(err),
+        }
     }
 
     async fn get_transactions(

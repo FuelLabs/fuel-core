@@ -33,6 +33,13 @@ use std::{
     time::Duration,
 };
 
+fn random_peer() -> PeerId {
+    let mut rng = StdRng::seed_from_u64(0xF00DF00D);
+    let bytes = rng.gen::<[u8; 32]>().to_vec();
+    let peer_id = PeerId::from(bytes);
+    peer_id
+}
+
 pub struct PressurePeerToPeer {
     p2p: MockPeerToPeerPort,
     durations: [Duration; 2],
@@ -45,24 +52,14 @@ impl PeerToPeerPort for PressurePeerToPeer {
         self.p2p.height_stream()
     }
 
-    async fn select_peer(
-        &self,
-        _block_height: BlockHeight,
-    ) -> anyhow::Result<Option<PeerId>> {
-        let mut rng = StdRng::seed_from_u64(0xF00DF00D);
-        let bytes = rng.gen::<[u8; 32]>().to_vec();
-        let peer_id = PeerId::from(bytes);
-        Ok(Some(peer_id))
-    }
-
     async fn get_sealed_block_headers(
         &self,
-        block_height_range: SourcePeer<Range<u32>>,
-    ) -> SourcePeer<anyhow::Result<Option<Vec<SealedBlockHeader>>>> {
+        block_height_range: Range<u32>,
+    ) -> anyhow::Result<SourcePeer<Option<Vec<SealedBlockHeader>>>> {
         self.counts.apply(|c| c.inc_headers());
         tokio::time::sleep(self.durations[0]).await;
         self.counts.apply(|c| c.dec_headers());
-        for _ in block_height_range.data.clone() {
+        for _ in block_height_range.clone() {
             self.counts.apply(|c| c.inc_blocks());
         }
         self.p2p.get_sealed_block_headers(block_height_range).await
@@ -104,14 +101,14 @@ impl PressurePeerToPeer {
     pub fn new(counts: SharedCounts, delays: [Duration; 2]) -> Self {
         let mut mock = MockPeerToPeerPort::default();
         mock.expect_get_sealed_block_headers().returning(|range| {
-            range.map(|range| {
-                let range = range
-                    .clone()
-                    .map(BlockHeight::from)
-                    .map(empty_header)
-                    .collect();
-                Ok(Some(range))
-            })
+            let peer = random_peer();
+            let headers = range
+                .clone()
+                .map(BlockHeight::from)
+                .map(empty_header)
+                .collect();
+            let headers = peer.bind(Some(headers));
+            Ok(headers)
         });
         mock.expect_get_transactions()
             .returning(|_| Ok(Some(vec![])));

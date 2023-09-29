@@ -566,7 +566,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 }
             }
             FuelBehaviourEvent::RequestResponse(req_res_event) => match req_res_event {
-                RequestResponseEvent::Message { message, .. } => match message {
+                RequestResponseEvent::Message { peer, message } => match message {
                     RequestResponseMessage::Request {
                         request,
                         channel,
@@ -624,7 +624,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                                 Some(ResponseChannelItem::SealedHeaders(channel)),
                                 Ok(ResponseMessage::SealedHeaders(headers)),
                             ) => {
-                                if channel.send(headers).is_err() {
+                                if channel.send((peer, headers)).is_err() {
                                     debug!(
                                         "Failed to send through the channel for {:?}",
                                         request_id
@@ -1606,7 +1606,7 @@ mod tests {
 
                                             let expected = arbitrary_headers_for_range(range.clone());
 
-                                            if let Ok(sealed_headers) = response_message {
+                                            if let Ok((_, sealed_headers)) = response_message {
                                                 let check = expected.iter().zip(sealed_headers.unwrap().iter()).all(|(a, b)| eq_except_metadata(a, b));
                                                 let _ = tx_test_end.send(check).await;
                                             } else {

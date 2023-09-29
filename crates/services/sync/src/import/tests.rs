@@ -1,7 +1,10 @@
 #![allow(non_snake_case)]
 
 use crate::{
-    import::test_helpers::empty_header,
+    import::test_helpers::{
+        empty_header,
+        random_peer,
+    },
     ports::{
         MockBlockImporterPort,
         MockConsensusPort,
@@ -10,6 +13,7 @@ use crate::{
     },
 };
 use fuel_core_types::services::p2p::Transactions;
+
 // use test_case::test_case;
 
 use super::*;
@@ -35,18 +39,13 @@ async fn test_import_0_to_5() {
         .returning(|_| Ok(()));
 
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_select_peer().times(1).returning(|_| {
-        let bytes = vec![1u8, 2, 3, 4, 5];
-        let peer_id = bytes.into();
-        Ok(Some(peer_id))
-    });
     p2p.expect_get_sealed_block_headers()
         .times(1)
         .returning(|range| {
-            range.map(|range| {
-                let headers = range.clone().map(|h| empty_header(h.into())).collect();
-                Ok(Some(headers))
-            })
+            let peer = random_peer();
+            let headers = Some(range.map(empty_header).collect());
+            let headers = peer.bind(headers);
+            Ok(headers)
         });
     p2p.expect_get_transactions_2()
         .times(1)
@@ -82,18 +81,13 @@ async fn test_import_3_to_5() {
         .returning(|_| Ok(()));
 
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_select_peer().times(1).returning(|_| {
-        let bytes = vec![1u8, 2, 3, 4, 5];
-        let peer_id = bytes.into();
-        Ok(Some(peer_id))
-    });
     p2p.expect_get_sealed_block_headers()
         .times(1)
         .returning(|range| {
-            range.map(|range| {
-                let headers = range.clone().map(|h| empty_header(h.into())).collect();
-                Ok(Some(headers))
-            })
+            let peer = random_peer();
+            let headers = Some(range.map(empty_header).collect());
+            let headers = peer.bind(headers);
+            Ok(headers)
         });
     p2p.expect_get_transactions_2()
         .times(1)
@@ -129,18 +123,13 @@ async fn import__signature_fails_on_header_5_only() {
         .times(1)
         .returning(|_| Ok(()));
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_select_peer().times(1).returning(|_| {
-        let bytes = vec![1u8, 2, 3, 4, 5];
-        let peer_id = bytes.into();
-        Ok(Some(peer_id))
-    });
     p2p.expect_get_sealed_block_headers()
         .times(1)
         .returning(|range| {
-            range.map(|range| {
-                let headers = range.clone().map(|h| empty_header(h.into())).collect();
-                Ok(Some(headers))
-            })
+            let peer = random_peer();
+            let headers = Some(range.map(empty_header).collect());
+            let headers = peer.bind(headers);
+            Ok(headers)
         });
     p2p.expect_get_transactions_2()
         .times(1)
@@ -178,18 +167,13 @@ async fn import__signature_fails_on_header_4_only() {
         .returning(|_| Ok(()));
 
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_select_peer().times(1).returning(|_| {
-        let bytes = vec![1u8, 2, 3, 4, 5];
-        let peer_id = bytes.into();
-        Ok(Some(peer_id))
-    });
     p2p.expect_get_sealed_block_headers()
         .times(1)
         .returning(|range| {
-            range.map(|range| {
-                let headers = range.clone().map(|h| empty_header(h.into())).collect();
-                Ok(Some(headers))
-            })
+            let peer = random_peer();
+            let headers = Some(range.map(empty_header).collect());
+            let headers = peer.bind(headers);
+            Ok(headers)
         });
     p2p.expect_get_transactions_2()
         .times(0)
@@ -217,14 +201,14 @@ async fn import__signature_fails_on_header_4_only() {
 async fn import__header_not_found() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_select_peer().times(1).returning(|_| {
-        let bytes = vec![1u8, 2, 3, 4, 5];
-        let peer_id = bytes.into();
-        Ok(Some(peer_id))
-    });
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|range| range.map(|_| Ok(Some(Vec::new()))));
+        .returning(|_| {
+            let peer = random_peer();
+            let headers = Some(Vec::new());
+            let headers = peer.bind(headers);
+            Ok(headers)
+        });
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
@@ -244,14 +228,14 @@ async fn import__header_not_found() {
 async fn import__header_response_incomplete() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_select_peer().times(1).returning(|_| {
-        let bytes = vec![1u8, 2, 3, 4, 5];
-        let peer_id = bytes.into();
-        Ok(Some(peer_id))
-    });
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|range| range.map(|_| Ok(None)));
+        .returning(|_| {
+            let peer = random_peer();
+            let headers = None;
+            let headers = peer.bind(headers);
+            Ok(headers)
+        });
 
     let state = State::new(3, 5).into();
     let mocks = Mocks {
@@ -271,14 +255,15 @@ async fn import__header_response_incomplete() {
 async fn import__header_5_not_found() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_select_peer().times(1).returning(|_| {
-        let bytes = vec![1u8, 2, 3, 4, 5];
-        let peer_id = bytes.into();
-        Ok(Some(peer_id))
-    });
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|range| range.map(|_| Ok(Some(vec![empty_header(4.into())]))));
+        .returning(|_| {
+            let peer = random_peer();
+            let headers = Some(vec![empty_header(4)]);
+            let headers = peer.bind(headers);
+            Ok(headers)
+        });
+
     p2p.expect_get_transactions_2()
         .times(1)
         .returning(|block_ids| {
@@ -305,14 +290,14 @@ async fn import__header_5_not_found() {
 async fn import__header_4_not_found() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_select_peer().times(1).returning(|_| {
-        let bytes = vec![1u8, 2, 3, 4, 5];
-        let peer_id = bytes.into();
-        Ok(Some(peer_id))
-    });
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|range| range.map(|_| Ok(Some(vec![empty_header(5.into())]))));
+        .returning(|_| {
+            let peer = random_peer();
+            let headers = Some(vec![empty_header(5)]);
+            let headers = peer.bind(headers);
+            Ok(headers)
+        });
     p2p.expect_get_transactions_2().times(0);
 
     let state = State::new(3, 5).into();
@@ -343,15 +328,13 @@ async fn import__transactions_not_found() {
         .returning(|_| Ok(()));
 
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_select_peer().times(1).returning(|_| {
-        let bytes = vec![1u8, 2, 3, 4, 5];
-        let peer_id = bytes.into();
-        Ok(Some(peer_id))
-    });
     p2p.expect_get_sealed_block_headers()
         .times(1)
         .returning(|range| {
-            range.map(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])))
+            let peer = random_peer();
+            let headers = Some(range.map(empty_header).collect());
+            let headers = peer.bind(headers);
+            Ok(headers)
         });
     p2p.expect_get_transactions_2()
         .times(1)
@@ -385,15 +368,13 @@ async fn import__transactions_not_found_for_header_4() {
         .returning(|_| Ok(()));
 
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_select_peer().times(1).returning(|_| {
-        let bytes = vec![1u8, 2, 3, 4, 5];
-        let peer_id = bytes.into();
-        Ok(Some(peer_id))
-    });
     p2p.expect_get_sealed_block_headers()
         .times(1)
         .returning(|range| {
-            range.map(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])))
+            let peer = random_peer();
+            let headers = Some(range.map(empty_header).collect());
+            let headers = peer.bind(headers);
+            Ok(headers)
         });
     let mut height = 3;
     p2p.expect_get_transactions_2()
@@ -437,15 +418,13 @@ async fn import__transactions_not_found_for_header_5() {
         .returning(|_| Ok(()));
 
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_select_peer().times(1).returning(|_| {
-        let bytes = vec![1u8, 2, 3, 4, 5];
-        let peer_id = bytes.into();
-        Ok(Some(peer_id))
-    });
     p2p.expect_get_sealed_block_headers()
         .times(1)
         .returning(|range| {
-            range.map(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])))
+            let peer = random_peer();
+            let headers = Some(range.map(empty_header).collect());
+            let headers = peer.bind(headers);
+            Ok(headers)
         });
     p2p.expect_get_transactions_2()
         .times(1)
@@ -472,14 +451,9 @@ async fn import__transactions_not_found_for_header_5() {
 async fn import__p2p_error() {
     // given
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_select_peer().times(1).returning(|_| {
-        let bytes = vec![1u8, 2, 3, 4, 5];
-        let peer_id = bytes.into();
-        Ok(Some(peer_id))
-    });
     p2p.expect_get_sealed_block_headers()
         .times(1)
-        .returning(|range| range.map(|_| Err(anyhow::anyhow!("Some network error"))));
+        .returning(|_| Err(anyhow::anyhow!("Some network error")));
     p2p.expect_get_transactions_2().times(0);
 
     let state = State::new(3, 5).into();
@@ -510,15 +484,13 @@ async fn import__p2p_error_on_4_transactions() {
         .returning(|_| Ok(()));
 
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_select_peer().times(1).returning(|_| {
-        let bytes = vec![1u8, 2, 3, 4, 5];
-        let peer_id = bytes.into();
-        Ok(Some(peer_id))
-    });
     p2p.expect_get_sealed_block_headers()
         .times(1)
         .returning(|range| {
-            range.map(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])))
+            let peer = random_peer();
+            let headers = Some(range.map(empty_header).collect());
+            let headers = peer.bind(headers);
+            Ok(headers)
         });
     p2p.expect_get_transactions_2()
         .times(1)
@@ -537,47 +509,6 @@ async fn import__p2p_error_on_4_transactions() {
     // then
     assert_eq!((State::new(3, None), false), res);
 }
-
-// #[tokio::test]
-// async fn import__p2p_error_on_5_transactions() {
-//     // given
-//     let mut p2p = MockPeerToPeerPort::default();
-//     p2p.expect_select_peer().times(1).returning(|_| {
-//         let bytes = vec![1u8, 2, 3, 4, 5];
-//         let peer_id = bytes.into();
-//         Ok(Some(peer_id))
-//     });
-//     p2p.expect_get_sealed_block_headers()
-//         .times(1)
-//         .returning(|_| {
-//             Ok(peer_sourced_headers(Some(vec![
-//                 empty_header(4.into()),
-//                 empty_header(5.into()),
-//             ])))
-//         });
-//     let mut height = 3;
-//     p2p.expect_get_transactions().times(2).returning(move |_| {
-//         height += 1;
-//         if height == 5 {
-//             Err(anyhow::anyhow!("Some network error"))
-//         } else {
-//             Ok(Some(vec![]))
-//         }
-//     });
-//
-//     let state = State::new(3, 5).into();
-//     let mocks = Mocks {
-//         p2p,
-//         consensus_port: DefaultMocks::times([2]),
-//         executor: DefaultMocks::times([1]),
-//     };
-//
-//     // when
-//     let res = test_import_inner(state, mocks, None).await;
-//
-//     // then
-//     assert_eq!((State::new(4, None), false), res);
-// }
 
 #[tokio::test]
 async fn import__consensus_error_on_4() {
@@ -599,15 +530,13 @@ async fn import__consensus_error_on_4() {
         .returning(|_| Ok(()));
 
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_select_peer().times(1).returning(|_| {
-        let bytes = vec![1u8, 2, 3, 4, 5];
-        let peer_id = bytes.into();
-        Ok(Some(peer_id))
-    });
     p2p.expect_get_sealed_block_headers()
         .times(1)
         .returning(|range| {
-            range.map(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])))
+            let peer = random_peer();
+            let headers = Some(range.map(empty_header).collect());
+            let headers = peer.bind(headers);
+            Ok(headers)
         });
     p2p.expect_get_transactions_2().times(0);
 
@@ -645,15 +574,13 @@ async fn import__consensus_error_on_5() {
         .returning(|_| Ok(()));
 
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_select_peer().times(1).returning(|_| {
-        let bytes = vec![1u8, 2, 3, 4, 5];
-        let peer_id = bytes.into();
-        Ok(Some(peer_id))
-    });
     p2p.expect_get_sealed_block_headers()
         .times(1)
         .returning(|range| {
-            range.map(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])))
+            let peer = random_peer();
+            let headers = Some(range.map(empty_header).collect());
+            let headers = peer.bind(headers);
+            Ok(headers)
         });
     p2p.expect_get_transactions_2()
         .times(1)
@@ -691,15 +618,13 @@ async fn import__execution_error_on_header_4() {
         .returning(|_| Ok(()));
 
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_select_peer().times(1).returning(|_| {
-        let bytes = vec![1u8, 2, 3, 4, 5];
-        let peer_id = bytes.into();
-        Ok(Some(peer_id))
-    });
     p2p.expect_get_sealed_block_headers()
         .times(1)
         .returning(|range| {
-            range.map(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])))
+            let peer = random_peer();
+            let headers = Some(range.map(empty_header).collect());
+            let headers = peer.bind(headers);
+            Ok(headers)
         });
     p2p.expect_get_transactions_2()
         .times(1)
@@ -749,15 +674,13 @@ async fn import__execution_error_on_header_5() {
         .returning(|_| Ok(()));
 
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_select_peer().times(1).returning(|_| {
-        let bytes = vec![1u8, 2, 3, 4, 5];
-        let peer_id = bytes.into();
-        Ok(Some(peer_id))
-    });
     p2p.expect_get_sealed_block_headers()
         .times(1)
         .returning(|range| {
-            range.map(|_| Ok(Some(vec![empty_header(4.into()), empty_header(5.into())])))
+            let peer = random_peer();
+            let headers = Some(range.map(empty_header).collect());
+            let headers = peer.bind(headers);
+            Ok(headers)
         });
     p2p.expect_get_transactions_2()
         .times(1)
@@ -834,19 +757,14 @@ async fn import__can_work_in_two_loops() {
         .returning(|_| Ok(()));
 
     let mut p2p = MockPeerToPeerPort::default();
-    p2p.expect_select_peer().times(2).returning(|_| {
-        let bytes = vec![1u8, 2, 3, 4, 5];
-        let peer_id = bytes.into();
-        Ok(Some(peer_id))
-    });
     p2p.expect_get_sealed_block_headers()
         .times(2)
         .returning(move |range| {
             state.apply(|s| s.observe(6));
-            range.map(|range| {
-                let headers = range.clone().map(|h| empty_header(h.into())).collect();
-                Ok(Some(headers))
-            })
+            let peer = random_peer();
+            let headers = Some(range.map(empty_header).collect());
+            let headers = peer.bind(headers);
+            Ok(headers)
         });
     p2p.expect_get_transactions_2()
         .times(2)
@@ -979,7 +897,6 @@ async fn import__missing_transactions_sends_peer_report() {
 struct PeerReportTestBuilder {
     shared_peer_id: Vec<u8>,
     get_sealed_headers: Option<Option<Vec<SealedBlockHeader>>>,
-    // get_transactions: Option<Option<Vec<Transaction>>>,
     get_transactions_2: Option<Option<Vec<Transactions>>>,
     check_sealed_header: Option<bool>,
     block_count: u32,
@@ -991,7 +908,6 @@ impl PeerReportTestBuilder {
         Self {
             shared_peer_id: vec![1, 2, 3, 4],
             get_sealed_headers: None,
-            // get_transactions: None,
             get_transactions_2: None,
             check_sealed_header: None,
             block_count: 1,
@@ -1086,22 +1002,19 @@ impl PeerReportTestBuilder {
         let mut p2p = MockPeerToPeerPort::default();
 
         let peer_id = self.shared_peer_id.clone();
-        p2p.expect_select_peer().times(1).returning(move |_| {
-            let peer_id = peer_id.clone();
-            Ok(Some(peer_id.clone().into()))
-        });
-
         if let Some(get_headers) = self.get_sealed_headers.clone() {
-            p2p.expect_get_sealed_block_headers()
-                .returning(move |range| range.map(|_| Ok(get_headers.clone())));
+            p2p.expect_get_sealed_block_headers().returning(move |_| {
+                let peer: PeerId = peer_id.clone().into();
+                let headers = peer.bind(get_headers.clone());
+                Ok(headers)
+            });
         } else {
             p2p.expect_get_sealed_block_headers()
                 .returning(move |range| {
-                    range.map(|range| {
-                        let headers =
-                            range.clone().map(|h| empty_header(h.into())).collect();
-                        Ok(Some(headers))
-                    })
+                    let peer: PeerId = peer_id.clone().into();
+                    let headers = Some(range.map(empty_header).collect());
+                    let headers = peer.bind(headers);
+                    Ok(headers)
                 });
         }
 
@@ -1226,19 +1139,13 @@ impl DefaultMocks for MockPeerToPeerPort {
         let mut p2p = MockPeerToPeerPort::default();
         let mut t = t.into_iter().cycle();
 
-        p2p.expect_select_peer().times(1).returning(|_| {
-            let bytes = vec![1u8, 2, 3, 4, 5];
-            let peer_id = bytes.into();
-            Ok(Some(peer_id))
-        });
-
         p2p.expect_get_sealed_block_headers()
             .times(1)
             .returning(|range| {
-                range.map(|range| {
-                    let headers = range.clone().map(|h| empty_header(h.into())).collect();
-                    Ok(Some(headers))
-                })
+                let peer = random_peer();
+                let headers = Some(range.map(empty_header).collect());
+                let headers = peer.bind(headers);
+                Ok(headers)
             });
 
         p2p.expect_get_transactions_2()

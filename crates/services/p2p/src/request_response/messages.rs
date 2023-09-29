@@ -13,6 +13,7 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
     services::p2p::Transactions,
 };
+use libp2p::PeerId;
 use serde::{
     Deserialize,
     Serialize,
@@ -61,7 +62,7 @@ pub enum ResponseMessage {
 #[derive(Debug)]
 pub enum ResponseChannelItem {
     Block(oneshot::Sender<Option<SealedBlock>>),
-    SealedHeaders(oneshot::Sender<Option<Vec<SealedBlockHeader>>>),
+    SealedHeaders(oneshot::Sender<(PeerId, Option<Vec<SealedBlockHeader>>)>),
     Transactions(oneshot::Sender<Option<Vec<Transaction>>>),
     Transactions2(oneshot::Sender<Option<Vec<Transactions>>>),
 }

@@ -97,8 +97,7 @@ enum TaskRequest {
     },
     GetSealedHeaders {
         block_height_range: Range<u32>,
-        from_peer: PeerId,
-        channel: oneshot::Sender<Option<Vec<SealedBlockHeader>>>,
+        channel: oneshot::Sender<(PeerId, Option<Vec<SealedBlockHeader>>)>,
     },
     GetTransactions {
         block_id: BlockId,
@@ -116,10 +115,6 @@ enum TaskRequest {
         peer_id: PeerId,
         score: AppScore,
         reporting_service: &'static str,
-    },
-    SelectPeer {
-        block_height: BlockHeight,
-        channel: oneshot::Sender<Option<PeerId>>,
     },
 }
 
@@ -486,10 +481,16 @@ where
                         let peer = self.p2p_service.get_peer_id_with_height(&height);
                         let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
                     }
-                    Some(TaskRequest::GetSealedHeaders { block_height_range, from_peer, channel: response}) => {
-                        let request_msg = RequestMessage::SealedHeaders(block_height_range);
+                    Some(TaskRequest::GetSealedHeaders { block_height_range, channel: response}) => {
+                        let request_msg = RequestMessage::SealedHeaders(block_height_range.clone());
                         let channel_item = ResponseChannelItem::SealedHeaders(response);
-                        let _ = self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item);
+
+                        // Note: this range has already been check for
+                        // validity in `SharedState::get_sealed_block_headers`.
+                        let block_height = BlockHeight::from(block_height_range.end - 1);
+                        let peer = self.p2p_service
+                             .get_peer_id_with_height(&block_height);
+                        let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
                     }
                     Some(TaskRequest::GetTransactions { block_id, from_peer, channel }) => {
                         let request_msg = RequestMessage::Transactions(block_id);
@@ -507,10 +508,6 @@ where
                     }
                     Some(TaskRequest::RespondWithPeerReport { peer_id, score, reporting_service }) => {
                         let _ = self.p2p_service.report_peer(peer_id, score, reporting_service);
-                    }
-                    Some(TaskRequest::SelectPeer { block_height, channel }) => {
-                        let peer = self.p2p_service.get_peer_id_with_height(&block_height);
-                        let _ = channel.send(peer);
                     }
                     None => {
                         unreachable!("The `Task` is holder of the `Sender`, so it should not be possible");
@@ -697,32 +694,11 @@ impl SharedState {
         receiver.await.map_err(|e| anyhow!("{}", e))
     }
 
-    pub async fn select_peer(
-        &self,
-        block_height: BlockHeight,
-    ) -> anyhow::Result<Option<FuelPeerId>> {
-        let (sender, receiver) = oneshot::channel();
-
-        self.request_sender
-            .send(TaskRequest::SelectPeer {
-                block_height,
-                channel: sender,
-            })
-            .await?;
-
-        receiver
-            .await
-            .map(|peer_id| peer_id.map(|peer_id| peer_id.to_bytes().into()))
-            .map_err(|e| anyhow!("{}", e))
-    }
-
     pub async fn get_sealed_block_headers(
         &self,
-        peer_id: Vec<u8>,
         block_height_range: Range<u32>,
-    ) -> anyhow::Result<Option<Vec<SealedBlockHeader>>> {
+    ) -> anyhow::Result<(Vec<u8>, Option<Vec<SealedBlockHeader>>)> {
         let (sender, receiver) = oneshot::channel();
-        let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
 
         if block_height_range.is_empty() {
             return Err(anyhow!(
@@ -733,12 +709,14 @@ impl SharedState {
         self.request_sender
             .send(TaskRequest::GetSealedHeaders {
                 block_height_range,
-                from_peer,
                 channel: sender,
             })
             .await?;
 
-        receiver.await.map_err(|e| anyhow!("{}", e))
+        receiver
+            .await
+            .map(|(peer_id, headers)| (peer_id.to_bytes(), headers))
+            .map_err(|e| anyhow!("{}", e))
     }
 
     pub async fn get_transactions_from_peer(

@@ -2,17 +2,17 @@ use fuel_core_services::{
     stream::IntoBoxStream,
     Service,
 };
-use fuel_core_types::services::p2p::{
-    PeerId,
-    Transactions,
-};
+use fuel_core_types::services::p2p::Transactions;
 use futures::{
     stream,
     StreamExt,
 };
 
 use crate::{
-    import::test_helpers::empty_header,
+    import::test_helpers::{
+        empty_header,
+        random_peer,
+    },
     ports::{
         MockBlockImporterPort,
         MockConsensusPort,
@@ -38,19 +38,11 @@ async fn test_new_service() {
         })
         .into_boxed()
     });
-    p2p.expect_select_peer().times(1).returning(move |_| {
-        let peer_id: PeerId = vec![1, 2, 3, 4, 5].into();
-        Ok(Some(peer_id))
-    });
     p2p.expect_get_sealed_block_headers().returning(|range| {
-        range.map(|range| {
-            let headers = range
-                .clone()
-                .map(BlockHeight::from)
-                .map(empty_header)
-                .collect::<Vec<_>>();
-            Ok(Some(headers))
-        })
+        let peer = random_peer();
+        let headers = Some(range.map(empty_header).collect::<Vec<_>>());
+        let headers = peer.bind(headers);
+        Ok(headers)
     });
     p2p.expect_get_transactions_2().returning(|block_ids| {
         let data = block_ids.data;

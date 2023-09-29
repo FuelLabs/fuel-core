@@ -153,8 +153,6 @@ type SealedBlockBatch = Batch<SealedBlock>;
 enum ImportError {
     ConsensusError(anyhow::Error),
     ExecutionError(anyhow::Error),
-    NoSuitablePeer,
-    MissingBlockHeaders,
     MissingTransactions,
     BadBlockHeader,
     JoinError(JoinError),
@@ -229,20 +227,8 @@ where
         let (shutdown_guard, mut shutdown_guard_recv) =
             tokio::sync::mpsc::channel::<()>(1);
 
-        let block_height = BlockHeight::from(*range.end());
-        let peer = select_peer(block_height, p2p.as_ref()).await;
-        if peer.is_err() {
-            return 0
-        }
-        let peer = peer.expect("Checked");
-
-        let block_stream = get_block_stream(
-            peer.clone(),
-            range.clone(),
-            params,
-            p2p.clone(),
-            consensus.clone(),
-        );
+        let block_stream =
+            get_block_stream(range.clone(), params, p2p.clone(), consensus.clone());
         let result = block_stream
             .map(move |stream_block_batch| {
                 let shutdown_guard = shutdown_guard.clone();
@@ -324,15 +310,13 @@ fn get_block_stream<
     P: PeerToPeerPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 >(
-    peer_id: PeerId,
     range: RangeInclusive<u32>,
     params: &Config,
     p2p: Arc<P>,
     consensus: Arc<C>,
 ) -> impl Stream<Item = impl Future<Output = Result<SealedBlockBatch, ImportError>>> + '_
 {
-    let header_stream =
-        get_header_batch_stream(peer_id.clone(), range.clone(), params, p2p.clone());
+    let header_stream = get_header_batch_stream(range.clone(), params, p2p.clone());
     header_stream
         .map({
             let consensus = consensus.clone();
@@ -347,13 +331,13 @@ fn get_block_stream<
                 let results = results
                     .into_iter()
                     .map({
-                        let peer_id = peer_id.clone();
                         let consensus = consensus.clone();
                         let p2p = p2p.clone();
+                        let peer = peer.clone();
                         move |header| {
                             check_sealed_header(
                                 &header,
-                                peer_id.clone(),
+                                peer.clone(),
                                 p2p.clone(),
                                 consensus.clone(),
                             )?;
@@ -363,7 +347,7 @@ fn get_block_stream<
                     .take_while(|result| result.is_ok())
                     .filter_map(|result| result.ok())
                     .collect::<Vec<_>>();
-                let batch = Batch::new(peer, range, results);
+                let batch = Batch::new(peer.clone(), range, results);
                 Result::<_, ImportError>::Ok(batch)
             }
         })
@@ -408,7 +392,6 @@ fn get_block_stream<
 }
 
 fn get_header_batch_stream<P: PeerToPeerPort + Send + Sync + 'static>(
-    peer: PeerId,
     range: RangeInclusive<u32>,
     params: &Config,
     p2p: Arc<P>,
@@ -418,9 +401,8 @@ fn get_header_batch_stream<P: PeerToPeerPort + Send + Sync + 'static>(
     } = params;
     let ranges = range_chunks(range, *header_batch_size);
     futures::stream::iter(ranges).then(move |range| {
-        let peer = peer.clone();
         let p2p = p2p.clone();
-        async move { get_headers_batch(peer, range, p2p).await }
+        async move { get_headers_batch(range, p2p).await }
     })
 }
 
@@ -489,24 +471,10 @@ async fn wait_for_notify_or_shutdown(
     matches!(r, futures::future::Either::Left(_))
 }
 
-async fn select_peer<P>(block_height: BlockHeight, p2p: &P) -> Result<PeerId, ImportError>
-where
-    P: PeerToPeerPort + Send + Sync + 'static,
-{
-    tracing::debug!("getting peer for block height {}", block_height);
-    let res = p2p.select_peer(block_height).await;
-    match res {
-        Ok(Some(peer_id)) => Ok(peer_id),
-        Ok(None) => Err(ImportError::NoSuitablePeer),
-        Err(e) => Err(e.into()),
-    }
-}
-
 async fn get_sealed_block_headers<P>(
-    peer: PeerId,
     range: Range<u32>,
     p2p: &P,
-) -> Result<Vec<SealedBlockHeader>, ImportError>
+) -> Result<SourcePeer<Vec<SealedBlockHeader>>, ImportError>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
 {
@@ -515,17 +483,21 @@ where
         range.start,
         range.end
     );
-    let range = peer.clone().bind(range);
-    let res = p2p.get_sealed_block_headers(range).await;
-    let SourcePeer { data: headers, .. } = res;
-    match headers {
-        Ok(Some(headers)) => Ok(headers),
-        Ok(None) => {
-            report_peer(p2p, peer.clone(), PeerReportReason::MissingBlockHeaders);
-            Err(ImportError::MissingBlockHeaders)
+    let res = p2p
+        .get_sealed_block_headers(range)
+        .await
+        .trace_err("Failed to get headers");
+    let sorted_headers = match res {
+        Ok(sourced_headers) => {
+            let sourced = sourced_headers.map(|headers| match headers {
+                None => vec![],
+                Some(headers) => headers,
+            });
+            Ok(sourced)
         }
-        Err(e) => Err(e.into()),
-    }
+        Err(e) => Err(ImportError::Other(e)),
+    };
+    sorted_headers
 }
 
 async fn get_transactions<P>(
@@ -549,7 +521,6 @@ where
 }
 
 async fn get_headers_batch<P>(
-    peer_id: PeerId,
     range: RangeInclusive<u32>,
     p2p: Arc<P>,
 ) -> Result<SealedHeaderBatch, ImportError>
@@ -564,11 +535,15 @@ where
     let start = *range.start();
     let end = *range.end() + 1;
     let range = start..end;
-    let headers =
-        get_sealed_block_headers(peer_id.clone(), range.clone(), p2p.as_ref()).await?;
-    let headers = headers.into_iter();
+    let result = get_sealed_block_headers(range.clone(), p2p.as_ref()).await;
+    let sourced_headers = result?;
+    let SourcePeer {
+        peer_id,
+        data: headers,
+    } = sourced_headers;
     let heights = range.clone().map(BlockHeight::from);
     let headers = headers
+        .into_iter()
         .zip(heights)
         .take_while(move |(header, expected_height)| {
             let height = header.entity.height();
