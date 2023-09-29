@@ -133,14 +133,6 @@ struct Batch<T> {
 }
 
 impl<T> Batch<T> {
-    pub fn empty(peer: PeerId, range: Range<u32>) -> Self {
-        Self {
-            peer,
-            range,
-            results: vec![],
-        }
-    }
-
     pub fn new(peer: PeerId, range: Range<u32>, results: Vec<T>) -> Self {
         Self {
             peer,
@@ -156,12 +148,6 @@ impl<T> Batch<T> {
 
 type SealedHeaderBatch = Batch<SealedBlockHeader>;
 type SealedBlockBatch = Batch<SealedBlock>;
-
-// impl SealedBlockBatch {
-//     fn err(&self) -> Option<ImportError> {
-//         self.is_err().then(|| ImportError::MissingTransactions)
-//     }
-// }
 
 #[derive(Debug, derive_more::Display)]
 enum ImportError {
@@ -310,7 +296,7 @@ where
                     move |batch| {
                         let peer = peer.clone();
                         async move {
-                            let batch = batch?;
+                            let batch = batch??;
                             let error = batch.is_err().then(|| ImportError::MissingTransactions);
                             let results = batch.results;
                             let sealed_blocks = futures::stream::iter(results);
@@ -364,18 +350,23 @@ fn get_block_stream<
     params: &Config,
     p2p: Arc<P>,
     consensus: Arc<C>,
-) -> impl Stream<Item = impl Future<Output = SealedBlockBatch>> + '_ {
+) -> impl Stream<Item = impl Future<Output = Result<SealedBlockBatch, ImportError>>> + '_
+{
     let header_stream =
         get_header_batch_stream(peer_id.clone(), range.clone(), params, p2p.clone());
-    let range = *range.start()..(*range.end() + 1);
+    // let range = *range.start()..(*range.end() + 1);
     header_stream
         .map({
-            let peer_id = peer_id.clone();
             let consensus = consensus.clone();
             let p2p = p2p.clone();
             move |header_batch| {
-                header_batch
-                    .results
+                let header_batch = header_batch?;
+                let Batch {
+                    peer,
+                    range,
+                    results,
+                } = header_batch;
+                let results = results
                     .into_iter()
                     .map({
                         let peer_id = peer_id.clone();
@@ -393,15 +384,18 @@ fn get_block_stream<
                     })
                     .take_while(|result| result.is_ok())
                     .filter_map(|result| result.ok())
-                    .collect::<Vec<_>>()
+                    .collect::<Vec<_>>();
+                let batch = Batch::new(peer, range, results);
+                Result::<_, ImportError>::Ok(batch)
             }
         })
         .map({
             let consensus = consensus.clone();
-            move |valid_headers| {
+            move |valid_headers_batch| {
                 let consensus = consensus.clone();
                 async move {
-                    if let Some(header) = valid_headers.last() {
+                    let valid_headers = valid_headers_batch?;
+                    if let Some(header) = valid_headers.results.last() {
                         await_da_height(header, consensus.as_ref()).await?
                     };
                     Result::<_, ImportError>::Ok(valid_headers)
@@ -409,24 +403,24 @@ fn get_block_stream<
             }
         })
         .map({
-            let peer_id = peer_id.clone();
-            let range = range.clone();
             let p2p = p2p.clone();
             move |headers| {
-                let peer_id = peer_id.clone();
-                let range = range.clone();
                 let p2p = p2p.clone();
                 async move {
-                    let headers = headers.await.unwrap_or(Default::default());
-                    if headers.is_empty() {
-                        SealedBlockBatch::empty(peer_id, range)
+                    let headers = headers.await?;
+                    let Batch {
+                        peer,
+                        range,
+                        results,
+                    } = headers;
+                    if results.is_empty() {
+                        let batch = SealedBlockBatch::new(peer, range, vec![]);
+                        Ok(batch)
                     } else {
-                        let headers = SealedHeaderBatch::new(
-                            peer_id.clone(),
-                            range.clone(),
-                            headers,
-                        );
-                        get_blocks(p2p, headers).await
+                        let headers =
+                            SealedHeaderBatch::new(peer.clone(), range.clone(), results);
+                        let batch = get_blocks(p2p, headers).await?;
+                        Ok(batch)
                     }
                 }
                 .instrument(tracing::debug_span!("consensus_and_transactions"))
@@ -440,7 +434,7 @@ fn get_header_batch_stream<P: PeerToPeerPort + Send + Sync + 'static>(
     range: RangeInclusive<u32>,
     params: &Config,
     p2p: Arc<P>,
-) -> impl Stream<Item = SealedHeaderBatch> {
+) -> impl Stream<Item = Result<SealedHeaderBatch, ImportError>> {
     let Config {
         header_batch_size, ..
     } = params;
@@ -580,7 +574,7 @@ async fn get_headers_batch<P>(
     peer_id: PeerId,
     range: RangeInclusive<u32>,
     p2p: Arc<P>,
-) -> SealedHeaderBatch
+) -> Result<SealedHeaderBatch, ImportError>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
 {
@@ -592,33 +586,28 @@ where
     let start = *range.start();
     let end = *range.end() + 1;
     let range = start..end;
-    let res =
-        get_sealed_block_headers(peer_id.clone(), range.clone(), p2p.as_ref()).await;
-    match res {
-        Ok(headers) => {
-            let headers = headers.into_iter();
-            let heights = range.clone().map(BlockHeight::from);
-            let headers = headers
-                .zip(heights)
-                .take_while(move |(header, expected_height)| {
-                    let height = header.entity.height();
-                    height == expected_height
-                })
-                .map(|(header, _)| header)
-                .collect::<Vec<_>>();
-            if let Some(expected_len) = end.checked_sub(start) {
-                if headers.len() != expected_len as usize {
-                    report_peer(
-                        p2p.as_ref(),
-                        peer_id.clone(),
-                        PeerReportReason::MissingBlockHeaders,
-                    );
-                }
-            }
-            Batch::new(peer_id, range.clone(), headers)
+    let headers =
+        get_sealed_block_headers(peer_id.clone(), range.clone(), p2p.as_ref()).await?;
+    let headers = headers.into_iter();
+    let heights = range.clone().map(BlockHeight::from);
+    let headers = headers
+        .zip(heights)
+        .take_while(move |(header, expected_height)| {
+            let height = header.entity.height();
+            height == expected_height
+        })
+        .map(|(header, _)| header)
+        .collect::<Vec<_>>();
+    if let Some(expected_len) = end.checked_sub(start) {
+        if headers.len() != expected_len as usize {
+            report_peer(
+                p2p.as_ref(),
+                peer_id.clone(),
+                PeerReportReason::MissingBlockHeaders,
+            );
         }
-        Err(_e) => Batch::empty(peer_id, range.clone()),
     }
+    Ok(Batch::new(peer_id, range.clone(), headers))
 }
 
 fn report_peer<P>(p2p: &P, peer_id: PeerId, reason: PeerReportReason)
@@ -635,7 +624,10 @@ where
 
 /// Get blocks correlating to the headers from a specific peer
 #[tracing::instrument(skip(p2p, headers))]
-async fn get_blocks<P>(p2p: Arc<P>, headers: SealedHeaderBatch) -> SealedBlockBatch
+async fn get_blocks<P>(
+    p2p: Arc<P>,
+    headers: SealedHeaderBatch,
+) -> Result<SealedBlockBatch, ImportError>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
 {
@@ -644,38 +636,32 @@ where
         peer,
         range,
     } = headers;
-    let maybe_txs = get_transactions(peer.clone(), range.clone(), p2p.as_ref()).await;
-    match maybe_txs {
-        Ok(transaction_data) => {
-            let iter = headers.into_iter().zip(transaction_data);
-            let mut blocks = vec![];
-            for (block_header, transactions) in iter {
-                let block_header = block_header.clone();
-                let SealedBlockHeader {
-                    consensus,
-                    entity: header,
-                } = block_header;
-                let block =
-                    Block::try_from_executed(header, transactions.0).map(|block| {
-                        SealedBlock {
-                            entity: block,
-                            consensus,
-                        }
-                    });
-                if let Some(block) = block {
-                    blocks.push(block);
-                } else {
-                    report_peer(
-                        p2p.as_ref(),
-                        peer.clone(),
-                        PeerReportReason::InvalidTransactions,
-                    );
-                }
-            }
-            Batch::new(peer, range, blocks)
+    let transaction_data =
+        get_transactions(peer.clone(), range.clone(), p2p.as_ref()).await?;
+    let iter = headers.into_iter().zip(transaction_data);
+    let mut blocks = vec![];
+    for (block_header, transactions) in iter {
+        let block_header = block_header.clone();
+        let SealedBlockHeader {
+            consensus,
+            entity: header,
+        } = block_header;
+        let block =
+            Block::try_from_executed(header, transactions.0).map(|block| SealedBlock {
+                entity: block,
+                consensus,
+            });
+        if let Some(block) = block {
+            blocks.push(block);
+        } else {
+            report_peer(
+                p2p.as_ref(),
+                peer.clone(),
+                PeerReportReason::InvalidTransactions,
+            );
         }
-        Err(_error) => Batch::empty(peer, range),
     }
+    Ok(Batch::new(peer, range, blocks))
 }
 
 #[tracing::instrument(

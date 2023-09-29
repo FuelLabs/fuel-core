@@ -119,3 +119,51 @@ async fn test_back_pressure(input: Input, state: State, params: Config) -> Count
     import.import(&mut watcher).await.unwrap();
     counts.apply(|c| c.max.clone())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_back_pressure_2() {
+    // input: Input, state: State, params: Config
+    let input = Input {
+        executes: Duration::from_millis(10),
+        ..Default::default()
+    };
+    let state = State::new(None, 50);
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
+    let counts = SharedCounts::new(Default::default());
+    let state = SharedMutex::new(state);
+
+    let p2p = Arc::new(PressurePeerToPeer::new(
+        counts.clone(),
+        [input.headers, input.transactions],
+    ));
+    let executor = Arc::new(PressureBlockImporter::new(counts.clone(), input.executes));
+    let consensus = Arc::new(PressureConsensus::new(counts.clone(), input.consensus));
+    let notify = Arc::new(Notify::new());
+
+    let import = Import {
+        state,
+        notify,
+        params,
+        p2p,
+        executor,
+        consensus,
+    };
+
+    import.notify.notify_one();
+    let (_tx, shutdown) = tokio::sync::watch::channel(fuel_core_services::State::Started);
+    let mut watcher = shutdown.into();
+    import.import(&mut watcher).await.unwrap();
+    let counts = counts.apply(|c| c.max.clone());
+    let expected = Count {
+        headers: 10,
+        consensus: 10,
+        transactions: 10,
+        executes: 1,
+        blocks: 21,
+    };
+
+    assert!(counts <= expected);
+}
