@@ -1662,10 +1662,6 @@ mod tests {
 
                                 let _ = node_b.send_response_msg(*request_id, OutboundResponse::SealedHeaders(Some(sealed_headers)));
                             }
-                            RequestMessage::Transactions(_) => {
-                                let transactions = (0..5).map(|_| Transaction::default_test_tx()).collect();
-                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::Transactions(Some(Arc::new(transactions))));
-                            }
                             RequestMessage::Transactions2(_) => {
                                 let transactions = (0..5).map(|_| Transaction::default_test_tx()).collect();
                                 let _ = node_b.send_response_msg(*request_id, OutboundResponse::Transactions(Some(Arc::new(transactions))));
