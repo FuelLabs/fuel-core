@@ -243,31 +243,22 @@ where
             p2p.clone(),
             consensus.clone(),
         );
-        // let range = *range.start()..(*range.end() + 1);
         let result = block_stream
-            .map({
-                // let peer = peer.clone();
-                // let range = range.clone();
-                move |stream_block_batch| {
-                    let shutdown_guard = shutdown_guard.clone();
-                    let shutdown_signal = shutdown_signal.clone();
-                    // let peer = peer.clone();
-                    // let range = range.clone();
-                    tokio::spawn(async move {
-                        // Hold a shutdown sender for the lifetime of the spawned task
-                        let _shutdown_guard = shutdown_guard.clone();
-                        let mut shutdown_signal = shutdown_signal.clone();
-                        // let peer = peer.clone();
-                        // let range = range.clone();
-                        tokio::select! {
-                        // Stream a batch of blocks
-                        blocks = stream_block_batch => Some(blocks),
-                        // If a shutdown signal is received during the stream, terminate early and
-                        // return an empty response
-                        _ = shutdown_signal.while_started() => None
-                    }
-                    }).map(|task| task.map_err(ImportError::JoinError))
+            .map(move |stream_block_batch| {
+                let shutdown_guard = shutdown_guard.clone();
+                let shutdown_signal = shutdown_signal.clone();
+                tokio::spawn(async move {
+                    // Hold a shutdown sender for the lifetime of the spawned task
+                    let _shutdown_guard = shutdown_guard.clone();
+                    let mut shutdown_signal = shutdown_signal.clone();
+                    tokio::select! {
+                    // Stream a batch of blocks
+                    blocks = stream_block_batch => blocks.map(Some),
+                    // If a shutdown signal is received during the stream, terminate early and
+                    // return an empty response
+                    _ = shutdown_signal.while_started() => Ok(None)
                 }
+                }).map(|task| task.map_err(ImportError::JoinError)?)
             })
             // Request up to `block_stream_buffer_size` transactions from the network.
             .buffered(params.block_stream_buffer_size)
@@ -281,46 +272,34 @@ where
             })
             .into_scan_none_or_err()
             .scan_none_or_err()
-            // .map({
-            //     let peer = peer.clone();
-            //     let range = range.clone();
-            //     move |result| result.unwrap_or({
-            //         let peer = peer.clone();
-            //         let range = range.clone();
-            //         SealedBlockBatch::empty(peer, range)
-            //     })
-            // })
-            .then({
-                let peer = peer.clone();
-                // let range = range.clone();
-                    move |batch| {
-                        let peer = peer.clone();
-                        async move {
-                            let batch = batch??;
-                            let error = batch.is_err().then(|| ImportError::MissingTransactions);
-                            let results = batch.results;
-                            let sealed_blocks = futures::stream::iter(results);
-                            let res = sealed_blocks.then(|sealed_block| async {
-                                execute_and_commit(executor.as_ref(), state, sealed_block).await
-                            }).try_collect::<Vec<_>>().await.and_then(|v| error.map_or(Ok(v), Err));
-                            match &res {
-                                Ok(_) => {
-                                    report_peer(p2p.as_ref(), peer.clone(), PeerReportReason::SuccessfulBlockImport);
-                                },
-                                Err(e) => {
-                                    // If this fails, then it means that consensus has approved a block that is invalid.
-                                    // This would suggest a more serious issue than a bad peer, e.g. a fork or an out-of-date client.
-                                    tracing::error!("Failed to execute and commit block from peer {:?}: {:?}", peer, e);
-                                },
-                            };
-                            res
-                        }
-                        .instrument(tracing::debug_span!("execute_and_commit"))
-                        .in_current_span()
-                    }
+            .then(|batch| {
+                async move {
+                    let batch = batch?;
+                    let error = batch.is_err().then(|| ImportError::MissingTransactions);
+                    let Batch {
+                        peer,
+                        results,
+                        ..
+                    } = batch;
+                    let sealed_blocks = futures::stream::iter(results);
+                    let res = sealed_blocks.then(|sealed_block| async {
+                        execute_and_commit(executor.as_ref(), state, sealed_block).await
+                    }).try_collect::<Vec<_>>().await.and_then(|v| error.map_or(Ok(v), Err));
+                    match &res {
+                        Ok(_) => {
+                            report_peer(p2p.as_ref(), peer.clone(), PeerReportReason::SuccessfulBlockImport);
+                        },
+                        Err(e) => {
+                            // If this fails, then it means that consensus has approved a block that is invalid.
+                            // This would suggest a more serious issue than a bad peer, e.g. a fork or an out-of-date client.
+                            tracing::error!("Failed to execute and commit block from peer {:?}: {:?}", peer, e);
+                        },
+                    };
+                    res
                 }
-            )
-
+                .instrument(tracing::debug_span!("execute_and_commit"))
+                .in_current_span()
+            })
             // Continue the stream unless an error occurs.
             .into_scan_err()
             .scan_err()
@@ -354,7 +333,6 @@ fn get_block_stream<
 {
     let header_stream =
         get_header_batch_stream(peer_id.clone(), range.clone(), params, p2p.clone());
-    // let range = *range.start()..(*range.end() + 1);
     header_stream
         .map({
             let consensus = consensus.clone();
