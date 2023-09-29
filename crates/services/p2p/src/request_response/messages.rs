@@ -5,11 +5,9 @@ use std::{
 
 use fuel_core_types::{
     blockchain::{
-        primitives::BlockId,
         SealedBlock,
         SealedBlockHeader,
     },
-    fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::p2p::Transactions,
 };
@@ -18,10 +16,7 @@ use serde::{
     Deserialize,
     Serialize,
 };
-use serde_with::{
-    serde_as,
-    FromInto,
-};
+use serde_with::serde_as;
 use thiserror::Error;
 use tokio::sync::oneshot;
 
@@ -40,12 +35,10 @@ pub(crate) const MAX_REQUEST_SIZE: usize = core::mem::size_of::<RequestMessage>(
 // Server Peer: `RequestMessage` (receive request) -> `OutboundResponse` -> `NetworkResponse` (send response)
 // Client Peer: `NetworkResponse` (receive response) -> `ResponseMessage(data)` -> `ResponseChannelItem(channel, data)` (handle response)
 
-#[serde_as]
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub enum RequestMessage {
     Block(BlockHeight),
     SealedHeaders(Range<u32>),
-    Transactions(#[serde_as(as = "FromInto<[u8; 32]>")] BlockId),
     Transactions2(Range<u32>),
 }
 
@@ -54,7 +47,6 @@ pub enum RequestMessage {
 pub enum ResponseMessage {
     SealedBlock(Box<Option<SealedBlock>>),
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
-    Transactions(Option<Vec<Transaction>>),
     Transactions2(Option<Vec<Transactions>>),
 }
 
@@ -63,7 +55,6 @@ pub enum ResponseMessage {
 pub enum ResponseChannelItem {
     Block(oneshot::Sender<Option<SealedBlock>>),
     SealedHeaders(oneshot::Sender<(PeerId, Option<Vec<SealedBlockHeader>>)>),
-    Transactions(oneshot::Sender<Option<Vec<Transaction>>>),
     Transactions2(oneshot::Sender<Option<Vec<Transactions>>>),
 }
 
@@ -73,7 +64,6 @@ pub enum ResponseChannelItem {
 pub enum NetworkResponse {
     Block(Option<Vec<u8>>),
     Headers(Option<Vec<u8>>),
-    Transactions(Option<Vec<u8>>),
     Transactions2(Option<Vec<u8>>),
 }
 
@@ -83,7 +73,6 @@ pub enum NetworkResponse {
 pub enum OutboundResponse {
     Block(Option<Arc<SealedBlock>>),
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
-    Transactions(Option<Arc<Vec<Transaction>>>),
     Transactions2(Option<Arc<Vec<Transactions>>>),
 }
 

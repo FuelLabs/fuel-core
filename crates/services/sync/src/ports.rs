@@ -3,14 +3,10 @@
 use fuel_core_services::stream::BoxStream;
 use fuel_core_types::{
     blockchain::{
-        primitives::{
-            BlockId,
-            DaBlockHeight,
-        },
+        primitives::DaBlockHeight,
         SealedBlock,
         SealedBlockHeader,
     },
-    fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::p2p::{
         PeerId,
@@ -50,13 +46,6 @@ pub trait PeerToPeerPort {
         &self,
         block_height_range: Range<u32>,
     ) -> anyhow::Result<SourcePeer<Option<Vec<SealedBlockHeader>>>>;
-
-    /// Request transactions from the network for the given block
-    /// and source peer.
-    async fn get_transactions(
-        &self,
-        block_id: SourcePeer<BlockId>,
-    ) -> anyhow::Result<Option<Vec<Transaction>>>;
 
     /// Request transactions from the network for the given block
     /// and source peer.

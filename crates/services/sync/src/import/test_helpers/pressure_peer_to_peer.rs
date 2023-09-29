@@ -11,11 +11,7 @@ use crate::{
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_types::{
-    blockchain::{
-        primitives::BlockId,
-        SealedBlockHeader,
-    },
-    fuel_tx::Transaction,
+    blockchain::SealedBlockHeader,
     fuel_types::BlockHeight,
     services::p2p::{
         PeerId,
@@ -65,16 +61,6 @@ impl PeerToPeerPort for PressurePeerToPeer {
         self.p2p.get_sealed_block_headers(block_height_range).await
     }
 
-    async fn get_transactions(
-        &self,
-        block_id: SourcePeer<BlockId>,
-    ) -> anyhow::Result<Option<Vec<Transaction>>> {
-        self.counts.apply(|c| c.inc_transactions());
-        tokio::time::sleep(self.durations[1]).await;
-        self.counts.apply(|c| c.dec_transactions());
-        self.p2p.get_transactions(block_id).await
-    }
-
     async fn get_transactions_2(
         &self,
         block_ids: SourcePeer<Range<u32>>,
@@ -110,8 +96,6 @@ impl PressurePeerToPeer {
             let headers = peer.bind(Some(headers));
             Ok(headers)
         });
-        mock.expect_get_transactions()
-            .returning(|_| Ok(Some(vec![])));
         mock.expect_get_transactions_2().returning(|block_ids| {
             let data = block_ids.data;
             let v = data.into_iter().map(|_| Transactions::default()).collect();

@@ -128,15 +128,6 @@ impl Database {
         }
     }
 
-    pub fn get_transactions_on_block(
-        &self,
-        block_id: &BlockId,
-    ) -> StorageResult<Option<Vec<Transaction>>> {
-        Ok(self
-            .get_sealed_block_by_id(block_id)?
-            .map(|Sealed { entity: block, .. }| block.into_inner().1))
-    }
-
     pub fn get_transactions_on_blocks(
         &self,
         block_height_range: Range<u32>,

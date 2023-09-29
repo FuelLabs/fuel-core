@@ -204,15 +204,6 @@ impl RequestResponseConverter for PostcardCodec {
 
                 Ok(ResponseMessage::SealedBlock(Box::new(response)))
             }
-            NetworkResponse::Transactions(tx_bytes) => {
-                let response = if let Some(tx_bytes) = tx_bytes {
-                    Some(self.deserialize(tx_bytes)?)
-                } else {
-                    None
-                };
-
-                Ok(ResponseMessage::Transactions(response))
-            }
             NetworkResponse::Transactions2(tx_bytes) => {
                 let response = if let Some(tx_bytes) = tx_bytes {
                     Some(self.deserialize(tx_bytes)?)
@@ -245,15 +236,6 @@ impl RequestResponseConverter for PostcardCodec {
                 };
 
                 Ok(NetworkResponse::Block(response))
-            }
-            OutboundResponse::Transactions(transactions) => {
-                let response = if let Some(transactions) = transactions {
-                    Some(self.serialize(transactions.as_ref())?)
-                } else {
-                    None
-                };
-
-                Ok(NetworkResponse::Transactions(response))
             }
             OutboundResponse::Transactions2(transactions) => {
                 let response = if let Some(transactions) = transactions {

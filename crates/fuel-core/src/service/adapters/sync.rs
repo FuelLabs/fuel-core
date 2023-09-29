@@ -12,14 +12,10 @@ use fuel_core_sync::ports::{
 };
 use fuel_core_types::{
     blockchain::{
-        primitives::{
-            BlockId,
-            DaBlockHeight,
-        },
+        primitives::DaBlockHeight,
         SealedBlock,
         SealedBlockHeader,
     },
-    fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::p2p::{
         peer_reputation::{
@@ -65,23 +61,6 @@ impl PeerToPeerPort for P2PAdapter {
                 Ok(headers)
             }
             Err(err) => Err(err),
-        }
-    }
-
-    async fn get_transactions(
-        &self,
-        block: SourcePeer<BlockId>,
-    ) -> anyhow::Result<Option<Vec<Transaction>>> {
-        let SourcePeer {
-            peer_id,
-            data: block,
-        } = block;
-        if let Some(service) = &self.service {
-            service
-                .get_transactions_from_peer(peer_id.into(), block)
-                .await
-        } else {
-            Err(anyhow::anyhow!("No P2P service available"))
         }
     }
 

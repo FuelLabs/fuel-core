@@ -35,7 +35,6 @@ use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::ConsensusVote,
-        primitives::BlockId,
         SealedBlock,
         SealedBlockHeader,
     },
@@ -98,11 +97,6 @@ enum TaskRequest {
     GetSealedHeaders {
         block_height_range: Range<u32>,
         channel: oneshot::Sender<(PeerId, Option<Vec<SealedBlockHeader>>)>,
-    },
-    GetTransactions {
-        block_id: BlockId,
-        from_peer: PeerId,
-        channel: oneshot::Sender<Option<Vec<Transaction>>>,
     },
     GetTransactions2 {
         block_height_range: Range<u32>,
@@ -492,11 +486,6 @@ where
                              .get_peer_id_with_height(&block_height);
                         let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
                     }
-                    Some(TaskRequest::GetTransactions { block_id, from_peer, channel }) => {
-                        let request_msg = RequestMessage::Transactions(block_id);
-                        let channel_item = ResponseChannelItem::Transactions(channel);
-                        let _ = self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item);
-                    }
                     Some(TaskRequest::GetTransactions2 { block_height_range, from_peer, channel }) => {
                         let request_msg = RequestMessage::Transactions2(block_height_range);
                         let channel_item = ResponseChannelItem::Transactions2(channel);
@@ -560,19 +549,8 @@ where
                                     }
                                 }
                             }
-                            RequestMessage::Transactions(block_id) => {
-                                match self.db.get_transactions(&block_id) {
-                                    Ok(maybe_transactions) => {
-                                        let response = maybe_transactions.map(Arc::new);
-                                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(response));
-                                    },
-                                    Err(e) => {
-                                        tracing::error!("Failed to get transactions for block {:?}: {:?}", block_id, e);
-                                        let response = None;
-                                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(response));
-                                        return Err(e.into())
-                                    }
-                                }
+                            RequestMessage::Transactions(_block_id) => {
+                                todo!()
                             }
                             RequestMessage::Transactions2(range) => {
                                 match self.db.get_transactions_2(range.clone()) {
@@ -717,25 +695,6 @@ impl SharedState {
             .await
             .map(|(peer_id, headers)| (peer_id.to_bytes(), headers))
             .map_err(|e| anyhow!("{}", e))
-    }
-
-    pub async fn get_transactions_from_peer(
-        &self,
-        peer_id: Vec<u8>,
-        block_id: BlockId,
-    ) -> anyhow::Result<Option<Vec<Transaction>>> {
-        let (sender, receiver) = oneshot::channel();
-        let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
-
-        self.request_sender
-            .send(TaskRequest::GetTransactions {
-                block_id,
-                from_peer,
-                channel: sender,
-            })
-            .await?;
-
-        receiver.await.map_err(|e| anyhow!("{}", e))
     }
 
     pub async fn get_transactions_2_from_peer(
@@ -915,13 +874,6 @@ pub mod tests {
             unimplemented!()
         }
 
-        fn get_transactions(
-            &self,
-            _block_id: &BlockId,
-        ) -> StorageResult<Option<Vec<Transaction>>> {
-            unimplemented!()
-        }
-
         fn get_transactions_2(
             &self,
             _block_height_range: Range<u32>,
@@ -1041,13 +993,6 @@ pub mod tests {
             &self,
             _block_height_range: Range<u32>,
         ) -> StorageResult<Vec<SealedBlockHeader>> {
-            todo!()
-        }
-
-        fn get_transactions(
-            &self,
-            _block_id: &BlockId,
-        ) -> StorageResult<Option<Vec<Transaction>>> {
             todo!()
         }
 

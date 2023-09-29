@@ -8,11 +8,9 @@ use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::{
-        primitives::BlockId,
         SealedBlock,
         SealedBlockHeader,
     },
-    fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::p2p::Transactions,
 };
@@ -38,13 +36,6 @@ impl P2pDb for Database {
         block_height_range: Range<u32>,
     ) -> StorageResult<Vec<SealedBlockHeader>> {
         self.get_sealed_block_headers(block_height_range)
-    }
-
-    fn get_transactions(
-        &self,
-        block_id: &BlockId,
-    ) -> StorageResult<Option<Vec<Transaction>>> {
-        self.get_transactions_on_block(block_id)
     }
 
     fn get_transactions_2(
