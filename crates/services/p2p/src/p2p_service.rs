@@ -1606,7 +1606,7 @@ mod tests {
                                             }
                                         });
                                     }
-                                    RequestMessage::Transactions2(_) => {
+                                    RequestMessage::Transactions2(_range) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
                                         assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::Transactions2(tx_orchestrator)).is_ok());
                                         let tx_test_end = tx_test_end.clone();
@@ -1615,7 +1615,8 @@ mod tests {
                                             let response_message = rx_orchestrator.await;
 
                                             if let Ok(Some(transactions)) = response_message {
-                                                let _ = tx_test_end.send(transactions.len() == 5).await;
+                                                let check = transactions.len() == 1 && transactions[0].0.len() == 5;
+                                                let _ = tx_test_end.send(check).await;
                                             } else {
                                                 tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
                                                 let _ = tx_test_end.send(false).await;
