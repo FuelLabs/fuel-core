@@ -508,7 +508,7 @@ where
     P: PeerToPeerPort + Send + Sync + 'static,
 {
     let range = peer_id.clone().bind(range);
-    let res = p2p.get_transactions_2(range).await;
+    let res = p2p.get_transactions(range).await;
     match res {
         Ok(Some(transactions)) => Ok(transactions),
         Ok(None) => {

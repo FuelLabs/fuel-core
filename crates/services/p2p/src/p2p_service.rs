@@ -599,8 +599,8 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                                 }
                             }
                             (
-                                Some(ResponseChannelItem::Transactions2(channel)),
-                                Ok(ResponseMessage::Transactions2(transactions)),
+                                Some(ResponseChannelItem::Transactions(channel)),
+                                Ok(ResponseMessage::Transactions(transactions)),
                             ) => {
                                 if channel.send(transactions).is_err() {
                                     debug!(
@@ -1606,9 +1606,9 @@ mod tests {
                                             }
                                         });
                                     }
-                                    RequestMessage::Transactions2(_range) => {
+                                    RequestMessage::Transactions(_range) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::Transactions2(tx_orchestrator)).is_ok());
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::Transactions(tx_orchestrator)).is_ok());
                                         let tx_test_end = tx_test_end.clone();
 
                                         tokio::spawn(async move {
@@ -1649,10 +1649,10 @@ mod tests {
 
                                 let _ = node_b.send_response_msg(*request_id, OutboundResponse::SealedHeaders(Some(sealed_headers)));
                             }
-                            RequestMessage::Transactions2(_) => {
+                            RequestMessage::Transactions(_) => {
                                 let txs = (0..5).map(|_| Transaction::default_test_tx()).collect();
                                 let transactions = vec![Transactions(txs)];
-                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::Transactions2(Some(Arc::new(transactions))));
+                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::Transactions(Some(Arc::new(transactions))));
                             }
                         }
                     }
@@ -1666,7 +1666,7 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn request_response_works_with_transactions() {
-        request_response_works_with(RequestMessage::Transactions2(2..6)).await
+        request_response_works_with(RequestMessage::Transactions(2..6)).await
     }
 
     #[tokio::test]

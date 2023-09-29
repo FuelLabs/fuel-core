@@ -49,7 +49,7 @@ pub trait PeerToPeerPort {
 
     /// Request transactions from the network for the given block
     /// and source peer.
-    async fn get_transactions_2(
+    async fn get_transactions(
         &self,
         block_ids: SourcePeer<Range<u32>>,
     ) -> anyhow::Result<Option<Vec<Transactions>>>;

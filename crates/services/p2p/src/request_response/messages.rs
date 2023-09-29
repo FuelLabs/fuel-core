@@ -38,7 +38,7 @@ pub(crate) const MAX_REQUEST_SIZE: usize = core::mem::size_of::<RequestMessage>(
 pub enum RequestMessage {
     Block(BlockHeight),
     SealedHeaders(Range<u32>),
-    Transactions2(Range<u32>),
+    Transactions(Range<u32>),
 }
 
 /// Final Response Message that p2p service sends to the Orchestrator
@@ -46,7 +46,7 @@ pub enum RequestMessage {
 pub enum ResponseMessage {
     SealedBlock(Box<Option<SealedBlock>>),
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
-    Transactions2(Option<Vec<Transactions>>),
+    Transactions(Option<Vec<Transactions>>),
 }
 
 /// Holds oneshot channels for specific responses
@@ -54,7 +54,7 @@ pub enum ResponseMessage {
 pub enum ResponseChannelItem {
     Block(oneshot::Sender<Option<SealedBlock>>),
     SealedHeaders(oneshot::Sender<(PeerId, Option<Vec<SealedBlockHeader>>)>),
-    Transactions2(oneshot::Sender<Option<Vec<Transactions>>>),
+    Transactions(oneshot::Sender<Option<Vec<Transactions>>>),
 }
 
 /// Response that is sent over the wire
@@ -63,7 +63,7 @@ pub enum ResponseChannelItem {
 pub enum NetworkResponse {
     Block(Option<Vec<u8>>),
     Headers(Option<Vec<u8>>),
-    Transactions2(Option<Vec<u8>>),
+    Transactions(Option<Vec<u8>>),
 }
 
 /// Initial state of the `ResponseMessage` prior to having its inner value serialized
@@ -72,7 +72,7 @@ pub enum NetworkResponse {
 pub enum OutboundResponse {
     Block(Option<Arc<SealedBlock>>),
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
-    Transactions2(Option<Arc<Vec<Transactions>>>),
+    Transactions(Option<Arc<Vec<Transactions>>>),
 }
 
 #[derive(Debug, Error)]

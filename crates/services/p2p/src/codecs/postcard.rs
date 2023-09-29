@@ -204,14 +204,14 @@ impl RequestResponseConverter for PostcardCodec {
 
                 Ok(ResponseMessage::SealedBlock(Box::new(response)))
             }
-            NetworkResponse::Transactions2(tx_bytes) => {
+            NetworkResponse::Transactions(tx_bytes) => {
                 let response = if let Some(tx_bytes) = tx_bytes {
                     Some(self.deserialize(tx_bytes)?)
                 } else {
                     None
                 };
 
-                Ok(ResponseMessage::Transactions2(response))
+                Ok(ResponseMessage::Transactions(response))
             }
             NetworkResponse::Headers(headers_bytes) => {
                 let response = headers_bytes
@@ -237,14 +237,14 @@ impl RequestResponseConverter for PostcardCodec {
 
                 Ok(NetworkResponse::Block(response))
             }
-            OutboundResponse::Transactions2(transactions) => {
+            OutboundResponse::Transactions(transactions) => {
                 let response = if let Some(transactions) = transactions {
                     Some(self.serialize(transactions.as_ref())?)
                 } else {
                     None
                 };
 
-                Ok(NetworkResponse::Transactions2(response))
+                Ok(NetworkResponse::Transactions(response))
             }
             OutboundResponse::SealedHeaders(maybe_headers) => {
                 let response = maybe_headers
@@ -278,7 +278,7 @@ mod tests {
 
     #[test]
     fn test_request_size_fits() {
-        let m = RequestMessage::Transactions2(2..6);
+        let m = RequestMessage::Transactions(2..6);
         assert!(postcard::to_stdvec(&m).unwrap().len() <= MAX_REQUEST_SIZE);
     }
 }

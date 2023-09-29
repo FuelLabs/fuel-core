@@ -44,7 +44,7 @@ async fn test_new_service() {
         let headers = peer.bind(headers);
         Ok(headers)
     });
-    p2p.expect_get_transactions_2().returning(|block_ids| {
+    p2p.expect_get_transactions().returning(|block_ids| {
         let data = block_ids.data;
         let v = data.into_iter().map(|_| Transactions::default()).collect();
         Ok(Some(v))

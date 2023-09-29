@@ -50,7 +50,7 @@ impl PeerToPeerPort for PressurePeerToPeer {
         self.p2p.get_sealed_block_headers(block_height_range).await
     }
 
-    async fn get_transactions_2(
+    async fn get_transactions(
         &self,
         block_ids: SourcePeer<Range<u32>>,
     ) -> anyhow::Result<Option<Vec<Transactions>>> {
@@ -60,7 +60,7 @@ impl PeerToPeerPort for PressurePeerToPeer {
         tokio::time::sleep(self.durations[1]).await;
         self.counts
             .apply(|c| c.sub_transactions(transactions_count));
-        self.p2p.get_transactions_2(block_ids).await
+        self.p2p.get_transactions(block_ids).await
     }
 
     fn report_peer(
@@ -85,7 +85,7 @@ impl PressurePeerToPeer {
             let headers = peer.bind(Some(headers));
             Ok(headers)
         });
-        mock.expect_get_transactions_2().returning(|block_ids| {
+        mock.expect_get_transactions().returning(|block_ids| {
             let data = block_ids.data;
             let v = data.into_iter().map(|_| Transactions::default()).collect();
             Ok(Some(v))
