@@ -112,9 +112,9 @@ async fn test_import_3_to_5() {
 async fn test_import_0_to_499() {
     // The observed block height
     let end = 499;
-    // The number of blocks in range 0..end
+    // The number of headers/blocks in range 0..end
     let n = end + 1;
-    // The number of batches per request
+    // The number of headers/blocks per batch
     let header_batch_size = 10;
 
     let mut consensus_port = MockConsensusPort::default();
