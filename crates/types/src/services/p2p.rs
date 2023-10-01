@@ -54,7 +54,7 @@ pub struct GossipData<T> {
 /// Transactions gossiped by peers for inclusion into a block
 pub type TransactionGossipData = GossipData<Transaction>;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// The source of some network data.
 pub struct SourcePeer<T> {
     /// The source of the data.
@@ -112,7 +112,7 @@ pub struct BlockHeightHeartbeatData {
 }
 
 /// Opaque peer identifier.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PeerId(Vec<u8>);
 
