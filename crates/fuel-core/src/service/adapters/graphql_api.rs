@@ -303,7 +303,10 @@ impl P2pPort for P2PAdapter {
                         client_version: peer_info.client_version,
                         heartbeat_data: HeartbeatData {
                             block_height: peer_info.heartbeat_data.block_height,
-                            last_heartbeat: todo!(),//peer_info.heartbeat_data.last_heartbeat,
+                            last_heartbeat: peer_info
+                                .heartbeat_data
+                                .last_heartbeat
+                                .map(Into::into),
                         },
                         app_score: peer_info.score,
                     })
