@@ -16,6 +16,7 @@ fuel-core-services = { workspace = true }
 fuel-core-types = { workspace = true }
 futures = { workspace = true }
 mockall = { workspace = true, optional = true }
+rand = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 

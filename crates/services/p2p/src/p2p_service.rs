@@ -696,7 +696,6 @@ mod tests {
                 BlockHeader,
                 PartialBlockHeader,
             },
-            primitives::BlockId,
             SealedBlock,
             SealedBlockHeader,
         },
@@ -704,7 +703,10 @@ mod tests {
             Transaction,
             TransactionBuilder,
         },
-        services::p2p::GossipsubMessageAcceptance,
+        services::p2p::{
+            GossipsubMessageAcceptance,
+            Transactions,
+        },
     };
     use futures::{
         future::join_all,
@@ -1557,7 +1559,7 @@ mod tests {
             tokio::select! {
                 message_sent = rx_test_end.recv() => {
                     // we received a signal to end the test
-                    assert!(message_sent.unwrap(), "Receuved incorrect or missing missing messsage");
+                    assert!(message_sent.unwrap(), "Received incorrect or missing message");
                     break;
                 }
                 node_a_event = node_a.next_event() => {
@@ -1604,7 +1606,7 @@ mod tests {
                                             }
                                         });
                                     }
-                                    RequestMessage::Transactions(_) => {
+                                    RequestMessage::Transactions(_range) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
                                         assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::Transactions(tx_orchestrator)).is_ok());
                                         let tx_test_end = tx_test_end.clone();
@@ -1613,7 +1615,8 @@ mod tests {
                                             let response_message = rx_orchestrator.await;
 
                                             if let Ok(Some(transactions)) = response_message {
-                                                let _ = tx_test_end.send(transactions.len() == 5).await;
+                                                let check = transactions.len() == 1 && transactions[0].0.len() == 5;
+                                                let _ = tx_test_end.send(check).await;
                                             } else {
                                                 tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
                                                 let _ = tx_test_end.send(false).await;
@@ -1647,7 +1650,8 @@ mod tests {
                                 let _ = node_b.send_response_msg(*request_id, OutboundResponse::SealedHeaders(Some(sealed_headers)));
                             }
                             RequestMessage::Transactions(_) => {
-                                let transactions = (0..5).map(|_| Transaction::default_test_tx()).collect();
+                                let txs = (0..5).map(|_| Transaction::default_test_tx()).collect();
+                                let transactions = vec![Transactions(txs)];
                                 let _ = node_b.send_response_msg(*request_id, OutboundResponse::Transactions(Some(Arc::new(transactions))));
                             }
                         }
@@ -1662,8 +1666,8 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn request_response_works_with_transactions() {
-        request_response_works_with(RequestMessage::Transactions(BlockId::default()))
-            .await
+        let arbitrary_range = 2..6;
+        request_response_works_with(RequestMessage::Transactions(arbitrary_range)).await
     }
 
     #[tokio::test]
@@ -1675,7 +1679,8 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn request_response_works_with_sealed_headers_range_inclusive() {
-        request_response_works_with(RequestMessage::SealedHeaders(2..6)).await
+        let arbitrary_range = 2..6;
+        request_response_works_with(RequestMessage::SealedHeaders(arbitrary_range)).await
     }
 
     #[tokio::test]

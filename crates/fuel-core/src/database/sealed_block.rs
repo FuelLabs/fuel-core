@@ -23,8 +23,8 @@ use fuel_core_types::{
         SealedBlock,
         SealedBlockHeader,
     },
-    fuel_tx::Transaction,
     fuel_types::BlockHeight,
+    services::p2p::Transactions,
 };
 use std::ops::Range;
 
@@ -127,12 +127,21 @@ impl Database {
         }
     }
 
-    pub fn get_transactions_on_block(
+    pub fn get_transactions_on_blocks(
         &self,
-        block_id: &BlockId,
-    ) -> StorageResult<Option<Vec<Transaction>>> {
-        Ok(self
-            .get_sealed_block_by_id(block_id)?
-            .map(|Sealed { entity: block, .. }| block.into_inner().1))
+        block_height_range: Range<u32>,
+    ) -> StorageResult<Option<Vec<Transactions>>> {
+        let transactions = block_height_range
+            .into_iter()
+            .map(BlockHeight::from)
+            .map(|block_height| {
+                let transactions = self
+                    .get_sealed_block_by_height(&block_height)?
+                    .map(|Sealed { entity: block, .. }| block.into_inner().1)
+                    .map(Transactions);
+                Ok(transactions)
+            })
+            .collect::<StorageResult<_>>()?;
+        Ok(transactions)
     }
 }

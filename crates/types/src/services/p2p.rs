@@ -5,8 +5,14 @@ use crate::{
     fuel_types::BlockHeight,
 };
 use std::fmt::Debug;
+
 /// Contains types and logic for Peer Reputation
 pub mod peer_reputation;
+
+/// List of transactions
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Transactions(pub Vec<Transaction>);
 
 /// Lightweight representation of gossipped data that only includes IDs
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -48,13 +54,26 @@ pub struct GossipData<T> {
 /// Transactions gossiped by peers for inclusion into a block
 pub type TransactionGossipData = GossipData<Transaction>;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// The source of some network data.
 pub struct SourcePeer<T> {
     /// The source of the data.
     pub peer_id: PeerId,
     /// The data.
     pub data: T,
+}
+
+impl<T> SourcePeer<T> {
+    /// Maps a `SourcePeer<T>` to `SourcePeer<U>` by applying a function to the
+    /// contained data. The internal `peer_id` is maintained.
+    pub fn map<F, U>(self, mut f: F) -> SourcePeer<U>
+    where
+        F: FnMut(T) -> U,
+    {
+        let peer_id = self.peer_id;
+        let data = f(self.data);
+        SourcePeer { peer_id, data }
+    }
 }
 
 impl<T> GossipData<T> {
@@ -93,7 +112,7 @@ pub struct BlockHeightHeartbeatData {
 }
 
 /// Opaque peer identifier.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PeerId(Vec<u8>);
 
@@ -112,5 +131,16 @@ impl From<Vec<u8>> for PeerId {
 impl From<PeerId> for Vec<u8> {
     fn from(peer_id: PeerId) -> Self {
         peer_id.0
+    }
+}
+
+impl PeerId {
+    /// Bind the PeerId and given data of type T together to generate a
+    /// SourcePeer<T>
+    pub fn bind<T>(self, data: T) -> SourcePeer<T> {
+        SourcePeer {
+            peer_id: self,
+            data,
+        }
     }
 }
