@@ -1059,14 +1059,6 @@ impl PeerReportTestBuilder {
         self
     }
 
-    // pub fn with_get_transactions(
-    //     mut self,
-    //     get_transactions: Option<Vec<Transaction>>,
-    // ) -> Self {
-    //     self.get_transactions = Some(get_transactions);
-    //     self
-    // }
-
     pub fn with_get_transactions(
         mut self,
         get_transactions: Option<Vec<Transactions>>,
