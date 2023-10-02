@@ -73,7 +73,7 @@ impl HeartbeatConfig {
 impl Default for HeartbeatConfig {
     fn default() -> Self {
         Self::new(
-            Duration::from_secs(2),
+            Duration::from_secs(60),
             Duration::from_secs(1),
             NonZeroU32::new(5).expect("5 != 0"),
         )
