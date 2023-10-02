@@ -1666,7 +1666,8 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn request_response_works_with_transactions() {
-        request_response_works_with(RequestMessage::Transactions(2..6)).await
+        let arbitrary_range = 2..6;
+        request_response_works_with(RequestMessage::Transactions(arbitrary_range)).await
     }
 
     #[tokio::test]
@@ -1678,7 +1679,8 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn request_response_works_with_sealed_headers_range_inclusive() {
-        request_response_works_with(RequestMessage::SealedHeaders(2..6)).await
+        let arbitrary_range = 2..6;
+        request_response_works_with(RequestMessage::SealedHeaders(arbitrary_range)).await
     }
 
     #[tokio::test]

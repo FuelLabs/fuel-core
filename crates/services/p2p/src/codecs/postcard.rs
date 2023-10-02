@@ -278,7 +278,8 @@ mod tests {
 
     #[test]
     fn test_request_size_fits() {
-        let m = RequestMessage::Transactions(2..6);
+        let arbitrary_range = 2..6;
+        let m = RequestMessage::Transactions(arbitrary_range);
         assert!(postcard::to_stdvec(&m).unwrap().len() <= MAX_REQUEST_SIZE);
     }
 }

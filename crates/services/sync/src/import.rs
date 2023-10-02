@@ -341,8 +341,7 @@ fn get_block_stream<
                         &consensus,
                     )
                     .await;
-                    let headers =
-                        SealedHeaderBatch::new(peer.clone(), range.clone(), results);
+                    let headers = SealedHeaderBatch::new(peer, range, results);
                     get_blocks(&p2p, headers).await
                 }
             }
