@@ -116,7 +116,7 @@ async fn poa_interval_produces_nonempty_blocks_at_correct_rate() {
             vec![],
         )
         .add_unsigned_coin_input(
-            rng.gen(),
+            SecretKey::random(&mut rng),
             rng.gen(),
             rng.gen(),
             rng.gen(),

@@ -13,11 +13,11 @@ description = "Fuel Relayer"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 bytes = { version = "1.1", optional = true }
-ethers-contract = { version = "1.0.2", default-features = false, features = [
+ethers-contract = { version = "2", default-features = false, features = [
     "abigen",
 ] }
-ethers-core = { version = "1.0.2", default-features = false }
-ethers-providers = { version = "1.0.2", default-features = false, features = [
+ethers-core = { version = "2", default-features = false }
+ethers-providers = { version = "2", default-features = false, features = [
     "ws",
     "rustls",
 ] }

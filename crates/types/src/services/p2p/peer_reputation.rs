@@ -15,3 +15,9 @@ pub trait PeerReport {
     /// Extracts PeerScore from the Report
     fn get_score_from_report(&self) -> AppScore;
 }
+
+impl PeerReport for AppScore {
+    fn get_score_from_report(&self) -> AppScore {
+        *self
+    }
+}

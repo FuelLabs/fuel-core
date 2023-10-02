@@ -12,7 +12,7 @@ use crate::{
     fuel_merkle,
     fuel_tx::Transaction,
     fuel_types::{
-        canonical::SerializedSize,
+        canonical::Serialize,
         BlockHeight,
         Bytes32,
         MessageId,

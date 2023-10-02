@@ -20,7 +20,7 @@ path = "tests/lib.rs"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 cynic = { workspace = true }
-ethers = "1.0.2"
+ethers = "2"
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = ["test-helpers"] }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
 fuel-core-p2p = { path = "../crates/services/p2p", features = ["test-helpers"], optional = true }

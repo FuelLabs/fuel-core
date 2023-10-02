@@ -10,7 +10,7 @@ use rand::{
 async fn can_submit_genesis_message() {
     let mut rng = StdRng::seed_from_u64(1234);
 
-    let secret_key: SecretKey = rng.gen();
+    let secret_key: SecretKey = SecretKey::random(&mut rng);
     let pk = secret_key.public_key();
 
     let msg1 = MessageConfig {
