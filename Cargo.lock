@@ -3117,6 +3117,7 @@ dependencies = [
  "fuel-core-types",
  "futures",
  "mockall",
+ "rand 0.8.5",
  "test-case",
  "tokio",
  "tracing",

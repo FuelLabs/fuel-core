@@ -3,18 +3,15 @@
 use fuel_core_services::stream::BoxStream;
 use fuel_core_types::{
     blockchain::{
-        primitives::{
-            BlockId,
-            DaBlockHeight,
-        },
+        primitives::DaBlockHeight,
         SealedBlock,
         SealedBlockHeader,
     },
-    fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::p2p::{
         PeerId,
         SourcePeer,
+        Transactions,
     },
 };
 use std::ops::Range;
@@ -54,15 +51,11 @@ pub trait PeerToPeerPort {
     /// and source peer.
     async fn get_transactions(
         &self,
-        block_id: SourcePeer<BlockId>,
-    ) -> anyhow::Result<Option<Vec<Transaction>>>;
+        block_ids: SourcePeer<Range<u32>>,
+    ) -> anyhow::Result<Option<Vec<Transactions>>>;
 
     /// Report a peer for some reason to modify their reputation.
-    async fn report_peer(
-        &self,
-        peer: PeerId,
-        report: PeerReportReason,
-    ) -> anyhow::Result<()>;
+    fn report_peer(&self, peer: PeerId, report: PeerReportReason) -> anyhow::Result<()>;
 }
 
 #[cfg_attr(any(test, feature = "benchmarking"), mockall::automock)]
