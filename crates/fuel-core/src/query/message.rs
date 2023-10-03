@@ -205,8 +205,8 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         None => return Ok(None),
     };
 
-    let block_heigth = *commit_block_header.height();
-    if block_heigth == 0u32.into() {
+    let block_height = *commit_block_header.height();
+    if block_height == 0u32.into() {
         // Cannot look beyond the genesis block
         return Ok(None)
     }
