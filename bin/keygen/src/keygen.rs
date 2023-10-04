@@ -40,7 +40,6 @@ pub struct NewKey {
 }
 
 #[derive(Clone, Debug, Default, ValueEnum)]
-#[clap(rename_all = "snake_case")]
 pub enum KeyType {
     #[default]
     BlockProduction,
