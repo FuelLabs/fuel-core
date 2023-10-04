@@ -81,8 +81,9 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(
             &mut bench_k256,
             format!("{i}"),
-            VmBench::new(op::k256(RegId::HP, RegId::ZERO, 0x10))
-                .with_prepare_script(vec![op::movi(0x11, 32), op::aloc(0x11), op::movi(0x10, 5)]),
+            VmBench::new(op::k256(RegId::HP, RegId::ZERO, 0x10)).with_prepare_script(
+                vec![op::movi(0x11, 32), op::aloc(0x11), op::movi(0x10, 5)],
+            ),
         );
     }
     bench_k256.finish();
@@ -93,8 +94,9 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(
             &mut bench_s256,
             format!("{i}"),
-            VmBench::new(op::s256(RegId::HP, RegId::ZERO, 0x10))
-                .with_prepare_script(vec![op::movi(0x11, 32), op::aloc(0x11), op::movi(0x10, *i)]),
+            VmBench::new(op::s256(RegId::HP, RegId::ZERO, 0x10)).with_prepare_script(
+                vec![op::movi(0x11, 32), op::aloc(0x11), op::movi(0x10, *i)],
+            ),
         );
     }
     bench_s256.finish();

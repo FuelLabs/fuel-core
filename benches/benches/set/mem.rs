@@ -108,8 +108,9 @@ pub fn run(c: &mut Criterion) {
 
     let mut mem_mcpi = c.benchmark_group("mcp");
     for i in &linear {
-        if *i >= (1 << 12) { // Too large for immedidate value
-            continue;
+        if *i >= (1 << 12) {
+            // Too large for immedidate value
+            continue
         }
 
         let i_as_u16: u16 = (*i).try_into().unwrap();
