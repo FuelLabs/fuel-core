@@ -3,7 +3,7 @@
 
 use core::ops::RangeInclusive;
 pub use state_builder::*;
-use std::ops::Deref;
+// use std::ops::Deref;
 
 mod state_builder;
 
@@ -14,7 +14,7 @@ mod test;
 /// The state of the Ethereum node.
 pub struct EthState {
     /// The state that the relayer thinks the remote Ethereum node is in.
-    remote: EthHeights,
+    remote: EthHeight,
     /// State related to the Ethereum node that is tracked by the relayer.
     local: Option<EthHeight>,
 }
@@ -25,14 +25,10 @@ type EthHeight = u64;
 /// Type for tracking block height ranges.
 struct Heights<T>(RangeInclusive<T>);
 
-#[derive(Debug)]
-/// Ethereum block height range.
-struct EthHeights(Heights<u64>);
-
 #[derive(Clone, Debug)]
 /// The gap between the eth block height on
 /// the relayer and the Ethereum node.
-pub struct EthSyncGap(Heights<u64>);
+pub struct EthSyncGap(EthHeight, EthHeight);
 
 #[derive(Clone, Debug)]
 /// Block pagination to avoid requesting too
@@ -53,7 +49,7 @@ impl EthState {
     }
 
     pub fn is_synced_at(&self) -> Option<u64> {
-        self.local.filter(|local| *local >= self.remote.finalized())
+        self.local.filter(|local| *local >= self.remote)
     }
 
     /// Get the gap between the relayer and the Ethereum node if
@@ -62,39 +58,39 @@ impl EthState {
         (!self.is_synced()).then(|| {
             EthSyncGap::new(
                 self.local.map(|l| l.saturating_add(1)).unwrap_or(0),
-                self.remote.finalized(),
+                self.remote,
             )
         })
     }
 }
 
-impl EthHeights {
-    /// Create a new Ethereum block height from the current
-    /// block height and the desired finalization period.
-    fn new(current: u64, finalized: u64) -> Self {
-        Self(Heights(current.saturating_sub(finalized)..=current))
-    }
-
-    /// Get the finalized eth block height.
-    fn finalized(&self) -> u64 {
-        *self.0 .0.start()
-    }
-}
+// impl EthHeights {
+//     /// Create a new Ethereum block height from the current
+//     /// block height and the desired finalization period.
+//     fn new(current: u64, finalized: u64) -> Self {
+//         Self(Heights(current.saturating_sub(finalized)..=current))
+//     }
+//
+//     /// Get the finalized eth block height.
+//     fn finalized(&self) -> u64 {
+//         *self.0 .0.start()
+//     }
+// }
 
 impl EthSyncGap {
     /// Create a new sync gap between the relayer and Ethereum node.
     pub(crate) fn new(local: u64, remote: u64) -> Self {
-        Self(Heights(local..=remote))
+        Self(local, remote)
     }
 
     /// Get the oldest block height (which will be the relayers eth block height).
     pub fn oldest(&self) -> u64 {
-        *self.0 .0.start()
+        self.0
     }
 
     /// Get the latest block height (which will be the Ethereum nodes eth block height).
     pub fn latest(&self) -> u64 {
-        *self.0 .0.end()
+        self.1
     }
 
     /// Create a pagination that will run from the oldest
@@ -111,6 +107,12 @@ impl EthSyncGap {
             end: self.latest(),
         };
         (!page.is_empty()).then_some(page)
+    }
+}
+
+impl From<EthSyncGap> for RangeInclusive<u64> {
+    fn from(gap: EthSyncGap) -> Self {
+        gap.oldest()..=gap.latest()
     }
 }
 
@@ -139,10 +141,10 @@ impl EthSyncPage {
     }
 }
 
-impl Deref for EthHeights {
-    type Target = Heights<u64>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
+// impl Deref for EthHeights {
+//     type Target = Heights<u64>;
+//
+//     fn deref(&self) -> &Self::Target {
+//         &self.0
+//     }
+// }

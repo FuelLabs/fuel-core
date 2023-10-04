@@ -314,19 +314,6 @@ where
     P: Middleware<Error = ProviderError>,
     D: RelayerDb + 'static,
 {
-    async fn current(&self) -> anyhow::Result<u64> {
-        let mut shutdown = self.shutdown.clone();
-        tokio::select! {
-            biased;
-            _ = shutdown.while_started() => {
-                Err(anyhow::anyhow!("The relayer got a stop signal"))
-            },
-            block_number = self.eth_node.get_block_number() => {
-                Ok(block_number?.as_u64())
-            }
-        }
-    }
-
     async fn finalized(&self) -> anyhow::Result<u64> {
         let mut shutdown = self.shutdown.clone();
         tokio::select! {
