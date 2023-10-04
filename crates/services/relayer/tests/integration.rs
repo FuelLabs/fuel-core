@@ -126,7 +126,6 @@ async fn deploy_height_is_set() {
     let mock_db = MockDb::default();
     let config = Config {
         da_deploy_height: 50u64.into(),
-        da_finalization: 1u64.into(),
         ..Default::default()
     };
     let eth_node = MockMiddleware::default();

@@ -51,7 +51,6 @@ async fn deploy_height_does_not_override() {
         .unwrap();
     let config = Config {
         da_deploy_height: 20u64.into(),
-        da_finalization: 1u64.into(),
         ..Default::default()
     };
     let eth_node = MockMiddleware::default();
@@ -69,7 +68,6 @@ async fn deploy_height_does_override() {
         .unwrap();
     let config = Config {
         da_deploy_height: 52u64.into(),
-        da_finalization: 1u64.into(),
         ..Default::default()
     };
     let eth_node = MockMiddleware::default();
