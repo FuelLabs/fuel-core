@@ -327,8 +327,22 @@ where
         }
     }
 
-    fn finalization_period(&self) -> u64 {
-        *self.config.da_finalization
+    async fn finalized(&self) -> anyhow::Result<u64> {
+        let mut shutdown = self.shutdown.clone();
+        tokio::select! {
+            biased;
+            _ = shutdown.while_started() => {
+                Err(anyhow::anyhow!("The relayer got a stop signal"))
+            },
+            block = self.eth_node.get_block(ethers_core::types::BlockNumber::Finalized) => {
+                let block_number = if let Ok(Some(block)) = block {
+                    block.number.ok_or(anyhow::anyhow!("Pending"))
+                } else {
+                    Err(anyhow::anyhow!("error"))
+                };
+                Ok(block_number?.as_u64())
+            }
+        }
     }
 }
 
@@ -338,7 +352,7 @@ where
     P: Middleware<Error = ProviderError>,
     D: RelayerDb + 'static,
 {
-    fn finalized(&self) -> Option<u64> {
+    fn observed(&self) -> Option<u64> {
         self.database.get_finalized_da_height().map(|h| *h).ok()
     }
 }

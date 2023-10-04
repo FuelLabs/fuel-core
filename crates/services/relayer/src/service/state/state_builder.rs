@@ -7,15 +7,15 @@ use async_trait::async_trait;
 pub trait EthRemote {
     /// The current block height on the Ethereum node.
     async fn current(&self) -> anyhow::Result<u64>;
-    /// The amount of blocks to wait before we consider an
-    /// eth block finalized.
-    fn finalization_period(&self) -> u64;
+
+    /// The most recently finalized height on the Ethereum node.
+    async fn finalized(&self) -> anyhow::Result<u64>;
 }
 
 #[async_trait]
 pub trait EthLocal {
     /// The current finalized eth block that the relayer has seen.
-    fn finalized(&self) -> Option<u64>;
+    fn observed(&self) -> Option<u64>;
 }
 
 /// Build the Ethereum state.
@@ -23,9 +23,12 @@ pub async fn build_eth<T>(t: &T) -> anyhow::Result<EthState>
 where
     T: EthRemote + EthLocal + ?Sized,
 {
+    let current = t.current().await?;
+    let finalized = t.finalized().await?;
+    let observed = t.observed();
     Ok(EthState {
-        remote: EthHeights::new(t.current().await?, t.finalization_period()),
-        local: t.finalized(),
+        remote: EthHeights::new(current, finalized),
+        local: observed,
     })
 }
 
@@ -44,13 +47,13 @@ pub mod test_builder {
         async fn current(&self) -> anyhow::Result<u64> {
             Ok(self.eth_remote_current)
         }
-        fn finalization_period(&self) -> u64 {
-            self.eth_remote_finalization_period
+        async fn finalized(&self) -> anyhow::Result<u64> {
+            Ok(self.eth_remote_current)
         }
     }
 
     impl EthLocal for TestDataSource {
-        fn finalized(&self) -> Option<u64> {
+        fn observed(&self) -> Option<u64> {
             self.eth_local_finalized
         }
     }

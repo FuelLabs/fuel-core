@@ -71,10 +71,8 @@ impl EthState {
 impl EthHeights {
     /// Create a new Ethereum block height from the current
     /// block height and the desired finalization period.
-    fn new(current: u64, finalization_period: u64) -> Self {
-        Self(Heights(
-            current.saturating_sub(finalization_period)..=current,
-        ))
+    fn new(current: u64, finalized: u64) -> Self {
+        Self(Heights(current.saturating_sub(finalized)..=current))
     }
 
     /// Get the finalized eth block height.
