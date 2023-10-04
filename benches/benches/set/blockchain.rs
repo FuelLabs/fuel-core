@@ -327,7 +327,7 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("burn"),
         "burn",
-        VmBench::contract(rng, op::burn(RegId::ZERO, RegId::ZERO))
+        VmBench::contract(rng, op::mint(RegId::ZERO, RegId::ZERO))
             .expect("failed to prepare contract"),
     );
 
