@@ -322,10 +322,14 @@ where
                 Err(anyhow::anyhow!("The relayer got a stop signal"))
             },
             block = self.eth_node.get_block(ethers_core::types::BlockNumber::Finalized) => {
-                let block_number = if let Ok(Some(block)) = block {
-                    block.number.ok_or(anyhow::anyhow!("Pending"))
-                } else {
-                    Err(anyhow::anyhow!("error"))
+                let block_number = match block {
+                    Ok(Some(block)) => {
+                        // If the block number is missing, it means the block
+                        // is pending
+                        block.number.ok_or(anyhow::anyhow!("Block pending"))
+                    },
+                    Ok(_) => Err(anyhow::anyhow!("Block missing")),
+                    Err(e) => Err(anyhow::anyhow!(e))
                 };
                 Ok(block_number?.as_u64())
             }

@@ -63,19 +63,6 @@ impl EthState {
     }
 }
 
-// impl EthHeights {
-//     /// Create a new Ethereum block height from the current
-//     /// block height and the desired finalization period.
-//     fn new(current: u64, finalized: u64) -> Self {
-//         Self(Heights(current.saturating_sub(finalized)..=current))
-//     }
-//
-//     /// Get the finalized eth block height.
-//     fn finalized(&self) -> u64 {
-//         *self.0 .0.start()
-//     }
-// }
-
 impl EthSyncGap {
     /// Create a new sync gap between the relayer and Ethereum node.
     pub(crate) fn new(local: u64, remote: u64) -> Self {
@@ -139,11 +126,3 @@ impl EthSyncPage {
         *self.current.end()
     }
 }
-
-// impl Deref for EthHeights {
-//     type Target = Heights<u64>;
-//
-//     fn deref(&self) -> &Self::Target {
-//         &self.0
-//     }
-// }
