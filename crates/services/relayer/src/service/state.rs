@@ -56,10 +56,9 @@ impl EthState {
     /// a sync is required.
     pub fn needs_to_sync_eth(&self) -> Option<EthSyncGap> {
         (!self.is_synced()).then(|| {
-            EthSyncGap::new(
-                self.local.map(|l| l.saturating_add(1)).unwrap_or(0),
-                self.remote,
-            )
+            let local = self.local.map(|l| l.saturating_add(1)).unwrap_or(0);
+            let remote = self.remote;
+            EthSyncGap::new(local, remote)
         })
     }
 }
