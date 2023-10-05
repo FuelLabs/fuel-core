@@ -1,12 +1,14 @@
 use super::run_group_ref;
 
-use criterion::Criterion;
+use criterion::{
+    Criterion,
+    Throughput,
+};
 use ed25519_dalek::Signer;
 use fuel_core_benches::*;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_crypto::*,
-    fuel_types::*,
 };
 use rand::{
     rngs::StdRng,
@@ -71,41 +73,33 @@ pub fn run(c: &mut Criterion) {
             ),
     );
 
-    run_group_ref(
-        &mut c.benchmark_group("k256"),
-        "k256",
-        VmBench::new(op::k256(RegId::HP, RegId::ZERO, 0x11))
-            .with_prepare_script(vec![
-                op::movi(0x10, Bytes32::LEN.try_into().unwrap()),
-                op::aloc(0x10),
-                op::movi(0x11, 32),
-            ])
-            .with_data(
-                eck1_signature
-                    .iter()
-                    .chain(message.iter())
-                    .copied()
-                    .collect(),
-            ),
-    );
+    let linear = super::generate_linear_costs();
 
-    run_group_ref(
-        &mut c.benchmark_group("s256"),
-        "s256",
-        VmBench::new(op::s256(RegId::HP, RegId::ZERO, 0x11))
-            .with_prepare_script(vec![
-                op::movi(0x10, Bytes32::LEN.try_into().unwrap()),
-                op::aloc(0x10),
-                op::movi(0x11, 32),
-            ])
-            .with_data(
-                eck1_signature
-                    .iter()
-                    .chain(message.iter())
-                    .copied()
-                    .collect(),
+    let mut bench_k256 = c.benchmark_group("k256");
+    for i in &linear {
+        bench_k256.throughput(Throughput::Bytes(*i as u64));
+        run_group_ref(
+            &mut bench_k256,
+            format!("{i}"),
+            VmBench::new(op::k256(RegId::HP, RegId::ZERO, 0x10)).with_prepare_script(
+                vec![op::movi(0x11, 32), op::aloc(0x11), op::movi(0x10, *i)],
             ),
-    );
+        );
+    }
+    bench_k256.finish();
+
+    let mut bench_s256 = c.benchmark_group("s256");
+    for i in &linear {
+        bench_s256.throughput(Throughput::Bytes(*i as u64));
+        run_group_ref(
+            &mut bench_s256,
+            format!("{i}"),
+            VmBench::new(op::s256(RegId::HP, RegId::ZERO, 0x10)).with_prepare_script(
+                vec![op::movi(0x11, 32), op::aloc(0x11), op::movi(0x10, *i)],
+            ),
+        );
+    }
+    bench_s256.finish();
 
     let ed19_keypair =
         ed25519_dalek::Keypair::generate(&mut ed25519_dalek_old_rand::rngs::OsRng {});
