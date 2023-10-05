@@ -106,7 +106,7 @@ pub fn run(c: &mut Criterion) {
     }
     mem_mcp.finish();
 
-    let mut mem_mcpi = c.benchmark_group("mcp");
+    let mut mem_mcpi = c.benchmark_group("mcpi");
 
     let mut imm12_linear: Vec<_> = linear
         .iter()
