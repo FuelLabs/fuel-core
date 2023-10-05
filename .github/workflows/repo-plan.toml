@@ -1,0 +1,14 @@
+[current-repo]
+name = "fuel-core"
+owner = "FuelLabs"
+
+[repo.fuels-rs.details]
+name = "fuels-rs"
+owner = "FuelLabs"
+
+[repo.fuel-core.details]
+name = "fuel-core"
+owner = "FuelLabs"
+
+[repo.fuels-rs]
+dependencies = ["fuel-core"]
