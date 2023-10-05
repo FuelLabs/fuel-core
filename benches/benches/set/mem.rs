@@ -107,12 +107,14 @@ pub fn run(c: &mut Criterion) {
     mem_mcp.finish();
 
     let mut mem_mcpi = c.benchmark_group("mcp");
-    for i in &linear {
-        if *i >= (1 << 12) {
-            // Too large for immedidate value
-            continue
-        }
 
+    let mut imm12_linear: Vec<_> = linear
+        .iter()
+        .copied()
+        .take_while(|p| *p < (1 << 12))
+        .collect();
+    imm12_linear.push((1 << 12) - 1);
+    for i in &imm12_linear {
         let i_as_u16: u16 = (*i).try_into().unwrap();
         mem_mcpi.throughput(Throughput::Bytes(*i as u64));
         run_group_ref(
