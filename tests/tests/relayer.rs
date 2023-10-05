@@ -309,6 +309,10 @@ async fn handle(
             let r = mock.get_block_number().await.unwrap();
             json!({ "id": id, "jsonrpc": "2.0", "result": r })
         }
+        "eth_getBlockByNumber" => {
+            let r = mock.get_block(id).await.unwrap().unwrap();
+            json!({ "id": id, "jsonrpc": "2.0", "result": r })
+        }
         "eth_syncing" => {
             let r = mock.syncing().await.unwrap();
             match r {
@@ -330,7 +334,7 @@ async fn handle(
             let r = mock.get_logs(&params[0]).await.unwrap();
             json!({ "id": id, "jsonrpc": "2.0", "result": r })
         }
-        _ => unreachable!(),
+        _ => unreachable!("Mock handler for method not defined"),
     };
 
     let r = serde_json::to_vec(&r).unwrap();
