@@ -1,29 +1,55 @@
 use crate::{
     database::Database,
-    service::adapters::{BlockImporterAdapter, P2PAdapter},
+    service::adapters::{
+        BlockImporterAdapter,
+        P2PAdapter,
+    },
 };
 use fuel_core_p2p::PeerId;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
     not_found,
-    tables::{Coins, ContractsRawCode, Messages, SpentMessages},
-    Result as StorageResult, StorageAsRef,
+    tables::{
+        Coins,
+        ContractsRawCode,
+        Messages,
+        SpentMessages,
+    },
+    Result as StorageResult,
+    StorageAsRef,
 };
 use fuel_core_txpool::ports::BlockImporter;
 use fuel_core_types::{
-    entities::{coins::coin::CompressedCoin, message::Message},
-    fuel_tx::{Transaction, UtxoId},
-    fuel_types::{BlockHeight, ContractId, Nonce},
+    entities::{
+        coins::coin::CompressedCoin,
+        message::Message,
+    },
+    fuel_tx::{
+        Transaction,
+        UtxoId,
+    },
+    fuel_types::{
+        BlockHeight,
+        ContractId,
+        Nonce,
+    },
     services::{
         block_importer::ImportResult,
-        p2p::{GossipsubMessageAcceptance, GossipsubMessageInfo, TransactionGossipData},
+        p2p::{
+            GossipsubMessageAcceptance,
+            GossipsubMessageInfo,
+            TransactionGossipData,
+        },
     },
 };
 use std::sync::Arc;
 
 impl BlockImporter for BlockImporterAdapter {
     fn block_events(&self) -> BoxStream<Arc<ImportResult>> {
-        use tokio_stream::{wrappers::BroadcastStream, StreamExt};
+        use tokio_stream::{
+            wrappers::BroadcastStream,
+            StreamExt,
+        };
         Box::pin(
             BroadcastStream::new(self.block_importer.subscribe())
                 .filter_map(|result| result.ok()),
@@ -47,7 +73,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     async fn send_pooled_transactions(
         &self,
         peer_id: PeerId,
-        transactions: Vec<String>,
+        transactions: Vec<Transaction>,
     ) -> anyhow::Result<()> {
         if let Some(service) = &self.service {
             service
@@ -59,7 +85,10 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     }
 
     fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction> {
-        use tokio_stream::{wrappers::BroadcastStream, StreamExt};
+        use tokio_stream::{
+            wrappers::BroadcastStream,
+            StreamExt,
+        };
         if let Some(service) = &self.service {
             Box::pin(
                 BroadcastStream::new(service.subscribe_tx())
@@ -82,8 +111,26 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         }
     }
 
+    fn incoming_pooled_transactions(&self) -> BoxStream<Vec<Transaction>> {
+        use tokio_stream::{
+            wrappers::BroadcastStream,
+            StreamExt,
+        };
+        if let Some(service) = &self.service {
+            Box::pin(
+                BroadcastStream::new(service.subscribe_to_incoming_pooled_transactions())
+                    .filter_map(|result| result.ok()),
+            )
+        } else {
+            fuel_core_services::stream::IntoBoxStream::into_boxed(tokio_stream::pending())
+        }
+    }
+
     fn new_connection(&self) -> BoxStream<PeerId> {
-        use tokio_stream::{wrappers::BroadcastStream, StreamExt};
+        use tokio_stream::{
+            wrappers::BroadcastStream,
+            StreamExt,
+        };
         if let Some(service) = &self.service {
             Box::pin(
                 BroadcastStream::new(service.subscribe_to_connections())
@@ -117,6 +164,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     ) -> anyhow::Result<()> {
         Ok(())
     }
+    // TODO: implement missing methods for this adapter.
 }
 
 impl fuel_core_txpool::ports::TxPoolDb for Database {

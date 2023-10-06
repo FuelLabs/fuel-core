@@ -91,7 +91,7 @@ async fn test_partition_single(num_txs: usize) {
             Some(ValidatorSetup::new(pub_key).with_name("Bob")),
             Some(ValidatorSetup::new(pub_key).with_name("Carol")),
         ],
-        disable_block_production
+        disable_block_production,
     )
     .await;
 
@@ -157,7 +157,7 @@ async fn test_partitions_larger_groups(
         (0..num_validators).map(|i| {
             Some(ValidatorSetup::new(pub_key).with_name(format!("{pub_key}:{i}")))
         }),
-        disable_block_production
+        disable_block_production,
     )
     .await;
 
@@ -259,7 +259,7 @@ async fn test_multiple_producers_different_keys() {
                 Some(ValidatorSetup::new(*pub_key).with_name(format!("{pub_key}:{i}")))
             })
         }),
-        disable_block_production
+        disable_block_production,
     )
     .await;
 
@@ -317,7 +317,7 @@ async fn test_multiple_producers_same_key() {
         std::iter::repeat(Some(BootstrapSetup::new(pub_key))).take(num_producers),
         std::iter::repeat(Some(ProducerSetup::new(secret))).take(num_producers),
         std::iter::repeat(Some(ValidatorSetup::new(pub_key))).take(num_validators),
-        disable_block_production
+        disable_block_production,
     )
     .await;
 

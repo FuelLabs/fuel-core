@@ -100,7 +100,7 @@ enum TaskRequest {
     },
     SendPooledTransactions {
         to_peer: PeerId,
-        transactions: Vec<String>, // temp string
+        transactions: Vec<Transaction>,
     },
     GetTransactions {
         block_id: BlockId,
@@ -252,6 +252,11 @@ pub trait Broadcast: Send {
     fn tx_broadcast(&self, transaction: TransactionGossipData) -> anyhow::Result<()>;
 
     fn connection_broadcast(&self, peer_id: PeerId) -> anyhow::Result<()>;
+
+    fn incoming_pooled_transactions(
+        &self,
+        transactions: Vec<Transaction>,
+    ) -> anyhow::Result<()>;
 }
 
 impl Broadcast for SharedState {
@@ -279,6 +284,14 @@ impl Broadcast for SharedState {
 
     fn connection_broadcast(&self, peer_id: PeerId) -> anyhow::Result<()> {
         self.connection_broadcast.send(peer_id)?;
+        Ok(())
+    }
+
+    fn incoming_pooled_transactions(
+        &self,
+        transactions: Vec<Transaction>,
+    ) -> anyhow::Result<()> {
+        self.incoming_pooled_transactions.send(transactions)?;
         Ok(())
     }
 }
@@ -325,6 +338,7 @@ impl<D> Task<FuelP2PService<PostcardCodec>, D, SharedState> {
         let (tx_broadcast, _) = broadcast::channel(100);
         let (block_height_broadcast, _) = broadcast::channel(100);
         let (connection_broadcast, _) = broadcast::channel(100);
+        let (incoming_pooled_transactions, _) = broadcast::channel(100);
 
         // Hardcoded for now, but left here to be configurable in the future.
         // TODO: https://github.com/FuelLabs/fuel-core/issues/1340
@@ -352,6 +366,7 @@ impl<D> Task<FuelP2PService<PostcardCodec>, D, SharedState> {
                 reserved_peers_broadcast,
                 block_height_broadcast,
                 connection_broadcast,
+                incoming_pooled_transactions,
             },
             max_headers_per_request,
             heartbeat_check_interval,
@@ -589,9 +604,9 @@ where
                                 }
                             }
                             RequestMessage::PooledTransactions(transactions) => {
-                                // Temp `todo!` because with this new implementation we're
-                                // never getting to this point, as the node was already disconnected.
-                                todo!("Pooled transactions are not yet implemented");
+                                // Received pooled transactions from a peer. Send those
+                                // transactions to the txpool service.
+                                self.broadcast.incoming_pooled_transactions(transactions)?;
                             }
                             RequestMessage::SealedHeaders(range) => {
                                 let max_len = self.max_headers_per_request.try_into().expect("u32 should always fit into usize");
@@ -669,6 +684,8 @@ pub struct SharedState {
     block_height_broadcast: broadcast::Sender<BlockHeightHeartbeatData>,
     /// Sender of new incoming connections
     connection_broadcast: broadcast::Sender<PeerId>,
+    /// Sender of incoming pooled Transactions
+    incoming_pooled_transactions: broadcast::Sender<Vec<Transaction>>,
 }
 
 impl SharedState {
@@ -748,9 +765,8 @@ impl SharedState {
     pub async fn send_pooled_transactions_to_peer(
         &self,
         peer_id: Vec<u8>,
-        transactions: Vec<String>,
+        transactions: Vec<Transaction>,
     ) -> anyhow::Result<()> {
-        // temp string
         let to_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
 
         self.request_sender
@@ -812,6 +828,12 @@ impl SharedState {
 
     pub fn subscribe_to_connections(&self) -> broadcast::Receiver<PeerId> {
         self.connection_broadcast.subscribe()
+    }
+
+    pub fn subscribe_to_incoming_pooled_transactions(
+        &self,
+    ) -> broadcast::Receiver<Vec<Transaction>> {
+        self.incoming_pooled_transactions.subscribe()
     }
 
     pub fn report_peer<T: PeerReport>(

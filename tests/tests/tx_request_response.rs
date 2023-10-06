@@ -1,21 +1,9 @@
-use fuel_core::{
-    chain_config::{
-        CoinConfig,
-        StateConfig,
-    },
-    service::{
-        Config,
-        FuelService,
-    },
-};
-use fuel_core::{
-    p2p_test_helpers::{
-        make_nodes, BootstrapSetup, Nodes, ProducerSetup, ValidatorSetup,
-    },
-};
-use std::{
-    collections::hash_map::DefaultHasher,
-    hash::{Hash, Hasher},
+use fuel_core::p2p_test_helpers::{
+    make_nodes,
+    BootstrapSetup,
+    Nodes,
+    ProducerSetup,
+    ValidatorSetup,
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_poa::Trigger;
@@ -32,18 +20,22 @@ use fuel_core_types::{
 };
 use rand::{
     rngs::StdRng,
-    Rng,
     SeedableRng,
 };
-use std::time::Duration;
-
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{
+        Hash,
+        Hasher,
+    },
+    time::Duration,
+};
 
 // This test is set up in such a way that the transaction is not committed
 // as we've disabled the block production. This is to test that the peer
 // will request this transaction from the other peer upon connection.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_tx_request() {
-    use futures::StreamExt;
     // Create a random seed based on the test parameters.
     let mut hasher = DefaultHasher::new();
     let num_txs = 1;
@@ -89,34 +81,60 @@ async fn test_tx_request() {
         }),
         disable_block_production,
     )
-        .await;
+    .await;
 
-    let _client_one = FuelClient::from(validators[0].node.bound_address);
+    let client_one = FuelClient::from(validators[0].node.bound_address);
 
     // Temporarily shut down the second node.
-     producers[0].shutdown().await;
-
-
+    producers[0].shutdown().await;
 
     // Insert transactions into the mempool of the first node.
     validators[0].test_txs = producers[0].test_txs.clone();
-    let (tx_id, _) = validators[0]
-        .insert_txs()
-        .await
-        .into_iter()
-        .next()
-        .expect("Validator is initialized with one transaction");
-
-    println!("tx_id = {:?}", tx_id);
+    let _tx = validators[0].insert_txs().await;
 
     // Sleep for 2 seconds
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     // Start second node
-     producers[0].start().await;
+    producers[0].start().await;
 
     let client_two = FuelClient::from(producers[0].node.bound_address);
 
-    let wait_time = Duration::from_secs(10);
-    tokio::time::sleep(wait_time).await;
+    // Produce a new block with the participating nodes.
+    // It's expected that they will:
+    // 1. Connect to each other;
+    // 2. Share the transaction;
+    // 3. Produce a block with the transaction;
+    let _ = client_one.produce_blocks(1, None).await.unwrap();
+    let _ = client_two.produce_blocks(1, None).await.unwrap();
+
+    let chain_id = validators[0]
+        .config
+        .chain_conf
+        .consensus_parameters
+        .chain_id();
+
+    let request = fuel_core_client::client::pagination::PaginationRequest {
+        cursor: None,
+        results: 10,
+        direction: fuel_core_client::client::pagination::PageDirection::Forward,
+    };
+
+    let first_node_txs = client_two.transactions(request.clone()).await.unwrap();
+    let second_node_txs = client_one.transactions(request).await.unwrap();
+
+    let first_node_tx = first_node_txs
+        .results
+        .first()
+        .expect("txs should have at least one result")
+        .transaction
+        .id(&chain_id);
+    let second_node_tx = second_node_txs
+        .results
+        .first()
+        .expect("txs should have at least one result")
+        .transaction
+        .id(&chain_id);
+
+    assert_eq!(first_node_tx, second_node_tx);
 }

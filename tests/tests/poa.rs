@@ -125,11 +125,19 @@ mod p2p {
         };
 
         let disable_block_production = false;
-        let bootstrap_config = make_config("Bootstrap".to_string(), chain_config.clone(), disable_block_production);
+        let bootstrap_config = make_config(
+            "Bootstrap".to_string(),
+            chain_config.clone(),
+            disable_block_production,
+        );
         let bootstrap = Bootstrap::new(&bootstrap_config).await;
 
         let make_node_config = |name: &str| {
-            let mut config = make_config(name.to_string(), chain_config.clone(), disable_block_production);
+            let mut config = make_config(
+                name.to_string(),
+                chain_config.clone(),
+                disable_block_production,
+            );
             config.block_production = Trigger::Interval {
                 block_time: Duration::from_secs(INTERVAL),
             };

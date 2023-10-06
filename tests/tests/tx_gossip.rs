@@ -1,25 +1,41 @@
 use fuel_core::{
-    chain_config::{CoinConfig, StateConfig},
-    p2p_test_helpers::{
-        make_nodes, BootstrapSetup, Nodes, ProducerSetup, ValidatorSetup,
+    chain_config::{
+        CoinConfig,
+        StateConfig,
     },
-    service::{Config, FuelService},
+    p2p_test_helpers::{
+        make_nodes,
+        BootstrapSetup,
+        Nodes,
+        ProducerSetup,
+        ValidatorSetup,
+    },
+    service::Config,
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
     fuel_tx::{
         field::*,
-        input::coin::{CoinPredicate, CoinSigned},
+        input::coin::{
+            CoinPredicate,
+            CoinSigned,
+        },
         *,
     },
     fuel_vm::*,
 };
 
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{
+    rngs::StdRng,
+    SeedableRng,
+};
 use std::{
     collections::hash_map::DefaultHasher,
-    hash::{Hash, Hasher},
+    hash::{
+        Hash,
+        Hasher,
+    },
     time::Duration,
 };
 
@@ -107,7 +123,7 @@ async fn test_tx_gossiping() {
                 Some(ValidatorSetup::new(*pub_key).with_name(format!("{pub_key}:{i}")))
             })
         }),
-        disable_block_production
+        disable_block_production,
     )
     .await;
 

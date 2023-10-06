@@ -1,37 +1,75 @@
 use crate::{
-    behavior::{FuelBehaviour, FuelBehaviourEvent},
+    behavior::{
+        FuelBehaviour,
+        FuelBehaviourEvent,
+    },
     codecs::NetworkCodec,
-    config::{build_transport, Config},
+    config::{
+        build_transport,
+        Config,
+    },
     gossipsub::{
-        messages::{GossipsubBroadcastRequest, GossipsubMessage as FuelGossipsubMessage},
+        messages::{
+            GossipsubBroadcastRequest,
+            GossipsubMessage as FuelGossipsubMessage,
+        },
         topics::GossipsubTopics,
     },
-    peer_manager::{PeerManager, Punisher},
+    peer_manager::{
+        PeerManager,
+        Punisher,
+    },
     peer_report::PeerReportEvent,
     request_response::messages::{
-        NetworkResponse, OutboundResponse, RequestError, RequestMessage,
-        ResponseChannelItem, ResponseError, ResponseMessage,
+        NetworkResponse,
+        OutboundResponse,
+        RequestError,
+        RequestMessage,
+        ResponseChannelItem,
+        ResponseError,
+        ResponseMessage,
     },
 };
 use fuel_core_metrics::p2p_metrics::p2p_metrics;
 use fuel_core_types::{
-    fuel_types::BlockHeight, services::p2p::peer_reputation::AppScore,
+    fuel_types::BlockHeight,
+    services::p2p::peer_reputation::AppScore,
 };
 use futures::prelude::*;
 use libp2p::{
     gossipsub::{
-        error::PublishError, GossipsubEvent, MessageAcceptance, MessageId, TopicHash,
+        error::PublishError,
+        GossipsubEvent,
+        MessageAcceptance,
+        MessageId,
+        TopicHash,
     },
     multiaddr::Protocol,
     request_response::{
-        RequestId, RequestResponseEvent, RequestResponseMessage, ResponseChannel,
+        RequestId,
+        RequestResponseEvent,
+        RequestResponseMessage,
+        ResponseChannel,
     },
-    swarm::{AddressScore, ConnectionLimits, SwarmBuilder, SwarmEvent},
-    Multiaddr, PeerId, Swarm,
+    swarm::{
+        AddressScore,
+        ConnectionLimits,
+        SwarmBuilder,
+        SwarmEvent,
+    },
+    Multiaddr,
+    PeerId,
+    Swarm,
 };
 use rand::seq::IteratorRandom;
-use std::{collections::HashMap, time::Duration};
-use tracing::{debug, warn};
+use std::{
+    collections::HashMap,
+    time::Duration,
+};
+use tracing::{
+    debug,
+    warn,
+};
 
 impl<Codec: NetworkCodec> Punisher for Swarm<FuelBehaviour<Codec>> {
     fn ban_peer(&mut self, peer_id: PeerId) {
@@ -219,7 +257,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         loop {
             if let SwarmEvent::NewListenAddr { .. } = self.swarm.select_next_some().await
             {
-                break;
+                break
             }
         }
     }
@@ -275,7 +313,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 let peers_count = self.peer_manager.total_peers_connected();
 
                 if peers_count == 0 {
-                    return Err(RequestError::NoPeersConnected);
+                    return Err(RequestError::NoPeersConnected)
                 }
 
                 let mut range = rand::thread_rng();
@@ -317,16 +355,16 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                     .is_err()
                 {
                     debug!("Failed to send ResponseMessage for {:?}", request_id);
-                    return Err(ResponseError::SendingResponseFailed);
+                    return Err(ResponseError::SendingResponseFailed)
                 }
             }
             (Ok(_), None) => {
                 debug!("ResponseChannel for {:?} does not exist!", request_id);
-                return Err(ResponseError::ResponseChannelDoesNotExist);
+                return Err(ResponseError::ResponseChannelDoesNotExist)
             }
             (Err(e), _) => {
                 debug!("Failed to convert to IntermediateResponse with {:?}", e);
-                return Err(ResponseError::ConversionToIntermediateFailed);
+                return Err(ResponseError::ConversionToIntermediateFailed)
             }
         }
 
@@ -507,7 +545,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                         return Some(FuelP2PEvent::PeerInfoUpdated {
                             peer_id,
                             block_height,
-                        });
+                        })
                     }
                     PeerReportEvent::PeerConnected {
                         peer_id,
@@ -521,7 +559,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                         ) {
                             let _ = self.swarm.disconnect_peer_id(peer_id);
                         } else if initial_connection {
-                            return Some(FuelP2PEvent::PeerConnected(peer_id));
+                            return Some(FuelP2PEvent::PeerConnected(peer_id))
                         }
                     }
                     PeerReportEvent::PeerDisconnected { peer_id } => {
@@ -531,7 +569,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                         if self.peer_manager.handle_peer_disconnect(peer_id) {
                             let _ = self.swarm.dial(peer_id);
                         }
-                        return Some(FuelP2PEvent::PeerDisconnected(peer_id));
+                        return Some(FuelP2PEvent::PeerDisconnected(peer_id))
                     }
                 }
             }
@@ -547,7 +585,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                         return Some(FuelP2PEvent::RequestMessage {
                             request_id,
                             request_message: request,
-                        });
+                        })
                     }
                     RequestResponseMessage::Response {
                         request_id,
@@ -645,47 +683,81 @@ mod tests {
         codecs::postcard::PostcardCodec,
         config::Config,
         gossipsub::{
-            messages::{GossipsubBroadcastRequest, GossipsubMessage},
+            messages::{
+                GossipsubBroadcastRequest,
+                GossipsubMessage,
+            },
             topics::{
-                GossipTopic, CON_VOTE_GOSSIP_TOPIC, NEW_BLOCK_GOSSIP_TOPIC,
+                GossipTopic,
+                CON_VOTE_GOSSIP_TOPIC,
+                NEW_BLOCK_GOSSIP_TOPIC,
                 NEW_TX_GOSSIP_TOPIC,
             },
         },
         p2p_service::FuelP2PEvent,
         peer_manager::PeerInfo,
         request_response::messages::{
-            OutboundResponse, RequestMessage, ResponseChannelItem,
+            OutboundResponse,
+            RequestMessage,
+            ResponseChannelItem,
         },
         service::to_message_acceptance,
     };
     use fuel_core_types::{
         blockchain::{
             block::Block,
-            consensus::{poa::PoAConsensus, Consensus, ConsensusVote},
-            header::{BlockHeader, PartialBlockHeader},
+            consensus::{
+                poa::PoAConsensus,
+                Consensus,
+                ConsensusVote,
+            },
+            header::{
+                BlockHeader,
+                PartialBlockHeader,
+            },
             primitives::BlockId,
-            SealedBlock, SealedBlockHeader,
+            SealedBlock,
+            SealedBlockHeader,
         },
-        fuel_tx::{Transaction, TransactionBuilder},
+        fuel_tx::{
+            Transaction,
+            TransactionBuilder,
+        },
         services::p2p::GossipsubMessageAcceptance,
     };
-    use futures::{future::join_all, StreamExt};
+    use futures::{
+        future::join_all,
+        StreamExt,
+    };
     use libp2p::{
-        gossipsub::{error::PublishError, Topic},
+        gossipsub::{
+            error::PublishError,
+            Topic,
+        },
         identity::Keypair,
         swarm::SwarmEvent,
-        Multiaddr, PeerId,
+        Multiaddr,
+        PeerId,
     };
     use libp2p_swarm::PendingInboundConnectionError;
     use rand::Rng;
     use std::{
         collections::HashSet,
-        net::{IpAddr, Ipv4Addr, SocketAddrV4, TcpListener},
+        net::{
+            IpAddr,
+            Ipv4Addr,
+            SocketAddrV4,
+            TcpListener,
+        },
         ops::Range,
         sync::Arc,
         time::Duration,
     };
-    use tokio::sync::{mpsc, oneshot, watch};
+    use tokio::sync::{
+        mpsc,
+        oneshot,
+        watch,
+    };
     use tracing_attributes::instrument;
 
     type P2PService = FuelP2PService<PostcardCodec>;
@@ -742,7 +814,7 @@ mod tests {
             match fuel_p2p_service.swarm.select_next_some().await {
                 SwarmEvent::NewListenAddr { .. } => {
                     // listener address registered, we are good to go
-                    break;
+                    break
                 }
                 SwarmEvent::Behaviour(_) => {}
                 other_event => {
@@ -1047,7 +1119,10 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn nodes_cannot_connect_due_to_different_checksum() {
-        use libp2p::{swarm::DialError, TransportError};
+        use libp2p::{
+            swarm::DialError,
+            TransportError,
+        };
         // Node A
         let mut p2p_config =
             Config::default_initialized("nodes_cannot_connect_due_to_different_checksum");
