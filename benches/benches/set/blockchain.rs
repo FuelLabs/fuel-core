@@ -1,4 +1,5 @@
 use std::iter::successors;
+use std::io;
 
 use super::run_group_ref;
 
@@ -32,6 +33,20 @@ use rand::{
     SeedableRng,
 };
 
+fn fill_contract_storage(db: &mut VmDatabase, contract: &ContractId) -> io::Result<()> {
+    println!("Filling...");
+    let start = std::time::Instant::now();
+
+    db.database_mut().init_contract_state(contract, (0u64..10_000_000).map(|k| {
+        let mut key = Bytes32::zeroed();
+        key.as_mut()[..8].copy_from_slice(&k.to_be_bytes());
+        (key, key)
+    }))?;
+    println!("{:?}", start.elapsed());
+    panic!();
+    Ok(())
+}
+
 pub fn run(c: &mut Criterion) {
     let rng = &mut StdRng::seed_from_u64(2322u64);
 
@@ -42,8 +57,12 @@ pub fn run(c: &mut Criterion) {
         .collect::<Vec<_>>();
     l.sort_unstable();
     linear.extend(l);
+
     let asset: AssetId = rng.gen();
     let contract: ContractId = rng.gen();
+
+    let mut db = VmDatabase::default();
+    fill_contract_storage(&mut db, &contract).expect("Unable to fill contract storage");
 
     run_group_ref(
         &mut c.benchmark_group("bal"),
@@ -73,16 +92,11 @@ pub fn run(c: &mut Criterion) {
         "sww",
         VmBench::contract(rng, op::sww(RegId::ZERO, 0x29, RegId::ONE))
             .expect("failed to prepare contract")
-            .with_prepare_db(move |mut db| {
-                let mut key = Bytes32::zeroed();
-
-                key.as_mut()[..8].copy_from_slice(&1_u64.to_be_bytes());
-
-                db.merkle_contract_state_insert(&contract, &key, &key)?;
-
-                Ok(db)
-            }),
+            .with_db(db),
     );
+
+    return;
+
     {
         let mut input = VmBench::contract(rng, op::srw(0x13, 0x14, 0x15))
             .expect("failed to prepare contract")
@@ -327,7 +341,7 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("burn"),
         "burn",
-        VmBench::contract(rng, op::mint(RegId::ZERO, RegId::ZERO))
+        VmBench::contract(rng, op::burn(RegId::ZERO, RegId::ZERO))
             .expect("failed to prepare contract"),
     );
 
