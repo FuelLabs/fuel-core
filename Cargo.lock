@@ -2970,6 +2970,7 @@ dependencies = [
  "pin-project-lite 0.2.13",
  "prometheus-client 0.18.1",
  "prometheus-client 0.20.0",
+ "regex",
  "tokio",
  "tracing",
 ]
