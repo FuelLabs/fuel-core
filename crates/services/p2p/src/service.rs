@@ -139,6 +139,13 @@ pub trait TaskP2PService: Send {
         &mut self,
         message: GossipsubBroadcastRequest,
     ) -> anyhow::Result<()>;
+
+    fn send_msg(
+        &mut self,
+        peer_id: PeerId,
+        request_msg: RequestMessage,
+    ) -> anyhow::Result<()>;
+
     fn send_request_msg(
         &mut self,
         peer_id: Option<PeerId>,
@@ -189,6 +196,16 @@ impl TaskP2PService for FuelP2PService<PostcardCodec> {
         message: GossipsubBroadcastRequest,
     ) -> anyhow::Result<()> {
         self.publish_message(message)?;
+        Ok(())
+    }
+
+    /// Sends a one way request message to a peer.
+    fn send_msg(
+        &mut self,
+        peer_id: PeerId,
+        request_msg: RequestMessage,
+    ) -> anyhow::Result<()> {
+        self.send_msg(peer_id, request_msg);
         Ok(())
     }
 
@@ -474,8 +491,7 @@ where
                 match next_service_request {
                     Some(TaskRequest::SendPooledTransactions { to_peer, transactions }) => {
                         let request_msg = RequestMessage::PooledTransactions(transactions);
-                        let channel_item = ResponseChannelItem::PooledTransactions(oneshot::channel().0);
-                        let _ = self.p2p_service.send_request_msg(Some(to_peer), request_msg, channel_item);
+                        let _ = self.p2p_service.send_msg(to_peer, request_msg);
                     }
                     Some(TaskRequest::BroadcastTransaction(transaction)) => {
                         let broadcast = GossipsubBroadcastRequest::NewTx(transaction);

@@ -298,6 +298,17 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         }
     }
 
+    /// Sends a one way message to a peer. 
+    /// It leverages the `RequestMessage` type to send the message. 
+    /// But, unlike `send_request_msg`, it does not expect a 
+    /// response through a response channel.
+    pub fn send_msg(&mut self, peer_id: PeerId, message_request: RequestMessage) -> RequestId {
+        self
+            .swarm
+            .behaviour_mut()
+            .send_request_msg(message_request, &peer_id)
+    }
+
     /// Sends RequestMessage to a peer
     /// If the peer is not defined it will pick one at random
     pub fn send_request_msg(
@@ -592,17 +603,6 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                                 Ok(ResponseMessage::SealedBlock(block)),
                             ) => {
                                 if channel.send(*block).is_err() {
-                                    debug!(
-                                        "Failed to send through the channel for {:?}",
-                                        request_id
-                                    );
-                                }
-                            }
-                            (
-                                Some(ResponseChannelItem::PooledTransactions(channel)),
-                                Ok(ResponseMessage::PooledTransactions(transactions)),
-                            ) => {
-                                if channel.send(transactions).is_err() {
                                     debug!(
                                         "Failed to send through the channel for {:?}",
                                         request_id

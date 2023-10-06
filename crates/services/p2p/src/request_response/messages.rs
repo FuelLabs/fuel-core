@@ -48,7 +48,6 @@ pub enum RequestMessage {
 pub enum ResponseMessage {
     SealedBlock(Box<Option<SealedBlock>>),
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
-    PooledTransactions(Option<Vec<String>>), // temp as string
     Transactions(Option<Vec<Transactions>>),
 }
 
@@ -57,7 +56,6 @@ pub enum ResponseMessage {
 pub enum ResponseChannelItem {
     Block(oneshot::Sender<Option<SealedBlock>>),
     SealedHeaders(oneshot::Sender<(PeerId, Option<Vec<SealedBlockHeader>>)>),
-    PooledTransactions(oneshot::Sender<Option<Vec<String>>>), // temp as string
     Transactions(oneshot::Sender<Option<Vec<Transactions>>>),
 }
 
@@ -68,7 +66,6 @@ pub enum NetworkResponse {
     Block(Option<Vec<u8>>),
     Headers(Option<Vec<u8>>),
     Transactions(Option<Vec<u8>>),
-    PooledTransactions(Option<Vec<u8>>),
 }
 
 /// Initial state of the `ResponseMessage` prior to having its inner value serialized
@@ -77,7 +74,6 @@ pub enum NetworkResponse {
 pub enum OutboundResponse {
     Block(Option<Arc<SealedBlock>>),
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
-    PooledTransactions(Option<Arc<Vec<String>>>), // temp as string
     Transactions(Option<Arc<Vec<Transactions>>>),
 }
 
