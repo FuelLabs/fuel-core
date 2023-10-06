@@ -35,6 +35,11 @@ pub struct ServicesMetrics {
 
 impl ServicesMetrics {
     pub fn register_service(&self, service_name: &str) -> ServiceLifecycle {
+        let reg =
+            regex::Regex::new("^[a-zA-Z_:][a-zA-Z0-9_:]*$").expect("It is a valid Regex");
+        if !reg.is_match(service_name) {
+            panic!("The service {} has incorrect name.", service_name);
+        }
         let lifecycle = ServiceLifecycle::default();
         let mut lock = self
             .registry
@@ -45,7 +50,10 @@ impl ServicesMetrics {
         let mut encoded_bytes = String::new();
         encode(&mut encoded_bytes, lock.deref())
             .expect("Unable to decode service metrics");
-        if encoded_bytes.contains(service_name) {
+
+        let reg = regex::Regex::new(format!("\\b{}\\b", service_name).as_str())
+            .expect("It is a valid Regex");
+        if reg.is_match(encoded_bytes.as_str()) {
             tracing::warn!("Service with '{}' name is already registered", service_name);
         }
 
