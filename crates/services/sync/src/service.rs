@@ -137,7 +137,7 @@ where
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 {
-    const NAME: &'static str = "fuel-core-sync";
+    const NAME: &'static str = "SyncTask";
 
     type SharedData = ();
 
@@ -195,7 +195,7 @@ where
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 {
-    const NAME: &'static str = "fuel-core-sync/import-task";
+    const NAME: &'static str = "ImportTask";
 
     type SharedData = ();
     type TaskParams = ();

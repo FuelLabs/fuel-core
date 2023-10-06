@@ -1,4 +1,3 @@
-use lazy_static::lazy_static;
 use prometheus_client::{
     encoding::text::encode,
     metrics::counter::Counter,
@@ -6,7 +5,10 @@ use prometheus_client::{
 };
 use std::{
     ops::Deref,
-    sync::Mutex,
+    sync::{
+        Mutex,
+        OnceLock,
+    },
 };
 
 /// The statistic of the service life cycle.
@@ -33,6 +35,11 @@ pub struct ServicesMetrics {
 
 impl ServicesMetrics {
     pub fn register_service(&self, service_name: &str) -> ServiceLifecycle {
+        let reg =
+            regex::Regex::new("^[a-zA-Z_:][a-zA-Z0-9_:]*$").expect("It is a valid Regex");
+        if !reg.is_match(service_name) {
+            panic!("The service {} has incorrect name.", service_name);
+        }
         let lifecycle = ServiceLifecycle::default();
         let mut lock = self
             .registry
@@ -43,7 +50,10 @@ impl ServicesMetrics {
         let mut encoded_bytes = String::new();
         encode(&mut encoded_bytes, lock.deref())
             .expect("Unable to decode service metrics");
-        if encoded_bytes.contains(service_name) {
+
+        let reg = regex::Regex::new(format!("\\b{}\\b", service_name).as_str())
+            .expect("It is a valid Regex");
+        if reg.is_match(encoded_bytes.as_str()) {
             tracing::error!("Service with '{}' name is already registered", service_name);
         }
 
@@ -62,12 +72,14 @@ impl ServicesMetrics {
     }
 }
 
-lazy_static! {
-    pub static ref SERVICES_METRICS: ServicesMetrics = ServicesMetrics::default();
+static SERVICES_METRICS: OnceLock<ServicesMetrics> = OnceLock::new();
+
+pub fn services_metrics() -> &'static ServicesMetrics {
+    SERVICES_METRICS.get_or_init(ServicesMetrics::default)
 }
 
 #[test]
 fn register_success() {
-    SERVICES_METRICS.register_service("Foo");
-    SERVICES_METRICS.register_service("Bar");
+    services_metrics().register_service("Foo");
+    services_metrics().register_service("Bar");
 }

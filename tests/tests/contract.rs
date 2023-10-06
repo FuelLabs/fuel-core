@@ -189,12 +189,12 @@ async fn can_get_message_proof() {
         .as_ref()
         .iter()
         .copied()
-        .chain(db_data.clone().into_iter())
+        .chain(db_data.clone())
         .chain(Call::new(id, 0, 0).to_bytes())
         .collect();
 
     // Call contract script.
-    let script = vec![
+    let script = [
         // Save the ptr to the script data to register 16.
         // This will be used to read the contract id + two
         // empty params. So 32 + 8 + 8.

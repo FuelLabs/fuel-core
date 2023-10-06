@@ -12,11 +12,11 @@ description = "Fuel metrics"
 
 [dependencies]
 axum = { workspace = true }
-lazy_static = { workspace = true }
 libp2p-prom-client = { workspace = true }
 once_cell = { workspace = true }
 pin-project-lite = { workspace = true }
 prometheus-client = { workspace = true }
+regex = "1"
 tracing = { workspace = true }
 
 [dev-dependencies]

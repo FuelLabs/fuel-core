@@ -379,15 +379,12 @@ async fn can_get_message_proof() {
                 // Recipient address
                 arg.recipient_address.into_iter()
                     // The message data
-                    .chain(arg.message_data.clone().into_iter())
+                    .chain(arg.message_data.clone())
             })).collect();
-        let script_data = AssetId::BASE
-            .into_iter()
-            .chain(smo_data.into_iter())
-            .collect();
+        let script_data = AssetId::BASE.into_iter().chain(smo_data).collect();
 
         // Call contract script.
-        let script = vec![
+        let script = [
             // Save the ptr to the script data to register 16.
             // This will be used to read the contract id + two
             // empty params. So 32 + 8 + 8.

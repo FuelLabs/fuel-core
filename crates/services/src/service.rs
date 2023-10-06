@@ -6,8 +6,8 @@ use anyhow::anyhow;
 use fuel_core_metrics::{
     future_tracker::FutureTracker,
     services::{
+        services_metrics,
         ServiceLifecycle,
-        SERVICES_METRICS,
     },
 };
 use futures::FutureExt;
@@ -153,7 +153,7 @@ where
     /// Initializes a new `ServiceRunner` containing a `RunnableService` with parameters for underlying `Task`
     pub fn new_with_params(service: S, params: S::TaskParams) -> Self {
         let shared = service.shared_data();
-        let metric = SERVICES_METRICS.register_service(S::NAME);
+        let metric = services_metrics().register_service(S::NAME);
         let state = initialize_loop(service, params, metric);
         Self { shared, state }
     }
