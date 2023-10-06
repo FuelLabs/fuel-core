@@ -995,7 +995,9 @@ where
                         )
                     }
                 }
-                Input::Contract(_) => {}
+                Input::Contract(_) => {
+                    // TODO: Check that contract exists
+                }
                 Input::MessageCoinSigned(MessageCoinSigned {
                     sender,
                     recipient,

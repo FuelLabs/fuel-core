@@ -219,7 +219,6 @@ fn block_target_gas(c: &mut Criterion) {
         ed19_keypair
             .public
             .as_ref()
-            .as_ref()
             .iter()
             .chain(ed19_signature.as_ref())
             .chain(message.as_ref())

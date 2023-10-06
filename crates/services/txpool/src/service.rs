@@ -226,7 +226,6 @@ where
                     }
 
                     if !txs.is_empty() {
-                        println!("Sending my pooled transactions: {:?}", txs);
                         // TODO: we still have to make sure we're splitting the txs into
                         // MAX_REQUEST_SIZE.
                         let _ =  self.shared.p2p.send_pooled_transactions(peer_id, txs).await;

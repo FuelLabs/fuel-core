@@ -1,6 +1,7 @@
 use crate::{
     import::test_helpers::{
         empty_header,
+        random_peer,
         SharedCounts,
     },
     ports::{
@@ -11,15 +12,12 @@ use crate::{
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_types::{
-    blockchain::{
-        primitives::BlockId,
-        SealedBlockHeader,
-    },
-    fuel_tx::Transaction,
+    blockchain::SealedBlockHeader,
     fuel_types::BlockHeight,
     services::p2p::{
         PeerId,
         SourcePeer,
+        Transactions,
     },
 };
 use std::{
@@ -54,15 +52,18 @@ impl PeerToPeerPort for PressurePeerToPeer {
 
     async fn get_transactions(
         &self,
-        block_id: SourcePeer<BlockId>,
-    ) -> anyhow::Result<Option<Vec<Transaction>>> {
-        self.counts.apply(|c| c.inc_transactions());
+        block_ids: SourcePeer<Range<u32>>,
+    ) -> anyhow::Result<Option<Vec<Transactions>>> {
+        let transactions_count = block_ids.data.len();
+        self.counts
+            .apply(|c| c.add_transactions(transactions_count));
         tokio::time::sleep(self.durations[1]).await;
-        self.counts.apply(|c| c.dec_transactions());
-        self.p2p.get_transactions(block_id).await
+        self.counts
+            .apply(|c| c.sub_transactions(transactions_count));
+        self.p2p.get_transactions(block_ids).await
     }
 
-    async fn report_peer(
+    fn report_peer(
         &self,
         _peer: PeerId,
         _report: PeerReportReason,
@@ -75,22 +76,20 @@ impl PressurePeerToPeer {
     pub fn new(counts: SharedCounts, delays: [Duration; 2]) -> Self {
         let mut mock = MockPeerToPeerPort::default();
         mock.expect_get_sealed_block_headers().returning(|range| {
-            let headers = Some(
-                range
-                    .clone()
-                    .map(BlockHeight::from)
-                    .map(empty_header)
-                    .collect(),
-            );
-            let peer_id = vec![].into();
-            let source_peer_data = SourcePeer {
-                peer_id,
-                data: headers,
-            };
-            Ok(source_peer_data)
+            let peer = random_peer();
+            let headers = range
+                .clone()
+                .map(BlockHeight::from)
+                .map(empty_header)
+                .collect();
+            let headers = peer.bind(Some(headers));
+            Ok(headers)
         });
-        mock.expect_get_transactions()
-            .returning(|_| Ok(Some(vec![])));
+        mock.expect_get_transactions().returning(|block_ids| {
+            let data = block_ids.data;
+            let v = data.into_iter().map(|_| Transactions::default()).collect();
+            Ok(Some(v))
+        });
         Self {
             p2p: mock,
             durations: delays,

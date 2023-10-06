@@ -5,21 +5,17 @@ use std::{
 
 use fuel_core_types::{
     blockchain::{
-        primitives::BlockId,
         SealedBlock,
         SealedBlockHeader,
     },
-    fuel_tx::Transaction,
     fuel_types::BlockHeight,
+    services::p2p::Transactions,
+    fuel_tx::Transaction,
 };
 use libp2p::PeerId;
 use serde::{
     Deserialize,
     Serialize,
-};
-use serde_with::{
-    serde_as,
-    FromInto,
 };
 use thiserror::Error;
 use tokio::sync::oneshot;
@@ -39,13 +35,12 @@ pub(crate) const MAX_REQUEST_SIZE: usize = 32 * 1024;
 // Server Peer: `RequestMessage` (receive request) -> `OutboundResponse` -> `NetworkResponse` (send response)
 // Client Peer: `NetworkResponse` (receive response) -> `ResponseMessage(data)` -> `ResponseChannelItem(channel, data)` (handle response)
 
-#[serde_as]
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub enum RequestMessage {
     Block(BlockHeight),
     SealedHeaders(Range<u32>),
-    Transactions(#[serde_as(as = "FromInto<[u8; 32]>")] BlockId),
     PooledTransactions(Vec<Transaction>),
+    Transactions(Range<u32>),
 }
 
 /// Final Response Message that p2p service sends to the Orchestrator
@@ -53,8 +48,8 @@ pub enum RequestMessage {
 pub enum ResponseMessage {
     SealedBlock(Box<Option<SealedBlock>>),
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
-    Transactions(Option<Vec<Transaction>>),
     PooledTransactions(Option<Vec<String>>), // temp as string
+    Transactions(Option<Vec<Transactions>>),
 }
 
 /// Holds oneshot channels for specific responses
@@ -62,8 +57,8 @@ pub enum ResponseMessage {
 pub enum ResponseChannelItem {
     Block(oneshot::Sender<Option<SealedBlock>>),
     SealedHeaders(oneshot::Sender<(PeerId, Option<Vec<SealedBlockHeader>>)>),
-    Transactions(oneshot::Sender<Option<Vec<Transaction>>>),
     PooledTransactions(oneshot::Sender<Option<Vec<String>>>), // temp as string
+    Transactions(oneshot::Sender<Option<Vec<Transactions>>>),
 }
 
 /// Response that is sent over the wire
@@ -82,8 +77,8 @@ pub enum NetworkResponse {
 pub enum OutboundResponse {
     Block(Option<Arc<SealedBlock>>),
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
-    Transactions(Option<Arc<Vec<Transaction>>>),
     PooledTransactions(Option<Arc<Vec<String>>>), // temp as string
+    Transactions(Option<Arc<Vec<Transactions>>>),
 }
 
 #[derive(Debug, Error)]
