@@ -82,6 +82,7 @@ anyhow = "1.0"
 async-trait = "0.1"
 cynic = { version = "2.2.1", features = ["http-reqwest"] }
 clap = "4.1"
+derive_more = { version = "0.99" }
 hyper = { version = "0.14.26" }
 rand = "0.8"
 parking_lot = "0.12"
