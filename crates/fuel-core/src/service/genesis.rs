@@ -454,7 +454,7 @@ mod tests {
         let alice: Address = rng.gen();
         let asset_id_alice: AssetId = rng.gen();
         let alice_value = rng.gen();
-        let alice_maturity = Some(rng.next_u32().into());
+        let alice_maturity = rng.next_u32().into();
         let alice_block_created = rng.next_u32().into();
         let alice_block_created_tx_idx = Some(rng.gen());
         let alice_tx_id = rng.gen();
@@ -475,7 +475,7 @@ mod tests {
                             output_index: Some(alice_output_index),
                             tx_pointer_block_height: Some(alice_block_created),
                             tx_pointer_tx_idx: alice_block_created_tx_idx,
-                            maturity: alice_maturity,
+                            maturity: Some(alice_maturity),
                             owner: alice,
                             amount: alice_value,
                             asset_id: asset_id_alice,
@@ -495,7 +495,7 @@ mod tests {
                         let mut h: u32 = alice_block_created.into();
                         // set starting height to something higher than alice's coin
                         h = h.saturating_add(rng.next_u32());
-                        h.into()
+                        Some(h.into())
                     },
                     ..Default::default()
                 }),
@@ -527,7 +527,7 @@ mod tests {
             && amount == alice_value
             && asset_id == asset_id_alice
             && tx_pointer.block_height() == alice_block_created
-            && maturity == alice_maturity.unwrap(),
+            && maturity == alice_maturity,
         ));
         assert!(matches!(
             bob_coins.as_slice(),

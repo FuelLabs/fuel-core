@@ -341,7 +341,7 @@ const TEMPLATE: [&str; 5] = [
 "##,
     r#"
 pub const GIT: &str = ""#,
-    r##"";"##,
+    r#"";"#,
     r##"
 pub fn default_gas_costs() -> GasCostsValues {
     GasCostsValues {"##,
