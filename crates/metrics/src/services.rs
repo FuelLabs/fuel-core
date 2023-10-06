@@ -35,6 +35,11 @@ pub struct ServicesMetrics {
 
 impl ServicesMetrics {
     pub fn register_service(&self, service_name: &str) -> ServiceLifecycle {
+        let reg =
+            regex::Regex::new("^[a-zA-Z_:][a-zA-Z0-9_:]*$").expect("It is a valid Regex");
+        if !reg.is_match(service_name) {
+            panic!("The service {} has incorrect name.", service_name);
+        }
         let lifecycle = ServiceLifecycle::default();
         let mut lock = self
             .registry
