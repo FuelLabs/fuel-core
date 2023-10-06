@@ -109,7 +109,7 @@ impl SyncTask {
 
 #[async_trait::async_trait]
 impl RunnableService for SyncTask {
-    const NAME: &'static str = "PoASyncTask";
+    const NAME: &'static str = "PoaSyncTask";
 
     type SharedData = watch::Receiver<SyncState>;
     type TaskParams = ();

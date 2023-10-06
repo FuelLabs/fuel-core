@@ -48,7 +48,10 @@ impl ServicesMetrics {
         let mut encoded_bytes = String::new();
         encode(&mut encoded_bytes, lock.deref())
             .expect("Unable to decode service metrics");
-        if encoded_bytes.contains(service_name) {
+
+        let reg = regex::Regex::new(format!("\\b{}\\b", service_name).as_str())
+            .expect("It is a valid Regex");
+        if reg.is_match(encoded_bytes.as_str()) {
             tracing::error!("Service with '{}' name is already registered", service_name);
         }
 
