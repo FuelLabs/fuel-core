@@ -305,10 +305,6 @@ async fn handle(
     let id = o.get("id").unwrap().as_u64().unwrap();
     let method = o.get("method").unwrap().as_str().unwrap();
     let r = match method {
-        "eth_blockNumber" => {
-            let r = mock.get_block_number().await.unwrap();
-            json!({ "id": id, "jsonrpc": "2.0", "result": r })
-        }
         "eth_getBlockByNumber" => {
             let r = mock.get_block(id).await.unwrap().unwrap();
             json!({ "id": id, "jsonrpc": "2.0", "result": r })
