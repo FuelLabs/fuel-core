@@ -109,7 +109,7 @@ impl SyncTask {
 
 #[async_trait::async_trait]
 impl RunnableService for SyncTask {
-    const NAME: &'static str = "fuel-core-consensus/poa/sync-task";
+    const NAME: &'static str = "PoASyncTask";
 
     type SharedData = watch::Receiver<SyncState>;
     type TaskParams = ();

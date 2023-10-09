@@ -1,5 +1,3 @@
-use std::iter::successors;
-
 use super::run_group_ref;
 
 use criterion::{
@@ -55,13 +53,7 @@ pub fn run(c: &mut Criterion) {
         ]),
     );
 
-    let mut linear = vec![1, 10, 100, 1000, 10_000];
-    let mut l = successors(Some(100_000.0f64), |n| Some(n / 1.5))
-        .take(5)
-        .map(|f| f as u32)
-        .collect::<Vec<_>>();
-    l.sort_unstable();
-    linear.extend(l);
+    let linear = super::generate_linear_costs();
 
     run_group_ref(
         &mut c.benchmark_group("cfei"),
@@ -114,16 +106,30 @@ pub fn run(c: &mut Criterion) {
     }
     mem_mcp.finish();
 
-    run_group_ref(
-        &mut c.benchmark_group("mcpi"),
-        "mcpi",
-        VmBench::new(op::mcpi(0x10, RegId::ZERO, Imm12::MAX.to_u16()))
-            .with_prepare_script(vec![
-                op::movi(0x11, Imm12::MAX.to_u16() as u32),
-                op::aloc(0x11),
-                op::move_(0x10, RegId::HP),
-            ]),
-    );
+    let mut mem_mcpi = c.benchmark_group("mcpi");
+
+    let mut imm12_linear: Vec<_> = linear
+        .iter()
+        .copied()
+        .take_while(|p| *p < (1 << 12))
+        .collect();
+    imm12_linear.push((1 << 12) - 1);
+    for i in &imm12_linear {
+        let i_as_u16: u16 = (*i).try_into().unwrap();
+        mem_mcpi.throughput(Throughput::Bytes(*i as u64));
+        run_group_ref(
+            &mut mem_mcpi,
+            format!("{i}"),
+            VmBench::new(op::mcpi(0x10, RegId::ZERO, i_as_u16)).with_prepare_script(
+                vec![
+                    op::movi(0x11, *i),
+                    op::aloc(0x11),
+                    op::move_(0x10, RegId::HP),
+                ],
+            ),
+        );
+    }
+    mem_mcpi.finish();
 
     let mut mem_meq = c.benchmark_group("meq");
     for i in &linear {
