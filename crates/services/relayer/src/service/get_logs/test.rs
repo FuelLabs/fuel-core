@@ -119,8 +119,7 @@ async fn can_paginate_logs(input: Input) -> Expected {
 
     eth_node.update_data(|data| {
         data.logs_batch = vec![logs];
-        data.best_block.number =
-            Some((eth_gap.end() + Config::DEFAULT_DA_FINALIZATION).into());
+        data.best_block.number = Some((*eth_gap.end()).into());
     });
     let count = std::sync::Arc::new(AtomicUsize::new(0));
     let num_calls = count.clone();

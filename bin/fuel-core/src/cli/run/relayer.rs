@@ -31,10 +31,6 @@ pub struct RelayerArgs {
     #[arg(long = "relayer-v2-listening-contracts", value_parser = parse_h160, env)]
     pub eth_v2_listening_contracts: Vec<H160>,
 
-    /// Number of da block after which messages/stakes/validators become finalized.
-    #[clap(long = "relayer-da-finalization", default_value_t = Config::DEFAULT_DA_FINALIZATION, env)]
-    pub da_finalization: u64,
-
     /// Number of da block that the contract is deployed at.
     #[clap(long = "relayer-da-deploy-height", default_value_t = Config::DEFAULT_DA_DEPLOY_HEIGHT, env)]
     pub da_deploy_height: u64,
@@ -70,7 +66,6 @@ impl RelayerArgs {
 
         let config = Config {
             da_deploy_height: DaBlockHeight(self.da_deploy_height),
-            da_finalization: DaBlockHeight(self.da_finalization),
             relayer: self.relayer,
             eth_v2_listening_contracts: self.eth_v2_listening_contracts,
             log_page_size: self.log_page_size,
