@@ -1,6 +1,5 @@
 use crate::database::{
     Column,
-    Database,
     Result as DatabaseResult,
 };
 use fuel_core_storage::iter::{
@@ -12,6 +11,7 @@ use std::{
     sync::Arc,
 };
 
+pub type DataSource = Arc<dyn TransactableStorage>;
 pub type Value = Arc<Vec<u8>>;
 pub type KVItem = DatabaseResult<(Vec<u8>, Value)>;
 
@@ -86,11 +86,7 @@ pub enum WriteOperation {
     Remove,
 }
 
-pub trait Snapshot {
-    fn snapshot(&self) -> Database;
-}
-
-pub trait TransactableStorage: BatchOperations + Snapshot + Debug + Send + Sync {}
+pub trait TransactableStorage: BatchOperations + Debug + Send + Sync {}
 
 pub mod in_memory;
 #[cfg(feature = "rocksdb")]

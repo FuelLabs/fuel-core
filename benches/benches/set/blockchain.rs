@@ -1,6 +1,7 @@
 use std::{
     io,
     iter::successors,
+    sync::Arc, env, path::PathBuf,
 };
 
 use super::run_group_ref;
@@ -9,7 +10,10 @@ use criterion::{
     Criterion,
     Throughput,
 };
-use fuel_core::database::vm_database::VmDatabase;
+use fuel_core::{
+    database::vm_database::VmDatabase,
+    state::rocks_db::RocksDb,
+};
 use fuel_core_benches::*;
 use fuel_core_storage::ContractsAssetsStorage;
 use fuel_core_types::{
@@ -35,21 +39,73 @@ use rand::{
     SeedableRng,
 };
 
-fn fill_contract_storage(db: &mut VmDatabase, contract: &ContractId) -> io::Result<()> {
-    println!("Filling...");
-    let start = std::time::Instant::now();
+/// Reimplementation of `tempdir::TempDir` that allows creating a new
+/// instance without actually creating a new directory on the filesystem.
+/// This is needed since rocksdb requires empty directory for checkpoints.
+pub struct ShallowTempDir {
+    path: PathBuf,
+}
+impl ShallowTempDir {
+    pub fn new() -> Self {
+        let mut rng = rand::thread_rng();
+        let mut path = env::temp_dir();
+        path.push(format!("fuel-core-bench-rocksdb-{}", rng.next_u64()));
+        Self {path}
+    }
+}
+impl Drop for ShallowTempDir {
+    fn drop(&mut self) {
+        // Ignore errors
+        let _ = std::fs::remove_dir_all(&self.path);
+    }
+}
 
-    db.database_mut().init_contract_state(
-        contract,
-        (0u64..10_000).map(|k| {
-            // 10_000_000
-            let mut key = Bytes32::zeroed();
-            key.as_mut()[..8].copy_from_slice(&k.to_be_bytes());
-            (key, key)
-        }),
-    )?;
-    println!("{:?}", start.elapsed());
-    Ok(())
+
+pub struct BenchDb {
+    db: RocksDb,
+    /// Used for RAII cleanup. Contents of this directory are deleted on drop.
+    tmp_dir: ShallowTempDir,
+}
+
+impl BenchDb {
+    fn new(contract: &ContractId) -> io::Result<Self> {
+        let tmp_dir = ShallowTempDir::new();
+        let db = RocksDb::default_open(&tmp_dir.path, None).unwrap();
+        let db = Arc::new(db);
+        let mut database = Database::new(db.clone());
+        database.init_contract_state(
+            contract,
+            (0u64..10_000).map(|k| {
+                // 10_000_000
+                let mut key = Bytes32::zeroed();
+                key.as_mut()[..8].copy_from_slice(&k.to_be_bytes());
+                (key, key)
+            }),
+        )?;
+        drop(database);
+        Ok(Self {
+            tmp_dir,
+            db: Arc::into_inner(db).expect("All other references must be dropped"),
+        })
+    }
+
+    /// Create a new separate database instance using a rocksdb checkpoint
+    fn checkpoint(&self) -> Self {
+        let tmp_dir = ShallowTempDir::new();
+        self.db
+            .checkpoint(&tmp_dir.path)
+            .expect("Unable to create checkpoint");
+        let db = RocksDb::default_open(&tmp_dir.path, None).unwrap();
+        Self { tmp_dir, db }
+    }
+
+    fn into_vm_db(self) -> VmDatabase {
+        let Self { db, tmp_dir } = self;
+        let database = Database::new(Arc::new(db)).with_drop(Box::new(move || {
+            drop(tmp_dir);
+        }));
+        VmDatabase::default_from_database(database)
+    }
 }
 
 pub fn run(c: &mut Criterion) {
@@ -66,47 +122,49 @@ pub fn run(c: &mut Criterion) {
     let asset: AssetId = rng.gen();
     let contract: ContractId = rng.gen();
 
-    let mut db = VmDatabase::default();
-    fill_contract_storage(&mut db, &contract).expect("Unable to fill contract storage");
+    run_group_ref(
+        &mut c.benchmark_group("bal"),
+        "bal",
+        VmBench::new(op::bal(0x10, 0x10, 0x11))
+            .with_data(asset.iter().chain(contract.iter()).copied().collect())
+            .with_prepare_script(vec![
+                op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+                op::addi(0x11, 0x10, asset.len().try_into().unwrap()),
+            ])
+            .with_dummy_contract(contract)
+            .with_prepare_db(move |mut db| {
+                let mut asset_inc = AssetId::zeroed();
 
-    // run_group_ref(
-    //     &mut c.benchmark_group("bal"),
-    //     "bal",
-    //     VmBench::new(op::bal(0x10, 0x10, 0x11))
-    //         .with_data(asset.iter().chain(contract.iter()).copied().collect())
-    //         .with_prepare_script(vec![
-    //             op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
-    //             op::addi(0x11, 0x10, asset.len().try_into().unwrap()),
-    //         ])
-    //         .with_dummy_contract(contract)
-    //         .with_prepare_db(move |mut db| {
-    //             let mut asset_inc = AssetId::zeroed();
+                asset_inc.as_mut()[..8].copy_from_slice(&1_u64.to_be_bytes());
 
-    //             asset_inc.as_mut()[..8].copy_from_slice(&1_u64.to_be_bytes());
+                db.merkle_contract_asset_id_balance_insert(&contract, &asset_inc, 1)?;
 
-    //             db.merkle_contract_asset_id_balance_insert(&contract, &asset_inc, 1)?;
+                db.merkle_contract_asset_id_balance_insert(&contract, &asset, 100)?;
 
-    //             db.merkle_contract_asset_id_balance_insert(&contract, &asset, 100)?;
+                Ok(db)
+            }),
+    );
 
-    //             Ok(db)
-    //         }),
-    // );
+    let mut db = BenchDb::new(&contract).expect("Unable to fill contract storage");
 
     run_group_ref(
         &mut c.benchmark_group("sww"),
         "sww",
         VmBench::contract_using_db(
             rng,
-            db.clone(),
+            db.checkpoint().into_vm_db(),
             op::sww(RegId::ZERO, 0x29, RegId::ONE),
         )
         .expect("failed to prepare contract"),
     );
 
     {
-        let mut input =
-            VmBench::contract_using_db(rng, db.snapshot(), op::srw(0x13, 0x14, 0x15))
-                .expect("failed to prepare contract");
+        let mut input = VmBench::contract_using_db(
+            rng,
+            db.checkpoint().into_vm_db(),
+            op::srw(0x13, 0x14, 0x15),
+        )
+        .expect("failed to prepare contract");
         input.prepare_script.extend(vec![op::movi(0x15, 2000)]);
         run_group_ref(&mut c.benchmark_group("srw"), "srw", input);
     }
@@ -123,10 +181,13 @@ pub fn run(c: &mut Criterion) {
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
         ];
-        let mut bench =
-            VmBench::contract_using_db(rng, db.clone(), op::scwq(0x11, 0x29, RegId::ONE))
-                .expect("failed to prepare contract")
-                .with_post_call(post_call);
+        let mut bench = VmBench::contract_using_db(
+            rng,
+            db.checkpoint().into_vm_db(),
+            op::scwq(0x11, 0x29, RegId::ONE),
+        )
+        .expect("failed to prepare contract")
+        .with_post_call(post_call);
         bench.data.extend(data);
         run_group_ref(&mut c.benchmark_group("scwq"), "scwq", bench);
     }
@@ -145,7 +206,7 @@ pub fn run(c: &mut Criterion) {
         ];
         let mut bench = VmBench::contract_using_db(
             rng,
-            db.clone(),
+            db.checkpoint().into_vm_db(),
             op::swwq(0x10, 0x11, 0x20, RegId::ONE),
         )
         .expect("failed to prepare contract")
@@ -186,7 +247,7 @@ pub fn run(c: &mut Criterion) {
             &mut call,
             format!("{i}"),
             VmBench::new(op::call(0x10, RegId::ZERO, 0x11, 0x12))
-                .with_db(db.clone())
+                .with_db(db.checkpoint().into_vm_db())
                 .with_contract_code(code)
                 .with_data(data)
                 .with_prepare_script(prepare_script),
@@ -330,15 +391,23 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("mint"),
         "mint",
-        VmBench::contract_using_db(rng, db.clone(), op::mint(RegId::ZERO, RegId::ZERO))
-            .expect("failed to prepare contract"),
+        VmBench::contract_using_db(
+            rng,
+            db.checkpoint().into_vm_db(),
+            op::mint(RegId::ZERO, RegId::ZERO),
+        )
+        .expect("failed to prepare contract"),
     );
 
     run_group_ref(
         &mut c.benchmark_group("burn"),
         "burn",
-        VmBench::contract_using_db(rng, db.clone(), op::burn(RegId::ZERO, RegId::ZERO))
-            .expect("failed to prepare contract"),
+        VmBench::contract_using_db(
+            rng,
+            db.checkpoint().into_vm_db(),
+            op::burn(RegId::ZERO, RegId::ZERO),
+        )
+        .expect("failed to prepare contract"),
     );
 
     run_group_ref(
@@ -352,18 +421,21 @@ pub fn run(c: &mut Criterion) {
     );
 
     {
-        let mut input =
-            VmBench::contract_using_db(rng, db.clone(), op::tr(0x15, 0x14, 0x15))
-                .expect("failed to prepare contract")
-                .with_prepare_db(move |mut db| {
-                    db.merkle_contract_asset_id_balance_insert(
-                        &ContractId::zeroed(),
-                        &AssetId::zeroed(),
-                        200,
-                    )?;
+        let mut input = VmBench::contract_using_db(
+            rng,
+            db.checkpoint().into_vm_db(),
+            op::tr(0x15, 0x14, 0x15),
+        )
+        .expect("failed to prepare contract")
+        .with_prepare_db(move |mut db| {
+            db.merkle_contract_asset_id_balance_insert(
+                &ContractId::zeroed(),
+                &AssetId::zeroed(),
+                200,
+            )?;
 
-                    Ok(db)
-                });
+            Ok(db)
+        });
         input
             .prepare_script
             .extend(vec![op::movi(0x15, 2000), op::movi(0x14, 100)]);
@@ -371,18 +443,21 @@ pub fn run(c: &mut Criterion) {
     }
 
     {
-        let mut input =
-            VmBench::contract_using_db(rng, db.clone(), op::tro(0x15, 0x16, 0x14, 0x15))
-                .expect("failed to prepare contract")
-                .with_prepare_db(move |mut db| {
-                    db.merkle_contract_asset_id_balance_insert(
-                        &ContractId::zeroed(),
-                        &AssetId::zeroed(),
-                        200,
-                    )?;
+        let mut input = VmBench::contract_using_db(
+            rng,
+            db.checkpoint().into_vm_db(),
+            op::tro(0x15, 0x16, 0x14, 0x15),
+        )
+        .expect("failed to prepare contract")
+        .with_prepare_db(move |mut db| {
+            db.merkle_contract_asset_id_balance_insert(
+                &ContractId::zeroed(),
+                &AssetId::zeroed(),
+                200,
+            )?;
 
-                    Ok(db)
-                });
+            Ok(db)
+        });
         let coin_output = Output::variable(Address::zeroed(), 100, AssetId::zeroed());
         input.outputs.push(coin_output);
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
@@ -442,9 +517,12 @@ pub fn run(c: &mut Criterion) {
     let mut smo = c.benchmark_group("smo");
 
     for i in linear.clone() {
-        let mut input =
-            VmBench::contract_using_db(rng, db.clone(), op::smo(0x15, 0x16, 0x17, 0x18))
-                .expect("failed to prepare contract");
+        let mut input = VmBench::contract_using_db(
+            rng,
+            db.checkpoint().into_vm_db(),
+            op::smo(0x15, 0x16, 0x17, 0x18),
+        )
+        .expect("failed to prepare contract");
         input.prepare_db = Some(Box::new(|mut db: VmDatabase| {
             db.merkle_contract_asset_id_balance_insert(
                 &ContractId::default(),
