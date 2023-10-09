@@ -207,7 +207,9 @@ where
     }
 
     fn next_height(&self) -> BlockHeight {
-        self.last_height + 1u32.into()
+        self.last_height
+            .succ()
+            .expect("It should be impossible to produce more blocks than u32::MAX")
     }
 
     fn next_time(&self, request_type: RequestType) -> anyhow::Result<Tai64> {

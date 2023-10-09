@@ -93,7 +93,13 @@ async fn can_produce_next_block() {
     let ctx = TestContext::default_from_db(db);
     let producer = ctx.producer();
     let result = producer
-        .produce_and_execute_block(prev_height + 1u32.into(), Tai64::now(), 1_000_000_000)
+        .produce_and_execute_block(
+            prev_height
+                .succ()
+                .expect("The block height should be valid"),
+            Tai64::now(),
+            1_000_000_000,
+        )
         .await;
 
     assert!(result.is_ok());
@@ -150,7 +156,13 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
     let producer = ctx.producer();
 
     let err = producer
-        .produce_and_execute_block(prev_height + 1u32.into(), Tai64::now(), 1_000_000_000)
+        .produce_and_execute_block(
+            prev_height
+                .succ()
+                .expect("The block height should be valid"),
+            Tai64::now(),
+            1_000_000_000,
+        )
         .await
         .expect_err("expected failure");
 

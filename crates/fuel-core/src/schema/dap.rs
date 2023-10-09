@@ -29,7 +29,6 @@ use fuel_core_types::{
         Script,
         Transaction,
     },
-    fuel_types::Address,
     fuel_vm::{
         checked_transaction::{
             CheckedTransaction,
@@ -166,7 +165,7 @@ impl ConcreteStorage {
             storage.as_ref().clone(),
             &block.header().consensus,
             // TODO: Use a real coinbase address
-            Address::zeroed(),
+            Default::default(),
         );
 
         Ok(vm_database)

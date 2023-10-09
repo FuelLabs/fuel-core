@@ -28,12 +28,9 @@ use fuel_core::{
     txpool::Config as TxPoolConfig,
     types::{
         blockchain::primitives::SecretKeyWrapper,
-        fuel_tx::Address,
+        fuel_tx::ContractId,
         fuel_vm::SecretKey,
-        secrecy::{
-            ExposeSecret,
-            Secret,
-        },
+        secrecy::Secret,
     },
 };
 use pyroscope::{
@@ -47,7 +44,6 @@ use pyroscope_pprofrs::{
 use std::{
     env,
     net,
-    ops::Deref,
     path::PathBuf,
     str::FromStr,
 };
@@ -285,16 +281,13 @@ impl Command {
         }
 
         let coinbase_recipient = if let Some(coinbase_recipient) = coinbase_recipient {
-            Address::from_str(coinbase_recipient.as_str()).map_err(|err| anyhow!(err))?
+            Some(
+                ContractId::from_str(coinbase_recipient.as_str())
+                    .map_err(|err| anyhow!(err))?,
+            )
         } else {
-            consensus_key
-                .as_ref()
-                .cloned()
-                .map(|key| {
-                    let sk = key.expose_secret().deref();
-                    Address::from(*sk.public_key().hash())
-                })
-                .unwrap_or_default()
+            tracing::warn!("The coinbase recipient `ContractId` is not set!");
+            None
         };
 
         let verifier = RelayerVerifierConfig {
