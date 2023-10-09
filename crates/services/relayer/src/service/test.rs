@@ -23,8 +23,7 @@ async fn can_download_logs() {
     eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
 
     let eth_state = super::state::test_builder::TestDataSource {
-        eth_remote_current: 20,
-        eth_remote_finalization_period: 15,
+        eth_remote_finalized: 5,
         eth_local_finalized: Some(1),
     };
     let eth_state = state::build_eth(&eth_state).await.unwrap();
@@ -51,7 +50,6 @@ async fn deploy_height_does_not_override() {
         .unwrap();
     let config = Config {
         da_deploy_height: 20u64.into(),
-        da_finalization: 1u64.into(),
         ..Default::default()
     };
     let eth_node = MockMiddleware::default();
@@ -69,7 +67,6 @@ async fn deploy_height_does_override() {
         .unwrap();
     let config = Config {
         da_deploy_height: 52u64.into(),
-        da_finalization: 1u64.into(),
         ..Default::default()
     };
     let eth_node = MockMiddleware::default();

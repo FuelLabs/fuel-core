@@ -7,7 +7,10 @@ use fuel_core_relayer::{
     new_service_test,
     ports::RelayerDb,
     test_helpers::{
-        middleware::MockMiddleware,
+        middleware::{
+            MockMiddleware,
+            TriggerType,
+        },
         EvtToLog,
         LogTestHelper,
     },
@@ -23,7 +26,7 @@ async fn can_set_da_height() {
     let eth_node = MockMiddleware::default();
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
-    eth_node.update_data(|data| data.best_block.number = Some(200.into()));
+    eth_node.update_data(|data| data.best_block.number = Some(100.into()));
     let relayer = new_service_test(eth_node, mock_db.clone(), Default::default());
     relayer.start_and_await().await.unwrap();
 
@@ -41,7 +44,7 @@ async fn stop_service_at_the_begin() {
     let eth_node = MockMiddleware::default();
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
-    eth_node.update_data(|data| data.best_block.number = Some(200.into()));
+    eth_node.update_data(|data| data.best_block.number = Some(100.into()));
     let relayer = new_service_test(eth_node, mock_db.clone(), Default::default());
     relayer.start_and_await().await.unwrap();
     relayer.stop();
@@ -58,7 +61,7 @@ async fn stop_service_at_the_middle() {
     // `tokio::task::yield_now().await` in each method of the `MockMiddleware`.
     let mock_db = MockDb::default();
     let eth_node = MockMiddleware::default();
-    eth_node.update_data(|data| data.best_block.number = Some(200.into()));
+    eth_node.update_data(|data| data.best_block.number = Some(100.into()));
     let config = Config {
         log_page_size: 5,
         ..Default::default()
@@ -110,7 +113,7 @@ async fn can_get_messages() {
     eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
-    eth_node.update_data(|data| data.best_block.number = Some(200.into()));
+    eth_node.update_data(|data| data.best_block.number = Some(100.into()));
     let relayer = new_service_test(eth_node, mock_db.clone(), config);
     relayer.start_and_await().await.unwrap();
 
@@ -126,7 +129,6 @@ async fn deploy_height_is_set() {
     let mock_db = MockDb::default();
     let config = Config {
         da_deploy_height: 50u64.into(),
-        da_finalization: 1u64.into(),
         ..Default::default()
     };
     let eth_node = MockMiddleware::default();
@@ -134,18 +136,17 @@ async fn deploy_height_is_set() {
     let (tx, rx) = tokio::sync::oneshot::channel();
     let mut tx = Some(tx);
     eth_node.set_before_event(move |_, evt| {
-        if let fuel_core_relayer::test_helpers::middleware::TriggerType::GetLogs(evt) = evt {
+        if let TriggerType::GetLogs(evt) = evt {
             assert!(
                 matches!(
                     evt,
-                        ethers_core::types::Filter {
-                            block_option: ethers_core::types::FilterBlockOption::Range {
-                                from_block: Some(ethers_core::types::BlockNumber::Number(f)),
-                                to_block: Some(ethers_core::types::BlockNumber::Number(t))
-                            },
-                            ..
-                        }
-                    if f.as_u64() == 51 && t.as_u64() == 53
+                    ethers_core::types::Filter {
+                        block_option: ethers_core::types::FilterBlockOption::Range {
+                            from_block: Some(ethers_core::types::BlockNumber::Number(f)),
+                            to_block: Some(ethers_core::types::BlockNumber::Number(t))
+                        },
+                        ..
+                    } if f.as_u64() == 51 && t.as_u64() == 54
                 ),
                 "{evt:?}"
             );
@@ -156,9 +157,7 @@ async fn deploy_height_is_set() {
     });
     let relayer = new_service_test(eth_node, mock_db.clone(), config);
     relayer.start_and_await().await.unwrap();
-
     relayer.shared.await_synced().await.unwrap();
     rx.await.unwrap();
-
-    assert_eq!(*mock_db.get_finalized_da_height().unwrap(), 53);
+    assert_eq!(*mock_db.get_finalized_da_height().unwrap(), 54);
 }
