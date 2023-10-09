@@ -142,6 +142,17 @@ impl VmBench {
     where
         R: Rng,
     {
+        Self::contract_using_db(rng, new_db(), instruction)
+    }
+
+    pub fn contract_using_db<R>(
+        rng: &mut R,
+        mut db: VmDatabase,
+        instruction: Instruction,
+    ) -> io::Result<Self>
+    where
+        R: Rng,
+    {
         let bench = Self::new(instruction);
 
         let program = iter::once(instruction)
@@ -163,8 +174,7 @@ impl VmBench {
         let input = Input::contract(utxo_id, balance_root, state_root, tx_pointer, id);
         let output = Output::contract(0, rng.gen(), rng.gen());
 
-        let mut db = new_db();
-
+        dbg!(&contract);
         db.deploy_contract_with_id(&salt, &[], &contract, &state_root, &id)?;
 
         let data = id

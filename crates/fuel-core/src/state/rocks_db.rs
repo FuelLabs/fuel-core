@@ -39,7 +39,10 @@ use std::{
     sync::Arc,
 };
 
+use super::Snapshot;
+
 type DB = DBWithThreadMode<MultiThreaded>;
+
 #[derive(Debug)]
 pub struct RocksDb {
     db: DB,
@@ -382,6 +385,12 @@ impl BatchOperations for RocksDb {
         self.db
             .write(batch)
             .map_err(|e| DatabaseError::Other(e.into()))
+    }
+}
+
+impl Snapshot for RocksDb {
+    fn snapshot(&self) -> crate::database::Database {
+        self.db.snapshot()
     }
 }
 

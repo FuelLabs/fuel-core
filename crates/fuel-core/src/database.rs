@@ -2,7 +2,9 @@ use crate::{
     database::transaction::DatabaseTransaction,
     state::{
         in_memory::memory_store::MemoryStore,
-        DataSource,
+        BatchOperations,
+        KeyValueStore,
+        TransactableStorage,
         WriteOperation,
     },
 };
@@ -144,11 +146,21 @@ impl Column {
     }
 }
 
+/// Wrapper around [`fuel_core_storage::TransactableStorage`].
+/// This holds the underlying storage and provides methods to interact with it.
 #[derive(Clone, Debug)]
 pub struct Database {
-    data: DataSource,
-    // used for RAII
-    _drop: Arc<DropResources>,
+    /// The underlying storage and a possible RAII cleanup closure,
+    /// behind a shared `Arc` so drop only occurs when data is no longer used.
+    inner: Arc<DatabaseInner>,
+}
+
+#[derive(Debug)]
+struct DatabaseInner {
+    /// The underlying storage.
+    storage: Box<dyn TransactableStorage>,
+    /// Used for RAII.
+    _drop: DropResources,
 }
 
 trait DropFnTrait: FnOnce() + Send + Sync {}
@@ -184,10 +196,21 @@ impl Drop for DropResources {
 }
 
 impl Database {
-    pub fn new(data_source: DataSource) -> Self {
+    pub fn new(storage: Box<dyn TransactableStorage>) -> Self {
         Self {
-            data: data_source,
-            _drop: Default::default(),
+            inner: Arc::new(DatabaseInner {
+                storage,
+                _drop: Default::default(),
+            }),
+        }
+    }
+
+    pub fn in_memory() -> Self {
+        Self {
+            inner: Arc::new(DatabaseInner {
+                storage: Box::new(MemoryStore::default()),
+                _drop: Default::default(),
+            }),
         }
     }
 
@@ -196,39 +219,45 @@ impl Database {
         use anyhow::Context;
         let db = RocksDb::default_open(path, capacity.into()).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
 
-        Ok(Database {
-            data: Arc::new(db),
-            _drop: Default::default(),
+        Ok(Self {
+            inner: Arc::new(DatabaseInner {
+                storage: Box::new(db),
+                _drop: Default::default(),
+            }),
         })
-    }
-
-    pub fn in_memory() -> Self {
-        Self {
-            data: Arc::new(MemoryStore::default()),
-            _drop: Default::default(),
-        }
     }
 
     #[cfg(feature = "rocksdb")]
     pub fn rocksdb() -> Self {
         let tmp_dir = TempDir::new().unwrap();
         let db = RocksDb::default_open(tmp_dir.path(), None).unwrap();
+
         Self {
-            data: Arc::new(db),
-            _drop: Arc::new(
-                {
-                    move || {
-                        // cleanup temp dir
-                        drop(tmp_dir);
-                    }
-                }
+            inner: Arc::new(DatabaseInner {
+                storage: Box::new(db),
+                _drop: (move || {
+                    // cleanup temp dir
+                    drop(tmp_dir);
+                })
                 .into(),
-            ),
+            }),
         }
+    }
+
+    pub fn snapshot(&self) -> Self {
+        todo!()
     }
 
     pub fn transaction(&self) -> DatabaseTransaction {
         self.into()
+    }
+}
+
+impl Deref for Database {
+    type Target = dyn TransactableStorage;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner.storage.as_ref()
     }
 }
 
@@ -241,7 +270,7 @@ impl Database {
         column: Column,
         value: &V,
     ) -> DatabaseResult<Option<R>> {
-        let result = self.data.put(
+        let result = self.inner.storage.put(
             key.as_ref(),
             column,
             Arc::new(postcard::to_stdvec(value).map_err(|_| DatabaseError::Codec)?),
@@ -278,7 +307,7 @@ impl Database {
             })
             .try_collect()?;
 
-        self.data.batch_write(&mut set.into_iter())
+        self.inner.storage.batch_write(&mut set.into_iter())
     }
 
     fn remove<V: DeserializeOwned>(
@@ -286,14 +315,15 @@ impl Database {
         key: &[u8],
         column: Column,
     ) -> DatabaseResult<Option<V>> {
-        self.data
+        self.inner
+            .storage
             .delete(key, column)?
             .map(|val| postcard::from_bytes(&val).map_err(|_| DatabaseError::Codec))
             .transpose()
     }
 
     fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
-        self.data.write(key, column, buf)
+        self.inner.storage.write(key, column, buf)
     }
 
     fn replace(
@@ -302,13 +332,15 @@ impl Database {
         column: Column,
         buf: &[u8],
     ) -> DatabaseResult<(usize, Option<Vec<u8>>)> {
-        self.data
+        self.inner
+            .storage
             .replace(key, column, buf)
             .map(|(size, value)| (size, value.map(|value| value.deref().clone())))
     }
 
     fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
-        self.data
+        self.inner
+            .storage
             .take(key, column)
             .map(|value| value.map(|value| value.deref().clone()))
     }
@@ -317,11 +349,11 @@ impl Database {
 /// Read-only methods.
 impl Database {
     fn contains_key(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
-        self.data.exists(key, column)
+        self.inner.storage.exists(key, column)
     }
 
     fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
-        self.data.size_of_value(key, column)
+        self.inner.storage.size_of_value(key, column)
     }
 
     fn read(
@@ -330,11 +362,12 @@ impl Database {
         column: Column,
         buf: &mut [u8],
     ) -> DatabaseResult<Option<usize>> {
-        self.data.read(key, column, buf)
+        self.inner.storage.read(key, column, buf)
     }
 
     fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
-        self.data
+        self.inner
+            .storage
             .read_alloc(key, column)
             .map(|value| value.map(|value| value.deref().clone()))
     }
@@ -344,7 +377,8 @@ impl Database {
         key: &[u8],
         column: Column,
     ) -> DatabaseResult<Option<V>> {
-        self.data
+        self.inner
+            .storage
             .get(key, column)?
             .map(|val| postcard::from_bytes(&val).map_err(|_| DatabaseError::Codec))
             .transpose()
@@ -402,7 +436,8 @@ impl Database {
         P: AsRef<[u8]>,
         S: AsRef<[u8]>,
     {
-        self.data
+        self.inner
+            .storage
             .iter_all(
                 column,
                 prefix.as_ref().map(|p| p.as_ref()),

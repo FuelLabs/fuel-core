@@ -1,15 +1,16 @@
 use crate::{
     database::{
         Column,
+        Database,
         Result as DatabaseResult,
     },
     state::{
         in_memory::memory_store::MemoryStore,
         BatchOperations,
-        DataSource,
         IterDirection,
         KVItem,
         KeyValueStore,
+        Snapshot,
         TransactableStorage,
         Value,
         WriteOperation,
@@ -40,11 +41,11 @@ pub struct MemoryTransactionView {
     // TODO: Remove `Mutex`.
     // use hashmap to collapse changes (e.g. insert then remove the same key)
     changes: [Mutex<HashMap<Vec<u8>, WriteOperation>>; Column::COUNT],
-    data_source: DataSource,
+    data_source: Database,
 }
 
 impl MemoryTransactionView {
-    pub fn new(source: DataSource) -> Self {
+    pub fn new(source: Database) -> Self {
         Self {
             view_layer: MemoryStore::default(),
             changes: Default::default(),
@@ -284,6 +285,12 @@ impl KeyValueStore for MemoryTransactionView {
 
 impl BatchOperations for MemoryTransactionView {}
 
+impl Snapshot for MemoryTransactionView {
+    fn snapshot(&self) -> Database {
+        panic!("Cannot snapshot a transaction view");
+    }
+}
+
 impl TransactableStorage for MemoryTransactionView {}
 
 #[cfg(test)]
@@ -294,7 +301,7 @@ mod tests {
     #[test]
     fn get_returns_from_view() {
         // setup
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         let view = MemoryTransactionView::new(store);
         let key = vec![0xA, 0xB, 0xC];
         let expected = Arc::new(vec![1, 2, 3]);
@@ -308,7 +315,7 @@ mod tests {
     #[test]
     fn get_returns_from_data_store_when_key_not_in_view() {
         // setup
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         let key = vec![0xA, 0xB, 0xC];
         let expected = Arc::new(vec![1, 2, 3]);
         store.put(&key, Column::Metadata, expected.clone()).unwrap();
@@ -322,7 +329,7 @@ mod tests {
     #[test]
     fn get_does_not_fetch_from_datastore_if_intentionally_deleted_from_view() {
         // setup
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         let key = vec![0xA, 0xB, 0xC];
         let expected = Arc::new(vec![1, 2, 3]);
         store.put(&key, Column::Metadata, expected.clone()).unwrap();
@@ -341,7 +348,7 @@ mod tests {
     #[test]
     fn can_insert_value_into_view() {
         // setup
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         let view = MemoryTransactionView::new(store);
         let expected = Arc::new(vec![1, 2, 3]);
         let _ = view.put(&[0xA, 0xB, 0xC], Column::Metadata, expected.clone());
@@ -356,7 +363,7 @@ mod tests {
     #[test]
     fn delete_value_from_view_returns_value() {
         // setup
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         let view = MemoryTransactionView::new(store);
         let key = vec![0xA, 0xB, 0xC];
         let expected = Arc::new(vec![1, 2, 3]);
@@ -372,7 +379,7 @@ mod tests {
     #[test]
     fn delete_returns_datastore_value_when_not_in_view() {
         // setup
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         let key = vec![0xA, 0xB, 0xC];
         let expected = Arc::new(vec![1, 2, 3]);
         store.put(&key, Column::Metadata, expected.clone()).unwrap();
@@ -388,7 +395,7 @@ mod tests {
     #[test]
     fn delete_does_not_return_datastore_value_when_deleted_twice() {
         // setup
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         let key = vec![0xA, 0xB, 0xC];
         let expected = Arc::new(vec![1, 2, 3]);
         store.put(&key, Column::Metadata, expected.clone()).unwrap();
@@ -406,7 +413,7 @@ mod tests {
     #[test]
     fn exists_checks_view_values() {
         // setup
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         let view = MemoryTransactionView::new(store);
         let key = vec![0xA, 0xB, 0xC];
         let expected = Arc::new(vec![1, 2, 3]);
@@ -420,7 +427,7 @@ mod tests {
     #[test]
     fn exists_checks_data_store_when_not_in_view() {
         // setup
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         let key = vec![0xA, 0xB, 0xC];
         let expected = Arc::new(vec![1, 2, 3]);
         store.put(&key, Column::Metadata, expected).unwrap();
@@ -434,7 +441,7 @@ mod tests {
     #[test]
     fn exists_does_not_check_data_store_after_intentional_removal_from_view() {
         // setup
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         let key = vec![0xA, 0xB, 0xC];
         let expected = Arc::new(vec![1, 2, 3]);
         store.put(&key, Column::Metadata, expected).unwrap();
@@ -453,7 +460,7 @@ mod tests {
     #[test]
     fn commit_applies_puts() {
         // setup
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         let view = MemoryTransactionView::new(store.clone());
         let key = vec![0xA, 0xB, 0xC];
         let expected = Arc::new(vec![1, 2, 3]);
@@ -468,7 +475,7 @@ mod tests {
     #[test]
     fn commit_applies_deletes() {
         // setup
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         let key = vec![0xA, 0xB, 0xC];
         let expected = Arc::new(vec![1, 2, 3]);
         store.put(&key, Column::Metadata, expected).unwrap();
@@ -484,7 +491,7 @@ mod tests {
     #[test]
     fn iter_all_is_sorted_across_source_and_view() {
         // setup
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         (0..10).step_by(2).for_each(|i| {
             store
                 .put(&[i], Column::Metadata, Arc::new(vec![1]))
@@ -509,7 +516,7 @@ mod tests {
     #[test]
     fn iter_all_is_reversible() {
         // setup
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         (0..10).step_by(2).for_each(|i| {
             store
                 .put(&[i], Column::Metadata, Arc::new(vec![1]))
@@ -534,7 +541,7 @@ mod tests {
     #[test]
     fn iter_all_overrides_data_source_keys() {
         // setup
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         (0..10).step_by(2).for_each(|i| {
             store
                 .put(&[i], Column::Metadata, Arc::new(vec![0xA]))
@@ -561,7 +568,7 @@ mod tests {
     #[test]
     fn iter_all_hides_deleted_data_source_keys() {
         // setup
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         (0..10).step_by(2).for_each(|i| {
             store
                 .put(&[i], Column::Metadata, Arc::new(vec![0xA]))
@@ -587,7 +594,7 @@ mod tests {
     fn can_use_unit_value() {
         let key = vec![0x00];
 
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         let db = MemoryTransactionView::new(store.clone());
         let expected = Arc::new(vec![]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
@@ -614,7 +621,7 @@ mod tests {
 
         assert!(!store.exists(&key, Column::Metadata).unwrap());
 
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         let db = MemoryTransactionView::new(store.clone());
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
         db.commit().unwrap();
@@ -629,7 +636,7 @@ mod tests {
     fn can_use_unit_key() {
         let key: Vec<u8> = Vec::with_capacity(0);
 
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         let db = MemoryTransactionView::new(store.clone());
         let expected = Arc::new(vec![]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
@@ -656,7 +663,7 @@ mod tests {
 
         assert!(!store.exists(&key, Column::Metadata).unwrap());
 
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         let db = MemoryTransactionView::new(store.clone());
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
         db.commit().unwrap();
@@ -671,7 +678,7 @@ mod tests {
     fn can_use_unit_key_and_value() {
         let key: Vec<u8> = Vec::with_capacity(0);
 
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         let db = MemoryTransactionView::new(store.clone());
         let expected = Arc::new(vec![]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
@@ -698,7 +705,7 @@ mod tests {
 
         assert!(!store.exists(&key, Column::Metadata).unwrap());
 
-        let store = Arc::new(MemoryStore::default());
+        let store = Database::in_memory();
         let db = MemoryTransactionView::new(store.clone());
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
         db.commit().unwrap();

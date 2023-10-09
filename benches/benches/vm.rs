@@ -63,11 +63,11 @@ where
     });
 }
 fn vm(c: &mut Criterion) {
-    alu::run(c);
+    // alu::run(c);
     blockchain::run(c);
-    crypto::run(c);
-    flow::run(c);
-    mem::run(c);
+    // crypto::run(c);
+    // flow::run(c);
+    // mem::run(c);
 }
 
 criterion_group!(benches, vm);

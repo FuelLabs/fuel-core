@@ -1,6 +1,7 @@
 use crate::{
     database::{
         Column,
+        Database,
         Error as DatabaseError,
         Result as DatabaseResult,
     },
@@ -9,6 +10,7 @@ use crate::{
         IterDirection,
         KVItem,
         KeyValueStore,
+        Snapshot,
         TransactableStorage,
         Value,
     },
@@ -211,6 +213,17 @@ impl KeyValueStore for MemoryStore {
 }
 
 impl BatchOperations for MemoryStore {}
+
+impl Snapshot for MemoryStore {
+    fn snapshot(&self) -> Database {
+        // Go through each column and clone the inner map, re-mutexing them all.
+        let mut copy = Self::default();
+        for (i, v) in self.inner.iter().enumerate() {
+            copy.inner[i] = Mutex::new(v.lock().expect("poisoned").clone());
+        }
+        Database::new(Box::new(copy))
+    }
+}
 
 impl TransactableStorage for MemoryStore {}
 
