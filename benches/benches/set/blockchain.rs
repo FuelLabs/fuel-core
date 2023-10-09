@@ -1,7 +1,9 @@
 use std::{
+    env,
     io,
     iter::successors,
-    sync::Arc, env, path::PathBuf,
+    path::PathBuf,
+    sync::Arc,
 };
 
 use super::run_group_ref;
@@ -50,7 +52,7 @@ impl ShallowTempDir {
         let mut rng = rand::thread_rng();
         let mut path = env::temp_dir();
         path.push(format!("fuel-core-bench-rocksdb-{}", rng.next_u64()));
-        Self {path}
+        Self { path }
     }
 }
 impl Drop for ShallowTempDir {
@@ -59,7 +61,6 @@ impl Drop for ShallowTempDir {
         let _ = std::fs::remove_dir_all(&self.path);
     }
 }
-
 
 pub struct BenchDb {
     db: RocksDb,
@@ -75,8 +76,7 @@ impl BenchDb {
         let mut database = Database::new(db.clone());
         database.init_contract_state(
             contract,
-            (0u64..10_000).map(|k| {
-                // 10_000_000
+            (0u64..10_000_000).map(|k| {
                 let mut key = Bytes32::zeroed();
                 key.as_mut()[..8].copy_from_slice(&k.to_be_bytes());
                 (key, key)
@@ -145,7 +145,7 @@ pub fn run(c: &mut Criterion) {
             }),
     );
 
-    let mut db = BenchDb::new(&contract).expect("Unable to fill contract storage");
+    let db = BenchDb::new(&contract).expect("Unable to fill contract storage");
 
     run_group_ref(
         &mut c.benchmark_group("sww"),
