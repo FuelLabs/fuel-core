@@ -27,7 +27,7 @@ use std::{
 
 mod handler;
 
-pub const HEARTBEAT_PROTOCOL: &[u8] = b"/fuel/heartbeat/0.0.1";
+pub const HEARTBEAT_PROTOCOL: &str = "/fuel/heartbeat/0.0.1";
 
 #[derive(Debug, Clone)]
 enum HeartbeatAction {

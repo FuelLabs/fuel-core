@@ -27,8 +27,6 @@ use libp2p::{
     PeerId,
 };
 
-// TODO: Figure out the right Handler
-use libp2p_kad::handler::KademliaHandler;
 use libp2p_swarm::{
     THandlerOutEvent,
     ToSwarm,
@@ -89,7 +87,8 @@ impl DiscoveryBehaviour {
 }
 
 impl NetworkBehaviour for DiscoveryBehaviour {
-    type ConnectionHandler = KademliaHandler;
+    type ConnectionHandler =
+        <Kademlia<MemoryStore> as NetworkBehaviour>::ConnectionHandler;
     type ToSwarm = KademliaEvent;
 
     // receive events from KademliaHandler and pass it down to kademlia

@@ -128,8 +128,8 @@ impl ConnectionHandler for HeartbeatHandler {
     type ToBehaviour = ();
     type Error = HeartbeatFailure;
 
-    type InboundProtocol = ReadyUpgrade<&'static [u8]>;
-    type OutboundProtocol = ReadyUpgrade<&'static [u8]>;
+    type InboundProtocol = ReadyUpgrade<&'static str>;
+    type OutboundProtocol = ReadyUpgrade<&'static str>;
     type OutboundOpenInfo = ();
     type InboundOpenInfo = ();
 
