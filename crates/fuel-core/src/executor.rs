@@ -642,6 +642,10 @@ where
             )?;
         }
 
+        if execution_kind != ExecutionKind::DryRun && !data.found_mint {
+            return Err(ExecutorError::CoinbaseIsMissed)
+        }
+
         Ok(data)
     }
 
@@ -735,7 +739,7 @@ where
             let mut outputs = [Output::Contract(output)];
 
             if options.utxo_validation {
-                // validate utxos exist and maturity is properly set
+                // validate utxos exist
                 self.verify_input_state(
                     block_db_transaction.deref(),
                     inputs.as_mut_slice(),
@@ -783,15 +787,6 @@ where
                 execution_data.tx_count,
                 &coinbase_id,
                 block_db_transaction,
-                inputs.as_slice(),
-                outputs.as_slice(),
-            )?;
-
-            self.persist_output_utxos(
-                block_height,
-                execution_data.tx_count,
-                &coinbase_id,
-                block_db_transaction.deref_mut(),
                 inputs.as_slice(),
                 outputs.as_slice(),
             )?;
@@ -2414,6 +2409,17 @@ mod tests {
                 validation_err,
                 ExecutorError::CoinbaseIsNotLastTransaction
             ));
+        }
+
+        #[test]
+        fn invalidate_block_missed_coinbase() {
+            let block = Block::default();
+
+            let validator = Executor::test(Default::default(), Default::default());
+            let validation_err = validator
+                .execute_and_commit(ExecutionBlock::Validation(block), Default::default())
+                .expect_err("Expected error because coinbase is missing");
+            assert!(matches!(validation_err, ExecutorError::CoinbaseIsMissed));
         }
 
         #[test]

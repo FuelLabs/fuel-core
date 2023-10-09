@@ -253,6 +253,8 @@ pub enum Error {
     OutputAlreadyExists,
     #[error("The computed fee caused an integer overflow")]
     FeeOverflow,
+    #[error("The blocks is missing `Mint` transaction.")]
+    CoinbaseIsMissed,
     #[error("The second entry of the `Mint` - coinbase transaction.")]
     CoinbaseSecondTransaction,
     #[error("The last transaction in the block is not `Mint` - coinbase.")]
