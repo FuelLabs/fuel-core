@@ -174,7 +174,6 @@ impl VmBench {
         let input = Input::contract(utxo_id, balance_root, state_root, tx_pointer, id);
         let output = Output::contract(0, rng.gen(), rng.gen());
 
-        dbg!(&contract);
         db.deploy_contract_with_id(&salt, &[], &contract, &state_root, &id)?;
 
         let data = id
