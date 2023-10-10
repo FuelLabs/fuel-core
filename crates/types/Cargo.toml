@@ -25,6 +25,7 @@ serde = { workspace = true, features = ["derive"], optional = true }
 tai64 = { version = "4.0", features = ["serde"] }
 thiserror = "1.0"
 zeroize = "1.5"
+getrandom = { version = "0.2", features = ["js"] }
 
 [features]
 default = []
