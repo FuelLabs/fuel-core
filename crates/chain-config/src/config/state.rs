@@ -1,20 +1,42 @@
-use crate::{serialization::HexNumber, FUEL_BECH32_HRP, TESTNET_INITIAL_BALANCE};
-use bech32::{ToBase32, Variant::Bech32m};
+use crate::{
+    FUEL_BECH32_HRP,
+    TESTNET_INITIAL_BALANCE,
+};
+use bech32::{
+    ToBase32,
+    Variant::Bech32m,
+};
 use fuel_core_types::{
     fuel_tx::UtxoId,
-    fuel_types::{Address, BlockHeight, Bytes32},
+    fuel_types::{
+        Address,
+        BlockHeight,
+        Bytes32,
+    },
     fuel_vm::SecretKey,
 };
 use itertools::Itertools;
-use rand::{rngs::StdRng, SeedableRng};
-use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, skip_serializing_none};
+use rand::{
+    rngs::StdRng,
+    SeedableRng,
+};
+use serde::{
+    Deserialize,
+    Serialize,
+};
+use serde_with::{
+    serde_as,
+    skip_serializing_none,
+};
 
 use crate::config::coin::CoinConfig;
 
 use fuel_core_storage::Result as StorageResult;
 
-use super::{contract::ContractConfig, message::MessageConfig};
+use super::{
+    contract::ContractConfig,
+    message::MessageConfig,
+};
 
 // TODO: do streaming deserialization to handle large state configs
 #[serde_as]
@@ -27,10 +49,6 @@ pub struct StateConfig {
     pub contracts: Option<Vec<ContractConfig>>,
     /// Messages from Layer 1
     pub messages: Option<Vec<MessageConfig>>,
-    /// Starting block height (useful for flattened fork networks)
-    #[serde_as(as = "Option<HexNumber>")]
-    #[serde(default)]
-    pub height: Option<BlockHeight>,
 }
 
 impl StateConfig {
@@ -42,10 +60,10 @@ impl StateConfig {
             coins: db.get_coin_config()?,
             contracts: db.get_contract_config()?,
             messages: db.get_message_config()?,
-            height: Some(db.get_block_height()?),
         })
     }
-    pub fn nesto() -> Self {
+
+    pub fn local_testnet() -> Self {
         // endow some preset accounts with an initial balance
         tracing::info!("Initial Accounts");
         let mut rng = StdRng::seed_from_u64(10);
@@ -72,6 +90,7 @@ impl StateConfig {
             ..StateConfig::default()
         }
     }
+
     pub fn initial_coin(
         secret: SecretKey,
         amount: u64,

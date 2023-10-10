@@ -2,6 +2,8 @@ use clap::ValueEnum;
 use fuel_core_chain_config::{
     default_consensus_dev_key,
     ChainConfig,
+    CoinConfig,
+    StateImporter,
 };
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
@@ -39,6 +41,7 @@ pub struct Config {
     pub database_path: PathBuf,
     pub database_type: DbType,
     pub chain_conf: ChainConfig,
+    pub state_importer: StateImporter<CoinConfig>,
     /// When `true`:
     /// - Enables manual block production.
     /// - Enables debugger endpoint.
@@ -72,6 +75,7 @@ pub struct Config {
 impl Config {
     pub fn local_node() -> Self {
         let chain_conf = ChainConfig::local_testnet();
+        let state_importer = StateImporter::local_testnet();
         let utxo_validation = false;
         let min_gas_price = 0;
 
@@ -86,6 +90,7 @@ impl Config {
             database_type: DbType::InMemory,
             debug: true,
             chain_conf: chain_conf.clone(),
+            state_importer,
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,

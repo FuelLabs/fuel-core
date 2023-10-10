@@ -1,15 +1,31 @@
+use std::path::Path;
+
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     fuel_crypto::Hasher,
-    fuel_tx::{ConsensusParameters, GasCosts, TxParameters, UtxoId},
-    fuel_types::{Address, AssetId, BlockHeight},
-    fuel_vm::SecretKey,
+    fuel_tx::{
+        ConsensusParameters,
+        GasCosts,
+        TxParameters,
+    },
+    fuel_types::{
+        AssetId,
+        BlockHeight,
+    },
 };
-use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, skip_serializing_none};
-use std::{io::ErrorKind, path::PathBuf, str::FromStr};
+use serde::{
+    Deserialize,
+    Serialize,
+};
+use serde_with::{
+    serde_as,
+    skip_serializing_none,
+};
 
-use crate::{config::coin::CoinConfig, genesis::GenesisCommitment, ConsensusConfig};
+use crate::{
+    genesis::GenesisCommitment,
+    ConsensusConfig,
+};
 
 // Fuel Network human-readable part for bech32 encoding
 pub const FUEL_BECH32_HRP: &str = "fuel";
@@ -45,55 +61,19 @@ impl ChainConfig {
     pub const BASE_ASSET: AssetId = AssetId::zeroed();
 
     pub fn local_testnet() -> Self {
-        // endow some preset accounts with an initial balance
-        tracing::info!("Initial Accounts");
-
         Self {
             chain_name: LOCAL_TESTNET.to_string(),
             ..Default::default()
         }
     }
 
-    pub fn initial_coin(
-        secret: SecretKey,
-        amount: u64,
-        utxo_id: Option<UtxoId>,
-    ) -> CoinConfig {
-        let address = Address::from(*secret.public_key().hash());
-
-        CoinConfig {
-            tx_id: utxo_id.as_ref().map(|u| *u.tx_id()),
-            output_index: utxo_id.as_ref().map(|u| u.output_index()),
-            tx_pointer_block_height: None,
-            tx_pointer_tx_idx: None,
-            maturity: None,
-            owner: address,
-            amount,
-            asset_id: Default::default(),
-        }
-    }
-}
-
-impl FromStr for ChainConfig {
-    type Err = std::io::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            LOCAL_TESTNET => Ok(Self::local_testnet()),
-            s => {
-                // Attempt to load chain config from path
-                let path = PathBuf::from(s.to_string());
-                let contents = std::fs::read(path)?;
-                serde_json::from_slice(&contents).map_err(|e| {
-                    std::io::Error::new(
-                        ErrorKind::InvalidData,
-                        anyhow::Error::new(e).context(format!(
-                            "an error occurred while loading the chain config file {s}"
-                        )),
-                    )
-                })
-            }
-        }
+    pub fn load_from_file(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let contents = std::fs::read(path.as_ref().join("chain_config.json"))?;
+        serde_json::from_slice(&contents).map_err(|e| {
+            anyhow::Error::new(e).context(format!(
+                "an error occurred while loading the chain config file"
+            ))
+        })
     }
 }
 

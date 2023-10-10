@@ -132,6 +132,12 @@ pub enum Column {
     ContractsStateMerkleData = 23,
     /// See [`ContractsStateMerkleMetadata`](storage::ContractsStateMerkleMetadata)
     ContractsStateMerkleMetadata = 24,
+    /// See [`GenesisRootCalculatorMerkleData`](storage::CoinsRootMerkleData)
+    StateImportCursor = 25,
+    /// See [`GenesisRootCalculatorMerkleData`](storage::CoinsRootMerkleData)
+    GenesisRootCalculatorMerkleData = 26,
+    /// See [`GenesisRootCalculatorMetadata`](storage::CoinsRootMerkleMetadata)
+    GenesisRootCalculatorMetadata = 27,
 }
 
 impl Column {

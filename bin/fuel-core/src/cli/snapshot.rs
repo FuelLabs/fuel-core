@@ -1,5 +1,8 @@
 use crate::cli::DEFAULT_DB_PATH;
-use clap::{Parser, Subcommand};
+use clap::{
+    Parser,
+    Subcommand,
+};
 use fuel_core::types::fuel_types::ContractId;
 use std::path::PathBuf;
 
@@ -46,7 +49,10 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
 pub async fn exec(command: Command) -> anyhow::Result<()> {
     use anyhow::Context;
     use fuel_core::{
-        chain_config::{ChainConfig, StateConfig},
+        chain_config::{
+            ChainConfig,
+            StateConfig,
+        },
         database::Database,
     };
     let path = command.database_path;

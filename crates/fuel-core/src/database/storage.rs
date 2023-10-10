@@ -142,6 +142,43 @@ impl Mappable for ContractsStateMerkleMetadata {
     type OwnedValue = Self::Value;
 }
 
+/// The cursor that marks the progress of the resumable state import process
+pub struct StateImportCursor;
+
+impl Mappable for StateImportCursor {
+    type Key = u8;
+    type OwnedKey = Self::Key;
+    type Value = usize;
+    type OwnedValue = Self::Value;
+}
+
+#[derive(Clone)]
+pub enum GenesisRootCalculatorKey {
+    Coins,
+    Messages,
+    Contracts,
+}
+
+/// The table for the coin merkle root computation
+pub struct GenesisRootCalculatorMerkleData;
+
+impl Mappable for GenesisRootCalculatorMerkleData {
+    type Key = GenesisRootCalculatorKey;
+    type OwnedKey = Self::Key;
+    type Value = sparse::Primitive;
+    type OwnedValue = Self::Value;
+}
+
+/// The metadata table for [`GenesisRootCalculatorMetadata`](GenesisRootCalculatorMetadata) table
+pub struct GenesisRootCalculatorMetadata;
+
+impl Mappable for GenesisRootCalculatorMetadata {
+    type Key = GenesisRootCalculatorKey;
+    type OwnedKey = Self::Key;
+    type Value = SparseMerkleMetadata;
+    type OwnedValue = Self::Value;
+}
+
 /// The table has a corresponding column in the database.
 ///
 /// Using this trait allows the configured mappable type to have its'
@@ -193,6 +230,24 @@ impl DatabaseColumn for ContractsStateMerkleData {
 impl DatabaseColumn for ContractsStateMerkleMetadata {
     fn column() -> Column {
         Column::ContractsStateMerkleMetadata
+    }
+}
+
+impl DatabaseColumn for StateImportCursor {
+    fn column() -> Column {
+        Column::StateImportCursor
+    }
+}
+
+impl DatabaseColumn for GenesisRootCalculatorMerkleData {
+    fn column() -> Column {
+        Column::GenesisRootCalculatorMerkleData
+    }
+}
+
+impl DatabaseColumn for GenesisRootCalculatorMetadata {
+    fn column() -> Column {
+        Column::GenesisRootCalculatorMetadata
     }
 }
 

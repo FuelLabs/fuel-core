@@ -4,7 +4,7 @@ mod consensus;
 mod contract;
 mod message;
 mod state;
-mod regenesis;
+mod state_importer;
 
 pub use chain::*;
 pub use coin::*;
@@ -12,7 +12,7 @@ pub use consensus::*;
 pub use contract::*;
 pub use message::*;
 pub use state::*;
-pub use regenesis::*;
+pub use state_importer::*;
 
 #[cfg(test)]
 mod tests {
