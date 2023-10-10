@@ -22,7 +22,6 @@ use libp2p::{
             FromSwarm,
             ListenFailure,
         },
-        ConnectionHandler,
         PollParameters,
     },
     Multiaddr,
@@ -32,10 +31,10 @@ use libp2p_core::Endpoint;
 use libp2p_swarm::{
     derive_prelude::Either,
     ConnectionDenied,
-    ConnectionHandlerSelect,
     ConnectionId,
     NetworkBehaviour,
     THandler,
+    THandlerInEvent,
     THandlerOutEvent,
     ToSwarm,
 };
@@ -246,7 +245,7 @@ impl NetworkBehaviour for PeerReportBehaviour {
         &mut self,
         cx: &mut Context<'_>,
         params: &mut impl PollParameters,
-    ) -> Poll<ToSwarm<Self::ToSwarm, Self::ConnectionHandler>> {
+    ) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
         if let Some(event) = self.pending_events.pop_front() {
             return Poll::Ready(ToSwarm::GenerateEvent(event))
         }
@@ -466,11 +465,11 @@ trait FromSwarmEvent: NetworkBehaviour {
             FromSwarm::ListenerClosed(e) => {
                 self.on_swarm_event(FromSwarm::ListenerClosed(*e));
             }
-            FromSwarm::NewExternalAddr(e) => {
-                self.on_swarm_event(FromSwarm::NewExternalAddr(*e));
+            FromSwarm::NewExternalAddrCandidate(e) => {
+                self.on_swarm_event(FromSwarm::NewExternalAddrCandidate(*e));
             }
-            FromSwarm::ExpiredExternalAddr(e) => {
-                self.on_swarm_event(FromSwarm::ExpiredExternalAddr(*e));
+            FromSwarm::ExternalAddrExpired(e) => {
+                self.on_swarm_event(FromSwarm::ExternalAddrExpired(*e));
             }
             FromSwarm::NewListenAddr(e) => {
                 self.on_swarm_event(FromSwarm::NewListenAddr(*e));

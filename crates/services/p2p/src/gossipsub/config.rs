@@ -18,7 +18,7 @@ use libp2p::gossipsub::{
     TopicScoreParams,
 };
 use libp2p_gossipsub::MetricsConfig;
-use libp2p_prom_client::registry::Registry;
+use prometheus_client::registry::Registry;
 use sha2::{
     Digest,
     Sha256,

@@ -78,11 +78,11 @@ impl Error for FuelUpgradeError {
 }
 
 impl UpgradeInfo for FuelUpgrade {
-    type Info = &'static [u8];
+    type Info = &'static str;
     type InfoIter = std::iter::Once<Self::Info>;
 
     fn protocol_info(&self) -> Self::InfoIter {
-        std::iter::once(b"/fuel/upgrade/0")
+        std::iter::once("/fuel/upgrade/0")
     }
 }
 

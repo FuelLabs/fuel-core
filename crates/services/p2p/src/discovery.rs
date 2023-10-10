@@ -1,13 +1,11 @@
 use self::mdns::MdnsWrapper;
 use futures::FutureExt;
-use ip_network::IpNetwork;
 use libp2p::{
     core::Endpoint,
     kad::{
         store::MemoryStore,
         Kademlia,
         KademliaEvent,
-        QueryId,
     },
     mdns::Event as MdnsEvent,
     swarm::{
@@ -17,7 +15,6 @@ use libp2p::{
             FromSwarm,
         },
         ConnectionDenied,
-        ConnectionHandler,
         ConnectionId,
         NetworkBehaviour,
         PollParameters,
@@ -28,6 +25,7 @@ use libp2p::{
 };
 
 use libp2p_swarm::{
+    THandlerInEvent,
     THandlerOutEvent,
     ToSwarm,
 };
@@ -135,7 +133,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         &mut self,
         cx: &mut Context<'_>,
         params: &mut impl PollParameters,
-    ) -> Poll<ToSwarm<Self::ToSwarm, Self::ConnectionHandler>> {
+    ) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
         // if random walk is enabled poll the stream that will fire when random walk is scheduled
         if let Some(next_kad_random_query) = self.next_kad_random_walk.as_mut() {
             while next_kad_random_query.poll_unpin(cx).is_ready() {

@@ -2,6 +2,7 @@ use crate::{
     gossipsub::config::default_gossipsub_config,
     heartbeat::HeartbeatConfig,
     peer_manager::ConnectionState,
+    TryPeerId,
 };
 use fuel_core_types::blockchain::consensus::Genesis;
 
@@ -11,15 +12,11 @@ use libp2p::{
         transport::Boxed,
     },
     gossipsub::Config as GossipsubConfig,
-    identity,
     identity::{
-        secp256k1::SecretKey,
+        secp256k1,
         Keypair,
     },
-    noise::{
-        Config as NoiseConfig,
-        {self,},
-    },
+    noise::Config as NoiseConfig,
     tcp::{
         tokio::Transport as TokioTcpTransport,
         Config as TcpConfig,
@@ -201,9 +198,10 @@ impl Config<NotInitialized> {
 pub fn convert_to_libp2p_keypair(
     secret_key_bytes: impl AsMut<[u8]>,
 ) -> anyhow::Result<Keypair> {
-    let secret_key = SecretKey::from_bytes(secret_key_bytes)?;
+    let secret_key = secp256k1::SecretKey::try_from_bytes(secret_key_bytes)?;
+    let keypair: secp256k1::Keypair = secret_key.into();
 
-    Ok(Keypair::Secp256k1(secret_key.into()))
+    Ok(keypair.into())
 }
 
 impl Config<NotInitialized> {
@@ -275,13 +273,8 @@ pub(crate) fn build_transport(
     }
     .upgrade(libp2p::core::upgrade::Version::V1);
 
-    let noise_authenticated = {
-        let dh_keys = identity::Keypair::new()
-            .into_authentic(&p2p_config.keypair)
-            .expect("Noise key generation failed");
-
-        NoiseConfig::xx(dh_keys).into_authenticated()
-    };
+    let noise_authenticated =
+        NoiseConfig::new(&p2p_config.keypair).expect("Noise key generation failed");
 
     let multiplex_config = {
         let mplex_config = MplexConfig::default();
@@ -329,6 +322,6 @@ fn peer_ids_set_from(multiaddr: &[Multiaddr]) -> HashSet<PeerId> {
         .iter()
         // Safety: as is the case with `bootstrap_nodes` it is assumed that `reserved_nodes` [`Multiadr`]
         // come with PeerId included, in case they are not the `unwrap()` will only panic when the node is started.
-        .map(|address| PeerId::try_from_multiaddr(address).unwrap())
+        .map(|address| address.try_to_peer_id().unwrap())
         .collect()
 }

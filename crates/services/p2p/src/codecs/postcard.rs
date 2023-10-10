@@ -36,7 +36,7 @@ use serde::{
 };
 use std::io;
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct PostcardCodec {
     /// Used for `max_size` parameter when reading Response Message
     /// Necessary in order to avoid DoS attacks
@@ -260,14 +260,14 @@ impl NetworkCodec for PostcardCodec {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct MessageExchangePostcardProtocol;
 
-// impl ProtocolName for MessageExchangePostcardProtocol {
-//     fn protocol_name(&self) -> &[u8] {
-//         REQUEST_RESPONSE_PROTOCOL_ID
-//     }
-// }
+impl AsRef<str> for MessageExchangePostcardProtocol {
+    fn as_ref(&self) -> &str {
+        REQUEST_RESPONSE_PROTOCOL_ID
+    }
+}
 
 #[cfg(test)]
 mod tests {

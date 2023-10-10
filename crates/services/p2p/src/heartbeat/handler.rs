@@ -18,7 +18,7 @@ use libp2p_swarm::{
     ConnectionHandler,
     ConnectionHandlerEvent,
     KeepAlive,
-    NegotiatedSubstream,
+    Stream,
     SubstreamProtocol,
 };
 use std::{
@@ -99,9 +99,8 @@ impl std::error::Error for HeartbeatFailure {
     }
 }
 
-type InboundData =
-    BoxFuture<'static, Result<(NegotiatedSubstream, BlockHeight), std::io::Error>>;
-type OutboundData = BoxFuture<'static, Result<NegotiatedSubstream, std::io::Error>>;
+type InboundData = BoxFuture<'static, Result<(Stream, BlockHeight), std::io::Error>>;
+type OutboundData = BoxFuture<'static, Result<Stream, std::io::Error>>;
 
 pub struct HeartbeatHandler {
     config: HeartbeatConfig,
@@ -124,8 +123,8 @@ impl HeartbeatHandler {
 }
 
 impl ConnectionHandler for HeartbeatHandler {
-    type FromBehaviour = ();
-    type ToBehaviour = ();
+    type FromBehaviour = HeartbeatInEvent;
+    type ToBehaviour = HeartbeatOutEvent;
     type Error = HeartbeatFailure;
 
     type InboundProtocol = ReadyUpgrade<&'static str>;
@@ -133,7 +132,7 @@ impl ConnectionHandler for HeartbeatHandler {
     type OutboundOpenInfo = ();
     type InboundOpenInfo = ();
 
-    fn listen_protocol(&self) -> SubstreamProtocol<ReadyUpgrade<&'static [u8]>, ()> {
+    fn listen_protocol(&self) -> SubstreamProtocol<ReadyUpgrade<&'static str>, ()> {
         SubstreamProtocol::new(ReadyUpgrade::new(HEARTBEAT_PROTOCOL), ())
     }
 
@@ -183,7 +182,7 @@ impl ConnectionHandler for HeartbeatHandler {
                     self.inbound = Some(receive_block_height(stream).boxed());
 
                     // report newly received `BlockHeight` to the Behaviour
-                    return Poll::Ready(ConnectionHandlerEvent::Custom(
+                    return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
                         HeartbeatOutEvent::BlockHeight(block_height),
                     ))
                 }
@@ -207,7 +206,7 @@ impl ConnectionHandler for HeartbeatHandler {
                     });
 
                     if !requested {
-                        return Poll::Ready(ConnectionHandlerEvent::Custom(
+                        return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
                             HeartbeatOutEvent::RequestBlockHeight,
                         ))
                     }
@@ -309,9 +308,9 @@ impl ConnectionHandler for HeartbeatHandler {
 /// Represents state of the Oubound stream
 enum OutboundState {
     NegotiatingStream,
-    Idle(NegotiatedSubstream),
+    Idle(Stream),
     RequestingBlockHeight {
-        stream: NegotiatedSubstream,
+        stream: Stream,
         /// `false` if the BlockHeight has not been requested yet.
         /// `true` if the BlockHeight has been requested in the current `Heartbeat` cycle.
         requested: bool,

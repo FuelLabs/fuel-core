@@ -52,7 +52,8 @@ pub trait RequestResponseConverter {
 /// Main Codec trait
 /// Needs to be implemented and provided to FuelBehaviour
 pub trait NetworkCodec:
-    GossipsubCodec<
+    Default
+    + GossipsubCodec<
         RequestMessage = GossipsubBroadcastRequest,
         ResponseMessage = GossipsubMessage,
     > + RequestResponseCodec<Request = RequestMessage, Response = NetworkResponse>

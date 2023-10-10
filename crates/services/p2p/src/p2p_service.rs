@@ -29,6 +29,7 @@ use crate::{
         ResponseError,
         ResponseMessage,
     },
+    TryPeerId,
 };
 use fuel_core_metrics::p2p_metrics::p2p_metrics;
 use fuel_core_types::{
@@ -73,7 +74,7 @@ use tracing::{
 
 impl<Codec: NetworkCodec> Punisher for Swarm<FuelBehaviour<Codec>> {
     fn ban_peer(&mut self, peer_id: PeerId) {
-        self.ban_peer_id(peer_id)
+        self.behaviour_mut().block_peer(peer_id)
     }
 }
 
@@ -207,7 +208,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let reserved_peers = config
             .reserved_nodes
             .iter()
-            .filter_map(PeerId::try_from_multiaddr)
+            .filter_map(|m| m.try_to_peer_id())
             .collect();
 
         Self {

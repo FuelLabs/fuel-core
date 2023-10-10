@@ -2656,8 +2656,7 @@ dependencies = [
  "axum",
  "once_cell",
  "pin-project-lite 0.2.13",
- "prometheus-client 0.18.1",
- "prometheus-client 0.20.0",
+ "prometheus-client",
  "regex",
  "tokio",
  "tracing",
@@ -2680,6 +2679,7 @@ dependencies = [
  "futures",
  "ip_network",
  "libp2p",
+ "libp2p-allow-block-list",
  "libp2p-core",
  "libp2p-dns",
  "libp2p-gossipsub",
@@ -2694,8 +2694,7 @@ dependencies = [
  "libp2p-websocket",
  "libp2p-yamux",
  "postcard",
- "prometheus-client 0.18.1",
- "prometheus-client 0.20.0",
+ "prometheus-client",
  "rand 0.8.5",
  "serde",
  "serde_with",
@@ -2705,6 +2704,7 @@ dependencies = [
  "tracing",
  "tracing-attributes",
  "tracing-subscriber",
+ "void",
 ]
 
 [[package]]
@@ -4060,7 +4060,7 @@ dependencies = [
  "libp2p-identity",
  "libp2p-swarm",
  "log",
- "prometheus-client 0.21.2",
+ "prometheus-client",
  "quick-protobuf",
  "quick-protobuf-codec",
  "rand 0.8.5",
@@ -4177,7 +4177,7 @@ dependencies = [
  "libp2p-kad",
  "libp2p-swarm",
  "once_cell",
- "prometheus-client 0.21.2",
+ "prometheus-client",
 ]
 
 [[package]]
@@ -5521,30 +5521,6 @@ dependencies = [
 
 [[package]]
 name = "prometheus-client"
-version = "0.18.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83cd1b99916654a69008fd66b4f9397fbe08e6e51dfe23d4417acf5d3b8cb87c"
-dependencies = [
- "dtoa",
- "itoa",
- "parking_lot",
- "prometheus-client-derive-text-encode",
-]
-
-[[package]]
-name = "prometheus-client"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e227aeb6c2cfec819e999c4773b35f8c7fa37298a203ff46420095458eee567e"
-dependencies = [
- "dtoa",
- "itoa",
- "parking_lot",
- "prometheus-client-derive-encode",
-]
-
-[[package]]
-name = "prometheus-client"
 version = "0.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c99afa9a01501019ac3a14d71d9f94050346f55ca471ce90c799a15c58f61e2"
@@ -5564,17 +5540,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.38",
-]
-
-[[package]]
-name = "prometheus-client-derive-text-encode"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66a455fbcb954c1a7decf3c586e860fd7889cddf4b8e164be736dbac95a953cd"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
 ]
 
 [[package]]

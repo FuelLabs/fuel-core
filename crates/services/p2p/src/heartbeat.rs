@@ -11,12 +11,12 @@ use libp2p_core::Endpoint;
 use libp2p_swarm::{
     derive_prelude::ConnectionId,
     ConnectionDenied,
-    ConnectionHandler,
     FromSwarm,
     NetworkBehaviour,
     NotifyHandler,
     PollParameters,
     THandler,
+    THandlerInEvent,
     THandlerOutEvent,
     ToSwarm,
 };
@@ -40,7 +40,7 @@ enum HeartbeatAction {
 }
 
 impl HeartbeatAction {
-    fn build(self) -> ToSwarm<HeartbeatEvent, HeartbeatHandler> {
+    fn build(self) -> ToSwarm<HeartbeatEvent, HeartbeatInEvent> {
         match self {
             Self::HeartbeatEvent(event) => ToSwarm::GenerateEvent(event),
             Self::BlockHeightRequest {
@@ -141,7 +141,7 @@ impl NetworkBehaviour for Heartbeat {
         &mut self,
         _: &mut std::task::Context<'_>,
         _: &mut impl PollParameters,
-    ) -> Poll<ToSwarm<Self::ToSwarm, Self::ConnectionHandler>> {
+    ) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
         if let Some(action) = self.pending_events.pop_front() {
             return Poll::Ready(action.build())
         }

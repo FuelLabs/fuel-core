@@ -9,9 +9,9 @@ use libp2p::{
         PollParameters,
         ToSwarm,
     },
-    Multiaddr,
     PeerId,
 };
+use libp2p_swarm::THandlerInEvent;
 use std::task::{
     Context,
     Poll,
@@ -24,9 +24,9 @@ pub enum MdnsWrapper {
     Disabled,
 }
 
-impl Default for MdnsWrapper {
-    fn default() -> Self {
-        match TokioMdns::new(Config::default()) {
+impl MdnsWrapper {
+    pub fn new(peer_id: PeerId) -> Self {
+        match TokioMdns::new(Config::default(), peer_id) {
             Ok(mdns) => Self::Ready(mdns),
             Err(err) => {
                 warn!("Failed to initialize mDNS: {:?}", err);
@@ -34,26 +34,16 @@ impl Default for MdnsWrapper {
             }
         }
     }
-}
 
-impl MdnsWrapper {
     pub fn disabled() -> Self {
         MdnsWrapper::Disabled
-    }
-
-    pub fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-        match self {
-            Self::Ready(mdns) => mdns.addresses_of_peer(peer_id),
-            _ => Vec::new(),
-        }
     }
 
     pub fn poll(
         &mut self,
         cx: &mut Context<'_>,
         params: &mut impl PollParameters,
-    ) -> Poll<ToSwarm<MdnsEvent, <TokioMdns as NetworkBehaviour>::ConnectionHandler>>
-    {
+    ) -> Poll<ToSwarm<MdnsEvent, THandlerInEvent<TokioMdns>>> {
         match self {
             Self::Ready(mdns) => mdns.poll(cx, params),
             Self::Disabled => Poll::Pending,

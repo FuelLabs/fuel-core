@@ -49,7 +49,7 @@ impl<A: Approver> UpgradeInfo for FuelAuthenticated<A> {
 
 impl<A, T> InboundUpgrade<T> for FuelAuthenticated<A>
 where
-    T: AsyncRead + AsyncWrite + Send + 'static,
+    T: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     A: Approver + Send + 'static,
 {
     type Output = (PeerId, NoiseOutput<T>);
@@ -73,7 +73,7 @@ where
 
 impl<A, T> OutboundUpgrade<T> for FuelAuthenticated<A>
 where
-    T: AsyncRead + AsyncWrite + Send + 'static,
+    T: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     A: Approver + Send + 'static,
 {
     type Output = (PeerId, NoiseOutput<T>);

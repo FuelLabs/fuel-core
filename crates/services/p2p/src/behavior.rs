@@ -39,6 +39,7 @@ use libp2p::{
     Multiaddr,
     PeerId,
 };
+use libp2p_allow_block_list as allow_block_list;
 use libp2p_kad::KademliaEvent;
 
 #[derive(Debug)]
@@ -47,6 +48,7 @@ pub enum FuelBehaviourEvent {
     PeerReport(PeerReportEvent),
     Gossipsub(GossipsubEvent),
     RequestResponse(RequestResponseEvent<RequestMessage, NetworkResponse>),
+    BlockedPeers(void::Void),
 }
 
 /// Handles all p2p protocols needed for Fuel.
@@ -64,6 +66,9 @@ pub struct FuelBehaviour<Codec: NetworkCodec> {
 
     /// RequestResponse protocol
     request_response: RequestResponse<Codec>,
+
+    /// The Behaviour to manage connections to blocked peers.
+    blocked_peer: allow_block_list::Behaviour<allow_block_list::BlockedPeers>,
 }
 
 impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
@@ -99,20 +104,20 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         let peer_report = PeerReportBehaviour::new(p2p_config);
 
         let req_res_protocol =
-            std::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
+            core::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
 
         let mut req_res_config = RequestResponseConfig::default();
         req_res_config.set_request_timeout(p2p_config.set_request_timeout);
         req_res_config.set_connection_keep_alive(p2p_config.set_connection_keep_alive);
 
-        let request_response =
-            RequestResponse::new(codec, req_res_protocol, req_res_config);
+        let request_response = RequestResponse::new(req_res_protocol, req_res_config);
 
         Self {
             discovery: discovery_config.finish(),
             gossipsub,
             peer_report,
             request_response,
+            blocked_peer: Default::default(),
         }
     }
 
@@ -188,6 +193,10 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
     pub fn get_peer_score(&self, peer_id: &PeerId) -> Option<f64> {
         self.gossipsub.peer_score(peer_id)
     }
+
+    pub fn block_peer(&mut self, peer_id: PeerId) {
+        self.blocked_peer.block_peer(peer_id)
+    }
 }
 
 impl From<KademliaEvent> for FuelBehaviourEvent {
@@ -211,5 +220,11 @@ impl From<GossipsubEvent> for FuelBehaviourEvent {
 impl From<RequestResponseEvent<RequestMessage, NetworkResponse>> for FuelBehaviourEvent {
     fn from(event: RequestResponseEvent<RequestMessage, NetworkResponse>) -> Self {
         FuelBehaviourEvent::RequestResponse(event)
+    }
+}
+
+impl From<void::Void> for FuelBehaviourEvent {
+    fn from(event: void::Void) -> Self {
+        FuelBehaviourEvent::BlockedPeers(event)
     }
 }
