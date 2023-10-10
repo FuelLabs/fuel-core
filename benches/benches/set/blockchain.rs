@@ -69,19 +69,31 @@ pub struct BenchDb {
 }
 
 impl BenchDb {
+    const STATE_SIZE: u64 = 10_000_000;
+
     fn new(contract: &ContractId) -> io::Result<Self> {
         let tmp_dir = ShallowTempDir::new();
+
         let db = Arc::new(RocksDb::default_open(&tmp_dir.path, None).unwrap());
+
         let mut database = Database::new(db.clone());
         database.init_contract_state(
             contract,
-            (0u64..10_000_000).map(|k| {
+            (0..Self::STATE_SIZE).map(|k| {
                 let mut key = Bytes32::zeroed();
                 key.as_mut()[..8].copy_from_slice(&k.to_be_bytes());
                 (key, key)
             }),
         )?;
-        drop(database);
+
+        let mut database = VmDatabase::default_from_database(database);
+        for key in 0..Self::STATE_SIZE {
+            let mut asset = AssetId::zeroed();
+            asset.as_mut()[..8].copy_from_slice(&(key + 1).to_be_bytes());
+            database.merkle_contract_asset_id_balance_insert(contract, &asset, key)?;
+        }
+
+        drop(database); // Drops one reference to the db wrapper, but we still hold the last one
         Ok(Self {
             _tmp_dir: tmp_dir,
             db: Arc::into_inner(db).expect("All other references must be dropped"),
