@@ -132,6 +132,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
+          targets: "wasm32-unknown-unknown"
           components: "clippy"
       - name: Install Cargo Make
         uses: davidB/rust-cargo-make@v1
