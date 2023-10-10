@@ -23,8 +23,6 @@ pub mod blockchain;
 pub mod entities;
 pub mod services;
 
-use getrandom as _;
-/// Re-export of some fuel-vm types
 pub mod fuel_vm {
     #[doc(no_inline)]
     pub use fuel_vm_private::prelude::Breakpoint;
