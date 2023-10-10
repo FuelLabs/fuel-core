@@ -593,7 +593,7 @@ where
             block.transactions.push(tx);
             execution_data.tx_count = tx_count
                 .checked_add(1)
-                .ok_or(ExecutorError::TooMuchTransactions)?;
+                .ok_or(ExecutorError::TooManyTransactions)?;
 
             Ok(())
         };
@@ -643,7 +643,7 @@ where
         }
 
         if execution_kind != ExecutionKind::DryRun && !data.found_mint {
-            return Err(ExecutorError::CoinbaseIsMissed)
+            return Err(ExecutorError::MintMissing)
         }
 
         Ok(data)
@@ -715,12 +715,12 @@ where
         options: ExecutionOptions,
     ) -> ExecutorResult<Transaction> {
         if execution_data.found_mint {
-            return Err(ExecutorError::CoinbaseSecondTransaction)
+            return Err(ExecutorError::MintFoundSecondEntry)
         }
         execution_data.found_mint = true;
 
         if checked_mint.transaction().tx_pointer().tx_index() != execution_data.tx_count {
-            return Err(ExecutorError::CoinbaseIsNotLastTransaction)
+            return Err(ExecutorError::MintIsNotLastTransaction)
         }
 
         let coinbase_id = checked_mint.id();
@@ -779,7 +779,7 @@ where
                 *mint.mint_amount(),
             )
             .map_err(|e| anyhow::anyhow!(e))
-            .map_err(ExecutorError::CoinbaseCantIncreaseBalance)?;
+            .map_err(ExecutorError::CoinbaseCannotIncreaseBalance)?;
             sub_block_db_commit.commit()?;
 
             self.persist_output_utxos(
@@ -817,7 +817,7 @@ where
 
             if execution_kind == ExecutionKind::Validation {
                 if mint.input_contract() != &input || mint.output_contract() != &output {
-                    return Err(ExecutorError::CoinbaseMismatch)
+                    return Err(ExecutorError::MintMismatch)
                 }
             } else {
                 *mint.input_contract_mut() = input;
@@ -830,7 +830,7 @@ where
             let input = input::contract::Contract::default();
             let output = output::contract::Contract::default();
             if mint.input_contract() != &input || mint.output_contract() != &output {
-                return Err(ExecutorError::CoinbaseMismatch)
+                return Err(ExecutorError::MintMismatch)
             }
         }
 
@@ -2407,7 +2407,7 @@ mod tests {
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(
                 validation_err,
-                ExecutorError::CoinbaseIsNotLastTransaction
+                ExecutorError::MintIsNotLastTransaction
             ));
         }
 
@@ -2419,7 +2419,7 @@ mod tests {
             let validation_err = validator
                 .execute_and_commit(ExecutionBlock::Validation(block), Default::default())
                 .expect_err("Expected error because coinbase is missing");
-            assert!(matches!(validation_err, ExecutorError::CoinbaseIsMissed));
+            assert!(matches!(validation_err, ExecutorError::MintMissing));
         }
 
         #[test]
@@ -2529,7 +2529,7 @@ mod tests {
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(
                 validation_err,
-                ExecutorError::CoinbaseSecondTransaction
+                ExecutorError::MintFoundSecondEntry
             ));
         }
     }

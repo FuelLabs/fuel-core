@@ -313,7 +313,9 @@ impl Transaction {
             fuel_tx::Transaction::Create(create) => {
                 Some(create.input_contracts().map(|v| Contract(*v)).collect())
             }
-            fuel_tx::Transaction::Mint(_) => None,
+            fuel_tx::Transaction::Mint(mint) => {
+                Some(vec![Contract(mint.input_contract().contract_id)])
+            }
         }
     }
 

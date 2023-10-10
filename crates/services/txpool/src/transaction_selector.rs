@@ -16,7 +16,7 @@ pub fn select_transactions(
     // Future improvements to this algorithm may take into account the parallel nature of
     // transactions to maximize throughput.
     let mut used_block_space: Word = 0;
-    // The maximum index for the transaction is `u16`, so we need to
+    // The type of the index for the transaction is `u16`, so we need to
     // limit it to `MAX` value minus 1(because of the `Mint` transaction).
     let takes_txs = u16::MAX - 1;
 

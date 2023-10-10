@@ -247,22 +247,22 @@ impl ExecutionKind {
 pub enum Error {
     #[error("Transaction id was already used: {0:#x}")]
     TransactionIdCollision(Bytes32),
-    #[error("Too much transactions in the block")]
-    TooMuchTransactions,
+    #[error("Too many transactions in the block")]
+    TooManyTransactions,
     #[error("output already exists")]
     OutputAlreadyExists,
     #[error("The computed fee caused an integer overflow")]
     FeeOverflow,
-    #[error("The blocks is missing `Mint` transaction.")]
-    CoinbaseIsMissed,
-    #[error("The second entry of the `Mint` - coinbase transaction.")]
-    CoinbaseSecondTransaction,
-    #[error("The last transaction in the block is not `Mint` - coinbase.")]
-    CoinbaseIsNotLastTransaction,
-    #[error("Coinbase mismatches expectations.")]
-    CoinbaseMismatch,
+    #[error("The block is missing `Mint` transaction.")]
+    MintMissing,
+    #[error("Found the second entry of the `Mint` transaction in the block.")]
+    MintFoundSecondEntry,
+    #[error("The last transaction in the block is not `Mint`.")]
+    MintIsNotLastTransaction,
+    #[error("The `Mint` transaction mismatches expectations.")]
+    MintMismatch,
     #[error("Can't increase the balance of the coinbase contract: {0}.")]
-    CoinbaseCantIncreaseBalance(anyhow::Error),
+    CoinbaseCannotIncreaseBalance(anyhow::Error),
     #[error("Coinbase amount mismatches with expected.")]
     CoinbaseAmountMismatch,
     #[error("Invalid transaction: {0}")]

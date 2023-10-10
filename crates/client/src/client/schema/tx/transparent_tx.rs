@@ -82,7 +82,11 @@ pub struct Transaction {
     pub id: TransactionId,
     pub tx_pointer: Option<TxPointer>,
     pub input_asset_ids: Option<Vec<AssetId>>,
+    /// The list of all contracts from the inputs of the transaction.
+    ///
+    /// It is a helper function and doesn't have a corresponding field in the transaction.
     pub input_contracts: Option<Vec<ContractIdFragment>>,
+    /// The field of the `Mint` transaction.
     pub input_contract: Option<InputContract>,
     pub inputs: Option<Vec<Input>>,
     pub is_script: bool,

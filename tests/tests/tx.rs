@@ -305,12 +305,12 @@ async fn get_transactions() {
         .iter()
         .map(|tx| tx.transaction.id(&ChainId::default()))
         .collect_vec();
-    // coinbase_tx1
     assert_eq!(transactions[0], tx1);
-    // coinbase_tx2
+    // coinbase_tx1
     assert_eq!(transactions[2], tx2);
-    // coinbase_tx3
+    // coinbase_tx2
     assert_eq!(transactions[4], tx3);
+    // coinbase_tx3
     // Check pagination state for first page
     assert!(response.has_next_page);
     assert!(!response.has_previous_page);
