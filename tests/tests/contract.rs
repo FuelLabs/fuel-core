@@ -17,10 +17,7 @@ use fuel_core_client::client::{
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::*,
-    fuel_types::{
-        canonical::Serialize,
-        ChainId,
-    },
+    fuel_types::canonical::Serialize,
     fuel_vm::*,
 };
 use rstest::rstest;
@@ -214,7 +211,7 @@ async fn can_get_message_proof() {
         .collect();
 
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-    let owner = Input::predicate_owner(&predicate, &ChainId::default());
+    let owner = Input::predicate_owner(&predicate);
     let coin_input = Input::coin_predicate(
         Default::default(),
         owner,

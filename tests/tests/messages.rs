@@ -408,7 +408,7 @@ async fn can_get_message_proof() {
             .collect();
 
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-        let owner = Input::predicate_owner(&predicate, &ChainId::default());
+        let owner = Input::predicate_owner(&predicate);
         let coin_input = Input::coin_predicate(
             Default::default(),
             owner,
