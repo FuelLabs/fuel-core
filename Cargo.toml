@@ -75,10 +75,11 @@ fuel-core-tests = { version = "0.0.0", path = "./tests" }
 fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 
 # Fuel dependencies
-fuel-vm-private = { version = "0.38.0", package = "fuel-vm" }
+fuel-vm-private = { version = "0.38.0", package = "fuel-vm", default-features = false, features = ["alloc"] }
+#fuel-vm-private = { path = "../fuel-vm/fuel-vm", package = "fuel-vm", default-features = false, features = ["alloc"] }
 
 # Common dependencies
-anyhow = "1.0"
+anyhow = { version = "1.0", default-features = false }
 async-trait = "0.1"
 cynic = { version = "2.2.1", features = ["http-reqwest"] }
 clap = "4.1"
@@ -113,3 +114,6 @@ itertools = "0.10"
 insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
+
+[patch.crates-io]
+fuel-vm-private = { git = "https://github.com/FuelLabs/fuel-vm/", package = "fuel-vm", branch = "bvrooman/feat/prepare-no-std-compatability" }
