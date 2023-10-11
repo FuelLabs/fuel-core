@@ -146,7 +146,7 @@ impl Mappable for ContractsStateMerkleMetadata {
 pub struct StateImportCursor;
 
 impl Mappable for StateImportCursor {
-    type Key = u8;
+    type Key = ();
     type OwnedKey = Self::Key;
     type Value = usize;
     type OwnedValue = Self::Value;
@@ -160,22 +160,12 @@ pub enum GenesisRootCalculatorKey {
 }
 
 /// The table for the coin merkle root computation
-pub struct GenesisRootCalculatorMerkleData;
+pub struct GenesisRootCalculator;
 
-impl Mappable for GenesisRootCalculatorMerkleData {
+impl Mappable for GenesisRootCalculator {
     type Key = GenesisRootCalculatorKey;
     type OwnedKey = Self::Key;
-    type Value = sparse::Primitive;
-    type OwnedValue = Self::Value;
-}
-
-/// The metadata table for [`GenesisRootCalculatorMetadata`](GenesisRootCalculatorMetadata) table
-pub struct GenesisRootCalculatorMetadata;
-
-impl Mappable for GenesisRootCalculatorMetadata {
-    type Key = GenesisRootCalculatorKey;
-    type OwnedKey = Self::Key;
-    type Value = SparseMerkleMetadata;
+    type Value = u64; //placeholder
     type OwnedValue = Self::Value;
 }
 
@@ -239,15 +229,9 @@ impl DatabaseColumn for StateImportCursor {
     }
 }
 
-impl DatabaseColumn for GenesisRootCalculatorMerkleData {
+impl DatabaseColumn for GenesisRootCalculator{
     fn column() -> Column {
         Column::GenesisRootCalculatorMerkleData
-    }
-}
-
-impl DatabaseColumn for GenesisRootCalculatorMetadata {
-    fn column() -> Column {
-        Column::GenesisRootCalculatorMetadata
     }
 }
 

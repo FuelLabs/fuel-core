@@ -1,6 +1,6 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, path::Path};
 
-use fuel_core_types::fuel_types::Bytes32;
+use fuel_core_types::fuel_types::{Bytes32, ContractId};
 
 use crate::{
     CoinConfig,
@@ -8,14 +8,15 @@ use crate::{
     MessageConfig,
 };
 
+#[derive(Clone, Debug)]
 pub struct StateImporter<T> {
     phantom_data: PhantomData<T>,
 }
 
 pub enum ContractComponent {
     ContractMetadata(ContractConfig),
-    ContractState(Bytes32, Bytes32),
-    ContractAsset(Bytes32, usize),
+    ContractState(ContractId, Bytes32, Bytes32),
+    ContractAsset(ContractId, Bytes32, usize),
 }
 
 impl<T> StateImporter<T> {
@@ -30,11 +31,15 @@ impl<T> StateImporter<T> {
 
 impl StateImporter<CoinConfig> {
     pub fn new(_reader: impl std::io::Read) -> Self {
-        todo!()
+        Self { phantom_data: PhantomData::default() }
     }
 
     pub fn local_testnet() -> Self {
-        todo!()
+        Self { phantom_data: PhantomData::default() }
+    }
+
+    pub fn load_from_file(_path: impl AsRef<Path>) -> Self {
+        Self { phantom_data: PhantomData::default() }
     }
 
     pub fn messages(self) -> StateImporter<MessageConfig> {

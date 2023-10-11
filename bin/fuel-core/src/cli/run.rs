@@ -10,22 +10,13 @@ use anyhow::{
     anyhow,
     Context,
 };
-use bech32::{
-    ToBase32,
-    Variant::Bech32m,
-};
 use clap::Parser;
 use fuel_core::{
     chain_config::{
         default_consensus_dev_key,
         ChainConfig,
-        CoinConfig,
-        ConsensusConfig,
-        StateConfig,
-        StateStreamer,
-        FUEL_BECH32_HRP,
         LOCAL_TESTNET,
-        TESTNET_INITIAL_BALANCE,
+        StateImporter,
     },
     producer::Config as ProducerConfig,
     service::{
@@ -39,28 +30,13 @@ use fuel_core::{
     txpool::Config as TxPoolConfig,
     types::{
         blockchain::primitives::SecretKeyWrapper,
-        fuel_crypto::rand::{
-            rngs::StdRng,
-            SeedableRng,
-        },
-        fuel_tx::{
-            Address,
-            ConsensusParameters,
-            TxParameters,
-            UtxoId,
-        },
-        fuel_types::{
-            BlockHeight,
-            Bytes32,
-        },
         fuel_vm::SecretKey,
         secrecy::{
             ExposeSecret,
             Secret,
-        },
+        }, fuel_types::Address,
     },
 };
-use itertools::Itertools;
 use pyroscope::{
     pyroscope::PyroscopeAgentRunning,
     PyroscopeAgent,
@@ -68,10 +44,6 @@ use pyroscope::{
 use pyroscope_pprofrs::{
     pprof_backend,
     PprofConfig,
-};
-use serde_json::{
-    Map,
-    Value,
 };
 use std::{
     env,

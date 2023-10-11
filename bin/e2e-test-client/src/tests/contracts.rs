@@ -24,8 +24,6 @@ pub async fn deploy_large_contract(ctx: &TestContext) -> Result<(), Failed> {
         contract_id: Default::default(),
         code: bytecode,
         salt: rng.gen(),
-        state: None,
-        balances: None,
         tx_id: None,
         output_index: None,
         tx_pointer_block_height: None,

@@ -6,10 +6,8 @@ use fuel_core_types::{
     fuel_tx::{
         Contract,
         ContractId,
-        StorageSlot,
     },
     fuel_types::{
-        AssetId,
         BlockHeight,
         Bytes32,
         Salt,
@@ -34,12 +32,6 @@ pub struct ContractConfig {
     pub code: Vec<u8>,
     #[serde_as(as = "HexType")]
     pub salt: Salt,
-    #[serde_as(as = "Option<Vec<(HexType, HexType)>>")]
-    #[serde(default)]
-    pub state: Option<Vec<(Bytes32, Bytes32)>>,
-    #[serde_as(as = "Option<Vec<(HexType, HexNumber)>>")]
-    #[serde(default)]
-    pub balances: Option<Vec<(AssetId, u64)>>,
     /// UtxoId: auto-generated if None
     #[serde_as(as = "Option<HexType>")]
     #[serde(default)]
@@ -66,18 +58,19 @@ impl ContractConfig {
     pub fn calculate_contract_id(&mut self) {
         let bytes = &self.code;
         let salt = self.salt;
-        let slots = self.state.clone().map(|slots| {
-            slots
-                .into_iter()
-                .map(|(key, value)| StorageSlot::new(key, value))
-                .collect::<Vec<_>>()
-        });
-        let state_root = slots
-            .as_ref()
-            .map(|slots| Contract::initial_state_root(slots.iter()))
-            .unwrap_or(Contract::default_state_root());
+        // let slots = self.state.clone().map(|slots| {
+        //    slots
+        //         .into_iter()
+        //         .map(|(key, value)| StorageSlot::new(key, value))
+        //         .collect::<Vec<_>>()
+        // });
+        // let state_root = slots
+        //     .as_ref()
+        //     .map(|slots| Contract::initial_state_root(slots.iter()))
+        //     .unwrap_or(Contract::default_state_root());
         let contract = Contract::from(bytes.clone());
         let root = contract.root();
+        let state_root = Default::default();
         let contract_id = contract.id(&salt, &root, &state_root);
         self.contract_id = contract_id;
     }
