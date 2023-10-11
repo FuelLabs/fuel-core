@@ -2701,7 +2701,8 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.38.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=bvrooman/feat/prepare-no-std-compatability#4d76425cd1d226d640ce3d133e0a3242b04e497b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04b475eaa2b92b9b616c736974785bb25bd0babd9baa13b450bd618dc092ea6c"
 dependencies = [
  "bitflags 1.3.2",
  "fuel-types",
@@ -3197,7 +3198,6 @@ dependencies = [
  "anyhow",
  "derive_more",
  "fuel-vm",
- "getrandom 0.2.10",
  "secrecy",
  "serde",
  "tai64",
@@ -3208,15 +3208,19 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.38.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=bvrooman/feat/prepare-no-std-compatability#4d76425cd1d226d640ce3d133e0a3242b04e497b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "931a77cda5b2732ae538b0945e28dc6a57979f2c2b4cb601515956c48d3bb44a"
 dependencies = [
- "derive_more",
+ "coins-bip32",
+ "coins-bip39",
  "ecdsa 0.16.8",
  "ed25519-dalek 2.0.0",
  "fuel-types",
  "k256",
+ "lazy_static",
  "p256 0.13.2",
  "rand 0.8.5",
+ "secp256k1",
  "serde",
  "sha2 0.10.8",
  "zeroize",
@@ -3225,7 +3229,8 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.38.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=bvrooman/feat/prepare-no-std-compatability#4d76425cd1d226d640ce3d133e0a3242b04e497b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c8b467951f6f2b0f61eff3cd8c308b2652a7c908c60d2cf55eaf588dcd44e1c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3236,7 +3241,8 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.38.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=bvrooman/feat/prepare-no-std-compatability#4d76425cd1d226d640ce3d133e0a3242b04e497b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3af06dfe8d1f1e9fcab1b61462c505073807d40b012994b66f346c19068e7272"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3249,12 +3255,14 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.38.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=bvrooman/feat/prepare-no-std-compatability#4d76425cd1d226d640ce3d133e0a3242b04e497b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed39a799d7a158b60cf862b8ba3cd354488f124f1b51c3929c9f8cb6c3021e2a"
 
 [[package]]
 name = "fuel-tx"
 version = "0.38.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=bvrooman/feat/prepare-no-std-compatability#4d76425cd1d226d640ce3d133e0a3242b04e497b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce5f316e3566f337869e6522c27abda5c606298c27913d93e1150b54636fc743"
 dependencies = [
  "derivative",
  "derive_more",
@@ -3275,7 +3283,8 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.38.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=bvrooman/feat/prepare-no-std-compatability#4d76425cd1d226d640ce3d133e0a3242b04e497b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2cb2c79b8274965438b10342a841d80eb69cca539c1439ec66dbc567c603be2"
 dependencies = [
  "fuel-derive",
  "hex",
@@ -3286,7 +3295,8 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.38.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=bvrooman/feat/prepare-no-std-compatability#4d76425cd1d226d640ce3d133e0a3242b04e497b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b65764050e16b8f41a0bd777f6c00593e676296cbadfff0f5d1b6f195935ff1b"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3494,10 +3504,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be4136b2a15dd319360be1c07d9933517ccf0be8f16bf62a3bee4f0d618df427"
 dependencies = [
  "cfg-if",
- "js-sys",
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -7081,6 +7089,25 @@ dependencies = [
  "pkcs8 0.10.2",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "secp256k1"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4124a35fe33ae14259c490fd70fa199a32b9ce9502f2ee6bc4f81ec06fa65894"
+dependencies = [
+ "rand 0.8.5",
+ "secp256k1-sys",
+]
+
+[[package]]
+name = "secp256k1-sys"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70a129b9e9efbfb223753b9163c4ab3b13cff7fd9c7f010fbac25ab4099fa07e"
+dependencies = [
+ "cc",
 ]
 
 [[package]]

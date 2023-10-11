@@ -38,7 +38,7 @@ impl Consensus {
                 let public_key = poa_data
                     .signature
                     .recover(block_id.as_message())
-                    .map_err(anyhow::Error::msg)?;
+                    .map_err(|e| anyhow::anyhow!("Can't recover public key: {:?}", e))?;
                 let address = Input::owner(&public_key);
                 Ok(address)
             }
