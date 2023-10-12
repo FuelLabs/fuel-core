@@ -125,9 +125,8 @@ jobs:
             args: -p fuel-core-types --target wasm32-unknown-unknown --no-default-features
           - command: check
             args: -p fuel-core-storage --target wasm32-unknown-unknown --no-default-features
-          # - command: check
-          #   args: -p fuel-core-client --target wasm32-unknown-unknown --no-default-features
-          # Currently failing
+          - command: check
+            args: -p fuel-core-client --target wasm32-unknown-unknown --no-default-features
           # - command: check
           #   args: -p fuel-core-chain-config --target wasm32-unknown-unknown --no-default-features
 
