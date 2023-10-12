@@ -8,13 +8,22 @@ mod tests;
 
 use crate::block_verifier::config::Config;
 use anyhow::ensure;
-use fuel_core_poa::ports::{Database as PoAVerifierDatabase, RelayerPort};
+use fuel_core_poa::ports::{
+    Database as PoAVerifierDatabase,
+    RelayerPort,
+};
 use fuel_core_types::{
     blockchain::{
-        block::Block, consensus::Consensus, header::BlockHeader,
-        primitives::DaBlockHeight, SealedBlockHeader,
+        block::Block,
+        consensus::Consensus,
+        header::BlockHeader,
+        primitives::DaBlockHeight,
+        SealedBlockHeader,
     },
-    fuel_types::{BlockHeight, Bytes32},
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+    },
     tai64::Tai64,
 };
 

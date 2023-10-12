@@ -15,8 +15,8 @@ use fuel_core::{
     chain_config::{
         default_consensus_dev_key,
         ChainConfig,
-        LOCAL_TESTNET,
         StateImporter,
+        LOCAL_TESTNET,
     },
     producer::Config as ProducerConfig,
     service::{
@@ -30,11 +30,12 @@ use fuel_core::{
     txpool::Config as TxPoolConfig,
     types::{
         blockchain::primitives::SecretKeyWrapper,
+        fuel_types::Address,
         fuel_vm::SecretKey,
         secrecy::{
             ExposeSecret,
             Secret,
-        }, fuel_types::Address,
+        },
     },
 };
 use pyroscope::{

@@ -1,10 +1,12 @@
 use crate::{
     database::{
+        self,
         storage::{
+            GenesisRootCalculator,
             GenesisRootCalculatorKey,
-            StateImportCursor, GenesisRootCalculator,
+            StateImportCursor,
         },
-        Database, self,
+        Database,
     },
     service::config::Config,
 };
@@ -63,9 +65,10 @@ use fuel_core_types::{
     },
     fuel_types::{
         bytes::WORD_SIZE,
+        AssetId,
         BlockHeight,
         Bytes32,
-        ContractId, AssetId,
+        ContractId,
     },
     services::block_importer::{
         ImportResult,
@@ -91,90 +94,117 @@ pub fn maybe_initialize_state(
     Ok(())
 }
 
+fn save_genesis_progress(
+    cursor: usize,
+    key: GenesisRootCalculatorKey,
+    db: &mut Database,
+) -> anyhow::Result<()> {
+    original_database
+        .storage::<StateImportCursor>()
+        .insert(&(), &cursor)?;
+    original_database
+        .storage::<GenesisRootCalculator>()
+        .insert(&key, &coins_tree)?;
+
+    database_transaction.commit()
+}
+
 fn import_chain_state(
     config: &Config,
     original_database: &mut Database,
 ) -> anyhow::Result<()> {
     let block_height = config.chain_conf.block_height;
 
-    let (mut cursor, mut coins_tree, mut messages_tree, mut contracts_tree) = resume_import(original_database)?;
+    let (mut cursor, mut coins_tree, mut messages_tree, mut contracts_tree) =
+        resume_import(original_database)?;
 
     let state_importer = config.state_importer.clone();
-    // TODO advance cursor on importer
-    // state_importer.advance_cursor(cursor);
 
-    for coin in state_importer {
-        if let Some(coin) = coin {
-            let mut database_transaction = Transactional::transaction(original_database);
-            let database = database_transaction.as_mut();
+    state_importer.try_for_each(|coin| {
+        let mut database_transaction = Transactional::transaction(original_database);
+        let database = database_transaction.as_mut();
 
-            let root = init_coin(database, coin, cursor as u64, block_height)?;
-            coins_tree.push(root.as_slice());
+        let root = init_coin(database, coin?, cursor as u64, block_height)?;
+        coins_tree.push(root.as_slice());
 
-            cursor += 1;
-            original_database.storage::<StateImportCursor>()
-                        .insert(&(), &cursor)?;
-            original_database.storage::<GenesisRootCalculator>()
-                        .insert(&GenesisRootCalculatorKey::Coins, &coins_tree)?;
-
-            database_transaction.commit()?;
-        }
-    }
+        save_genesis_progress(
+            cursor + 1,
+            GenesisRootCalculatorKey::Coins,
+            original_database,
+        )?
+    })?;
 
     let message_importer = state_importer.messages();
-    for message in message_importer {
-        if let Some(message) = message {
-            let mut database_transaction = Transactional::transaction(original_database);
-            let database = database_transaction.as_mut();
+    message_importer.try_for_each(|message| {
+        let mut database_transaction = Transactional::transaction(original_database);
+        let database = database_transaction.as_mut();
 
-            let root = init_da_message(database, message)?;
-            messages_tree.push(root.as_slice());
+        let root = init_da_message(database, message)?;
+        messages_tree.push(root.as_slice());
 
-            cursor += 1;
-            original_database.storage::<StateImportCursor>()
-                        .insert(&(), &cursor)?;
-            original_database.storage::<GenesisRootCalculator>()
-                        .insert(&GenesisRootCalculatorKey::Coins, &messages_tree)?;
-
-            database_transaction.commit()?;
-        }
-    }
+        save_genesis_progress(
+            cursor + 1,
+            GenesisRootCalculatorKey::Messages,
+            original_database,
+        )?
+    })?;
 
     let contract_importer = message_importer.contracts();
-    for contract in contract_importer {
+    contract_importer.try_for_each(|message| {
         match contract? {
             // TODO output index
-            ContractComponent::ContractMetadata(contract) => init_contract(original_database, contract, cursor as u64, block_height)?,
-            ContractComponent::ContractState(contract_id, key, value) => init_contract_state(original_database, &contract_id, key, value)?,
-            ContractComponent::ContractAsset(contract_id, asset_id, balance) => { 
-                init_contract_balance(original_database, &contract_id, AssetId::from(*asset_id), balance)?;
+            ContractComponent::ContractMetadata(contract) => {
+                init_contract(original_database, contract, cursor as u64, block_height)?
+            }
+            ContractComponent::ContractState(contract_id, key, value) => {
+                init_contract_state(original_database, &contract_id, key, value)?
+            }
+            ContractComponent::ContractAsset(contract_id, asset_id, balance) => {
+                init_contract_balance(
+                    original_database,
+                    &contract_id,
+                    AssetId::from(*asset_id),
+                    balance,
+                )?;
 
                 // State file specs guarantee that ContractAsset will come last when reading contract state
                 // We can calculate the root at this point
-                contracts_tree
-                    .push(ContractRef::new(&mut *original_database, contract_id).root()?.as_slice());
-                cursor += 1;
-                original_database.storage::<StateImportCursor>()
-                            .insert(&(), &cursor)?;
-                original_database.storage::<GenesisRootCalculator>()
-                            .insert(&GenesisRootCalculatorKey::Coins, &contracts_tree)?;
-            },
+                contracts_tree.push(
+                    ContractRef::new(&mut *original_database, contract_id)
+                        .root()?
+                        .as_slice(),
+                );
+                save_genesis_progress(
+                    cursor + 1,
+                    GenesisRootCalculatorKey::Contracts,
+                    original_database,
+                )?
+            }
         }
-    }
+    })?;
 
     Ok(())
 }
 
 fn resume_import(
     mut database: &Database,
-) -> anyhow::Result<(usize, MerkleRootCalculator, MerkleRootCalculator, MerkleRootCalculator)>
- {
+) -> anyhow::Result<(
+    usize,
+    MerkleRootCalculator,
+    MerkleRootCalculator,
+    MerkleRootCalculator,
+)> {
     let cursor = *database
         .storage::<StateImportCursor>()
         .get(&())?
         .unwrap_or_default();
 
-        Ok((cursor, MerkleRootCalculator::default(), MerkleRootCalculator::default(), MerkleRootCalculator::default()))
+    Ok((
+        cursor,
+        MerkleRootCalculator::default(),
+        MerkleRootCalculator::default(),
+        MerkleRootCalculator::default(),
+    ))
 }
 
 fn commit_genesis_block(
@@ -286,10 +316,7 @@ fn init_coin(
     coin.root()
 }
 
-fn init_da_message(
-    db: &mut Database,
-    msg: MessageConfig,
-) -> anyhow::Result<MerkleRoot> {
+fn init_da_message(db: &mut Database, msg: MessageConfig) -> anyhow::Result<MerkleRoot> {
     let message = Message {
         sender: msg.sender,
         recipient: msg.recipient,
@@ -314,7 +341,7 @@ fn init_contract(
     db: &mut Database,
     contract_config: ContractConfig,
     output_index: u64,
-    height: BlockHeight
+    height: BlockHeight,
 ) -> anyhow::Result<()> {
     // initialize contract state
     let contract = Contract::from(contract_config.code.as_slice());
@@ -330,65 +357,61 @@ fn init_contract(
             // generated transaction id([0..[out_index/255]])
             Bytes32::try_from(
                 (0..(Bytes32::LEN - WORD_SIZE))
-                .map(|_| 0u8)
-                .chain(
-                    (output_index as u64 / 255)
-                    .to_be_bytes()
-                    .into_iter(),
-                )
-                .collect_vec()
-                .as_slice(),
+                    .map(|_| 0u8)
+                    .chain((output_index as u64 / 255).to_be_bytes().into_iter())
+                    .collect_vec()
+                    .as_slice(),
             )
             .expect("Incorrect genesis transaction id byte length"),
             output_index as u8,
-            )
-        };
-        let tx_pointer = if let (Some(block_height), Some(tx_idx)) = (
-            contract_config.tx_pointer_block_height,
-            contract_config.tx_pointer_tx_idx,
-        ) {
-            TxPointer::new(block_height, tx_idx)
-          } else {
-            TxPointer::default()
-          };
+        )
+    };
+    let tx_pointer = if let (Some(block_height), Some(tx_idx)) = (
+        contract_config.tx_pointer_block_height,
+        contract_config.tx_pointer_tx_idx,
+    ) {
+        TxPointer::new(block_height, tx_idx)
+    } else {
+        TxPointer::default()
+    };
 
-          if tx_pointer.block_height() > height {
-            return Err(anyhow!(
-             "contract tx_pointer cannot be greater than genesis block"
-            ));
-          }
+    if tx_pointer.block_height() > height {
+        return Err(anyhow!(
+            "contract tx_pointer cannot be greater than genesis block"
+        ))
+    }
 
-          // insert contract code
-          if db
-            .storage::<ContractsRawCode>()
-            .insert(&contract_id, contract.as_ref())?
-            .is_some()
-          {
-            return Err(anyhow!("Contract code should not exist"))
-          }
+    // insert contract code
+    if db
+        .storage::<ContractsRawCode>()
+        .insert(&contract_id, contract.as_ref())?
+        .is_some()
+    {
+        return Err(anyhow!("Contract code should not exist"))
+    }
 
-        // insert contract root
-          if db
-            .storage::<ContractsInfo>()
-            .insert(&contract_id, &(salt, root))?
-            .is_some()
-          {
-            return Err(anyhow!("Contract info should not exist"))
-          }
-          if db
-            .storage::<ContractsLatestUtxo>()
-            .insert(
-                &contract_id,
-                &ContractUtxoInfo {
-                    utxo_id,
-                    tx_pointer,
-                },
-            )?
-            .is_some()
-            {
-                return Err(anyhow!("Contract utxo should not exist"))
-            }     
-    Ok(())           
+    // insert contract root
+    if db
+        .storage::<ContractsInfo>()
+        .insert(&contract_id, &(salt, root))?
+        .is_some()
+    {
+        return Err(anyhow!("Contract info should not exist"))
+    }
+    if db
+        .storage::<ContractsLatestUtxo>()
+        .insert(
+            &contract_id,
+            &ContractUtxoInfo {
+                utxo_id,
+                tx_pointer,
+            },
+        )?
+        .is_some()
+    {
+        return Err(anyhow!("Contract utxo should not exist"))
+    }
+    Ok(())
 }
 
 fn init_contract_state(
@@ -411,10 +434,10 @@ fn init_contract_balance(
     db: &mut Database,
     contract_id: &ContractId,
     asset_id: AssetId,
-    balance: u64
+    balance: u64,
 ) -> anyhow::Result<()> {
     // insert balances related to contract
-    
+
     // TODO: need to insert piecewise
     // if let Some(balances) = &contract.balances {
     //    db.init_contract_balances(contract_id, balances.clone().into_iter())?;

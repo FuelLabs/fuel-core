@@ -1,6 +1,12 @@
-use std::{marker::PhantomData, path::Path};
+use std::{
+    marker::PhantomData,
+    path::Path,
+};
 
-use fuel_core_types::fuel_types::{Bytes32, ContractId};
+use fuel_core_types::fuel_types::{
+    Bytes32,
+    ContractId,
+};
 
 use crate::{
     CoinConfig,
@@ -31,15 +37,21 @@ impl<T> StateImporter<T> {
 
 impl StateImporter<CoinConfig> {
     pub fn new(_reader: impl std::io::Read) -> Self {
-        Self { phantom_data: PhantomData::default() }
+        Self {
+            phantom_data: PhantomData::default(),
+        }
     }
 
     pub fn local_testnet() -> Self {
-        Self { phantom_data: PhantomData::default() }
+        Self {
+            phantom_data: PhantomData::default(),
+        }
     }
 
     pub fn load_from_file(_path: impl AsRef<Path>) -> Self {
-        Self { phantom_data: PhantomData::default() }
+        Self {
+            phantom_data: PhantomData::default(),
+        }
     }
 
     pub fn messages(self) -> StateImporter<MessageConfig> {

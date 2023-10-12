@@ -230,7 +230,7 @@ impl DatabaseColumn for StateImportCursor {
     }
 }
 
-impl DatabaseColumn for GenesisRootCalculator{
+impl DatabaseColumn for GenesisRootCalculator {
     fn column() -> Column {
         Column::GenesisRootCalculator
     }

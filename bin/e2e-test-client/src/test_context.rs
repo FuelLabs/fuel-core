@@ -217,7 +217,7 @@ impl Wallet {
             contract_id,
             code: bytes,
             salt,
-            //state,
+            // state,
             ..
         } = config;
         // let slots = state
