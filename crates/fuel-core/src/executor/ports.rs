@@ -64,6 +64,10 @@ impl RelayerPort for crate::database::Database {
             StorageAsRef,
         };
         use std::borrow::Cow;
-        Ok(self.storage::<Messages>().get(id)?.map(Cow::into_owned))
+        Ok(self
+            .storage::<Messages>()
+            .get(id)
+            .map_err(anyhow::Error::msg)?
+            .map(Cow::into_owned))
     }
 }

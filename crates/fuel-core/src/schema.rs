@@ -133,7 +133,7 @@ where
                 end = after;
             }
 
-            let entries = entries(&start, direction)?;
+            let entries = entries(&start, direction).map_err(anyhow::Error::msg)?;
             let mut has_previous_page = false;
             let mut has_next_page = false;
 
@@ -173,7 +173,7 @@ where
                 }
             });
 
-            let entries: Vec<_> = entries.try_collect()?;
+            let entries: Vec<_> = entries.try_collect().map_err(anyhow::Error::msg)?;
             let entries = entries.into_iter();
 
             let mut connection = Connection::new(has_previous_page, has_next_page);

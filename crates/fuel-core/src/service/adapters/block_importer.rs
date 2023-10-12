@@ -66,7 +66,8 @@ impl BlockImporterAdapter {
             let importer = self.block_importer.clone();
             move || importer.execute_and_commit(sealed_block)
         })
-        .await??;
+        .await?
+        .map_err(anyhow::Error::msg)?;
         Ok(())
     }
 }

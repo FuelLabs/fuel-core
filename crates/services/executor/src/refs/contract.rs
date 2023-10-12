@@ -23,10 +23,7 @@ use fuel_core_types::{
         Result as ExecutorResult,
     },
 };
-use std::{
-    borrow::Cow,
-    error::Error as StdError,
-};
+use std::borrow::Cow;
 
 /// The wrapper around `contract_id` to simplify work with `Contract` in the database.
 pub struct ContractRef<Database> {
@@ -116,7 +113,7 @@ pub trait ContractStorageTrait:
     + MerkleRootStorage<ContractId, ContractsState, Error = Self::InnerError>
     + MerkleRootStorage<ContractId, ContractsAssets, Error = Self::InnerError>
 {
-    type InnerError: StdError + Send + Sync + 'static;
+    type InnerError: core::fmt::Display + core::fmt::Debug + Send + Sync + 'static;
 }
 
 impl<'a, Database> GenesisCommitment for ContractRef<&'a mut Database>
@@ -128,20 +125,24 @@ where
         let utxo = self
             .database()
             .storage::<ContractsLatestUtxo>()
-            .get(&contract_id)?
-            .ok_or(not_found!(ContractsLatestUtxo))?
+            .get(&contract_id)
+            .map_err(anyhow::Error::msg)?
+            .ok_or(not_found!(ContractsLatestUtxo))
+            .map_err(anyhow::Error::msg)?
             .into_owned()
             .utxo_id;
 
         let state_root = self
             .database()
             .storage::<ContractsState>()
-            .root(&contract_id)?;
+            .root(&contract_id)
+            .map_err(anyhow::Error::msg)?;
 
         let balance_root = self
             .database()
             .storage::<ContractsAssets>()
-            .root(&contract_id)?;
+            .root(&contract_id)
+            .map_err(anyhow::Error::msg)?;
 
         let contract_hash = *Hasher::default()
             // `ContractId` already is based on contract's code and salt so we don't need it.

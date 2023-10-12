@@ -124,7 +124,7 @@ where
         utxo_validation: Option<bool>,
     ) -> anyhow::Result<Vec<Receipt>> {
         let height = match height {
-            None => self.db.current_block_height()?,
+            None => self.db.current_block_height().map_err(anyhow::Error::msg)?,
             Some(height) => height,
         } + 1.into();
 
@@ -233,8 +233,14 @@ where
         } else {
             // get info from previous block height
             let prev_height = height - 1u32.into();
-            let previous_block = self.db.get_block(&prev_height)?;
-            let prev_root = self.db.block_header_merkle_root(&prev_height)?;
+            let previous_block = self
+                .db
+                .get_block(&prev_height)
+                .map_err(anyhow::Error::msg)?;
+            let prev_root = self
+                .db
+                .block_header_merkle_root(&prev_height)
+                .map_err(anyhow::Error::msg)?;
 
             Ok(PreviousBlockInfo {
                 prev_root,

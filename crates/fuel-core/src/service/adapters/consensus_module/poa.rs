@@ -108,7 +108,7 @@ impl BlockImporter for BlockImporterAdapter {
     ) -> anyhow::Result<()> {
         self.block_importer
             .commit_result(result)
-            .map_err(Into::into)
+            .map_err(anyhow::Error::msg)
     }
 
     fn block_stream(&self) -> BoxStream<BlockImportInfo> {

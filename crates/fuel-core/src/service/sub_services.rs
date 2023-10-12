@@ -47,9 +47,12 @@ pub fn init_sub_services(
     config: &Config,
     database: &Database,
 ) -> anyhow::Result<(SubServices, SharedState)> {
-    let last_block = database.get_current_block()?.ok_or(anyhow::anyhow!(
-        "The blockchain is not initialized with any block"
-    ))?;
+    let last_block = database
+        .get_current_block()
+        .map_err(anyhow::Error::msg)?
+        .ok_or(anyhow::anyhow!(
+            "The blockchain is not initialized with any block"
+        ))?;
     #[cfg(feature = "relayer")]
     let relayer_service = if let Some(config) = &config.relayer {
         Some(fuel_core_relayer::new_service(

@@ -126,10 +126,13 @@ fn import_genesis_block(
     );
 
     let block_id = block.id();
-    database.storage::<FuelBlocks>().insert(
-        &block_id,
-        &block.compress(&config.chain_conf.consensus_parameters.chain_id),
-    )?;
+    database
+        .storage::<FuelBlocks>()
+        .insert(
+            &block_id,
+            &block.compress(&config.chain_conf.consensus_parameters.chain_id),
+        )
+        .map_err(anyhow::Error::msg)?;
     let consensus = Consensus::Genesis(genesis);
     let block = SealedBlock {
         entity: block,
@@ -142,10 +145,12 @@ fn import_genesis_block(
         (),
         (),
     );
-    importer.commit_result(UncommittedImportResult::new(
-        ImportResult::new_from_local(block, vec![]),
-        database_transaction,
-    ))?;
+    importer
+        .commit_result(UncommittedImportResult::new(
+            ImportResult::new_from_local(block, vec![]),
+            database_transaction,
+        ))
+        .map_err(anyhow::Error::msg)?;
     Ok(())
 }
 
@@ -199,7 +204,12 @@ fn init_coin_state(
                     ))
                 }
 
-                if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
+                if db
+                    .storage::<Coins>()
+                    .insert(&utxo_id, &coin)
+                    .map_err(anyhow::Error::msg)?
+                    .is_some()
+                {
                     return Err(anyhow!("Coin should not exist"))
                 }
                 coins_tree.push(coin.root()?.as_slice())
@@ -263,7 +273,8 @@ fn init_contracts(
                 // insert contract code
                 if db
                     .storage::<ContractsRawCode>()
-                    .insert(&contract_id, contract.as_ref())?
+                    .insert(&contract_id, contract.as_ref())
+                    .map_err(anyhow::Error::msg)?
                     .is_some()
                 {
                     return Err(anyhow!("Contract code should not exist"))
@@ -272,7 +283,8 @@ fn init_contracts(
                 // insert contract root
                 if db
                     .storage::<ContractsInfo>()
-                    .insert(&contract_id, &(salt, root))?
+                    .insert(&contract_id, &(salt, root))
+                    .map_err(anyhow::Error::msg)?
                     .is_some()
                 {
                     return Err(anyhow!("Contract info should not exist"))
@@ -285,7 +297,8 @@ fn init_contracts(
                             utxo_id,
                             tx_pointer,
                         },
-                    )?
+                    )
+                    .map_err(anyhow::Error::msg)?
                     .is_some()
                 {
                     return Err(anyhow!("Contract utxo should not exist"))
@@ -307,7 +320,8 @@ fn init_contract_state(
 ) -> anyhow::Result<()> {
     // insert state related to contract
     if let Some(contract_state) = &contract.state {
-        db.init_contract_state(contract_id, contract_state.iter().map(Clone::clone))?;
+        db.init_contract_state(contract_id, contract_state.iter().map(Clone::clone))
+            .map_err(anyhow::Error::msg)?;
     }
     Ok(())
 }
@@ -331,7 +345,8 @@ fn init_da_messages(
 
                 if db
                     .storage::<Messages>()
-                    .insert(message.id(), &message)?
+                    .insert(message.id(), &message)
+                    .map_err(anyhow::Error::msg)?
                     .is_some()
                 {
                     return Err(anyhow!("Message should not exist"))
@@ -351,7 +366,8 @@ fn init_contract_balance(
 ) -> anyhow::Result<()> {
     // insert balances related to contract
     if let Some(balances) = &contract.balances {
-        db.init_contract_balances(contract_id, balances.clone().into_iter())?;
+        db.init_contract_balances(contract_id, balances.clone().into_iter())
+            .map_err(anyhow::Error::msg)?;
     }
     Ok(())
 }
