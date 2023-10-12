@@ -86,7 +86,7 @@ impl ChainConfig {
         let mut rng = StdRng::seed_from_u64(10);
         let initial_coins = (0..5)
             .map(|_| {
-                let secret = fuel_core_types::fuel_crypto::SecretKey::random(&mut rng);
+                let secret = SecretKey::random(&mut rng);
                 let address = Address::from(*secret.public_key().hash());
                 let bech32_data = Bytes32::new(*address).to_base32();
                 let bech32_encoding =
