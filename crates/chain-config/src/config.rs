@@ -33,6 +33,7 @@ mod tests {
         RngCore,
         SeedableRng,
     };
+    #[cfg(feature = "std")]
     use std::{
         env::temp_dir,
         fs::write,
@@ -47,6 +48,7 @@ mod tests {
         state::StateConfig,
     };
 
+    #[cfg(feature = "std")]
     #[test]
     fn from_str_loads_from_file() {
         // setup chain config in a temp file
@@ -320,6 +322,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "std")]
     fn tmp_path() -> PathBuf {
         let mut path = temp_dir();
         path.push(rand::random::<u16>().to_string());
