@@ -257,6 +257,8 @@ pub enum Error {
     MintMissing,
     #[error("Found the second entry of the `Mint` transaction in the block.")]
     MintFoundSecondEntry,
+    #[error("The `Mint` transaction has an unexpected index.")]
+    MintHasUnexpectedIndex,
     #[error("The last transaction in the block is not `Mint`.")]
     MintIsNotLastTransaction,
     #[error("The `Mint` transaction mismatches expectations.")]

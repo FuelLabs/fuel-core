@@ -414,7 +414,7 @@ where
                     component.gas_limit,
                 );
 
-                let execution_data = self.execute_transactions(
+                let execution_data = self.execute_block(
                     &mut block_db_transaction,
                     ExecutionType::DryRun(component),
                     options,
@@ -430,7 +430,7 @@ where
                     component.gas_limit,
                 );
 
-                let execution_data = self.execute_transactions(
+                let execution_data = self.execute_block(
                     &mut block_db_transaction,
                     ExecutionType::Production(component),
                     options,
@@ -439,7 +439,7 @@ where
             }
             ExecutionTypes::Validation(mut block) => {
                 let component = PartialBlockComponent::from_partial_block(&mut block);
-                let execution_data = self.execute_transactions(
+                let execution_data = self.execute_block(
                     &mut block_db_transaction,
                     ExecutionType::Validation(component),
                     options,
@@ -513,8 +513,8 @@ where
     }
 
     #[tracing::instrument(skip_all)]
-    /// Execute all transactions on the fuel block.
-    fn execute_transactions<TxSource>(
+    /// Execute the fuel block with all transactions.
+    fn execute_block<TxSource>(
         &self,
         block_db_transaction: &mut DatabaseTransaction,
         block: ExecutionType<PartialBlockComponent<TxSource>>,
@@ -660,6 +660,10 @@ where
         tx_db_transaction: &mut DatabaseTransaction,
         options: ExecutionOptions,
     ) -> ExecutorResult<Transaction> {
+        if execution_data.found_mint {
+            return Err(ExecutorError::MintIsNotLastTransaction)
+        }
+
         // Throw a clear error if the transaction id is a duplicate
         if tx_db_transaction
             .deref_mut()
@@ -714,13 +718,10 @@ where
         execution_kind: ExecutionKind,
         options: ExecutionOptions,
     ) -> ExecutorResult<Transaction> {
-        if execution_data.found_mint {
-            return Err(ExecutorError::MintFoundSecondEntry)
-        }
         execution_data.found_mint = true;
 
         if checked_mint.transaction().tx_pointer().tx_index() != execution_data.tx_count {
-            return Err(ExecutorError::MintIsNotLastTransaction)
+            return Err(ExecutorError::MintHasUnexpectedIndex)
         }
 
         let coinbase_id = checked_mint.id();
@@ -2387,9 +2388,39 @@ mod tests {
         }
 
         #[test]
-        fn invalidate_is_not_last() {
+        fn invalidate_unexpected_index() {
             let mint = Transaction::mint(
                 TxPointer::new(Default::default(), 1),
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                Default::default(),
+            );
+
+            let mut block = Block::default();
+            *block.transactions_mut() = vec![mint.into()];
+            block.header_mut().recalculate_metadata();
+
+            let validator = Executor::test(
+                Default::default(),
+                Config {
+                    utxo_validation_default: false,
+                    ..Default::default()
+                },
+            );
+            let validation_err = validator
+                .execute_and_commit(ExecutionBlock::Validation(block), Default::default())
+                .expect_err("Expected error because coinbase if invalid");
+            assert!(matches!(
+                validation_err,
+                ExecutorError::MintHasUnexpectedIndex
+            ));
+        }
+
+        #[test]
+        fn invalidate_is_not_last() {
+            let mint = Transaction::mint(
+                TxPointer::new(Default::default(), 0),
                 Default::default(),
                 Default::default(),
                 Default::default(),
@@ -2499,39 +2530,6 @@ mod tests {
                 ExecutorError::CoinbaseAmountMismatch
             ));
         }
-
-        #[test]
-        fn invalidate_more_than_one_mint_is_not_allowed() {
-            let mut block = Block::default();
-            *block.transactions_mut() = vec![
-                Transaction::mint(
-                    TxPointer::new(Default::default(), 0),
-                    Default::default(),
-                    Default::default(),
-                    Default::default(),
-                    Default::default(),
-                )
-                .into(),
-                Transaction::mint(
-                    TxPointer::new(Default::default(), 1),
-                    Default::default(),
-                    Default::default(),
-                    Default::default(),
-                    Default::default(),
-                )
-                .into(),
-            ];
-            block.header_mut().recalculate_metadata();
-
-            let validator = Executor::test(Default::default(), Default::default());
-            let validation_err = validator
-                .execute_and_commit(ExecutionBlock::Validation(block), Default::default())
-                .expect_err("Expected error because coinbase if invalid");
-            assert!(matches!(
-                validation_err,
-                ExecutorError::MintFoundSecondEntry
-            ));
-        }
     }
 
     // Ensure tx has at least one input to cover gas
@@ -2572,7 +2570,7 @@ mod tests {
             skipped_transactions,
             ..
         } = producer
-            .execute_transactions(
+            .execute_block(
                 &mut block_db_transaction,
                 ExecutionType::Production(PartialBlockComponent::from_partial_block(
                     &mut block,
@@ -2589,7 +2587,7 @@ mod tests {
         // Produced block is valid
         let mut block_db_transaction = verifier.database.transaction();
         verifier
-            .execute_transactions(
+            .execute_block(
                 &mut block_db_transaction,
                 ExecutionType::Validation(PartialBlockComponent::from_partial_block(
                     &mut block,
@@ -2599,9 +2597,9 @@ mod tests {
             .unwrap();
 
         // Invalidate the block with Insufficient tx
-        block.transactions.push(tx);
+        block.transactions.insert(block.transactions.len() - 1, tx);
         let mut block_db_transaction = verifier.database.transaction();
-        let verify_result = verifier.execute_transactions(
+        let verify_result = verifier.execute_block(
             &mut block_db_transaction,
             ExecutionType::Validation(PartialBlockComponent::from_partial_block(
                 &mut block,
@@ -2633,7 +2631,7 @@ mod tests {
             skipped_transactions,
             ..
         } = producer
-            .execute_transactions(
+            .execute_block(
                 &mut block_db_transaction,
                 ExecutionType::Production(PartialBlockComponent::from_partial_block(
                     &mut block,
@@ -2650,7 +2648,7 @@ mod tests {
         // Produced block is valid
         let mut block_db_transaction = verifier.database.transaction();
         verifier
-            .execute_transactions(
+            .execute_block(
                 &mut block_db_transaction,
                 ExecutionType::Validation(PartialBlockComponent::from_partial_block(
                     &mut block,
@@ -2660,9 +2658,11 @@ mod tests {
             .unwrap();
 
         // Make the block invalid by adding of the duplicating transaction
-        block.transactions.push(Transaction::default_test_tx());
+        block
+            .transactions
+            .insert(block.transactions.len() - 1, Transaction::default_test_tx());
         let mut block_db_transaction = verifier.database.transaction();
-        let verify_result = verifier.execute_transactions(
+        let verify_result = verifier.execute_block(
             &mut block_db_transaction,
             ExecutionType::Validation(PartialBlockComponent::from_partial_block(
                 &mut block,
@@ -2719,7 +2719,7 @@ mod tests {
             skipped_transactions,
             ..
         } = producer
-            .execute_transactions(
+            .execute_block(
                 &mut block_db_transaction,
                 ExecutionType::Production(PartialBlockComponent::from_partial_block(
                     &mut block,
@@ -2740,7 +2740,7 @@ mod tests {
         // Produced block is valid
         let mut block_db_transaction = verifier.database.transaction();
         verifier
-            .execute_transactions(
+            .execute_block(
                 &mut block_db_transaction,
                 ExecutionType::Validation(PartialBlockComponent::from_partial_block(
                     &mut block,
@@ -2752,9 +2752,9 @@ mod tests {
             .unwrap();
 
         // Invalidate block by adding transaction with not existing coin
-        block.transactions.push(tx);
+        block.transactions.insert(block.transactions.len() - 1, tx);
         let mut block_db_transaction = verifier.database.transaction();
-        let verify_result = verifier.execute_transactions(
+        let verify_result = verifier.execute_block(
             &mut block_db_transaction,
             ExecutionType::Validation(PartialBlockComponent::from_partial_block(
                 &mut block,
@@ -3952,7 +3952,7 @@ mod tests {
             skipped_transactions,
             ..
         } = exec
-            .execute_transactions(
+            .execute_block(
                 &mut block_db_transaction,
                 ExecutionType::Production(PartialBlockComponent::from_partial_block(
                     &mut block,
@@ -4015,7 +4015,7 @@ mod tests {
             skipped_transactions,
             ..
         } = exec
-            .execute_transactions(
+            .execute_block(
                 &mut block_db_transaction,
                 ExecutionType::Production(PartialBlockComponent::from_partial_block(
                     &mut block,
@@ -4084,7 +4084,8 @@ mod tests {
             .unwrap();
 
         // Invalidate block by returning back `tx` with not existing message
-        block.transactions_mut().push(tx);
+        let index = block.transactions().len() - 1;
+        block.transactions_mut().insert(index, tx);
         let res = make_executor(&[]) // No messages in the db
             .execute_and_commit(
                 ExecutionBlock::Validation(block),
@@ -4140,7 +4141,8 @@ mod tests {
             .unwrap();
 
         // Invalidate block by return back `tx` with not ready message.
-        block.transactions_mut().push(tx);
+        let index = block.transactions().len() - 1;
+        block.transactions_mut().insert(index, tx);
         let res = make_executor(&[&message]).execute_and_commit(
             ExecutionBlock::Validation(block),
             ExecutionOptions {
@@ -4176,7 +4178,7 @@ mod tests {
             skipped_transactions,
             ..
         } = exec
-            .execute_transactions(
+            .execute_block(
                 &mut block_db_transaction,
                 ExecutionType::Production(PartialBlockComponent::from_partial_block(
                     &mut block,
@@ -4199,7 +4201,7 @@ mod tests {
         // Produced block is valid
         let exec = make_executor(&[&message]);
         let mut block_db_transaction = exec.database.transaction();
-        exec.execute_transactions(
+        exec.execute_block(
             &mut block_db_transaction,
             ExecutionType::Validation(PartialBlockComponent::from_partial_block(
                 &mut block,
@@ -4211,10 +4213,10 @@ mod tests {
         .unwrap();
 
         // Invalidate block by return back `tx2` transaction skipped during production.
-        block.transactions.push(tx2);
+        block.transactions.insert(block.transactions.len() - 1, tx2);
         let exec = make_executor(&[&message]);
         let mut block_db_transaction = exec.database.transaction();
-        let res = exec.execute_transactions(
+        let res = exec.execute_block(
             &mut block_db_transaction,
             ExecutionType::Validation(PartialBlockComponent::from_partial_block(
                 &mut block,
