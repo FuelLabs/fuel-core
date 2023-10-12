@@ -30,10 +30,7 @@ use fuel_core_types::{
 };
 
 pub use rand::Rng;
-use std::{
-    io,
-    iter,
-};
+use std::iter;
 
 const LARGE_GAS_LIMIT: u64 = u64::MAX - 1001;
 
@@ -95,7 +92,7 @@ pub struct VmBench {
     pub prepare_call: Option<PrepareCall>,
     pub dummy_contract: Option<ContractId>,
     pub contract_code: Option<ContractCode>,
-    pub prepare_db: Option<Box<dyn FnMut(VmDatabase) -> io::Result<VmDatabase>>>,
+    pub prepare_db: Option<Box<dyn FnMut(VmDatabase) -> anyhow::Result<VmDatabase>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -138,7 +135,7 @@ impl VmBench {
         }
     }
 
-    pub fn contract<R>(rng: &mut R, instruction: Instruction) -> io::Result<Self>
+    pub fn contract<R>(rng: &mut R, instruction: Instruction) -> anyhow::Result<Self>
     where
         R: Rng,
     {
@@ -165,7 +162,8 @@ impl VmBench {
 
         let mut db = new_db();
 
-        db.deploy_contract_with_id(&salt, &[], &contract, &state_root, &id)?;
+        db.deploy_contract_with_id(&salt, &[], &contract, &state_root, &id)
+            .map_err(anyhow::Error::msg)?;
 
         let data = id
             .iter()
@@ -276,21 +274,21 @@ impl VmBench {
 
     pub fn with_prepare_db<F>(mut self, prepare_db: F) -> Self
     where
-        F: FnMut(VmDatabase) -> io::Result<VmDatabase> + 'static,
+        F: FnMut(VmDatabase) -> anyhow::Result<VmDatabase> + 'static,
     {
         self.prepare_db.replace(Box::new(prepare_db));
         self
     }
 
-    pub fn prepare(self) -> io::Result<VmBenchPrepared> {
+    pub fn prepare(self) -> anyhow::Result<VmBenchPrepared> {
         self.try_into()
     }
 }
 
 impl TryFrom<VmBench> for VmBenchPrepared {
-    type Error = io::Error;
+    type Error = anyhow::Error;
 
-    fn try_from(case: VmBench) -> io::Result<Self> {
+    fn try_from(case: VmBench) -> anyhow::Result<Self> {
         let VmBench {
             params,
             gas_price,
@@ -317,8 +315,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             .iter()
             .any(|op| matches!(op, Instruction::RET(_)))
         {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(anyhow::anyhow!(
                 "a prepare script should not call/return into different contexts.",
             ))
         }
@@ -351,7 +348,8 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             tx.add_input(input);
             tx.add_output(output);
 
-            db.deploy_contract_with_id(&VmBench::SALT, &[], &code, &root, &contract)?;
+            db.deploy_contract_with_id(&VmBench::SALT, &[], &code, &root, &contract)
+                .map_err(anyhow::Error::msg)?;
         }
 
         if let Some(ContractCode {
@@ -377,11 +375,12 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             tx.add_input(input);
             tx.add_output(output);
 
-            db.deploy_contract_with_id(&salt, &slots, &contract, &root, &id)?;
+            db.deploy_contract_with_id(&salt, &slots, &contract, &root, &id)
+                .map_err(anyhow::Error::msg)?;
         }
 
         let db = match prepare_db {
-            Some(mut prepare_db) => prepare_db(db)?,
+            Some(mut prepare_db) => prepare_db(db).map_err(anyhow::Error::msg)?,
             None => db,
         };
 
@@ -423,7 +422,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             let PrepareCall { ra, rb, rc, rd } = p;
 
             vm.prepare_call(ra, rb, rc, rd)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+                .map_err(anyhow::Error::msg)?;
             for instruction in post_call {
                 vm.instruction(instruction).unwrap();
             }

@@ -67,7 +67,11 @@ pub fn maybe_initialize_state(
     database: &Database,
 ) -> anyhow::Result<()> {
     // check if chain is initialized
-    if database.ids_of_latest_block()?.is_none() {
+    if database
+        .ids_of_latest_block()
+        .map_err(anyhow::Error::msg)?
+        .is_none()
+    {
         import_genesis_block(config, database)?;
     }
 

@@ -107,6 +107,7 @@ where
         let result = self
             .executor
             .execute_without_commit(component)
+            .map_err(anyhow::Error::msg)
             .context(context_string)?;
 
         debug!("Produced block with result: {:?}", result.result());
@@ -151,7 +152,8 @@ where
         let res: Vec<_> =
             tokio_rayon::spawn_fifo(move || -> anyhow::Result<Vec<Receipt>> {
                 Ok(executor
-                    .dry_run(component, utxo_validation)?
+                    .dry_run(component, utxo_validation)
+                    .map_err(anyhow::Error::msg)?
                     .into_iter()
                     .flatten()
                     .collect())
@@ -193,8 +195,8 @@ where
             return Err(Error::InvalidDaFinalizationState {
                 best: best_height,
                 previous_block: previous_da_height,
-            }
-            .into())
+            })
+            .map_err(anyhow::Error::msg)
         }
         Ok(best_height)
     }
@@ -229,7 +231,7 @@ where
         //  return a new error.
         // block 0 is reserved for genesis
         if height == 0u32.into() {
-            Err(Error::GenesisBlock.into())
+            Err(Error::GenesisBlock).map_err(anyhow::Error::msg)
         } else {
             // get info from previous block height
             let prev_height = height - 1u32.into();

@@ -167,7 +167,7 @@ where
             if !state.starting() {
                 return Ok(state)
             }
-            start.changed().await?;
+            start.changed().await.map_err(anyhow::Error::msg)?;
         }
     }
 
@@ -177,7 +177,7 @@ where
             if state.stopped() {
                 return Ok(state)
             }
-            stop.changed().await?;
+            stop.changed().await.map_err(anyhow::Error::msg)?;
         }
     }
 }
@@ -369,8 +369,7 @@ async fn run<S>(
                 tracing::debug!("run loop");
             }
             Err(e) => {
-                let e: &dyn std::error::Error = &*e;
-                tracing::error!(e);
+                tracing::error!("{:?}", e);
             }
         }
     }

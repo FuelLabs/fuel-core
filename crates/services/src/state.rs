@@ -91,7 +91,7 @@ impl StateWatcher {
                 return Ok(state)
             }
 
-            self.changed().await?;
+            self.changed().await.map_err(anyhow::Error::msg)?;
         }
     }
 }

@@ -133,6 +133,7 @@ impl FromStr for FuelClient {
         }
 
         let mut url = reqwest::Url::parse(&raw_url)
+            .map_err(anyhow::Error::msg)
             .with_context(|| format!("Invalid fuel-core URL: {str}"))?;
         url.set_path("/graphql");
 
@@ -141,7 +142,8 @@ impl FromStr for FuelClient {
             let cookie = std::sync::Arc::new(reqwest::cookie::Jar::default());
             let client = reqwest::Client::builder()
                 .cookie_provider(cookie.clone())
-                .build()?;
+                .build()
+                .map_err(anyhow::Error::msg)?;
             Ok(Self {
                 client,
                 cookie,
@@ -151,7 +153,9 @@ impl FromStr for FuelClient {
 
         #[cfg(not(feature = "subscriptions"))]
         {
-            let client = reqwest::Client::builder().build()?;
+            let client = reqwest::Client::builder()
+                .build()
+                .map_err(anyhow::Error::msg)?;
             Ok(Self { client, url })
         }
     }

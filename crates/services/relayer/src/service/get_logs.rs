@@ -60,7 +60,9 @@ where
     S: futures::Stream<Item = Result<(u64, Vec<Log>), ProviderError>>,
 {
     tokio::pin!(logs);
-    while let Some((height, events)) = logs.try_next().await? {
+    while let Some((height, events)) =
+        logs.try_next().await.map_err(anyhow::Error::msg)?
+    {
         let messages = events
             .into_iter()
             .filter_map(|event| match EthEventLog::try_from(&event) {
@@ -74,7 +76,9 @@ where
                 Err(e) => Some(Err(e)),
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
-        database.insert_messages(&height.into(), &messages)?;
+        database
+            .insert_messages(&height.into(), &messages)
+            .map_err(anyhow::Error::msg)?;
     }
     Ok(())
 }

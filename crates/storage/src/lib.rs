@@ -41,7 +41,7 @@ pub enum Error {
     Codec,
     /// Error occurred during interaction with database.
     #[display(fmt = "error occurred in the underlying datastore `{_0:?}`")]
-    DatabaseError(Box<dyn std::error::Error + Send + Sync>),
+    DatabaseError(Box<dyn core::fmt::Debug + Send + Sync>),
     /// This error should be created with `not_found` macro.
     #[display(fmt = "resource of type `{_0}` was not found at the: {_1}")]
     NotFound(&'static str, &'static str),
@@ -51,12 +51,6 @@ pub enum Error {
     #[display(fmt = transparent)]
     Other(anyhow::Error),
 }
-
-// impl From<Error> for std::io::Error {
-//     fn from(e: Error) -> Self {
-//         std::io::Error::new(ErrorKind::Other, e)
-//     }
-// }
 
 impl From<Error> for ExecutorError {
     fn from(e: Error) -> Self {

@@ -536,7 +536,7 @@ where
                     Some(FuelP2PEvent::RequestMessage { request_message, request_id }) => {
                         match request_message {
                             RequestMessage::Block(block_height) => {
-                                match self.db.get_sealed_block(&block_height) {
+                                match self.db.get_sealed_block(&block_height).map_err(anyhow::Error::msg) {
                                     Ok(maybe_block) => {
                                         let response = maybe_block.map(Arc::new);
                                         let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Block(response));
@@ -545,12 +545,12 @@ where
                                         tracing::error!("Failed to get block at height {:?}: {:?}", block_height, e);
                                         let response = None;
                                         let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Block(response));
-                                        return Err(e.into())
+                                        return Err(e)
                                     }
                                 }
                             }
                             RequestMessage::Transactions(range) => {
-                                match self.db.get_transactions(range.clone()) {
+                                match self.db.get_transactions(range.clone()).map_err(anyhow::Error::msg) {
                                     Ok(maybe_transactions) => {
                                         let response = maybe_transactions.map(Arc::new);
                                         let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(response));
@@ -559,7 +559,7 @@ where
                                         tracing::error!("Failed to get transactions for range {:?}: {:?}", range, e);
                                         let response = None;
                                         let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(response));
-                                        return Err(e.into())
+                                        return Err(e)
                                     }
                                 }
                             }
@@ -571,7 +571,7 @@ where
                                     let response = None;
                                     let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeaders(response));
                                 } else {
-                                    match self.db.get_sealed_headers(range.clone()) {
+                                    match self.db.get_sealed_headers(range.clone()).map_err(anyhow::Error::msg) {
                                         Ok(headers) => {
                                             let response = Some(headers);
                                             let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeaders(response));
@@ -580,7 +580,7 @@ where
                                             tracing::error!("Failed to get sealed headers for range {:?}: {:?}", range, &e);
                                             let response = None;
                                             let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeaders(response));
-                                            return Err(e.into())
+                                            return Err(e)
                                         }
                                     }
                                 };

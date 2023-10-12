@@ -68,7 +68,9 @@ impl FuelService {
     #[tracing::instrument(skip_all, fields(name = %config.name))]
     pub fn new(database: Database, config: Config) -> anyhow::Result<Self> {
         let config = config.make_config_consistent();
-        database.init(&config.chain_conf)?;
+        database
+            .init(&config.chain_conf)
+            .map_err(anyhow::Error::msg)?;
         let task = Task::new(database, config)?;
         let runner = ServiceRunner::new(task);
         let shared = runner.shared.clone();
@@ -93,7 +95,8 @@ impl FuelService {
                     );
                     Database::default()
                 } else {
-                    Database::open(&config.database_path, config.max_database_cache_size)?
+                    Database::open(&config.database_path, config.max_database_cache_size)
+                        .map_err(anyhow::Error::msg)?
                 }
             }
             DbType::InMemory => Database::in_memory(),
