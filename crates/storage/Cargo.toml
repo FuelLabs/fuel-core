@@ -18,9 +18,9 @@ version = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
+derive_more = { workspace = true }
 fuel-core-types = { workspace = true }
 fuel-vm-private = { workspace = true }
-derive_more = { workspace = true }
 mockall = { workspace = true, optional = true }
 
 [features]
