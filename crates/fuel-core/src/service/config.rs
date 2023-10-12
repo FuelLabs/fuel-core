@@ -34,12 +34,12 @@ use fuel_core_relayer::Config as RelayerConfig;
 
 pub use fuel_core_poa::Trigger;
 
+use crate::database::DatabaseConfig;
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub addr: SocketAddr,
-    pub max_database_cache_size: usize,
-    pub database_path: PathBuf,
-    pub database_type: DbType,
+    pub database_config: DatabaseConfig,
     pub chain_conf: ChainConfig,
     pub state_importer: StateImporter<CoinConfig>,
     /// When `true`:
@@ -79,15 +79,19 @@ impl Config {
         let utxo_validation = false;
         let min_gas_price = 0;
 
-        Self {
-            addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
-            // Set the cache for tests = 10MB
-            max_database_cache_size: 10 * 1024 * 1024,
+        let database_config = DatabaseConfig {
             database_path: Default::default(),
             #[cfg(feature = "rocksdb")]
             database_type: DbType::RocksDb,
             #[cfg(not(feature = "rocksdb"))]
             database_type: DbType::InMemory,
+            // Set the cache for tests = 10MB
+            max_database_cache_size: 10 * 1024 * 1024,
+        };
+
+        Self {
+            addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
+            database_config,
             debug: true,
             chain_conf: chain_conf.clone(),
             state_importer,
@@ -162,13 +166,4 @@ impl From<&Config> for fuel_core_poa::Config {
 #[derive(Clone, Debug, Default)]
 pub struct VMConfig {
     pub backtrace: bool,
-}
-
-#[derive(
-    Clone, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames, ValueEnum,
-)]
-#[strum(serialize_all = "kebab_case")]
-pub enum DbType {
-    InMemory,
-    RocksDb,
 }

@@ -83,23 +83,7 @@ impl FuelService {
     /// Creates and starts fuel node instance from service config
     pub async fn new_node(config: Config) -> anyhow::Result<Self> {
         // initialize database
-        let database = match config.database_type {
-            #[cfg(feature = "rocksdb")]
-            DbType::RocksDb => {
-                // use a default tmp rocksdb if no path is provided
-                if config.database_path.as_os_str().is_empty() {
-                    warn!(
-                        "No RocksDB path configured, initializing database with a tmp directory"
-                    );
-                    Database::default()
-                } else {
-                    Database::open(&config.database_path, config.max_database_cache_size)?
-                }
-            }
-            DbType::InMemory => Database::in_memory(),
-            #[cfg(not(feature = "rocksdb"))]
-            _ => Database::in_memory(),
-        };
+        let database = Database::from_config(&config.database_config);
 
         Self::from_database(database, config).await
     }

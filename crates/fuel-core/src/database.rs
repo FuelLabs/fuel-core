@@ -34,6 +34,7 @@ use std::{
     },
     marker::Send,
     ops::Deref,
+    path::PathBuf,
     sync::Arc,
 };
 
@@ -72,6 +73,21 @@ pub mod storage;
 pub mod transaction;
 pub mod transactions;
 pub mod vm_database;
+
+#[derive(
+    Clone, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames, ValueEnum,
+)]
+#[strum(serialize_all = "kebab_case")]
+pub enum DbType {
+    InMemory,
+    RocksDb,
+}
+
+pub struct DatabaseConfig {
+    pub database_path: PathBuf,
+    pub database_type: DbType,
+    pub max_database_cache_size: usize,
+}
 
 /// Database tables column ids to the corresponding [`fuel_core_storage::Mappable`] table.
 #[repr(u32)]
@@ -192,6 +208,26 @@ impl Database {
         Self {
             data: data_source,
             _drop: Default::default(),
+        }
+    }
+
+    pub fn from_config(config: &DatabaseConfig) -> Self {
+        match config.database_type {
+            #[cfg(feature = "rocksdb")]
+            DbType::RocksDb => {
+                // use a default tmp rocksdb if no path is provided
+                if config.database_path.as_os_str().is_empty() {
+                    warn!(
+                        "No RocksDB path configured, initializing database with a tmp directory"
+                    );
+                    Database::default()
+                } else {
+                    Database::open(&config.database_path, config.max_database_cache_size)?
+                }
+            }
+            DbType::InMemory => Database::in_memory(),
+            #[cfg(not(feature = "rocksdb"))]
+            _ => Database::in_memory(),
         }
     }
 

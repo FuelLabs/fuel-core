@@ -210,9 +210,6 @@ pub struct Command {
 
     #[clap(flatten)]
     pub profiling: profiling::ProfilingArgs,
-
-    #[arg(long = "regenesis", default_value = "false", env)]
-    pub regenesis: bool,
 }
 
 impl Command {
@@ -250,7 +247,6 @@ impl Command {
             time_until_synced,
             query_log_threshold_time,
             profiling: _,
-            regenesis,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -317,11 +313,15 @@ impl Command {
             max_wait_time: max_wait_time.into(),
         };
 
-        let config = Config {
-            addr,
-            max_database_cache_size,
+        let database_config = DatabaseConfig {
             database_path,
             database_type,
+            max_database_cache_size,
+        };
+
+        let config = Config {
+            addr,
+            database_config,
             chain_conf: chain_conf.clone(),
             state_importer,
             debug,

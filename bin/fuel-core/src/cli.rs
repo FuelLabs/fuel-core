@@ -18,6 +18,11 @@ lazy_static::lazy_static! {
     pub static ref DEFAULT_DB_PATH: PathBuf = dirs::home_dir().unwrap().join(".fuel").join("db");
 }
 
+lazy_static::lazy_static! {
+    pub static ref DEFAULT_REGENESIS_DB_PATH: PathBuf = dirs::home_dir().unwrap().join(".fuel").join("regenesis-db");
+}
+
+pub mod regenesis;
 pub mod run;
 pub mod snapshot;
 
@@ -38,6 +43,7 @@ pub struct Opt {
 pub enum Fuel {
     Run(run::Command),
     Snapshot(snapshot::Command),
+    Regenesis(regenesis::Regenesis),
 }
 
 pub const LOG_FILTER: &str = "RUST_LOG";
@@ -117,6 +123,7 @@ pub async fn run_cli() -> anyhow::Result<()> {
         Ok(opt) => match opt.command {
             Fuel::Run(command) => run::exec(command).await,
             Fuel::Snapshot(command) => snapshot::exec(command).await,
+            Fuel::Regenesis(command) => regenesis::exec(command).await,
         },
         Err(e) => {
             // Prints the error and exits.
