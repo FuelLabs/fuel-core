@@ -13,10 +13,19 @@ use fuel_core::service::{
 };
 use rand::SeedableRng;
 
+use ethnum::U256;
 use fuel_core_benches::*;
 use fuel_core_types::{
     fuel_asm::{
         op,
+        wideint::{
+            CompareArgs,
+            CompareMode,
+            DivArgs,
+            MathArgs,
+            MathOp,
+            MulArgs,
+        },
         GTFArgs,
         Instruction,
         RegId,
@@ -28,6 +37,27 @@ use fuel_core_types::{
     fuel_tx::UniqueIdentifier,
     fuel_types::AssetId,
 };
+
+/// Allocates a byte array from heap and initializes it. Then points `reg` to it.
+fn aloc_bytearray<const S: usize>(reg: u8, v: [u8; S]) -> Vec<Instruction> {
+    let mut ops = vec![op::movi(reg, S as u32), op::aloc(reg)];
+    for (i, b) in v.iter().enumerate() {
+        if *b != 0 {
+            ops.push(op::movi(reg, *b as u32));
+            ops.push(op::sb(RegId::HP, reg, i as u16));
+        }
+    }
+    ops.push(op::move_(reg, RegId::HP));
+    ops
+}
+
+fn make_u128(reg: u8, v: u128) -> Vec<Instruction> {
+    aloc_bytearray(reg, v.to_be_bytes())
+}
+
+fn make_u256(reg: u8, v: U256) -> Vec<Instruction> {
+    aloc_bytearray(reg, v.to_be_bytes())
+}
 
 // Use Jemalloc during benchmarks
 #[global_allocator]
@@ -117,13 +147,6 @@ fn block_target_gas(c: &mut Criterion) {
     let mut group = c.benchmark_group("block target estimation");
 
     run(
-        "Script with noop opcode and infinite loop",
-        &mut group,
-        [op::noop(), op::jmpb(RegId::ZERO, 0)].to_vec(),
-        vec![],
-    );
-
-    run(
         "Script with meq opcode and infinite loop",
         &mut group,
         [
@@ -141,17 +164,6 @@ fn block_target_gas(c: &mut Criterion) {
         [
             op::movi(0x10, (1 << 18) - 1),
             op::logd(RegId::ZERO, RegId::ZERO, RegId::ZERO, 0x10),
-            op::jmpb(RegId::ZERO, 0),
-        ]
-        .to_vec(),
-        vec![],
-    );
-
-    run(
-        "Script with gtf opcode and infinite loop",
-        &mut group,
-        [
-            op::gtf(0x10, RegId::ZERO, GTFArgs::InputCoinOwner as u16),
             op::jmpb(RegId::ZERO, 0),
         ]
         .to_vec(),
@@ -239,7 +251,553 @@ fn block_target_gas(c: &mut Criterion) {
     //     .to_vec(),
     // );
 
+    run_alu(&mut group);
+
     group.finish();
+}
+
+fn run_alu(group: &mut BenchmarkGroup<WallTime>) {
+    run(
+        "add opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::movi(0x12, 27),
+            op::add(0x10, 0x11, 0x12),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "addi opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::addi(0x10, 0x11, 27),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "aloc opcode",
+        group,
+        [op::aloc(0x10), op::jmpb(RegId::ZERO, 0)].to_vec(),
+        vec![],
+    );
+
+    run(
+        "and opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::movi(0x12, 27),
+            op::and(0x10, 0x11, 0x12),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "andi opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::andi(0x10, 0x11, 27),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "div opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::movi(0x12, 27),
+            op::div(0x10, 0x11, 0x12),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "divi opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::divi(0x10, 0x11, 27),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "eq opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::movi(0x12, 27),
+            op::eq(0x10, 0x11, 0x12),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "exp opcode",
+        group,
+        [
+            op::movi(0x11, 23),
+            op::movi(0x12, 11),
+            op::exp(0x10, 0x11, 0x12),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "expi opcode",
+        group,
+        [
+            op::movi(0x11, 23),
+            op::expi(0x10, 0x11, 11),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "gt opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::movi(0x12, 27),
+            op::gt(0x10, 0x11, 0x12),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    {
+        let data = vec![0u8; 32];
+        run(
+            "gtf opcode",
+            group,
+            [
+                op::gtf_args(0x10, RegId::ZERO, GTFArgs::ScriptData),
+                op::jmpb(RegId::ZERO, 0),
+            ]
+            .to_vec(),
+            data,
+        );
+    }
+
+    run(
+        "lt opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::movi(0x12, 27),
+            op::lt(0x10, 0x11, 0x12),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "mlog opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::movi(0x12, 27),
+            op::mlog(0x10, 0x11, 0x12),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "mod opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::movi(0x12, 27),
+            op::mod_(0x10, 0x11, 0x12),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "modi opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::modi(0x10, 0x11, 27),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "move opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::move_(0x10, 0x11),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "movi opcode",
+        group,
+        [op::movi(0x10, 27), op::jmpb(RegId::ZERO, 0)].to_vec(),
+        vec![],
+    );
+
+    run(
+        "mroo opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::movi(0x12, 27),
+            op::mroo(0x10, 0x11, 0x12),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "mul opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::movi(0x12, 27),
+            op::mul(0x10, 0x11, 0x12),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "muli opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::muli(0x10, 0x11, 27),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "noop opcode",
+        group,
+        [op::noop(), op::jmpb(RegId::ZERO, 0)].to_vec(),
+        vec![],
+    );
+
+    run(
+        "not opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::not(0x10, 0x11),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "or opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::movi(0x12, 27),
+            op::or(0x10, 0x11, 0x12),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "ori opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::ori(0x10, 0x11, 27),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "sll opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::movi(0x12, 3),
+            op::sll(0x10, 0x11, 0x12),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "slli opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::slli(0x10, 0x11, 3),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "srl opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::movi(0x12, 3),
+            op::srl(0x10, 0x11, 0x12),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "srli opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::srli(0x10, 0x11, 3),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "sub opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::movi(0x12, 27),
+            op::sub(0x10, 0x11, 0x12),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "subi opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::subi(0x10, 0x11, 27),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "xor opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::movi(0x12, 27),
+            op::xor(0x10, 0x11, 0x12),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "xori opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::xori(0x10, 0x11, 27),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    let mut wideint_prepare = Vec::new();
+    wideint_prepare.extend(make_u128(0x10, 0));
+    wideint_prepare.extend(make_u128(0x11, u128::MAX));
+    wideint_prepare.extend(make_u128(0x12, u128::MAX / 2 + 1));
+    wideint_prepare.extend(make_u128(0x13, u128::MAX - 158)); // prime
+    wideint_prepare.extend(make_u128(0x14, u64::MAX.into()));
+
+    let mut instructions = wideint_prepare.clone();
+    instructions.extend([
+        op::wdcm_args(
+            0x10,
+            0x12,
+            0x13,
+            CompareArgs {
+                mode: CompareMode::LTE,
+                indirect_rhs: true,
+            },
+        ),
+        op::jmpb(RegId::ZERO, 0),
+    ]);
+    run("wdcm opcode", group, instructions, vec![]);
+
+    let mut instructions = wideint_prepare.clone();
+    instructions.extend([
+        op::wdop_args(
+            0x10,
+            0x13,
+            0x12,
+            MathArgs {
+                op: MathOp::SUB,
+                indirect_rhs: true,
+            },
+        ),
+        op::jmpb(RegId::ZERO, 0),
+    ]);
+    run("wdop opcode", group, instructions, vec![]);
+
+    let mut instructions = wideint_prepare.clone();
+    instructions.extend([
+        op::wdml_args(
+            0x10,
+            0x14,
+            0x14,
+            MulArgs {
+                indirect_lhs: true,
+                indirect_rhs: true,
+            },
+        ),
+        op::jmpb(RegId::ZERO, 0),
+    ]);
+    run("wdml opcode", group, instructions, vec![]);
+
+    let mut instructions = wideint_prepare.clone();
+    instructions.extend([
+        op::wddv_args(0x10, 0x12, 0x13, DivArgs { indirect_rhs: true }),
+        op::jmpb(RegId::ZERO, 0),
+    ]);
+    run("wddv opcode", group, instructions, vec![]);
+
+    let mut instructions = wideint_prepare.clone();
+    instructions.extend([op::wdmd(0x10, 0x12, 0x13, 0x13), op::jmpb(RegId::ZERO, 0)]);
+    run("wdmd opcode", group, instructions, vec![]);
+
+    let mut instructions = wideint_prepare.clone();
+    instructions.extend([op::wdam(0x10, 0x12, 0x13, 0x13), op::jmpb(RegId::ZERO, 0)]);
+    run("wdam opcode", group, instructions, vec![]);
+
+    let mut instructions = wideint_prepare.clone();
+    instructions.extend([op::wdmm(0x10, 0x12, 0x13, 0x13), op::jmpb(RegId::ZERO, 0)]);
+    run("wdmm opcode", group, instructions, vec![]);
+
+    // Wideint operations: 256 bit
+    let mut wideint_prepare = Vec::new();
+    wideint_prepare.extend(make_u256(0x10, U256::ZERO));
+    wideint_prepare.extend(make_u256(0x11, U256::MAX));
+    wideint_prepare.extend(make_u256(0x12, U256::MAX / 2 + 1));
+    wideint_prepare.extend(make_u256(0x13, U256::MAX - 188)); // prime
+    wideint_prepare.extend(make_u256(0x14, u128::MAX.into()));
+
+    let mut instructions = wideint_prepare.clone();
+    instructions.extend([
+        op::wqcm_args(
+            0x10,
+            0x12,
+            0x13,
+            CompareArgs {
+                mode: CompareMode::LTE,
+                indirect_rhs: true,
+            },
+        ),
+        op::jmpb(RegId::ZERO, 0),
+    ]);
+    run("wqcm opcode", group, instructions, vec![]);
+
+    let mut instructions = wideint_prepare.clone();
+    instructions.extend([
+        op::wqop_args(
+            0x10,
+            0x13,
+            0x12,
+            MathArgs {
+                op: MathOp::SUB,
+                indirect_rhs: true,
+            },
+        ),
+        op::jmpb(RegId::ZERO, 0),
+    ]);
+    run("wqop opcode", group, instructions, vec![]);
+
+    let mut instructions = wideint_prepare.clone();
+    instructions.extend([
+        op::wqml_args(
+            0x10,
+            0x14,
+            0x14,
+            MulArgs {
+                indirect_lhs: true,
+                indirect_rhs: true,
+            },
+        ),
+        op::jmpb(RegId::ZERO, 0),
+    ]);
+    run("wqml opcode", group, instructions, vec![]);
+
+    let mut instructions = wideint_prepare.clone();
+    instructions.extend([
+        op::wqdv_args(0x10, 0x12, 0x13, DivArgs { indirect_rhs: true }),
+        op::jmpb(RegId::ZERO, 0),
+    ]);
+    run("wqdv opcode", group, instructions, vec![]);
+
+    let mut instructions = wideint_prepare.clone();
+    instructions.extend([op::wqmd(0x10, 0x12, 0x13, 0x13), op::jmpb(RegId::ZERO, 0)]);
+    run("wqmd opcode", group, instructions, vec![]);
+
+    let mut instructions = wideint_prepare.clone();
+    instructions.extend([op::wqam(0x10, 0x12, 0x13, 0x13), op::jmpb(RegId::ZERO, 0)]);
+    run("wqam opcode", group, instructions, vec![]);
+
+    let mut instructions = wideint_prepare.clone();
+    instructions.extend([op::wqmm(0x10, 0x12, 0x13, 0x13), op::jmpb(RegId::ZERO, 0)]);
+    run("wqmm opcode", group, instructions, vec![]);
 }
 
 criterion_group!(benches, block_target_gas);

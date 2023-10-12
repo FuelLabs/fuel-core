@@ -333,18 +333,6 @@ pub fn run(c: &mut Criterion) {
     );
 
     run_group_ref(
-        &mut c.benchmark_group("wddv"),
-        "wddv",
-        VmBench::new(op::wddv_args(
-            0x10,
-            0x12,
-            0x13,
-            DivArgs { indirect_rhs: true },
-        ))
-        .with_prepare_script(wideint_prepare.clone()),
-    );
-
-    run_group_ref(
         &mut c.benchmark_group("wdmd"),
         "wdmd",
         VmBench::new(op::wdmd(0x10, 0x12, 0x13, 0x13))
@@ -414,18 +402,6 @@ pub fn run(c: &mut Criterion) {
                 indirect_lhs: true,
                 indirect_rhs: true,
             },
-        ))
-        .with_prepare_script(wideint_prepare.clone()),
-    );
-
-    run_group_ref(
-        &mut c.benchmark_group("wqdv"),
-        "wqdv",
-        VmBench::new(op::wqdv_args(
-            0x10,
-            0x12,
-            0x13,
-            DivArgs { indirect_rhs: true },
         ))
         .with_prepare_script(wideint_prepare.clone()),
     );

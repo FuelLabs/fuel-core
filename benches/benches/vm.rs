@@ -1,4 +1,4 @@
-mod set;
+pub mod set;
 
 use criterion::{
     black_box,
