@@ -131,7 +131,7 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     let contract_address = relayer_config.eth_v2_listening_contracts[0];
 
     // setup a real spendable message
-    let secret_key: SecretKey = rng.gen();
+    let secret_key: SecretKey = SecretKey::random(&mut rng);
     let pk = secret_key.public_key();
     let recipient = Input::owner(&pk);
     let sender = Address::zeroed();
@@ -305,8 +305,8 @@ async fn handle(
     let id = o.get("id").unwrap().as_u64().unwrap();
     let method = o.get("method").unwrap().as_str().unwrap();
     let r = match method {
-        "eth_blockNumber" => {
-            let r = mock.get_block_number().await.unwrap();
+        "eth_getBlockByNumber" => {
+            let r = mock.get_block(id).await.unwrap().unwrap();
             json!({ "id": id, "jsonrpc": "2.0", "result": r })
         }
         "eth_syncing" => {
@@ -330,7 +330,7 @@ async fn handle(
             let r = mock.get_logs(&params[0]).await.unwrap();
             json!({ "id": id, "jsonrpc": "2.0", "result": r })
         }
-        _ => unreachable!(),
+        _ => unreachable!("Mock handler for method not defined"),
     };
 
     let r = serde_json::to_vec(&r).unwrap();

@@ -16,22 +16,32 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
 };
+use rand::{
+    rngs::StdRng,
+    Rng,
+    SeedableRng,
+};
 
 pub use counts::{
     Count,
     SharedCounts,
 };
-use fuel_core_types::services::p2p::{
-    PeerId,
-    SourcePeer,
-};
+use fuel_core_types::services::p2p::PeerId;
+
 pub use pressure_block_importer::PressureBlockImporter;
 pub use pressure_consensus::PressureConsensus;
 pub use pressure_peer_to_peer::PressurePeerToPeer;
 
-pub fn empty_header(h: BlockHeight) -> SealedBlockHeader {
+pub fn random_peer() -> PeerId {
+    let mut rng = StdRng::seed_from_u64(0xF00DF00D);
+    let bytes = rng.gen::<[u8; 32]>().to_vec();
+    PeerId::from(bytes)
+}
+
+pub fn empty_header<I: Into<BlockHeight>>(i: I) -> SealedBlockHeader {
     let mut header = BlockHeader::default();
-    header.consensus.height = h;
+    let height = i.into();
+    header.consensus.height = height;
     let transaction_tree =
         fuel_core_types::fuel_merkle::binary::in_memory::MerkleTree::new();
     header.application.generated.transactions_root = transaction_tree.root().into();
@@ -40,21 +50,5 @@ pub fn empty_header(h: BlockHeight) -> SealedBlockHeader {
     Sealed {
         entity: header,
         consensus,
-    }
-}
-
-pub fn peer_sourced_headers(
-    headers: Option<Vec<SealedBlockHeader>>,
-) -> SourcePeer<Option<Vec<SealedBlockHeader>>> {
-    peer_sourced_headers_peer_id(headers, vec![].into())
-}
-
-pub fn peer_sourced_headers_peer_id(
-    headers: Option<Vec<SealedBlockHeader>>,
-    peer_id: PeerId,
-) -> SourcePeer<Option<Vec<SealedBlockHeader>>> {
-    SourcePeer {
-        peer_id,
-        data: headers,
     }
 }

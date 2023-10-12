@@ -35,7 +35,6 @@ use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::ConsensusVote,
-        primitives::BlockId,
         SealedBlock,
         SealedBlockHeader,
     },
@@ -52,6 +51,7 @@ use fuel_core_types::{
         GossipsubMessageInfo,
         PeerId as FuelPeerId,
         TransactionGossipData,
+        Transactions,
     },
 };
 use futures::{
@@ -99,9 +99,9 @@ enum TaskRequest {
         channel: oneshot::Sender<(PeerId, Option<Vec<SealedBlockHeader>>)>,
     },
     GetTransactions {
-        block_id: BlockId,
+        block_height_range: Range<u32>,
         from_peer: PeerId,
-        channel: oneshot::Sender<Option<Vec<Transaction>>>,
+        channel: oneshot::Sender<Option<Vec<Transactions>>>,
     },
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
@@ -122,12 +122,6 @@ impl Debug for TaskRequest {
 pub enum HeartBeatPeerReportReason {
     OldHeartBeat,
     LowHeartBeatFrequency,
-}
-
-impl PeerReport for HeartBeatPeerReportReason {
-    fn get_score_from_report(&self) -> AppScore {
-        todo!()
-    }
 }
 
 pub trait TaskP2PService: Send {
@@ -242,7 +236,7 @@ pub trait Broadcast: Send {
     fn report_peer(
         &self,
         peer_id: FuelPeerId,
-        report: HeartBeatPeerReportReason,
+        report: AppScore,
         reporting_service: &'static str,
     ) -> anyhow::Result<()>;
 
@@ -258,7 +252,7 @@ impl Broadcast for SharedState {
     fn report_peer(
         &self,
         peer_id: FuelPeerId,
-        report: HeartBeatPeerReportReason,
+        report: AppScore,
         reporting_service: &'static str,
     ) -> anyhow::Result<()> {
         self.report_peer(peer_id, report, reporting_service)
@@ -293,6 +287,13 @@ pub struct Task<P, D, B> {
     heartbeat_max_avg_interval: Duration,
     heartbeat_max_time_since_last: Duration,
     next_check_time: Instant,
+    heartbeat_peer_reputation_config: HeartbeatPeerReputationConfig,
+}
+
+#[derive(Clone)]
+pub struct HeartbeatPeerReputationConfig {
+    old_heartbeat_penalty: AppScore,
+    low_heartbeat_frequency_penalty: AppScore,
 }
 
 impl<D> Task<FuelP2PService<PostcardCodec>, D, SharedState> {
@@ -312,6 +313,13 @@ impl<D> Task<FuelP2PService<PostcardCodec>, D, SharedState> {
         let (request_sender, request_receiver) = mpsc::channel(100);
         let (tx_broadcast, _) = broadcast::channel(100);
         let (block_height_broadcast, _) = broadcast::channel(100);
+
+        // Hardcoded for now, but left here to be configurable in the future.
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1340
+        let heartbeat_peer_reputation_config = HeartbeatPeerReputationConfig {
+            old_heartbeat_penalty: -5.,
+            low_heartbeat_frequency_penalty: -5.,
+        };
 
         let next_block_height = block_importer.next_block_height();
         let p2p_service = FuelP2PService::new(config, PostcardCodec::new(max_block_size));
@@ -337,6 +345,7 @@ impl<D> Task<FuelP2PService<PostcardCodec>, D, SharedState> {
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
             next_check_time,
+            heartbeat_peer_reputation_config,
         }
     }
 }
@@ -348,19 +357,37 @@ impl<P: TaskP2PService, D, B: Broadcast> Task<P, D, B> {
             {
                 tracing::debug!("Peer {:?} has old heartbeat", peer_id);
                 let report = HeartBeatPeerReportReason::OldHeartBeat;
-                let service = "p2p";
                 let peer_id = convert_peer_id(peer_id)?;
-                self.broadcast.report_peer(peer_id, report, service)?;
+                self.report_peer(peer_id, report)?;
             } else if peer_info.heartbeat_data.average_time_between_heartbeats()
                 > self.heartbeat_max_avg_interval
             {
                 tracing::debug!("Peer {:?} has low heartbeat frequency", peer_id);
                 let report = HeartBeatPeerReportReason::LowHeartBeatFrequency;
-                let service = "p2p";
                 let peer_id = convert_peer_id(peer_id)?;
-                self.broadcast.report_peer(peer_id, report, service)?;
+                self.report_peer(peer_id, report)?;
             }
         }
+        Ok(())
+    }
+
+    fn report_peer(
+        &self,
+        peer_id: FuelPeerId,
+        report: HeartBeatPeerReportReason,
+    ) -> anyhow::Result<()> {
+        let app_score = match report {
+            HeartBeatPeerReportReason::OldHeartBeat => {
+                self.heartbeat_peer_reputation_config.old_heartbeat_penalty
+            }
+            HeartBeatPeerReportReason::LowHeartBeatFrequency => {
+                self.heartbeat_peer_reputation_config
+                    .low_heartbeat_frequency_penalty
+            }
+        };
+        let reporting_service = "p2p";
+        self.broadcast
+            .report_peer(peer_id, app_score, reporting_service)?;
         Ok(())
     }
 }
@@ -459,8 +486,8 @@ where
                              .get_peer_id_with_height(&block_height);
                         let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
                     }
-                    Some(TaskRequest::GetTransactions { block_id, from_peer, channel }) => {
-                        let request_msg = RequestMessage::Transactions(block_id);
+                    Some(TaskRequest::GetTransactions { block_height_range, from_peer, channel }) => {
+                        let request_msg = RequestMessage::Transactions(block_height_range);
                         let channel_item = ResponseChannelItem::Transactions(channel);
                         let _ = self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item);
                     }
@@ -522,14 +549,14 @@ where
                                     }
                                 }
                             }
-                            RequestMessage::Transactions(block_id) => {
-                                match self.db.get_transactions(&block_id) {
+                            RequestMessage::Transactions(range) => {
+                                match self.db.get_transactions(range.clone()) {
                                     Ok(maybe_transactions) => {
                                         let response = maybe_transactions.map(Arc::new);
                                         let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(response));
                                     },
                                     Err(e) => {
-                                        tracing::error!("Failed to get transactions for block {:?}: {:?}", block_id, e);
+                                        tracing::error!("Failed to get transactions for range {:?}: {:?}", range, e);
                                         let response = None;
                                         let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(response));
                                         return Err(e.into())
@@ -670,18 +697,17 @@ impl SharedState {
     pub async fn get_transactions_from_peer(
         &self,
         peer_id: Vec<u8>,
-        block_id: BlockId,
-    ) -> anyhow::Result<Option<Vec<Transaction>>> {
+        range: Range<u32>,
+    ) -> anyhow::Result<Option<Vec<Transactions>>> {
         let (sender, receiver) = oneshot::channel();
         let from_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
 
-        self.request_sender
-            .send(TaskRequest::GetTransactions {
-                block_id,
-                from_peer,
-                channel: sender,
-            })
-            .await?;
+        let request = TaskRequest::GetTransactions {
+            block_height_range: range,
+            from_peer,
+            channel: sender,
+        };
+        self.request_sender.send(request).await?;
 
         receiver.await.map_err(|e| anyhow!("{}", e))
     }
@@ -847,8 +873,8 @@ pub mod tests {
 
         fn get_transactions(
             &self,
-            _block_id: &fuel_core_types::blockchain::primitives::BlockId,
-        ) -> StorageResult<Option<Vec<Transaction>>> {
+            _block_height_range: Range<u32>,
+        ) -> StorageResult<Option<Vec<Transactions>>> {
             unimplemented!()
         }
     }
@@ -969,21 +995,21 @@ pub mod tests {
 
         fn get_transactions(
             &self,
-            _block_id: &BlockId,
-        ) -> StorageResult<Option<Vec<Transaction>>> {
+            _block_height_range: Range<u32>,
+        ) -> StorageResult<Option<Vec<Transactions>>> {
             todo!()
         }
     }
 
     struct FakeBroadcast {
-        pub peer_reports: mpsc::Sender<(FuelPeerId, HeartBeatPeerReportReason, String)>,
+        pub peer_reports: mpsc::Sender<(FuelPeerId, AppScore, String)>,
     }
 
     impl Broadcast for FakeBroadcast {
         fn report_peer(
             &self,
             peer_id: FuelPeerId,
-            report: HeartBeatPeerReportReason,
+            report: AppScore,
             reporting_service: &'static str,
         ) -> anyhow::Result<()> {
             self.peer_reports.try_send((
@@ -1044,6 +1070,12 @@ pub mod tests {
         // Greater than actual
         let heartbeat_max_time_since_last = Duration::from_secs(40);
 
+        // Arbitrary values
+        let heartbeat_peer_reputation_config = HeartbeatPeerReputationConfig {
+            old_heartbeat_penalty: 5.6,
+            low_heartbeat_frequency_penalty: 20.45,
+        };
+
         let mut task = Task {
             p2p_service,
             db: Arc::new(FakeDB),
@@ -1055,6 +1087,7 @@ pub mod tests {
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
             next_check_time: Instant::now(),
+            heartbeat_peer_reputation_config: heartbeat_peer_reputation_config.clone(),
         };
         let (watch_sender, watch_receiver) = tokio::sync::watch::channel(State::Started);
         let mut watcher = StateWatcher::from(watch_receiver);
@@ -1072,7 +1105,10 @@ pub mod tests {
             FuelPeerId::from(peer_id.to_bytes().to_vec()),
             report_peer_id
         );
-        assert_eq!(report, HeartBeatPeerReportReason::LowHeartBeatFrequency);
+        assert_eq!(
+            report,
+            heartbeat_peer_reputation_config.low_heartbeat_frequency_penalty
+        );
         assert_eq!(reporting_service, "p2p");
     }
 
@@ -1112,6 +1148,12 @@ pub mod tests {
         // Less than actual
         let heartbeat_max_time_since_last = Duration::from_secs(40);
 
+        // Arbitrary values
+        let heartbeat_peer_reputation_config = HeartbeatPeerReputationConfig {
+            old_heartbeat_penalty: 5.6,
+            low_heartbeat_frequency_penalty: 20.45,
+        };
+
         let mut task = Task {
             p2p_service,
             db: Arc::new(FakeDB),
@@ -1123,6 +1165,7 @@ pub mod tests {
             heartbeat_max_avg_interval,
             heartbeat_max_time_since_last,
             next_check_time: Instant::now(),
+            heartbeat_peer_reputation_config: heartbeat_peer_reputation_config.clone(),
         };
         let (watch_sender, watch_receiver) = tokio::sync::watch::channel(State::Started);
         let mut watcher = StateWatcher::from(watch_receiver);
@@ -1140,7 +1183,10 @@ pub mod tests {
             FuelPeerId::from(peer_id.to_bytes().to_vec()),
             report_peer_id
         );
-        assert_eq!(report, HeartBeatPeerReportReason::OldHeartBeat);
+        assert_eq!(
+            report,
+            heartbeat_peer_reputation_config.old_heartbeat_penalty
+        );
         assert_eq!(reporting_service, "p2p");
     }
 }

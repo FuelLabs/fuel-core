@@ -13,7 +13,7 @@ description = "Tx client and schema specification."
 [dependencies]
 anyhow = { workspace = true }
 cynic = { workspace = true }
-derive_more = { version = "0.99" }
+derive_more = { workspace = true }
 eventsource-client = { version = "0.10.2", optional = true }
 fuel-core-types = { workspace = true, features = ["serde"] }
 futures = { workspace = true, optional = true }

@@ -423,7 +423,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             let PrepareCall { ra, rb, rc, rd } = p;
 
             vm.prepare_call(ra, rb, rc, rd)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
             for instruction in post_call {
                 vm.instruction(instruction).unwrap();
             }

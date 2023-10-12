@@ -12,14 +12,10 @@ use fuel_core_sync::ports::{
 };
 use fuel_core_types::{
     blockchain::{
-        primitives::{
-            BlockId,
-            DaBlockHeight,
-        },
+        primitives::DaBlockHeight,
         SealedBlock,
         SealedBlockHeader,
     },
-    fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::p2p::{
         peer_reputation::{
@@ -28,6 +24,7 @@ use fuel_core_types::{
         },
         PeerId,
         SourcePeer,
+        Transactions,
     },
 };
 use std::ops::Range;
@@ -50,43 +47,41 @@ impl PeerToPeerPort for P2PAdapter {
 
     async fn get_sealed_block_headers(
         &self,
-        block_range_height: Range<u32>,
+        block_height_range: Range<u32>,
     ) -> anyhow::Result<SourcePeer<Option<Vec<SealedBlockHeader>>>> {
-        if let Some(service) = &self.service {
-            let (peer_id, headers) =
-                service.get_sealed_block_headers(block_range_height).await?;
-            let sourced_headers = SourcePeer {
-                peer_id: peer_id.into(),
-                data: headers,
-            };
-            Ok(sourced_headers)
+        let result = if let Some(service) = &self.service {
+            service.get_sealed_block_headers(block_height_range).await
         } else {
             Err(anyhow::anyhow!("No P2P service available"))
+        };
+        match result {
+            Ok((peer_id, headers)) => {
+                let peer_id: PeerId = peer_id.into();
+                let headers = peer_id.bind(headers);
+                Ok(headers)
+            }
+            Err(err) => Err(err),
         }
     }
 
     async fn get_transactions(
         &self,
-        block: SourcePeer<BlockId>,
-    ) -> anyhow::Result<Option<Vec<Transaction>>> {
+        range: SourcePeer<Range<u32>>,
+    ) -> anyhow::Result<Option<Vec<Transactions>>> {
         let SourcePeer {
             peer_id,
-            data: block,
-        } = block;
+            data: range,
+        } = range;
         if let Some(service) = &self.service {
             service
-                .get_transactions_from_peer(peer_id.into(), block)
+                .get_transactions_from_peer(peer_id.into(), range)
                 .await
         } else {
             Err(anyhow::anyhow!("No P2P service available"))
         }
     }
 
-    async fn report_peer(
-        &self,
-        peer: PeerId,
-        report: PeerReportReason,
-    ) -> anyhow::Result<()> {
+    fn report_peer(&self, peer: PeerId, report: PeerReportReason) -> anyhow::Result<()> {
         if let Some(service) = &self.service {
             let service_name = "Sync";
             let new_report = self.process_report(report);

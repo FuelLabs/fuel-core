@@ -13,5 +13,7 @@ mod tracing_helpers;
 
 pub use import::Config;
 
+use rand as _;
+
 #[cfg(test)]
 fuel_core_trace::enable_tracing!();
