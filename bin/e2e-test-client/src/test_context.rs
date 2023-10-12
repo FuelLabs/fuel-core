@@ -217,14 +217,15 @@ impl Wallet {
             contract_id,
             code: bytes,
             salt,
-            state,
+            //state,
             ..
         } = config;
-        let slots = state
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(key, value)| StorageSlot::new(key, value))
-            .collect::<Vec<_>>();
+        // let slots = state
+        //     .unwrap_or_default()
+        //     .into_iter()
+        //     .map(|(key, value)| StorageSlot::new(key, value))
+        //     .collect::<Vec<_>>();
+        let slots = vec![];
         let state_root = Contract::initial_state_root(slots.iter());
         let mut tx = TransactionBuilder::create(bytes.into(), salt, slots);
         tx.gas_price(1);

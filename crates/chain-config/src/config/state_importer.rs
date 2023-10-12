@@ -16,7 +16,7 @@ pub struct StateImporter<T> {
 pub enum ContractComponent {
     ContractMetadata(ContractConfig),
     ContractState(ContractId, Bytes32, Bytes32),
-    ContractAsset(ContractId, Bytes32, usize),
+    ContractAsset(ContractId, Bytes32, u64),
 }
 
 impl<T> StateImporter<T> {

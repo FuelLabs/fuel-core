@@ -23,6 +23,7 @@ use fuel_core_types::{
         Nonce,
     },
 };
+use fuel_vm::fuel_merkle::binary::root_calculator::MerkleRootCalculator;
 use serde::{
     de::DeserializeOwned,
     Serialize,
@@ -165,7 +166,7 @@ pub struct GenesisRootCalculator;
 impl Mappable for GenesisRootCalculator {
     type Key = GenesisRootCalculatorKey;
     type OwnedKey = Self::Key;
-    type Value = u64; //placeholder
+    type Value = MerkleRootCalculator;
     type OwnedValue = Self::Value;
 }
 
@@ -231,7 +232,7 @@ impl DatabaseColumn for StateImportCursor {
 
 impl DatabaseColumn for GenesisRootCalculator{
     fn column() -> Column {
-        Column::GenesisRootCalculatorMerkleData
+        Column::GenesisRootCalculator
     }
 }
 
