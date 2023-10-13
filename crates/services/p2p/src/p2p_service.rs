@@ -298,13 +298,16 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         }
     }
 
-    /// Sends a one way message to a peer. 
-    /// It leverages the `RequestMessage` type to send the message. 
-    /// But, unlike `send_request_msg`, it does not expect a 
+    /// Sends a one way message to a peer.
+    /// It leverages the `RequestMessage` type to send the message.
+    /// But, unlike `send_request_msg`, it does not expect a
     /// response through a response channel.
-    pub fn send_msg(&mut self, peer_id: PeerId, message_request: RequestMessage) -> RequestId {
-        self
-            .swarm
+    pub fn send_msg(
+        &mut self,
+        peer_id: PeerId,
+        message_request: RequestMessage,
+    ) -> RequestId {
+        self.swarm
             .behaviour_mut()
             .send_request_msg(message_request, &peer_id)
     }

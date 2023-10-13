@@ -3183,6 +3183,7 @@ dependencies = [
  "itertools 0.10.5",
  "mockall",
  "parking_lot 0.12.1",
+ "postcard",
  "proptest",
  "rstest",
  "test-strategy",

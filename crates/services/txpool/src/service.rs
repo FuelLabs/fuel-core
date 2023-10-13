@@ -15,6 +15,11 @@ use crate::{
     TxPool,
 };
 
+use fuel_core_p2p::request_response::messages::{
+    RequestMessage,
+    MAX_REQUEST_SIZE,
+};
+
 use fuel_core_p2p::PeerId;
 
 use fuel_core_services::{
@@ -225,10 +230,14 @@ where
                         txs.push(Transaction::from(&*tx.1.tx));
                     }
 
+
                     if !txs.is_empty() {
-                        // TODO: we still have to make sure we're splitting the txs into
-                        // MAX_REQUEST_SIZE.
-                        let _ =  self.shared.p2p.send_pooled_transactions(peer_id, txs).await;
+                        for txs in split_into_batches(txs) {
+                            let result =  self.shared.p2p.send_pooled_transactions(peer_id, txs).await;
+                            if let Err(e) = result {
+                                tracing::error!("Unable to send pooled transactions, got an {} error", e);
+                            }
+                        }
                     }
 
                 } else {
@@ -248,6 +257,27 @@ where
 
         Ok(())
     }
+}
+
+// Split transactions into batches of size less than MAX_REQUEST_SIZE.
+fn split_into_batches(txs: Vec<Transaction>) -> Vec<Vec<Transaction>> {
+    let mut batches = Vec::new();
+    let mut batch = Vec::new();
+    let mut size = 0;
+    for tx in txs.into_iter() {
+        let m = RequestMessage::PooledTransactions(vec![tx.clone()]);
+        let tx_size = postcard::to_stdvec(&m).unwrap().len();
+        if size + tx_size < MAX_REQUEST_SIZE {
+            batch.push(tx);
+            size += tx_size;
+        } else {
+            batches.push(batch);
+            batch = vec![tx];
+            size = tx_size;
+        }
+    }
+    batches.push(batch);
+    batches
 }
 
 pub struct Task<P2P, DB>
