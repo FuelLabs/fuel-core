@@ -65,7 +65,7 @@ impl PostcardCodec {
     }
 
     fn serialize<D: Serialize>(&self, data: &D) -> Result<Vec<u8>, io::Error> {
-        postcard::to_stdvec(&data)
+        postcard::to_allocvec(&data)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
 }
@@ -118,7 +118,7 @@ impl RequestResponseCodec for PostcardCodec {
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        match postcard::to_stdvec(&req) {
+        match postcard::to_allocvec(&req) {
             Ok(encoded_data) => {
                 write_length_prefixed(socket, encoded_data).await?;
                 socket.close().await?;
