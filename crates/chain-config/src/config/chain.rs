@@ -81,6 +81,7 @@ impl Default for ChainConfig {
 impl ChainConfig {
     pub const BASE_ASSET: AssetId = AssetId::zeroed();
 
+    #[cfg(feature = "random")]
     pub fn local_testnet() -> Self {
         // endow some preset accounts with an initial balance
         tracing::info!("Initial Accounts");
@@ -139,6 +140,7 @@ impl FromStr for ChainConfig {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            #[cfg(feature = "random")]
             LOCAL_TESTNET => Ok(Self::local_testnet()),
             s => {
                 // Attempt to load chain config from path
