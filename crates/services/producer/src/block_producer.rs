@@ -201,8 +201,8 @@ where
             return Err(Error::InvalidDaFinalizationState {
                 best: best_height,
                 previous_block: previous_da_height,
-            })
-            .map_err(Into::into)
+            }
+            .into())
         }
         Ok(best_height)
     }
