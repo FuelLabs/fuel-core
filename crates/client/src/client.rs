@@ -153,9 +153,7 @@ impl FromStr for FuelClient {
 
         #[cfg(not(feature = "subscriptions"))]
         {
-            let client = reqwest::Client::builder()
-                .build()
-                .map_err(anyhow::Error::msg)?;
+            let client = reqwest::Client::new();
             Ok(Self { client, url })
         }
     }
