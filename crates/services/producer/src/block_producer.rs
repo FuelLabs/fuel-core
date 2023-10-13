@@ -237,7 +237,7 @@ where
         //  return a new error.
         // block 0 is reserved for genesis
         if height == 0u32.into() {
-            Err(Error::GenesisBlock).map_err(Into::into)
+            Err(Error::GenesisBlock.into())
         } else {
             // get info from previous block height
             let prev_height = height - 1u32.into();
