@@ -1,4 +1,3 @@
-#[cfg(feature = "local")]
 use bech32::{
     ToBase32,
     Variant::Bech32m,
@@ -15,12 +14,11 @@ use fuel_core_types::{
     fuel_types::{
         Address,
         AssetId,
+        Bytes32,
     },
     fuel_vm::SecretKey,
 };
-#[cfg(feature = "local")]
 use itertools::Itertools;
-#[cfg(feature = "random")]
 use rand::{
     rngs::StdRng,
     SeedableRng,
@@ -83,7 +81,6 @@ impl Default for ChainConfig {
 impl ChainConfig {
     pub const BASE_ASSET: AssetId = AssetId::zeroed();
 
-    #[cfg(feature = "local")]
     pub fn local_testnet() -> Self {
         // endow some preset accounts with an initial balance
         tracing::info!("Initial Accounts");
@@ -92,8 +89,7 @@ impl ChainConfig {
             .map(|_| {
                 let secret = SecretKey::random(&mut rng);
                 let address = Address::from(*secret.public_key().hash());
-                let bech32_data =
-                    fuel_core_types::fuel_types::Bytes32::new(*address).to_base32();
+                let bech32_data = Bytes32::new(*address).to_base32();
                 let bech32_encoding =
                     bech32::encode(FUEL_BECH32_HRP, bech32_data, Bech32m).unwrap();
                 tracing::info!(
@@ -143,7 +139,6 @@ impl FromStr for ChainConfig {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            #[cfg(feature = "local")]
             LOCAL_TESTNET => Ok(Self::local_testnet()),
             s => {
                 // Attempt to load chain config from path
