@@ -101,10 +101,7 @@ impl ConcreteStorage {
         let vm_database = Self::vm_database(&storage)?;
         let tx = Self::dummy_tx();
         let checked_tx = tx
-            .into_checked_basic(
-                vm_database.block_height().map_err(anyhow::Error::msg)?,
-                &self.params,
-            )
+            .into_checked_basic(vm_database.block_height()?, &self.params)
             .map_err(|e| anyhow::anyhow!(e))?;
         self.tx
             .get_mut(&id)
@@ -137,10 +134,7 @@ impl ConcreteStorage {
             .unwrap_or(Self::dummy_tx());
 
         let checked_tx = tx
-            .into_checked_basic(
-                vm_database.block_height().map_err(anyhow::Error::msg)?,
-                &self.params,
-            )
+            .into_checked_basic(vm_database.block_height()?, &self.params)
             .map_err(|e| anyhow::anyhow!(e))?;
 
         let mut vm = Interpreter::with_storage(vm_database, (&self.params).into());
@@ -164,11 +158,8 @@ impl ConcreteStorage {
 
     fn vm_database(storage: &DatabaseTransaction) -> anyhow::Result<VmDatabase> {
         let block = storage
-            .get_current_block()
-            .map_err(anyhow::Error::msg)?
-            .ok_or(not_found!("Block for VMDatabase"))
-            .map_err(anyhow::Error::msg)?
-            .into_owned();
+            .get_current_block()?
+            .ok_or(not_found!("Block for VMDatabase"))?;
 
         let vm_database = VmDatabase::new(
             storage.as_ref().clone(),

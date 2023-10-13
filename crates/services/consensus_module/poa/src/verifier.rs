@@ -42,18 +42,14 @@ pub fn verify_block_fields<D: Database>(
     );
 
     let prev_height = height - 1u32.into();
-    let prev_root = database
-        .block_header_merkle_root(&prev_height)
-        .map_err(anyhow::Error::msg)?;
+    let prev_root = database.block_header_merkle_root(&prev_height)?;
     let header = block.header();
     ensure!(
         header.prev_root() == &prev_root,
         "Previous root of the next block should match the previous block root"
     );
 
-    let prev_header = database
-        .block_header(&prev_height)
-        .map_err(anyhow::Error::msg)?;
+    let prev_header = database.block_header(&prev_height)?;
 
     ensure!(
         header.da_height >= prev_header.da_height,

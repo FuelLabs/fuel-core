@@ -12,9 +12,9 @@ version = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+derive_more = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
-thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-rayon = { workspace = true }
 tracing = { workspace = true }

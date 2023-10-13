@@ -86,6 +86,12 @@ pub enum Error {
     StorageError(StorageError),
 }
 
+impl From<Error> for anyhow::Error {
+    fn from(error: Error) -> Self {
+        error.into()
+    }
+}
+
 #[cfg(test)]
 impl PartialEq for Error {
     fn eq(&self, other: &Self) -> bool {

@@ -61,7 +61,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     };
     let path = command.database_path;
     let data_source = fuel_core::state::rocks_db::RocksDb::default_open(&path, None)
-        .map_err(anyhow::Error::msg)
+        .map_err(Into::<anyhow::Error>::into)
         .context(format!(
             "failed to open database at path {}",
             path.display()
@@ -71,8 +71,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     match command.subcommand {
         SubCommands::Everything { chain_config } => {
             let config: ChainConfig = chain_config.parse()?;
-            let state_conf =
-                StateConfig::generate_state_config(db).map_err(anyhow::Error::msg)?;
+            let state_conf = StateConfig::generate_state_config(db)?;
 
             let chain_conf = ChainConfig {
                 initial_state: Some(state_conf),
@@ -85,9 +84,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
                 .context("failed to dump snapshot to JSON")?;
         }
         SubCommands::Contract { contract_id } => {
-            let config = db
-                .get_contract_config_by_id(contract_id)
-                .map_err(anyhow::Error::msg)?;
+            let config = db.get_contract_config_by_id(contract_id)?;
             let stdout = std::io::stdout().lock();
 
             serde_json::to_writer_pretty(stdout, &config)

@@ -385,14 +385,11 @@ impl Dependency {
                                 if state.is_in_database() {
                                     // this means it is loaded from db. Get tx to compare output.
                                     if self.utxo_validation {
-                                        let coin = db
-                                            .utxo(utxo_id)
-                                            .map_err(anyhow::Error::msg)?
-                                            .ok_or(
-                                                Error::NotInsertedInputUtxoIdNotExisting(
-                                                    *utxo_id,
-                                                ),
-                                            )?;
+                                        let coin = db.utxo(utxo_id)?.ok_or(
+                                            Error::NotInsertedInputUtxoIdNotExisting(
+                                                *utxo_id,
+                                            ),
+                                        )?;
                                         Self::check_if_coin_input_can_spend_db_coin(
                                             &coin, input,
                                         )?;
@@ -414,10 +411,9 @@ impl Dependency {
                     } else {
                         if self.utxo_validation {
                             // fetch from db and check if tx exist.
-                            let coin =
-                                db.utxo(utxo_id).map_err(anyhow::Error::msg)?.ok_or(
-                                    Error::NotInsertedInputUtxoIdNotExisting(*utxo_id),
-                                )?;
+                            let coin = db.utxo(utxo_id)?.ok_or(
+                                Error::NotInsertedInputUtxoIdNotExisting(*utxo_id),
+                            )?;
 
                             Self::check_if_coin_input_can_spend_db_coin(&coin, input)?;
                         }
@@ -439,16 +435,14 @@ impl Dependency {
                 | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
                     // since message id is derived, we don't need to double check all the fields
                     if self.utxo_validation {
-                        if let Some(db_message) =
-                            db.message(nonce).map_err(anyhow::Error::msg)?
-                        {
+                        if let Some(db_message) = db.message(nonce)? {
                             // verify message id integrity
                             Self::check_if_message_input_matches_database(
                                 input,
                                 &db_message,
                             )?;
                             // return an error if spent block is set
-                            if db.is_message_spent(nonce).map_err(anyhow::Error::msg)? {
+                            if db.is_message_spent(nonce)? {
                                 return Err(
                                     Error::NotInsertedInputMessageSpent(*nonce).into()
                                 )
@@ -496,7 +490,7 @@ impl Dependency {
                             return Err(Error::NotInsertedMaxDepth.into())
                         }
                     } else {
-                        if !db.contract_exist(contract_id).map_err(anyhow::Error::msg)? {
+                        if !db.contract_exist(contract_id)? {
                             return Err(Error::NotInsertedInputContractNotExisting(
                                 *contract_id,
                             )

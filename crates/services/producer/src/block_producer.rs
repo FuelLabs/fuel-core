@@ -33,26 +33,33 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use std::sync::Arc;
-use thiserror::Error;
 use tokio::sync::Mutex;
 use tracing::debug;
 
 #[cfg(test)]
 mod tests;
 
-#[derive(Error, Debug)]
+#[derive(Debug, derive_more::Display)]
 pub enum Error {
-    #[error(
-        "0 is an invalid block height for production. It is reserved for genesis data."
+    #[display(
+        fmt = "0 is an invalid block height for production. It is reserved for genesis data."
     )]
     GenesisBlock,
-    #[error("Previous block height {0} doesn't exist")]
+    #[display(fmt = "Previous block height {_0} doesn't exist")]
     MissingBlock(BlockHeight),
-    #[error("Best finalized da_height {best} is behind previous block da_height {previous_block}")]
+    #[display(
+        fmt = "Best finalized da_height {best} is behind previous block da_height {previous_block}"
+    )]
     InvalidDaFinalizationState {
         best: DaBlockHeight,
         previous_block: DaBlockHeight,
     },
+}
+
+impl From<Error> for anyhow::Error {
+    fn from(error: Error) -> Self {
+        error.into()
+    }
 }
 
 pub struct Producer<Database, TxPool, Executor> {
@@ -107,7 +114,7 @@ where
         let result = self
             .executor
             .execute_without_commit(component)
-            .map_err(anyhow::Error::msg)
+            .map_err(Into::<anyhow::Error>::into)
             .context(context_string)?;
 
         debug!("Produced block with result: {:?}", result.result());
@@ -125,7 +132,7 @@ where
         utxo_validation: Option<bool>,
     ) -> anyhow::Result<Vec<Receipt>> {
         let height = match height {
-            None => self.db.current_block_height().map_err(anyhow::Error::msg)?,
+            None => self.db.current_block_height()?,
             Some(height) => height,
         } + 1.into();
 
@@ -152,8 +159,7 @@ where
         let res: Vec<_> =
             tokio_rayon::spawn_fifo(move || -> anyhow::Result<Vec<Receipt>> {
                 Ok(executor
-                    .dry_run(component, utxo_validation)
-                    .map_err(anyhow::Error::msg)?
+                    .dry_run(component, utxo_validation)?
                     .into_iter()
                     .flatten()
                     .collect())
@@ -196,7 +202,7 @@ where
                 best: best_height,
                 previous_block: previous_da_height,
             })
-            .map_err(anyhow::Error::msg)
+            .map_err(Into::<anyhow::Error>::into)
         }
         Ok(best_height)
     }
@@ -231,18 +237,12 @@ where
         //  return a new error.
         // block 0 is reserved for genesis
         if height == 0u32.into() {
-            Err(Error::GenesisBlock).map_err(anyhow::Error::msg)
+            Err(Error::GenesisBlock).map_err(Into::<anyhow::Error>::into)
         } else {
             // get info from previous block height
             let prev_height = height - 1u32.into();
-            let previous_block = self
-                .db
-                .get_block(&prev_height)
-                .map_err(anyhow::Error::msg)?;
-            let prev_root = self
-                .db
-                .block_header_merkle_root(&prev_height)
-                .map_err(anyhow::Error::msg)?;
+            let previous_block = self.db.get_block(&prev_height)?;
+            let prev_root = self.db.block_header_merkle_root(&prev_height)?;
 
             Ok(PreviousBlockInfo {
                 prev_root,

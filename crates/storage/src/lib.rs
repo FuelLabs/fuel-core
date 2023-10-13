@@ -48,8 +48,13 @@ pub enum Error {
     // TODO: Do we need this type at all?
     /// Unknown or not expected(by architecture) error.
     #[from]
-    #[display(fmt = transparent)]
     Other(anyhow::Error),
+}
+
+impl From<Error> for anyhow::Error {
+    fn from(error: Error) -> Self {
+        error.into()
+    }
 }
 
 impl From<Error> for ExecutorError {

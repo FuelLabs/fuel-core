@@ -60,11 +60,9 @@ pub fn run(c: &mut Criterion) {
 
                 asset_inc.as_mut()[..8].copy_from_slice(&1_u64.to_be_bytes());
 
-                db.merkle_contract_asset_id_balance_insert(&contract, &asset_inc, 1)
-                    .map_err(anyhow::Error::msg)?;
+                db.merkle_contract_asset_id_balance_insert(&contract, &asset_inc, 1)?;
 
-                db.merkle_contract_asset_id_balance_insert(&contract, &asset, 100)
-                    .map_err(anyhow::Error::msg)?;
+                db.merkle_contract_asset_id_balance_insert(&contract, &asset, 100)?;
 
                 Ok(db)
             }),
@@ -80,8 +78,7 @@ pub fn run(c: &mut Criterion) {
 
                 key.as_mut()[..8].copy_from_slice(&1_u64.to_be_bytes());
 
-                db.merkle_contract_state_insert(&contract, &key, &key)
-                    .map_err(anyhow::Error::msg)?;
+                db.merkle_contract_state_insert(&contract, &key, &key)?;
 
                 Ok(db)
             }),
@@ -92,8 +89,7 @@ pub fn run(c: &mut Criterion) {
             .with_prepare_db(move |mut db| {
                 let key = Bytes32::zeroed();
 
-                db.merkle_contract_state_insert(&ContractId::zeroed(), &key, &key)
-                    .map_err(anyhow::Error::msg)?;
+                db.merkle_contract_state_insert(&ContractId::zeroed(), &key, &key)?;
 
                 Ok(db)
             });
@@ -117,8 +113,7 @@ pub fn run(c: &mut Criterion) {
             .expect("failed to prepare contract")
             .with_post_call(post_call)
             .with_prepare_db(move |mut db| {
-                db.merkle_contract_state_insert(&contract, &key, &key)
-                    .map_err(anyhow::Error::msg)?;
+                db.merkle_contract_state_insert(&contract, &key, &key)?;
 
                 Ok(db)
             });
@@ -142,8 +137,7 @@ pub fn run(c: &mut Criterion) {
             .expect("failed to prepare contract")
             .with_post_call(post_call)
             .with_prepare_db(move |mut db| {
-                db.merkle_contract_state_insert(&contract, &key, &key)
-                    .map_err(anyhow::Error::msg)?;
+                db.merkle_contract_state_insert(&contract, &key, &key)?;
 
                 Ok(db)
             });
@@ -355,8 +349,7 @@ pub fn run(c: &mut Criterion) {
                     &ContractId::zeroed(),
                     &AssetId::zeroed(),
                     200,
-                )
-                .map_err(anyhow::Error::msg)?;
+                )?;
 
                 Ok(db)
             });
@@ -374,8 +367,7 @@ pub fn run(c: &mut Criterion) {
                     &ContractId::zeroed(),
                     &AssetId::zeroed(),
                     200,
-                )
-                .map_err(anyhow::Error::msg)?;
+                )?;
 
                 Ok(db)
             });
@@ -445,8 +437,7 @@ pub fn run(c: &mut Criterion) {
                 &ContractId::default(),
                 &AssetId::default(),
                 Word::MAX,
-            )
-            .map_err(anyhow::Error::msg)?;
+            )?;
             Ok(db)
         }));
         input.post_call.extend(vec![
@@ -505,8 +496,7 @@ pub fn run(c: &mut Criterion) {
             .with_post_call(post_call)
             .with_prepare_db(move |mut db| {
                 let values = vec![key; i as usize];
-                db.merkle_contract_state_insert_range(&contract, &key, &values)
-                    .map_err(anyhow::Error::msg)?;
+                db.merkle_contract_state_insert_range(&contract, &key, &values)?;
 
                 Ok(db)
             });

@@ -162,8 +162,7 @@ impl VmBench {
 
         let mut db = new_db();
 
-        db.deploy_contract_with_id(&salt, &[], &contract, &state_root, &id)
-            .map_err(anyhow::Error::msg)?;
+        db.deploy_contract_with_id(&salt, &[], &contract, &state_root, &id)?;
 
         let data = id
             .iter()
@@ -348,8 +347,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             tx.add_input(input);
             tx.add_output(output);
 
-            db.deploy_contract_with_id(&VmBench::SALT, &[], &code, &root, &contract)
-                .map_err(anyhow::Error::msg)?;
+            db.deploy_contract_with_id(&VmBench::SALT, &[], &code, &root, &contract)?;
         }
 
         if let Some(ContractCode {
@@ -375,12 +373,11 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             tx.add_input(input);
             tx.add_output(output);
 
-            db.deploy_contract_with_id(&salt, &slots, &contract, &root, &id)
-                .map_err(anyhow::Error::msg)?;
+            db.deploy_contract_with_id(&salt, &slots, &contract, &root, &id)?;
         }
 
         let db = match prepare_db {
-            Some(mut prepare_db) => prepare_db(db).map_err(anyhow::Error::msg)?,
+            Some(mut prepare_db) => prepare_db(db)?,
             None => db,
         };
 

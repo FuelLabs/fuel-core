@@ -1,3 +1,4 @@
+use core::fmt;
 use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_storage::{
     not_found,
@@ -113,7 +114,12 @@ pub trait ContractStorageTrait:
     + MerkleRootStorage<ContractId, ContractsState, Error = Self::InnerError>
     + MerkleRootStorage<ContractId, ContractsAssets, Error = Self::InnerError>
 {
-    type InnerError: core::fmt::Display + core::fmt::Debug + Send + Sync + 'static;
+    type InnerError: Into<anyhow::Error>
+        + fmt::Debug
+        + fmt::Display
+        + Send
+        + Sync
+        + 'static;
 }
 
 impl<'a, Database> GenesisCommitment for ContractRef<&'a mut Database>
@@ -126,9 +132,8 @@ where
             .database()
             .storage::<ContractsLatestUtxo>()
             .get(&contract_id)
-            .map_err(anyhow::Error::msg)?
-            .ok_or(not_found!(ContractsLatestUtxo))
-            .map_err(anyhow::Error::msg)?
+            .map_err(Into::<anyhow::Error>::into)?
+            .ok_or(not_found!(ContractsLatestUtxo))?
             .into_owned()
             .utxo_id;
 
@@ -136,13 +141,13 @@ where
             .database()
             .storage::<ContractsState>()
             .root(&contract_id)
-            .map_err(anyhow::Error::msg)?;
+            .map_err(Into::<anyhow::Error>::into)?;
 
         let balance_root = self
             .database()
             .storage::<ContractsAssets>()
             .root(&contract_id)
-            .map_err(anyhow::Error::msg)?;
+            .map_err(Into::<anyhow::Error>::into)?;
 
         let contract_hash = *Hasher::default()
             // `ContractId` already is based on contract's code and salt so we don't need it.

@@ -40,11 +40,11 @@ pub enum Error {
     Other(anyhow::Error),
 }
 
-// impl From<Error> for std::io::Error {
-//     fn from(e: Error) -> Self {
-//         std::io::Error::new(ErrorKind::Other, e)
-//     }
-// }
+impl From<Error> for anyhow::Error {
+    fn from(error: Error) -> Self {
+        error.into()
+    }
+}
 
 impl From<Error> for StorageError {
     fn from(e: Error) -> Self {

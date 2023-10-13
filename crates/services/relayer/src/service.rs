@@ -293,8 +293,7 @@ impl<D> SharedState<D> {
         Ok(self
             .database
             .storage::<Messages>()
-            .get(id)
-            .map_err(anyhow::Error::msg)?
+            .get(id)?
             .map(Cow::into_owned)
             .filter(|message| message.da_height <= *da_height))
     }
@@ -307,7 +306,7 @@ impl<D> SharedState<D> {
     {
         self.database
             .get_finalized_da_height()
-            .map_err(anyhow::Error::msg)
+            .map_err(Into::<anyhow::Error>::into)
     }
 }
 

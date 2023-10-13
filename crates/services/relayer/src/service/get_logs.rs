@@ -76,9 +76,7 @@ where
                 Err(e) => Some(Err(e)),
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
-        database
-            .insert_messages(&height.into(), &messages)
-            .map_err(anyhow::Error::msg)?;
+        database.insert_messages(&height.into(), &messages)?;
     }
     Ok(())
 }
