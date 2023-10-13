@@ -11,7 +11,6 @@ pub struct Service {
 }
 
 impl Service {
-    #[allow(clippy::let_unit_value)]
     pub async fn new(_config: &Config, _db: ()) -> anyhow::Result<Self> {
         let (sender, _receiver) = mpsc::channel(100);
         Ok(Self {
