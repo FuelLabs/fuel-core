@@ -17,7 +17,8 @@ fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true, default-features = false, features = ["serde"] }
 hex = { version = "0.4", features = ["serde"] }
 itertools = { workspace = true }
-postcard = { version = "1.0"}
+postcard = { version = "1.0", features = ["alloc"]}
+rand = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_json = { version = "1.0", features = ["raw_value"], optional = true }
 serde_with = "1.11"
@@ -29,4 +30,5 @@ serde_json = { version = "1.0", features = ["raw_value"] }
 
 [features]
 default = ["std"]
+random = ["dep:rand", "fuel-core-types/random"]
 std = ["dep:serde_json", "fuel-core-types/std", "anyhow/std"]
