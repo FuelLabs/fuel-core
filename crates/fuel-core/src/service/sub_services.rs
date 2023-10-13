@@ -98,7 +98,7 @@ pub fn init_sub_services(
     let mut network = {
         if let Some(config) = config.p2p.clone() {
             let p2p_db = database.clone();
-            let genesis = p2p_db.get_genesis()?;
+            let genesis = p2p_db.get_genesis().map_err(anyhow::Error::msg)?;
             let p2p_config = config.init(genesis)?;
 
             Some(fuel_core_p2p::service::new_service(
