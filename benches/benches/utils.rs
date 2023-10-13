@@ -1,12 +1,12 @@
-use crate::RegId;
 use ethnum::U256;
 use fuel_core_types::fuel_asm::{
     op,
     Instruction,
+    RegId,
 };
 
 /// Allocates a byte array from heap and initializes it. Then points `reg` to it.
-pub fn aloc_bytearray<const S: usize>(reg: u8, v: [u8; S]) -> Vec<Instruction> {
+fn aloc_bytearray<const S: usize>(reg: u8, v: [u8; S]) -> Vec<Instruction> {
     let mut ops = vec![op::movi(reg, S as u32), op::aloc(reg)];
     for (i, b) in v.iter().enumerate() {
         if *b != 0 {

@@ -18,7 +18,6 @@ use fuel_core_types::fuel_asm::wideint::{
 mod utils;
 
 use utils::{
-    aloc_bytearray,
     make_u128,
     make_u256,
 };
