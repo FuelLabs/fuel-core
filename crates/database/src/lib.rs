@@ -35,6 +35,7 @@ pub enum Error {
         /// the database version expected by this build of fuel-core
         expected: u32,
     },
+
     /// Not related to database error.
     #[from]
     Other(anyhow::Error),
@@ -42,7 +43,7 @@ pub enum Error {
 
 impl From<Error> for anyhow::Error {
     fn from(error: Error) -> Self {
-        error.into()
+        anyhow::Error::msg(error)
     }
 }
 

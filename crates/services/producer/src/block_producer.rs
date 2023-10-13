@@ -58,7 +58,7 @@ pub enum Error {
 
 impl From<Error> for anyhow::Error {
     fn from(error: Error) -> Self {
-        error.into()
+        anyhow::Error::msg(error)
     }
 }
 
