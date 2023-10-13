@@ -304,9 +304,7 @@ impl<D> SharedState<D> {
     where
         D: RelayerDb + 'static,
     {
-        self.database
-            .get_finalized_da_height()
-            .map_err(Into::<anyhow::Error>::into)
+        self.database.get_finalized_da_height().map_err(Into::into)
     }
 }
 

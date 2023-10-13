@@ -132,7 +132,7 @@ where
             .database()
             .storage::<ContractsLatestUtxo>()
             .get(&contract_id)
-            .map_err(Into::<anyhow::Error>::into)?
+            .map_err(Into::into)?
             .ok_or(not_found!(ContractsLatestUtxo))?
             .into_owned()
             .utxo_id;
@@ -141,13 +141,13 @@ where
             .database()
             .storage::<ContractsState>()
             .root(&contract_id)
-            .map_err(Into::<anyhow::Error>::into)?;
+            .map_err(Into::into)?;
 
         let balance_root = self
             .database()
             .storage::<ContractsAssets>()
             .root(&contract_id)
-            .map_err(Into::<anyhow::Error>::into)?;
+            .map_err(Into::into)?;
 
         let contract_hash = *Hasher::default()
             // `ContractId` already is based on contract's code and salt so we don't need it.

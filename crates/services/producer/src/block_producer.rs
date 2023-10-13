@@ -202,7 +202,7 @@ where
                 best: best_height,
                 previous_block: previous_da_height,
             })
-            .map_err(Into::<anyhow::Error>::into)
+            .map_err(Into::into)
         }
         Ok(best_height)
     }
@@ -237,7 +237,7 @@ where
         //  return a new error.
         // block 0 is reserved for genesis
         if height == 0u32.into() {
-            Err(Error::GenesisBlock).map_err(Into::<anyhow::Error>::into)
+            Err(Error::GenesisBlock).map_err(Into::into)
         } else {
             // get info from previous block height
             let prev_height = height - 1u32.into();
