@@ -23,7 +23,7 @@ pub mod blockchain;
 pub mod entities;
 pub mod services;
 
-#[allow(missing_docs)]
+/// Re-export of some fuel-vm types
 pub mod fuel_vm {
     #[doc(no_inline)]
     pub use fuel_vm_private::prelude::Breakpoint;
