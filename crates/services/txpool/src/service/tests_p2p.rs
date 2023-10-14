@@ -26,7 +26,7 @@ async fn can_insert_from_p2p() {
     let mut receiver = service
         .shared
         .tx_update_subscribe(tx1.id(&ConsensusParameters::DEFAULT.chain_id))
-        .await;
+        .unwrap();
 
     service.start_and_await().await.unwrap();
 
@@ -68,7 +68,7 @@ async fn insert_from_local_broadcasts_to_p2p() {
     let mut subscribe_update = service
         .shared
         .tx_update_subscribe(tx1.cached_id().unwrap())
-        .await;
+        .unwrap();
 
     let out = service.shared.insert(vec![Arc::new(tx1.clone())]).await;
 
@@ -116,8 +116,7 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
     // verify tx status update from p2p injected tx is successful
     let mut receiver = service
         .shared
-        .tx_update_subscribe(tx1.id(&ConsensusParameters::DEFAULT.chain_id))
-        .await;
+        .tx_update_subscribe(tx1.id(&ConsensusParameters::DEFAULT.chain_id)).unwrap();
 
     service.start_and_await().await.unwrap();
 

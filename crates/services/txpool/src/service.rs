@@ -51,8 +51,12 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 
+use anyhow::anyhow;
 use parking_lot::Mutex as ParkingMutex;
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::Duration,
+};
 use tokio::{
     sync::broadcast,
     time::MissedTickBehavior,
@@ -76,9 +80,9 @@ pub struct TxStatusChange {
 }
 
 impl TxStatusChange {
-    pub fn new(capacity: usize) -> Self {
+    pub fn new(capacity: usize, ttl: Duration) -> Self {
         let (new_tx_notification_sender, _) = broadcast::channel(capacity);
-        let update_sender = UpdateSender::new(capacity);
+        let update_sender = UpdateSender::new(capacity, ttl);
         Self {
             new_tx_notification_sender,
             update_sender,
@@ -326,11 +330,11 @@ where
         self.tx_status_sender.new_tx_notification_sender.subscribe()
     }
 
-    pub async fn tx_update_subscribe(&self, tx_id: Bytes32) -> TxStatusStream {
+    pub fn tx_update_subscribe(&self, tx_id: Bytes32) -> anyhow::Result<TxStatusStream> {
         self.tx_status_sender
             .update_sender
-            .subscribe::<MpscChannel>(tx_id)
-            .await
+            .try_subscribe::<MpscChannel>(tx_id)
+            .ok_or(anyhow!("Maximum number of subscriptions reached"))
     }
 }
 
@@ -450,7 +454,10 @@ where
         gossiped_tx_stream,
         committed_block_stream,
         shared: SharedState {
-            tx_status_sender: TxStatusChange::new(number_of_active_subscription),
+            tx_status_sender: TxStatusChange::new(
+                number_of_active_subscription,
+                config.transaction_ttl,
+            ),
             txpool,
             p2p,
             consensus_params,
