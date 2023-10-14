@@ -621,16 +621,16 @@ where
             let coinbase_tx = Transaction::mint(
                 TxPointer::new(block_height, execution_data.tx_count),
                 input::contract::Contract {
-                    utxo_id: Default::default(),
-                    balance_root: Default::default(),
-                    state_root: Default::default(),
-                    tx_pointer: Default::default(),
+                    utxo_id: UtxoId::new(Bytes32::zeroed(), 0),
+                    balance_root: Bytes32::zeroed(),
+                    state_root: Bytes32::zeroed(),
+                    tx_pointer: TxPointer::new(BlockHeight::new(0), 0),
                     contract_id: self.config.coinbase_recipient,
                 },
                 output::contract::Contract {
                     input_index: 0,
-                    balance_root: Default::default(),
-                    state_root: Default::default(),
+                    balance_root: Bytes32::zeroed(),
+                    state_root: Bytes32::zeroed(),
                 },
                 amount_to_mint,
                 self.config.consensus_parameters.base_asset_id,
@@ -727,7 +727,32 @@ where
         let coinbase_id = checked_mint.id();
         let (mut mint, _) = checked_mint.into();
 
-        if mint.input_contract().contract_id != ContractId::zeroed() {
+        fn verify_mint_for_empty_contract(mint: &Mint) -> ExecutorResult<()> {
+            if *mint.mint_amount() != 0 {
+                return Err(ExecutorError::CoinbaseAmountMismatch)
+            }
+
+            let input = input::contract::Contract {
+                utxo_id: UtxoId::new(Bytes32::zeroed(), 0),
+                balance_root: Bytes32::zeroed(),
+                state_root: Bytes32::zeroed(),
+                tx_pointer: TxPointer::new(BlockHeight::new(0), 0),
+                contract_id: ContractId::zeroed(),
+            };
+            let output = output::contract::Contract {
+                input_index: 0,
+                balance_root: Bytes32::zeroed(),
+                state_root: Bytes32::zeroed(),
+            };
+            if mint.input_contract() != &input || mint.output_contract() != &output {
+                return Err(ExecutorError::MintMismatch)
+            }
+            Ok(())
+        }
+
+        if mint.input_contract().contract_id == ContractId::zeroed() {
+            verify_mint_for_empty_contract(&mint)?;
+        } else {
             if *mint.mint_amount() != execution_data.coinbase {
                 return Err(ExecutorError::CoinbaseAmountMismatch)
             }
@@ -823,15 +848,6 @@ where
             } else {
                 *mint.input_contract_mut() = input;
                 *mint.output_contract_mut() = output;
-            }
-        } else {
-            if *mint.mint_amount() != 0 {
-                return Err(ExecutorError::CoinbaseAmountMismatch)
-            }
-            let input = input::contract::Contract::default();
-            let output = output::contract::Contract::default();
-            if mint.input_contract() != &input || mint.output_contract() != &output {
-                return Err(ExecutorError::MintMismatch)
             }
         }
 

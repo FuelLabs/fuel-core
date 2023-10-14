@@ -84,7 +84,8 @@ pub struct Transaction {
     pub input_asset_ids: Option<Vec<AssetId>>,
     /// The list of all contracts from the inputs of the transaction.
     ///
-    /// It is a helper function and doesn't have a corresponding field in the transaction.
+    /// The result of a `input_contracts()` helper function is stored here.
+    /// It is not an original field of the transaction.
     pub input_contracts: Option<Vec<ContractIdFragment>>,
     /// The field of the `Mint` transaction.
     pub input_contract: Option<InputContract>,
@@ -93,6 +94,7 @@ pub struct Transaction {
     pub is_create: bool,
     pub is_mint: bool,
     pub outputs: Vec<Output>,
+    /// The field of the `Mint` transaction.
     pub output_contract: Option<ContractOutput>,
     pub maturity: Option<U32>,
     pub mint_amount: Option<U64>,
