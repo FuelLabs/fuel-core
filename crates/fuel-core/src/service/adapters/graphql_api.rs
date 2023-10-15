@@ -234,7 +234,7 @@ impl TxPoolPort for TxPoolAdapter {
         &self,
         id: TxId,
     ) -> anyhow::Result<BoxStream<TxStatusMessage>> {
-        Ok(Box::pin(self.service.tx_update_subscribe(id)?))
+        self.service.tx_update_subscribe(id)
     }
 }
 
