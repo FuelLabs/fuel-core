@@ -1,11 +1,8 @@
+use std::fs::File;
+
 use crate::{
     database::{
-        self,
-        storage::{
-            GenesisRootCalculator,
-            GenesisRootCalculatorKey,
-            StateImportCursor,
-        },
+        storage::{StateImportProgressKey, StateImportProgress},
         Database,
     },
     service::config::Config,
@@ -16,7 +13,7 @@ use fuel_core_chain_config::{
     ContractComponent,
     ContractConfig,
     GenesisCommitment,
-    MessageConfig,
+    MessageConfig, StateReader,
 };
 use fuel_core_executor::refs::ContractRef;
 use fuel_core_importer::Importer;
@@ -32,7 +29,6 @@ use fuel_core_storage::{
     transactional::Transactional,
     MerkleRoot,
     StorageAsMut,
-    StorageInspect,
 };
 use fuel_core_types::{
     blockchain::{
@@ -54,10 +50,6 @@ use fuel_core_types::{
         contract::ContractUtxoInfo,
         message::Message,
     },
-    fuel_merkle::binary::{
-        self,
-        MerkleTree,
-    },
     fuel_tx::{
         Contract,
         TxPointer,
@@ -73,11 +65,10 @@ use fuel_core_types::{
     services::block_importer::{
         ImportResult,
         UncommittedResult as UncommittedImportResult,
-    },
+    }, fuel_merkle::binary,
 };
 use fuel_vm::fuel_merkle::binary::root_calculator::MerkleRootCalculator;
 use itertools::Itertools;
-use tracing::info;
 
 /// Loads state from the chain config into database
 pub fn maybe_initialize_state(
@@ -94,60 +85,33 @@ pub fn maybe_initialize_state(
     Ok(())
 }
 
-fn save_genesis_progress(
-    cursor: usize,
-    key: GenesisRootCalculatorKey,
-    db: &mut Database,
-) -> anyhow::Result<()> {
-    original_database
-        .storage::<StateImportCursor>()
-        .insert(&(), &cursor)?;
-    original_database
-        .storage::<GenesisRootCalculator>()
-        .insert(&key, &coins_tree)?;
-
-    database_transaction.commit()
-}
-
 fn import_chain_state(
     config: &Config,
     original_database: &mut Database,
 ) -> anyhow::Result<()> {
     let block_height = config.chain_conf.block_height;
 
-    let (mut cursor, mut coins_tree, mut messages_tree, mut contracts_tree) =
-        resume_import(original_database)?;
+    // TODO: other threads should be killed if one encounters a failure
+    let coins_reader = config.get_coins_reader()?;
+    let handle = tokio::spawn(
+        async move { 
+        import_coin_configs(&original_database, coins_reader, block_height).unwrap()
+    });
 
-    let state_importer = config.state_importer.clone();
+    /*
+    let coins_reader = config.get_message_reader()?;
+    let handle = tokio::spawn(
+        async move { 
+        import_message_configs(&original_database, coins_reader, block_height).unwrap()
+    });
 
-    state_importer.try_for_each(|coin| {
-        let mut database_transaction = Transactional::transaction(original_database);
-        let database = database_transaction.as_mut();
-
-        let root = init_coin(database, coin?, cursor as u64, block_height)?;
-        coins_tree.push(root.as_slice());
-
-        save_genesis_progress(
-            cursor + 1,
-            GenesisRootCalculatorKey::Coins,
-            original_database,
-        )?
-    })?;
-
-    let message_importer = state_importer.messages();
-    message_importer.try_for_each(|message| {
-        let mut database_transaction = Transactional::transaction(original_database);
-        let database = database_transaction.as_mut();
-
-        let root = init_da_message(database, message)?;
-        messages_tree.push(root.as_slice());
-
-        save_genesis_progress(
-            cursor + 1,
-            GenesisRootCalculatorKey::Messages,
-            original_database,
-        )?
-    })?;
+    let coins_reader = config.get_contracts_reader()?;
+    let handle = tokio::spawn(
+        async move { 
+        import_contract_configs(&original_database, coins_reader, block_height).unwrap()
+    });
+    */
+    /*
 
     let contract_importer = message_importer.contracts();
     contract_importer.try_for_each(|message| {
@@ -181,30 +145,66 @@ fn import_chain_state(
                 )?
             }
         }
-    })?;
+    })?; */
 
     Ok(())
 }
 
 fn resume_import(
     mut database: &Database,
+    key: StateImportProgressKey,
 ) -> anyhow::Result<(
-    usize,
-    MerkleRootCalculator,
-    MerkleRootCalculator,
+    u64,
     MerkleRootCalculator,
 )> {
-    let cursor = *database
-        .storage::<StateImportCursor>()
-        .get(&())?
+    let (cursor, root_calculator) = *database
+        .storage::<StateImportProgress>()
+        .get(&key)?
         .unwrap_or_default();
 
-    Ok((
-        cursor,
-        MerkleRootCalculator::default(),
-        MerkleRootCalculator::default(),
-        MerkleRootCalculator::default(),
-    ))
+    Ok((cursor, root_calculator))
+}
+
+fn save_import_progress(
+    database: &mut Database,
+    key: StateImportProgressKey,
+    cursor: u64,
+    root_calculator: MerkleRootCalculator,
+) -> anyhow::Result<()> {
+    database
+        .storage::<StateImportProgress>()
+        .insert(&key, &(cursor, root_calculator))?;
+
+    database.commit()
+}
+
+fn import_coin_configs(mut database: &Database, coins_reader: File, block_height: BlockHeight) -> anyhow::Result<()> {
+    let (cursor, root_calculator) = resume_import(database, StateImportProgressKey::Coins)?;
+    let mut state_reader = StateReader::new(coins_reader, cursor)?;
+
+    while let batch = state_reader.read_batch::<CoinConfig>()? {
+        if batch.is_empty() {
+            break;
+        }
+
+        let mut database_transaction = Transactional::transaction(database);
+        let database = database_transaction.as_mut();
+
+        // TODO: set output_index
+        batch.iter().try_for_each(|coin| {
+            let root = init_coin(database, coin, cursor as u64, block_height)?;
+            root_calculator.push(root.as_slice());
+    
+            save_import_progress(
+                database,
+                StateImportProgressKey::Coins,
+                cursor + 1,  // TODO: advance by # bytes read
+                root_calculator,
+            )
+        })?;
+    }
+
+    Ok(())
 }
 
 fn commit_genesis_block(
@@ -271,7 +271,7 @@ fn commit_genesis_block(
 
 fn init_coin(
     db: &mut Database,
-    coin: CoinConfig,
+    coin: &CoinConfig,
     output_index: u64,
     height: BlockHeight,
 ) -> anyhow::Result<MerkleRoot> {

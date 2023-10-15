@@ -143,30 +143,21 @@ impl Mappable for ContractsStateMerkleMetadata {
     type OwnedValue = Self::Value;
 }
 
-/// The cursor that marks the progress of the resumable state import process
-pub struct StateImportCursor;
-
-impl Mappable for StateImportCursor {
-    type Key = ();
-    type OwnedKey = Self::Key;
-    type Value = usize;
-    type OwnedValue = Self::Value;
-}
-
 #[derive(Clone)]
-pub enum GenesisRootCalculatorKey {
+pub enum StateImportProgressKey {
     Coins,
     Messages,
     Contracts,
 }
 
-/// The table for the coin merkle root computation
-pub struct GenesisRootCalculator;
+/// The table for the coin merkle root computation and the cursor
+/// which marks the progress of the resumable state import process
+pub struct StateImportProgress;
 
-impl Mappable for GenesisRootCalculator {
-    type Key = GenesisRootCalculatorKey;
+impl Mappable for StateImportProgress {
+    type Key = StateImportProgressKey;
     type OwnedKey = Self::Key;
-    type Value = MerkleRootCalculator;
+    type Value = (u64, MerkleRootCalculator);
     type OwnedValue = Self::Value;
 }
 
@@ -224,15 +215,9 @@ impl DatabaseColumn for ContractsStateMerkleMetadata {
     }
 }
 
-impl DatabaseColumn for StateImportCursor {
+impl DatabaseColumn for StateImportProgress {
     fn column() -> Column {
-        Column::StateImportCursor
-    }
-}
-
-impl DatabaseColumn for GenesisRootCalculator {
-    fn column() -> Column {
-        Column::GenesisRootCalculator
+        Column::StateImportProgress
     }
 }
 

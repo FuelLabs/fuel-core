@@ -14,7 +14,6 @@ use tracing::warn;
 
 pub use config::{
     Config,
-    DbType,
     VMConfig,
 };
 pub use fuel_core_services::Service as ServiceTrait;
@@ -83,7 +82,7 @@ impl FuelService {
     /// Creates and starts fuel node instance from service config
     pub async fn new_node(config: Config) -> anyhow::Result<Self> {
         // initialize database
-        let database = Database::from_config(&config.database_config);
+        let database = Database::from_config(&config.database_config)?;
 
         Self::from_database(database, config).await
     }

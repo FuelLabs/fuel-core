@@ -6,6 +6,7 @@ use crate::{
         WriteOperation,
     },
 };
+use clap::ValueEnum;
 use fuel_core_chain_config::{
     ChainConfigDb,
     CoinConfig,
@@ -26,6 +27,8 @@ use serde::{
     de::DeserializeOwned,
     Serialize,
 };
+use strum_macros::{Display, EnumVariantNames, EnumString};
+use tracing::warn;
 use std::{
     fmt::{
         self,
@@ -83,6 +86,9 @@ pub enum DbType {
     RocksDb,
 }
 
+#[derive(
+    Clone, Debug, Eq, PartialEq,
+)]
 pub struct DatabaseConfig {
     pub database_path: PathBuf,
     pub database_type: DbType,
@@ -148,10 +154,8 @@ pub enum Column {
     ContractsStateMerkleData = 23,
     /// See [`ContractsStateMerkleMetadata`](storage::ContractsStateMerkleMetadata)
     ContractsStateMerkleMetadata = 24,
-    /// See [`StateImportCursor`](storage::StateImportCursor)
-    StateImportCursor = 25,
-    /// See [`GenesisRootCalculator`](storage::GenesisRootCalculator)
-    GenesisRootCalculator = 26,
+    /// See [`StateImportProgress`](storage::StateImportProgress)
+    StateImportProgress = 25,
 }
 
 impl Column {
@@ -211,7 +215,7 @@ impl Database {
         }
     }
 
-    pub fn from_config(config: &DatabaseConfig) -> Self {
+    pub fn from_config(config: &DatabaseConfig) -> DatabaseResult<Self> {
         match config.database_type {
             #[cfg(feature = "rocksdb")]
             DbType::RocksDb => {
@@ -220,12 +224,12 @@ impl Database {
                     warn!(
                         "No RocksDB path configured, initializing database with a tmp directory"
                     );
-                    Database::default()
+                    Ok(Database::default())
                 } else {
-                    Database::open(&config.database_path, config.max_database_cache_size)?
+                    Database::open(&config.database_path, config.max_database_cache_size)
                 }
             }
-            DbType::InMemory => Database::in_memory(),
+            DbType::InMemory => Ok(Database::in_memory()),
             #[cfg(not(feature = "rocksdb"))]
             _ => Database::in_memory(),
         }

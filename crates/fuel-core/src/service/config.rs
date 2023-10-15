@@ -1,4 +1,3 @@
-use clap::ValueEnum;
 use fuel_core_chain_config::{
     default_consensus_dev_key,
     ChainConfig,
@@ -14,13 +13,8 @@ use std::{
         Ipv4Addr,
         SocketAddr,
     },
-    path::PathBuf,
-    time::Duration,
-};
-use strum_macros::{
-    Display,
-    EnumString,
-    EnumVariantNames,
+    io::Read,
+    time::Duration, path::PathBuf,
 };
 
 #[cfg(feature = "p2p")]
@@ -34,14 +28,14 @@ use fuel_core_relayer::Config as RelayerConfig;
 
 pub use fuel_core_poa::Trigger;
 
-use crate::database::DatabaseConfig;
+use crate::database::{DatabaseConfig, DbType};
 
 #[derive(Clone, Debug)]
 pub struct Config {
     pub addr: SocketAddr,
     pub database_config: DatabaseConfig,
     pub chain_conf: ChainConfig,
-    pub state_importer: StateImporter<CoinConfig>,
+    pub state_conf_path: PathBuf,
     /// When `true`:
     /// - Enables manual block production.
     /// - Enables debugger endpoint.
@@ -94,7 +88,7 @@ impl Config {
             database_config,
             debug: true,
             chain_conf: chain_conf.clone(),
-            state_importer,
+            state_conf_path,
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,
@@ -121,6 +115,10 @@ impl Config {
             time_until_synced: Duration::ZERO,
             query_log_threshold_time: Duration::from_secs(2),
         }
+    }
+
+    pub fn get_coins_reader<T: Read>(&self) -> anyhow::Result<T> {
+        todo!()
     }
 
     // TODO: Rework our configs system to avoid nesting of the same configs.
