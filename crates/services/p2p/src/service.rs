@@ -201,8 +201,8 @@ where
                 should_continue = true;
                 match next_service_request {
                     Some(TaskRequest::BroadcastTransaction(transaction)) => {
-                        let broadcast = GossipsubBroadcastRequest::NewTx(transaction);
                         let tx_id = transaction.id(&self.chain_id);
+                        let broadcast = GossipsubBroadcastRequest::NewTx(transaction);
                         let result = self.p2p_service.publish_message(broadcast);
                         if let Err(e) = result {
                             tracing::error!("Got an error during transaction {} broadcasting {}", tx_id, e);
