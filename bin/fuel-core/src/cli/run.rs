@@ -194,6 +194,10 @@ pub struct Command {
     /// Time to wait after submitting a query before debug info will be logged about query.
     #[clap(long = "query_log_threshold_time", default_value = "2s", env)]
     pub query_log_threshold_time: humantime::Duration,
+
+    /// Timeout before drop the request.
+    #[clap(long = "api-request-timeout", default_value = "30m", env)]
+    pub api_request_timeout: humantime::Duration,
 }
 
 impl Command {
@@ -230,6 +234,7 @@ impl Command {
             min_connected_reserved_peers,
             time_until_synced,
             query_log_threshold_time,
+            api_request_timeout,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -286,6 +291,7 @@ impl Command {
 
         Ok(Config {
             addr,
+            api_request_timeout: api_request_timeout.into(),
             max_database_cache_size,
             database_path,
             database_type,

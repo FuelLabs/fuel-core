@@ -2,17 +2,21 @@ use std::{
     collections::HashMap,
     future::Future,
     pin::Pin,
+    time::Duration,
 };
 
 use super::*;
 use parking_lot::Mutex;
-use tokio::sync::{
-    mpsc::{
-        self,
-        error::TrySendError,
+use tokio::{
+    sync::{
+        mpsc::{
+            self,
+            error::TrySendError,
+        },
+        OwnedSemaphorePermit,
+        Semaphore,
     },
-    OwnedSemaphorePermit,
-    Semaphore,
+    time::Instant,
 };
 use tokio_stream::{
     wrappers::ReceiverStream,
@@ -40,6 +44,8 @@ pub struct UpdateSender {
     senders: Arc<Mutex<SenderMap<Permit, Tx>>>,
     /// Semaphore used to limit the number of concurrent subscribers.
     permits: GetPermit,
+    /// TTL for senders
+    ttl: Duration,
 }
 
 /// Error returned when a transaction status update cannot be sent.
@@ -78,6 +84,8 @@ struct Sender<P = OwnedSemaphorePermit, Tx = mpsc::Sender<TxStatusMessage>> {
     stream: TxUpdateStream,
     /// The sending end of the subscriber channel.
     tx: Tx,
+    /// time that this sender was created
+    created: Instant,
 }
 
 /// A trait for sending transaction status updates.
@@ -205,46 +213,27 @@ impl SendStatus for mpsc::Sender<TxStatusMessage> {
 
 impl UpdateSender {
     /// Create a new UpdateSender with a specified capacity for the semaphore
-    pub fn new(capacity: usize) -> UpdateSender {
+    pub fn new(capacity: usize, ttl: Duration) -> UpdateSender {
         UpdateSender {
             senders: Default::default(),
             permits: Arc::new(Semaphore::new(capacity)),
+            ttl,
         }
     }
 
     /// Try to subscribe for updates, returns a TxStatusStream if successful
-    #[cfg(test)]
     pub fn try_subscribe<C>(&self, tx_id: Bytes32) -> Option<TxStatusStream>
     where
         C: CreateChannel,
     {
         // Remove closed senders from the list
-        remove_closed(&mut self.senders.lock());
+        remove_closed_and_expired(&mut self.senders.lock(), self.ttl);
 
         // Try to acquire a permit from the semaphore
         let permit = Arc::clone(&self.permits).try_acquire()?;
 
         // Call subscribe_inner with the acquired permit
         Some(self.subscribe_inner::<C>(tx_id, permit))
-    }
-
-    /// Asynchronously await a permit to subscribe
-    /// returns a TxStatusStream on completion
-    pub async fn subscribe<C>(&self, tx_id: Bytes32) -> TxStatusStream
-    where
-        C: CreateChannel,
-    {
-        // Remove closed senders from the list.
-        // Careful not to hold the lock while awaiting.
-        {
-            remove_closed(&mut self.senders.lock());
-        }
-
-        // Acquire a permit from the semaphore asynchronously.
-        let permit = Arc::clone(&self.permits).acquire().await;
-
-        // Call subscribe_inner with the acquired permit.
-        self.subscribe_inner::<C>(tx_id, permit)
     }
 
     /// Subscribe to updates with the given transaction id and a permit.
@@ -256,7 +245,7 @@ impl UpdateSender {
         let mut senders = self.senders.lock();
 
         // Remove closed senders from the list
-        remove_closed(&mut senders);
+        remove_closed_and_expired(&mut senders, self.ttl);
 
         // Call the subscribe function with the tx_id, senders, and permit
         subscribe::<_, C>(tx_id, &mut (*senders), permit)
@@ -268,7 +257,7 @@ impl UpdateSender {
         let mut senders = self.senders.lock();
 
         // Remove closed senders from the list
-        remove_closed(&mut senders);
+        remove_closed_and_expired(&mut senders, self.ttl);
 
         // Initialize a flag to check if there are no senders
         // left for a given tx_id.
@@ -308,6 +297,7 @@ where
         _permit: permit,
         stream: TxUpdateStream::new(),
         tx,
+        created: Instant::now(),
     });
 
     // Return the receiver part of the channel
@@ -315,13 +305,13 @@ where
 }
 
 // Remove closed senders from the senders map
-fn remove_closed<P, Tx>(senders: &mut SenderMap<P, Tx>)
+fn remove_closed_and_expired<P, Tx>(senders: &mut SenderMap<P, Tx>, ttl: Duration)
 where
     Tx: SendStatus,
 {
     // Iterate over the senders map, retaining only the senders that are not closed
     senders.retain(|_, senders| {
-        senders.retain(|sender| !sender.is_closed());
+        senders.retain(|sender| !sender.is_closed() && sender.created.elapsed() < ttl);
         // Continue retaining if the senders list is not empty
         !senders.is_empty()
     });
@@ -349,6 +339,7 @@ impl Clone for UpdateSender {
         Self {
             senders: self.senders.clone(),
             permits: self.permits.clone(),
+            ttl: self.ttl,
         }
     }
 }

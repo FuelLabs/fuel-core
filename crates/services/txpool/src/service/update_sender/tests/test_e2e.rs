@@ -74,7 +74,7 @@ fn test_update_sender_inner(ops: Vec<Op>) {
     }
 
     // Initialize test variables
-    let update = UpdateSender::new(CAPACITY);
+    let update = UpdateSender::new(CAPACITY, Duration::from_secs(5));
     let mut receivers: Vec<TxStatusStream> = Vec::new();
     let mut model_receivers: Vec<(u8, usize, [Option<TxStatusMessage>; 2])> = Vec::new();
     let mut sender_id = 0usize;
