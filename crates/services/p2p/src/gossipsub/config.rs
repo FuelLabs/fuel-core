@@ -175,7 +175,7 @@ fn initialize_peer_score_thresholds() -> PeerScoreThresholds {
 
 /// Given a `P2pConfig` containing `GossipsubConfig` creates a Gossipsub Behaviour
 pub(crate) fn build_gossipsub_behaviour(p2p_config: &Config) -> Gossipsub {
-    if p2p_config.metrics {
+    let mut gossipsub = if p2p_config.metrics {
         // Move to Metrics related feature flag
         let mut p2p_registry = Registry::default();
 
@@ -208,7 +208,12 @@ pub(crate) fn build_gossipsub_behaviour(p2p_config: &Config) -> Gossipsub {
         initialize_gossipsub(&mut gossipsub, p2p_config);
 
         gossipsub
+    };
+    for peer_id in crate::config::peer_ids_set_from(&p2p_config.reserved_nodes) {
+        gossipsub.add_explicit_peer(&peer_id);
     }
+
+    gossipsub
 }
 
 fn initialize_gossipsub(gossipsub: &mut Gossipsub, p2p_config: &Config) {
