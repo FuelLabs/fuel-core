@@ -208,6 +208,7 @@ pub fn init_sub_services(
         Box::new(producer_adapter),
         Box::new(poa_adapter),
         config.query_log_threshold_time,
+        config.api_request_timeout,
     )?;
 
     let shared = SharedState {

@@ -117,6 +117,7 @@ fn test_send_inner(
     let update = UpdateSender {
         senders: Arc::new(Mutex::new(box_senders(senders))),
         permits: Arc::new(()),
+        ttl: Duration::from_secs(5),
     };
     update.send(msg.clone());
 
