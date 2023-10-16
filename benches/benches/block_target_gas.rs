@@ -500,6 +500,20 @@ fn run_alu(group: &mut BenchmarkGroup<WallTime>) {
     );
 
     run(
+        "mldv opcode",
+        group,
+        [
+            op::movi(0x11, 100000),
+            op::movi(0x12, 3),
+            op::movi(0x13, 2),
+            op::mldv(0x10, 0x11, 0x12, 0x13),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
         "noop opcode",
         group,
         [op::noop(), op::jmpb(RegId::ZERO, 0)].to_vec(),
