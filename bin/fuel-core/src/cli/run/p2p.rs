@@ -117,7 +117,7 @@ pub struct P2PArgs {
     #[clap(long = "connection-idle-timeout", default_value = "120", env)]
     pub connection_idle_timeout: u64,
 
-    /// Choose how often to recieve PeerInfo from other nodes
+    /// Choose how often to receive PeerInfo from other nodes
     #[clap(long = "info-interval", default_value = "3", env)]
     pub info_interval: u64,
 

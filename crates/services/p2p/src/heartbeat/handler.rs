@@ -218,7 +218,7 @@ impl ConnectionHandler for HeartbeatHandler {
                     match outbound_block_height.poll_unpin(cx) {
                         Poll::Pending => {
                             if self.timer.poll_unpin(cx).is_ready() {
-                                // Time for successfull send expired!
+                                // Time for successful send expired!
                                 self.failure_count += 1;
                                 debug!(target: "fuel-libp2p", "Sending Heartbeat timed out, this is {} time it failed with this connection", self.failure_count);
                             } else {
