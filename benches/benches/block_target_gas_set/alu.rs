@@ -1,4 +1,4 @@
-use super::*;
+use crate::*;
 
 pub fn run_alu(group: &mut BenchmarkGroup<WallTime>) {
     run(

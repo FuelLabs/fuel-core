@@ -1,4 +1,4 @@
-use alu::run_alu;
+use block_target_gas_set::alu::run_alu;
 use criterion::{
     criterion_group,
     criterion_main,
@@ -39,10 +39,9 @@ use fuel_core_types::{
     fuel_types::AssetId,
 };
 
-#[path = "../utils.rs"]
 mod utils;
 
-mod alu;
+mod block_target_gas_set;
 
 use utils::{
     make_u128,
