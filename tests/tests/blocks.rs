@@ -213,7 +213,7 @@ async fn produce_block_bad_start_time() {
     // produce block with current timestamp
     let _ = client.produce_blocks(1, None).await.unwrap();
 
-    // try producing block with an ealier timestamp
+    // try producing block with an earlier timestamp
     let err = client
         .produce_blocks(1, Some(100u64))
         .await
