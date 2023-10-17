@@ -17,6 +17,7 @@ use fuel_core::{
     state::rocks_db::RocksDb,
 };
 use fuel_core_benches::*;
+use fuel_core_storage::ContractsAssetsStorage;
 use fuel_core_types::{
     fuel_asm::{
         op,
