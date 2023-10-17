@@ -14,10 +14,7 @@ use fuel_core_types::fuel_asm::wideint::{
     MulArgs,
 };
 
-#[path = "../utils.rs"]
-mod utils;
-
-use utils::{
+use super::utils::{
     make_u128,
     make_u256,
 };

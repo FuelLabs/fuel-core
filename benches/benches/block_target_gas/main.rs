@@ -39,10 +39,9 @@ use fuel_core_types::{
     fuel_types::AssetId,
 };
 
-#[path = "utils.rs"]
+#[path = "../utils.rs"]
 mod utils;
 
-#[path = "block_target_gas/alu.rs"]
 mod alu;
 
 use utils::{
@@ -93,17 +92,17 @@ fn run(
                 script.clone().into_iter().collect(),
                 script_data.clone(),
             )
-            .gas_limit(TARGET_BLOCK_GAS_LIMIT - BASE)
-            .gas_price(1)
-            .add_unsigned_coin_input(
-                SecretKey::random(&mut rng),
-                rng.gen(),
-                u64::MAX,
-                AssetId::BASE,
-                Default::default(),
-                Default::default(),
-            )
-            .finalize_as_transaction();
+                .gas_limit(TARGET_BLOCK_GAS_LIMIT - BASE)
+                .gas_price(1)
+                .add_unsigned_coin_input(
+                    SecretKey::random(&mut rng),
+                    rng.gen(),
+                    u64::MAX,
+                    AssetId::BASE,
+                    Default::default(),
+                    Default::default(),
+                )
+                .finalize_as_transaction();
             async move {
                 let tx_id = tx.id(&config.chain_conf.consensus_parameters.chain_id);
 
