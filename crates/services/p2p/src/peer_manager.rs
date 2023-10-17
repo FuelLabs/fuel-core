@@ -8,10 +8,7 @@ use fuel_core_types::{
         MIN_APP_SCORE,
     },
 };
-use libp2p::{
-    Multiaddr,
-    PeerId,
-};
+use libp2p::PeerId;
 use rand::seq::IteratorRandom;
 use std::{
     collections::{
@@ -41,7 +38,6 @@ const MIN_GOSSIPSUB_SCORE_BEFORE_BAN: AppScore = GRAYLIST_THRESHOLD;
 // Info about a single Peer that we're connected to
 #[derive(Debug, Clone)]
 pub struct PeerInfo {
-    pub peer_addresses: HashSet<Multiaddr>,
     pub client_version: Option<String>,
     pub heartbeat_data: HeartbeatData,
     pub score: AppScore,
@@ -50,7 +46,6 @@ pub struct PeerInfo {
 impl PeerInfo {
     pub fn new(heartbeat_avg_window: u32) -> Self {
         Self {
-            peer_addresses: HashSet::new(),
             client_version: None,
             heartbeat_data: HeartbeatData::new(heartbeat_avg_window),
             score: DEFAULT_APP_SCORE,
@@ -127,27 +122,18 @@ impl PeerManager {
     pub fn handle_peer_connected(
         &mut self,
         peer_id: &PeerId,
-        addresses: Vec<Multiaddr>,
         initial_connection: bool,
     ) -> bool {
         if initial_connection {
-            self.handle_initial_connection(peer_id, addresses)
+            self.handle_initial_connection(peer_id)
         } else {
-            let peers = self.get_assigned_peer_table_mut(peer_id);
-            insert_peer_addresses(peers, peer_id, addresses);
             false
         }
     }
 
-    pub fn handle_peer_identified(
-        &mut self,
-        peer_id: &PeerId,
-        addresses: Vec<Multiaddr>,
-        agent_version: String,
-    ) {
+    pub fn handle_peer_identified(&mut self, peer_id: &PeerId, agent_version: String) {
         let peers = self.get_assigned_peer_table_mut(peer_id);
         insert_client_version(peers, peer_id, agent_version);
-        insert_peer_addresses(peers, peer_id, addresses);
     }
 
     pub fn batch_update_score_with_decay(&mut self) {
@@ -254,11 +240,7 @@ impl PeerManager {
     }
 
     /// Handles the first connnection established with a Peer    
-    fn handle_initial_connection(
-        &mut self,
-        peer_id: &PeerId,
-        addresses: Vec<Multiaddr>,
-    ) -> bool {
+    fn handle_initial_connection(&mut self, peer_id: &PeerId) -> bool {
         const HEARTBEAT_AVG_WINDOW: u32 = 10;
 
         // if the connected Peer is not from the reserved peers
@@ -287,7 +269,6 @@ impl PeerManager {
         }
 
         let peers = self.get_assigned_peer_table_mut(peer_id);
-        insert_peer_addresses(peers, peer_id, addresses);
 
         false
     }
@@ -332,20 +313,6 @@ impl ConnectionState {
 
     fn deny_new_peers(&mut self) {
         self.peers_allowed = false;
-    }
-}
-
-fn insert_peer_addresses(
-    peers: &mut HashMap<PeerId, PeerInfo>,
-    peer_id: &PeerId,
-    addresses: Vec<Multiaddr>,
-) {
-    if let Some(peer) = peers.get_mut(peer_id) {
-        for address in addresses {
-            peer.peer_addresses.insert(address);
-        }
-    } else {
-        log_missing_peer(peer_id);
     }
 }
 

@@ -63,7 +63,6 @@ const REPUTATION_DECAY_INTERVAL_IN_SECONDS: u64 = 1;
 pub enum PeerReportEvent {
     PeerConnected {
         peer_id: PeerId,
-        addresses: Vec<Multiaddr>,
         initial_connection: bool,
     },
     PeerDisconnected {
@@ -152,11 +151,9 @@ impl NetworkBehaviour for PeerReportBehaviour {
                         connection_established,
                     ));
 
-                let addresses = self.addresses_of_peer(&peer_id);
                 self.pending_events
                     .push_back(PeerReportEvent::PeerConnected {
                         peer_id,
-                        addresses,
                         initial_connection: other_established == 0,
                     });
             }

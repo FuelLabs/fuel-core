@@ -505,11 +505,8 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                             p2p_metrics().unique_peers.inc();
                         }
 
-                        self.peer_manager.handle_peer_identified(
-                            &peer_id,
-                            addresses.clone(),
-                            agent_version,
-                        );
+                        self.peer_manager
+                            .handle_peer_identified(&peer_id, agent_version);
 
                         self.swarm
                             .behaviour_mut()
@@ -545,14 +542,12 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                     }
                     PeerReportEvent::PeerConnected {
                         peer_id,
-                        addresses,
                         initial_connection,
                     } => {
-                        if self.peer_manager.handle_peer_connected(
-                            &peer_id,
-                            addresses,
-                            initial_connection,
-                        ) {
+                        if self
+                            .peer_manager
+                            .handle_peer_connected(&peer_id, initial_connection)
+                        {
                             let _ = self.swarm.disconnect_peer_id(peer_id);
                         } else if initial_connection {
                             return Some(FuelP2PEvent::PeerConnected(peer_id))
@@ -1435,9 +1430,9 @@ mod tests {
             tokio::select! {
                 node_a_event = node_a.next_event() => {
                     if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                        if let Some(PeerInfo { peer_addresses, .. }) = node_a.peer_manager.get_peer_info(&peer_id) {
+                        if let Some(_) = node_a.peer_manager.get_peer_info(&peer_id) {
                             // verifies that we've got at least a single peer address to send message to
-                            if !peer_addresses.is_empty() && !message_sent  {
+                            if !message_sent  {
                                 message_sent = true;
                                 let broadcast_request = broadcast_request.clone();
                                 node_a.publish_message(broadcast_request).unwrap();
@@ -1562,9 +1557,9 @@ mod tests {
                 }
                 node_a_event = node_a.next_event() => {
                     if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                        if let Some(PeerInfo { peer_addresses, .. }) = node_a.peer_manager.get_peer_info(&peer_id) {
+                        if let Some(_) = node_a.peer_manager.get_peer_info(&peer_id) {
                             // 0. verifies that we've got at least a single peer address to request message from
-                            if !peer_addresses.is_empty() && !request_sent {
+                            if !request_sent {
                                 request_sent = true;
 
                                 match request_msg.clone() {
@@ -1706,9 +1701,9 @@ mod tests {
             tokio::select! {
                 node_a_event = node_a.next_event() => {
                     if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                        if let Some(PeerInfo { peer_addresses, .. }) = node_a.peer_manager.get_peer_info(&peer_id) {
+                        if let Some(_) = node_a.peer_manager.get_peer_info(&peer_id) {
                             // 0. verifies that we've got at least a single peer address to request message from
-                            if !peer_addresses.is_empty() && !request_sent {
+                            if !request_sent {
                                 request_sent = true;
 
                                 // 1. Simulating Oneshot channel from the NetworkOrchestrator
