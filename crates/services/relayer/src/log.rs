@@ -68,7 +68,8 @@ impl TryFrom<&Log> for EthEventLog {
                     data: log.data.to_vec(),
                 };
 
-                let message = abi::bridge::MessageSentFilter::decode_log(&raw_log)?;
+                let message = abi::bridge::MessageSentFilter::decode_log(&raw_log)
+                    .map_err(anyhow::Error::msg)?;
                 let amount = message.amount;
                 let data = message.data.to_vec();
                 let mut nonce = Nonce::zeroed();

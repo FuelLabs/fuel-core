@@ -9,7 +9,6 @@
 #![deny(warnings)]
 
 use fuel_core_types::services::executor::Error as ExecutorError;
-use std::io::ErrorKind;
 
 pub use fuel_vm_private::{
     fuel_storage::*,
@@ -33,28 +32,28 @@ pub use fuel_vm_private::storage::{
 /// The storage result alias.
 pub type Result<T> = core::result::Result<T, Error>;
 
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug, derive_more::Display, derive_more::From)]
 #[non_exhaustive]
 /// Error occurring during interaction with storage
 pub enum Error {
     /// Error occurred during serialization or deserialization of the entity.
-    #[error("error performing serialization or deserialization")]
+    #[display(fmt = "error performing serialization or deserialization")]
     Codec,
     /// Error occurred during interaction with database.
-    #[error("error occurred in the underlying datastore `{0}`")]
-    DatabaseError(Box<dyn std::error::Error + Send + Sync>),
+    #[display(fmt = "error occurred in the underlying datastore `{_0:?}`")]
+    DatabaseError(Box<dyn core::fmt::Debug + Send + Sync>),
     /// This error should be created with `not_found` macro.
-    #[error("resource of type `{0}` was not found at the: {1}")]
+    #[display(fmt = "resource of type `{_0}` was not found at the: {_1}")]
     NotFound(&'static str, &'static str),
     // TODO: Do we need this type at all?
     /// Unknown or not expected(by architecture) error.
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
+    #[from]
+    Other(anyhow::Error),
 }
 
-impl From<Error> for std::io::Error {
-    fn from(e: Error) -> Self {
-        std::io::Error::new(ErrorKind::Other, e)
+impl From<Error> for anyhow::Error {
+    fn from(error: Error) -> Self {
+        anyhow::Error::msg(error)
     }
 }
 

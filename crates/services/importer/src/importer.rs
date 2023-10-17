@@ -49,39 +49,47 @@ use tokio::sync::{
 #[cfg(test)]
 pub mod test;
 
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
-    #[error("The commit is already in the progress: {0}.")]
+    #[display(fmt = "The commit is already in the progress: {_0}.")]
     SemaphoreError(TryAcquireError),
-    #[error("The wrong state of database during insertion of the genesis block.")]
-    InvalidUnderlyingDatabaseGenesisState,
-    #[error(
-        "The wrong state of database after execution of the block.\
-        The actual height is {1}, when the next expected height is {0}."
+    #[display(
+        fmt = "The wrong state of database during insertion of the genesis block."
     )]
+    InvalidUnderlyingDatabaseGenesisState,
+    #[display(fmt = "The wrong state of database after execution of the block.\
+        The actual height is {_1}, when the next expected height is {_0}.")]
     InvalidDatabaseStateAfterExecution(BlockHeight, BlockHeight),
-    #[error("Got overflow during increasing the height.")]
+    #[display(fmt = "Got overflow during increasing the height.")]
     Overflow,
-    #[error("The non-generic block can't have zero height.")]
+    #[display(fmt = "The non-generic block can't have zero height.")]
     ZeroNonGenericHeight,
-    #[error("The actual height is {1}, when the next expected height is {0}.")]
+    #[display(fmt = "The actual height is {_1}, when the next expected height is {_0}.")]
     IncorrectBlockHeight(BlockHeight, BlockHeight),
-    #[error(
-        "Got another block id after validation of the block. Expected {0} != Actual {1}"
+    #[display(
+        fmt = "Got another block id after validation of the block. Expected {_0} != Actual {_1}"
     )]
     BlockIdMismatch(BlockId, BlockId),
-    #[error("Some of the block fields are not valid: {0}.")]
+    #[display(fmt = "Some of the block fields are not valid: {_0}.")]
     FailedVerification(anyhow::Error),
-    #[error("The execution of the block failed: {0}.")]
+    #[display(fmt = "The execution of the block failed: {_0}.")]
     FailedExecution(executor::Error),
-    #[error("It is not possible to skip transactions during importing of the block.")]
+    #[display(
+        fmt = "It is not possible to skip transactions during importing of the block."
+    )]
     SkippedTransactionsNotEmpty,
-    #[error("It is not possible to execute the genesis block.")]
+    #[display(fmt = "It is not possible to execute the genesis block.")]
     ExecuteGenesis,
-    #[error("The database already contains the data at the height {0}.")]
+    #[display(fmt = "The database already contains the data at the height {_0}.")]
     NotUnique(BlockHeight),
-    #[error(transparent)]
-    StorageError(#[from] StorageError),
+    #[from]
+    StorageError(StorageError),
+}
+
+impl From<Error> for anyhow::Error {
+    fn from(error: Error) -> Self {
+        anyhow::Error::msg(error)
+    }
 }
 
 #[cfg(test)]

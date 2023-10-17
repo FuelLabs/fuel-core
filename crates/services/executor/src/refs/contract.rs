@@ -1,3 +1,4 @@
+use core::fmt;
 use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_storage::{
     not_found,
@@ -23,10 +24,7 @@ use fuel_core_types::{
         Result as ExecutorResult,
     },
 };
-use std::{
-    borrow::Cow,
-    error::Error as StdError,
-};
+use std::borrow::Cow;
 
 /// The wrapper around `contract_id` to simplify work with `Contract` in the database.
 pub struct ContractRef<Database> {
@@ -116,12 +114,13 @@ pub trait ContractStorageTrait:
     + MerkleRootStorage<ContractId, ContractsState, Error = Self::InnerError>
     + MerkleRootStorage<ContractId, ContractsAssets, Error = Self::InnerError>
 {
-    type InnerError: StdError + Send + Sync + 'static;
+    type InnerError: fmt::Debug + fmt::Display + Send + Sync + 'static;
 }
 
 impl<'a, Database> GenesisCommitment for ContractRef<&'a mut Database>
 where
     Database: ContractStorageTrait,
+    anyhow::Error: From<Database::InnerError>,
 {
     fn root(&self) -> anyhow::Result<MerkleRoot> {
         let contract_id = *self.contract_id();
