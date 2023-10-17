@@ -2,6 +2,7 @@ use bech32::{
     ToBase32,
     Variant::Bech32m,
 };
+use core::str::FromStr;
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     fuel_crypto::Hasher,
@@ -19,10 +20,6 @@ use fuel_core_types::{
     fuel_vm::SecretKey,
 };
 use itertools::Itertools;
-use rand::{
-    rngs::StdRng,
-    SeedableRng,
-};
 use serde::{
     Deserialize,
     Serialize,
@@ -31,10 +28,10 @@ use serde_with::{
     serde_as,
     skip_serializing_none,
 };
+#[cfg(feature = "std")]
 use std::{
     io::ErrorKind,
     path::PathBuf,
-    str::FromStr,
 };
 
 use crate::{
@@ -83,10 +80,49 @@ impl ChainConfig {
     pub fn local_testnet() -> Self {
         // endow some preset accounts with an initial balance
         tracing::info!("Initial Accounts");
-        let mut rng = StdRng::seed_from_u64(10);
+        let secrets = [
+            "0xde97d8624a438121b86a1956544bd72ed68cd69f2c99555b08b1e8c51ffd511c",
+            "0x37fa81c84ccd547c30c176b118d5cb892bdb113e8e80141f266519422ef9eefd",
+            "0x862512a2363db2b3a375c0d4bbbd27172180d89f23f2e259bac850ab02619301",
+            "0x976e5c3fa620092c718d852ca703b6da9e3075b9f2ecb8ed42d9f746bf26aafb",
+            "0x7f8a325504e7315eda997db7861c9447f5c3eff26333b20180475d94443a10c6",
+        ];
+        let initial_coins = secrets
+            .into_iter()
+            .map(|secret| {
+                let secret = SecretKey::from_str(secret).expect("Expected valid secret");
+                let address = Address::from(*secret.public_key().hash());
+                let bech32_data = Bytes32::new(*address).to_base32();
+                let bech32_encoding =
+                    bech32::encode(FUEL_BECH32_HRP, bech32_data, Bech32m).unwrap();
+                tracing::info!(
+                    "PrivateKey({:#x}), Address({:#x} [bech32: {}]), Balance({})",
+                    secret,
+                    address,
+                    bech32_encoding,
+                    TESTNET_INITIAL_BALANCE
+                );
+                Self::initial_coin(secret, TESTNET_INITIAL_BALANCE, None)
+            })
+            .collect_vec();
+
+        Self {
+            chain_name: LOCAL_TESTNET.to_string(),
+            initial_state: Some(StateConfig {
+                coins: Some(initial_coins),
+                ..StateConfig::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[cfg(feature = "random")]
+    pub fn random_testnet() -> Self {
+        tracing::info!("Initial Accounts");
+        let mut rng = rand::thread_rng();
         let initial_coins = (0..5)
             .map(|_| {
-                let secret = fuel_core_types::fuel_crypto::SecretKey::random(&mut rng);
+                let secret = SecretKey::random(&mut rng);
                 let address = Address::from(*secret.public_key().hash());
                 let bech32_data = Bytes32::new(*address).to_base32();
                 let bech32_encoding =
@@ -132,6 +168,7 @@ impl ChainConfig {
     }
 }
 
+#[cfg(feature = "std")]
 impl FromStr for ChainConfig {
     type Err = std::io::Error;
 
@@ -184,7 +221,7 @@ impl GenesisCommitment for ChainConfig {
 impl GenesisCommitment for ConsensusParameters {
     fn root(&self) -> anyhow::Result<MerkleRoot> {
         // TODO: Define hash algorithm for `ConsensusParameters`
-        let bytes = postcard::to_stdvec(&self)?;
+        let bytes = postcard::to_allocvec(&self).map_err(anyhow::Error::msg)?;
         let params_hash = Hasher::default().chain(bytes).finalize();
 
         Ok(params_hash.into())
@@ -194,7 +231,7 @@ impl GenesisCommitment for ConsensusParameters {
 impl GenesisCommitment for GasCosts {
     fn root(&self) -> anyhow::Result<MerkleRoot> {
         // TODO: Define hash algorithm for `GasCosts`
-        let bytes = postcard::to_stdvec(&self)?;
+        let bytes = postcard::to_allocvec(&self).map_err(anyhow::Error::msg)?;
         let hash = Hasher::default().chain(bytes).finalize();
 
         Ok(hash.into())
@@ -204,7 +241,7 @@ impl GenesisCommitment for GasCosts {
 impl GenesisCommitment for ConsensusConfig {
     fn root(&self) -> anyhow::Result<MerkleRoot> {
         // TODO: Define hash algorithm for `ConsensusConfig`
-        let bytes = postcard::to_stdvec(&self)?;
+        let bytes = postcard::to_allocvec(&self).map_err(anyhow::Error::msg)?;
         let hash = Hasher::default().chain(bytes).finalize();
 
         Ok(hash.into())

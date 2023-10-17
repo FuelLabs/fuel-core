@@ -304,7 +304,7 @@ impl<D> SharedState<D> {
     where
         D: RelayerDb + 'static,
     {
-        Ok(self.database.get_finalized_da_height()?)
+        self.database.get_finalized_da_height().map_err(Into::into)
     }
 }
 
@@ -322,7 +322,7 @@ where
                 Err(anyhow::anyhow!("The relayer got a stop signal"))
             },
             block = self.eth_node.get_block(ethers_core::types::BlockNumber::Finalized) => {
-                let block_number = block?
+                let block_number = block.map_err(anyhow::Error::msg)?
                     .and_then(|block| block.number)
                     .ok_or(anyhow::anyhow!("Block pending"))?
                     .as_u64();
