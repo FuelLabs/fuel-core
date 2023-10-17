@@ -114,25 +114,20 @@ pub trait ContractStorageTrait:
     + MerkleRootStorage<ContractId, ContractsState, Error = Self::InnerError>
     + MerkleRootStorage<ContractId, ContractsAssets, Error = Self::InnerError>
 {
-    type InnerError: Into<anyhow::Error>
-        + fmt::Debug
-        + fmt::Display
-        + Send
-        + Sync
-        + 'static;
+    type InnerError: fmt::Debug + fmt::Display + Send + Sync + 'static;
 }
 
 impl<'a, Database> GenesisCommitment for ContractRef<&'a mut Database>
 where
     Database: ContractStorageTrait,
+    anyhow::Error: From<Database::InnerError>,
 {
     fn root(&self) -> anyhow::Result<MerkleRoot> {
         let contract_id = *self.contract_id();
         let utxo = self
             .database()
             .storage::<ContractsLatestUtxo>()
-            .get(&contract_id)
-            .map_err(Into::into)?
+            .get(&contract_id)?
             .ok_or(not_found!(ContractsLatestUtxo))?
             .into_owned()
             .utxo_id;
@@ -140,14 +135,12 @@ where
         let state_root = self
             .database()
             .storage::<ContractsState>()
-            .root(&contract_id)
-            .map_err(Into::into)?;
+            .root(&contract_id)?;
 
         let balance_root = self
             .database()
             .storage::<ContractsAssets>()
-            .root(&contract_id)
-            .map_err(Into::into)?;
+            .root(&contract_id)?;
 
         let contract_hash = *Hasher::default()
             // `ContractId` already is based on contract's code and salt so we don't need it.

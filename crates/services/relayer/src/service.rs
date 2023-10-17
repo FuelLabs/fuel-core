@@ -263,7 +263,7 @@ impl<D> SharedState<D> {
     pub async fn await_synced(&self) -> anyhow::Result<()> {
         let mut rx = self.synced.clone();
         if rx.borrow_and_update().deref().is_none() {
-            rx.changed().await.map_err(anyhow::Error::msg)?;
+            rx.changed().await?;
         }
         Ok(())
     }
@@ -275,7 +275,7 @@ impl<D> SharedState<D> {
     ) -> anyhow::Result<()> {
         let mut rx = self.synced.clone();
         while rx.borrow_and_update().deref().map_or(true, |h| h < *height) {
-            rx.changed().await.map_err(anyhow::Error::msg)?;
+            rx.changed().await?;
         }
         Ok(())
     }
