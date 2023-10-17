@@ -1,3 +1,4 @@
+use block_target_gas_set::alu::run_alu;
 use criterion::{
     criterion_group,
     criterion_main,
@@ -13,10 +14,19 @@ use fuel_core::service::{
 };
 use rand::SeedableRng;
 
+use ethnum::U256;
 use fuel_core_benches::*;
 use fuel_core_types::{
     fuel_asm::{
         op,
+        wideint::{
+            CompareArgs,
+            CompareMode,
+            DivArgs,
+            MathArgs,
+            MathOp,
+            MulArgs,
+        },
         GTFArgs,
         Instruction,
         RegId,
@@ -27,6 +37,15 @@ use fuel_core_types::{
     },
     fuel_tx::UniqueIdentifier,
     fuel_types::AssetId,
+};
+
+mod utils;
+
+mod block_target_gas_set;
+
+use utils::{
+    make_u128,
+    make_u256,
 };
 
 // Use Jemalloc during benchmarks
@@ -72,17 +91,17 @@ fn run(
                 script.clone().into_iter().collect(),
                 script_data.clone(),
             )
-            .gas_limit(TARGET_BLOCK_GAS_LIMIT - BASE)
-            .gas_price(1)
-            .add_unsigned_coin_input(
-                SecretKey::random(&mut rng),
-                rng.gen(),
-                u64::MAX,
-                AssetId::BASE,
-                Default::default(),
-                Default::default(),
-            )
-            .finalize_as_transaction();
+                .gas_limit(TARGET_BLOCK_GAS_LIMIT - BASE)
+                .gas_price(1)
+                .add_unsigned_coin_input(
+                    SecretKey::random(&mut rng),
+                    rng.gen(),
+                    u64::MAX,
+                    AssetId::BASE,
+                    Default::default(),
+                    Default::default(),
+                )
+                .finalize_as_transaction();
             async move {
                 let tx_id = tx.id(&config.chain_conf.consensus_parameters.chain_id);
 
@@ -115,13 +134,6 @@ fn run(
 
 fn block_target_gas(c: &mut Criterion) {
     let mut group = c.benchmark_group("block target estimation");
-
-    run(
-        "Script with noop opcode and infinite loop",
-        &mut group,
-        [op::noop(), op::jmpb(RegId::ZERO, 0)].to_vec(),
-        vec![],
-    );
 
     run(
         "Script with meq opcode and infinite loop",
@@ -238,6 +250,8 @@ fn block_target_gas(c: &mut Criterion) {
     //     ]
     //     .to_vec(),
     // );
+
+    run_alu(&mut group);
 
     group.finish();
 }

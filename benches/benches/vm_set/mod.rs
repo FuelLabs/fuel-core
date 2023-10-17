@@ -6,6 +6,7 @@ pub mod mem;
 
 pub use super::run_group_ref;
 
+use super::utils;
 use core::iter::successors;
 
 fn generate_linear_costs() -> Vec<u32> {
