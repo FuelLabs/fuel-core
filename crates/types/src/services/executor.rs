@@ -242,62 +242,68 @@ impl ExecutionKind {
 }
 
 #[allow(missing_docs)]
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug, derive_more::Display, derive_more::From)]
 #[non_exhaustive]
 pub enum Error {
-    #[error("Transaction id was already used: {0:#x}")]
+    #[display(fmt = "Transaction id was already used: {_0:#x}")]
     TransactionIdCollision(Bytes32),
-    #[error("Too many transactions in the block")]
+    #[display(fmt = "Too many transactions in the block")]
     TooManyTransactions,
-    #[error("output already exists")]
+    #[display(fmt = "output already exists")]
     OutputAlreadyExists,
-    #[error("The computed fee caused an integer overflow")]
+    #[display(fmt = "The computed fee caused an integer overflow")]
     FeeOverflow,
-    #[error("The block is missing `Mint` transaction.")]
+    #[display(fmt = "The block is missing `Mint` transaction.")]
     MintMissing,
-    #[error("Found the second entry of the `Mint` transaction in the block.")]
+    #[display(fmt = "Found the second entry of the `Mint` transaction in the block.")]
     MintFoundSecondEntry,
-    #[error("The `Mint` transaction has an unexpected index.")]
+    #[display(fmt = "The `Mint` transaction has an unexpected index.")]
     MintHasUnexpectedIndex,
-    #[error("The last transaction in the block is not `Mint`.")]
+    #[display(fmt = "The last transaction in the block is not `Mint`.")]
     MintIsNotLastTransaction,
-    #[error("The `Mint` transaction mismatches expectations.")]
+    #[display(fmt = "The `Mint` transaction mismatches expectations.")]
     MintMismatch,
-    #[error("Can't increase the balance of the coinbase contract: {0}.")]
+    #[display(fmt = "Can't increase the balance of the coinbase contract: {0}.")]
     CoinbaseCannotIncreaseBalance(anyhow::Error),
-    #[error("Coinbase amount mismatches with expected.")]
+    #[display(fmt = "Coinbase amount mismatches with expected.")]
     CoinbaseAmountMismatch,
-    #[error("Invalid transaction: {0}")]
-    TransactionValidity(#[from] TransactionValidityError),
+    #[from]
+    TransactionValidity(TransactionValidityError),
     // TODO: Replace with `fuel_core_storage::Error` when execution error will live in the
     //  `fuel-core-executor`.
-    #[error("got error during work with storage {0}")]
+    #[display(fmt = "got error during work with storage {_0}")]
     StorageError(anyhow::Error),
-    #[error("got error during work with relayer {0}")]
+    #[display(fmt = "got error during work with relayer {_0}")]
     RelayerError(Box<dyn StdError + Send + Sync>),
-    #[error("Transaction({transaction_id:#x}) execution error: {error:?}")]
+    #[display(fmt = "Transaction({transaction_id:#x}) execution error: {error:?}")]
     VmExecution {
         // TODO: Replace with `fuel_core_storage::Error` when execution error will live in the
         //  `fuel-core-executor`.
         error: InterpreterError<anyhow::Error>,
         transaction_id: Bytes32,
     },
-    #[error("{0:?}")]
+    #[display(fmt = "{_0:?}")]
     InvalidTransaction(CheckError),
-    #[error("Execution error with backtrace")]
+    #[display(fmt = "Execution error with backtrace")]
     Backtrace(Box<Backtrace>),
-    #[error("Transaction doesn't match expected result: {transaction_id:#x}")]
+    #[display(fmt = "Transaction doesn't match expected result: {transaction_id:#x}")]
     InvalidTransactionOutcome { transaction_id: Bytes32 },
-    #[error("The amount of charged fees is invalid")]
+    #[display(fmt = "The amount of charged fees is invalid")]
     InvalidFeeAmount,
-    #[error("Block id is invalid")]
+    #[display(fmt = "Block id is invalid")]
     InvalidBlockId,
-    #[error("No matching utxo for contract id ${0:#x}")]
+    #[display(fmt = "No matching utxo for contract id ${_0:#x}")]
     ContractUtxoMissing(ContractId),
-    #[error("message already spent {0:#x}")]
+    #[display(fmt = "message already spent {_0:#x}")]
     MessageAlreadySpent(Nonce),
-    #[error("Expected input of type {0}")]
+    #[display(fmt = "Expected input of type {_0}")]
     InputTypeMismatch(String),
+}
+
+impl From<Error> for anyhow::Error {
+    fn from(error: Error) -> Self {
+        anyhow::Error::msg(error)
+    }
 }
 
 impl From<Backtrace> for Error {

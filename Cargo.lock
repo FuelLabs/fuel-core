@@ -2881,10 +2881,10 @@ name = "fuel-core-database"
 version = "0.20.4"
 dependencies = [
  "anyhow",
+ "derive_more",
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types",
- "thiserror",
 ]
 
 [[package]]
@@ -2928,13 +2928,13 @@ name = "fuel-core-importer"
 version = "0.20.4"
 dependencies = [
  "anyhow",
+ "derive_more",
  "fuel-core-metrics",
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types",
  "mockall",
  "test-case",
- "thiserror",
  "tokio",
  "tracing",
 ]
@@ -3032,12 +3032,12 @@ version = "0.20.4"
 dependencies = [
  "anyhow",
  "async-trait",
+ "derive_more",
  "fuel-core-producer",
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types",
  "rand 0.8.5",
- "thiserror",
  "tokio",
  "tokio-rayon",
  "tracing",
@@ -3090,10 +3090,10 @@ name = "fuel-core-storage"
 version = "0.20.4"
 dependencies = [
  "anyhow",
+ "derive_more",
  "fuel-core-types",
  "fuel-vm",
  "mockall",
- "thiserror",
 ]
 
 [[package]]
