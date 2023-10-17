@@ -77,37 +77,75 @@ pub struct TransactionEdge {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Transaction {
+    /// The field of the `Transaction` type.
     pub gas_limit: Option<U64>,
+    /// The field of the `Transaction` type.
     pub gas_price: Option<U64>,
+    /// The field of the `Transaction` type.
     pub id: TransactionId,
+    /// The field of the `Transaction::Mint`.
     pub tx_pointer: Option<TxPointer>,
+    /// The list of all `AssetId` from the inputs of the transaction.
+    ///
+    /// The result of a `input_asset_ids()` helper function is stored here.
+    /// It is not an original field of the `Transaction`.
     pub input_asset_ids: Option<Vec<AssetId>>,
     /// The list of all contracts from the inputs of the transaction.
     ///
     /// The result of a `input_contracts()` helper function is stored here.
-    /// It is not an original field of the transaction.
+    /// It is not an original field of the `Transaction`.
     pub input_contracts: Option<Vec<ContractIdFragment>>,
-    /// The field of the `Mint` transaction.
+    /// The field of the `Transaction::Mint` transaction.
     pub input_contract: Option<InputContract>,
+    /// The field of the `Transaction` type.
     pub inputs: Option<Vec<Input>>,
+    /// It is `true` for `Transaction::Script`.
+    ///
+    /// The result of a `is_script()` helper function is stored here.
+    /// It is not an original field of the `Transaction`.
     pub is_script: bool,
+    /// It is `true` for `Transaction::Create`.
+    ///
+    /// The result of a `is_create()` helper function is stored here.
+    /// It is not an original field of the `Transaction`.
     pub is_create: bool,
+    /// It is `true` for `Transaction::Mint`.
+    ///
+    /// The result of a `is_mint()` helper function is stored here.
+    /// It is not an original field of the `Transaction`.
     pub is_mint: bool,
+    /// The field of the `Transaction` type.
     pub outputs: Vec<Output>,
-    /// The field of the `Mint` transaction.
+    /// The field of the `Transaction::Mint`.
     pub output_contract: Option<ContractOutput>,
+    /// The field of the `Transaction::Script` and `Transaction::Create`.
     pub maturity: Option<U32>,
+    /// The field of the `Transaction::Mint`.
     pub mint_amount: Option<U64>,
+    /// The field of the `Transaction::Mint`.
     pub mint_asset_id: Option<AssetId>,
+    /// The field of the `Transaction::Script`.
     pub receipts_root: Option<Bytes32>,
+    /// The status of the transaction fetched from the database.
     pub status: Option<TransactionStatus>,
+    /// The field of the `Transaction::Script` and `Transaction::Create`.
     pub witnesses: Option<Vec<HexString>>,
+    /// The receipts produced during transaction execution. It is fetched from the database..
     pub receipts: Option<Vec<Receipt>>,
+    /// The field of the `Transaction::Script`.
     pub script: Option<HexString>,
+    /// The field of the `Transaction::Script`.
     pub script_data: Option<HexString>,
+    /// The field of the `Transaction::Create`.
     pub salt: Option<Salt>,
+    /// The field of the `Transaction::Create`.
     pub storage_slots: Option<Vec<HexString>>,
+    /// The field of the `Transaction::Create`.
     pub bytecode_witness_index: Option<i32>,
+    /// The size of the bytecode of the `Transaction::Create`.
+    ///
+    /// The result of a `bytecode_length()` helper function is stored here.
+    /// It is not an original field of the `Transaction`.
     pub bytecode_length: Option<U64>,
 }
 

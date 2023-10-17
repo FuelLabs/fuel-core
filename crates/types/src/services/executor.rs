@@ -263,7 +263,7 @@ pub enum Error {
     MintIsNotLastTransaction,
     #[display(fmt = "The `Mint` transaction mismatches expectations.")]
     MintMismatch,
-    #[display(fmt = "Can't increase the balance of the coinbase contract: {0}.")]
+    #[display(fmt = "Can't increase the balance of the coinbase contract: {_0}.")]
     CoinbaseCannotIncreaseBalance(anyhow::Error),
     #[display(fmt = "Coinbase amount mismatches with expected.")]
     CoinbaseAmountMismatch,
