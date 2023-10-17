@@ -17,7 +17,6 @@ use fuel_core::{
     state::rocks_db::RocksDb,
 };
 use fuel_core_benches::*;
-use fuel_core_storage::ContractsAssetsStorage;
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -85,13 +84,14 @@ impl BenchDb {
                 (key, key)
             }),
         )?;
-
-        let mut database = VmDatabase::default_from_database(database);
-        for key in 0..Self::STATE_SIZE {
-            let mut asset = AssetId::zeroed();
-            asset.as_mut()[..8].copy_from_slice(&(key + 1).to_be_bytes());
-            database.merkle_contract_asset_id_balance_insert(contract, &asset, key)?;
-        }
+        database.init_contract_balances(
+            contract,
+            (0..Self::STATE_SIZE).map(|k| {
+                let mut asset = AssetId::zeroed();
+                asset.as_mut()[..8].copy_from_slice(&(k + 1).to_be_bytes());
+                (asset, k)
+            }),
+        )?;
 
         drop(database); // Drops one reference to the db wrapper, but we still hold the last one
         Ok(Self {
