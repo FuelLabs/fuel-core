@@ -146,7 +146,7 @@ impl VmBench {
         rng: &mut R,
         mut db: VmDatabase,
         instruction: Instruction,
-    ) -> io::Result<Self>
+    ) -> anyhow::Result<Self>
     where
         R: Rng,
     {
