@@ -58,7 +58,7 @@ pub enum ResponseChannelItem {
 }
 
 /// Response that is sent over the wire
-/// and then additionaly deserialized into `ResponseMessage`
+/// and then additionally deserialized into `ResponseMessage`
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum NetworkResponse {
     Block(Option<Vec<u8>>),
