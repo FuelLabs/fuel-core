@@ -194,7 +194,7 @@ impl Database {
     #[cfg(feature = "rocksdb")]
     pub fn open(path: &Path, capacity: impl Into<Option<usize>>) -> DatabaseResult<Self> {
         use anyhow::Context;
-        let db = RocksDb::default_open(path, capacity.into()).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
+        let db = RocksDb::default_open(path, capacity.into()).map_err(Into::<anyhow::Error>::into).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
 
         Ok(Database {
             data: Arc::new(db),

@@ -33,26 +33,33 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use std::sync::Arc;
-use thiserror::Error;
 use tokio::sync::Mutex;
 use tracing::debug;
 
 #[cfg(test)]
 mod tests;
 
-#[derive(Error, Debug)]
+#[derive(Debug, derive_more::Display)]
 pub enum Error {
-    #[error(
-        "0 is an invalid block height for production. It is reserved for genesis data."
+    #[display(
+        fmt = "0 is an invalid block height for production. It is reserved for genesis data."
     )]
     GenesisBlock,
-    #[error("Previous block height {0} doesn't exist")]
+    #[display(fmt = "Previous block height {_0} doesn't exist")]
     MissingBlock(BlockHeight),
-    #[error("Best finalized da_height {best} is behind previous block da_height {previous_block}")]
+    #[display(
+        fmt = "Best finalized da_height {best} is behind previous block da_height {previous_block}"
+    )]
     InvalidDaFinalizationState {
         best: DaBlockHeight,
         previous_block: DaBlockHeight,
     },
+}
+
+impl From<Error> for anyhow::Error {
+    fn from(error: Error) -> Self {
+        anyhow::Error::msg(error)
+    }
 }
 
 pub struct Producer<Database, TxPool, Executor> {
@@ -107,6 +114,7 @@ where
         let result = self
             .executor
             .execute_without_commit(component)
+            .map_err(Into::<anyhow::Error>::into)
             .context(context_string)?;
 
         debug!("Produced block with result: {:?}", result.result());
