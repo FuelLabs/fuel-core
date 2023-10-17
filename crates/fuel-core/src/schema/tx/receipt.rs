@@ -14,13 +14,14 @@ use async_graphql::{
     Enum,
     Object,
 };
-use derive_more::Display;
 use fuel_core_types::{
     fuel_asm::Word,
     fuel_tx,
 };
 
-#[derive(Copy, Clone, Debug, Display, Enum, Eq, PartialEq, strum_macros::EnumIter)]
+#[derive(
+    Copy, Clone, Debug, derive_more::Display, Enum, Eq, PartialEq, strum_macros::EnumIter,
+)]
 pub enum ReceiptType {
     Call,
     Return,
