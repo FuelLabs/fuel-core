@@ -74,6 +74,9 @@ pub struct TransactionEdge {
     pub node: Transaction,
 }
 
+/// The `Transaction` schema is a combination of all fields available in
+/// the `fuel_tx::Transaction` from each variant plus some additional
+/// data from helper functions that are often fetched by the user.
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Transaction {
