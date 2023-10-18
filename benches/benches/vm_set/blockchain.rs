@@ -97,53 +97,79 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(&mut c.benchmark_group("srw"), "srw", input);
     }
 
-    {
-        let mut key = Bytes32::zeroed();
+    let mut scwq = c.benchmark_group("scwq");
 
-        key.as_mut()[..8].copy_from_slice(&1u64.to_be_bytes());
-        let data = key.iter().copied().collect::<Vec<_>>();
-
-        let post_call = vec![
-            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
-            op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
-            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-        ];
-        let mut bench = VmBench::contract(rng, op::scwq(0x11, 0x29, RegId::ONE))
-            .expect("failed to prepare contract")
-            .with_post_call(post_call)
-            .with_prepare_db(move |mut db| {
-                db.merkle_contract_state_insert(&contract, &key, &key)?;
-
-                Ok(db)
-            });
-        bench.data.extend(data);
-        run_group_ref(&mut c.benchmark_group("scwq"), "scwq", bench);
-    }
-
-    {
-        let mut key = Bytes32::zeroed();
-
-        key.as_mut()[..8].copy_from_slice(&1u64.to_be_bytes());
-        let data = key.iter().copied().collect::<Vec<_>>();
+    for i in linear.clone() {
+        let start_key = Bytes32::zeroed();
+        let data = start_key.iter().copied().collect::<Vec<_>>();
 
         let post_call = vec![
             op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
             op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::movi(0x12, i as u32),
         ];
-        let mut bench = VmBench::contract(rng, op::swwq(0x10, 0x11, 0x20, RegId::ONE))
+        let mut bench = VmBench::contract(rng, op::scwq(0x11, 0x29, 0x12))
             .expect("failed to prepare contract")
             .with_post_call(post_call)
             .with_prepare_db(move |mut db| {
-                db.merkle_contract_state_insert(&contract, &key, &key)?;
+                let slots = (0u64..i).map(|key_number| {
+                    let mut key = Bytes32::zeroed();
+                    key.as_mut()[..8].copy_from_slice(&key_number.to_be_bytes());
+                    (key, key)
+                });
+                db.database_mut()
+                    .init_contract_state(&contract, slots)
+                    .unwrap();
 
                 Ok(db)
             });
         bench.data.extend(data);
-        run_group_ref(&mut c.benchmark_group("swwq"), "swwq", bench);
+
+        scwq.throughput(Throughput::Bytes(i));
+
+        run_group_ref(&mut scwq, format!("{i}"), bench);
     }
+
+    scwq.finish();
+
+    let mut swwq = c.benchmark_group("swwq");
+
+    for i in linear.clone() {
+        let start_key = Bytes32::zeroed();
+        let data = start_key.iter().copied().collect::<Vec<_>>();
+
+        let post_call = vec![
+            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+            op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::movi(0x12, i as u32),
+        ];
+        let mut bench = VmBench::contract(rng, op::swwq(0x10, 0x11, 0x20, 0x12))
+            .expect("failed to prepare contract")
+            .with_post_call(post_call)
+            .with_prepare_db(move |mut db| {
+                let slots = (0u64..i).map(|key_number| {
+                    let mut key = Bytes32::zeroed();
+                    key.as_mut()[..8].copy_from_slice(&key_number.to_be_bytes());
+                    (key, key)
+                });
+                db.database_mut()
+                    .init_contract_state(&contract, slots)
+                    .unwrap();
+
+                Ok(db)
+            });
+        bench.data.extend(data);
+
+        swwq.throughput(Throughput::Bytes(i));
+
+        run_group_ref(&mut swwq, format!("{i}"), bench);
+    }
+
+    swwq.finish();
 
     let mut call = c.benchmark_group("call");
 
@@ -477,13 +503,11 @@ pub fn run(c: &mut Criterion) {
     let mut srwq = c.benchmark_group("srwq");
 
     for i in linear.clone() {
-        let mut key = Bytes32::zeroed();
-
-        key.as_mut()[..8].copy_from_slice(&i.to_be_bytes());
-        let data = key.iter().copied().collect::<Vec<_>>();
+        let start_key = Bytes32::zeroed();
+        let data = start_key.iter().copied().collect::<Vec<_>>();
 
         let post_call = vec![
-            op::movi(0x16, i.try_into().unwrap()),
+            op::movi(0x16, i as u32),
             op::movi(0x17, 2000),
             op::move_(0x15, 0x16),
             op::muli(0x15, 0x15, 32),
@@ -495,8 +519,14 @@ pub fn run(c: &mut Criterion) {
             .expect("failed to prepare contract")
             .with_post_call(post_call)
             .with_prepare_db(move |mut db| {
-                let values = vec![key; i as usize];
-                db.merkle_contract_state_insert_range(&contract, &key, &values)?;
+                let slots = (0u64..i).map(|key_number| {
+                    let mut key = Bytes32::zeroed();
+                    key.as_mut()[..8].copy_from_slice(&key_number.to_be_bytes());
+                    (key, key)
+                });
+                db.database_mut()
+                    .init_contract_state(&contract, slots)
+                    .unwrap();
 
                 Ok(db)
             });
