@@ -98,7 +98,8 @@ pub struct ParseSecret {
 
 impl ParseSecret {
     pub fn exec(&self) -> anyhow::Result<()> {
-        let secret = SecretKey::from_str(&self.secret)?;
+        let secret = SecretKey::from_str(&self.secret)
+            .map_err(|_| anyhow::anyhow!("invalid secret key"))?;
         match self.key_type {
             KeyType::BlockProduction => {
                 let address = Input::owner(&secret.public_key());
@@ -130,7 +131,8 @@ fn print_value(output: serde_json::Value, pretty: bool) -> anyhow::Result<()> {
         serde_json::to_string_pretty(&output)
     } else {
         serde_json::to_string(&output)
-    };
+    }
+    .map_err(anyhow::Error::msg);
     println!("{}", output?);
     Ok(())
 }

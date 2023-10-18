@@ -119,6 +119,17 @@ jobs:
             args: --manifest-path version-compatibility/Cargo.toml --workspace
           - command: build
             args: -p fuel-core-bin --no-default-features --features production
+
+          # WASM compatibility checks
+          - command: check
+            args: -p fuel-core-types --target wasm32-unknown-unknown --no-default-features
+          - command: check
+            args: -p fuel-core-storage --target wasm32-unknown-unknown --no-default-features
+          - command: check
+            args: -p fuel-core-client --target wasm32-unknown-unknown --no-default-features
+          - command: check
+            args: -p fuel-core-chain-config --target wasm32-unknown-unknown --no-default-features
+
     # disallow any job that takes longer than 45 minutes
     timeout-minutes: 45
     continue-on-error: ${{ matrix.skip-error || false }}
@@ -127,6 +138,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
+          targets: "wasm32-unknown-unknown"
           components: "clippy"
       - name: Install Cargo Make
         uses: davidB/rust-cargo-make@v1

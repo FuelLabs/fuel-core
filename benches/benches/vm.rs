@@ -1,4 +1,5 @@
-mod set;
+mod utils;
+mod vm_set;
 
 use criterion::{
     black_box,
@@ -13,7 +14,7 @@ use std::time::Duration;
 use fuel_core_benches::*;
 use fuel_core_storage::transactional::Transaction;
 use fuel_core_types::fuel_asm::Instruction;
-use set::*;
+use vm_set::*;
 
 // Use Jemalloc during benchmarks
 #[global_allocator]
