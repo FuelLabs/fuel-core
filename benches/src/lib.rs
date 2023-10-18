@@ -238,8 +238,17 @@ impl VmBench {
         self
     }
 
+    /// Replaces the current prepare script with the given one.
+    /// Not that if you've constructed this instance with `contract` or `using_contract_db`,
+    /// then this will remove the script added by it. Use `extend_prepare_script` instead.
     pub fn with_prepare_script(mut self, prepare_script: Vec<Instruction>) -> Self {
         self.prepare_script = prepare_script;
+        self
+    }
+
+    /// Adds more instructions before the current prepare script.
+    pub fn prepend_prepare_script(mut self, prepare_script: Vec<Instruction>) -> Self {
+        self.prepare_script.extend(prepare_script);
         self
     }
 

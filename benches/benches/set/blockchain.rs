@@ -17,6 +17,7 @@ use fuel_core::{
     state::rocks_db::RocksDb,
 };
 use fuel_core_benches::*;
+use fuel_core_storage::StorageAsMut;
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -24,6 +25,7 @@ use fuel_core_types::{
         RegId,
     },
     fuel_tx::{
+        ContractIdExt,
         Input,
         Output,
         Word,
@@ -85,11 +87,18 @@ impl BenchDb {
             }),
         )?;
         database.init_contract_balances(
-            contract,
+            &ContractId::zeroed(),
             (0..Self::STATE_SIZE).map(|k| {
-                let mut asset = AssetId::zeroed();
-                asset.as_mut()[..8].copy_from_slice(&(k + 1).to_be_bytes());
-                (asset, k)
+                let key = k / 2;
+                let mut sub_id = Bytes32::zeroed();
+                sub_id.as_mut()[..8].copy_from_slice(&key.to_be_bytes());
+
+                let asset = if k % 2 == 0 {
+                    ContractId::zeroed().asset_id(&sub_id)
+                } else {
+                    AssetId::new(*sub_id)
+                };
+                (asset, key + 1_000)
             }),
         )?;
 
@@ -128,6 +137,8 @@ pub fn run(c: &mut Criterion) {
     let asset: AssetId = rng.gen();
     let contract: ContractId = rng.gen();
 
+    let db = BenchDb::new(&contract).expect("Unable to fill contract storage");
+
     run_group_ref(
         &mut c.benchmark_group("bal"),
         "bal",
@@ -137,21 +148,8 @@ pub fn run(c: &mut Criterion) {
                 op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
                 op::addi(0x11, 0x10, asset.len().try_into().unwrap()),
             ])
-            .with_dummy_contract(contract)
-            .with_prepare_db(move |mut db| {
-                let mut asset_inc = AssetId::zeroed();
-
-                asset_inc.as_mut()[..8].copy_from_slice(&1_u64.to_be_bytes());
-
-                db.merkle_contract_asset_id_balance_insert(&contract, &asset_inc, 1)?;
-
-                db.merkle_contract_asset_id_balance_insert(&contract, &asset, 100)?;
-
-                Ok(db)
-            }),
+            .with_dummy_contract(contract),
     );
-
-    let db = BenchDb::new(&contract).expect("Unable to fill contract storage");
 
     run_group_ref(
         &mut c.benchmark_group("sww"),
@@ -397,7 +395,7 @@ pub fn run(c: &mut Criterion) {
         VmBench::contract_using_db(
             rng,
             db.checkpoint(),
-            op::mint(RegId::ZERO, RegId::ZERO),
+            op::mint(RegId::ONE, RegId::ZERO),
         )
         .expect("failed to prepare contract"),
     );
@@ -405,12 +403,9 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("burn"),
         "burn",
-        VmBench::contract_using_db(
-            rng,
-            db.checkpoint(),
-            op::burn(RegId::ZERO, RegId::ZERO),
-        )
-        .expect("failed to prepare contract"),
+        VmBench::contract_using_db(rng, db.checkpoint(), op::burn(RegId::ONE, RegId::HP))
+            .expect("failed to prepare contract")
+            .prepend_prepare_script(vec![op::movi(0x10, 32), op::aloc(0x10)]),
     );
 
     run_group_ref(
@@ -426,16 +421,7 @@ pub fn run(c: &mut Criterion) {
     {
         let mut input =
             VmBench::contract_using_db(rng, db.checkpoint(), op::tr(0x15, 0x14, 0x15))
-                .expect("failed to prepare contract")
-                .with_prepare_db(move |mut db| {
-                    db.merkle_contract_asset_id_balance_insert(
-                        &ContractId::zeroed(),
-                        &AssetId::zeroed(),
-                        200,
-                    )?;
-
-                    Ok(db)
-                });
+                .expect("failed to prepare contract");
         input
             .prepare_script
             .extend(vec![op::movi(0x15, 2000), op::movi(0x14, 100)]);
@@ -446,18 +432,9 @@ pub fn run(c: &mut Criterion) {
         let mut input = VmBench::contract_using_db(
             rng,
             db.checkpoint(),
-            op::tro(0x15, 0x16, 0x14, 0x15),
+            op::tro(RegId::ZERO, 0x15, 0x14, RegId::HP),
         )
-        .expect("failed to prepare contract")
-        .with_prepare_db(move |mut db| {
-            db.merkle_contract_asset_id_balance_insert(
-                &ContractId::zeroed(),
-                &AssetId::zeroed(),
-                200,
-            )?;
-
-            Ok(db)
-        });
+        .expect("failed to prepare contract");
         let coin_output = Output::variable(Address::zeroed(), 100, AssetId::zeroed());
         input.outputs.push(coin_output);
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
@@ -477,10 +454,16 @@ pub fn run(c: &mut Criterion) {
 
         let index = input.outputs.len() - 1;
         input.prepare_script.extend(vec![
-            op::movi(0x15, 2000),
             op::movi(0x14, 100),
-            op::movi(0x16, index.try_into().unwrap()),
+            op::movi(0x15, index.try_into().unwrap()),
+            op::movi(0x20, 32),
+            op::aloc(0x20),
         ]);
+        for (i, v) in (*AssetId::zeroed()).into_iter().enumerate() {
+            input.prepare_script.push(op::movi(0x20, v as u32));
+            input.prepare_script.push(op::sb(RegId::HP, 0x20, i as u16));
+        }
+
         run_group_ref(&mut c.benchmark_group("tro"), "tro", input);
     }
 
@@ -523,14 +506,6 @@ pub fn run(c: &mut Criterion) {
             op::smo(0x15, 0x16, 0x17, 0x18),
         )
         .expect("failed to prepare contract");
-        input.prepare_db = Some(Box::new(|mut db: VmDatabase| {
-            db.merkle_contract_asset_id_balance_insert(
-                &ContractId::default(),
-                &AssetId::default(),
-                Word::MAX,
-            )?;
-            Ok(db)
-        }));
         input.post_call.extend(vec![
             op::gtf_args(0x15, 0x00, GTFArgs::ScriptData),
             // Offset 32 + 8 + 8 + 32
