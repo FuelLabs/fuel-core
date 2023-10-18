@@ -20,6 +20,10 @@ use libp2p_identity::{
 };
 use serde_json::json;
 use std::{
+    io::{
+        Read,
+        Write,
+    },
     ops::Deref,
     str::FromStr,
 };
@@ -126,6 +130,24 @@ impl ParseSecret {
     }
 }
 
+fn wait_for_keypress() {
+    let mut single_key = [0u8];
+    std::io::stdin().read_exact(&mut single_key).unwrap();
+}
+
+fn display_string_discreetly(
+    discreet_string: &str,
+    continue_message: &str,
+) -> anyhow::Result<()> {
+    use termion::screen::IntoAlternateScreen;
+    let mut screen = std::io::stdout().into_alternate_screen()?;
+    writeln!(screen, "{discreet_string}")?;
+    screen.flush()?;
+    println!("{continue_message}");
+    wait_for_keypress();
+    Ok(())
+}
+
 fn print_value(output: serde_json::Value, pretty: bool) -> anyhow::Result<()> {
     let output = if pretty {
         serde_json::to_string_pretty(&output)
@@ -133,6 +155,10 @@ fn print_value(output: serde_json::Value, pretty: bool) -> anyhow::Result<()> {
         serde_json::to_string(&output)
     }
     .map_err(anyhow::Error::msg);
-    println!("{}", output?);
+
+    let _ = display_string_discreetly(
+        &output?,
+        "### Do not share or lose this private key! Press any key to complete. ###",
+    );
     Ok(())
 }
