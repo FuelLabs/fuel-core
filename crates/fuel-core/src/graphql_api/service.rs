@@ -155,7 +155,7 @@ impl RunnableTask for Task {
     }
 }
 
-// Need a seperate Data Object for each Query endpoint, cannot be avoided
+// Need a separate Data Object for each Query endpoint, cannot be avoided
 pub fn new_service(
     config: Config,
     schema: CoreSchemaBuilder,

@@ -1,6 +1,5 @@
 use std::{
     env,
-    io,
     iter::successors,
     path::PathBuf,
     sync::Arc,
@@ -17,7 +16,6 @@ use fuel_core::{
     state::rocks_db::RocksDb,
 };
 use fuel_core_benches::*;
-use fuel_core_storage::StorageAsMut;
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -72,7 +70,7 @@ pub struct BenchDb {
 impl BenchDb {
     const STATE_SIZE: u64 = 10_000_000;
 
-    fn new(contract: &ContractId) -> io::Result<Self> {
+    fn new(contract: &ContractId) -> anyhow::Result<Self> {
         let tmp_dir = ShallowTempDir::new();
 
         let db = Arc::new(RocksDb::default_open(&tmp_dir.path, None).unwrap());

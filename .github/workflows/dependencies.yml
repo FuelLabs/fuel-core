@@ -26,7 +26,6 @@ env:
 
 jobs:
   update:
-    if: github.repository_owner == 'fuel-core'
     name: update dependencies
     runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
@@ -53,10 +52,9 @@ jobs:
           retention-days: 1
 
   pr:
-    if: github.repository_owner == 'fuel-core'
     name: amend PR
     needs: update
-    runs-on: ubuntu-latest
+    runs-on: buildjet-4vcpu-ubuntu-2204
     permissions:
       contents: write
       pull-requests: write

@@ -98,7 +98,6 @@ use std::{
         self,
         FromStr,
     },
-    sync::Arc,
 };
 use tai64::Tai64;
 use tracing as _;
@@ -120,7 +119,7 @@ pub mod types;
 pub struct FuelClient {
     client: reqwest::Client,
     #[cfg(feature = "subscriptions")]
-    cookie: Arc<reqwest::cookie::Jar>,
+    cookie: std::sync::Arc<reqwest::cookie::Jar>,
     url: reqwest::Url,
 }
 
@@ -134,18 +133,29 @@ impl FromStr for FuelClient {
         }
 
         let mut url = reqwest::Url::parse(&raw_url)
+            .map_err(anyhow::Error::msg)
             .with_context(|| format!("Invalid fuel-core URL: {str}"))?;
         url.set_path("/graphql");
-        let cookie = Arc::new(reqwest::cookie::Jar::default());
-        let client = reqwest::Client::builder()
-            .cookie_provider(cookie.clone())
-            .build()?;
-        Ok(Self {
-            client,
-            #[cfg(feature = "subscriptions")]
-            cookie,
-            url,
-        })
+
+        #[cfg(feature = "subscriptions")]
+        {
+            let cookie = std::sync::Arc::new(reqwest::cookie::Jar::default());
+            let client = reqwest::Client::builder()
+                .cookie_provider(cookie.clone())
+                .build()
+                .map_err(anyhow::Error::msg)?;
+            Ok(Self {
+                client,
+                cookie,
+                url,
+            })
+        }
+
+        #[cfg(not(feature = "subscriptions"))]
+        {
+            let client = reqwest::Client::new();
+            Ok(Self { client, url })
+        }
     }
 }
 
