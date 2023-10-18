@@ -1,4 +1,7 @@
-use block_target_gas_set::alu::run_alu;
+use block_target_gas_set::{
+    alu::run_alu,
+    crypto::run_crypto,
+};
 use criterion::{
     criterion_group,
     criterion_main,
@@ -252,6 +255,8 @@ fn block_target_gas(c: &mut Criterion) {
     // );
 
     run_alu(&mut group);
+
+    run_crypto(&mut group);
 
     group.finish();
 }
