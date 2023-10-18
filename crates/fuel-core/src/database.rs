@@ -193,10 +193,6 @@ impl Database {
         self
     }
 
-    pub fn deconstruct(self) -> DataSource {
-        self.data
-    }
-
     #[cfg(feature = "rocksdb")]
     pub fn open(path: &Path, capacity: impl Into<Option<usize>>) -> DatabaseResult<Self> {
         use anyhow::Context;
