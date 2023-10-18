@@ -2944,6 +2944,7 @@ name = "fuel-core-keygen"
 version = "0.20.4"
 dependencies = [
  "anyhow",
+ "atty",
  "clap 4.4.6",
  "fuel-core-types",
  "libp2p-identity 0.2.5",
