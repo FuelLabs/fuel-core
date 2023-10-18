@@ -31,6 +31,10 @@ use crate::{
             U32,
             U64,
         },
+        tx::{
+            input,
+            output,
+        },
     },
 };
 use async_graphql::{
@@ -47,8 +51,12 @@ use fuel_core_types::{
         field::{
             BytecodeLength,
             BytecodeWitnessIndex,
+            InputContract,
             Inputs,
             Maturity,
+            MintAmount,
+            MintAssetId,
+            OutputContract,
             Outputs,
             ReceiptsRoot,
             Salt as SaltField,
@@ -305,7 +313,16 @@ impl Transaction {
             fuel_tx::Transaction::Create(create) => {
                 Some(create.input_contracts().map(|v| Contract(*v)).collect())
             }
-            fuel_tx::Transaction::Mint(_) => None,
+            fuel_tx::Transaction::Mint(mint) => {
+                Some(vec![Contract(mint.input_contract().contract_id)])
+            }
+        }
+    }
+
+    async fn input_contract(&self) -> Option<input::InputContract> {
+        match &self.0 {
+            fuel_tx::Transaction::Script(_) | fuel_tx::Transaction::Create(_) => None,
+            fuel_tx::Transaction::Mint(mint) => Some(mint.input_contract().into()),
         }
     }
 
@@ -330,6 +347,20 @@ impl Transaction {
             fuel_tx::Transaction::Script(script) => Some((*script.maturity()).into()),
             fuel_tx::Transaction::Create(create) => Some((*create.maturity()).into()),
             fuel_tx::Transaction::Mint(_) => None,
+        }
+    }
+
+    async fn mint_amount(&self) -> Option<U64> {
+        match &self.0 {
+            fuel_tx::Transaction::Script(_) | fuel_tx::Transaction::Create(_) => None,
+            fuel_tx::Transaction::Mint(mint) => Some((*mint.mint_amount()).into()),
+        }
+    }
+
+    async fn mint_asset_id(&self) -> Option<AssetId> {
+        match &self.0 {
+            fuel_tx::Transaction::Script(_) | fuel_tx::Transaction::Create(_) => None,
+            fuel_tx::Transaction::Mint(mint) => Some((*mint.mint_asset_id()).into()),
         }
     }
 
@@ -374,9 +405,14 @@ impl Transaction {
             fuel_tx::Transaction::Create(create) => {
                 create.outputs().iter().map(Into::into).collect()
             }
-            fuel_tx::Transaction::Mint(mint) => {
-                mint.outputs().iter().map(Into::into).collect()
-            }
+            fuel_tx::Transaction::Mint(_) => vec![],
+        }
+    }
+
+    async fn output_contract(&self) -> Option<output::ContractOutput> {
+        match &self.0 {
+            fuel_tx::Transaction::Script(_) | fuel_tx::Transaction::Create(_) => None,
+            fuel_tx::Transaction::Mint(mint) => Some(mint.output_contract().into()),
         }
     }
 

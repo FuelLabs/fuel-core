@@ -132,9 +132,13 @@ where
         utxo_validation: Option<bool>,
     ) -> anyhow::Result<Vec<Receipt>> {
         let height = match height {
-            None => self.db.current_block_height()?,
+            None => self
+                .db
+                .current_block_height()?
+                .succ()
+                .expect("It is impossible to overflow the current block height"),
             Some(height) => height,
-        } + 1.into();
+        };
 
         let is_script = transaction.is_script();
         // The dry run execution should use the state of the blockchain based on the
@@ -240,7 +244,7 @@ where
             Err(Error::GenesisBlock.into())
         } else {
             // get info from previous block height
-            let prev_height = height - 1u32.into();
+            let prev_height = height.pred().expect("We checked the height above");
             let previous_block = self.db.get_block(&prev_height)?;
             let prev_root = self.db.block_header_merkle_root(&prev_height)?;
 

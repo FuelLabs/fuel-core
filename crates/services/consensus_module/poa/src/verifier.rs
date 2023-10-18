@@ -41,7 +41,7 @@ pub fn verify_block_fields<D: Database>(
         "The PoA block can't have the zero height"
     );
 
-    let prev_height = height - 1u32.into();
+    let prev_height = height.pred().expect("We checked the height above");
     let prev_root = database.block_header_merkle_root(&prev_height)?;
     let header = block.header();
     ensure!(
