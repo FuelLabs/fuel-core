@@ -2951,6 +2951,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-keygen-bin"
+version = "0.20.4"
+dependencies = [
+ "anyhow",
+ "clap 4.4.6",
+ "fuel-core-keygen",
+]
+
+[[package]]
 name = "fuel-core-metrics"
 version = "0.20.4"
 dependencies = [
