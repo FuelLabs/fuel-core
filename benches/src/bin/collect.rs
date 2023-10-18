@@ -530,7 +530,7 @@ impl State {
                         time: *y,
                     })
                     .collect();
-                let (_, dep_per_unit) = dependent_cost(x_y);
+                let (_, dep_per_unit) = dependent_cost(&name, x_y);
                 (
                     name,
                     Cost::DependentAll {
@@ -544,7 +544,7 @@ impl State {
             let iter = dependant_groups.into_iter().map(|(name, x_y)| {
                 groups.remove(&name);
 
-                let (base, dep_per_unit) = dependent_cost(x_y);
+                let (base, dep_per_unit) = dependent_cost(&name, x_y);
                 (name, Cost::Dependent { base, dep_per_unit })
             });
             costs.0.extend(iter);
@@ -618,7 +618,7 @@ fn linear_regression(x_y: Vec<(u64, u64)>) -> f64 {
     sq_x / sum_x_y
 }
 
-fn dependent_cost(x_y: Vec<(u64, u64)>) -> (u64, u64) {
+fn dependent_cost(name: &String, x_y: Vec<(u64, u64)>) -> (u64, u64) {
     const NEAR_LINEAR: f64 = 0.1;
 
     enum Type {
@@ -633,7 +633,7 @@ fn dependent_cost(x_y: Vec<(u64, u64)>) -> (u64, u64) {
         Exp,
     }
 
-    #[derive(Clone, Copy)]
+    #[derive(Debug, Clone, Copy)]
     struct Point {
         /// Number of elements for the opcode.
         x: u64,
@@ -659,7 +659,7 @@ fn dependent_cost(x_y: Vec<(u64, u64)>) -> (u64, u64) {
 
     let linear_regression = linear_regression(x_y.clone());
 
-    let x_y = x_y
+    let mut x_y = x_y
         .into_iter()
         .map(|(x, y)| Point { x, y })
         .collect::<Vec<_>>();
@@ -695,6 +695,7 @@ fn dependent_cost(x_y: Vec<(u64, u64)>) -> (u64, u64) {
         Type::Logarithm => {
             // The logarithm function slows down fast, and the point where it becomes more
             // linear is the base point. After this point we use linear strategy.
+            let last = x_y.last().unwrap().amount();
             let mut x_y = x_y.into_iter();
 
             let mut base = x_y.next().unwrap();
@@ -710,11 +711,19 @@ fn dependent_cost(x_y: Vec<(u64, u64)>) -> (u64, u64) {
                 })
                 .map(|p| p.amount())
                 .min_by(|a, b| a.partial_cmp(b).unwrap())
-                .unwrap();
+                .unwrap_or(last);
             (base.y, amount as u64)
         }
         Type::Exp => {
-            panic!("We don't support exponential chart")
+            println!(
+                "The {} is exponential. We don't support exponential chart. \
+                The opcode should be limited with upper bound. \n {:?}",
+                name, x_y
+            );
+
+            x_y.sort_unstable_by_key(|a| a.amount() as u64);
+            let base = x_y.last().unwrap();
+            (base.y, 0)
         }
     }
 }
