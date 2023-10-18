@@ -75,7 +75,10 @@ pub fn init_sub_services(
         relayer: relayer_adapter.clone(),
         config: Arc::new(fuel_core_executor::Config {
             consensus_parameters: config.chain_conf.consensus_parameters.clone(),
-            coinbase_recipient: config.block_producer.coinbase_recipient,
+            coinbase_recipient: config
+                .block_producer
+                .coinbase_recipient
+                .unwrap_or_default(),
             backtrace: config.vm.backtrace,
             utxo_validation_default: config.utxo_validation,
         }),

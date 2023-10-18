@@ -17,10 +17,7 @@ use fuel_core_client::client::{
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::*,
-    fuel_types::{
-        canonical::Serialize,
-        ChainId,
-    },
+    fuel_types::canonical::Serialize,
     fuel_vm::*,
 };
 use rstest::rstest;
@@ -214,7 +211,7 @@ async fn can_get_message_proof() {
         .collect();
 
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-    let owner = Input::predicate_owner(&predicate, &ChainId::default());
+    let owner = Input::predicate_owner(&predicate);
     let coin_input = Input::coin_predicate(
         Default::default(),
         owner,
@@ -240,11 +237,7 @@ async fn can_get_message_proof() {
     ];
 
     // The transaction will output a contract output and message output.
-    let outputs = vec![Output::Contract {
-        input_index: 0,
-        balance_root: Bytes32::zeroed(),
-        state_root: Bytes32::zeroed(),
-    }];
+    let outputs = vec![Output::contract(0, Bytes32::zeroed(), Bytes32::zeroed())];
 
     // Create the contract calling script.
     let script = Transaction::script(

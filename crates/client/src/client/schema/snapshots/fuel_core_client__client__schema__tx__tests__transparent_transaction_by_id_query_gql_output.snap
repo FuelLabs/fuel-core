@@ -12,6 +12,15 @@ query($id: TransactionId!) {
     inputContracts {
       id
     }
+    inputContract {
+      utxoId
+      balanceRoot
+      stateRoot
+      txPointer
+      contract {
+        id
+      }
+    }
     inputs {
       __typename
       ... on InputCoin {
@@ -79,7 +88,14 @@ query($id: TransactionId!) {
         stateRoot
       }
     }
+    outputContract {
+      inputIndex
+      balanceRoot
+      stateRoot
+    }
     maturity
+    mintAmount
+    mintAssetId
     receiptsRoot
     status {
       __typename

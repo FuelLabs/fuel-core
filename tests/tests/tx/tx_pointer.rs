@@ -164,7 +164,7 @@ async fn tx_pointer_set_from_previous_block() {
     let ret_tx2 = ret_tx2.as_script().unwrap();
 
     // verify coin tx_pointer is correctly set
-    let expected_tx_pointer = TxPointer::new((block_height + 1u32).into(), 1);
+    let expected_tx_pointer = TxPointer::new((block_height + 1u32).into(), 0);
     assert_eq!(
         *ret_tx2.inputs()[0].tx_pointer().unwrap(),
         expected_tx_pointer

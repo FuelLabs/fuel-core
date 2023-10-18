@@ -14,6 +14,7 @@ use async_graphql::{
 use fuel_core_types::{
     fuel_asm::Word,
     fuel_tx,
+    fuel_tx::output,
     fuel_types,
 };
 
@@ -130,15 +131,7 @@ impl From<&fuel_tx::Output> for Output {
                 amount: *amount,
                 asset_id: *asset_id,
             }),
-            fuel_tx::Output::Contract {
-                input_index,
-                balance_root,
-                state_root,
-            } => Output::Contract(ContractOutput {
-                input_index: *input_index,
-                balance_root: *balance_root,
-                state_root: *state_root,
-            }),
+            fuel_tx::Output::Contract(contract) => Output::Contract(contract.into()),
             fuel_tx::Output::Change {
                 to,
                 amount,
@@ -164,6 +157,21 @@ impl From<&fuel_tx::Output> for Output {
                 contract_id: *contract_id,
                 state_root: *state_root,
             }),
+        }
+    }
+}
+
+impl From<&output::contract::Contract> for ContractOutput {
+    fn from(value: &output::contract::Contract) -> Self {
+        let output::contract::Contract {
+            input_index,
+            balance_root,
+            state_root,
+        } = value;
+        ContractOutput {
+            input_index: *input_index,
+            balance_root: *balance_root,
+            state_root: *state_root,
         }
     }
 }

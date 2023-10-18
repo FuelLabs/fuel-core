@@ -27,7 +27,6 @@ use fuel_core_types::{
         StorageSlot,
     },
     fuel_types::{
-        Address,
         BlockHeight,
         Bytes32,
         ContractId,
@@ -45,7 +44,7 @@ use std::borrow::Cow;
 pub struct VmDatabase {
     current_block_height: BlockHeight,
     current_timestamp: Tai64,
-    coinbase: Address,
+    coinbase: ContractId,
     database: Database,
 }
 
@@ -77,7 +76,7 @@ impl VmDatabase {
     pub fn new<T>(
         database: Database,
         header: &ConsensusHeader<T>,
-        coinbase: Address,
+        coinbase: ContractId,
     ) -> Self {
         Self {
             current_block_height: header.height,
@@ -194,7 +193,7 @@ impl InterpreterStorage for VmDatabase {
         }
     }
 
-    fn coinbase(&self) -> Result<Address, Self::DataError> {
+    fn coinbase(&self) -> Result<ContractId, Self::DataError> {
         Ok(self.coinbase)
     }
 

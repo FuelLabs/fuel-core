@@ -32,7 +32,7 @@ async fn transaction_with_valid_predicate_is_executed() {
     let asset_id = rng.gen();
     // make predicate return 1 which mean valid
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-    let owner = Input::predicate_owner(&predicate, &ChainId::default());
+    let owner = Input::predicate_owner(&predicate);
     let mut predicate_tx =
         TransactionBuilder::script(Default::default(), Default::default())
             .add_input(Input::coin_predicate(
@@ -94,7 +94,7 @@ async fn transaction_with_invalid_predicate_is_rejected() {
     let asset_id = rng.gen();
     // make predicate return 0 which means invalid
     let predicate = op::ret(RegId::ZERO).to_bytes().to_vec();
-    let owner = Input::predicate_owner(&predicate, &ChainId::default());
+    let owner = Input::predicate_owner(&predicate);
     let predicate_tx = TransactionBuilder::script(Default::default(), Default::default())
         .add_input(Input::coin_predicate(
             rng.gen(),
@@ -130,7 +130,7 @@ async fn transaction_with_predicates_that_exhaust_gas_limit_are_rejected() {
     let asset_id = rng.gen();
     // make predicate jump in infinite loop
     let predicate = op::jmp(RegId::ZERO).to_bytes().to_vec();
-    let owner = Input::predicate_owner(&predicate, &ChainId::default());
+    let owner = Input::predicate_owner(&predicate);
     let predicate_tx = TransactionBuilder::script(Default::default(), Default::default())
         .add_input(Input::coin_predicate(
             rng.gen(),
