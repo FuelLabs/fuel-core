@@ -150,5 +150,4 @@ pub fn run_crypto(group: &mut BenchmarkGroup<WallTime>) {
     //                     .collect(),
     //             ),
     //     );
-    todo!()
 }
