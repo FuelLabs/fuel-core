@@ -173,19 +173,6 @@ fn block_target_gas(c: &mut Criterion) {
         vec![],
     );
 
-    // The test is supper long because we don't use `DependentCost` for k256 opcode
-    // run(
-    //     "Script with k256 opcode and infinite loop",
-    //     &mut group,
-    //     [
-    //         op::movi(0x10, 1 << 18 - 1),
-    //         op::aloc(0x10),
-    //         op::k256(RegId::HP, RegId::ZERO, 0x10),
-    //         op::jmpb(RegId::ZERO, 0),
-    //     ]
-    //     .to_vec(),
-    // );
-
     run_alu(&mut group);
 
     run_crypto(&mut group);
