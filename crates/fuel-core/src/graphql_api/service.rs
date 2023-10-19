@@ -68,6 +68,7 @@ use std::{
 use tokio_stream::StreamExt;
 use tower_http::{
     set_header::SetResponseHeaderLayer,
+    timeout::TimeoutLayer,
     trace::TraceLayer,
 };
 
@@ -155,7 +156,8 @@ impl RunnableTask for Task {
     }
 }
 
-// Need a separate Data Object for each Query endpoint, cannot be avoided
+// Need a seperate Data Object for each Query endpoint, cannot be avoided
+#[allow(clippy::too_many_arguments)]
 pub fn new_service(
     config: Config,
     schema: CoreSchemaBuilder,
@@ -163,7 +165,8 @@ pub fn new_service(
     txpool: TxPool,
     producer: BlockProducer,
     consensus_module: ConsensusModule,
-    _log_threshold_ms: Duration,
+    log_threshold_ms: Duration,
+    request_timeout: Duration,
 ) -> anyhow::Result<Service> {
     let network_addr = config.addr;
 
@@ -174,7 +177,7 @@ pub fn new_service(
         .data(producer)
         .data(consensus_module)
         .extension(async_graphql::extensions::Tracing)
-        .extension(MetricsExtension::new(_log_threshold_ms))
+        .extension(MetricsExtension::new(log_threshold_ms))
         .finish();
 
     let router = Router::new()
@@ -188,6 +191,7 @@ pub fn new_service(
         .route("/health", get(health))
         .layer(Extension(schema))
         .layer(TraceLayer::new_for_http())
+        .layer(TimeoutLayer::new(request_timeout))
         .layer(SetResponseHeaderLayer::<_>::overriding(
             ACCESS_CONTROL_ALLOW_ORIGIN,
             HeaderValue::from_static("*"),

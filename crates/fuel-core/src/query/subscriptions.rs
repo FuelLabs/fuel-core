@@ -30,7 +30,7 @@ where
 }
 
 #[tracing::instrument(skip(state, stream), fields(transaction_id = %transaction_id))]
-pub(crate) async fn transaction_status_change<'a, State>(
+pub(crate) fn transaction_status_change<'a, State>(
     state: State,
     stream: BoxStream<'a, TxStatusMessage>,
     transaction_id: Bytes32,
