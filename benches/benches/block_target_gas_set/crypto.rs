@@ -4,36 +4,12 @@ use rand::{
     SeedableRng,
 };
 
+// ECK1: Secp251k1 signature recovery
+// ECR1: Secp256r1 signature recovery
+// ED19: edDSA curve25519 verification
+// K256: keccak-256
+// S256: SHA-2-256
 pub fn run_crypto(group: &mut BenchmarkGroup<WallTime>) {
-    //     let rng = &mut StdRng::seed_from_u64(2322u64);
-    //
-    //     let message = Message::new(b"foo");
-    //
-    //     let eck1_secret = SecretKey::random(rng);
-    //     let eck1_signature = Signature::sign(&eck1_secret, &message);
-    //
-    //     run_group_ref(
-    //         &mut c.benchmark_group("eck1"),
-    //         "eck1",
-    //         VmBench::new(op::eck1(RegId::HP, 0x20, 0x21))
-    //             .with_prepare_script(vec![
-    //                 op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
-    //                 op::addi(
-    //                     0x21,
-    //                     0x20,
-    //                     eck1_signature.as_ref().len().try_into().unwrap(),
-    //                 ),
-    //                 op::movi(0x10, PublicKey::LEN.try_into().unwrap()),
-    //                 op::aloc(0x10),
-    //             ])
-    //             .with_data(
-    //                 eck1_signature
-    //                     .iter()
-    //                     .chain(message.iter())
-    //                     .copied()
-    //                     .collect(),
-    //             ),
-    //     );
     let rng = &mut StdRng::seed_from_u64(2322u64);
 
     let message = Message::new(b"foo");
@@ -63,48 +39,88 @@ pub fn run_crypto(group: &mut BenchmarkGroup<WallTime>) {
             .collect(),
     );
 
-    //     let ecr1_secret = p256::ecdsa::SigningKey::random(rng);
-    //     let ecr1_signature = secp256r1::sign_prehashed(&ecr1_secret, &message)
-    //         .expect("Failed to sign with secp256r1");
-    //
-    //     run_group_ref(
-    //         &mut c.benchmark_group("ecr1"),
-    //         "ecr1",
-    //         VmBench::new(op::ecr1(RegId::HP, 0x20, 0x21))
-    //             .with_prepare_script(vec![
-    //                 op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
-    //                 op::addi(
-    //                     0x21,
-    //                     0x20,
-    //                     ecr1_signature.as_ref().len().try_into().unwrap(),
-    //                 ),
-    //                 op::movi(0x10, PublicKey::LEN.try_into().unwrap()),
-    //                 op::aloc(0x10),
-    //             ])
-    //             .with_data(
-    //                 ecr1_signature
-    //                     .iter()
-    //                     .chain(message.iter())
-    //                     .copied()
-    //                     .collect(),
-    //             ),
-    //     );
-    //
-    //     let linear = super::generate_linear_costs();
-    //
-    //     let mut bench_k256 = c.benchmark_group("k256");
-    //     for i in &linear {
-    //         bench_k256.throughput(Throughput::Bytes(*i as u64));
-    //         run_group_ref(
-    //             &mut bench_k256,
-    //             format!("{i}"),
-    //             VmBench::new(op::k256(RegId::HP, RegId::ZERO, 0x10)).with_prepare_script(
-    //                 vec![op::movi(0x11, 32), op::aloc(0x11), op::movi(0x10, *i)],
-    //             ),
-    //         );
-    //     }
-    //     bench_k256.finish();
-    //
+    let message = fuel_core_types::fuel_crypto::Message::new(b"foo");
+    let ecr1_secret = p256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+    let ecr1_signature = secp256r1::sign_prehashed(&ecr1_secret, &message)
+        .expect("Failed to sign with secp256r1");
+
+    run(
+        "crypto/ecr1 opcode",
+        group,
+        [
+            op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
+            op::addi(
+                0x21,
+                0x20,
+                ecr1_signature.as_ref().len().try_into().unwrap(),
+            ),
+            op::addi(0x22, 0x21, message.as_ref().len().try_into().unwrap()),
+            op::movi(0x10, PublicKey::LEN.try_into().unwrap()),
+            op::aloc(0x10),
+            op::move_(0x11, RegId::HP),
+            op::ecr1(0x11, 0x20, 0x21),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        ecr1_signature
+            .as_ref()
+            .iter()
+            .chain(message.as_ref())
+            .copied()
+            .collect(),
+    );
+
+    let message = fuel_core_types::fuel_crypto::Message::new(b"foo");
+    let ed19_keypair =
+        ed25519_dalek::Keypair::generate(&mut ed25519_dalek_old_rand::rngs::OsRng {});
+    let ed19_signature = ed19_keypair.sign(&*message);
+
+    run(
+        "crypto/ed19 opcode",
+        group,
+        [
+            op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
+            op::addi(
+                0x21,
+                0x20,
+                ed19_keypair.public.as_ref().len().try_into().unwrap(),
+            ),
+            op::addi(
+                0x22,
+                0x21,
+                ed19_signature.as_ref().len().try_into().unwrap(),
+            ),
+            op::addi(0x22, 0x21, message.as_ref().len().try_into().unwrap()),
+            op::movi(0x10, ed25519_dalek::PUBLIC_KEY_LENGTH.try_into().unwrap()),
+            op::aloc(0x10),
+            op::move_(0x11, RegId::HP),
+            op::ed19(0x20, 0x21, 0x22),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        ed19_keypair
+            .public
+            .as_ref()
+            .iter()
+            .chain(ed19_signature.as_ref())
+            .chain(message.as_ref())
+            .copied()
+            .collect(),
+    );
+
+    // The test is supper long because we don't use `DependentCost` for k256 opcode
+    // run(
+    //     "Script with k256 opcode and infinite loop",
+    //     &mut group,
+    //     [
+    //         op::movi(0x10, 1 << 18 - 1),
+    //         op::aloc(0x10),
+    //         op::k256(RegId::HP, RegId::ZERO, 0x10),
+    //         op::jmpb(RegId::ZERO, 0),
+    //     ]
+    //     .to_vec(),
+    // );
+
     //     let mut bench_s256 = c.benchmark_group("s256");
     //     for i in &linear {
     //         bench_s256.throughput(Throughput::Bytes(*i as u64));
@@ -117,37 +133,17 @@ pub fn run_crypto(group: &mut BenchmarkGroup<WallTime>) {
     //         );
     //     }
     //     bench_s256.finish();
-    //
-    //     let ed19_keypair =
-    //         ed25519_dalek::Keypair::generate(&mut ed25519_dalek_old_rand::rngs::OsRng {});
-    //     let ed19_signature = ed19_keypair.sign(&*message);
-    //
-    //     run_group_ref(
-    //         &mut c.benchmark_group("ed19"),
-    //         "ed19",
-    //         VmBench::new(op::ed19(0x20, 0x21, 0x22))
-    //             .with_prepare_script(vec![
-    //                 op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
-    //                 op::addi(
-    //                     0x21,
-    //                     0x20,
-    //                     ed19_keypair.public.as_ref().len().try_into().unwrap(),
-    //                 ),
-    //                 op::addi(
-    //                     0x22,
-    //                     0x21,
-    //                     ed19_signature.as_ref().len().try_into().unwrap(),
-    //                 ),
-    //             ])
-    //             .with_data(
-    //                 ed19_keypair
-    //                     .public
-    //                     .to_bytes()
-    //                     .iter()
-    //                     .chain(ed19_signature.to_bytes().iter())
-    //                     .chain(message.iter())
-    //                     .copied()
-    //                     .collect(),
-    //             ),
-    //     );
+
+    run(
+        "crypto/k256 opcode",
+        group,
+        [
+            op::movi(0x10, 32),
+            op::aloc(0x10),
+            op::k256(RegId::HP, RegId::ZERO, 0x10),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    )
 }
