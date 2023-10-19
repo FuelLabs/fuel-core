@@ -117,12 +117,12 @@ fn run(
                 let res = sub.recv().await.expect("Should produce a block");
                 assert_eq!(res.tx_status.len(), 2);
                 assert_eq!(res.sealed_block.entity.transactions().len(), 2);
-                assert_eq!(res.tx_status[1].id, tx_id);
+                assert_eq!(res.tx_status[0].id, tx_id);
 
                 let fuel_core_types::services::executor::TransactionExecutionResult::Failed {
                     reason,
                     ..
-                } = &res.tx_status[1].result
+                } = &res.tx_status[0].result
                     else {
                         panic!("The execution should fails with out of gas")
                     };
