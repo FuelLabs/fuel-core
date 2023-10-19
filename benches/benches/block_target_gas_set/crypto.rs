@@ -1,4 +1,7 @@
-use crate::*;
+use crate::{
+    utils::generate_linear_costs,
+    *,
+};
 use rand::{
     rngs::StdRng,
     SeedableRng,
@@ -134,16 +137,20 @@ pub fn run_crypto(group: &mut BenchmarkGroup<WallTime>) {
     //     }
     //     bench_s256.finish();
 
-    run(
-        "crypto/k256 opcode",
-        group,
-        [
-            op::movi(0x10, 32),
-            op::aloc(0x10),
-            op::k256(RegId::HP, RegId::ZERO, 0x10),
-            op::jmpb(RegId::ZERO, 0),
-        ]
-        .to_vec(),
-        vec![],
-    )
+    for i in generate_linear_costs() {
+        let id = format!("crypto/k256 opcode {:?}", i);
+        run(
+            &id,
+            group,
+            [
+                op::movi(0x11, 32),
+                op::aloc(0x11),
+                op::movi(0x10, i),
+                op::k256(RegId::HP, RegId::ZERO, 0x10),
+                op::jmpb(RegId::ZERO, 0),
+            ]
+            .to_vec(),
+            vec![],
+        )
+    }
 }
