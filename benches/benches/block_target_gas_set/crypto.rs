@@ -111,32 +111,6 @@ pub fn run_crypto(group: &mut BenchmarkGroup<WallTime>) {
             .collect(),
     );
 
-    // The test is supper long because we don't use `DependentCost` for k256 opcode
-    // run(
-    //     "Script with k256 opcode and infinite loop",
-    //     &mut group,
-    //     [
-    //         op::movi(0x10, 1 << 18 - 1),
-    //         op::aloc(0x10),
-    //         op::k256(RegId::HP, RegId::ZERO, 0x10),
-    //         op::jmpb(RegId::ZERO, 0),
-    //     ]
-    //     .to_vec(),
-    // );
-
-    //     let mut bench_s256 = c.benchmark_group("s256");
-    //     for i in &linear {
-    //         bench_s256.throughput(Throughput::Bytes(*i as u64));
-    //         run_group_ref(
-    //             &mut bench_s256,
-    //             format!("{i}"),
-    //             VmBench::new(op::s256(RegId::HP, RegId::ZERO, 0x10)).with_prepare_script(
-    //                 vec![op::movi(0x11, 32), op::aloc(0x11), op::movi(0x10, *i)],
-    //             ),
-    //         );
-    //     }
-    //     bench_s256.finish();
-
     for i in generate_linear_costs() {
         let id = format!("crypto/s256 opcode {:?}", i);
         run(
