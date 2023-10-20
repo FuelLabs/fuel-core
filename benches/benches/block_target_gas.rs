@@ -1,5 +1,6 @@
 use block_target_gas_set::{
     alu::run_alu,
+    contract::run_contract,
     crypto::run_crypto,
     flow::run_flow,
 };
@@ -175,6 +176,8 @@ fn block_target_gas(c: &mut Criterion) {
     );
 
     run_alu(&mut group);
+
+    run_contract(&mut group);
 
     run_crypto(&mut group);
 
