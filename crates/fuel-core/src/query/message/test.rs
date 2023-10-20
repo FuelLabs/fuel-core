@@ -164,7 +164,7 @@ async fn can_build_message_proof() {
         .once()
         .with(
             eq(message_block_height),
-            eq(commit_block_height - 1u32.into()),
+            eq(commit_block_height.pred().expect("Non-zero block height")),
         )
         .returning({
             let block_proof = block_proof.clone();

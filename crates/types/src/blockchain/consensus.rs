@@ -35,7 +35,10 @@ impl Consensus {
         match &self {
             Consensus::Genesis(_) => Ok(Address::zeroed()),
             Consensus::PoA(poa_data) => {
-                let public_key = poa_data.signature.recover(block_id.as_message())?;
+                let public_key = poa_data
+                    .signature
+                    .recover(block_id.as_message())
+                    .map_err(|e| anyhow::anyhow!("Can't recover public key: {:?}", e))?;
                 let address = Input::owner(&public_key);
                 Ok(address)
             }

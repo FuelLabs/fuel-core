@@ -20,7 +20,7 @@ pub(crate) fn create_message_predicate_from_message(
     let predicate = vec![op::ret(1)].into_iter().collect::<Vec<u8>>();
     let message = Message {
         sender: Default::default(),
-        recipient: Input::predicate_owner(&predicate, &Default::default()),
+        recipient: Input::predicate_owner(&predicate),
         nonce: nonce.into(),
         amount,
         data: vec![],
@@ -31,7 +31,7 @@ pub(crate) fn create_message_predicate_from_message(
         message.clone(),
         Input::message_coin_predicate(
             message.sender,
-            Input::predicate_owner(&predicate, &Default::default()),
+            Input::predicate_owner(&predicate),
             message.amount,
             message.nonce,
             Default::default(),
