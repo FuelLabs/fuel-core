@@ -144,20 +144,17 @@ impl Bootstrap {
                         break;
                     }
                     event = bootstrap.next_event() => {
-                        match event {
-                            // The bootstrap node only forwards data without validating it.
-                            Some(FuelP2PEvent::GossipsubMessage {
+                        // The bootstrap node only forwards data without validating it.
+                        if let Some(FuelP2PEvent::GossipsubMessage {
+                            peer_id,
+                            message_id,
+                            ..
+                        }) = event {
+                            bootstrap.report_message_validation_result(
+                                &message_id,
                                 peer_id,
-                                message_id,
-                                ..
-                            }) => {
-                                bootstrap.report_message_validation_result(
-                                    &message_id,
-                                    peer_id,
-                                    to_message_acceptance(&GossipsubMessageAcceptance::Accept)
-                                )
-                            }
-                            _ => {},
+                                to_message_acceptance(&GossipsubMessageAcceptance::Accept)
+                            )
                         }
                     }
                 }

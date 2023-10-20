@@ -220,5 +220,5 @@ async fn test_tx_gossiping_non_reserved_nodes_invalid_txs() {
     // and verifies that sending a valid one will be ignored.
     let status = test_tx_gossiping_invalid_txs(BootstrapType::BootstrapNodes).await;
 
-    assert!(matches!(status, Err(_)));
+    assert!(status.is_err());
 }
