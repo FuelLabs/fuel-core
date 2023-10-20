@@ -108,7 +108,35 @@ enum TaskRequest {
 
 impl Debug for TaskRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TaskRequest")
+        match self {
+            TaskRequest::BroadcastTransaction(_) => {
+                write!(f, "TaskRequest::BroadcastTransaction")
+            }
+            TaskRequest::BroadcastBlock(_) => {
+                write!(f, "TaskRequest::BroadcastBlock")
+            }
+            TaskRequest::BroadcastVote(_) => {
+                write!(f, "TaskRequest::BroadcastVote")
+            }
+            TaskRequest::GetPeerIds(_) => {
+                write!(f, "TaskRequest::GetPeerIds")
+            }
+            TaskRequest::GetBlock { .. } => {
+                write!(f, "TaskRequest::GetBlock")
+            }
+            TaskRequest::GetSealedHeader { .. } => {
+                write!(f, "TaskRequest::v")
+            }
+            TaskRequest::GetTransactions { .. } => {
+                write!(f, "TaskRequest::GetTransactions")
+            }
+            TaskRequest::RespondWithGossipsubMessageReport(_) => {
+                write!(f, "TaskRequest::RespondWithGossipsubMessageReport")
+            }
+            TaskRequest::RespondWithPeerReport { .. } => {
+                write!(f, "TaskRequest::RespondWithPeerReport")
+            }
+        }
     }
 }
 
@@ -131,9 +159,9 @@ impl<D> Task<D> {
         db: Arc<D>,
         block_importer: Arc<B>,
     ) -> Self {
-        let (request_sender, request_receiver) = mpsc::channel(100);
-        let (tx_broadcast, _) = broadcast::channel(100);
-        let (block_height_broadcast, _) = broadcast::channel(100);
+        let (request_sender, request_receiver) = mpsc::channel(1024 * 10);
+        let (tx_broadcast, _) = broadcast::channel(1024 * 10);
+        let (block_height_broadcast, _) = broadcast::channel(1024 * 10);
 
         let next_block_height = block_importer.next_block_height();
         let max_block_size = config.max_block_size;
@@ -198,6 +226,7 @@ where
             }
 
             next_service_request = self.request_receiver.recv() => {
+                println!("Request: {:?}", next_service_request);
                 should_continue = true;
                 match next_service_request {
                     Some(TaskRequest::BroadcastTransaction(transaction)) => {
@@ -267,6 +296,7 @@ where
                         let _ = self.shared.block_height_broadcast.send(block_height_data);
                     }
                     Some(FuelP2PEvent::GossipsubMessage { message, message_id, peer_id,.. }) => {
+                        println!("Gossipsub Me ssage::tx_broadcast");
                         let message_id = message_id.0;
 
                         match message {
@@ -506,7 +536,7 @@ where
     ))
 }
 
-pub(crate) fn to_message_acceptance(
+pub fn to_message_acceptance(
     acceptance: &GossipsubMessageAcceptance,
 ) -> MessageAcceptance {
     match acceptance {

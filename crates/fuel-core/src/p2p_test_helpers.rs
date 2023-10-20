@@ -14,6 +14,8 @@ use crate::{
 use fuel_core_p2p::{
     codecs::postcard::PostcardCodec,
     network_service::FuelP2PService,
+    p2p_service::FuelP2PEvent,
+    service::to_message_acceptance,
 };
 use fuel_core_poa::{
     ports::BlockImporter,
@@ -43,6 +45,7 @@ use fuel_core_types::{
         Bytes32,
     },
     secrecy::Secret,
+    services::p2p::GossipsubMessageAcceptance,
 };
 use futures::StreamExt;
 use itertools::Itertools;
@@ -71,6 +74,8 @@ pub struct ProducerSetup {
     pub secret: SecretKey,
     /// Number of test transactions to create for this producer.
     pub num_test_txs: usize,
+    /// Enable full utxo stateful validation.
+    pub utxo_validation: bool,
 }
 
 #[derive(Clone)]
@@ -80,6 +85,8 @@ pub struct ValidatorSetup {
     pub name: String,
     /// Public key of the producer to sync from.
     pub pub_key: Address,
+    /// Enable full utxo stateful validation.
+    pub utxo_validation: bool,
 }
 
 #[derive(Clone)]
@@ -126,7 +133,23 @@ impl Bootstrap {
                         assert!(result.is_ok());
                         break;
                     }
-                    _ = bootstrap.next_event() => {}
+                    event = bootstrap.next_event() => {
+                        match event {
+                            // The bootstrap node only forwards data without validating it.
+                            Some(FuelP2PEvent::GossipsubMessage {
+                                peer_id,
+                                message_id,
+                                ..
+                            }) => {
+                                bootstrap.report_message_validation_result(
+                                    &message_id,
+                                    peer_id,
+                                    to_message_acceptance(&GossipsubMessageAcceptance::Accept)
+                                )
+                            }
+                            _ => {},
+                        }
+                    }
                 }
             }
         });
@@ -253,9 +276,18 @@ pub async fn make_nodes(
 
         let mut test_txs = Vec::with_capacity(0);
         node_config.block_production = Trigger::Instant;
-        node_config.p2p.as_mut().unwrap().bootstrap_nodes = boots.clone();
+        node_config.p2p.as_mut().unwrap().reserved_nodes = boots.clone();
 
-        if let Some((ProducerSetup { secret, .. }, txs)) = s {
+        if let Some((
+            ProducerSetup {
+                secret,
+                utxo_validation,
+                ..
+            },
+            txs,
+        )) = s
+        {
+            node_config.utxo_validation = utxo_validation;
             let pub_key = secret.public_key();
             match &mut node_config.chain_conf.consensus {
                 crate::chain_config::ConsensusConfig::PoA { signing_key } => {
@@ -283,9 +315,15 @@ pub async fn make_nodes(
             chain_config.clone(),
         );
         node_config.block_production = Trigger::Never;
-        node_config.p2p.as_mut().unwrap().bootstrap_nodes = boots.clone();
+        node_config.p2p.as_mut().unwrap().reserved_nodes = boots.clone();
 
-        if let Some(ValidatorSetup { pub_key, .. }) = s {
+        if let Some(ValidatorSetup {
+            pub_key,
+            utxo_validation,
+            ..
+        }) = s
+        {
+            node_config.utxo_validation = utxo_validation;
             match &mut node_config.chain_conf.consensus {
                 crate::chain_config::ConsensusConfig::PoA { signing_key } => {
                     *signing_key = pub_key;
@@ -340,6 +378,11 @@ fn extract_p2p_config(node_config: &Config) -> fuel_core_p2p::config::Config {
 }
 
 impl Node {
+    /// Returns the vector of valid transactions for pre-initialized state.
+    pub fn test_transactions(&self) -> &Vec<Transaction> {
+        &self.test_txs
+    }
+
     /// Waits for `number_of_blocks` and each block should be `is_local`
     pub async fn wait_for_blocks(&self, number_of_blocks: usize, is_local: bool) {
         let mut stream = self
@@ -450,6 +493,7 @@ impl ProducerSetup {
             name: Default::default(),
             secret,
             num_test_txs: Default::default(),
+            utxo_validation: true,
         }
     }
 
@@ -466,6 +510,13 @@ impl ProducerSetup {
             ..self
         }
     }
+
+    pub fn disable_utxo_validation(self) -> Self {
+        Self {
+            utxo_validation: false,
+            ..self
+        }
+    }
 }
 
 impl ValidatorSetup {
@@ -473,12 +524,20 @@ impl ValidatorSetup {
         Self {
             pub_key,
             name: Default::default(),
+            utxo_validation: true,
         }
     }
 
     pub fn with_name(self, name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
+            ..self
+        }
+    }
+
+    pub fn disable_utxo_validation(self) -> Self {
+        Self {
+            utxo_validation: false,
             ..self
         }
     }
