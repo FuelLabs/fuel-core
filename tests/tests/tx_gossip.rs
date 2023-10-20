@@ -1,13 +1,15 @@
 use fuel_core::p2p_test_helpers::{
-        make_nodes,
-        BootstrapSetup,
-        Nodes,
-        ProducerSetup,
-        ValidatorSetup,
-    };
+    make_nodes,
+    BootstrapSetup,
+    Nodes,
+    ProducerSetup,
+    ValidatorSetup,
+};
 use fuel_core_client::client::FuelClient;
-use fuel_core_types::fuel_vm::*;
-use fuel_core_types::fuel_tx::input::Input;
+use fuel_core_types::{
+    fuel_tx::input::Input,
+    fuel_vm::*,
+};
 
 use rand::{
     rngs::StdRng,
