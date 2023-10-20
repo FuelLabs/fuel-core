@@ -37,8 +37,9 @@ static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 fn basic_transfers(c: &mut Criterion) {
     let transfer_bench = |c: &mut BenchmarkGroup<WallTime>, n: u32| {
-        let id = format!("basic transfers {}", n);
+        let id = format!("{}", n);
         c.bench_function(id.as_str(), |b| {
+            eprintln!("setting up test");
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -92,10 +93,12 @@ fn basic_transfers(c: &mut Criterion) {
             let transactions: Vec<Transaction> =
                 transactions.into_iter().map(|tx| tx.into()).collect();
             let transactions = Arc::new(transactions);
+            eprintln!("test setup");
             b.to_async(&rt).iter(|| {
                 let client = client.clone();
                 let transactions = transactions.clone();
                 async move {
+                    eprintln!("running test");
                     // insert all transactions
                     let submits = FuturesUnordered::new();
                     for tx in transactions.iter() {
@@ -103,7 +106,8 @@ fn basic_transfers(c: &mut Criterion) {
                     }
                     let _: Vec<_> = submits.collect().await;
 
-                    client.produce_blocks(1, None).await
+                    let _ = client.produce_blocks(1, None).await;
+                    eprintln!("finished test");
                 }
             });
         });
