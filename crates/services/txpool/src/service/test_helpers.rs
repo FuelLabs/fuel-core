@@ -112,6 +112,11 @@ impl MockP2P {
             let stream = fuel_core_services::stream::empty::<PeerId>();
             Box::pin(stream)
         });
+        p2p.expect_incoming_pooled_transactions()
+            .returning(move || {
+                let stream = fuel_core_services::stream::empty::<Vec<Transaction>>();
+                Box::pin(stream)
+            });
         p2p
     }
 }
