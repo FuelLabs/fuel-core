@@ -16,14 +16,14 @@ pub fn run_flow(group: &mut BenchmarkGroup<WallTime>) {
     run(
         "flow/jmp opcode",
         group,
-        vec![op::movi(0x10, 0), op::jmp(0x10)].to_vec(),
+        vec![op::movi(0x10, 0), op::jmp(0x10)],
         vec![],
     );
 
     run(
         "flow/ji opcode",
         group,
-        vec![op::ji(0), op::jmpb(RegId::ZERO, 0)].to_vec(),
+        vec![op::ji(0), op::jmpb(RegId::ZERO, 0)],
         vec![],
     );
 
@@ -34,8 +34,7 @@ pub fn run_flow(group: &mut BenchmarkGroup<WallTime>) {
             op::movi(0x10, 0),
             op::jne(RegId::ZERO, RegId::ONE, 0x10),
             op::jmpb(RegId::ZERO, 0),
-        ]
-        .to_vec(),
+        ],
         vec![],
     );
 
@@ -45,15 +44,14 @@ pub fn run_flow(group: &mut BenchmarkGroup<WallTime>) {
         vec![
             op::jnei(RegId::ZERO, RegId::ONE, 0),
             op::jmpb(RegId::ZERO, 0),
-        ]
-        .to_vec(),
+        ],
         vec![],
     );
 
     run(
         "flow/jnzi opcode",
         group,
-        vec![op::jnzi(RegId::ONE, 0), op::jmpb(RegId::ZERO, 0)].to_vec(),
+        vec![op::jnzi(RegId::ONE, 0), op::jmpb(RegId::ZERO, 0)],
         vec![],
     );
 
