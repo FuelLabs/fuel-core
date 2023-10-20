@@ -1,15 +1,21 @@
 use fuel_core::p2p_test_helpers::{
     make_nodes,
     BootstrapSetup,
+    BootstrapType,
     Nodes,
     ProducerSetup,
     ValidatorSetup,
 };
-use fuel_core_client::client::FuelClient;
+use fuel_core_client::client::{
+    types::TransactionStatus,
+    FuelClient,
+};
+use fuel_core_poa::ports::BlockImporter;
 use fuel_core_types::{
     fuel_tx::*,
     fuel_vm::*,
 };
+use futures::StreamExt;
 use rand::{
     rngs::StdRng,
     SeedableRng,
@@ -20,12 +26,12 @@ use std::{
         Hash,
         Hasher,
     },
+    io,
     time::Duration,
 };
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_tx_gossiping() {
-    use futures::StreamExt;
     // Create a random seed based on the test parameters.
     let mut hasher = DefaultHasher::new();
     let num_txs = 1;
@@ -91,8 +97,11 @@ async fn test_tx_gossiping() {
     assert!(response.is_some());
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_tx_gossiping_reserved_nodes_invalid_txs() {
+const NUMBER_OF_INVALID_TXS: usize = 100;
+
+async fn test_tx_gossiping_invalid_txs(
+    bootstrap_type: BootstrapType,
+) -> io::Result<TransactionStatus> {
     // Create a random seed based on the test parameters.
     let mut hasher = DefaultHasher::new();
     let num_txs = 1;
@@ -123,7 +132,8 @@ async fn test_tx_gossiping_reserved_nodes_invalid_txs() {
             Some(
                 ProducerSetup::new(secret)
                     .with_txs(num_txs)
-                    .with_name(format!("{}:producer", pub_keys[i])),
+                    .with_name(format!("{}:producer", pub_keys[i]))
+                    .bootstrap_type(bootstrap_type),
             )
         }),
         pub_keys.iter().flat_map(|pub_key| {
@@ -131,8 +141,9 @@ async fn test_tx_gossiping_reserved_nodes_invalid_txs() {
                 Some(
                     ValidatorSetup::new(*pub_key)
                         .with_name(format!("{pub_key}:{i}"))
+                        .bootstrap_type(bootstrap_type)
                         // Validator wants to send invalid transactions.
-                        .disable_utxo_validation(),
+                        .utxo_validation(false),
                 )
             })
         }),
@@ -143,11 +154,11 @@ async fn test_tx_gossiping_reserved_nodes_invalid_txs() {
     let sentry = &validators[0];
 
     // Time for nodes to connect to each other.
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    tokio::time::sleep(Duration::from_secs(2)).await;
 
     use rand::Rng;
 
-    for _ in 0..1000 {
+    for _ in 0..NUMBER_OF_INVALID_TXS {
         let invalid_tx = TransactionBuilder::script(vec![], vec![])
             .add_unsigned_coin_input(
                 rng.gen(),
@@ -165,23 +176,49 @@ async fn test_tx_gossiping_reserved_nodes_invalid_txs() {
         );
     }
 
-    let valid_transaction = authority.test_transactions()[0].clone();
-    let _ = tokio::time::timeout(
-        Duration::from_secs(5),
-        sentry.node.submit_and_await_commit(valid_transaction.clone()),
-    )
-    .await
-    .expect_err("The authority node shouldn't accept a valid transaction after decreasing sentries reputation.");
+    // Give some time to receive all invalid transactions.
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
-    // While submitting valid transaction to authority node should include it into the block.
-    let status = authority
+    let mut authority_blocks = authority.node.shared.block_importer.block_stream();
+
+    // Submit a valid transaction from banned sentry to an authority node.
+    let valid_transaction = authority.test_transactions()[0].clone();
+    sentry
         .node
-        .submit_and_await_commit(valid_transaction)
+        .submit(valid_transaction.clone())
         .await
-        .expect("Should submit valid transaction without any errors.");
+        .expect("Transaction is valid");
+    let _ = tokio::time::timeout(Duration::from_secs(5), authority_blocks.next()).await;
+
+    let authority_client = FuelClient::from(authority.node.bound_address);
+    authority_client
+        .transaction_status(&valid_transaction.id(&Default::default()))
+        .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_tx_gossiping_reserved_nodes_invalid_txs() {
+    // Test verifies that gossiping of invalid transactions from reserved
+    // nodes doesn't decrease its reputation.
+    // After gossiping `NUMBER_OF_INVALID_TXS` transactions,
+    // we will gossip one valid transaction, and it should be included.
+    let status = test_tx_gossiping_invalid_txs(BootstrapType::ReservedNodes).await;
 
     assert!(matches!(
         status,
-        fuel_core::schema::tx::types::TransactionStatus::Success(_)
+        Ok(fuel_core_client::client::types::TransactionStatus::Success { .. })
     ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_tx_gossiping_non_reserved_nodes_invalid_txs() {
+    // This test is opposite to the `test_tx_gossiping_reserved_nodes_invalid_txs`.
+    // It verifies that gossiping about invalid transactions from
+    // non-reserved peers disconnects them.
+    //
+    // The test sends `NUMBER_OF_INVALID_TXS` invalid transactions,
+    // and verifies that sending a valid one will be ignored.
+    let status = test_tx_gossiping_invalid_txs(BootstrapType::BootstrapNodes).await;
+
+    assert!(matches!(status, Err(_)));
 }

@@ -239,11 +239,9 @@ where
 
                             match result.pop() {
                                 Some(Ok(_)) => {
-                                    println!("TxPool Gossisping: Accept");
                                     GossipsubMessageAcceptance::Accept
                                 },
                                 Some(Err(_)) => {
-                                    println!("TxPool Gossisping: Reject");
                                     GossipsubMessageAcceptance::Reject
                                 }
                                 _ => GossipsubMessageAcceptance::Ignore

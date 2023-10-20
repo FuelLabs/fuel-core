@@ -65,6 +65,12 @@ use std::{
 };
 use tokio::sync::broadcast;
 
+#[derive(Copy, Clone)]
+pub enum BootstrapType {
+    BootstrapNodes,
+    ReservedNodes,
+}
+
 #[derive(Clone)]
 /// Setup for a producer node
 pub struct ProducerSetup {
@@ -76,6 +82,8 @@ pub struct ProducerSetup {
     pub num_test_txs: usize,
     /// Enable full utxo stateful validation.
     pub utxo_validation: bool,
+    /// Indicates the type of initial connections.
+    pub bootstrap_type: BootstrapType,
 }
 
 #[derive(Clone)]
@@ -87,6 +95,8 @@ pub struct ValidatorSetup {
     pub pub_key: Address,
     /// Enable full utxo stateful validation.
     pub utxo_validation: bool,
+    /// Indicates the type of initial connections.
+    pub bootstrap_type: BootstrapType,
 }
 
 #[derive(Clone)]
@@ -276,17 +286,26 @@ pub async fn make_nodes(
 
         let mut test_txs = Vec::with_capacity(0);
         node_config.block_production = Trigger::Instant;
-        node_config.p2p.as_mut().unwrap().reserved_nodes = boots.clone();
 
         if let Some((
             ProducerSetup {
                 secret,
                 utxo_validation,
+                bootstrap_type,
                 ..
             },
             txs,
         )) = s
         {
+            match bootstrap_type {
+                BootstrapType::BootstrapNodes => {
+                    node_config.p2p.as_mut().unwrap().bootstrap_nodes = boots.clone();
+                }
+                BootstrapType::ReservedNodes => {
+                    node_config.p2p.as_mut().unwrap().reserved_nodes = boots.clone();
+                }
+            }
+
             node_config.utxo_validation = utxo_validation;
             let pub_key = secret.public_key();
             match &mut node_config.chain_conf.consensus {
@@ -315,15 +334,24 @@ pub async fn make_nodes(
             chain_config.clone(),
         );
         node_config.block_production = Trigger::Never;
-        node_config.p2p.as_mut().unwrap().reserved_nodes = boots.clone();
 
         if let Some(ValidatorSetup {
             pub_key,
             utxo_validation,
+            bootstrap_type,
             ..
         }) = s
         {
             node_config.utxo_validation = utxo_validation;
+
+            match bootstrap_type {
+                BootstrapType::BootstrapNodes => {
+                    node_config.p2p.as_mut().unwrap().bootstrap_nodes = boots.clone();
+                }
+                BootstrapType::ReservedNodes => {
+                    node_config.p2p.as_mut().unwrap().reserved_nodes = boots.clone();
+                }
+            }
             match &mut node_config.chain_conf.consensus {
                 crate::chain_config::ConsensusConfig::PoA { signing_key } => {
                     *signing_key = pub_key;
@@ -494,6 +522,7 @@ impl ProducerSetup {
             secret,
             num_test_txs: Default::default(),
             utxo_validation: true,
+            bootstrap_type: BootstrapType::BootstrapNodes,
         }
     }
 
@@ -511,9 +540,16 @@ impl ProducerSetup {
         }
     }
 
-    pub fn disable_utxo_validation(self) -> Self {
+    pub fn utxo_validation(self, utxo_validation: bool) -> Self {
         Self {
-            utxo_validation: false,
+            utxo_validation,
+            ..self
+        }
+    }
+
+    pub fn bootstrap_type(self, bootstrap_type: BootstrapType) -> Self {
+        Self {
+            bootstrap_type,
             ..self
         }
     }
@@ -525,6 +561,7 @@ impl ValidatorSetup {
             pub_key,
             name: Default::default(),
             utxo_validation: true,
+            bootstrap_type: BootstrapType::BootstrapNodes,
         }
     }
 
@@ -535,9 +572,16 @@ impl ValidatorSetup {
         }
     }
 
-    pub fn disable_utxo_validation(self) -> Self {
+    pub fn utxo_validation(self, utxo_validation: bool) -> Self {
         Self {
-            utxo_validation: false,
+            utxo_validation,
+            ..self
+        }
+    }
+
+    pub fn bootstrap_type(self, bootstrap_type: BootstrapType) -> Self {
+        Self {
+            bootstrap_type,
             ..self
         }
     }

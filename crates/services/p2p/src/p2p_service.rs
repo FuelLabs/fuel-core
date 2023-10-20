@@ -382,7 +382,6 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         // Even invalid transactions shouldn't affect reserved peer reputation.
         if let MessageAcceptance::Reject = acceptance {
             if self.peer_manager.is_reserved(&propagation_source) {
-                println!("report_message_validation_result");
                 acceptance = MessageAcceptance::Ignore;
             }
         }

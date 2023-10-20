@@ -226,7 +226,6 @@ where
             }
 
             next_service_request = self.request_receiver.recv() => {
-                println!("Request: {:?}", next_service_request);
                 should_continue = true;
                 match next_service_request {
                     Some(TaskRequest::BroadcastTransaction(transaction)) => {
@@ -296,7 +295,6 @@ where
                         let _ = self.shared.block_height_broadcast.send(block_height_data);
                     }
                     Some(FuelP2PEvent::GossipsubMessage { message, message_id, peer_id,.. }) => {
-                        println!("Gossipsub Me ssage::tx_broadcast");
                         let message_id = message_id.0;
 
                         match message {
