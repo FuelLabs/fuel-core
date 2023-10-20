@@ -1,10 +1,8 @@
 name: E2E Test Beta-4
 
 on:
-  # schedule:
-  #   - cron: '* * * * *'
-  pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+  schedule:
+    - cron: '* * * * *'
 
 jobs:
   e2e_test:
