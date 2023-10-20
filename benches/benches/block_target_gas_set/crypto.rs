@@ -20,7 +20,7 @@ pub fn run_crypto(group: &mut BenchmarkGroup<WallTime>) {
     let eck1_secret = SecretKey::random(rng);
     let eck1_signature = Signature::sign(&eck1_secret, &message);
     run(
-        "crypto/eck1 opcode",
+        "crypto/eck1 opcode valid",
         group,
         [
             op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
@@ -42,6 +42,31 @@ pub fn run_crypto(group: &mut BenchmarkGroup<WallTime>) {
             .collect(),
     );
 
+    let wrong_message = Message::new(b"bar");
+
+    run(
+        "crypto/eck1 opcode invalid",
+        group,
+        [
+            op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
+            op::addi(
+                0x21,
+                0x20,
+                eck1_signature.as_ref().len().try_into().unwrap(),
+            ),
+            op::movi(0x10, PublicKey::LEN.try_into().unwrap()),
+            op::aloc(0x10),
+            op::eck1(RegId::HP, 0x20, 0x21),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        eck1_signature
+            .iter()
+            .chain(wrong_message.iter())
+            .copied()
+            .collect(),
+    );
+
     let message = fuel_core_types::fuel_crypto::Message::new(b"foo");
     let ecr1_secret = p256::ecdsa::SigningKey::random(&mut rand::thread_rng());
     let ecr1_signature = secp256r1::sign_prehashed(&ecr1_secret, &message)
@@ -57,7 +82,6 @@ pub fn run_crypto(group: &mut BenchmarkGroup<WallTime>) {
                 0x20,
                 ecr1_signature.as_ref().len().try_into().unwrap(),
             ),
-            op::addi(0x22, 0x21, message.as_ref().len().try_into().unwrap()),
             op::movi(0x10, PublicKey::LEN.try_into().unwrap()),
             op::aloc(0x10),
             op::move_(0x11, RegId::HP),
