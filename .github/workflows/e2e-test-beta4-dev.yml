@@ -1,0 +1,19 @@
+name: E2E Test Beta-4
+
+on:
+  schedule:
+    - cron: '* * * * *'
+
+jobs:
+  e2e_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup e2e config secrets
+        run: |
+          export e2e_wallet_a="${{ secrets.E2E_WALLET_A }}"
+          export e2e_wallet_b="${{ secrets.E2E_WALLET_B }}"
+          envsubst < ${{ github.workspace }}/.github/workflows/e2e_config/beta-4.toml.template > ${{ github.workspace }}/.github/workflows/e2e_config/beta-4.toml
+
+      - name: Run e2e tests with docker
+        run: docker run -v ${{ github.workspace }}/.github/workflows/e2e_config:/etc/e2e_config -e FUEL_CORE_E2E_CONFIG='/etc/e2e_config/beta-4.toml' ghcr.io/fuellabs/fuel-core-e2e-client:v0.20.7 ./fuel-core-e2e-client -- alice
