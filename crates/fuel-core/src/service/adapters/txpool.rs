@@ -5,10 +5,6 @@ use crate::{
         P2PAdapter,
     },
 };
-#[cfg(feature = "p2p")]
-use fuel_core_p2p::PeerId;
-#[cfg(not(feature = "p2p"))]
-use fuel_core_types::services::p2p::Libp2pPeerId;
 
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
@@ -40,6 +36,7 @@ use fuel_core_types::{
     services::{
         block_importer::ImportResult,
         p2p::{
+            PeerId,
             GossipsubMessageAcceptance,
             GossipsubMessageInfo,
             TransactionGossipData,
@@ -81,7 +78,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     ) -> anyhow::Result<()> {
         if let Some(service) = &self.service {
             service
-                .send_pooled_transactions_to_peer(peer_id.to_bytes(), transactions)
+                .send_pooled_transactions_to_peer(peer_id.into(), transactions)
                 .await
         } else {
             Ok(())
@@ -170,7 +167,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         Ok(())
     }
 
-    fn new_connection(&self) -> BoxStream<Libp2pPeerId> {
+    fn new_connection(&self) -> BoxStream<PeerId> {
         Box::pin(fuel_core_services::stream::pending())
     }
 
@@ -180,7 +177,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
 
     async fn send_pooled_transactions(
         &self,
-        _peer_id: Libp2pPeerId,
+        _peer_id: PeerId,
         _transactions: Vec<Transaction>,
     ) -> anyhow::Result<()> {
         Ok(())

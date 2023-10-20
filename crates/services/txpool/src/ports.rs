@@ -1,4 +1,3 @@
-use fuel_core_p2p::PeerId;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
@@ -19,6 +18,7 @@ use fuel_core_types::{
     services::{
         block_importer::ImportResult,
         p2p::{
+            PeerId,
             GossipsubMessageAcceptance,
             GossipsubMessageInfo,
             NetworkData,

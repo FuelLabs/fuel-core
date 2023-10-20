@@ -41,6 +41,7 @@ async fn works_in_multinode_local_env() {
     let mut rng = StdRng::seed_from_u64(line!() as u64);
     let secret = SecretKey::random(&mut rng);
     let pub_key = Input::owner(&secret.public_key());
+    let disable_block_production = false;
     let Nodes {
         mut producers,
         mut validators,
@@ -51,6 +52,7 @@ async fn works_in_multinode_local_env() {
             ProducerSetup::new(secret).with_txs(1).with_name("Alice"),
         )],
         [Some(ValidatorSetup::new(pub_key).with_name("Bob"))],
+        disable_block_production,
     )
     .await;
 

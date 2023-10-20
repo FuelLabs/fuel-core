@@ -274,7 +274,7 @@ pub trait Broadcast: Send {
 
     fn tx_broadcast(&self, transaction: TransactionGossipData) -> anyhow::Result<()>;
 
-    fn connection_broadcast(&self, peer_id: PeerId) -> anyhow::Result<()>;
+    fn connection_broadcast(&self, peer_id: FuelPeerId) -> anyhow::Result<()>;
 
     fn incoming_pooled_transactions(
         &self,
@@ -305,7 +305,7 @@ impl Broadcast for SharedState {
         Ok(())
     }
 
-    fn connection_broadcast(&self, peer_id: PeerId) -> anyhow::Result<()> {
+    fn connection_broadcast(&self, peer_id: FuelPeerId) -> anyhow::Result<()> {
         self.connection_broadcast.send(peer_id)?;
         Ok(())
     }
@@ -570,7 +570,7 @@ where
                         // channel that the TxPoolSync service is listening to.
                         // This is the first step of the protocol for the initial
                         // pool sync between two nodes.
-                        let _ = self.broadcast.connection_broadcast(peer_id);
+                        let _ = self.broadcast.connection_broadcast(FuelPeerId::from(peer_id.to_bytes()));
                     }
                     Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height }) => {
                         let peer_id: Vec<u8> = peer_id.into();
@@ -709,7 +709,7 @@ pub struct SharedState {
     /// Sender of p2p blopck height data
     block_height_broadcast: broadcast::Sender<BlockHeightHeartbeatData>,
     /// Sender of new incoming connections
-    connection_broadcast: broadcast::Sender<PeerId>,
+    connection_broadcast: broadcast::Sender<FuelPeerId>,
     /// Sender of incoming pooled Transactions
     incoming_pooled_transactions: broadcast::Sender<Vec<Transaction>>,
 }
@@ -851,7 +851,7 @@ impl SharedState {
         self.reserved_peers_broadcast.subscribe()
     }
 
-    pub fn subscribe_to_connections(&self) -> broadcast::Receiver<PeerId> {
+    pub fn subscribe_to_connections(&self) -> broadcast::Receiver<FuelPeerId> {
         self.connection_broadcast.subscribe()
     }
 
@@ -1032,6 +1032,14 @@ pub mod tests {
             std::future::pending().boxed()
         }
 
+        fn send_msg(
+                &mut self,
+                peer_id: PeerId,
+                request_msg: RequestMessage,
+            ) -> anyhow::Result<()> {
+            todo!()
+        }
+
         fn publish_message(
             &mut self,
             _message: GossipsubBroadcastRequest,
@@ -1133,6 +1141,17 @@ pub mod tests {
             &self,
             _block_height_data: BlockHeightHeartbeatData,
         ) -> anyhow::Result<()> {
+            todo!()
+        }
+
+        fn incoming_pooled_transactions(
+                &self,
+                _transactions: Vec<Transaction>,
+            ) -> anyhow::Result<()> {
+            todo!()
+        }
+
+        fn connection_broadcast(&self, _peer_id: FuelPeerId) -> anyhow::Result<()> {
             todo!()
         }
 

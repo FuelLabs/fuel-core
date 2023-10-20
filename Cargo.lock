@@ -3189,7 +3189,6 @@ dependencies = [
  "anyhow",
  "derive_more",
  "fuel-vm",
- "libp2p-core 0.38.0",
  "secrecy",
  "serde",
  "tai64",

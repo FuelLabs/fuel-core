@@ -20,8 +20,6 @@ use fuel_core_p2p::request_response::messages::{
     MAX_REQUEST_SIZE,
 };
 
-use fuel_core_p2p::PeerId;
-
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
@@ -44,6 +42,7 @@ use fuel_core_types::{
     services::{
         block_importer::ImportResult,
         p2p::{
+            PeerId,
             GossipData,
             GossipsubMessageAcceptance,
             GossipsubMessageInfo,
@@ -242,7 +241,7 @@ where
 
                     if !txs.is_empty() {
                         for txs in split_into_batches(txs) {
-                            let result =  self.shared.p2p.send_pooled_transactions(peer_id, txs).await;
+                            let result =  self.shared.p2p.send_pooled_transactions(peer_id.clone(), txs).await;
                             if let Err(e) = result {
                                 tracing::error!("Unable to send pooled transactions, got an {} error", e);
                             }

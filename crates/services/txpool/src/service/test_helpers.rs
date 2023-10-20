@@ -73,7 +73,13 @@ mockall::mock! {
 
         fn new_connection(&self) -> BoxStream<PeerId>;
 
-        async fn request_pooled_transactions(&self, peer_id: PeerId) -> anyhow::Result<Option<Vec<String>>>;
+        fn incoming_pooled_transactions(&self) -> BoxStream<Vec<Transaction>>;
+
+        async fn send_pooled_transactions(
+            &self,
+            peer_id: PeerId,
+            transactions: Vec<Transaction>,
+            ) -> anyhow::Result<()>;
 
         fn notify_gossip_transaction_validity(
             &self,
