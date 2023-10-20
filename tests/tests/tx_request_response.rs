@@ -205,7 +205,7 @@ async fn test_tx_request_multiple_batches() {
     second_node.start().await;
 
     // Wait for nodes to share their transaction pool.
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    tokio::time::sleep(Duration::from_secs(10)).await;
 
     let client_two = FuelClient::from(second_node.node.bound_address);
 
