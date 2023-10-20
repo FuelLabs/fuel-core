@@ -96,12 +96,13 @@ pub fn init_sub_services(
 
     #[cfg(feature = "p2p")]
     let mut network = {
-        if let Some(config) = config.p2p.clone() {
+        if let Some(p2p_config) = config.p2p.clone() {
             let p2p_db = database.clone();
             let genesis = p2p_db.get_genesis()?;
-            let p2p_config = config.init(genesis)?;
+            let p2p_config = p2p_config.init(genesis)?;
 
             Some(fuel_core_p2p::service::new_service(
+                config.chain_conf.consensus_parameters.chain_id,
                 p2p_config,
                 p2p_db,
                 importer_adapter.clone(),
