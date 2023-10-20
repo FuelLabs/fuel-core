@@ -1,5 +1,10 @@
 use crate::*;
 
+use rand::{
+    rngs::StdRng,
+    SeedableRng,
+};
+
 // JMP: Jump
 // JI: Jump immediate
 // JNE: Jump if not equal
@@ -13,6 +18,7 @@ use crate::*;
 // JNEF: Jump if not equal relative forwards
 // RET: Return from context
 pub fn run_flow(group: &mut BenchmarkGroup<WallTime>) {
+    let rng = &mut StdRng::seed_from_u64(2322u64);
     //     let rng = &mut StdRng::seed_from_u64(2322u64);
     //
     //     let mut linear = vec![1, 10, 100, 1000, 10_000];
@@ -118,9 +124,60 @@ pub fn run_flow(group: &mut BenchmarkGroup<WallTime>) {
     //     }
     //     logd.finish();
     run(
-        "flow/jmp",
+        "flow/jmp opcode",
         group,
         vec![op::movi(0x10, 0), op::jmp(0x10)].to_vec(),
+        vec![],
+    );
+
+    run(
+        "flow/ji opcode",
+        group,
+        vec![op::ji(0), op::jmpb(RegId::ZERO, 0)].to_vec(),
+        vec![],
+    );
+
+    run(
+        "flow/jne opcode",
+        group,
+        vec![
+            op::movi(0x10, 0),
+            op::jne(RegId::ZERO, RegId::ONE, 0x10),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "flow/jnei opcode",
+        group,
+        vec![
+            op::jnei(RegId::ZERO, RegId::ONE, 0),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
+        vec![],
+    );
+
+    run(
+        "flow/jnzi opcode",
+        group,
+        vec![op::jnzi(RegId::ONE, 0), op::jmpb(RegId::ZERO, 0)].to_vec(),
+        vec![],
+    );
+
+    run(
+        "flow/ret_script opcode",
+        group,
+        vec![op::ret(RegId::ONE), op::jmpb(RegId::ZERO, 0)].to_vec(),
+        vec![],
+    );
+
+    run(
+        "flow/ret_contract opcode",
+        group,
+        vec![op::ret(RegId::ONE), op::jmpb(RegId::ZERO, 0)].to_vec(),
         vec![],
     );
 }
