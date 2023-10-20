@@ -246,7 +246,6 @@ fn test_tsc_inner(
 
             let stream = futures::stream::iter(stream).boxed();
             super::transaction_status_change(mock_state, stream, txn_id(0))
-                .await
                 .collect::<Vec<_>>()
                 .await
         })
