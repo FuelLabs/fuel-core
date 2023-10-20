@@ -14,26 +14,10 @@ use fuel_core_types::fuel_asm::wideint::{
     MulArgs,
 };
 
-/// Allocates a byte array from heap and initializes it. Then points `reg` to it.
-fn aloc_bytearray<const S: usize>(reg: u8, v: [u8; S]) -> Vec<Instruction> {
-    let mut ops = vec![op::movi(reg, S as u32), op::aloc(reg)];
-    for (i, b) in v.iter().enumerate() {
-        if *b != 0 {
-            ops.push(op::movi(reg, *b as u32));
-            ops.push(op::sb(RegId::HP, reg, i as u16));
-        }
-    }
-    ops.push(op::move_(reg, RegId::HP));
-    ops
-}
-
-fn make_u128(reg: u8, v: u128) -> Vec<Instruction> {
-    aloc_bytearray(reg, v.to_be_bytes())
-}
-
-fn make_u256(reg: u8, v: U256) -> Vec<Instruction> {
-    aloc_bytearray(reg, v.to_be_bytes())
-}
+use super::utils::{
+    make_u128,
+    make_u256,
+};
 
 pub fn run(c: &mut Criterion) {
     run_group_ref(
@@ -333,18 +317,6 @@ pub fn run(c: &mut Criterion) {
     );
 
     run_group_ref(
-        &mut c.benchmark_group("wddv"),
-        "wddv",
-        VmBench::new(op::wddv_args(
-            0x10,
-            0x12,
-            0x13,
-            DivArgs { indirect_rhs: true },
-        ))
-        .with_prepare_script(wideint_prepare.clone()),
-    );
-
-    run_group_ref(
         &mut c.benchmark_group("wdmd"),
         "wdmd",
         VmBench::new(op::wdmd(0x10, 0x12, 0x13, 0x13))
@@ -414,18 +386,6 @@ pub fn run(c: &mut Criterion) {
                 indirect_lhs: true,
                 indirect_rhs: true,
             },
-        ))
-        .with_prepare_script(wideint_prepare.clone()),
-    );
-
-    run_group_ref(
-        &mut c.benchmark_group("wqdv"),
-        "wqdv",
-        VmBench::new(op::wqdv_args(
-            0x10,
-            0x12,
-            0x13,
-            DivArgs { indirect_rhs: true },
         ))
         .with_prepare_script(wideint_prepare.clone()),
     );

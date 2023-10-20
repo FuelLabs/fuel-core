@@ -840,15 +840,19 @@ type Transaction {
 	id: TransactionId!
 	inputAssetIds: [AssetId!]
 	inputContracts: [Contract!]
+	inputContract: InputContract
 	gasPrice: U64
 	gasLimit: U64
 	maturity: U32
+	mintAmount: U64
+	mintAssetId: AssetId
 	txPointer: TxPointer
 	isScript: Boolean!
 	isCreate: Boolean!
 	isMint: Boolean!
 	inputs: [Input!]
 	outputs: [Output!]!
+	outputContract: ContractOutput
 	witnesses: [HexString!]
 	receiptsRoot: Bytes32
 	status: TransactionStatus

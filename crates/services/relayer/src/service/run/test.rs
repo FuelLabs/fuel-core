@@ -11,8 +11,7 @@ async fn can_set_da_height() {
     test_data_source(
         &mut relayer,
         TestDataSource {
-            eth_remote_current: 300,
-            eth_remote_finalization_period: 100,
+            eth_remote_finalized: 200,
             eth_local_finalized: None,
         },
     );
@@ -31,8 +30,7 @@ async fn logs_are_downloaded_and_written() {
     test_data_source(
         &mut relayer,
         TestDataSource {
-            eth_remote_current: 300,
-            eth_remote_finalization_period: 100,
+            eth_remote_finalized: 200,
             eth_local_finalized: None,
         },
     );
@@ -44,12 +42,11 @@ mockall::mock! {
 
     #[async_trait]
     impl EthRemote for RelayerData {
-        async fn current(&self) -> anyhow::Result<u64>;
-        fn finalization_period(&self) -> u64;
+        async fn finalized(&self) -> anyhow::Result<u64>;
     }
 
     impl EthLocal for RelayerData {
-        fn finalized(&self) -> Option<u64>;
+        fn observed(&self) -> Option<u64>;
     }
 
     #[async_trait]
@@ -66,10 +63,8 @@ mockall::mock! {
 }
 
 fn test_data_source(mock: &mut MockRelayerData, data: TestDataSource) {
-    let out = data.eth_remote_current;
-    mock.expect_current().returning(move || Ok(out));
-    let out = data.eth_remote_finalization_period;
-    mock.expect_finalization_period().returning(move || out);
+    let out = data.eth_remote_finalized;
+    mock.expect_finalized().returning(move || Ok(out));
     let out = data.eth_local_finalized;
-    mock.expect_finalized().returning(move || out);
+    mock.expect_observed().returning(move || out);
 }

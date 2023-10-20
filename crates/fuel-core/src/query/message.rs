@@ -210,7 +210,8 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         // Cannot look beyond the genesis block
         return Ok(None)
     }
-    let verifiable_commit_block_height = block_height - 1u32.into();
+    let verifiable_commit_block_height =
+        block_height.pred().expect("We checked the height above");
     let block_proof = database.block_history_proof(
         message_block_header.height(),
         &verifiable_commit_block_height,

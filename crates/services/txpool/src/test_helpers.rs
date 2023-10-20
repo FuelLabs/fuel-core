@@ -30,7 +30,6 @@ use fuel_core_types::{
     },
     fuel_types::{
         AssetId,
-        ChainId,
         Word,
     },
     fuel_vm::checked_transaction::EstimatePredicates,
@@ -101,7 +100,7 @@ pub(crate) fn random_predicate(
     let mut predicate_code: Vec<u8> = vec![op::ret(1)].into_iter().collect();
     // append some randomizing bytes after the predicate has already returned.
     predicate_code.push(rng.gen());
-    let owner = Input::predicate_owner(&predicate_code, &ChainId::default());
+    let owner = Input::predicate_owner(&predicate_code);
     Input::coin_predicate(
         utxo_id.unwrap_or_else(|| rng.gen()),
         owner,
@@ -123,7 +122,7 @@ pub(crate) fn custom_predicate(
     code: Vec<u8>,
     utxo_id: Option<UtxoId>,
 ) -> Input {
-    let owner = Input::predicate_owner(&code, &ChainId::default());
+    let owner = Input::predicate_owner(&code);
     Input::coin_predicate(
         utxo_id.unwrap_or_else(|| rng.gen()),
         owner,

@@ -16,6 +16,9 @@ pub fn select_transactions(
     // Future improvements to this algorithm may take into account the parallel nature of
     // transactions to maximize throughput.
     let mut used_block_space: Word = 0;
+    // The type of the index for the transaction is `u16`, so we need to
+    // limit it to `MAX` value minus 1(because of the `Mint` transaction).
+    let takes_txs = u16::MAX - 1;
 
     // Pick as many transactions as we can fit into the block (greedy)
     includable_txs
@@ -32,6 +35,7 @@ pub fn select_transactions(
                 false
             }
         })
+        .take(takes_txs as usize)
         .collect()
 }
 

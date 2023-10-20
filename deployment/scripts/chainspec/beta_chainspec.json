@@ -45,13 +45,13 @@
       "max_inputs": 255,
       "max_outputs": 255,
       "max_witnesses": 255,
-      "max_gas_per_tx": 100000000
+      "max_gas_per_tx": 10000000
     },
     "predicate_params": {
       "max_predicate_length": 1048576,
       "max_predicate_data_length": 1048576,
       "max_message_data_length": 1048576,
-      "max_gas_per_predicate": 100000000
+      "max_gas_per_predicate": 10000000
     },
     "script_params": {
       "max_script_length": 1048576,
@@ -62,7 +62,7 @@
       "max_storage_slots": 255
     },
     "fee_params": {
-      "gas_price_factor": 1000000000,
+      "gas_price_factor": 92,
       "gas_per_byte": 4
     },
     "chain_id": 0,
