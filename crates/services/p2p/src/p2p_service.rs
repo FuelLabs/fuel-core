@@ -740,12 +740,6 @@ mod tests {
     use rand::Rng;
     use std::{
         collections::HashSet,
-        net::{
-            IpAddr,
-            Ipv4Addr,
-            SocketAddrV4,
-            TcpListener,
-        },
         ops::Range,
         sync::Arc,
         time::Duration,
@@ -1609,9 +1603,6 @@ mod tests {
                                 request_sent = true;
 
                                 match request_msg.clone() {
-                                    RequestMessage::PooledTransactions => {
-                                        todo!("PooledTransactions not implemented yet")
-                                    }
                                     RequestMessage::Block(_) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
                                         assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::Block(tx_orchestrator)).is_ok());
@@ -1665,6 +1656,12 @@ mod tests {
                                             }
                                         });
                                     }
+                                    RequestMessage::PooledTransactions(_) => {
+                                        // This test case isn't applicable here because
+                                        // we send a one way message containing the pooled
+                                        // transactions. The node doesn't respond with anything
+                                        // so we can't test the response.
+                                    }
                                 }
                             }
                         }
@@ -1676,9 +1673,6 @@ mod tests {
                     // 2. Node B receives the RequestMessage from Node A initiated by the NetworkOrchestrator
                     if let Some(FuelP2PEvent::RequestMessage{ request_id, request_message: received_request_message }) = &node_b_event {
                         match received_request_message {
-                            RequestMessage::PooledTransactions => {
-                                todo!("PooledTransactions not implemented yet")
-                            }
                             RequestMessage::Block(_) => {
                                 let block = Block::new(PartialBlockHeader::default(), (0..5).map(|_| Transaction::default_test_tx()).collect(), &[]);
 
@@ -1698,6 +1692,12 @@ mod tests {
                                 let txs = (0..5).map(|_| Transaction::default_test_tx()).collect();
                                 let transactions = vec![Transactions(txs)];
                                 let _ = node_b.send_response_msg(*request_id, OutboundResponse::Transactions(Some(Arc::new(transactions))));
+                            }
+                            RequestMessage::PooledTransactions(_) => {
+                                // This test case isn't applicable here because
+                                // we send a one way message containing the pooled
+                                // transactions. The node doesn't respond with anything
+                                // so we can't test the response.
                             }
                         }
                     }

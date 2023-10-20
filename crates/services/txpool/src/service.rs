@@ -207,10 +207,15 @@ where
                     let current_height = self.shared.db.current_block_height()?;
 
                     let mut res = Vec::new();
-                    for tx in incoming_pooled_transactions.into_iter() {
-                        // verify tx
-                        let checked_tx = check_single_tx(tx, current_height, &self.shared.config).await.unwrap(); // TODO: remove temp unwrap
 
+                    for tx in incoming_pooled_transactions.into_iter() {
+                        let checked_tx = match check_single_tx(tx, current_height, &self.shared.config).await {
+                            Ok(tx) => tx,
+                            Err(e) => {
+                                tracing::error!("Unable to insert pooled transaction coming from a newly connected peer, got an {} error", e);
+                                continue;
+                            }
+                        };
                         res.push(self.shared.txpool.lock().insert_inner(checked_tx));
                     }
 

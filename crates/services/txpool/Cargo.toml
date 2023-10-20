@@ -15,9 +15,9 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 fuel-core-chain-config = { workspace = true }
 fuel-core-metrics = { workspace = true }
+fuel-core-p2p = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true }
-fuel-core-p2p = { workspace = true }
 fuel-core-types = { workspace = true }
 futures = { workspace = true }
 parking_lot = { workspace = true }

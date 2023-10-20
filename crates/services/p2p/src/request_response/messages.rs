@@ -8,9 +8,9 @@ use fuel_core_types::{
         SealedBlock,
         SealedBlockHeader,
     },
+    fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::p2p::Transactions,
-    fuel_tx::Transaction,
 };
 use libp2p::PeerId;
 use serde::{

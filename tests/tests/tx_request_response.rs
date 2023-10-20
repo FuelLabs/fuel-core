@@ -113,11 +113,7 @@ async fn test_tx_request() {
     let _ = client_one.produce_blocks(1, None).await.unwrap();
     let _ = client_two.produce_blocks(1, None).await.unwrap();
 
-    let chain_id = first_node 
-        .config
-        .chain_conf
-        .consensus_parameters
-        .chain_id();
+    let chain_id = first_node.config.chain_conf.consensus_parameters.chain_id();
 
     let request = fuel_core_client::client::pagination::PaginationRequest {
         cursor: None,
@@ -225,7 +221,7 @@ async fn test_tx_request_multiple_batches() {
     // 3. Produce a block with the transaction;
     let _ = client_one.produce_blocks(1, None).await.unwrap();
     let _ = client_two.produce_blocks(1, None).await.unwrap();
- 
+
     let request = fuel_core_client::client::pagination::PaginationRequest {
         cursor: None,
         results: 1000,
