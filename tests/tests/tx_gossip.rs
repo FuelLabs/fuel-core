@@ -7,9 +7,10 @@ use fuel_core::p2p_test_helpers::{
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_types::{
-    fuel_tx::*,
+    fuel_tx::input::Input,
     fuel_vm::*,
 };
+
 use rand::{
     rngs::StdRng,
     SeedableRng,
@@ -42,6 +43,7 @@ async fn test_tx_gossiping() {
         .map(|secret| Input::owner(&secret.public_key()))
         .collect();
 
+    let disable_block_production = false;
     // Create a producer for each key pair and a set of validators that share
     // the same key pair.
     let Nodes {
@@ -64,6 +66,7 @@ async fn test_tx_gossiping() {
                 Some(ValidatorSetup::new(*pub_key).with_name(format!("{pub_key}:{i}")))
             })
         }),
+        disable_block_production,
     )
     .await;
 

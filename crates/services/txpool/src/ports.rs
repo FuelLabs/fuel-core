@@ -21,12 +21,14 @@ use fuel_core_types::{
             GossipsubMessageAcceptance,
             GossipsubMessageInfo,
             NetworkData,
+            PeerId,
         },
         txpool::TransactionStatus,
     },
 };
 use std::sync::Arc;
 
+#[async_trait::async_trait]
 pub trait PeerToPeer: Send + Sync {
     type GossipedTransaction: NetworkData<Transaction>;
 
@@ -41,6 +43,19 @@ pub trait PeerToPeer: Send + Sync {
         &self,
         message_info: GossipsubMessageInfo,
         validity: GossipsubMessageAcceptance,
+    ) -> anyhow::Result<()>;
+
+    /// Streams new connections to the node.
+    fn new_connection(&self) -> BoxStream<PeerId>;
+
+    /// Streams incoming pooled transactions.
+    fn incoming_pooled_transactions(&self) -> BoxStream<Vec<Transaction>>;
+
+    /// Send pooled transactions to a peer.
+    async fn send_pooled_transactions(
+        &self,
+        peer_id: PeerId,
+        transactions: Vec<Transaction>,
     ) -> anyhow::Result<()>;
 }
 

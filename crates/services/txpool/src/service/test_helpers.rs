@@ -63,12 +63,23 @@ impl TestContext {
 mockall::mock! {
     pub P2P {}
 
+    #[async_trait::async_trait]
     impl PeerToPeer for P2P {
         type GossipedTransaction = GossipedTransaction;
 
         fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()>;
 
         fn gossiped_transaction_events(&self) -> BoxStream<GossipedTransaction>;
+
+        fn new_connection(&self) -> BoxStream<PeerId>;
+
+        fn incoming_pooled_transactions(&self) -> BoxStream<Vec<Transaction>>;
+
+        async fn send_pooled_transactions(
+            &self,
+            peer_id: PeerId,
+            transactions: Vec<Transaction>,
+            ) -> anyhow::Result<()>;
 
         fn notify_gossip_transaction_validity(
             &self,
@@ -95,6 +106,17 @@ impl MockP2P {
         });
         p2p.expect_broadcast_transaction()
             .returning(move |_| Ok(()));
+        p2p.expect_notify_gossip_transaction_validity()
+            .returning(move |_, _| Ok(()));
+        p2p.expect_new_connection().returning(move || {
+            let stream = fuel_core_services::stream::empty::<PeerId>();
+            Box::pin(stream)
+        });
+        p2p.expect_incoming_pooled_transactions()
+            .returning(move || {
+                let stream = fuel_core_services::stream::empty::<Vec<Transaction>>();
+                Box::pin(stream)
+            });
         p2p
     }
 }

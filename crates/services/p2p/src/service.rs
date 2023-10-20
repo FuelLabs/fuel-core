@@ -104,6 +104,10 @@ enum TaskRequest {
         block_height_range: Range<u32>,
         channel: oneshot::Sender<(PeerId, Option<Vec<SealedBlockHeader>>)>,
     },
+    SendPooledTransactions {
+        to_peer: PeerId,
+        transactions: Vec<Transaction>,
+    },
     GetTransactions {
         block_height_range: Range<u32>,
         from_peer: PeerId,
@@ -141,6 +145,13 @@ pub trait TaskP2PService: Send {
         &mut self,
         message: GossipsubBroadcastRequest,
     ) -> anyhow::Result<()>;
+
+    fn send_msg(
+        &mut self,
+        peer_id: PeerId,
+        request_msg: RequestMessage,
+    ) -> anyhow::Result<()>;
+
     fn send_request_msg(
         &mut self,
         peer_id: Option<PeerId>,
@@ -191,6 +202,16 @@ impl TaskP2PService for FuelP2PService<PostcardCodec> {
         message: GossipsubBroadcastRequest,
     ) -> anyhow::Result<()> {
         self.publish_message(message)?;
+        Ok(())
+    }
+
+    /// Sends a one way request message to a peer.
+    fn send_msg(
+        &mut self,
+        peer_id: PeerId,
+        request_msg: RequestMessage,
+    ) -> anyhow::Result<()> {
+        self.send_msg(peer_id, request_msg);
         Ok(())
     }
 
@@ -252,6 +273,13 @@ pub trait Broadcast: Send {
     ) -> anyhow::Result<()>;
 
     fn tx_broadcast(&self, transaction: TransactionGossipData) -> anyhow::Result<()>;
+
+    fn connection_broadcast(&self, peer_id: FuelPeerId) -> anyhow::Result<()>;
+
+    fn incoming_pooled_transactions(
+        &self,
+        transactions: Vec<Transaction>,
+    ) -> anyhow::Result<()>;
 }
 
 impl Broadcast for SharedState {
@@ -274,6 +302,19 @@ impl Broadcast for SharedState {
 
     fn tx_broadcast(&self, transaction: TransactionGossipData) -> anyhow::Result<()> {
         self.tx_broadcast.send(transaction)?;
+        Ok(())
+    }
+
+    fn connection_broadcast(&self, peer_id: FuelPeerId) -> anyhow::Result<()> {
+        self.connection_broadcast.send(peer_id)?;
+        Ok(())
+    }
+
+    fn incoming_pooled_transactions(
+        &self,
+        transactions: Vec<Transaction>,
+    ) -> anyhow::Result<()> {
+        self.incoming_pooled_transactions.send(transactions)?;
         Ok(())
     }
 }
@@ -321,6 +362,8 @@ impl<D> Task<FuelP2PService<PostcardCodec>, D, SharedState> {
         let (request_sender, request_receiver) = mpsc::channel(100);
         let (tx_broadcast, _) = broadcast::channel(100);
         let (block_height_broadcast, _) = broadcast::channel(100);
+        let (connection_broadcast, _) = broadcast::channel(100);
+        let (incoming_pooled_transactions, _) = broadcast::channel(100);
 
         // Hardcoded for now, but left here to be configurable in the future.
         // TODO: https://github.com/FuelLabs/fuel-core/issues/1340
@@ -348,6 +391,8 @@ impl<D> Task<FuelP2PService<PostcardCodec>, D, SharedState> {
                 tx_broadcast,
                 reserved_peers_broadcast,
                 block_height_broadcast,
+                connection_broadcast,
+                incoming_pooled_transactions,
             },
             max_headers_per_request,
             heartbeat_check_interval,
@@ -453,6 +498,10 @@ where
             next_service_request = self.request_receiver.recv() => {
                 should_continue = true;
                 match next_service_request {
+                    Some(TaskRequest::SendPooledTransactions { to_peer, transactions }) => {
+                        let request_msg = RequestMessage::PooledTransactions(transactions);
+                        let _ = self.p2p_service.send_msg(to_peer, request_msg);
+                    }
                     Some(TaskRequest::BroadcastTransaction(transaction)) => {
                         let tx_id = transaction.id(&self.chain_id);
                         let broadcast = GossipsubBroadcastRequest::NewTx(transaction);
@@ -516,6 +565,13 @@ where
             p2p_event = self.p2p_service.next_event() => {
                 should_continue = true;
                 match p2p_event {
+                    Some(FuelP2PEvent::PeerConnected (peer_id) ) => {
+                        // Send the peer ID that connected to this node to a
+                        // channel that the TxPoolSync service is listening to.
+                        // This is the first step of the protocol for the initial
+                        // pool sync between two nodes.
+                        let _ = self.broadcast.connection_broadcast(FuelPeerId::from(peer_id.to_bytes()));
+                    }
                     Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height }) => {
                         let peer_id: Vec<u8> = peer_id.into();
                         let block_height_data = BlockHeightHeartbeatData {
@@ -572,6 +628,11 @@ where
                                         return Err(e.into())
                                     }
                                 }
+                            }
+                            RequestMessage::PooledTransactions(transactions) => {
+                                // Received pooled transactions from a peer. Send those
+                                // transactions to the txpool service.
+                                self.broadcast.incoming_pooled_transactions(transactions)?;
                             }
                             RequestMessage::SealedHeaders(range) => {
                                 let max_len = self.max_headers_per_request.try_into().expect("u32 should always fit into usize");
@@ -647,6 +708,10 @@ pub struct SharedState {
     request_sender: mpsc::Sender<TaskRequest>,
     /// Sender of p2p blopck height data
     block_height_broadcast: broadcast::Sender<BlockHeightHeartbeatData>,
+    /// Sender of new incoming connections
+    connection_broadcast: broadcast::Sender<FuelPeerId>,
+    /// Sender of incoming pooled Transactions
+    incoming_pooled_transactions: broadcast::Sender<Vec<Transaction>>,
 }
 
 impl SharedState {
@@ -722,6 +787,23 @@ impl SharedState {
         receiver.await.map_err(|e| anyhow!("{}", e))
     }
 
+    pub async fn send_pooled_transactions_to_peer(
+        &self,
+        peer_id: Vec<u8>,
+        transactions: Vec<Transaction>,
+    ) -> anyhow::Result<()> {
+        let to_peer = PeerId::from_bytes(&peer_id).expect("Valid PeerId");
+
+        self.request_sender
+            .send(TaskRequest::SendPooledTransactions {
+                to_peer,
+                transactions,
+            })
+            .await?;
+
+        Ok(())
+    }
+
     pub fn broadcast_vote(&self, vote: Arc<ConsensusVote>) -> anyhow::Result<()> {
         self.request_sender
             .try_send(TaskRequest::BroadcastVote(vote))?;
@@ -767,6 +849,16 @@ impl SharedState {
 
     pub fn subscribe_reserved_peers_count(&self) -> broadcast::Receiver<usize> {
         self.reserved_peers_broadcast.subscribe()
+    }
+
+    pub fn subscribe_to_connections(&self) -> broadcast::Receiver<FuelPeerId> {
+        self.connection_broadcast.subscribe()
+    }
+
+    pub fn subscribe_to_incoming_pooled_transactions(
+        &self,
+    ) -> broadcast::Receiver<Vec<Transaction>> {
+        self.incoming_pooled_transactions.subscribe()
     }
 
     pub fn report_peer<T: PeerReport>(
@@ -940,6 +1032,14 @@ pub mod tests {
             std::future::pending().boxed()
         }
 
+        fn send_msg(
+            &mut self,
+            _peer_id: PeerId,
+            _request_msg: RequestMessage,
+        ) -> anyhow::Result<()> {
+            todo!()
+        }
+
         fn publish_message(
             &mut self,
             _message: GossipsubBroadcastRequest,
@@ -1041,6 +1141,17 @@ pub mod tests {
             &self,
             _block_height_data: BlockHeightHeartbeatData,
         ) -> anyhow::Result<()> {
+            todo!()
+        }
+
+        fn incoming_pooled_transactions(
+            &self,
+            _transactions: Vec<Transaction>,
+        ) -> anyhow::Result<()> {
+            todo!()
+        }
+
+        fn connection_broadcast(&self, _peer_id: FuelPeerId) -> anyhow::Result<()> {
             todo!()
         }
 

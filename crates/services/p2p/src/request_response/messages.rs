@@ -8,6 +8,7 @@ use fuel_core_types::{
         SealedBlock,
         SealedBlockHeader,
     },
+    fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::p2p::Transactions,
 };
@@ -22,7 +23,7 @@ use tokio::sync::oneshot;
 pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &[u8] = b"/fuel/req_res/0.0.1";
 
 /// Max Size in Bytes of the Request Message
-pub(crate) const MAX_REQUEST_SIZE: usize = core::mem::size_of::<RequestMessage>();
+pub const MAX_REQUEST_SIZE: usize = 32 * 1024;
 
 // Peer receives a `RequestMessage`.
 // It prepares a response in form of `OutboundResponse`
@@ -38,6 +39,7 @@ pub(crate) const MAX_REQUEST_SIZE: usize = core::mem::size_of::<RequestMessage>(
 pub enum RequestMessage {
     Block(BlockHeight),
     SealedHeaders(Range<u32>),
+    PooledTransactions(Vec<Transaction>),
     Transactions(Range<u32>),
 }
 

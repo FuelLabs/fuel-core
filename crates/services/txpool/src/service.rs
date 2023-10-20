@@ -15,10 +15,16 @@ use crate::{
     TxPool,
 };
 
+use fuel_core_p2p::request_response::messages::{
+    RequestMessage,
+    MAX_REQUEST_SIZE,
+};
+
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
     RunnableTask,
+    Service as _,
     ServiceRunner,
     StateWatcher,
 };
@@ -39,6 +45,7 @@ use fuel_core_types::{
             GossipData,
             GossipsubMessageAcceptance,
             GossipsubMessageInfo,
+            PeerId,
             TransactionGossipData,
         },
         txpool::{
@@ -71,7 +78,15 @@ use self::update_sender::{
 
 mod update_sender;
 
+// Main transaction pool service. It is mainly responsible for
+// listening for new transactions being gossiped through the network and
+// adding those to its own pool.
 pub type Service<P2P, DB> = ServiceRunner<Task<P2P, DB>>;
+// Sidecar service that is responsible for a request-response style of syncing
+// pending transactions with other peers upon connection. In other words,
+// when a new connection between peers happen, they will compare their
+// pending transactions and sync them with each other.
+pub type TxPoolSyncService<P2P, DB> = ServiceRunner<TxPoolSyncTask<P2P, DB>>;
 
 #[derive(Clone)]
 pub struct TxStatusChange {
@@ -141,10 +156,147 @@ impl<P2P, DB: Clone> Clone for SharedState<P2P, DB> {
     }
 }
 
-pub struct Task<P2P, DB> {
+pub struct TxPoolSyncTask<P2P, DB> {
+    ttl_timer: tokio::time::Interval,
+    peer_connections: BoxStream<PeerId>,
+    incoming_pooled_transactions: BoxStream<Vec<Transaction>>,
+    shared: SharedState<P2P, DB>,
+}
+
+#[async_trait::async_trait]
+impl<P2P, DB> RunnableService for TxPoolSyncTask<P2P, DB>
+where
+    DB: TxPoolDb + Clone,
+    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
+{
+    const NAME: &'static str = "TxPoolSync";
+
+    type SharedData = SharedState<P2P, DB>;
+    type Task = TxPoolSyncTask<P2P, DB>;
+    type TaskParams = ();
+
+    fn shared_data(&self) -> Self::SharedData {
+        self.shared.clone()
+    }
+
+    async fn into_task(
+        mut self,
+        _: &StateWatcher,
+        _: Self::TaskParams,
+    ) -> anyhow::Result<Self::Task> {
+        self.ttl_timer.reset();
+        Ok(self)
+    }
+}
+
+#[async_trait::async_trait]
+impl<P2P, DB> RunnableTask for TxPoolSyncTask<P2P, DB>
+where
+    DB: TxPoolDb,
+    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
+{
+    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+        let should_continue;
+
+        tokio::select! {
+            biased;
+
+            _ = watcher.while_started() => {
+                should_continue = false;
+            }
+
+            incoming_pooled_transactions = self.incoming_pooled_transactions.next() => {
+                if let Some(incoming_pooled_transactions) = incoming_pooled_transactions {
+                    let current_height = self.shared.db.current_block_height()?;
+
+                    let mut res = Vec::new();
+
+                    for tx in incoming_pooled_transactions.into_iter() {
+                        let checked_tx = match check_single_tx(tx, current_height, &self.shared.config).await {
+                            Ok(tx) => tx,
+                            Err(e) => {
+                                tracing::error!("Unable to insert pooled transaction coming from a newly connected peer, got an {} error", e);
+                                continue;
+                            }
+                        };
+                        res.push(self.shared.txpool.lock().insert_inner(checked_tx));
+                    }
+
+                    should_continue = true;
+
+                } else {
+                    should_continue = false;
+                }
+            }
+
+            new_connection = self.peer_connections.next() => {
+                if let Some(peer_id) = new_connection {
+                    should_continue = true;
+
+                    let mut txs = vec![];
+                    for tx in self.shared.txpool.lock().txs() {
+                        txs.push(Transaction::from(&*tx.1.tx));
+                    }
+
+
+                    if !txs.is_empty() {
+                        for txs in split_into_batches(txs) {
+                            let result =  self.shared.p2p.send_pooled_transactions(peer_id.clone(), txs).await;
+                            if let Err(e) = result {
+                                tracing::error!("Unable to send pooled transactions, got an {} error", e);
+                            }
+                        }
+                    }
+
+                } else {
+                    should_continue = false;
+                }
+            }
+        }
+
+        Ok(should_continue)
+    }
+
+    async fn shutdown(self) -> anyhow::Result<()> {
+        // Nothing to shut down because we don't have any temporary state that should be dumped,
+        // and we don't spawn any sub-tasks that we need to finish or await.
+        // Maybe we will save and load the previous list of transactions in the future to
+        // avoid losing them.
+
+        Ok(())
+    }
+}
+
+// Split transactions into batches of size less than MAX_REQUEST_SIZE.
+fn split_into_batches(txs: Vec<Transaction>) -> Vec<Vec<Transaction>> {
+    let mut batches = Vec::new();
+    let mut batch = Vec::new();
+    let mut size = 0;
+    for tx in txs.into_iter() {
+        let m = RequestMessage::PooledTransactions(vec![tx.clone()]);
+        let tx_size = postcard::to_stdvec(&m).unwrap().len();
+        if size + tx_size < MAX_REQUEST_SIZE {
+            batch.push(tx);
+            size += tx_size;
+        } else {
+            batches.push(batch);
+            batch = vec![tx];
+            size = tx_size;
+        }
+    }
+    batches.push(batch);
+    batches
+}
+
+pub struct Task<P2P, DB>
+where
+    DB: TxPoolDb + 'static + Clone,
+    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync + 'static,
+{
     gossiped_tx_stream: BoxStream<TransactionGossipData>,
     committed_block_stream: BoxStream<Arc<ImportResult>>,
     shared: SharedState<P2P, DB>,
+    txpool_sync_task: ServiceRunner<TxPoolSyncTask<P2P, DB>>,
     ttl_timer: tokio::time::Interval,
 }
 
@@ -169,6 +321,9 @@ where
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
+        // Transaction pool sync task work as a sub service to the transaction pool task.
+        // So we start it here and shut it down when this task is shut down.
+        self.txpool_sync_task.start()?;
         self.ttl_timer.reset();
         Ok(self)
     }
@@ -178,7 +333,7 @@ where
 impl<P2P, DB> RunnableTask for Task<P2P, DB>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
-    DB: TxPoolDb,
+    DB: TxPoolDb + Clone,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
@@ -271,10 +426,12 @@ where
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        // Nothing to shut down because we don't have any temporary state that should be dumped,
+        // Nothing other than the txpool sync task to shut down
+        // because we don't have any temporary state that should be dumped,
         // and we don't spawn any sub-tasks that we need to finish or await.
         // Maybe we will save and load the previous list of transactions in the future to
         // avoid losing them.
+        self.txpool_sync_task.stop_and_await().await?;
         Ok(())
     }
 }
@@ -431,6 +588,40 @@ pub enum TxStatusMessage {
     FailedStatus,
 }
 
+pub fn new_txpool_syncing_service<P2P, DB>(
+    config: Config,
+    txpool: Arc<ParkingMutex<TxPool<DB>>>,
+    p2p: Arc<P2P>,
+    db: DB,
+) -> TxPoolSyncService<P2P, DB>
+where
+    DB: TxPoolDb + 'static + Clone,
+    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + 'static,
+{
+    let mut ttl_timer = tokio::time::interval(config.transaction_ttl);
+    ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    let number_of_active_subscription = config.number_of_active_subscription;
+    let consensus_params = config.chain_config.consensus_parameters.clone();
+    let tx_sync_task = TxPoolSyncTask {
+        peer_connections: p2p.new_connection(),
+        incoming_pooled_transactions: p2p.incoming_pooled_transactions(),
+        ttl_timer,
+        shared: SharedState {
+            db,
+            tx_status_sender: TxStatusChange::new(
+                number_of_active_subscription,
+                2 * config.transaction_ttl,
+            ),
+            config,
+            txpool,
+            p2p,
+            consensus_params,
+        },
+    };
+
+    TxPoolSyncService::new(tx_sync_task)
+}
+
 pub fn new_service<P2P, Importer, DB>(
     config: Config,
     db: DB,
@@ -450,9 +641,18 @@ where
     let consensus_params = config.chain_config.consensus_parameters.clone();
     let number_of_active_subscription = config.number_of_active_subscription;
     let txpool = Arc::new(ParkingMutex::new(TxPool::new(config.clone(), db.clone())));
+
+    let txpool_sync_task = new_txpool_syncing_service(
+        config.clone(),
+        txpool.clone(),
+        p2p.clone(),
+        db.clone(),
+    );
+
     let task = Task {
         gossiped_tx_stream,
         committed_block_stream,
+        txpool_sync_task,
         shared: SharedState {
             tx_status_sender: TxStatusChange::new(
                 number_of_active_subscription,

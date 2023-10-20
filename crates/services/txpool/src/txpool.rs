@@ -87,7 +87,7 @@ where
 
     #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id()), ret, err)]
     // this is atomic operation. Return removed(pushed out/replaced) transactions
-    fn insert_inner(
+    pub fn insert_inner(
         &mut self,
         tx: Checked<Transaction>,
     ) -> anyhow::Result<InsertionResult> {

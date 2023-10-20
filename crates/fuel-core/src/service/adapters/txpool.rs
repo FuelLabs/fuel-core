@@ -5,6 +5,7 @@ use crate::{
         P2PAdapter,
     },
 };
+
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
     not_found,
@@ -37,6 +38,7 @@ use fuel_core_types::{
         p2p::{
             GossipsubMessageAcceptance,
             GossipsubMessageInfo,
+            PeerId,
             TransactionGossipData,
         },
     },
@@ -57,12 +59,27 @@ impl BlockImporter for BlockImporterAdapter {
 }
 
 #[cfg(feature = "p2p")]
+#[async_trait::async_trait]
 impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 
     fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()> {
         if let Some(service) = &self.service {
             service.broadcast_transaction(transaction)
+        } else {
+            Ok(())
+        }
+    }
+
+    async fn send_pooled_transactions(
+        &self,
+        peer_id: PeerId,
+        transactions: Vec<Transaction>,
+    ) -> anyhow::Result<()> {
+        if let Some(service) = &self.service {
+            service
+                .send_pooled_transactions_to_peer(peer_id.into(), transactions)
+                .await
         } else {
             Ok(())
         }
@@ -94,9 +111,40 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
             Ok(())
         }
     }
+
+    fn incoming_pooled_transactions(&self) -> BoxStream<Vec<Transaction>> {
+        use tokio_stream::{
+            wrappers::BroadcastStream,
+            StreamExt,
+        };
+        if let Some(service) = &self.service {
+            Box::pin(
+                BroadcastStream::new(service.subscribe_to_incoming_pooled_transactions())
+                    .filter_map(|result| result.ok()),
+            )
+        } else {
+            fuel_core_services::stream::IntoBoxStream::into_boxed(tokio_stream::pending())
+        }
+    }
+
+    fn new_connection(&self) -> BoxStream<PeerId> {
+        use tokio_stream::{
+            wrappers::BroadcastStream,
+            StreamExt,
+        };
+        if let Some(service) = &self.service {
+            Box::pin(
+                BroadcastStream::new(service.subscribe_to_connections())
+                    .filter_map(|result| result.ok()),
+            )
+        } else {
+            fuel_core_services::stream::IntoBoxStream::into_boxed(tokio_stream::pending())
+        }
+    }
 }
 
 #[cfg(not(feature = "p2p"))]
+#[async_trait::async_trait]
 impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 
@@ -115,6 +163,22 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
         &self,
         _message_info: GossipsubMessageInfo,
         _validity: GossipsubMessageAcceptance,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn new_connection(&self) -> BoxStream<PeerId> {
+        Box::pin(fuel_core_services::stream::pending())
+    }
+
+    fn incoming_pooled_transactions(&self) -> BoxStream<Vec<Transaction>> {
+        Box::pin(fuel_core_services::stream::pending())
+    }
+
+    async fn send_pooled_transactions(
+        &self,
+        _peer_id: PeerId,
+        _transactions: Vec<Transaction>,
     ) -> anyhow::Result<()> {
         Ok(())
     }

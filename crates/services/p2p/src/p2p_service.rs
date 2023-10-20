@@ -298,6 +298,20 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         }
     }
 
+    /// Sends a one way message to a peer.
+    /// It leverages the `RequestMessage` type to send the message.
+    /// But, unlike `send_request_msg`, it does not expect a
+    /// response through a response channel.
+    pub fn send_msg(
+        &mut self,
+        peer_id: PeerId,
+        message_request: RequestMessage,
+    ) -> RequestId {
+        self.swarm
+            .behaviour_mut()
+            .send_request_msg(message_request, &peer_id)
+    }
+
     /// Sends RequestMessage to a peer
     /// If the peer is not defined it will pick one at random
     pub fn send_request_msg(
@@ -783,7 +797,23 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn p2p_service_works() {
-        build_service_from_config(Config::default_initialized("p2p_service_works")).await;
+        let mut fuel_p2p_service =
+            build_service_from_config(Config::default_initialized("p2p_service_works"))
+                .await;
+
+        loop {
+            match fuel_p2p_service.swarm.select_next_some().await {
+                SwarmEvent::NewListenAddr { .. } => {
+                    // listener address registered, we are good to go
+                    break
+                }
+                SwarmEvent::Behaviour(_) => {}
+                other_event => {
+                    tracing::error!("Unexpected event: {:?}", other_event);
+                    panic!("Unexpected event {other_event:?}")
+                }
+            }
+        }
     }
 
     // Single sentry node connects to multiple reserved nodes and `max_peers_allowed` amount of non-reserved nodes.
@@ -1623,6 +1653,12 @@ mod tests {
                                             }
                                         });
                                     }
+                                    RequestMessage::PooledTransactions(_) => {
+                                        // This test case isn't applicable here because
+                                        // we send a one way message containing the pooled
+                                        // transactions. The node doesn't respond with anything
+                                        // so we can't test the response.
+                                    }
                                 }
                             }
                         }
@@ -1653,6 +1689,12 @@ mod tests {
                                 let txs = (0..5).map(|_| Transaction::default_test_tx()).collect();
                                 let transactions = vec![Transactions(txs)];
                                 let _ = node_b.send_response_msg(*request_id, OutboundResponse::Transactions(Some(Arc::new(transactions))));
+                            }
+                            RequestMessage::PooledTransactions(_) => {
+                                // This test case isn't applicable here because
+                                // we send a one way message containing the pooled
+                                // transactions. The node doesn't respond with anything
+                                // so we can't test the response.
                             }
                         }
                     }

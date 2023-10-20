@@ -10,6 +10,7 @@ mod state;
 pub mod stream {
     #[doc(no_inline)]
     pub use futures::stream::{
+        empty,
         pending,
         unfold,
         Stream,
