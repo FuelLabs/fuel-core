@@ -1034,8 +1034,8 @@ pub mod tests {
 
         fn send_msg(
             &mut self,
-            peer_id: PeerId,
-            request_msg: RequestMessage,
+            _peer_id: PeerId,
+            _request_msg: RequestMessage,
         ) -> anyhow::Result<()> {
             todo!()
         }

@@ -1110,10 +1110,7 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn nodes_cannot_connect_due_to_different_checksum() {
-        use libp2p::{
-            swarm::DialError,
-            TransportError,
-        };
+        use libp2p::TransportError;
         // Node A
         let mut p2p_config =
             Config::default_initialized("nodes_cannot_connect_due_to_different_checksum");
