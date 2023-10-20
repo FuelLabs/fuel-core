@@ -82,6 +82,7 @@ impl TestContext {
 }
 
 /// Helper for configuring the genesis block in tests
+#[derive(Clone)]
 pub struct TestSetupBuilder {
     pub rng: StdRng,
     pub contracts: HashMap<ContractId, ContractConfig>,
