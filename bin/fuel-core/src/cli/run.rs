@@ -202,6 +202,10 @@ pub struct Command {
     #[clap(long = "query-log-threshold-time", default_value = "2s", env)]
     pub query_log_threshold_time: humantime::Duration,
 
+    /// Timeout before drop the request.
+    #[clap(long = "api-request-timeout", default_value = "30m", env)]
+    pub api_request_timeout: humantime::Duration,
+
     #[clap(flatten)]
     pub profiling: profiling::ProfilingArgs,
 }
@@ -240,6 +244,7 @@ impl Command {
             min_connected_reserved_peers,
             time_until_synced,
             query_log_threshold_time,
+            api_request_timeout,
             profiling: _,
         } = self;
 
@@ -297,6 +302,7 @@ impl Command {
 
         let config = Config {
             addr,
+            api_request_timeout: api_request_timeout.into(),
             max_database_cache_size,
             database_path,
             database_type,

@@ -86,6 +86,7 @@ pub(super) fn senders_strategy(
             stream: TxUpdateStream::with_state(state),
             _permit: (),
             tx,
+            created: Instant::now(),
         }
     });
     prop::collection::hash_map(
@@ -167,6 +168,7 @@ pub(super) fn construct_senders(
                 stream: TxUpdateStream::with_state(state.clone()),
                 _permit: (),
                 tx,
+                created: Instant::now(),
             });
         }
         senders.insert(Bytes32::from([*i; 32]), v);
@@ -212,6 +214,7 @@ pub(super) fn box_senders<
                         _permit: Permit::from(Box::new(s._permit)),
                         stream: s.stream,
                         tx: Tx::from(Box::new(s.tx)),
+                        created: s.created,
                     })
                     .collect::<Vec<_>>(),
             )

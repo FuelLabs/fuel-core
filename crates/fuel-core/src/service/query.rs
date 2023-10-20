@@ -1,5 +1,4 @@
 //! Queries we can run directly on `FuelService`.
-
 use std::sync::Arc;
 
 use fuel_core_types::{
@@ -44,7 +43,7 @@ impl FuelService {
         tx: Transaction,
     ) -> anyhow::Result<impl Stream<Item = anyhow::Result<TransactionStatus>>> {
         let id = tx.id(&self.shared.config.chain_conf.consensus_parameters.chain_id);
-        let stream = self.transaction_status_change(id).await;
+        let stream = self.transaction_status_change(id)?;
         self.submit(tx).await?;
         Ok(stream)
     }
@@ -55,7 +54,7 @@ impl FuelService {
         tx: Transaction,
     ) -> anyhow::Result<TransactionStatus> {
         let id = tx.id(&self.shared.config.chain_conf.consensus_parameters.chain_id);
-        let stream = self.transaction_status_change(id).await.filter(|status| {
+        let stream = self.transaction_status_change(id)?.filter(|status| {
             futures::future::ready(!matches!(status, Ok(TransactionStatus::Submitted(_))))
         });
         futures::pin_mut!(stream);
@@ -67,21 +66,20 @@ impl FuelService {
     }
 
     /// Return a stream of status changes for a transaction.
-    pub async fn transaction_status_change(
+    pub fn transaction_status_change(
         &self,
         id: Bytes32,
-    ) -> impl Stream<Item = anyhow::Result<TransactionStatus>> {
+    ) -> anyhow::Result<impl Stream<Item = anyhow::Result<TransactionStatus>>> {
         let txpool = self.shared.txpool.clone();
         let db = self.shared.database.clone();
-        let rx = Box::pin(txpool.tx_update_subscribe(id).await);
-        transaction_status_change(
+        let rx = txpool.tx_update_subscribe(id)?;
+        Ok(transaction_status_change(
             move |id| match db.get_tx_status(&id)? {
                 Some(status) => Ok(Some(status)),
                 None => Ok(txpool.find_one(id).map(Into::into)),
             },
             rx,
             id,
-        )
-        .await
+        ))
     }
 }

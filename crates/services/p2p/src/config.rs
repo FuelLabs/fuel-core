@@ -320,7 +320,7 @@ pub(crate) fn build_transport(
     (transport, connection_state)
 }
 
-fn peer_ids_set_from(multiaddr: &[Multiaddr]) -> HashSet<PeerId> {
+pub fn peer_ids_set_from(multiaddr: &[Multiaddr]) -> HashSet<PeerId> {
     multiaddr
         .iter()
         // Safety: as is the case with `bootstrap_nodes` it is assumed that `reserved_nodes` [`Multiadr`]
