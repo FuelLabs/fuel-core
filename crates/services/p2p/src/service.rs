@@ -1033,10 +1033,10 @@ pub mod tests {
         }
 
         fn send_msg(
-                &mut self,
-                peer_id: PeerId,
-                request_msg: RequestMessage,
-            ) -> anyhow::Result<()> {
+            &mut self,
+            peer_id: PeerId,
+            request_msg: RequestMessage,
+        ) -> anyhow::Result<()> {
             todo!()
         }
 
@@ -1145,9 +1145,9 @@ pub mod tests {
         }
 
         fn incoming_pooled_transactions(
-                &self,
-                _transactions: Vec<Transaction>,
-            ) -> anyhow::Result<()> {
+            &self,
+            _transactions: Vec<Transaction>,
+        ) -> anyhow::Result<()> {
             todo!()
         }
 

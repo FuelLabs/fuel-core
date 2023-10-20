@@ -18,10 +18,10 @@ use fuel_core_types::{
     services::{
         block_importer::ImportResult,
         p2p::{
-            PeerId,
             GossipsubMessageAcceptance,
             GossipsubMessageInfo,
             NetworkData,
+            PeerId,
         },
         txpool::TransactionStatus,
     },

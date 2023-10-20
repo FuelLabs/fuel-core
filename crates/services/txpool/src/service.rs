@@ -42,10 +42,10 @@ use fuel_core_types::{
     services::{
         block_importer::ImportResult,
         p2p::{
-            PeerId,
             GossipData,
             GossipsubMessageAcceptance,
             GossipsubMessageInfo,
+            PeerId,
             TransactionGossipData,
         },
         txpool::{
