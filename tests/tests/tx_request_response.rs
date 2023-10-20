@@ -6,15 +6,10 @@ use fuel_core::p2p_test_helpers::{
     ValidatorSetup,
 };
 use fuel_core_client::client::FuelClient;
-use fuel_core_poa::Trigger;
 use fuel_core_types::{
     fuel_tx::{
-        field::*,
-        input::coin::{
-            CoinPredicate,
-            CoinSigned,
-        },
-        *,
+        input::Input,
+        UniqueIdentifier,
     },
     fuel_vm::*,
 };

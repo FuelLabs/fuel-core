@@ -609,10 +609,10 @@ where
         ttl_timer,
         shared: SharedState {
             db,
+            tx_status_sender: TxStatusChange::new(number_of_active_subscription, 2 * config.transaction_ttl),
             config,
             txpool,
             p2p,
-            tx_status_sender: TxStatusChange::new(number_of_active_subscription),
             consensus_params,
         },
     };
