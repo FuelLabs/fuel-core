@@ -9,6 +9,8 @@ use std::fmt::Debug;
 /// Contains types and logic for Peer Reputation
 pub mod peer_reputation;
 
+pub use libp2p_core::PeerId as Libp2pPeerId;
+
 /// List of transactions
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

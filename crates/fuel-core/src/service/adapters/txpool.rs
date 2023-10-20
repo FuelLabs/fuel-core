@@ -5,7 +5,11 @@ use crate::{
         P2PAdapter,
     },
 };
+#[cfg(feature = "p2p")]
 use fuel_core_p2p::PeerId;
+#[cfg(not(feature = "p2p"))]
+use fuel_core_types::services::p2p::Libp2pPeerId;
+
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
     not_found,
@@ -143,6 +147,7 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
 }
 
 #[cfg(not(feature = "p2p"))]
+#[async_trait::async_trait]
 impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 
@@ -164,7 +169,22 @@ impl fuel_core_txpool::ports::PeerToPeer for P2PAdapter {
     ) -> anyhow::Result<()> {
         Ok(())
     }
-    // TODO: implement missing methods for this adapter.
+
+    fn new_connection(&self) -> BoxStream<Libp2pPeerId> {
+        Box::pin(fuel_core_services::stream::pending())
+    }
+
+    fn incoming_pooled_transactions(&self) -> BoxStream<Vec<Transaction>> {
+        Box::pin(fuel_core_services::stream::pending())
+    }
+
+    async fn send_pooled_transactions(
+        &self,
+        _peer_id: Libp2pPeerId,
+        _transactions: Vec<Transaction>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 impl fuel_core_txpool::ports::TxPoolDb for Database {
