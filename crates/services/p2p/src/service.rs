@@ -125,7 +125,7 @@ impl Debug for TaskRequest {
                 write!(f, "TaskRequest::GetBlock")
             }
             TaskRequest::GetSealedHeader { .. } => {
-                write!(f, "TaskRequest::v")
+                write!(f, "TaskRequest::GetSealedHeader")
             }
             TaskRequest::GetTransactions { .. } => {
                 write!(f, "TaskRequest::GetTransactions")
