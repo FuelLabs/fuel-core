@@ -153,7 +153,7 @@ fn init_coin_state(
     db: &mut Database,
     state: &Option<StateConfig>,
 ) -> anyhow::Result<MerkleRoot> {
-    let mut coins_tree = binary::in_memory::MerkleTree::new();
+    let mut coins_tree = binary::root_calculator::MerkleRootCalculator::new();
     // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
     let mut generated_output_index: u64 = 0;
     if let Some(state) = &state {
@@ -213,7 +213,7 @@ fn init_contracts(
     db: &mut Database,
     state: &Option<StateConfig>,
 ) -> anyhow::Result<MerkleRoot> {
-    let mut contracts_tree = binary::in_memory::MerkleTree::new();
+    let mut contracts_tree = binary::root_calculator::MerkleRootCalculator::new();
     // initialize contract state
     if let Some(state) = &state {
         if let Some(contracts) = &state.contracts {
@@ -316,7 +316,7 @@ fn init_da_messages(
     db: &mut Database,
     state: &Option<StateConfig>,
 ) -> anyhow::Result<MerkleRoot> {
-    let mut message_tree = binary::in_memory::MerkleTree::new();
+    let mut message_tree = binary::root_calculator::MerkleRootCalculator::new();
     if let Some(state) = &state {
         if let Some(message_state) = &state.messages {
             for msg in message_state {
