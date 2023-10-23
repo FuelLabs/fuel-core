@@ -29,6 +29,8 @@ use fuel_core_types::{
     fuel_tx,
     fuel_tx::{
         field::ReceiptsRoot,
+        input,
+        output,
         StorageSlot,
     },
     fuel_types,
@@ -72,30 +74,81 @@ pub struct TransactionEdge {
     pub node: Transaction,
 }
 
+/// The `Transaction` schema is a combination of all fields available in
+/// the `fuel_tx::Transaction` from each variant plus some additional
+/// data from helper functions that are often fetched by the user.
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Transaction {
+    /// The field of the `Transaction` type.
     pub gas_limit: Option<U64>,
+    /// The field of the `Transaction` type.
     pub gas_price: Option<U64>,
+    /// The field of the `Transaction` type.
     pub id: TransactionId,
+    /// The field of the `Transaction::Mint`.
     pub tx_pointer: Option<TxPointer>,
+    /// The list of all `AssetId` from the inputs of the transaction.
+    ///
+    /// The result of a `input_asset_ids()` helper function is stored here.
+    /// It is not an original field of the `Transaction`.
     pub input_asset_ids: Option<Vec<AssetId>>,
+    /// The list of all contracts from the inputs of the transaction.
+    ///
+    /// The result of a `input_contracts()` helper function is stored here.
+    /// It is not an original field of the `Transaction`.
     pub input_contracts: Option<Vec<ContractIdFragment>>,
+    /// The field of the `Transaction::Mint` transaction.
+    pub input_contract: Option<InputContract>,
+    /// The field of the `Transaction` type.
     pub inputs: Option<Vec<Input>>,
+    /// It is `true` for `Transaction::Script`.
+    ///
+    /// The result of a `is_script()` helper function is stored here.
+    /// It is not an original field of the `Transaction`.
     pub is_script: bool,
+    /// It is `true` for `Transaction::Create`.
+    ///
+    /// The result of a `is_create()` helper function is stored here.
+    /// It is not an original field of the `Transaction`.
     pub is_create: bool,
+    /// It is `true` for `Transaction::Mint`.
+    ///
+    /// The result of a `is_mint()` helper function is stored here.
+    /// It is not an original field of the `Transaction`.
     pub is_mint: bool,
+    /// The field of the `Transaction` type.
     pub outputs: Vec<Output>,
+    /// The field of the `Transaction::Mint`.
+    pub output_contract: Option<ContractOutput>,
+    /// The field of the `Transaction::Script` and `Transaction::Create`.
     pub maturity: Option<U32>,
+    /// The field of the `Transaction::Mint`.
+    pub mint_amount: Option<U64>,
+    /// The field of the `Transaction::Mint`.
+    pub mint_asset_id: Option<AssetId>,
+    /// The field of the `Transaction::Script`.
     pub receipts_root: Option<Bytes32>,
+    /// The status of the transaction fetched from the database.
     pub status: Option<TransactionStatus>,
+    /// The field of the `Transaction::Script` and `Transaction::Create`.
     pub witnesses: Option<Vec<HexString>>,
+    /// The receipts produced during transaction execution. It is fetched from the database..
     pub receipts: Option<Vec<Receipt>>,
+    /// The field of the `Transaction::Script`.
     pub script: Option<HexString>,
+    /// The field of the `Transaction::Script`.
     pub script_data: Option<HexString>,
+    /// The field of the `Transaction::Create`.
     pub salt: Option<Salt>,
+    /// The field of the `Transaction::Create`.
     pub storage_slots: Option<Vec<HexString>>,
+    /// The field of the `Transaction::Create`.
     pub bytecode_witness_index: Option<i32>,
+    /// The size of the bytecode of the `Transaction::Create`.
+    ///
+    /// The result of a `bytecode_length()` helper function is stored here.
+    /// It is not an original field of the `Transaction`.
     pub bytecode_length: Option<U64>,
 }
 
@@ -220,10 +273,26 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
                 .into();
             let mint = fuel_tx::Transaction::mint(
                 tx_pointer,
-                tx.outputs
-                    .into_iter()
-                    .map(TryInto::try_into)
-                    .collect::<Result<Vec<fuel_tx::Output>, ConversionError>>()?,
+                tx.input_contract
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("input_contract".to_string())
+                    })?
+                    .into(),
+                tx.output_contract
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("output_contract".to_string())
+                    })?
+                    .try_into()?,
+                tx.mint_amount
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("mint_amount".to_string())
+                    })?
+                    .into(),
+                tx.mint_asset_id
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("mint_asset_id".to_string())
+                    })?
+                    .into(),
             );
             mint.into()
         };
@@ -321,13 +390,7 @@ impl TryFrom<Input> for fuel_tx::Input {
                     )
                 }
             }
-            Input::InputContract(contract) => fuel_tx::Input::contract(
-                contract.utxo_id.into(),
-                contract.balance_root.into(),
-                contract.state_root.into(),
-                contract.tx_pointer.into(),
-                contract.contract.id.into(),
-            ),
+            Input::InputContract(contract) => fuel_tx::Input::Contract(contract.into()),
             Input::InputMessage(message) => {
                 match (
                     message.data.0 .0.is_empty(),
@@ -435,11 +498,7 @@ impl TryFrom<Output> for fuel_tx::Output {
                 amount: coin.amount.into(),
                 asset_id: coin.asset_id.into(),
             },
-            Output::ContractOutput(contract) => Self::Contract {
-                input_index: contract.input_index.try_into()?,
-                balance_root: contract.balance_root.into(),
-                state_root: contract.state_root.into(),
-            },
+            Output::ContractOutput(contract) => Self::Contract(contract.try_into()?),
             Output::ChangeOutput(change) => Self::Change {
                 to: change.to.into(),
                 amount: change.amount.into(),
@@ -455,6 +514,30 @@ impl TryFrom<Output> for fuel_tx::Output {
                 state_root: contract.state_root.into(),
             },
             Output::Unknown => return Err(Self::Error::UnknownVariant("Output")),
+        })
+    }
+}
+
+impl From<InputContract> for input::contract::Contract {
+    fn from(contract: InputContract) -> Self {
+        input::contract::Contract {
+            utxo_id: contract.utxo_id.into(),
+            balance_root: contract.balance_root.into(),
+            state_root: contract.state_root.into(),
+            tx_pointer: contract.tx_pointer.into(),
+            contract_id: contract.contract.id.into(),
+        }
+    }
+}
+
+impl TryFrom<ContractOutput> for output::contract::Contract {
+    type Error = ConversionError;
+
+    fn try_from(contract: ContractOutput) -> Result<Self, Self::Error> {
+        Ok(output::contract::Contract {
+            input_index: contract.input_index.try_into()?,
+            balance_root: contract.balance_root.into(),
+            state_root: contract.state_root.into(),
         })
     }
 }

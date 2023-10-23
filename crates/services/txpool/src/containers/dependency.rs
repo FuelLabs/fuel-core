@@ -235,7 +235,7 @@ impl Dependency {
                         return Err(Error::NotInsertedIoWrongAssetId.into())
                     }
                 }
-                Output::Contract { .. } => {
+                Output::Contract(_) => {
                     return Err(Error::NotInsertedIoContractOutput.into())
                 }
                 Output::Change {
@@ -630,7 +630,7 @@ impl Dependency {
                         },
                     );
                 }
-                Output::Contract { .. } => {
+                Output::Contract(_) => {
                     // do nothing, this contract is already already found in dependencies.
                     // as it is tied with input and used_by is already inserted.
                 }
@@ -651,7 +651,7 @@ impl Dependency {
         // recursively remove all transactions that depend on the outputs of the current tx
         for (index, output) in tx.outputs().iter().enumerate() {
             match output {
-                Output::Contract { .. } => {
+                Output::Contract(_) => {
                     // no other transactions can depend on these types of outputs
                 }
                 Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
@@ -847,11 +847,7 @@ mod tests {
             "test5"
         );
 
-        let output = Output::Contract {
-            input_index: 0,
-            balance_root: Default::default(),
-            state_root: Default::default(),
-        };
+        let output = Output::contract(0, Default::default(), Default::default());
 
         let out =
             Dependency::check_if_coin_input_can_spend_output(&output, &input, false);

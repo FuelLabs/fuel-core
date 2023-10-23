@@ -247,18 +247,24 @@ impl ExecutionKind {
 pub enum Error {
     #[display(fmt = "Transaction id was already used: {_0:#x}")]
     TransactionIdCollision(Bytes32),
+    #[display(fmt = "Too many transactions in the block")]
+    TooManyTransactions,
     #[display(fmt = "output already exists")]
     OutputAlreadyExists,
     #[display(fmt = "The computed fee caused an integer overflow")]
     FeeOverflow,
-    #[display(fmt = "Not supported transaction: {_0:?}")]
-    NotSupportedTransaction(TxId),
-    #[display(fmt = "The first transaction in the block is not `Mint` - coinbase.")]
-    CoinbaseIsNotFirstTransaction,
-    #[display(fmt = "Coinbase should have one output.")]
-    CoinbaseSeveralOutputs,
-    #[display(fmt = "Coinbase outputs is invalid.")]
-    CoinbaseOutputIsInvalid,
+    #[display(fmt = "The block is missing `Mint` transaction.")]
+    MintMissing,
+    #[display(fmt = "Found the second entry of the `Mint` transaction in the block.")]
+    MintFoundSecondEntry,
+    #[display(fmt = "The `Mint` transaction has an unexpected index.")]
+    MintHasUnexpectedIndex,
+    #[display(fmt = "The last transaction in the block is not `Mint`.")]
+    MintIsNotLastTransaction,
+    #[display(fmt = "The `Mint` transaction mismatches expectations.")]
+    MintMismatch,
+    #[display(fmt = "Can't increase the balance of the coinbase contract: {_0}.")]
+    CoinbaseCannotIncreaseBalance(anyhow::Error),
     #[display(fmt = "Coinbase amount mismatches with expected.")]
     CoinbaseAmountMismatch,
     #[from]

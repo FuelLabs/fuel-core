@@ -211,19 +211,7 @@ impl From<&fuel_tx::Input> for Input {
                 predicate: HexString(predicate.clone()),
                 predicate_data: HexString(predicate_data.clone()),
             }),
-            fuel_tx::Input::Contract(fuel_tx::input::contract::Contract {
-                utxo_id,
-                balance_root,
-                state_root,
-                tx_pointer,
-                contract_id,
-            }) => Input::Contract(InputContract {
-                utxo_id: UtxoId(*utxo_id),
-                balance_root: Bytes32(*balance_root),
-                state_root: Bytes32(*state_root),
-                tx_pointer: TxPointer(*tx_pointer),
-                contract_id: ContractId(*contract_id),
-            }),
+            fuel_tx::Input::Contract(contract) => Input::Contract(contract.into()),
             fuel_tx::Input::MessageCoinSigned(
                 fuel_tx::input::message::MessageCoinSigned {
                     sender,
@@ -310,6 +298,25 @@ impl From<&fuel_tx::Input> for Input {
                 predicate: HexString(predicate.clone()),
                 predicate_data: HexString(predicate_data.clone()),
             }),
+        }
+    }
+}
+
+impl From<&fuel_tx::input::contract::Contract> for InputContract {
+    fn from(value: &fuel_tx::input::contract::Contract) -> Self {
+        let fuel_tx::input::contract::Contract {
+            utxo_id,
+            balance_root,
+            state_root,
+            tx_pointer,
+            contract_id,
+        } = value;
+        InputContract {
+            utxo_id: UtxoId(*utxo_id),
+            balance_root: Bytes32(*balance_root),
+            state_root: Bytes32(*state_root),
+            tx_pointer: TxPointer(*tx_pointer),
+            contract_id: ContractId(*contract_id),
         }
     }
 }
