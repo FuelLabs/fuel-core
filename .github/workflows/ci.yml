@@ -119,6 +119,17 @@ jobs:
             args: --manifest-path version-compatibility/Cargo.toml --workspace
           - command: build
             args: -p fuel-core-bin --no-default-features --features production
+
+          # WASM compatibility checks
+          - command: check
+            args: -p fuel-core-types --target wasm32-unknown-unknown --no-default-features
+          - command: check
+            args: -p fuel-core-storage --target wasm32-unknown-unknown --no-default-features
+          - command: check
+            args: -p fuel-core-client --target wasm32-unknown-unknown --no-default-features
+          - command: check
+            args: -p fuel-core-chain-config --target wasm32-unknown-unknown --no-default-features
+
     # disallow any job that takes longer than 45 minutes
     timeout-minutes: 45
     continue-on-error: ${{ matrix.skip-error || false }}
@@ -127,6 +138,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
+          targets: "wasm32-unknown-unknown"
           components: "clippy"
       - name: Install Cargo Make
         uses: davidB/rust-cargo-make@v1
@@ -466,13 +478,13 @@ jobs:
       - name: Build fuel-core and fuel-core-keygen
         run: |
           cross build --profile=release --target ${{ matrix.job.target }} --no-default-features --features "production" -p fuel-core-bin
-          cross build --profile=release --target ${{ matrix.job.target }} -p fuel-core-keygen
+          cross build --profile=release --target ${{ matrix.job.target }} -p fuel-core-keygen-bin
 
       - name: Strip release binary linux x86_64
         if: matrix.job.platform == 'linux'
         run: |
           strip "target/${{ matrix.job.target }}/release/fuel-core"
-          strip "target/${{ matrix.job.target }}/release/fuel-core-keygen"
+          strip "target/${{ matrix.job.target }}/release/fuel-core-keygen-bin"
 
       - name: Strip release binary aarch64-linux-gnu
         if: matrix.job.target == 'aarch64-unknown-linux-gnu'
@@ -486,13 +498,13 @@ jobs:
           "$PWD/target:/target:Z" \
           aarch64-linux-gnu:latest \
           aarch64-linux-gnu-strip \
-          /target/aarch64-unknown-linux-gnu/release/fuel-core-keygen
+          /target/aarch64-unknown-linux-gnu/release/fuel-core-keygen-bin
 
       - name: Strip release binary mac
         if: matrix.job.os == 'macos-latest'
         run: |
           strip -x "target/${{ matrix.job.target }}/release/fuel-core"
-          strip -x "target/${{ matrix.job.target }}/release/fuel-core-keygen"
+          strip -x "target/${{ matrix.job.target }}/release/fuel-core-keygen-bin"
 
       - name: Prepare Binary Artifact
         env:
@@ -511,7 +523,7 @@ jobs:
           # create zip file
           mkdir -pv "$ARTIFACT"
           cp "target/${{ matrix.job.target }}/release/fuel-core" "$ARTIFACT"
-          cp "target/${{ matrix.job.target }}/release/fuel-core-keygen" "$ARTIFACT"
+          cp "target/${{ matrix.job.target }}/release/fuel-core-keygen-bin" "$ARTIFACT"
           tar -czvf "$ZIP_FILE_NAME" "$ARTIFACT"
 
       - name: Upload Binary Artifact

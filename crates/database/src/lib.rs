@@ -10,40 +10,40 @@
 
 use fuel_core_storage::Error as StorageError;
 use fuel_core_types::services::executor::Error as ExecutorError;
-use std::{
-    array::TryFromSliceError,
-    io::ErrorKind,
-};
+use std::array::TryFromSliceError;
 
 /// The error occurred during work with any of databases.
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug, derive_more::Display, derive_more::From)]
 #[non_exhaustive]
 pub enum Error {
     /// Error occurred during serialization or deserialization of the entity.
-    #[error("error performing serialization or deserialization")]
+    #[display(fmt = "error performing serialization or deserialization")]
     Codec,
     /// Chain can be initialized once.
-    #[error("Failed to initialize chain")]
+    #[display(fmt = "Failed to initialize chain")]
     ChainAlreadyInitialized,
     /// Chain should be initialized before usage.
-    #[error("Chain is not yet initialized")]
+    #[display(fmt = "Chain is not yet initialized")]
     ChainUninitialized,
     /// The version of database or data is invalid (possibly not migrated).
-    #[error("Invalid database version, expected {expected:#x}, found {found:#x}")]
+    #[display(
+        fmt = "Invalid database version, expected {expected:#x}, found {found:#x}"
+    )]
     InvalidDatabaseVersion {
         /// the current database version
         found: u32,
         /// the database version expected by this build of fuel-core
         expected: u32,
     },
+
     /// Not related to database error.
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
+    #[from]
+    Other(anyhow::Error),
 }
 
-impl From<Error> for std::io::Error {
-    fn from(e: Error) -> Self {
-        std::io::Error::new(ErrorKind::Other, e)
+impl From<Error> for anyhow::Error {
+    fn from(error: Error) -> Self {
+        anyhow::Error::msg(error)
     }
 }
 

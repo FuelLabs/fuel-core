@@ -175,20 +175,17 @@ pub struct Database {
     _drop: Arc<DropResources>,
 }
 
-trait DropFnTrait: FnOnce() + Send + Sync {}
-impl<F> DropFnTrait for F where F: FnOnce() + Send + Sync {}
-type DropFn = Box<dyn DropFnTrait>;
-
-impl fmt::Debug for DropFn {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "DropFn")
-    }
-}
-
-#[derive(Debug, Default)]
+type DropFn = Box<dyn FnOnce() + Send + Sync>;
+#[derive(Default)]
 struct DropResources {
     // move resources into this closure to have them dropped when db drops
     drop: Option<DropFn>,
+}
+
+impl fmt::Debug for DropResources {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "DropResources")
+    }
 }
 
 impl<F: 'static + FnOnce() + Send + Sync> From<F> for DropResources {
@@ -215,6 +212,11 @@ impl Database {
         }
     }
 
+    pub fn with_drop(mut self, drop: DropFn) -> Self {
+        self._drop = Arc::new(drop.into());
+        self
+    }
+
     pub fn from_config(config: &DatabaseConfig) -> DatabaseResult<Self> {
         match config.database_type {
             #[cfg(feature = "rocksdb")]
@@ -238,7 +240,7 @@ impl Database {
     #[cfg(feature = "rocksdb")]
     pub fn open(path: &Path, capacity: impl Into<Option<usize>>) -> DatabaseResult<Self> {
         use anyhow::Context;
-        let db = RocksDb::default_open(path, capacity.into()).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
+        let db = RocksDb::default_open(path, capacity.into()).map_err(Into::<anyhow::Error>::into).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
 
         Ok(Database {
             data: Arc::new(db),

@@ -30,12 +30,9 @@ use fuel_core::{
     txpool::Config as TxPoolConfig,
     types::{
         blockchain::primitives::SecretKeyWrapper,
-        fuel_types::Address,
+        fuel_types::ContractId,
         fuel_vm::SecretKey,
-        secrecy::{
-            ExposeSecret,
-            Secret,
-        },
+        secrecy::Secret,
     },
 };
 use pyroscope::{
@@ -49,7 +46,6 @@ use pyroscope_pprofrs::{
 use std::{
     env,
     net,
-    ops::Deref,
     path::PathBuf,
     str::FromStr,
 };
@@ -208,6 +204,10 @@ pub struct Command {
     #[clap(long = "query-log-threshold-time", default_value = "2s", env)]
     pub query_log_threshold_time: humantime::Duration,
 
+    /// Timeout before drop the request.
+    #[clap(long = "api-request-timeout", default_value = "30m", env)]
+    pub api_request_timeout: humantime::Duration,
+
     #[clap(flatten)]
     pub profiling: profiling::ProfilingArgs,
 }
@@ -246,6 +246,7 @@ impl Command {
             min_connected_reserved_peers,
             time_until_synced,
             query_log_threshold_time,
+            api_request_timeout,
             profiling: _,
         } = self;
 
@@ -296,16 +297,13 @@ impl Command {
         }
 
         let coinbase_recipient = if let Some(coinbase_recipient) = coinbase_recipient {
-            Address::from_str(coinbase_recipient.as_str()).map_err(|err| anyhow!(err))?
+            Some(
+                ContractId::from_str(coinbase_recipient.as_str())
+                    .map_err(|err| anyhow!(err))?,
+            )
         } else {
-            consensus_key
-                .as_ref()
-                .cloned()
-                .map(|key| {
-                    let sk = key.expose_secret().deref();
-                    Address::from(*sk.public_key().hash())
-                })
-                .unwrap_or_default()
+            tracing::warn!("The coinbase recipient `ContractId` is not set!");
+            None
         };
 
         let verifier = RelayerVerifierConfig {
@@ -321,6 +319,7 @@ impl Command {
 
         let config = Config {
             addr,
+            api_request_timeout: api_request_timeout.into(),
             database_config,
             chain_conf: chain_conf.clone(),
             state_importer,

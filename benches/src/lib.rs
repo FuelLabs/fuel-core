@@ -30,10 +30,7 @@ use fuel_core_types::{
 };
 
 pub use rand::Rng;
-use std::{
-    io,
-    iter,
-};
+use std::iter;
 
 const LARGE_GAS_LIMIT: u64 = u64::MAX - 1001;
 
@@ -95,7 +92,7 @@ pub struct VmBench {
     pub prepare_call: Option<PrepareCall>,
     pub dummy_contract: Option<ContractId>,
     pub contract_code: Option<ContractCode>,
-    pub prepare_db: Option<Box<dyn FnMut(VmDatabase) -> io::Result<VmDatabase>>>,
+    pub prepare_db: Option<Box<dyn FnMut(VmDatabase) -> anyhow::Result<VmDatabase>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -138,7 +135,18 @@ impl VmBench {
         }
     }
 
-    pub fn contract<R>(rng: &mut R, instruction: Instruction) -> io::Result<Self>
+    pub fn contract<R>(rng: &mut R, instruction: Instruction) -> anyhow::Result<Self>
+    where
+        R: Rng,
+    {
+        Self::contract_using_db(rng, new_db(), instruction)
+    }
+
+    pub fn contract_using_db<R>(
+        rng: &mut R,
+        mut db: VmDatabase,
+        instruction: Instruction,
+    ) -> anyhow::Result<Self>
     where
         R: Rng,
     {
@@ -162,8 +170,6 @@ impl VmBench {
 
         let input = Input::contract(utxo_id, balance_root, state_root, tx_pointer, id);
         let output = Output::contract(0, rng.gen(), rng.gen());
-
-        let mut db = new_db();
 
         db.deploy_contract_with_id(&salt, &[], &contract, &state_root, &id)?;
 
@@ -229,8 +235,17 @@ impl VmBench {
         self
     }
 
+    /// Replaces the current prepare script with the given one.
+    /// Not that if you've constructed this instance with `contract` or `using_contract_db`,
+    /// then this will remove the script added by it. Use `extend_prepare_script` instead.
     pub fn with_prepare_script(mut self, prepare_script: Vec<Instruction>) -> Self {
         self.prepare_script = prepare_script;
+        self
+    }
+
+    /// Adds more instructions before the current prepare script.
+    pub fn prepend_prepare_script(mut self, prepare_script: Vec<Instruction>) -> Self {
+        self.prepare_script.extend(prepare_script);
         self
     }
 
@@ -276,21 +291,21 @@ impl VmBench {
 
     pub fn with_prepare_db<F>(mut self, prepare_db: F) -> Self
     where
-        F: FnMut(VmDatabase) -> io::Result<VmDatabase> + 'static,
+        F: FnMut(VmDatabase) -> anyhow::Result<VmDatabase> + 'static,
     {
         self.prepare_db.replace(Box::new(prepare_db));
         self
     }
 
-    pub fn prepare(self) -> io::Result<VmBenchPrepared> {
+    pub fn prepare(self) -> anyhow::Result<VmBenchPrepared> {
         self.try_into()
     }
 }
 
 impl TryFrom<VmBench> for VmBenchPrepared {
-    type Error = io::Error;
+    type Error = anyhow::Error;
 
-    fn try_from(case: VmBench) -> io::Result<Self> {
+    fn try_from(case: VmBench) -> anyhow::Result<Self> {
         let VmBench {
             params,
             gas_price,
@@ -317,8 +332,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             .iter()
             .any(|op| matches!(op, Instruction::RET(_)))
         {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(anyhow::anyhow!(
                 "a prepare script should not call/return into different contexts.",
             ))
         }
@@ -423,7 +437,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             let PrepareCall { ra, rb, rc, rd } = p;
 
             vm.prepare_call(ra, rb, rc, rd)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+                .map_err(anyhow::Error::msg)?;
             for instruction in post_call {
                 vm.instruction(instruction).unwrap();
             }

@@ -287,11 +287,11 @@ async fn get_transactions() {
 
     // there are 12 transactions
     // [
-    //  coinbase_tx1, tx1, coinbase_tx2, tx2, coinbase_tx3, tx3,
-    //  coinbase_tx4, tx4, coinbase_tx5, tx5, coinbase_tx6, tx6
+    //  tx1, coinbase_tx1, tx2, coinbase_tx2, tx3, coinbase_tx3,
+    //  tx4, coinbase_tx4, tx5, coinbase_tx5, tx6, coinbase_tx6,
     // ]
 
-    // Query for first 6: [coinbase_tx1, tx1, coinbase_tx2, tx2, coinbase_tx3, tx3]
+    // Query for first 6: [tx1, coinbase_tx1, tx2, coinbase_tx2, tx3, coinbase_tx3]
     let client = context.client;
     let page_request = PaginationRequest {
         cursor: None,
@@ -305,31 +305,31 @@ async fn get_transactions() {
         .iter()
         .map(|tx| tx.transaction.id(&ChainId::default()))
         .collect_vec();
+    assert_eq!(transactions[0], tx1);
     // coinbase_tx1
-    assert_eq!(transactions[1], tx1);
+    assert_eq!(transactions[2], tx2);
     // coinbase_tx2
-    assert_eq!(transactions[3], tx2);
+    assert_eq!(transactions[4], tx3);
     // coinbase_tx3
-    assert_eq!(transactions[5], tx3);
     // Check pagination state for first page
     assert!(response.has_next_page);
     assert!(!response.has_previous_page);
 
-    // Query for second page 2 with last given cursor: [coinbase_tx4, tx4, coinbase_tx5, tx5]
+    // Query for second page 2 with last given cursor: [tx4, coinbase_tx4, tx5, coinbase_tx5]
     let page_request_middle_page = PaginationRequest {
         cursor: response.cursor.clone(),
         results: 4,
         direction: PageDirection::Forward,
     };
 
-    // Query backwards from last given cursor [3]: [coinbase_tx3, tx2, coinbase_tx2, tx1, coinbase_tx1]
+    // Query backwards from last given cursor [3]: [tx3, coinbase_tx2, tx2, coinbase_tx1, tx1]
     let page_request_backwards = PaginationRequest {
         cursor: response.cursor.clone(),
         results: 6,
         direction: PageDirection::Backward,
     };
 
-    // Query forwards from last given cursor [3]: [coinbase_tx4, tx4, coinbase_tx5, tx5, coinbase_tx6, tx6]
+    // Query forwards from last given cursor [3]: [tx4, coinbase_tx4, tx5, coinbase_tx5, tx6, coinbase_tx6]
     let page_request_forwards = PaginationRequest {
         cursor: response.cursor,
         results: 6,
@@ -343,9 +343,9 @@ async fn get_transactions() {
         .map(|tx| tx.transaction.id(&ChainId::default()))
         .collect_vec();
     // coinbase_tx4
-    assert_eq!(transactions[1], tx4);
+    assert_eq!(transactions[0], tx4);
     // coinbase_tx5
-    assert_eq!(transactions[3], tx5);
+    assert_eq!(transactions[2], tx5);
     // Check pagination state for middle page
     // it should have next and previous page
     assert!(response.has_next_page);
@@ -357,11 +357,11 @@ async fn get_transactions() {
         .iter()
         .map(|tx| tx.transaction.id(&ChainId::default()))
         .collect_vec();
-    // transactions[0] - coinbase_tx3
-    assert_eq!(transactions[1], tx2);
-    // transactions[2] - coinbase_tx2
-    assert_eq!(transactions[3], tx1);
-    // transactions[4] - coinbase_tx1
+    assert_eq!(transactions[0], tx3);
+    // transactions[1] - coinbase_tx2
+    assert_eq!(transactions[2], tx2);
+    // transactions[3] - coinbase_tx1
+    assert_eq!(transactions[4], tx1);
     // Check pagination state for last page
     assert!(!response.has_next_page);
     assert!(response.has_previous_page);
@@ -372,12 +372,12 @@ async fn get_transactions() {
         .iter()
         .map(|tx| tx.transaction.id(&ChainId::default()))
         .collect_vec();
+    assert_eq!(transactions[0], tx4);
     // coinbase_tx4
-    assert_eq!(transactions[1], tx4);
+    assert_eq!(transactions[2], tx5);
     // coinbase_tx5
-    assert_eq!(transactions[3], tx5);
+    assert_eq!(transactions[4], tx6);
     // coinbase_tx6
-    assert_eq!(transactions[5], tx6);
     // Check pagination state for last page
     assert!(!response.has_next_page);
     assert!(response.has_previous_page);
@@ -530,7 +530,7 @@ async fn get_transactions_from_manual_blocks() {
         )
         .unwrap();
 
-    // Query for first 4: [coinbase_tx1, 0, 1, 2]
+    // Query for first 4: [0, 1, 2, 3]
     let page_request_forwards = PaginationRequest {
         cursor: None,
         results: 4,
@@ -546,12 +546,12 @@ async fn get_transactions_from_manual_blocks() {
         .iter()
         .map(|tx| tx.transaction.id(&ChainId::default()))
         .collect_vec();
-    // coinbase_tx1
-    assert_eq!(transactions[1], txs[0].id(&ChainId::default()));
-    assert_eq!(transactions[2], txs[1].id(&ChainId::default()));
-    assert_eq!(transactions[3], txs[2].id(&ChainId::default()));
+    assert_eq!(transactions[0], txs[0].id(&ChainId::default()));
+    assert_eq!(transactions[1], txs[1].id(&ChainId::default()));
+    assert_eq!(transactions[2], txs[2].id(&ChainId::default()));
+    assert_eq!(transactions[3], txs[3].id(&ChainId::default()));
 
-    // Query forwards from last given cursor [2]: [3, 4, coinbase_tx2, 5, 6]
+    // Query forwards from last given cursor [2]: [4, coinbase_tx1, 5, 6, coinbase_tx2]
     let next_page_request_forwards = PaginationRequest {
         cursor: response.cursor,
         results: 5,
@@ -567,13 +567,13 @@ async fn get_transactions_from_manual_blocks() {
         .iter()
         .map(|tx| tx.transaction.id(&ChainId::default()))
         .collect_vec();
-    assert_eq!(transactions[0], txs[3].id(&ChainId::default()));
-    assert_eq!(transactions[1], txs[4].id(&ChainId::default()));
+    assert_eq!(transactions[0], txs[4].id(&ChainId::default()));
+    // coinbase_tx1
+    assert_eq!(transactions[2], txs[5].id(&ChainId::default()));
+    assert_eq!(transactions[3], txs[6].id(&ChainId::default()));
     // coinbase_tx2
-    assert_eq!(transactions[3], txs[5].id(&ChainId::default()));
-    assert_eq!(transactions[4], txs[6].id(&ChainId::default()));
 
-    // Query backwards from last given cursor [8]: [5, coinbase_tx2, 4, 3, 2, 1, 0, coinbase_tx1]
+    // Query backwards from last given cursor [8]: [6, 5, coinbase_tx1, 4, 3, 2, 1, 0]
     let page_request_backwards = PaginationRequest {
         cursor: response.cursor,
         results: 10,
@@ -589,14 +589,14 @@ async fn get_transactions_from_manual_blocks() {
         .iter()
         .map(|tx| tx.transaction.id(&ChainId::default()))
         .collect_vec();
-    assert_eq!(transactions[0], txs[5].id(&ChainId::default()));
-    // transactions[1] coinbase_tx2
-    assert_eq!(transactions[2], txs[4].id(&ChainId::default()));
-    assert_eq!(transactions[3], txs[3].id(&ChainId::default()));
-    assert_eq!(transactions[4], txs[2].id(&ChainId::default()));
-    assert_eq!(transactions[5], txs[1].id(&ChainId::default()));
-    assert_eq!(transactions[6], txs[0].id(&ChainId::default()));
-    // transactions[7] coinbase_tx1
+    assert_eq!(transactions[0], txs[6].id(&ChainId::default()));
+    assert_eq!(transactions[1], txs[5].id(&ChainId::default()));
+    // transactions[2] coinbase_tx1
+    assert_eq!(transactions[3], txs[4].id(&ChainId::default()));
+    assert_eq!(transactions[4], txs[3].id(&ChainId::default()));
+    assert_eq!(transactions[5], txs[2].id(&ChainId::default()));
+    assert_eq!(transactions[6], txs[1].id(&ChainId::default()));
+    assert_eq!(transactions[7], txs[0].id(&ChainId::default()));
 }
 
 #[tokio::test]

@@ -73,7 +73,7 @@ pub fn run(c: &mut Criterion) {
             ),
     );
 
-    let linear = super::generate_linear_costs();
+    let linear = super::utils::generate_linear_costs();
 
     let mut bench_k256 = c.benchmark_group("k256");
     for i in &linear {

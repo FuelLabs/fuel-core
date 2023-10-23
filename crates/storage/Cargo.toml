@@ -18,10 +18,10 @@ version = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-fuel-core-types = { workspace = true }
-fuel-vm-private = { workspace = true }
+derive_more = { workspace = true }
+fuel-core-types = { workspace = true, default-features = false }
+fuel-vm-private = { workspace = true, default-features = false }
 mockall = { workspace = true, optional = true }
-thiserror = { workspace = true }
 
 [features]
 test-helpers = ["dep:mockall"]

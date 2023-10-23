@@ -68,6 +68,7 @@ fn test_try_subscribe_inner(senders: HashMap<Bytes32, Vec<Sender<(), MockSendSta
                         _permit: Arc::clone(&permits),
                         stream: v.stream,
                         tx: v.tx,
+                        created: Instant::now(),
                     })
                     .collect(),
             )
@@ -94,6 +95,7 @@ fn test_try_subscribe_inner(senders: HashMap<Bytes32, Vec<Sender<(), MockSendSta
     let update = UpdateSender {
         senders: Arc::new(Mutex::new(box_senders(senders))),
         permits: Arc::new(permits),
+        ttl: Duration::from_secs(100),
     };
 
     // Test the try_subscribe function on the UpdateSender

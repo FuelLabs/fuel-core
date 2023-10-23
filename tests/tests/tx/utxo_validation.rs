@@ -300,7 +300,10 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
         .results
         .iter()
         .flat_map(|b| {
-            b.transactions.iter().skip(1 /* coinbase */).copied()
+            b.transactions
+                .iter()
+                .take(b.transactions.len().saturating_sub(1) /* coinbase */)
+                .copied()
         })
         .dedup_with_count()
         .map(|(count, id)| {

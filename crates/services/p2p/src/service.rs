@@ -38,8 +38,14 @@ use fuel_core_types::{
         SealedBlock,
         SealedBlockHeader,
     },
-    fuel_tx::Transaction,
-    fuel_types::BlockHeight,
+    fuel_tx::{
+        Transaction,
+        UniqueIdentifier,
+    },
+    fuel_types::{
+        BlockHeight,
+        ChainId,
+    },
     services::p2p::{
         peer_reputation::{
             AppScore,
@@ -275,6 +281,7 @@ impl Broadcast for SharedState {
 /// Orchestrates various p2p-related events between the inner `P2pService`
 /// and the top level `NetworkService`.
 pub struct Task<P, D, B> {
+    chain_id: ChainId,
     p2p_service: P,
     db: Arc<D>,
     next_block_height: BoxStream<BlockHeight>,
@@ -298,6 +305,7 @@ pub struct HeartbeatPeerReputationConfig {
 
 impl<D> Task<FuelP2PService<PostcardCodec>, D, SharedState> {
     pub fn new<B: BlockHeightImporter>(
+        chain_id: ChainId,
         config: Config,
         db: Arc<D>,
         block_importer: Arc<B>,
@@ -330,6 +338,7 @@ impl<D> Task<FuelP2PService<PostcardCodec>, D, SharedState> {
         let next_check_time = Instant::now() + heartbeat_check_interval;
 
         Self {
+            chain_id,
             p2p_service,
             db,
             request_receiver,
@@ -445,10 +454,11 @@ where
                 should_continue = true;
                 match next_service_request {
                     Some(TaskRequest::BroadcastTransaction(transaction)) => {
+                        let tx_id = transaction.id(&self.chain_id);
                         let broadcast = GossipsubBroadcastRequest::NewTx(transaction);
                         let result = self.p2p_service.publish_message(broadcast);
                         if let Err(e) = result {
-                            tracing::error!("Got an error during transaction broadcasting {}", e);
+                            tracing::error!("Got an error during transaction {} broadcasting {}", tx_id, e);
                         }
                     }
                     Some(TaskRequest::BroadcastBlock(block)) => {
@@ -786,12 +796,18 @@ impl SharedState {
     }
 }
 
-pub fn new_service<D, B>(p2p_config: Config, db: D, block_importer: B) -> Service<D>
+pub fn new_service<D, B>(
+    chain_id: ChainId,
+    p2p_config: Config,
+    db: D,
+    block_importer: B,
+) -> Service<D>
 where
     D: P2pDb + 'static,
     B: BlockHeightImporter,
 {
     Service::new(Task::new(
+        chain_id,
         p2p_config,
         Arc::new(db),
         Arc::new(block_importer),
@@ -891,7 +907,8 @@ pub mod tests {
     #[tokio::test]
     async fn start_and_stop_awaits_works() {
         let p2p_config = Config::default_initialized("start_stop_works");
-        let service = new_service(p2p_config, FakeDb, FakeBlockImporter);
+        let service =
+            new_service(ChainId::default(), p2p_config, FakeDb, FakeBlockImporter);
 
         // Node with p2p service started
         assert!(service.start_and_await().await.unwrap().started());
@@ -1077,6 +1094,7 @@ pub mod tests {
         };
 
         let mut task = Task {
+            chain_id: Default::default(),
             p2p_service,
             db: Arc::new(FakeDB),
             next_block_height: FakeBlockImporter.next_block_height(),
@@ -1155,6 +1173,7 @@ pub mod tests {
         };
 
         let mut task = Task {
+            chain_id: Default::default(),
             p2p_service,
             db: Arc::new(FakeDB),
             next_block_height: FakeBlockImporter.next_block_height(),

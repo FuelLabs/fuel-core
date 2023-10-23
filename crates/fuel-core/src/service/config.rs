@@ -33,6 +33,7 @@ use crate::database::{DatabaseConfig, DbType};
 #[derive(Clone, Debug)]
 pub struct Config {
     pub addr: SocketAddr,
+    pub api_request_timeout: Duration,
     pub database_config: DatabaseConfig,
     pub chain_conf: ChainConfig,
     pub state_conf_path: PathBuf,
@@ -85,6 +86,7 @@ impl Config {
 
         Self {
             addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
+            api_request_timeout: Duration::from_secs(60),
             database_config,
             debug: true,
             chain_conf: chain_conf.clone(),

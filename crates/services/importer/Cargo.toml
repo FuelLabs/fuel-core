@@ -11,10 +11,10 @@ description = "Fuel Block Importer"
 
 [dependencies]
 anyhow = { workspace = true }
+derive_more = { workspace = true }
 fuel-core-metrics = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
-thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 

@@ -1,0 +1,9 @@
+endpoint = "https://beta-4.fuel.network/graphql"
+wallet_sync_timeout = "10s"
+full_test = false
+
+[wallet_a]
+secret = "${e2e_wallet_a}"
+
+[wallet_b]
+secret = "${e2e_wallet_b}"
