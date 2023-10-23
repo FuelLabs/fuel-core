@@ -1,3 +1,4 @@
+use core::iter::successors;
 use ethnum::U256;
 use fuel_core_types::fuel_asm::{
     op,
@@ -24,4 +25,15 @@ pub fn make_u128(reg: u8, v: u128) -> Vec<Instruction> {
 
 pub fn make_u256(reg: u8, v: U256) -> Vec<Instruction> {
     aloc_bytearray(reg, v.to_be_bytes())
+}
+
+pub fn generate_linear_costs() -> Vec<u32> {
+    let mut linear = vec![1, 10, 100, 1000, 10_000];
+    let mut l = successors(Some(100_000.0f64), |n| Some(n / 1.5))
+        .take(5)
+        .map(|f| f as u32)
+        .collect::<Vec<_>>();
+    l.sort_unstable();
+    linear.extend(l);
+    linear
 }
