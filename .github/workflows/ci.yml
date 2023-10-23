@@ -478,13 +478,13 @@ jobs:
       - name: Build fuel-core and fuel-core-keygen
         run: |
           cross build --profile=release --target ${{ matrix.job.target }} --no-default-features --features "production" -p fuel-core-bin
-          cross build --profile=release --target ${{ matrix.job.target }} -p fuel-core-keygen
+          cross build --profile=release --target ${{ matrix.job.target }} -p fuel-core-keygen-bin
 
       - name: Strip release binary linux x86_64
         if: matrix.job.platform == 'linux'
         run: |
           strip "target/${{ matrix.job.target }}/release/fuel-core"
-          strip "target/${{ matrix.job.target }}/release/fuel-core-keygen"
+          strip "target/${{ matrix.job.target }}/release/fuel-core-keygen-bin"
 
       - name: Strip release binary aarch64-linux-gnu
         if: matrix.job.target == 'aarch64-unknown-linux-gnu'
@@ -498,13 +498,13 @@ jobs:
           "$PWD/target:/target:Z" \
           aarch64-linux-gnu:latest \
           aarch64-linux-gnu-strip \
-          /target/aarch64-unknown-linux-gnu/release/fuel-core-keygen
+          /target/aarch64-unknown-linux-gnu/release/fuel-core-keygen-bin
 
       - name: Strip release binary mac
         if: matrix.job.os == 'macos-latest'
         run: |
           strip -x "target/${{ matrix.job.target }}/release/fuel-core"
-          strip -x "target/${{ matrix.job.target }}/release/fuel-core-keygen"
+          strip -x "target/${{ matrix.job.target }}/release/fuel-core-keygen-bin"
 
       - name: Prepare Binary Artifact
         env:
@@ -523,7 +523,7 @@ jobs:
           # create zip file
           mkdir -pv "$ARTIFACT"
           cp "target/${{ matrix.job.target }}/release/fuel-core" "$ARTIFACT"
-          cp "target/${{ matrix.job.target }}/release/fuel-core-keygen" "$ARTIFACT"
+          cp "target/${{ matrix.job.target }}/release/fuel-core-keygen-bin" "$ARTIFACT"
           tar -czvf "$ZIP_FILE_NAME" "$ARTIFACT"
 
       - name: Upload Binary Artifact
