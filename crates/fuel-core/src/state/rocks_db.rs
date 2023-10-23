@@ -21,6 +21,7 @@ use fuel_core_storage::iter::{
     IntoBoxedIter,
 };
 use rocksdb::{
+    checkpoint::Checkpoint,
     BoundColumnFamily,
     Cache,
     ColumnFamilyDescriptor,
@@ -96,6 +97,10 @@ impl RocksDb {
         .map_err(|e| DatabaseError::Other(e.into()))?;
         let rocks_db = RocksDb { db };
         Ok(rocks_db)
+    }
+
+    pub fn checkpoint<P: AsRef<Path>>(&self, path: P) -> Result<(), rocksdb::Error> {
+        Checkpoint::new(&self.db)?.create_checkpoint(path)
     }
 
     fn cf(&self, column: Column) -> Arc<BoundColumnFamily> {

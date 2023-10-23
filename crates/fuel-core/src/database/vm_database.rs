@@ -86,6 +86,13 @@ impl VmDatabase {
         }
     }
 
+    pub fn default_from_database(database: Database) -> Self {
+        Self {
+            database,
+            ..Default::default()
+        }
+    }
+
     pub fn database_mut(&mut self) -> &mut Database {
         &mut self.database
     }
