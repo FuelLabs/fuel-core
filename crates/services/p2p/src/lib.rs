@@ -1,14 +1,14 @@
-mod behavior;
+pub mod behavior;
 pub mod codecs;
 pub mod config;
-mod discovery;
-mod gossipsub;
-mod heartbeat;
-mod p2p_service;
-mod peer_manager;
-mod peer_report;
+pub mod discovery;
+pub mod gossipsub;
+pub mod heartbeat;
+pub mod p2p_service;
+pub mod peer_manager;
+pub mod peer_report;
 pub mod ports;
-mod request_response;
+pub mod request_response;
 pub mod service;
 
 pub use gossipsub::config as gossipsub_config;
