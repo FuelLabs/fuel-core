@@ -5,8 +5,8 @@ use criterion::{
     Criterion,
     Throughput,
 };
+use fuel_core_benches::VmBench;
 use fuel_core_types::fuel_asm::*;
-use fuel_corebenches::*;
 use rand::{
     rngs::StdRng,
     SeedableRng,
