@@ -89,7 +89,7 @@ impl BenchDb {
                 sub_id.as_mut()[..8].copy_from_slice(&key.to_be_bytes());
 
                 let asset = if k % 2 == 0 {
-                    ContractId::zeroed().asset_id(&sub_id)
+                    VmBench::CONTRACT.asset_id(&sub_id)
                 } else {
                     AssetId::new(*sub_id)
                 };
