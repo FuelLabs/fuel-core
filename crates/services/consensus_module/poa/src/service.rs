@@ -153,7 +153,7 @@ where
         p2p_port: P,
     ) -> Self {
         let tx_status_update_stream = txpool.transaction_status_events();
-        let (request_sender, request_receiver) = mpsc::channel(100);
+        let (request_sender, request_receiver) = mpsc::channel(1024);
         let (last_height, last_timestamp, last_block_created) =
             Self::extract_block_info(last_block);
 
