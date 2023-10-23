@@ -10,6 +10,7 @@ members = [
   "crates/client",
   "crates/database",
   "crates/fuel-core",
+  "crates/keygen",
   "crates/metrics",
   "crates/services",
   "crates/services/consensus_module",
@@ -52,7 +53,8 @@ version = "0.20.4"
 fuel-core = { version = "0.20.4", path = "./crates/fuel-core", default-features = false }
 fuel-core-client-bin = { version = "0.20.4", path = "./bin/client" }
 fuel-core-bin = { version = "0.20.4", path = "./bin/fuel-core" }
-fuel-core-keygen = { version = "0.20.4", path = "./bin/keygen" }
+fuel-core-keygen = { version = "0.20.4", path = "./crates/keygen" }
+fuel-core-keygen-bin = { version = "0.20.4", path = "./bin/keygen" }
 fuel-core-chain-config = { version = "0.20.4", path = "./crates/chain-config" }
 fuel-core-client = { version = "0.20.4", path = "./crates/client" }
 fuel-core-database = { version = "0.20.4", path = "./crates/database" }
