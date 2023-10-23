@@ -1,13 +1,15 @@
-use crate::fuel_types::{
-    RegisterId,
-    Word,
-};
 use core::iter::successors;
 use ethnum::U256;
-use fuel_core_types::fuel_asm::{
-    op,
-    Instruction,
-    RegId,
+use fuel_core_types::{
+    fuel_asm::{
+        op,
+        Instruction,
+        RegId,
+    },
+    fuel_types::{
+        RegisterId,
+        Word,
+    },
 };
 
 /// Allocates a byte array from heap and initializes it. Then points `reg` to it.
