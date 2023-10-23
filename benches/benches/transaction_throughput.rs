@@ -36,11 +36,6 @@ use fuel_core_types::{
         EstimatePredicates,
     },
 };
-use futures::{
-    stream::FuturesUnordered,
-    FutureExt,
-    StreamExt,
-};
 use rand::{
     rngs::StdRng,
     SeedableRng,
@@ -100,27 +95,45 @@ where
                 async move {
                     for _ in 0..iters {
                         let mut test_builder = test_builder.clone();
-                        let transactions = transactions.clone();
-                        // start the node
-                        let TestContext {
-                            srv: _dont_drop,
-                            client,
-                            ..
-                        } = test_builder.finalize().await;
+                        let sealed_block = {
+                            let transactions = transactions
+                                .iter()
+                                .map(|tx| Arc::new(tx.clone()))
+                                .collect();
+                            // start the producer node
+                            let TestContext { srv, client, .. } =
+                                test_builder.finalize().await;
 
-                        // insert all transactions
-                        let submits = FuturesUnordered::new();
-                        for tx in transactions.iter() {
-                            submits.push(client.submit(&tx).boxed());
-                        }
-                        let _: Vec<_> = submits.collect().await;
+                            // insert all transactions
+                            srv.shared.txpool.insert(transactions).await;
+                            let _ = client.produce_blocks(1, None).await;
+
+                            // sanity check block to ensure the transactions were actually processed
+                            let block = srv
+                                .shared
+                                .database
+                                .get_sealed_block_by_height(&1.into())
+                                .unwrap()
+                                .unwrap();
+                            assert_eq!(
+                                block.entity.transactions().len(),
+                                (n + 1) as usize
+                            );
+                            block
+                        };
+
+                        // start the validator node
+                        let TestContext { srv, .. } = test_builder.finalize().await;
+
                         let start = std::time::Instant::now();
-                        let _ = client.produce_blocks(1, None).await;
-                        elapsed_time += start.elapsed();
 
-                        // sanity check block to ensure the transactions were actually processed
-                        let block = client.block_by_height(1).await.unwrap().unwrap();
-                        assert_eq!(block.transactions.len(), (n + 1) as usize);
+                        srv.shared
+                            .block_importer
+                            .execute_and_commit(sealed_block)
+                            .await
+                            .expect("Should validate the block");
+
+                        elapsed_time += start.elapsed();
                     }
                     elapsed_time
                 }
