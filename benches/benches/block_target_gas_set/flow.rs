@@ -55,6 +55,122 @@ pub fn run_flow(group: &mut BenchmarkGroup<WallTime>) {
         vec![],
     );
 
+    run(
+        "flow/jmpb opcode",
+        group,
+        vec![op::noop(), op::jmpb(RegId::ZERO, 0)],
+        vec![],
+    );
+
+    run(
+        "flow/jmpf opcode",
+        group,
+        vec![op::jmpf(RegId::ZERO, 0), op::jmpb(RegId::ZERO, 0)],
+        vec![],
+    );
+
+    run(
+        "flow/jnzb opcode true",
+        group,
+        vec![
+            op::movi(0x10, 1),
+            op::noop(),
+            op::jnzb(0x10, RegId::ZERO, 0),
+        ],
+        vec![],
+    );
+
+    run(
+        "flow/jnzb opcode false",
+        group,
+        vec![
+            op::movi(0x10, 0),
+            op::noop(),
+            op::jnzb(0x10, RegId::ZERO, 0),
+            op::jmpb(RegId::ZERO, 0),
+        ],
+        vec![],
+    );
+
+    run(
+        "flow/jnzf opcode true",
+        group,
+        vec![
+            op::movi(0x10, 1),
+            op::noop(),
+            op::jnzf(0x10, RegId::ZERO, 1),
+            op::ret(RegId::ZERO),
+            op::jmpb(RegId::ZERO, 1),
+        ],
+        vec![],
+    );
+
+    run(
+        "flow/jnzf opcode false",
+        group,
+        vec![
+            op::movi(0x10, 0),
+            op::noop(),
+            op::jnzf(0x10, RegId::ZERO, 1),
+            op::jmpb(RegId::ZERO, 0),
+            op::noop(),
+        ],
+        vec![],
+    );
+
+    run(
+        "flow/jneb opcode not equal",
+        group,
+        vec![
+            op::movi(0x10, 1),
+            op::movi(0x11, 0),
+            op::noop(),
+            op::jneb(0x10, 0x11, RegId::ZERO, 0),
+        ],
+        vec![],
+    );
+
+    run(
+        "flow/jneb opcode equal",
+        group,
+        vec![
+            op::movi(0x10, 1),
+            op::movi(0x11, 1),
+            op::noop(),
+            op::jneb(0x10, 0x11, RegId::ZERO, 0),
+            op::jmpb(RegId::ZERO, 0),
+        ],
+        vec![],
+    );
+
+    run(
+        "flow/jnef opcode not equal",
+        group,
+        vec![
+            op::movi(0x10, 1),
+            op::movi(0x11, 0),
+            op::noop(),
+            op::jnef(0x10, 0x11, RegId::ZERO, 1),
+            op::ret(RegId::ZERO),
+            op::jmpb(RegId::ZERO, 1),
+        ],
+        vec![],
+    );
+
+    run(
+        "flow/jnef opcode equal",
+        group,
+        vec![
+            op::movi(0x10, 1),
+            op::movi(0x11, 1),
+            op::noop(),
+            op::jnef(0x10, 0x11, RegId::ZERO, 1),
+            op::jmpb(RegId::ZERO, 0),
+            op::noop(),
+        ],
+        vec![],
+    );
+
     // Don't know how to test "returning" op codes
     // run(
     //     "flow/ret_script opcode",
