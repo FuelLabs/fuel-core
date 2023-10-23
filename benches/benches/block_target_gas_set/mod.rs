@@ -6,4 +6,4 @@ pub mod flow;
 
 pub mod contract;
 
-pub mod mem;
+pub mod memory;
