@@ -1,9 +1,9 @@
 use crate::*;
-// use crate::utils::generate_linear_costs;
+// use crate::utils::arb_dependent_cost_values;
 
 pub fn run_contract(_group: &mut BenchmarkGroup<WallTime>) {
     // This breaks the benchmarking
-    // for i in generate_linear_costs() {
+    // for i in arb_dependent_cost_values() {
     //     let id = format!("flow/retd_contract opcode {:?}", i);
     //     run(
     //         &id,

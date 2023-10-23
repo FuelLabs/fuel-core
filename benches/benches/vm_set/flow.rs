@@ -1,12 +1,12 @@
 use super::run_group_ref;
 
-use crate::utils::generate_linear_costs;
+use crate::utils::arb_dependent_cost_values;
 use criterion::{
     Criterion,
     Throughput,
 };
-use fuel_core_benches::*;
 use fuel_core_types::fuel_asm::*;
+use fuel_corebenches::*;
 use rand::{
     rngs::StdRng,
     SeedableRng,
@@ -15,7 +15,7 @@ use rand::{
 pub fn run(c: &mut Criterion) {
     let rng = &mut StdRng::seed_from_u64(2322u64);
 
-    let linear = generate_linear_costs();
+    let linear = arb_dependent_cost_values();
 
     run_group_ref(
         &mut c.benchmark_group("jmp"),
