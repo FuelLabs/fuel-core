@@ -1,8 +1,5 @@
 use async_trait::async_trait;
-use fuel_core_services::stream::{
-    BoxFuture,
-    BoxStream,
-};
+use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -172,7 +169,7 @@ pub trait TxPoolPort: Send + Sync {
     fn tx_update_subscribe(
         &self,
         tx_id: TxId,
-    ) -> BoxFuture<'_, BoxStream<TxStatusMessage>>;
+    ) -> anyhow::Result<BoxStream<TxStatusMessage>>;
 }
 
 #[async_trait]

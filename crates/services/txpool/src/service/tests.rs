@@ -198,11 +198,11 @@ async fn simple_insert_removal_subscription() {
     let mut tx1_subscribe_updates = service
         .shared
         .tx_update_subscribe(tx1.cached_id().unwrap())
-        .await;
+        .unwrap();
     let mut tx2_subscribe_updates = service
         .shared
         .tx_update_subscribe(tx2.cached_id().unwrap())
-        .await;
+        .unwrap();
 
     let out = service.shared.insert(vec![tx1.clone(), tx2.clone()]).await;
 
