@@ -1,3 +1,7 @@
+use crate::fuel_types::{
+    RegisterId,
+    Word,
+};
 use core::iter::successors;
 use ethnum::U256;
 use fuel_core_types::fuel_asm::{
@@ -36,4 +40,16 @@ pub fn arb_dependent_cost_values() -> Vec<u32> {
     l.sort_unstable();
     linear.extend(l);
     linear
+}
+
+/// Set a register `r` to a Word-sized number value using left-shifts
+pub fn set_full_word(r: RegisterId, v: Word) -> Vec<Instruction> {
+    let r = u8::try_from(r).unwrap();
+    let mut ops = vec![op::movi(r, 0)];
+    for byte in v.to_be_bytes() {
+        ops.push(op::ori(r, r, byte as u16));
+        ops.push(op::slli(r, r, 8));
+    }
+    ops.pop().unwrap(); // Remove last shift
+    ops
 }

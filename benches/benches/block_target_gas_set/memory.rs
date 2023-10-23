@@ -1,4 +1,10 @@
-use crate::*;
+use crate::{
+    utils::{
+        arb_dependent_cost_values,
+        set_full_word,
+    },
+    *,
+};
 
 // ALOC: Allocate memory
 // CFE: Extend call frame
@@ -119,132 +125,125 @@ pub fn run_memory(group: &mut BenchmarkGroup<WallTime>) {
         vec![],
     );
 
-    //     run_group_ref(
-    //         &mut c.benchmark_group("lb"),
-    //         "lb",
-    //         VmBench::new(op::lb(0x10, RegId::ONE, 10)),
-    //     );
-    //
-    //     run_group_ref(
-    //         &mut c.benchmark_group("lw"),
-    //         "lw",
-    //         VmBench::new(op::lw(0x10, RegId::ONE, 10)),
-    //     );
-    //
-    //     run_group_ref(
-    //         &mut c.benchmark_group("sb"),
-    //         "sb",
-    //         VmBench::new(op::sb(0x10, 0x11, 0)).with_prepare_script(vec![
-    //             op::aloc(RegId::ONE),
-    //             op::move_(0x10, RegId::HP),
-    //             op::movi(0x11, 50),
-    //         ]),
-    //     );
-    //
-    //     run_group_ref(
-    //         &mut c.benchmark_group("sw"),
-    //         "sw",
-    //         VmBench::new(op::sw(0x10, 0x11, 0)).with_prepare_script(vec![
-    //             op::movi(0x10, 8),
-    //             op::aloc(0x10),
-    //             op::move_(0x10, RegId::HP),
-    //             op::movi(0x11, 50),
-    //         ]),
-    //     );
-    //
-    //     let linear = arb_dependent_cost_values();
-    //
-    //     run_group_ref(
-    //         &mut c.benchmark_group("cfei"),
-    //         "cfei",
-    //         VmBench::new(op::cfei(1)),
-    //     );
-    //
-    //     let mut mem_mcl = c.benchmark_group("mcl");
-    //     for i in &linear {
-    //         mem_mcl.throughput(Throughput::Bytes(*i as u64));
-    //         run_group_ref(
-    //             &mut mem_mcl,
-    //             format!("{i}"),
-    //             VmBench::new(op::mcl(0x10, 0x11)).with_prepare_script(vec![
-    //                 op::movi(0x11, *i),
-    //                 op::aloc(0x11),
-    //                 op::move_(0x10, RegId::HP),
-    //             ]),
-    //         );
-    //     }
-    //     mem_mcl.finish();
-    //
-    //     let mut mem_mcli = c.benchmark_group("mcli");
-    //     for i in &linear {
-    //         mem_mcli.throughput(Throughput::Bytes(*i as u64));
-    //         run_group_ref(
-    //             &mut mem_mcli,
-    //             format!("{i}"),
-    //             VmBench::new(op::mcli(0x10, *i)).with_prepare_script(vec![
-    //                 op::movi(0x11, *i),
-    //                 op::aloc(0x11),
-    //                 op::move_(0x10, RegId::HP),
-    //             ]),
-    //         );
-    //     }
-    //     mem_mcli.finish();
-    //
-    //     let mut mem_mcp = c.benchmark_group("mcp");
-    //     for i in &linear {
-    //         mem_mcp.throughput(Throughput::Bytes(*i as u64));
-    //         run_group_ref(
-    //             &mut mem_mcp,
-    //             format!("{i}"),
-    //             VmBench::new(op::mcp(0x10, RegId::ZERO, 0x11)).with_prepare_script(vec![
-    //                 op::movi(0x11, *i),
-    //                 op::aloc(0x11),
-    //                 op::move_(0x10, RegId::HP),
-    //             ]),
-    //         );
-    //     }
-    //     mem_mcp.finish();
-    //
-    //     let mut mem_mcpi = c.benchmark_group("mcpi");
-    //
-    //     let mut imm12_linear: Vec<_> = linear
-    //         .iter()
-    //         .copied()
-    //         .take_while(|p| *p < (1 << 12))
-    //         .collect();
-    //     imm12_linear.push((1 << 12) - 1);
-    //     for i in &imm12_linear {
-    //         let i_as_u16: u16 = (*i).try_into().unwrap();
-    //         mem_mcpi.throughput(Throughput::Bytes(*i as u64));
-    //         run_group_ref(
-    //             &mut mem_mcpi,
-    //             format!("{i}"),
-    //             VmBench::new(op::mcpi(0x10, RegId::ZERO, i_as_u16)).with_prepare_script(
-    //                 vec![
-    //                     op::movi(0x11, *i),
-    //                     op::aloc(0x11),
-    //                     op::move_(0x10, RegId::HP),
-    //                 ],
-    //             ),
-    //         );
-    //     }
-    //     mem_mcpi.finish();
-    //
-    //     let mut mem_meq = c.benchmark_group("meq");
-    //     for i in &linear {
-    //         let i = *i as u64;
-    //         mem_meq.throughput(Throughput::Bytes(i));
-    //
-    //         let mut prepare_script =
-    //             vec![op::move_(0x11, RegId::ZERO), op::move_(0x12, RegId::ZERO)];
-    //         prepare_script.extend(set_full_word(0x13, i));
-    //
-    //         run_group_ref(
-    //             &mut mem_meq,
-    //             format!("{i}"),
-    //             VmBench::new(op::meq(0x10, 0x11, 0x12, 0x13))
-    //                 .with_prepare_script(prepare_script),
-    //         );
-    //     }
-    //     mem_meq.finish();
+    run(
+        "memory/lb opcode",
+        group,
+        [op::lb(0x10, RegId::ONE, 10), op::jmpb(RegId::ZERO, 0)].to_vec(),
+        vec![],
+    );
+
+    run(
+        "memory/lw opcode",
+        group,
+        [op::lw(0x10, RegId::ONE, 10), op::jmpb(RegId::ZERO, 0)].to_vec(),
+        vec![],
+    );
+
+    for i in arb_dependent_cost_values() {
+        let id = format!("memory/mcl opcode {:?}", i);
+        run(
+            &id,
+            group,
+            vec![
+                op::movi(0x11, i),
+                op::aloc(0x11),
+                op::move_(0x10, RegId::HP),
+                op::mcl(0x10, 0x11),
+                op::jmpb(RegId::ZERO, 0),
+            ],
+            vec![],
+        );
+    }
+
+    for i in arb_dependent_cost_values() {
+        let id = format!("memory/mcli opcode {:?}", i);
+        run(
+            &id,
+            group,
+            vec![
+                op::movi(0x11, i),
+                op::aloc(0x11),
+                op::move_(0x10, RegId::HP),
+                op::mcli(0x10, i),
+                op::jmpb(RegId::ZERO, 0),
+            ],
+            vec![],
+        );
+    }
+
+    for i in arb_dependent_cost_values() {
+        let id = format!("memory/mcp opcode {:?}", i);
+        run(
+            &id,
+            group,
+            vec![
+                op::movi(0x11, i),
+                op::aloc(0x11),
+                op::move_(0x10, RegId::HP),
+                op::mcp(0x10, RegId::ZERO, 0x11),
+                op::jmpb(RegId::ZERO, 0),
+            ],
+            vec![],
+        );
+    }
+
+    let valid_values: Vec<_> = arb_dependent_cost_values()
+        .iter()
+        .copied()
+        .take_while(|p| *p < (1 << 12)) // 12 bits
+        .collect();
+    for val in valid_values {
+        let id = format!("memory/mcpi opcode {:?}", val);
+        let val_as_u16 = (val).try_into().unwrap();
+        run(
+            &id,
+            group,
+            vec![
+                op::movi(0x11, val),
+                op::aloc(0x11),
+                op::move_(0x10, RegId::HP),
+                op::mcpi(0x10, RegId::ZERO, val_as_u16),
+                op::jmpb(RegId::ZERO, 0),
+            ],
+            vec![],
+        );
+    }
+
+    for i in arb_dependent_cost_values() {
+        let id = format!("memory/meq opcode {:?}", i);
+        let mut script = vec![op::move_(0x11, RegId::ZERO), op::move_(0x12, RegId::ZERO)];
+        script.extend(set_full_word(0x13, i as u64));
+        script.extend(vec![
+            op::meq(0x10, 0x11, 0x12, 0x13),
+            op::jmpb(RegId::ZERO, 0),
+        ]);
+        run(&id, group, script, vec![]);
+    }
+
+    run(
+        "memory/sb opcode",
+        group,
+        vec![
+            op::aloc(RegId::ONE),
+            op::move_(0x10, RegId::HP),
+            op::movi(0x11, 50),
+            op::sb(0x10, 0x11, 0),
+            op::jmpb(RegId::ZERO, 0),
+        ],
+        vec![],
+    );
+
+    run(
+        "memory/sw opcode",
+        group,
+        vec![
+            op::movi(0x10, 8),
+            op::aloc(0x10),
+            op::move_(0x10, RegId::HP),
+            op::movi(0x11, 50),
+            op::sw(0x10, 0x11, 0),
+            op::jmpb(RegId::ZERO, 0),
+        ],
+        vec![],
+    );
 }
