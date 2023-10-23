@@ -151,20 +151,17 @@ pub struct Database {
     _drop: Arc<DropResources>,
 }
 
-trait DropFnTrait: FnOnce() + Send + Sync {}
-impl<F> DropFnTrait for F where F: FnOnce() + Send + Sync {}
-type DropFn = Box<dyn DropFnTrait>;
-
-impl fmt::Debug for DropFn {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "DropFn")
-    }
-}
-
-#[derive(Debug, Default)]
+type DropFn = Box<dyn FnOnce() + Send + Sync>;
+#[derive(Default)]
 struct DropResources {
     // move resources into this closure to have them dropped when db drops
     drop: Option<DropFn>,
+}
+
+impl fmt::Debug for DropResources {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "DropResources")
+    }
 }
 
 impl<F: 'static + FnOnce() + Send + Sync> From<F> for DropResources {
@@ -189,6 +186,11 @@ impl Database {
             data: data_source,
             _drop: Default::default(),
         }
+    }
+
+    pub fn with_drop(mut self, drop: DropFn) -> Self {
+        self._drop = Arc::new(drop.into());
+        self
     }
 
     #[cfg(feature = "rocksdb")]
