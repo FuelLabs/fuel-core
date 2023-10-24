@@ -2957,7 +2957,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-keygen-bin"
-version = "0.20.4"
+version = "0.20.8"
 dependencies = [
  "anyhow",
  "clap 4.4.6",
